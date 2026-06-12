@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Cpu,
   Eraser,
+  Heart,
   ImagePlus,
   Library,
   Loader2,
@@ -1277,6 +1278,8 @@ export default function Home() {
                 clearing={clearingLocalData}
                 onClear={() => void clearAllLocalData()}
               />
+
+              <SupportPanel />
             </div>
           </aside>
         </div>
@@ -2237,6 +2240,37 @@ function LocalDataPanel({
           Clear all local data
         </button>
       </ClearLocalDataDialog>
+    </div>
+  );
+}
+
+function SupportPanel() {
+  return (
+    <div className="space-y-3 border-t border-stone-800 pt-6">
+      <PanelTitle icon={Heart} title="Support" />
+      <p className="text-pretty text-xs leading-relaxed text-stone-500">
+        Open Dungeon is free and open source. If it earns a spot on your machine, a tip
+        keeps development going.
+      </p>
+      <div className="flex flex-col gap-2">
+        <a
+          href="https://github.com/sponsors/newideas99"
+          target="_blank"
+          rel="noreferrer noopener"
+          className="inline-flex w-full items-center justify-center gap-2 rounded border border-stone-700 bg-stone-900/40 px-3 py-2 text-sm font-medium text-stone-200 hover:border-amber-700/60 hover:bg-stone-900"
+        >
+          <Heart className="size-4 text-amber-200" aria-hidden="true" />
+          Sponsor on GitHub
+        </a>
+        <a
+          href="https://ko-fi.com/opendungeon"
+          target="_blank"
+          rel="noreferrer noopener"
+          className="inline-flex w-full items-center justify-center gap-2 rounded border border-stone-700 bg-stone-900/40 px-3 py-2 text-sm font-medium text-stone-200 hover:border-amber-700/60 hover:bg-stone-900"
+        >
+          Buy me a coffee on Ko-fi
+        </a>
+      </div>
     </div>
   );
 }

@@ -235,6 +235,16 @@ permits consensual adult content between adults; everything is generated and
 stored only on your machine. Edit the system prompt in
 `src/lib/story-prompt.ts` if you want different defaults.
 
+## Support the project
+
+Open Dungeon is free and MIT-licensed, and it always will be. If it earns a spot on
+your machine and you want to help with development, a tip goes a long way:
+
+- **[Sponsor on GitHub](https://github.com/sponsors/newideas99)**
+- **[Buy me a coffee on Ko-fi](https://ko-fi.com/opendungeon)**
+
+Starring the repo and sharing it helps too.
+
 ## License
 
 MIT
