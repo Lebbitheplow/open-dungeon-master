@@ -1,0 +1,34 @@
+import { z } from "zod";
+import { createChat, listChats } from "@/lib/db";
+import { LOCAL_TEXT_MODEL_IDS } from "@/lib/text-models";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const settingsSchema = z.object({
+  world: z.string().optional(),
+  style: z.string().optional(),
+  textProvider: z.enum(["local", "openrouter"]).optional(),
+  localTextModel: z.enum(LOCAL_TEXT_MODEL_IDS).optional(),
+  imageMode: z.enum(["fast", "slow"]).optional(),
+  imageBackend: z.enum(["mflux-hs", "sdnq-hs"]).optional(),
+  aspect: z.enum(["square", "portrait", "landscape"]).optional(),
+  autoImages: z.boolean().optional(),
+});
+
+const createChatSchema = z.object({
+  title: z.string().trim().min(1).optional(),
+  settings: settingsSchema.optional(),
+});
+
+export async function GET() {
+  return Response.json({ chats: listChats() });
+}
+
+export async function POST(request: Request) {
+  const raw = await request.json().catch(() => ({}));
+  const body = createChatSchema.parse(raw);
+  const chat = createChat(body.settings, body.title);
+
+  return Response.json({ chat }, { status: 201 });
+}
