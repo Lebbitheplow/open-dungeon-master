@@ -1,6 +1,6 @@
 # Optimized Image Server
 
-This folder is the Local Roleplay wrapper around the optimized uncensored
+This folder is the Open Dungeon wrapper around the optimized uncensored
 FLUX.2-klein backends from the `ultra-fast-image-gen` repo (expected at
 `~/ultra-fast-image-gen`, or set `ULTRA_FAST_IMAGE_GEN_DIR`).
 

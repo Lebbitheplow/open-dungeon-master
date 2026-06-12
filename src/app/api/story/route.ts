@@ -373,7 +373,7 @@ async function requestOpenRouterMessage(
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
       "HTTP-Referer": serverEnv("OPENROUTER_APP_URL", "http://localhost:3000"),
-      "X-OpenRouter-Title": serverEnv("OPENROUTER_APP_TITLE", "Local Roleplay"),
+      "X-OpenRouter-Title": serverEnv("OPENROUTER_APP_TITLE", "Open Dungeon"),
     },
     body: JSON.stringify(requestPayload),
   });

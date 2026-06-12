@@ -1,8 +1,8 @@
 {
-  "name": "local-roleplay",
+  "name": "open-dungeon",
   "version": "0.1.0",
   "private": true,
-  "description": "Local-first interactive story app with local text and image generation",
+  "description": "Fully on-device AI roleplay app with local text and inline image generation",
   "license": "MIT",
   "scripts": {
     "dev": "next dev",

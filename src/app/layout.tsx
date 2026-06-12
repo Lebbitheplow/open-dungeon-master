@@ -19,8 +19,8 @@ const sourceSerif = Source_Serif_4({
 });
 
 export const metadata: Metadata = {
-  title: "Local Roleplay",
-  description: "A local-first interactive story app with inline image generation.",
+  title: "Open Dungeon",
+  description: "Fully on-device AI roleplay with inline image generation.",
 };
 
 export default function RootLayout({

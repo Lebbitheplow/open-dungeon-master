@@ -782,7 +782,7 @@ export default function Home() {
             </div>
             <div className="min-w-0">
               <h1 className="truncate text-balance text-base font-semibold text-stone-100">
-                {activeChat?.title || "Local Roleplay"}
+                {activeChat?.title || "Open Dungeon"}
               </h1>
               <p className="truncate text-xs text-stone-500">
                 {settings.textProvider === "local"

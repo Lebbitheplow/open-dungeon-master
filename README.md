@@ -1,9 +1,8 @@
-# Local Roleplay
+# Open Dungeon
 
-A local-first interactive story app with **inline image generation** — text
-and images both generated on your own machine. No accounts,
-no API keys required, and nothing leaves your computer unless you opt into a
-cloud provider.
+The first lightweight, **fully on-device** AI roleplay app. The story and the
+**inline scene images** are both generated on your own machine — no accounts,
+no API keys, no cloud, no GPU rig. Your stories never leave your computer.
 
 ![A story scene with an inline generated image](docs/hero.png)
 
@@ -41,7 +40,7 @@ cloud provider.
 ## Quick start
 
 ```bash
-git clone <this-repo> && cd local-roleplay
+git clone https://github.com/newideas99/open-dungeon && cd open-dungeon
 npm install
 
 # pull a local model (7.2 GB — see the table below for other sizes)
