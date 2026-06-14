@@ -38,8 +38,10 @@ no API keys, no cloud, no GPU rig. Your stories never leave your computer.
 
 - Node.js 20+
 - [Ollama](https://ollama.com) for local text generation
-- Text-only works on any platform Ollama supports. Inline image generation
-  currently targets Apple Silicon (see [Image generation](#image-generation-optional)).
+- Text-only works on any platform Ollama supports. Inline image generation is
+  optional: Apple Silicon can use MFLUX/MLX, and Windows/Linux can use the
+  PyTorch SDNQ backend on CUDA or CPU (see
+  [Image generation](#image-generation-optional)).
 
 ## Quick start
 
@@ -50,8 +52,27 @@ time — it's unsigned). It walks you through everything: a bundled Node
 runtime, the narrator model download, and first build. You just need
 [Ollama](https://ollama.com/download) installed.
 
+**Easiest (Windows):** clone or download the repo, then double-click
+`Launch-Windows.bat`. The launcher checks Node.js, Ollama, Python, the narrator
+model, and the optional image worker. If `winget` is available it can install
+missing Node/Ollama/Python/Git pieces for you. For local image generation it
+clones `ultra-fast-image-gen` into `%USERPROFILE%\ultra-fast-image-gen`,
+creates `.venv`, installs PyTorch CUDA wheels when `nvidia-smi` is present, and
+falls back to CPU wheels otherwise. To force CPU, run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1 -CpuOnly
+```
+
+To sanity-check image routing without downloading models or generating an
+image, run:
+
+```powershell
+npm run check:image-routing
+```
+
 **From a clone:** double-click `Launch.command`, which does the same checks
-and setup. Or by hand:
+and setup on macOS. Or by hand:
 
 ```bash
 git clone https://github.com/newideas99/open-dungeon && cd open-dungeon
@@ -166,9 +187,12 @@ doesn't, the turn is retried without it so the story still flows.
 ## Image generation (optional)
 
 Inline images are produced by a small HTTP worker that wraps the optimized
-FLUX.2-klein backends from the `ultra-fast-image-gen` project (Apple
-Silicon / MLX + PyTorch MPS). The app expects that repo at
-`~/ultra-fast-image-gen` (override with `ULTRA_FAST_IMAGE_GEN_DIR`).
+FLUX.2-klein backends from the `ultra-fast-image-gen` project. Apple Silicon
+can use the resident MFLUX/MLX path; Windows/Linux use the PyTorch SDNQ path
+with `IMAGE_SERVER_DEVICE=cuda` or `IMAGE_SERVER_DEVICE=cpu`. The app expects
+that repo at `~/ultra-fast-image-gen` on macOS/Linux or
+`%USERPROFILE%\ultra-fast-image-gen` on Windows (override with
+`ULTRA_FAST_IMAGE_GEN_DIR`).
 
 The uncensored text encoder is downloaded once from a gated Hugging Face repo:
 accept the terms on the model page, then set your token in
@@ -185,13 +209,16 @@ a Generate button that succeeds once the worker is up.
 
 Backends exposed in the app:
 
-- MFLUX/MLX uncensored HS: `flux2-4b-uncensored-mflux-hs`
-- PyTorch SDNQ uncensored HS: `flux2-4b-uncensored-sdnq-hs`
+- MFLUX/MLX uncensored HS: `flux2-4b-uncensored-mflux-hs` (Apple Silicon)
+- PyTorch SDNQ: `flux2-4b-uncensored-sdnq-hs` on MPS; `flux2-4b-sdnq`
+  on CUDA/CPU because the HS attention patch is MPS-only
 
 Defaults are 1024 long-side, 4 steps, guidance 0.0; the slow size is 2048
 long-side. Square, portrait, and landscape aspects are exposed in the UI.
 Reference images are capped at two per request. MFLUX runs resident by
-default: the worker keeps the model loaded between generations. See
+default on Apple Silicon: the worker keeps the model loaded between
+generations. On Windows, the worker automatically maps MFLUX requests to the
+SDNQ backend because MLX is not available there. See
 [image_server/README.md](image_server/README.md) for details.
 
 ## The story image tool
@@ -230,6 +257,9 @@ defaults run fully local. Highlights:
 | `OPENAI_COMPAT_API_KEY` | — | Fallback key for other connected servers |
 | `FLUX_WORKER_URL` | `http://127.0.0.1:7869` | Image worker |
 | `ULTRA_FAST_IMAGE_GEN_DIR` | `~/ultra-fast-image-gen` | FLUX backends repo |
+| `ULTRA_FAST_IMAGE_GEN_PYTHON` | platform venv Python | Python inside the image backend venv |
+| `IMAGE_SERVER_DEVICE` | `mps` on macOS, `cuda` elsewhere | `mps`, `cuda`, `cpu`, or `auto` for SDNQ |
+| `IMAGE_SERVER_DEFAULT_BACKEND` | `mflux-hs` on macOS, `sdnq-hs` elsewhere | Default image worker backend |
 | `SQLITE_DB_PATH` | `data/local-roleplay.sqlite` | Database location |
 
 ## Local data

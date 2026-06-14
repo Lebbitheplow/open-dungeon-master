@@ -30,9 +30,22 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 ULTRA_REPO = Path(
     os.environ.get("ULTRA_FAST_IMAGE_GEN_DIR", str(Path.home() / "ultra-fast-image-gen"))
 ).expanduser()
-PYTHON = Path(
-    os.environ.get("ULTRA_FAST_IMAGE_GEN_PYTHON", ULTRA_REPO / ".venv/bin/python")
-).expanduser()
+
+
+def default_ultra_python() -> Path:
+    if os.name == "nt":
+        return ULTRA_REPO / ".venv" / "Scripts" / "python.exe"
+    return ULTRA_REPO / ".venv" / "bin" / "python"
+
+
+def default_image_device() -> str:
+    configured = os.environ.get("IMAGE_SERVER_DEVICE", "").strip().lower()
+    if configured and configured != "auto":
+        return configured
+    return "mps" if sys.platform == "darwin" else "cuda"
+
+
+PYTHON = Path(os.environ.get("ULTRA_FAST_IMAGE_GEN_PYTHON", default_ultra_python())).expanduser()
 GENERATE = ULTRA_REPO / "generate.py"
 # Patched MFLUX checkout created by ultra-fast-image-gen/scripts/setup_mflux_hs.sh
 MFLUX_DIR = Path(
@@ -44,6 +57,11 @@ OUT_DIR = Path(os.environ.get("IMAGE_SERVER_OUTPUT_DIR", APP_ROOT / "public/gene
 HOST = os.environ.get("IMAGE_SERVER_HOST", "127.0.0.1")
 PORT = int(os.environ.get("IMAGE_SERVER_PORT", "7869"))
 DEFAULT_TIMEOUT = int(os.environ.get("IMAGE_SERVER_TIMEOUT", "240"))
+IMAGE_DEVICE = default_image_device()
+DEFAULT_BACKEND = os.environ.get(
+    "IMAGE_SERVER_DEFAULT_BACKEND",
+    "mflux-hs" if sys.platform == "darwin" else "sdnq-hs",
+)
 
 RUNTIME_LOCK = threading.Lock()
 STATUS: dict[str, Any] = {
@@ -56,6 +74,7 @@ BACKENDS = {
     "mflux-hs": "flux2-4b-uncensored-mflux-hs",
     "sdnq-hs": "flux2-4b-uncensored-sdnq-hs",
 }
+STANDARD_SDNQ_MODEL = "flux2-4b-sdnq"
 MFLUX_BACKEND_CONFIGS = {
     "mflux-hs": {
         "model": "flux2-klein-4b",
@@ -267,6 +286,53 @@ def is_mflux_backend(backend: str) -> bool:
     return backend in MFLUX_BACKEND_CONFIGS
 
 
+def uses_standard_sdnq_backend(backend: str) -> bool:
+    return backend == "sdnq-hs" and IMAGE_DEVICE != "mps"
+
+
+def backend_model(backend: str) -> str:
+    if uses_standard_sdnq_backend(backend):
+        return STANDARD_SDNQ_MODEL
+    return BACKENDS[backend]
+
+
+def normalize_backend(backend: Any) -> tuple[str, list[str]]:
+    selected = str(backend or DEFAULT_BACKEND)
+    warnings: list[str] = []
+    if selected not in BACKENDS:
+        raise ValueError(f"Unsupported backend: {selected}")
+    if is_mflux_backend(selected) and sys.platform != "darwin":
+        warnings.append("MFLUX/MLX is Apple Silicon only; using PyTorch SDNQ instead.")
+        selected = "sdnq-hs"
+    if uses_standard_sdnq_backend(selected):
+        warnings.append("Using standard FLUX.2 SDNQ because the HS path is MPS-only.")
+    return selected, warnings
+
+
+def popen_kwargs() -> dict[str, Any]:
+    if os.name == "nt":
+        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+    return {"start_new_session": True}
+
+
+def terminate_process(proc: subprocess.Popen[str]) -> None:
+    if proc.poll() is not None:
+        return
+    if os.name == "nt":
+        proc.terminate()
+        return
+    os.killpg(proc.pid, signal.SIGTERM)
+
+
+def kill_process(proc: subprocess.Popen[str]) -> None:
+    if proc.poll() is not None:
+        return
+    if os.name == "nt":
+        proc.kill()
+        return
+    os.killpg(proc.pid, signal.SIGKILL)
+
+
 def hf_token_from_repo_env() -> str | None:
     """Read the HF token ultra-fast-image-gen's UI persists to its .env.
 
@@ -324,7 +390,7 @@ def backend_command(
     timeout: int,
     reference_paths: list[Path],
 ) -> tuple[list[str], dict[str, str]]:
-    model = BACKENDS[backend]
+    model = backend_model(backend)
     hs_stride = 1 if is_mflux_backend(backend) and reference_paths else 2
     hs_max_transformer_forward = 0 if is_mflux_backend(backend) and reference_paths else max(0, steps - 1)
     cmd = [
@@ -344,18 +410,6 @@ def backend_command(
         str(guidance),
         "--output",
         str(output_path),
-        "--gguf-quant",
-        "q4_k_m",
-        "--hs-stride",
-        str(hs_stride),
-        "--hs-skip-transformer-forwards",
-        "0",
-        "--hs-max-transformer-forward",
-        str(hs_max_transformer_forward),
-        "--hs-single-start-frac",
-        "0.0",
-        "--hs-single-end-frac",
-        "1.0",
     ]
 
     env = os.environ.copy()
@@ -364,6 +418,18 @@ def backend_command(
     if is_mflux_backend(backend):
         cmd.extend(
             [
+                "--gguf-quant",
+                "q4_k_m",
+                "--hs-stride",
+                str(hs_stride),
+                "--hs-skip-transformer-forwards",
+                "0",
+                "--hs-max-transformer-forward",
+                str(hs_max_transformer_forward),
+                "--hs-single-start-frac",
+                "0.0",
+                "--hs-single-end-frac",
+                "1.0",
                 "--mflux-dir",
                 str(MFLUX_DIR),
                 "--timeout",
@@ -377,8 +443,26 @@ def backend_command(
             ]
         )
         env = mflux_env(steps, backend)
+    elif uses_standard_sdnq_backend(backend):
+        cmd.extend(["--device", IMAGE_DEVICE])
     else:
-        cmd.extend(["--device", "mps", "--qchunk", "1024"])
+        cmd.extend(["--device", IMAGE_DEVICE, "--qchunk", "1024"])
+        cmd.extend(
+            [
+                "--gguf-quant",
+                "q4_k_m",
+                "--hs-stride",
+                str(hs_stride),
+                "--hs-skip-transformer-forwards",
+                "0",
+                "--hs-max-transformer-forward",
+                str(hs_max_transformer_forward),
+                "--hs-single-start-frac",
+                "0.0",
+                "--hs-single-end-frac",
+                "1.0",
+            ]
+        )
 
     if reference_paths:
         cmd.extend(["--input-images", *[str(path) for path in reference_paths]])
@@ -433,9 +517,7 @@ def run_mflux_resident(
 
 
 def run_generation(payload: dict[str, Any]) -> dict[str, Any]:
-    backend = payload.get("backend") or "mflux-hs"
-    if backend not in BACKENDS:
-        raise ValueError(f"Unsupported backend: {backend}")
+    backend, backend_warnings = normalize_backend(payload.get("backend"))
 
     prompt = str(payload.get("prompt") or "").strip()
     if not prompt:
@@ -448,9 +530,19 @@ def run_generation(payload: dict[str, Any]) -> dict[str, Any]:
     if is_mflux_backend(backend) and not MFLUX_DIR.exists():
         raise FileNotFoundError(f"Missing patched MFLUX checkout: {MFLUX_DIR}")
 
+    standard_sdnq = uses_standard_sdnq_backend(backend)
     dimensions = resolve_dimensions(payload)
-    steps = clamp_int(payload.get("steps"), 4, 1, 8)
-    guidance = float(payload.get("guidance", 0.0) or 0.0)
+    steps = clamp_int(
+        payload.get("steps"),
+        12 if standard_sdnq else 4,
+        1,
+        32 if standard_sdnq else 8,
+    )
+    if standard_sdnq and steps <= 4:
+        steps = 12
+    guidance = float(payload.get("guidance", 3.5 if standard_sdnq else 0.0) or 0.0)
+    if standard_sdnq and guidance == 0.0:
+        guidance = 3.5
     seed = clamp_int(payload.get("seed"), random.randint(1, 2**31 - 1), 1, 2**32 - 1)
     timeout = clamp_int(payload.get("timeout"), DEFAULT_TIMEOUT, 30, 1200)
 
@@ -515,18 +607,18 @@ def run_generation(payload: dict[str, Any]) -> dict[str, Any]:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            start_new_session=True,
             env=env,
+            **popen_kwargs(),
         )
         try:
             cli_log, _ = proc.communicate(timeout=timeout)
             log += cli_log
         except subprocess.TimeoutExpired:
-            os.killpg(proc.pid, signal.SIGTERM)
+            terminate_process(proc)
             try:
                 cli_log, _ = proc.communicate(timeout=5)
             except subprocess.TimeoutExpired:
-                os.killpg(proc.pid, signal.SIGKILL)
+                kill_process(proc)
                 cli_log, _ = proc.communicate()
             log += cli_log
             raise TimeoutError(f"{backend} timed out after {timeout}s\n{log}")
@@ -537,7 +629,7 @@ def run_generation(payload: dict[str, Any]) -> dict[str, Any]:
         if not output_path.exists():
             raise RuntimeError(f"{backend} completed but did not write {output_path}\n{log}")
 
-    warnings = reference_warnings
+    warnings = [*backend_warnings, *reference_warnings]
     if payload.get("references") and not reference_paths:
         warnings.append("No usable local reference images were provided.")
 
@@ -578,9 +670,13 @@ class Handler(BaseHTTPRequestHandler):
                     "warmed": STATUS["lastWarm"],
                     "repo": str(ULTRA_REPO),
                     "python": str(PYTHON),
+                    "platform": sys.platform,
+                    "device": IMAGE_DEVICE,
+                    "defaultBackend": DEFAULT_BACKEND,
+                    "sdnqModel": backend_model("sdnq-hs"),
                     "mfluxDir": str(MFLUX_DIR),
                     "backends": {
-                        "mflux-hs": MFLUX_DIR.exists(),
+                        "mflux-hs": sys.platform == "darwin" and MFLUX_DIR.exists(),
                         "sdnq-hs": PYTHON.exists() and GENERATE.exists(),
                     },
                 },
@@ -601,18 +697,20 @@ class Handler(BaseHTTPRequestHandler):
                         },
                         {
                             "id": "sdnq-hs",
-                            "label": "PyTorch SDNQ uncensored HS",
-                            "model": BACKENDS["sdnq-hs"],
+                            "label": "PyTorch SDNQ",
+                            "model": backend_model("sdnq-hs"),
                             "referenceLimit": 2,
                         },
                     ],
                     "aspects": ["square", "portrait", "landscape"],
                     "defaults": {"longSide": 1024, "steps": 4, "guidance": 0.0},
+                    "defaultBackend": DEFAULT_BACKEND,
+                    "device": IMAGE_DEVICE,
                     "sizes": [
                         {"mode": "fast", "longSide": 1024},
                         {"mode": "slow", "longSide": 2048},
                     ],
-                    "warmNote": "MFLUX warm starts a resident worker and keeps the model process alive.",
+                    "warmNote": "MFLUX warm starts a resident worker on Apple Silicon; Windows/Linux use the PyTorch SDNQ backend.",
                 },
             )
             return

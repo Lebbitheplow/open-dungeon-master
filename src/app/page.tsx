@@ -2801,8 +2801,8 @@ function ImageSettingsPanel({
         <Segmented<ImageBackend>
           value={settings.imageBackend}
           options={[
-            { value: "mflux-hs", label: "MFLUX 4B" },
-            { value: "sdnq-hs", label: "SDNQ HS" },
+            { value: "mflux-hs", label: "MFLUX Mac" },
+            { value: "sdnq-hs", label: "SDNQ CUDA/CPU" },
           ]}
           disabled={imageControlsDisabled}
           onChange={(imageBackend) =>
