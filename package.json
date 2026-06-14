@@ -15,6 +15,7 @@
     "start:tailscale": "next start -H 0.0.0.0 -p 3002",
     "lint": "eslint",
     "check:image-routing": "node scripts/run-python.mjs scripts/check-image-server-routing.py",
+    "check:image-server-http": "node scripts/run-python.mjs scripts/check-image-server-http.py",
     "image:server": "node scripts/start-image-server.mjs",
     "image:warm:mflux": "curl -sS -X POST http://127.0.0.1:7869/warm -H 'Content-Type: application/json' -d '{\"backend\":\"mflux-hs\"}'",
     "image:warm:sdnq": "curl -sS -X POST http://127.0.0.1:7869/warm -H 'Content-Type: application/json' -d '{\"backend\":\"sdnq-hs\"}'",

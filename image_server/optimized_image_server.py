@@ -30,6 +30,7 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 ULTRA_REPO = Path(
     os.environ.get("ULTRA_FAST_IMAGE_GEN_DIR", str(Path.home() / "ultra-fast-image-gen"))
 ).expanduser()
+RUNTIME_PLATFORM = os.environ.get("IMAGE_SERVER_PLATFORM_OVERRIDE", sys.platform)
 
 
 def default_ultra_python() -> Path:
@@ -42,7 +43,7 @@ def default_image_device() -> str:
     configured = os.environ.get("IMAGE_SERVER_DEVICE", "").strip().lower()
     if configured and configured != "auto":
         return configured
-    return "mps" if sys.platform == "darwin" else "cuda"
+    return "mps" if RUNTIME_PLATFORM == "darwin" else "cuda"
 
 
 PYTHON = Path(os.environ.get("ULTRA_FAST_IMAGE_GEN_PYTHON", default_ultra_python())).expanduser()
@@ -60,7 +61,7 @@ DEFAULT_TIMEOUT = int(os.environ.get("IMAGE_SERVER_TIMEOUT", "240"))
 IMAGE_DEVICE = default_image_device()
 DEFAULT_BACKEND = os.environ.get(
     "IMAGE_SERVER_DEFAULT_BACKEND",
-    "mflux-hs" if sys.platform == "darwin" else "sdnq-hs",
+    "mflux-hs" if RUNTIME_PLATFORM == "darwin" else "sdnq-hs",
 )
 
 RUNTIME_LOCK = threading.Lock()
@@ -301,7 +302,7 @@ def normalize_backend(backend: Any) -> tuple[str, list[str]]:
     warnings: list[str] = []
     if selected not in BACKENDS:
         raise ValueError(f"Unsupported backend: {selected}")
-    if is_mflux_backend(selected) and sys.platform != "darwin":
+    if is_mflux_backend(selected) and RUNTIME_PLATFORM != "darwin":
         warnings.append("MFLUX/MLX is Apple Silicon only; using PyTorch SDNQ instead.")
         selected = "sdnq-hs"
     if uses_standard_sdnq_backend(selected):
@@ -670,13 +671,13 @@ class Handler(BaseHTTPRequestHandler):
                     "warmed": STATUS["lastWarm"],
                     "repo": str(ULTRA_REPO),
                     "python": str(PYTHON),
-                    "platform": sys.platform,
+                    "platform": RUNTIME_PLATFORM,
                     "device": IMAGE_DEVICE,
                     "defaultBackend": DEFAULT_BACKEND,
                     "sdnqModel": backend_model("sdnq-hs"),
                     "mfluxDir": str(MFLUX_DIR),
                     "backends": {
-                        "mflux-hs": sys.platform == "darwin" and MFLUX_DIR.exists(),
+                        "mflux-hs": RUNTIME_PLATFORM == "darwin" and MFLUX_DIR.exists(),
                         "sdnq-hs": PYTHON.exists() and GENERATE.exists(),
                     },
                 },

@@ -60,6 +60,7 @@ Check backend routing without loading any model:
 
 ```bash
 npm run check:image-routing
+npm run check:image-server-http
 ```
 
 Health:

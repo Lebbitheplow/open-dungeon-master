@@ -69,6 +69,7 @@ image, run:
 
 ```powershell
 npm run check:image-routing
+npm run check:image-server-http
 ```
 
 **From a clone:** double-click `Launch.command`, which does the same checks

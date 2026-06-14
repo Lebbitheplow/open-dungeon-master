@@ -57,13 +57,13 @@ def main() -> int:
     assert "--qchunk" in mps_command, mps_command
     assert "--gguf-quant" in mps_command, mps_command
 
-    original_platform = server.sys.platform
+    original_platform = server.RUNTIME_PLATFORM
     try:
-        server.sys.platform = "win32"
+        server.RUNTIME_PLATFORM = "win32"
         server.IMAGE_DEVICE = "cuda"
         backend, warnings = server.normalize_backend("mflux-hs")
     finally:
-        server.sys.platform = original_platform
+        server.RUNTIME_PLATFORM = original_platform
 
     assert backend == "sdnq-hs", backend
     assert any("MFLUX/MLX is Apple Silicon only" in warning for warning in warnings), warnings

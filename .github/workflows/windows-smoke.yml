@@ -35,6 +35,9 @@ jobs:
       - name: Check image routing
         run: npm run check:image-routing
 
+      - name: Smoke image server HTTP path
+        run: npm run check:image-server-http
+
       - name: Lint
         run: npm run lint
 
