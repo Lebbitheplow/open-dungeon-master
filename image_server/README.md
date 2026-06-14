@@ -56,12 +56,23 @@ On Windows, use the repo-level `Launch-Windows.bat`; it creates the backend
 venv, installs CUDA or CPU PyTorch wheels, updates a clean
 `ultra-fast-image-gen` checkout, and starts this worker in a second PowerShell
 window. Use `Launch-Windows-CPU.bat` to force the CPU wheel path.
+For a real model smoke test, use `Launch-Windows-Image-Smoke.bat` or
+`Launch-Windows-Image-Smoke-CPU.bat`; these generate a 512px image and validate
+that the output file exists.
 
 Check backend routing without loading any model:
 
 ```bash
 npm run check:image-routing
 npm run check:image-server-http
+```
+
+Run a real Windows generation smoke (downloads model weights on first run):
+
+```powershell
+npm run image:smoke:windows
+npm run image:smoke:windows:cuda
+npm run image:smoke:windows:cpu
 ```
 
 Health:

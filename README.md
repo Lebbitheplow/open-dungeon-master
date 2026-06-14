@@ -58,11 +58,11 @@ model, and the optional image worker. If `winget` is available it can install
 missing Node/Ollama/Python/Git pieces for you. For local image generation it
 clones `ultra-fast-image-gen` into `%USERPROFILE%\ultra-fast-image-gen`,
 creates `.venv`, installs PyTorch CUDA wheels when `nvidia-smi` is present, and
-falls back to CPU wheels otherwise. If CUDA gives you trouble or you want the
-most compatible path, double-click `Launch-Windows-CPU.bat` instead. The
-launcher also fast-forwards an existing clean `ultra-fast-image-gen` checkout
-and reinstalls image dependencies when that repo's `requirements.txt` changes.
-To force CPU from PowerShell, run:
+falls back to CPU mode when CUDA is not usable. If CUDA gives you trouble or
+you want the most compatible path, double-click `Launch-Windows-CPU.bat`
+instead. The launcher also fast-forwards an existing clean
+`ultra-fast-image-gen` checkout and reinstalls image dependencies when that
+repo's `requirements.txt` changes. To force CPU from PowerShell, run:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1 -CpuOnly
@@ -74,6 +74,18 @@ image, run:
 ```powershell
 npm run check:image-routing
 npm run check:image-server-http
+```
+
+To prove the real Windows image path, double-click
+`Launch-Windows-Image-Smoke.bat` (auto/CUDA when available) or
+`Launch-Windows-Image-Smoke-CPU.bat` (forced CPU). This performs a real 512px
+FLUX generation and will download model weights the first time. From
+PowerShell, the same checks are:
+
+```powershell
+npm run image:smoke:windows
+npm run image:smoke:windows:cuda
+npm run image:smoke:windows:cpu
 ```
 
 **From a clone:** double-click `Launch.command`, which does the same checks
@@ -202,6 +214,8 @@ that repo at `~/ultra-fast-image-gen` on macOS/Linux or
 The uncensored text encoder is downloaded once from a gated Hugging Face repo:
 accept the terms on the model page, then set your token in
 `ultra-fast-image-gen`'s web UI (or add `HF_TOKEN=...` to that repo's `.env`).
+Windows/Linux use the standard `flux2-4b-sdnq` route by default, so the gated
+token is not required for the normal CUDA/CPU path.
 
 Start the worker in a second terminal:
 

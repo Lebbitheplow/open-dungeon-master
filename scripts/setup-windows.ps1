@@ -1,6 +1,7 @@
 param(
   [switch]$CpuOnly,
   [switch]$SkipImageSetup,
+  [switch]$ImageOnly,
   [switch]$ValidateOnly
 )
 
@@ -56,6 +57,17 @@ function Invoke-Checked($FailureMessage, $Exe, [string[]]$CommandArgs) {
   & $Exe @CommandArgs
   if ($LASTEXITCODE -ne 0) {
     Stop-WithHelp $FailureMessage
+  }
+}
+
+function Test-PowerShellFile($RelativePath, $Name) {
+  $tokens = $null
+  $errors = $null
+  $path = Join-Path $Repo $RelativePath
+  [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors) | Out-Null
+  if ($errors.Count -gt 0) {
+    $message = ($errors | Select-Object -First 1).Message
+    Stop-WithHelp "$Name syntax check failed: $message"
   }
 }
 
@@ -156,7 +168,35 @@ function Get-PythonCommand {
   return $null
 }
 
+function Test-CudaAvailable($PythonExe) {
+  $probe = @"
+import sys
+try:
+    import torch
+except Exception as exc:
+    print(f"torch import failed: {exc}")
+    sys.exit(2)
+
+print(f"torch={torch.__version__}")
+print(f"cuda_available={torch.cuda.is_available()}")
+if torch.cuda.is_available():
+    print(f"cuda_device={torch.cuda.get_device_name(0)}")
+    sys.exit(0)
+sys.exit(1)
+"@
+  & $PythonExe -c $probe
+  $exitCode = $LASTEXITCODE
+  if ($exitCode -eq 2) {
+    Stop-WithHelp "PyTorch could not be imported inside ultra-fast-image-gen's virtual environment."
+  }
+  return $exitCode -eq 0
+}
+
 Write-Step "Open Dungeon Windows launcher"
+
+if ($ImageOnly -and $SkipImageSetup) {
+  Stop-WithHelp "-ImageOnly cannot be combined with -SkipImageSetup."
+}
 
 if ($ValidateOnly) {
   Write-Step "Validating Windows launcher and image routing"
@@ -169,6 +209,7 @@ if ($ValidateOnly) {
   }
   Invoke-Checked "start-image-server syntax check failed." "node" @("--check", "scripts/start-image-server.mjs")
   Invoke-Checked "run-python syntax check failed." "node" @("--check", "scripts/run-python.mjs")
+  Test-PowerShellFile "scripts/smoke-windows-image.ps1" "image smoke script"
   Invoke-Checked "image routing check failed." "npm" @("run", "check:image-routing")
   Invoke-Checked "image server HTTP smoke failed." "npm" @("run", "check:image-server-http")
   Write-Host "Windows launcher validation passed." -ForegroundColor Green
@@ -186,54 +227,56 @@ if ($nodeMajor -lt 22) {
   Stop-WithHelp "Node.js 22+ is required; found $(node -v). Node 20 does not have Windows prebuilt binaries for this app's SQLite dependency." "https://nodejs.org"
 }
 
-if (-not (Test-Command "ollama")) {
-  if (-not (Install-WithWinget "Ollama.Ollama" "Ollama")) {
-    Stop-WithHelp "Ollama is required for the local narrator." "https://ollama.com/download"
+if (-not $ImageOnly) {
+  if (-not (Test-Command "ollama")) {
+    if (-not (Install-WithWinget "Ollama.Ollama" "Ollama")) {
+      Stop-WithHelp "Ollama is required for the local narrator." "https://ollama.com/download"
+    }
   }
-}
 
-if (-not (Wait-Http "http://127.0.0.1:11434/api/version" 2)) {
-  Write-Step "Starting Ollama"
-  Start-Process -WindowStyle Minimized -FilePath "ollama" -ArgumentList "serve"
-  if (-not (Wait-Http "http://127.0.0.1:11434/api/version" 30)) {
-    Stop-WithHelp "Ollama did not start. Open Ollama manually, then relaunch."
+  if (-not (Wait-Http "http://127.0.0.1:11434/api/version" 2)) {
+    Write-Step "Starting Ollama"
+    Start-Process -WindowStyle Minimized -FilePath "ollama" -ArgumentList "serve"
+    if (-not (Wait-Http "http://127.0.0.1:11434/api/version" 30)) {
+      Stop-WithHelp "Ollama did not start. Open Ollama manually, then relaunch."
+    }
   }
-}
 
-if (-not ((ollama list 2>$null) -match "gemma4:12b-it-qat")) {
-  Write-Step "Downloading the default narrator model (gemma4:12b-it-qat, one time)"
-  ollama pull gemma4:12b-it-qat
-  if ($LASTEXITCODE -ne 0) {
-    Stop-WithHelp "Model download failed. Check your connection and relaunch."
+  if (-not ((ollama list 2>$null) -match "gemma4:12b-it-qat")) {
+    Write-Step "Downloading the default narrator model (gemma4:12b-it-qat, one time)"
+    ollama pull gemma4:12b-it-qat
+    if ($LASTEXITCODE -ne 0) {
+      Stop-WithHelp "Model download failed. Check your connection and relaunch."
+    }
   }
-}
 
-$NodeInstallStamp = "node_modules\.package-lock.json"
-$NpmInputs = @("package.json", "package-lock.json")
-$NeedsNpmInstall = -not (Test-Path "node_modules") -or
-  -not (Test-Path $NodeInstallStamp) -or
-  ((Get-LatestWriteTimeUtc $NpmInputs) -gt (Get-Item $NodeInstallStamp).LastWriteTimeUtc)
+  $NodeInstallStamp = "node_modules\.package-lock.json"
+  $NpmInputs = @("package.json", "package-lock.json")
+  $NeedsNpmInstall = -not (Test-Path "node_modules") -or
+    -not (Test-Path $NodeInstallStamp) -or
+    ((Get-LatestWriteTimeUtc $NpmInputs) -gt (Get-Item $NodeInstallStamp).LastWriteTimeUtc)
 
-if ($NeedsNpmInstall) {
-  Write-Step "Installing app dependencies"
-  Invoke-Checked "npm install failed." "npm" @("install")
-}
+  if ($NeedsNpmInstall) {
+    Write-Step "Installing app dependencies"
+    Invoke-Checked "npm install failed." "npm" @("install")
+  }
 
-$BuildStamp = ".next\BUILD_ID"
-$BuildInputs = @(
-  "src",
-  "package.json",
-  "package-lock.json",
-  "next.config.ts",
-  "postcss.config.mjs",
-  "tsconfig.json"
-)
-$NeedsBuild = -not (Test-Path $BuildStamp) -or
-  ((Get-LatestWriteTimeUtc $BuildInputs) -gt (Get-Item $BuildStamp).LastWriteTimeUtc)
+  $BuildStamp = ".next\BUILD_ID"
+  $BuildInputs = @(
+    "src",
+    "package.json",
+    "package-lock.json",
+    "next.config.ts",
+    "postcss.config.mjs",
+    "tsconfig.json"
+  )
+  $NeedsBuild = -not (Test-Path $BuildStamp) -or
+    ((Get-LatestWriteTimeUtc $BuildInputs) -gt (Get-Item $BuildStamp).LastWriteTimeUtc)
 
-if ($NeedsBuild) {
-  Write-Step "Building Open Dungeon"
-  Invoke-Checked "Build failed." "npm" @("run", "build")
+  if ($NeedsBuild) {
+    Write-Step "Building Open Dungeon"
+    Invoke-Checked "Build failed." "npm" @("run", "build")
+  }
 }
 
 if (-not $SkipImageSetup) {
@@ -312,6 +355,15 @@ if (-not $SkipImageSetup) {
     Set-Content -Path $Stamp -Value "device=$ImageDevice`ninstalled=$(Get-Date -Format o)`n" -Encoding UTF8
   }
 
+  if ($ImageDevice -eq "cuda") {
+    Write-Step "Checking PyTorch CUDA availability"
+    if (-not (Test-CudaAvailable $VenvPython)) {
+      Write-Host "PyTorch CUDA is not available even though an NVIDIA tool was detected. Starting the image worker in CPU mode." -ForegroundColor Yellow
+      Write-Host "After updating NVIDIA drivers/CUDA support, relaunch Launch-Windows.bat to try CUDA again." -ForegroundColor Yellow
+      $ImageDevice = "cpu"
+    }
+  }
+
   if (-not (Wait-Http "http://127.0.0.1:7869/health" 2)) {
     Write-Step "Starting local image server ($ImageDevice)"
     $imageCommand = @"
@@ -325,6 +377,12 @@ npm run image:server
     $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($imageCommand))
     Start-Process powershell -ArgumentList @("-NoExit", "-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", $encoded)
   }
+}
+
+if ($ImageOnly) {
+  Write-Step "Image worker setup complete"
+  Write-Host "The image server should be available at http://127.0.0.1:7869/health." -ForegroundColor Green
+  return
 }
 
 Write-Step "Starting Open Dungeon at http://localhost:3000"
