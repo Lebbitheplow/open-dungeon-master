@@ -357,9 +357,13 @@ if (-not $SkipImageSetup) {
 
   if ($NeedsImageDeps) {
     Write-Step "Installing image dependencies ($ImageDevice)"
+    $FilteredRequirements = Join-Path $env:TEMP "open-dungeon-ultra-fast-image-gen-requirements.txt"
+    Get-Content -Path $Requirements |
+      Where-Object { $_ -notmatch '^\s*(torch|torchvision)(\s|[<>=~!;\[]|$)' } |
+      Set-Content -Path $FilteredRequirements -Encoding UTF8
     Invoke-Checked "pip upgrade failed." $VenvPython @("-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel")
     Invoke-Checked "PyTorch install failed. Try relaunching with: powershell -File scripts\setup-windows.ps1 -CpuOnly" $VenvPython @("-m", "pip", "install", "torch", "torchvision", "--index-url", $TorchIndex)
-    Invoke-Checked "ultra-fast-image-gen dependency install failed." $VenvPython @("-m", "pip", "install", "-r", $Requirements)
+    Invoke-Checked "ultra-fast-image-gen dependency install failed." $VenvPython @("-m", "pip", "install", "-r", $FilteredRequirements)
     Set-Content -Path $Stamp -Value "device=$ImageDevice`ninstalled=$(Get-Date -Format o)`n" -Encoding UTF8
   }
 
