@@ -258,6 +258,7 @@ if ($ValidateOnly) {
   Test-PowerShellFile "scripts/check-windows-launchers.ps1" "Windows launcher check script"
   Test-PowerShellFile "scripts/smoke-windows-image.ps1" "image smoke script"
   Test-PowerShellFile "scripts/stop-windows.ps1" "Windows stop script"
+  Test-PowerShellFile "scripts/diagnose-windows.ps1" "Windows diagnostics script"
   & (Join-Path $Repo "scripts\check-windows-launchers.ps1")
   Invoke-Checked "image routing check failed." "npm" @("run", "check:image-routing")
   Invoke-Checked "image server HTTP smoke failed." "npm" @("run", "check:image-server-http")

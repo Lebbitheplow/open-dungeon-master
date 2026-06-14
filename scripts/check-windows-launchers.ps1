@@ -23,6 +23,10 @@ $Launchers = @(
   @{
     Path = "Stop-Windows.bat"
     Command = 'powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\stop-windows.ps1"'
+  },
+  @{
+    Path = "Diagnose-Windows.bat"
+    Command = 'powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\diagnose-windows.ps1" -IncludeLogTails'
   }
 )
 

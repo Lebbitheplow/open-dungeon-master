@@ -17,6 +17,7 @@
     "check:windows-launchers": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\check-windows-launchers.ps1",
     "check:image-routing": "node scripts/run-python.mjs scripts/check-image-server-routing.py",
     "check:image-server-http": "node scripts/run-python.mjs scripts/check-image-server-http.py",
+    "windows:diagnose": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\diagnose-windows.ps1 -IncludeLogTails",
     "windows:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\stop-windows.ps1",
     "image:smoke:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\smoke-windows-image.ps1",
     "image:smoke:windows:cuda": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\smoke-windows-image.ps1 -Device cuda",
