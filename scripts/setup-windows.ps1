@@ -9,6 +9,8 @@ $ErrorActionPreference = "Stop"
 $Repo = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $Repo
 $NonInteractive = $ValidateOnly -or ($env:CI -eq "true")
+$LogDir = Join-Path $Repo "logs"
+$LatestImageServerLog = Join-Path $LogDir "windows-image-server-latest.txt"
 
 function Write-Step($Message) {
   Write-Host ""
@@ -58,6 +60,10 @@ function Invoke-Checked($FailureMessage, $Exe, [string[]]$CommandArgs) {
   if ($LASTEXITCODE -ne 0) {
     Stop-WithHelp $FailureMessage
   }
+}
+
+function ConvertTo-PowerShellLiteral($Value) {
+  return "'" + ([string]$Value).Replace("'", "''") + "'"
 }
 
 function Test-PowerShellFile($RelativePath, $Name) {
@@ -368,16 +374,32 @@ if (-not $SkipImageSetup) {
 
   if (-not (Wait-Http "http://127.0.0.1:7869/health" 2)) {
     Write-Step "Starting local image server ($ImageDevice)"
+    New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
+    $ImageServerLog = Join-Path $LogDir ("windows-image-server-{0}.log" -f (Get-Date -Format "yyyyMMdd-HHmmss"))
+    Set-Content -Path $LatestImageServerLog -Value $ImageServerLog -Encoding UTF8
+    Write-Host "Image server log: $ImageServerLog"
+
+    $UltraDirLiteral = ConvertTo-PowerShellLiteral $UltraDir
+    $VenvPythonLiteral = ConvertTo-PowerShellLiteral $VenvPython
+    $ImageDeviceLiteral = ConvertTo-PowerShellLiteral $ImageDevice
+    $RepoLiteral = ConvertTo-PowerShellLiteral $Repo
+    $ImageServerLogLiteral = ConvertTo-PowerShellLiteral $ImageServerLog
     $imageCommand = @"
-`$env:ULTRA_FAST_IMAGE_GEN_DIR = '$UltraDir'
-`$env:ULTRA_FAST_IMAGE_GEN_PYTHON = '$VenvPython'
-`$env:IMAGE_SERVER_DEVICE = '$ImageDevice'
+`$env:ULTRA_FAST_IMAGE_GEN_DIR = $UltraDirLiteral
+`$env:ULTRA_FAST_IMAGE_GEN_PYTHON = $VenvPythonLiteral
+`$env:IMAGE_SERVER_DEVICE = $ImageDeviceLiteral
 `$env:IMAGE_SERVER_DEFAULT_BACKEND = 'sdnq-hs'
-Set-Location '$Repo'
-npm run image:server
+Set-Location $RepoLiteral
+Write-Host ('Image server log: ' + $ImageServerLogLiteral)
+npm run image:server *>&1 | Tee-Object -FilePath $ImageServerLogLiteral -Append
 "@
     $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($imageCommand))
     Start-Process powershell -ArgumentList @("-NoExit", "-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", $encoded)
+  } elseif (Test-Path $LatestImageServerLog) {
+    $ImageServerLog = Get-Content -Path $LatestImageServerLog -TotalCount 1
+    if ($ImageServerLog) {
+      Write-Host "Existing image server log: $ImageServerLog"
+    }
   }
 }
 

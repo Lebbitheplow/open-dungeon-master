@@ -59,7 +59,8 @@ window. Use `Launch-Windows-CPU.bat` to force the CPU wheel path.
 For a real model smoke test, use `Launch-Windows-Image-Smoke.bat` or
 `Launch-Windows-Image-Smoke-CPU.bat`; these generate a 512px image and validate
 that the output file exists. Each smoke run writes a transcript to
-`logs/windows-image-smoke-*.log`.
+`logs/windows-image-smoke-*.log`, and the worker output is written to
+`logs/windows-image-server-*.log`.
 
 Check backend routing without loading any model:
 

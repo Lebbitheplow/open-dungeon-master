@@ -80,8 +80,9 @@ To prove the real Windows image path, double-click
 `Launch-Windows-Image-Smoke.bat` (auto/CUDA when available) or
 `Launch-Windows-Image-Smoke-CPU.bat` (forced CPU). This performs a real 512px
 FLUX generation, will download model weights the first time, and writes a
-transcript to `logs/windows-image-smoke-*.log`. From PowerShell, the same
-checks are:
+transcript to `logs/windows-image-smoke-*.log`. The image server itself tees
+backend output to `logs/windows-image-server-*.log`, with the latest path saved
+in `logs/windows-image-server-latest.txt`. From PowerShell, the same checks are:
 
 ```powershell
 npm run image:smoke:windows

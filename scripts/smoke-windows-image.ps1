@@ -12,6 +12,7 @@ $ErrorActionPreference = "Stop"
 $Repo = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $Repo
 $LogDir = Join-Path $Repo "logs"
+$ServerLogPointer = Join-Path $LogDir "windows-image-server-latest.txt"
 if (-not $LogPath) {
   $LogPath = Join-Path $LogDir ("windows-image-smoke-{0}.log" -f (Get-Date -Format "yyyyMMdd-HHmmss"))
 }
@@ -79,6 +80,12 @@ try {
   & $setup @setupArgs
   if (-not $?) {
     exit 1
+  }
+  if (Test-Path $ServerLogPointer) {
+    $ServerLogPath = Get-Content -Path $ServerLogPointer -TotalCount 1
+    if ($ServerLogPath) {
+      Write-Host "Image server backend log: $ServerLogPath"
+    }
   }
 
   $baseUrl = "http://127.0.0.1:$Port"
