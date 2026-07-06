@@ -15,6 +15,8 @@ export const DEFAULT_STORY_SETTINGS: StorySettings = {
   customApiKey: "",
   imageMode: "fast",
   imageBackend: "mflux-hs",
+  comfyUrl: "",
+  comfyCheckpoint: "",
   aspect: "square",
   imageGenerationEnabled: true,
   autoImages: true,

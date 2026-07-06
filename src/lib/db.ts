@@ -4,7 +4,7 @@ import path from "node:path";
 import { DEFAULT_CHAT_TITLE, titleFromInput } from "@/lib/defaults";
 import { configuredDefaultStorySettings } from "@/lib/runtime-defaults";
 import { isLocalTextModelId, isTextProvider } from "@/lib/text-models";
-import { isProseSize } from "@/lib/types";
+import { isImageBackend, isProseSize } from "@/lib/types";
 import type {
   Attachment,
   GeneratedImage,
@@ -183,12 +183,14 @@ function normalizeSettings(settings?: Partial<StorySettings>): StorySettings {
     merged.aspect = defaultSettings.aspect;
   }
 
-  if (
-    merged.imageBackend !== "mflux-hs" &&
-    merged.imageBackend !== "sdnq-hs"
-  ) {
+  if (!isImageBackend(merged.imageBackend)) {
     merged.imageBackend = defaultSettings.imageBackend;
   }
+
+  merged.comfyUrl =
+    typeof merged.comfyUrl === "string" ? merged.comfyUrl.trim().slice(0, 500) : "";
+  merged.comfyCheckpoint =
+    typeof merged.comfyCheckpoint === "string" ? merged.comfyCheckpoint.trim().slice(0, 300) : "";
 
   if (merged.imageMode !== "fast" && merged.imageMode !== "slow") {
     merged.imageMode = defaultSettings.imageMode;

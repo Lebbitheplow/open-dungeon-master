@@ -899,6 +899,8 @@ export default function Home() {
           mode: imageRequest?.mode || settings.imageMode,
           backend: imageRequest?.backend || settings.imageBackend,
           aspect: imageRequest?.aspect || settings.aspect,
+          comfyUrl: settings.comfyUrl,
+          comfyCheckpoint: settings.comfyCheckpoint,
           references: refs,
         }),
       });
@@ -3151,6 +3153,114 @@ function StorySettingsPanel({
   );
 }
 
+// ComfyUI backend settings: server URL plus a checkpoint picker fed by the
+// server's own checkpoint list (via /api/comfy, which also proves it's up).
+function ComfySettings({
+  settings,
+  setSettings,
+  disabled,
+  idPrefix,
+}: {
+  settings: StorySettings;
+  setSettings: Dispatch<SetStateAction<StorySettings>>;
+  disabled: boolean;
+  idPrefix: string;
+}) {
+  const [status, setStatus] = useState<{
+    ok: boolean;
+    error?: string;
+    url?: string;
+    checkpoints: string[];
+  } | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setChecking(true);
+      try {
+        const response = await fetch("/api/comfy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: settings.comfyUrl }),
+          signal: controller.signal,
+        });
+        setStatus(await response.json());
+      } catch {
+        if (!controller.signal.aborted) {
+          setStatus({ ok: false, error: "Could not check ComfyUI.", checkpoints: [] });
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setChecking(false);
+        }
+      }
+    }, 400);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeout);
+    };
+  }, [settings.comfyUrl]);
+
+  return (
+    <div className="space-y-3 rounded border border-stone-800 bg-stone-950 px-3 py-3">
+      <div>
+        <p className="text-sm font-medium text-stone-200">
+          {checking ? "Checking ComfyUI…" : status?.ok ? "ComfyUI connected" : "ComfyUI not reachable"}
+        </p>
+        <p className="mt-1 text-xs leading-relaxed text-stone-500">
+          {status?.ok
+            ? `${status.checkpoints.length} ${status.checkpoints.length === 1 ? "checkpoint" : "checkpoints"} available at ${status.url}`
+            : status?.error || "Start ComfyUI, then set its URL here."}
+        </p>
+      </div>
+      <label className="block">
+        <span className="mb-1 block text-xs font-medium uppercase text-stone-500">Server URL</span>
+        <input
+          id={`${idPrefix}-comfy-url`}
+          name={`${idPrefix}-comfy-url`}
+          value={settings.comfyUrl}
+          disabled={disabled}
+          onChange={(event) =>
+            setSettings((current) => ({ ...current, comfyUrl: event.target.value }))
+          }
+          placeholder="http://127.0.0.1:8188"
+          className="w-full rounded border border-stone-800 bg-stone-950 px-3 py-2 text-sm text-stone-200 outline-none focus:border-amber-300 disabled:text-stone-600"
+        />
+      </label>
+      <label className="block">
+        <span className="mb-1 block text-xs font-medium uppercase text-stone-500">Checkpoint</span>
+        <select
+          id={`${idPrefix}-comfy-checkpoint`}
+          name={`${idPrefix}-comfy-checkpoint`}
+          value={settings.comfyCheckpoint}
+          disabled={disabled}
+          onChange={(event) =>
+            setSettings((current) => ({ ...current, comfyCheckpoint: event.target.value }))
+          }
+          className="w-full rounded border border-stone-800 bg-stone-950 px-3 py-2 text-sm text-stone-200 outline-none focus:border-amber-300 disabled:text-stone-600"
+        >
+          <option value="">Auto (first available)</option>
+          {status?.checkpoints.map((checkpoint) => (
+            <option key={checkpoint} value={checkpoint}>
+              {checkpoint}
+            </option>
+          ))}
+          {settings.comfyCheckpoint &&
+            !status?.checkpoints.includes(settings.comfyCheckpoint) && (
+              <option value={settings.comfyCheckpoint}>{settings.comfyCheckpoint}</option>
+            )}
+        </select>
+      </label>
+      <p className="text-xs leading-relaxed text-stone-600">
+        Images generate with the selected ComfyUI checkpoint. Character portrait references are
+        not used by this backend.
+      </p>
+    </div>
+  );
+}
+
 function ImageSettingsPanel({
   settings,
   setSettings,
@@ -3177,6 +3287,7 @@ function ImageSettingsPanel({
 } & PanelControlProps) {
   const idPrefix = compact ? "mobile" : "desktop";
   const imageControlsDisabled = !settings.imageGenerationEnabled;
+  const usingComfy = settings.imageBackend === "comfyui";
   const workerRunning = Boolean(imageWorkerStatus?.ok);
   const workerStatusLabel = workerRunning ? "Worker running" : "Worker stopped";
   const workerDetail = workerRunning
@@ -3207,46 +3318,14 @@ function ImageSettingsPanel({
           className="size-4 accent-amber-200"
         />
       </label>
-      <div className="space-y-3 rounded border border-stone-800 bg-stone-950 px-3 py-3">
-        <div>
-          <p className="text-sm font-medium text-stone-200">{workerStatusLabel}</p>
-          <p className="mt-1 text-xs leading-relaxed text-stone-500">{workerDetail}</p>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            disabled={imageControlsDisabled || imageWorkerBusy}
-            onClick={onStartImageWorker}
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded border border-stone-700 bg-stone-900/50 px-2 text-sm text-stone-200 hover:border-amber-700/60 hover:bg-stone-900 disabled:cursor-not-allowed disabled:border-stone-800 disabled:text-stone-600"
-          >
-            {imageWorkerBusy ? (
-              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-            ) : (
-              <Play className="size-4" aria-hidden="true" />
-            )}
-            Start
-          </button>
-          <button
-            type="button"
-            disabled={imageWorkerBusy}
-            onClick={onOpenImageModelFolder}
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded border border-stone-700 bg-stone-900/50 px-2 text-sm text-stone-200 hover:border-amber-700/60 hover:bg-stone-900 disabled:cursor-not-allowed disabled:border-stone-800 disabled:text-stone-600"
-          >
-            <FolderOpen className="size-4" aria-hidden="true" />
-            Models
-          </button>
-        </div>
-        {imageWorkerMessage && (
-          <p className="text-xs leading-relaxed text-stone-500">{imageWorkerMessage}</p>
-        )}
-      </div>
       <div className="space-y-2">
         <span className="block text-xs font-medium uppercase text-stone-500">Backend</span>
         <Segmented<ImageBackend>
           value={settings.imageBackend}
           options={[
             { value: "mflux-hs", label: "MFLUX Mac" },
-            { value: "sdnq-hs", label: "SDNQ CUDA/CPU" },
+            { value: "sdnq-hs", label: "SDNQ GPU/CPU" },
+            { value: "comfyui", label: "ComfyUI" },
           ]}
           disabled={imageControlsDisabled}
           onChange={(imageBackend) =>
@@ -3257,13 +3336,56 @@ function ImageSettingsPanel({
           }
         />
       </div>
+      {usingComfy ? (
+        <ComfySettings
+          settings={settings}
+          setSettings={setSettings}
+          disabled={imageControlsDisabled}
+          idPrefix={idPrefix}
+        />
+      ) : (
+        <div className="space-y-3 rounded border border-stone-800 bg-stone-950 px-3 py-3">
+          <div>
+            <p className="text-sm font-medium text-stone-200">{workerStatusLabel}</p>
+            <p className="mt-1 text-xs leading-relaxed text-stone-500">{workerDetail}</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              disabled={imageControlsDisabled || imageWorkerBusy}
+              onClick={onStartImageWorker}
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded border border-stone-700 bg-stone-900/50 px-2 text-sm text-stone-200 hover:border-amber-700/60 hover:bg-stone-900 disabled:cursor-not-allowed disabled:border-stone-800 disabled:text-stone-600"
+            >
+              {imageWorkerBusy ? (
+                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Play className="size-4" aria-hidden="true" />
+              )}
+              Start
+            </button>
+            <button
+              type="button"
+              disabled={imageWorkerBusy}
+              onClick={onOpenImageModelFolder}
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded border border-stone-700 bg-stone-900/50 px-2 text-sm text-stone-200 hover:border-amber-700/60 hover:bg-stone-900 disabled:cursor-not-allowed disabled:border-stone-800 disabled:text-stone-600"
+            >
+              <FolderOpen className="size-4" aria-hidden="true" />
+              Models
+            </button>
+          </div>
+          {imageWorkerMessage && (
+            <p className="text-xs leading-relaxed text-stone-500">{imageWorkerMessage}</p>
+          )}
+        </div>
+      )}
       <div className="space-y-2">
         <span className="block text-xs font-medium uppercase text-stone-500">Size</span>
         <Segmented<ImageMode>
           value={settings.imageMode}
           options={[
             { value: "fast", label: "1024" },
-            { value: "slow", label: "2048" },
+            // ComfyUI checkpoints (SDXL-class) degrade past ~1.5K long side.
+            { value: "slow", label: usingComfy ? "1344" : "2048" },
           ]}
           disabled={imageControlsDisabled}
           onChange={(imageMode) => setSettings((current) => ({ ...current, imageMode }))}
