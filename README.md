@@ -309,16 +309,8 @@ On Linux, install the ROCm build of PyTorch into `ultra-fast-image-gen`'s
 venv instead (`pip install torch torchvision --index-url
 https://download.pytorch.org/whl/rocm6.4`) and run with
 `IMAGE_SERVER_DEVICE=cuda` — PyTorch's ROCm build exposes the CUDA device
-API.
-
-For AMD cards not on the supported list (RX 7800/7600, RX 6000 series and
-older), the community
-[opendungeon-comfy-shim](https://github.com/momcilovicrobert-momc/opendungeon-comfy-shim)
-remains a solid workaround: a small Python shim that speaks the image-worker
-API and drives a local ComfyUI (SDXL) instance — ~20–60 seconds per image.
-Note it generates with SDXL checkpoints, not the FLUX models bundled here.
-Point `FLUX_WORKER_URL` at the shim and Open Dungeon needs no other changes.
-(Community-maintained; setup instructions are in that repo.)
+API. AMD cards without official PyTorch support (RX 7800/7600, RX 6000
+series and older) fall back to CPU image generation.
 
 ## The story image tool
 
