@@ -390,6 +390,33 @@ function toOllamaMessages(messages: OpenRouterMessage[]): OllamaChatMessage[] {
   });
 }
 
+function hasImageParts(messages: OpenRouterMessage[]) {
+  return messages.some(
+    (message) =>
+      typeof message.content !== "string" &&
+      message.content.some((part) => part.type === "image_url"),
+  );
+}
+
+// Flatten multimodal messages to text-only for backends that can't take
+// images (e.g. llama.cpp without an mmproj file). Portrait labels survive as
+// text, so character continuity degrades gracefully instead of erroring.
+function stripImageParts(messages: OpenRouterMessage[]): OpenRouterMessage[] {
+  return messages.map((message) => {
+    if (typeof message.content === "string") {
+      return message;
+    }
+
+    return {
+      role: message.role,
+      content: message.content
+        .filter((part): part is TextContentPart => part.type === "text")
+        .map((part) => part.text)
+        .join("\n\n"),
+    };
+  });
+}
+
 // Resolve a user-entered backend URL to its /chat/completions endpoint.
 // Accepts a bare host (http://127.0.0.1:8080), a versioned base (.../v1), or
 // the full endpoint, so people can paste whatever their server prints.
@@ -511,6 +538,18 @@ async function requestCustomMessage(
   if (!upstream.ok) {
     const text = await upstream.text();
 
+    // Some servers can't accept image inputs at all (llama.cpp without an
+    // mmproj, plain text models); retry the turn with text-only messages.
+    if (hasImageParts(messages) && /image input|mmproj|image_url|vision/i.test(text)) {
+      return requestCustomMessage(
+        trimmedBase,
+        resolvedModel,
+        apiKey,
+        stripImageParts(messages),
+        includeImageTool,
+      );
+    }
+
     // Some servers don't implement function tools; retry without auto images.
     if (includeImageTool && /tool|function|not support/i.test(text)) {
       return requestCustomMessage(trimmedBase, resolvedModel, apiKey, messages, false);
@@ -589,7 +628,7 @@ async function requestLocalMessage(
     return {
       error: Response.json(
         {
-          error: `Could not reach Ollama at ${baseUrl}. Start the Ollama app (or \`ollama serve\`), pull the model with \`ollama pull ${model}\`, or switch this chat to OpenRouter in Text Model settings.`,
+          error: `Could not reach Ollama at ${baseUrl}. Start the Ollama app (or \`ollama serve\`), pull the model with \`ollama pull ${model}\`, or switch this chat to a custom backend (LM Studio, llama.cpp, OpenRouter, ...) in Text Model settings.`,
         },
         { status: 502 },
       ),

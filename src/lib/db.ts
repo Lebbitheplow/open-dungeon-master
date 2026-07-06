@@ -96,6 +96,12 @@ function ensureSchema(db: Database.Database) {
 
     CREATE INDEX IF NOT EXISTS idx_characters_chat_updated
       ON characters(chat_id, updated_at);
+
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value_json TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
 
   // Compaction memory: a rolling "story so far" summary plus a watermark of
@@ -287,6 +293,37 @@ export function listChats(): StoryChatSummary[] {
   return rows.map(mapChatSummary);
 }
 
+const DEFAULT_SETTINGS_KEY = "default_story_settings";
+
+// Backend/model choices are remembered app-wide, so a new story starts from
+// the settings the player last used instead of silently falling back to the
+// stock Ollama defaults (#9). World/style still come from the story dialog.
+export function getStoredDefaultSettings(): StorySettings {
+  const db = getDatabase();
+  const row = db
+    .prepare(`SELECT value_json FROM app_settings WHERE key = ?`)
+    .get(DEFAULT_SETTINGS_KEY) as { value_json: string } | undefined;
+
+  return normalizeSettings(parseJson<Partial<StorySettings>>(row?.value_json, {}));
+}
+
+export function setStoredDefaultSettings(settings: Partial<StorySettings>) {
+  const db = getDatabase();
+  db.prepare(
+    `
+      INSERT INTO app_settings (key, value_json, updated_at)
+      VALUES (@key, @valueJson, @updatedAt)
+      ON CONFLICT(key) DO UPDATE SET
+        value_json = excluded.value_json,
+        updated_at = excluded.updated_at
+    `,
+  ).run({
+    key: DEFAULT_SETTINGS_KEY,
+    valueJson: JSON.stringify(normalizeSettings(settings)),
+    updatedAt: new Date().toISOString(),
+  });
+}
+
 export function createChat(settings?: Partial<StorySettings>, title = DEFAULT_CHAT_TITLE): StoryChat {
   const db = getDatabase();
   const now = new Date().toISOString();
@@ -395,6 +432,10 @@ export function updateChat(
     ? normalizeSettings({ ...current.settings, ...updates.settings })
     : current.settings;
   const now = new Date().toISOString();
+
+  if (updates.settings) {
+    setStoredDefaultSettings(nextSettings);
+  }
 
   getDatabase()
     .prepare(
