@@ -286,6 +286,16 @@ generations. On Windows, the worker automatically maps MFLUX requests to the
 SDNQ backend because MLX is not available there. See
 [image_server/README.md](image_server/README.md) for details.
 
+### AMD GPUs (ComfyUI shim)
+
+The bundled FLUX backends target Apple Silicon (MLX) and NVIDIA (CUDA); on
+AMD cards they fall back to CPU, where a single image can take 15–30 minutes.
+Community workaround: [opendungeon-comfy-shim](https://github.com/momcilovicrobert-momc/opendungeon-comfy-shim)
+is a small Python shim that speaks the image-worker API and drives a local
+ComfyUI (SDXL) instance instead — ~20–60 seconds per image on the same AMD
+GPU. Point `FLUX_WORKER_URL` at the shim and Open Dungeon needs no other
+changes. (Community-maintained; setup instructions are in that repo.)
+
 ## The story image tool
 
 The narrator can call a `generate_image` function tool through the selected

@@ -107,8 +107,21 @@ function npmCommand() {
 }
 
 async function startWorker() {
-  const existing = await waitForHealth(1);
+  const existing = (await waitForHealth(1)) as { ok?: boolean; repo?: string } | null;
   if (existing) {
+    // The worker answers /health with ok:false when its backends are missing
+    // (typically no ultra-fast-image-gen checkout). Saying "already running"
+    // here while the panel shows "Worker stopped" reads as a contradiction —
+    // explain the real state instead (#11).
+    if (existing.ok === false) {
+      return Response.json({
+        ok: false,
+        status: "unhealthy",
+        message: `Image worker is running but its image backend is not ready. Install the ultra-fast-image-gen repo${existing.repo ? ` (expected at ${existing.repo})` : ""} — see the "Image generation" section of the README.`,
+        health: existing,
+      });
+    }
+
     return Response.json({
       ok: true,
       status: "running",
@@ -146,14 +159,17 @@ async function startWorker() {
     closeSync(logFd);
   }
 
-  const health = await waitForHealth(8);
+  const health = (await waitForHealth(8)) as { ok?: boolean; repo?: string } | null;
+  const healthy = Boolean(health && health.ok !== false);
   return Response.json(
     {
-      ok: Boolean(health),
-      status: health ? "running" : "starting",
-      message: health
+      ok: healthy,
+      status: healthy ? "running" : health ? "unhealthy" : "starting",
+      message: healthy
         ? "Image worker started."
-        : "Image worker is starting. If it does not appear soon, check the log.",
+        : health
+          ? `Image worker started, but its image backend is not ready. Install the ultra-fast-image-gen repo${health.repo ? ` (expected at ${health.repo})` : ""} — see the "Image generation" section of the README.`
+          : "Image worker is starting. If it does not appear soon, check the log.",
       health,
       logPath,
     },
