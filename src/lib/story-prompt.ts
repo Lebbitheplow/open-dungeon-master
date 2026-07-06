@@ -156,9 +156,70 @@ export function parseStoryModelResult(raw: string): StoryModelResult {
   };
 }
 
+// Reasoning models leak their hidden thinking into the visible reply when the
+// serving template doesn't separate it: <think>...</think> blocks
+// (Qwen/DeepSeek-style templates) or Harmony channel markers (gpt-oss), often
+// mangled mid-token into forms like "<|channel>thought" / "<channel|>".
+const THINK_BLOCK = /<(think|thinking|thought|reasoning)>[\s\S]*?<\/\1>/gi;
+const THINK_TAG = /<\/?(?:think|thinking|thought|reasoning)>/gi;
+const THINK_CLOSER = /<\/(?:think|thinking|thought|reasoning)>/gi;
+// Tolerant of mangled pipes: matches <|channel|>, <|channel>, and <channel|>.
+const FINAL_CHANNEL = /<\|?channel\|?>\s*final\s*(?:<\|?message\|?>)?/gi;
+const THOUGHT_CHANNEL_BLOCK =
+  /<\|?channel\|?>\s*(?:analysis|commentary|thought|thinking)\b[\s\S]*?(?=<\|?channel\|?>|<\|start\|>|$)/gi;
+const BARE_MARKER = /<\|?(?:start|end|message|channel|return|im_start|im_end)\|?>/gi;
+// Harmony markers collapsed by a broken template glue the role and channel
+// straight into the text ("...assistantfinalYou draw your blade.").
+const GLUED_FINAL = /assistantfinal[:\s]*/gi;
+
+function lastMatchEnd(text: string, pattern: RegExp): number {
+  pattern.lastIndex = 0;
+  let end = -1;
+  for (let match = pattern.exec(text); match; match = pattern.exec(text)) {
+    end = match.index + match[0].length;
+  }
+  return end;
+}
+
+export function stripReasoningArtifacts(raw: string): string {
+  let text = raw.replace(THINK_BLOCK, "");
+
+  // A closing tag with no opener left means the opener was never emitted
+  // (some templates strip it); the reply is whatever follows the last closer.
+  const afterCloser = lastMatchEnd(text, THINK_CLOSER);
+  if (afterCloser >= 0) {
+    text = text.slice(afterCloser);
+  }
+
+  // Harmony format: the visible reply is the last "final" channel.
+  const afterFinal = lastMatchEnd(text, FINAL_CHANNEL);
+  if (afterFinal >= 0) {
+    text = text.slice(afterFinal);
+  }
+
+  const afterGluedFinal = lastMatchEnd(text, GLUED_FINAL);
+  if (afterGluedFinal >= 0) {
+    text = text.slice(afterGluedFinal);
+  }
+
+  text = text
+    .replace(THOUGHT_CHANNEL_BLOCK, "")
+    .replace(BARE_MARKER, "")
+    .replace(THINK_TAG, "");
+
+  const cleaned = text.trim();
+  if (cleaned) {
+    return cleaned;
+  }
+
+  // Everything was swallowed (e.g. an unterminated thought block that was
+  // really the whole reply) — fall back to removing only the markers.
+  return raw.replace(BARE_MARKER, " ").replace(THINK_TAG, " ").replace(/\s{3,}/g, "\n\n").trim();
+}
+
 export function extractStoryText(raw: unknown): string {
   if (typeof raw === "string") {
-    const trimmed = raw.trim();
+    const trimmed = stripReasoningArtifacts(raw.trim());
 
     if (!trimmed) {
       return "";
@@ -176,7 +237,7 @@ export function extractStoryText(raw: unknown): string {
   }
 
   if (Array.isArray(raw)) {
-    return raw
+    const joined = raw
       .map((part) => {
         if (typeof part === "string") {
           return part;
@@ -195,6 +256,8 @@ export function extractStoryText(raw: unknown): string {
       })
       .join("")
       .trim();
+
+    return stripReasoningArtifacts(joined);
   }
 
   return "";
