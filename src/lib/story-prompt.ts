@@ -217,6 +217,155 @@ export function stripReasoningArtifacts(raw: string): string {
   return raw.replace(BARE_MARKER, " ").replace(THINK_TAG, " ").replace(/\s{3,}/g, "\n\n").trim();
 }
 
+// Streaming counterpart to stripReasoningArtifacts: emits visible story text
+// as chunks arrive while holding back reasoning leakage. Text inside think
+// blocks / thought channels is suppressed until the block closes, marker
+// tokens are dropped, and a short tail is buffered so a marker split across
+// chunks never flashes on screen. Best-effort — callers must still re-clean
+// the final full text with stripReasoningArtifacts and reconcile.
+const STREAM_SUPPRESS_OPEN =
+  /<(?:think|thinking|thought|reasoning)>|<\|?channel\|?>\s*(?:analysis|commentary|thought|thinking)\b/i;
+const STREAM_SUPPRESS_END =
+  /<\/(?:think|thinking|thought|reasoning)>|<\|?channel\|?>\s*final\s*(?:<\|?message\|?>)?|assistantfinal[:\s]*/i;
+// A channel/turn boundary inside a thought block ends the block without being
+// consumed — the marker is re-examined by the visible-text pass, which may
+// immediately re-suppress (doubled thought tags) or strip it and emit prose.
+const STREAM_CHANNEL_BOUNDARY = /<\|?channel\|?>|<\|?(?:start|im_start)\|?>/i;
+// Markers dropped from visible text: orphan closers, final-channel switches,
+// and bare Harmony/ChatML tokens. Opening think tags are NOT here — they are
+// handled by STREAM_SUPPRESS_OPEN so the match kinds stay unambiguous.
+const STREAM_STRIP =
+  /<\/(?:think|thinking|thought|reasoning)>|<\|?channel\|?>\s*final\s*(?:<\|?message\|?>)?|assistantfinal[:\s]*|<\|?(?:start|im_start)\|?>\s*assistant\b|<\|?(?:start|end|message|channel|return|im_start|im_end)\|?>/i;
+const STREAM_HOLDBACK_CHARS = 48;
+
+function partialMarkerStart(text: string): number {
+  // A trailing '<'-run with no '>' yet could be the head of a marker.
+  const angle = text.lastIndexOf("<");
+  if (angle >= 0 && angle >= text.length - 40 && !text.slice(angle).includes(">")) {
+    return angle;
+  }
+  // A trailing prefix of the glued "assistantfinal" marker.
+  const glued = "assistantfinal";
+  const window = text.slice(-glued.length);
+  for (let length = window.length; length > 0; length -= 1) {
+    if (glued.startsWith(window.slice(-length))) {
+      return text.length - length;
+    }
+  }
+  return -1;
+}
+
+export function createStreamingArtifactFilter() {
+  let pending = "";
+  let suppressing = false;
+  let emittedAnything = false;
+  let jsonReply = false;
+
+  return {
+    push(chunk: string): string {
+      pending += chunk;
+      let output = "";
+
+      for (;;) {
+        if (suppressing) {
+          const end = pending.match(STREAM_SUPPRESS_END);
+          const boundary = pending.match(STREAM_CHANNEL_BOUNDARY);
+          const endAt = end?.index ?? -1;
+          const boundaryAt = boundary?.index ?? -1;
+
+          if (endAt >= 0 && (boundaryAt < 0 || endAt <= boundaryAt)) {
+            pending = pending.slice(endAt + end![0].length);
+            suppressing = false;
+            continue;
+          }
+          if (boundaryAt >= 0) {
+            const afterBoundary = pending.slice(boundaryAt + boundary![0].length);
+            if (afterBoundary.length < 24 && /^\s*[a-zA-Z]*$/.test(afterBoundary)) {
+              // The channel name may still be arriving — wait before
+              // deciding whether this switches to thought or prose.
+              pending = pending.slice(boundaryAt);
+              break;
+            }
+            pending = pending.slice(boundaryAt);
+            suppressing = false;
+            continue;
+          }
+          // Discard consumed thought text; keep a tail in case an end
+          // marker is split across chunks.
+          pending = pending.slice(-STREAM_HOLDBACK_CHARS);
+          break;
+        }
+
+        // Structured-JSON replies are not readable mid-stream; hold
+        // everything and let the caller deliver the parsed result.
+        if (!emittedAnything && /^\s*\{/.test(pending)) {
+          jsonReply = true;
+        }
+        if (jsonReply) {
+          break;
+        }
+
+        const open = pending.match(STREAM_SUPPRESS_OPEN);
+        const strip = pending.match(STREAM_STRIP);
+        const openAt = open?.index ?? -1;
+        const stripAt = strip?.index ?? -1;
+
+        if (openAt >= 0 && (stripAt < 0 || openAt <= stripAt)) {
+          output += pending.slice(0, openAt);
+          pending = pending.slice(openAt + open![0].length);
+          suppressing = true;
+          continue;
+        }
+        if (stripAt >= 0) {
+          const marker = strip![0];
+          const afterMarker = pending.slice(stripAt + marker.length);
+          // A bare channel/turn marker at the tail is ambiguous until what
+          // follows it fully arrives — it may open a thought channel
+          // (suppress) or precede prose (strip). Hold back while the next
+          // word could still be growing instead of guessing.
+          if (
+            /^<\|?(?:channel|start|im_start)\|?>$/i.test(marker) &&
+            afterMarker.length < 24 &&
+            /^\s*[a-zA-Z]*$/.test(afterMarker)
+          ) {
+            output += pending.slice(0, stripAt);
+            pending = pending.slice(stripAt);
+            break;
+          }
+          output += pending.slice(0, stripAt);
+          pending = pending.slice(stripAt + marker.length);
+          continue;
+        }
+
+        const holdback = partialMarkerStart(pending);
+        if (holdback >= 0) {
+          output += pending.slice(0, holdback);
+          pending = pending.slice(holdback);
+        } else {
+          output += pending;
+          pending = "";
+        }
+        break;
+      }
+
+      if (output) {
+        emittedAnything = true;
+      }
+      return output;
+    },
+
+    flush(): string {
+      const rest = suppressing || jsonReply ? "" : pending.replace(new RegExp(STREAM_STRIP.source, "gi"), "");
+      pending = "";
+      suppressing = false;
+      if (rest) {
+        emittedAnything = true;
+      }
+      return rest;
+    },
+  };
+}
+
 export function extractStoryText(raw: unknown): string {
   if (typeof raw === "string") {
     const trimmed = stripReasoningArtifacts(raw.trim());

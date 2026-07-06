@@ -9,7 +9,12 @@ import {
   updateChatTitleFromInput,
 } from "@/lib/db";
 import { serverEnv } from "@/lib/server-env";
-import { buildStoryMessages, extractStoryText, packStoryHistory } from "@/lib/story-prompt";
+import {
+  buildStoryMessages,
+  createStreamingArtifactFilter,
+  extractStoryText,
+  packStoryHistory,
+} from "@/lib/story-prompt";
 import {
   DEFAULT_LOCAL_TEXT_MODEL,
   LOCAL_TEXT_MODEL_IDS,
@@ -85,6 +90,10 @@ const requestSchema = z.object({
   // opening — the player wrote the first passage themselves; store it verbatim
   //           as the opening narration, with no model call.
   mode: z.enum(["turn", "kickoff", "continue", "retry", "opening"]).default("turn"),
+  // When true the narration is delivered as NDJSON events (delta/done/error)
+  // instead of a single JSON body. Opening mode and request-level failures
+  // still answer with plain JSON.
+  stream: z.boolean().default(false),
   input: z.string().min(1),
   messages: z.array(messageSchema).default([]),
   attachments: z.array(attachmentSchema).default([]),
@@ -333,17 +342,70 @@ function formatTimeout(ms: number) {
 function createRequestTimeout(ms: number) {
   const controller = new AbortController();
   let timedOut = false;
-  const timeoutId = setTimeout(() => {
+  const abortNow = () => {
     timedOut = true;
     controller.abort();
-  }, ms);
+  };
+  const timeoutId = setTimeout(abortNow, ms);
 
   return {
     signal: controller.signal,
     clear: () => clearTimeout(timeoutId),
     timedOut: () => timedOut,
+    abortNow,
   };
 }
+
+type StreamDeltaHandler = (text: string) => void;
+
+// Reads an upstream streaming body line by line with an idle timeout that
+// resets on every chunk, so a stalled model server can't hold the turn open
+// forever while a slow-but-alive one is given all the time it needs.
+async function forEachStreamLine(
+  upstream: Response,
+  idleMs: number,
+  onIdleAbort: () => void,
+  onLine: (line: string) => void,
+) {
+  const reader = upstream.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  const resetIdle = () => {
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(onIdleAbort, idleMs);
+  };
+
+  resetIdle();
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      resetIdle();
+      buffer += decoder.decode(value, { stream: true });
+      let newline = buffer.indexOf("\n");
+      while (newline >= 0) {
+        const line = buffer.slice(0, newline).trim();
+        buffer = buffer.slice(newline + 1);
+        if (line) {
+          onLine(line);
+        }
+        newline = buffer.indexOf("\n");
+      }
+    }
+    buffer += decoder.decode();
+    const rest = buffer.trim();
+    if (rest) {
+      onLine(rest);
+    }
+  } finally {
+    clearTimeout(idleTimer);
+  }
+}
+
+type StreamedToolCall = { function: { name: string; arguments: string } };
 
 type UpstreamChatMessage = {
   content?: unknown;
@@ -438,6 +500,7 @@ async function requestCustomMessage(
   apiKey: string,
   messages: OpenRouterMessage[],
   includeImageTool: boolean,
+  onDelta?: StreamDeltaHandler,
 ): Promise<UpstreamResult> {
   const trimmedBase = (baseUrl || "").trim();
 
@@ -482,6 +545,7 @@ async function requestCustomMessage(
     messages,
     temperature: 0.9,
     max_tokens: configuredMaxOutputTokens(),
+    ...(onDelta ? { stream: true } : {}),
   };
 
   if (includeImageTool) {
@@ -547,12 +611,13 @@ async function requestCustomMessage(
         apiKey,
         stripImageParts(messages),
         includeImageTool,
+        onDelta,
       );
     }
 
     // Some servers don't implement function tools; retry without auto images.
     if (includeImageTool && /tool|function|not support/i.test(text)) {
-      return requestCustomMessage(trimmedBase, resolvedModel, apiKey, messages, false);
+      return requestCustomMessage(trimmedBase, resolvedModel, apiKey, messages, false, onDelta);
     }
 
     return {
@@ -563,6 +628,92 @@ async function requestCustomMessage(
         },
         { status: upstream.status },
       ),
+    };
+  }
+
+  if (onDelta && upstream.body) {
+    // OpenAI-compatible SSE: "data: {...}" lines carrying content and
+    // tool-call fragments, terminated by "data: [DONE]".
+    const contentParts: string[] = [];
+    const toolCalls: Array<StreamedToolCall | undefined> = [];
+    let upstreamError = "";
+
+    try {
+      await forEachStreamLine(upstream, timeoutMs, requestTimeout.abortNow, (line) => {
+        if (!line.startsWith("data:")) {
+          return;
+        }
+        const payload = line.slice(5).trim();
+        if (!payload || payload === "[DONE]") {
+          return;
+        }
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(payload);
+        } catch {
+          return;
+        }
+        const record = parsed as {
+          choices?: Array<{ delta?: { content?: unknown; tool_calls?: unknown } }>;
+          error?: { message?: string } | string;
+        };
+        if (record.error) {
+          upstreamError =
+            typeof record.error === "string"
+              ? record.error
+              : record.error.message || "The backend reported a stream error.";
+          return;
+        }
+        const delta = record.choices?.[0]?.delta;
+        if (typeof delta?.content === "string" && delta.content) {
+          contentParts.push(delta.content);
+          onDelta(delta.content);
+        }
+        if (Array.isArray(delta?.tool_calls)) {
+          for (const call of delta.tool_calls) {
+            const raw = call as { index?: number; function?: { name?: unknown; arguments?: unknown } };
+            const index = typeof raw.index === "number" ? raw.index : 0;
+            const target = (toolCalls[index] ??= { function: { name: "", arguments: "" } });
+            if (typeof raw.function?.name === "string") {
+              target.function.name += raw.function.name;
+            }
+            if (typeof raw.function?.arguments === "string") {
+              target.function.arguments += raw.function.arguments;
+            }
+          }
+        }
+      });
+    } catch {
+      return {
+        error: Response.json(
+          {
+            error: requestTimeout.timedOut()
+              ? `${isOpenRouter ? "OpenRouter" : "Backend"} stream stalled for ${formatTimeout(timeoutMs)}. Retry, or lower that backend's context/output settings.`
+              : `The ${isOpenRouter ? "OpenRouter" : "backend"} stream was interrupted. Check the server and retry.`,
+          },
+          { status: requestTimeout.timedOut() ? 504 : 502 },
+        ),
+      };
+    }
+
+    if (upstreamError) {
+      return {
+        error: Response.json(
+          {
+            error: `${isOpenRouter ? "OpenRouter" : "Backend"} stream failed.`,
+            detail: upstreamError.slice(0, 1000),
+          },
+          { status: 502 },
+        ),
+      };
+    }
+
+    const completedToolCalls = toolCalls.filter(Boolean) as StreamedToolCall[];
+    return {
+      message: {
+        content: contentParts.join(""),
+        ...(completedToolCalls.length ? { tool_calls: completedToolCalls } : {}),
+      },
     };
   }
 
@@ -578,12 +729,13 @@ async function requestLocalMessage(
   messages: OpenRouterMessage[],
   includeImageTool: boolean,
   disableThinking = true,
+  onDelta?: StreamDeltaHandler,
 ): Promise<UpstreamResult> {
   const baseUrl = serverEnv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").replace(/\/$/, "");
   const requestPayload: Record<string, unknown> = {
     model,
     messages: toOllamaMessages(messages),
-    stream: false,
+    stream: Boolean(onDelta),
     // Keep the model (and the story's prompt cache) resident between turns.
     keep_alive: "30m",
     options: {
@@ -642,12 +794,12 @@ async function requestLocalMessage(
 
     // Some local models lack a tool-call template; retry the turn without auto images.
     if (includeImageTool && /does not support tools/i.test(text)) {
-      return requestLocalMessage(model, messages, false, disableThinking);
+      return requestLocalMessage(model, messages, false, disableThinking, onDelta);
     }
 
     // Models without a thinking channel reject the think parameter; retry without it.
     if (disableThinking && /does not support think/i.test(text)) {
-      return requestLocalMessage(model, messages, includeImageTool, false);
+      return requestLocalMessage(model, messages, includeImageTool, false, onDelta);
     }
 
     const hint = /not found/i.test(text)
@@ -661,6 +813,70 @@ async function requestLocalMessage(
         },
         { status: 502 },
       ),
+    };
+  }
+
+  if (onDelta && upstream.body) {
+    // Ollama streams NDJSON: one JSON object per line with message.content
+    // fragments; tool calls arrive whole on whichever line carries them.
+    const contentParts: string[] = [];
+    const toolCalls: unknown[] = [];
+    let upstreamError = "";
+
+    try {
+      await forEachStreamLine(upstream, timeoutMs, requestTimeout.abortNow, (line) => {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(line);
+        } catch {
+          return;
+        }
+        const record = parsed as {
+          message?: { content?: unknown; tool_calls?: unknown };
+          error?: unknown;
+        };
+        if (record.error) {
+          upstreamError = String(record.error);
+          return;
+        }
+        if (typeof record.message?.content === "string" && record.message.content) {
+          contentParts.push(record.message.content);
+          onDelta(record.message.content);
+        }
+        if (Array.isArray(record.message?.tool_calls)) {
+          toolCalls.push(...record.message.tool_calls);
+        }
+      });
+    } catch {
+      return {
+        error: Response.json(
+          {
+            error: requestTimeout.timedOut()
+              ? `The local model stalled for ${formatTimeout(timeoutMs)} mid-passage. Ollama may still be working; wait a moment, then retry, or lower LOCAL_TEXT_CONTEXT / LOCAL_TEXT_MAX_TOKENS.`
+              : "The local model stream was interrupted. Check that Ollama is still running and retry.",
+          },
+          { status: requestTimeout.timedOut() ? 504 : 502 },
+        ),
+      };
+    }
+
+    if (upstreamError) {
+      return {
+        error: Response.json(
+          {
+            error: "Local model stream failed.",
+            detail: upstreamError.slice(0, 1000),
+          },
+          { status: 502 },
+        ),
+      };
+    }
+
+    return {
+      message: {
+        content: contentParts.join(""),
+        ...(toolCalls.length ? { tool_calls: toolCalls } : {}),
+      },
     };
   }
 
@@ -681,9 +897,10 @@ function requestStoryMessage(
   settings: StoryRequestSettings,
   messages: OpenRouterMessage[],
   includeImageTool: boolean,
+  onDelta?: StreamDeltaHandler,
 ): Promise<UpstreamResult> {
   if (settings.textProvider === "local") {
-    return requestLocalMessage(settings.localTextModel, messages, includeImageTool);
+    return requestLocalMessage(settings.localTextModel, messages, includeImageTool, true, onDelta);
   }
   return requestCustomMessage(
     settings.customBaseUrl,
@@ -691,6 +908,7 @@ function requestStoryMessage(
     settings.customApiKey,
     messages,
     includeImageTool,
+    onDelta,
   );
 }
 
@@ -812,59 +1030,165 @@ export async function POST(request: Request) {
   const messages = characterVisionMessage
     ? [storyMessages[0], characterVisionMessage, ...storyMessages.slice(1)]
     : storyMessages;
-  const { message, error } = await requestStoryMessage(
-    body.settings,
-    messages,
-    body.settings.imageGenerationEnabled && body.settings.autoImages,
-  );
+  const includeImageTool = body.settings.imageGenerationEnabled && body.settings.autoImages;
+
+  // Shared tail of a narration turn: extract, validate, persist.
+  const finalizeTurn = (
+    message: UpstreamChatMessage | undefined,
+  ):
+    | { failure: { error: string; detail?: unknown }; assistantMessage?: undefined }
+    | { assistantMessage: StoryMessage; failure?: undefined } => {
+    const storyText = extractStoryText(message?.content);
+    const imageToolArgs = parseGenerateImageToolCall(message?.tool_calls);
+
+    if (!storyText && !imageToolArgs) {
+      return {
+        failure: {
+          error: `${provider === "local" ? "The local model" : "The backend"} returned no story content.`,
+          detail: message,
+        },
+      };
+    }
+
+    const characterIds =
+      imageToolArgs?.characterIds
+        ?.filter((id) => knownCharacterIds.has(id))
+        .slice(0, MAX_IMAGE_REFERENCES) || [];
+    const assistantMessage: StoryMessage = {
+      id: crypto.randomUUID(),
+      role: "assistant",
+      content: storyText || "The moment hangs there, waiting for what you do next.",
+      createdAt: new Date().toISOString(),
+      imageRequest:
+        includeImageTool && imageToolArgs?.prompt
+          ? {
+              needed: true,
+              prompt: imageToolArgs.prompt,
+              mode: body.settings.imageMode,
+              backend: body.settings.imageBackend,
+              aspect: body.settings.aspect,
+              reason: imageToolArgs.reason,
+              characterIds,
+            }
+          : { needed: false },
+    };
+
+    if (body.chatId) {
+      addMessage(body.chatId, assistantMessage);
+    }
+
+    return { assistantMessage };
+  };
+
+  if (body.stream) {
+    // NDJSON events: {type:"delta"} chunks of visible story text as the model
+    // writes, then one {type:"done"} carrying the sanitized persisted message
+    // the client reconciles to, or {type:"error"}.
+    const encoder = new TextEncoder();
+    const filter = createStreamingArtifactFilter();
+    let cancelled = false;
+
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const send = (event: Record<string, unknown>) => {
+          if (cancelled) {
+            return;
+          }
+          try {
+            controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+          } catch {
+            cancelled = true;
+          }
+        };
+
+        void (async () => {
+          try {
+            const { message, error } = await requestStoryMessage(
+              body.settings,
+              messages,
+              includeImageTool,
+              (text) => {
+                const visible = filter.push(text);
+                if (visible) {
+                  send({ type: "delta", text: visible });
+                }
+              },
+            );
+
+            if (error) {
+              const payload = (await error.json().catch(() => null)) as {
+                error?: string;
+                detail?: unknown;
+              } | null;
+              send({
+                type: "error",
+                error: payload?.error || "Story request failed.",
+                ...(payload?.detail !== undefined ? { detail: payload.detail } : {}),
+              });
+              return;
+            }
+
+            const trailing = filter.flush();
+            if (trailing) {
+              send({ type: "delta", text: trailing });
+            }
+
+            const result = finalizeTurn(message);
+            if (result.failure) {
+              send({ type: "error", ...result.failure });
+              return;
+            }
+
+            send({
+              type: "done",
+              id: result.assistantMessage.id,
+              content: result.assistantMessage.content,
+              imageRequest: result.assistantMessage.imageRequest,
+            });
+          } catch (streamFailure) {
+            send({
+              type: "error",
+              error:
+                streamFailure instanceof Error ? streamFailure.message : "Story request failed.",
+            });
+          } finally {
+            if (!cancelled) {
+              try {
+                controller.close();
+              } catch {
+                // The client went away first; nothing left to close cleanly.
+              }
+            }
+          }
+        })();
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "application/x-ndjson; charset=utf-8",
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
+  const { message, error } = await requestStoryMessage(body.settings, messages, includeImageTool);
 
   if (error) {
     return error;
   }
 
-  const storyText = extractStoryText(message?.content);
-  const imageToolArgs = parseGenerateImageToolCall(message?.tool_calls);
-
-  if (!storyText && !imageToolArgs) {
-    return Response.json(
-      {
-        error: `${provider === "local" ? "The local model" : "The backend"} returned no story content.`,
-        detail: message,
-      },
-      { status: 502 },
-    );
-  }
-
-  const characterIds =
-    imageToolArgs?.characterIds
-      ?.filter((id) => knownCharacterIds.has(id))
-      .slice(0, MAX_IMAGE_REFERENCES) || [];
-  const assistantMessage: StoryMessage = {
-    id: crypto.randomUUID(),
-    role: "assistant",
-    content: storyText || "The moment hangs there, waiting for what you do next.",
-    createdAt: new Date().toISOString(),
-    imageRequest:
-      body.settings.imageGenerationEnabled && body.settings.autoImages && imageToolArgs?.prompt
-        ? {
-            needed: true,
-            prompt: imageToolArgs.prompt,
-            mode: body.settings.imageMode,
-            backend: body.settings.imageBackend,
-            aspect: body.settings.aspect,
-            reason: imageToolArgs.reason,
-            characterIds,
-          }
-        : { needed: false },
-  };
-
-  if (body.chatId) {
-    addMessage(body.chatId, assistantMessage);
+  const result = finalizeTurn(message);
+  if (result.failure) {
+    return Response.json(result.failure, { status: 502 });
   }
 
   return Response.json({
-    id: assistantMessage.id,
-    content: assistantMessage.content,
-    imageRequest: assistantMessage.imageRequest,
+    id: result.assistantMessage.id,
+    content: result.assistantMessage.content,
+    imageRequest: result.assistantMessage.imageRequest,
   });
 }

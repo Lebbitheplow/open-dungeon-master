@@ -347,6 +347,8 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [busy, setBusy] = useState(false);
+  // Id of the assistant message currently receiving streamed text, "" when idle.
+  const [streamingId, setStreamingId] = useState("");
   const [uploading, setUploading] = useState(false);
   const [characterSaving, setCharacterSaving] = useState(false);
   const [characterUploadingId, setCharacterUploadingId] = useState("");
@@ -627,6 +629,12 @@ export default function Home() {
       document
         .getElementById(`story-message-${last.id}`)
         ?.scrollIntoView({ block: "start", behavior: "smooth" });
+      return;
+    }
+
+    // Assistant id changes without growth (a streamed passage reconciling to
+    // its persisted id, or an erase) should not move the viewport.
+    if (last.role === "assistant") {
       return;
     }
 
@@ -914,6 +922,8 @@ export default function Home() {
   }
 
   // Shared core for every narrator turn (new turn, kickoff, continue, retry).
+  // Narration streams in as NDJSON deltas; the final "done" event carries the
+  // sanitized message the server persisted, which replaces the streamed text.
   async function runTurn(opts: {
     chatId: string;
     mode: "turn" | "kickoff" | "continue" | "retry" | "opening";
@@ -927,38 +937,34 @@ export default function Home() {
     setError("");
 
     const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), STORY_REQUEST_TIMEOUT_MS);
+    // Idle timeout: reset whenever a stream chunk arrives, so long passages
+    // keep flowing while a stalled backend still gets cut off.
+    let timeoutId = window.setTimeout(() => controller.abort(), STORY_REQUEST_TIMEOUT_MS);
+    const resetTimeout = () => {
+      window.clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(() => controller.abort(), STORY_REQUEST_TIMEOUT_MS);
+    };
+    const placeholderId = makeId();
+    let streamedContent = "";
 
-    try {
-      const response = await fetch("/api/story", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          chatId: opts.chatId,
-          mode: opts.mode,
-          userMessageId: opts.userMessageId,
-          input: opts.input,
-          messages: opts.history,
-          attachments: opts.attachments || [],
-          settings: opts.settings,
-        }),
-      });
-      const payload = await readApi<{
-        id?: string;
-        content: string;
-        imageRequest?: StoryMessage["imageRequest"];
-      }>(response);
-
+    const finishTurn = (payload: {
+      id?: string;
+      content: string;
+      imageRequest?: StoryMessage["imageRequest"];
+    }) => {
       const assistantMessage: StoryMessage = {
-        id: payload.id || makeId(),
+        id: payload.id || placeholderId,
         role: "assistant",
         content: payload.content,
         createdAt: new Date().toISOString(),
         imageRequest: payload.imageRequest,
       };
 
-      setMessages((current) => [...current, assistantMessage]);
+      setMessages((current) =>
+        streamedContent
+          ? current.map((message) => (message.id === placeholderId ? assistantMessage : message))
+          : [...current, assistantMessage],
+      );
       void refreshChats();
 
       if (
@@ -973,7 +979,132 @@ export default function Home() {
           payload.imageRequest,
         );
       }
+    };
+
+    try {
+      const response = await fetch("/api/story", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          chatId: opts.chatId,
+          mode: opts.mode,
+          stream: true,
+          userMessageId: opts.userMessageId,
+          input: opts.input,
+          messages: opts.history,
+          attachments: opts.attachments || [],
+          settings: opts.settings,
+        }),
+      });
+
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("application/x-ndjson")) {
+        // Plain JSON: opening mode and request-level failures.
+        finishTurn(
+          await readApi<{
+            id?: string;
+            content: string;
+            imageRequest?: StoryMessage["imageRequest"];
+          }>(response),
+        );
+        return;
+      }
+      if (!response.body) {
+        throw new Error("The story stream had no body.");
+      }
+
+      let donePayload: {
+        id?: string;
+        content?: string;
+        imageRequest?: StoryMessage["imageRequest"];
+      } | null = null;
+      let streamError = "";
+
+      const handleEvent = (event: {
+        type?: string;
+        text?: string;
+        error?: string;
+        id?: string;
+        content?: string;
+        imageRequest?: StoryMessage["imageRequest"];
+      }) => {
+        if (event.type === "delta" && typeof event.text === "string" && event.text) {
+          if (!streamedContent) {
+            setStreamingId(placeholderId);
+            setMessages((current) => [
+              ...current,
+              {
+                id: placeholderId,
+                role: "assistant",
+                content: event.text as string,
+                createdAt: new Date().toISOString(),
+              },
+            ]);
+          } else {
+            setMessages((current) =>
+              current.map((message) =>
+                message.id === placeholderId
+                  ? { ...message, content: message.content + event.text }
+                  : message,
+              ),
+            );
+          }
+          streamedContent += event.text;
+          return;
+        }
+        if (event.type === "done") {
+          donePayload = event;
+          return;
+        }
+        if (event.type === "error") {
+          streamError = event.error || "Story request failed.";
+        }
+      };
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+        resetTimeout();
+        buffer += decoder.decode(value, { stream: true });
+        let newline = buffer.indexOf("\n");
+        while (newline >= 0) {
+          const line = buffer.slice(0, newline).trim();
+          buffer = buffer.slice(newline + 1);
+          if (line) {
+            handleEvent(JSON.parse(line));
+          }
+          newline = buffer.indexOf("\n");
+        }
+      }
+
+      if (streamError) {
+        throw new Error(streamError);
+      }
+      if (!donePayload) {
+        throw new Error("The story stream ended before the passage finished.");
+      }
+      const finished = donePayload as {
+        id?: string;
+        content?: string;
+        imageRequest?: StoryMessage["imageRequest"];
+      };
+      finishTurn({
+        id: finished.id,
+        content: finished.content ?? streamedContent,
+        imageRequest: finished.imageRequest,
+      });
     } catch (storyError) {
+      // Nothing was persisted for a failed stream; drop the partial passage
+      // so the story matches what the server has.
+      if (streamedContent) {
+        setMessages((current) => current.filter((message) => message.id !== placeholderId));
+      }
       setError(
         isAbortError(storyError)
           ? "The narrator took too long to answer. The model may still be busy in the background; wait a moment, then retry or restart the local model if your system stays under load."
@@ -984,6 +1115,7 @@ export default function Home() {
       void refreshChats();
     } finally {
       window.clearTimeout(timeoutId);
+      setStreamingId("");
       setBusy(false);
     }
   }
@@ -1514,7 +1646,7 @@ export default function Home() {
                   ))
                 )}
 
-                {busy && (
+                {busy && !streamingId && (
                   <div className="flex items-center gap-3 font-serif text-base italic text-stone-500">
                     <Loader2 className="size-4 animate-spin" aria-hidden="true" />
                     The next passage is forming…
