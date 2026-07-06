@@ -57,9 +57,9 @@ venv, installs CUDA or CPU PyTorch wheels, updates a clean
 `ultra-fast-image-gen` checkout, installs the rest of that repo's requirements
 without replacing the selected PyTorch wheel, verifies the expected
 `flux2-4b-sdnq` CLI route is still present, and starts this worker in a second
-PowerShell window. Use `Launch-Windows-CPU.bat` to force the CPU wheel path.
-For a real model smoke test, use `Launch-Windows-Image-Smoke.bat` or
-`Launch-Windows-Image-Smoke-CPU.bat`; these generate a 512px image and validate
+PowerShell window. Use `windows\Launch-Windows-CPU.bat` to force the CPU wheel path.
+For a real model smoke test, use `windows\Launch-Windows-Image-Smoke.bat` or
+`windows\Launch-Windows-Image-Smoke-CPU.bat`; these generate a 512px image and validate
 that the output file exists. Each smoke run writes a transcript to
 `logs/windows-image-smoke-*.log`, and the worker output is written to
 `logs/windows-image-server-*.log`.

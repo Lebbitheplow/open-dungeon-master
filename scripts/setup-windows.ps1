@@ -569,8 +569,8 @@ if ($ShouldSetupImages) {
       Set-Content -Path $FilteredRequirements -Encoding UTF8
     Invoke-Checked "pip upgrade failed." $VenvPython @("-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel")
     if ($ImageStack -eq "rocm") {
-      Invoke-Checked "ROCm SDK install failed. AMD's PyTorch on Windows needs the Adrenalin 26.2.2+ driver; if this keeps failing, relaunch with Launch-Windows-CPU.bat or use the ComfyUI shim from the README." $VenvPython (@("-m", "pip", "install", "--no-cache-dir") + $RocmSdkWheels)
-      Invoke-Checked "PyTorch (ROCm) install failed. If this keeps failing, relaunch with Launch-Windows-CPU.bat or use the ComfyUI shim from the README." $VenvPython (@("-m", "pip", "install", "--no-cache-dir") + $RocmTorchWheels)
+      Invoke-Checked "ROCm SDK install failed. AMD's PyTorch on Windows needs the Adrenalin 26.2.2+ driver; if this keeps failing, relaunch with windows\\Launch-Windows-CPU.bat or switch the Images backend to ComfyUI in the app." $VenvPython (@("-m", "pip", "install", "--no-cache-dir") + $RocmSdkWheels)
+      Invoke-Checked "PyTorch (ROCm) install failed. If this keeps failing, relaunch with windows\\Launch-Windows-CPU.bat or switch the Images backend to ComfyUI in the app." $VenvPython (@("-m", "pip", "install", "--no-cache-dir") + $RocmTorchWheels)
     } else {
       Invoke-Checked "PyTorch install failed. Try relaunching with: powershell -File scripts\setup-windows.ps1 -SetupImages -CpuOnly" $VenvPython @("-m", "pip", "install", "torch", "torchvision", "--index-url", $TorchIndex)
     }
@@ -587,10 +587,10 @@ if ($ShouldSetupImages) {
     if (-not (Test-CudaAvailable $VenvPython)) {
       if ($ImageStack -eq "rocm") {
         Write-Host "PyTorch could not see the AMD GPU ($AmdGpu). PyTorch on Windows for Radeon needs the Adrenalin 26.2.2 (or newer) driver. Starting the image worker in CPU mode." -ForegroundColor Yellow
-        Write-Host "After updating the driver, run Launch-Windows-Image-Smoke.bat to try the GPU again." -ForegroundColor Yellow
+        Write-Host "After updating the driver, run windows\\Launch-Windows-Image-Smoke.bat to try the GPU again." -ForegroundColor Yellow
       } else {
         Write-Host "PyTorch CUDA is not available even though an NVIDIA tool was detected. Starting the image worker in CPU mode." -ForegroundColor Yellow
-        Write-Host "After updating NVIDIA drivers/CUDA support, run Launch-Windows-Image-Smoke.bat to try CUDA again." -ForegroundColor Yellow
+        Write-Host "After updating NVIDIA drivers/CUDA support, run windows\\Launch-Windows-Image-Smoke.bat to try CUDA again." -ForegroundColor Yellow
       }
       $ImageDevice = "cpu"
     }
@@ -651,7 +651,7 @@ npm run image:server *>&1 | Tee-Object -FilePath $ImageServerLogLiteral -Append
   }
 } elseif (-not $ImageOnly) {
   Write-Host "Skipping optional local image generation setup. The app can still launch for text play." -ForegroundColor Yellow
-  Write-Host "Run Launch-Windows-Image-Smoke.bat or Launch-Windows-Image-Loop.bat later to install and test the image worker." -ForegroundColor Yellow
+  Write-Host "Run windows\\Launch-Windows-Image-Smoke.bat or windows\\Launch-Windows-Image-Loop.bat later to install and test the image worker." -ForegroundColor Yellow
 }
 
 if ($ImageOnly) {

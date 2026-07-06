@@ -3,34 +3,43 @@ Set-StrictMode -Version Latest
 
 $Repo = Resolve-Path (Join-Path $PSScriptRoot "..")
 
+# The primary launcher lives at the repo root for double-click discovery; the
+# secondary tools live in windows\ and cd up one level to the repo root.
 $Launchers = @(
   @{
     Path = "Launch-Windows.bat"
+    Cd = 'cd /d "%~dp0"'
     Command = 'powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\launch-windows.ps1"'
   },
   @{
-    Path = "Launch-Windows-CPU.bat"
-    Command = 'powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\launch-windows.ps1" -CpuOnly'
+    Path = "windows\Launch-Windows-CPU.bat"
+    Cd = 'cd /d "%~dp0.."'
+    Command = 'powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\scripts\launch-windows.ps1" -CpuOnly'
   },
   @{
-    Path = "Launch-Windows-Image-Smoke.bat"
-    Command = 'powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\smoke-windows-image.ps1"'
+    Path = "windows\Launch-Windows-Image-Smoke.bat"
+    Cd = 'cd /d "%~dp0.."'
+    Command = 'powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\scripts\smoke-windows-image.ps1"'
   },
   @{
-    Path = "Launch-Windows-Image-Smoke-CPU.bat"
-    Command = 'powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\smoke-windows-image.ps1" -CpuOnly'
+    Path = "windows\Launch-Windows-Image-Smoke-CPU.bat"
+    Cd = 'cd /d "%~dp0.."'
+    Command = 'powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\scripts\smoke-windows-image.ps1" -CpuOnly'
   },
   @{
-    Path = "Launch-Windows-Image-Loop.bat"
-    Command = 'powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\run-windows-image-loop.ps1" -Device both -Count 1 -DiagnoseOnSuccess'
+    Path = "windows\Launch-Windows-Image-Loop.bat"
+    Cd = 'cd /d "%~dp0.."'
+    Command = 'powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\scripts\run-windows-image-loop.ps1" -Device both -Count 1 -DiagnoseOnSuccess'
   },
   @{
-    Path = "Stop-Windows.bat"
-    Command = 'powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\stop-windows.ps1"'
+    Path = "windows\Stop-Windows.bat"
+    Cd = 'cd /d "%~dp0.."'
+    Command = 'powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\scripts\stop-windows.ps1"'
   },
   @{
-    Path = "Diagnose-Windows.bat"
-    Command = 'powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\diagnose-windows.ps1" -IncludeLogTails'
+    Path = "windows\Diagnose-Windows.bat"
+    Cd = 'cd /d "%~dp0.."'
+    Command = 'powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\scripts\diagnose-windows.ps1" -IncludeLogTails'
   }
 )
 
@@ -52,8 +61,8 @@ foreach ($launcher in $Launchers) {
   if ($text -notmatch '(?m)^setlocal$') {
     throw "$($launcher.Path) is missing setlocal."
   }
-  if ($text -notmatch '(?m)^cd /d "%~dp0"$') {
-    throw "$($launcher.Path) is missing repo-root cd command."
+  if (-not $text.Contains($launcher.Cd)) {
+    throw "$($launcher.Path) is missing repo-root cd command: $($launcher.Cd)"
   }
   if (-not $text.Contains($launcher.Command)) {
     throw "$($launcher.Path) is missing expected PowerShell command: $($launcher.Command)"
