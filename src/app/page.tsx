@@ -370,6 +370,7 @@ export default function Home() {
   const defaultSettingsRef = useRef(DEFAULT_STORY_SETTINGS);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
 
   const activeChat = useMemo(
     () => chats.find((chat) => chat.id === selectedChatId),
@@ -380,9 +381,6 @@ export default function Home() {
     return [...messages].reverse().find((message) => message.role === "user")?.attachments || [];
   }, [messages]);
 
-  const orderedDesktopPanels = useMemo(() => {
-    return activeDesktopPanel ? [activeDesktopPanel] : DESKTOP_PANEL_ORDER;
-  }, [activeDesktopPanel]);
 
   const applyChat = useCallback((chat: StoryChat) => {
     setSelectedChatId(chat.id);
@@ -580,6 +578,9 @@ export default function Home() {
         });
         const payload = await readApi<ChatResponse>(response);
         lastSavedSettingsRef.current = JSON.stringify(payload.chat.settings);
+        // The server mirrors saved settings as the app-wide defaults; track
+        // that here so new stories started this session inherit them too (#9).
+        defaultSettingsRef.current = payload.chat.settings;
         setChats((current) =>
           current.map((chat) =>
             chat.id === payload.chat.id ? chatToSummary(payload.chat) : chat,
@@ -598,9 +599,58 @@ export default function Home() {
     };
   }, [libraryLoading, loadingChat, selectedChatId, settings]);
 
+  // Autoscroll: a freshly generated passage is pinned with its start at the
+  // top of the viewport so long replies read from the beginning (#10); player
+  // messages and chat switches jump to the end as before. Image completions
+  // deliberately don't move the viewport.
+  const scrollAnchorRef = useRef({ chatId: "", count: 0, lastId: "" });
+
   useEffect(() => {
+    const last = messages[messages.length - 1];
+    const previous = scrollAnchorRef.current;
+    scrollAnchorRef.current = {
+      chatId: selectedChatId,
+      count: messages.length,
+      lastId: last?.id ?? "",
+    };
+
+    if (!last || previous.chatId !== selectedChatId) {
+      endRef.current?.scrollIntoView({ block: "end" });
+      return;
+    }
+
+    if (last.id === previous.lastId) {
+      return;
+    }
+
+    if (last.role === "assistant" && messages.length > previous.count) {
+      document
+        .getElementById(`story-message-${last.id}`)
+        ?.scrollIntoView({ block: "start", behavior: "smooth" });
+      return;
+    }
+
     endRef.current?.scrollIntoView({ block: "end" });
-  }, [messages, busy, imageStatus]);
+  }, [messages, selectedChatId]);
+
+  useEffect(() => {
+    if (busy) {
+      endRef.current?.scrollIntoView({ block: "end" });
+    }
+  }, [busy]);
+
+  // Grow the composer with its content (up to ~40% of the viewport) so
+  // multi-paragraph actions stay fully visible while typing (#12).
+  useEffect(() => {
+    const composer = composerRef.current;
+    if (!composer) {
+      return;
+    }
+
+    composer.style.height = "auto";
+    const maxHeight = Math.round(window.innerHeight * 0.4);
+    composer.style.height = `${Math.min(composer.scrollHeight, maxHeight)}px`;
+  }, [input]);
 
   const setImageGenerationEnabled = useCallback((imageGenerationEnabled: boolean) => {
     setSettings((current) => ({ ...current, imageGenerationEnabled }));
@@ -1151,11 +1201,13 @@ export default function Home() {
     });
   }
 
+  // Accordion behavior: every section header stays visible; opening one
+  // closes the previously open one (#8).
   function desktopPanelControls(panel: DesktopPanel) {
     return {
       open: activeDesktopPanel === panel,
       onOpenChange: (open: boolean) => setActiveDesktopPanel(open ? panel : null),
-      divided: orderedDesktopPanels[0] !== panel,
+      divided: DESKTOP_PANEL_ORDER[0] !== panel,
     };
   }
 
@@ -1395,7 +1447,11 @@ export default function Home() {
                   </div>
                 ) : (
                   messages.map((message) => (
-                    <article key={message.id} className="group">
+                    <article
+                      key={message.id}
+                      id={`story-message-${message.id}`}
+                      className="group scroll-mt-2"
+                    >
                       {editingId === message.id ? (
                         <MessageEditor
                           message={message}
@@ -1527,6 +1583,7 @@ export default function Home() {
                   <textarea
                     id="story-input"
                     name="story-input"
+                    ref={composerRef}
                     value={input}
                     onChange={(event) => setInput(event.target.value)}
                     onKeyDown={(event) => {
@@ -1538,7 +1595,7 @@ export default function Home() {
                     placeholder={
                       INPUT_MODES.find((m) => m.value === inputMode)?.placeholder ?? "What do you do?"
                     }
-                    className="max-h-40 min-h-16 w-full resize-none bg-transparent px-4 pb-1 pt-3.5 text-base text-stone-100 outline-none placeholder:text-stone-600 disabled:cursor-not-allowed disabled:text-stone-600 sm:min-h-20"
+                    className="min-h-16 w-full resize-none overflow-y-auto bg-transparent px-4 pb-1 pt-3.5 text-base text-stone-100 outline-none placeholder:text-stone-600 disabled:cursor-not-allowed disabled:text-stone-600 sm:min-h-20"
                     disabled={libraryLoading || loadingChat}
                   />
                   <div className="flex items-center justify-between gap-2 px-2.5 pb-2.5">
@@ -1595,19 +1652,17 @@ export default function Home() {
             <div
               className={cn(
                 "sticky top-4 overflow-y-auto pr-1 pb-4",
-                activeDesktopPanel
-                  ? "flex h-[calc(100dvh-2rem)] min-h-0 flex-col"
+                activeDesktopPanel === "chats"
+                  ? "flex h-[calc(100dvh-2rem)] min-h-0 flex-col gap-2"
                   : "max-h-[calc(100dvh-2rem)] space-y-2",
               )}
             >
-              {orderedDesktopPanels.map((panel) => renderDesktopPanel(panel))}
-              {!activeDesktopPanel && (
-                <FontSizeSlider
-                  settings={settings}
-                  setSettings={setSettings}
-                  idPrefix="desktop-rail"
-                />
-              )}
+              {DESKTOP_PANEL_ORDER.map((panel) => renderDesktopPanel(panel))}
+              <FontSizeSlider
+                settings={settings}
+                setSettings={setSettings}
+                idPrefix="desktop-rail"
+              />
             </div>
           </aside>
         </div>
@@ -2108,23 +2163,21 @@ function ChatLibrary({
     <PanelSection
       icon={Library}
       iconSrc={SIDEBAR_ICONS.chats}
-      title="Chats"
+      title="Stories"
       defaultOpen
       open={open}
       onOpenChange={onOpenChange}
       divided={divided ?? false}
       fill={fillAvailable}
-      action={
-        <button
-          type="button"
-          aria-label="Create new story"
-          onClick={onCreate}
-          className="flex size-10 shrink-0 items-center justify-center rounded border border-stone-800 text-stone-300 hover:bg-stone-900"
-        >
-          <Plus className="size-4" aria-hidden="true" />
-        </button>
-      }
     >
+      <button
+        type="button"
+        onClick={onCreate}
+        className="flex w-full items-center gap-2 rounded border border-dashed border-stone-700 px-3 py-2 text-sm text-stone-400 hover:border-amber-800/60 hover:bg-stone-900 hover:text-stone-200"
+      >
+        <Plus className="size-4" aria-hidden="true" />
+        New story
+      </button>
 
       {loading ? (
         <div className={chatListClassName} style={chatListStyle}>
@@ -2175,13 +2228,9 @@ function ChatLibrary({
           })}
 
           {!chats.length && (
-            <button
-              type="button"
-              onClick={onCreate}
-              className="w-full rounded border border-stone-800 bg-stone-950 px-3 py-4 text-left text-sm text-stone-400 hover:bg-stone-900"
-            >
-              Start a story
-            </button>
+            <p className="rounded border border-dashed border-stone-800 px-3 py-4 text-sm text-stone-500">
+              Your stories will appear here.
+            </p>
           )}
         </div>
       )}
@@ -2224,6 +2273,11 @@ function CharacterPanel({
   onDelete: (characterId: string) => void;
   compact?: boolean;
 } & PanelControlProps) {
+  // Characters render as compact name rows that expand one at a time, so a
+  // full roster doesn't crowd the panel (#8).
+  const [createOpen, setCreateOpen] = useState(false);
+  const [expandedId, setExpandedId] = useState("");
+
   return (
     <PanelSection
       icon={UserRound}
@@ -2235,6 +2289,21 @@ function CharacterPanel({
       onOpenChange={onOpenChange}
       divided={divided}
     >
+      <button
+        type="button"
+        aria-expanded={createOpen}
+        onClick={() => setCreateOpen((current) => !current)}
+        className="flex w-full items-center gap-2 rounded border border-dashed border-stone-700 px-3 py-2 text-sm text-stone-400 hover:border-amber-800/60 hover:bg-stone-900 hover:text-stone-200"
+      >
+        <Plus className="size-4" aria-hidden="true" />
+        New character
+        <ChevronRight
+          className={cn("ml-auto size-4 transition", createOpen && "rotate-90")}
+          aria-hidden="true"
+        />
+      </button>
+
+      {createOpen && (
       <div className="space-y-3 rounded border border-stone-800 bg-stone-950/70 p-3">
         <label className="block">
           <span className="mb-1 block text-xs font-medium uppercase text-stone-500">Name</span>
@@ -2381,15 +2450,52 @@ function CharacterPanel({
           </button>
         </div>
       </div>
+      )}
 
       <div className="space-y-2">
         {characters.map((character) => {
           const pictureInputId = `character-picture-${character.id}`;
+          const expanded = expandedId === character.id;
+
+          if (!expanded) {
+            return (
+              <button
+                key={character.id}
+                type="button"
+                onClick={() => setExpandedId(character.id)}
+                className="grid w-full grid-cols-[36px_minmax(0,1fr)_auto] items-center gap-3 rounded border border-stone-800 bg-stone-950/70 p-2 text-left hover:border-amber-800/60 hover:bg-stone-900/70"
+              >
+                <span className="flex size-9 items-center justify-center overflow-hidden rounded border border-stone-800 bg-stone-900 text-stone-500">
+                  {character.portrait ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={character.portrait.url}
+                      alt=""
+                      className="size-full object-cover"
+                    />
+                  ) : (
+                    <UserRound className="size-4" aria-hidden="true" />
+                  )}
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium text-stone-200">
+                    {character.name || "Unnamed character"}
+                  </span>
+                  {character.details && (
+                    <span className="block truncate text-xs text-stone-500">
+                      {character.details}
+                    </span>
+                  )}
+                </span>
+                <ChevronRight className="size-4 text-stone-500" aria-hidden="true" />
+              </button>
+            );
+          }
 
           return (
             <div
               key={character.id}
-              className="space-y-2 rounded border border-stone-800 bg-stone-950/70 p-3"
+              className="space-y-2 rounded border border-amber-900/70 bg-stone-950/70 p-3"
             >
               <div className="grid grid-cols-[48px_minmax(0,1fr)_auto] gap-3">
                 <div className="flex size-12 items-center justify-center overflow-hidden rounded border border-stone-800 bg-stone-900 text-stone-500">
@@ -2426,15 +2532,25 @@ function CharacterPanel({
                   />
                 </div>
 
-                <DeleteCharacterDialog characterName={character.name} onConfirm={() => onDelete(character.id)}>
+                <div className="flex flex-col items-center gap-1">
                   <button
                     type="button"
-                    aria-label={`Delete ${character.name}`}
-                    className="flex size-8 items-center justify-center rounded text-stone-500 hover:bg-stone-900 hover:text-red-200"
+                    aria-label={`Collapse ${character.name}`}
+                    onClick={() => setExpandedId("")}
+                    className="flex size-8 items-center justify-center rounded text-stone-500 hover:bg-stone-900 hover:text-stone-100"
                   >
-                    <Trash2 className="size-4" aria-hidden="true" />
+                    <ChevronRight className="size-4 rotate-90" aria-hidden="true" />
                   </button>
-                </DeleteCharacterDialog>
+                  <DeleteCharacterDialog characterName={character.name} onConfirm={() => onDelete(character.id)}>
+                    <button
+                      type="button"
+                      aria-label={`Delete ${character.name}`}
+                      className="flex size-8 items-center justify-center rounded text-stone-500 hover:bg-stone-900 hover:text-red-200"
+                    >
+                      <Trash2 className="size-4" aria-hidden="true" />
+                    </button>
+                  </DeleteCharacterDialog>
+                </div>
               </div>
 
               <div className="grid gap-2">
