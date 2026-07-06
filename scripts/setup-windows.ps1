@@ -190,19 +190,32 @@ function Get-HealthValue($Health, $Name) {
   return $property.Value
 }
 
-function Get-PythonCommand {
-  $candidates = @(
-    @{ Exe = "py"; Args = @("-3.11") },
-    @{ Exe = "py"; Args = @("-3.12") },
-    @{ Exe = "py"; Args = @("-3.10") },
-    @{ Exe = "python"; Args = @() }
-  )
+function Get-PythonCommand([string]$RequireVersion = "") {
+  $candidates = if ($RequireVersion) {
+    @(
+      @{ Exe = "py"; Args = @("-$RequireVersion") },
+      @{ Exe = "python"; Args = @() }
+    )
+  } else {
+    @(
+      @{ Exe = "py"; Args = @("-3.11") },
+      @{ Exe = "py"; Args = @("-3.12") },
+      @{ Exe = "py"; Args = @("-3.10") },
+      @{ Exe = "python"; Args = @() }
+    )
+  }
+
+  $probe = if ($RequireVersion) {
+    "import sys; raise SystemExit(0 if '{0}.{1}'.format(*sys.version_info[:2]) == '$RequireVersion' else 1)"
+  } else {
+    "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)"
+  }
 
   foreach ($candidate in $candidates) {
     if (-not (Test-Command $candidate.Exe)) {
       continue
     }
-    $probeArgs = @($candidate.Args) + @("-c", "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)")
+    $probeArgs = @($candidate.Args) + @("-c", $probe)
     try {
       & $candidate.Exe @probeArgs *> $null
       $exitCode = $LASTEXITCODE
@@ -212,6 +225,48 @@ function Get-PythonCommand {
     if ($exitCode -eq 0) {
       return $candidate
     }
+  }
+  return $null
+}
+
+# GPUs covered by AMD's official PyTorch-on-Windows wheels (ROCm 7.2.x).
+# Patterns match Windows display adapter names from Win32_VideoController.
+$SupportedAmdGpuPatterns = @(
+  "Radeon\s+RX\s+9070",
+  "Radeon\s+RX\s+9060\s+XT",
+  "Radeon\s+RX\s+7900\s+XTX",
+  "Radeon\s+RX\s+7700(?!\s*S)",
+  "Radeon\s+AI\s+PRO\s+R9700",
+  "Radeon\s+PRO\s+W7900"
+)
+
+# Returns the display name of an AMD GPU that AMD's PyTorch-on-Windows wheels
+# support, or $null. OPEN_DUNGEON_ROCM=0 disables the AMD path entirely;
+# OPEN_DUNGEON_ROCM=1 opts an unlisted Radeon in (untested models).
+function Get-SupportedAmdGpu {
+  if ($env:OPEN_DUNGEON_ROCM -eq "0") {
+    return $null
+  }
+  try {
+    $gpus = @(
+      Get-CimInstance Win32_VideoController -ErrorAction Stop |
+        Where-Object { $_.Name -match "AMD|Radeon" }
+    )
+  } catch {
+    return $null
+  }
+  if (-not $gpus) {
+    return $null
+  }
+  foreach ($gpu in $gpus) {
+    foreach ($pattern in $SupportedAmdGpuPatterns) {
+      if ($gpu.Name -match $pattern) {
+        return $gpu.Name
+      }
+    }
+  }
+  if ($env:OPEN_DUNGEON_ROCM -eq "1") {
+    return $gpus[0].Name
   }
   return $null
 }
@@ -405,25 +460,11 @@ if ($ShouldSetupImages) {
     Update-GitRepoIfClean $UltraDir "ultra-fast-image-gen"
   }
 
-  $VenvDir = Join-Path $UltraDir ".venv"
-  $VenvPython = Join-Path $VenvDir "Scripts\python.exe"
-  if (-not (Test-Path $VenvPython)) {
-    $Python = Get-PythonCommand
-    if (-not $Python) {
-      if (-not (Install-WithWinget "Python.Python.3.11" "Python 3.11")) {
-        Stop-WithHelp "Python 3.10+ is required for local image generation." "https://www.python.org/downloads/windows/"
-      }
-      Refresh-Path
-      $Python = Get-PythonCommand
-    }
-    if (-not $Python) {
-      Stop-WithHelp "Python 3.10+ was not found after install. Relaunch this script."
-    }
-
-    Write-Step "Creating ultra-fast-image-gen virtual environment"
-    $venvArgs = @($Python.Args) + @("-m", "venv", $VenvDir)
-    Invoke-Checked "Could not create the Python virtual environment." $Python.Exe $venvArgs
-  }
+  # Pick the GPU stack before creating the venv: AMD's PyTorch-on-Windows
+  # wheels require Python 3.12, so the stack decides which interpreter the
+  # venv needs. PyTorch's ROCm build exposes the CUDA device API, so AMD
+  # still runs with device "cuda".
+  $AmdGpu = if (Test-Command "nvidia-smi") { $null } else { Get-SupportedAmdGpu }
 
   $ImageDevice = if ($env:IMAGE_SERVER_DEVICE) {
     $env:IMAGE_SERVER_DEVICE
@@ -431,15 +472,77 @@ if ($ShouldSetupImages) {
     "cpu"
   } elseif (Test-Command "nvidia-smi") {
     "cuda"
+  } elseif ($AmdGpu) {
+    "cuda"
   } else {
     "cpu"
   }
 
-  $TorchIndex = if ($ImageDevice -eq "cuda") {
+  $ImageStack = if ($ImageDevice -ne "cuda") {
+    "cpu"
+  } elseif ($AmdGpu) {
+    "rocm"
+  } else {
+    "cuda"
+  }
+
+  if ($ImageStack -eq "rocm") {
+    Write-Host "Detected an AMD GPU with PyTorch-on-Windows support: $AmdGpu" -ForegroundColor Green
+    Write-Host "Note: this needs the AMD Adrenalin 26.2.2 (or newer) driver." -ForegroundColor Yellow
+  }
+
+  $VenvDir = Join-Path $UltraDir ".venv"
+  $VenvPython = Join-Path $VenvDir "Scripts\python.exe"
+
+  # AMD's ROCm wheels only ship for Python 3.12; rebuild the venv when it was
+  # created with a different interpreter.
+  $RequiredPythonVersion = if ($ImageStack -eq "rocm") { "3.12" } else { "" }
+  if ($RequiredPythonVersion -and (Test-Path $VenvPython)) {
+    $venvVersion = (& $VenvPython -c "import sys; print('{0}.{1}'.format(*sys.version_info[:2]))" 2>$null | Out-String).Trim()
+    if ($venvVersion -ne $RequiredPythonVersion) {
+      Write-Step "Recreating the image venv with Python $RequiredPythonVersion for the AMD ROCm wheels (found Python $venvVersion)"
+      Remove-Item -Recurse -Force $VenvDir
+    }
+  }
+
+  if (-not (Test-Path $VenvPython)) {
+    $PythonLabel = if ($RequiredPythonVersion) { "Python $RequiredPythonVersion" } else { "Python 3.10+" }
+    $PythonWingetId = if ($RequiredPythonVersion -eq "3.12") { "Python.Python.3.12" } else { "Python.Python.3.11" }
+    $Python = Get-PythonCommand $RequiredPythonVersion
+    if (-not $Python) {
+      if (-not (Install-WithWinget $PythonWingetId $PythonLabel)) {
+        Stop-WithHelp "$PythonLabel is required for local image generation." "https://www.python.org/downloads/windows/"
+      }
+      Refresh-Path
+      $Python = Get-PythonCommand $RequiredPythonVersion
+    }
+    if (-not $Python) {
+      Stop-WithHelp "$PythonLabel was not found after install. Relaunch this script."
+    }
+
+    Write-Step "Creating ultra-fast-image-gen virtual environment"
+    $venvArgs = @($Python.Args) + @("-m", "venv", $VenvDir)
+    Invoke-Checked "Could not create the Python virtual environment." $Python.Exe $venvArgs
+  }
+
+  $TorchIndex = if ($ImageStack -eq "cuda") {
     "https://download.pytorch.org/whl/cu128"
   } else {
     "https://download.pytorch.org/whl/cpu"
   }
+
+  # AMD publishes direct wheel URLs (no pip index) for PyTorch on Windows.
+  $RocmRelease = "https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1"
+  $RocmSdkWheels = @(
+    "$RocmRelease/rocm_sdk_core-7.2.1-py3-none-win_amd64.whl",
+    "$RocmRelease/rocm_sdk_devel-7.2.1-py3-none-win_amd64.whl",
+    "$RocmRelease/rocm_sdk_libraries_custom-7.2.1-py3-none-win_amd64.whl",
+    "$RocmRelease/rocm-7.2.1.tar.gz"
+  )
+  $RocmTorchWheels = @(
+    "$RocmRelease/torch-2.9.1%2Brocm7.2.1-cp312-cp312-win_amd64.whl",
+    "$RocmRelease/torchvision-0.24.1%2Brocm7.2.1-cp312-cp312-win_amd64.whl"
+  )
 
   $Requirements = Join-Path $UltraDir "requirements.txt"
   $Generate = Join-Path $UltraDir "generate.py"
@@ -447,38 +550,48 @@ if ($ShouldSetupImages) {
     Stop-WithHelp "Missing ultra-fast-image-gen requirements.txt at $Requirements."
   }
 
-  $Stamp = Join-Path $VenvDir ".open-dungeon-windows-$ImageDevice.stamp"
+  $Stamp = Join-Path $VenvDir ".open-dungeon-windows-$ImageStack.stamp"
   $ActiveDeviceStamp = Join-Path $VenvDir ".open-dungeon-windows-active-device"
-  $ActiveImageDevice = if (Test-Path $ActiveDeviceStamp) {
+  $ActiveImageStack = if (Test-Path $ActiveDeviceStamp) {
     (Get-Content -Path $ActiveDeviceStamp -TotalCount 1).Trim()
   } else {
     ""
   }
   $NeedsImageDeps = -not (Test-Path $Stamp) -or
-    ($ActiveImageDevice -ne $ImageDevice) -or
+    ($ActiveImageStack -ne $ImageStack) -or
     ((Get-Item $Requirements).LastWriteTimeUtc -gt (Get-Item $Stamp).LastWriteTimeUtc)
 
   if ($NeedsImageDeps) {
-    Write-Step "Installing image dependencies ($ImageDevice)"
+    Write-Step "Installing image dependencies ($ImageStack)"
     $FilteredRequirements = Join-Path ([System.IO.Path]::GetTempPath()) "open-dungeon-ultra-fast-image-gen-requirements.txt"
     Get-Content -Path $Requirements |
       Where-Object { $_ -notmatch '^\s*(torch|torchvision)(\s|[<>=~!;\[]|$)' } |
       Set-Content -Path $FilteredRequirements -Encoding UTF8
     Invoke-Checked "pip upgrade failed." $VenvPython @("-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel")
-    Invoke-Checked "PyTorch install failed. Try relaunching with: powershell -File scripts\setup-windows.ps1 -SetupImages -CpuOnly" $VenvPython @("-m", "pip", "install", "torch", "torchvision", "--index-url", $TorchIndex)
+    if ($ImageStack -eq "rocm") {
+      Invoke-Checked "ROCm SDK install failed. AMD's PyTorch on Windows needs the Adrenalin 26.2.2+ driver; if this keeps failing, relaunch with Launch-Windows-CPU.bat or use the ComfyUI shim from the README." $VenvPython (@("-m", "pip", "install", "--no-cache-dir") + $RocmSdkWheels)
+      Invoke-Checked "PyTorch (ROCm) install failed. If this keeps failing, relaunch with Launch-Windows-CPU.bat or use the ComfyUI shim from the README." $VenvPython (@("-m", "pip", "install", "--no-cache-dir") + $RocmTorchWheels)
+    } else {
+      Invoke-Checked "PyTorch install failed. Try relaunching with: powershell -File scripts\setup-windows.ps1 -SetupImages -CpuOnly" $VenvPython @("-m", "pip", "install", "torch", "torchvision", "--index-url", $TorchIndex)
+    }
     Invoke-Checked "ultra-fast-image-gen dependency install failed." $VenvPython @("-m", "pip", "install", "-r", $FilteredRequirements)
-    Set-Content -Path $Stamp -Value "device=$ImageDevice`ninstalled=$(Get-Date -Format o)`n" -Encoding UTF8
-    Set-Content -Path $ActiveDeviceStamp -Value $ImageDevice -Encoding UTF8
+    Set-Content -Path $Stamp -Value "stack=$ImageStack`ninstalled=$(Get-Date -Format o)`n" -Encoding UTF8
+    Set-Content -Path $ActiveDeviceStamp -Value $ImageStack -Encoding UTF8
   }
 
   Write-Step "Checking ultra-fast-image-gen CLI contract"
   Test-UltraFastImageGenContract $VenvPython $Generate
 
   if ($ImageDevice -eq "cuda") {
-    Write-Step "Checking PyTorch CUDA availability"
+    Write-Step "Checking PyTorch GPU availability"
     if (-not (Test-CudaAvailable $VenvPython)) {
-      Write-Host "PyTorch CUDA is not available even though an NVIDIA tool was detected. Starting the image worker in CPU mode." -ForegroundColor Yellow
-      Write-Host "After updating NVIDIA drivers/CUDA support, run Launch-Windows-Image-Smoke.bat to try CUDA again." -ForegroundColor Yellow
+      if ($ImageStack -eq "rocm") {
+        Write-Host "PyTorch could not see the AMD GPU ($AmdGpu). PyTorch on Windows for Radeon needs the Adrenalin 26.2.2 (or newer) driver. Starting the image worker in CPU mode." -ForegroundColor Yellow
+        Write-Host "After updating the driver, run Launch-Windows-Image-Smoke.bat to try the GPU again." -ForegroundColor Yellow
+      } else {
+        Write-Host "PyTorch CUDA is not available even though an NVIDIA tool was detected. Starting the image worker in CPU mode." -ForegroundColor Yellow
+        Write-Host "After updating NVIDIA drivers/CUDA support, run Launch-Windows-Image-Smoke.bat to try CUDA again." -ForegroundColor Yellow
+      }
       $ImageDevice = "cpu"
     }
   }

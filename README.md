@@ -286,15 +286,39 @@ generations. On Windows, the worker automatically maps MFLUX requests to the
 SDNQ backend because MLX is not available there. See
 [image_server/README.md](image_server/README.md) for details.
 
-### AMD GPUs (ComfyUI shim)
+### AMD GPUs
 
-The bundled FLUX backends target Apple Silicon (MLX) and NVIDIA (CUDA); on
-AMD cards they fall back to CPU, where a single image can take 15–30 minutes.
-Community workaround: [opendungeon-comfy-shim](https://github.com/momcilovicrobert-momc/opendungeon-comfy-shim)
-is a small Python shim that speaks the image-worker API and drives a local
-ComfyUI (SDXL) instance instead — ~20–60 seconds per image on the same AMD
-GPU. Point `FLUX_WORKER_URL` at the shim and Open Dungeon needs no other
-changes. (Community-maintained; setup instructions are in that repo.)
+On supported Radeon cards the Windows launcher now runs the same FLUX
+backends natively through AMD's official PyTorch-on-Windows (ROCm) wheels —
+no NVIDIA hardware required. Supported by AMD's ROCm 7.2.x Windows release:
+RX 9070 XT, RX 9070, RX 9060 XT, RX 7900 XTX, RX 7700, Radeon AI PRO R9700,
+and Radeon PRO W7900. Requirements the launcher handles or checks for you:
+
+- Python 3.12 (AMD's wheels only ship for 3.12; the launcher creates or
+  rebuilds the image venv with it automatically)
+- AMD Adrenalin 26.2.2 or newer graphics driver (install this yourself)
+
+`Launch-Windows.bat` detects a supported Radeon automatically when no NVIDIA
+GPU is present. Overrides: set `OPEN_DUNGEON_ROCM=0` to disable the AMD path,
+or `OPEN_DUNGEON_ROCM=1` to try it on an unlisted Radeon (untested; expect
+rough edges). AMD notes known convolution performance gaps on RX 9000-series
+Windows drivers, so the VAE decode step may be slower than the raw
+transformer — still enormously faster than the CPU fallback.
+
+On Linux, install the ROCm build of PyTorch into `ultra-fast-image-gen`'s
+venv instead (`pip install torch torchvision --index-url
+https://download.pytorch.org/whl/rocm6.4`) and run with
+`IMAGE_SERVER_DEVICE=cuda` — PyTorch's ROCm build exposes the CUDA device
+API.
+
+For AMD cards not on the supported list (RX 7800/7600, RX 6000 series and
+older), the community
+[opendungeon-comfy-shim](https://github.com/momcilovicrobert-momc/opendungeon-comfy-shim)
+remains a solid workaround: a small Python shim that speaks the image-worker
+API and drives a local ComfyUI (SDXL) instance — ~20–60 seconds per image.
+Note it generates with SDXL checkpoints, not the FLUX models bundled here.
+Point `FLUX_WORKER_URL` at the shim and Open Dungeon needs no other changes.
+(Community-maintained; setup instructions are in that repo.)
 
 ## The story image tool
 

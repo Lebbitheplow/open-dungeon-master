@@ -105,6 +105,7 @@ try:
     if torch.cuda.is_available():
         print(f"cuda_device={torch.cuda.get_device_name(0)}")
         print(f"cuda_version={torch.version.cuda}")
+        print(f"hip_version={getattr(torch.version, 'hip', None)}")
 except Exception as exc:
     print(f"torch_probe_error={exc}")
 
@@ -154,6 +155,15 @@ Invoke-DiagnosticCommand "Python launcher" "py" @("-0p")
 Invoke-DiagnosticCommand "Python" "python" @("--version")
 Invoke-DiagnosticCommand "Git" "git" @("--version")
 Invoke-DiagnosticCommand "NVIDIA driver" "nvidia-smi" @("--query-gpu=name,driver_version,memory.total", "--format=csv,noheader")
+
+Write-DiagnosticSection "Display adapters"
+try {
+  Get-CimInstance Win32_VideoController | ForEach-Object {
+    Write-DiagnosticLine ("name={0} driver={1}" -f $_.Name, $_.DriverVersion)
+  }
+} catch {
+  Write-DiagnosticLine ("gpu_probe_error={0}" -f $_.Exception.Message)
+}
 Invoke-DiagnosticCommand "Ollama version" "ollama" @("--version")
 Invoke-DiagnosticCommand "Ollama models" "ollama" @("list")
 

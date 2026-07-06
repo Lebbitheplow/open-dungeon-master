@@ -87,13 +87,52 @@ function Invoke-Diagnostics($Reason) {
   Write-LoopLine ("Diagnostics exit code: {0}" -f $diagnosticExit)
 }
 
+# Keep in sync with Get-SupportedAmdGpu in setup-windows.ps1: AMD GPUs with
+# PyTorch-on-Windows (ROCm) wheels run as device "cuda".
+function Test-LoopSupportedAmdGpu {
+  if ($env:OPEN_DUNGEON_ROCM -eq "0") {
+    return $false
+  }
+  $patterns = @(
+    "Radeon\s+RX\s+9070",
+    "Radeon\s+RX\s+9060\s+XT",
+    "Radeon\s+RX\s+7900\s+XTX",
+    "Radeon\s+RX\s+7700(?!\s*S)",
+    "Radeon\s+AI\s+PRO\s+R9700",
+    "Radeon\s+PRO\s+W7900"
+  )
+  try {
+    $gpus = @(
+      Get-CimInstance Win32_VideoController -ErrorAction Stop |
+        Where-Object { $_.Name -match "AMD|Radeon" }
+    )
+  } catch {
+    return $false
+  }
+  if (-not $gpus) {
+    return $false
+  }
+  foreach ($gpu in $gpus) {
+    foreach ($pattern in $patterns) {
+      if ($gpu.Name -match $pattern) {
+        return $true
+      }
+    }
+  }
+  return $env:OPEN_DUNGEON_ROCM -eq "1"
+}
+
 function Get-DevicesToRun {
   if ($Device -eq "both") {
     if (Test-LoopCommand "nvidia-smi") {
       return @("cpu", "cuda")
     }
+    if (Test-LoopSupportedAmdGpu) {
+      Write-LoopLine "Found an AMD GPU with PyTorch-on-Windows support; running CPU and GPU proofs."
+      return @("cpu", "cuda")
+    }
 
-    Write-LoopLine "No nvidia-smi command was found; running the CPU proof only."
+    Write-LoopLine "No supported GPU was found; running the CPU proof only."
     return @("cpu")
   }
 
