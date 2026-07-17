@@ -1,0 +1,60 @@
+{
+  "_license": "Data derived from the SRD 5.1, (c) Wizards of the Coast LLC, CC-BY-4.0. See docs/LICENSES.md.",
+  "races": [
+    {
+      "id": "hill_dwarf", "name": "Dwarf (Hill)", "speed": 25, "size": "Medium",
+      "asi": { "con": 2, "wis": 1 },
+      "traits": ["Darkvision 60 ft", "Dwarven Resilience (adv. vs poison)", "Stonecunning", "+1 HP per level (Dwarven Toughness)"],
+      "languages": ["Common", "Dwarvish"]
+    },
+    {
+      "id": "high_elf", "name": "Elf (High)", "speed": 30, "size": "Medium",
+      "asi": { "dex": 2, "int": 1 },
+      "traits": ["Darkvision 60 ft", "Fey Ancestry (adv. vs charm, immune to magical sleep)", "Trance", "One wizard cantrip", "Perception proficiency (Keen Senses)"],
+      "languages": ["Common", "Elvish"]
+    },
+    {
+      "id": "lightfoot_halfling", "name": "Halfling (Lightfoot)", "speed": 25, "size": "Small",
+      "asi": { "dex": 2, "cha": 1 },
+      "traits": ["Lucky (reroll nat 1 on d20)", "Brave (adv. vs frightened)", "Halfling Nimbleness", "Naturally Stealthy"],
+      "languages": ["Common", "Halfling"]
+    },
+    {
+      "id": "human", "name": "Human", "speed": 30, "size": "Medium",
+      "asi": { "str": 1, "dex": 1, "con": 1, "int": 1, "wis": 1, "cha": 1 },
+      "traits": ["One extra language"],
+      "languages": ["Common"]
+    },
+    {
+      "id": "dragonborn", "name": "Dragonborn", "speed": 30, "size": "Medium",
+      "asi": { "str": 2, "cha": 1 },
+      "traits": ["Draconic Ancestry", "Breath Weapon (2d6, DC 8 + CON mod + PB)", "Damage Resistance (ancestry type)"],
+      "languages": ["Common", "Draconic"]
+    },
+    {
+      "id": "rock_gnome", "name": "Gnome (Rock)", "speed": 25, "size": "Small",
+      "asi": { "int": 2, "con": 1 },
+      "traits": ["Darkvision 60 ft", "Gnome Cunning (adv. on INT/WIS/CHA saves vs magic)", "Artificer's Lore", "Tinker"],
+      "languages": ["Common", "Gnomish"]
+    },
+    {
+      "id": "half_elf", "name": "Half-Elf", "speed": 30, "size": "Medium",
+      "asi": { "cha": 2 },
+      "asiChoice": { "count": 2, "amount": 1 },
+      "traits": ["Darkvision 60 ft", "Fey Ancestry", "Two skill proficiencies of your choice (Skill Versatility)"],
+      "languages": ["Common", "Elvish", "one of your choice"]
+    },
+    {
+      "id": "half_orc", "name": "Half-Orc", "speed": 30, "size": "Medium",
+      "asi": { "str": 2, "con": 1 },
+      "traits": ["Darkvision 60 ft", "Intimidation proficiency (Menacing)", "Relentless Endurance", "Savage Attacks"],
+      "languages": ["Common", "Orc"]
+    },
+    {
+      "id": "tiefling", "name": "Tiefling", "speed": 30, "size": "Medium",
+      "asi": { "cha": 2, "int": 1 },
+      "traits": ["Darkvision 60 ft", "Hellish Resistance (fire)", "Infernal Legacy (thaumaturgy cantrip)"],
+      "languages": ["Common", "Infernal"]
+    }
+  ]
+}

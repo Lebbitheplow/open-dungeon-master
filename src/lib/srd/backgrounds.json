@@ -1,0 +1,18 @@
+{
+  "_license": "Acolyte derives from the SRD 5.1, (c) Wizards of the Coast LLC, CC-BY-4.0. Other entries are generic skill pairings for convenience.",
+  "backgrounds": [
+    { "id": "acolyte", "name": "Acolyte", "skills": ["insight", "religion"], "feature": "Shelter of the Faithful" },
+    { "id": "charlatan", "name": "Charlatan", "skills": ["deception", "sleight_of_hand"], "feature": "False Identity" },
+    { "id": "criminal", "name": "Criminal", "skills": ["deception", "stealth"], "feature": "Criminal Contact" },
+    { "id": "entertainer", "name": "Entertainer", "skills": ["acrobatics", "performance"], "feature": "By Popular Demand" },
+    { "id": "folk_hero", "name": "Folk Hero", "skills": ["animal_handling", "survival"], "feature": "Rustic Hospitality" },
+    { "id": "guild_artisan", "name": "Guild Artisan", "skills": ["insight", "persuasion"], "feature": "Guild Membership" },
+    { "id": "hermit", "name": "Hermit", "skills": ["medicine", "religion"], "feature": "Discovery" },
+    { "id": "noble", "name": "Noble", "skills": ["history", "persuasion"], "feature": "Position of Privilege" },
+    { "id": "outlander", "name": "Outlander", "skills": ["athletics", "survival"], "feature": "Wanderer" },
+    { "id": "sage", "name": "Sage", "skills": ["arcana", "history"], "feature": "Researcher" },
+    { "id": "sailor", "name": "Sailor", "skills": ["athletics", "perception"], "feature": "Ship's Passage" },
+    { "id": "soldier", "name": "Soldier", "skills": ["athletics", "intimidation"], "feature": "Military Rank" },
+    { "id": "urchin", "name": "Urchin", "skills": ["sleight_of_hand", "stealth"], "feature": "City Secrets" }
+  ]
+}

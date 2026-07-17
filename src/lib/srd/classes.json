@@ -1,0 +1,77 @@
+{
+  "_license": "Data derived from the SRD 5.1, (c) Wizards of the Coast LLC, CC-BY-4.0. See docs/LICENSES.md.",
+  "classes": [
+    {
+      "id": "barbarian", "name": "Barbarian", "hitDie": 12,
+      "saves": ["str", "con"], "casterType": "none", "spellAbility": null,
+      "armor": ["light", "medium", "shields"], "weapons": ["simple", "martial"],
+      "skillChoices": { "count": 2, "from": ["animal_handling", "athletics", "intimidation", "nature", "perception", "survival"] }
+    },
+    {
+      "id": "bard", "name": "Bard", "hitDie": 8,
+      "saves": ["dex", "cha"], "casterType": "full", "spellAbility": "cha",
+      "armor": ["light"], "weapons": ["simple", "hand crossbows", "longswords", "rapiers", "shortswords"],
+      "skillChoices": { "count": 3, "from": ["acrobatics", "animal_handling", "arcana", "athletics", "deception", "history", "insight", "intimidation", "investigation", "medicine", "nature", "perception", "performance", "persuasion", "religion", "sleight_of_hand", "stealth", "survival"] }
+    },
+    {
+      "id": "cleric", "name": "Cleric", "hitDie": 8,
+      "saves": ["wis", "cha"], "casterType": "full", "spellAbility": "wis",
+      "armor": ["light", "medium", "shields"], "weapons": ["simple"],
+      "skillChoices": { "count": 2, "from": ["history", "insight", "medicine", "persuasion", "religion"] }
+    },
+    {
+      "id": "druid", "name": "Druid", "hitDie": 8,
+      "saves": ["int", "wis"], "casterType": "full", "spellAbility": "wis",
+      "armor": ["light", "medium", "shields (nonmetal)"], "weapons": ["clubs", "daggers", "darts", "javelins", "maces", "quarterstaffs", "scimitars", "sickles", "slings", "spears"],
+      "skillChoices": { "count": 2, "from": ["arcana", "animal_handling", "insight", "medicine", "nature", "perception", "religion", "survival"] }
+    },
+    {
+      "id": "fighter", "name": "Fighter", "hitDie": 10,
+      "saves": ["str", "con"], "casterType": "none", "spellAbility": null,
+      "armor": ["light", "medium", "heavy", "shields"], "weapons": ["simple", "martial"],
+      "skillChoices": { "count": 2, "from": ["acrobatics", "animal_handling", "athletics", "history", "insight", "intimidation", "perception", "survival"] }
+    },
+    {
+      "id": "monk", "name": "Monk", "hitDie": 8,
+      "saves": ["str", "dex"], "casterType": "none", "spellAbility": null,
+      "armor": [], "weapons": ["simple", "shortswords"],
+      "skillChoices": { "count": 2, "from": ["acrobatics", "athletics", "history", "insight", "religion", "stealth"] }
+    },
+    {
+      "id": "paladin", "name": "Paladin", "hitDie": 10,
+      "saves": ["wis", "cha"], "casterType": "half", "spellAbility": "cha",
+      "armor": ["light", "medium", "heavy", "shields"], "weapons": ["simple", "martial"],
+      "skillChoices": { "count": 2, "from": ["athletics", "insight", "intimidation", "medicine", "persuasion", "religion"] }
+    },
+    {
+      "id": "ranger", "name": "Ranger", "hitDie": 10,
+      "saves": ["str", "dex"], "casterType": "half", "spellAbility": "wis",
+      "armor": ["light", "medium", "shields"], "weapons": ["simple", "martial"],
+      "skillChoices": { "count": 3, "from": ["animal_handling", "athletics", "insight", "investigation", "nature", "perception", "stealth", "survival"] }
+    },
+    {
+      "id": "rogue", "name": "Rogue", "hitDie": 8,
+      "saves": ["dex", "int"], "casterType": "none", "spellAbility": null,
+      "armor": ["light"], "weapons": ["simple", "hand crossbows", "longswords", "rapiers", "shortswords"],
+      "skillChoices": { "count": 4, "from": ["acrobatics", "athletics", "deception", "insight", "intimidation", "investigation", "perception", "performance", "persuasion", "sleight_of_hand", "stealth"] }
+    },
+    {
+      "id": "sorcerer", "name": "Sorcerer", "hitDie": 6,
+      "saves": ["con", "cha"], "casterType": "full", "spellAbility": "cha",
+      "armor": [], "weapons": ["daggers", "darts", "slings", "quarterstaffs", "light crossbows"],
+      "skillChoices": { "count": 2, "from": ["arcana", "deception", "insight", "intimidation", "persuasion", "religion"] }
+    },
+    {
+      "id": "warlock", "name": "Warlock", "hitDie": 8,
+      "saves": ["wis", "cha"], "casterType": "pact", "spellAbility": "cha",
+      "armor": ["light"], "weapons": ["simple"],
+      "skillChoices": { "count": 2, "from": ["arcana", "deception", "history", "intimidation", "investigation", "nature", "religion"] }
+    },
+    {
+      "id": "wizard", "name": "Wizard", "hitDie": 6,
+      "saves": ["int", "wis"], "casterType": "full", "spellAbility": "int",
+      "armor": [], "weapons": ["daggers", "darts", "slings", "quarterstaffs", "light crossbows"],
+      "skillChoices": { "count": 2, "from": ["arcana", "history", "insight", "investigation", "medicine", "religion"] }
+    }
+  ]
+}
