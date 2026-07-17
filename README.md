@@ -1,97 +1,79 @@
-# Open Dungeon
+# Open Dungeon Master
 
-The first **easy-to-use, fully local** AI roleplay app. The story and the
-**inline scene images** are both generated on your own machine — no accounts,
-no API keys, no cloud, no GPU rig. Your stories never leave your computer.
+Multiplayer Dungeons & Dragons 5e campaigns run by an AI Dungeon Master, fully
+on your own machine. A fork of [Open Dungeon](https://github.com/newideas99/open-dungeon)
+that adds campaigns, player accounts, structured 5e character sheets, a
+server-side dice engine, and a rules-aware DM that requests rolls instead of
+inventing outcomes.
 
-![A story scene with an inline generated image](docs/hero.png)
+## What the fork adds
 
-- **Local text generation** via [Ollama](https://ollama.com) (Gemma 4 QAT),
-  or **Connect a server** to any OpenAI-compatible backend — llama.cpp,
-  LM Studio, vLLM, a remote Ollama, OpenRouter. Narration **streams in real
-  time** as the model writes.
-- **Local image generation** — the narrator calls a `generate_image` tool and
-  scenes render inline: FLUX.2-klein on Apple Silicon / NVIDIA / supported
-  AMD Radeons, or point the app at your own **ComfyUI** instance.
-- **Full play controls** — Do / Say / Story input, Continue, Retry, Erase,
-  and inline Edit on any passage. Quick-start presets write a custom opening.
-- **Long-story memory** — history fills the model's context window
-  (128K–256K), and older passages compact into a rolling "story so far"
-  summary instead of being forgotten.
-- **Characters with visual continuity** — saved portraits feed both the
-  narrator (vision context) and the image generator (reference images).
-- **Private by design** — everything lives in a local SQLite database and
-  folders on your disk. Play from your phone over Tailscale.
+- **Campaigns and lobbies**: create a campaign, share an invite code, ready up,
+  and play with your party in real time (SSE-based live updates).
+- **Player accounts**: lightweight username/password auth suitable for a LAN.
+- **Structured 5e character sheets**: race, class, background, abilities,
+  saves, skills, HP, AC, spell slots, conditions, equipment. Derived stats are
+  computed from SRD 5.1 data, never invented by the model.
+- **Server-side dice**: every check, save, and attack is rolled by the backend.
+  The DM asks for rolls through a `request_roll` tool call, the server rolls,
+  and the model narrates the actual result.
+- **AI Dungeon Master**: a guardrailed DM prompt built from authoritative game
+  state (party sheets, scene, quest log, recent rolls, rolling story summary).
+- The original single-player narrator still works, unchanged, at `/solo`.
 
-<table>
-  <tr>
-    <td><img src="docs/prose.png" alt="Serif story prose" /></td>
-    <td><img src="docs/modal.png" alt="New story dialog with setting presets" /></td>
-  </tr>
-</table>
+Later phases (combat engine, encounters, factions, economy, NPC memory) are
+tracked in [docs/ROADMAP.md](docs/ROADMAP.md).
+
+## Requirements
+
+- Node 22+
+- A text model backend, either:
+  - an OpenAI-compatible server (llama.cpp `llama-server`, LM Studio, vLLM);
+    the default config expects `llama-server` at `http://127.0.0.1:8001/v1`
+    with a Qwen3.6 class model and tool calling enabled (`--jinja`), or
+  - [Ollama](https://ollama.com) at `http://127.0.0.1:11434`. Note: local
+    Ollama models are noticeably less reliable at calling the dice tool; the
+    OpenAI-compatible path is the recommended DM backend.
+- Optional: [ComfyUI](https://github.com/comfyanonymous/ComfyUI) at
+  `http://127.0.0.1:8188` for inline scene images.
 
 ## Quick start
 
-**Mac (Apple Silicon):** grab the DMG from
-[Releases](https://github.com/newideas99/open-dungeon/releases), drag
-**Open Dungeon** to Applications, and open it (right-click → Open the first
-time — it's unsigned). It walks you through everything, including choosing
-Ollama or your own server as the narrator.
-
-**Windows:** download the release zip (or clone), then double-click
-`Launch-Windows.bat`. It checks Node.js, builds the app, and starts
-http://localhost:3000. Ollama and image generation are optional prompts —
-see the [Windows guide](docs/windows.md).
-
-**From a clone (any OS):**
-
 ```bash
-git clone https://github.com/newideas99/open-dungeon && cd open-dungeon
 npm install
-
-# optional, only if you want the bundled Ollama provider
-ollama pull gemma4:12b-it-qat
-
-npm run dev
+npm run dev                   # or: npm run build && npm run start:lan (0.0.0.0:3006)
 ```
 
-Open http://localhost:3000 and start writing. Node.js 22+ required; text
-play needs no other setup.
+Backend configuration goes in a gitignored `.env.server` file in the project
+root:
 
-## Playing
+```
+DEFAULT_TEXT_PROVIDER=custom
+OPENAI_COMPAT_BASE_URL=http://127.0.0.1:8001/v1
+OPENAI_COMPAT_MODEL=qwen3.6-27b
+OPENAI_COMPAT_API_KEY=...   # never commit this file
+```
 
-The composer has three input modes — **Do** (a player action), **Say**
-(dialogue), and **Story** (write narration yourself) — plus **Continue**,
-**Retry**, and **Erase** above it. Hover any message and hit **Edit** to
-rewrite it in place. Everything saves to the local database as you go.
+## Storage and the single-writer rule
 
-## Guides
+All state lives in a local SQLite database at `data/local-roleplay.sqlite`
+(override with `SQLITE_DB_PATH`). The database driver is synchronous and the
+app assumes **one Next.js process owns the database file**. Do not run `npm
+run dev` and a production service against the same `data/` directory; point
+dev at a scratch database with `SQLITE_DB_PATH`.
 
-| Guide | Covers |
-|---|---|
-| [Text backends](docs/text-backends.md) | Gemma 4 model choices and benchmarks, Connect a server, long-story memory |
-| [Image generation](docs/image-generation.md) | FLUX worker setup, ComfyUI backend, AMD GPUs, the story image tool |
-| [Windows](docs/windows.md) | Launcher details, image smoke tests, diagnostics, tuning |
-| [Configuration](docs/configuration.md) | Environment variables, playing from your phone, local data |
+## Solo mode
 
-## Content note
+The upstream single-player experience is preserved at `/solo`: Do / Say /
+Story input, Continue, Retry, Erase, inline edit, long-story memory, and
+inline scene images via ComfyUI. Upstream guides still apply:
+[text backends](docs/text-backends.md),
+[image generation](docs/image-generation.md),
+[configuration](docs/configuration.md).
 
-This app is built for private, local fiction. The default narrator prompt
-permits consensual adult content between adults; everything is generated and
-stored only on your machine. Edit the system prompt in
-`src/lib/story-prompt.ts` if you want different defaults.
+## Credits and licenses
 
-## Support the project
-
-Open Dungeon is free and MIT-licensed, and it always will be. If it earns a
-spot on your machine and you want to help with development, a tip goes a
-long way:
-
-- **[Sponsor on GitHub](https://github.com/sponsors/newideas99)**
-- **[Buy me a coffee on Ko-fi](https://ko-fi.com/opendungeon)**
-
-Starring the repo and sharing it helps too.
-
-## License
-
-MIT
+- Forked from [Open Dungeon](https://github.com/newideas99/open-dungeon) by
+  Jacob Ferrari, MIT licensed. See [LICENSE](LICENSE).
+- Game rules data derives from the System Reference Document 5.1 by Wizards of
+  the Coast LLC, licensed under CC-BY-4.0. See [docs/LICENSES.md](docs/LICENSES.md).

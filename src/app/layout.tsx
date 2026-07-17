@@ -19,8 +19,8 @@ const sourceSerif = Source_Serif_4({
 });
 
 export const metadata: Metadata = {
-  title: "Open Dungeon",
-  description: "Fully on-device AI roleplay with inline image generation.",
+  title: "Open Dungeon Master",
+  description: "Multiplayer D&D 5e campaigns with an AI Dungeon Master.",
 };
 
 export default function RootLayout({

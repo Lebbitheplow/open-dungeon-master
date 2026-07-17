@@ -8,10 +8,13 @@ export const DEFAULT_STORY_SETTINGS: StorySettings = {
     "A grounded interactive fiction scene with sharp dialogue, human stakes, and space for the player to steer the story.",
   style:
     "Classic text-adventure narration: direct second person, vivid but restrained prose, natural dialogue, and no purple exposition.",
-  textProvider: "local",
+  // Default DM model is Qwen3.6-27B served by the local llama-server
+  // (OpenAI-compatible, strong tool calling). Ollama stays selectable via
+  // the "local" provider. The API key comes from .env.server, never code.
+  textProvider: "custom",
   localTextModel: DEFAULT_LOCAL_TEXT_MODEL,
-  customBaseUrl: "",
-  customModel: "",
+  customBaseUrl: "http://127.0.0.1:8001/v1",
+  customModel: "qwen3.6-27b",
   customApiKey: "",
   imageMode: "fast",
   // This machine (AMD gfx1151) can't run the bundled mflux/sdnq workers, so

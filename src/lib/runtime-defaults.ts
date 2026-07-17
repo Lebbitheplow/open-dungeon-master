@@ -31,8 +31,8 @@ export function configuredDefaultStorySettings(): StorySettings {
     ...DEFAULT_STORY_SETTINGS,
     textProvider,
     localTextModel,
-    customBaseUrl,
-    customModel,
+    customBaseUrl: customBaseUrl || DEFAULT_STORY_SETTINGS.customBaseUrl,
+    customModel: customModel || DEFAULT_STORY_SETTINGS.customModel,
     customApiKey: "",
   };
 }
