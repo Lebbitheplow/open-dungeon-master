@@ -3,7 +3,7 @@ import classesJson from "@/lib/srd/classes.json";
 import racesJson from "@/lib/srd/races.json";
 import skillsJson from "@/lib/srd/skills.json";
 import spellSlotsJson from "@/lib/srd/spell-slots.json";
-import type { Ability, AbilityScores, CharacterSheet } from "@/lib/schemas/sheet";
+import type { Ability, CharacterSheet } from "@/lib/schemas/sheet";
 
 export type SrdSkill = { id: string; name: string; ability: Ability };
 export type SrdClass = {

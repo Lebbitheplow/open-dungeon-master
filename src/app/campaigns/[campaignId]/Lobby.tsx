@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Check, Copy, Loader2, Play, Swords, UserRound } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
@@ -66,9 +67,9 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 p-6">
       <header className="mb-6">
-        <a href="/" className="text-sm text-stone-500 hover:text-stone-300">
+        <Link href="/" className="text-sm text-stone-500 hover:text-stone-300">
           &larr; All campaigns
-        </a>
+        </Link>
         <div className="mt-2 flex items-center gap-3">
           <Swords className="size-7 text-amber-500" />
           <div>
@@ -145,12 +146,12 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
 
       <section className="space-y-3">
         {!mySheet ? (
-          <a
+          <Link
             href={`/campaigns/${campaign.id}/character`}
             className="flex w-full items-center justify-center gap-2 rounded-md bg-amber-700 px-3 py-2.5 font-medium text-amber-50 hover:bg-amber-600"
           >
             Create your character
-          </a>
+          </Link>
         ) : (
           <button
             type="button"

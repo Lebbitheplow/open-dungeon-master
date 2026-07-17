@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Dices, Loader2, Send, Swords } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { cn } from "@/lib/cn";
@@ -74,9 +75,9 @@ export function SessionView({ state }: { state: CampaignState }) {
             </p>
           </div>
         </div>
-        <a href="/" className="text-sm text-stone-500 hover:text-stone-300">
+        <Link href="/" className="text-sm text-stone-500 hover:text-stone-300">
           All campaigns
-        </a>
+        </Link>
       </header>
 
       <div className="flex min-h-0 flex-1">

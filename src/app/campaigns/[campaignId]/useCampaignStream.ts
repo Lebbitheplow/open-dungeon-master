@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useReducer, useRef } from "react";
+import { useCallback, useEffect, useReducer } from "react";
 import type { CampaignMember, SessionUser } from "@/lib/campaign-types";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { CampaignMessage } from "@/lib/db/messages";
@@ -142,22 +142,23 @@ const EPHEMERAL_EVENTS = ["dm_status", "dm_delta"];
 
 export function useCampaignStream(campaignId: string) {
   const [state, dispatch] = useReducer(reducer, initialState);
-  const lastSeqRef = useRef(0);
-  lastSeqRef.current = state.lastSeq;
 
-  const refresh = useCallback(async () => {
+  // Loads the snapshot and returns its latestSeq so the event stream can
+  // start exactly where the snapshot left off.
+  const refresh = useCallback(async (): Promise<number> => {
     try {
       const response = await fetch(`/api/campaigns/${campaignId}`);
       if (response.status === 401) {
         window.location.href = "/";
-        return;
+        return 0;
       }
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
         dispatch({ type: "error", error: data.error || "Could not load the campaign." });
-        return;
+        return 0;
       }
       const data = await response.json();
+      const lastSeq = data.latestSeq ?? 0;
       dispatch({
         type: "snapshot",
         payload: {
@@ -167,11 +168,13 @@ export function useCampaignStream(campaignId: string) {
           sheets: data.sheets,
           messages: data.messages,
           rolls: data.rolls,
-          lastSeq: data.latestSeq ?? 0,
+          lastSeq,
         },
       });
+      return lastSeq;
     } catch {
       dispatch({ type: "error", error: "Could not reach the server." });
+      return 0;
     }
   }, [campaignId]);
 
@@ -179,13 +182,11 @@ export function useCampaignStream(campaignId: string) {
     let source: EventSource | null = null;
     let cancelled = false;
 
-    refresh().then(() => {
+    refresh().then((lastSeq) => {
       if (cancelled) {
         return;
       }
-      source = new EventSource(
-        `/api/campaigns/${campaignId}/events?lastSeq=${lastSeqRef.current}`,
-      );
+      source = new EventSource(`/api/campaigns/${campaignId}/events?lastSeq=${lastSeq}`);
       const handle = (eventType: string) => (event: MessageEvent) => {
         try {
           const payload = JSON.parse(event.data);

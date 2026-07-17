@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { use } from "react";
 import { Lobby } from "@/app/campaigns/[campaignId]/Lobby";
@@ -26,9 +27,9 @@ export default function CampaignPage({
     return (
       <main className="flex flex-1 flex-col items-center justify-center gap-3 p-6">
         <p className="text-stone-400">{state.error || "Campaign not found."}</p>
-        <a href="/" className="text-sm text-amber-500 hover:underline">
+        <Link href="/" className="text-sm text-amber-500 hover:underline">
           Back to campaigns
-        </a>
+        </Link>
       </main>
     );
   }
