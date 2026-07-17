@@ -2,14 +2,17 @@ import { z } from "zod";
 import { isErrorResponse, requireMember } from "@/lib/campaign-api";
 import {
   allMembersReady,
+  allocateSeq,
   latestSeq,
   listMembers,
   setCampaignStatus,
 } from "@/lib/db/campaigns";
-import { listRecentMessages } from "@/lib/db/messages";
+import { insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
 import { listRecentRolls } from "@/lib/db/rolls";
 import { listSheets } from "@/lib/db/sheets";
-import { publishPersisted } from "@/lib/events";
+import { runDmTurn } from "@/lib/dm/loop";
+import { enqueueDmJob } from "@/lib/dm/queue";
+import { publishPersisted, publishWithSeq } from "@/lib/events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -81,6 +84,21 @@ export async function PATCH(
 
   setCampaignStatus(campaignId, nextStatus);
   publishPersisted(campaignId, "campaign_updated", { status: nextStatus });
+
+  // Kick off the adventure: a table note the DM answers with the opening
+  // scene, introducing the party and the premise.
+  if (nextStatus === "active") {
+    const seq = allocateSeq(campaignId);
+    const message = insertCampaignMessage({
+      campaignId,
+      seq,
+      authorType: "system",
+      content:
+        "The party is assembled and the adventure begins. Introduce the opening scene, set the premise, and give the party their first decision.",
+    });
+    publishWithSeq(campaignId, seq, "message_added", { message });
+    enqueueDmJob(campaignId, () => runDmTurn(campaignId));
+  }
 
   return Response.json({ ok: true, status: nextStatus });
 }

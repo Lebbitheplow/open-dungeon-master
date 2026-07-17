@@ -129,8 +129,9 @@ export function listRecentRolls(campaignId: string, limit = 20): StoredRoll[] {
     .prepare(
       `
         SELECT * FROM (
-          SELECT * FROM rolls WHERE campaign_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?
-        ) ORDER BY created_at ASC, rowid ASC
+          SELECT r.*, r.rowid AS row_order FROM rolls r
+          WHERE r.campaign_id = ? ORDER BY r.created_at DESC, r.rowid DESC LIMIT ?
+        ) ORDER BY created_at ASC, row_order ASC
       `,
     )
     .all(campaignId, limit) as RollRow[];
