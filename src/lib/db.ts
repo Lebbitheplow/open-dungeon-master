@@ -1,6 +1,4 @@
-import Database from "better-sqlite3";
-import { mkdirSync } from "node:fs";
-import path from "node:path";
+import { getDatabase, parseJson } from "@/lib/db/core";
 import { DEFAULT_CHAT_TITLE, titleFromInput } from "@/lib/defaults";
 import { configuredDefaultStorySettings } from "@/lib/runtime-defaults";
 import { isLocalTextModelId, isTextProvider } from "@/lib/text-models";
@@ -15,9 +13,6 @@ import type {
   StoryMessage,
   StorySettings,
 } from "@/lib/types";
-
-const dbPath =
-  process.env.SQLITE_DB_PATH || path.join(process.cwd(), "data", "local-roleplay.sqlite");
 
 type ChatRow = {
   id: string;
@@ -53,108 +48,7 @@ type CharacterRow = {
   updated_at: string;
 };
 
-declare global {
-  var __localRoleplayDb: Database.Database | undefined;
-}
-
-function ensureSchema(db: Database.Database) {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS chats (
-      id TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
-      settings_json TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS messages (
-      id TEXT PRIMARY KEY,
-      chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
-      role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
-      content TEXT NOT NULL,
-      attachments_json TEXT NOT NULL DEFAULT '[]',
-      image_request_json TEXT,
-      generated_image_json TEXT,
-      created_at TEXT NOT NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_messages_chat_created
-      ON messages(chat_id, created_at);
-
-    CREATE TABLE IF NOT EXISTS characters (
-      id TEXT PRIMARY KEY,
-      chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
-      name TEXT NOT NULL,
-      details TEXT NOT NULL DEFAULT '',
-      inventory TEXT NOT NULL DEFAULT '',
-      skills TEXT NOT NULL DEFAULT '',
-      spells TEXT NOT NULL DEFAULT '',
-      portrait_json TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_characters_chat_updated
-      ON characters(chat_id, updated_at);
-
-    CREATE TABLE IF NOT EXISTS app_settings (
-      key TEXT PRIMARY KEY,
-      value_json TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-  `);
-
-  // Compaction memory: a rolling "story so far" summary plus a watermark of
-  // how many of the chat's oldest messages it already covers.
-  const chatColumns = db.prepare(`PRAGMA table_info(chats)`).all() as Array<{ name: string }>;
-  if (!chatColumns.some((column) => column.name === "story_summary")) {
-    db.exec(`ALTER TABLE chats ADD COLUMN story_summary TEXT NOT NULL DEFAULT ''`);
-  }
-  if (!chatColumns.some((column) => column.name === "story_summary_count")) {
-    db.exec(`ALTER TABLE chats ADD COLUMN story_summary_count INTEGER NOT NULL DEFAULT 0`);
-  }
-
-  const characterColumns = db.prepare(`PRAGMA table_info(characters)`).all() as Array<{ name: string }>;
-  if (!characterColumns.some((column) => column.name === "inventory")) {
-    db.exec(`ALTER TABLE characters ADD COLUMN inventory TEXT NOT NULL DEFAULT ''`);
-  }
-  if (!characterColumns.some((column) => column.name === "skills")) {
-    db.exec(`ALTER TABLE characters ADD COLUMN skills TEXT NOT NULL DEFAULT ''`);
-  }
-  if (!characterColumns.some((column) => column.name === "spells")) {
-    db.exec(`ALTER TABLE characters ADD COLUMN spells TEXT NOT NULL DEFAULT ''`);
-  }
-}
-
-function getDatabase() {
-  if (globalThis.__localRoleplayDb) {
-    ensureSchema(globalThis.__localRoleplayDb);
-    return globalThis.__localRoleplayDb;
-  }
-
-  mkdirSync(path.dirname(dbPath), { recursive: true });
-  const db = new Database(dbPath);
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
-  ensureSchema(db);
-
-  globalThis.__localRoleplayDb = db;
-  return db;
-}
-
-function parseJson<T>(raw: string | null | undefined, fallback: T): T {
-  if (!raw) {
-    return fallback;
-  }
-
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function normalizeSettings(settings?: Partial<StorySettings>): StorySettings {
+export function normalizeSettings(settings?: Partial<StorySettings>): StorySettings {
   const defaultSettings = configuredDefaultStorySettings();
   const merged = {
     ...defaultSettings,
