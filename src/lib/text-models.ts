@@ -27,7 +27,7 @@ export const LOCAL_TEXT_MODEL_IDS = LOCAL_TEXT_MODELS.map(
   (model) => model.id,
 ) as [LocalTextModelId, ...LocalTextModelId[]];
 
-export const DEFAULT_LOCAL_TEXT_MODEL: LocalTextModelId = "gemma4:12b-it-qat";
+export const DEFAULT_LOCAL_TEXT_MODEL: LocalTextModelId = "gemma4:31b-it-qat";
 
 export function isLocalTextModelId(value: unknown): value is LocalTextModelId {
   return LOCAL_TEXT_MODEL_IDS.includes(value as LocalTextModelId);

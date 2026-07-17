@@ -26,12 +26,18 @@ export async function GET() {
     });
     if (response.ok) {
       const data = (await response.json()) as { models?: Array<{ name?: string }> };
+      // Ollama resolves model names case-insensitively, so match the same way
+      // (a pre-existing "Gemma4" repo can store tags with different casing).
       const installed = new Set(
-        (data.models || []).map((model) => model.name || "").filter(Boolean),
+        (data.models || [])
+          .map((model) => (model.name || "").toLowerCase())
+          .filter(Boolean),
       );
       localText = {
         ok: true,
-        installedModels: LOCAL_TEXT_MODEL_IDS.filter((id) => installed.has(id)),
+        installedModels: LOCAL_TEXT_MODEL_IDS.filter((id) =>
+          installed.has(id.toLowerCase()),
+        ),
       };
     }
   } catch {
