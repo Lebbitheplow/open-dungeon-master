@@ -9,10 +9,10 @@
   },
   "scripts": {
     "dev": "next dev",
-    "dev:lan": "next dev -H 0.0.0.0 -p 3006",
+    "dev:lan": "next dev -H 0.0.0.0 -p 3005",
     "build": "next build",
     "start": "next start",
-    "start:lan": "next start -H 0.0.0.0 -p 3006",
+    "start:lan": "next start -H 0.0.0.0 -p 3005",
     "lint": "eslint",
     "test": "node scripts/test-all.mjs",
     "test:dice": "node scripts/test-dice.mjs",
