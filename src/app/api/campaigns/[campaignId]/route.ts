@@ -37,7 +37,7 @@ export async function GET(
   const { campaign, user } = context;
   return Response.json({
     campaign: publicCampaign(campaign),
-    me: { id: user.id, username: user.username },
+    me: { id: user.id, username: user.username, avatar: user.avatar },
     members: listMembers(campaignId),
     sheets: listSheets(campaignId),
     messages: listRecentMessages(campaignId, 100),

@@ -215,7 +215,7 @@ export function listMembers(campaignId: string): CampaignMember[] {
   const rows = getDatabase()
     .prepare(
       `
-        SELECT m.user_id, u.username, m.role, m.ready, m.use_real_dice, m.joined_at
+        SELECT m.user_id, u.username, u.avatar_json, m.role, m.ready, m.use_real_dice, m.joined_at
         FROM campaign_members m
         JOIN users u ON u.id = m.user_id
         WHERE m.campaign_id = ?
@@ -225,6 +225,7 @@ export function listMembers(campaignId: string): CampaignMember[] {
     .all(campaignId) as Array<{
     user_id: string;
     username: string;
+    avatar_json: string | null;
     role: "owner" | "player";
     ready: number;
     use_real_dice: number;
@@ -234,6 +235,7 @@ export function listMembers(campaignId: string): CampaignMember[] {
   return rows.map((row) => ({
     userId: row.user_id,
     username: row.username,
+    avatar: parseJson<{ url: string } | null>(row.avatar_json, null),
     role: row.role,
     ready: Boolean(row.ready),
     useRealDice: Boolean(row.use_real_dice),

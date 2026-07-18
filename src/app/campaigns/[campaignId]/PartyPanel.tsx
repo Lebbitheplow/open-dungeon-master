@@ -1,9 +1,11 @@
 "use client";
 
-import { Check, Crown, Heart, Save, Shield, Wrench } from "lucide-react";
+import { Check, Crown, Heart, ImagePlus, Save, Shield, UserRound, Wrench } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
+import { CharacterSheetDialog } from "@/app/campaigns/[campaignId]/CharacterSheetDialog";
 import { LeadEditDialog } from "@/app/campaigns/[campaignId]/LeadEditDialog";
+import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { computeSheetDerived, formatModifier } from "@/lib/srd";
 
@@ -64,8 +66,20 @@ export function PartyPanel({
   canTransferLead?: boolean;
 }) {
   const [editingSheetId, setEditingSheetId] = useState("");
+  const [viewingSheetId, setViewingSheetId] = useState("");
+  const [croppingSheetId, setCroppingSheetId] = useState("");
   const editingSheet = sheets.find((sheet) => sheet.id === editingSheetId);
+  const viewingSheet = sheets.find((sheet) => sheet.id === viewingSheetId);
+  const croppingSheet = sheets.find((sheet) => sheet.id === croppingSheetId);
   const Wrapper = embedded ? "div" : "aside";
+
+  async function setPortrait(sheet: CharacterSheet, url: string) {
+    await fetch(`/api/campaigns/${sheet.campaignId}/sheet`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ portrait: { url } }),
+    });
+  }
   return (
     <Wrapper
       className={cn(
@@ -91,15 +105,36 @@ export function PartyPanel({
                 "ring-1 ring-amber-500/70 border-amber-700",
             )}
           >
-            <p className="flex items-center gap-1.5 font-medium">
-              {sheet.name}
-              {sheet.userId === leadUserId ? (
-                <Crown className="size-3.5 text-amber-300" aria-label="Party lead" />
-              ) : null}
-            </p>
-            <p className="text-xs text-stone-400">
-              {sheet.race.replaceAll("_", " ")} {sheet.class} {sheet.level}
-            </p>
+            <button
+              type="button"
+              onClick={() => setViewingSheetId(sheet.id)}
+              title="View full character sheet"
+              className="flex w-full items-center gap-2.5 text-left"
+            >
+              {sheet.portrait ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={sheet.portrait.url}
+                  alt={sheet.name}
+                  className="size-10 shrink-0 rounded-lg border border-stone-700 object-cover"
+                />
+              ) : (
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-stone-800 bg-stone-900">
+                  <UserRound className="size-4 text-stone-600" />
+                </span>
+              )}
+              <span className="min-w-0">
+                <span className="flex items-center gap-1.5 font-medium">
+                  <span className="truncate">{sheet.name}</span>
+                  {sheet.userId === leadUserId ? (
+                    <Crown className="size-3.5 shrink-0 text-amber-300" aria-label="Party lead" />
+                  ) : null}
+                </span>
+                <span className="block text-xs text-stone-400">
+                  {sheet.race.replaceAll("_", " ")} {sheet.class} {sheet.level}
+                </span>
+              </span>
+            </button>
 
             <div className="mt-2 flex items-center gap-2 text-sm">
               <Heart className="size-4 text-red-400" />
@@ -157,6 +192,14 @@ export function PartyPanel({
                     +1 HP
                   </button>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setCroppingSheetId(sheet.id)}
+                  className="flex w-full items-center justify-center gap-1 rounded border border-stone-700 py-1 text-xs text-stone-400 hover:bg-stone-900"
+                >
+                  <ImagePlus className="size-3" />
+                  {sheet.portrait ? "Change portrait" : "Add portrait"}
+                </button>
                 {sheet.libraryCharacterId ? (
                   <SaveToLibraryButton campaignId={sheet.campaignId} />
                 ) : null}
@@ -199,6 +242,27 @@ export function PartyPanel({
           campaignId={editingSheet.campaignId}
           sheet={editingSheet}
           onClose={() => setEditingSheetId("")}
+        />
+      ) : null}
+
+      {viewingSheet ? (
+        <CharacterSheetDialog
+          sheet={viewingSheet}
+          mine={viewingSheet.userId === meUserId}
+          isLead={isLead}
+          onAdjust={() => {
+            setViewingSheetId("");
+            setEditingSheetId(viewingSheet.id);
+          }}
+          onClose={() => setViewingSheetId("")}
+        />
+      ) : null}
+
+      {croppingSheet ? (
+        <AvatarCropDialog
+          title={`${croppingSheet.name}'s portrait`}
+          onUploaded={(image) => setPortrait(croppingSheet, image.url)}
+          onClose={() => setCroppingSheetId("")}
         />
       ) : null}
     </Wrapper>

@@ -39,6 +39,16 @@ export const equipmentItemSchema = z.object({
 });
 export type EquipmentItem = z.infer<typeof equipmentItemSchema>;
 
+// Uploaded portrait/avatar reference; restricted to local uploads so a
+// sheet can never point the party's browsers at an external host.
+export const attachmentSchema = z.object({
+  id: z.string().max(80).optional(),
+  name: z.string().max(120).optional(),
+  type: z.string().max(60).optional(),
+  url: z.string().max(300).startsWith("/uploads/"),
+});
+export type SheetAttachment = z.infer<typeof attachmentSchema>;
+
 export const spellSlotSchema = z.object({
   max: z.number().int().min(0).max(10),
   used: z.number().int().min(0).max(10),
@@ -75,6 +85,7 @@ export const createSheetSchema = z.object({
   gold: z.number().int().min(0).max(1000000).default(0),
   feats: z.array(z.string().trim().min(1).max(60)).max(20).default([]),
   spellcasting: spellcastingSchema.default(null),
+  portrait: attachmentSchema.nullable().default(null),
   notes: z.string().max(4000).default(""),
 });
 export type CreateSheetInput = z.infer<typeof createSheetSchema>;
@@ -94,6 +105,7 @@ export const patchSheetSchema = z.object({
   spellcasting: spellcastingSchema.optional(),
   feats: z.array(z.string().trim().min(1).max(80)).max(30).optional(),
   subclass: z.string().trim().max(60).optional(),
+  portrait: attachmentSchema.nullable().optional(),
   notes: z.string().max(4000).optional(),
 });
 export type PatchSheetInput = z.infer<typeof patchSheetSchema>;
@@ -124,6 +136,7 @@ export type CharacterSheet = {
   feats: string[];
   spellcasting: Spellcasting;
   conditions: string[];
+  portrait: SheetAttachment | null;
   notes: string;
   createdAt: string;
   updatedAt: string;

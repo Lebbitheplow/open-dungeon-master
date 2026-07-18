@@ -1,6 +1,7 @@
 export type SessionUser = {
   id: string;
   username: string;
+  avatar?: { url: string } | null;
 };
 
 export type CampaignStatus = "lobby" | "active" | "ended";
@@ -36,6 +37,7 @@ export const LEAD_NOTE_PREFIX = "[Party lead direction] ";
 export type CampaignMember = {
   userId: string;
   username: string;
+  avatar?: { url: string } | null;
   role: "owner" | "player";
   ready: boolean;
   useRealDice: boolean;

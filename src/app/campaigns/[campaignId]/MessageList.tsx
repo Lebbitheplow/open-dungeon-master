@@ -141,7 +141,15 @@ export function MessageList({
         const sheet = message.characterId ? sheetsById.get(message.characterId) : undefined;
         return (
           <div key={message.id} className="ml-auto max-w-[92%] sm:max-w-2xl">
-            <p className="mb-0.5 text-right text-xs font-medium text-amber-200/60">
+            <p className="mb-0.5 flex items-center justify-end gap-1.5 text-right text-xs font-medium text-amber-200/60">
+              {sheet?.portrait ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={sheet.portrait.url}
+                  alt=""
+                  className="size-5 rounded-full border border-stone-700 object-cover"
+                />
+              ) : null}
               {sheet?.name ?? "Player"}
             </p>
             <div

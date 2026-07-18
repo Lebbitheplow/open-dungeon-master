@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, Loader2, LogOut, Plus, Swords, Users } from "lucide-react";
+import { BookOpen, Loader2, LogOut, Plus, Settings, Swords, Users } from "lucide-react";
 import Link from "next/link";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
@@ -146,6 +146,9 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
           <a href="/solo" className={ui.btnSmall}>
             <BookOpen className="size-4" /> Solo mode
           </a>
+          <Link href="/settings" className={ui.btnSmall} title="Account settings">
+            <Settings className="size-4" />
+          </Link>
           <button type="button" onClick={logout} className={ui.btnSmall}>
             <LogOut className="size-4" /> Log out
           </button>

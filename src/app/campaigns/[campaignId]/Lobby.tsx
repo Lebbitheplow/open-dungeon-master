@@ -193,7 +193,18 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
                 className="flex items-center justify-between rounded-lg border border-stone-800 bg-stone-950/60 px-4 py-3"
               >
                 <div className="flex items-center gap-3">
-                  <UserRound className="size-5 text-stone-500" />
+                  {member.avatar ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={member.avatar.url}
+                      alt=""
+                      className="size-9 rounded-full border border-stone-700 object-cover"
+                    />
+                  ) : (
+                    <span className="flex size-9 items-center justify-center rounded-full border border-stone-800 bg-stone-900">
+                      <UserRound className="size-4 text-stone-500" />
+                    </span>
+                  )}
                   <div>
                     <p className="font-medium">
                       {member.username}

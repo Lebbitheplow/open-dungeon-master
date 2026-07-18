@@ -217,12 +217,28 @@ export function SessionView({ state }: { state: CampaignState }) {
             ))}
             {floor.mode === "spotlight" ? (
               <div className="mb-2 flex items-center justify-between rounded-md border border-amber-900/60 bg-amber-950/30 px-3 py-1.5 text-xs">
-                <span className="text-amber-200">
-                  Spotlight:{" "}
-                  {spotlighted.map((sheet) => sheet.name).join(", ") || "someone"}
-                  {floor.prompt ? (
-                    <span className="text-amber-200/80"> · {floor.prompt}</span>
-                  ) : null}
+                <span className="flex items-center gap-1.5 text-amber-200">
+                  <span className="flex -space-x-1.5">
+                    {spotlighted
+                      .filter((sheet) => sheet.portrait)
+                      .slice(0, 4)
+                      .map((sheet) => (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          key={sheet.id}
+                          src={sheet.portrait!.url}
+                          alt=""
+                          className="size-5 rounded-full border border-amber-900 object-cover"
+                        />
+                      ))}
+                  </span>
+                  <span>
+                    Spotlight:{" "}
+                    {spotlighted.map((sheet) => sheet.name).join(", ") || "someone"}
+                    {floor.prompt ? (
+                      <span className="text-amber-200/80"> · {floor.prompt}</span>
+                    ) : null}
+                  </span>
                 </span>
                 {isLead ? (
                   <button

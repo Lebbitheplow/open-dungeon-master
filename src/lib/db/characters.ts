@@ -222,6 +222,7 @@ export function syncProgressToLibrary(sheetId: string): LibraryCharacter | null 
       : sheet.spellcasting,
     maxHp: sheet.maxHp,
     ac: sheet.ac,
+    portrait: sheet.portrait,
     notes: sheet.notes,
   };
   getDatabase()

@@ -166,6 +166,7 @@ export default function CharacterBuilder({
         abilities,
         maxHp: preview.maxHp,
         ac: preview.ac,
+        portrait: null,
         speed: race.speed,
         hitDice: {
           die: `d${klass.hitDie}` as "d6" | "d8" | "d10" | "d12",

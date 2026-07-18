@@ -1,8 +1,13 @@
-import { getDatabase, nowIso } from "@/lib/db/core";
+import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
+
+export type UserAvatar = {
+  url: string;
+};
 
 export type User = {
   id: string;
   username: string;
+  avatar: UserAvatar | null;
   createdAt: string;
 };
 
@@ -10,11 +15,17 @@ type UserRow = {
   id: string;
   username: string;
   password_hash: string;
+  avatar_json: string | null;
   created_at: string;
 };
 
 function mapUser(row: UserRow): User {
-  return { id: row.id, username: row.username, createdAt: row.created_at };
+  return {
+    id: row.id,
+    username: row.username,
+    avatar: parseJson<UserAvatar | null>(row.avatar_json, null),
+    createdAt: row.created_at,
+  };
 }
 
 export function createUser(username: string, passwordHash: string): User {
@@ -23,21 +34,31 @@ export function createUser(username: string, passwordHash: string): User {
   db.prepare(
     `INSERT INTO users (id, username, password_hash, created_at) VALUES (?, ?, ?, ?)`,
   ).run(id, username, passwordHash, nowIso());
-  return { id, username, createdAt: nowIso() };
+  return { id, username, avatar: null, createdAt: nowIso() };
 }
 
 export function getUserByUsername(username: string): (User & { passwordHash: string }) | null {
   const row = getDatabase()
-    .prepare(`SELECT id, username, password_hash, created_at FROM users WHERE username = ?`)
+    .prepare(
+      `SELECT id, username, password_hash, avatar_json, created_at FROM users WHERE username = ?`,
+    )
     .get(username) as UserRow | undefined;
   return row ? { ...mapUser(row), passwordHash: row.password_hash } : null;
 }
 
 export function getUserById(userId: string): User | null {
   const row = getDatabase()
-    .prepare(`SELECT id, username, password_hash, created_at FROM users WHERE id = ?`)
+    .prepare(
+      `SELECT id, username, password_hash, avatar_json, created_at FROM users WHERE id = ?`,
+    )
     .get(userId) as UserRow | undefined;
   return row ? mapUser(row) : null;
+}
+
+export function setUserAvatar(userId: string, avatar: UserAvatar | null) {
+  getDatabase()
+    .prepare(`UPDATE users SET avatar_json = ? WHERE id = ?`)
+    .run(avatar ? JSON.stringify(avatar) : null, userId);
 }
 
 export function insertSession(tokenHash: string, userId: string, expiresAt: string) {
@@ -54,7 +75,7 @@ export function getSessionUser(tokenHash: string): User | null {
   const row = db
     .prepare(
       `
-        SELECT u.id, u.username, u.password_hash, u.created_at
+        SELECT u.id, u.username, u.password_hash, u.avatar_json, u.created_at
         FROM sessions s
         JOIN users u ON u.id = s.user_id
         WHERE s.token_hash = ? AND s.expires_at >= ?
