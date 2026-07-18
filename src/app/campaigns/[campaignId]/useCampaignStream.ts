@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useReducer } from "react";
 import type { CampaignMember, SessionUser } from "@/lib/campaign-types";
 import type { Campaign } from "@/lib/db/campaigns";
+import type { Chapter } from "@/lib/db/chapters";
 import type { CampaignMessage } from "@/lib/db/messages";
 import type { StoredRoll } from "@/lib/db/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -64,6 +65,7 @@ export type CampaignState = {
   auditLog: AuditEntry[];
   levelUps: LevelUpNotice[];
   locations: CampaignLocation[];
+  chapters: Chapter[];
   narrationAudio: Record<string, string>;
   latestTts: { messageId: string; url: string; seq: number } | null;
   lastSeq: number;
@@ -84,6 +86,7 @@ const initialState: CampaignState = {
   auditLog: [],
   levelUps: [],
   locations: [],
+  chapters: [],
   narrationAudio: {},
   latestTts: null,
   lastSeq: 0,
@@ -225,6 +228,26 @@ function reducer(state: CampaignState, action: Action): CampaignState {
           );
           return next;
         }
+        case "chapter_closed": {
+          const closed = payload.chapter as Chapter | undefined;
+          const opened = payload.opened as Chapter | undefined;
+          let chapters = state.chapters;
+          if (closed) {
+            chapters = upsertBy(chapters, closed, (entry) => entry.id);
+          }
+          if (opened) {
+            chapters = upsertBy(chapters, opened, (entry) => entry.id);
+          }
+          next.chapters = [...chapters].sort((a, b) => a.index - b.index);
+          return next;
+        }
+        case "chapter_updated": {
+          const chapter = payload.chapter as Chapter | undefined;
+          if (chapter) {
+            next.chapters = upsertBy(state.chapters, chapter, (entry) => entry.id);
+          }
+          return next;
+        }
         case "campaign_updated":
           next.campaign = state.campaign
             ? { ...state.campaign, ...(payload as Partial<Campaign>) }
@@ -269,6 +292,8 @@ const PERSISTED_EVENTS = [
   "sheet_audit",
   "level_up_available",
   "campaign_updated",
+  "chapter_closed",
+  "chapter_updated",
   "floor_changed",
   "image_ready",
   "location_updated",
@@ -308,6 +333,7 @@ export function useCampaignStream(campaignId: string) {
           pendingRolls: data.pendingRolls ?? [],
           auditLog: data.auditLog ?? [],
           locations: data.locations ?? [],
+          chapters: data.chapters ?? [],
           lastSeq,
         },
       });

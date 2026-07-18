@@ -90,6 +90,28 @@ export function getCampaignMessage(messageId: string): CampaignMessage | null {
   return row ? mapMessage(row) : null;
 }
 
+// Messages inside a seq span (chapter transcripts), ascending.
+export function listMessagesInSeqRange(
+  campaignId: string,
+  seqStart: number,
+  seqEnd: number,
+): CampaignMessage[] {
+  const rows = getDatabase()
+    .prepare(
+      `SELECT * FROM campaign_messages WHERE campaign_id = ? AND seq >= ? AND seq <= ? ORDER BY seq ASC`,
+    )
+    .all(campaignId, seqStart, seqEnd) as MessageRow[];
+  return rows.map(mapMessage);
+}
+
+// How many messages exist at or below a seq (compaction watermark resets).
+export function countMessagesUpToSeq(campaignId: string, seq: number): number {
+  const row = getDatabase()
+    .prepare(`SELECT COUNT(*) AS n FROM campaign_messages WHERE campaign_id = ? AND seq <= ?`)
+    .get(campaignId, seq) as { n: number };
+  return row.n;
+}
+
 // Most recent `limit` messages in ascending seq order.
 export function listRecentMessages(campaignId: string, limit = 100): CampaignMessage[] {
   const rows = getDatabase()

@@ -327,6 +327,7 @@ export function SessionView({ state }: { state: CampaignState }) {
           spotlightUserIds={floor.mode === "spotlight" ? floor.userIds : []}
           auditLog={auditLog}
           locations={locations}
+          chapters={state.chapters}
           mapsEnabled={campaign.gameSettings?.mapsEnabled ?? true}
         />
       </div>

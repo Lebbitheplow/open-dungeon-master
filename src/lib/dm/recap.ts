@@ -3,6 +3,7 @@ import {
   getCampaignById,
   getCampaignSummaryState,
 } from "@/lib/db/campaigns";
+import { listChapters } from "@/lib/db/chapters";
 import { listRecentEventsForCampaign } from "@/lib/db/character-events";
 import { getCurrentLocation } from "@/lib/db/locations";
 import { insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
@@ -19,6 +20,9 @@ export async function runResumeRecap(campaignId: string) {
     return;
   }
   const { summary } = getCampaignSummaryState(campaignId);
+  const lastChapter = listChapters(campaignId)
+    .filter((chapter) => chapter.status === "closed")
+    .at(-1);
   const location = getCurrentLocation(campaignId);
   const recent = listRecentMessages(campaignId, 12)
     .map((message) => `${message.authorType === "dm" ? "DM" : "Player"}: ${message.content}`)
@@ -40,7 +44,10 @@ export async function runResumeRecap(campaignId: string) {
       {
         role: "user",
         content: [
-          summary ? `Story so far:\n${summary}` : "",
+          lastChapter
+            ? `Last chapter ("${lastChapter.title}"):\n${lastChapter.summary}`
+            : "",
+          summary ? `Current chapter so far:\n${summary}` : "",
           location ? `Current location: ${location.name}` : "",
           events.length ? `Recent milestones:\n${events.map((entry) => `- ${entry}`).join("\n")}` : "",
           `Most recent exchanges:\n${recent}`,

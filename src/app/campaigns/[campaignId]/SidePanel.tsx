@@ -5,13 +5,15 @@ import { cn } from "@/lib/cn";
 import { EventLog } from "@/app/campaigns/[campaignId]/EventLog";
 import { MapPanel } from "@/app/campaigns/[campaignId]/MapPanel";
 import { PartyPanel } from "@/app/campaigns/[campaignId]/PartyPanel";
+import { StoryPanel } from "@/app/campaigns/[campaignId]/StoryPanel";
 import type {
   AuditEntry,
   CampaignLocation,
 } from "@/app/campaigns/[campaignId]/useCampaignStream";
+import type { Chapter } from "@/lib/db/chapters";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
-type Tab = "party" | "map" | "log";
+type Tab = "party" | "map" | "story" | "log";
 
 // The session's right rail: party sheets, the current area map, and the
 // stat-change log, tabbed to keep the rail narrow.
@@ -26,6 +28,7 @@ export function SidePanel({
   spotlightUserIds,
   auditLog,
   locations,
+  chapters,
   mapsEnabled,
 }: {
   campaignId: string;
@@ -38,12 +41,14 @@ export function SidePanel({
   spotlightUserIds: string[];
   auditLog: AuditEntry[];
   locations: CampaignLocation[];
+  chapters: Chapter[];
   mapsEnabled: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("party");
   const tabs: Array<[Tab, string]> = [
     ["party", "Party"],
     ...(mapsEnabled ? ([["map", "Map"]] as Array<[Tab, string]>) : []),
+    ["story", "Story"],
     ["log", "Log"],
   ];
 
@@ -80,6 +85,8 @@ export function SidePanel({
           />
         ) : tab === "map" ? (
           <MapPanel campaignId={campaignId} locations={locations} isLead={isLead} />
+        ) : tab === "story" ? (
+          <StoryPanel campaignId={campaignId} chapters={chapters} isLead={isLead} />
         ) : (
           <EventLog auditLog={auditLog} sheets={sheets} />
         )}

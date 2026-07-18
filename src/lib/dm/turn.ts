@@ -37,11 +37,14 @@ import {
 import {
   buildDmMessages,
   movePartyTool,
+  recallStoryTool,
   recordEventTool,
   requestPlayerInputTool,
   requestRollTool,
   updateLocationTool,
 } from "@/lib/dm/prompt";
+import { listChapters } from "@/lib/db/chapters";
+import { maybeCloseChapter } from "@/lib/dm/chapter-close";
 import {
   hasRecentIdenticalEvent,
   insertCharacterEvent,
@@ -136,6 +139,13 @@ export async function startDmTurn(campaignId: string) {
           events.map((event) => event.summary),
         ]),
       ),
+      chapters: listChapters(campaignId)
+        .filter((chapter) => chapter.status === "closed")
+        .map((chapter) => ({
+          index: chapter.index,
+          title: chapter.title,
+          oneLiner: chapter.highlights[0] ?? "",
+        })),
     },
     history,
   );
@@ -202,9 +212,11 @@ async function advance(context: TurnContext, turn: DmTurn) {
     movePartyTool,
     updateLocationTool,
     recordEventTool,
+    recallStoryTool,
     ...(leanTools ? [] : mutationTools),
     ...(imageEnabled ? [generateImageTool] : []),
   ];
+  let movedParty = false;
 
   while (turn.callIndex < MAX_MODEL_CALLS) {
     const finalCall = turn.callIndex === MAX_MODEL_CALLS - 1;
@@ -256,14 +268,24 @@ async function advance(context: TurnContext, turn: DmTurn) {
       (toolCall) => toolCall.name === "move_party" || toolCall.name === "update_location",
     );
     const eventCalls = toolCalls.filter((toolCall) => toolCall.name === "record_event");
+    const recallCalls = toolCalls.filter((toolCall) => toolCall.name === "recall_story");
 
     // Location bookkeeping is synchronous and cheap; maps render async on
     // the media queue when vision allows.
     const locationResults = new Map<string, Record<string, unknown>>();
     for (const locationCall of locationCalls) {
-      locationResults.set(
-        locationCall.id ?? locationCall.name,
-        handleLocationCall(campaign, locationCall.name, locationCall.rawArguments),
+      const result = handleLocationCall(campaign, locationCall.name, locationCall.rawArguments);
+      if (result.movedToNewLocation) {
+        movedParty = true;
+        delete result.movedToNewLocation;
+      }
+      locationResults.set(locationCall.id ?? locationCall.name, result);
+    }
+    const recallResults = new Map<string, Record<string, unknown>>();
+    for (const recallCall of recallCalls) {
+      recallResults.set(
+        recallCall.id ?? "recall_story",
+        handleRecallStory(campaignId, recallCall.rawArguments),
       );
     }
     const eventResults = new Map<string, Record<string, unknown>>();
@@ -300,6 +322,8 @@ async function advance(context: TurnContext, turn: DmTurn) {
     const needsFollowUp =
       rollCalls.length > 0 ||
       mutationCalls.length > 0 ||
+      // The model asked for a chapter recall in order to use the answer.
+      recallCalls.length > 0 ||
       ((locationCalls.length > 0 || eventCalls.length > 0) && !turn.narrationParts.length);
 
     if (!needsFollowUp) {
@@ -365,6 +389,16 @@ async function advance(context: TurnContext, turn: DmTurn) {
         ...(eventCall.id ? { tool_call_id: eventCall.id } : {}),
         content: JSON.stringify(
           eventResults.get(eventCall.id ?? "record_event") ?? { ok: true },
+        ),
+      });
+    }
+
+    for (const recallCall of recallCalls) {
+      turn.conversation.push({
+        role: "tool",
+        ...(recallCall.id ? { tool_call_id: recallCall.id } : {}),
+        content: JSON.stringify(
+          recallResults.get(recallCall.id ?? "recall_story") ?? { ok: true },
         ),
       });
     }
@@ -500,8 +534,67 @@ async function advance(context: TurnContext, turn: DmTurn) {
 
   finalize(context, turn, failed);
   if (!failed) {
+    await maybeCloseChapter(campaignId, { movedParty });
     await maybeCompactHistory(campaignId, listAllMessages(campaignId));
   }
+}
+
+// recall_story: return a past chapter's full summary by number, or the
+// best matches for a query over titles, summaries, and highlights.
+function handleRecallStory(campaignId: string, rawArguments: string): Record<string, unknown> {
+  let args: { chapter?: unknown; query?: unknown };
+  try {
+    args = JSON.parse(rawArguments || "{}");
+  } catch {
+    return { error: "Invalid arguments." };
+  }
+  const closed = listChapters(campaignId).filter((chapter) => chapter.status === "closed");
+  if (!closed.length) {
+    return { error: "No closed chapters yet; the story is still in its first chapter." };
+  }
+  const describe = (chapter: (typeof closed)[number]) => ({
+    chapter: chapter.index,
+    title: chapter.title,
+    summary: chapter.summary,
+    highlights: chapter.highlights,
+  });
+  const requested = Number(args.chapter);
+  if (Number.isInteger(requested) && requested > 0) {
+    const match = closed.find((chapter) => chapter.index === requested);
+    return match
+      ? describe(match)
+      : {
+          error: `No closed chapter ${requested}.`,
+          availableChapters: closed.map((chapter) => `${chapter.index}. ${chapter.title}`),
+        };
+  }
+  const query = String(args.query ?? "").trim().toLowerCase();
+  if (!query) {
+    return {
+      error: "Give a chapter number or a query.",
+      availableChapters: closed.map((chapter) => `${chapter.index}. ${chapter.title}`),
+    };
+  }
+  const terms = query.split(/\s+/).filter((term) => term.length > 2);
+  const scored = closed
+    .map((chapter) => {
+      const haystack =
+        `${chapter.title} ${chapter.summary} ${chapter.highlights.join(" ")}`.toLowerCase();
+      const score = terms.reduce(
+        (sum, term) => sum + (haystack.includes(term) ? 1 : 0),
+        haystack.includes(query) ? 3 : 0,
+      );
+      return { chapter, score };
+    })
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score);
+  if (!scored.length) {
+    return {
+      error: "Nothing matched.",
+      availableChapters: closed.map((chapter) => `${chapter.index}. ${chapter.title}`),
+    };
+  }
+  return { matches: scored.slice(0, 2).map((entry) => describe(entry.chapter)) };
 }
 
 // record_event: a lasting milestone on the character's permanent record
@@ -576,6 +669,7 @@ function handleLocationCall(
 
   let location;
   let previousLayout = "";
+  let movedToNewLocation = false;
   if (toolName === "move_party") {
     const name = typeof args.name === "string" ? args.name.trim() : "";
     if (!name) {
@@ -588,6 +682,7 @@ function handleLocationCall(
       layoutDescription,
       connections,
     });
+    movedToNewLocation = !previous || previous.id !== location.id;
     // Keep the old area linked to the new one so routes stay consistent.
     if (previous && previous.id !== location.id) {
       const merged = [...new Set([...location.connections, previous.name])];
@@ -624,6 +719,9 @@ function handleLocationCall(
     ok: true,
     location: location.name,
     note: "Recorded. Continue the scene.",
+    // Consumed by advance() as the chapter-break signal, then stripped
+    // before the result reaches the model.
+    ...(movedToNewLocation ? { movedToNewLocation: true } : {}),
   };
 }
 

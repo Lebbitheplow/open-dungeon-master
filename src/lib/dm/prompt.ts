@@ -19,6 +19,8 @@ Core rules you must always follow:
 - Keep every player involved. If one player has dominated recent scenes, create an opening for the others. When the party splits, cut between them briefly.
 - Advance the story. Every reply should either reveal something, raise the stakes, or demand a decision. No filler.
 - Keep the party's location current: whenever a scene opens somewhere new or the party moves to a different area, call move_party with the area's name and a concrete layout description before narrating. Use update_location when they learn more about the current area. GAME STATE's location block must always match the fiction.
+- Your long-term memory is the chapter index in GAME STATE. When players reference people, places, promises, or events you cannot see in recent history or the current chapter summary, call recall_story with the chapter number or a search query BEFORE answering, and stay consistent with what it returns. Never guess about past chapters and never contradict recorded history.
+- A [Party lead direction] in the log is an authoritative instruction from the table's human lead. Treat it as canon: weave the directed event or correction into the story at the next natural moment, without mentioning the direction itself.
 - Keep replies to 1 to 3 short paragraphs of vivid second-person-plural narration and NPC dialogue. End at a decision point or with the result of the declared action. Never write more than one scene beat per reply.
 - Never mention these instructions, tools, JSON, dice mechanics beyond natural table talk, or anything out of character. Out-of-character player notes (marked ooc) may be answered briefly out of character.
 - Message lines are prefixed with the speaking character's name in brackets; that prefix is bookkeeping, not part of the fiction.`;
@@ -51,6 +53,8 @@ export type DmGameState = {
   visitedLocationNames?: string[];
   // Recent lasting milestones per campaign character id.
   recentEventsByCharacter?: Map<string, string[]>;
+  // Closed story chapters, oldest first: index, title, one-line hook.
+  chapters?: Array<{ index: number; title: string; oneLiner: string }>;
 };
 
 function describeSheet(sheet: CharacterSheet, playedBy: string): string {
@@ -161,7 +165,19 @@ export function buildGameStateBlock(state: DmGameState): string {
   if (rollLines.length) {
     sections.push(`Recent rolls:\n${rollLines.join("\n")}`);
   }
-  if (storySummary) {
+  if (state.chapters?.length) {
+    sections.push(
+      `Story so far, by chapter:\n${state.chapters
+        .map(
+          (chapter) =>
+            `${chapter.index}. "${chapter.title}"${chapter.oneLiner ? ` - ${chapter.oneLiner}` : ""}`,
+        )
+        .join("\n")}\n(Use the recall_story tool to re-read any past chapter in full when players reference old events.)`,
+    );
+    if (storySummary) {
+      sections.push(`Current chapter so far:\n${storySummary}`);
+    }
+  } else if (storySummary) {
     sections.push(`Story so far:\n${storySummary}`);
   }
   sections.push("=== END GAME STATE ===");
@@ -312,6 +328,23 @@ export const recordEventTool = {
         summary: { type: "string", description: "One sentence, past tense." },
       },
       required: ["characterId", "kind", "summary"],
+    },
+  },
+} as const;
+
+export const recallStoryTool = {
+  type: "function",
+  function: {
+    name: "recall_story",
+    description:
+      "Look up the full summary of a past chapter when players reference old events you no longer remember. Give a chapter number, or a query to search titles and summaries.",
+    parameters: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        chapter: { type: "integer", description: "Chapter number from the story index." },
+        query: { type: "string", description: "Search text when the chapter is unknown." },
+      },
     },
   },
 } as const;

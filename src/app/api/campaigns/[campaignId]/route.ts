@@ -8,6 +8,7 @@ import {
   publicCampaign,
   setCampaignStatus,
 } from "@/lib/db/campaigns";
+import { listChapters } from "@/lib/db/chapters";
 import { syncProgressToLibrary } from "@/lib/db/characters";
 import { listOpenPendingRolls } from "@/lib/db/dm-turns";
 import { listLocations } from "@/lib/db/locations";
@@ -44,6 +45,7 @@ export async function GET(
     pendingRolls: listOpenPendingRolls(campaignId),
     auditLog: listRecentAudit(campaignId, 50),
     locations: listLocations(campaignId),
+    chapters: listChapters(campaignId),
     latestSeq: latestSeq(campaignId),
   });
 }
