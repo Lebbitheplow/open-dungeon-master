@@ -495,7 +495,10 @@ async function advance(context: TurnContext, turn: DmTurn) {
           result: outcome,
         });
         turn.rollIds.push(roll.id);
-        publishWithSeq(campaignId, allocateSeq(campaignId), "roll_result", { roll });
+        publishWithSeq(campaignId, allocateSeq(campaignId), "roll_result", {
+          roll,
+          source: "digital",
+        });
         turn.conversation.push({
           role: "tool",
           ...(rollCall.id ? { tool_call_id: rollCall.id } : {}),

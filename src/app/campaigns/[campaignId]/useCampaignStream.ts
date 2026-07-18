@@ -74,6 +74,7 @@ export type CampaignState = {
   chapters: Chapter[];
   narrationAudio: Record<string, string>;
   latestTts: { messageId: string; url: string; seq: number } | null;
+  latestRoll: { roll: StoredRoll; source: string; seq: number } | null;
   lastSeq: number;
   dmStatus: DmStatus;
   dmDraft: string;
@@ -97,6 +98,7 @@ const initialState: CampaignState = {
   chapters: [],
   narrationAudio: {},
   latestTts: null,
+  latestRoll: null,
   lastSeq: 0,
   dmStatus: "idle",
   dmDraft: "",
@@ -154,6 +156,11 @@ function reducer(state: CampaignState, action: Action): CampaignState {
         }
         case "roll_result":
           next.rolls = [...state.rolls.slice(-30), payload.roll as StoredRoll];
+          next.latestRoll = {
+            roll: payload.roll as StoredRoll,
+            source: String(payload.source ?? "digital"),
+            seq: action.seq ?? 0,
+          };
           if (payload.pendingRollId) {
             next.pendingRolls = state.pendingRolls.filter(
               (pending) => pending.id !== payload.pendingRollId,

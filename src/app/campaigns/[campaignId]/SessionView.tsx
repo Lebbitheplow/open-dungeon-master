@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { Dices, Loader2, Send, Volume2, VolumeX } from "lucide-react";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { cn } from "@/lib/cn";
 import { PIXEL_ICONS, PixelTile } from "@/lib/ui";
+import { DiceOverlay } from "@/app/campaigns/[campaignId]/DiceOverlay";
 import { LevelUpDialog } from "@/app/campaigns/[campaignId]/LevelUpDialog";
 import { MessageList } from "@/app/campaigns/[campaignId]/MessageList";
 import { PendingRollCard } from "@/app/campaigns/[campaignId]/PendingRollCard";
@@ -14,6 +15,11 @@ import { useNarrationAudio } from "@/app/campaigns/[campaignId]/useNarrationAudi
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
 
 type InputKind = "do" | "say" | "ooc" | "lead";
+
+function subscribeDicePref(callback: () => void) {
+  window.addEventListener("odm-dice3d-pref", callback);
+  return () => window.removeEventListener("odm-dice3d-pref", callback);
+}
 
 export function SessionView({ state }: { state: CampaignState }) {
   const {
@@ -34,6 +40,16 @@ export function SessionView({ state }: { state: CampaignState }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [dismissedLevelUp, setDismissedLevelUp] = useState("");
+  const dice3d = useSyncExternalStore(
+    subscribeDicePref,
+    () => window.localStorage.getItem("odm:dice3d") !== "off",
+    () => true,
+  );
+
+  function toggleDice3d() {
+    window.localStorage.setItem("odm:dice3d", dice3d ? "off" : "on");
+    window.dispatchEvent(new Event("odm-dice3d-pref"));
+  }
 
   const narration = useNarrationAudio();
   // Only tts_ready events newer than the seq present when the snapshot first
@@ -135,6 +151,19 @@ export function SessionView({ state }: { state: CampaignState }) {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={toggleDice3d}
+            title={dice3d ? "Turn off 3D dice animation" : "Turn on 3D dice animation"}
+            className={cn(
+              "rounded-md border p-1.5",
+              dice3d
+                ? "border-amber-800 bg-amber-950/40 text-amber-400"
+                : "border-stone-700 text-stone-500 hover:text-stone-300",
+            )}
+          >
+            <Dices className="size-4" />
+          </button>
           {campaign.gameSettings?.ttsEnabled ? (
             <div className="flex items-center gap-1.5">
               <button
@@ -349,6 +378,8 @@ export function SessionView({ state }: { state: CampaignState }) {
           mapsEnabled={campaign.gameSettings?.mapsEnabled ?? true}
         />
       </div>
+
+      <DiceOverlay latestRoll={state.latestRoll} enabled={dice3d} />
 
       {myLevelUp &&
       mySheet &&

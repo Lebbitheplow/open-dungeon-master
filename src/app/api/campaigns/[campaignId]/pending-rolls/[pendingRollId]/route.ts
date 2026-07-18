@@ -88,6 +88,9 @@ export async function POST(
   publishWithSeq(campaignId, allocateSeq(campaignId), "roll_result", {
     roll,
     pendingRollId,
+    // Real dice already rolled on a real table; the overlay animates only
+    // digital results.
+    source: isFallback ? "digital" : "physical",
   });
 
   const remaining = listPendingForTurn(pending.turnId).filter(

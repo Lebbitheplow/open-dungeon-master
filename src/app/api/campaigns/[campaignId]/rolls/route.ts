@@ -100,7 +100,7 @@ export async function POST(
     result,
   });
 
-  publishPersisted(campaignId, "roll_result", { roll });
+  publishPersisted(campaignId, "roll_result", { roll, source: "digital" });
 
   return Response.json({ roll }, { status: 201 });
 }

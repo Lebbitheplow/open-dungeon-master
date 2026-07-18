@@ -15,9 +15,11 @@
     "start:lan": "next start -H 0.0.0.0 -p 3006",
     "lint": "eslint",
     "test": "node scripts/test-all.mjs",
-    "test:dice": "node scripts/test-dice.mjs"
+    "test:dice": "node scripts/test-dice.mjs",
+    "postinstall": "node scripts/copy-dice-assets.mjs"
   },
   "dependencies": {
+    "@3d-dice/dice-box-threejs": "^0.0.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-dialog": "^1.1.16",
     "better-sqlite3-multiple-ciphers": "^12.11.1",
