@@ -117,6 +117,20 @@ export function listRecentEventsForCampaign(
   return byCharacter;
 }
 
+// Latest milestones campaign-wide, oldest first, for the session event log.
+export function listRecentCampaignEvents(campaignId: string, limit = 30): CharacterEvent[] {
+  const rows = getDatabase()
+    .prepare(
+      `
+        SELECT * FROM (
+          SELECT * FROM character_events WHERE campaign_id = ? ORDER BY seq DESC LIMIT ?
+        ) ORDER BY seq ASC
+      `,
+    )
+    .all(campaignId, limit) as EventRow[];
+  return rows.map(mapEvent);
+}
+
 // Dedupe helper: has this character already recorded an identical summary?
 export function hasRecentIdenticalEvent(
   campaignCharacterId: string,

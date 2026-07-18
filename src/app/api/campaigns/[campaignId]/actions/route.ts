@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { isErrorResponse, requireMember } from "@/lib/campaign-api";
-import { allocateSeq, canAct, claimRecap, getFloor, setFloor } from "@/lib/db/campaigns";
+import { allocateSeq, canAct, claimRecap, getFloor, setFloor, type Floor } from "@/lib/db/campaigns";
 import { countMessages, insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
 import { getSheetForUser, listSheets } from "@/lib/db/sheets";
-import { runDmTurn } from "@/lib/dm/loop";
+import { requestDmTurn } from "@/lib/dm/loop";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { runResumeRecap } from "@/lib/dm/recap";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
@@ -44,14 +44,29 @@ export async function POST(
 
   const { kind } = parsed.data;
 
-  // Floor control: during a spotlight only the named players may act
-  // (ooc is always allowed). A spotlighted player acting releases the floor.
+  // Floor control: during a spotlight only the named players may act (ooc is
+  // always allowed); the floor releases once ALL of them have answered.
+  // During a hold nobody may act until the lead releases. This read-modify-
+  // write must stay await-free so it is atomic in Node.
   const floor = getFloor(campaignId);
   if (!canAct(floor, user.id, kind)) {
+    if (floor.mode === "hold") {
+      return Response.json(
+        {
+          error: "The party lead has not opened responses yet. Use OOC for table talk.",
+          floor,
+        },
+        { status: 409 },
+      );
+    }
     const waitingOn =
       floor.mode === "spotlight"
         ? listSheets(campaignId)
-            .filter((entry) => floor.userIds.includes(entry.userId))
+            .filter(
+              (entry) =>
+                floor.userIds.includes(entry.userId) &&
+                !floor.respondedUserIds.includes(entry.userId),
+            )
             .map((entry) => entry.name)
             .join(", ")
         : "";
@@ -65,9 +80,21 @@ export async function POST(
       { status: 409 },
     );
   }
+  let spotlightStillWaiting = false;
   if (kind !== "ooc" && floor.mode === "spotlight") {
-    setFloor(campaignId, { mode: "open" });
-    publishPersisted(campaignId, "floor_changed", { floor: { mode: "open" } });
+    const responded =
+      floor.userIds.includes(user.id) && !floor.respondedUserIds.includes(user.id)
+        ? [...floor.respondedUserIds, user.id]
+        : floor.respondedUserIds;
+    const allAnswered = floor.userIds.every((id) => responded.includes(id));
+    const nextFloor: Floor = allAnswered
+      ? { mode: "open" }
+      : { ...floor, respondedUserIds: responded };
+    if (allAnswered || responded !== floor.respondedUserIds) {
+      setFloor(campaignId, nextFloor);
+      publishPersisted(campaignId, "floor_changed", { floor: nextFloor });
+    }
+    spotlightStillWaiting = !allAnswered;
   }
 
   const content =
@@ -103,10 +130,13 @@ export async function POST(
   });
   publishWithSeq(campaignId, seq, "message_added", { message });
 
-  // OOC table talk does not wake the DM; everything else queues a narration
-  // turn. The queue serializes turns per campaign.
-  if (kind !== "ooc" || isFirstAction) {
-    enqueueDmJob(campaignId, () => runDmTurn(campaignId));
+  // OOC table talk does not wake the DM; everything else requests a
+  // narration turn, except while a spotlight still waits on other players:
+  // the single coalesced turn fires with the last answer and reads all the
+  // queued messages. Requests coalesce: rapid actions share one turn (plus
+  // at most one follow-up for actions landing mid-turn) instead of stacking.
+  if ((kind !== "ooc" && !spotlightStillWaiting) || isFirstAction) {
+    requestDmTurn(campaignId);
   }
 
   return Response.json({ messageId: message.id }, { status: 202 });

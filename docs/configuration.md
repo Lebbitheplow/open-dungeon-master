@@ -12,6 +12,7 @@ defaults run fully local.
 | `LOCAL_TEXT_MAX_TOKENS` | `4096` | Max tokens generated per local turn |
 | `LOCAL_TEXT_CONTEXT` | model max | Cap on the local context window |
 | `LOCAL_TEXT_TIMEOUT_MS` | `360000` | Local turn timeout (idle, resets per streamed chunk) |
+| `ARC_TEXT_TIMEOUT_MS` | `480000` | Timeout for story-arc generation/refresh and chapter summaries (non-streaming, whole reply must finish in time) |
 | `OPENROUTER_API_KEY` | — | Fallback key for OpenRouter URLs (else set in-app) |
 | `OPENAI_COMPAT_API_KEY` | — | Fallback key for other connected servers |
 | `FLUX_WORKER_URL` | `http://127.0.0.1:7869` | Image worker |

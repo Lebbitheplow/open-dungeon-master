@@ -14,19 +14,13 @@ import {
   spellSlotsFor,
   suggestedStartingHp,
 } from "@/lib/srd";
+import { defaultLoadout, suggestWeapons } from "@/lib/srd/weapons";
 import AbilityEditor, { type AbilityMethod, type AbilityState } from "./AbilityEditor";
 import ContentPicker from "./ContentPicker";
+import EquipmentSection from "./EquipmentSection";
 import { useArchetypes, useBuilderOptions } from "./useBuilderOptions";
 
 const ALIGNMENTS = ["LG", "NG", "CG", "LN", "N", "CN", "LE", "NE", "CE"];
-const STARTER_PACK: Array<{ name: string; qty: number }> = [
-  { name: "Backpack", qty: 1 },
-  { name: "Bedroll", qty: 1 },
-  { name: "Rations (1 day)", qty: 5 },
-  { name: "Rope, Hempen (50 feet)", qty: 1 },
-  { name: "Torch", qty: 5 },
-  { name: "Waterskin", qty: 1 },
-];
 
 export type BuilderResult = { level: number; sheet: CreateSheetInput };
 
@@ -62,7 +56,10 @@ export default function CharacterBuilder({
   const [chosenSkills, setChosenSkills] = useState<string[]>([]);
   const [spells, setSpells] = useState<string[]>([]);
   const [equipment, setEquipment] = useState<Array<{ name: string; qty: number; slug?: string }>>([]);
+  // Auto-added class weapons the user explicitly removed; reset on class change.
+  const [removedAutoNames, setRemovedAutoNames] = useState<string[]>([]);
   const [feats, setFeats] = useState<string[]>([]);
+  const [backstory, setBackstory] = useState("");
   const [gold, setGold] = useState(15);
   const [hpOverride, setHpOverride] = useState<number | null>(null);
   const [acOverride, setAcOverride] = useState<number | null>(null);
@@ -110,6 +107,40 @@ export default function CharacterBuilder({
     const ac = acOverride ?? 10 + derived.abilityMods.dex;
     return { proficiencies, derived, maxHp, ac };
   }, [abilities, race, klass, background, chosenSkills, effectiveLevel, hpOverride, acOverride]);
+
+  // Class-appropriate starting weapons ride along automatically (removable
+  // chips) so no character begins the adventure unarmed.
+  const autoLoadout = useMemo(() => (klass ? defaultLoadout(klass.weapons) : []), [klass]);
+  const suggestedWeapons = useMemo(() => (klass ? suggestWeapons(klass.weapons) : []), [klass]);
+  const fullEquipment = useMemo(() => {
+    const manualNames = new Set(equipment.map((item) => item.name));
+    const auto = autoLoadout
+      .filter((weapon) => !removedAutoNames.includes(weapon.name) && !manualNames.has(weapon.name))
+      .map((weapon) => ({ name: weapon.name, qty: 1 }));
+    return [...auto, ...equipment];
+  }, [equipment, autoLoadout, removedAutoNames]);
+
+  function addEquipmentItem(entry: { name: string; qty?: number; slug?: string }) {
+    setEquipment((current) => {
+      const existing = current.find((item) => item.name === entry.name);
+      if (existing) {
+        return current.map((item) =>
+          item.name === entry.name ? { ...item, qty: item.qty + 1 } : item,
+        );
+      }
+      return [...current, { name: entry.name, qty: entry.qty ?? 1, slug: entry.slug }];
+    });
+  }
+
+  function removeEquipmentItem(name: string) {
+    if (equipment.some((item) => item.name === name)) {
+      setEquipment((current) => current.filter((item) => item.name !== name));
+    } else {
+      setRemovedAutoNames((removed) =>
+        removed.includes(name) ? removed : [...removed, name],
+      );
+    }
+  }
 
   const spellAdvice =
     klass?.spellAbility && abilities
@@ -174,7 +205,7 @@ export default function CharacterBuilder({
           spent: 0,
         },
         proficiencies: preview.proficiencies,
-        equipment,
+        equipment: fullEquipment,
         gold,
         feats,
         spellcasting: klass.spellAbility
@@ -186,6 +217,7 @@ export default function CharacterBuilder({
             }
           : null,
         notes: "",
+        backstory: backstory.trim(),
       },
     });
   }
@@ -263,7 +295,7 @@ export default function CharacterBuilder({
           <span className="mb-1 block text-stone-400">Class</span>
           <select
             value={klass?.id ?? ""}
-            onChange={(event) => { setClassId(event.target.value); setChosenSkills([]); setSubclass(""); setSpells([]); }}
+            onChange={(event) => { setClassId(event.target.value); setChosenSkills([]); setSubclass(""); setSpells([]); setRemovedAutoNames([]); }}
             className={inputClass}
           >
             {classes.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
@@ -359,59 +391,37 @@ export default function CharacterBuilder({
         </section>
       ) : null}
 
+      <EquipmentSection
+        equipment={fullEquipment}
+        suggestions={suggestedWeapons}
+        onAdd={addEquipmentItem}
+        onAddMany={(entries) =>
+          setEquipment((current) => {
+            const names = new Set(current.map((item) => item.name));
+            return [...current, ...entries.filter((item) => !names.has(item.name))];
+          })
+        }
+        onRemove={removeEquipmentItem}
+        gold={gold}
+        setGold={setGold}
+        chip={chip}
+        inputClass={inputClass}
+      />
+
       <section>
-        <h2 className="mb-1 font-medium">Equipment</h2>
-        <div className="mb-2 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() =>
-              setEquipment((current) => {
-                const names = new Set(current.map((item) => item.name));
-                return [...current, ...STARTER_PACK.filter((item) => !names.has(item.name))];
-              })
-            }
-            className="rounded-md border border-stone-700 px-2.5 py-1 text-xs text-stone-300 hover:bg-stone-900"
-          >
-            Add adventurer&apos;s starter pack
-          </button>
-          <span className="text-xs text-stone-500">plus search armor, weapons, and gear:</span>
-        </div>
-        <ContentPicker
-          kind="items"
-          placeholder="Search items (e.g. longsword, chain mail, rope)"
-          onPick={(entry) =>
-            setEquipment((current) => {
-              const existing = current.find((item) => item.name === entry.name);
-              if (existing) {
-                return current.map((item) =>
-                  item.name === entry.name ? { ...item, qty: item.qty + 1 } : item,
-                );
-              }
-              return [...current, { name: entry.name, qty: 1, slug: entry.slug }];
-            })
-          }
-          renderMeta={(entry) => entry.rarity || entry.kind || ""}
+        <h2 className="mb-1 font-medium">Backstory (optional)</h2>
+        <p className="mb-2 text-xs text-stone-500">
+          Who were they before the adventure? The party can read this, and the DM weaves it
+          into the story.
+        </p>
+        <textarea
+          value={backstory}
+          onChange={(event) => setBackstory(event.target.value)}
+          rows={4}
+          maxLength={2000}
+          placeholder="A disgraced temple guard looking for a second chance..."
+          className={cn(inputClass, "resize-y")}
         />
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {equipment.map((item) =>
-            chip(
-              item.qty > 1 ? `${item.name} x${item.qty}` : item.name,
-              () => setEquipment((current) => current.filter((entry) => entry.name !== item.name)),
-              item.slug?.startsWith("homebrew:") ?? false,
-            ),
-          )}
-        </div>
-        <label className="mt-3 block w-40">
-          <span className="mb-1 block text-xs text-stone-400">Starting gold</span>
-          <input
-            type="number"
-            min={0}
-            max={100000}
-            value={gold}
-            onChange={(event) => setGold(Math.max(0, Number(event.target.value) || 0))}
-            className={inputClass}
-          />
-        </label>
       </section>
 
       <section>

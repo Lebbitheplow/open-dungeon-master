@@ -12,7 +12,10 @@ import {
 } from "@/lib/db/messages";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { parseChapterJson, shouldCloseChapter } from "@/lib/dm/chapter-logic";
+import { refreshStoryArc } from "@/lib/dm/arc";
+import { arcTextTimeoutMs } from "@/lib/model-client";
 import { requestDmMessage } from "@/lib/dm/model";
+import { setDmStatus } from "@/lib/dm/status";
 
 // Chapter closing: at a natural scene break (the party moved somewhere new)
 // or a hard size cap, the open chapter is sealed with an AI-written title,
@@ -70,6 +73,7 @@ export async function maybeCloseChapter(
   const seqEnd = latestSeq(campaignId);
   const transcript = chapterTranscript(campaignId, chapter, seqEnd);
   const previous = previousChapterLines(campaignId, chapter.index);
+  setDmStatus(campaignId, "writing_chapter");
 
   let parsed = { title: `Chapter ${chapter.index}`, summary: "", highlights: [] as string[] };
   try {
@@ -91,7 +95,7 @@ export async function maybeCloseChapter(
             .join("\n\n"),
         },
       ],
-      {},
+      { timeoutMs: arcTextTimeoutMs() },
     );
     if (!error) {
       parsed = parseChapterJson(String(message?.content ?? ""), chapter.index);
@@ -103,6 +107,7 @@ export async function maybeCloseChapter(
 
   const result = closeChapterRow(chapter.id, { ...parsed, seqEnd });
   if (!result) {
+    setDmStatus(campaignId, "idle");
     return;
   }
 
@@ -121,6 +126,10 @@ export async function maybeCloseChapter(
     content: `Chapter ${result.closed.index}${result.closed.title ? `, "${result.closed.title}",` : ""} comes to a close.`,
   });
   publishWithSeq(campaignId, seq, "message_added", { message: divider });
+
+  // Chapter boundaries are the arc's heartbeat: mark beats the chapter
+  // accomplished, settle or open sub-arcs. Never throws (arc.ts swallows).
+  await refreshStoryArc(campaignId, result.closed);
 }
 
 function previousChapterLines(campaignId: string, beforeIndex: number): string {

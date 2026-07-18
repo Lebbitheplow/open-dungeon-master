@@ -12,6 +12,9 @@ export type CampaignMessage = {
   content: string;
   imageRequest?: ImageRequest;
   generatedImage?: GeneratedImage;
+  // Set on DM messages that moved the party somewhere new; the chat renders
+  // that location's map inline (the map itself lives on the locations row).
+  locationId?: string;
   createdAt: string;
 };
 
@@ -25,6 +28,7 @@ type MessageRow = {
   content: string;
   image_request_json: string | null;
   generated_image_json: string | null;
+  location_id: string | null;
   created_at: string;
 };
 
@@ -39,6 +43,7 @@ function mapMessage(row: MessageRow): CampaignMessage {
     content: row.content,
     imageRequest: parseJson<ImageRequest | undefined>(row.image_request_json, undefined),
     generatedImage: parseJson<GeneratedImage | undefined>(row.generated_image_json, undefined),
+    locationId: row.location_id ?? undefined,
     createdAt: row.created_at,
   };
 }
@@ -51,6 +56,7 @@ export function insertCampaignMessage(input: {
   characterId?: string | null;
   content: string;
   imageRequest?: ImageRequest;
+  locationId?: string;
 }): CampaignMessage {
   const id = crypto.randomUUID();
   getDatabase()
@@ -58,9 +64,9 @@ export function insertCampaignMessage(input: {
       `
         INSERT INTO campaign_messages (
           id, campaign_id, seq, author_type, user_id, character_id, content,
-          image_request_json, created_at
+          image_request_json, location_id, created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
     )
     .run(
@@ -72,6 +78,7 @@ export function insertCampaignMessage(input: {
       input.characterId ?? null,
       input.content,
       input.imageRequest ? JSON.stringify(input.imageRequest) : null,
+      input.locationId ?? null,
       nowIso(),
     );
   touchCampaign(input.campaignId);

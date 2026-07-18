@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, Loader2, LogOut, Plus, Settings, Swords, Users } from "lucide-react";
+import { BookOpen, Loader2, LogOut, Plus, Settings, Swords, Trash2, Users } from "lucide-react";
 import Link from "next/link";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
@@ -108,6 +108,20 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
     onLogout();
   }
 
+  async function deleteCampaign(campaign: CampaignSummary) {
+    if (
+      !window.confirm(
+        `Delete "${campaign.title}" for everyone? All characters, messages, and story progress are lost. This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    const response = await fetch(`/api/campaigns/${campaign.id}`, { method: "DELETE" });
+    if (response.ok) {
+      setCampaigns((current) => current.filter((entry) => entry.id !== campaign.id));
+    }
+  }
+
   async function join(event: FormEvent) {
     event.preventDefault();
     setJoining(true);
@@ -212,6 +226,20 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
                     >
                       {campaign.status}
                     </span>
+                    {campaign.role === "owner" ? (
+                      <button
+                        type="button"
+                        title="Delete this campaign"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          deleteCampaign(campaign);
+                        }}
+                        className="rounded-md p-1 text-stone-600 hover:text-red-400"
+                      >
+                        <Trash2 className="size-4" />
+                      </button>
+                    ) : null}
                   </div>
                 </a>
               </li>

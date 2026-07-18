@@ -3,7 +3,7 @@ import { touchCampaign } from "@/lib/db/campaigns";
 import type {
   CharacterSheet,
   CreateSheetInput,
-  PatchSheetInput,
+  FullPatchSheetInput,
 } from "@/lib/schemas/sheet";
 
 type SheetRow = {
@@ -34,6 +34,7 @@ type SheetRow = {
   conditions_json: string;
   portrait_json: string | null;
   notes: string;
+  backstory: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -81,6 +82,7 @@ function mapSheet(row: SheetRow): CharacterSheet {
     conditions: parseJson(row.conditions_json, []),
     portrait: parseJson<CharacterSheet["portrait"]>(row.portrait_json, null),
     notes: row.notes,
+    backstory: row.backstory ?? "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -91,7 +93,7 @@ const SHEET_COLUMNS = `
   background, alignment, level, xp,
   abilities_json, max_hp, current_hp, temp_hp, ac, speed, hit_dice_json,
   proficiencies_json, equipment_json, gold, feats_json, spellcasting_json,
-  conditions_json, portrait_json, notes, created_at, updated_at
+  conditions_json, portrait_json, notes, backstory, created_at, updated_at
 `;
 
 export function createSheet(
@@ -112,9 +114,9 @@ export function createSheet(
         subclass, background, alignment,
         level, xp, abilities_json, max_hp, current_hp, temp_hp, ac, speed,
         hit_dice_json, proficiencies_json, equipment_json, gold, feats_json,
-        spellcasting_json, conditions_json, portrait_json, notes, created_at, updated_at
+        spellcasting_json, conditions_json, portrait_json, notes, backstory, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?, ?)
     `,
   ).run(
     id,
@@ -141,6 +143,8 @@ export function createSheet(
     JSON.stringify(input.spellcasting),
     input.portrait ? JSON.stringify(input.portrait) : null,
     input.notes,
+    // Older library sheet_json blobs predate the field.
+    input.backstory ?? "",
     now,
     now,
   );
@@ -176,13 +180,21 @@ export function listSheets(campaignId: string): CharacterSheet[] {
   return rows.map(mapSheet);
 }
 
-export function patchSheet(sheetId: string, patch: PatchSheetInput): CharacterSheet | null {
+export function patchSheet(sheetId: string, patch: FullPatchSheetInput): CharacterSheet | null {
   const existing = getSheetById(sheetId);
   if (!existing) {
     return null;
   }
 
   const next = {
+    name: patch.name ?? existing.name,
+    race: patch.race ?? existing.race,
+    class: patch.class ?? existing.class,
+    background: patch.background ?? existing.background,
+    alignment: patch.alignment ?? existing.alignment,
+    speed: patch.speed ?? existing.speed,
+    abilities: patch.abilities ?? existing.abilities,
+    proficiencies: patch.proficiencies ?? existing.proficiencies,
     currentHp: patch.currentHp ?? existing.currentHp,
     tempHp: patch.tempHp ?? existing.tempHp,
     maxHp: patch.maxHp ?? existing.maxHp,
@@ -198,20 +210,31 @@ export function patchSheet(sheetId: string, patch: PatchSheetInput): CharacterSh
     subclass: patch.subclass ?? existing.subclass,
     portrait: patch.portrait !== undefined ? patch.portrait : existing.portrait,
     notes: patch.notes ?? existing.notes,
+    backstory: patch.backstory ?? existing.backstory,
   };
 
   getDatabase()
     .prepare(
       `
         UPDATE character_sheets SET
+          name = ?, race = ?, class = ?, background = ?, alignment = ?,
+          speed = ?, abilities_json = ?, proficiencies_json = ?,
           current_hp = ?, temp_hp = ?, max_hp = ?, ac = ?, xp = ?, level = ?,
           gold = ?, conditions_json = ?, equipment_json = ?, hit_dice_json = ?,
           spellcasting_json = ?, feats_json = ?, subclass = ?, portrait_json = ?,
-          notes = ?, updated_at = ?
+          notes = ?, backstory = ?, updated_at = ?
         WHERE id = ?
       `,
     )
     .run(
+      next.name,
+      next.race,
+      next.class,
+      next.background,
+      next.alignment,
+      next.speed,
+      JSON.stringify(next.abilities),
+      JSON.stringify(next.proficiencies),
       Math.min(next.currentHp, next.maxHp),
       next.tempHp,
       next.maxHp,
@@ -227,6 +250,7 @@ export function patchSheet(sheetId: string, patch: PatchSheetInput): CharacterSh
       next.subclass,
       next.portrait ? JSON.stringify(next.portrait) : null,
       next.notes,
+      next.backstory,
       nowIso(),
       sheetId,
     );

@@ -1,8 +1,9 @@
 "use client";
 
-import { BookOpen, Check, ChevronDown, ChevronRight, Loader2, Pencil, Scissors, X } from "lucide-react";
+import { BookOpen, Check, ChevronDown, ChevronRight, Compass, Loader2, Pencil, RefreshCw, Scissors, X } from "lucide-react";
 import { useState } from "react";
 import type { Chapter } from "@/lib/db/chapters";
+import type { StoryArc } from "@/lib/dm/arc-logic";
 
 // Story-so-far browser: every closed chapter with its title, highlights,
 // and expandable summary, plus the chapter in progress. The party lead can
@@ -128,6 +129,148 @@ function ChapterCard({
   );
 }
 
+// Lead-only view of the DM's secret story arc: the main beats the AI is
+// steering by plus the open quest threads. Read-only, with a regenerate
+// escape hatch when the arc no longer fits where the table took the story.
+function ArcCard({ campaignId }: { campaignId: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  const [arc, setArc] = useState<StoryArc | null>(null);
+  const [outline, setOutline] = useState("");
+
+  async function load() {
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/arc`);
+      if (response.ok) {
+        const data = (await response.json()) as { arc: StoryArc | null; dmOutline: string };
+        setArc(data.arc);
+        setOutline(data.dmOutline);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function toggle() {
+    const next = !expanded;
+    setExpanded(next);
+    if (next) {
+      void load();
+    }
+  }
+
+  async function regenerate() {
+    setRegenerating(true);
+    try {
+      await fetch(`/api/campaigns/${campaignId}/arc`, { method: "POST" });
+    } finally {
+      // The arc is written on the DM queue; a short hold avoids
+      // double-submits, then the view refetches.
+      setTimeout(() => {
+        setRegenerating(false);
+        void load();
+      }, 6_000);
+    }
+  }
+
+  const openThreads = arc?.subArcs.filter(
+    (subArc) => subArc.status === "active" || subArc.status === "pending",
+  );
+
+  return (
+    <div className="rounded-lg border border-stone-800 bg-stone-950/40 p-2.5">
+      <button type="button" onClick={toggle} className="flex w-full items-start gap-1.5 text-left">
+        {expanded ? (
+          <ChevronDown className="mt-0.5 size-3.5 shrink-0 text-stone-500" />
+        ) : (
+          <ChevronRight className="mt-0.5 size-3.5 shrink-0 text-stone-500" />
+        )}
+        <span className="flex items-center gap-1.5 text-xs font-medium text-amber-200">
+          <Compass className="size-3.5 text-amber-600" /> DM story arc (secret)
+        </span>
+      </button>
+      {expanded ? (
+        <div className="mt-2 space-y-2 pl-5">
+          {loading ? (
+            <p className="flex items-center gap-1 text-[11px] text-stone-500">
+              <Loader2 className="size-3 animate-spin" /> Loading...
+            </p>
+          ) : arc ? (
+            <>
+              <p className="text-[11px] leading-4 text-stone-300">{arc.premise}</p>
+              {arc.stakes ? (
+                <p className="text-[11px] leading-4 text-stone-400">Stakes: {arc.stakes}</p>
+              ) : null}
+              {arc.antagonist ? (
+                <p className="text-[11px] leading-4 text-stone-400">Antagonist: {arc.antagonist}</p>
+              ) : null}
+              <ol className="space-y-0.5">
+                {arc.beats.map((beat, index) => (
+                  <li
+                    key={index}
+                    className={`text-[11px] leading-4 ${
+                      beat.status === "done"
+                        ? "text-stone-600 line-through"
+                        : beat.status === "active"
+                          ? "text-amber-200"
+                          : "text-stone-400"
+                    }`}
+                  >
+                    {index + 1}. {beat.status === "active" ? "(now) " : ""}
+                    {beat.text}
+                  </li>
+                ))}
+              </ol>
+              {arc.finale ? (
+                <p className="text-[11px] leading-4 text-stone-400">Finale: {arc.finale}</p>
+              ) : null}
+              {openThreads?.length ? (
+                <div>
+                  <p className="text-[11px] font-medium text-stone-400">Open threads</p>
+                  <ul className="mt-0.5 space-y-0.5">
+                    {openThreads.map((subArc) => (
+                      <li key={subArc.id} className="list-none text-[11px] leading-4 text-stone-400">
+                        {subArc.name}: {subArc.goal}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </>
+          ) : outline ? (
+            <p className="whitespace-pre-wrap text-[11px] leading-4 text-stone-400">{outline}</p>
+          ) : (
+            <p className="text-[11px] italic text-stone-600">
+              No story arc yet. It is written when the adventure begins, or generate one now.
+            </p>
+          )}
+          {!loading ? (
+            <button
+              type="button"
+              onClick={regenerate}
+              disabled={regenerating}
+              title="Discard the current arc and have the DM plot a fresh one from the premise"
+              className="flex items-center gap-1 rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-400 hover:bg-stone-900 disabled:opacity-50"
+            >
+              {regenerating ? (
+                <>
+                  <Loader2 className="size-3 animate-spin" /> Plotting a new arc...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="size-3" /> Regenerate arc
+                </>
+              )}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function StoryPanel({
   campaignId,
   chapters,
@@ -154,14 +297,18 @@ export function StoryPanel({
 
   if (!closed.length && !open) {
     return (
-      <p className="px-1 py-6 text-center text-xs text-stone-600">
-        The story has not begun. Chapters appear here as the adventure unfolds.
-      </p>
+      <div className="space-y-2">
+        {isLead ? <ArcCard campaignId={campaignId} /> : null}
+        <p className="px-1 py-6 text-center text-xs text-stone-600">
+          The story has not begun. Chapters appear here as the adventure unfolds.
+        </p>
+      </div>
     );
   }
 
   return (
     <div className="space-y-2">
+      {isLead ? <ArcCard campaignId={campaignId} /> : null}
       <div className="rounded-lg border border-dashed border-stone-800 p-2.5">
         <p className="flex items-center gap-1.5 text-xs text-stone-400">
           <BookOpen className="size-3.5 text-amber-600" />

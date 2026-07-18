@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { publishPersisted } from "@/lib/events";
 import { publishMediaStatus } from "@/lib/dm/images";
+import { stripToolText } from "@/lib/dm/tool-text";
 import { enqueueMediaJob } from "@/lib/media-queue";
 import { serverEnv } from "@/lib/server-env";
 
@@ -13,7 +14,7 @@ import { serverEnv } from "@/lib/server-env";
 const CHUNK_CHAR_LIMIT = 1_800;
 
 function stripForSpeech(text: string): string {
-  return text
+  return stripToolText(text)
     .replace(/\[roll:[^\]]+\]/g, " ")
     .replace(/```[\s\S]*?```/g, " ")
     .replace(/[*_#>`]/g, "")

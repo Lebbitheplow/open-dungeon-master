@@ -26,6 +26,11 @@ export const gameSettingsSchema = z.object({
   ttsEnabled: z.boolean().default(true),
   ttsVoice: z.string().trim().max(40).default("af_heart"),
   mapsEnabled: z.boolean().default(true),
+  // Lets new players join with the invite code after the adventure started.
+  midGameJoinOpen: z.boolean().default(false),
+  // After each DM narration, block do and say for everyone until the party
+  // lead opens responses. OOC and lead directions stay available.
+  holdSubmissions: z.boolean().default(false),
 });
 
 export type GameSettings = z.infer<typeof gameSettingsSchema>;

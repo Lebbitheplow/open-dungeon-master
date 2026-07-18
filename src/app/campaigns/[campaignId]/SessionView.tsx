@@ -4,10 +4,14 @@ import Link from "next/link";
 import { Dices, Loader2, Send, Volume2, VolumeX } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { cn } from "@/lib/cn";
+import { JOIN_NOTE_PREFIX, latestUnintroducedJoin } from "@/lib/campaign-types";
 import { PIXEL_ICONS, PixelTile } from "@/lib/ui";
+import { CharacterGate } from "@/app/campaigns/[campaignId]/CharacterGate";
 import { DiceOverlay } from "@/app/campaigns/[campaignId]/DiceOverlay";
+import { FloorBanners } from "@/app/campaigns/[campaignId]/FloorBanners";
 import { LevelUpDialog } from "@/app/campaigns/[campaignId]/LevelUpDialog";
 import { MessageList } from "@/app/campaigns/[campaignId]/MessageList";
+import { NewAdventurerBanner } from "@/app/campaigns/[campaignId]/NewAdventurerBanner";
 import { PendingRollCard } from "@/app/campaigns/[campaignId]/PendingRollCard";
 import { PushToTalk } from "@/app/campaigns/[campaignId]/PushToTalk";
 import { SidePanel } from "@/app/campaigns/[campaignId]/SidePanel";
@@ -21,7 +25,13 @@ function subscribeDicePref(callback: () => void) {
   return () => window.removeEventListener("odm-dice3d-pref", callback);
 }
 
-export function SessionView({ state }: { state: CampaignState }) {
+export function SessionView({
+  state,
+  refreshNotes,
+}: {
+  state: CampaignState;
+  refreshNotes: () => Promise<void>;
+}) {
   const {
     campaign,
     me,
@@ -40,6 +50,8 @@ export function SessionView({ state }: { state: CampaignState }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [dismissedLevelUp, setDismissedLevelUp] = useState("");
+  const [dismissedJoinNotice, setDismissedJoinNotice] = useState("");
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   const dice3d = useSyncExternalStore(
     subscribeDicePref,
     () => window.localStorage.getItem("odm:dice3d") !== "off",
@@ -54,15 +66,21 @@ export function SessionView({ state }: { state: CampaignState }) {
   const narration = useNarrationAudio();
   // Only tts_ready events newer than the seq present when the snapshot first
   // loaded autoplay; the backlog stays silent (replay buttons cover history).
+  // Each narration is handed over exactly once: unrelated events (new chat
+  // messages) must never re-trigger and restart playback.
   const mountSeqRef = useRef<number | null>(null);
+  const handedTtsRef = useRef<string | null>(null);
   const { latestTts, loading, lastSeq } = state;
   const { onTtsReady } = narration;
   useEffect(() => {
-    if (mountSeqRef.current === null && !loading) {
-      mountSeqRef.current = lastSeq;
+    if (mountSeqRef.current === null) {
+      if (!loading) {
+        mountSeqRef.current = lastSeq;
+      }
       return;
     }
-    if (latestTts && mountSeqRef.current !== null) {
+    if (latestTts && latestTts.messageId !== handedTtsRef.current) {
+      handedTtsRef.current = latestTts.messageId;
       onTtsReady(latestTts.messageId, latestTts.url, latestTts.seq > mountSeqRef.current);
     }
   }, [latestTts, onTtsReady, loading, lastSeq]);
@@ -86,6 +104,30 @@ export function SessionView({ state }: { state: CampaignState }) {
     !floor.userIds.includes(me.id) &&
     kind !== "ooc" &&
     kind !== "lead";
+  // Held responses: the lead has not opened the floor after the last DM
+  // narration. OOC and lead directions stay available.
+  const holdBlocked = floor.mode === "hold" && kind !== "ooc" && kind !== "lead";
+  const heldSpotlightNames =
+    floor.mode === "hold" && floor.next.mode === "spotlight"
+      ? sheets
+          .filter((sheet) => floor.next.mode === "spotlight" && floor.next.userIds.includes(sheet.userId))
+          .map((sheet) => sheet.name)
+      : [];
+  // The campaign's opening narration gets everyone's full attention: while
+  // it plays for this user, do/say/lead input waits (OOC stays open).
+  const firstDmMessageId = messages.find((message) => message.authorType === "dm")?.id;
+  const openingNarrationPlaying =
+    Boolean(firstDmMessageId) &&
+    narration.playingMessageId === firstDmMessageId &&
+    messages.filter((message) => message.authorType === "dm").length === 1;
+  const narrationBlocked = openingNarrationPlaying && kind !== "ooc";
+  const inputBlocked = floorBlocked || holdBlocked || narrationBlocked;
+  // A mid-game joiner without a character is gated to creation first.
+  const needsCharacter = !mySheet && campaign.status === "active";
+  // Lead prompt: a newcomer's join note the DM has not narrated past yet.
+  const joinNotice = latestUnintroducedJoin(messages);
+  const showJoinBanner =
+    isLead && joinNotice !== null && dismissedJoinNotice !== joinNotice.id;
 
   async function releaseFloor() {
     await fetch(`/api/campaigns/${campaign!.id}/floor`, { method: "POST" });
@@ -94,7 +136,7 @@ export function SessionView({ state }: { state: CampaignState }) {
   async function submit(event: FormEvent) {
     event.preventDefault();
     const content = input.trim();
-    if (!content || sending) {
+    if (!content || sending || inputBlocked) {
       return;
     }
     setSending(true);
@@ -218,6 +260,8 @@ export function SessionView({ state }: { state: CampaignState }) {
             messages={messages}
             rolls={rolls}
             sheets={sheets}
+            members={state.members}
+            locations={locations}
             dmStatus={dmStatus}
             dmDraft={dmDraft}
             mediaStatus={state.mediaStatus}
@@ -226,6 +270,7 @@ export function SessionView({ state }: { state: CampaignState }) {
                 ? (messageId) => {
                     narration.unlock();
                     narration.play(
+                      messageId,
                       state.narrationAudio[messageId] ??
                         `/generated-audio/${campaign!.id}/${messageId}.mp3`,
                     );
@@ -234,6 +279,9 @@ export function SessionView({ state }: { state: CampaignState }) {
             }
           />
 
+          {needsCharacter ? (
+            <CharacterGate campaignId={campaign.id} />
+          ) : (
           <form onSubmit={submit} className="border-t border-stone-800 p-3">
             {pendingRolls.map((pending) => (
               <PendingRollCard
@@ -245,41 +293,23 @@ export function SessionView({ state }: { state: CampaignState }) {
                 isLead={isLead}
               />
             ))}
-            {floor.mode === "spotlight" ? (
-              <div className="mb-2 flex items-center justify-between rounded-md border border-amber-900/60 bg-amber-950/30 px-3 py-1.5 text-xs">
-                <span className="flex items-center gap-1.5 text-amber-200">
-                  <span className="flex -space-x-1.5">
-                    {spotlighted
-                      .filter((sheet) => sheet.portrait)
-                      .slice(0, 4)
-                      .map((sheet) => (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          key={sheet.id}
-                          src={sheet.portrait!.url}
-                          alt=""
-                          className="size-5 rounded-full border border-amber-900 object-cover"
-                        />
-                      ))}
-                  </span>
-                  <span>
-                    Spotlight:{" "}
-                    {spotlighted.map((sheet) => sheet.name).join(", ") || "someone"}
-                    {floor.prompt ? (
-                      <span className="text-amber-200/80"> · {floor.prompt}</span>
-                    ) : null}
-                  </span>
-                </span>
-                {isLead ? (
-                  <button
-                    type="button"
-                    onClick={releaseFloor}
-                    className="ml-3 shrink-0 text-amber-200 hover:text-amber-300"
-                  >
-                    Release
-                  </button>
-                ) : null}
-              </div>
+            <FloorBanners
+              floor={floor}
+              spotlighted={spotlighted}
+              heldSpotlightNames={heldSpotlightNames}
+              isLead={isLead}
+              onRelease={releaseFloor}
+            />
+            {showJoinBanner ? (
+              <NewAdventurerBanner
+                campaignId={campaign.id}
+                text={joinNotice.content.slice(JOIN_NOTE_PREFIX.length)}
+                onWriteIntro={() => {
+                  setKind("lead");
+                  composerRef.current?.focus();
+                }}
+                onDismiss={() => setDismissedJoinNotice(joinNotice.id)}
+              />
             ) : null}
             <div className="mb-2 flex gap-1.5">
               {(["do", "say", "ooc", ...(isLead ? (["lead"] as const) : [])] as const).map(
@@ -315,12 +345,23 @@ export function SessionView({ state }: { state: CampaignState }) {
               {dmStatus !== "idle" ? (
                 <span className="ml-auto flex items-center gap-1.5 text-xs text-stone-500">
                   <Dices className="size-3.5 animate-bounce text-amber-600" />
-                  DM at work...
+                  {dmStatus === "rolling"
+                    ? "DM rolling dice..."
+                    : dmStatus === "awaiting_rolls"
+                      ? "Waiting on real dice..."
+                      : dmStatus === "narrating"
+                        ? "DM narrating..."
+                        : dmStatus === "writing_chapter"
+                          ? "DM writing the chapter..."
+                          : dmStatus === "plotting_arc"
+                            ? "DM plotting the story arc..."
+                            : "DM at work..."}
                 </span>
               ) : null}
             </div>
             <div className="flex items-end gap-2 rounded-2xl border border-stone-700/80 bg-stone-950 p-2 focus-within:border-amber-300/60">
               <textarea
+                ref={composerRef}
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
                 onKeyDown={(event) => {
@@ -330,9 +371,13 @@ export function SessionView({ state }: { state: CampaignState }) {
                   }
                 }}
                 rows={2}
-                disabled={floorBlocked}
+                disabled={inputBlocked}
                 placeholder={
-                  floorBlocked
+                  narrationBlocked
+                    ? "The Dungeon Master is setting the scene... (OOC still open)"
+                    : holdBlocked
+                    ? "The party lead has the floor held for discussion... (OOC still open)"
+                    : floorBlocked
                     ? `Waiting on ${spotlighted.map((sheet) => sheet.name).join(", ")}... (OOC still open)`
                     : kind === "do"
                       ? `What does ${mySheet?.name ?? "your character"} do?`
@@ -345,14 +390,14 @@ export function SessionView({ state }: { state: CampaignState }) {
                 className="flex-1 resize-none bg-transparent px-2 py-1.5 text-sm text-stone-200 outline-none disabled:opacity-50"
               />
               <PushToTalk
-                disabled={floorBlocked}
+                disabled={inputBlocked}
                 onTranscript={(text) =>
                   setInput((current) => (current ? `${current} ${text}` : text))
                 }
               />
               <button
                 type="submit"
-                disabled={sending || !input.trim() || floorBlocked}
+                disabled={sending || !input.trim() || inputBlocked}
                 className="rounded-lg bg-amber-200 p-2.5 text-stone-950 hover:bg-amber-100 disabled:opacity-40"
               >
                 {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
@@ -360,11 +405,13 @@ export function SessionView({ state }: { state: CampaignState }) {
             </div>
             {error ? <p className="mt-1.5 text-sm text-red-400">{error}</p> : null}
           </form>
+          )}
         </div>
 
         <SidePanel
           campaignId={campaign.id}
           sheets={sheets}
+          members={state.members}
           meUserId={me.id}
           isLead={isLead}
           leadUserId={campaign.leadUserId}
@@ -374,8 +421,14 @@ export function SessionView({ state }: { state: CampaignState }) {
           auditLog={auditLog}
           locations={locations}
           chapters={state.chapters}
+          notes={state.notes}
+          characterEvents={state.characterEvents}
+          refreshNotes={refreshNotes}
           mediaStatus={state.mediaStatus}
           mapsEnabled={campaign.gameSettings?.mapsEnabled ?? true}
+          inviteCode={campaign.inviteCode}
+          midGameJoinOpen={campaign.gameSettings?.midGameJoinOpen ?? false}
+          campaign={campaign}
         />
       </div>
 

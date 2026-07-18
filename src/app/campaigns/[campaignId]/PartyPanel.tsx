@@ -1,11 +1,15 @@
 "use client";
 
-import { Check, Crown, Heart, ImagePlus, Save, Shield, UserRound, Wrench } from "lucide-react";
+import { Check, Crown, Heart, ImagePlus, Save, Shield, StickyNote, UserRound } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
+import { CharacterMenu } from "@/app/campaigns/[campaignId]/CharacterMenu";
+import { CharacterNotesDialog } from "@/app/campaigns/[campaignId]/CharacterNotesDialog";
 import { CharacterSheetDialog } from "@/app/campaigns/[campaignId]/CharacterSheetDialog";
 import { LeadEditDialog } from "@/app/campaigns/[campaignId]/LeadEditDialog";
 import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
+import type { CampaignMember } from "@/lib/campaign-types";
+import type { Note } from "@/lib/db/notes";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { computeSheetDerived, formatModifier } from "@/lib/srd";
 
@@ -55,6 +59,9 @@ export function PartyPanel({
   isLead = false,
   leadUserId = "",
   canTransferLead = false,
+  notes = [],
+  members = [],
+  refreshNotes,
 }: {
   sheets: CharacterSheet[];
   meUserId: string;
@@ -64,13 +71,18 @@ export function PartyPanel({
   isLead?: boolean;
   leadUserId?: string;
   canTransferLead?: boolean;
+  notes?: Note[];
+  members?: CampaignMember[];
+  refreshNotes?: () => Promise<void>;
 }) {
   const [editingSheetId, setEditingSheetId] = useState("");
   const [viewingSheetId, setViewingSheetId] = useState("");
   const [croppingSheetId, setCroppingSheetId] = useState("");
+  const [notesSheetId, setNotesSheetId] = useState("");
   const editingSheet = sheets.find((sheet) => sheet.id === editingSheetId);
   const viewingSheet = sheets.find((sheet) => sheet.id === viewingSheetId);
   const croppingSheet = sheets.find((sheet) => sheet.id === croppingSheetId);
+  const notesSheet = sheets.find((sheet) => sheet.id === notesSheetId);
   const Wrapper = embedded ? "div" : "aside";
 
   async function setPortrait(sheet: CharacterSheet, url: string) {
@@ -95,6 +107,9 @@ export function PartyPanel({
         const derived = computeSheetDerived(sheet);
         const mine = sheet.userId === meUserId;
         const hpFraction = sheet.maxHp > 0 ? sheet.currentHp / sheet.maxHp : 0;
+        const publicNoteCount = notes.filter(
+          (note) => note.characterId === sheet.id && note.visibility === "public",
+        ).length;
         return (
           <div
             key={sheet.id}
@@ -105,12 +120,13 @@ export function PartyPanel({
                 "ring-1 ring-amber-500/70 border-amber-700",
             )}
           >
-            <button
-              type="button"
-              onClick={() => setViewingSheetId(sheet.id)}
-              title="View full character sheet"
-              className="flex w-full items-center gap-2.5 text-left"
-            >
+            <div className="flex items-start gap-1">
+              <button
+                type="button"
+                onClick={() => setViewingSheetId(sheet.id)}
+                title="View full character sheet"
+                className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+              >
               {sheet.portrait ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -134,7 +150,27 @@ export function PartyPanel({
                   {sheet.race.replaceAll("_", " ")} {sheet.class} {sheet.level}
                 </span>
               </span>
-            </button>
+              </button>
+              {publicNoteCount ? (
+                <button
+                  type="button"
+                  onClick={() => setNotesSheetId(sheet.id)}
+                  title={`${publicNoteCount} party ${publicNoteCount === 1 ? "note" : "notes"} on ${sheet.name}`}
+                  className="flex shrink-0 items-center gap-0.5 rounded-full border border-stone-800 px-1.5 py-0.5 text-[10px] text-stone-500 hover:text-amber-300"
+                >
+                  <StickyNote className="size-3" /> {publicNoteCount}
+                </button>
+              ) : null}
+              <CharacterMenu
+                sheet={sheet}
+                isLead={isLead}
+                leadUserId={leadUserId}
+                canTransferLead={canTransferLead}
+                onViewSheet={() => setViewingSheetId(sheet.id)}
+                onNotes={() => setNotesSheetId(sheet.id)}
+                onAdjust={() => setEditingSheetId(sheet.id)}
+              />
+            </div>
 
             <div className="mt-2 flex items-center gap-2 text-sm">
               <Heart className="size-4 text-red-400" />
@@ -206,33 +242,6 @@ export function PartyPanel({
               </div>
             ) : null}
 
-            {isLead ? (
-              <button
-                type="button"
-                onClick={() => setEditingSheetId(sheet.id)}
-                className="mt-2 flex w-full items-center justify-center gap-1 rounded border border-stone-700 py-1 text-xs text-stone-400 hover:bg-stone-900"
-                title="Party lead: correct this character's stats"
-              >
-                <Wrench className="size-3" /> Adjust
-              </button>
-            ) : null}
-
-            {canTransferLead && sheet.userId !== leadUserId ? (
-              <button
-                type="button"
-                onClick={async () => {
-                  await fetch(`/api/campaigns/${sheet.campaignId}/lead`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ userId: sheet.userId }),
-                  });
-                }}
-                className="mt-1.5 flex w-full items-center justify-center gap-1 rounded border border-stone-700 py-1 text-xs text-stone-400 hover:bg-stone-900"
-                title="Hand the party lead to this player"
-              >
-                <Crown className="size-3" /> Make party lead
-              </button>
-            ) : null}
           </div>
         );
       })}
@@ -263,6 +272,19 @@ export function PartyPanel({
           title={`${croppingSheet.name}'s portrait`}
           onUploaded={(image) => setPortrait(croppingSheet, image.url)}
           onClose={() => setCroppingSheetId("")}
+        />
+      ) : null}
+
+      {notesSheet && refreshNotes ? (
+        <CharacterNotesDialog
+          campaignId={notesSheet.campaignId}
+          sheet={notesSheet}
+          notes={notes}
+          members={members}
+          meUserId={meUserId}
+          isLead={isLead}
+          refreshNotes={refreshNotes}
+          onClose={() => setNotesSheetId("")}
         />
       ) : null}
     </Wrapper>

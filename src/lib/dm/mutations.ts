@@ -6,7 +6,7 @@ import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { listConditions } from "@/lib/content";
 import { levelForXp } from "@/lib/srd";
 import { publishPersisted } from "@/lib/events";
-import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { fullPatchSheetSchema, type CharacterSheet } from "@/lib/schemas/sheet";
 import {
   applyDamageMath,
   goldMath,
@@ -29,6 +29,7 @@ export const MUTATION_TOOL_NAMES = [
   "set_condition",
   "clear_condition",
   "use_spell_slot",
+  "update_sheet",
 ] as const;
 
 type ToolDef = {
@@ -85,7 +86,7 @@ export const mutationTools: ToolDef[] = [
   tool("modify_gold", "Add or remove gold (negative delta = spend/lose). Floors at 0.", {
     delta: { type: "integer", minimum: -100000, maximum: 100000 },
   }, ["delta"]),
-  tool("grant_item", "Give a character an item (loot, purchase, gift).", {
+  tool("grant_item", "Give a character an item (loot, purchase, gift). Only for items the fiction actually put in their hands.", {
     name: { type: "string" },
     qty: { type: "integer", minimum: 1, maximum: 99 },
   }, ["name"]),
@@ -101,8 +102,66 @@ export const mutationTools: ToolDef[] = [
   }, ["condition"]),
   tool("use_spell_slot", "Expend one of a character's spell slots of the given level.", {
     level: { type: "integer", minimum: 1, maximum: 9 },
-  }, ["level"]),
+    spell: { type: "string", description: "Exact name of the spell being cast, from the character's spell list." },
+  }, ["level", "spell"]),
+  tool(
+    "update_sheet",
+    "Directly set character sheet fields for permanent or story-driven changes: renames, transformations, curses, blessings, training, level or ability score changes. For routine bookkeeping (damage, healing, loot, gold, XP, conditions, spell slots) use the specific tools instead. Include ONLY the fields that change.",
+    {
+      name: { type: "string" },
+      race: { type: "string" },
+      class: { type: "string" },
+      subclass: { type: "string" },
+      background: { type: "string" },
+      alignment: { type: "string" },
+      level: { type: "integer", minimum: 1, maximum: 20 },
+      xp: { type: "integer", minimum: 0 },
+      maxHp: { type: "integer", minimum: 1, maximum: 500 },
+      currentHp: { type: "integer", minimum: 0, maximum: 500 },
+      tempHp: { type: "integer", minimum: 0, maximum: 200 },
+      ac: { type: "integer", minimum: 1, maximum: 30 },
+      speed: { type: "integer", minimum: 0, maximum: 120 },
+      gold: { type: "integer", minimum: 0 },
+      abilities: {
+        type: "object",
+        description: "Full ability block: str, dex, con, int, wis, cha (1-30 each).",
+        properties: {
+          str: { type: "integer" },
+          dex: { type: "integer" },
+          con: { type: "integer" },
+          int: { type: "integer" },
+          wis: { type: "integer" },
+          cha: { type: "integer" },
+        },
+      },
+      conditions: { type: "array", items: { type: "string" } },
+      feats: { type: "array", items: { type: "string" } },
+    },
+    ["reason"],
+  ),
 ];
+
+// Fields update_sheet may write. Equipment, spell slots, portrait, and the
+// player's private notes stay with the granular tools and the lead UI.
+const updateSheetPatchSchema = fullPatchSheetSchema.pick({
+  name: true,
+  race: true,
+  class: true,
+  subclass: true,
+  background: true,
+  alignment: true,
+  level: true,
+  xp: true,
+  maxHp: true,
+  currentHp: true,
+  tempHp: true,
+  ac: true,
+  speed: true,
+  gold: true,
+  abilities: true,
+  conditions: true,
+  feats: true,
+});
 
 const argsSchema = z.object({
   characterId: z.string().optional(),
@@ -114,6 +173,7 @@ const argsSchema = z.object({
   qty: z.number().int().optional(),
   condition: z.string().optional(),
   level: z.number().int().optional(),
+  spell: z.string().optional(),
   reason: z.string().optional(),
 });
 
@@ -121,6 +181,8 @@ export const MUTATION_CAP_PER_TURN = 10;
 
 type MutationOutcome = { result: Record<string, unknown> };
 
+// `sheet` is the freshly resolved pre-mutation state; it doubles as the
+// undo pre-image. `patch` is exactly what patchSheet was given.
 function audit(
   campaign: Campaign,
   turnId: string,
@@ -128,6 +190,7 @@ function audit(
   kind: string,
   delta: Record<string, unknown>,
   reason: string,
+  patch: Record<string, unknown>,
 ) {
   const entry = insertSheetAudit({
     campaignId: campaign.id,
@@ -137,6 +200,8 @@ function audit(
     delta,
     reason,
     seq: allocateSeq(campaign.id),
+    before: sheet,
+    patch,
   });
   publishPersisted(campaign.id, "sheet_audit", { entry, characterName: sheet.name });
 }
@@ -196,7 +261,7 @@ export function applyDmMutation(
     for (const sheet of targets) {
       const newXp = sheet.xp + amount;
       patchSheet(sheet.id, { xp: newXp });
-      audit(campaign, turnId, sheet, "award_xp", { amount, newXp }, reason);
+      audit(campaign, turnId, sheet, "award_xp", { amount, newXp }, reason, { xp: newXp });
       publishSheet(campaign, sheet.id);
       if (levelForXp(newXp) > sheet.level) {
         levelUps.push(sheet.name);
@@ -238,7 +303,10 @@ export function applyDmMutation(
       }
       const math = applyDamageMath(sheet.currentHp, sheet.tempHp, Math.min(amount, 200));
       patchSheet(sheet.id, { currentHp: math.currentHp, tempHp: math.tempHp });
-      audit(campaign, turnId, sheet, "apply_damage", { amount, ...math, type: args.type ?? "" }, reason);
+      audit(campaign, turnId, sheet, "apply_damage", { amount, ...math, type: args.type ?? "" }, reason, {
+        currentHp: math.currentHp,
+        tempHp: math.tempHp,
+      });
       publishSheet(campaign, sheet.id);
       return {
         result: {
@@ -256,7 +324,9 @@ export function applyDmMutation(
       }
       const math = healMath(sheet.currentHp, sheet.maxHp, Math.min(amount, 200));
       patchSheet(sheet.id, { currentHp: math.currentHp });
-      audit(campaign, turnId, sheet, "heal", { amount, newHp: math.currentHp }, reason);
+      audit(campaign, turnId, sheet, "heal", { amount, newHp: math.currentHp }, reason, {
+        currentHp: math.currentHp,
+      });
       publishSheet(campaign, sheet.id);
       return { result: { ok: true, hp: `${math.currentHp}/${sheet.maxHp}` } };
     }
@@ -267,7 +337,9 @@ export function applyDmMutation(
       }
       const math = goldMath(sheet.gold, delta);
       patchSheet(sheet.id, { gold: math.gold });
-      audit(campaign, turnId, sheet, "modify_gold", { delta: math.applied, gold: math.gold }, reason);
+      audit(campaign, turnId, sheet, "modify_gold", { delta: math.applied, gold: math.gold }, reason, {
+        gold: math.gold,
+      });
       publishSheet(campaign, sheet.id);
       return { result: { ok: true, gold: math.gold } };
     }
@@ -278,7 +350,9 @@ export function applyDmMutation(
       }
       const math = grantItemMath(sheet.equipment, name, args.qty ?? 1);
       patchSheet(sheet.id, { equipment: math.equipment });
-      audit(campaign, turnId, sheet, "grant_item", { name, qty: args.qty ?? 1 }, reason);
+      audit(campaign, turnId, sheet, "grant_item", { name, qty: args.qty ?? 1 }, reason, {
+        equipment: math.equipment,
+      });
       publishSheet(campaign, sheet.id);
       insertCharacterEvent({
         libraryCharacterId: sheet.libraryCharacterId,
@@ -297,7 +371,9 @@ export function applyDmMutation(
         return { result: { error: `${sheet.name} does not carry "${name}".` } };
       }
       patchSheet(sheet.id, { equipment: math.equipment });
-      audit(campaign, turnId, sheet, "remove_item", { name, removed: math.removed }, reason);
+      audit(campaign, turnId, sheet, "remove_item", { name, removed: math.removed }, reason, {
+        equipment: math.equipment,
+      });
       publishSheet(campaign, sheet.id);
       return { result: { ok: true, removed: name, qty: math.removed } };
     }
@@ -311,8 +387,11 @@ export function applyDmMutation(
       if (sheet.conditions.includes(normalized)) {
         return { result: { ok: true, note: `${sheet.name} is already ${normalized}.` } };
       }
-      patchSheet(sheet.id, { conditions: [...sheet.conditions, normalized].slice(0, 15) });
-      audit(campaign, turnId, sheet, "set_condition", { condition: normalized }, reason);
+      const withCondition = [...sheet.conditions, normalized].slice(0, 15);
+      patchSheet(sheet.id, { conditions: withCondition });
+      audit(campaign, turnId, sheet, "set_condition", { condition: normalized }, reason, {
+        conditions: withCondition,
+      });
       publishSheet(campaign, sheet.id);
       return { result: { ok: true, condition: normalized } };
     }
@@ -321,15 +400,31 @@ export function applyDmMutation(
       if (!sheet.conditions.includes(condition)) {
         return { result: { error: `${sheet.name} is not ${condition || "under that condition"}.` } };
       }
-      patchSheet(sheet.id, {
-        conditions: sheet.conditions.filter((entry) => entry !== condition),
+      const withoutCondition = sheet.conditions.filter((entry) => entry !== condition);
+      patchSheet(sheet.id, { conditions: withoutCondition });
+      audit(campaign, turnId, sheet, "clear_condition", { condition }, reason, {
+        conditions: withoutCondition,
       });
-      audit(campaign, turnId, sheet, "clear_condition", { condition }, reason);
       publishSheet(campaign, sheet.id);
       return { result: { ok: true, cleared: condition } };
     }
     case "use_spell_slot": {
       const level = args.level ?? 0;
+      // A named spell must be on the character's list; the slot is not spent
+      // otherwise. A missing spell arg is tolerated (weak tool calling must
+      // not break casting), so the slot check still runs.
+      const spell = (args.spell ?? "").trim();
+      if (spell && sheet.spellcasting) {
+        const spellList = [...sheet.spellcasting.known, ...sheet.spellcasting.prepared];
+        const knows = spellList.some((entry) => entry.trim().toLowerCase() === spell.toLowerCase());
+        if (!knows) {
+          return {
+            result: {
+              error: `${sheet.name} cannot cast "${spell}". Their spells: ${spellList.join(", ") || "none"}.`,
+            },
+          };
+        }
+      }
       const slot = sheet.spellcasting?.slots[String(level)];
       const math = slot ? spendSlotMath(slot) : null;
       if (!math) {
@@ -337,19 +432,64 @@ export function applyDmMutation(
           result: { error: `${sheet.name} has no free level ${level} spell slot.` },
         };
       }
-      patchSheet(sheet.id, {
-        spellcasting: sheet.spellcasting
-          ? {
-              ...sheet.spellcasting,
-              slots: { ...sheet.spellcasting.slots, [String(level)]: math },
-            }
-          : sheet.spellcasting,
-      });
-      audit(campaign, turnId, sheet, "use_spell_slot", { level, used: math.used, max: math.max }, reason);
+      const nextSpellcasting = sheet.spellcasting
+        ? {
+            ...sheet.spellcasting,
+            slots: { ...sheet.spellcasting.slots, [String(level)]: math },
+          }
+        : sheet.spellcasting;
+      patchSheet(sheet.id, { spellcasting: nextSpellcasting });
+      audit(
+        campaign,
+        turnId,
+        sheet,
+        "use_spell_slot",
+        spell ? { level, spell, used: math.used, max: math.max } : { level, used: math.used, max: math.max },
+        reason,
+        { spellcasting: nextSpellcasting },
+      );
       publishSheet(campaign, sheet.id);
       return {
         result: { ok: true, slot: `level ${level}: ${math.max - math.used}/${math.max} left` },
       };
+    }
+    case "update_sheet": {
+      let rawArgs: Record<string, unknown>;
+      try {
+        rawArgs = JSON.parse(rawArguments || "{}") as Record<string, unknown>;
+      } catch {
+        return { result: { error: "Invalid arguments." } };
+      }
+      delete rawArgs.characterId;
+      delete rawArgs.reason;
+      const parsedPatch = updateSheetPatchSchema.safeParse(rawArgs);
+      if (!parsedPatch.success) {
+        const issue = parsedPatch.error.issues[0];
+        return {
+          result: { error: `Invalid update_sheet field ${issue?.path.join(".")}: ${issue?.message}` },
+        };
+      }
+      const patch = parsedPatch.data;
+      const changed = Object.keys(patch).filter(
+        (key) => patch[key as keyof typeof patch] !== undefined,
+      );
+      if (!changed.length) {
+        return {
+          result: { error: "update_sheet changed nothing; include at least one field." },
+        };
+      }
+      patchSheet(sheet.id, patch);
+      audit(
+        campaign,
+        turnId,
+        sheet,
+        "update_sheet",
+        patch as Record<string, unknown>,
+        reason,
+        patch as Record<string, unknown>,
+      );
+      publishSheet(campaign, sheet.id);
+      return { result: { ok: true, changed } };
     }
     default:
       return { result: { error: `Unknown mutation tool ${toolName}.` } };

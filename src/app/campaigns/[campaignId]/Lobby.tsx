@@ -8,12 +8,15 @@ import {
   Dices,
   Link as LinkIcon,
   Loader2,
+  Pencil,
   Play,
+  Trash2,
   UserRound,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
+import { EditCampaignDialog } from "@/app/campaigns/[campaignId]/EditCampaignDialog";
 import { GameSettingsPanel } from "@/app/campaigns/[campaignId]/GameSettingsPanel";
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
 
@@ -22,6 +25,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [error, setError] = useState("");
 
   if (!campaign || !me) {
@@ -101,6 +105,31 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
     });
   }
 
+  async function deleteCampaign() {
+    if (
+      !window.confirm(
+        `Delete "${campaign!.title}" for everyone? All characters, messages, and story progress are lost. This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/campaigns/${campaign!.id}`, { method: "DELETE" });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        setError(data.error || "Could not delete the campaign.");
+        return;
+      }
+      window.location.href = "/";
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 p-6">
       <header className="mb-6">
@@ -109,8 +138,20 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
         </Link>
         <div className="mt-2 flex items-center gap-3">
           <PixelTile src={PIXEL_ICONS.chats} />
-          <div>
-            <h1 className="font-serif text-2xl text-stone-100">{campaign.title}</h1>
+          <div className="min-w-0 flex-1">
+            <h1 className="flex items-center gap-2 font-serif text-2xl text-stone-100">
+              <span className="truncate">{campaign.title}</span>
+              {isLead ? (
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  title="Edit campaign settings"
+                  className="rounded-md border border-stone-700 p-1.5 text-stone-400 hover:text-stone-200"
+                >
+                  <Pencil className="size-3.5" />
+                </button>
+              ) : null}
+            </h1>
             <p className="text-sm text-stone-500">
               Waiting in the lobby · Level {campaign.startingLevel} start · {campaign.difficulty}
               {campaign.theme ? ` · ${campaign.theme}` : ""}
@@ -303,7 +344,22 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
           </p>
         ) : null}
         {error ? <p className="text-center text-sm text-red-400">{error}</p> : null}
+
+        {isOwner ? (
+          <button
+            type="button"
+            onClick={deleteCampaign}
+            disabled={busy}
+            className="mx-auto flex items-center gap-1.5 pt-2 text-xs text-stone-600 hover:text-red-400 disabled:opacity-60"
+          >
+            <Trash2 className="size-3.5" /> Delete this campaign
+          </button>
+        ) : null}
       </section>
+
+      {editing ? (
+        <EditCampaignDialog campaign={campaign} onClose={() => setEditing(false)} />
+      ) : null}
     </main>
   );
 }

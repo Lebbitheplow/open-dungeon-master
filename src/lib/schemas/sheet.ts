@@ -87,6 +87,9 @@ export const createSheetSchema = z.object({
   spellcasting: spellcastingSchema.default(null),
   portrait: attachmentSchema.nullable().default(null),
   notes: z.string().max(4000).default(""),
+  // Player-authored backstory, visible to the whole party and woven into
+  // the DM prompt (unlike notes, which stay private to the owner).
+  backstory: z.string().trim().max(2000).default(""),
 });
 export type CreateSheetInput = z.infer<typeof createSheetSchema>;
 
@@ -107,8 +110,24 @@ export const patchSheetSchema = z.object({
   subclass: z.string().trim().max(60).optional(),
   portrait: attachmentSchema.nullable().optional(),
   notes: z.string().max(4000).optional(),
+  backstory: z.string().trim().max(2000).optional(),
 });
 export type PatchSheetInput = z.infer<typeof patchSheetSchema>;
+
+// Everything the DM engine and the party lead may change, including the
+// identity fields players cannot touch in-play. Players stay limited to
+// patchSheetSchema.
+export const fullPatchSheetSchema = patchSheetSchema.extend({
+  name: z.string().trim().min(1).max(60).optional(),
+  race: z.string().trim().min(1).max(60).optional(),
+  class: z.string().trim().min(1).max(60).optional(),
+  background: z.string().trim().max(60).optional(),
+  alignment: z.string().trim().max(30).optional(),
+  speed: z.number().int().min(0).max(120).optional(),
+  abilities: abilityScoresSchema.optional(),
+  proficiencies: proficienciesSchema.optional(),
+});
+export type FullPatchSheetInput = z.infer<typeof fullPatchSheetSchema>;
 
 export type CharacterSheet = {
   id: string;
@@ -138,6 +157,7 @@ export type CharacterSheet = {
   conditions: string[];
   portrait: SheetAttachment | null;
   notes: string;
+  backstory: string;
   createdAt: string;
   updatedAt: string;
 };

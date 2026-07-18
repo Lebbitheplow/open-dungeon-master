@@ -10,12 +10,23 @@ import type {
   CampaignSummary,
 } from "@/lib/campaign-types";
 import type { StorySettings } from "@/lib/types";
+import { normalizeStoryArc, type StoryArc } from "@/lib/dm/arc-logic";
 
 // Who may act right now. Extensible: combat later adds an
 // {mode:"initiative"} variant; always branch on mode.
+export type SpotlightFloor = {
+  mode: "spotlight";
+  userIds: string[];
+  prompt: string;
+  // Releases only when every spotlighted user appears here.
+  respondedUserIds: string[];
+};
 export type Floor =
   | { mode: "open" }
-  | { mode: "spotlight"; userIds: string[]; prompt: string };
+  | SpotlightFloor
+  // Held responses: nobody may act until the party lead releases; `next` is
+  // the floor that takes effect on release.
+  | { mode: "hold"; next: { mode: "open" } | SpotlightFloor };
 
 export type Campaign = CampaignSummary & {
   scene: string;
@@ -23,6 +34,7 @@ export type Campaign = CampaignSummary & {
   settings: StorySettings;
   gameSettings: GameSettings;
   dmOutline: string;
+  storyArc: StoryArc | null;
   floor: Floor;
 };
 
@@ -41,6 +53,7 @@ type CampaignRow = {
   game_settings_json: string;
   party_lead_user_id: string | null;
   dm_outline: string;
+  story_arc_json: string;
   floor_json: string;
   scene: string;
   quest_log_json: string;
@@ -55,18 +68,43 @@ export function canAct(floor: Floor, userId: string, kind: string): boolean {
   if (kind === "ooc" || floor.mode === "open") {
     return true;
   }
+  if (floor.mode === "hold") {
+    return false;
+  }
   return floor.userIds.includes(userId);
 }
 
-export function normalizeFloor(raw: unknown): Floor {
-  const floor = raw as Floor | null;
+function normalizeSpotlight(raw: unknown): SpotlightFloor | null {
+  const floor = raw as SpotlightFloor | null;
   if (
     floor &&
     floor.mode === "spotlight" &&
     Array.isArray(floor.userIds) &&
     floor.userIds.length
   ) {
-    return { mode: "spotlight", userIds: floor.userIds, prompt: String(floor.prompt ?? "") };
+    const responded = Array.isArray(floor.respondedUserIds)
+      ? floor.respondedUserIds.filter(
+          (id) => typeof id === "string" && floor.userIds.includes(id),
+        )
+      : [];
+    return {
+      mode: "spotlight",
+      userIds: floor.userIds,
+      prompt: String(floor.prompt ?? ""),
+      respondedUserIds: responded,
+    };
+  }
+  return null;
+}
+
+export function normalizeFloor(raw: unknown): Floor {
+  const floor = raw as Floor | null;
+  const spotlight = normalizeSpotlight(raw);
+  if (spotlight) {
+    return spotlight;
+  }
+  if (floor && floor.mode === "hold") {
+    return { mode: "hold", next: normalizeSpotlight(floor.next) ?? { mode: "open" } };
   }
   return { mode: "open" };
 }
@@ -102,6 +140,7 @@ function mapCampaign(row: CampaignRow): Campaign {
     settings: normalizeSettings(parseJson(row.settings_json, {})),
     gameSettings: normalizeGameSettings(parseJson(row.game_settings_json, {})),
     dmOutline: row.dm_outline ?? "",
+    storyArc: normalizeStoryArc(parseJson(row.story_arc_json ?? "", null)),
     floor: normalizeFloor(parseJson(row.floor_json, null)),
   };
 }
@@ -164,6 +203,48 @@ export function createCampaign(
     throw new Error("Failed to create campaign.");
   }
   return campaign;
+}
+
+// Campaign info fields the party lead may edit. Foreign keys cascade the
+// delete through every campaign-scoped table.
+export function updateCampaignInfo(
+  campaignId: string,
+  patch: Partial<{
+    title: string;
+    description: string;
+    theme: string;
+    maxPlayers: number;
+    startingLevel: number;
+    difficulty: CampaignDifficulty;
+  }>,
+) {
+  const columns: Record<string, string> = {
+    title: "title",
+    description: "description",
+    theme: "theme",
+    maxPlayers: "max_players",
+    startingLevel: "starting_level",
+    difficulty: "difficulty",
+  };
+  const sets: string[] = [];
+  const values: unknown[] = [];
+  for (const [key, column] of Object.entries(columns)) {
+    const value = patch[key as keyof typeof patch];
+    if (value !== undefined) {
+      sets.push(`${column} = ?`);
+      values.push(value);
+    }
+  }
+  if (!sets.length) {
+    return;
+  }
+  getDatabase()
+    .prepare(`UPDATE campaigns SET ${sets.join(", ")}, updated_at = ? WHERE id = ?`)
+    .run(...values, nowIso(), campaignId);
+}
+
+export function deleteCampaign(campaignId: string) {
+  getDatabase().prepare(`DELETE FROM campaigns WHERE id = ?`).run(campaignId);
 }
 
 export function listCampaignsForUser(userId: string): CampaignSummary[] {
@@ -261,8 +342,15 @@ export function joinByInviteCode(
     return { campaign: existing };
   }
 
-  if (row.status !== "lobby") {
-    return { error: "That campaign has already started." };
+  // Mid-game joining is allowed only while the lead has it switched on.
+  if (row.status === "ended") {
+    return { error: "That campaign has ended." };
+  }
+  if (row.status === "active") {
+    const gameSettings = normalizeGameSettings(parseJson(row.game_settings_json, {}));
+    if (!gameSettings.midGameJoinOpen) {
+      return { error: "That campaign has already started." };
+    }
   }
   if (Number(row.player_count ?? 0) >= row.max_players) {
     return { error: "That campaign is full." };
@@ -318,6 +406,32 @@ export function setDmOutline(campaignId: string, outline: string) {
   getDatabase()
     .prepare(`UPDATE campaigns SET dm_outline = ?, updated_at = ? WHERE id = ?`)
     .run(outline.slice(0, 8_000), nowIso(), campaignId);
+}
+
+// Persists the structured story arc. Serialized whole; if an arc somehow
+// outgrows the cap, oldest settled sub-arcs are shed rather than writing
+// truncated (corrupt) JSON.
+const STORY_ARC_CHAR_CAP = 16_000;
+
+export function setStoryArc(campaignId: string, arc: StoryArc) {
+  const trimmed: StoryArc = { ...arc, subArcs: [...arc.subArcs] };
+  let serialized = JSON.stringify(trimmed);
+  while (serialized.length > STORY_ARC_CHAR_CAP && trimmed.subArcs.length) {
+    const settled = trimmed.subArcs.findIndex(
+      (subArc) => subArc.status === "resolved" || subArc.status === "abandoned",
+    );
+    trimmed.subArcs.splice(settled >= 0 ? settled : 0, 1);
+    serialized = JSON.stringify(trimmed);
+  }
+  getDatabase()
+    .prepare(`UPDATE campaigns SET story_arc_json = ?, updated_at = ? WHERE id = ?`)
+    .run(serialized, nowIso(), campaignId);
+}
+
+export function setQuestLog(campaignId: string, quests: string[]) {
+  getDatabase()
+    .prepare(`UPDATE campaigns SET quest_log_json = ?, updated_at = ? WHERE id = ?`)
+    .run(JSON.stringify(quests.slice(0, 20)), nowIso(), campaignId);
 }
 
 export function getFloor(campaignId: string): Floor {
@@ -390,11 +504,13 @@ export function setCampaignSummaryState(campaignId: string, summary: string, cov
 }
 
 // Strip server-only fields before sending a campaign to any client. The DM
-// outline is the story's secret spine; players must never receive it.
-export function publicCampaign(campaign: Campaign): Omit<Campaign, "dmOutline"> {
+// outline and story arc are the story's secret spine; players must never
+// receive them.
+export function publicCampaign(campaign: Campaign): Omit<Campaign, "dmOutline" | "storyArc"> {
   const rest = { ...campaign } as Partial<Campaign>;
   delete rest.dmOutline;
-  return rest as Omit<Campaign, "dmOutline">;
+  delete rest.storyArc;
+  return rest as Omit<Campaign, "dmOutline" | "storyArc">;
 }
 
 export function touchCampaign(campaignId: string) {

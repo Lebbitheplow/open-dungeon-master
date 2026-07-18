@@ -205,6 +205,15 @@ export function CharacterSheetDialog({
             </section>
           ) : null}
 
+          {sheet.backstory ? (
+            <section className="mt-4">
+              <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
+                Backstory
+              </h3>
+              <p className="whitespace-pre-wrap text-xs text-stone-300">{sheet.backstory}</p>
+            </section>
+          ) : null}
+
           {mine && sheet.notes ? (
             <section className="mt-4">
               <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
@@ -220,9 +229,9 @@ export function CharacterSheetDialog({
                 type="button"
                 onClick={onAdjust}
                 className={ui.btnSmall}
-                title="Party lead: correct this character's stats"
+                title="Party lead: correct this character's stats, items, and spells"
               >
-                <Wrench className="size-3.5" /> Adjust stats
+                <Wrench className="size-3.5" /> Adjust
               </button>
             </div>
           ) : null}

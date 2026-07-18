@@ -1,9 +1,33 @@
 import { z } from "zod";
-import { isErrorResponse, requireMember } from "@/lib/campaign-api";
+import { isErrorResponse, requireMember, type MemberContext } from "@/lib/campaign-api";
+import { JOIN_NOTE_PREFIX } from "@/lib/campaign-types";
+import { allocateSeq } from "@/lib/db/campaigns";
 import { createCharacter, instantiateIntoCampaign } from "@/lib/db/characters";
+import { insertCampaignMessage } from "@/lib/db/messages";
 import { createSheet, getSheetForUser, patchSheet } from "@/lib/db/sheets";
 import { createSheetSchema, patchSheetSchema } from "@/lib/schemas/sheet";
-import { publishPersisted } from "@/lib/events";
+import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { publishPersisted, publishWithSeq } from "@/lib/events";
+
+// A character arriving after the adventure started gets a table note so the
+// DM writes them into the story on its next turn.
+function announceMidGameJoin(context: MemberContext, sheet: CharacterSheet) {
+  if (context.campaign.status !== "active") {
+    return;
+  }
+  const campaignId = context.campaign.id;
+  const seq = allocateSeq(campaignId);
+  const backstoryHint = sheet.backstory
+    ? ` Their backstory: ${sheet.backstory.slice(0, 200)}`
+    : "";
+  const message = insertCampaignMessage({
+    campaignId,
+    seq,
+    authorType: "system",
+    content: `${JOIN_NOTE_PREFIX}${context.user.username} has joined the party as ${sheet.name}, a ${sheet.race.replaceAll("_", " ")} ${sheet.class}.${backstoryHint} Introduce them into the scene at the next natural moment.`,
+  });
+  publishWithSeq(campaignId, seq, "message_added", { message });
+}
 
 const fromLibrarySchema = z.object({
   libraryCharacterId: z.string().min(1),
@@ -57,6 +81,7 @@ export async function POST(
       return Response.json({ error: result.error }, { status: 400 });
     }
     publishPersisted(campaignId, "sheet_updated", { sheet: result });
+    announceMidGameJoin(context, result);
     return Response.json({ sheet: result }, { status: 201 });
   }
 
@@ -82,6 +107,7 @@ export async function POST(
     libraryCharacter.id,
   );
   publishPersisted(campaignId, "sheet_updated", { sheet });
+  announceMidGameJoin(context, sheet);
 
   return Response.json({ sheet }, { status: 201 });
 }

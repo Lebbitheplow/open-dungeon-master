@@ -34,6 +34,31 @@ export type CampaignSummary = {
 // styles them as a lead note.
 export const LEAD_NOTE_PREFIX = "[Party lead direction] ";
 
+// Marks the system message announcing a mid-game joiner's new character.
+// The lead's "new adventurer" banner derives from it: shown until a DM
+// message lands after it (the DM had its "next natural moment").
+export const JOIN_NOTE_PREFIX = "[New adventurer] ";
+
+// The latest join announcement the DM has not yet narrated past, if any.
+// Pure so tests can drive it; seq comparison decides "answered".
+export function latestUnintroducedJoin<
+  T extends { authorType: string; content: string; seq: number },
+>(messages: T[]): T | null {
+  let joinNotice: T | null = null;
+  for (const message of messages) {
+    if (message.authorType === "system" && message.content.startsWith(JOIN_NOTE_PREFIX)) {
+      joinNotice = message;
+    }
+  }
+  if (!joinNotice) {
+    return null;
+  }
+  const notice = joinNotice;
+  return messages.some((message) => message.authorType === "dm" && message.seq > notice.seq)
+    ? null
+    : notice;
+}
+
 export type CampaignMember = {
   userId: string;
   username: string;

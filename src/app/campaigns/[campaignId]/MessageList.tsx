@@ -1,14 +1,16 @@
 "use client";
 
-import { Crown, ImageOff, Loader2, Volume2 } from "lucide-react";
+import { Crown, ImageOff, Loader2, UserPlus, Volume2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
-import { LEAD_NOTE_PREFIX } from "@/lib/campaign-types";
+import { JOIN_NOTE_PREFIX, LEAD_NOTE_PREFIX, type CampaignMember } from "@/lib/campaign-types";
+import { stripToolText } from "@/lib/dm/tool-text";
 import type { CampaignMessage } from "@/lib/db/messages";
 import type { StoredRoll } from "@/lib/db/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { RollCard } from "@/app/campaigns/[campaignId]/RollCard";
 import type {
+  CampaignLocation,
   DmStatus,
   MediaStatus,
 } from "@/app/campaigns/[campaignId]/useCampaignStream";
@@ -68,11 +70,14 @@ function DmContent({ content, rollsById, sheetsById }: {
   rollsById: Map<string, StoredRoll>;
   sheetsById: Map<string, CharacterSheet>;
 }) {
+  // Older messages may still carry leaked "[request_roll ...]" tool text;
+  // never render it.
+  const cleaned = stripToolText(content);
   const parts: Array<{ kind: "text"; text: string } | { kind: "roll"; roll: StoredRoll }> = [];
   let lastIndex = 0;
-  for (const match of content.matchAll(ROLL_MARKER)) {
+  for (const match of cleaned.matchAll(ROLL_MARKER)) {
     if (match.index! > lastIndex) {
-      parts.push({ kind: "text", text: content.slice(lastIndex, match.index) });
+      parts.push({ kind: "text", text: cleaned.slice(lastIndex, match.index) });
     }
     const roll = rollsById.get(match[1]);
     if (roll) {
@@ -80,8 +85,8 @@ function DmContent({ content, rollsById, sheetsById }: {
     }
     lastIndex = match.index! + match[0].length;
   }
-  if (lastIndex < content.length) {
-    parts.push({ kind: "text", text: content.slice(lastIndex) });
+  if (lastIndex < cleaned.length) {
+    parts.push({ kind: "text", text: cleaned.slice(lastIndex) });
   }
 
   return (
@@ -114,6 +119,8 @@ export function MessageList({
   messages,
   rolls,
   sheets,
+  members = [],
+  locations = [],
   dmStatus,
   dmDraft,
   mediaStatus = {},
@@ -122,6 +129,8 @@ export function MessageList({
   messages: CampaignMessage[];
   rolls: StoredRoll[];
   sheets: CharacterSheet[];
+  members?: CampaignMember[];
+  locations?: CampaignLocation[];
   dmStatus: DmStatus;
   dmDraft: string;
   mediaStatus?: Record<string, MediaStatus>;
@@ -130,6 +139,8 @@ export function MessageList({
   const bottomRef = useRef<HTMLDivElement>(null);
   const rollsById = new Map(rolls.map((roll) => [roll.id, roll]));
   const sheetsById = new Map(sheets.map((sheet) => [sheet.id, sheet]));
+  const membersById = new Map(members.map((member) => [member.userId, member]));
+  const locationsById = new Map(locations.map((location) => [location.id, location]));
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -152,6 +163,17 @@ export function MessageList({
                   {message.content.slice(LEAD_NOTE_PREFIX.length)}
                 </p>
               </div>
+            );
+          }
+          if (message.content.startsWith(JOIN_NOTE_PREFIX)) {
+            return (
+              <p
+                key={message.id}
+                className="mx-auto flex max-w-xl items-center justify-center gap-1.5 text-center font-serif text-sm italic text-stone-500"
+              >
+                <UserPlus className="size-3.5 shrink-0" />
+                {message.content.slice(JOIN_NOTE_PREFIX.length)}
+              </p>
             );
           }
           return (
@@ -194,17 +216,54 @@ export function MessageList({
                   fallbackStartedAt={message.createdAt}
                 />
               ) : null}
+              {(() => {
+                // The message that introduced an area shows its map inline.
+                // The map lives on the location row, so lead redraws and
+                // layout revisions refresh here automatically.
+                const location = message.locationId
+                  ? locationsById.get(message.locationId)
+                  : undefined;
+                if (!location) {
+                  return null;
+                }
+                if (location.mapImage) {
+                  return (
+                    <figure className="mt-3 max-w-md">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={location.mapImage.url}
+                        alt={`Map of ${location.name}`}
+                        className="max-h-96 rounded-xl border border-stone-800"
+                      />
+                      <figcaption className="mt-1 text-xs text-stone-500">
+                        {location.name}
+                      </figcaption>
+                    </figure>
+                  );
+                }
+                return (
+                  <MediaPlaceholder
+                    label="Charting the area..."
+                    status={mediaStatus[location.id]}
+                    fallbackStartedAt={message.createdAt}
+                  />
+                );
+              })()}
             </div>
           );
         }
         const sheet = message.characterId ? sheetsById.get(message.characterId) : undefined;
+        // Character portrait first; the player's own avatar as a fallback.
+        const portraitUrl =
+          sheet?.portrait?.url ??
+          (message.userId ? membersById.get(message.userId)?.avatar?.url : undefined);
         return (
           <div key={message.id} className="ml-auto max-w-[92%] sm:max-w-2xl">
             <p className="mb-0.5 flex items-center justify-end gap-1.5 text-right text-xs font-medium text-amber-200/60">
-              {sheet?.portrait ? (
+              {portraitUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={sheet.portrait.url}
+                  src={portraitUrl}
                   alt=""
                   className="size-5 rounded-full border border-stone-700 object-cover"
                 />
@@ -238,7 +297,13 @@ export function MessageList({
             ? "The dice clatter across the table…"
             : dmStatus === "awaiting_rolls"
               ? "The table waits on real dice…"
-              : "The next passage is forming…"}
+              : dmStatus === "thinking"
+                ? "The DM weighs the outcome…"
+                : dmStatus === "writing_chapter"
+                  ? "The DM writes the chapter into the record…"
+                  : dmStatus === "plotting_arc"
+                    ? "The DM plots the road ahead…"
+                    : "The next passage is forming…"}
         </p>
       ) : null}
 

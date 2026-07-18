@@ -224,6 +224,7 @@ export function syncProgressToLibrary(sheetId: string): LibraryCharacter | null 
     ac: sheet.ac,
     portrait: sheet.portrait,
     notes: sheet.notes,
+    backstory: sheet.backstory,
   };
   getDatabase()
     .prepare(

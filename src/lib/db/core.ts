@@ -309,6 +309,28 @@ function ensureSchema(db: Database.Database) {
     );
 
     CREATE INDEX IF NOT EXISTS idx_chapters_campaign ON chapters(campaign_id, chapter_index);
+
+    -- Campaign and character notes: public party knowledge (lead-curated),
+    -- private jottings, and member suggestions awaiting the lead's approval.
+    -- character_id NULL means campaign scope; else it references a
+    -- character_sheets row. A suggestion is a public campaign note with
+    -- status 'pending'.
+    CREATE TABLE IF NOT EXISTS campaign_notes (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      character_id TEXT,
+      author_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      visibility TEXT NOT NULL CHECK (visibility IN ('public','private')),
+      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','pending')),
+      pinned INTEGER NOT NULL DEFAULT 0,
+      title TEXT NOT NULL DEFAULT '',
+      body TEXT NOT NULL,
+      seq INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_campaign_notes ON campaign_notes(campaign_id, seq);
   `);
 
   // Compaction memory: a rolling "story so far" summary plus a watermark of
@@ -348,6 +370,9 @@ function ensureSchema(db: Database.Database) {
     ["game_settings_json", `TEXT NOT NULL DEFAULT '{}'`],
     // Secret story outline written by the AI story setup pass.
     ["dm_outline", `TEXT NOT NULL DEFAULT ''`],
+    // Structured secret story arc (main beats + quest sub-arcs); supersedes
+    // dm_outline in the prompt when present.
+    ["story_arc_json", `TEXT NOT NULL DEFAULT ''`],
     // Turn/floor control: who may act right now.
     ["floor_json", `TEXT NOT NULL DEFAULT '{"mode":"open"}'`],
     // Guard so the resume recap is inserted at most once per idle gap.
@@ -370,6 +395,32 @@ function ensureSchema(db: Database.Database) {
   addColumns("character_sheets", [
     ["library_character_id", `TEXT`],
     ["subclass", `TEXT NOT NULL DEFAULT ''`],
+    // Player-authored backstory, visible to the whole party and the DM.
+    ["backstory", `TEXT NOT NULL DEFAULT ''`],
+  ]);
+
+  addColumns("campaign_messages", [
+    // Set on the DM message that moved the party somewhere new so the chat
+    // can render that location's map inline. The map itself stays on the
+    // locations row; this is only a reference.
+    ["location_id", `TEXT`],
+  ]);
+
+  addColumns("dm_turns", [
+    // Pending location reference for the message finalize() will write;
+    // persisted so it survives a turn parked on physical dice.
+    ["location_id", `TEXT`],
+  ]);
+
+  addColumns("sheet_audit", [
+    // Full sheet snapshot taken before the mutation, so the party lead can
+    // undo it. Rows from before undo support keep NULL and are not undoable.
+    ["before_json", `TEXT`],
+    // The exact top-level sheet fields the mutation wrote.
+    ["patch_json", `TEXT`],
+    // Set once the lead undoes this entry: id of the compensating row.
+    ["reverted_by", `TEXT`],
+    ["reverted_at", `TEXT`],
   ]);
 }
 

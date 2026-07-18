@@ -1,11 +1,15 @@
 import { isErrorResponse, requireLead } from "@/lib/campaign-api";
-import { setFloor } from "@/lib/db/campaigns";
+import { getFloor, setFloor, type Floor } from "@/lib/db/campaigns";
+import { requestDmTurn } from "@/lib/dm/loop";
 import { publishPersisted } from "@/lib/events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Party lead override: release a stuck spotlight back to the open floor.
+// Party lead release, layered: a hold opens into its stored next floor (which
+// may be a spotlight); a spotlight force-opens. Releasing a partially
+// answered spotlight hands the answers so far to the DM; releasing a hold or
+// a fully unanswered spotlight wakes nobody (there is nothing to answer).
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ campaignId: string }> },
@@ -15,7 +19,12 @@ export async function POST(
   if (isErrorResponse(context)) {
     return context;
   }
-  setFloor(campaignId, { mode: "open" });
-  publishPersisted(campaignId, "floor_changed", { floor: { mode: "open" } });
+  const floor = getFloor(campaignId);
+  const next: Floor = floor.mode === "hold" ? floor.next : { mode: "open" };
+  setFloor(campaignId, next);
+  publishPersisted(campaignId, "floor_changed", { floor: next });
+  if (floor.mode === "spotlight" && floor.respondedUserIds.length) {
+    requestDmTurn(campaignId);
+  }
   return Response.json({ ok: true });
 }

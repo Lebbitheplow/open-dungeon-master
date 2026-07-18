@@ -2,6 +2,7 @@ import {
   allocateSeq,
   getCampaignById,
   getCampaignSummaryState,
+  getFloor,
   listMembers,
   setCampaignScene,
   setFloor,
@@ -27,11 +28,13 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { fulfillMessageImage } from "@/lib/dm/images";
 import { enqueueNarrationAudio } from "@/lib/tts";
 import { requestDmMessage } from "@/lib/dm/model";
+import { setDmStatus } from "@/lib/dm/status";
 import {
   extractToolCalls,
   resolveRollExpression,
   resolveSheetRef,
   rollArgsSchema,
+  salvageTextualToolCalls,
   type RollArgs,
 } from "@/lib/dm/rolls";
 import {
@@ -44,6 +47,7 @@ import {
   updateLocationTool,
 } from "@/lib/dm/prompt";
 import { listChapters } from "@/lib/db/chapters";
+import { listPublicCampaignNotes } from "@/lib/db/notes";
 import { maybeCloseChapter } from "@/lib/dm/chapter-close";
 import {
   hasRecentIdenticalEvent,
@@ -109,10 +113,17 @@ export async function startDmTurn(campaignId: string) {
   }
   failStaleRunningTurns(campaignId);
 
-  publishEphemeral(campaignId, "dm_status", { state: "thinking" });
+  const history = listAllMessages(campaignId);
+  // Coalesced follow-up turn with nothing new to answer (the previous turn
+  // already covered every message): skip instead of narrating into silence.
+  if (history.length && history[history.length - 1].authorType === "dm") {
+    setDmStatus(campaignId, "idle");
+    return;
+  }
+
+  setDmStatus(campaignId, "thinking");
 
   const context = loadContext(campaign);
-  const history = listAllMessages(campaignId);
   const { summary } = getCampaignSummaryState(campaignId);
   const currentLocation = getCurrentLocation(campaignId);
   const conversation = buildDmMessages(
@@ -146,6 +157,11 @@ export async function startDmTurn(campaignId: string) {
           title: chapter.title,
           oneLiner: chapter.highlights[0] ?? "",
         })),
+      publicNotes: listPublicCampaignNotes(campaignId, 10).map((note) => ({
+        pinned: note.pinned,
+        title: note.title,
+        body: note.body,
+      })),
     },
     history,
   );
@@ -191,7 +207,7 @@ export async function resumeDmTurn(campaignId: string, turnId: string) {
 
   turn.status = "running";
   saveDmTurn(turn);
-  publishEphemeral(campaignId, "dm_status", { state: "narrating" });
+  setDmStatus(campaignId, "narrating");
   await advance(loadContext(campaign), turn);
 }
 
@@ -253,12 +269,26 @@ async function advance(context: TurnContext, turn: DmTurn) {
     }
     turn.callIndex += 1;
 
-    const visibleText = extractStoryText(message?.content);
+    // Salvage tool calls the model wrote as literal text so they still run
+    // (and never reach players as raw brackets), then merge them with the
+    // structured calls under synthetic ids for tool-result pairing.
+    const salvage = salvageTextualToolCalls(extractStoryText(message?.content));
+    const visibleText = salvage.text;
+    const echoedToolCalls = salvage.calls.length
+      ? [
+          ...(Array.isArray(message?.tool_calls) ? message.tool_calls : []),
+          ...salvage.calls.map((call) => ({
+            id: call.id,
+            type: "function",
+            function: { name: call.name, arguments: call.rawArguments },
+          })),
+        ]
+      : message?.tool_calls;
     if (visibleText?.trim()) {
       turn.narrationParts.push(visibleText.trim());
     }
 
-    const toolCalls = extractToolCalls(message?.tool_calls);
+    const toolCalls = [...extractToolCalls(message?.tool_calls), ...salvage.calls];
     const rollCalls = toolCalls.filter((toolCall) => toolCall.name === "request_roll");
     const inputCalls = toolCalls.filter(
       (toolCall) => toolCall.name === "request_player_input",
@@ -278,7 +308,15 @@ async function advance(context: TurnContext, turn: DmTurn) {
       if (result.movedToNewLocation) {
         movedParty = true;
         delete result.movedToNewLocation;
+        // Link the narration message finalize() writes to the new area so
+        // the chat can show its map inline; only when a map exists or one
+        // was just enqueued, so the placeholder can never dangle forever.
+        if (result._mapAvailable && typeof result._locationId === "string") {
+          turn.locationId = result._locationId;
+        }
       }
+      delete result._locationId;
+      delete result._mapAvailable;
       locationResults.set(locationCall.id ?? locationCall.name, result);
     }
     const recallResults = new Map<string, Record<string, unknown>>();
@@ -296,7 +334,7 @@ async function advance(context: TurnContext, turn: DmTurn) {
       );
     }
     if (!turn.imageArgs) {
-      const parsedImage = parseGenerateImageToolCall(message?.tool_calls);
+      const parsedImage = parseGenerateImageToolCall(echoedToolCalls);
       if (parsedImage?.prompt) {
         turn.imageArgs = { prompt: parsedImage.prompt, reason: parsedImage.reason };
       }
@@ -310,6 +348,7 @@ async function advance(context: TurnContext, turn: DmTurn) {
           mode: "spotlight" as const,
           userIds: floorUserIds.userIds,
           prompt: floorUserIds.prompt,
+          respondedUserIds: [],
         };
         setFloor(campaignId, floor);
         publishPersisted(campaignId, "floor_changed", { floor });
@@ -334,7 +373,7 @@ async function advance(context: TurnContext, turn: DmTurn) {
         turn.conversation.push({
           role: "assistant",
           content: visibleText || "",
-          tool_calls: message?.tool_calls,
+          tool_calls: echoedToolCalls,
         });
         for (const inputCall of inputCalls) {
           turn.conversation.push({
@@ -355,14 +394,14 @@ async function advance(context: TurnContext, turn: DmTurn) {
       break;
     }
 
-    publishEphemeral(campaignId, "dm_status", { state: "rolling" });
+    setDmStatus(campaignId, "rolling");
 
     // Echo the assistant turn (with its tool calls) then answer each call
     // with a tool result carrying the real dice outcome.
     turn.conversation.push({
       role: "assistant",
       content: visibleText || "",
-      tool_calls: message?.tool_calls,
+      tool_calls: echoedToolCalls,
     });
 
     for (const inputCall of inputCalls) {
@@ -527,12 +566,12 @@ async function advance(context: TurnContext, turn: DmTurn) {
       // Park: the queue job ends here. Submissions resume the turn.
       turn.status = "awaiting_rolls";
       saveDmTurn(turn);
-      publishEphemeral(campaignId, "dm_status", { state: "awaiting_rolls" });
+      setDmStatus(campaignId, "awaiting_rolls");
       return;
     }
 
     saveDmTurn(turn);
-    publishEphemeral(campaignId, "dm_status", { state: "narrating" });
+    setDmStatus(campaignId, "narrating");
   }
 
   finalize(context, turn, failed);
@@ -709,12 +748,12 @@ function handleLocationCall(
   // changed the recorded layout.
   const layoutRevised =
     toolName === "update_location" && location.layoutDescription !== previousLayout;
-  if (
+  const mapEnqueued =
     visionClear &&
     campaign.gameSettings.mapsEnabled &&
     campaign.settings.imageBackend === "comfyui" &&
-    (!location.mapImage || layoutRevised)
-  ) {
+    (!location.mapImage || layoutRevised);
+  if (mapEnqueued) {
     void enqueueLocationMap(campaign, location.id);
   }
 
@@ -722,9 +761,15 @@ function handleLocationCall(
     ok: true,
     location: location.name,
     note: "Recorded. Continue the scene.",
-    // Consumed by advance() as the chapter-break signal, then stripped
-    // before the result reaches the model.
-    ...(movedToNewLocation ? { movedToNewLocation: true } : {}),
+    // Consumed by advance() as the chapter-break and inline-map signals,
+    // then stripped before the result reaches the model.
+    ...(movedToNewLocation
+      ? {
+          movedToNewLocation: true,
+          _locationId: location.id,
+          _mapAvailable: mapEnqueued || Boolean(location.mapImage),
+        }
+      : {}),
   };
 }
 
@@ -765,7 +810,7 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string) {
       content: `The DM ran into a problem: ${failed}`,
     });
     publishWithSeq(campaignId, seq, "message_added", { message });
-    publishEphemeral(campaignId, "dm_status", { state: "idle" });
+    setDmStatus(campaignId, "idle");
     turn.status = "failed";
     saveDmTurn(turn);
     return;
@@ -806,9 +851,22 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string) {
             characterIds: [],
           }
         : undefined,
+    locationId: turn.locationId ?? undefined,
   });
   publishWithSeq(campaignId, seq, "message_added", { message });
-  publishEphemeral(campaignId, "dm_status", { state: "idle" });
+  setDmStatus(campaignId, "idle");
+
+  // Held responses: after a successful narration the table is locked for
+  // discussion until the lead releases. A spotlight set this turn becomes
+  // the floor that takes effect on release.
+  if (context.campaign.gameSettings.holdSubmissions) {
+    const current = getFloor(campaignId);
+    if (current.mode !== "hold") {
+      const held = { mode: "hold" as const, next: current };
+      setFloor(campaignId, held);
+      publishPersisted(campaignId, "floor_changed", { floor: held });
+    }
+  }
 
   if (message.imageRequest && context.campaign.settings.imageBackend === "comfyui") {
     void fulfillMessageImage(campaignId, message.id, message.imageRequest, context.campaign.settings);

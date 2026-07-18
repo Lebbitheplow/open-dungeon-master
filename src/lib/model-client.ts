@@ -58,6 +58,7 @@ export type ChatRequestOptions = {
   toolChoice?: "auto" | "none";
   temperature?: number;
   onDelta?: StreamDeltaHandler;
+  timeoutMs?: number;
 };
 
 export function configuredMaxOutputTokens() {
@@ -99,14 +100,24 @@ export function localContextTokens(model: string) {
   return Math.max(2_048, Math.min(parsed, native));
 }
 
-function configuredTextTimeoutMs(envKey: string, fallback: number) {
-  const parsed = Number.parseInt(serverEnv(envKey), 10);
+export function resolveTextTimeoutMs(
+  explicit: number | undefined,
+  envKey: string,
+  fallback: number,
+) {
+  const raw = explicit ?? Number.parseInt(serverEnv(envKey), 10);
 
-  if (!Number.isFinite(parsed)) {
+  if (!Number.isFinite(raw)) {
     return fallback;
   }
 
-  return Math.max(MIN_TEXT_TIMEOUT_MS, Math.min(parsed, MAX_TEXT_TIMEOUT_MS));
+  return Math.max(MIN_TEXT_TIMEOUT_MS, Math.min(raw, MAX_TEXT_TIMEOUT_MS));
+}
+
+// Story-arc generation and chapter summaries digest the whole story so far
+// with no streaming, so the entire reply must land inside one timeout.
+export function arcTextTimeoutMs() {
+  return resolveTextTimeoutMs(undefined, "ARC_TEXT_TIMEOUT_MS", 8 * 60 * 1000);
 }
 
 function formatTimeout(ms: number) {
@@ -324,7 +335,8 @@ export async function requestCustomMessage(
     requestPayload.tool_choice = toolChoice ?? "auto";
   }
 
-  const timeoutMs = configuredTextTimeoutMs(
+  const timeoutMs = resolveTextTimeoutMs(
+    options.timeoutMs,
     "CUSTOM_TEXT_TIMEOUT_MS",
     DEFAULT_CUSTOM_TEXT_TIMEOUT_MS,
   );
@@ -539,7 +551,11 @@ export async function requestLocalMessage(
     requestPayload.tools = tools;
   }
 
-  const timeoutMs = configuredTextTimeoutMs("LOCAL_TEXT_TIMEOUT_MS", DEFAULT_LOCAL_TEXT_TIMEOUT_MS);
+  const timeoutMs = resolveTextTimeoutMs(
+    options.timeoutMs,
+    "LOCAL_TEXT_TIMEOUT_MS",
+    DEFAULT_LOCAL_TEXT_TIMEOUT_MS,
+  );
   const requestTimeout = createRequestTimeout(timeoutMs);
   let upstream: Response;
   try {

@@ -65,7 +65,10 @@ export function publishPersisted(campaignId: string, type: string, payload: unkn
 }
 
 // Ephemeral events (streaming deltas, DM status) skip persistence and carry
-// no id, so EventSource reconnects do not replay them.
+// no id, so EventSource reconnects do not replay them. Note: SSE offers no
+// way to clear the browser's last-event-id buffer, so on the client these
+// events still arrive with the previous persisted event's lastEventId; the
+// stream hook must ignore lastEventId for ephemeral event types.
 export function publishEphemeral(campaignId: string, type: string, payload: unknown) {
   fanOut(campaignId, sseChunk(type, payload));
 }

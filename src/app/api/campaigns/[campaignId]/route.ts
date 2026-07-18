@@ -1,24 +1,33 @@
+import { rm } from "node:fs/promises";
+import path from "node:path";
 import { z } from "zod";
-import { isErrorResponse, requireMember } from "@/lib/campaign-api";
+import { isErrorResponse, isLead, requireMember } from "@/lib/campaign-api";
+import { CAMPAIGN_DIFFICULTIES } from "@/lib/campaign-types";
 import {
   allMembersReady,
   allocateSeq,
+  deleteCampaign,
   latestSeq,
   listMembers,
   publicCampaign,
   setCampaignStatus,
+  updateCampaignInfo,
 } from "@/lib/db/campaigns";
 import { listChapters } from "@/lib/db/chapters";
+import { listRecentCampaignEvents } from "@/lib/db/character-events";
 import { syncProgressToLibrary } from "@/lib/db/characters";
+import { listNotesVisibleTo } from "@/lib/db/notes";
 import { listOpenPendingRolls } from "@/lib/db/dm-turns";
 import { listLocations } from "@/lib/db/locations";
 import { listRecentAudit } from "@/lib/db/sheet-audit";
 import { insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
 import { listRecentRolls } from "@/lib/db/rolls";
 import { listSheets } from "@/lib/db/sheets";
-import { runDmTurn } from "@/lib/dm/loop";
+import { requestDmTurn } from "@/lib/dm/loop";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { runStorySetup } from "@/lib/dm/setup";
+import { generateStoryArc } from "@/lib/dm/arc";
+import { getDmStatus } from "@/lib/dm/status";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 
 export const runtime = "nodejs";
@@ -46,12 +55,22 @@ export async function GET(
     auditLog: listRecentAudit(campaignId, 50),
     locations: listLocations(campaignId),
     chapters: listChapters(campaignId),
+    notes: listNotesVisibleTo(campaignId, user.id, isLead(context)),
+    characterEvents: listRecentCampaignEvents(campaignId, 30),
     latestSeq: latestSeq(campaignId),
+    // In-memory status so a reload mid-turn still shows the DM at work.
+    dmStatus: getDmStatus(campaignId),
   });
 }
 
 const patchSchema = z.object({
   status: z.enum(["active", "ended"]).optional(),
+  title: z.string().trim().min(1).max(80).optional(),
+  description: z.string().trim().max(500).optional(),
+  theme: z.string().trim().max(120).optional(),
+  maxPlayers: z.number().int().min(1).max(8).optional(),
+  startingLevel: z.number().int().min(1).max(20).optional(),
+  difficulty: z.enum(CAMPAIGN_DIFFICULTIES).optional(),
 });
 
 export async function PATCH(
@@ -65,17 +84,46 @@ export async function PATCH(
   }
 
   const { campaign, user } = context;
-  if (campaign.ownerUserId !== user.id) {
-    return Response.json({ error: "Only the campaign owner can do that." }, { status: 403 });
-  }
 
   const raw = await request.json().catch(() => ({}));
   const parsed = patchSchema.safeParse(raw);
-  if (!parsed.success || !parsed.data.status) {
+  if (!parsed.success) {
     return Response.json({ error: "Invalid update." }, { status: 400 });
   }
 
-  const nextStatus = parsed.data.status;
+  const { status: nextStatus, ...info } = parsed.data;
+  const infoKeys = Object.keys(info) as Array<keyof typeof info>;
+
+  // Campaign info edits: party lead only, any time before the campaign
+  // ends. The DM prompt reads title/theme/difficulty/description fresh each
+  // turn, so mid-game changes steer the very next narration; startingLevel
+  // only seeds sheets for future joiners.
+  if (infoKeys.length) {
+    if (!isLead(context)) {
+      return Response.json({ error: "Only the party lead can edit the campaign." }, { status: 403 });
+    }
+    if (campaign.status === "ended") {
+      return Response.json({ error: "The campaign has ended." }, { status: 400 });
+    }
+    if (info.maxPlayers !== undefined && info.maxPlayers < listMembers(campaignId).length) {
+      return Response.json(
+        { error: "Max players cannot drop below the current party size." },
+        { status: 400 },
+      );
+    }
+    updateCampaignInfo(campaignId, info);
+    publishPersisted(campaignId, "campaign_updated", info);
+    if (!nextStatus) {
+      return Response.json({ ok: true, ...info });
+    }
+  }
+
+  if (!nextStatus) {
+    return Response.json({ error: "Invalid update." }, { status: 400 });
+  }
+  if (campaign.ownerUserId !== user.id) {
+    return Response.json({ error: "Only the campaign owner can do that." }, { status: 403 });
+  }
   if (nextStatus === "active") {
     if (campaign.status !== "lobby") {
       return Response.json({ error: "Campaign has already started." }, { status: 400 });
@@ -123,8 +171,37 @@ export async function PATCH(
     if (campaign.gameSettings.aiStorySetup) {
       enqueueDmJob(campaignId, () => runStorySetup(campaignId));
     }
-    enqueueDmJob(campaignId, () => runDmTurn(campaignId));
+    // Every campaign gets a structured story arc built from the premise
+    // (whether the table wrote it or the setup pass just did); the kickoff
+    // narration behind it on the queue already steers by the arc.
+    enqueueDmJob(campaignId, () => generateStoryArc(campaignId));
+    requestDmTurn(campaignId);
   }
 
   return Response.json({ ok: true, status: nextStatus });
+}
+
+// Deletes the campaign and everything under it. Rows cascade via foreign
+// keys; the per-campaign narration audio directory goes with them.
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ campaignId: string }> },
+) {
+  const { campaignId } = await params;
+  const context = await requireMember(campaignId);
+  if (isErrorResponse(context)) {
+    return context;
+  }
+
+  const { campaign, user } = context;
+  if (campaign.ownerUserId !== user.id) {
+    return Response.json({ error: "Only the campaign owner can delete it." }, { status: 403 });
+  }
+
+  deleteCampaign(campaignId);
+  await rm(path.join(process.cwd(), "public", "generated-audio", campaignId), {
+    recursive: true,
+    force: true,
+  });
+  return Response.json({ ok: true });
 }

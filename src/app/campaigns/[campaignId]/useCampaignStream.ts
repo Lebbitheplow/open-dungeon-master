@@ -4,11 +4,20 @@ import { useCallback, useEffect, useReducer } from "react";
 import type { CampaignMember, SessionUser } from "@/lib/campaign-types";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { Chapter } from "@/lib/db/chapters";
+import type { CharacterEvent } from "@/lib/db/character-events";
 import type { CampaignMessage } from "@/lib/db/messages";
+import type { Note } from "@/lib/db/notes";
 import type { StoredRoll } from "@/lib/db/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
-export type DmStatus = "idle" | "thinking" | "rolling" | "narrating" | "awaiting_rolls";
+export type DmStatus =
+  | "idle"
+  | "thinking"
+  | "rolling"
+  | "narrating"
+  | "awaiting_rolls"
+  | "writing_chapter"
+  | "plotting_arc";
 
 export type MediaStatus = {
   kind: "image" | "map" | "tts";
@@ -34,11 +43,15 @@ export type AuditEntry = {
   characterId: string;
   characterName?: string;
   actor?: string;
+  turnId?: string | null;
   kind: string;
   delta: Record<string, unknown>;
   reason: string;
   seq: number;
   createdAt: string;
+  // Whether the party lead can undo this entry (a pre-image was recorded).
+  undoable?: boolean;
+  revertedAt?: string | null;
 };
 
 export type LevelUpNotice = {
@@ -72,6 +85,8 @@ export type CampaignState = {
   levelUps: LevelUpNotice[];
   locations: CampaignLocation[];
   chapters: Chapter[];
+  notes: Note[];
+  characterEvents: CharacterEvent[];
   narrationAudio: Record<string, string>;
   latestTts: { messageId: string; url: string; seq: number } | null;
   latestRoll: { roll: StoredRoll; source: string; seq: number } | null;
@@ -96,6 +111,8 @@ const initialState: CampaignState = {
   levelUps: [],
   locations: [],
   chapters: [],
+  notes: [],
+  characterEvents: [],
   narrationAudio: {},
   latestTts: null,
   latestRoll: null,
@@ -107,6 +124,7 @@ const initialState: CampaignState = {
 
 type Action =
   | { type: "snapshot"; payload: Partial<CampaignState> & { lastSeq: number } }
+  | { type: "notes"; notes: Note[] }
   | { type: "error"; error: string }
   | { type: "event"; eventType: string; seq: number | null; payload: Record<string, unknown> };
 
@@ -133,6 +151,8 @@ function reducer(state: CampaignState, action: Action): CampaignState {
   switch (action.type) {
     case "snapshot":
       return { ...state, ...action.payload, loading: false, error: "" };
+    case "notes":
+      return { ...state, notes: action.notes };
     case "error":
       return { ...state, loading: false, error: action.error };
     case "event": {
@@ -289,6 +309,34 @@ function reducer(state: CampaignState, action: Action): CampaignState {
           }
           return next;
         }
+        case "note_updated": {
+          const note = payload.note as Note | undefined;
+          if (note) {
+            next.notes = upsertBy(state.notes, note, (entry) => entry.id);
+          }
+          return next;
+        }
+        case "note_deleted":
+          next.notes = state.notes.filter((note) => note.id !== payload.noteId);
+          return next;
+        case "character_event": {
+          const event = payload.event as CharacterEvent | undefined;
+          if (event) {
+            next.characterEvents = upsertBy(
+              state.characterEvents.slice(-60),
+              event,
+              (entry) => entry.id,
+            );
+          }
+          return next;
+        }
+        case "audit_reverted":
+          next.auditLog = state.auditLog.map((entry) =>
+            entry.id === payload.entryId
+              ? { ...entry, revertedAt: String(payload.revertedAt ?? "") }
+              : entry,
+          );
+          return next;
         case "campaign_updated":
           next.campaign = state.campaign
             ? { ...state.campaign, ...(payload as Partial<Campaign>) }
@@ -336,6 +384,11 @@ const PERSISTED_EVENTS = [
   "campaign_updated",
   "chapter_closed",
   "chapter_updated",
+  "note_updated",
+  "note_deleted",
+  "note_suggested",
+  "character_event",
+  "audit_reverted",
   "floor_changed",
   "image_ready",
   "location_updated",
@@ -343,6 +396,7 @@ const PERSISTED_EVENTS = [
   "tts_ready",
 ];
 const EPHEMERAL_EVENTS = ["dm_status", "dm_delta", "media_status"];
+const EPHEMERAL_EVENT_SET = new Set(EPHEMERAL_EVENTS);
 
 export function useCampaignStream(campaignId: string) {
   const [state, dispatch] = useReducer(reducer, initialState);
@@ -376,6 +430,9 @@ export function useCampaignStream(campaignId: string) {
           auditLog: data.auditLog ?? [],
           locations: data.locations ?? [],
           chapters: data.chapters ?? [],
+          notes: data.notes ?? [],
+          characterEvents: data.characterEvents ?? [],
+          dmStatus: data.dmStatus ?? "idle",
           lastSeq,
         },
       });
@@ -383,6 +440,21 @@ export function useCampaignStream(campaignId: string) {
     } catch {
       dispatch({ type: "error", error: "Could not reach the server." });
       return 0;
+    }
+  }, [campaignId]);
+
+  // Re-fetches just the caller's visible notes. Suggestion events carry no
+  // content (privacy), so clients pull their own filtered list instead.
+  const refreshNotes = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/notes`);
+      if (!response.ok) {
+        return;
+      }
+      const data = await response.json();
+      dispatch({ type: "notes", notes: data.notes ?? [] });
+    } catch {
+      // transient; the next snapshot refresh catches up
     }
   }, [campaignId]);
 
@@ -398,8 +470,17 @@ export function useCampaignStream(campaignId: string) {
       const handle = (eventType: string) => (event: MessageEvent) => {
         try {
           const payload = JSON.parse(event.data);
-          const seq = event.lastEventId ? Number(event.lastEventId) : null;
+          // Ephemeral events carry no SSE id, but the browser's lastEventId
+          // persists from the previous id-bearing event, so trusting it here
+          // would make the seq guard drop every ephemeral event.
+          const seq =
+            EPHEMERAL_EVENT_SET.has(eventType) || !event.lastEventId
+              ? null
+              : Number(event.lastEventId);
           dispatch({ type: "event", eventType, seq, payload });
+          if (eventType === "note_suggested") {
+            void refreshNotes();
+          }
         } catch {
           // malformed event; ignore
         }
@@ -413,7 +494,7 @@ export function useCampaignStream(campaignId: string) {
       cancelled = true;
       source?.close();
     };
-  }, [campaignId, refresh]);
+  }, [campaignId, refresh, refreshNotes]);
 
-  return { state, refresh };
+  return { state, refresh, refreshNotes };
 }

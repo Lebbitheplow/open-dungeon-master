@@ -17,6 +17,7 @@ export type DmTurn = {
   narrationParts: string[];
   rollIds: string[];
   imageArgs: { prompt: string; reason?: string } | null;
+  locationId: string | null;
   mutationCount: number;
   createdAt: string;
   updatedAt: string;
@@ -31,6 +32,7 @@ type TurnRow = {
   narration_parts_json: string;
   roll_ids_json: string;
   image_args_json: string | null;
+  location_id: string | null;
   mutation_count: number;
   created_at: string;
   updated_at: string;
@@ -46,6 +48,7 @@ function mapTurn(row: TurnRow): DmTurn {
     narrationParts: parseJson<string[]>(row.narration_parts_json, []),
     rollIds: parseJson<string[]>(row.roll_ids_json, []),
     imageArgs: parseJson<DmTurn["imageArgs"]>(row.image_args_json, null),
+    locationId: row.location_id ?? null,
     mutationCount: row.mutation_count,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -84,7 +87,7 @@ export function saveDmTurn(turn: DmTurn) {
         UPDATE dm_turns SET
           status = ?, call_index = ?, conversation_json = ?,
           narration_parts_json = ?, roll_ids_json = ?, image_args_json = ?,
-          mutation_count = ?, updated_at = ?
+          location_id = ?, mutation_count = ?, updated_at = ?
         WHERE id = ?
       `,
     )
@@ -95,6 +98,7 @@ export function saveDmTurn(turn: DmTurn) {
       JSON.stringify(turn.narrationParts),
       JSON.stringify(turn.rollIds),
       turn.imageArgs ? JSON.stringify(turn.imageArgs) : null,
+      turn.locationId,
       turn.mutationCount,
       nowIso(),
       turn.id,

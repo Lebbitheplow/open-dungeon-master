@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { d20Expression, type Advantage } from "@/lib/dice";
+import { toolTextRegex } from "@/lib/dm/tool-text";
 import { computeSheetDerived, findSkill } from "@/lib/srd";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { StreamedToolCall } from "@/lib/model-client";
@@ -49,6 +50,65 @@ export function extractToolCalls(toolCalls: unknown): ParsedToolCall[] {
     parsed.push({ id: typeof raw.id === "string" ? raw.id : undefined, name, rawArguments: args });
   }
   return parsed;
+}
+
+// Parses "key=value key2=value with spaces" bodies from leaked textual tool
+// calls. Values run until the next "key=" boundary; bare ints and booleans
+// are coerced so the results satisfy the tools' JSON schemas.
+function parseKeyValueArgs(body: string): Record<string, unknown> {
+  const args: Record<string, unknown> = {};
+  const boundaries = [...body.matchAll(/(?:^|\s)([A-Za-z_][A-Za-z0-9_]*)=/g)];
+  for (let index = 0; index < boundaries.length; index += 1) {
+    const match = boundaries[index];
+    const start = match.index! + match[0].length;
+    const end = index + 1 < boundaries.length ? boundaries[index + 1].index! : body.length;
+    const key = match[1];
+    let value = body.slice(start, end).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    if (/^-?\d+$/.test(value)) {
+      args[key] = Number(value);
+    } else if (value === "true" || value === "false") {
+      args[key] = value === "true";
+    } else {
+      args[key] = value;
+    }
+  }
+  return args;
+}
+
+// Some models emit tool calls as literal narration text instead of
+// structured tool_calls, e.g. "[request_roll characterId=... kind=custom
+// expression=1d20+3 reason=...]". Salvage them: strip the bracket text from
+// the narration and return synthetic calls that run through the normal tool
+// pipeline, so dice actually roll instead of raw brackets reaching players.
+export function salvageTextualToolCalls(text: string): {
+  text: string;
+  calls: ParsedToolCall[];
+} {
+  if (!text) {
+    return { text, calls: [] };
+  }
+  const calls: ParsedToolCall[] = [];
+  const cleaned = text
+    .replace(toolTextRegex(), (_match, name: string, body: string) => {
+      const args = parseKeyValueArgs(body);
+      if (Object.keys(args).length) {
+        calls.push({
+          id: `salvaged-${calls.length}`,
+          name,
+          rawArguments: JSON.stringify(args),
+        });
+      }
+      return "";
+    })
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+  return { text: cleaned, calls };
 }
 
 // Resolve a request_roll call into a canonical expression using the sheet as

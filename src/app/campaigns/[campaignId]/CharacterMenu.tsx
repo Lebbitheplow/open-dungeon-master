@@ -1,0 +1,74 @@
+"use client";
+
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { BookUser, Crown, MoreVertical, StickyNote, Wrench } from "lucide-react";
+import type { CharacterSheet } from "@/lib/schemas/sheet";
+
+// Per-character options menu on each party card: sheet, notes, and the
+// lead-only corrections and lead transfer.
+export function CharacterMenu({
+  sheet,
+  isLead,
+  leadUserId,
+  canTransferLead,
+  onViewSheet,
+  onNotes,
+  onAdjust,
+}: {
+  sheet: CharacterSheet;
+  isLead: boolean;
+  leadUserId: string;
+  canTransferLead: boolean;
+  onViewSheet: () => void;
+  onNotes: () => void;
+  onAdjust: () => void;
+}) {
+  const item =
+    "flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs text-stone-300 outline-none data-[highlighted]:bg-stone-800";
+
+  async function makeLead() {
+    await fetch(`/api/campaigns/${sheet.campaignId}/lead`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: sheet.userId }),
+    });
+  }
+
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <button
+          type="button"
+          title={`Options for ${sheet.name}`}
+          className="rounded p-1 text-stone-500 hover:bg-stone-900 hover:text-stone-300"
+        >
+          <MoreVertical className="size-3.5" />
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          align="end"
+          sideOffset={4}
+          className="z-50 min-w-40 rounded-md border border-stone-700 bg-stone-950 p-1 shadow-xl"
+        >
+          <DropdownMenu.Item className={item} onSelect={onViewSheet}>
+            <BookUser className="size-3.5 text-stone-500" /> View sheet
+          </DropdownMenu.Item>
+          <DropdownMenu.Item className={item} onSelect={onNotes}>
+            <StickyNote className="size-3.5 text-stone-500" /> Notes
+          </DropdownMenu.Item>
+          {isLead ? (
+            <DropdownMenu.Item className={item} onSelect={onAdjust}>
+              <Wrench className="size-3.5 text-stone-500" /> Adjust stats
+            </DropdownMenu.Item>
+          ) : null}
+          {canTransferLead && sheet.userId !== leadUserId ? (
+            <DropdownMenu.Item className={item} onSelect={makeLead}>
+              <Crown className="size-3.5 text-amber-400" /> Make party lead
+            </DropdownMenu.Item>
+          ) : null}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}

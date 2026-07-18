@@ -2,8 +2,7 @@ import { isErrorResponse, requireLead } from "@/lib/campaign-api";
 import { LEAD_NOTE_PREFIX } from "@/lib/campaign-types";
 import { allocateSeq } from "@/lib/db/campaigns";
 import { insertCampaignMessage } from "@/lib/db/messages";
-import { runDmTurn } from "@/lib/dm/loop";
-import { enqueueDmJob } from "@/lib/dm/queue";
+import { requestDmTurn } from "@/lib/dm/loop";
 import { publishWithSeq } from "@/lib/events";
 
 export const runtime = "nodejs";
@@ -42,7 +41,7 @@ export async function POST(
   publishWithSeq(campaignId, seq, "message_added", { message });
 
   if (wake) {
-    enqueueDmJob(campaignId, () => runDmTurn(campaignId));
+    requestDmTurn(campaignId);
   }
 
   return Response.json({ message }, { status: 201 });

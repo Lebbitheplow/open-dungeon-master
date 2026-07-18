@@ -142,6 +142,11 @@ export default function CharacterDetailPage({
         {sheet.feats.length ? (
           <p className="mt-1 text-sm text-stone-400">Feats: {sheet.feats.join(", ")}</p>
         ) : null}
+        {sheet.backstory ? (
+          <p className="mt-2 whitespace-pre-wrap text-sm text-stone-400">
+            Backstory: {sheet.backstory}
+          </p>
+        ) : null}
       </section>
 
       <section>
