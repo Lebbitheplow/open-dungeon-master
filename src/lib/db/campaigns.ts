@@ -2,6 +2,7 @@ import { randomInt } from "node:crypto";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { normalizeSettings } from "@/lib/db";
 import { configuredDefaultStorySettings } from "@/lib/runtime-defaults";
+import { normalizeGameSettings, type GameSettings } from "@/lib/schemas/game-settings";
 import type {
   CampaignDifficulty,
   CampaignMember,
@@ -10,10 +11,19 @@ import type {
 } from "@/lib/campaign-types";
 import type { StorySettings } from "@/lib/types";
 
+// Who may act right now. Extensible: combat later adds an
+// {mode:"initiative"} variant; always branch on mode.
+export type Floor =
+  | { mode: "open" }
+  | { mode: "spotlight"; userIds: string[]; prompt: string };
+
 export type Campaign = CampaignSummary & {
   scene: string;
   questLog: string[];
   settings: StorySettings;
+  gameSettings: GameSettings;
+  dmOutline: string;
+  floor: Floor;
 };
 
 type CampaignRow = {
@@ -28,6 +38,9 @@ type CampaignRow = {
   difficulty: CampaignDifficulty;
   theme: string;
   settings_json: string;
+  game_settings_json: string;
+  dm_outline: string;
+  floor_json: string;
   scene: string;
   quest_log_json: string;
   created_at: string;
@@ -35,6 +48,27 @@ type CampaignRow = {
   player_count?: number;
   member_role?: "owner" | "player";
 };
+
+// OOC talk is always allowed; otherwise the floor decides.
+export function canAct(floor: Floor, userId: string, kind: string): boolean {
+  if (kind === "ooc" || floor.mode === "open") {
+    return true;
+  }
+  return floor.userIds.includes(userId);
+}
+
+export function normalizeFloor(raw: unknown): Floor {
+  const floor = raw as Floor | null;
+  if (
+    floor &&
+    floor.mode === "spotlight" &&
+    Array.isArray(floor.userIds) &&
+    floor.userIds.length
+  ) {
+    return { mode: "spotlight", userIds: floor.userIds, prompt: String(floor.prompt ?? "") };
+  }
+  return { mode: "open" };
+}
 
 // Unambiguous alphabet: no 0/O, 1/I lookalikes.
 const INVITE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -64,6 +98,9 @@ function mapCampaign(row: CampaignRow): Campaign {
     scene: row.scene,
     questLog: parseJson<string[]>(row.quest_log_json, []),
     settings: normalizeSettings(parseJson(row.settings_json, {})),
+    gameSettings: normalizeGameSettings(parseJson(row.game_settings_json, {})),
+    dmOutline: row.dm_outline ?? "",
+    floor: normalizeFloor(parseJson(row.floor_json, null)),
   };
 }
 
@@ -83,6 +120,7 @@ export function createCampaign(
     maxPlayers: number;
     startingLevel: number;
     difficulty: CampaignDifficulty;
+    gameSettings?: Partial<GameSettings>;
   },
 ): Campaign {
   const db = getDatabase();
@@ -95,9 +133,9 @@ export function createCampaign(
         INSERT INTO campaigns (
           id, title, description, invite_code, owner_user_id, status,
           max_players, starting_level, difficulty, theme, settings_json,
-          created_at, updated_at
+          game_settings_json, created_at, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, 'lobby', ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, 'lobby', ?, ?, ?, ?, ?, ?, ?, ?)
       `,
     ).run(
       id,
@@ -110,6 +148,7 @@ export function createCampaign(
       input.difficulty,
       input.theme,
       JSON.stringify(configuredDefaultStorySettings()),
+      JSON.stringify(normalizeGameSettings(input.gameSettings ?? {})),
       now,
       now,
     );
@@ -174,7 +213,7 @@ export function listMembers(campaignId: string): CampaignMember[] {
   const rows = getDatabase()
     .prepare(
       `
-        SELECT m.user_id, u.username, m.role, m.ready, m.joined_at
+        SELECT m.user_id, u.username, m.role, m.ready, m.use_real_dice, m.joined_at
         FROM campaign_members m
         JOIN users u ON u.id = m.user_id
         WHERE m.campaign_id = ?
@@ -186,6 +225,7 @@ export function listMembers(campaignId: string): CampaignMember[] {
     username: string;
     role: "owner" | "player";
     ready: number;
+    use_real_dice: number;
     joined_at: string;
   }>;
 
@@ -194,6 +234,7 @@ export function listMembers(campaignId: string): CampaignMember[] {
     username: row.username,
     role: row.role,
     ready: Boolean(row.ready),
+    useRealDice: Boolean(row.use_real_dice),
     joinedAt: row.joined_at,
   }));
 }
@@ -254,6 +295,56 @@ export function setCampaignStatus(campaignId: string, status: CampaignStatus) {
     .run(status, nowIso(), campaignId);
 }
 
+export function updateGameSettings(
+  campaignId: string,
+  patch: Partial<GameSettings>,
+): GameSettings | null {
+  const campaign = getCampaignById(campaignId);
+  if (!campaign) {
+    return null;
+  }
+  const merged = normalizeGameSettings({ ...campaign.gameSettings, ...patch });
+  getDatabase()
+    .prepare(`UPDATE campaigns SET game_settings_json = ?, updated_at = ? WHERE id = ?`)
+    .run(JSON.stringify(merged), nowIso(), campaignId);
+  return merged;
+}
+
+export function setDmOutline(campaignId: string, outline: string) {
+  getDatabase()
+    .prepare(`UPDATE campaigns SET dm_outline = ?, updated_at = ? WHERE id = ?`)
+    .run(outline.slice(0, 8_000), nowIso(), campaignId);
+}
+
+export function getFloor(campaignId: string): Floor {
+  const row = getDatabase()
+    .prepare(`SELECT floor_json FROM campaigns WHERE id = ?`)
+    .get(campaignId) as { floor_json?: string } | undefined;
+  return normalizeFloor(parseJson(row?.floor_json ?? null, null));
+}
+
+export function setFloor(campaignId: string, floor: Floor) {
+  getDatabase()
+    .prepare(`UPDATE campaigns SET floor_json = ? WHERE id = ?`)
+    .run(JSON.stringify(floor), campaignId);
+}
+
+export function setMemberRealDice(campaignId: string, userId: string, useRealDice: boolean) {
+  getDatabase()
+    .prepare(`UPDATE campaign_members SET use_real_dice = ? WHERE campaign_id = ? AND user_id = ?`)
+    .run(useRealDice ? 1 : 0, campaignId, userId);
+  touchCampaign(campaignId);
+}
+
+// Atomically claim the right to insert a resume recap covering messages up
+// to `seq`; a second concurrent action loses the claim and skips the recap.
+export function claimRecap(campaignId: string, seq: number): boolean {
+  const result = getDatabase()
+    .prepare(`UPDATE campaigns SET last_recap_seq = ? WHERE id = ? AND last_recap_seq < ?`)
+    .run(seq, campaignId, seq);
+  return result.changes > 0;
+}
+
 export function setCampaignScene(campaignId: string, scene: string) {
   getDatabase()
     .prepare(`UPDATE campaigns SET scene = ?, updated_at = ? WHERE id = ?`)
@@ -274,6 +365,13 @@ export function setCampaignSummaryState(campaignId: string, summary: string, cov
   getDatabase()
     .prepare(`UPDATE campaigns SET story_summary = ?, story_summary_count = ? WHERE id = ?`)
     .run(summary, coveredCount, campaignId);
+}
+
+// Strip server-only fields before sending a campaign to any client. The DM
+// outline is the story's secret spine; players must never receive it.
+export function publicCampaign(campaign: Campaign): Omit<Campaign, "dmOutline"> {
+  const { dmOutline: _dmOutline, ...rest } = campaign;
+  return rest;
 }
 
 export function touchCampaign(campaignId: string) {

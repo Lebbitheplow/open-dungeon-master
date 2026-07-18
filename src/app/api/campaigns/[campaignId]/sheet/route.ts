@@ -1,7 +1,13 @@
+import { z } from "zod";
 import { isErrorResponse, requireMember } from "@/lib/campaign-api";
+import { createCharacter, instantiateIntoCampaign } from "@/lib/db/characters";
 import { createSheet, getSheetForUser, patchSheet } from "@/lib/db/sheets";
 import { createSheetSchema, patchSheetSchema } from "@/lib/schemas/sheet";
 import { publishPersisted } from "@/lib/events";
+
+const fromLibrarySchema = z.object({
+  libraryCharacterId: z.string().min(1),
+});
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,6 +43,24 @@ export async function POST(
   }
 
   const raw = await request.json().catch(() => ({}));
+
+  // Path 1: pick an existing library character (adapted to campaign level).
+  const fromLibrary = fromLibrarySchema.safeParse(raw);
+  if (fromLibrary.success) {
+    const result = instantiateIntoCampaign(
+      fromLibrary.data.libraryCharacterId,
+      campaignId,
+      context.user.id,
+      context.campaign.startingLevel,
+    );
+    if ("error" in result) {
+      return Response.json({ error: result.error }, { status: 400 });
+    }
+    publishPersisted(campaignId, "sheet_updated", { sheet: result });
+    return Response.json({ sheet: result }, { status: 201 });
+  }
+
+  // Path 2: create new; also saved to the user's library, then copied in.
   const parsed = createSheetSchema.safeParse(raw);
   if (!parsed.success) {
     return Response.json(
@@ -45,11 +69,17 @@ export async function POST(
     );
   }
 
+  const libraryCharacter = createCharacter(
+    context.user.id,
+    context.campaign.startingLevel,
+    parsed.data,
+  );
   const sheet = createSheet(
     campaignId,
     context.user.id,
     context.campaign.startingLevel,
     parsed.data,
+    libraryCharacter.id,
   );
   publishPersisted(campaignId, "sheet_updated", { sheet });
 

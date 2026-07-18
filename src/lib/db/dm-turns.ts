@@ -1,0 +1,262 @@
+import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
+import type { ChatMessage } from "@/lib/model-client";
+import type { Advantage } from "@/lib/dice";
+import type { RollKind } from "@/lib/db/rolls";
+
+// A DM narration turn persisted as a state machine so it can park while a
+// player rolls physical dice and resume later (across restarts).
+
+export type DmTurnStatus = "running" | "awaiting_rolls" | "done" | "failed";
+
+export type DmTurn = {
+  id: string;
+  campaignId: string;
+  status: DmTurnStatus;
+  callIndex: number;
+  conversation: ChatMessage[];
+  narrationParts: string[];
+  rollIds: string[];
+  imageArgs: { prompt: string; reason?: string } | null;
+  mutationCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type TurnRow = {
+  id: string;
+  campaign_id: string;
+  status: DmTurnStatus;
+  call_index: number;
+  conversation_json: string;
+  narration_parts_json: string;
+  roll_ids_json: string;
+  image_args_json: string | null;
+  mutation_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+function mapTurn(row: TurnRow): DmTurn {
+  return {
+    id: row.id,
+    campaignId: row.campaign_id,
+    status: row.status,
+    callIndex: row.call_index,
+    conversation: parseJson<ChatMessage[]>(row.conversation_json, []),
+    narrationParts: parseJson<string[]>(row.narration_parts_json, []),
+    rollIds: parseJson<string[]>(row.roll_ids_json, []),
+    imageArgs: parseJson<DmTurn["imageArgs"]>(row.image_args_json, null),
+    mutationCount: row.mutation_count,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function createDmTurn(campaignId: string, conversation: ChatMessage[]): DmTurn {
+  const id = crypto.randomUUID();
+  const now = nowIso();
+  getDatabase()
+    .prepare(
+      `
+        INSERT INTO dm_turns (id, campaign_id, status, call_index, conversation_json, created_at, updated_at)
+        VALUES (?, ?, 'running', 0, ?, ?, ?)
+      `,
+    )
+    .run(id, campaignId, JSON.stringify(conversation), now, now);
+  const turn = getDmTurn(id);
+  if (!turn) {
+    throw new Error("Failed to create DM turn.");
+  }
+  return turn;
+}
+
+export function getDmTurn(turnId: string): DmTurn | null {
+  const row = getDatabase().prepare(`SELECT * FROM dm_turns WHERE id = ?`).get(turnId) as
+    | TurnRow
+    | undefined;
+  return row ? mapTurn(row) : null;
+}
+
+export function saveDmTurn(turn: DmTurn) {
+  getDatabase()
+    .prepare(
+      `
+        UPDATE dm_turns SET
+          status = ?, call_index = ?, conversation_json = ?,
+          narration_parts_json = ?, roll_ids_json = ?, image_args_json = ?,
+          mutation_count = ?, updated_at = ?
+        WHERE id = ?
+      `,
+    )
+    .run(
+      turn.status,
+      turn.callIndex,
+      JSON.stringify(turn.conversation),
+      JSON.stringify(turn.narrationParts),
+      JSON.stringify(turn.rollIds),
+      turn.imageArgs ? JSON.stringify(turn.imageArgs) : null,
+      turn.mutationCount,
+      nowIso(),
+      turn.id,
+    );
+}
+
+// Turns stuck in `running` are stale after a crash/restart; fail them so a
+// new turn can start. `awaiting_rolls` turns are durable by design.
+export function failStaleRunningTurns(campaignId: string, olderThanMinutes = 10) {
+  const cutoff = new Date(Date.now() - olderThanMinutes * 60_000).toISOString();
+  getDatabase()
+    .prepare(
+      `UPDATE dm_turns SET status = 'failed', updated_at = ? WHERE campaign_id = ? AND status = 'running' AND updated_at < ?`,
+    )
+    .run(nowIso(), campaignId, cutoff);
+}
+
+export function getAwaitingTurn(campaignId: string): DmTurn | null {
+  const row = getDatabase()
+    .prepare(
+      `SELECT * FROM dm_turns WHERE campaign_id = ? AND status = 'awaiting_rolls' ORDER BY created_at DESC LIMIT 1`,
+    )
+    .get(campaignId) as TurnRow | undefined;
+  return row ? mapTurn(row) : null;
+}
+
+// ---- pending physical rolls ----
+
+export type PendingRollStatus = "pending" | "submitted" | "fallback";
+
+export type PendingRoll = {
+  id: string;
+  campaignId: string;
+  turnId: string;
+  toolCallId: string | null;
+  userId: string;
+  characterId: string | null;
+  kind: RollKind;
+  detail: string;
+  expression: string;
+  advantage: Advantage;
+  dc: number | null;
+  reason: string;
+  status: PendingRollStatus;
+  rollId: string | null;
+  createdAt: string;
+};
+
+type PendingRow = {
+  id: string;
+  campaign_id: string;
+  turn_id: string;
+  tool_call_id: string | null;
+  user_id: string;
+  character_id: string | null;
+  kind: RollKind;
+  detail: string;
+  expression: string;
+  advantage: Advantage;
+  dc: number | null;
+  reason: string;
+  status: PendingRollStatus;
+  roll_id: string | null;
+  created_at: string;
+};
+
+function mapPending(row: PendingRow): PendingRoll {
+  return {
+    id: row.id,
+    campaignId: row.campaign_id,
+    turnId: row.turn_id,
+    toolCallId: row.tool_call_id,
+    userId: row.user_id,
+    characterId: row.character_id,
+    kind: row.kind,
+    detail: row.detail,
+    expression: row.expression,
+    advantage: row.advantage,
+    dc: row.dc,
+    reason: row.reason,
+    status: row.status,
+    rollId: row.roll_id,
+    createdAt: row.created_at,
+  };
+}
+
+export function createPendingRoll(input: {
+  campaignId: string;
+  turnId: string;
+  toolCallId: string | null;
+  userId: string;
+  characterId: string | null;
+  kind: RollKind;
+  detail: string;
+  expression: string;
+  advantage: Advantage;
+  dc: number | null;
+  reason: string;
+}): PendingRoll {
+  const id = crypto.randomUUID();
+  getDatabase()
+    .prepare(
+      `
+        INSERT INTO pending_rolls (
+          id, campaign_id, turn_id, tool_call_id, user_id, character_id, kind,
+          detail, expression, advantage, dc, reason, status, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+      `,
+    )
+    .run(
+      id,
+      input.campaignId,
+      input.turnId,
+      input.toolCallId,
+      input.userId,
+      input.characterId,
+      input.kind,
+      input.detail,
+      input.expression,
+      input.advantage,
+      input.dc,
+      input.reason,
+      nowIso(),
+    );
+  const pending = getPendingRoll(id);
+  if (!pending) {
+    throw new Error("Failed to create pending roll.");
+  }
+  return pending;
+}
+
+export function getPendingRoll(id: string): PendingRoll | null {
+  const row = getDatabase().prepare(`SELECT * FROM pending_rolls WHERE id = ?`).get(id) as
+    | PendingRow
+    | undefined;
+  return row ? mapPending(row) : null;
+}
+
+export function listPendingForTurn(turnId: string): PendingRoll[] {
+  const rows = getDatabase()
+    .prepare(`SELECT * FROM pending_rolls WHERE turn_id = ? ORDER BY created_at ASC`)
+    .all(turnId) as PendingRow[];
+  return rows.map(mapPending);
+}
+
+export function listOpenPendingRolls(campaignId: string): PendingRoll[] {
+  const rows = getDatabase()
+    .prepare(
+      `SELECT * FROM pending_rolls WHERE campaign_id = ? AND status = 'pending' ORDER BY created_at ASC`,
+    )
+    .all(campaignId) as PendingRow[];
+  return rows.map(mapPending);
+}
+
+export function resolvePendingRoll(
+  id: string,
+  status: "submitted" | "fallback",
+  rollId: string,
+): PendingRoll | null {
+  const result = getDatabase()
+    .prepare(`UPDATE pending_rolls SET status = ?, roll_id = ? WHERE id = ? AND status = 'pending'`)
+    .run(status, rollId, id);
+  return result.changes > 0 ? getPendingRoll(id) : null;
+}

@@ -8,13 +8,17 @@ export const DEFAULT_STORY_SETTINGS: StorySettings = {
     "A grounded interactive fiction scene with sharp dialogue, human stakes, and space for the player to steer the story.",
   style:
     "Classic text-adventure narration: direct second person, vivid but restrained prose, natural dialogue, and no purple exposition.",
-  // Default DM model is Qwen3.6-27B served by the local llama-server
-  // (OpenAI-compatible, strong tool calling). Ollama stays selectable via
-  // the "local" provider. The API key comes from .env.server, never code.
+  // Default DM model is Qwen3.6-35B MoE served by Ollama's OpenAI-compatible
+  // endpoint (tool calling verified). Gemma via the "local" provider stays
+  // selectable. Any API key comes from .env.server, never code; Ollama
+  // ignores auth headers.
   textProvider: "custom",
   localTextModel: DEFAULT_LOCAL_TEXT_MODEL,
-  customBaseUrl: "http://127.0.0.1:8001/v1",
-  customModel: "qwen3.6-27b",
+  customBaseUrl: "http://127.0.0.1:11434/v1",
+  // qwen3.6-dm = qwen3.6:35b-a3b-q8_0 with num_ctx 65536 baked in (Ollama's
+  // default context is tiny and silently truncates the DM prompt, which
+  // causes looping) plus Qwen's recommended samplers.
+  customModel: "qwen3.6-dm",
   customApiKey: "",
   imageMode: "fast",
   // This machine (AMD gfx1151) can't run the bundled mflux/sdnq workers, so

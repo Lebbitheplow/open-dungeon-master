@@ -3,10 +3,10 @@
 import { BookOpen, Loader2, LogOut, Plus, Swords, Users } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
+import { IconChip, PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
 import type { CampaignSummary, SessionUser } from "@/lib/campaign-types";
 import { CreateCampaignDialog } from "@/app/CreateCampaignDialog";
-
-type AuthMode = "login" | "register";
+import AuthForm from "@/app/AuthForm";
 
 export default function Home() {
   const [checking, setChecking] = useState(true);
@@ -48,96 +48,28 @@ export default function Home() {
 }
 
 function AuthScreen({ onAuthed }: { onAuthed: (user: SessionUser) => void }) {
-  const [mode, setMode] = useState<AuthMode>("login");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setError("");
-    try {
-      const response = await fetch(`/api/auth/${mode}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setError(data.error || "Something went wrong.");
-        return;
-      }
-      onAuthed(data.user);
-    } catch {
-      setError("Could not reach the server.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <main className="flex flex-1 items-center justify-center p-6">
-      <div className="w-full max-w-sm rounded-xl border border-stone-800 bg-stone-950/60 p-6">
-        <div className="mb-6 flex items-center gap-3">
-          <Swords className="size-7 text-amber-500" />
+      <div className="w-full max-w-sm">
+        <div className="mb-6 flex flex-col items-center gap-4 text-center">
+          <PixelTile src={PIXEL_ICONS.story} size="size-16" />
           <div>
-            <h1 className="font-serif text-xl font-semibold">Open Dungeon Master</h1>
-            <p className="text-sm text-stone-400">Multiplayer 5e with an AI DM</p>
+            <h1 className="text-balance font-serif text-3xl text-stone-100">
+              Open Dungeon Master
+            </h1>
+            <p className="mt-2 text-pretty text-sm text-stone-500">
+              Gather your party. An AI Dungeon Master runs the table; the dice
+              are honest and the story is yours.
+            </p>
           </div>
         </div>
 
-        <form onSubmit={submit} className="space-y-3">
-          <label className="block text-sm">
-            <span className="mb-1 block text-stone-400">Username</span>
-            <input
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              autoComplete="username"
-              required
-              minLength={3}
-              maxLength={24}
-              className="w-full rounded-md border border-stone-700 bg-stone-900 px-3 py-2 outline-none focus:border-amber-600"
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block text-stone-400">Password</span>
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
-              required
-              minLength={mode === "register" ? 8 : 1}
-              maxLength={100}
-              className="w-full rounded-md border border-stone-700 bg-stone-900 px-3 py-2 outline-none focus:border-amber-600"
-            />
-          </label>
-          {error ? <p className="text-sm text-red-400">{error}</p> : null}
-          <button
-            type="submit"
-            disabled={busy}
-            className="flex w-full items-center justify-center gap-2 rounded-md bg-amber-700 px-3 py-2 font-medium text-amber-50 hover:bg-amber-600 disabled:opacity-60"
-          >
-            {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-            {mode === "login" ? "Log in" : "Create account"}
-          </button>
-        </form>
+        <div className="rounded-xl border border-stone-800 bg-stone-950/70 p-6">
+          <AuthForm onAuthed={onAuthed} />
+        </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            setMode(mode === "login" ? "register" : "login");
-            setError("");
-          }}
-          className="mt-4 w-full text-center text-sm text-stone-400 hover:text-stone-200"
-        >
-          {mode === "login" ? "New here? Create an account" : "Have an account? Log in"}
-        </button>
-
-        <div className="mt-6 border-t border-stone-800 pt-4 text-center">
-          <a href="/solo" className="text-sm text-stone-500 hover:text-stone-300">
+        <div className="mt-6 text-center">
+          <a href="/solo" className="text-sm text-stone-500 hover:text-amber-200">
             Or play the single-player narrator
           </a>
         </div>
@@ -200,24 +132,20 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
     <main className="mx-auto w-full max-w-3xl flex-1 p-6">
       <header className="mb-8 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Swords className="size-7 text-amber-500" />
+          <PixelTile src={PIXEL_ICONS.story} />
           <div>
-            <h1 className="font-serif text-xl font-semibold">Open Dungeon Master</h1>
-            <p className="text-sm text-stone-400">Signed in as {user.username}</p>
+            <h1 className="font-serif text-xl text-stone-100">Open Dungeon Master</h1>
+            <p className="text-sm text-stone-500">Signed in as {user.username}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <a
-            href="/solo"
-            className="flex items-center gap-1.5 rounded-md border border-stone-700 px-3 py-1.5 text-sm text-stone-300 hover:bg-stone-900"
-          >
+          <a href="/characters" className={ui.btnSmall}>
+            <Users className="size-4" /> Characters
+          </a>
+          <a href="/solo" className={ui.btnSmall}>
             <BookOpen className="size-4" /> Solo mode
           </a>
-          <button
-            type="button"
-            onClick={logout}
-            className="flex items-center gap-1.5 rounded-md border border-stone-700 px-3 py-1.5 text-sm text-stone-300 hover:bg-stone-900"
-          >
+          <button type="button" onClick={logout} className={ui.btnSmall}>
             <LogOut className="size-4" /> Log out
           </button>
         </div>
@@ -225,12 +153,11 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
 
       <section className="mb-8">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-medium">Your campaigns</h2>
-          <button
-            type="button"
-            onClick={() => setCreateOpen(true)}
-            className="flex items-center gap-1.5 rounded-md bg-amber-700 px-3 py-1.5 text-sm font-medium text-amber-50 hover:bg-amber-600"
-          >
+          <div className="flex items-center gap-3">
+            <PixelTile src={PIXEL_ICONS.chats} size="size-9" />
+            <h2 className="text-lg font-medium">Your campaigns</h2>
+          </div>
+          <button type="button" onClick={() => setCreateOpen(true)} className={ui.btnPrimary}>
             <Plus className="size-4" /> New campaign
           </button>
         </div>
@@ -240,16 +167,24 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
             <Loader2 className="size-5 animate-spin text-stone-500" />
           </div>
         ) : campaigns.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-stone-800 p-6 text-center text-sm text-stone-500">
-            No campaigns yet. Create one, or join with an invite code below.
-          </p>
+          <div className="flex flex-col items-center gap-4 rounded-xl border border-stone-800 bg-stone-950/40 px-6 py-10 text-center">
+            <IconChip icon={Swords} size="size-12" iconSize="size-5" />
+            <div className="max-w-sm">
+              <p className="text-balance font-serif text-2xl text-stone-200">
+                Every campaign starts with an empty table.
+              </p>
+              <p className="mt-2 text-pretty text-sm text-stone-500">
+                Create one and invite your friends, or join theirs with a room code below.
+              </p>
+            </div>
+          </div>
         ) : (
           <ul className="space-y-2">
             {campaigns.map((campaign) => (
               <li key={campaign.id}>
                 <a
                   href={`/campaigns/${campaign.id}`}
-                  className="flex items-center justify-between rounded-lg border border-stone-800 bg-stone-950/60 px-4 py-3 hover:border-stone-600"
+                  className={cn(ui.cardHover, "flex items-center justify-between px-4 py-3")}
                 >
                   <div>
                     <p className="font-medium">{campaign.title}</p>
@@ -282,7 +217,7 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
       </section>
 
       <section>
-        <h2 className="mb-3 text-lg font-medium">Join with an invite code</h2>
+        <h2 className="mb-3 text-lg font-medium">Join with a room code</h2>
         <form onSubmit={join} className="flex gap-2">
           <input
             value={joinCode}
@@ -290,18 +225,20 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
             placeholder="e.g. K7WQ2MNP"
             required
             maxLength={12}
-            className="w-44 rounded-md border border-stone-700 bg-stone-900 px-3 py-2 font-mono uppercase tracking-widest outline-none focus:border-amber-600"
+            className="w-44 rounded-lg border border-stone-800 bg-stone-950 px-3 py-2 font-mono uppercase tracking-widest text-stone-200 outline-none focus:border-amber-300"
           />
-          <button
-            type="submit"
-            disabled={joining}
-            className="rounded-md border border-stone-700 px-4 py-2 text-sm hover:bg-stone-900 disabled:opacity-60"
-          >
+          <button type="submit" disabled={joining} className={ui.btnSecondary}>
             {joining ? "Joining..." : "Join"}
           </button>
         </form>
         {joinError ? <p className="mt-2 text-sm text-red-400">{joinError}</p> : null}
       </section>
+
+      <footer className="mt-12 border-t border-stone-900 pt-4 text-center">
+        <a href="/licenses" className="text-xs text-stone-600 hover:text-stone-400">
+          Licenses and attribution
+        </a>
+      </footer>
 
       <CreateCampaignDialog
         open={createOpen}

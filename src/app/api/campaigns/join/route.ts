@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { currentUser, unauthorized } from "@/lib/auth";
-import { joinByInviteCode } from "@/lib/db/campaigns";
+import { joinByInviteCode, publicCampaign } from "@/lib/db/campaigns";
 import { publishPersisted } from "@/lib/events";
 
 export const runtime = "nodejs";
@@ -32,5 +32,5 @@ export async function POST(request: Request) {
     username: user.username,
   });
 
-  return Response.json({ campaign: result.campaign });
+  return Response.json({ campaign: publicCampaign(result.campaign) });
 }

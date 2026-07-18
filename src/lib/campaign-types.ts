@@ -30,5 +30,6 @@ export type CampaignMember = {
   username: string;
   role: "owner" | "player";
   ready: boolean;
+  useRealDice: boolean;
   joinedAt: string;
 };

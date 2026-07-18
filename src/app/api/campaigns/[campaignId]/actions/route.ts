@@ -1,11 +1,12 @@
 import { z } from "zod";
 import { isErrorResponse, requireMember } from "@/lib/campaign-api";
-import { allocateSeq } from "@/lib/db/campaigns";
-import { countMessages, insertCampaignMessage } from "@/lib/db/messages";
-import { getSheetForUser } from "@/lib/db/sheets";
+import { allocateSeq, canAct, claimRecap, getFloor, setFloor } from "@/lib/db/campaigns";
+import { countMessages, insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
+import { getSheetForUser, listSheets } from "@/lib/db/sheets";
 import { runDmTurn } from "@/lib/dm/loop";
 import { enqueueDmJob } from "@/lib/dm/queue";
-import { publishWithSeq } from "@/lib/events";
+import { runResumeRecap } from "@/lib/dm/recap";
+import { publishPersisted, publishWithSeq } from "@/lib/events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,6 +43,33 @@ export async function POST(
   }
 
   const { kind } = parsed.data;
+
+  // Floor control: during a spotlight only the named players may act
+  // (ooc is always allowed). A spotlighted player acting releases the floor.
+  const floor = getFloor(campaignId);
+  if (!canAct(floor, user.id, kind)) {
+    const waitingOn =
+      floor.mode === "spotlight"
+        ? listSheets(campaignId)
+            .filter((entry) => floor.userIds.includes(entry.userId))
+            .map((entry) => entry.name)
+            .join(", ")
+        : "";
+    return Response.json(
+      {
+        error: waitingOn
+          ? `The DM is waiting on ${waitingOn}. Use OOC for table talk.`
+          : "It is not your moment to act.",
+        floor,
+      },
+      { status: 409 },
+    );
+  }
+  if (kind !== "ooc" && floor.mode === "spotlight") {
+    setFloor(campaignId, { mode: "open" });
+    publishPersisted(campaignId, "floor_changed", { floor: { mode: "open" } });
+  }
+
   const content =
     kind === "say"
       ? `"${parsed.data.content}"`
@@ -50,6 +78,20 @@ export async function POST(
         : parsed.data.content;
 
   const isFirstAction = countMessages(campaignId) === 0;
+
+  // Returning after a long break: enqueue a "Previously..." recap before
+  // this action's DM turn (claimRecap makes it at most once per gap).
+  const lastMessages = listRecentMessages(campaignId, 1);
+  const lastMessage = lastMessages[lastMessages.length - 1];
+  const RECAP_IDLE_MS = 6 * 60 * 60 * 1000;
+  if (
+    lastMessage &&
+    Date.now() - new Date(lastMessage.createdAt).getTime() > RECAP_IDLE_MS &&
+    claimRecap(campaignId, lastMessage.seq)
+  ) {
+    enqueueDmJob(campaignId, () => runResumeRecap(campaignId));
+  }
+
   const seq = allocateSeq(campaignId);
   const message = insertCampaignMessage({
     campaignId,

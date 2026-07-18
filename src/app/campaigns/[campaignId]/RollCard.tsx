@@ -32,7 +32,7 @@ export function RollCard({ roll, characterName }: { roll: StoredRoll; characterN
       )}
     >
       <span className="flex items-center gap-1.5 text-stone-300">
-        <Dices className="size-4 text-amber-500" />
+        <Dices className="size-4 text-amber-200" />
         {characterName ? `${characterName} · ` : ""}
         {label}
         {detail ? ` (${detail})` : ""}

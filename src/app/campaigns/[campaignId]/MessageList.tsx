@@ -1,5 +1,6 @@
 "use client";
 
+import { Volume2 } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { cn } from "@/lib/cn";
 import type { CampaignMessage } from "@/lib/db/messages";
@@ -35,7 +36,10 @@ function DmContent({ content, rollsById, sheetsById }: {
     <div className="space-y-2">
       {parts.map((part, index) =>
         part.kind === "text" ? (
-          <p key={index} className="whitespace-pre-wrap font-serif leading-relaxed text-stone-200">
+          <p
+            key={index}
+            className="whitespace-pre-wrap text-pretty font-serif text-base leading-relaxed text-stone-100"
+          >
             {part.text.trim()}
           </p>
         ) : (
@@ -60,12 +64,14 @@ export function MessageList({
   sheets,
   dmStatus,
   dmDraft,
+  onReplayAudio,
 }: {
   messages: CampaignMessage[];
   rolls: StoredRoll[];
   sheets: CharacterSheet[];
   dmStatus: DmStatus;
   dmDraft: string;
+  onReplayAudio?: (messageId: string) => void;
 }) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const rollsById = new Map(rolls.map((roll) => [roll.id, roll]));
@@ -76,20 +82,33 @@ export function MessageList({
   }, [messages.length, dmDraft, dmStatus]);
 
   return (
-    <div className="flex-1 space-y-4 overflow-y-auto px-4 py-6">
+    <div className="flex-1 space-y-7 overflow-y-auto px-4 py-6">
       {messages.map((message) => {
         if (message.authorType === "system") {
           return (
-            <p key={message.id} className="text-center text-sm italic text-stone-500">
+            <p
+              key={message.id}
+              className="mx-auto max-w-xl text-center font-serif text-sm italic text-stone-500"
+            >
               {message.content}
             </p>
           );
         }
         if (message.authorType === "dm") {
           return (
-            <div key={message.id} className="rounded-lg border border-stone-800 bg-stone-950/40 p-4">
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-amber-600">
+            <div key={message.id} className="group">
+              <p className="mb-1.5 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-amber-200/70">
                 Dungeon Master
+                {onReplayAudio ? (
+                  <button
+                    type="button"
+                    onClick={() => onReplayAudio(message.id)}
+                    title="Replay narration"
+                    className="text-stone-600 opacity-0 transition hover:text-amber-200 group-hover:opacity-100"
+                  >
+                    <Volume2 className="size-3.5" />
+                  </button>
+                ) : null}
               </p>
               <DmContent content={message.content} rollsById={rollsById} sheetsById={sheetsById} />
               {message.generatedImage ? (
@@ -97,7 +116,7 @@ export function MessageList({
                 <img
                   src={message.generatedImage.url}
                   alt={message.imageRequest?.prompt || "Scene"}
-                  className="mt-3 max-h-96 rounded-lg border border-stone-800"
+                  className="mt-3 max-h-96 rounded-xl border border-stone-800"
                 />
               ) : null}
             </div>
@@ -105,32 +124,38 @@ export function MessageList({
         }
         const sheet = message.characterId ? sheetsById.get(message.characterId) : undefined;
         return (
-          <div key={message.id} className="px-1">
-            <p className="mb-0.5 text-xs font-medium text-sky-500">
+          <div key={message.id} className="ml-auto max-w-[92%] sm:max-w-2xl">
+            <p className="mb-0.5 text-right text-xs font-medium text-amber-200/60">
               {sheet?.name ?? "Player"}
             </p>
-            <p
+            <div
               className={cn(
-                "whitespace-pre-wrap text-stone-300",
+                "rounded-2xl rounded-br-md border border-stone-800/70 bg-stone-900/60 px-4 py-3 text-sm leading-6 text-stone-300",
                 message.content.startsWith("(ooc)") && "italic text-stone-500",
               )}
             >
-              {message.content}
-            </p>
+              <p className="whitespace-pre-wrap text-pretty">{message.content}</p>
+            </div>
           </div>
         );
       })}
 
       {dmDraft ? (
-        <div className="rounded-lg border border-stone-800 bg-stone-950/40 p-4">
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-amber-600">
+        <div>
+          <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-amber-200/70">
             Dungeon Master
           </p>
-          <p className="whitespace-pre-wrap font-serif leading-relaxed text-stone-200">{dmDraft}</p>
+          <p className="whitespace-pre-wrap text-pretty font-serif text-base leading-relaxed text-stone-100">
+            {dmDraft}
+          </p>
         </div>
       ) : dmStatus !== "idle" ? (
-        <p className="animate-pulse text-sm italic text-stone-500">
-          {dmStatus === "rolling" ? "The DM rolls the dice..." : "The DM is thinking..."}
+        <p className="flex animate-pulse items-center gap-2 font-serif text-base italic text-stone-500">
+          {dmStatus === "rolling"
+            ? "The dice clatter across the table…"
+            : dmStatus === "awaiting_rolls"
+              ? "The table waits on real dice…"
+              : "The next passage is forming…"}
         </p>
       ) : null}
 

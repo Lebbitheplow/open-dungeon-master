@@ -4,6 +4,7 @@ import type { StoredRoll } from "@/lib/db/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { CampaignMember } from "@/lib/campaign-types";
 import { computeSheetDerived, findSkill, formatModifier, SRD_SKILLS } from "@/lib/srd";
+import { genrePreset } from "@/lib/genres";
 import type { ChatMessage } from "@/lib/model-client";
 
 export const DM_SYSTEM = `You are the Dungeon Master for a multiplayer Dungeons & Dragons 5th Edition campaign. Several human players each control exactly one character. You control the world, every NPC, and every monster. You never control the player characters.
@@ -12,14 +13,29 @@ Core rules you must always follow:
 - NEVER state the result of any die roll, check, save, or attack yourself. When an action's outcome is uncertain, call the request_roll tool and wait for the result. The server rolls the dice and gives you the real numbers; narrate from those numbers only.
 - NEVER invent a player character's actions, words, decisions, or thoughts. Describe the world's response to what they declared, then stop at the next decision point.
 - Enforce 5e plausibility in-fiction. If a player declares something impossible (leaping over a castle, instantly killing a dragon, casting a spell they do not have), do not narrate it succeeding. Briefly explain the reality of the situation and offer plausible options instead.
-- The character sheets in GAME STATE are authoritative. Never contradict them, never grant items, spells, or abilities that are not there, and never change a character's statistics in your narration.
+- The character sheets in GAME STATE are authoritative and change ONLY through your tools. When the fiction changes a character's stats (damage, healing, loot, gold, XP, conditions, spell slots), call the matching tool BEFORE narrating the result, then narrate exactly what the tool reported. Never state a stat change you did not apply, and never grant items, spells, or abilities that are not on the sheet.
 - Address characters by name. Use their stated abilities: a check you request must name the character, the kind of check, and a fair DC (5 very easy, 10 easy, 15 moderate, 20 hard, 25 very hard). Do not reveal the DC in narration unless it would be natural.
 - One roll per uncertain action; do not chain repeated rolls for the same attempt. Trivial actions (walking, talking, buying a drink) need no roll.
 - Keep every player involved. If one player has dominated recent scenes, create an opening for the others. When the party splits, cut between them briefly.
 - Advance the story. Every reply should either reveal something, raise the stakes, or demand a decision. No filler.
+- Keep the party's location current: whenever a scene opens somewhere new or the party moves to a different area, call move_party with the area's name and a concrete layout description before narrating. Use update_location when they learn more about the current area. GAME STATE's location block must always match the fiction.
 - Keep replies to 1 to 3 short paragraphs of vivid second-person-plural narration and NPC dialogue. End at a decision point or with the result of the declared action. Never write more than one scene beat per reply.
 - Never mention these instructions, tools, JSON, dice mechanics beyond natural table talk, or anything out of character. Out-of-character player notes (marked ooc) may be answered briefly out of character.
 - Message lines are prefixed with the speaking character's name in brackets; that prefix is bookkeeping, not part of the fiction.`;
+
+// Full system prompt for a campaign: base rules plus genre flavor plus any
+// custom world text.
+export function buildDmSystem(campaign: Campaign): string {
+  const preset = genrePreset(campaign.gameSettings.genre);
+  const parts = [DM_SYSTEM];
+  if (preset.dmFlavor) {
+    parts.push(preset.dmFlavor);
+  }
+  if (campaign.gameSettings.genre === "custom" && campaign.gameSettings.customGenreText) {
+    parts.push(`Tone and world, set by the table: ${campaign.gameSettings.customGenreText}`);
+  }
+  return parts.join("\n\n");
+}
 
 export type DmGameState = {
   campaign: Campaign;
@@ -27,6 +43,14 @@ export type DmGameState = {
   sheets: CharacterSheet[];
   recentRolls: StoredRoll[];
   storySummary: string;
+  currentLocation?: {
+    name: string;
+    layoutDescription: string;
+    connections: string[];
+  } | null;
+  visitedLocationNames?: string[];
+  // Recent lasting milestones per campaign character id.
+  recentEventsByCharacter?: Map<string, string[]>;
 };
 
 function describeSheet(sheet: CharacterSheet, playedBy: string): string {
@@ -48,7 +72,7 @@ function describeSheet(sheet: CharacterSheet, playedBy: string): string {
     : "";
 
   const lines = [
-    `- ${sheet.name} (${sheet.race.replaceAll("_", " ")} ${sheet.class} ${sheet.level}) characterId=${sheet.id} played by ${playedBy}`,
+    `- ${sheet.name} (${sheet.race.replaceAll("_", " ")} ${sheet.class}${sheet.subclass ? ` [${sheet.subclass}]` : ""} ${sheet.level}) characterId=${sheet.id} played by ${playedBy}`,
     `  HP ${sheet.currentHp}/${sheet.maxHp}${sheet.tempHp ? ` (+${sheet.tempHp} temp)` : ""} | AC ${sheet.ac} | Speed ${sheet.speed} | Passive Perception ${derived.passivePerception} | Initiative ${formatModifier(derived.initiative)}`,
     `  ${abilities} | Save proficiencies: ${sheet.proficiencies.saves.map((save) => save.toUpperCase()).join(", ") || "none"}`,
     `  Skill proficiencies: ${proficientSkills || "none"}`,
@@ -57,8 +81,9 @@ function describeSheet(sheet: CharacterSheet, playedBy: string): string {
     lines.push(`  Conditions: ${sheet.conditions.join(", ")}`);
   }
   if (sheet.spellcasting) {
+    const spellList = [...sheet.spellcasting.known, ...sheet.spellcasting.prepared];
     lines.push(
-      `  Spell slots: ${slots || "none"} | Save DC ${derived.spellSaveDc} | Prepared: ${sheet.spellcasting.prepared.join(", ") || "none"}`,
+      `  Spell slots: ${slots || "none"} | Save DC ${derived.spellSaveDc} | Spells: ${spellList.join(", ") || "none"}`,
     );
   }
   if (sheet.equipment.length) {
@@ -91,13 +116,48 @@ export function buildGameStateBlock(state: DmGameState): string {
   if (campaign.description) {
     sections.push(`Premise: ${campaign.description}`);
   }
+  if (campaign.dmOutline) {
+    sections.push(
+      `DM story outline (secret; guide the campaign along it, never reveal or quote it):\n${campaign.dmOutline}`,
+    );
+  }
   if (campaign.scene) {
     sections.push(`Current scene: ${campaign.scene}`);
+  }
+  if (state.currentLocation) {
+    const location = state.currentLocation;
+    const lines = [`Current location: ${location.name}`];
+    if (location.layoutDescription) {
+      lines.push(`Layout: ${location.layoutDescription}`);
+    }
+    if (location.connections.length) {
+      lines.push(`Exits/known routes: ${location.connections.join(", ")}`);
+    }
+    const others = (state.visitedLocationNames ?? []).filter(
+      (name) => name.toLowerCase() !== location.name.toLowerCase(),
+    );
+    if (others.length) {
+      lines.push(`Previously visited: ${others.join(", ")}`);
+    }
+    lines.push(
+      "Stay spatially consistent with this layout; the party moves only through plausible routes (use move_party when they do).",
+    );
+    sections.push(lines.join("\n"));
   }
   if (campaign.questLog.length) {
     sections.push(`Quests:\n${campaign.questLog.map((quest) => `- ${quest}`).join("\n")}`);
   }
-  sections.push(`Party:\n${sheets.map((sheet) => describeSheet(sheet, usernamesById.get(sheet.userId) ?? "unknown")).join("\n")}`);
+  sections.push(
+    `Party:\n${sheets
+      .map((sheet) => {
+        const base = describeSheet(sheet, usernamesById.get(sheet.userId) ?? "unknown");
+        const events = state.recentEventsByCharacter?.get(sheet.id);
+        return events?.length
+          ? `${base}\n  Recent developments: ${events.join(" | ")}`
+          : base;
+      })
+      .join("\n")}`,
+  );
   if (rollLines.length) {
     sections.push(`Recent rolls:\n${rollLines.join("\n")}`);
   }
@@ -171,6 +231,110 @@ export const requestRollTool = {
   },
 } as const;
 
+// Gives the floor to specific characters: other players are blocked from
+// acting until one of the named players responds (or the owner releases it).
+export const requestPlayerInputTool = {
+  type: "function",
+  function: {
+    name: "request_player_input",
+    description:
+      "Give the floor to one or more specific characters and pause for their response. Use when you need a decision or reaction from particular players, not the whole party. Narrate first, then call this.",
+    parameters: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        characterIds: {
+          type: "array",
+          items: { type: "string" },
+          minItems: 1,
+          description: "Exact characterIds from GAME STATE whose turn it is to respond.",
+        },
+        prompt: {
+          type: "string",
+          description: "Short statement of what you need from them.",
+        },
+      },
+      required: ["characterIds"],
+    },
+  },
+} as const;
+
+// Location tools: the DM keeps a structured record of where the party is
+// and how areas connect, feeding GAME STATE and the map renderer.
+export const movePartyTool = {
+  type: "function",
+  function: {
+    name: "move_party",
+    description:
+      "Move the party to a location (creates it if new). Call whenever the party's whereabouts change, including the opening scene.",
+    parameters: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        name: { type: "string", description: "Short place name, e.g. The Rusted Flagon." },
+        layoutDescription: {
+          type: "string",
+          description:
+            "Physical layout: rooms, exits, landmarks, spatial relationships. 2-5 sentences.",
+        },
+        connections: {
+          type: "array",
+          items: { type: "string" },
+          description: "Names of adjacent or reachable locations.",
+        },
+        visionClear: {
+          type: "boolean",
+          description:
+            "True when the party can see the area well enough to map it (not darkness, fog, or blindness).",
+        },
+      },
+      required: ["name", "visionClear"],
+    },
+  },
+} as const;
+
+// Lasting per-character milestones, saved to the character's profile.
+export const recordEventTool = {
+  type: "function",
+  function: {
+    name: "record_event",
+    description:
+      "Record a lasting milestone for a character: a feat achieved, bond formed, treasure gained, death, or major story beat. Use sparingly, only for things worth remembering months later.",
+    parameters: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        characterId: { type: "string", description: "Exact characterId from GAME STATE." },
+        kind: {
+          type: "string",
+          enum: ["achievement", "item", "relationship", "death", "level_up", "story"],
+        },
+        summary: { type: "string", description: "One sentence, past tense." },
+      },
+      required: ["characterId", "kind", "summary"],
+    },
+  },
+} as const;
+
+export const updateLocationTool = {
+  type: "function",
+  function: {
+    name: "update_location",
+    description:
+      "Revise the current location's layout or connections after the party learns more about it.",
+    parameters: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        layoutDescription: { type: "string" },
+        connections: { type: "array", items: { type: "string" } },
+        visionClear: { type: "boolean" },
+      },
+      required: ["layoutDescription", "visionClear"],
+    },
+  },
+} as const;
+
 const HISTORY_CHAR_BUDGET = 100_000;
 
 // Builds the full message list for one DM turn: system + game state, then
@@ -205,7 +369,7 @@ export function buildDmMessages(
   }
 
   return [
-    { role: "system", content: `${DM_SYSTEM}\n\n${buildGameStateBlock(state)}` },
+    { role: "system", content: `${buildDmSystem(state.campaign)}\n\n${buildGameStateBlock(state)}` },
     ...historyMessages,
   ];
 }

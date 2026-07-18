@@ -172,6 +172,123 @@ function ensureSchema(db: Database.Database) {
       created_at TEXT NOT NULL,
       PRIMARY KEY (campaign_id, seq)
     );
+
+    CREATE TABLE IF NOT EXISTS homebrew_entries (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL CHECK (kind IN ('spell','feat','item','race','background','archetype','monster')),
+      slug TEXT NOT NULL,
+      name TEXT NOT NULL,
+      data_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE (user_id, kind, slug)
+    );
+
+    -- The per-user character library. "characters" is taken by the legacy
+    -- solo table (chat-scoped), so the library gets its own name. Campaign
+    -- play copies a library character into character_sheets and links back
+    -- via character_sheets.library_character_id.
+    CREATE TABLE IF NOT EXISTS library_characters (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      race TEXT NOT NULL,
+      class TEXT NOT NULL,
+      subclass TEXT NOT NULL DEFAULT '',
+      background TEXT NOT NULL DEFAULT '',
+      level INTEGER NOT NULL DEFAULT 1,
+      xp INTEGER NOT NULL DEFAULT 0,
+      sheet_json TEXT NOT NULL,
+      portrait_json TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    -- A DM narration turn as a persisted state machine, so a turn can park
+    -- while waiting on a physical dice roll and resume later (surviving
+    -- restarts). conversation_json holds the full model conversation.
+    CREATE TABLE IF NOT EXISTS dm_turns (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      status TEXT NOT NULL CHECK (status IN ('running','awaiting_rolls','done','failed')),
+      call_index INTEGER NOT NULL DEFAULT 0,
+      conversation_json TEXT NOT NULL,
+      narration_parts_json TEXT NOT NULL DEFAULT '[]',
+      roll_ids_json TEXT NOT NULL DEFAULT '[]',
+      image_args_json TEXT,
+      mutation_count INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS pending_rolls (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      turn_id TEXT NOT NULL REFERENCES dm_turns(id) ON DELETE CASCADE,
+      tool_call_id TEXT,
+      user_id TEXT NOT NULL,
+      character_id TEXT,
+      kind TEXT NOT NULL,
+      detail TEXT NOT NULL DEFAULT '',
+      expression TEXT NOT NULL,
+      advantage TEXT NOT NULL DEFAULT 'none',
+      dc INTEGER,
+      reason TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','submitted','fallback')),
+      roll_id TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_pending_rolls_turn ON pending_rolls(turn_id, status);
+
+    -- Audit trail of DM-driven sheet mutations (damage, loot, XP, ...).
+    CREATE TABLE IF NOT EXISTS sheet_audit (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      character_id TEXT NOT NULL,
+      turn_id TEXT,
+      actor TEXT NOT NULL DEFAULT 'dm',
+      kind TEXT NOT NULL,
+      delta_json TEXT NOT NULL,
+      reason TEXT NOT NULL DEFAULT '',
+      seq INTEGER NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_sheet_audit_campaign ON sheet_audit(campaign_id, seq);
+
+    -- Structured location state so the DM stays spatially consistent and
+    -- maps can be generated per area.
+    CREATE TABLE IF NOT EXISTS locations (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      layout_description TEXT NOT NULL DEFAULT '',
+      connections_json TEXT NOT NULL DEFAULT '[]',
+      visited INTEGER NOT NULL DEFAULT 0,
+      is_current INTEGER NOT NULL DEFAULT 0,
+      map_image_json TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE (campaign_id, name COLLATE NOCASE)
+    );
+
+    -- Lasting per-character milestones, keyed to the library character so a
+    -- character's story accretes across campaigns.
+    CREATE TABLE IF NOT EXISTS character_events (
+      id TEXT PRIMARY KEY,
+      library_character_id TEXT,
+      campaign_character_id TEXT NOT NULL,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      seq INTEGER NOT NULL,
+      kind TEXT NOT NULL CHECK (kind IN ('achievement','item','relationship','death','level_up','story')),
+      summary TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_character_events_library
+      ON character_events(library_character_id, created_at);
   `);
 
   // Compaction memory: a rolling "story so far" summary plus a watermark of
@@ -194,6 +311,38 @@ function ensureSchema(db: Database.Database) {
   if (!characterColumns.some((column) => column.name === "spells")) {
     db.exec(`ALTER TABLE characters ADD COLUMN spells TEXT NOT NULL DEFAULT ''`);
   }
+
+  // Multiplayer additive columns, one PRAGMA per table.
+  const addColumns = (table: string, columns: Array<[name: string, ddl: string]>) => {
+    const existing = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+    for (const [name, ddl] of columns) {
+      if (!existing.some((column) => column.name === name)) {
+        db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${ddl}`);
+      }
+    }
+  };
+
+  addColumns("campaigns", [
+    // Game-facing settings (genre, dice policy, TTS, maps); settings_json
+    // keeps holding the model/image StorySettings so the two never fight.
+    ["game_settings_json", `TEXT NOT NULL DEFAULT '{}'`],
+    // Secret story outline written by the AI story setup pass.
+    ["dm_outline", `TEXT NOT NULL DEFAULT ''`],
+    // Turn/floor control: who may act right now.
+    ["floor_json", `TEXT NOT NULL DEFAULT '{"mode":"open"}'`],
+    // Guard so the resume recap is inserted at most once per idle gap.
+    ["last_recap_seq", `INTEGER NOT NULL DEFAULT 0`],
+  ]);
+
+  addColumns("campaign_members", [
+    // Player opted in to rolling physical dice (when the campaign allows it).
+    ["use_real_dice", `INTEGER NOT NULL DEFAULT 0`],
+  ]);
+
+  addColumns("character_sheets", [
+    ["library_character_id", `TEXT`],
+    ["subclass", `TEXT NOT NULL DEFAULT ''`],
+  ]);
 }
 
 export function getDatabase() {

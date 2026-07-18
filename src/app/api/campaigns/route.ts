@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { currentUser, unauthorized } from "@/lib/auth";
-import { createCampaign, listCampaignsForUser } from "@/lib/db/campaigns";
+import { createCampaign, listCampaignsForUser, publicCampaign, type Campaign } from "@/lib/db/campaigns";
+import { gameSettingsSchema } from "@/lib/schemas/game-settings";
 import { CAMPAIGN_DIFFICULTIES } from "@/lib/campaign-types";
 
 export const runtime = "nodejs";
@@ -13,6 +14,7 @@ const createCampaignSchema = z.object({
   maxPlayers: z.number().int().min(1).max(8).default(5),
   startingLevel: z.number().int().min(1).max(20).default(1),
   difficulty: z.enum(CAMPAIGN_DIFFICULTIES).default("normal"),
+  gameSettings: gameSettingsSchema.partial().default({}),
 });
 
 export async function GET() {
@@ -20,7 +22,11 @@ export async function GET() {
   if (!user) {
     return unauthorized();
   }
-  return Response.json({ campaigns: listCampaignsForUser(user.id) });
+  return Response.json({
+    campaigns: listCampaignsForUser(user.id).map((campaign) =>
+      publicCampaign(campaign as Campaign),
+    ),
+  });
 }
 
 export async function POST(request: Request) {
@@ -36,5 +42,5 @@ export async function POST(request: Request) {
   }
 
   const campaign = createCampaign(user.id, parsed.data);
-  return Response.json({ campaign }, { status: 201 });
+  return Response.json({ campaign: publicCampaign(campaign) }, { status: 201 });
 }

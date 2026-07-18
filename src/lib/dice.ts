@@ -169,6 +169,39 @@ export function rollD20(
   return rollExpression(d20Expression(modifier, advantage), rng);
 }
 
+// The die faces an expression will roll, in roll order. Lets the UI render
+// one input per physical die (e.g. "2d20kh1+4" -> [20, 20]).
+export function expressionDice(expression: string): number[] {
+  const faces: number[] = [];
+  rollExpression(expression, (sides) => {
+    faces.push(sides);
+    return 1;
+  });
+  return faces;
+}
+
+// Scores an expression using player-supplied physical die values instead of
+// the RNG. Values are consumed in roll order; keep rules, modifiers, and
+// crit detection all apply exactly as in a digital roll.
+export function rollExpressionWithDice(expression: string, values: number[]): RollResult {
+  let index = 0;
+  const result = rollExpression(expression, (sides) => {
+    if (index >= values.length) {
+      throw new Error("Not enough die values for this roll.");
+    }
+    const value = values[index];
+    if (!Number.isInteger(value) || value < 1 || value > sides) {
+      throw new Error(`Die ${index + 1} must be a whole number from 1 to ${sides}.`);
+    }
+    index += 1;
+    return value;
+  });
+  if (index !== values.length) {
+    throw new Error("Too many die values for this roll.");
+  }
+  return result;
+}
+
 export function isValidExpression(expression: string) {
   try {
     // Roll with a constant RNG; only the parse can throw for a valid grammar.

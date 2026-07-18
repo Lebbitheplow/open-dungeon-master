@@ -1,22 +1,73 @@
 "use client";
 
-import { Heart, Shield } from "lucide-react";
+import { Check, Heart, Save, Shield } from "lucide-react";
+import { useState } from "react";
 import { cn } from "@/lib/cn";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { computeSheetDerived, formatModifier } from "@/lib/srd";
+
+function SaveToLibraryButton({ campaignId }: { campaignId: string }) {
+  const [state, setState] = useState<"idle" | "saving" | "saved">("idle");
+  async function save() {
+    setState("saving");
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/sheet/sync`, {
+        method: "POST",
+      });
+      setState(response.ok ? "saved" : "idle");
+      if (response.ok) {
+        setTimeout(() => setState("idle"), 2_000);
+      }
+    } catch {
+      setState("idle");
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={save}
+      disabled={state === "saving"}
+      title="Save level, gear, and spells back to your character library"
+      className="flex w-full items-center justify-center gap-1 rounded border border-stone-700 py-1 text-xs text-stone-400 hover:bg-stone-900 disabled:opacity-50"
+    >
+      {state === "saved" ? (
+        <>
+          <Check className="size-3 text-emerald-400" /> Saved
+        </>
+      ) : (
+        <>
+          <Save className="size-3" /> Save to library
+        </>
+      )}
+    </button>
+  );
+}
 
 export function PartyPanel({
   sheets,
   meUserId,
   onAdjustHp,
+  spotlightUserIds = [],
+  embedded = false,
 }: {
   sheets: CharacterSheet[];
   meUserId: string;
   onAdjustHp: (delta: number) => void;
+  spotlightUserIds?: string[];
+  embedded?: boolean;
 }) {
+  const Wrapper = embedded ? "div" : "aside";
   return (
-    <aside className="hidden w-64 shrink-0 space-y-3 overflow-y-auto border-l border-stone-800 p-3 lg:block">
-      <h2 className="px-1 text-xs font-medium uppercase tracking-wide text-stone-500">Party</h2>
+    <Wrapper
+      className={cn(
+        embedded
+          ? "space-y-3"
+          : "hidden w-64 shrink-0 space-y-3 overflow-y-auto border-l border-stone-800 p-3 lg:block",
+      )}
+    >
+      {embedded ? null : (
+        <h2 className="px-1 text-xs font-medium uppercase tracking-wide text-stone-500">Party</h2>
+      )}
       {sheets.map((sheet) => {
         const derived = computeSheetDerived(sheet);
         const mine = sheet.userId === meUserId;
@@ -27,6 +78,8 @@ export function PartyPanel({
             className={cn(
               "rounded-lg border p-3",
               mine ? "border-amber-900 bg-amber-950/20" : "border-stone-800 bg-stone-950/40",
+              spotlightUserIds.includes(sheet.userId) &&
+                "ring-1 ring-amber-500/70 border-amber-700",
             )}
           >
             <p className="font-medium">{sheet.name}</p>
@@ -73,26 +126,31 @@ export function PartyPanel({
             ) : null}
 
             {mine ? (
-              <div className="mt-2 flex gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => onAdjustHp(-1)}
-                  className="flex-1 rounded border border-stone-700 py-1 text-xs hover:bg-stone-900"
-                >
-                  -1 HP
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onAdjustHp(1)}
-                  className="flex-1 rounded border border-stone-700 py-1 text-xs hover:bg-stone-900"
-                >
-                  +1 HP
-                </button>
+              <div className="mt-2 space-y-1.5">
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => onAdjustHp(-1)}
+                    className="flex-1 rounded border border-stone-700 py-1 text-xs hover:bg-stone-900"
+                  >
+                    -1 HP
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onAdjustHp(1)}
+                    className="flex-1 rounded border border-stone-700 py-1 text-xs hover:bg-stone-900"
+                  >
+                    +1 HP
+                  </button>
+                </div>
+                {sheet.libraryCharacterId ? (
+                  <SaveToLibraryButton campaignId={sheet.campaignId} />
+                ) : null}
               </div>
             ) : null}
           </div>
         );
       })}
-    </aside>
+    </Wrapper>
   );
 }

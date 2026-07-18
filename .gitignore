@@ -54,3 +54,4 @@ next-env.d.ts
 
 # packaging
 /dist
+public/generated-audio

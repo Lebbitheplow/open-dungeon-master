@@ -23,6 +23,30 @@ defaults run fully local.
 | `OPEN_DUNGEON_ROCM` | auto-detect | `0` disables / `1` forces the AMD ROCm path on Windows |
 | `SQLITE_DB_PATH` | `data/local-roleplay.sqlite` | Database location |
 
+## Multiplayer (Open Dungeon Master) variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `CONTENT_DB_PATH` | `data/content/open5e.sqlite` | Open5e content pack (built by `node scripts/import-open5e.mjs`) |
+| `STT_URL` | `http://127.0.0.1:8870` | Push-to-talk transcription service (odm-stt.service) |
+| `STT_MODEL` | `distil-large-v3` | faster-whisper model the STT proxy requests |
+| `KOKORO_URL` | `http://127.0.0.1:8880` | Kokoro-FastAPI TTS service for DM narration |
+| `DM_DEBUG` | — | `1` logs DM model content and tool calls |
+| `DM_LEAN_TOOLS` | — | `1` removes the stat-mutation tools if the model's tool fidelity suffers |
+| `DM_COMPACT_THRESHOLD` | `120` | Messages before history compaction begins (lower to test) |
+
+Secrets (model API keys) belong in `.env.server`, never in code or `.env.local`.
+
+### Voice services on this machine
+
+- STT: `~/.config/systemd/user/odm-stt.service` runs `~/odm-stt/server.py`
+  (faster-whisper CPU int8) on 127.0.0.1:8870. Change the model with the
+  `STT_MODEL` env in the unit (e.g. `small` for faster, lower-quality
+  transcription).
+- TTS: the existing Kokoro-FastAPI service on :8880; the campaign's
+  narrator voice is picked in campaign settings. Narration MP3s are written
+  under `public/generated-audio/<campaignId>/`.
+
 ## Playing from your phone
 
 Run the app on all interfaces:

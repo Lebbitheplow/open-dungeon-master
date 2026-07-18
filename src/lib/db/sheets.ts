@@ -10,9 +10,11 @@ type SheetRow = {
   id: string;
   campaign_id: string;
   user_id: string;
+  library_character_id: string | null;
   name: string;
   race: string;
   class: string;
+  subclass: string;
   background: string;
   alignment: string;
   level: number;
@@ -45,13 +47,20 @@ const EMPTY_PROFICIENCIES = {
 };
 
 function mapSheet(row: SheetRow): CharacterSheet {
+  // Sheets created before the `known` spell list existed lack the field.
+  const spellcasting = parseJson<CharacterSheet["spellcasting"]>(row.spellcasting_json, null);
+  if (spellcasting && !Array.isArray(spellcasting.known)) {
+    spellcasting.known = [];
+  }
   return {
     id: row.id,
     campaignId: row.campaign_id,
     userId: row.user_id,
+    libraryCharacterId: row.library_character_id,
     name: row.name,
     race: row.race,
     class: row.class,
+    subclass: row.subclass ?? "",
     background: row.background,
     alignment: row.alignment,
     level: row.level,
@@ -67,7 +76,7 @@ function mapSheet(row: SheetRow): CharacterSheet {
     equipment: parseJson(row.equipment_json, []),
     gold: row.gold,
     feats: parseJson(row.feats_json, []),
-    spellcasting: parseJson(row.spellcasting_json, null),
+    spellcasting,
     conditions: parseJson(row.conditions_json, []),
     notes: row.notes,
     createdAt: row.created_at,
@@ -76,7 +85,8 @@ function mapSheet(row: SheetRow): CharacterSheet {
 }
 
 const SHEET_COLUMNS = `
-  id, campaign_id, user_id, name, race, class, background, alignment, level, xp,
+  id, campaign_id, user_id, library_character_id, name, race, class, subclass,
+  background, alignment, level, xp,
   abilities_json, max_hp, current_hp, temp_hp, ac, speed, hit_dice_json,
   proficiencies_json, equipment_json, gold, feats_json, spellcasting_json,
   conditions_json, notes, created_at, updated_at
@@ -87,6 +97,7 @@ export function createSheet(
   userId: string,
   level: number,
   input: CreateSheetInput,
+  libraryCharacterId?: string | null,
 ): CharacterSheet {
   const db = getDatabase();
   const id = crypto.randomUUID();
@@ -95,20 +106,23 @@ export function createSheet(
   db.prepare(
     `
       INSERT INTO character_sheets (
-        id, campaign_id, user_id, name, race, class, background, alignment,
+        id, campaign_id, user_id, library_character_id, name, race, class,
+        subclass, background, alignment,
         level, xp, abilities_json, max_hp, current_hp, temp_hp, ac, speed,
         hit_dice_json, proficiencies_json, equipment_json, gold, feats_json,
         spellcasting_json, conditions_json, notes, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?)
     `,
   ).run(
     id,
     campaignId,
     userId,
+    libraryCharacterId ?? null,
     input.name,
     input.race,
     input.class,
+    input.subclass,
     input.background,
     input.alignment,
     level,
@@ -177,6 +191,8 @@ export function patchSheet(sheetId: string, patch: PatchSheetInput): CharacterSh
     equipment: patch.equipment ?? existing.equipment,
     hitDice: patch.hitDice ?? existing.hitDice,
     spellcasting: patch.spellcasting !== undefined ? patch.spellcasting : existing.spellcasting,
+    feats: patch.feats ?? existing.feats,
+    subclass: patch.subclass ?? existing.subclass,
     notes: patch.notes ?? existing.notes,
   };
 
@@ -186,7 +202,7 @@ export function patchSheet(sheetId: string, patch: PatchSheetInput): CharacterSh
         UPDATE character_sheets SET
           current_hp = ?, temp_hp = ?, max_hp = ?, ac = ?, xp = ?, level = ?,
           gold = ?, conditions_json = ?, equipment_json = ?, hit_dice_json = ?,
-          spellcasting_json = ?, notes = ?, updated_at = ?
+          spellcasting_json = ?, feats_json = ?, subclass = ?, notes = ?, updated_at = ?
         WHERE id = ?
       `,
     )
@@ -202,6 +218,8 @@ export function patchSheet(sheetId: string, patch: PatchSheetInput): CharacterSh
       JSON.stringify(next.equipment),
       JSON.stringify(next.hitDice),
       JSON.stringify(next.spellcasting),
+      JSON.stringify(next.feats),
+      next.subclass,
       next.notes,
       nowIso(),
       sheetId,

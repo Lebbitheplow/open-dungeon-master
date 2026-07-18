@@ -33,6 +33,9 @@ export type Proficiencies = z.infer<typeof proficienciesSchema>;
 export const equipmentItemSchema = z.object({
   name: z.string().trim().min(1).max(80),
   qty: z.number().int().min(1).max(999).default(1),
+  // Optional link to a content-db entry (Open5e slug or "homebrew:<id>");
+  // free-text items stay valid.
+  slug: z.string().trim().max(80).optional(),
 });
 export type EquipmentItem = z.infer<typeof equipmentItemSchema>;
 
@@ -45,7 +48,10 @@ export const spellcastingSchema = z
   .object({
     ability: z.enum(["int", "wis", "cha"]),
     slots: z.record(z.string().regex(/^[1-9]$/), spellSlotSchema),
-    prepared: z.array(z.string().trim().min(1).max(60)).max(40),
+    prepared: z.array(z.string().trim().min(1).max(80)).max(60),
+    // Spells known (for known-casters); prepared casters leave this empty
+    // and use `prepared` alone.
+    known: z.array(z.string().trim().min(1).max(80)).max(80).default([]),
   })
   .nullable();
 export type Spellcasting = z.infer<typeof spellcastingSchema>;
@@ -54,9 +60,10 @@ export type Spellcasting = z.infer<typeof spellcastingSchema>;
 // suggests derived values, the player can adjust before saving).
 export const createSheetSchema = z.object({
   name: z.string().trim().min(1).max(60),
-  race: z.string().trim().min(1).max(40),
-  class: z.string().trim().min(1).max(40),
-  background: z.string().trim().max(40).default(""),
+  race: z.string().trim().min(1).max(60),
+  class: z.string().trim().min(1).max(60),
+  subclass: z.string().trim().max(60).default(""),
+  background: z.string().trim().max(60).default(""),
   alignment: z.string().trim().max(30).default(""),
   abilities: abilityScoresSchema,
   maxHp: z.number().int().min(1).max(500),
@@ -85,6 +92,8 @@ export const patchSheetSchema = z.object({
   equipment: z.array(equipmentItemSchema).max(60).optional(),
   hitDice: hitDiceSchema.optional(),
   spellcasting: spellcastingSchema.optional(),
+  feats: z.array(z.string().trim().min(1).max(80)).max(30).optional(),
+  subclass: z.string().trim().max(60).optional(),
   notes: z.string().max(4000).optional(),
 });
 export type PatchSheetInput = z.infer<typeof patchSheetSchema>;
@@ -93,9 +102,11 @@ export type CharacterSheet = {
   id: string;
   campaignId: string;
   userId: string;
+  libraryCharacterId: string | null;
   name: string;
   race: string;
   class: string;
+  subclass: string;
   background: string;
   alignment: string;
   level: number;

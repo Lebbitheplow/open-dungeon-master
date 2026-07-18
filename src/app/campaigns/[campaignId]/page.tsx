@@ -27,7 +27,7 @@ export default function CampaignPage({
     return (
       <main className="flex flex-1 flex-col items-center justify-center gap-3 p-6">
         <p className="text-stone-400">{state.error || "Campaign not found."}</p>
-        <Link href="/" className="text-sm text-amber-500 hover:underline">
+        <Link href="/" className="text-sm text-amber-200 hover:underline">
           Back to campaigns
         </Link>
       </main>
