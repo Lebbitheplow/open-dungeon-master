@@ -1,6 +1,17 @@
 "use client";
 
-import { BookOpen, Loader2, LogOut, Plus, Settings, Swords, Trash2, Users } from "lucide-react";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import {
+  BookOpen,
+  Loader2,
+  LogOut,
+  Plus,
+  Settings,
+  Swords,
+  Trash2,
+  UserRound,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
@@ -50,29 +61,23 @@ export default function Home() {
 
 function AuthScreen({ onAuthed }: { onAuthed: (user: SessionUser) => void }) {
   return (
-    <main className="flex flex-1 items-center justify-center p-6">
-      <div className="w-full max-w-sm">
+    <main className="bg-starfield flex flex-1 items-center justify-center p-6">
+      <div className="w-full max-w-sm animate-fade-up-slow">
         <div className="mb-6 flex flex-col items-center gap-4 text-center">
-          <PixelTile src={PIXEL_ICONS.story} size="size-16" />
+          <PixelTile src={PIXEL_ICONS.story} size="size-16" className="animate-twinkle" />
           <div>
-            <h1 className="text-balance font-serif text-3xl text-stone-100">
+            <h1 className="text-balance font-display text-3xl tracking-wide text-amber-50">
               Open Dungeon Master
             </h1>
-            <p className="mt-2 text-pretty text-sm text-stone-500">
+            <p className="mt-2 text-pretty text-sm text-stone-400">
               Gather your party. An AI Dungeon Master runs the table; the dice
               are honest and the story is yours.
             </p>
           </div>
         </div>
 
-        <div className="rounded-xl border border-stone-800 bg-stone-950/70 p-6">
+        <div className="glass texture-noise rounded-xl p-6 shadow-elev-2">
           <AuthForm onAuthed={onAuthed} />
-        </div>
-
-        <div className="mt-6 text-center">
-          <a href="/solo" className="text-sm text-stone-500 hover:text-amber-200">
-            Or play the single-player narrator
-          </a>
         </div>
       </div>
     </main>
@@ -83,6 +88,7 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
   const [campaigns, setCampaigns] = useState<CampaignSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
+  const [soloOpen, setSoloOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [joinError, setJoinError] = useState("");
   const [joining, setJoining] = useState(false);
@@ -149,35 +155,81 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
         <div className="flex items-center gap-3">
           <PixelTile src={PIXEL_ICONS.story} />
           <div>
-            <h1 className="font-serif text-xl text-stone-100">Open Dungeon Master</h1>
+            <h1 className="font-display text-xl tracking-wide text-amber-50">
+              Open Dungeon Master
+            </h1>
             <p className="text-sm text-stone-500">Signed in as {user.username}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Link href="/characters" className={ui.btnSmall}>
-            <Users className="size-4" /> Characters
-          </Link>
-          <a href="/solo" className={ui.btnSmall}>
-            <BookOpen className="size-4" /> Solo mode
-          </a>
-          <Link href="/settings" className={ui.btnSmall} title="Account settings">
-            <Settings className="size-4" />
-          </Link>
-          <button type="button" onClick={logout} className={ui.btnSmall}>
-            <LogOut className="size-4" /> Log out
-          </button>
-        </div>
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <button
+              type="button"
+              title="Account"
+              className="rounded-full outline-none transition-shadow duration-150 hover:shadow-glow-gold focus-visible:shadow-glow-gold"
+            >
+              {user.avatar ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={user.avatar.url}
+                  alt=""
+                  className="size-9 rounded-full border border-amber-500/40 object-cover"
+                />
+              ) : (
+                <span className="flex size-9 items-center justify-center rounded-full border border-stone-600/70 bg-stone-900">
+                  <UserRound className="size-4 text-stone-400" />
+                </span>
+              )}
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content
+              align="end"
+              sideOffset={6}
+              className="min-w-44 rounded-lg border border-stone-600/60 bg-stone-950 p-1 shadow-elev-2"
+            >
+              <DropdownMenu.Item asChild>
+                <Link
+                  href="/characters"
+                  className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-stone-300 outline-none data-[highlighted]:bg-stone-800 data-[highlighted]:text-amber-100"
+                >
+                  <Users className="size-4" /> Characters
+                </Link>
+              </DropdownMenu.Item>
+              <DropdownMenu.Item asChild>
+                <Link
+                  href="/settings"
+                  className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-stone-300 outline-none data-[highlighted]:bg-stone-800 data-[highlighted]:text-amber-100"
+                >
+                  <Settings className="size-4" /> Settings
+                </Link>
+              </DropdownMenu.Item>
+              <DropdownMenu.Separator className="my-1 h-px bg-stone-800" />
+              <DropdownMenu.Item
+                onSelect={logout}
+                className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-stone-300 outline-none data-[highlighted]:bg-stone-800 data-[highlighted]:text-amber-100"
+              >
+                <LogOut className="size-4" /> Log out
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
       </header>
 
       <section className="mb-8">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <PixelTile src={PIXEL_ICONS.chats} size="size-9" />
-            <h2 className="text-lg font-medium">Your campaigns</h2>
+            <h2 className="eyebrow text-sm text-amber-200/90">Your campaigns</h2>
           </div>
-          <button type="button" onClick={() => setCreateOpen(true)} className={ui.btnPrimary}>
-            <Plus className="size-4" /> New campaign
-          </button>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setSoloOpen(true)} className={ui.btnSecondary}>
+              <BookOpen className="size-4" /> Solo adventure
+            </button>
+            <button type="button" onClick={() => setCreateOpen(true)} className={ui.btnPrimary}>
+              <Plus className="size-4" /> New campaign
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -197,34 +249,40 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
             </div>
           </div>
         ) : (
-          <ul className="space-y-2">
+          <ul className="grid gap-3 sm:grid-cols-2">
             {campaigns.map((campaign) => (
               <li key={campaign.id}>
                 <a
                   href={`/campaigns/${campaign.id}`}
-                  className={cn(ui.cardHover, "flex items-center justify-between px-4 py-3")}
+                  className={cn(ui.cardHover, "group relative block h-full px-5 py-4")}
                 >
-                  <div>
-                    <p className="font-medium">{campaign.title}</p>
-                    <p className="text-sm text-stone-400">
-                      Level {campaign.startingLevel} start · {campaign.difficulty}
-                      {campaign.theme ? ` · ${campaign.theme}` : ""}
+                  <div className="mb-2 flex items-start justify-between gap-2">
+                    <p className="min-w-0 truncate font-display text-lg tracking-wide text-amber-50">
+                      {campaign.title}
                     </p>
-                  </div>
-                  <div className="flex items-center gap-3 text-sm text-stone-400">
-                    <span className="flex items-center gap-1">
-                      <Users className="size-4" />
-                      {campaign.playerCount}/{campaign.maxPlayers}
-                    </span>
                     <span
                       className={cn(
-                        "rounded-full px-2 py-0.5 text-xs",
-                        campaign.status === "lobby" && "bg-sky-950 text-sky-300",
-                        campaign.status === "active" && "bg-emerald-950 text-emerald-300",
-                        campaign.status === "ended" && "bg-stone-800 text-stone-400",
+                        "eyebrow shrink-0 rounded-full border px-2 py-0.5 text-[9px]",
+                        campaign.status === "lobby" &&
+                          "border-sky-500/40 bg-sky-950/60 text-sky-300",
+                        campaign.status === "active" &&
+                          "border-emerald-500/40 bg-emerald-950/60 text-emerald-300",
+                        campaign.status === "ended" &&
+                          "border-stone-600/50 bg-stone-900 text-stone-400",
                       )}
                     >
                       {campaign.status}
+                    </span>
+                  </div>
+                  <p className="text-sm text-stone-400">
+                    Level {campaign.startingLevel} start · {campaign.difficulty}
+                    {campaign.theme ? ` · ${campaign.theme}` : ""}
+                  </p>
+                  <div className="mt-3 flex items-center justify-between border-t border-stone-700/40 pt-2.5 text-sm text-stone-400">
+                    <span className="flex items-center gap-1.5">
+                      <Users className="size-4 text-amber-300/70" />
+                      {campaign.playerCount}/{campaign.maxPlayers}
+                      {campaign.maxPlayers === 1 ? " · solo" : " adventurers"}
                     </span>
                     {campaign.role === "owner" ? (
                       <button
@@ -235,7 +293,7 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
                           event.stopPropagation();
                           deleteCampaign(campaign);
                         }}
-                        className="rounded-md p-1 text-stone-600 hover:text-red-400"
+                        className="rounded-md p-1 text-stone-600 opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
                       >
                         <Trash2 className="size-4" />
                       </button>
@@ -248,16 +306,19 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
         )}
       </section>
 
-      <section>
-        <h2 className="mb-3 text-lg font-medium">Join with a room code</h2>
+      <section className={cn(ui.card, "ornate p-5")}>
+        <h2 className="eyebrow mb-1 text-sm text-amber-200/90">Join with a room code</h2>
+        <p className="mb-3 text-sm text-stone-500">
+          A friend running a table gives you an eight-letter sigil.
+        </p>
         <form onSubmit={join} className="flex gap-2">
           <input
             value={joinCode}
             onChange={(event) => setJoinCode(event.target.value)}
-            placeholder="e.g. K7WQ2MNP"
+            placeholder="K7WQ2MNP"
             required
             maxLength={12}
-            className="w-44 rounded-lg border border-stone-800 bg-stone-950 px-3 py-2 font-mono uppercase tracking-widest text-stone-200 outline-none focus:border-amber-300"
+            className={cn(ui.input, "w-52 font-mono uppercase tracking-[0.25em]")}
           />
           <button type="submit" disabled={joining} className={ui.btnSecondary}>
             {joining ? "Joining..." : "Join"}
@@ -275,6 +336,14 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
       <CreateCampaignDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
+        onCreated={(campaignId) => {
+          window.location.href = `/campaigns/${campaignId}`;
+        }}
+      />
+      <CreateCampaignDialog
+        solo
+        open={soloOpen}
+        onOpenChange={setSoloOpen}
         onCreated={(campaignId) => {
           window.location.href = `/campaigns/${campaignId}`;
         }}

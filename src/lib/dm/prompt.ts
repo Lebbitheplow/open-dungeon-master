@@ -67,7 +67,20 @@ export type DmGameState = {
   publicNotes?: Array<{ pinned: boolean; title: string; body: string }>;
 };
 
-function describeSheet(sheet: CharacterSheet, playedBy: string): string {
+// Players who roll physical dice at the table: campaign policy must allow
+// it and the member must have opted in. Empty set otherwise.
+function realDiceUserIds(campaign: Campaign, members: CampaignMember[]): Set<string> {
+  if (campaign.gameSettings.dicePolicy !== "real_allowed") {
+    return new Set();
+  }
+  return new Set(members.filter((member) => member.useRealDice).map((member) => member.userId));
+}
+
+// Appended to the system prompt only when at least one present character's
+// player rolls real dice, so digital-only tables see no prompt change.
+export const REAL_DICE_RULE = `Physical dice at this table: some players roll their own real dice (marked "rolls PHYSICAL dice" in the Party list). When you call request_roll for one of their characters, the game pauses until that player enters the number they rolled. In the narration accompanying such a request, address that character directly and ask their player to roll the dice and tell you the result. Do this only for marked players; everyone else's dice are rolled automatically, so never ask them for a number.`;
+
+function describeSheet(sheet: CharacterSheet, playedBy: string, realDice: boolean): string {
   const derived = computeSheetDerived(sheet);
   const abilities = (Object.entries(sheet.abilities) as Array<[string, number]>)
     .map(([ability, score]) => `${ability.toUpperCase()} ${score}(${formatModifier(derived.abilityMods[ability as keyof typeof derived.abilityMods])})`)
@@ -86,7 +99,7 @@ function describeSheet(sheet: CharacterSheet, playedBy: string): string {
     : "";
 
   const lines = [
-    `- ${sheet.name} (${sheet.race.replaceAll("_", " ")} ${sheet.class}${sheet.subclass ? ` [${sheet.subclass}]` : ""} ${sheet.level}) characterId=${sheet.id} played by ${playedBy}`,
+    `- ${sheet.name} (${sheet.race.replaceAll("_", " ")} ${sheet.class}${sheet.subclass ? ` [${sheet.subclass}]` : ""} ${sheet.level}) characterId=${sheet.id} played by ${playedBy}${realDice ? " (rolls PHYSICAL dice)" : ""}`,
     `  HP ${sheet.currentHp}/${sheet.maxHp}${sheet.tempHp ? ` (+${sheet.tempHp} temp)` : ""} | AC ${sheet.ac} | Speed ${sheet.speed} | Passive Perception ${derived.passivePerception} | Initiative ${formatModifier(derived.initiative)}`,
     `  ${abilities} | Save proficiencies: ${sheet.proficiencies.saves.map((save) => save.toUpperCase()).join(", ") || "none"}`,
     `  Skill proficiencies: ${proficientSkills || "none"}`,
@@ -123,6 +136,7 @@ function describeSheet(sheet: CharacterSheet, playedBy: string): string {
 export function buildGameStateBlock(state: DmGameState): string {
   const { campaign, members, sheets, recentRolls, storySummary } = state;
   const usernamesById = new Map(members.map((member) => [member.userId, member.username]));
+  const physicalDiceUsers = realDiceUserIds(campaign, members);
 
   const rollLines = recentRolls.slice(-5).map((roll) => {
     const sheet = sheets.find((entry) => entry.id === roll.characterId);
@@ -187,7 +201,11 @@ export function buildGameStateBlock(state: DmGameState): string {
   sections.push(
     `Party:\n${sheets
       .map((sheet) => {
-        const base = describeSheet(sheet, usernamesById.get(sheet.userId) ?? "unknown");
+        const base = describeSheet(
+          sheet,
+          usernamesById.get(sheet.userId) ?? "unknown",
+          physicalDiceUsers.has(sheet.userId),
+        );
         const events = state.recentEventsByCharacter?.get(sheet.id);
         return events?.length
           ? `${base}\n  Recent developments: ${events.join(" | ")}`
@@ -438,8 +456,16 @@ export function buildDmMessages(
     });
   }
 
+  const physicalDiceUsers = realDiceUserIds(state.campaign, state.members);
+  const anyPhysicalDice = state.sheets.some((sheet) => physicalDiceUsers.has(sheet.userId));
+  const systemParts = [buildDmSystem(state.campaign)];
+  if (anyPhysicalDice) {
+    systemParts.push(REAL_DICE_RULE);
+  }
+  systemParts.push(buildGameStateBlock(state));
+
   return [
-    { role: "system", content: `${buildDmSystem(state.campaign)}\n\n${buildGameStateBlock(state)}` },
+    { role: "system", content: systemParts.join("\n\n") },
     ...historyMessages,
   ];
 }

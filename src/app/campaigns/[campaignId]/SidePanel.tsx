@@ -1,6 +1,17 @@
 "use client";
 
-import { Check, Link as LinkIcon, UserPlus } from "lucide-react";
+import {
+  BookOpen,
+  Check,
+  Link as LinkIcon,
+  Map as MapIcon,
+  ScrollText,
+  Settings2,
+  StickyNote,
+  UserPlus,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { EventLog } from "@/app/campaigns/[campaignId]/EventLog";
@@ -86,35 +97,42 @@ export function SidePanel({
   }
   // The lead sees every pending suggestion; members only their own.
   const pendingCount = notes.filter((note) => note.status === "pending").length;
-  const tabs: Array<[Tab, string]> = [
-    ["party", "Party"],
-    ...(mapsEnabled ? ([["map", "Map"]] as Array<[Tab, string]>) : []),
-    ["story", "Story"],
-    ["notes", "Notes"],
-    ["log", "Log"],
-    ...(campaign ? ([["settings", "Setup"]] as Array<[Tab, string]>) : []),
+  const tabs: Array<[Tab, string, LucideIcon]> = [
+    ["party", "Party", Users],
+    ...(mapsEnabled ? ([["map", "Map", MapIcon]] as Array<[Tab, string, LucideIcon]>) : []),
+    ["story", "Story", BookOpen],
+    ["notes", "Notes", StickyNote],
+    ["log", "Log", ScrollText],
+    ...(campaign
+      ? ([["settings", "Setup", Settings2]] as Array<[Tab, string, LucideIcon]>)
+      : []),
   ];
 
   return (
-    <aside className="hidden w-64 shrink-0 flex-col border-l border-stone-800 lg:flex">
-      <div className="flex border-b border-stone-800">
-        {tabs.map(([value, label]) => (
+    <aside className="hidden w-80 shrink-0 flex-col border-l border-stone-700/50 bg-gradient-to-b from-stone-950/70 to-stone-950/30 lg:flex">
+      <div className="flex gap-1 border-b border-stone-700/50 px-2 py-2">
+        {tabs.map(([value, label, Icon]) => (
           <button
             key={value}
             type="button"
             onClick={() => setTab(value)}
+            title={label}
             className={cn(
-              "relative flex-1 py-2 text-xs font-medium uppercase tracking-wide",
+              "relative flex flex-1 flex-col items-center gap-1 rounded-lg py-2 transition-all duration-150 ease-snap",
               tab === value
-                ? "border-b-2 border-amber-600 text-amber-300"
-                : "text-stone-500 hover:text-stone-300",
+                ? "bg-amber-400/10 text-amber-300 shadow-[0_1px_0_rgba(244,224,166,0.15)_inset,0_0_16px_rgba(212,171,58,0.12)]"
+                : "text-stone-500 hover:bg-stone-900/60 hover:text-stone-300",
             )}
           >
-            {label}
+            <Icon className="size-4" />
+            <span className="eyebrow text-[9px] leading-none">{label}</span>
             {value === "notes" && pendingCount ? (
-              <span className="absolute -mt-1 ml-0.5 rounded-full bg-amber-600 px-1 text-[9px] font-semibold text-stone-950">
+              <span className="absolute right-1.5 top-1 rounded-full bg-gradient-to-b from-amber-300 to-amber-500 px-1 text-[9px] font-semibold text-amber-950 shadow-glow-gold">
                 {pendingCount}
               </span>
+            ) : null}
+            {tab === value ? (
+              <span className="absolute -bottom-[9px] h-px w-8 bg-gradient-to-r from-transparent via-amber-400/80 to-transparent" />
             ) : null}
           </button>
         ))}

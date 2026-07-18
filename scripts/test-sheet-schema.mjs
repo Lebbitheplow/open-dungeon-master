@@ -44,4 +44,44 @@ test("patch schema leaves backstory undefined when absent", () => {
   assert.equal(parsed.backstory, undefined);
 });
 
+test("pre-ASI payloads default asiChoices to empty", () => {
+  const parsed = createSheetSchema.parse(baseSheet);
+  assert.deepEqual(parsed.asiChoices, []);
+});
+
+test("asiChoices round-trip all three modes", () => {
+  const parsed = createSheetSchema.parse({
+    ...baseSheet,
+    asiChoices: [
+      { mode: "plus2", ability: "str" },
+      { mode: "plus1x2", abilities: ["dex", "con"] },
+      { mode: "feat", feat: "Alert" },
+    ],
+  });
+  assert.equal(parsed.asiChoices.length, 3);
+  assert.equal(parsed.asiChoices[2].feat, "Alert");
+});
+
+test("asiChoices reject unknown modes and overflow", () => {
+  assert.equal(
+    createSheetSchema.safeParse({ ...baseSheet, asiChoices: [{ mode: "plus3", ability: "str" }] })
+      .success,
+    false,
+  );
+  assert.equal(
+    createSheetSchema.safeParse({
+      ...baseSheet,
+      asiChoices: Array.from({ length: 6 }, () => ({ mode: "plus2", ability: "str" })),
+    }).success,
+    false,
+  );
+});
+
+test("patch schema accepts ability score updates", () => {
+  const parsed = patchSheetSchema.parse({
+    abilities: { str: 18, dex: 12, con: 14, int: 10, wis: 10, cha: 10 },
+  });
+  assert.equal(parsed.abilities.str, 18);
+});
+
 console.log(`test-sheet-schema: ${passed} tests passed.`);

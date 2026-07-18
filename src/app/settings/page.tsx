@@ -74,25 +74,25 @@ export default function SettingsPage() {
         <div className="mt-2 flex items-center gap-3">
           <PixelTile src={PIXEL_ICONS.characters} />
           <div>
-            <h1 className="font-serif text-2xl text-stone-100">Account settings</h1>
+            <h1 className="font-display text-2xl tracking-wide text-amber-50">Account settings</h1>
             <p className="text-sm text-stone-500">Signed in as {me.username}</p>
           </div>
         </div>
       </header>
 
-      <section className="rounded-lg border border-stone-800 bg-stone-950/60 p-4">
+      <section className="texture-noise rounded-xl border border-stone-700/50 bg-stone-950/60 p-5 shadow-elev-1">
         <h2 className="mb-3 text-sm font-medium text-stone-300">Profile picture</h2>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-5">
           {me.avatar ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={me.avatar.url}
               alt="Your avatar"
-              className="size-20 rounded-full border border-stone-700 object-cover"
+              className="size-24 rounded-full border-2 border-amber-500/40 object-cover shadow-glow-gold"
             />
           ) : (
-            <div className="flex size-20 items-center justify-center rounded-full border border-stone-700 bg-stone-900">
-              <UserRound className="size-8 text-stone-600" />
+            <div className="flex size-24 items-center justify-center rounded-full border border-stone-700 bg-stone-900">
+              <UserRound className="size-10 text-stone-600" />
             </div>
           )}
           <div className="space-y-2">

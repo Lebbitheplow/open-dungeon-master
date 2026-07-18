@@ -39,7 +39,7 @@ export default function NewCharacterPage() {
         </Link>
         <div className="mt-2 flex items-center gap-3">
           <PixelTile src={PIXEL_ICONS.characters} />
-          <h1 className="font-serif text-2xl text-stone-100">Create a character</h1>
+          <h1 className="font-display text-2xl tracking-wide text-amber-50">Create a character</h1>
         </div>
         <p className="mt-1 text-sm text-stone-400">
           Saved to your library; bring them into any campaign later.

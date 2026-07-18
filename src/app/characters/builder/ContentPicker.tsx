@@ -99,7 +99,7 @@ export default function ContentPicker({
         ) : null}
       </div>
       {open && results.length ? (
-        <ul className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-stone-700 bg-stone-900 shadow-xl">
+        <ul className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto panel rounded-lg">
           {results.map((entry) => (
             <li key={entry.slug}>
               <button

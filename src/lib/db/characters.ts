@@ -1,6 +1,7 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { createSheet, getSheetById, getSheetForUser } from "@/lib/db/sheets";
 import { spellSlotsFor, suggestedStartingHp } from "@/lib/srd";
+import { earnedAsiCount, removeAsiChoices } from "@/lib/srd/asi";
 import type { CharacterSheet, CreateSheetInput } from "@/lib/schemas/sheet";
 
 // The per-user character library (table library_characters). Campaign play
@@ -170,6 +171,24 @@ export function instantiateIntoCampaign(
   const sheet = structuredClone(character.sheet);
   const level = Math.max(1, Math.min(20, targetLevel));
 
+  // Strip ASI choices earned above the campaign's starting level: reverse
+  // their ability bonuses (slightly lossy for scores that hit the 20 cap)
+  // and drop their feats. Up-scaling grants no automatic extra ASIs; the
+  // player edits the sheet in-game instead. Level-up ASIs taken mid-campaign
+  // sync back as raw abilities without a recorded choice, so those cannot
+  // be reversed here either.
+  const storedChoices = sheet.asiChoices ?? [];
+  const keptChoiceCount = earnedAsiCount(level);
+  if (storedChoices.length > keptChoiceCount) {
+    const dropped = storedChoices.slice(keptChoiceCount);
+    sheet.abilities = removeAsiChoices(sheet.abilities, dropped);
+    const droppedFeats = new Set(
+      dropped.flatMap((choice) => (choice.mode === "feat" ? [choice.feat] : [])),
+    );
+    sheet.feats = (sheet.feats ?? []).filter((feat) => !droppedFeats.has(feat));
+    sheet.asiChoices = storedChoices.slice(0, keptChoiceCount);
+  }
+
   sheet.hitDice = { ...sheet.hitDice, total: level, spent: 0 };
   if (level !== character.level) {
     const suggested = suggestedStartingHp(sheet.class, sheet.race, sheet.abilities.con, level);
@@ -209,6 +228,9 @@ export function syncProgressToLibrary(sheetId: string): LibraryCharacter | null 
     equipment: sheet.equipment,
     gold: sheet.gold,
     feats: sheet.feats,
+    // Level-up ASIs land here as raw scores; the campaign records no
+    // AsiChoice for them, so asiChoices keeps only creation-time picks.
+    abilities: sheet.abilities,
     spellcasting: sheet.spellcasting
       ? {
           ...sheet.spellcasting,

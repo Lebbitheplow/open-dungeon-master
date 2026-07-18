@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
-import { normalizeSettings } from "@/lib/db";
+import { normalizeSettings } from "@/lib/db/settings";
 import { configuredDefaultStorySettings } from "@/lib/runtime-defaults";
 import { normalizeGameSettings, type GameSettings } from "@/lib/schemas/game-settings";
 import type {

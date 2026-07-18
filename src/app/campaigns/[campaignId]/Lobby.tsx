@@ -36,6 +36,8 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
   const mySheet = sheets.find((sheet) => sheet.userId === me.id);
   const isOwner = campaign.ownerUserId === me.id;
   const isLead = campaign.leadUserId === me.id;
+  // One-player campaigns skip the invite/party ceremony entirely.
+  const isSolo = campaign.maxPlayers === 1;
   const allReady = members.length > 0 && members.every((member) => member.ready);
   const allHaveSheets = members.every((member) =>
     sheets.some((sheet) => sheet.userId === member.userId),
@@ -70,6 +72,36 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
         return;
       }
       refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Solo flow: one button readies up and starts in a single stroke.
+  async function beginSolo() {
+    setBusy(true);
+    setError("");
+    try {
+      if (!myMember?.ready) {
+        await fetch(`/api/campaigns/${campaign!.id}/ready`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ready: true }),
+        });
+      }
+      const response = await fetch(`/api/campaigns/${campaign!.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "active" }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(data.error || "Could not start the adventure.");
+        return;
+      }
+      refresh();
+    } catch {
+      setError("Could not reach the server.");
     } finally {
       setBusy(false);
     }
@@ -132,14 +164,14 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 p-6">
-      <header className="mb-6">
-        <Link href="/" className="text-sm text-stone-500 hover:text-stone-300">
+      <header className="bg-starfield mb-6 -mx-6 -mt-6 px-6 pb-5 pt-6">
+        <Link href="/" className="text-sm text-stone-500 transition-colors hover:text-stone-300">
           &larr; All campaigns
         </Link>
         <div className="mt-2 flex items-center gap-3">
           <PixelTile src={PIXEL_ICONS.chats} />
           <div className="min-w-0 flex-1">
-            <h1 className="flex items-center gap-2 font-serif text-2xl text-stone-100">
+            <h1 className="flex items-center gap-2 font-display text-2xl tracking-wide text-amber-50">
               <span className="truncate">{campaign.title}</span>
               {isLead ? (
                 <button
@@ -163,11 +195,12 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
         ) : null}
       </header>
 
-      <section className="mb-6 rounded-xl border border-amber-200/15 bg-stone-950/70 px-4 py-3 shadow-[0_0_16px_rgba(251,191,36,0.06)]">
+      {!isSolo ? (
+      <section className="panel ornate mb-6 rounded-xl border-amber-400/30 px-5 py-4 shadow-glow-gold">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs uppercase tracking-wide text-amber-200/70">Room code</p>
-            <p className="font-mono text-lg tracking-widest text-amber-100">
+            <p className="eyebrow text-[10px] text-amber-200/70">Room code</p>
+            <p className="font-mono text-xl tracking-[0.3em] text-amber-100">
               {campaign.inviteCode}
             </p>
           </div>
@@ -190,6 +223,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
           {typeof window !== "undefined" ? `${window.location.origin}/join/${campaign.inviteCode}` : ""}
         </p>
       </section>
+      ) : null}
 
       <GameSettingsPanel
         campaignId={campaign.id}
@@ -221,9 +255,10 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
         </section>
       ) : null}
 
+      {!isSolo ? (
       <section className="mb-6">
-        <h2 className="mb-3 text-lg font-medium">
-          Party ({members.length}/{campaign.maxPlayers})
+        <h2 className="eyebrow mb-3 text-sm text-amber-200/90">
+          Party · {members.length}/{campaign.maxPlayers}
         </h2>
         <ul className="space-y-2">
           {members.map((member) => {
@@ -231,7 +266,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
             return (
               <li
                 key={member.userId}
-                className="flex items-center justify-between rounded-lg border border-stone-800 bg-stone-950/60 px-4 py-3"
+                className="panel flex items-center justify-between rounded-xl px-4 py-3"
               >
                 <div className="flex items-center gap-3">
                   {member.avatar ? (
@@ -239,11 +274,11 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
                     <img
                       src={member.avatar.url}
                       alt=""
-                      className="size-9 rounded-full border border-stone-700 object-cover"
+                      className="size-12 rounded-full border border-amber-500/30 object-cover"
                     />
                   ) : (
-                    <span className="flex size-9 items-center justify-center rounded-full border border-stone-800 bg-stone-900">
-                      <UserRound className="size-4 text-stone-500" />
+                    <span className="flex size-12 items-center justify-center rounded-full border border-stone-700/60 bg-stone-900">
+                      <UserRound className="size-5 text-stone-500" />
                     </span>
                   )}
                   <div>
@@ -299,50 +334,79 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
           })}
         </ul>
       </section>
+      ) : null}
 
       <section className="space-y-3">
-        {!mySheet ? (
-          <Link href={`/campaigns/${campaign.id}/character`} className={cn(ui.btnPrimary, "w-full")}>
-            Create your character
-          </Link>
+        {isSolo ? (
+          !mySheet ? (
+            <div className="panel ornate flex flex-col items-center gap-3 rounded-xl px-6 py-8 text-center">
+              <p className="max-w-sm text-balance font-display text-xl tracking-wide text-amber-50">
+                Your adventure needs a hero.
+              </p>
+              <Link
+                href={`/campaigns/${campaign.id}/character`}
+                className={cn(ui.btnPrimary, "px-6")}
+              >
+                Create your character
+              </Link>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={beginSolo}
+              disabled={busy}
+              className={cn(ui.btnPrimary, "w-full py-2.5")}
+            >
+              {busy ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
+              Begin the adventure
+            </button>
+          )
         ) : (
-          <button
-            type="button"
-            onClick={toggleReady}
-            disabled={busy}
-            className={cn(
-              "flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 font-medium disabled:opacity-60",
-              myMember?.ready
-                ? "border border-stone-700 text-stone-300 hover:bg-stone-900"
-                : "bg-emerald-700 text-emerald-50 hover:bg-emerald-600",
+          <>
+            {!mySheet ? (
+              <Link href={`/campaigns/${campaign.id}/character`} className={cn(ui.btnPrimary, "w-full")}>
+                Create your character
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={toggleReady}
+                disabled={busy}
+                className={cn(
+                  "flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 font-medium disabled:opacity-60",
+                  myMember?.ready
+                    ? "border border-stone-700 text-stone-300 hover:bg-stone-900"
+                    : "bg-emerald-700 text-emerald-50 hover:bg-emerald-600",
+                )}
+              >
+                {busy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+                {myMember?.ready ? "Un-ready" : "Ready up"}
+              </button>
             )}
-          >
-            {busy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
-            {myMember?.ready ? "Un-ready" : "Ready up"}
-          </button>
-        )}
 
-        {isOwner ? (
-          <button
-            type="button"
-            onClick={start}
-            disabled={busy || !allReady || !allHaveSheets}
-            className={cn(ui.btnPrimary, "w-full py-2.5")}
-          >
-            <Play className="size-4" /> Begin the adventure
-          </button>
-        ) : (
-          <p className="text-center text-sm text-stone-500">
-            The owner starts the adventure once everyone is ready.
-          </p>
+            {isOwner ? (
+              <button
+                type="button"
+                onClick={start}
+                disabled={busy || !allReady || !allHaveSheets}
+                className={cn(ui.btnPrimary, "w-full py-2.5")}
+              >
+                <Play className="size-4" /> Begin the adventure
+              </button>
+            ) : (
+              <p className="text-center text-sm text-stone-500">
+                The owner starts the adventure once everyone is ready.
+              </p>
+            )}
+            {isOwner && (!allReady || !allHaveSheets) ? (
+              <p className="text-center text-sm text-stone-500">
+                {!allHaveSheets
+                  ? "Everyone needs a character first."
+                  : "Waiting for everyone to ready up."}
+              </p>
+            ) : null}
+          </>
         )}
-        {isOwner && (!allReady || !allHaveSheets) ? (
-          <p className="text-center text-sm text-stone-500">
-            {!allHaveSheets
-              ? "Everyone needs a character first."
-              : "Waiting for everyone to ready up."}
-          </p>
-        ) : null}
         {error ? <p className="text-center text-sm text-red-400">{error}</p> : null}
 
         {isOwner ? (

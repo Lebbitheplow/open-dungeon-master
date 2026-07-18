@@ -114,10 +114,10 @@ export function PartyPanel({
           <div
             key={sheet.id}
             className={cn(
-              "rounded-lg border p-3",
-              mine ? "border-amber-900 bg-amber-950/20" : "border-stone-800 bg-stone-950/40",
+              "panel rounded-xl p-3 transition-shadow duration-200",
+              mine && "ornate border-amber-600/40",
               spotlightUserIds.includes(sheet.userId) &&
-                "ring-1 ring-amber-500/70 border-amber-700",
+                "border-amber-500/70 ring-1 ring-amber-500/60 shadow-glow-gold-strong",
             )}
           >
             <div className="flex items-start gap-1">
@@ -132,11 +132,11 @@ export function PartyPanel({
                 <img
                   src={sheet.portrait.url}
                   alt={sheet.name}
-                  className="size-10 shrink-0 rounded-lg border border-stone-700 object-cover"
+                  className="size-12 shrink-0 rounded-lg border border-amber-500/30 object-cover shadow-glow-gold"
                 />
               ) : (
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-stone-800 bg-stone-900">
-                  <UserRound className="size-4 text-stone-600" />
+                <span className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-stone-700/60 bg-stone-900">
+                  <UserRound className="size-5 text-stone-600" />
                 </span>
               )}
               <span className="min-w-0">
@@ -174,11 +174,15 @@ export function PartyPanel({
 
             <div className="mt-2 flex items-center gap-2 text-sm">
               <Heart className="size-4 text-red-400" />
-              <div className="h-2 flex-1 overflow-hidden rounded-full bg-stone-800">
+              <div className="h-2 flex-1 overflow-hidden rounded-full bg-stone-800/80 shadow-[0_1px_2px_rgba(4,2,12,0.6)_inset]">
                 <div
                   className={cn(
-                    "h-full rounded-full",
-                    hpFraction > 0.5 ? "bg-emerald-600" : hpFraction > 0.25 ? "bg-amber-600" : "bg-red-600",
+                    "h-full rounded-full transition-[width] duration-500 ease-snap",
+                    hpFraction > 0.5
+                      ? "bg-gradient-to-r from-emerald-600 to-emerald-400"
+                      : hpFraction > 0.25
+                        ? "bg-gradient-to-r from-amber-600 to-amber-400"
+                        : "bg-gradient-to-r from-red-700 to-ember-500",
                   )}
                   style={{ width: `${Math.max(0, Math.min(1, hpFraction)) * 100}%` }}
                 />
@@ -189,12 +193,27 @@ export function PartyPanel({
               </span>
             </div>
 
-            <div className="mt-1.5 flex items-center gap-3 text-xs text-stone-400">
-              <span className="flex items-center gap-1">
-                <Shield className="size-3.5" /> AC {sheet.ac}
-              </span>
-              <span>PP {derived.passivePerception}</span>
-              <span>Init {formatModifier(derived.initiative)}</span>
+            <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
+              {(
+                [
+                  ["AC", String(sheet.ac)],
+                  ["PP", String(derived.passivePerception)],
+                  ["Init", formatModifier(derived.initiative)],
+                ] as const
+              ).map(([statLabel, statValue]) => (
+                <span
+                  key={statLabel}
+                  className="rounded-md border border-stone-700/50 bg-stone-950/60 py-1 shadow-[0_1px_2px_rgba(4,2,12,0.5)_inset]"
+                >
+                  <span className="eyebrow block text-[8px] text-stone-500">
+                    {statLabel === "AC" ? (
+                      <Shield className="mr-0.5 inline size-2.5 -translate-y-px" />
+                    ) : null}
+                    {statLabel}
+                  </span>
+                  <span className="font-mono text-xs text-stone-200">{statValue}</span>
+                </span>
+              ))}
             </div>
 
             {sheet.conditions.length ? (

@@ -69,7 +69,7 @@ export default function CharactersPage() {
         <div className="flex items-center gap-3">
           <PixelTile src={PIXEL_ICONS.characters} />
           <div>
-            <h1 className="font-serif text-xl text-stone-100">Your characters</h1>
+            <h1 className="font-display text-xl tracking-wide text-amber-50">Your characters</h1>
             <p className="text-sm text-stone-500">
               Saved to your profile; bring them into any campaign.
             </p>
@@ -106,16 +106,22 @@ export default function CharactersPage() {
           {characters.map((character) => (
             <li
               key={character.id}
-              className="group relative rounded-lg border border-stone-800 bg-stone-950/70 p-4 transition hover:border-amber-800/60 hover:bg-stone-900/70"
+              className={`group relative ${ui.cardHover} p-4`}
             >
               <a href={`/characters/${character.id}`} className="block">
-                <div className="flex items-center gap-2">
-                  <IconChip icon={UserRound} size="size-8" iconSize="size-4" />
-                  <span className="font-medium text-stone-100">{character.name}</span>
+                <div className="flex items-center gap-3">
+                  <IconChip icon={UserRound} size="size-12" iconSize="size-5" />
+                  <div className="min-w-0">
+                    <span className="block truncate font-medium text-stone-100">
+                      {character.name}
+                    </span>
+                    <span className="inline-flex rounded-full border border-amber-500/30 bg-amber-400/10 px-2 py-0.5 text-[11px] text-amber-200">
+                      Level {character.level} {titleCase(character.class)}
+                    </span>
+                  </div>
                 </div>
-                <p className="mt-1 text-sm text-stone-400">
-                  Level {character.level} {titleCase(character.race)}{" "}
-                  {titleCase(character.class)}
+                <p className="mt-2 text-sm text-stone-400">
+                  {titleCase(character.race)}
                   {character.subclass ? ` (${character.subclass})` : ""}
                 </p>
                 {character.background ? (

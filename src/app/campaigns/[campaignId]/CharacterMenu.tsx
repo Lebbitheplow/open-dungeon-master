@@ -49,7 +49,7 @@ export function CharacterMenu({
         <DropdownMenu.Content
           align="end"
           sideOffset={4}
-          className="z-50 min-w-40 rounded-md border border-stone-700 bg-stone-950 p-1 shadow-xl"
+          className="panel z-50 min-w-40 rounded-lg p-1"
         >
           <DropdownMenu.Item className={item} onSelect={onViewSheet}>
             <BookUser className="size-3.5 text-stone-500" /> View sheet

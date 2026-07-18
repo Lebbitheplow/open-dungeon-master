@@ -99,7 +99,7 @@ export function PendingRollCard({
   }
 
   return (
-    <div className="mb-2 rounded-md border border-amber-700/70 bg-amber-950/30 px-3 py-2.5">
+    <div className="mb-2 animate-fade-up rounded-lg border border-amber-500/50 bg-amber-950/30 px-3 py-2.5 shadow-glow-gold">
       <div className="flex items-center justify-between text-sm">
         <span className="flex items-center gap-2 text-amber-100">
           <Dices className="size-4 text-amber-200" />
@@ -140,8 +140,10 @@ export function PendingRollCard({
             submit({ dice: faces.map((_, index) => Number(values[index])) })
           }
           className={cn(
-            "rounded-lg bg-amber-200 px-3 py-1.5 text-sm font-medium text-stone-950",
-            "hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-40",
+            "rounded-lg bg-gradient-to-b from-amber-100 via-amber-200 to-amber-400 px-3 py-1.5 text-sm font-semibold text-amber-950",
+            "shadow-[0_1px_0_rgba(253,247,231,0.6)_inset] transition-all duration-150 ease-snap",
+            "hover:-translate-y-px hover:shadow-glow-gold-strong active:translate-y-0 active:scale-95",
+            "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none",
           )}
         >
           {busy ? <Loader2 className="size-4 animate-spin" /> : "Submit roll"}

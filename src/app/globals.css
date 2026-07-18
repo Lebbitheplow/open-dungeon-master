@@ -1,8 +1,121 @@
 @import "tailwindcss";
 
+/*
+  Arcane night theme. The neutral ramp (stone-*) is redefined as deep
+  indigo/violet and the accent ramp (amber-*) as aged gold, so every
+  existing utility class resolves into the new palette. Ember is the hot
+  accent for crits and danger moments.
+*/
+
 :root {
-  --background: #130d09;
-  --foreground: #efe7dd;
+  --background: #0a0817;
+  --foreground: #e9e6f4;
+}
+
+@theme {
+  /* Night neutrals (replaces Tailwind's stone ramp) */
+  --color-stone-950: #0d0b1c;
+  --color-stone-900: #151229;
+  --color-stone-800: #211b3a;
+  --color-stone-700: #302853;
+  /* 600-300 are text tones: kept light and low-saturation for contrast
+     against the night surfaces (700-950 stay dark for borders/fills). */
+  --color-stone-600: #575170;
+  --color-stone-500: #8f8aab;
+  --color-stone-400: #aeaac6;
+  --color-stone-300: #c9c6db;
+  --color-stone-200: #dedbec;
+  --color-stone-100: #edeaf7;
+  --color-stone-50: #f7f6fc;
+
+  /* Aged gold (replaces Tailwind's amber ramp) */
+  --color-amber-950: #2b2008;
+  --color-amber-900: #4a390f;
+  --color-amber-800: #6d5517;
+  --color-amber-700: #95761f;
+  --color-amber-600: #b8922a;
+  --color-amber-500: #d4ab3a;
+  --color-amber-400: #e3c15c;
+  --color-amber-300: #ecd287;
+  --color-amber-200: #f4e0a6;
+  --color-amber-100: #f9ecc8;
+  --color-amber-50: #fdf7e7;
+
+  /* Ember: crits, fire, danger glow */
+  --color-ember-600: #c65a24;
+  --color-ember-500: #e0703a;
+  --color-ember-400: #ff9d5c;
+  --color-ember-300: #ffbe8f;
+
+  /* Elevation and glow */
+  --shadow-elev-1: 0 1px 2px rgba(4, 2, 12, 0.5), 0 2px 8px rgba(4, 2, 12, 0.35);
+  --shadow-elev-2: 0 2px 6px rgba(4, 2, 12, 0.55), 0 12px 32px rgba(4, 2, 12, 0.45);
+  --shadow-glow-gold: 0 0 20px rgba(212, 171, 58, 0.16);
+  --shadow-glow-gold-strong: 0 0 14px rgba(212, 171, 58, 0.35), 0 0 40px rgba(212, 171, 58, 0.12);
+  --shadow-glow-ember: 0 0 18px rgba(224, 112, 58, 0.3);
+
+  /* Motion */
+  --ease-snap: cubic-bezier(0.2, 0.9, 0.25, 1);
+  --animate-fade-up: fade-up 260ms var(--ease-snap) both;
+  --animate-fade-up-slow: fade-up 420ms var(--ease-snap) both;
+  --animate-scale-in: scale-in 180ms var(--ease-snap) both;
+  --animate-twinkle: twinkle 3.2s ease-in-out infinite;
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes scale-in {
+    from {
+      opacity: 0;
+      transform: scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  @keyframes scale-out {
+    from {
+      opacity: 1;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: scale(0.97);
+    }
+  }
+  @keyframes overlay-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes twinkle {
+    0%,
+    100% {
+      opacity: 0.7;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+  @keyframes shimmer {
+    from {
+      background-position: 150% 0;
+    }
+    to {
+      background-position: -50% 0;
+    }
+  }
 }
 
 @theme inline {
@@ -11,6 +124,7 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-serif: var(--font-source-serif), Georgia, "Times New Roman", serif;
+  --font-display: var(--font-display), var(--font-source-serif), Georgia, serif;
   /* lift the default corner radius app-wide */
   --radius: 0.5rem;
 }
@@ -22,7 +136,12 @@ html {
 }
 
 body {
-  background: var(--background);
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(76, 60, 130, 0.28), transparent 65%),
+    radial-gradient(ellipse 60% 45% at 85% 110%, rgba(48, 32, 90, 0.22), transparent 60%),
+    radial-gradient(ellipse 40% 35% at 8% 65%, rgba(60, 38, 110, 0.14), transparent 60%),
+    var(--background);
+  background-attachment: fixed;
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
   min-height: 100%;
@@ -30,9 +149,163 @@ body {
   overscroll-behavior-y: none;
 }
 
+/* The whole app sits under a fixed night sky: faint star specks plus film
+   grain, behind all content. Pure CSS + inline SVG, zero requests. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(1px 1px at 11% 24%, rgba(244, 224, 166, 0.5), transparent 60%),
+    radial-gradient(1.5px 1.5px at 27% 68%, rgba(233, 230, 244, 0.32), transparent 60%),
+    radial-gradient(1px 1px at 38% 12%, rgba(244, 224, 166, 0.35), transparent 60%),
+    radial-gradient(1px 1px at 52% 44%, rgba(233, 230, 244, 0.3), transparent 60%),
+    radial-gradient(1.5px 1.5px at 64% 80%, rgba(244, 224, 166, 0.4), transparent 60%),
+    radial-gradient(1px 1px at 71% 27%, rgba(233, 230, 244, 0.35), transparent 60%),
+    radial-gradient(1px 1px at 83% 57%, rgba(244, 224, 166, 0.32), transparent 60%),
+    radial-gradient(1.5px 1.5px at 92% 16%, rgba(233, 230, 244, 0.32), transparent 60%),
+    radial-gradient(1px 1px at 18% 88%, rgba(244, 224, 166, 0.3), transparent 60%),
+    radial-gradient(1px 1px at 45% 93%, rgba(233, 230, 244, 0.26), transparent 60%),
+    radial-gradient(1px 1px at 6% 42%, rgba(244, 224, 166, 0.3), transparent 60%),
+    radial-gradient(1px 1px at 96% 84%, rgba(233, 230, 244, 0.3), transparent 60%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='0.055'/%3E%3C/svg%3E");
+}
+
+@layer components {
+  /* Starfield: layered gold and violet specks over a night vignette. Pure
+     CSS, no assets, no external requests. */
+  .bg-starfield {
+    background-image:
+      radial-gradient(1px 1px at 11% 24%, rgba(244, 224, 166, 0.8), transparent 60%),
+      radial-gradient(1.5px 1.5px at 27% 68%, rgba(233, 230, 244, 0.5), transparent 60%),
+      radial-gradient(1px 1px at 38% 12%, rgba(244, 224, 166, 0.55), transparent 60%),
+      radial-gradient(1px 1px at 52% 44%, rgba(233, 230, 244, 0.45), transparent 60%),
+      radial-gradient(1.5px 1.5px at 64% 80%, rgba(244, 224, 166, 0.6), transparent 60%),
+      radial-gradient(1px 1px at 71% 27%, rgba(233, 230, 244, 0.55), transparent 60%),
+      radial-gradient(1px 1px at 83% 57%, rgba(244, 224, 166, 0.5), transparent 60%),
+      radial-gradient(1.5px 1.5px at 92% 16%, rgba(233, 230, 244, 0.5), transparent 60%),
+      radial-gradient(1px 1px at 18% 88%, rgba(244, 224, 166, 0.45), transparent 60%),
+      radial-gradient(1px 1px at 45% 93%, rgba(233, 230, 244, 0.4), transparent 60%);
+  }
+
+  /* Faint film grain via inline SVG turbulence; keeps glass surfaces from
+     looking sterile. Self-contained data URI. */
+  .texture-noise {
+    position: relative;
+  }
+  .texture-noise::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    opacity: 0.05;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* Glass surface: translucent night panel with a soft hairline. */
+  .glass {
+    background: linear-gradient(180deg, rgba(33, 27, 58, 0.55), rgba(21, 18, 41, 0.65));
+    border: 1px solid rgba(107, 99, 148, 0.22);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  /* Raised panel: gradient surface, top-edge light, layered depth shadow.
+     The workhorse card treatment; nothing on the app should read as flat. */
+  .panel {
+    position: relative;
+    background:
+      linear-gradient(180deg, rgba(48, 40, 83, 0.42), rgba(16, 13, 32, 0.85)),
+      radial-gradient(ellipse 120% 60% at 50% -20%, rgba(107, 99, 148, 0.12), transparent 60%);
+    border: 1px solid rgba(107, 99, 148, 0.3);
+    box-shadow:
+      0 1px 0 rgba(233, 230, 244, 0.08) inset,
+      0 -1px 0 rgba(4, 2, 12, 0.6) inset,
+      0 2px 6px rgba(4, 2, 12, 0.55),
+      0 14px 36px rgba(4, 2, 12, 0.4);
+  }
+
+  /* Dialogs get a smokier panel: a heavier fill plus backdrop blur so the
+     table behind the modal recedes instead of reading through. */
+  [role="dialog"].panel,
+  [role="alertdialog"].panel {
+    background:
+      linear-gradient(180deg, rgba(41, 34, 71, 0.94), rgba(13, 11, 28, 0.97)),
+      radial-gradient(ellipse 120% 60% at 50% -20%, rgba(107, 99, 148, 0.14), transparent 60%);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  /* Gold corner brackets, the arcane frame signature. Pair with .panel. */
+  .ornate::before,
+  .ornate::after {
+    content: "";
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    pointer-events: none;
+    border-color: rgba(212, 171, 58, 0.55);
+    border-style: solid;
+  }
+  .ornate::before {
+    top: 7px;
+    left: 7px;
+    border-width: 1px 0 0 1px;
+  }
+  .ornate::after {
+    bottom: 7px;
+    right: 7px;
+    border-width: 0 1px 1px 0;
+  }
+
+  /* Engraved caps label: the display face at small sizes, letterspaced. */
+  .eyebrow {
+    font-family: var(--font-display), Georgia, serif;
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    font-weight: 600;
+  }
+
+  /* Illuminated drop cap on the opening paragraph of DM narration. */
+  .narration > p:first-of-type::first-letter {
+    font-family: var(--font-display), Georgia, serif;
+    float: left;
+    font-size: 3.1em;
+    line-height: 0.82;
+    padding: 0.04em 0.12em 0 0;
+    color: var(--color-amber-300);
+    text-shadow: 0 0 20px rgba(212, 171, 58, 0.45);
+  }
+}
+
+/* Radix dialogs and dropdowns animate on their data-state. */
+[data-radix-popper-content-wrapper] > [data-state="open"],
+[role="dialog"][data-state="open"] {
+  animation: scale-in 180ms var(--ease-snap);
+}
+[role="dialog"][data-state="closed"] {
+  animation: scale-out 140ms var(--ease-snap) forwards;
+}
+.dialog-overlay[data-state="open"] {
+  animation: overlay-in 200ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 ::selection {
-  background: #8b6f47;
-  color: #fffaf2;
+  background: #6d5517;
+  color: #fdf7e7;
 }
 
 button,
@@ -55,7 +328,7 @@ input {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #44403c transparent;
+  scrollbar-color: #302853 transparent;
 }
 
 ::-webkit-scrollbar {
@@ -64,7 +337,7 @@ input {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #44403c;
+  background: #302853;
   border-radius: 4px;
 }
 

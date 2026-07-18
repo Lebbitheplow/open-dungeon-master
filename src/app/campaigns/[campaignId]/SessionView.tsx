@@ -182,11 +182,11 @@ export function SessionView({
 
   return (
     <main className="flex h-dvh flex-col">
-      <header className="flex items-center justify-between border-b border-stone-800/80 px-4 py-2.5">
+      <header className="glass z-10 flex items-center justify-between border-b border-stone-700/40 px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-2.5">
           <PixelTile src={PIXEL_ICONS.story} size="size-9" />
           <div className="min-w-0">
-            <h1 className="truncate font-serif leading-tight text-stone-100">{campaign.title}</h1>
+            <h1 className="truncate font-display leading-tight tracking-wide text-amber-50">{campaign.title}</h1>
             <p className="truncate text-xs text-stone-500">
               {campaign.scene || "The adventure unfolds"}
             </p>
@@ -282,7 +282,11 @@ export function SessionView({
           {needsCharacter ? (
             <CharacterGate campaignId={campaign.id} />
           ) : (
-          <form onSubmit={submit} className="border-t border-stone-800 p-3">
+          <form
+            onSubmit={submit}
+            className="glass border-t border-stone-700/40 px-3 pb-3 pt-2.5"
+          >
+            <div className="mx-auto max-w-3xl sm:px-3">
             {pendingRolls.map((pending) => (
               <PendingRollCard
                 key={pending.id}
@@ -324,12 +328,12 @@ export function SessionView({
                         : undefined
                     }
                     className={cn(
-                      "rounded-full px-3 py-1 text-xs font-medium",
+                      "rounded-full px-3 py-1 text-xs font-medium transition-all duration-150 ease-snap active:scale-95",
                       kind === option
                         ? option === "lead"
-                          ? "bg-amber-600 text-stone-950"
-                          : "bg-amber-200 text-stone-950"
-                        : "bg-stone-900 text-stone-400 hover:text-stone-200",
+                          ? "bg-gradient-to-b from-ember-400 to-ember-600 text-stone-950 shadow-glow-ember"
+                          : "bg-gradient-to-b from-amber-100 to-amber-400 text-amber-950 shadow-glow-gold"
+                        : "bg-stone-900/80 text-stone-400 hover:bg-stone-800 hover:text-stone-200",
                     )}
                   >
                     {option === "do"
@@ -359,7 +363,7 @@ export function SessionView({
                 </span>
               ) : null}
             </div>
-            <div className="flex items-end gap-2 rounded-2xl border border-stone-700/80 bg-stone-950 p-2 focus-within:border-amber-300/60">
+            <div className="texture-noise flex items-end gap-2 rounded-2xl border border-stone-700/70 bg-stone-950/90 p-2 shadow-elev-1 transition-[border-color,box-shadow] duration-200 focus-within:border-amber-400/60 focus-within:shadow-[0_0_0_3px_rgba(212,171,58,0.1),0_2px_12px_rgba(4,2,12,0.5)]">
               <textarea
                 ref={composerRef}
                 value={input}
@@ -398,12 +402,13 @@ export function SessionView({
               <button
                 type="submit"
                 disabled={sending || !input.trim() || inputBlocked}
-                className="rounded-lg bg-amber-200 p-2.5 text-stone-950 hover:bg-amber-100 disabled:opacity-40"
+                className="rounded-lg bg-gradient-to-b from-amber-100 via-amber-200 to-amber-400 p-2.5 text-amber-950 shadow-[0_1px_0_rgba(253,247,231,0.6)_inset] transition-all duration-150 ease-snap hover:-translate-y-px hover:shadow-glow-gold-strong active:translate-y-0 active:scale-95 disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none"
               >
                 {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
               </button>
             </div>
             {error ? <p className="mt-1.5 text-sm text-red-400">{error}</p> : null}
+            </div>
           </form>
           )}
         </div>

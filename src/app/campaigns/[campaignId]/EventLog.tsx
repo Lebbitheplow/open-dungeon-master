@@ -68,7 +68,7 @@ function ConfirmUndoDialog({
             "fixed left-1/2 top-1/2 z-50 w-[22rem] -translate-x-1/2 -translate-y-1/2",
           )}
         >
-          <AlertDialog.Title className="font-serif text-lg text-stone-100">
+          <AlertDialog.Title className="font-display text-lg tracking-wide text-amber-50">
             Undo anyway?
           </AlertDialog.Title>
           <AlertDialog.Description className="mt-2 text-xs text-stone-400">

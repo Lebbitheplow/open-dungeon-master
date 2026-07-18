@@ -54,7 +54,7 @@ export function CharacterSheetDialog({
                 </div>
               )}
               <div>
-                <Dialog.Title className="font-serif text-xl text-stone-100">
+                <Dialog.Title className="font-display text-xl tracking-wide text-amber-50">
                   {sheet.name}
                 </Dialog.Title>
                 <p className="text-xs text-stone-400">

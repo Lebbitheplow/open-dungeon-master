@@ -66,6 +66,18 @@ export const spellcastingSchema = z
   .nullable();
 export type Spellcasting = z.infer<typeof spellcastingSchema>;
 
+// One Ability Score Improvement choice (earned at levels 4/8/12/16/19):
+// +2 to one ability, +1 to two abilities, or a feat instead.
+export const asiChoiceSchema = z.discriminatedUnion("mode", [
+  z.object({ mode: z.literal("plus2"), ability: z.enum(ABILITIES) }),
+  z.object({
+    mode: z.literal("plus1x2"),
+    abilities: z.tuple([z.enum(ABILITIES), z.enum(ABILITIES)]),
+  }),
+  z.object({ mode: z.literal("feat"), feat: z.string().trim().min(1).max(80) }),
+]);
+export type AsiChoice = z.infer<typeof asiChoiceSchema>;
+
 // Payload for creating a sheet. HP/AC arrive explicit (the creation UI
 // suggests derived values, the player can adjust before saving).
 export const createSheetSchema = z.object({
@@ -84,6 +96,9 @@ export const createSheetSchema = z.object({
   equipment: z.array(equipmentItemSchema).max(60).default([]),
   gold: z.number().int().min(0).max(1000000).default(0),
   feats: z.array(z.string().trim().min(1).max(60)).max(20).default([]),
+  // The ASI choices baked into `abilities`, in threshold order. Stored so
+  // instantiating at a lower campaign level can reverse the extra ones.
+  asiChoices: z.array(asiChoiceSchema).max(5).default([]),
   spellcasting: spellcastingSchema.default(null),
   portrait: attachmentSchema.nullable().default(null),
   notes: z.string().max(4000).default(""),
@@ -107,6 +122,8 @@ export const patchSheetSchema = z.object({
   hitDice: hitDiceSchema.optional(),
   spellcasting: spellcastingSchema.optional(),
   feats: z.array(z.string().trim().min(1).max(80)).max(30).optional(),
+  // Level-up ASIs change ability scores, so players may patch them.
+  abilities: abilityScoresSchema.optional(),
   subclass: z.string().trim().max(60).optional(),
   portrait: attachmentSchema.nullable().optional(),
   notes: z.string().max(4000).optional(),

@@ -53,7 +53,7 @@ export default function JoinPage({ params }: { params: Promise<{ code: string }>
         <div className="mb-6 flex items-center gap-3">
           <PixelTile src={PIXEL_ICONS.chats} />
           <div>
-            <h1 className="font-serif text-xl text-stone-100">Join the party</h1>
+            <h1 className="font-display text-xl tracking-wide text-amber-50">Join the party</h1>
             <p className="text-sm text-stone-500">
               Room code <span className="font-mono text-amber-200">{code.toUpperCase()}</span>
             </p>

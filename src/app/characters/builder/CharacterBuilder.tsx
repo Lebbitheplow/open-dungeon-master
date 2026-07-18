@@ -4,7 +4,7 @@ import { Loader2, X } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 import { cn } from "@/lib/cn";
 import { suggestedSpellCount } from "@/lib/content/mechanics";
-import type { Ability, AbilityScores, CreateSheetInput } from "@/lib/schemas/sheet";
+import type { Ability, AbilityScores, AsiChoice, CreateSheetInput } from "@/lib/schemas/sheet";
 import {
   SRD_SKILLS,
   abilityMod,
@@ -14,8 +14,10 @@ import {
   spellSlotsFor,
   suggestedStartingHp,
 } from "@/lib/srd";
+import { ASI_LEVELS, applyAsiChoices } from "@/lib/srd/asi";
 import { defaultLoadout, suggestWeapons } from "@/lib/srd/weapons";
 import AbilityEditor, { type AbilityMethod, type AbilityState } from "./AbilityEditor";
+import AsiFeatEditor from "./AsiFeatEditor";
 import ContentPicker from "./ContentPicker";
 import EquipmentSection from "./EquipmentSection";
 import { useArchetypes, useBuilderOptions } from "./useBuilderOptions";
@@ -59,6 +61,9 @@ export default function CharacterBuilder({
   // Auto-added class weapons the user explicitly removed; reset on class change.
   const [removedAutoNames, setRemovedAutoNames] = useState<string[]>([]);
   const [feats, setFeats] = useState<string[]>([]);
+  // One slot per ASI threshold the effective level has earned; kept full
+  // length so lowering and re-raising the level restores earlier picks.
+  const [asiChoices, setAsiChoices] = useState<Array<AsiChoice | null>>([]);
   const [backstory, setBackstory] = useState("");
   const [gold, setGold] = useState(15);
   const [hpOverride, setHpOverride] = useState<number | null>(null);
@@ -70,8 +75,18 @@ export default function CharacterBuilder({
   const background = backgrounds.find((entry) => entry.id === backgroundId) ?? backgrounds[0];
   const archetypes = useArchetypes(klass?.id ?? "");
   const effectiveLevel = fixedLevel ?? level;
+  const asiSlotLevels = useMemo(
+    () => ASI_LEVELS.filter((threshold) => effectiveLevel >= threshold),
+    [effectiveLevel],
+  );
+  const activeAsiChoices = useMemo(
+    () => asiSlotLevels.map((_, index) => asiChoices[index] ?? null),
+    [asiSlotLevels, asiChoices],
+  );
 
-  const abilities = useMemo<AbilityScores | null>(() => {
+  // Base scores after racial bonuses, before level ASIs; what the ASI cards
+  // build on.
+  const baseAbilities = useMemo<AbilityScores | null>(() => {
     if (!race || Object.values(scores).some((value) => value === null)) {
       return null;
     }
@@ -81,6 +96,11 @@ export default function CharacterBuilder({
     }
     return final as AbilityScores;
   }, [scores, race]);
+
+  const abilities = useMemo<AbilityScores | null>(
+    () => (baseAbilities ? applyAsiChoices(baseAbilities, activeAsiChoices) : null),
+    [baseAbilities, activeAsiChoices],
+  );
 
   const preview = useMemo(() => {
     if (!abilities || !race || !klass || !background) {
@@ -177,7 +197,20 @@ export default function CharacterBuilder({
       setLocalError("Give your character a name.");
       return;
     }
+    const unresolvedSlot = activeAsiChoices.findIndex((choice) => choice === null);
+    if (unresolvedSlot !== -1) {
+      setLocalError(
+        `Resolve your level ${asiSlotLevels[unresolvedSlot]} ability score improvement first.`,
+      );
+      return;
+    }
     setLocalError("");
+    const resolvedAsiChoices = activeAsiChoices.filter(
+      (choice): choice is AsiChoice => choice !== null,
+    );
+    const asiFeats = resolvedAsiChoices.flatMap((choice) =>
+      choice.mode === "feat" ? [choice.feat] : [],
+    );
     const slots = Object.fromEntries(
       Object.entries(spellSlotsFor(klass.id, effectiveLevel)).map(([slotLevel, max]) => [
         slotLevel,
@@ -207,7 +240,8 @@ export default function CharacterBuilder({
         proficiencies: preview.proficiencies,
         equipment: fullEquipment,
         gold,
-        feats,
+        feats: [...new Set([...asiFeats, ...feats])],
+        asiChoices: resolvedAsiChoices,
         spellcasting: klass.spellAbility
           ? {
               ability: klass.spellAbility,
@@ -257,7 +291,7 @@ export default function CharacterBuilder({
         </p>
       ) : null}
 
-      <section className="grid gap-3 sm:grid-cols-2">
+      <section className="panel ornate grid gap-3 rounded-xl p-4 sm:grid-cols-2">
         <label className="block">
           <span className="mb-1 block text-stone-400">Name</span>
           <input value={name} onChange={(event) => setName(event.target.value)} required maxLength={60} className={inputClass} />
@@ -337,9 +371,26 @@ export default function CharacterBuilder({
         racialBonus={race?.asi ?? {}}
       />
 
+      {asiSlotLevels.length ? (
+        <AsiFeatEditor
+          slotLevels={asiSlotLevels}
+          baseScores={baseAbilities}
+          choices={activeAsiChoices}
+          onChange={(next) =>
+            setAsiChoices((current) => {
+              const merged = [...current];
+              next.forEach((choice, index) => {
+                merged[index] = choice;
+              });
+              return merged;
+            })
+          }
+        />
+      ) : null}
+
       {klass ? (
-        <section>
-          <h2 className="mb-2 font-medium">Class skills (pick {klass.skillChoices.count})</h2>
+        <section className="panel rounded-xl p-4">
+          <h2 className="eyebrow mb-2 text-xs text-amber-200/90">Class skills (pick {klass.skillChoices.count})</h2>
           <div className="flex flex-wrap gap-2">
             {klass.skillChoices.from.map((skillId) => {
               const skill = SRD_SKILLS.find((entry) => entry.id === skillId);
@@ -370,8 +421,8 @@ export default function CharacterBuilder({
       ) : null}
 
       {klass?.spellAbility ? (
-        <section>
-          <h2 className="mb-1 font-medium">Spells</h2>
+        <section className="panel rounded-xl p-4">
+          <h2 className="eyebrow mb-1 text-xs text-amber-200/90">Spells</h2>
           <p className="mb-2 text-xs text-stone-500">
             {spellAdvice
               ? `Suggested: ${spellAdvice.count} ${spellAdvice.label} at level ${effectiveLevel}. `
@@ -408,8 +459,8 @@ export default function CharacterBuilder({
         inputClass={inputClass}
       />
 
-      <section>
-        <h2 className="mb-1 font-medium">Backstory (optional)</h2>
+      <section className="panel rounded-xl p-4">
+        <h2 className="eyebrow mb-1 text-xs text-amber-200/90">Backstory (optional)</h2>
         <p className="mb-2 text-xs text-stone-500">
           Who were they before the adventure? The party can read this, and the DM weaves it
           into the story.
@@ -424,8 +475,13 @@ export default function CharacterBuilder({
         />
       </section>
 
-      <section>
-        <h2 className="mb-1 font-medium">Feats (optional)</h2>
+      <section className="panel rounded-xl p-4">
+        <h2 className="eyebrow mb-1 text-xs text-amber-200/90">Additional feats (optional)</h2>
+        {asiSlotLevels.length ? (
+          <p className="mb-2 text-xs text-stone-500">
+            Beyond the ability score improvement picks above; racial or homebrew feats go here.
+          </p>
+        ) : null}
         <ContentPicker
           kind="feats"
           placeholder="Search feats (e.g. alert, tough)"
@@ -437,8 +493,8 @@ export default function CharacterBuilder({
       </section>
 
       {preview && race ? (
-        <section className="rounded-lg border border-stone-800 bg-stone-950/60 p-4">
-          <h2 className="mb-2 font-medium">Derived stats</h2>
+        <section className="panel ornate rounded-xl border-amber-500/30 p-4">
+          <h2 className="eyebrow mb-2 text-xs text-amber-200/90">Derived stats</h2>
           <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-stone-300 sm:grid-cols-4">
             <label className="block">
               <span className="block text-xs text-stone-500">Max HP</span>

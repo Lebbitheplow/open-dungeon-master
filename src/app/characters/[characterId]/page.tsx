@@ -98,7 +98,7 @@ export default function CharacterDetailPage({
         <div className="mt-2 flex items-center gap-3">
           <PixelTile src={PIXEL_ICONS.characters} />
           <div>
-            <h1 className="font-serif text-2xl text-stone-100">{character.name}</h1>
+            <h1 className="font-display text-2xl tracking-wide text-amber-50">{character.name}</h1>
             <p className="text-sm text-stone-400">
               Level {character.level} {titleCase(character.race)} {titleCase(character.class)}
               {character.subclass ? ` (${character.subclass})` : ""}

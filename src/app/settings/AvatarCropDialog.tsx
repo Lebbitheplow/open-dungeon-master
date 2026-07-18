@@ -124,7 +124,7 @@ export function AvatarCropDialog({
           className={cn(ui.dialog, "fixed left-1/2 top-1/2 z-50 w-[22rem] -translate-x-1/2 -translate-y-1/2")}
         >
           <div className="mb-3 flex items-center justify-between">
-            <Dialog.Title className="font-serif text-lg text-stone-100">{title}</Dialog.Title>
+            <Dialog.Title className="font-display text-lg tracking-wide text-amber-50">{title}</Dialog.Title>
             <Dialog.Close className="text-stone-500 hover:text-stone-300">
               <X className="size-4" />
             </Dialog.Close>

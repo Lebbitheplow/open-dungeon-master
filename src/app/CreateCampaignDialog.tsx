@@ -10,14 +10,18 @@ import { TTS_VOICES } from "@/lib/tts-voices";
 import { CAMPAIGN_DIFFICULTIES, type CampaignDifficulty } from "@/lib/campaign-types";
 import type { DicePolicy, Genre } from "@/lib/schemas/game-settings";
 
+// solo: creates a one-player campaign (maxPlayers 1); the player count is
+// hidden and the lobby streamlines itself for a party of one.
 export function CreateCampaignDialog({
   open,
   onOpenChange,
   onCreated,
+  solo = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated: (campaignId: string) => void;
+  solo?: boolean;
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -47,7 +51,7 @@ export function CreateCampaignDialog({
           title: title.trim(),
           description: description.trim(),
           theme: theme.trim(),
-          maxPlayers,
+          maxPlayers: solo ? 1 : maxPlayers,
           startingLevel,
           difficulty,
           gameSettings: {
@@ -87,9 +91,11 @@ export function CreateCampaignDialog({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/60" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 max-h-[90vh] w-[min(92vw,34rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-stone-700 bg-[#130d09] p-6 shadow-xl">
+        <Dialog.Content className="fixed left-1/2 top-1/2 max-h-[90vh] w-[min(92vw,34rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto panel rounded-xl p-6">
           <div className="mb-4 flex items-center justify-between">
-            <Dialog.Title className="font-serif text-lg font-semibold">New campaign</Dialog.Title>
+            <Dialog.Title className="font-display text-lg tracking-wide text-amber-50">
+              {solo ? "New solo adventure" : "New campaign"}
+            </Dialog.Title>
             <Dialog.Close className="rounded p-1 text-stone-400 hover:bg-stone-900">
               <X className="size-4" />
             </Dialog.Close>
@@ -166,18 +172,20 @@ export function CreateCampaignDialog({
               />
             </label>
 
-            <div className="grid grid-cols-3 gap-3">
-              <label className="block">
-                <span className="mb-1 block text-stone-400">Players</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={8}
-                  value={maxPlayers}
-                  onChange={(event) => setMaxPlayers(Number(event.target.value))}
-                  className={inputClass}
-                />
-              </label>
+            <div className={cn("grid gap-3", solo ? "grid-cols-2" : "grid-cols-3")}>
+              {!solo ? (
+                <label className="block">
+                  <span className="mb-1 block text-stone-400">Players</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={8}
+                    value={maxPlayers}
+                    onChange={(event) => setMaxPlayers(Number(event.target.value))}
+                    className={inputClass}
+                  />
+                </label>
+              ) : null}
               <label className="block">
                 <span className="mb-1 block text-stone-400">Start level</span>
                 <input
@@ -223,7 +231,9 @@ export function CreateCampaignDialog({
                 >
                   <span className="block font-medium">Real dice allowed</span>
                   <span className="block text-xs opacity-80">
-                    Players may opt in to rolling at the table
+                    {solo
+                      ? "Roll at your desk and enter the numbers"
+                      : "Players may opt in to rolling at the table"}
                   </span>
                 </button>
               </div>
@@ -276,7 +286,7 @@ export function CreateCampaignDialog({
             {error ? <p className="text-red-400">{error}</p> : null}
             <button type="submit" disabled={busy} className={cn(ui.btnPrimary, "w-full")}>
               {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-              Create campaign
+              {solo ? "Create adventure" : "Create campaign"}
             </button>
           </form>
         </Dialog.Content>

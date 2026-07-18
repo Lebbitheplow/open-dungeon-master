@@ -87,9 +87,9 @@ export default function AbilityEditor({
   }
 
   return (
-    <section>
+    <section className="panel rounded-xl p-4">
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <h2 className="font-medium">Ability scores</h2>
+        <h2 className="eyebrow text-xs text-amber-200/90">Ability scores</h2>
         <div className="flex rounded-md border border-stone-700 p-0.5 text-xs">
           {(
             [

@@ -41,8 +41,8 @@ export default function EquipmentSection({
   const openSuggestions = suggestions.filter((weapon) => !have.has(weapon.name));
 
   return (
-    <section>
-      <h2 className="mb-1 font-medium">Equipment</h2>
+    <section className="panel rounded-xl p-4">
+      <h2 className="eyebrow mb-1 text-xs text-amber-200/90">Equipment</h2>
       {openSuggestions.length ? (
         <div className="mb-2">
           <p className="mb-1.5 text-xs text-stone-500">Suggested for your class:</p>

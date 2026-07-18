@@ -146,7 +146,7 @@ export function LeadEditDialog({
           )}
         >
           <div className="mb-3 flex items-center justify-between">
-            <Dialog.Title className="flex items-center gap-2 font-serif text-lg text-stone-100">
+            <Dialog.Title className="flex items-center gap-2 font-display text-lg tracking-wide text-amber-50">
               <Wrench className="size-4 text-amber-300" /> Adjust {sheet.name}
             </Dialog.Title>
             <Dialog.Close className="text-stone-500 hover:text-stone-300">

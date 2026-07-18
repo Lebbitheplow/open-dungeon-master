@@ -171,7 +171,7 @@ export function CharacterNotesDialog({
           )}
         >
           <div className="mb-3 flex items-center justify-between">
-            <Dialog.Title className="flex items-center gap-2 font-serif text-lg text-stone-100">
+            <Dialog.Title className="flex items-center gap-2 font-display text-lg tracking-wide text-amber-50">
               <StickyNote className="size-4 text-amber-300" /> Notes on {sheet.name}
             </Dialog.Title>
             <Dialog.Close className="text-stone-500 hover:text-stone-300">

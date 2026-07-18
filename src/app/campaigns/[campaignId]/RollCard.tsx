@@ -25,14 +25,15 @@ export function RollCard({ roll, characterName }: { roll: StoredRoll; characterN
   return (
     <div
       className={cn(
-        "inline-flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-sm",
-        roll.breakdown.crit === "nat20" && "border-emerald-700 bg-emerald-950/40",
-        roll.breakdown.crit === "nat1" && "border-red-800 bg-red-950/40",
-        !roll.breakdown.crit && "border-stone-700 bg-stone-900/60",
+        "inline-flex animate-fade-up flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-sm shadow-elev-1",
+        roll.breakdown.crit === "nat20" &&
+          "border-amber-500/60 bg-amber-950/40 shadow-glow-gold-strong",
+        roll.breakdown.crit === "nat1" && "border-ember-500/60 bg-red-950/40 shadow-glow-ember",
+        !roll.breakdown.crit && "border-stone-700/70 bg-stone-900/70",
       )}
     >
       <span className="flex items-center gap-1.5 text-stone-300">
-        <Dices className="size-4 text-amber-200" />
+        <Dices className="size-4 text-amber-300" />
         {characterName ? `${characterName} · ` : ""}
         {label}
         {detail ? ` (${detail})` : ""}
@@ -50,8 +51,8 @@ export function RollCard({ roll, characterName }: { roll: StoredRoll; characterN
       <span
         className={cn(
           "font-mono text-base font-semibold",
-          roll.breakdown.crit === "nat20" && "text-emerald-300",
-          roll.breakdown.crit === "nat1" && "text-red-300",
+          roll.breakdown.crit === "nat20" && "text-amber-200",
+          roll.breakdown.crit === "nat1" && "text-ember-300",
         )}
       >
         = {roll.total}
@@ -67,9 +68,9 @@ export function RollCard({ roll, characterName }: { roll: StoredRoll; characterN
         </span>
       ) : null}
       {roll.breakdown.crit === "nat20" ? (
-        <span className="text-xs font-medium text-emerald-300">Natural 20!</span>
+        <span className="animate-twinkle text-xs font-semibold text-amber-200">Natural 20!</span>
       ) : roll.breakdown.crit === "nat1" ? (
-        <span className="text-xs font-medium text-red-300">Natural 1</span>
+        <span className="text-xs font-medium text-ember-300">Natural 1</span>
       ) : null}
     </div>
   );

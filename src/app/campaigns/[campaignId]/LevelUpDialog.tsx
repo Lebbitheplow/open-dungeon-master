@@ -2,13 +2,16 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { Dices, Loader2, Sparkles, X } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import { abilityMod, findClass, spellSlotsFor } from "@/lib/srd";
-import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { applyAsiChoices, crossedAsiLevels } from "@/lib/srd/asi";
+import AsiFeatEditor from "@/app/characters/builder/AsiFeatEditor";
+import type { AsiChoice, CharacterSheet } from "@/lib/schemas/sheet";
 
-// Guided level-up: pick average or rolled HP; hit dice and spell slots are
-// recomputed server-side shapes here and saved through the sheet PATCH.
+// Guided level-up: pick average or rolled HP, then resolve any Ability
+// Score Improvements the new level crosses (4/8/12/16/19). Everything is
+// saved through a single sheet PATCH.
 export function LevelUpDialog({
   campaignId,
   sheet,
@@ -21,6 +24,8 @@ export function LevelUpDialog({
   onDone: () => void;
 }) {
   const [rolledHp, setRolledHp] = useState<number | null>(null);
+  const [hpGain, setHpGain] = useState<number | null>(null);
+  const [asiChoices, setAsiChoices] = useState<Array<AsiChoice | null>>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -32,6 +37,12 @@ export function LevelUpDialog({
   const rolledGain =
     rolledHp !== null ? Math.max(1, rolledHp + conMod * levelsGained) : null;
 
+  const asiLevels = useMemo(
+    () => crossedAsiLevels(sheet.level, targetLevel),
+    [sheet.level, targetLevel],
+  );
+  const asiResolved = asiLevels.every((_, index) => asiChoices[index]);
+
   function rollHp() {
     let total = 0;
     for (let i = 0; i < levelsGained; i += 1) {
@@ -40,11 +51,24 @@ export function LevelUpDialog({
     setRolledHp(total);
   }
 
-  async function apply(gain: number) {
+  // With ASIs to resolve, an HP pick advances to step two; otherwise it
+  // applies immediately, as before.
+  function pickHp(gain: number) {
+    if (asiLevels.length) {
+      setHpGain(gain);
+    } else {
+      apply(gain, []);
+    }
+  }
+
+  async function apply(gain: number, choices: AsiChoice[]) {
     setBusy(true);
     setError("");
     try {
       const slots = spellSlotsFor(sheet.class, targetLevel);
+      const newFeats = choices.flatMap((choice) =>
+        choice.mode === "feat" ? [choice.feat] : [],
+      );
       const response = await fetch(`/api/campaigns/${campaignId}/sheet`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -53,6 +77,12 @@ export function LevelUpDialog({
           maxHp: sheet.maxHp + gain,
           currentHp: Math.min(sheet.currentHp + gain, sheet.maxHp + gain),
           hitDice: { ...sheet.hitDice, total: targetLevel },
+          ...(choices.length
+            ? { abilities: applyAsiChoices(sheet.abilities, choices) }
+            : {}),
+          ...(newFeats.length
+            ? { feats: [...new Set([...sheet.feats, ...newFeats])] }
+            : {}),
           ...(sheet.spellcasting && Object.keys(slots).length
             ? {
                 spellcasting: {
@@ -87,13 +117,22 @@ export function LevelUpDialog({
     }
   }
 
+  const onAsiStep = hpGain !== null;
+
   return (
     <Dialog.Root open onOpenChange={(open) => !open && onDone()}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/60" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 w-[min(92vw,24rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-amber-900/60 bg-stone-950 p-6 shadow-xl">
+        <Dialog.Content
+          className={cn(
+            "fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 panel ornate rounded-xl border-amber-500/40 p-6",
+            onAsiStep
+              ? "max-h-[85vh] w-[min(92vw,32rem)] overflow-y-auto"
+              : "w-[min(92vw,24rem)]",
+          )}
+        >
           <div className="mb-4 flex items-center justify-between">
-            <Dialog.Title className="flex items-center gap-2 font-serif text-lg font-semibold text-amber-100">
+            <Dialog.Title className="flex items-center gap-2 font-display text-lg tracking-wide text-amber-100">
               <Sparkles className="size-5 text-amber-200" />
               Level {targetLevel}!
             </Dialog.Title>
@@ -102,47 +141,87 @@ export function LevelUpDialog({
             </Dialog.Close>
           </div>
 
-          <p className="mb-4 text-sm text-stone-300">
-            {sheet.name} advances to level {targetLevel}. Choose how to gain hit points
-            ({levelsGained} d{hitDie}
-            {conMod ? ` ${conMod > 0 ? "+" : ""}${conMod} CON each` : ""}):
-          </p>
+          {!onAsiStep ? (
+            <>
+              <p className="mb-4 text-sm text-stone-300">
+                {sheet.name} advances to level {targetLevel}. Choose how to gain hit points
+                ({levelsGained} d{hitDie}
+                {conMod ? ` ${conMod > 0 ? "+" : ""}${conMod} CON each` : ""}):
+              </p>
 
-          <div className="space-y-2">
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => apply(averageGain)}
-              className="flex w-full items-center justify-between rounded-md border border-stone-700 px-4 py-2.5 text-sm hover:border-amber-700 hover:bg-stone-900 disabled:opacity-50"
-            >
-              <span>Take the average</span>
-              <span className="font-mono text-amber-400">+{averageGain} HP</span>
-            </button>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={rollHp}
-                className="flex flex-1 items-center justify-center gap-2 rounded-md border border-stone-700 px-4 py-2.5 text-sm hover:border-amber-700 hover:bg-stone-900 disabled:opacity-50"
-              >
-                <Dices className="size-4" />
-                {rolledHp === null ? `Roll ${levelsGained}d${hitDie}` : `Rolled ${rolledHp}`}
-              </button>
-              {rolledGain !== null ? (
+              <div className="space-y-2">
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => apply(rolledGain)}
-                  className={cn(
-                    "rounded-lg bg-amber-200 px-4 py-2.5 text-sm font-medium text-stone-950",
-                    "hover:bg-amber-100 disabled:opacity-50",
-                  )}
+                  onClick={() => pickHp(averageGain)}
+                  className="flex w-full items-center justify-between rounded-md border border-stone-700 px-4 py-2.5 text-sm hover:border-amber-700 hover:bg-stone-900 disabled:opacity-50"
                 >
-                  {busy ? <Loader2 className="size-4 animate-spin" /> : `Take +${rolledGain} HP`}
+                  <span>Take the average</span>
+                  <span className="font-mono text-amber-400">+{averageGain} HP</span>
                 </button>
-              ) : null}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={rollHp}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-md border border-stone-700 px-4 py-2.5 text-sm hover:border-amber-700 hover:bg-stone-900 disabled:opacity-50"
+                  >
+                    <Dices className="size-4" />
+                    {rolledHp === null ? `Roll ${levelsGained}d${hitDie}` : `Rolled ${rolledHp}`}
+                  </button>
+                  {rolledGain !== null ? (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => pickHp(rolledGain)}
+                      className={cn(
+                        "rounded-lg bg-amber-200 px-4 py-2.5 text-sm font-medium text-stone-950",
+                        "hover:bg-amber-100 disabled:opacity-50",
+                      )}
+                    >
+                      {busy ? <Loader2 className="size-4 animate-spin" /> : `Take +${rolledGain} HP`}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-4 text-sm">
+              <p className="text-stone-300">
+                +{hpGain} HP locked in. This level also grants
+                {asiLevels.length === 1 ? " an ability score improvement" : " ability score improvements"}:
+              </p>
+              <AsiFeatEditor
+                slotLevels={asiLevels}
+                baseScores={sheet.abilities}
+                choices={asiLevels.map((_, index) => asiChoices[index] ?? null)}
+                onChange={setAsiChoices}
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setHpGain(null)}
+                  className="rounded-md border border-stone-700 px-4 py-2.5 text-sm text-stone-300 hover:bg-stone-900 disabled:opacity-50"
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || !asiResolved}
+                  onClick={() =>
+                    apply(
+                      hpGain,
+                      asiChoices.filter((choice): choice is AsiChoice => choice !== null),
+                    )
+                  }
+                  className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-amber-200 px-4 py-2.5 text-sm font-medium text-stone-950 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {busy ? <Loader2 className="size-4 animate-spin" /> : "Confirm level up"}
+                </button>
+              </div>
             </div>
-          </div>
+          )}
           {error ? <p className="mt-3 text-sm text-red-400">{error}</p> : null}
         </Dialog.Content>
       </Dialog.Portal>

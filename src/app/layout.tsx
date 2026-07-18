@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Source_Serif_4 } from "next/font/google";
+import { Cinzel, Geist, Geist_Mono, Source_Serif_4 } from "next/font/google";
+import TopoBackground from "./TopoBackground";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -18,6 +19,14 @@ const sourceSerif = Source_Serif_4({
   style: ["normal", "italic"],
 });
 
+// Engraved-capitals display face for wordmarks, screen titles, and
+// campaign names; body text stays on Geist/Source Serif.
+const cinzel = Cinzel({
+  variable: "--font-display",
+  subsets: ["latin"],
+  weight: ["400", "600", "700"],
+});
+
 export const metadata: Metadata = {
   title: "Open Dungeon Master",
   description: "Multiplayer D&D 5e campaigns with an AI Dungeon Master.",
@@ -31,11 +40,14 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${sourceSerif.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${sourceSerif.variable} ${cinzel.variable} h-full antialiased`}
       // browser extensions inject attributes into <html> before React loads
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <TopoBackground />
+        {children}
+      </body>
     </html>
   );
 }

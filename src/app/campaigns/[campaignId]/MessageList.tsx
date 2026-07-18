@@ -90,7 +90,7 @@ function DmContent({ content, rollsById, sheetsById }: {
   }
 
   return (
-    <div className="space-y-2">
+    <div className="narration space-y-2">
       {parts.map((part, index) =>
         part.kind === "text" ? (
           <p
@@ -147,7 +147,8 @@ export function MessageList({
   }, [messages.length, dmDraft, dmStatus]);
 
   return (
-    <div className="flex-1 space-y-7 overflow-y-auto px-4 py-6">
+    <div className="flex-1 overflow-y-auto">
+      <div className="mx-auto max-w-3xl space-y-8 px-4 py-6 sm:px-6">
       {messages.map((message) => {
         if (message.authorType === "system") {
           if (message.content.startsWith(LEAD_NOTE_PREFIX)) {
@@ -187,9 +188,11 @@ export function MessageList({
         }
         if (message.authorType === "dm") {
           return (
-            <div key={message.id} className="group">
-              <p className="mb-1.5 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-amber-200/70">
+            <div key={message.id} className="group animate-fade-up">
+              <p className="eyebrow mb-2 flex items-center gap-2 text-[10px] text-amber-300/80">
+                <span className="h-px w-8 bg-gradient-to-r from-transparent to-amber-500/60" />
                 Dungeon Master
+                <span className="h-px flex-1 bg-gradient-to-r from-amber-500/40 to-transparent" />
                 {onReplayAudio ? (
                   <button
                     type="button"
@@ -258,21 +261,21 @@ export function MessageList({
           sheet?.portrait?.url ??
           (message.userId ? membersById.get(message.userId)?.avatar?.url : undefined);
         return (
-          <div key={message.id} className="ml-auto max-w-[92%] sm:max-w-2xl">
-            <p className="mb-0.5 flex items-center justify-end gap-1.5 text-right text-xs font-medium text-amber-200/60">
+          <div key={message.id} className="ml-auto max-w-[92%] animate-fade-up sm:max-w-2xl">
+            <p className="mb-1 flex items-center justify-end gap-1.5 text-right text-xs font-medium text-amber-200/80">
               {portraitUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={portraitUrl}
                   alt=""
-                  className="size-5 rounded-full border border-stone-700 object-cover"
+                  className="size-6 rounded-full border border-amber-500/30 object-cover"
                 />
               ) : null}
               {sheet?.name ?? "Player"}
             </p>
             <div
               className={cn(
-                "rounded-2xl rounded-br-md border border-stone-800/70 bg-stone-900/60 px-4 py-3 text-sm leading-6 text-stone-300",
+                "rounded-2xl rounded-br-md border border-stone-700/50 bg-stone-900/70 px-4 py-3 text-sm leading-6 text-stone-200 shadow-elev-1",
                 message.content.startsWith("(ooc)") && "italic text-stone-500",
               )}
             >
@@ -284,8 +287,10 @@ export function MessageList({
 
       {dmDraft ? (
         <div>
-          <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-amber-200/70">
+          <p className="eyebrow mb-2 flex items-center gap-2 text-[10px] text-amber-300/80">
+            <span className="h-px w-8 bg-gradient-to-r from-transparent to-amber-500/60" />
             Dungeon Master
+            <span className="h-px flex-1 bg-gradient-to-r from-amber-500/40 to-transparent" />
           </p>
           <p className="whitespace-pre-wrap text-pretty font-serif text-base leading-relaxed text-stone-100">
             {dmDraft}
@@ -308,6 +313,7 @@ export function MessageList({
       ) : null}
 
       <div ref={bottomRef} />
+      </div>
     </div>
   );
 }
