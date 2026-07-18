@@ -1,7 +1,7 @@
 import Database from "better-sqlite3-multiple-ciphers";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import { serverEnv } from "@/lib/server-env";
+import { serverEnv } from "../server-env.ts";
 
 const dbPath =
   process.env.SQLITE_DB_PATH || path.join(process.cwd(), "data", "local-roleplay.sqlite");
@@ -290,6 +290,25 @@ function ensureSchema(db: Database.Database) {
 
     CREATE INDEX IF NOT EXISTS idx_character_events_library
       ON character_events(library_character_id, created_at);
+
+    -- Story chapters: closed spans of the campaign transcript with an AI
+    -- title/summary/highlights, plus one open chapter accumulating messages.
+    CREATE TABLE IF NOT EXISTS chapters (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      chapter_index INTEGER NOT NULL,
+      title TEXT NOT NULL DEFAULT '',
+      summary TEXT NOT NULL DEFAULT '',
+      highlights_json TEXT NOT NULL DEFAULT '[]',
+      seq_start INTEGER NOT NULL,
+      seq_end INTEGER,
+      status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','closed')),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE (campaign_id, chapter_index)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_chapters_campaign ON chapters(campaign_id, chapter_index);
   `);
 
   // Compaction memory: a rolling "story so far" summary plus a watermark of
@@ -333,7 +352,15 @@ function ensureSchema(db: Database.Database) {
     ["floor_json", `TEXT NOT NULL DEFAULT '{"mode":"open"}'`],
     // Guard so the resume recap is inserted at most once per idle gap.
     ["last_recap_seq", `INTEGER NOT NULL DEFAULT 0`],
+    // Party lead: the player who can steer the story and fix stats when the
+    // AI DM errs. Null means the campaign owner leads.
+    ["party_lead_user_id", `TEXT`],
   ]);
+
+  const userColumns = db.prepare(`PRAGMA table_info(users)`).all() as Array<{ name: string }>;
+  if (!userColumns.some((column) => column.name === "avatar_json")) {
+    db.exec(`ALTER TABLE users ADD COLUMN avatar_json TEXT`);
+  }
 
   addColumns("campaign_members", [
     // Player opted in to rolling physical dice (when the campaign allows it).
