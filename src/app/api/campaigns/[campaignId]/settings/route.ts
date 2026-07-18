@@ -1,4 +1,4 @@
-import { isErrorResponse, requireMember } from "@/lib/campaign-api";
+import { isErrorResponse, requireLead } from "@/lib/campaign-api";
 import { updateGameSettings } from "@/lib/db/campaigns";
 import { gameSettingsSchema } from "@/lib/schemas/game-settings";
 import { publishPersisted } from "@/lib/events";
@@ -6,18 +6,15 @@ import { publishPersisted } from "@/lib/events";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Owner-only game settings edit (allowed in lobby and mid-campaign).
+// Party-lead game settings edit (allowed in lobby and mid-campaign).
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ campaignId: string }> },
 ) {
   const { campaignId } = await params;
-  const context = await requireMember(campaignId);
+  const context = await requireLead(campaignId);
   if (isErrorResponse(context)) {
     return context;
-  }
-  if (context.campaign.role !== "owner") {
-    return Response.json({ error: "Only the owner can change settings." }, { status: 403 });
   }
 
   const raw = await request.json().catch(() => ({}));

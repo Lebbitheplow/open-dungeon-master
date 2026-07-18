@@ -39,6 +39,7 @@ type CampaignRow = {
   theme: string;
   settings_json: string;
   game_settings_json: string;
+  party_lead_user_id: string | null;
   dm_outline: string;
   floor_json: string;
   scene: string;
@@ -91,6 +92,7 @@ function mapCampaign(row: CampaignRow): Campaign {
     difficulty: row.difficulty,
     theme: row.theme,
     ownerUserId: row.owner_user_id,
+    leadUserId: row.party_lead_user_id ?? row.owner_user_id,
     playerCount: Number(row.player_count ?? 0),
     role: row.member_role ?? (row.owner_user_id ? "player" : "player"),
     createdAt: row.created_at,
@@ -327,6 +329,24 @@ export function setFloor(campaignId: string, floor: Floor) {
   getDatabase()
     .prepare(`UPDATE campaigns SET floor_json = ? WHERE id = ?`)
     .run(JSON.stringify(floor), campaignId);
+}
+
+// Transfers the party lead to another member. Returns false when the
+// target is not a member of the campaign.
+export function setPartyLead(campaignId: string, userId: string): boolean {
+  const db = getDatabase();
+  const member = db
+    .prepare(`SELECT 1 FROM campaign_members WHERE campaign_id = ? AND user_id = ?`)
+    .get(campaignId, userId);
+  if (!member) {
+    return false;
+  }
+  db.prepare(`UPDATE campaigns SET party_lead_user_id = ?, updated_at = ? WHERE id = ?`).run(
+    userId,
+    nowIso(),
+    campaignId,
+  );
+  return true;
 }
 
 export function setMemberRealDice(campaignId: string, userId: string, useRealDice: boolean) {

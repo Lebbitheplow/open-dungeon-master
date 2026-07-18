@@ -48,8 +48,8 @@ export async function POST(
 
   const isFallback = "fallback" in parsed.data;
   const isRoller = pending.userId === context.user.id;
-  const isOwner = context.campaign.role === "owner";
-  if (isFallback ? !isRoller && !isOwner : !isRoller) {
+  const isPartyLead = context.campaign.leadUserId === context.user.id;
+  if (isFallback ? !isRoller && !isPartyLead : !isRoller) {
     return Response.json({ error: "This is not your roll." }, { status: 403 });
   }
 

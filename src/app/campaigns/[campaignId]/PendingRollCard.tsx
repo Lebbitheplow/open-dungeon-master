@@ -17,13 +17,13 @@ export function PendingRollCard({
   pending,
   sheets,
   meUserId,
-  isOwner,
+  isLead,
 }: {
   campaignId: string;
   pending: PendingRoll;
   sheets: CharacterSheet[];
   meUserId: string;
-  isOwner: boolean;
+  isLead: boolean;
 }) {
   const [values, setValues] = useState<Record<number, string>>({});
   const [busy, setBusy] = useState(false);
@@ -84,7 +84,7 @@ export function PendingRollCard({
           <Dices className="size-4 animate-pulse text-amber-200" />
           Waiting for {character?.name ?? "a player"} to roll {pending.expression} with real dice
         </span>
-        {isOwner && stale ? (
+        {isLead && stale ? (
           <button
             type="button"
             disabled={busy}

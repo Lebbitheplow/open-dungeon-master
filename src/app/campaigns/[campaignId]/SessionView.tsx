@@ -13,7 +13,7 @@ import { SidePanel } from "@/app/campaigns/[campaignId]/SidePanel";
 import { useNarrationAudio } from "@/app/campaigns/[campaignId]/useNarrationAudio";
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
 
-type InputKind = "do" | "say" | "ooc";
+type InputKind = "do" | "say" | "ooc" | "lead";
 
 export function SessionView({ state }: { state: CampaignState }) {
   const {
@@ -60,13 +60,16 @@ export function SessionView({ state }: { state: CampaignState }) {
     ? levelUps.find((notice) => notice.characterId === mySheet.id)
     : undefined;
   const floor = campaign.floor ?? { mode: "open" as const };
-  const isOwner = campaign.ownerUserId === me.id;
+  const isLead = campaign.leadUserId === me.id;
   const spotlighted =
     floor.mode === "spotlight"
       ? sheets.filter((sheet) => floor.userIds.includes(sheet.userId))
       : [];
   const floorBlocked =
-    floor.mode === "spotlight" && !floor.userIds.includes(me.id) && kind !== "ooc";
+    floor.mode === "spotlight" &&
+    !floor.userIds.includes(me.id) &&
+    kind !== "ooc" &&
+    kind !== "lead";
 
   async function releaseFloor() {
     await fetch(`/api/campaigns/${campaign!.id}/floor`, { method: "POST" });
@@ -81,11 +84,18 @@ export function SessionView({ state }: { state: CampaignState }) {
     setSending(true);
     setError("");
     try {
-      const response = await fetch(`/api/campaigns/${campaign!.id}/actions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content, kind }),
-      });
+      const response =
+        kind === "lead"
+          ? await fetch(`/api/campaigns/${campaign!.id}/lead-note`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ content }),
+            })
+          : await fetch(`/api/campaigns/${campaign!.id}/actions`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ content, kind }),
+            });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
         setError(data.error || "Could not send your action.");
@@ -202,7 +212,7 @@ export function SessionView({ state }: { state: CampaignState }) {
                 pending={pending}
                 sheets={sheets}
                 meUserId={me.id}
-                isOwner={isOwner}
+                isLead={isLead}
               />
             ))}
             {floor.mode === "spotlight" ? (
@@ -214,7 +224,7 @@ export function SessionView({ state }: { state: CampaignState }) {
                     <span className="text-amber-200/80"> · {floor.prompt}</span>
                   ) : null}
                 </span>
-                {isOwner ? (
+                {isLead ? (
                   <button
                     type="button"
                     onClick={releaseFloor}
@@ -226,21 +236,36 @@ export function SessionView({ state }: { state: CampaignState }) {
               </div>
             ) : null}
             <div className="mb-2 flex gap-1.5">
-              {(["do", "say", "ooc"] as const).map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => setKind(option)}
-                  className={cn(
-                    "rounded-full px-3 py-1 text-xs font-medium",
-                    kind === option
-                      ? "bg-amber-200 text-stone-950"
-                      : "bg-stone-900 text-stone-400 hover:text-stone-200",
-                  )}
-                >
-                  {option === "do" ? "Do" : option === "say" ? "Say" : "OOC"}
-                </button>
-              ))}
+              {(["do", "say", "ooc", ...(isLead ? (["lead"] as const) : [])] as const).map(
+                (option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => setKind(option)}
+                    title={
+                      option === "lead"
+                        ? "Party lead: send an authoritative story direction to the DM"
+                        : undefined
+                    }
+                    className={cn(
+                      "rounded-full px-3 py-1 text-xs font-medium",
+                      kind === option
+                        ? option === "lead"
+                          ? "bg-amber-600 text-stone-950"
+                          : "bg-amber-200 text-stone-950"
+                        : "bg-stone-900 text-stone-400 hover:text-stone-200",
+                    )}
+                  >
+                    {option === "do"
+                      ? "Do"
+                      : option === "say"
+                        ? "Say"
+                        : option === "ooc"
+                          ? "OOC"
+                          : "Direct"}
+                  </button>
+                ),
+              )}
               {dmStatus !== "idle" ? (
                 <span className="ml-auto flex items-center gap-1.5 text-xs text-stone-500">
                   <Dices className="size-3.5 animate-bounce text-amber-600" />
@@ -267,7 +292,9 @@ export function SessionView({ state }: { state: CampaignState }) {
                       ? `What does ${mySheet?.name ?? "your character"} do?`
                       : kind === "say"
                         ? `What does ${mySheet?.name ?? "your character"} say?`
-                        : "Out-of-character note to the table"
+                        : kind === "ooc"
+                          ? "Out-of-character note to the table"
+                          : "Steer the story: an event or direction the DM must weave in"
                 }
                 className="flex-1 resize-none bg-transparent px-2 py-1.5 text-sm text-stone-200 outline-none disabled:opacity-50"
               />
@@ -293,7 +320,9 @@ export function SessionView({ state }: { state: CampaignState }) {
           campaignId={campaign.id}
           sheets={sheets}
           meUserId={me.id}
-          isOwner={isOwner}
+          isLead={isLead}
+          leadUserId={campaign.leadUserId}
+          canTransferLead={isLead || campaign.ownerUserId === me.id}
           onAdjustHp={adjustHp}
           spotlightUserIds={floor.mode === "spotlight" ? floor.userIds : []}
           auditLog={auditLog}

@@ -2,7 +2,7 @@ import type { Campaign } from "@/lib/db/campaigns";
 import type { CampaignMessage } from "@/lib/db/messages";
 import type { StoredRoll } from "@/lib/db/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import type { CampaignMember } from "@/lib/campaign-types";
+import { LEAD_NOTE_PREFIX, type CampaignMember } from "@/lib/campaign-types";
 import { computeSheetDerived, findSkill, formatModifier, SRD_SKILLS } from "@/lib/srd";
 import { genrePreset } from "@/lib/genres";
 import type { ChatMessage } from "@/lib/model-client";
@@ -356,7 +356,9 @@ export function buildDmMessages(
       message.authorType === "dm"
         ? message.content
         : message.authorType === "system"
-          ? `[Table note] ${message.content}`
+          ? message.content.startsWith(LEAD_NOTE_PREFIX)
+            ? `[Authoritative direction from the party lead; weave it into the story now] ${message.content.slice(LEAD_NOTE_PREFIX.length)}`
+            : `[Table note] ${message.content}`
           : `[${name}] ${message.content}`;
     budget -= content.length;
     if (budget < 0 && historyMessages.length > 0) {

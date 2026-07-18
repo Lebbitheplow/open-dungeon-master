@@ -23,3 +23,20 @@ export async function requireMember(
 export function isErrorResponse(value: MemberContext | Response): value is Response {
   return value instanceof Response;
 }
+
+export function isLead(context: MemberContext): boolean {
+  return context.user.id === context.campaign.leadUserId;
+}
+
+// Membership plus party-lead check; the lead steers the story and fixes
+// stats when the AI DM errs.
+export async function requireLead(campaignId: string): Promise<MemberContext | Response> {
+  const context = await requireMember(campaignId);
+  if (isErrorResponse(context)) {
+    return context;
+  }
+  if (!isLead(context)) {
+    return Response.json({ error: "Only the party lead can do that." }, { status: 403 });
+  }
+  return context;
+}

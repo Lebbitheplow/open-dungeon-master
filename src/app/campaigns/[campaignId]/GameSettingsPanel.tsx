@@ -7,16 +7,16 @@ import { GENRE_PRESETS, genrePreset } from "@/lib/genres";
 import { TTS_VOICES } from "@/lib/tts-voices";
 import type { DicePolicy, GameSettings, Genre } from "@/lib/schemas/game-settings";
 
-// Lobby game-settings section: the owner edits live (PATCHes propagate to
+// Lobby game-settings section: the party lead edits live (PATCHes propagate to
 // everyone over SSE); other players see a read-only summary.
 export function GameSettingsPanel({
   campaignId,
   settings,
-  isOwner,
+  isLead,
 }: {
   campaignId: string;
   settings: GameSettings;
-  isOwner: boolean;
+  isLead: boolean;
 }) {
   const [busy, setBusy] = useState(false);
 
@@ -37,7 +37,7 @@ export function GameSettingsPanel({
   const selectClass =
     "rounded-md border border-stone-700 bg-stone-900 px-2 py-1 text-xs outline-none focus:border-amber-600";
 
-  if (!isOwner) {
+  if (!isLead) {
     return (
       <section className="mb-6 rounded-lg border border-stone-800 bg-stone-950/60 p-4">
         <h2 className="mb-2 text-sm font-medium text-stone-300">Game settings</h2>

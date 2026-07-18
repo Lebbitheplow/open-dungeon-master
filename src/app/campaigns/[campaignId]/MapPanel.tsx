@@ -11,11 +11,11 @@ import type { CampaignLocation } from "@/app/campaigns/[campaignId]/useCampaignS
 export function MapPanel({
   campaignId,
   locations,
-  isOwner,
+  isLead,
 }: {
   campaignId: string;
   locations: CampaignLocation[];
-  isOwner: boolean;
+  isLead: boolean;
 }) {
   const current = locations.find((location) => location.isCurrent) ?? null;
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -60,7 +60,7 @@ export function MapPanel({
                 </span>
               ) : null}
             </h3>
-            {isOwner ? (
+            {isLead ? (
               <button
                 type="button"
                 onClick={regenerate}

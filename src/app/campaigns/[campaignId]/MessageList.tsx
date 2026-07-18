@@ -1,8 +1,9 @@
 "use client";
 
-import { Volume2 } from "lucide-react";
+import { Crown, Volume2 } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { cn } from "@/lib/cn";
+import { LEAD_NOTE_PREFIX } from "@/lib/campaign-types";
 import type { CampaignMessage } from "@/lib/db/messages";
 import type { StoredRoll } from "@/lib/db/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -85,6 +86,21 @@ export function MessageList({
     <div className="flex-1 space-y-7 overflow-y-auto px-4 py-6">
       {messages.map((message) => {
         if (message.authorType === "system") {
+          if (message.content.startsWith(LEAD_NOTE_PREFIX)) {
+            return (
+              <div
+                key={message.id}
+                className="mx-auto max-w-xl rounded-lg border border-amber-900/60 bg-amber-950/30 px-4 py-2.5"
+              >
+                <p className="mb-0.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-amber-300">
+                  <Crown className="size-3.5" /> Party Lead
+                </p>
+                <p className="text-sm text-amber-100/90">
+                  {message.content.slice(LEAD_NOTE_PREFIX.length)}
+                </p>
+              </div>
+            );
+          }
           return (
             <p
               key={message.id}

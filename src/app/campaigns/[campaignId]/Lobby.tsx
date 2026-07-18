@@ -1,7 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { Check, Copy, Dices, Link as LinkIcon, Loader2, Play, UserRound } from "lucide-react";
+import {
+  Check,
+  Copy,
+  Crown,
+  Dices,
+  Link as LinkIcon,
+  Loader2,
+  Play,
+  UserRound,
+} from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
@@ -22,6 +31,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
   const myMember = members.find((member) => member.userId === me.id);
   const mySheet = sheets.find((sheet) => sheet.userId === me.id);
   const isOwner = campaign.ownerUserId === me.id;
+  const isLead = campaign.leadUserId === me.id;
   const allReady = members.length > 0 && members.every((member) => member.ready);
   const allHaveSheets = members.every((member) =>
     sheets.some((sheet) => sheet.userId === member.userId),
@@ -73,6 +83,14 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
     );
     setLinkCopied(true);
     setTimeout(() => setLinkCopied(false), 1500);
+  }
+
+  async function makeLead(userId: string) {
+    await fetch(`/api/campaigns/${campaign!.id}/lead`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    });
   }
 
   async function toggleRealDice() {
@@ -135,7 +153,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
       <GameSettingsPanel
         campaignId={campaign.id}
         settings={campaign.gameSettings}
-        isOwner={isOwner}
+        isLead={isLead}
       />
 
       {campaign.gameSettings.dicePolicy === "real_allowed" && mySheet ? (
@@ -179,7 +197,11 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
                   <div>
                     <p className="font-medium">
                       {member.username}
-                      {member.role === "owner" ? (
+                      {member.userId === campaign.leadUserId ? (
+                        <span className="ml-2 rounded-full bg-amber-950 px-2 py-0.5 text-xs text-amber-300">
+                          <Crown className="mr-0.5 inline size-3" /> party lead
+                        </span>
+                      ) : member.role === "owner" ? (
                         <span className="ml-2 rounded-full bg-amber-950 px-2 py-0.5 text-xs text-amber-300">
                           owner
                         </span>
@@ -193,6 +215,16 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
                   </div>
                 </div>
                 <span className="flex items-center gap-1.5">
+                  {(isLead || isOwner) && member.userId !== campaign.leadUserId ? (
+                    <button
+                      type="button"
+                      onClick={() => makeLead(member.userId)}
+                      className="rounded-full border border-stone-700 px-2 py-0.5 text-xs text-stone-400 hover:bg-stone-900"
+                      title="Hand the party lead to this player"
+                    >
+                      <Crown className="mr-0.5 inline size-3" /> make lead
+                    </button>
+                  ) : null}
                   {member.useRealDice ? (
                     <span
                       className="rounded-full bg-amber-950 px-2 py-0.5 text-xs text-amber-300"

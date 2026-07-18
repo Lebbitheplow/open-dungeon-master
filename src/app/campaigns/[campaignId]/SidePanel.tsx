@@ -19,7 +19,9 @@ export function SidePanel({
   campaignId,
   sheets,
   meUserId,
-  isOwner,
+  isLead,
+  leadUserId,
+  canTransferLead,
   onAdjustHp,
   spotlightUserIds,
   auditLog,
@@ -29,7 +31,9 @@ export function SidePanel({
   campaignId: string;
   sheets: CharacterSheet[];
   meUserId: string;
-  isOwner: boolean;
+  isLead: boolean;
+  leadUserId: string;
+  canTransferLead: boolean;
   onAdjustHp: (delta: number) => void;
   spotlightUserIds: string[];
   auditLog: AuditEntry[];
@@ -69,10 +73,13 @@ export function SidePanel({
             meUserId={meUserId}
             onAdjustHp={onAdjustHp}
             spotlightUserIds={spotlightUserIds}
+            isLead={isLead}
+            leadUserId={leadUserId}
+            canTransferLead={canTransferLead}
             embedded
           />
         ) : tab === "map" ? (
-          <MapPanel campaignId={campaignId} locations={locations} isOwner={isOwner} />
+          <MapPanel campaignId={campaignId} locations={locations} isLead={isLead} />
         ) : (
           <EventLog auditLog={auditLog} sheets={sheets} />
         )}

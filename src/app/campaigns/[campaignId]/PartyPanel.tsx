@@ -1,8 +1,9 @@
 "use client";
 
-import { Check, Heart, Save, Shield } from "lucide-react";
+import { Check, Crown, Heart, Save, Shield, Wrench } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
+import { LeadEditDialog } from "@/app/campaigns/[campaignId]/LeadEditDialog";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { computeSheetDerived, formatModifier } from "@/lib/srd";
 
@@ -49,13 +50,21 @@ export function PartyPanel({
   onAdjustHp,
   spotlightUserIds = [],
   embedded = false,
+  isLead = false,
+  leadUserId = "",
+  canTransferLead = false,
 }: {
   sheets: CharacterSheet[];
   meUserId: string;
   onAdjustHp: (delta: number) => void;
   spotlightUserIds?: string[];
   embedded?: boolean;
+  isLead?: boolean;
+  leadUserId?: string;
+  canTransferLead?: boolean;
 }) {
+  const [editingSheetId, setEditingSheetId] = useState("");
+  const editingSheet = sheets.find((sheet) => sheet.id === editingSheetId);
   const Wrapper = embedded ? "div" : "aside";
   return (
     <Wrapper
@@ -82,7 +91,12 @@ export function PartyPanel({
                 "ring-1 ring-amber-500/70 border-amber-700",
             )}
           >
-            <p className="font-medium">{sheet.name}</p>
+            <p className="flex items-center gap-1.5 font-medium">
+              {sheet.name}
+              {sheet.userId === leadUserId ? (
+                <Crown className="size-3.5 text-amber-300" aria-label="Party lead" />
+              ) : null}
+            </p>
             <p className="text-xs text-stone-400">
               {sheet.race.replaceAll("_", " ")} {sheet.class} {sheet.level}
             </p>
@@ -148,9 +162,45 @@ export function PartyPanel({
                 ) : null}
               </div>
             ) : null}
+
+            {isLead ? (
+              <button
+                type="button"
+                onClick={() => setEditingSheetId(sheet.id)}
+                className="mt-2 flex w-full items-center justify-center gap-1 rounded border border-stone-700 py-1 text-xs text-stone-400 hover:bg-stone-900"
+                title="Party lead: correct this character's stats"
+              >
+                <Wrench className="size-3" /> Adjust
+              </button>
+            ) : null}
+
+            {canTransferLead && sheet.userId !== leadUserId ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  await fetch(`/api/campaigns/${sheet.campaignId}/lead`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ userId: sheet.userId }),
+                  });
+                }}
+                className="mt-1.5 flex w-full items-center justify-center gap-1 rounded border border-stone-700 py-1 text-xs text-stone-400 hover:bg-stone-900"
+                title="Hand the party lead to this player"
+              >
+                <Crown className="size-3" /> Make party lead
+              </button>
+            ) : null}
           </div>
         );
       })}
+
+      {editingSheet ? (
+        <LeadEditDialog
+          campaignId={editingSheet.campaignId}
+          sheet={editingSheet}
+          onClose={() => setEditingSheetId("")}
+        />
+      ) : null}
     </Wrapper>
   );
 }

@@ -26,6 +26,7 @@ export type AuditEntry = {
   id: string;
   characterId: string;
   characterName?: string;
+  actor?: string;
   kind: string;
   delta: Record<string, unknown>;
   reason: string;

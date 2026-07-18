@@ -25,6 +25,10 @@ function describeEntry(entry: AuditEntry, name: string): string {
       return `${name} is no longer ${delta.condition}`;
     case "use_spell_slot":
       return `${name} expends a level ${delta.level} spell slot`;
+    case "lead_edit": {
+      const changed = Object.keys(delta).filter((key) => key !== "reason");
+      return `Party lead corrected ${name}${changed.length ? ` (${changed.join(", ")})` : ""}`;
+    }
     default:
       return `${name}: ${entry.kind}`;
   }

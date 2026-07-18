@@ -19,11 +19,19 @@ export type CampaignSummary = {
   difficulty: CampaignDifficulty;
   theme: string;
   ownerUserId: string;
+  // The player who steers the story and fixes stats when the AI DM errs.
+  // Defaults to the owner; transferable.
+  leadUserId: string;
   playerCount: number;
   role: "owner" | "player";
   createdAt: string;
   updatedAt: string;
 };
+
+// Marks system messages the party lead injected to steer the story; the DM
+// prompt reframes them as authoritative table direction and the client
+// styles them as a lead note.
+export const LEAD_NOTE_PREFIX = "[Party lead direction] ";
 
 export type CampaignMember = {
   userId: string;
