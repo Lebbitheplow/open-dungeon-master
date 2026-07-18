@@ -35,11 +35,11 @@ tracked in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 - **Node 22+** — `npm install` pulls everything else the app itself needs.
 - **A text model backend** (one of):
-  - [Ollama](https://ollama.com) at `http://127.0.0.1:11434` running the
-    `qwen3.6-dm` model — this is the default configuration; build the model
-    with the included [Modelfile](models/qwen3.6-dm.Modelfile) (see below), or
-  - any OpenAI-compatible server with tool calling: llama.cpp `llama-server`,
-    LM Studio, vLLM, TabbyAPI, KoboldCpp, or a remote API like OpenRouter.
+  - [llama.cpp](https://github.com/ggml-org/llama.cpp) `llama-server` at
+    `http://127.0.0.1:8001` serving a model named `qwen3.6-35b` — this is the
+    default and preferred configuration (see below), or
+  - any other OpenAI-compatible server with tool calling: Ollama, LM Studio,
+    vLLM, TabbyAPI, KoboldCpp, or a remote API like OpenRouter.
 - **Optional services** (each feature simply stays off without it):
   - [ComfyUI](https://github.com/comfyanonymous/ComfyUI) at `:8188` for inline
     scene images and maps ([docs/image-generation.md](docs/image-generation.md))
@@ -61,6 +61,10 @@ npm run dev        # http://localhost:3000, or:
 npm run dev:lan    # 0.0.0.0:3005 so your party can reach it on the LAN
 ```
 
+Then start the DM model with llama.cpp's `llama-server` — see
+[the default DM model](#the-default-dm-model-qwen36-35b-on-llamacpp) below
+for the exact command and settings.
+
 **The first account registered becomes the server admin.** To promote someone
 on an existing install: `node scripts/make-admin.mjs <username>`.
 
@@ -71,37 +75,41 @@ npm run build
 npm run start:lan   # 0.0.0.0:3005
 ```
 
-## The default DM model (qwen3.6-dm)
+## The default DM model (qwen3.6-35b on llama.cpp)
 
-The app defaults to Ollama's OpenAI-compatible endpoint
-(`http://127.0.0.1:11434/v1`) with a custom model named `qwen3.6-dm`:
-Qwen3.6-35B (MoE, q8_0) with a 64K context window and Qwen's recommended
-samplers baked in. Ollama's out-of-the-box context is tiny and silently
-truncates the DM prompt, which makes the model loop — the baked-in context is
-what makes the difference. Build it:
-
-```bash
-ollama pull qwen3.6:35b-a3b-q8_0
-ollama create qwen3.6-dm -f models/qwen3.6-dm.Modelfile
-```
-
-### The same model on other LLM software
-
-The Modelfile only encodes settings, so the setup ports to any
-OpenAI-compatible server. Equivalent llama.cpp `llama-server` run:
+The app defaults to llama.cpp's `llama-server` at `http://127.0.0.1:8001/v1`
+serving Qwen3.6-35B (MoE, q8_0) under the model name `qwen3.6-35b`, with a
+64K context window and Qwen's recommended samplers. A small default context
+silently truncates the DM prompt (party sheets, scene, story summary), which
+makes the model loop — the 64K window is what makes the difference. Run it:
 
 ```bash
 llama-server -m Qwen3.6-35B-A3B-Q8_0.gguf \
   -c 65536 --jinja \
   --flash-attn on --cache-type-k q8_0 --cache-type-v q8_0 \
   --temp 0.7 --top-p 0.8 --top-k 20 --min-p 0.0 \
-  --port 8001
+  --port 8001 --alias qwen3.6-35b
 ```
 
-Then point the app at `http://127.0.0.1:8001/v1` (admin panel, campaign Text
-Model settings, or `OPENAI_COMPAT_BASE_URL`). `--jinja` enables tool calling,
-which the dice engine requires. The key settings to replicate anywhere:
-**context 65536, temperature 0.7, top-p 0.8, top-k 20, min-p 0**.
+`--jinja` enables tool calling, which the dice engine and all sheet
+bookkeeping require. In llama-server's router mode the same settings live in
+the model's preset INI instead of flags. If your server runs with
+`--api-key`, put the key in `.env.server` as `OPENAI_COMPAT_API_KEY`.
+
+### The same model on other LLM software
+
+The setup is pure settings, so it ports to any OpenAI-compatible server with
+tool calling. The key settings to replicate anywhere: **context 65536,
+temperature 0.7, top-p 0.8, top-k 20, min-p 0**. Then point the app at your
+server (admin panel, campaign Text Model settings, or
+`OPENAI_COMPAT_BASE_URL`). For Ollama, the committed
+[Modelfile](models/qwen3.6-dm.Modelfile) bakes the same settings in:
+
+```bash
+ollama pull qwen3.6:35b-a3b-q8_0
+ollama create qwen3.6-dm -f models/qwen3.6-dm.Modelfile
+# then point the app at http://127.0.0.1:11434/v1, model qwen3.6-dm
+```
 
 More backends and model guidance: [docs/text-backends.md](docs/text-backends.md).
 

@@ -1,9 +1,45 @@
 # Text backends
 
 The Text Model panel in the sidebar picks the provider and model per story.
-Narration streams in as the model writes it on every provider.
+Narration streams in as the model writes it on every provider. The preferred
+backend is llama.cpp's `llama-server` (the app's defaults point at it); the
+legacy Ollama-native "Local" provider and any OpenAI-compatible server keep
+working.
 
-## Local models (Ollama)
+## The default DM model: qwen3.6-35b (llama.cpp, preferred)
+
+Campaign play defaults to llama-server (llama.cpp) on
+`http://127.0.0.1:8001/v1` with a model named `qwen3.6-35b`: base
+Qwen3.6-35B-A3B Q8 with a 64K context and Qwen's recommended non-thinking
+samplers. A short default context silently truncates the long DM prompt
+(party sheets, scene, story summary), which makes the model loop; the 64K
+window is what fixes that. Direct llama-server run:
+
+```bash
+llama-server -m Qwen3.6-35B-A3B-Q8_0.gguf \
+  -c 65536 --jinja \
+  --flash-attn on --cache-type-k q8_0 --cache-type-v q8_0 \
+  --temp 0.7 --top-p 0.8 --top-k 20 --min-p 0.0 \
+  --port 8001 --alias qwen3.6-35b
+```
+
+In llama-server's router mode the same settings live in the model's preset
+INI instead of flags. Settings to replicate on any server: **context 65536,
+temperature 0.7, top-p 0.8, top-k 20, min-p 0**, plus tool calling enabled
+(`--jinja` for llama.cpp). If the server runs with `--api-key`, set
+`OPENAI_COMPAT_API_KEY` in `.env.server`. Then point the app at the server
+(admin panel, campaign Text Model settings, or `OPENAI_COMPAT_BASE_URL`).
+
+Prefer Ollama? The same model is committed as a Modelfile with the context
+and samplers baked in; build it and point the app at
+`http://127.0.0.1:11434/v1`:
+
+```bash
+ollama pull qwen3.6:35b-a3b-q8_0
+ollama create qwen3.6-dm -f models/qwen3.6-dm.Modelfile
+```
+
+## Local models (legacy "Local" provider, Ollama)
 
 The app uses the Gemma 4 quantization-aware-trained (QAT, Q4_0) builds, which
 keep close to full-precision quality at a fraction of the memory. Any of
@@ -45,44 +81,12 @@ Two implementation notes baked into the app:
   is retried without the image tool, so the story continues without auto
   images.
 
-## The default DM model: qwen3.6-35b
-
-Campaign play defaults to llama-server (llama.cpp) on
-`http://127.0.0.1:8001/v1` with a model named `qwen3.6-35b`: base
-Qwen3.6-35B-A3B Q8 with a 64K context and Qwen's recommended non-thinking
-samplers. A short default context silently truncates the long DM prompt
-(party sheets, scene, story summary), which makes the model loop; the 64K
-window is what fixes that. Direct llama-server run:
-
-```bash
-llama-server -m Qwen3.6-35B-A3B-Q8_0.gguf \
-  -c 65536 --jinja \
-  --flash-attn on --cache-type-k q8_0 --cache-type-v q8_0 \
-  --temp 0.7 --top-p 0.8 --top-k 20 --min-p 0.0 \
-  --port 8001 --alias qwen3.6-35b
-```
-
-In llama-server's router mode the same settings live in the model's preset
-INI instead of flags. Settings to replicate on any server: **context 65536,
-temperature 0.7, top-p 0.8, top-k 20, min-p 0**, plus tool calling enabled
-(`--jinja` for llama.cpp). Then point the app at the server (admin panel,
-campaign Text Model settings, or `OPENAI_COMPAT_BASE_URL`).
-
-Prefer Ollama? The same model is committed as a Modelfile with the context
-and samplers baked in; build it and point the app at
-`http://127.0.0.1:11434/v1`:
-
-```bash
-ollama pull qwen3.6:35b-a3b-q8_0
-ollama create qwen3.6-dm -f models/qwen3.6-dm.Modelfile
-```
-
 ## Connect a server
 
-Don't want the bundled Ollama path? Switch a story's provider to **Connect a
-server** in the Text Model panel and point it at any OpenAI-compatible
-backend: llama.cpp, LM Studio, vLLM, TabbyAPI, KoboldCpp, a remote Ollama, or
-**OpenRouter**. Enter:
+The default llama-server setup above uses this provider. Switch a story's
+provider to **Connect a server** in the Text Model panel to point it at any
+OpenAI-compatible backend: llama.cpp, LM Studio, vLLM, TabbyAPI, KoboldCpp, a
+remote Ollama, or **OpenRouter**. Enter:
 
 - **Backend URL** — your server's address. A bare host
   (`http://127.0.0.1:8080`), a versioned base (`.../v1`), or the full
