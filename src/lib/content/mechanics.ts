@@ -9,8 +9,17 @@ export type RaceMechanics = {
   speed: number;
   asi: Partial<Record<Ability, number>>;
   languages: string[];
+  // Extra languages of the player's choice granted by the race.
+  bonusLanguages: number;
   traitsSummary: string;
 };
+
+// The 5e standard + exotic languages, for language pickers.
+export const STANDARD_LANGUAGES = [
+  "Common", "Dwarvish", "Elvish", "Giant", "Gnomish", "Goblin", "Halfling",
+  "Orc", "Abyssal", "Celestial", "Draconic", "Deep Speech", "Infernal",
+  "Primordial", "Sylvan", "Undercommon",
+];
 
 export type ClassMechanics = {
   hitDie: 6 | 8 | 10 | 12;
@@ -96,14 +105,14 @@ export function raceMechanics(data: Record<string, unknown>): RaceMechanics {
 
   // Languages prose usually reads "...speak, read, and write Common and X".
   const languageText = String(data.languages ?? "");
-  const knownLanguages = [
-    "Common", "Dwarvish", "Elvish", "Giant", "Gnomish", "Goblin", "Halfling",
-    "Orc", "Abyssal", "Celestial", "Draconic", "Deep Speech", "Infernal",
-    "Primordial", "Sylvan", "Undercommon",
-  ];
-  const languages = knownLanguages.filter((language) =>
+  const languages = STANDARD_LANGUAGES.filter((language) =>
     languageText.toLowerCase().includes(language.toLowerCase()),
   );
+  // "...and one extra/additional/other language of your choice."
+  const bonusLanguages = /\b(one|1)\b[^.]*\blanguage/i.test(languageText.replace(/speak|read|write/gi, "")) &&
+    /choice|extra|additional|other language/i.test(languageText)
+    ? 1
+    : 0;
 
   const traitsSummary = String(data.traits ?? "")
     .replace(/\*\*_?|_?\*\*/g, "")
@@ -113,7 +122,13 @@ export function raceMechanics(data: Record<string, unknown>): RaceMechanics {
     .slice(0, 6)
     .join(" · ");
 
-  return { speed, asi, languages: languages.length ? languages : ["Common"], traitsSummary };
+  return {
+    speed,
+    asi,
+    languages: languages.length ? languages : ["Common"],
+    bonusLanguages,
+    traitsSummary,
+  };
 }
 
 const FULL_CASTERS = new Set(["bard", "cleric", "druid", "sorcerer", "wizard"]);

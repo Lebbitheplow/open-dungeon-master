@@ -29,6 +29,7 @@ export const MUTATION_TOOL_NAMES = [
   "set_condition",
   "clear_condition",
   "use_spell_slot",
+  "learn_spell",
   "update_sheet",
 ] as const;
 
@@ -105,6 +106,15 @@ export const mutationTools: ToolDef[] = [
     spell: { type: "string", description: "Exact name of the spell being cast, from the character's spell list." },
   }, ["level", "spell"]),
   tool(
+    "learn_spell",
+    "Permanently add or remove ONE spell on a character's spell list, only when the story genuinely teaches or strips it: a scroll copied into a spellbook, a mentor's training, a granted boon, a curse. Never use this to let a character cast something in the moment; casting requires the spell to already be on their sheet.",
+    {
+      action: { type: "string", enum: ["add", "remove"] },
+      spell: { type: "string", description: "Exact spell name." },
+    },
+    ["action", "spell"],
+  ),
+  tool(
     "update_sheet",
     "Directly set character sheet fields for permanent or story-driven changes: renames, transformations, curses, blessings, training, level or ability score changes. For routine bookkeeping (damage, healing, loot, gold, XP, conditions, spell slots) use the specific tools instead. Include ONLY the fields that change.",
     {
@@ -136,6 +146,20 @@ export const mutationTools: ToolDef[] = [
       },
       conditions: { type: "array", items: { type: "string" } },
       feats: { type: "array", items: { type: "string" } },
+      features: {
+        type: "array",
+        description:
+          "FULL replacement features-and-traits list. To grant a lasting story ability, resend the existing list plus the new entry with source \"story\".",
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            source: { type: "string", enum: ["class", "race", "feat", "story"] },
+            level: { type: "integer" },
+          },
+          required: ["name"],
+        },
+      },
     },
     ["reason"],
   ),
@@ -161,6 +185,7 @@ const updateSheetPatchSchema = fullPatchSheetSchema.pick({
   abilities: true,
   conditions: true,
   feats: true,
+  features: true,
 });
 
 const argsSchema = z.object({
@@ -174,6 +199,7 @@ const argsSchema = z.object({
   condition: z.string().optional(),
   level: z.number().int().optional(),
   spell: z.string().optional(),
+  action: z.enum(["add", "remove"]).optional(),
   reason: z.string().optional(),
 });
 
@@ -452,6 +478,65 @@ export function applyDmMutation(
       return {
         result: { ok: true, slot: `level ${level}: ${math.max - math.used}/${math.max} left` },
       };
+    }
+    case "learn_spell": {
+      const spell = (args.spell ?? "").trim().slice(0, 80);
+      const action = args.action;
+      if (!spell || (action !== "add" && action !== "remove")) {
+        return { result: { error: "learn_spell needs a spell name and action add|remove." } };
+      }
+      if (!sheet.spellcasting) {
+        return {
+          result: { error: `${sheet.name} has no spellcasting; they cannot learn spells.` },
+        };
+      }
+      const known = sheet.spellcasting.known;
+      const prepared = sheet.spellcasting.prepared;
+      const matches = (entry: string) => entry.trim().toLowerCase() === spell.toLowerCase();
+      if (action === "add") {
+        if (known.some(matches) || prepared.some(matches)) {
+          return { result: { ok: true, note: `${sheet.name} already knows ${spell}.` } };
+        }
+        // Known-casters track spells in `known`; prepared casters keep the
+        // whole list in `prepared` (known stays empty by convention).
+        const intoKnown = known.length > 0;
+        if ((intoKnown ? known.length >= 80 : prepared.length >= 60)) {
+          return { result: { error: `${sheet.name}'s spell list is full.` } };
+        }
+        const nextSpellcasting = {
+          ...sheet.spellcasting,
+          known: intoKnown ? [...known, spell] : known,
+          prepared: intoKnown ? prepared : [...prepared, spell],
+        };
+        patchSheet(sheet.id, { spellcasting: nextSpellcasting });
+        audit(campaign, turnId, sheet, "learn_spell", { action, spell }, reason, {
+          spellcasting: nextSpellcasting,
+        });
+        publishSheet(campaign, sheet.id);
+        insertCharacterEvent({
+          libraryCharacterId: sheet.libraryCharacterId,
+          campaignCharacterId: sheet.id,
+          campaignId: campaign.id,
+          seq: allocateSeq(campaign.id),
+          kind: "achievement",
+          summary: `Learned the spell ${spell}.`,
+        });
+        return { result: { ok: true, learned: spell } };
+      }
+      if (!known.some(matches) && !prepared.some(matches)) {
+        return { result: { error: `${sheet.name} does not know "${spell}".` } };
+      }
+      const nextSpellcasting = {
+        ...sheet.spellcasting,
+        known: known.filter((entry) => !matches(entry)),
+        prepared: prepared.filter((entry) => !matches(entry)),
+      };
+      patchSheet(sheet.id, { spellcasting: nextSpellcasting });
+      audit(campaign, turnId, sheet, "learn_spell", { action, spell }, reason, {
+        spellcasting: nextSpellcasting,
+      });
+      publishSheet(campaign, sheet.id);
+      return { result: { ok: true, removed: spell } };
     }
     case "update_sheet": {
       let rawArgs: Record<string, unknown>;

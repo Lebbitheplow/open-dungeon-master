@@ -26,6 +26,8 @@ export type SrdRace = {
   asiChoice?: { count: number; amount: number };
   traits: string[];
   languages: string[];
+  // Extra languages of the player's choice (SRD: human, half-elf, high elf).
+  bonusLanguages?: number;
 };
 export type SrdBackground = { id: string; name: string; skills: string[]; feature: string };
 

@@ -2,6 +2,7 @@ import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { createSheet, getSheetById, getSheetForUser } from "@/lib/db/sheets";
 import { spellSlotsFor, suggestedStartingHp } from "@/lib/srd";
 import { earnedAsiCount, removeAsiChoices } from "@/lib/srd/asi";
+import { populateFeatures } from "@/lib/srd/features";
 import type { CharacterSheet, CreateSheetInput } from "@/lib/schemas/sheet";
 
 // The per-user character library (table library_characters). Campaign play
@@ -65,6 +66,10 @@ export function createCharacter(
   const db = getDatabase();
   const id = crypto.randomUUID();
   const now = nowIso();
+  const stored: CreateSheetInput = {
+    ...input,
+    features: populateFeatures(input.features ?? [], input.class, input.subclass, input.race, level),
+  };
   db.prepare(
     `
       INSERT INTO library_characters (
@@ -82,7 +87,7 @@ export function createCharacter(
     input.subclass,
     input.background,
     level,
-    JSON.stringify(input),
+    JSON.stringify(stored),
     now,
     now,
   );
@@ -122,6 +127,10 @@ export function updateCharacter(
   if (!existing) {
     return null;
   }
+  const stored: CreateSheetInput = {
+    ...input,
+    features: populateFeatures(input.features ?? [], input.class, input.subclass, input.race, level),
+  };
   getDatabase()
     .prepare(
       `
@@ -138,7 +147,7 @@ export function updateCharacter(
       input.subclass,
       input.background,
       level,
-      JSON.stringify(input),
+      JSON.stringify(stored),
       nowIso(),
       id,
     );
@@ -228,6 +237,7 @@ export function syncProgressToLibrary(sheetId: string): LibraryCharacter | null 
     equipment: sheet.equipment,
     gold: sheet.gold,
     feats: sheet.feats,
+    features: sheet.features,
     // Level-up ASIs land here as raw scores; the campaign records no
     // AsiChoice for them, so asiChoices keeps only creation-time picks.
     abilities: sheet.abilities,

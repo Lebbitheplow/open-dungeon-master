@@ -29,6 +29,7 @@ function srdRaceOptions(): RaceOption[] {
     speed: race.speed,
     asi: race.asi,
     languages: race.languages,
+    bonusLanguages: race.bonusLanguages ?? 0,
     traitsSummary: race.traits.join(" · "),
     note: race.traits.join(" · "),
   }));

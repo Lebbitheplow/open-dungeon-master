@@ -45,36 +45,37 @@ Two implementation notes baked into the app:
   is retried without the image tool, so the story continues without auto
   images.
 
-## The default DM model: qwen3.6-dm
+## The default DM model: qwen3.6-35b
 
-Campaign play defaults to Ollama's OpenAI-compatible endpoint
-(`http://127.0.0.1:11434/v1`) with a custom model named `qwen3.6-dm` — base
-`qwen3.6:35b-a3b-q8_0` with `num_ctx 65536` and Qwen's recommended
-non-thinking samplers baked in. Ollama's default context silently truncates
-the long DM prompt (party sheets, scene, story summary), which makes the
-model loop; the baked-in 64K window is what fixes that. Recreate it from the
-committed Modelfile:
-
-```bash
-ollama pull qwen3.6:35b-a3b-q8_0
-ollama create qwen3.6-dm -f models/qwen3.6-dm.Modelfile
-```
-
-The customization is pure settings, so it ports to any OpenAI-compatible
-server. Equivalent llama.cpp run:
+Campaign play defaults to llama-server (llama.cpp) on
+`http://127.0.0.1:8001/v1` with a model named `qwen3.6-35b`: base
+Qwen3.6-35B-A3B Q8 with a 64K context and Qwen's recommended non-thinking
+samplers. A short default context silently truncates the long DM prompt
+(party sheets, scene, story summary), which makes the model loop; the 64K
+window is what fixes that. Direct llama-server run:
 
 ```bash
 llama-server -m Qwen3.6-35B-A3B-Q8_0.gguf \
   -c 65536 --jinja \
   --flash-attn on --cache-type-k q8_0 --cache-type-v q8_0 \
   --temp 0.7 --top-p 0.8 --top-k 20 --min-p 0.0 \
-  --port 8001
+  --port 8001 --alias qwen3.6-35b
 ```
 
-Settings to replicate on any server: **context 65536, temperature 0.7,
-top-p 0.8, top-k 20, min-p 0**, plus tool calling enabled (`--jinja` for
-llama.cpp). Then point the app at the server (admin panel, campaign Text
-Model settings, or `OPENAI_COMPAT_BASE_URL`).
+In llama-server's router mode the same settings live in the model's preset
+INI instead of flags. Settings to replicate on any server: **context 65536,
+temperature 0.7, top-p 0.8, top-k 20, min-p 0**, plus tool calling enabled
+(`--jinja` for llama.cpp). Then point the app at the server (admin panel,
+campaign Text Model settings, or `OPENAI_COMPAT_BASE_URL`).
+
+Prefer Ollama? The same model is committed as a Modelfile with the context
+and samplers baked in; build it and point the app at
+`http://127.0.0.1:11434/v1`:
+
+```bash
+ollama pull qwen3.6:35b-a3b-q8_0
+ollama create qwen3.6-dm -f models/qwen3.6-dm.Modelfile
+```
 
 ## Connect a server
 

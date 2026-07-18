@@ -3,7 +3,7 @@
 import { Loader2, X } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 import { cn } from "@/lib/cn";
-import { suggestedSpellCount } from "@/lib/content/mechanics";
+import { STANDARD_LANGUAGES, suggestedSpellCount } from "@/lib/content/mechanics";
 import type { Ability, AbilityScores, AsiChoice, CreateSheetInput } from "@/lib/schemas/sheet";
 import {
   SRD_SKILLS,
@@ -64,6 +64,9 @@ export default function CharacterBuilder({
   // One slot per ASI threshold the effective level has earned; kept full
   // length so lowering and re-raising the level restores earlier picks.
   const [asiChoices, setAsiChoices] = useState<Array<AsiChoice | null>>([]);
+  // Bonus languages of the player's choice (human, half-elf, high elf, and
+  // content-pack races whose language text offers a pick).
+  const [bonusLanguages, setBonusLanguages] = useState<string[]>([]);
   const [backstory, setBackstory] = useState("");
   const [gold, setGold] = useState(15);
   const [hpOverride, setHpOverride] = useState<number | null>(null);
@@ -109,7 +112,7 @@ export default function CharacterBuilder({
     const proficiencies = {
       saves: klass.saves,
       skills: [...new Set([...chosenSkills, ...background.skills])],
-      languages: race.languages,
+      languages: [...new Set([...race.languages, ...bonusLanguages.filter(Boolean)])],
       tools: [] as string[],
       armor: klass.armor,
       weapons: klass.weapons,
@@ -126,7 +129,7 @@ export default function CharacterBuilder({
       hpOverride ?? suggestedStartingHp(klass.id, race.id, abilities.con, effectiveLevel);
     const ac = acOverride ?? 10 + derived.abilityMods.dex;
     return { proficiencies, derived, maxHp, ac };
-  }, [abilities, race, klass, background, chosenSkills, effectiveLevel, hpOverride, acOverride]);
+  }, [abilities, race, klass, background, chosenSkills, bonusLanguages, effectiveLevel, hpOverride, acOverride]);
 
   // Class-appropriate starting weapons ride along automatically (removable
   // chips) so no character begins the adventure unarmed.
@@ -204,6 +207,10 @@ export default function CharacterBuilder({
       );
       return;
     }
+    if (race.bonusLanguages > 0 && bonusLanguages.filter(Boolean).length < race.bonusLanguages) {
+      setLocalError(`Pick your bonus ${race.bonusLanguages === 1 ? "language" : "languages"} first.`);
+      return;
+    }
     setLocalError("");
     const resolvedAsiChoices = activeAsiChoices.filter(
       (choice): choice is AsiChoice => choice !== null,
@@ -241,6 +248,9 @@ export default function CharacterBuilder({
         equipment: fullEquipment,
         gold,
         feats: [...new Set([...asiFeats, ...feats])],
+        // Server-side creation populates SRD class features and racial
+        // traits; the builder only ever contributes an empty starting list.
+        features: [],
         asiChoices: resolvedAsiChoices,
         spellcasting: klass.spellAbility
           ? {
@@ -320,11 +330,46 @@ export default function CharacterBuilder({
         </div>
         <label className="block">
           <span className="mb-1 block text-stone-400">Race</span>
-          <select value={race?.id ?? ""} onChange={(event) => setRaceId(event.target.value)} className={inputClass}>
+          <select
+            value={race?.id ?? ""}
+            onChange={(event) => { setRaceId(event.target.value); setBonusLanguages([]); }}
+            className={inputClass}
+          >
             {races.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
           </select>
           {race?.note ? <span className="mt-1 line-clamp-2 block text-xs text-stone-500">{race.note}</span> : null}
         </label>
+        {race && race.bonusLanguages > 0 ? (
+          <div className="block">
+            <span className="mb-1 block text-stone-400">
+              Bonus {race.bonusLanguages === 1 ? "language" : "languages"} ({race.name} speaks{" "}
+              {race.languages.join(" and ")} plus {race.bonusLanguages} of your choice)
+            </span>
+            {Array.from({ length: race.bonusLanguages }, (_, index) => (
+              <select
+                key={index}
+                value={bonusLanguages[index] ?? ""}
+                onChange={(event) =>
+                  setBonusLanguages((current) => {
+                    const next = [...current];
+                    next[index] = event.target.value;
+                    return next;
+                  })
+                }
+                className={inputClass}
+              >
+                <option value="">Choose a language...</option>
+                {STANDARD_LANGUAGES.filter(
+                  (language) =>
+                    !race.languages.includes(language) &&
+                    (bonusLanguages[index] === language || !bonusLanguages.includes(language)),
+                ).map((language) => (
+                  <option key={language} value={language}>{language}</option>
+                ))}
+              </select>
+            ))}
+          </div>
+        ) : null}
         <label className="block">
           <span className="mb-1 block text-stone-400">Class</span>
           <select

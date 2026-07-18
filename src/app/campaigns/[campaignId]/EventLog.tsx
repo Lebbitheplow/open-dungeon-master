@@ -30,6 +30,10 @@ function describeEntry(entry: AuditEntry, name: string): string {
       return `${name} is no longer ${delta.condition}`;
     case "use_spell_slot":
       return `${name} expends a level ${delta.level} spell slot`;
+    case "learn_spell":
+      return delta.action === "remove"
+        ? `${name} loses the spell ${delta.spell}`
+        : `${name} learns the spell ${delta.spell}`;
     case "update_sheet": {
       const changed = Object.keys(delta);
       return `The DM rewrites ${name}'s sheet${changed.length ? ` (${changed.join(", ")})` : ""}`;

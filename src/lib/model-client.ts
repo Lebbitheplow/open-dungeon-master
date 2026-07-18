@@ -330,6 +330,11 @@ export async function requestCustomMessage(
     model: resolvedModel,
     messages,
     temperature: temperature ?? 0.9,
+    // Explicit 0 so a server-side sampler preset cannot override it: a
+    // positive presence penalty over the long DM prompt suppresses the
+    // tool-call token sequence (measured 2/5 vs 4/5 request_roll rate on
+    // llama-server with the qwen preset's 1.5).
+    presence_penalty: 0,
     max_tokens: configuredMaxOutputTokens(),
     ...(onDelta ? { stream: true } : {}),
   };

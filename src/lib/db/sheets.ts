@@ -1,5 +1,6 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { touchCampaign } from "@/lib/db/campaigns";
+import { populateFeatures } from "@/lib/srd/features";
 import type {
   CharacterSheet,
   CreateSheetInput,
@@ -30,6 +31,7 @@ type SheetRow = {
   equipment_json: string;
   gold: number;
   feats_json: string;
+  features_json: string | null;
   spellcasting_json: string;
   conditions_json: string;
   portrait_json: string | null;
@@ -78,6 +80,7 @@ function mapSheet(row: SheetRow): CharacterSheet {
     equipment: parseJson(row.equipment_json, []),
     gold: row.gold,
     feats: parseJson(row.feats_json, []),
+    features: parseJson(row.features_json, []),
     spellcasting,
     conditions: parseJson(row.conditions_json, []),
     portrait: parseJson<CharacterSheet["portrait"]>(row.portrait_json, null),
@@ -92,8 +95,9 @@ const SHEET_COLUMNS = `
   id, campaign_id, user_id, library_character_id, name, race, class, subclass,
   background, alignment, level, xp,
   abilities_json, max_hp, current_hp, temp_hp, ac, speed, hit_dice_json,
-  proficiencies_json, equipment_json, gold, feats_json, spellcasting_json,
-  conditions_json, portrait_json, notes, backstory, created_at, updated_at
+  proficiencies_json, equipment_json, gold, feats_json, features_json,
+  spellcasting_json, conditions_json, portrait_json, notes, backstory,
+  created_at, updated_at
 `;
 
 export function createSheet(
@@ -106,6 +110,15 @@ export function createSheet(
   const db = getDatabase();
   const id = crypto.randomUUID();
   const now = nowIso();
+  // Every creation path lands here, so the SRD class features and racial
+  // traits are always granted for the level the sheet actually starts at.
+  const features = populateFeatures(
+    input.features ?? [],
+    input.class,
+    input.subclass,
+    input.race,
+    level,
+  );
 
   db.prepare(
     `
@@ -114,9 +127,10 @@ export function createSheet(
         subclass, background, alignment,
         level, xp, abilities_json, max_hp, current_hp, temp_hp, ac, speed,
         hit_dice_json, proficiencies_json, equipment_json, gold, feats_json,
-        spellcasting_json, conditions_json, portrait_json, notes, backstory, created_at, updated_at
+        features_json, spellcasting_json, conditions_json, portrait_json,
+        notes, backstory, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?, ?)
     `,
   ).run(
     id,
@@ -140,6 +154,7 @@ export function createSheet(
     JSON.stringify(input.equipment),
     input.gold,
     JSON.stringify(input.feats),
+    JSON.stringify(features),
     JSON.stringify(input.spellcasting),
     input.portrait ? JSON.stringify(input.portrait) : null,
     input.notes,
@@ -207,6 +222,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
     hitDice: patch.hitDice ?? existing.hitDice,
     spellcasting: patch.spellcasting !== undefined ? patch.spellcasting : existing.spellcasting,
     feats: patch.feats ?? existing.feats,
+    features: patch.features ?? existing.features,
     subclass: patch.subclass ?? existing.subclass,
     portrait: patch.portrait !== undefined ? patch.portrait : existing.portrait,
     notes: patch.notes ?? existing.notes,
@@ -221,8 +237,8 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
           speed = ?, abilities_json = ?, proficiencies_json = ?,
           current_hp = ?, temp_hp = ?, max_hp = ?, ac = ?, xp = ?, level = ?,
           gold = ?, conditions_json = ?, equipment_json = ?, hit_dice_json = ?,
-          spellcasting_json = ?, feats_json = ?, subclass = ?, portrait_json = ?,
-          notes = ?, backstory = ?, updated_at = ?
+          spellcasting_json = ?, feats_json = ?, features_json = ?, subclass = ?,
+          portrait_json = ?, notes = ?, backstory = ?, updated_at = ?
         WHERE id = ?
       `,
     )
@@ -247,6 +263,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
       JSON.stringify(next.hitDice),
       JSON.stringify(next.spellcasting),
       JSON.stringify(next.feats),
+      JSON.stringify(next.features),
       next.subclass,
       next.portrait ? JSON.stringify(next.portrait) : null,
       next.notes,

@@ -139,6 +139,16 @@ export default function CharacterDetailPage({
               .join(", ")}
           </p>
         ) : null}
+        {sheet.features?.length ? (
+          <p className="mt-1 text-sm text-stone-400">
+            Features &amp; traits:{" "}
+            {sheet.features
+              .map((feature) =>
+                feature.source === "story" ? `${feature.name} (story)` : feature.name,
+              )
+              .join(", ")}
+          </p>
+        ) : null}
         {sheet.feats.length ? (
           <p className="mt-1 text-sm text-stone-400">Feats: {sheet.feats.join(", ")}</p>
         ) : null}

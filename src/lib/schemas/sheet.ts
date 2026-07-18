@@ -39,6 +39,16 @@ export const equipmentItemSchema = z.object({
 });
 export type EquipmentItem = z.infer<typeof equipmentItemSchema>;
 
+// A class feature, racial trait, feat, or story-granted ability. `source`
+// drives regranting: "class" and "race" entries are recomputed from SRD data
+// on level-up while "feat" and "story" entries are always preserved.
+export const sheetFeatureSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  source: z.enum(["class", "race", "feat", "story"]).default("story"),
+  level: z.number().int().min(1).max(20).optional(),
+});
+export type SheetFeature = z.infer<typeof sheetFeatureSchema>;
+
 // Uploaded portrait/avatar reference; restricted to local uploads so a
 // sheet can never point the party's browsers at an external host.
 export const attachmentSchema = z.object({
@@ -96,6 +106,7 @@ export const createSheetSchema = z.object({
   equipment: z.array(equipmentItemSchema).max(60).default([]),
   gold: z.number().int().min(0).max(1000000).default(0),
   feats: z.array(z.string().trim().min(1).max(60)).max(20).default([]),
+  features: z.array(sheetFeatureSchema).max(80).default([]),
   // The ASI choices baked into `abilities`, in threshold order. Stored so
   // instantiating at a lower campaign level can reverse the extra ones.
   asiChoices: z.array(asiChoiceSchema).max(5).default([]),
@@ -122,6 +133,7 @@ export const patchSheetSchema = z.object({
   hitDice: hitDiceSchema.optional(),
   spellcasting: spellcastingSchema.optional(),
   feats: z.array(z.string().trim().min(1).max(80)).max(30).optional(),
+  features: z.array(sheetFeatureSchema).max(80).optional(),
   // Level-up ASIs change ability scores, so players may patch them.
   abilities: abilityScoresSchema.optional(),
   subclass: z.string().trim().max(60).optional(),
@@ -170,6 +182,7 @@ export type CharacterSheet = {
   equipment: EquipmentItem[];
   gold: number;
   feats: string[];
+  features: SheetFeature[];
   spellcasting: Spellcasting;
   conditions: string[];
   portrait: SheetAttachment | null;

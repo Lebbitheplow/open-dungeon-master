@@ -2,6 +2,7 @@ import Database from "better-sqlite3-multiple-ciphers";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { serverEnv } from "../server-env.ts";
+import { populateFeatures } from "@/lib/srd/features";
 
 const dbPath =
   process.env.SQLITE_DB_PATH || path.join(process.cwd(), "data", "local-roleplay.sqlite");
@@ -122,6 +123,7 @@ function ensureSchema(db: Database.Database) {
       equipment_json TEXT NOT NULL DEFAULT '[]',
       gold INTEGER NOT NULL DEFAULT 0,
       feats_json TEXT NOT NULL DEFAULT '[]',
+      features_json TEXT,
       spellcasting_json TEXT NOT NULL DEFAULT 'null',
       conditions_json TEXT NOT NULL DEFAULT '[]',
       portrait_json TEXT,
@@ -445,12 +447,57 @@ function ensureSchema(db: Database.Database) {
     ["use_real_dice", `INTEGER NOT NULL DEFAULT 0`],
   ]);
 
+  // NULL features_json marks a sheet from before features existed; the
+  // backfill below fills it exactly once, so check before the column lands.
+  const sheetsNeedFeatureBackfill = !(
+    db.prepare(`PRAGMA table_info(character_sheets)`).all() as Array<{ name: string }>
+  ).some((column) => column.name === "features_json");
+
   addColumns("character_sheets", [
     ["library_character_id", `TEXT`],
     ["subclass", `TEXT NOT NULL DEFAULT ''`],
     // Player-authored backstory, visible to the whole party and the DM.
     ["backstory", `TEXT NOT NULL DEFAULT ''`],
+    // Class features, racial traits, and story-granted abilities; the DM
+    // prompt treats this as the complete list of what a character can do.
+    ["features_json", `TEXT`],
   ]);
+
+  if (sheetsNeedFeatureBackfill) {
+    backfillSheetFeatures(db);
+  }
+
+  // This machine's DM backend moved from Ollama to llama-server (llama.cpp)
+  // on :8001. Retarget campaigns still pointing at the old Ollama endpoint;
+  // idempotent because rewritten rows no longer match the WHERE.
+  const staleBackends = db
+    .prepare(
+      `SELECT id, settings_json FROM campaigns
+       WHERE settings_json LIKE '%127.0.0.1:11434/v1%' OR settings_json LIKE '%localhost:11434/v1%'`,
+    )
+    .all() as Array<{ id: string; settings_json: string }>;
+  for (const row of staleBackends) {
+    try {
+      const settings = JSON.parse(row.settings_json) as {
+        textProvider?: string;
+        customBaseUrl?: string;
+        customModel?: string;
+      };
+      if (settings.textProvider !== "custom" || !/:11434\/v1$/.test(settings.customBaseUrl ?? "")) {
+        continue;
+      }
+      settings.customBaseUrl = "http://127.0.0.1:8001/v1";
+      if (settings.customModel?.startsWith("qwen3.6")) {
+        settings.customModel = "qwen3.6-35b";
+      }
+      db.prepare(`UPDATE campaigns SET settings_json = ? WHERE id = ?`).run(
+        JSON.stringify(settings),
+        row.id,
+      );
+    } catch {
+      // Unparseable settings stay untouched; the campaign UI can fix them.
+    }
+  }
 
   addColumns("campaign_messages", [
     // Set on the DM message that moved the party somewhere new so the chat
@@ -475,6 +522,49 @@ function ensureSchema(db: Database.Database) {
     ["reverted_by", `TEXT`],
     ["reverted_at", `TEXT`],
   ]);
+}
+
+// One-time backfill when the features_json column first lands: existing
+// sheets and library blobs get their SRD class features and racial traits so
+// the DM prompt can honestly call the list complete from the first turn.
+function backfillSheetFeatures(db: Database.Database) {
+  const sheets = db
+    .prepare(
+      `SELECT id, class, subclass, race, level FROM character_sheets WHERE features_json IS NULL`,
+    )
+    .all() as Array<{ id: string; class: string; subclass: string | null; race: string; level: number }>;
+  const updateSheet = db.prepare(`UPDATE character_sheets SET features_json = ? WHERE id = ?`);
+  for (const row of sheets) {
+    const features = populateFeatures([], row.class, row.subclass ?? "", row.race, row.level);
+    updateSheet.run(JSON.stringify(features), row.id);
+  }
+
+  const blobs = db
+    .prepare(`SELECT id, sheet_json, level FROM library_characters`)
+    .all() as Array<{ id: string; sheet_json: string; level: number }>;
+  const updateBlob = db.prepare(`UPDATE library_characters SET sheet_json = ? WHERE id = ?`);
+  for (const row of blobs) {
+    try {
+      const sheet = JSON.parse(row.sheet_json) as {
+        class?: string;
+        subclass?: string;
+        race?: string;
+        features?: unknown;
+      };
+      if (!Array.isArray(sheet.features)) {
+        sheet.features = populateFeatures(
+          [],
+          sheet.class ?? "",
+          sheet.subclass ?? "",
+          sheet.race ?? "",
+          row.level,
+        );
+        updateBlob.run(JSON.stringify(sheet), row.id);
+      }
+    } catch {
+      // A malformed blob self-heals on next instantiation; skip it here.
+    }
+  }
 }
 
 function requireDbKey() {

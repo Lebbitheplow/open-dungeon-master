@@ -196,6 +196,21 @@ export function CharacterSheetDialog({
             </section>
           ) : null}
 
+          {sheet.features.length ? (
+            <section className="mt-4">
+              <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
+                Features &amp; Traits
+              </h3>
+              <p className="text-xs text-stone-300">
+                {sheet.features
+                  .map((feature) =>
+                    feature.source === "story" ? `${feature.name} (story)` : feature.name,
+                  )
+                  .join(", ")}
+              </p>
+            </section>
+          ) : null}
+
           {sheet.feats.length ? (
             <section className="mt-4">
               <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
