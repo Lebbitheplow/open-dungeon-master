@@ -4,7 +4,10 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { Compass, Loader2, Map as MapIcon, RefreshCw, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
-import type { CampaignLocation } from "@/app/campaigns/[campaignId]/useCampaignStream";
+import type {
+  CampaignLocation,
+  MediaStatus,
+} from "@/app/campaigns/[campaignId]/useCampaignStream";
 
 // The area map: current location's rendered map (click to enlarge), its
 // exits, and a history of visited places with their maps.
@@ -12,10 +15,12 @@ export function MapPanel({
   campaignId,
   locations,
   isLead,
+  mediaStatus = {},
 }: {
   campaignId: string;
   locations: CampaignLocation[];
   isLead: boolean;
+  mediaStatus?: Record<string, MediaStatus>;
 }) {
   const current = locations.find((location) => location.isCurrent) ?? null;
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -86,10 +91,17 @@ export function MapPanel({
                 className="w-full rounded-md border border-stone-800"
               />
             </button>
+          ) : mediaStatus[shown.id] && mediaStatus[shown.id].state !== "failed" ? (
+            <div className="flex aspect-[4/3] flex-col items-center justify-center gap-1.5 rounded-md border border-dashed border-stone-800 text-xs text-stone-500">
+              <Loader2 className="size-4 animate-spin text-amber-700" />
+              {mediaStatus[shown.id].state === "queued"
+                ? "Waiting for the render queue..."
+                : "Drawing the map..."}
+            </div>
           ) : (
             <div className="flex aspect-[4/3] items-center justify-center rounded-md border border-dashed border-stone-800 text-xs text-stone-600">
               <MapIcon className="mr-1.5 size-4" />
-              Not yet mapped
+              {mediaStatus[shown.id]?.state === "failed" ? "Map render failed" : "Not yet mapped"}
             </div>
           )}
 

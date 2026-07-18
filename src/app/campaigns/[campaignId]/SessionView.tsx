@@ -191,6 +191,7 @@ export function SessionView({ state }: { state: CampaignState }) {
             sheets={sheets}
             dmStatus={dmStatus}
             dmDraft={dmDraft}
+            mediaStatus={state.mediaStatus}
             onReplayAudio={
               campaign.gameSettings?.ttsEnabled
                 ? (messageId) => {
@@ -344,6 +345,7 @@ export function SessionView({ state }: { state: CampaignState }) {
           auditLog={auditLog}
           locations={locations}
           chapters={state.chapters}
+          mediaStatus={state.mediaStatus}
           mapsEnabled={campaign.gameSettings?.mapsEnabled ?? true}
         />
       </div>

@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { publishPersisted } from "@/lib/events";
+import { publishMediaStatus } from "@/lib/dm/images";
 import { enqueueMediaJob } from "@/lib/media-queue";
 import { serverEnv } from "@/lib/server-env";
 
@@ -65,11 +66,18 @@ export function enqueueNarrationAudio(
   if (!speech) {
     return Promise.resolve();
   }
+  publishMediaStatus(campaignId, "tts", messageId, "queued");
   return enqueueMediaJob(`tts ${messageId}`, async () => {
+    publishMediaStatus(campaignId, "tts", messageId, "generating");
     const chunks = chunkSentences(speech);
     const buffers: Buffer[] = [];
-    for (const chunk of chunks) {
-      buffers.push(await kokoroSpeech(chunk, voice));
+    try {
+      for (const chunk of chunks) {
+        buffers.push(await kokoroSpeech(chunk, voice));
+      }
+    } catch (error) {
+      publishMediaStatus(campaignId, "tts", messageId, "failed");
+      throw error;
     }
     // Kokoro-FastAPI emits plain MPEG frames; concatenation plays cleanly.
     const audio = Buffer.concat(buffers);

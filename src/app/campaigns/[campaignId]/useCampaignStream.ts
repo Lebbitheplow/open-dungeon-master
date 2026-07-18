@@ -10,6 +10,12 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 export type DmStatus = "idle" | "thinking" | "rolling" | "narrating" | "awaiting_rolls";
 
+export type MediaStatus = {
+  kind: "image" | "map" | "tts";
+  state: "queued" | "generating" | "failed";
+  startedAt: string;
+};
+
 export type PendingRoll = {
   id: string;
   userId: string;
@@ -71,6 +77,8 @@ export type CampaignState = {
   lastSeq: number;
   dmStatus: DmStatus;
   dmDraft: string;
+  // Ephemeral progress per media target (message/location id).
+  mediaStatus: Record<string, MediaStatus>;
 };
 
 const initialState: CampaignState = {
@@ -92,12 +100,22 @@ const initialState: CampaignState = {
   lastSeq: 0,
   dmStatus: "idle",
   dmDraft: "",
+  mediaStatus: {},
 };
 
 type Action =
   | { type: "snapshot"; payload: Partial<CampaignState> & { lastSeq: number } }
   | { type: "error"; error: string }
   | { type: "event"; eventType: string; seq: number | null; payload: Record<string, unknown> };
+
+function withoutKey<T>(record: Record<string, T>, key: string): Record<string, T> {
+  if (!key || !(key in record)) {
+    return record;
+  }
+  const next = { ...record };
+  delete next[key];
+  return next;
+}
 
 function upsertBy<T>(list: T[], item: T, key: (entry: T) => string): T[] {
   const index = list.findIndex((entry) => key(entry) === key(item));
@@ -185,6 +203,7 @@ function reducer(state: CampaignState, action: Action): CampaignState {
           if (messageId && url) {
             next.narrationAudio = { ...state.narrationAudio, [messageId]: url };
             next.latestTts = { messageId, url, seq: action.seq ?? 0 };
+            next.mediaStatus = withoutKey(state.mediaStatus, messageId);
           }
           return next;
         }
@@ -194,7 +213,22 @@ function reducer(state: CampaignState, action: Action): CampaignState {
               ? { ...location, mapImage: payload.image as CampaignLocation["mapImage"] }
               : location,
           );
+          next.mediaStatus = withoutKey(state.mediaStatus, String(payload.locationId ?? ""));
           return next;
+        case "media_status": {
+          const targetId = String(payload.targetId ?? "");
+          if (targetId) {
+            next.mediaStatus = {
+              ...state.mediaStatus,
+              [targetId]: {
+                kind: payload.kind as MediaStatus["kind"],
+                state: payload.state as MediaStatus["state"],
+                startedAt: String(payload.startedAt ?? new Date().toISOString()),
+              },
+            };
+          }
+          return next;
+        }
         case "member_joined": {
           const member: CampaignMember = {
             userId: String(payload.userId),
@@ -264,6 +298,7 @@ function reducer(state: CampaignState, action: Action): CampaignState {
               ? { ...message, generatedImage: payload.image as CampaignMessage["generatedImage"] }
               : message,
           );
+          next.mediaStatus = withoutKey(state.mediaStatus, String(payload.messageId ?? ""));
           return next;
         case "dm_status":
           next.dmStatus = payload.state as DmStatus;
@@ -300,7 +335,7 @@ const PERSISTED_EVENTS = [
   "location_map_ready",
   "tts_ready",
 ];
-const EPHEMERAL_EVENTS = ["dm_status", "dm_delta"];
+const EPHEMERAL_EVENTS = ["dm_status", "dm_delta", "media_status"];
 
 export function useCampaignStream(campaignId: string) {
   const [state, dispatch] = useReducer(reducer, initialState);

@@ -1,14 +1,65 @@
 "use client";
 
-import { Crown, Volume2 } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { Crown, ImageOff, Loader2, Volume2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { LEAD_NOTE_PREFIX } from "@/lib/campaign-types";
 import type { CampaignMessage } from "@/lib/db/messages";
 import type { StoredRoll } from "@/lib/db/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { RollCard } from "@/app/campaigns/[campaignId]/RollCard";
-import type { DmStatus } from "@/app/campaigns/[campaignId]/useCampaignStream";
+import type {
+  DmStatus,
+  MediaStatus,
+} from "@/app/campaigns/[campaignId]/useCampaignStream";
+
+function formatElapsed(fromIso: string, now: number): string {
+  const seconds = Math.max(0, Math.floor((now - Date.parse(fromIso)) / 1000));
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+// Placeholder for media still on the render queue. The durable pending
+// signal is the message's unanswered imageRequest, so this survives
+// reloads; the ephemeral media_status refines the label.
+export function MediaPlaceholder({
+  label,
+  status,
+  fallbackStartedAt,
+}: {
+  label: string;
+  status?: MediaStatus;
+  fallbackStartedAt: string;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  const failed = status?.state === "failed";
+  useEffect(() => {
+    if (failed) {
+      return;
+    }
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [failed]);
+
+  if (failed) {
+    return (
+      <p className="mt-3 flex items-center gap-1.5 text-xs text-stone-600">
+        <ImageOff className="size-3.5" /> Illustration failed; the story carries on.
+      </p>
+    );
+  }
+  return (
+    <div className="mt-3 flex aspect-video max-h-56 w-full max-w-md flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-stone-800 bg-stone-950/40">
+      <Loader2 className="size-5 animate-spin text-amber-700" />
+      <p className="text-xs text-stone-400">
+        {status?.state === "queued" ? "Waiting for the render queue..." : label}
+      </p>
+      <p className="font-mono text-[11px] text-stone-600">
+        {formatElapsed(status?.startedAt ?? fallbackStartedAt, now)}
+      </p>
+    </div>
+  );
+}
 
 const ROLL_MARKER = /\[roll:([0-9a-f-]{36})\]/g;
 
@@ -65,6 +116,7 @@ export function MessageList({
   sheets,
   dmStatus,
   dmDraft,
+  mediaStatus = {},
   onReplayAudio,
 }: {
   messages: CampaignMessage[];
@@ -72,6 +124,7 @@ export function MessageList({
   sheets: CharacterSheet[];
   dmStatus: DmStatus;
   dmDraft: string;
+  mediaStatus?: Record<string, MediaStatus>;
   onReplayAudio?: (messageId: string) => void;
 }) {
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -133,6 +186,12 @@ export function MessageList({
                   src={message.generatedImage.url}
                   alt={message.imageRequest?.prompt || "Scene"}
                   className="mt-3 max-h-96 rounded-xl border border-stone-800"
+                />
+              ) : message.imageRequest?.needed ? (
+                <MediaPlaceholder
+                  label="Illustrating the scene..."
+                  status={mediaStatus[message.id]}
+                  fallbackStartedAt={message.createdAt}
                 />
               ) : null}
             </div>

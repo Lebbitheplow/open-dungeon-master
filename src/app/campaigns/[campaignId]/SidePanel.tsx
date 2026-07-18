@@ -9,6 +9,7 @@ import { StoryPanel } from "@/app/campaigns/[campaignId]/StoryPanel";
 import type {
   AuditEntry,
   CampaignLocation,
+  MediaStatus,
 } from "@/app/campaigns/[campaignId]/useCampaignStream";
 import type { Chapter } from "@/lib/db/chapters";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -29,6 +30,7 @@ export function SidePanel({
   auditLog,
   locations,
   chapters,
+  mediaStatus,
   mapsEnabled,
 }: {
   campaignId: string;
@@ -42,6 +44,7 @@ export function SidePanel({
   auditLog: AuditEntry[];
   locations: CampaignLocation[];
   chapters: Chapter[];
+  mediaStatus: Record<string, MediaStatus>;
   mapsEnabled: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("party");
@@ -84,7 +87,12 @@ export function SidePanel({
             embedded
           />
         ) : tab === "map" ? (
-          <MapPanel campaignId={campaignId} locations={locations} isLead={isLead} />
+          <MapPanel
+            campaignId={campaignId}
+            locations={locations}
+            isLead={isLead}
+            mediaStatus={mediaStatus}
+          />
         ) : tab === "story" ? (
           <StoryPanel campaignId={campaignId} chapters={chapters} isLead={isLead} />
         ) : (
