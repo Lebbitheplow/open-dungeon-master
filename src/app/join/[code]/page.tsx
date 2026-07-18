@@ -1,6 +1,7 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
+import Link from "next/link";
 import { use, useCallback, useEffect, useState } from "react";
 import { PIXEL_ICONS, PixelTile } from "@/lib/ui";
 import AuthForm from "@/app/AuthForm";
@@ -66,9 +67,9 @@ export default function JoinPage({ params }: { params: Promise<{ code: string }>
         ) : state === "error" ? (
           <div className="space-y-4 text-center">
             <p className="text-sm text-red-400">{error}</p>
-            <a href="/" className="text-sm text-amber-200 hover:text-amber-400">
+            <Link href="/" className="text-sm text-amber-200 hover:text-amber-400">
               Back to Open Dungeon Master
-            </a>
+            </Link>
           </div>
         ) : (
           <>

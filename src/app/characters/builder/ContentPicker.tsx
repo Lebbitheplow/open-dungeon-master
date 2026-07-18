@@ -40,8 +40,6 @@ export default function ContentPicker({
 
   useEffect(() => {
     if (!query.trim()) {
-      setResults([]);
-      setOpen(false);
       return;
     }
     if (timer.current) {
@@ -84,7 +82,14 @@ export default function ContentPicker({
       <div className="relative">
         <input
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => {
+            const next = event.target.value;
+            setQuery(next);
+            if (!next.trim()) {
+              setResults([]);
+              setOpen(false);
+            }
+          }}
           onFocus={() => results.length && setOpen(true)}
           placeholder={placeholder}
           className="w-full rounded-lg border border-stone-800 bg-stone-950 px-3 py-2 text-sm text-stone-200 outline-none focus:border-amber-300"

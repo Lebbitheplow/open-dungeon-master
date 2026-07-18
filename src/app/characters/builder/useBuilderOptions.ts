@@ -137,9 +137,13 @@ export function useBuilderOptions() {
 
 export function useArchetypes(classId: string) {
   const [archetypes, setArchetypes] = useState<ArchetypeOption[]>([]);
+  const [prevClassId, setPrevClassId] = useState(classId);
+  if (prevClassId !== classId) {
+    setPrevClassId(classId);
+    setArchetypes([]);
+  }
   useEffect(() => {
     let cancelled = false;
-    setArchetypes([]);
     if (!classId) {
       return;
     }

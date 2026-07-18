@@ -1,6 +1,7 @@
 "use client";
 
 import { Loader2, Plus, Trash2, UserRound } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { IconChip, PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
 
@@ -55,7 +56,7 @@ export default function CharactersPage() {
     return (
       <main className="mx-auto w-full max-w-3xl flex-1 p-6">
         <p className="rounded-lg border border-stone-800 p-6 text-center text-stone-400">
-          <a href="/" className="text-amber-200 hover:text-amber-400">Log in</a> to see your
+          <Link href="/" className="text-amber-200 hover:text-amber-400">Log in</Link> to see your
           character library.
         </p>
       </main>
@@ -75,12 +76,12 @@ export default function CharactersPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <a href="/" className={ui.btnSmall}>
+          <Link href="/" className={ui.btnSmall}>
             Campaigns
-          </a>
-          <a href="/characters/new" className={ui.btnPrimary}>
+          </Link>
+          <Link href="/characters/new" className={ui.btnPrimary}>
             <Plus className="size-4" /> New character
-          </a>
+          </Link>
         </div>
       </header>
 

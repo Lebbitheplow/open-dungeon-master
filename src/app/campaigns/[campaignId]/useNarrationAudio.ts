@@ -1,13 +1,31 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 
 // Plays DM narration audio (tts_ready events). Only events that arrive
 // AFTER mount autoplay, and only the newest one; reconnect backlog never
-// replays old narration. Mute and volume are per-user (localStorage).
+// replays old narration. Mute and volume are per-user (localStorage),
+// exposed through useSyncExternalStore so server render stays muted and
+// the client snapshot takes over at hydration without a setState cascade.
 
 const MUTED_KEY = "odm_tts_muted";
 const VOLUME_KEY = "odm_tts_volume";
+const PREFS_EVENT = "odm-tts-prefs";
+
+function subscribePrefs(callback: () => void) {
+  window.addEventListener(PREFS_EVENT, callback);
+  return () => window.removeEventListener(PREFS_EVENT, callback);
+}
+
+function readMuted() {
+  const stored = window.localStorage.getItem(MUTED_KEY);
+  return stored === null ? false : stored === "1";
+}
+
+function readVolume() {
+  const stored = Number(window.localStorage.getItem(VOLUME_KEY));
+  return Number.isFinite(stored) && stored > 0 ? Math.min(1, stored) : 0.8;
+}
 
 export type NarrationAudio = {
   muted: boolean;
@@ -22,35 +40,16 @@ export type NarrationAudio = {
 };
 
 export function useNarrationAudio(): NarrationAudio {
-  const [muted, setMutedState] = useState(true);
-  const [volume, setVolumeState] = useState(0.8);
+  const muted = useSyncExternalStore(subscribePrefs, readMuted, () => true);
+  const volume = useSyncExternalStore(subscribePrefs, readVolume, () => 0.8);
   const [unlocked, setUnlocked] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [audioByMessage] = useState(() => new Map<string, string>());
-  const mutedRef = useRef(muted);
-  const volumeRef = useRef(volume);
   const unlockedRef = useRef(false);
 
-  useEffect(() => {
-    const storedMuted = window.localStorage.getItem(MUTED_KEY);
-    const storedVolume = Number(window.localStorage.getItem(VOLUME_KEY));
-    if (storedMuted !== null) {
-      setMutedState(storedMuted === "1");
-      mutedRef.current = storedMuted === "1";
-    } else {
-      setMutedState(false);
-      mutedRef.current = false;
-    }
-    if (Number.isFinite(storedVolume) && storedVolume > 0) {
-      setVolumeState(storedVolume);
-      volumeRef.current = storedVolume;
-    }
-  }, []);
-
   const setMuted = useCallback((next: boolean) => {
-    setMutedState(next);
-    mutedRef.current = next;
     window.localStorage.setItem(MUTED_KEY, next ? "1" : "0");
+    window.dispatchEvent(new Event(PREFS_EVENT));
     if (next) {
       audioRef.current?.pause();
     }
@@ -58,9 +57,8 @@ export function useNarrationAudio(): NarrationAudio {
 
   const setVolume = useCallback((next: number) => {
     const clamped = Math.max(0, Math.min(1, next));
-    setVolumeState(clamped);
-    volumeRef.current = clamped;
     window.localStorage.setItem(VOLUME_KEY, String(clamped));
+    window.dispatchEvent(new Event(PREFS_EVENT));
     if (audioRef.current) {
       audioRef.current.volume = clamped;
     }
@@ -72,7 +70,7 @@ export function useNarrationAudio(): NarrationAudio {
     }
     const audio = audioRef.current;
     audio.src = url;
-    audio.volume = volumeRef.current;
+    audio.volume = readVolume();
     audio.play().catch(() => {
       // Autoplay blocked until a user gesture; the unlock button handles it.
     });
@@ -88,7 +86,7 @@ export function useNarrationAudio(): NarrationAudio {
   const onTtsReady = useCallback(
     (messageId: string, url: string, live: boolean) => {
       audioByMessage.set(messageId, url);
-      if (live && !mutedRef.current && unlockedRef.current) {
+      if (live && !readMuted() && unlockedRef.current) {
         play(url);
       }
     },

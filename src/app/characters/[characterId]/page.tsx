@@ -1,6 +1,7 @@
 "use client";
 
 import { BookOpen, Loader2 } from "lucide-react";
+import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import { PIXEL_ICONS, PixelTile } from "@/lib/ui";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
@@ -77,9 +78,9 @@ export default function CharacterDetailPage({
       <main className="mx-auto w-full max-w-3xl flex-1 p-6">
         <p className="rounded-lg border border-stone-800 p-6 text-center text-stone-400">
           Character not found.{" "}
-          <a href="/characters" className="text-amber-200 hover:text-amber-400">
+          <Link href="/characters" className="text-amber-200 hover:text-amber-400">
             Back to your library
-          </a>
+          </Link>
         </p>
       </main>
     );
@@ -91,9 +92,9 @@ export default function CharacterDetailPage({
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 p-6">
       <header className="mb-6">
-        <a href="/characters" className="text-sm text-stone-500 hover:text-stone-300">
+        <Link href="/characters" className="text-sm text-stone-500 hover:text-stone-300">
           &larr; Back to your characters
-        </a>
+        </Link>
         <div className="mt-2 flex items-center gap-3">
           <PixelTile src={PIXEL_ICONS.characters} />
           <div>

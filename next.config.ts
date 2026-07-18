@@ -10,7 +10,7 @@ const extraDevOrigins = (process.env.ALLOWED_DEV_ORIGINS || "")
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["localhost", "127.0.0.1", ...extraDevOrigins],
   devIndicators: false,
-  serverExternalPackages: ["better-sqlite3"],
+  serverExternalPackages: ["better-sqlite3-multiple-ciphers"],
   turbopack: {
     root: process.cwd(),
   },

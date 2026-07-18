@@ -1,6 +1,7 @@
-import Database from "better-sqlite3";
+import Database from "better-sqlite3-multiple-ciphers";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
+import { serverEnv } from "@/lib/server-env";
 
 const dbPath =
   process.env.SQLITE_DB_PATH || path.join(process.cwd(), "data", "local-roleplay.sqlite");
@@ -345,14 +346,38 @@ function ensureSchema(db: Database.Database) {
   ]);
 }
 
+function requireDbKey() {
+  const key = serverEnv("DB_ENCRYPTION_KEY");
+  if (!key) {
+    throw new Error(
+      "DB_ENCRYPTION_KEY is not set. Generate one with `openssl rand -hex 32` and add it to .env.server. " +
+        "For an existing plaintext database, then run: node scripts/migrate-encrypt-db.mjs",
+    );
+  }
+
+  return key;
+}
+
 export function getDatabase() {
   if (globalThis.__localRoleplayDb) {
     ensureSchema(globalThis.__localRoleplayDb);
     return globalThis.__localRoleplayDb;
   }
 
+  const key = requireDbKey();
   mkdirSync(path.dirname(dbPath), { recursive: true });
   const db = new Database(dbPath);
+  db.pragma("cipher='chacha20'");
+  db.pragma(`key='${key.replaceAll("'", "''")}'`);
+  try {
+    db.prepare("SELECT count(*) FROM sqlite_master").get();
+  } catch {
+    db.close();
+    throw new Error(
+      `Could not decrypt ${dbPath}: wrong or missing DB_ENCRYPTION_KEY. ` +
+        "If this database predates encryption, run: node scripts/migrate-encrypt-db.mjs",
+    );
+  }
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
   ensureSchema(db);

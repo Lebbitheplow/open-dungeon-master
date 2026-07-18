@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { PIXEL_ICONS, PixelTile } from "@/lib/ui";
 import CharacterBuilder, { type BuilderResult } from "../builder/CharacterBuilder";
@@ -33,9 +34,9 @@ export default function NewCharacterPage() {
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 p-6">
       <header className="mb-6">
-        <a href="/characters" className="text-sm text-stone-500 hover:text-stone-300">
+        <Link href="/characters" className="text-sm text-stone-500 hover:text-stone-300">
           &larr; Back to your characters
-        </a>
+        </Link>
         <div className="mt-2 flex items-center gap-3">
           <PixelTile src={PIXEL_ICONS.characters} />
           <h1 className="font-serif text-2xl text-stone-100">Create a character</h1>

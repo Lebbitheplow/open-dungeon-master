@@ -1,6 +1,7 @@
 "use client";
 
 import { BookOpen, Loader2, LogOut, Plus, Swords, Users } from "lucide-react";
+import Link from "next/link";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { IconChip, PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
@@ -139,9 +140,9 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <a href="/characters" className={ui.btnSmall}>
+          <Link href="/characters" className={ui.btnSmall}>
             <Users className="size-4" /> Characters
-          </a>
+          </Link>
           <a href="/solo" className={ui.btnSmall}>
             <BookOpen className="size-4" /> Solo mode
           </a>

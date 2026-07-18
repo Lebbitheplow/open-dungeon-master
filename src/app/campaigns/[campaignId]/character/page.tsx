@@ -74,7 +74,7 @@ export default function CampaignCharacterPage({
         setError(data.error || "Could not create the character.");
         return;
       }
-      window.location.href = `/campaigns/${campaignId}`;
+      window.location.assign(`/campaigns/${campaignId}`);
     } catch {
       setError("Could not reach the server.");
     } finally {

@@ -34,8 +34,25 @@ defaults run fully local.
 | `DM_DEBUG` | — | `1` logs DM model content and tool calls |
 | `DM_LEAN_TOOLS` | — | `1` removes the stat-mutation tools if the model's tool fidelity suffers |
 | `DM_COMPACT_THRESHOLD` | `120` | Messages before history compaction begins (lower to test) |
+| `DB_ENCRYPTION_KEY` | required | Encrypts `data/local-roleplay.sqlite` at rest (chacha20). Belongs in `.env.server` |
 
 Secrets (model API keys) belong in `.env.server`, never in code or `.env.local`.
+
+### Database encryption
+
+The app database is encrypted at rest with SQLite3 Multiple Ciphers. The
+server refuses to start without `DB_ENCRYPTION_KEY` in `.env.server`.
+
+- Fresh install: `openssl rand -hex 32` into `DB_ENCRYPTION_KEY`; the
+  database is created encrypted on first run.
+- Existing plaintext database: stop the server, set the key, then run
+  `node scripts/migrate-encrypt-db.mjs` (it backs up to
+  `*.pre-encryption.bak` first). Delete the backups once a play session
+  has verified the migration.
+- Losing the key means losing the data; back the key up with the database.
+- The Open5e content pack (`data/content/open5e.sqlite`) is public SRD
+  data and stays unencrypted. Files under `public/uploads` and
+  `public/generated*` are also not covered.
 
 ### Voice services on this machine
 

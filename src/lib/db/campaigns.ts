@@ -370,8 +370,9 @@ export function setCampaignSummaryState(campaignId: string, summary: string, cov
 // Strip server-only fields before sending a campaign to any client. The DM
 // outline is the story's secret spine; players must never receive it.
 export function publicCampaign(campaign: Campaign): Omit<Campaign, "dmOutline"> {
-  const { dmOutline: _dmOutline, ...rest } = campaign;
-  return rest;
+  const rest = { ...campaign } as Partial<Campaign>;
+  delete rest.dmOutline;
+  return rest as Omit<Campaign, "dmOutline">;
 }
 
 export function touchCampaign(campaignId: string) {
