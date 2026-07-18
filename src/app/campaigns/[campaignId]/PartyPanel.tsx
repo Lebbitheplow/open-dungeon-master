@@ -62,6 +62,7 @@ export function PartyPanel({
   notes = [],
   members = [],
   refreshNotes,
+  onMessageUser,
 }: {
   sheets: CharacterSheet[];
   meUserId: string;
@@ -74,6 +75,7 @@ export function PartyPanel({
   notes?: Note[];
   members?: CampaignMember[];
   refreshNotes?: () => Promise<void>;
+  onMessageUser?: (userId: string) => void;
 }) {
   const [editingSheetId, setEditingSheetId] = useState("");
   const [viewingSheetId, setViewingSheetId] = useState("");
@@ -169,6 +171,9 @@ export function PartyPanel({
                 onViewSheet={() => setViewingSheetId(sheet.id)}
                 onNotes={() => setNotesSheetId(sheet.id)}
                 onAdjust={() => setEditingSheetId(sheet.id)}
+                onMessage={
+                  onMessageUser && !mine ? () => onMessageUser(sheet.userId) : undefined
+                }
               />
             </div>
 

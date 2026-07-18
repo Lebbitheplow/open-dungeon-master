@@ -15,6 +15,9 @@ export async function POST(request: Request) {
   if (!user) {
     return unauthorized();
   }
+  if (user.mustChangePassword) {
+    return Response.json({ error: "Set a new password to continue." }, { status: 403 });
+  }
 
   const raw = await request.json().catch(() => ({}));
   const parsed = joinSchema.safeParse(raw);

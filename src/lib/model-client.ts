@@ -1,3 +1,4 @@
+import { getGlobalConfig } from "@/lib/db/app-settings";
 import { serverEnv } from "@/lib/server-env";
 import { localModelContextWindow } from "@/lib/text-models";
 
@@ -298,9 +299,11 @@ export async function requestCustomMessage(
     };
   }
 
+  const globalText = getGlobalConfig().text;
   const isOpenRouter = /(^|\.)openrouter\.ai/i.test(trimmedBase);
   const resolvedModel =
     (model || "").trim() ||
+    globalText.customModel ||
     serverEnv("OPENAI_COMPAT_MODEL") ||
     (isOpenRouter ? serverEnv("OPENROUTER_MODEL", "google/gemini-3.5-flash") : "");
 
@@ -317,9 +320,10 @@ export async function requestCustomMessage(
   }
 
   const endpoint = customChatEndpoint(trimmedBase);
-  // In-app key wins; otherwise fall back to the matching env var.
+  // Per-campaign key wins, then the admin-panel key, then the env vars.
   const resolvedKey =
     (apiKey || "").trim() ||
+    globalText.customApiKey ||
     (isOpenRouter ? serverEnv("OPENROUTER_API_KEY") : "") ||
     serverEnv("OPENAI_COMPAT_API_KEY");
   const requestPayload: Record<string, unknown> = {

@@ -2,6 +2,8 @@ export type SessionUser = {
   id: string;
   username: string;
   avatar?: { url: string } | null;
+  isAdmin?: boolean;
+  mustChangePassword?: boolean;
 };
 
 export type CampaignStatus = "lobby" | "active" | "ended";

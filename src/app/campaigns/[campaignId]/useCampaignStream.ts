@@ -8,6 +8,7 @@ import type { CharacterEvent } from "@/lib/db/character-events";
 import type { CampaignMessage } from "@/lib/db/messages";
 import type { Note } from "@/lib/db/notes";
 import type { StoredRoll } from "@/lib/db/rolls";
+import type { SideThread } from "@/lib/db/side-chat";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 export type DmStatus =
@@ -86,6 +87,7 @@ export type CampaignState = {
   locations: CampaignLocation[];
   chapters: Chapter[];
   notes: Note[];
+  sideThreads: SideThread[];
   characterEvents: CharacterEvent[];
   narrationAudio: Record<string, string>;
   latestTts: { messageId: string; url: string; seq: number } | null;
@@ -112,6 +114,7 @@ const initialState: CampaignState = {
   locations: [],
   chapters: [],
   notes: [],
+  sideThreads: [],
   characterEvents: [],
   narrationAudio: {},
   latestTts: null,
@@ -125,6 +128,7 @@ const initialState: CampaignState = {
 type Action =
   | { type: "snapshot"; payload: Partial<CampaignState> & { lastSeq: number } }
   | { type: "notes"; notes: Note[] }
+  | { type: "sideThreads"; sideThreads: SideThread[] }
   | { type: "error"; error: string }
   | { type: "event"; eventType: string; seq: number | null; payload: Record<string, unknown> };
 
@@ -153,6 +157,8 @@ function reducer(state: CampaignState, action: Action): CampaignState {
       return { ...state, ...action.payload, loading: false, error: "" };
     case "notes":
       return { ...state, notes: action.notes };
+    case "sideThreads":
+      return { ...state, sideThreads: action.sideThreads };
     case "error":
       return { ...state, loading: false, error: action.error };
     case "event": {
@@ -395,7 +401,7 @@ const PERSISTED_EVENTS = [
   "location_map_ready",
   "tts_ready",
 ];
-const EPHEMERAL_EVENTS = ["dm_status", "dm_delta", "media_status"];
+const EPHEMERAL_EVENTS = ["dm_status", "dm_delta", "media_status", "side_activity"];
 const EPHEMERAL_EVENT_SET = new Set(EPHEMERAL_EVENTS);
 
 export function useCampaignStream(campaignId: string) {
@@ -458,6 +464,22 @@ export function useCampaignStream(campaignId: string) {
     }
   }, [campaignId]);
 
+  // Side-chat threads follow the same privacy pattern, one step stricter:
+  // the side_activity event is ephemeral and empty, and each member pulls
+  // only their own threads.
+  const refreshSideChat = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/side-chat`);
+      if (!response.ok) {
+        return;
+      }
+      const data = await response.json();
+      dispatch({ type: "sideThreads", sideThreads: data.threads ?? [] });
+    } catch {
+      // transient; the next side_activity event retries
+    }
+  }, [campaignId]);
+
   useEffect(() => {
     let source: EventSource | null = null;
     let cancelled = false;
@@ -466,6 +488,7 @@ export function useCampaignStream(campaignId: string) {
       if (cancelled) {
         return;
       }
+      void refreshSideChat();
       source = new EventSource(`/api/campaigns/${campaignId}/events?lastSeq=${lastSeq}`);
       const handle = (eventType: string) => (event: MessageEvent) => {
         try {
@@ -481,6 +504,9 @@ export function useCampaignStream(campaignId: string) {
           if (eventType === "note_suggested") {
             void refreshNotes();
           }
+          if (eventType === "side_activity") {
+            void refreshSideChat();
+          }
         } catch {
           // malformed event; ignore
         }
@@ -494,7 +520,7 @@ export function useCampaignStream(campaignId: string) {
       cancelled = true;
       source?.close();
     };
-  }, [campaignId, refresh, refreshNotes]);
+  }, [campaignId, refresh, refreshNotes, refreshSideChat]);
 
-  return { state, refresh, refreshNotes };
+  return { state, refresh, refreshNotes, refreshSideChat };
 }

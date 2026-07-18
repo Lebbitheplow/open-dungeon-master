@@ -24,5 +24,15 @@ export async function POST(request: Request) {
 
   await startSession(user.id);
 
-  return Response.json({ user: { id: user.id, username: user.username } });
+  // Same shape as /api/auth/me: the client renders this object directly
+  // (avatar in the header, admin link in the account menu).
+  return Response.json({
+    user: {
+      id: user.id,
+      username: user.username,
+      avatar: user.avatar,
+      isAdmin: user.isAdmin,
+      mustChangePassword: user.mustChangePassword,
+    },
+  });
 }

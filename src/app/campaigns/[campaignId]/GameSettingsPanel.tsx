@@ -3,6 +3,7 @@
 import { Dices, Hand, Map, Sparkles, UserPlus, Volume2 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { GENRE_PRESETS, genrePreset } from "@/lib/genres";
 import { TTS_VOICES } from "@/lib/tts-voices";
 import type { DicePolicy, GameSettings, Genre } from "@/lib/schemas/game-settings";
@@ -171,32 +172,34 @@ export function GameSettingsPanel({
           >
             Maps {settings.mapsEnabled ? "on" : "off"}
           </button>
-          <button
-            type="button"
-            onClick={() => patch({ midGameJoinOpen: !settings.midGameJoinOpen })}
-            title="Allow new players to join with the invite code after the adventure starts"
-            className={cn(
-              "rounded-md border px-2 py-1",
-              settings.midGameJoinOpen
-                ? "border-amber-700 bg-amber-950/50 text-amber-200"
-                : "border-stone-700 text-stone-400",
-            )}
-          >
-            Mid-game joining {settings.midGameJoinOpen ? "open" : "closed"}
-          </button>
-          <button
-            type="button"
-            onClick={() => patch({ holdSubmissions: !settings.holdSubmissions })}
-            title="After each DM narration, players cannot act until you allow responses. OOC stays open."
-            className={cn(
-              "rounded-md border px-2 py-1",
-              settings.holdSubmissions
-                ? "border-amber-700 bg-amber-950/50 text-amber-200"
-                : "border-stone-700 text-stone-400",
-            )}
-          >
-            Held responses {settings.holdSubmissions ? "on" : "off"}
-          </button>
+          <Tooltip content="Allow new players to join with the invite code after the adventure starts">
+            <button
+              type="button"
+              onClick={() => patch({ midGameJoinOpen: !settings.midGameJoinOpen })}
+              className={cn(
+                "rounded-md border px-2 py-1",
+                settings.midGameJoinOpen
+                  ? "border-amber-700 bg-amber-950/50 text-amber-200"
+                  : "border-stone-700 text-stone-400",
+              )}
+            >
+              Mid-game joining {settings.midGameJoinOpen ? "open" : "closed"}
+            </button>
+          </Tooltip>
+          <Tooltip content="After each DM narration, players cannot act until you allow responses. OOC stays open.">
+            <button
+              type="button"
+              onClick={() => patch({ holdSubmissions: !settings.holdSubmissions })}
+              className={cn(
+                "rounded-md border px-2 py-1",
+                settings.holdSubmissions
+                  ? "border-amber-700 bg-amber-950/50 text-amber-200"
+                  : "border-stone-700 text-stone-400",
+              )}
+            >
+              Held responses {settings.holdSubmissions ? "on" : "off"}
+            </button>
+          </Tooltip>
         </div>
       </div>
     </section>

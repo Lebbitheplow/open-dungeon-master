@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { serverEnv } from "@/lib/server-env";
+import { configValue, getGlobalConfig } from "@/lib/app-config";
 import type { AspectPreset, GeneratedImage, ImageMode } from "@/lib/types";
 
 // First-party ComfyUI backend: the app submits a plain text-to-image workflow
@@ -20,7 +20,13 @@ const NEGATIVE_PROMPT =
 const LONG_SIDE = { fast: 1024, slow: 1344 } as const;
 
 export function resolveComfyUrl(raw: string | undefined): string {
-  return (raw || "").trim().replace(/\/+$/, "") || serverEnv("COMFYUI_URL", DEFAULT_COMFY_URL).replace(/\/+$/, "");
+  return (
+    (raw || "").trim().replace(/\/+$/, "") ||
+    configValue(getGlobalConfig().images.comfyUrl, "COMFYUI_URL", DEFAULT_COMFY_URL).replace(
+      /\/+$/,
+      "",
+    )
+  );
 }
 
 function timeoutSignal(ms: number) {

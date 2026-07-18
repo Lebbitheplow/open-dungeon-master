@@ -1,15 +1,19 @@
 "use client";
 
-import { Loader2, Trash2, UserRound } from "lucide-react";
+import { Check, Link2, Loader2, ShieldCheck, Trash2, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
 import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
+import { ChangePasswordForm } from "@/app/ChangePasswordForm";
 
 type Me = {
   id: string;
   username: string;
   avatar: { url: string } | null;
+  isAdmin?: boolean;
+  discordLinked?: boolean;
+  discordAvailable?: boolean;
 };
 
 // Account settings: today, the profile picture shown across campaigns.
@@ -18,12 +22,27 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [cropping, setCropping] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [passwordChanged, setPasswordChanged] = useState(false);
+  // Seeded from the Discord link redirect (?linked=1 / ?error=...).
+  const [discordNotice] = useState(() => {
+    if (typeof window === "undefined") return "";
+    const query = new URLSearchParams(window.location.search);
+    if (query.get("linked") === "1") return "Discord account linked.";
+    if (query.get("error") === "discord_taken") {
+      return "That Discord account is already linked to another user.";
+    }
+    return "";
+  });
 
   useEffect(() => {
     fetch("/api/auth/me")
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => setMe(data?.user ?? null))
       .finally(() => setLoading(false));
+    const query = new URLSearchParams(window.location.search);
+    if (query.get("linked") || query.get("error")) {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
   }, []);
 
   async function setAvatar(avatar: { url: string } | null) {
@@ -121,6 +140,46 @@ export default function SettingsPage() {
           character.
         </p>
       </section>
+
+      <section className="texture-noise mt-4 rounded-xl border border-stone-700/50 bg-stone-950/60 p-5 shadow-elev-1">
+        <h2 className="mb-3 text-sm font-medium text-stone-300">Password</h2>
+        <ChangePasswordForm
+          onChanged={() => {
+            setPasswordChanged(true);
+            setTimeout(() => setPasswordChanged(false), 2500);
+          }}
+        />
+        {passwordChanged ? (
+          <p className="mt-2 inline-flex items-center gap-1 text-sm text-emerald-400">
+            <Check className="size-4" /> Password changed. Other devices were signed out.
+          </p>
+        ) : null}
+      </section>
+
+      {me.discordAvailable || me.discordLinked ? (
+        <section className="texture-noise mt-4 rounded-xl border border-stone-700/50 bg-stone-950/60 p-5 shadow-elev-1">
+          <h2 className="mb-3 text-sm font-medium text-stone-300">Discord</h2>
+          {me.discordLinked ? (
+            <p className="text-sm text-stone-400">
+              <Check className="mr-1 inline size-4 text-emerald-400" />
+              Linked. You can sign in with Discord.
+            </p>
+          ) : (
+            <a href="/api/auth/discord/start?link=1" className={ui.btnSmall}>
+              <Link2 className="size-3.5" /> Link Discord account
+            </a>
+          )}
+          {discordNotice ? <p className="mt-2 text-sm text-amber-300">{discordNotice}</p> : null}
+        </section>
+      ) : null}
+
+      {me.isAdmin ? (
+        <p className="mt-6 text-sm text-stone-500">
+          <Link href="/admin" className="inline-flex items-center gap-1.5 text-amber-200 hover:text-amber-400">
+            <ShieldCheck className="size-4" /> Open the admin panel
+          </Link>
+        </p>
+      ) : null}
 
       {cropping ? (
         <AvatarCropDialog

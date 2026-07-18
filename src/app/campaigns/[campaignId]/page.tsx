@@ -13,7 +13,7 @@ export default function CampaignPage({
   params: Promise<{ campaignId: string }>;
 }) {
   const { campaignId } = use(params);
-  const { state, refresh, refreshNotes } = useCampaignStream(campaignId);
+  const { state, refresh, refreshNotes, refreshSideChat } = useCampaignStream(campaignId);
 
   if (state.loading) {
     return (
@@ -37,6 +37,6 @@ export default function CampaignPage({
   return state.campaign.status === "lobby" ? (
     <Lobby state={state} refresh={refresh} />
   ) : (
-    <SessionView state={state} refreshNotes={refreshNotes} />
+    <SessionView state={state} refreshNotes={refreshNotes} refreshSideChat={refreshSideChat} />
   );
 }

@@ -1,4 +1,5 @@
 import { currentUser, unauthorized } from "@/lib/auth";
+import { configValue, getGlobalConfig } from "@/lib/app-config";
 import { serverEnv } from "@/lib/server-env";
 
 export const runtime = "nodejs";
@@ -23,7 +24,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Recording too long." }, { status: 413 });
   }
 
-  const sttUrl = serverEnv("STT_URL", "http://127.0.0.1:8870");
+  const sttUrl = configValue(getGlobalConfig().speech.sttUrl, "STT_URL", "http://127.0.0.1:8870");
   const upstream = new FormData();
   upstream.set("file", audio, audio.name || "speech.webm");
   upstream.set("model", serverEnv("STT_MODEL", "distil-large-v3"));

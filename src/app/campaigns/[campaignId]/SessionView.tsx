@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { Dices, Loader2, Send, Volume2, VolumeX } from "lucide-react";
+import { CircleHelp, Dices, Loader2, Send, Volume2, VolumeX } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { cn } from "@/lib/cn";
 import { JOIN_NOTE_PREFIX, latestUnintroducedJoin } from "@/lib/campaign-types";
 import { PIXEL_ICONS, PixelTile } from "@/lib/ui";
+import { HelpDialog } from "@/components/HelpDialog";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { CharacterGate } from "@/app/campaigns/[campaignId]/CharacterGate";
 import { DiceOverlay } from "@/app/campaigns/[campaignId]/DiceOverlay";
 import { FloorBanners } from "@/app/campaigns/[campaignId]/FloorBanners";
@@ -20,6 +22,13 @@ import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStre
 
 type InputKind = "do" | "say" | "ooc" | "lead";
 
+const KIND_TIPS: Record<InputKind, string> = {
+  do: "Act in the world. The DM narrates what happens.",
+  say: "Speak in character. Sent as dialogue in quotes.",
+  ooc: "Table talk. The DM does not respond, and it works even when the floor is locked.",
+  lead: "Party lead only. Send the DM an authoritative story direction.",
+};
+
 function subscribeDicePref(callback: () => void) {
   window.addEventListener("odm-dice3d-pref", callback);
   return () => window.removeEventListener("odm-dice3d-pref", callback);
@@ -28,9 +37,11 @@ function subscribeDicePref(callback: () => void) {
 export function SessionView({
   state,
   refreshNotes,
+  refreshSideChat,
 }: {
   state: CampaignState;
   refreshNotes: () => Promise<void>;
+  refreshSideChat: () => Promise<void>;
 }) {
   const {
     campaign,
@@ -51,6 +62,10 @@ export function SessionView({
   const [error, setError] = useState("");
   const [dismissedLevelUp, setDismissedLevelUp] = useState("");
   const [dismissedJoinNotice, setDismissedJoinNotice] = useState("");
+  // "Message" on a party card: SidePanel switches to the chat tab and opens
+  // the 1:1 thread with this user.
+  const [chatTarget, setChatTarget] = useState<string | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const dice3d = useSyncExternalStore(
     subscribeDicePref,
@@ -193,61 +208,89 @@ export function SessionView({
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={toggleDice3d}
-            title={dice3d ? "Turn off 3D dice animation" : "Turn on 3D dice animation"}
-            className={cn(
-              "rounded-md border p-1.5",
-              dice3d
-                ? "border-amber-800 bg-amber-950/40 text-amber-400"
-                : "border-stone-700 text-stone-500 hover:text-stone-300",
-            )}
+          <Tooltip
+            content={dice3d ? "Turn off 3D dice animation" : "Turn on 3D dice animation"}
+            side="bottom"
           >
-            <Dices className="size-4" />
-          </button>
+            <button
+              type="button"
+              onClick={toggleDice3d}
+              aria-label={dice3d ? "Turn off 3D dice animation" : "Turn on 3D dice animation"}
+              className={cn(
+                "rounded-md border p-1.5",
+                dice3d
+                  ? "border-amber-800 bg-amber-950/40 text-amber-400"
+                  : "border-stone-700 text-stone-500 hover:text-stone-300",
+              )}
+            >
+              <Dices className="size-4" />
+            </button>
+          </Tooltip>
           {campaign.gameSettings?.ttsEnabled ? (
             <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => {
-                  narration.unlock();
-                  narration.setMuted(!narration.muted);
-                }}
-                title={
+              <Tooltip
+                content={
                   !narration.unlocked
                     ? "Enable narration audio"
                     : narration.muted
                       ? "Unmute narration"
                       : "Mute narration"
                 }
-                className={cn(
-                  "rounded-md border p-1.5",
-                  narration.muted || !narration.unlocked
-                    ? "border-stone-700 text-stone-500 hover:text-stone-300"
-                    : "border-amber-800 bg-amber-950/40 text-amber-400",
-                )}
+                side="bottom"
               >
-                {narration.muted || !narration.unlocked ? (
-                  <VolumeX className="size-4" />
-                ) : (
-                  <Volume2 className="size-4" />
-                )}
-              </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    narration.unlock();
+                    narration.setMuted(!narration.muted);
+                  }}
+                  aria-label={
+                    !narration.unlocked
+                      ? "Enable narration audio"
+                      : narration.muted
+                        ? "Unmute narration"
+                        : "Mute narration"
+                  }
+                  className={cn(
+                    "rounded-md border p-1.5",
+                    narration.muted || !narration.unlocked
+                      ? "border-stone-700 text-stone-500 hover:text-stone-300"
+                      : "border-amber-800 bg-amber-950/40 text-amber-400",
+                  )}
+                >
+                  {narration.muted || !narration.unlocked ? (
+                    <VolumeX className="size-4" />
+                  ) : (
+                    <Volume2 className="size-4" />
+                  )}
+                </button>
+              </Tooltip>
               {narration.unlocked && !narration.muted ? (
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  value={narration.volume}
-                  onChange={(event) => narration.setVolume(Number(event.target.value))}
-                  className="w-16 accent-amber-600"
-                  title="Narration volume"
-                />
+                <Tooltip content="Narration volume" side="bottom">
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={narration.volume}
+                    onChange={(event) => narration.setVolume(Number(event.target.value))}
+                    className="w-16 accent-amber-600"
+                    aria-label="Narration volume"
+                  />
+                </Tooltip>
               ) : null}
             </div>
           ) : null}
+          <Tooltip content="How everything works" side="bottom">
+            <button
+              type="button"
+              onClick={() => setHelpOpen(true)}
+              aria-label="Help"
+              className="rounded-md border border-stone-700 p-1.5 text-stone-500 hover:text-stone-300"
+            >
+              <CircleHelp className="size-4" />
+            </button>
+          </Tooltip>
           <Link href="/" className="text-sm text-stone-500 hover:text-stone-300">
             All campaigns
           </Link>
@@ -318,32 +361,28 @@ export function SessionView({
             <div className="mb-2 flex gap-1.5">
               {(["do", "say", "ooc", ...(isLead ? (["lead"] as const) : [])] as const).map(
                 (option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() => setKind(option)}
-                    title={
-                      option === "lead"
-                        ? "Party lead: send an authoritative story direction to the DM"
-                        : undefined
-                    }
-                    className={cn(
-                      "rounded-full px-3 py-1 text-xs font-medium transition-all duration-150 ease-snap active:scale-95",
-                      kind === option
-                        ? option === "lead"
-                          ? "bg-gradient-to-b from-ember-400 to-ember-600 text-stone-950 shadow-glow-ember"
-                          : "bg-gradient-to-b from-amber-100 to-amber-400 text-amber-950 shadow-glow-gold"
-                        : "bg-stone-900/80 text-stone-400 hover:bg-stone-800 hover:text-stone-200",
-                    )}
-                  >
-                    {option === "do"
-                      ? "Do"
-                      : option === "say"
-                        ? "Say"
-                        : option === "ooc"
-                          ? "OOC"
-                          : "Direct"}
-                  </button>
+                  <Tooltip key={option} content={KIND_TIPS[option]}>
+                    <button
+                      type="button"
+                      onClick={() => setKind(option)}
+                      className={cn(
+                        "rounded-full px-3 py-1 text-xs font-medium transition-all duration-150 ease-snap active:scale-95",
+                        kind === option
+                          ? option === "lead"
+                            ? "bg-gradient-to-b from-ember-400 to-ember-600 text-stone-950 shadow-glow-ember"
+                            : "bg-gradient-to-b from-amber-100 to-amber-400 text-amber-950 shadow-glow-gold"
+                          : "bg-stone-900/80 text-stone-400 hover:bg-stone-800 hover:text-stone-200",
+                      )}
+                    >
+                      {option === "do"
+                        ? "Do"
+                        : option === "say"
+                          ? "Say"
+                          : option === "ooc"
+                            ? "OOC"
+                            : "Direct"}
+                    </button>
+                  </Tooltip>
                 ),
               )}
               {dmStatus !== "idle" ? (
@@ -429,6 +468,11 @@ export function SessionView({
           notes={state.notes}
           characterEvents={state.characterEvents}
           refreshNotes={refreshNotes}
+          sideThreads={state.sideThreads}
+          refreshSideChat={refreshSideChat}
+          chatTarget={chatTarget}
+          onChatTargetHandled={() => setChatTarget(null)}
+          onMessageUser={setChatTarget}
           mediaStatus={state.mediaStatus}
           mapsEnabled={campaign.gameSettings?.mapsEnabled ?? true}
           inviteCode={campaign.inviteCode}
@@ -438,6 +482,8 @@ export function SessionView({
       </div>
 
       <DiceOverlay latestRoll={state.latestRoll} enabled={dice3d} />
+
+      <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
 
       {myLevelUp &&
       mySheet &&

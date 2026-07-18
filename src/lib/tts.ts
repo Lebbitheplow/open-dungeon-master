@@ -4,7 +4,7 @@ import { publishPersisted } from "@/lib/events";
 import { publishMediaStatus } from "@/lib/dm/images";
 import { stripToolText } from "@/lib/dm/tool-text";
 import { enqueueMediaJob } from "@/lib/media-queue";
-import { serverEnv } from "@/lib/server-env";
+import { configValue, getGlobalConfig } from "@/lib/app-config";
 
 // Narration TTS via the local Kokoro-FastAPI service (:8880). Audio is
 // rendered on the serial media queue after a DM message persists, saved
@@ -44,7 +44,7 @@ function chunkSentences(text: string): string[] {
 }
 
 async function kokoroSpeech(input: string, voice: string): Promise<Buffer> {
-  const base = serverEnv("KOKORO_URL", "http://127.0.0.1:8880");
+  const base = configValue(getGlobalConfig().speech.kokoroUrl, "KOKORO_URL", "http://127.0.0.1:8880");
   const response = await fetch(`${base}/v1/audio/speech`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

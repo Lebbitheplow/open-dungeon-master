@@ -55,6 +55,14 @@ export async function endSession() {
   cookieStore.delete(SESSION_COOKIE);
 }
 
+// Hash of the caller's session token, so password changes can revoke every
+// other session while keeping this one alive.
+export async function currentSessionTokenHash(): Promise<string | null> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE)?.value;
+  return token ? hashToken(token) : null;
+}
+
 // Returns the logged-in user, or null. Route handlers that require auth
 // should 401 on null.
 export async function currentUser(): Promise<User | null> {

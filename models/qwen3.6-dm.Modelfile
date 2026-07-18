@@ -1,0 +1,24 @@
+# qwen3.6-dm: the default DM model for Open Dungeon Master.
+#
+# Ollama's default context window is tiny and silently truncates the DM
+# prompt (party sheets, scene, story summary), which makes the model loop.
+# This bakes a 64K context into the model along with Qwen's recommended
+# non-thinking sampler settings, so the app can request "qwen3.6-dm" without
+# per-request overrides.
+#
+# Build it with:
+#   ollama pull qwen3.6:35b-a3b-q8_0
+#   ollama create qwen3.6-dm -f models/qwen3.6-dm.Modelfile
+#
+# Running this model on another OpenAI-compatible server instead (llama.cpp,
+# vLLM, LM Studio)? See docs/text-backends.md for the equivalent flags.
+
+FROM qwen3.6:35b-a3b-q8_0
+
+PARAMETER num_ctx 65536
+
+# Qwen's recommended samplers for non-thinking chat use.
+PARAMETER temperature 0.7
+PARAMETER top_p 0.8
+PARAMETER top_k 20
+PARAMETER min_p 0.0

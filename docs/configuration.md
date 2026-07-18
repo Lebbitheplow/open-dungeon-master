@@ -3,6 +3,11 @@
 Copy `.env.example` to `.env.local` and adjust. Everything is optional; the
 defaults run fully local.
 
+Settings precedence, when the same knob exists in several places: campaign
+settings (in-game panels) > admin panel (`/admin`, stored in the database) >
+environment variables (below) > built-in defaults. A blank admin-panel field
+falls through to the env var.
+
 | Variable | Default | Purpose |
 |---|---|---|
 | `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Local text server |
@@ -36,6 +41,9 @@ defaults run fully local.
 | `DM_LEAN_TOOLS` | — | `1` removes the stat-mutation tools if the model's tool fidelity suffers |
 | `DM_COMPACT_THRESHOLD` | `120` | Messages before history compaction begins (lower to test) |
 | `DB_ENCRYPTION_KEY` | required | Encrypts `data/local-roleplay.sqlite` at rest (chacha20). Belongs in `.env.server` |
+| `DISCORD_CLIENT_ID` | — | Discord OAuth application id for "Sign in with Discord" (or set in `/admin`) |
+| `DISCORD_CLIENT_SECRET` | — | Discord OAuth client secret. Belongs in `.env.server` (or set in `/admin`) |
+| `APP_PUBLIC_URL` | forwarded headers / request origin | Public URL players use (e.g. `https://dungeon.example.org`); needed for OAuth redirect URIs when the reverse proxy doesn't send `X-Forwarded-Host`/`X-Forwarded-Proto` |
 
 Secrets (model API keys) belong in `.env.server`, never in code or `.env.local`.
 

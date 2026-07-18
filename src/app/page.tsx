@@ -3,10 +3,12 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   BookOpen,
+  CircleHelp,
   Loader2,
   LogOut,
   Plus,
   Settings,
+  ShieldCheck,
   Swords,
   Trash2,
   UserRound,
@@ -18,7 +20,10 @@ import { cn } from "@/lib/cn";
 import { IconChip, PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
 import type { CampaignSummary, SessionUser } from "@/lib/campaign-types";
 import { CreateCampaignDialog } from "@/app/CreateCampaignDialog";
+import { HelpDialog } from "@/components/HelpDialog";
+import { Tooltip } from "@/components/ui/Tooltip";
 import AuthForm from "@/app/AuthForm";
+import { ChangePasswordForm } from "@/app/ChangePasswordForm";
 
 export default function Home() {
   const [checking, setChecking] = useState(true);
@@ -52,10 +57,39 @@ export default function Home() {
     );
   }
 
+  if (user?.mustChangePassword) {
+    return (
+      <ForcedPasswordChange
+        onChanged={() => setUser({ ...user, mustChangePassword: false })}
+      />
+    );
+  }
+
   return user ? (
     <Dashboard user={user} onLogout={() => setUser(null)} />
   ) : (
     <AuthScreen onAuthed={setUser} />
+  );
+}
+
+// Shown when a session belongs to an account flagged by an admin password
+// reset; the server rejects campaign APIs until the password is changed.
+function ForcedPasswordChange({ onChanged }: { onChanged: () => void }) {
+  return (
+    <main className="bg-starfield flex flex-1 items-center justify-center p-6">
+      <div className="w-full max-w-sm animate-fade-up-slow">
+        <div className="glass texture-noise rounded-xl p-6 shadow-elev-2">
+          <h1 className="mb-1 font-display text-xl tracking-wide text-amber-50">
+            Set a new password
+          </h1>
+          <p className="mb-4 text-sm text-stone-400">
+            An admin reset your password. Enter the temporary password you were given and pick a
+            new one.
+          </p>
+          <ChangePasswordForm submitLabel="Set new password" onChanged={onChanged} />
+        </div>
+      </div>
+    </main>
   );
 }
 
@@ -89,6 +123,7 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [soloOpen, setSoloOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [joinError, setJoinError] = useState("");
   const [joining, setJoining] = useState(false);
@@ -162,10 +197,11 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
           </div>
         </div>
         <DropdownMenu.Root>
+          <Tooltip content="Account and app menu" side="bottom">
           <DropdownMenu.Trigger asChild>
             <button
               type="button"
-              title="Account"
+              aria-label="Account"
               className="rounded-full outline-none transition-shadow duration-150 hover:shadow-glow-gold focus-visible:shadow-glow-gold"
             >
               {user.avatar ? (
@@ -182,6 +218,7 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
               )}
             </button>
           </DropdownMenu.Trigger>
+          </Tooltip>
           <DropdownMenu.Portal>
             <DropdownMenu.Content
               align="end"
@@ -203,6 +240,22 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
                 >
                   <Settings className="size-4" /> Settings
                 </Link>
+              </DropdownMenu.Item>
+              {user.isAdmin ? (
+                <DropdownMenu.Item asChild>
+                  <Link
+                    href="/admin"
+                    className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-stone-300 outline-none data-[highlighted]:bg-stone-800 data-[highlighted]:text-amber-100"
+                  >
+                    <ShieldCheck className="size-4" /> Admin panel
+                  </Link>
+                </DropdownMenu.Item>
+              ) : null}
+              <DropdownMenu.Item
+                onSelect={() => setHelpOpen(true)}
+                className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-stone-300 outline-none data-[highlighted]:bg-stone-800 data-[highlighted]:text-amber-100"
+              >
+                <CircleHelp className="size-4" /> Help
               </DropdownMenu.Item>
               <DropdownMenu.Separator className="my-1 h-px bg-stone-800" />
               <DropdownMenu.Item
@@ -285,18 +338,20 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
                       {campaign.maxPlayers === 1 ? " · solo" : " adventurers"}
                     </span>
                     {campaign.role === "owner" ? (
-                      <button
-                        type="button"
-                        title="Delete this campaign"
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          deleteCampaign(campaign);
-                        }}
-                        className="rounded-md p-1 text-stone-600 opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
-                      >
-                        <Trash2 className="size-4" />
-                      </button>
+                      <Tooltip content="Delete this campaign">
+                        <button
+                          type="button"
+                          aria-label="Delete this campaign"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            deleteCampaign(campaign);
+                          }}
+                          className="rounded-md p-1 text-stone-600 opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
+                        >
+                          <Trash2 className="size-4" />
+                        </button>
+                      </Tooltip>
                     ) : null}
                   </div>
                 </a>
@@ -348,6 +403,7 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
           window.location.href = `/campaigns/${campaignId}`;
         }}
       />
+      <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
     </main>
   );
 }

@@ -8,6 +8,7 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { z } from "zod";
+import { getGlobalConfig } from "@/lib/db/app-settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -58,7 +59,9 @@ function expandHome(value: string) {
 }
 
 async function waitForHealth(seconds: number) {
-  const workerUrl = envValue("FLUX_WORKER_URL", "http://127.0.0.1:7869").replace(/\/$/, "");
+  const workerUrl = (
+    getGlobalConfig().images.fluxWorkerUrl || envValue("FLUX_WORKER_URL", "http://127.0.0.1:7869")
+  ).replace(/\/$/, "");
   const deadline = Date.now() + seconds * 1000;
 
   while (Date.now() < deadline) {

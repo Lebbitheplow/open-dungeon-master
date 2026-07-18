@@ -228,10 +228,12 @@ body::before {
       0 14px 36px rgba(4, 2, 12, 0.4);
   }
 
-  /* Dialogs get a smokier panel: a heavier fill plus backdrop blur so the
-     table behind the modal recedes instead of reading through. */
+  /* Dialogs and popup menus get a smokier panel: a heavier fill plus
+     backdrop blur so the table behind them recedes instead of reading
+     through. Radix menus render with role="menu". */
   [role="dialog"].panel,
-  [role="alertdialog"].panel {
+  [role="alertdialog"].panel,
+  [role="menu"].panel {
     background:
       linear-gradient(180deg, rgba(41, 34, 71, 0.94), rgba(13, 11, 28, 0.97)),
       radial-gradient(ellipse 120% 60% at 50% -20%, rgba(107, 99, 148, 0.14), transparent 60%);

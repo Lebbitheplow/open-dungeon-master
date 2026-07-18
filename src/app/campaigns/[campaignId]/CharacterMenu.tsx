@@ -1,11 +1,12 @@
 "use client";
 
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { BookUser, Crown, MoreVertical, StickyNote, Wrench } from "lucide-react";
+import { BookUser, Crown, MessageSquare, MoreVertical, StickyNote, Wrench } from "lucide-react";
+import { Tooltip } from "@/components/ui/Tooltip";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
-// Per-character options menu on each party card: sheet, notes, and the
-// lead-only corrections and lead transfer.
+// Per-character options menu on each party card: sheet, notes, private
+// message, and the lead-only corrections and lead transfer.
 export function CharacterMenu({
   sheet,
   isLead,
@@ -14,6 +15,7 @@ export function CharacterMenu({
   onViewSheet,
   onNotes,
   onAdjust,
+  onMessage,
 }: {
   sheet: CharacterSheet;
   isLead: boolean;
@@ -22,6 +24,7 @@ export function CharacterMenu({
   onViewSheet: () => void;
   onNotes: () => void;
   onAdjust: () => void;
+  onMessage?: () => void;
 }) {
   const item =
     "flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs text-stone-300 outline-none data-[highlighted]:bg-stone-800";
@@ -36,15 +39,17 @@ export function CharacterMenu({
 
   return (
     <DropdownMenu.Root>
-      <DropdownMenu.Trigger asChild>
-        <button
-          type="button"
-          title={`Options for ${sheet.name}`}
-          className="rounded p-1 text-stone-500 hover:bg-stone-900 hover:text-stone-300"
-        >
-          <MoreVertical className="size-3.5" />
-        </button>
-      </DropdownMenu.Trigger>
+      <Tooltip content={`Options for ${sheet.name}: sheet, notes, message and more`}>
+        <DropdownMenu.Trigger asChild>
+          <button
+            type="button"
+            aria-label={`Options for ${sheet.name}`}
+            className="rounded p-1 text-stone-500 hover:bg-stone-900 hover:text-stone-300"
+          >
+            <MoreVertical className="size-3.5" />
+          </button>
+        </DropdownMenu.Trigger>
+      </Tooltip>
       <DropdownMenu.Portal>
         <DropdownMenu.Content
           align="end"
@@ -57,6 +62,11 @@ export function CharacterMenu({
           <DropdownMenu.Item className={item} onSelect={onNotes}>
             <StickyNote className="size-3.5 text-stone-500" /> Notes
           </DropdownMenu.Item>
+          {onMessage ? (
+            <DropdownMenu.Item className={item} onSelect={onMessage}>
+              <MessageSquare className="size-3.5 text-stone-500" /> Message
+            </DropdownMenu.Item>
+          ) : null}
           {isLead ? (
             <DropdownMenu.Item className={item} onSelect={onAdjust}>
               <Wrench className="size-3.5 text-stone-500" /> Adjust stats

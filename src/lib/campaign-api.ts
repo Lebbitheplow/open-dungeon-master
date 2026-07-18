@@ -13,6 +13,11 @@ export async function requireMember(
   if (!user) {
     return unauthorized();
   }
+  if (user.mustChangePassword) {
+    // Admin reset a temp password for this account; nothing else works until
+    // the user sets their own via /api/auth/change-password.
+    return Response.json({ error: "Set a new password to continue." }, { status: 403 });
+  }
   const campaign = getCampaignForUser(campaignId, user.id);
   if (!campaign) {
     return Response.json({ error: "Campaign not found." }, { status: 404 });

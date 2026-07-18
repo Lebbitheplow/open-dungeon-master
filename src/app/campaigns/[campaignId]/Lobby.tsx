@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
 import { EditCampaignDialog } from "@/app/campaigns/[campaignId]/EditCampaignDialog";
 import { GameSettingsPanel } from "@/app/campaigns/[campaignId]/GameSettingsPanel";
@@ -174,14 +175,16 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
             <h1 className="flex items-center gap-2 font-display text-2xl tracking-wide text-amber-50">
               <span className="truncate">{campaign.title}</span>
               {isLead ? (
-                <button
-                  type="button"
-                  onClick={() => setEditing(true)}
-                  title="Edit campaign settings"
-                  className="rounded-md border border-stone-700 p-1.5 text-stone-400 hover:text-stone-200"
-                >
-                  <Pencil className="size-3.5" />
-                </button>
+                <Tooltip content="Edit campaign settings">
+                  <button
+                    type="button"
+                    onClick={() => setEditing(true)}
+                    aria-label="Edit campaign settings"
+                    className="rounded-md border border-stone-700 p-1.5 text-stone-400 hover:text-stone-200"
+                  >
+                    <Pencil className="size-3.5" />
+                  </button>
+                </Tooltip>
               ) : null}
             </h1>
             <p className="text-sm text-stone-500">
@@ -303,22 +306,22 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
                 </div>
                 <span className="flex items-center gap-1.5">
                   {(isLead || isOwner) && member.userId !== campaign.leadUserId ? (
-                    <button
-                      type="button"
-                      onClick={() => makeLead(member.userId)}
-                      className="rounded-full border border-stone-700 px-2 py-0.5 text-xs text-stone-400 hover:bg-stone-900"
-                      title="Hand the party lead to this player"
-                    >
-                      <Crown className="mr-0.5 inline size-3" /> make lead
-                    </button>
+                    <Tooltip content="Hand the party lead to this player">
+                      <button
+                        type="button"
+                        onClick={() => makeLead(member.userId)}
+                        className="rounded-full border border-stone-700 px-2 py-0.5 text-xs text-stone-400 hover:bg-stone-900"
+                      >
+                        <Crown className="mr-0.5 inline size-3" /> make lead
+                      </button>
+                    </Tooltip>
                   ) : null}
                   {member.useRealDice ? (
-                    <span
-                      className="rounded-full bg-amber-950 px-2 py-0.5 text-xs text-amber-300"
-                      title="Rolls physical dice"
-                    >
-                      real dice
-                    </span>
+                    <Tooltip content="Rolls physical dice: the DM waits for this player to enter real rolls">
+                      <span className="rounded-full bg-amber-950 px-2 py-0.5 text-xs text-amber-300">
+                        real dice
+                      </span>
+                    </Tooltip>
                   ) : null}
                   <span
                     className={cn(

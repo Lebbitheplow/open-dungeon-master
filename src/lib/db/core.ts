@@ -331,6 +331,45 @@ function ensureSchema(db: Database.Database) {
     );
 
     CREATE INDEX IF NOT EXISTS idx_campaign_notes ON campaign_notes(campaign_id, seq);
+
+    -- Private player-to-player side chats (1:1 "dm" threads and "group"
+    -- threads). Content must never reach the AI DM prompt or the shared
+    -- campaign event stream: nothing outside side-chat code may read these
+    -- tables, and sends publish only a contentless ephemeral event.
+    CREATE TABLE IF NOT EXISTS side_threads (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL CHECK (kind IN ('dm','group')),
+      title TEXT NOT NULL DEFAULT '',
+      created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      -- kind='dm' only: both member user ids sorted and joined with '|',
+      -- so the partial unique index makes 1:1 threads idempotent.
+      dm_key TEXT,
+      next_seq INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_side_threads_dm
+      ON side_threads(campaign_id, dm_key) WHERE dm_key IS NOT NULL;
+
+    CREATE TABLE IF NOT EXISTS side_thread_members (
+      thread_id TEXT NOT NULL REFERENCES side_threads(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      last_read_seq INTEGER NOT NULL DEFAULT 0,
+      joined_at TEXT NOT NULL,
+      PRIMARY KEY (thread_id, user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS side_messages (
+      id TEXT PRIMARY KEY,
+      thread_id TEXT NOT NULL REFERENCES side_threads(id) ON DELETE CASCADE,
+      author_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      seq INTEGER NOT NULL,
+      content TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      UNIQUE (thread_id, seq)
+    );
   `);
 
   // Compaction memory: a rolling "story so far" summary plus a watermark of
@@ -386,6 +425,20 @@ function ensureSchema(db: Database.Database) {
   if (!userColumns.some((column) => column.name === "avatar_json")) {
     db.exec(`ALTER TABLE users ADD COLUMN avatar_json TEXT`);
   }
+
+  addColumns("users", [
+    // Global admin: may manage users and app-wide settings at /admin.
+    ["is_admin", `INTEGER NOT NULL DEFAULT 0`],
+    // Set by an admin password reset; the user is forced through the
+    // change-password flow before doing anything else.
+    ["must_change_password", `INTEGER NOT NULL DEFAULT 0`],
+    // Discord account id for "Sign in with Discord"; NULL when unlinked.
+    ["discord_id", `TEXT`],
+  ]);
+  db.exec(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_discord
+       ON users(discord_id) WHERE discord_id IS NOT NULL`,
+  );
 
   addColumns("campaign_members", [
     // Player opted in to rolling physical dice (when the campaign allows it).
