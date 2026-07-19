@@ -1,0 +1,208 @@
+{
+  "_note": "Feature tables for the cyberpunk classes. n = feature name, d = one-line rules text the DM treats as authoritative.",
+  "classes": {
+    "netrunner": {
+      "subclassLevel": 2,
+      "levels": {
+        "1": [
+          { "n": "Deck Interface", "d": "Casts wizard-list spells as intrusion programs using INT; needs their cyberdeck as a focus." },
+          { "n": "Hot-Sim Focus", "d": "May run any known program with the ritual tag over 10 minutes without spending a slot." }
+        ],
+        "2": [
+          { "n": "Runner Protocol", "d": "Chooses a netrunning protocol (subclass)." },
+          { "n": "Signal Tap", "d": "1/rest, listen in on any electronic or magical communication within 100 ft." }
+        ],
+        "3": [{ "n": "Ghost in the Feed", "d": "Advantage on Stealth against cameras, sensors, and constructs." }],
+        "5": [{ "n": "Daemon Cache", "d": "Stores one program of level 1-3; cast it once without a slot per long rest." }],
+        "6": [{ "n": "Overwatch", "d": "Reaction: impose disadvantage on an attack against an ally you can see, 2/rest." }],
+        "9": [{ "n": "Deep-Dive Rig", "d": "Project senses through any networked device within 1 mile for 10 minutes." }],
+        "11": [{ "n": "Daemon Cache (2 programs)", "d": "Cache holds two programs of level 1-5." }],
+        "13": [{ "n": "Black Market Firmware", "d": "Learn two programs from any spell list; they count as wizard-list for you." }],
+        "15": [{ "n": "Neural Firewall", "d": "Advantage on INT, WIS, and CHA saves against spells and psionics." }],
+        "18": [{ "n": "Root Access", "d": "1/long rest, control a construct or networked system for 1 minute (INT save negates)." }],
+        "20": [{ "n": "The Net Remembers", "d": "Regain 4 expended slot levels on a short rest, once per day." }]
+      },
+      "subclass": {
+        "name": "Black ICE Breaker",
+        "levels": {
+          "2": [
+            { "n": "ICE Pick", "d": "When a hostile program or spell targets you, reaction to add +2 AC or +2 to the save." },
+            { "n": "Lethal Payload", "d": "1/turn, a damaging program deals +1d8 lightning damage to one target." }
+          ],
+          "6": [{ "n": "Counter-Intrusion", "d": "When you succeed on a save against a spell, deal 2d8 psychic damage to the caster." }],
+          "10": [{ "n": "Flatline Protocol", "d": "Your programs score a critical on 19-20 against constructs and spellcasters." }],
+          "14": [{ "n": "Daemon Swarm", "d": "1/long rest, split one single-target damaging program among up to three targets." }]
+        }
+      }
+    },
+    "street_samurai": {
+      "subclassLevel": 3,
+      "levels": {
+        "1": [
+          { "n": "Chrome Reflexes", "d": "+2 to initiative; cannot be surprised while conscious." },
+          { "n": "Combat Wetware", "d": "Pick one: +2 to ranged attack rolls, +1 AC in light or medium armor, or +2 melee damage." }
+        ],
+        "2": [{ "n": "Adrenal Override", "d": "1/short rest, take one additional action on your turn." }],
+        "3": [{ "n": "Edge Discipline", "d": "Chooses a combat discipline (subclass)." }],
+        "5": [{ "n": "Extra Attack", "d": "Attack twice when taking the Attack action." }],
+        "6": [{ "n": "Subdermal Plating", "d": "+1 AC while not wearing heavy armor." }],
+        "7": [{ "n": "Target Lock", "d": "Bonus action: mark a foe you can see; your attacks against it deal +2 damage." }],
+        "9": [{ "n": "Indomitable Firmware", "d": "1/long rest, reroll a failed saving throw." }],
+        "10": [{ "n": "Reflex Booster II", "d": "Initiative bonus improves to +4." }],
+        "11": [{ "n": "Extra Attack (2)", "d": "Attack three times when taking the Attack action." }],
+        "13": [{ "n": "Bullet Time", "d": "Reaction: +3 AC against one ranged attack you can see, 3/long rest." }],
+        "14": [{ "n": "Adrenal Override (2 uses)", "d": "Adrenal Override recharges twice per short rest." }],
+        "15": [{ "n": "Chrome Constitution", "d": "Advantage on CON saves; resistance to poison damage." }],
+        "17": [{ "n": "Killing Instinct", "d": "Your weapon attacks score a critical hit on 19-20." }],
+        "18": [{ "n": "Wired Soul", "d": "1/long rest while below half HP, bonus action to regain 10 + level HP." }],
+        "20": [{ "n": "Apex Predator", "d": "1/turn, dropping a foe to 0 HP grants one extra weapon attack immediately." }]
+      },
+      "subclass": {
+        "name": "Chrome Dervish",
+        "levels": {
+          "3": [{ "n": "Twin Chrome", "d": "Two-weapon fighting with blades adds your ability mod to off-hand damage; +1 AC while dual-wielding." }],
+          "7": [{ "n": "Whirl of Edges", "d": "Replace one attack with a spinning slash: weapon damage to every foe within 5 ft." }],
+          "11": [{ "n": "Afterimage", "d": "Dash or Disengage as a bonus action; opportunity attacks against you have disadvantage." }],
+          "15": [{ "n": "Storm of Blades", "d": "1/long rest, for 1 minute make one additional blade attack on each of your turns." }]
+        }
+      }
+    },
+    "rigger": {
+      "subclassLevel": 3,
+      "levels": {
+        "1": [
+          { "n": "Drone Companion", "d": "A small drone obeys you: AC 13, HP 5 + level, moves 30 ft, acts on your command." },
+          { "n": "Jury-Rig", "d": "2/long rest, 10 minutes of tinkering restores a broken device or gives a tool user +1d4 for 1 hour." }
+        ],
+        "2": [
+          { "n": "Machine Codex", "d": "Casts wizard-list spells as drone routines using INT; the drone is the focus." },
+          { "n": "Remote Eyes", "d": "See and hear through your drone while it is within 100 ft." }
+        ],
+        "3": [{ "n": "Rig Specialization", "d": "Chooses a rig specialization (subclass)." }],
+        "5": [{ "n": "Drone Swarm", "d": "A second drone; command all your drones with a single action." }],
+        "6": [{ "n": "Signal Boost", "d": "Drone command and Remote Eyes range extends to 1 mile." }],
+        "7": [{ "n": "Overclocked Servos", "d": "Your drones add your INT modifier to their damage." }],
+        "9": [{ "n": "Self-Repair Protocol", "d": "Each drone regains 2d6 HP at the start of your turn, once per rest each." }],
+        "10": [{ "n": "Hardened Uplink", "d": "Advantage on saves against effects that would sever or hijack control of your drones." }],
+        "11": [{ "n": "Improved Chassis", "d": "Your drones improve to AC 16 and HP 15 + twice your level." }],
+        "13": [{ "n": "Backup Frame", "d": "Rebuild a destroyed drone on a long rest for free, or in 1 minute once per day." }],
+        "14": [{ "n": "Omni-Tool Mastery", "d": "Jury-Rig has 4 uses and can affect magical or exotic devices." }],
+        "15": [{ "n": "Drone Legion", "d": "A third drone joins your swarm." }],
+        "17": [{ "n": "Master Uplink", "d": "Command your drones as a bonus action." }],
+        "18": [{ "n": "Ghost Protocol", "d": "1/long rest, one drone turns invisible for 1 minute." }],
+        "20": [{ "n": "Deus in Machina", "d": "1/long rest, for 1 minute your drones act independently and you may cast one routine through each." }]
+      },
+      "subclass": {
+        "name": "Drone Jockey",
+        "levels": {
+          "3": [{ "n": "Combat Chassis", "d": "Your primary drone mounts a weapon: on your command it attacks for 1d8 + INT force damage." }],
+          "7": [{ "n": "Evasive Subroutines", "d": "Your drones take half damage from area effects, none on a successful DEX save." }],
+          "11": [{ "n": "Twinned Strike", "d": "Two drones attack when you command an attack." }],
+          "15": [{ "n": "Titan Frame", "d": "Primary drone doubles its HP, deals +1d8 damage, and can carry a rider." }]
+        }
+      }
+    },
+    "fixer": {
+      "subclassLevel": 3,
+      "levels": {
+        "1": [
+          { "n": "Street Contacts", "d": "1/long rest, call in a favor: gear, a ride, a name, or entry somewhere (DM adjudicates scope)." },
+          { "n": "Grease the Wheels", "d": "1/short rest, reroll a failed CHA-based check." }
+        ],
+        "2": [
+          { "n": "Expertise", "d": "Double proficiency bonus in two skills you are proficient with." },
+          { "n": "Slippery", "d": "Disengage or Hide as a bonus action." }
+        ],
+        "3": [{ "n": "The Operation", "d": "Chooses an operation style (subclass)." }],
+        "5": [{ "n": "Favor Network", "d": "Street Contacts has 2 uses and reaches contacts in other cities." }],
+        "6": [{ "n": "Silver Ledger", "d": "Sell goods at full value; you can always find a buyer or seller within a day." }],
+        "7": [{ "n": "Exit Strategy", "d": "When you roll initiative, move up to your speed without provoking opportunity attacks." }],
+        "9": [{ "n": "Word on the Street", "d": "1 hour of canvassing reveals a named local's whereabouts or recent dealings." }],
+        "10": [{ "n": "Expertise (2 more skills)", "d": "Double proficiency bonus in two more proficient skills." }],
+        "11": [{ "n": "The Big Favor", "d": "1/week, a contact performs a genuinely dangerous service for you." }],
+        "13": [{ "n": "Neutral Ground", "d": "A creature that accepts your parley cannot attack you until your next turn." }],
+        "14": [{ "n": "Grease the Wheels (3 uses)", "d": "Grease the Wheels recharges to 3 uses per short rest." }],
+        "15": [{ "n": "Shadow Network", "d": "Street Contacts has 3 uses; favors arrive in half the usual time." }],
+        "17": [{ "n": "Everyone Owes You", "d": "1/long rest, the DM tells you one useful secret about a person you converse with." }],
+        "18": [{ "n": "Master of the Board", "d": "You and allies within 30 ft add +1d4 to CHA-based checks." }],
+        "20": [{ "n": "Kingpin", "d": "1/long rest, declare a contact anywhere; one favor within reason simply succeeds." }]
+      },
+      "subclass": {
+        "name": "Information Broker",
+        "levels": {
+          "3": [
+            { "n": "Dossier", "d": "After 1 minute observing a creature, learn one stat, weakness, or resistance of it." },
+            { "n": "Ear to the Ground", "d": "Advantage on Investigation checks to gather information." }
+          ],
+          "7": [{ "n": "Blackmail Files", "d": "Advantage on CHA checks against anyone whose secret you know." }],
+          "11": [{ "n": "Web of Whispers", "d": "You always learn when someone in the city asks about you or your crew." }],
+          "15": [{ "n": "Oracle of the Streets", "d": "1/long rest, ask the DM three questions about local people, places, or events; get brief true answers." }]
+        }
+      }
+    },
+    "esper": {
+      "subclassLevel": 1,
+      "levels": {
+        "1": [
+          { "n": "Wetware Surge", "d": "Casts sorcerer-list spells as psionics using CHA; needs no material focus." },
+          { "n": "Static Shield", "d": "1/short rest, bonus action: +2 AC until the start of your next turn." }
+        ],
+        "2": [{ "n": "Psi Font", "d": "Regain one 1st-level slot on a short rest." }],
+        "3": [{ "n": "Telekinetic Grip", "d": "An invisible telekinetic hand within 30 ft manipulates objects up to 10 lb." }],
+        "5": [{ "n": "Surge Momentum", "d": "2/rest, cast a cantrip as a bonus action after casting a leveled psionic." }],
+        "7": [{ "n": "Kinetic Buffer", "d": "Resistance to falling damage; 1/turn, shove a target 10 ft with a psionic hit." }],
+        "9": [{ "n": "Thought Shield", "d": "Your mind cannot be read; +2 on WIS saves." }],
+        "11": [{ "n": "Psychic Flight", "d": "1/long rest, fly 30 ft for 10 minutes." }],
+        "13": [{ "n": "Split Focus", "d": "Advantage on concentration saves." }],
+        "15": [{ "n": "Overmind", "d": "1/long rest, regain expended slot levels equal to your CHA modifier." }],
+        "17": [{ "n": "Reality Rend", "d": "1/long rest, your next damaging psionic deals maximum damage." }],
+        "18": [{ "n": "Ascendant Mind", "d": "Immune to psychic damage and mind reading." }],
+        "20": [{ "n": "Singularity", "d": "1/long rest, cast a psionic of 5th level or lower without a slot at two targets." }]
+      },
+      "subclass": {
+        "name": "Mindburner",
+        "levels": {
+          "1": [{ "n": "Neural Spike", "d": "1/turn, add your CHA modifier as psychic damage to a damaging psionic." }],
+          "6": [{ "n": "Feedback Loop", "d": "Reaction when a creature damages you: it takes psychic damage equal to your CHA modifier." }],
+          "10": [{ "n": "Synaptic Overload", "d": "1/long rest, a creature hit by your psionic saves (WIS) or is stunned until your next turn." }],
+          "14": [{ "n": "Mind Fortress", "d": "Resistance to psychic damage; advantage against charm and fear." }]
+        }
+      }
+    },
+    "trauma_doc": {
+      "subclassLevel": 3,
+      "levels": {
+        "1": [
+          { "n": "Stim Injector", "d": "Bonus action touch: an ally regains 1d6 + WIS HP. Uses per long rest equal WIS modifier." },
+          { "n": "Triage Protocol", "d": "Assess a creature to learn its rough HP, conditions, and diseases." }
+        ],
+        "2": [{ "n": "Nanomed Suite", "d": "Casts cleric-list spells as injected nanomeds using WIS." }],
+        "3": [{ "n": "Specialty", "d": "Chooses a medical specialty (subclass)." }],
+        "5": [{ "n": "Field Surgeon", "d": "Stabilize as a bonus action; creatures you stabilize wake with 1 HP after 1 minute." }],
+        "6": [{ "n": "Boosted Dosage", "d": "Stim Injector heals 2d6 + WIS." }],
+        "7": [{ "n": "Immuno-Shield", "d": "You and allies within 5 ft have advantage against poison and disease." }],
+        "9": [{ "n": "Adrenal Protocol", "d": "An ally you stim can also stand up and move half speed for free." }],
+        "10": [{ "n": "Miracle Worker", "d": "1/long rest, an ally at 0 HP within 30 ft instantly regains 3d6 + WIS HP." }],
+        "11": [{ "n": "Stim Injector (ranged)", "d": "Stim Injector heals 3d6 + WIS and can be fired as a dart at 30 ft." }],
+        "13": [{ "n": "Nanite Reserve", "d": "1/day, regain one expended spell slot of 3rd level or lower on a short rest." }],
+        "14": [{ "n": "Combat Calm", "d": "You and allies within 10 ft have advantage against being frightened." }],
+        "15": [{ "n": "Autodoc Implant", "d": "While below half HP, regain WIS-mod HP at the start of your turn (5 rounds per long rest)." }],
+        "17": [{ "n": "Perfected Formula", "d": "Your healing dice each count as at least half their maximum." }],
+        "18": [{ "n": "Plague Breaker", "d": "1/short rest, touch cures any disease, poison, blindness, deafness, or paralysis." }],
+        "20": [{ "n": "Lazarus Protocol", "d": "1/week, restore a creature dead less than 1 minute to life at half HP." }]
+      },
+      "subclass": {
+        "name": "Combat Medevac",
+        "levels": {
+          "3": [
+            { "n": "Under Fire", "d": "Dash or Disengage as a bonus action when moving toward a downed ally." },
+            { "n": "Shield the Fallen", "d": "While adjacent to a downed ally, attacks against you have disadvantage." }
+          ],
+          "7": [{ "n": "Extraction", "d": "Carry or drag allies at full speed; allies you stabilize or heal gain 1d6 temp HP." }],
+          "11": [{ "n": "Covering Stim", "d": "An ally you heal gains +2 AC until the start of your next turn." }],
+          "15": [{ "n": "One More Dawn", "d": "1/long rest, an ally within 30 ft that would drop to 0 HP drops to 1 instead." }]
+        }
+      }
+    }
+  }
+}

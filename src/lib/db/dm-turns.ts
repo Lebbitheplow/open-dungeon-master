@@ -16,9 +16,16 @@ export type DmTurn = {
   conversation: ChatMessage[];
   narrationParts: string[];
   rollIds: string[];
+  // Player-to-DM whispers this turn consumed; marked answered in finalize()
+  // so a failed turn leaves them pending for the next one to retry.
+  playerWhisperIds: string[];
+  // Enemies that already attacked this turn (via enemy_attack); the auto-act
+  // fallback skips them so nothing swings twice.
+  actedEnemyIds: string[];
   imageArgs: { prompt: string; reason?: string } | null;
   locationId: string | null;
   mutationCount: number;
+  encounterCount: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -31,9 +38,12 @@ type TurnRow = {
   conversation_json: string;
   narration_parts_json: string;
   roll_ids_json: string;
+  player_whisper_ids_json: string;
+  acted_enemy_ids_json: string | null;
   image_args_json: string | null;
   location_id: string | null;
   mutation_count: number;
+  encounter_count: number;
   created_at: string;
   updated_at: string;
 };
@@ -47,9 +57,12 @@ function mapTurn(row: TurnRow): DmTurn {
     conversation: parseJson<ChatMessage[]>(row.conversation_json, []),
     narrationParts: parseJson<string[]>(row.narration_parts_json, []),
     rollIds: parseJson<string[]>(row.roll_ids_json, []),
+    playerWhisperIds: parseJson<string[]>(row.player_whisper_ids_json, []),
+    actedEnemyIds: parseJson<string[]>(row.acted_enemy_ids_json, []),
     imageArgs: parseJson<DmTurn["imageArgs"]>(row.image_args_json, null),
     locationId: row.location_id ?? null,
     mutationCount: row.mutation_count,
+    encounterCount: row.encounter_count ?? 0,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -86,8 +99,8 @@ export function saveDmTurn(turn: DmTurn) {
       `
         UPDATE dm_turns SET
           status = ?, call_index = ?, conversation_json = ?,
-          narration_parts_json = ?, roll_ids_json = ?, image_args_json = ?,
-          location_id = ?, mutation_count = ?, updated_at = ?
+          narration_parts_json = ?, roll_ids_json = ?, player_whisper_ids_json = ?, acted_enemy_ids_json = ?, image_args_json = ?,
+          location_id = ?, mutation_count = ?, encounter_count = ?, updated_at = ?
         WHERE id = ?
       `,
     )
@@ -97,9 +110,12 @@ export function saveDmTurn(turn: DmTurn) {
       JSON.stringify(turn.conversation),
       JSON.stringify(turn.narrationParts),
       JSON.stringify(turn.rollIds),
+      JSON.stringify(turn.playerWhisperIds),
+      JSON.stringify(turn.actedEnemyIds),
       turn.imageArgs ? JSON.stringify(turn.imageArgs) : null,
       turn.locationId,
       turn.mutationCount,
+      turn.encounterCount,
       nowIso(),
       turn.id,
     );
@@ -129,6 +145,21 @@ export function getAwaitingTurn(campaignId: string): DmTurn | null {
 
 export type PendingRollStatus = "pending" | "submitted" | "fallback";
 
+// Adjudication context a parked pc_attack to-hit roll carries: when the d20
+// is submitted the server compares it to targetAc and, on a hit, parks the
+// matching damage roll (src/lib/dm/pc-attack.ts).
+export type PendingAttack = {
+  attacker: string;
+  weapon: string;
+  targetEnemyId: string;
+  targetAc: number;
+  damageExpression: string;
+  critDamageExpression: string;
+  damageType?: string;
+  // Condition-derived: any hit is a critical hit (paralyzed target, etc).
+  autoCrit?: boolean;
+};
+
 export type PendingRoll = {
   id: string;
   campaignId: string;
@@ -142,6 +173,13 @@ export type PendingRoll = {
   advantage: Advantage;
   dc: number | null;
   reason: string;
+  // Damage rolls only: enemy the server applies the result to on resolve.
+  targetEnemyId: string | null;
+  // pc_attack to-hit rolls only: how to adjudicate the submitted d20.
+  attack: PendingAttack | null;
+  // Server summary of what the resolved roll already did; the resumed turn
+  // surfaces it to the model so it narrates the real outcome.
+  combatNote: string | null;
   status: PendingRollStatus;
   rollId: string | null;
   createdAt: string;
@@ -160,6 +198,9 @@ type PendingRow = {
   advantage: Advantage;
   dc: number | null;
   reason: string;
+  target_enemy_id: string | null;
+  attack_json: string | null;
+  combat_note: string | null;
   status: PendingRollStatus;
   roll_id: string | null;
   created_at: string;
@@ -179,6 +220,9 @@ function mapPending(row: PendingRow): PendingRoll {
     advantage: row.advantage,
     dc: row.dc,
     reason: row.reason,
+    targetEnemyId: row.target_enemy_id ?? null,
+    attack: parseJson<PendingAttack | null>(row.attack_json, null),
+    combatNote: row.combat_note ?? null,
     status: row.status,
     rollId: row.roll_id,
     createdAt: row.created_at,
@@ -197,6 +241,8 @@ export function createPendingRoll(input: {
   advantage: Advantage;
   dc: number | null;
   reason: string;
+  targetEnemyId?: string | null;
+  attack?: PendingAttack | null;
 }): PendingRoll {
   const id = crypto.randomUUID();
   getDatabase()
@@ -204,9 +250,9 @@ export function createPendingRoll(input: {
       `
         INSERT INTO pending_rolls (
           id, campaign_id, turn_id, tool_call_id, user_id, character_id, kind,
-          detail, expression, advantage, dc, reason, status, created_at
+          detail, expression, advantage, dc, reason, target_enemy_id, attack_json, status, created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
       `,
     )
     .run(
@@ -222,6 +268,8 @@ export function createPendingRoll(input: {
       input.advantage,
       input.dc,
       input.reason,
+      input.targetEnemyId ?? null,
+      input.attack ? JSON.stringify(input.attack) : null,
       nowIso(),
     );
   const pending = getPendingRoll(id);
@@ -229,6 +277,15 @@ export function createPendingRoll(input: {
     throw new Error("Failed to create pending roll.");
   }
   return pending;
+}
+
+// Client-facing projection: the adjudication context (enemy AC) and the
+// model-facing combat note never ride events or snapshots to players.
+export function publicPendingRoll(pending: PendingRoll): Omit<PendingRoll, "attack" | "combatNote"> {
+  const rest: Partial<PendingRoll> = { ...pending };
+  delete rest.attack;
+  delete rest.combatNote;
+  return rest as Omit<PendingRoll, "attack" | "combatNote">;
 }
 
 export function getPendingRoll(id: string): PendingRoll | null {
@@ -252,6 +309,12 @@ export function listOpenPendingRolls(campaignId: string): PendingRoll[] {
     )
     .all(campaignId) as PendingRow[];
   return rows.map(mapPending);
+}
+
+export function setPendingCombatNote(id: string, note: string) {
+  getDatabase()
+    .prepare(`UPDATE pending_rolls SET combat_note = ? WHERE id = ?`)
+    .run(note.slice(0, 500), id);
 }
 
 export function resolvePendingRoll(

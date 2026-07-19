@@ -8,11 +8,28 @@ import {
   type RaceMechanics,
 } from "@/lib/content/mechanics";
 import { SRD_BACKGROUNDS, SRD_CLASSES, SRD_RACES } from "@/lib/srd";
+import { CUSTOM_BACKGROUNDS } from "@/lib/backgrounds";
+import { CUSTOM_CLASSES } from "@/lib/classes";
+import type { Genre } from "@/lib/schemas/game-settings";
 import { skillsInText } from "@/lib/content/mechanics";
 
 export type RaceOption = { id: string; name: string; note: string } & RaceMechanics;
-export type ClassOption = { id: string; name: string } & ClassMechanics;
-export type BackgroundOption = { id: string; name: string; skills: string[] };
+export type ClassOption = { id: string; name: string } & ClassMechanics & {
+    // Catalog-only extras; absent on SRD and Open5e rows.
+    genres?: Genre[];
+    blurb?: string;
+    knownCaster?: boolean;
+    castingLabel?: string | null;
+    spellListFrom?: string | null;
+  };
+export type BackgroundOption = {
+  id: string;
+  name: string;
+  skills: string[];
+  // Catalog-only extras; absent on SRD and Open5e rows.
+  genres?: Genre[];
+  blurb?: string;
+};
 export type ArchetypeOption = { id: string; name: string };
 
 type ContentRow = {
@@ -35,8 +52,8 @@ function srdRaceOptions(): RaceOption[] {
   }));
 }
 
-function srdClassOptions(): ClassOption[] {
-  return SRD_CLASSES.map((klass) => ({
+function customClassOptions(): ClassOption[] {
+  return CUSTOM_CLASSES.map((klass) => ({
     id: klass.id,
     name: klass.name,
     hitDie: klass.hitDie,
@@ -46,15 +63,50 @@ function srdClassOptions(): ClassOption[] {
     weapons: klass.weapons,
     spellAbility: klass.spellAbility,
     casterType: klass.casterType,
+    genres: klass.genres,
+    blurb: klass.blurb,
+    knownCaster: klass.knownCaster,
+    castingLabel: klass.castingLabel,
+    spellListFrom: klass.spellListFrom,
+  }));
+}
+
+function srdClassOptions(): ClassOption[] {
+  return [
+    ...SRD_CLASSES.map((klass) => ({
+      id: klass.id,
+      name: klass.name,
+      hitDie: klass.hitDie,
+      saves: klass.saves,
+      skillChoices: klass.skillChoices,
+      armor: klass.armor,
+      weapons: klass.weapons,
+      spellAbility: klass.spellAbility,
+      casterType: klass.casterType,
+    })),
+    ...customClassOptions(),
+  ];
+}
+
+function customBackgroundOptions(): BackgroundOption[] {
+  return CUSTOM_BACKGROUNDS.map((background) => ({
+    id: background.id,
+    name: background.name,
+    skills: background.skills,
+    genres: background.genres,
+    blurb: background.blurb,
   }));
 }
 
 function srdBackgroundOptions(): BackgroundOption[] {
-  return SRD_BACKGROUNDS.map((background) => ({
-    id: background.id,
-    name: background.name,
-    skills: background.skills,
-  }));
+  return [
+    ...SRD_BACKGROUNDS.map((background) => ({
+      id: background.id,
+      name: background.name,
+      skills: background.skills,
+    })),
+    ...customBackgroundOptions(),
+  ];
 }
 
 // Loads race/class/background options from the Open5e content pack with the
@@ -102,23 +154,35 @@ export function useBuilderOptions() {
         }
         const classRows = (classesData.results ?? []) as ContentRow[];
         if (classRows.length) {
-          setClasses(
-            classRows.map((row) => ({
-              id: row.slug,
-              name: row.name,
-              ...classMechanics(row.slug, row.data),
-            })),
-          );
+          // Catalog classes ride along with the pack rows; pack slugs win a
+          // (never expected) id collision so the dedupe is just a backstop.
+          const packOptions: ClassOption[] = classRows.map((row) => ({
+            id: row.slug,
+            name: row.name,
+            ...classMechanics(row.slug, row.data),
+          }));
+          const packIds = new Set(packOptions.map((option) => option.id));
+          setClasses([
+            ...packOptions,
+            ...customClassOptions().filter((option) => !packIds.has(option.id)),
+          ]);
         }
         const backgroundRows = (backgroundsData.results ?? []) as ContentRow[];
         if (backgroundRows.length) {
-          setBackgrounds(
-            backgroundRows.map((row) => ({
-              id: row.slug,
-              name: row.name,
-              skills: skillsInText(row.data.skill_proficiencies),
-            })),
-          );
+          // Catalog backgrounds ride along with the pack rows, same as
+          // classes; pack slugs win a (never expected) id collision.
+          const packBackgrounds: BackgroundOption[] = backgroundRows.map((row) => ({
+            id: row.slug,
+            name: row.name,
+            skills: skillsInText(row.data.skill_proficiencies),
+          }));
+          const packBackgroundIds = new Set(packBackgrounds.map((option) => option.id));
+          setBackgrounds([
+            ...packBackgrounds,
+            ...customBackgroundOptions().filter(
+              (option) => !packBackgroundIds.has(option.id),
+            ),
+          ]);
         }
       } catch {
         // SRD fallback already in state.

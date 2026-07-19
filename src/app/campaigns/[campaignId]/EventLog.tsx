@@ -30,6 +30,16 @@ function describeEntry(entry: AuditEntry, name: string): string {
       return `${name} is no longer ${delta.condition}`;
     case "use_spell_slot":
       return `${name} expends a level ${delta.level} spell slot`;
+    case "use_item":
+      return `${name} uses ${delta.item}`;
+    case "purchase":
+      return delta.action === "sell"
+        ? `${name} sells ${delta.item}${Number(delta.qty) > 1 ? ` x${delta.qty}` : ""} for ${Number(delta.price) * Number(delta.qty ?? 1)} gold`
+        : `${name} buys ${delta.item}${Number(delta.qty) > 1 ? ` x${delta.qty}` : ""} for ${Number(delta.price) * Number(delta.qty ?? 1)} gold`;
+    case "use_resource":
+      return `${name} spends ${Number(delta.spent) > 1 ? `${delta.spent} uses of ` : ""}${delta.resource}`;
+    case "grant_temp_hp":
+      return `${name} gains ${delta.tempHp} temporary HP`;
     case "learn_spell":
       return delta.action === "remove"
         ? `${name} loses the spell ${delta.spell}`

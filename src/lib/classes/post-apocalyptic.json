@@ -1,0 +1,59 @@
+{
+  "_note": "Original setting-specific classes for Open Dungeon Master. Not SRD-derived content.",
+  "classes": [
+    {
+      "id": "scavenger", "name": "Scavenger", "hitDie": 8,
+      "saves": ["dex", "int"], "casterType": "none", "spellAbility": null,
+      "armor": ["light"], "weapons": ["simple", "firearms"],
+      "skillChoices": { "count": 3, "from": ["acrobatics", "investigation", "perception", "sleight_of_hand", "stealth", "survival"] },
+      "genres": ["post_apocalyptic"],
+      "blurb": "The ruins provide, if you know where to look. Quick fingers, sharp eyes, and a bag of exactly the right junk.",
+      "spellListFrom": null, "knownCaster": false, "castingLabel": null
+    },
+    {
+      "id": "road_warrior", "name": "Road Warrior", "hitDie": 10,
+      "saves": ["str", "con"], "casterType": "none", "spellAbility": null,
+      "armor": ["light", "medium"], "weapons": ["simple", "martial", "firearms"],
+      "skillChoices": { "count": 2, "from": ["acrobatics", "athletics", "intimidation", "perception", "survival"] },
+      "genres": ["post_apocalyptic"],
+      "blurb": "Chrome-spiked and fearless, living fast on the dead highways where the loudest engine makes the law.",
+      "spellListFrom": null, "knownCaster": false, "castingLabel": null
+    },
+    {
+      "id": "aberrant", "name": "Aberrant", "hitDie": 10,
+      "saves": ["con", "cha"], "casterType": "full", "spellAbility": "cha",
+      "armor": [], "weapons": ["simple"],
+      "skillChoices": { "count": 2, "from": ["arcana", "athletics", "intimidation", "nature", "perception", "survival"] },
+      "genres": ["post_apocalyptic"],
+      "blurb": "The Fall rewrote them. Mutation is their magic, unstable and blooming, and their body never stopped adapting.",
+      "spellListFrom": "sorcerer", "knownCaster": true, "castingLabel": "Mutations"
+    },
+    {
+      "id": "salvage_tech", "name": "Salvage Tech", "hitDie": 8,
+      "saves": ["int", "con"], "casterType": "half", "spellAbility": "int",
+      "armor": ["light"], "weapons": ["simple", "firearms", "tech blades"],
+      "skillChoices": { "count": 2, "from": ["arcana", "history", "investigation", "perception", "sleight_of_hand", "survival"] },
+      "genres": ["post_apocalyptic"],
+      "blurb": "They coax old-world machines back to life and wield rebuilt wonders the new world barely understands.",
+      "spellListFrom": "wizard", "knownCaster": false, "castingLabel": "Reclaimed Tech"
+    },
+    {
+      "id": "waste_preacher", "name": "Waste Preacher", "hitDie": 8,
+      "saves": ["wis", "cha"], "casterType": "full", "spellAbility": "wis",
+      "armor": ["light", "medium"], "weapons": ["simple"],
+      "skillChoices": { "count": 2, "from": ["history", "insight", "intimidation", "medicine", "persuasion", "religion"] },
+      "genres": ["post_apocalyptic"],
+      "blurb": "A voice crying hope in the wasteland. Their sermons close wounds, steady hands, and occasionally call down judgment.",
+      "spellListFrom": "cleric", "knownCaster": false, "castingLabel": "Sermons"
+    },
+    {
+      "id": "packmaster", "name": "Packmaster", "hitDie": 10,
+      "saves": ["str", "wis"], "casterType": "half", "spellAbility": "wis",
+      "armor": ["light", "medium"], "weapons": ["simple", "martial"],
+      "skillChoices": { "count": 3, "from": ["animal_handling", "athletics", "insight", "intimidation", "nature", "perception", "survival"] },
+      "genres": ["post_apocalyptic"],
+      "blurb": "Bonded to the wasteland's beasts, they run with a loyal companion and speak the old green tongue of survival.",
+      "spellListFrom": "druid", "knownCaster": true, "castingLabel": "Bonds"
+    }
+  ]
+}

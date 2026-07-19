@@ -1,5 +1,6 @@
 import { isErrorResponse, requireLead } from "@/lib/campaign-api";
 import { getFloor, setFloor, type Floor } from "@/lib/db/campaigns";
+import { skipCurrentTurn } from "@/lib/dm/encounter-tools";
 import { requestDmTurn } from "@/lib/dm/loop";
 import { publishPersisted } from "@/lib/events";
 
@@ -20,6 +21,14 @@ export async function POST(
     return context;
   }
   const floor = getFloor(campaignId);
+  // In combat, "release" means skip the absent player's turn: the pointer
+  // advances and the DM plays any intervening enemies.
+  if (floor.mode === "initiative") {
+    if (skipCurrentTurn(campaignId)) {
+      requestDmTurn(campaignId);
+    }
+    return Response.json({ ok: true });
+  }
   const next: Floor = floor.mode === "hold" ? floor.next : { mode: "open" };
   setFloor(campaignId, next);
   publishPersisted(campaignId, "floor_changed", { floor: next });

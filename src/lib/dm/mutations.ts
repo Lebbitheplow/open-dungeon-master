@@ -15,6 +15,26 @@ import {
   removeItemMath,
   spendSlotMath,
 } from "@/lib/dm/mutation-math";
+import { applyDamageDeathHook, healDeathHook } from "@/lib/dm/death";
+import {
+  damageAdjust,
+  describeExhaustion,
+  pcResistances,
+  pruneMeta,
+} from "@/lib/dm/condition-logic";
+import {
+  breakConcentration,
+  concentrationDamageHook,
+  setConcentration,
+  spellRequiresConcentration,
+} from "@/lib/dm/concentration";
+import {
+  computePurchase,
+  computeUseItem,
+  computeUseResource,
+  resourceTools,
+} from "@/lib/dm/resource-tools";
+import { searchSpells } from "@/lib/content";
 
 // DM stat authority: the model changes sheets ONLY through these tools.
 // Every mutation is server-clamped, audit-logged, and published live.
@@ -22,10 +42,14 @@ import {
 export const MUTATION_TOOL_NAMES = [
   "apply_damage",
   "heal",
+  "stabilize",
   "award_xp",
   "modify_gold",
   "grant_item",
   "remove_item",
+  "use_item",
+  "purchase",
+  "use_resource",
   "set_condition",
   "clear_condition",
   "use_spell_slot",
@@ -64,9 +88,19 @@ export const mutationTools: ToolDef[] = [
     amount: { type: "integer", minimum: 1, maximum: 200 },
     type: { type: "string", description: "Damage type, e.g. slashing, fire." },
   }, ["amount"]),
-  tool("heal", "Restore a character's hit points, capped at their max.", {
+  tool("heal", "Restore a character's hit points, capped at their max. Healing a dying character any amount ends their death saves and wakes them. Pass temp:true to grant TEMPORARY hit points instead (they do not stack; the higher value wins).", {
     amount: { type: "integer", minimum: 1, maximum: 200 },
+    temp: {
+      type: "boolean",
+      description: "True = temporary hit points instead of healing.",
+    },
   }, ["amount"]),
+  tool(
+    "stabilize",
+    "Stabilize a DYING character at 0 HP without healing: a successful DC 10 Wisdom (Medicine) check or a healer's kit. They stop making death saves but stay unconscious at 0 HP.",
+    {},
+    [],
+  ),
   {
     type: "function",
     function: {
@@ -91,19 +125,40 @@ export const mutationTools: ToolDef[] = [
     name: { type: "string" },
     qty: { type: "integer", minimum: 1, maximum: 99 },
   }, ["name"]),
-  tool("remove_item", "Take an item from a character (lost, sold, consumed).", {
+  tool("remove_item", "Take an item from a character (lost, stolen, destroyed). For consumables being USED, call use_item instead; for sales, call purchase.", {
     name: { type: "string" },
     qty: { type: "integer", minimum: 1, maximum: 99 },
   }, ["name"]),
-  tool("set_condition", "Apply a condition (poisoned, frightened, ...).", {
+  ...resourceTools,
+  tool("set_condition", "Apply a condition. Use the exact 5e name when one fits: blinded, charmed, deafened, frightened, grappled, incapacitated, invisible, paralyzed, petrified, poisoned, prone, restrained, stunned, unconscious, exhaustion. Custom names are allowed for story effects. Timed effects expire automatically: pass rounds, or saveAbility + saveDc for save-ends effects the server re-rolls each round.", {
+    condition: { type: "string" },
+    rounds: {
+      type: "integer",
+      minimum: 1,
+      maximum: 100,
+      description: "Rounds until the condition ends on its own.",
+    },
+    saveAbility: {
+      type: "string",
+      enum: ["str", "dex", "con", "int", "wis", "cha"],
+      description: "Save-ends: ability re-saved at the end of each round.",
+    },
+    saveDc: { type: "integer", minimum: 1, maximum: 30, description: "Save-ends DC." },
+  }, ["condition"]),
+  tool("clear_condition", "Remove a condition from a character the moment the fiction ends it (cured, dispelled, rested, shaken off). Use the condition name shown in GAME STATE.", {
     condition: { type: "string" },
   }, ["condition"]),
-  tool("clear_condition", "Remove a condition from a character.", {
-    condition: { type: "string" },
-  }, ["condition"]),
-  tool("use_spell_slot", "Expend one of a character's spell slots of the given level.", {
+  tool("use_spell_slot", "Expend one of a character's spell slots of the given level. The server validates the slot level against the spell's real level (no casting a level 3 spell from a level 1 slot), skips the spend for cantrips, and tracks concentration automatically: casting a concentration spell ends any previous one.", {
     level: { type: "integer", minimum: 1, maximum: 9 },
     spell: { type: "string", description: "Exact name of the spell being cast, from the character's spell list." },
+    ritual: {
+      type: "boolean",
+      description: "True when cast as a ritual (10 extra minutes, no slot spent; only ritual-tagged spells).",
+    },
+    concentration: {
+      type: "boolean",
+      description: "Only for homebrew spells the server does not know: true if this spell requires concentration.",
+    },
   }, ["level", "spell"]),
   tool(
     "learn_spell",
@@ -193,17 +248,54 @@ const argsSchema = z.object({
   characterIds: z.array(z.string()).optional(),
   amount: z.number().int().optional(),
   type: z.string().optional(),
+  // Internal: set by enemy_attack on a natural 20 so damage on a dying
+  // target counts two death-save failures. Not exposed in the tool schema.
+  crit: z.boolean().optional(),
+  // use_spell_slot: homebrew concentration flag + ritual casting.
+  concentration: z.boolean().optional(),
+  ritual: z.coerce.boolean().optional(),
+  // heal: temporary hit points instead of healing.
+  temp: z.coerce.boolean().optional(),
   delta: z.number().int().optional(),
   name: z.string().optional(),
   qty: z.number().int().optional(),
+  // use_item / purchase / use_resource.
+  item: z.string().optional(),
+  targetCharacterId: z.string().optional(),
+  price: z.coerce.number().int().min(0).max(100000).optional(),
+  resource: z.string().optional(),
   condition: z.string().optional(),
+  // set_condition durations.
+  rounds: z.coerce.number().int().min(1).max(100).optional(),
+  saveAbility: z.enum(["str", "dex", "con", "int", "wis", "cha"]).optional(),
+  saveDc: z.coerce.number().int().min(1).max(30).optional(),
   level: z.number().int().optional(),
   spell: z.string().optional(),
-  action: z.enum(["add", "remove"]).optional(),
+  // learn_spell: add|remove; purchase: buy|sell.
+  action: z.enum(["add", "remove", "buy", "sell"]).optional(),
   reason: z.string().optional(),
 });
 
 export const MUTATION_CAP_PER_TURN = 10;
+
+// Conditions are stored lowercase. The model's wording drifts ("poison",
+// "Poisoned by the dart"), so set and clear both map through the SRD names;
+// unmatched strings stay as-is because custom story conditions are legal.
+export function canonicalCondition(raw: string): string {
+  const cleaned = raw.trim().toLowerCase().slice(0, 40);
+  if (!cleaned) {
+    return cleaned;
+  }
+  const known = listConditions({ limit: 50 }).map((entry) => entry.name.toLowerCase());
+  if (known.includes(cleaned)) {
+    return cleaned;
+  }
+  const prefix = known.find((name) => name.startsWith(cleaned) || cleaned.startsWith(name));
+  if (prefix) {
+    return prefix;
+  }
+  return known.find((name) => cleaned.includes(name)) ?? cleaned;
+}
 
 type MutationOutcome = { result: Record<string, unknown> };
 
@@ -327,19 +419,47 @@ export function applyDmMutation(
       if (amount < 1) {
         return { result: { error: "apply_damage needs a positive amount." } };
       }
-      const math = applyDamageMath(sheet.currentHp, sheet.tempHp, Math.min(amount, 200));
+      if (sheet.deathSaves?.dead) {
+        return { result: { error: `${sheet.name} is already dead.` } };
+      }
+      // Racial/feature resistances halve matching damage types server-side.
+      const adjusted = damageAdjust(
+        Math.min(amount, 200),
+        args.type,
+        pcResistances(sheet),
+        "",
+        "",
+      );
+      const math = applyDamageMath(sheet.currentHp, sheet.tempHp, adjusted.amount);
       patchSheet(sheet.id, { currentHp: math.currentHp, tempHp: math.tempHp });
       audit(campaign, turnId, sheet, "apply_damage", { amount, ...math, type: args.type ?? "" }, reason, {
         currentHp: math.currentHp,
         tempHp: math.tempHp,
       });
       publishSheet(campaign, sheet.id);
+      // Death engine: dropping to 0 starts the dying track; damage while
+      // already down adds automatic failures; massive damage kills.
+      const deathInfo = applyDamageDeathHook(campaign, turnId, sheet, math, args.crit === true);
+      // Concentration: damage forces the CON save server-side.
+      const concentrationInfo = concentrationDamageHook(
+        campaign,
+        turnId,
+        sheet,
+        adjusted.amount,
+      );
       return {
         result: {
           ok: true,
           hp: `${math.currentHp}/${sheet.maxHp}`,
+          ...(adjusted.note ? { resistance: `${sheet.name} is ${adjusted.note}` } : {}),
           ...(math.absorbed ? { tempHpAbsorbed: math.absorbed } : {}),
-          ...(math.dropped ? { dropped: true, note: `${sheet.name} falls to 0 HP.` } : {}),
+          ...(math.dropped && !("note" in deathInfo)
+            ? { dropped: true, note: `${sheet.name} falls to 0 HP.` }
+            : math.dropped
+              ? { dropped: true }
+              : {}),
+          ...deathInfo,
+          ...concentrationInfo,
         },
       };
     }
@@ -348,13 +468,60 @@ export function applyDmMutation(
       if (amount < 1) {
         return { result: { error: "heal needs a positive amount." } };
       }
+      if (sheet.deathSaves?.dead) {
+        return {
+          result: {
+            error: `${sheet.name} is DEAD. Healing cannot help; only the party lead can reverse a death.`,
+          },
+        };
+      }
+      // Temporary HP: 5e non-stacking, the higher value wins.
+      if (args.temp) {
+        const tempHp = Math.max(sheet.tempHp, Math.min(amount, 200));
+        if (tempHp === sheet.tempHp) {
+          return {
+            result: {
+              ok: true,
+              tempHp,
+              note: `${sheet.name} keeps their existing ${tempHp} temp HP (temporary hit points do not stack; the higher value wins).`,
+            },
+          };
+        }
+        patchSheet(sheet.id, { tempHp });
+        audit(campaign, turnId, sheet, "grant_temp_hp", { tempHp }, reason, { tempHp });
+        publishSheet(campaign, sheet.id);
+        return { result: { ok: true, tempHp, note: "Temporary hit points; they absorb damage first and vanish on a long rest." } };
+      }
       const math = healMath(sheet.currentHp, sheet.maxHp, Math.min(amount, 200));
       patchSheet(sheet.id, { currentHp: math.currentHp });
       audit(campaign, turnId, sheet, "heal", { amount, newHp: math.currentHp }, reason, {
         currentHp: math.currentHp,
       });
       publishSheet(campaign, sheet.id);
-      return { result: { ok: true, hp: `${math.currentHp}/${sheet.maxHp}` } };
+      // Any healing ends the dying state.
+      const deathInfo = healDeathHook(campaign, turnId, sheet);
+      return { result: { ok: true, hp: `${math.currentHp}/${sheet.maxHp}`, ...deathInfo } };
+    }
+    case "stabilize": {
+      const track = sheet.deathSaves;
+      if (!track || track.dead || sheet.currentHp > 0) {
+        return { result: { error: `${sheet.name} is not dying; nothing to stabilize.` } };
+      }
+      if (track.stable) {
+        return { result: { ok: true, note: `${sheet.name} is already stable.` } };
+      }
+      const nextTrack = { ...track, stable: true };
+      patchSheet(sheet.id, { deathSaves: nextTrack });
+      audit(campaign, turnId, sheet, "stabilize", { deathSaves: nextTrack }, reason, {
+        deathSaves: nextTrack,
+      });
+      publishSheet(campaign, sheet.id);
+      return {
+        result: {
+          ok: true,
+          note: `${sheet.name} is stable: no more death saves, but still unconscious at 0 HP until healed.`,
+        },
+      };
     }
     case "modify_gold": {
       const delta = args.delta ?? 0;
@@ -403,36 +570,220 @@ export function applyDmMutation(
       publishSheet(campaign, sheet.id);
       return { result: { ok: true, removed: name, qty: math.removed } };
     }
+    case "use_item": {
+      const itemName = (args.item ?? args.name ?? "").trim();
+      if (!itemName) {
+        return { result: { error: "use_item needs an item name." } };
+      }
+      const target = args.targetCharacterId ? resolve(args.targetCharacterId) : sheet;
+      if (!target) {
+        return { result: { error: "Unknown targetCharacterId; use one from GAME STATE." } };
+      }
+      const outcome = computeUseItem(campaign, sheet, target, itemName);
+      if ("error" in outcome) {
+        return { result: outcome };
+      }
+      patchSheet(sheet.id, outcome.patch);
+      audit(campaign, turnId, sheet, "use_item", { item: itemName }, reason, outcome.patch);
+      publishSheet(campaign, sheet.id);
+      // Potion healing rides the standard heal mutation so the death engine
+      // wakes a dying drinker; recursion is safe (different tool name).
+      if (outcome.healTarget) {
+        const healed = applyDmMutation(
+          campaign,
+          turnId,
+          "heal",
+          JSON.stringify({
+            characterId: outcome.healTarget.characterId,
+            amount: outcome.healTarget.amount,
+            reason: itemName,
+          }),
+          sheets,
+          sheetsById,
+        ).result;
+        return { result: { ...outcome.result, ...healed } };
+      }
+      return { result: outcome.result };
+    }
+    case "purchase": {
+      const itemName = (args.item ?? args.name ?? "").trim();
+      const action = args.action === "sell" ? "sell" : args.action === "buy" ? "buy" : null;
+      if (!itemName || args.price === undefined || !action) {
+        return { result: { error: "purchase needs item, price, and action buy|sell." } };
+      }
+      const outcome = computePurchase(sheet, {
+        item: itemName,
+        price: args.price,
+        qty: args.qty ?? 1,
+        action,
+      });
+      if ("error" in outcome) {
+        return { result: outcome };
+      }
+      patchSheet(sheet.id, outcome.patch);
+      audit(
+        campaign,
+        turnId,
+        sheet,
+        "purchase",
+        { item: itemName, price: args.price, qty: args.qty ?? 1, action },
+        reason,
+        outcome.patch,
+      );
+      publishSheet(campaign, sheet.id);
+      if (outcome.event) {
+        insertCharacterEvent({
+          libraryCharacterId: sheet.libraryCharacterId,
+          campaignCharacterId: sheet.id,
+          campaignId: campaign.id,
+          seq: allocateSeq(campaign.id),
+          kind: "item",
+          summary: outcome.event,
+        });
+      }
+      return { result: outcome.result };
+    }
+    case "use_resource": {
+      const resourceName = (args.resource ?? args.name ?? "").trim();
+      if (!resourceName) {
+        return { result: { error: "use_resource needs a resource name." } };
+      }
+      const outcome = computeUseResource(sheet, resourceName, Math.max(1, args.amount ?? 1));
+      if ("error" in outcome) {
+        return { result: outcome };
+      }
+      patchSheet(sheet.id, outcome.patch);
+      audit(
+        campaign,
+        turnId,
+        sheet,
+        "use_resource",
+        { resource: resourceName, spent: args.amount ?? 1 },
+        reason,
+        outcome.patch,
+      );
+      publishSheet(campaign, sheet.id);
+      return { result: outcome.result };
+    }
     case "set_condition": {
-      const condition = (args.condition ?? "").trim().toLowerCase().slice(0, 40);
-      if (!condition) {
+      const normalized = canonicalCondition(args.condition ?? "");
+      if (!normalized) {
         return { result: { error: "set_condition needs a condition name." } };
       }
-      const known = listConditions({ limit: 50 }).map((entry) => entry.name.toLowerCase());
-      const normalized = known.includes(condition) ? condition : condition;
+      // Exhaustion is a leveled track, not a stackable condition: each set
+      // raises it one level (6 = death). Effects apply automatically.
+      if (normalized.startsWith("exhaustion")) {
+        const nextLevel = Math.min(6, sheet.exhaustion + 1);
+        const patch: Record<string, unknown> = { exhaustion: nextLevel };
+        if (nextLevel >= 6) {
+          patch.deathSaves = { successes: 0, failures: 3, stable: false, dead: true };
+        }
+        patchSheet(sheet.id, patch);
+        audit(campaign, turnId, sheet, "set_condition", { condition: "exhaustion", level: nextLevel }, reason, patch);
+        publishSheet(campaign, sheet.id);
+        return {
+          result: {
+            ok: true,
+            ...(nextLevel >= 6
+              ? { dead: true, note: `${sheet.name} reaches exhaustion level 6 and DIES.` }
+              : { condition: describeExhaustion(nextLevel), note: "A long rest reduces exhaustion by one level." }),
+          },
+        };
+      }
       if (sheet.conditions.includes(normalized)) {
         return { result: { ok: true, note: `${sheet.name} is already ${normalized}.` } };
       }
       const withCondition = [...sheet.conditions, normalized].slice(0, 15);
-      patchSheet(sheet.id, { conditions: withCondition });
+      // Duration metadata: timed conditions tick down at round wrap;
+      // save-ends conditions re-save server-side each round.
+      const meta =
+        args.rounds || (args.saveAbility && args.saveDc)
+          ? {
+              ...sheet.conditionMeta,
+              [normalized]: {
+                ...(args.rounds ? { rounds: args.rounds } : {}),
+                ...(args.saveAbility && args.saveDc
+                  ? { saveEnds: { ability: args.saveAbility, dc: args.saveDc } }
+                  : {}),
+              },
+            }
+          : sheet.conditionMeta;
+      patchSheet(sheet.id, { conditions: withCondition, conditionMeta: meta });
       audit(campaign, turnId, sheet, "set_condition", { condition: normalized }, reason, {
         conditions: withCondition,
+        conditionMeta: meta,
       });
       publishSheet(campaign, sheet.id);
-      return { result: { ok: true, condition: normalized } };
+      return {
+        result: {
+          ok: true,
+          condition: normalized,
+          ...(args.rounds ? { duration: `${args.rounds} rounds, expires automatically` } : {}),
+          ...(args.saveAbility && args.saveDc
+            ? {
+                duration: `until they succeed on a ${args.saveAbility.toUpperCase()} save (DC ${args.saveDc}), re-rolled automatically each round`,
+              }
+            : {}),
+        },
+      };
     }
     case "clear_condition": {
-      const condition = (args.condition ?? "").trim().toLowerCase();
-      if (!sheet.conditions.includes(condition)) {
-        return { result: { error: `${sheet.name} is not ${condition || "under that condition"}.` } };
+      // "concentration" is not a real condition: clearing it ends the
+      // tracked spell (a caster dropping concentration voluntarily).
+      const rawCondition = (args.condition ?? "").trim().toLowerCase();
+      if (rawCondition.startsWith("concentrat")) {
+        const ended = breakConcentration(campaign, turnId, sheet.id, "ended voluntarily");
+        return ended
+          ? { result: { ok: true, cleared: `concentration (${ended})` } }
+          : { result: { error: `${sheet.name} is not concentrating on anything.` } };
       }
-      const withoutCondition = sheet.conditions.filter((entry) => entry !== condition);
-      patchSheet(sheet.id, { conditions: withoutCondition });
-      audit(campaign, turnId, sheet, "clear_condition", { condition }, reason, {
+      // Exhaustion clears one level at a time (greater restoration, a long
+      // rest); level 0 is fully recovered.
+      if (rawCondition.startsWith("exhaustion")) {
+        if (sheet.exhaustion <= 0 && !sheet.conditions.some((entry) => entry.startsWith("exhaustion"))) {
+          return { result: { error: `${sheet.name} has no exhaustion.` } };
+        }
+        const nextLevel = Math.max(0, sheet.exhaustion - 1);
+        // Legacy string entries clear alongside the leveled field.
+        const cleanedConditions = sheet.conditions.filter(
+          (entry) => !entry.startsWith("exhaustion"),
+        );
+        const patch = { exhaustion: nextLevel, conditions: cleanedConditions };
+        patchSheet(sheet.id, patch);
+        audit(campaign, turnId, sheet, "clear_condition", { condition: "exhaustion", level: nextLevel }, reason, patch);
+        publishSheet(campaign, sheet.id);
+        return {
+          result: {
+            ok: true,
+            cleared: nextLevel === 0 ? "exhaustion (fully recovered)" : `one level (now ${describeExhaustion(nextLevel)})`,
+          },
+        };
+      }
+      // Forgiving match: "poison" clears "poisoned", and legacy free-form
+      // entries ("poisoned by the dart") still clear alongside it.
+      const wanted = canonicalCondition(args.condition ?? "");
+      const matches = (entry: string) =>
+        entry === wanted ||
+        canonicalCondition(entry) === wanted ||
+        (wanted.length > 3 && (entry.includes(wanted) || wanted.includes(entry)));
+      const removed = wanted ? sheet.conditions.filter(matches) : [];
+      if (!removed.length) {
+        return {
+          result: {
+            error: `${sheet.name} is not ${wanted || "under that condition"}.`,
+            currentConditions: sheet.conditions,
+          },
+        };
+      }
+      const withoutCondition = sheet.conditions.filter((entry) => !matches(entry));
+      const prunedMeta = pruneMeta(withoutCondition, sheet.conditionMeta);
+      patchSheet(sheet.id, { conditions: withoutCondition, conditionMeta: prunedMeta });
+      audit(campaign, turnId, sheet, "clear_condition", { condition: removed.join(", ") }, reason, {
         conditions: withoutCondition,
+        conditionMeta: prunedMeta,
       });
       publishSheet(campaign, sheet.id);
-      return { result: { ok: true, cleared: condition } };
+      return { result: { ok: true, cleared: removed.join(", ") } };
     }
     case "use_spell_slot": {
       const level = args.level ?? 0;
@@ -450,6 +801,44 @@ export function applyDmMutation(
             },
           };
         }
+      }
+      // Content-pack validation: cantrips need no slot, upcasting only goes
+      // UP (a level 3 spell never fits a level 1 slot), and ritual-tagged
+      // spells may skip the slot entirely.
+      const known = spell
+        ? searchSpells({ q: spell, userId: sheet.userId, limit: 10 }).find(
+            (entry) => entry.name.trim().toLowerCase() === spell.toLowerCase(),
+          )
+        : undefined;
+      if (known && known.level === 0) {
+        return {
+          result: {
+            ok: true,
+            note: `${spell} is a cantrip: no spell slot is spent. Cantrips are unlimited.`,
+          },
+        };
+      }
+      if (known && known.level > 0 && level < known.level) {
+        return {
+          result: {
+            error: `${spell} is a level ${known.level} spell; it cannot be cast from a level ${level} slot. Use a slot of level ${known.level} or higher.`,
+          },
+        };
+      }
+      if (args.ritual) {
+        if (known && !known.ritual) {
+          return {
+            result: {
+              error: `${spell} has no ritual tag; it cannot be cast as a ritual and needs a slot.`,
+            },
+          };
+        }
+        return {
+          result: {
+            ok: true,
+            note: `${spell} cast as a ritual: ten extra minutes of casting, no slot spent.`,
+          },
+        };
       }
       const slot = sheet.spellcasting?.slots[String(level)];
       const math = slot ? spendSlotMath(slot) : null;
@@ -475,8 +864,26 @@ export function applyDmMutation(
         { spellcasting: nextSpellcasting },
       );
       publishSheet(campaign, sheet.id);
+      // Concentration: a concentration spell displaces any previous one.
+      const requiresConcentration =
+        args.concentration === true ||
+        (spell ? spellRequiresConcentration(spell, sheet.userId) === true : false);
+      let concentrationInfo: Record<string, unknown> = {};
+      if (spell && requiresConcentration) {
+        const { displaced } = setConcentration(campaign, turnId, sheet.id, spell);
+        concentrationInfo = {
+          concentration: true,
+          ...(displaced
+            ? { droppedConcentration: `${displaced} ended when ${spell} was cast.` }
+            : {}),
+        };
+      }
       return {
-        result: { ok: true, slot: `level ${level}: ${math.max - math.used}/${math.max} left` },
+        result: {
+          ok: true,
+          slot: `level ${level}: ${math.max - math.used}/${math.max} left`,
+          ...concentrationInfo,
+        },
       };
     }
     case "learn_spell": {
@@ -554,7 +961,14 @@ export function applyDmMutation(
           result: { error: `Invalid update_sheet field ${issue?.path.join(".")}: ${issue?.message}` },
         };
       }
-      const patch = parsedPatch.data;
+      const patch: typeof parsedPatch.data & {
+        conditionMeta?: CharacterSheet["conditionMeta"];
+      } = parsedPatch.data;
+      if (patch.conditions) {
+        patch.conditions = [...new Set(patch.conditions.map(canonicalCondition).filter(Boolean))];
+        // A full conditions replacement drops metadata for anything removed.
+        patch.conditionMeta = pruneMeta(patch.conditions, sheet.conditionMeta);
+      }
       const changed = Object.keys(patch).filter(
         (key) => patch[key as keyof typeof patch] !== undefined,
       );

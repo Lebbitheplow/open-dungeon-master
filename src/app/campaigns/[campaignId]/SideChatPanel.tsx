@@ -1,9 +1,10 @@
 "use client";
 
-import { ArrowLeft, Loader2, MessagesSquare, Plus, Send, UserRound, Users } from "lucide-react";
+import { ArrowLeft, Bell, BellOff, Loader2, MessagesSquare, Plus, Send, UserRound, Users } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
+import { setChimeMuted, useChimeMuted } from "@/app/campaigns/[campaignId]/useChatChime";
 import type { CampaignMember } from "@/lib/campaign-types";
 import type { SideMessage, SideThread } from "@/lib/db/side-chat";
 
@@ -33,6 +34,7 @@ export function SideChatPanel({
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
+  const chimeMuted = useChimeMuted();
 
   const openThread = threads.find((thread) => thread.id === openThreadId) ?? null;
 
@@ -104,9 +106,23 @@ export function SideChatPanel({
         <h3 className="text-xs font-medium uppercase tracking-wide text-stone-500">
           Private chats
         </h3>
-        <button type="button" onClick={() => setCreating(true)} className={ui.btnSmall}>
-          <Plus className="size-3.5" /> New
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setChimeMuted(!chimeMuted)}
+            className={ui.btnSmall}
+            title={
+              chimeMuted
+                ? "Chime muted. Click to play a chime when a private message arrives."
+                : "The chime plays when a private message arrives. Click to mute."
+            }
+          >
+            {chimeMuted ? <BellOff className="size-3.5" /> : <Bell className="size-3.5" />}
+          </button>
+          <button type="button" onClick={() => setCreating(true)} className={ui.btnSmall}>
+            <Plus className="size-3.5" /> New
+          </button>
+        </div>
       </div>
       <p className="text-[11px] leading-4 text-stone-600">
         Only the people in a chat can read it. The Dungeon Master never sees these.

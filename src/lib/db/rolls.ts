@@ -24,6 +24,10 @@ export type StoredRoll = {
   success: boolean | null;
   breakdown: RollResult;
   messageId: string | null;
+  // Damage rolls only: the enemy the server applied this roll's total to,
+  // set together with `applied` (the damage_enemy double-apply guard).
+  targetEnemyId: string | null;
+  applied: boolean;
   createdAt: string;
 };
 
@@ -41,6 +45,8 @@ type RollRow = {
   success: number | null;
   breakdown_json: string;
   message_id: string | null;
+  target_enemy_id: string | null;
+  applied: number;
   created_at: string;
 };
 
@@ -63,8 +69,18 @@ function mapRoll(row: RollRow): StoredRoll {
       terms: [],
     } as RollResult),
     messageId: row.message_id,
+    targetEnemyId: row.target_enemy_id ?? null,
+    applied: Boolean(row.applied),
     createdAt: row.created_at,
   };
+}
+
+// Stamp a damage roll as server-applied to a specific enemy; the
+// damage_enemy double-apply guard reads these.
+export function markRollApplied(rollId: string, targetEnemyId: string) {
+  getDatabase()
+    .prepare(`UPDATE rolls SET applied = 1, target_enemy_id = ? WHERE id = ?`)
+    .run(targetEnemyId, rollId);
 }
 
 export function insertRoll(input: {

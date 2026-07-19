@@ -1,6 +1,7 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { touchCampaign } from "@/lib/db/campaigns";
 import { populateFeatures } from "@/lib/srd/features";
+import { populateResources } from "@/lib/srd/class-resources";
 import type {
   CharacterSheet,
   CreateSheetInput,
@@ -34,6 +35,11 @@ type SheetRow = {
   features_json: string | null;
   spellcasting_json: string;
   conditions_json: string;
+  condition_meta_json: string | null;
+  resources_json: string | null;
+  exhaustion: number | null;
+  death_saves_json: string | null;
+  concentrating_on: string | null;
   portrait_json: string | null;
   notes: string;
   backstory: string | null;
@@ -44,6 +50,7 @@ type SheetRow = {
 const EMPTY_PROFICIENCIES = {
   saves: [],
   skills: [],
+  expertise: [],
   languages: [],
   tools: [],
   armor: [],
@@ -76,13 +83,25 @@ function mapSheet(row: SheetRow): CharacterSheet {
     ac: row.ac,
     speed: row.speed,
     hitDice: parseJson(row.hit_dice_json, { die: "d8" as const, total: 1, spent: 0 }),
-    proficiencies: parseJson(row.proficiencies_json, EMPTY_PROFICIENCIES),
+    // Rows stored before the expertise field existed lack it; heal on read.
+    proficiencies: (() => {
+      const parsed = parseJson<CharacterSheet["proficiencies"]>(
+        row.proficiencies_json,
+        EMPTY_PROFICIENCIES,
+      );
+      return { ...parsed, expertise: parsed.expertise ?? [] };
+    })(),
     equipment: parseJson(row.equipment_json, []),
     gold: row.gold,
     feats: parseJson(row.feats_json, []),
     features: parseJson(row.features_json, []),
     spellcasting,
     conditions: parseJson(row.conditions_json, []),
+    conditionMeta: parseJson<CharacterSheet["conditionMeta"]>(row.condition_meta_json, {}),
+    resources: parseJson<CharacterSheet["resources"]>(row.resources_json, {}),
+    exhaustion: row.exhaustion ?? 0,
+    deathSaves: parseJson<CharacterSheet["deathSaves"]>(row.death_saves_json, null),
+    concentratingOn: row.concentrating_on ?? null,
     portrait: parseJson<CharacterSheet["portrait"]>(row.portrait_json, null),
     notes: row.notes,
     backstory: row.backstory ?? "",
@@ -96,8 +115,8 @@ const SHEET_COLUMNS = `
   background, alignment, level, xp,
   abilities_json, max_hp, current_hp, temp_hp, ac, speed, hit_dice_json,
   proficiencies_json, equipment_json, gold, feats_json, features_json,
-  spellcasting_json, conditions_json, portrait_json, notes, backstory,
-  created_at, updated_at
+  spellcasting_json, conditions_json, condition_meta_json, resources_json, exhaustion, death_saves_json, concentrating_on,
+  portrait_json, notes, backstory, created_at, updated_at
 `;
 
 export function createSheet(
@@ -119,6 +138,15 @@ export function createSheet(
     input.race,
     level,
   );
+  // Limited-use counters (Rage, Ki, Second Wind...) sized for the features
+  // just granted; the resource engine spends and refills them.
+  const abilityMods = Object.fromEntries(
+    Object.entries(input.abilities).map(([ability, score]) => [
+      ability,
+      Math.floor((score - 10) / 2),
+    ]),
+  );
+  const resources = populateResources(features, level, abilityMods, undefined);
 
   db.prepare(
     `
@@ -127,10 +155,10 @@ export function createSheet(
         subclass, background, alignment,
         level, xp, abilities_json, max_hp, current_hp, temp_hp, ac, speed,
         hit_dice_json, proficiencies_json, equipment_json, gold, feats_json,
-        features_json, spellcasting_json, conditions_json, portrait_json,
+        features_json, resources_json, spellcasting_json, conditions_json, portrait_json,
         notes, backstory, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?, ?)
     `,
   ).run(
     id,
@@ -155,6 +183,7 @@ export function createSheet(
     input.gold,
     JSON.stringify(input.feats),
     JSON.stringify(features),
+    JSON.stringify(resources),
     JSON.stringify(input.spellcasting),
     input.portrait ? JSON.stringify(input.portrait) : null,
     input.notes,
@@ -186,6 +215,15 @@ export function getSheetForUser(campaignId: string, userId: string): CharacterSh
   return row ? mapSheet(row) : null;
 }
 
+// All campaign copies of a library character; used to land the auto-generated
+// portrait on sheets cloned before the render finished.
+export function listSheetsForLibraryCharacter(libraryCharacterId: string): CharacterSheet[] {
+  const rows = getDatabase()
+    .prepare(`SELECT ${SHEET_COLUMNS} FROM character_sheets WHERE library_character_id = ?`)
+    .all(libraryCharacterId) as SheetRow[];
+  return rows.map(mapSheet);
+}
+
 export function listSheets(campaignId: string): CharacterSheet[] {
   const rows = getDatabase()
     .prepare(
@@ -209,7 +247,18 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
     alignment: patch.alignment ?? existing.alignment,
     speed: patch.speed ?? existing.speed,
     abilities: patch.abilities ?? existing.abilities,
-    proficiencies: patch.proficiencies ?? existing.proficiencies,
+    // A bare `expertise` patch (level-up picks) merges into proficiencies;
+    // only skills the sheet is proficient in count.
+    proficiencies:
+      patch.proficiencies ??
+      (patch.expertise !== undefined
+        ? {
+            ...existing.proficiencies,
+            expertise: patch.expertise.filter((skill) =>
+              existing.proficiencies.skills.includes(skill),
+            ),
+          }
+        : existing.proficiencies),
     currentHp: patch.currentHp ?? existing.currentHp,
     tempHp: patch.tempHp ?? existing.tempHp,
     maxHp: patch.maxHp ?? existing.maxHp,
@@ -218,9 +267,32 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
     level: patch.level ?? existing.level,
     gold: patch.gold ?? existing.gold,
     conditions: patch.conditions ?? existing.conditions,
+    conditionMeta: patch.conditionMeta ?? existing.conditionMeta,
+    // Resources track features and level: any patch touching them re-sizes
+    // the counters (spent uses preserved, clamped). An explicit resources
+    // patch (rests, use_resource) wins.
+    resources:
+      patch.resources ??
+      (patch.level !== undefined || patch.features !== undefined || patch.abilities !== undefined
+        ? populateResources(
+            patch.features ?? existing.features,
+            patch.level ?? existing.level,
+            Object.fromEntries(
+              Object.entries(patch.abilities ?? existing.abilities).map(([ability, score]) => [
+                ability,
+                Math.floor((score - 10) / 2),
+              ]),
+            ),
+            existing.resources,
+          )
+        : existing.resources),
     equipment: patch.equipment ?? existing.equipment,
     hitDice: patch.hitDice ?? existing.hitDice,
+    exhaustion: patch.exhaustion ?? existing.exhaustion,
     spellcasting: patch.spellcasting !== undefined ? patch.spellcasting : existing.spellcasting,
+    deathSaves: patch.deathSaves !== undefined ? patch.deathSaves : existing.deathSaves,
+    concentratingOn:
+      patch.concentratingOn !== undefined ? patch.concentratingOn : existing.concentratingOn,
     feats: patch.feats ?? existing.feats,
     features: patch.features ?? existing.features,
     subclass: patch.subclass ?? existing.subclass,
@@ -236,8 +308,9 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
           name = ?, race = ?, class = ?, background = ?, alignment = ?,
           speed = ?, abilities_json = ?, proficiencies_json = ?,
           current_hp = ?, temp_hp = ?, max_hp = ?, ac = ?, xp = ?, level = ?,
-          gold = ?, conditions_json = ?, equipment_json = ?, hit_dice_json = ?,
-          spellcasting_json = ?, feats_json = ?, features_json = ?, subclass = ?,
+          gold = ?, conditions_json = ?, condition_meta_json = ?, resources_json = ?, equipment_json = ?, hit_dice_json = ?,
+          spellcasting_json = ?, exhaustion = ?, death_saves_json = ?, concentrating_on = ?,
+          feats_json = ?, features_json = ?, subclass = ?,
           portrait_json = ?, notes = ?, backstory = ?, updated_at = ?
         WHERE id = ?
       `,
@@ -259,9 +332,14 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
       next.level,
       next.gold,
       JSON.stringify(next.conditions),
+      JSON.stringify(next.conditionMeta),
+      JSON.stringify(next.resources),
       JSON.stringify(next.equipment),
       JSON.stringify(next.hitDice),
       JSON.stringify(next.spellcasting),
+      next.exhaustion,
+      next.deathSaves ? JSON.stringify(next.deathSaves) : null,
+      next.concentratingOn,
       JSON.stringify(next.feats),
       JSON.stringify(next.features),
       next.subclass,

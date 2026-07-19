@@ -60,6 +60,13 @@ export type ChatRequestOptions = {
   temperature?: number;
   onDelta?: StreamDeltaHandler;
   timeoutMs?: number;
+  // Ask the backend for reasoning/thinking mode on this call. Qwen-family
+  // models are unreliable tool callers without it under long prompts
+  // (measured ~1/5 request_roll without vs ~4/5 with on qwen3.6-35b);
+  // llama.cpp and vLLM honor chat_template_kwargs, other backends ignore
+  // the unknown field. Reasoning deltas never reach onDelta: the stream
+  // parser forwards only delta.content.
+  thinking?: boolean;
 };
 
 export function configuredMaxOutputTokens() {
@@ -329,13 +336,16 @@ export async function requestCustomMessage(
   const requestPayload: Record<string, unknown> = {
     model: resolvedModel,
     messages,
-    temperature: temperature ?? 0.9,
+    // Thinking runs cooler per Qwen guidance; 0.9 there makes the thought
+    // ramble past the point of ever emitting the tool call.
+    temperature: temperature ?? (options.thinking ? 0.7 : 0.9),
     // Explicit 0 so a server-side sampler preset cannot override it: a
     // positive presence penalty over the long DM prompt suppresses the
     // tool-call token sequence (measured 2/5 vs 4/5 request_roll rate on
     // llama-server with the qwen preset's 1.5).
     presence_penalty: 0,
     max_tokens: configuredMaxOutputTokens(),
+    ...(options.thinking ? { chat_template_kwargs: { enable_thinking: true } } : {}),
     ...(onDelta ? { stream: true } : {}),
   };
 

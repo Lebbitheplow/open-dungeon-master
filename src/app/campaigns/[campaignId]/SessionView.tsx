@@ -17,6 +17,7 @@ import { NewAdventurerBanner } from "@/app/campaigns/[campaignId]/NewAdventurerB
 import { PendingRollCard } from "@/app/campaigns/[campaignId]/PendingRollCard";
 import { PushToTalk } from "@/app/campaigns/[campaignId]/PushToTalk";
 import { SidePanel } from "@/app/campaigns/[campaignId]/SidePanel";
+import { useChatChime } from "@/app/campaigns/[campaignId]/useChatChime";
 import { useNarrationAudio } from "@/app/campaigns/[campaignId]/useNarrationAudio";
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
 
@@ -38,10 +39,14 @@ export function SessionView({
   state,
   refreshNotes,
   refreshSideChat,
+  refreshWhispers,
+  refreshBattleMap,
 }: {
   state: CampaignState;
   refreshNotes: () => Promise<void>;
   refreshSideChat: () => Promise<void>;
+  refreshWhispers: () => Promise<void>;
+  refreshBattleMap: () => Promise<void>;
 }) {
   const {
     campaign,
@@ -79,6 +84,11 @@ export function SessionView({
   }
 
   const narration = useNarrationAudio();
+  // Chime on new private messages (side chats + DM whispers). The loaded
+  // flags keep the page-load backlog silent.
+  const chatUnreadTotal =
+    state.sideThreads.reduce((sum, thread) => sum + thread.unread, 0) + state.whisperUnread;
+  useChatChime(chatUnreadTotal, state.sideChatLoaded && state.whispersLoaded);
   // Only tts_ready events newer than the seq present when the snapshot first
   // loaded autoplay; the backlog stays silent (replay buttons cover history).
   // Each narration is handed over exactly once: unrelated events (new chat
@@ -122,6 +132,12 @@ export function SessionView({
   // Held responses: the lead has not opened the floor after the last DM
   // narration. OOC and lead directions stay available.
   const holdBlocked = floor.mode === "hold" && kind !== "ooc" && kind !== "lead";
+  // Combat: only the current-turn player acts; everyone else waits.
+  const initiativeBlocked =
+    floor.mode === "initiative" &&
+    !floor.userIds.includes(me.id) &&
+    kind !== "ooc" &&
+    kind !== "lead";
   const heldSpotlightNames =
     floor.mode === "hold" && floor.next.mode === "spotlight"
       ? sheets
@@ -136,7 +152,7 @@ export function SessionView({
     narration.playingMessageId === firstDmMessageId &&
     messages.filter((message) => message.authorType === "dm").length === 1;
   const narrationBlocked = openingNarrationPlaying && kind !== "ooc";
-  const inputBlocked = floorBlocked || holdBlocked || narrationBlocked;
+  const inputBlocked = floorBlocked || holdBlocked || initiativeBlocked || narrationBlocked;
   // A mid-game joiner without a character is gated to creation first.
   const needsCharacter = !mySheet && campaign.status === "active";
   // Lead prompt: a newcomer's join note the DM has not narrated past yet.
@@ -344,6 +360,7 @@ export function SessionView({
               floor={floor}
               spotlighted={spotlighted}
               heldSpotlightNames={heldSpotlightNames}
+              encounter={state.encounter}
               isLead={isLead}
               onRelease={releaseFloor}
             />
@@ -420,6 +437,8 @@ export function SessionView({
                     ? "The Dungeon Master is setting the scene... (OOC still open)"
                     : holdBlocked
                     ? "The party lead has the floor held for discussion... (OOC still open)"
+                    : initiativeBlocked
+                    ? `${floor.mode === "initiative" ? floor.currentName : "Another hero"}'s turn in combat... (OOC still open)`
                     : floorBlocked
                     ? `Waiting on ${spotlighted.map((sheet) => sheet.name).join(", ")}... (OOC still open)`
                     : kind === "do"
@@ -470,6 +489,9 @@ export function SessionView({
           refreshNotes={refreshNotes}
           sideThreads={state.sideThreads}
           refreshSideChat={refreshSideChat}
+          whispers={state.whispers}
+          whisperUnread={state.whisperUnread}
+          refreshWhispers={refreshWhispers}
           chatTarget={chatTarget}
           onChatTargetHandled={() => setChatTarget(null)}
           onMessageUser={setChatTarget}
@@ -478,6 +500,9 @@ export function SessionView({
           inviteCode={campaign.inviteCode}
           midGameJoinOpen={campaign.gameSettings?.midGameJoinOpen ?? false}
           campaign={campaign}
+          encounter={state.encounter}
+          battleMap={state.battleMap}
+          refreshBattleMap={refreshBattleMap}
         />
       </div>
 

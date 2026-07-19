@@ -5,10 +5,13 @@ import type { CampaignMember, SessionUser } from "@/lib/campaign-types";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { Chapter } from "@/lib/db/chapters";
 import type { CharacterEvent } from "@/lib/db/character-events";
+import type { PublicEncounter } from "@/lib/db/encounters";
 import type { CampaignMessage } from "@/lib/db/messages";
 import type { Note } from "@/lib/db/notes";
 import type { StoredRoll } from "@/lib/db/rolls";
+import type { DmWhisper } from "@/lib/db/dm-whispers";
 import type { SideThread } from "@/lib/db/side-chat";
+import type { PlayerMapView } from "@/lib/battlemap/view";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 export type DmStatus =
@@ -88,7 +91,16 @@ export type CampaignState = {
   chapters: Chapter[];
   notes: Note[];
   sideThreads: SideThread[];
+  // True once the first side-chat fetch landed; the chime baseline waits
+  // for it so a page load with backlog stays silent.
+  sideChatLoaded: boolean;
+  whispers: DmWhisper[];
+  whisperUnread: number;
+  whispersLoaded: boolean;
   characterEvents: CharacterEvent[];
+  encounter: PublicEncounter | null;
+  // The caller's fogged battle-map projection; null outside combat.
+  battleMap: PlayerMapView | null;
   narrationAudio: Record<string, string>;
   latestTts: { messageId: string; url: string; seq: number } | null;
   latestRoll: { roll: StoredRoll; source: string; seq: number } | null;
@@ -115,7 +127,13 @@ const initialState: CampaignState = {
   chapters: [],
   notes: [],
   sideThreads: [],
+  sideChatLoaded: false,
+  whispers: [],
+  whisperUnread: 0,
+  whispersLoaded: false,
   characterEvents: [],
+  encounter: null,
+  battleMap: null,
   narrationAudio: {},
   latestTts: null,
   latestRoll: null,
@@ -129,6 +147,8 @@ type Action =
   | { type: "snapshot"; payload: Partial<CampaignState> & { lastSeq: number } }
   | { type: "notes"; notes: Note[] }
   | { type: "sideThreads"; sideThreads: SideThread[] }
+  | { type: "whispers"; whispers: DmWhisper[]; unread: number }
+  | { type: "battleMap"; view: PlayerMapView | null }
   | { type: "error"; error: string }
   | { type: "event"; eventType: string; seq: number | null; payload: Record<string, unknown> };
 
@@ -158,7 +178,16 @@ function reducer(state: CampaignState, action: Action): CampaignState {
     case "notes":
       return { ...state, notes: action.notes };
     case "sideThreads":
-      return { ...state, sideThreads: action.sideThreads };
+      return { ...state, sideThreads: action.sideThreads, sideChatLoaded: true };
+    case "whispers":
+      return {
+        ...state,
+        whispers: action.whispers,
+        whisperUnread: action.unread,
+        whispersLoaded: true,
+      };
+    case "battleMap":
+      return { ...state, battleMap: action.view };
     case "error":
       return { ...state, loading: false, error: action.error };
     case "event": {
@@ -348,6 +377,9 @@ function reducer(state: CampaignState, action: Action): CampaignState {
             ? { ...state.campaign, ...(payload as Partial<Campaign>) }
             : state.campaign;
           return next;
+        case "encounter_updated":
+          next.encounter = (payload.encounter as PublicEncounter | null) ?? null;
+          return next;
         case "floor_changed":
           next.campaign = state.campaign
             ? { ...state.campaign, floor: payload.floor as Campaign["floor"] }
@@ -395,13 +427,21 @@ const PERSISTED_EVENTS = [
   "note_suggested",
   "character_event",
   "audit_reverted",
+  "encounter_updated",
   "floor_changed",
   "image_ready",
   "location_updated",
   "location_map_ready",
   "tts_ready",
 ];
-const EPHEMERAL_EVENTS = ["dm_status", "dm_delta", "media_status", "side_activity"];
+const EPHEMERAL_EVENTS = [
+  "dm_status",
+  "dm_delta",
+  "media_status",
+  "side_activity",
+  "whisper_activity",
+  "battle_map_updated",
+];
 const EPHEMERAL_EVENT_SET = new Set(EPHEMERAL_EVENTS);
 
 export function useCampaignStream(campaignId: string) {
@@ -438,6 +478,7 @@ export function useCampaignStream(campaignId: string) {
           chapters: data.chapters ?? [],
           notes: data.notes ?? [],
           characterEvents: data.characterEvents ?? [],
+          encounter: data.encounter ?? null,
           dmStatus: data.dmStatus ?? "idle",
           lastSeq,
         },
@@ -480,6 +521,36 @@ export function useCampaignStream(campaignId: string) {
     }
   }, [campaignId]);
 
+  // The battle map is per-character fogged, so even token positions never
+  // ride the shared stream; the ping-and-self-fetch pattern applies.
+  const refreshBattleMap = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/battle-map`);
+      if (!response.ok) {
+        return;
+      }
+      const data = await response.json();
+      dispatch({ type: "battleMap", view: data.view ?? null });
+    } catch {
+      // transient; the next battle_map_updated event retries
+    }
+  }, [campaignId]);
+
+  // DM whispers follow the side-chat privacy pattern: the whisper_activity
+  // event is ephemeral and empty; each member pulls only their own rows.
+  const refreshWhispers = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/whispers`);
+      if (!response.ok) {
+        return;
+      }
+      const data = await response.json();
+      dispatch({ type: "whispers", whispers: data.whispers ?? [], unread: data.unread ?? 0 });
+    } catch {
+      // transient; the next whisper_activity event retries
+    }
+  }, [campaignId]);
+
   useEffect(() => {
     let source: EventSource | null = null;
     let cancelled = false;
@@ -489,6 +560,8 @@ export function useCampaignStream(campaignId: string) {
         return;
       }
       void refreshSideChat();
+      void refreshWhispers();
+      void refreshBattleMap();
       source = new EventSource(`/api/campaigns/${campaignId}/events?lastSeq=${lastSeq}`);
       const handle = (eventType: string) => (event: MessageEvent) => {
         try {
@@ -507,6 +580,14 @@ export function useCampaignStream(campaignId: string) {
           if (eventType === "side_activity") {
             void refreshSideChat();
           }
+          if (eventType === "whisper_activity") {
+            void refreshWhispers();
+          }
+          // encounter_updated too: the map exists the moment
+          // start_encounter lands, before any battle_map_updated ping.
+          if (eventType === "battle_map_updated" || eventType === "encounter_updated") {
+            void refreshBattleMap();
+          }
         } catch {
           // malformed event; ignore
         }
@@ -520,7 +601,7 @@ export function useCampaignStream(campaignId: string) {
       cancelled = true;
       source?.close();
     };
-  }, [campaignId, refresh, refreshNotes, refreshSideChat]);
+  }, [campaignId, refresh, refreshNotes, refreshSideChat, refreshWhispers, refreshBattleMap]);
 
-  return { state, refresh, refreshNotes, refreshSideChat };
+  return { state, refresh, refreshNotes, refreshSideChat, refreshWhispers, refreshBattleMap };
 }

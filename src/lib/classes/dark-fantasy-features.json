@@ -1,0 +1,215 @@
+{
+  "_note": "Feature tables for the dark fantasy classes. n = feature name, d = one-line rules text the DM treats as authoritative.",
+  "classes": {
+    "witch_hunter": {
+      "subclassLevel": 3,
+      "levels": {
+        "1": [
+          { "n": "Hunter's Brand", "d": "Bonus action: brand a creature you can see; your attacks against it deal +1d6 radiant until it dies or you rest." },
+          { "n": "Grim Resolve", "d": "Advantage on saves against fear." }
+        ],
+        "2": [{ "n": "Litany", "d": "Casts paladin-list spells as litanies using WIS, spoken through clenched teeth." }],
+        "3": [{ "n": "Order", "d": "Chooses a hunter order (subclass)." }],
+        "5": [{ "n": "Extra Attack", "d": "Attack twice when taking the Attack action." }],
+        "6": [{ "n": "Scent of Corruption", "d": "Action: learn whether a creature within 30 ft is a fiend, undead, shapechanger, or under a curse or charm." }],
+        "7": [{ "n": "Purging Flame", "d": "1/rest, your Hunter's Brand target takes 2d10 radiant when you hit it (declared before the roll)." }],
+        "9": [{ "n": "Iron Will", "d": "Advantage on saves against charm and possession; allies within 10 ft add +1d4 against fear." }],
+        "10": [{ "n": "Relentless Pursuit", "d": "Your branded quarry cannot hide from you; you know its direction within 1 mile." }],
+        "11": [{ "n": "Twin Brand", "d": "Maintain two Hunter's Brands at once; brand damage rises to +1d8." }],
+        "13": [{ "n": "Judgment Shot", "d": "1/rest, a ranged attack against your brand becomes an automatic critical if it hits." }],
+        "14": [{ "n": "Anathema Ward", "d": "Resistance to necrotic damage; curses targeting you have disadvantage." }],
+        "15": [{ "n": "The Litany Unbroken", "d": "Concentration on your litanies cannot be broken by damage of 20 or less." }],
+        "17": [{ "n": "Sanctioned Execution", "d": "Your critical hits against branded creatures prevent regeneration and revival for 24 hours." }],
+        "18": [{ "n": "No Rest for the Wicked", "d": "1/long rest, take an extra full turn immediately after killing your branded quarry." }],
+        "20": [{ "n": "Final Verdict", "d": "1/long rest, for 1 minute all your attacks against fiends, undead, and cursed creatures deal maximum weapon dice." }]
+      },
+      "subclass": {
+        "name": "Order of the Silver Flame",
+        "levels": {
+          "3": [
+            { "n": "Blessed Ammunition", "d": "Your ranged attacks count as silvered and magical." },
+            { "n": "Candle in the Dark", "d": "1/rest, emit bright warding light 20 ft for 10 minutes; hostile undead and fiends in it have disadvantage on attacks against your allies." }
+          ],
+          "7": [{ "n": "Flashfire Litany", "d": "1/rest, when a fiend or undead hits you, it takes 3d8 radiant (CON save halves)." }],
+          "11": [{ "n": "Silver Tide", "d": "Allies within 20 ft deal +1d4 radiant with weapon attacks against your branded quarry." }],
+          "15": [{ "n": "The Flame That Judges", "d": "1/long rest, mass brand: every enemy within 30 ft is branded at once (WIS save negates each)." }]
+        }
+      }
+    },
+    "plague_doctor": {
+      "subclassLevel": 3,
+      "levels": {
+        "1": [
+          { "n": "Miasma Ward", "d": "You and allies within 5 ft have resistance to poison damage and advantage against disease." },
+          { "n": "Anatomist's Eye", "d": "After observing a creature for a round, learn one vulnerability or resistance it has." }
+        ],
+        "2": [{ "n": "Pharmacopoeia", "d": "Casts cleric-list spells as remedies and toxins using INT; the kit and mask are the focus." }],
+        "3": [{ "n": "Guild", "d": "Chooses a guild tradition (subclass)." }],
+        "5": [{ "n": "Lance the Wound", "d": "1/rest, a melee hit also deals 2d8 necrotic and the target cannot regain HP until your next turn." }],
+        "6": [{ "n": "Triage", "d": "Stabilize as a bonus action; your stabilized patients wake with 1d4 HP after 1 minute." }],
+        "7": [{ "n": "Beaked Mask", "d": "Immune to inhaled poisons and gases; advantage on saves against fear while masked." }],
+        "9": [{ "n": "Controlled Dosage", "d": "Your healing remedies also cure one disease or poison per casting." }],
+        "10": [{ "n": "Death's Cartographer", "d": "Examining a body reveals cause, time, and manner of death precisely, including magical causes." }],
+        "11": [{ "n": "Virulent Strain", "d": "Lance the Wound damage rises to 4d8 and spreads: one creature adjacent to the target takes half." }],
+        "13": [{ "n": "Quarantine Ring", "d": "1/long rest, a 20-ft radius circle for 10 minutes: enemies treat it as difficult terrain and take 2d6 poison entering (CON save halves)." }],
+        "14": [{ "n": "Iron Constitution", "d": "Immune to poison and disease." }],
+        "15": [{ "n": "Miasma Mantle", "d": "Miasma Ward radius grows to 15 ft and also grants resistance to necrotic damage." }],
+        "17": [{ "n": "The Doctor's Cut", "d": "Your Anatomist's Eye reveals all vulnerabilities and resistances at a glance." }],
+        "18": [{ "n": "Panacea", "d": "1/long rest, touch removes all poison, disease, curse of 5th level or lower, blindness, deafness, and paralysis from one creature." }],
+        "20": [{ "n": "Master of the Black Ledger", "d": "1/long rest, choose life or death for a touched creature: full HP restored, or 10d10 necrotic (CON save halves)." }]
+      },
+      "subclass": {
+        "name": "The Crow Guild",
+        "levels": {
+          "3": [
+            { "n": "Carrion Courier", "d": "A trained crow carries messages and small items and scouts on command; you see through its eyes within 100 ft." },
+            { "n": "Guild Dues", "d": "Advantage on checks to source rare reagents, poisons, and cadavers in any settlement." }
+          ],
+          "7": [{ "n": "Murder of Crows", "d": "1/long rest, a wheeling flock blinds enemies in a 20-ft radius for 1 minute (CON save each turn)." }],
+          "11": [{ "n": "Crowsight Network", "d": "The guild's birds watch every district; ask the DM once per day where a named person was seen." }],
+          "15": [{ "n": "The Flock Remembers", "d": "1/long rest, when you drop to 0 HP, the flock carries you 60 ft to safety and you stabilize." }]
+        }
+      }
+    },
+    "grave_knight": {
+      "subclassLevel": 3,
+      "levels": {
+        "1": [
+          { "n": "Deathly Pact Blade", "d": "Bonus action: summon your bonded weapon to hand from anywhere; it counts as magical." },
+          { "n": "Sepulchral Aura", "d": "Enemies within 5 ft deal 1 less damage with weapon attacks (minimum 1)." }
+        ],
+        "2": [{ "n": "Oathbound Casting", "d": "Casts warlock-list spells as sworn oaths using CHA." }],
+        "3": [{ "n": "Court", "d": "Chooses a deathly court (subclass)." }],
+        "5": [{ "n": "Extra Attack", "d": "Attack twice when taking the Attack action." }],
+        "6": [{ "n": "Grave Grip", "d": "1/rest, spectral hands erupt in a 15-ft cube: creatures save (STR) or are restrained until your next turn." }],
+        "7": [{ "n": "Knight of Dust", "d": "Resistance to necrotic damage; you need half the usual food and sleep." }],
+        "9": [{ "n": "Barrow Ward", "d": "Reaction when an ally within 10 ft is hit: reduce the damage by your CHA mod + proficiency." }],
+        "10": [{ "n": "Deathless Vigor", "d": "1/long rest, when you drop to 0 HP, drop to 1 instead and gain temp HP equal to your level." }],
+        "11": [{ "n": "Reaping Blade", "d": "Your pact blade deals +1d8 necrotic; slain enemies cannot rise as undead unless you allow it." }],
+        "13": [{ "n": "Sepulchral Dominion", "d": "Sepulchral Aura reaches 10 ft and also halves enemy healing within it." }],
+        "14": [{ "n": "The Tomb Provides", "d": "1/long rest, regain expended slot levels equal to your CHA modifier." }],
+        "15": [{ "n": "Wight-Iron Will", "d": "Immune to fear and charm; advantage against effects that would age, drain, or possess you." }],
+        "17": [{ "n": "Squire of Bones", "d": "1/long rest, raise one slain foe as a loyal skeletal squire for 8 hours (uses its stats, obeys you)." }],
+        "18": [{ "n": "Champion of the Quiet Court", "d": "Your pact blade's necrotic rises to +2d8; critical hits also frighten (WIS save negates)." }],
+        "20": [{ "n": "Deathless Champion", "d": "1/long rest, for 1 minute you cannot drop below 1 HP." }]
+      },
+      "subclass": {
+        "name": "Court of the Wilted Rose",
+        "levels": {
+          "3": [
+            { "n": "Rose Thorn Oath", "d": "1/turn, when your pact blade hits, regain HP equal to your CHA modifier." },
+            { "n": "Funerary Grace", "d": "Advantage on CHA checks with mourners, undead, and those who serve death." }
+          ],
+          "7": [{ "n": "Petal Fall", "d": "1/rest, teleport 30 ft in a swirl of dead petals as a bonus action." }],
+          "11": [{ "n": "Garden of Grief", "d": "1/long rest, a 20-ft radius garden of black roses for 1 minute: allies in it regain 1d6 HP per turn, enemies are slowed." }],
+          "15": [{ "n": "The Last Rose", "d": "1/long rest, when an ally within 30 ft dies, they instead drop to 1 HP and your next attack is an automatic critical if it hits." }]
+        }
+      }
+    },
+    "penitent": {
+      "subclassLevel": 3,
+      "levels": {
+        "1": [
+          { "n": "Mortified Flesh", "d": "When you attack, you may pay HP up to your proficiency bonus; add the same amount to the damage." },
+          { "n": "Zeal Through Pain", "d": "While below half HP, advantage on STR checks and +1 to attack rolls." }
+        ],
+        "2": [{ "n": "Unarmored Devotion", "d": "AC equals 10 + STR mod + WIS mod while unarmored." }],
+        "3": [{ "n": "Discipline", "d": "Chooses a penitent discipline (subclass)." }],
+        "5": [{ "n": "Extra Attack", "d": "Attack twice when taking the Attack action." }],
+        "6": [{ "n": "Flagellant's Trance", "d": "Advantage on saves against pain, fear, and exhaustion effects." }],
+        "7": [{ "n": "Blood Offering", "d": "1/rest, pay 5 HP: one attack this turn becomes an automatic hit if the roll would miss by 3 or less." }],
+        "9": [{ "n": "Scarred Hide", "d": "Resistance to slashing damage from nonmagical attacks." }],
+        "10": [{ "n": "Martyr's Endurance", "d": "1/long rest, when you drop to 0 HP, drop to 1 instead." }],
+        "11": [{ "n": "Greater Mortification", "d": "Mortified Flesh can pay up to twice your proficiency bonus in HP; the bonus damage is doubled while below half HP." }],
+        "13": [{ "n": "Penance Shared", "d": "Reaction when an ally within 5 ft is hit: take the damage instead; it is halved for you." }],
+        "14": [{ "n": "Numb to the Lash", "d": "Reduce all incoming weapon damage by your WIS modifier (minimum 1 damage taken)." }],
+        "15": [{ "n": "Ecstatic Fury", "d": "While below one quarter HP, your attacks deal +2d6 damage and you cannot be frightened or charmed." }],
+        "17": [{ "n": "Sainted Scars", "d": "Martyr's Endurance recharges on a short rest; each use also grants temp HP equal to your level." }],
+        "18": [{ "n": "The Body Is a Prayer", "d": "Regain WIS-mod HP at the start of each of your turns while below half HP and conscious." }],
+        "20": [{ "n": "Apotheosis of Suffering", "d": "1/long rest, drop yourself to 1 HP: deal the HP paid as radiant damage divided among any creatures within 30 ft (DEX save halves)." }]
+      },
+      "subclass": {
+        "name": "Choir of Ash",
+        "levels": {
+          "3": [
+            { "n": "Ashen Hymn", "d": "Bonus action: chant for 1 minute; enemies within 10 ft have disadvantage on their first save against fear each turn." },
+            { "n": "Cinder Palms", "d": "Your unarmed strikes and flails deal +1d4 fire damage." }
+          ],
+          "7": [{ "n": "Voice Like Embers", "d": "1/rest, a scream: creatures in a 15-ft cone save (CON) or take 3d6 fire and are deafened for 1 minute." }],
+          "11": [{ "n": "Robes of Soot", "d": "Resistance to fire; when a creature hits you in melee, it takes your WIS mod in fire damage." }],
+          "15": [{ "n": "Immolate the Sin", "d": "1/long rest, wreathe yourself in gray flame for 1 minute: +2d8 fire on your attacks and immunity to fire." }]
+        }
+      }
+    },
+    "dirgesinger": {
+      "subclassLevel": 3,
+      "levels": {
+        "1": [
+          { "n": "Requiem Inspiration", "d": "Bonus action: an ally within 60 ft gains a d6 to add to one attack, check, or save; CHA-mod uses per long rest." },
+          { "n": "Dirge of Sorrow", "d": "A low hum: one enemy within 30 ft subtracts 1d4 from its next attack roll (WIS save negates)." }
+        ],
+        "2": [{ "n": "Mourning Song", "d": "Casts bard-list spells as dirges using CHA; your voice is the instrument." }],
+        "3": [{ "n": "College", "d": "Chooses a college of mourning (subclass)." }],
+        "5": [{ "n": "Requiem d8", "d": "Requiem Inspiration die becomes a d8; regain all uses on a short rest." }],
+        "6": [{ "n": "Threnody", "d": "1/rest, all enemies within 30 ft that can hear you save (WIS) or deal half damage on their next attack." }],
+        "7": [{ "n": "Songs of the Barrow", "d": "Advantage on saves against fear and necrotic effects; you sense undead within 60 ft." }],
+        "9": [{ "n": "Lament of the Lost", "d": "Your healing dirges add your CHA modifier again to HP restored." }],
+        "10": [{ "n": "Requiem d10", "d": "Requiem Inspiration die becomes a d10." }],
+        "11": [{ "n": "The Grave Chorus", "d": "1/long rest, spectral voices join you for 1 minute: your dirges affect one additional target." }],
+        "13": [{ "n": "Dirge of Ruin", "d": "Dirge of Sorrow affects up to three enemies and the penalty applies to attacks and saves." }],
+        "14": [{ "n": "Funeral March", "d": "You and allies within 30 ft ignore difficult terrain and cannot be slowed while you sing." }],
+        "15": [{ "n": "Requiem d12", "d": "Requiem Inspiration die becomes a d12." }],
+        "17": [{ "n": "Song That Ends", "d": "1/long rest, a killing note: one creature below 50 HP that can hear you saves (CON) or drops to 0." }],
+        "18": [{ "n": "Voice of the Veil", "d": "Your dirges reach creatures that cannot hear (they resonate in the bone); deafness offers no protection." }],
+        "20": [{ "n": "The Final Movement", "d": "When you roll initiative with no Requiem uses left, regain three; your inspiration dice explode (max rolls add another die)." }]
+      },
+      "subclass": {
+        "name": "College of the Last Rite",
+        "levels": {
+          "3": [
+            { "n": "Last Rites", "d": "A dying creature you sing over stabilizes automatically and is warded: it cannot be raised as undead." },
+            { "n": "Grief Made Strength", "d": "When an ally within 30 ft drops to 0 HP, your next dirge this minute costs no slot if 2nd level or lower." }
+          ],
+          "7": [{ "n": "Elegy of Echoes", "d": "1/rest, repeat the last dirge you cast this turn at a new target for free (3rd level or lower)." }],
+          "11": [{ "n": "Pallbearer's Procession", "d": "Allies within 30 ft gain resistance to necrotic damage while you sing." }],
+          "15": [{ "n": "The Rite Completed", "d": "1/long rest, sing a fallen ally within a minute of death back to 1 HP without material components." }]
+        }
+      }
+    },
+    "vermin_lord": {
+      "subclassLevel": 3,
+      "levels": {
+        "1": [
+          { "n": "Swarm Sense", "d": "Your rats scout: learn the layout, occupants, and dangers of any building or sewer stretch within 100 ft after a minute." },
+          { "n": "Gutter Fighting", "d": "1/turn, +1d6 damage against a creature that has not acted yet this combat or is surprised." }
+        ],
+        "2": [{ "n": "Underway", "d": "You know the sewer, cellar, and rooftop routes: in a settlement you can reach any point unseen with 10 minutes of travel." }],
+        "3": [{ "n": "Crown", "d": "Chooses a gutter crown (subclass)." }],
+        "5": [{ "n": "Rat Tide", "d": "1/rest, a swarm floods a 15-ft cube: difficult terrain, and creatures inside save (DEX) or take 2d6 piercing and are distracted (disadvantage on their next attack)." }],
+        "6": [{ "n": "Plaguebearer's Immunity", "d": "Immune to disease; resistance to poison damage." }],
+        "7": [{ "n": "Nimble Escape", "d": "Dash, Disengage, or Hide as a bonus action." }],
+        "9": [{ "n": "Ten Thousand Eyes", "d": "Your Swarm Sense covers the whole district; ask the DM once per short rest what the rats have seen." }],
+        "10": [{ "n": "Gutter King's Word", "d": "Beggars, urchins, and rat-folk treat you as royalty; one favor per day within their power." }],
+        "11": [{ "n": "Greater Gutter Fighting", "d": "Gutter Fighting damage rises to +2d6 and also applies to creatures adjacent to your swarm." }],
+        "13": [{ "n": "Vanish Below", "d": "1/rest, drop through a grate, crack, or shadow as a reaction when targeted; the attack misses and you move 15 ft." }],
+        "14": [{ "n": "Chittering Court", "d": "Your rats carry messages, small items, and keys anywhere in the city within an hour." }],
+        "15": [{ "n": "Rat Tide (2 uses)", "d": "Rat Tide has 2 uses per rest and its cube grows to 20 ft." }],
+        "17": [{ "n": "The Walls Have Teeth", "d": "While your swarm is active, enemies within 10 ft of it cannot take reactions." }],
+        "18": [{ "n": "King Below the Streets", "d": "1/long rest, summon a giant rat pack: four allied giant-rat-statted beasts serve for 10 minutes." }],
+        "20": [{ "n": "The City Is Mine", "d": "In any settlement: you cannot be tracked, always know who entered or left today, and your Rat Tide recharges on any rest." }]
+      },
+      "subclass": {
+        "name": "King Beneath the Streets",
+        "levels": {
+          "3": [
+            { "n": "Favored of the Swarm", "d": "A dire rat companion fights beside you (AC 13, HP 3 x level, bite 1d6 + DEX, obeys your commands)." },
+            { "n": "Tunnel Rat", "d": "You squeeze through any gap a rat could, at half speed." }
+          ],
+          "7": [{ "n": "Pack Hunting", "d": "You and your companion have advantage on attacks against a creature the other is adjacent to." }],
+          "11": [{ "n": "Grey Tide Rising", "d": "Your dire rat grows: HP 5 x level, bite 2d6 + DEX, and its bite forces a CON save against a weakening bite (disadvantage on STR checks 1 minute)." }],
+          "15": [{ "n": "The Crown Descends", "d": "1/long rest, for 1 minute every enemy within 30 ft is swarmed: half speed, no reactions, and 1d6 piercing at the start of each of its turns." }]
+        }
+      }
+    }
+  }
+}

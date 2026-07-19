@@ -16,6 +16,9 @@ export function applyDamageMath(currentHp: number, tempHp: number, amount: numbe
     tempHp: tempHp - absorbed,
     absorbed,
     dropped: newHp === 0 && currentHp > 0 && damage > 0,
+    // Damage beyond what reached 0 HP; the massive-damage instant-death
+    // rule compares this against max HP.
+    overkill: Math.max(0, remaining - currentHp),
   };
 }
 

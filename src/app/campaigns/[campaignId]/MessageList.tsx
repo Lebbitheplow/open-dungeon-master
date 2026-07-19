@@ -255,7 +255,13 @@ export function MessageList({
             </div>
           );
         }
-        const sheet = message.characterId ? sheetsById.get(message.characterId) : undefined;
+        // Older messages predate characterId, so fall back to the author's
+        // sheet in this campaign before giving up on a character identity.
+        const sheet =
+          (message.characterId ? sheetsById.get(message.characterId) : undefined) ??
+          (message.userId
+            ? sheets.find((candidate) => candidate.userId === message.userId)
+            : undefined);
         // Character portrait first; the player's own avatar as a fallback.
         const portraitUrl =
           sheet?.portrait?.url ??

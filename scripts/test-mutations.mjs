@@ -33,6 +33,14 @@ test("damage on a downed character does not re-report dropped", () => {
   assert.equal(applyDamageMath(0, 0, 10).dropped, false);
 });
 
+test("overkill measures damage past 0 HP, after temp HP", () => {
+  assert.equal(applyDamageMath(6, 0, 50).overkill, 44);
+  assert.equal(applyDamageMath(20, 5, 8).overkill, 0);
+  // Temp HP soaks first: 30 damage - 5 temp = 25 vs 6 HP -> 19 overkill.
+  assert.equal(applyDamageMath(6, 5, 30).overkill, 19);
+  assert.equal(applyDamageMath(0, 0, 10).overkill, 10);
+});
+
 test("heal caps at max", () => {
   assert.equal(healMath(20, 24, 10).currentHp, 24);
   assert.equal(healMath(0, 24, 5).currentHp, 5);

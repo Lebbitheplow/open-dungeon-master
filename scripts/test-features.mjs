@@ -113,4 +113,35 @@ test("srd subclass names resolve", () => {
   assert.equal(srdSubclassName("timeweaver"), null);
 });
 
+test("catalog class grants its level-1 features", () => {
+  const granted = classFeaturesFor("netrunner", "", 1);
+  assert.deepEqual(names(granted), ["Deck Interface", "Hot-Sim Focus"]);
+  assert.ok(granted.every((feature) => feature.source === "class"));
+});
+
+test("catalog subclass grants at its subclass level", () => {
+  assert.equal(subclassLevelFor("netrunner"), 2);
+  assert.equal(srdSubclassName("netrunner"), "Black ICE Breaker");
+  const granted = names(classFeaturesFor("netrunner", "Black ICE Breaker", 2));
+  assert.ok(granted.includes("ICE Pick"));
+  assert.ok(granted.includes("Lethal Payload"));
+  assert.ok(!names(classFeaturesFor("netrunner", "", 2)).includes("ICE Pick"));
+});
+
+test("catalog class regrant is idempotent and keeps story features", () => {
+  const atOne = populateFeatures([], "netrunner", "", "human", 1);
+  const withStory = [...atOne, { name: "Corp Blacklist", source: "story" }];
+  const atFive = populateFeatures(withStory, "netrunner", "Black ICE Breaker", "human", 5);
+  assert.ok(names(atFive).includes("Daemon Cache"));
+  assert.ok(names(atFive).includes("Corp Blacklist"));
+  assert.deepEqual(
+    populateFeatures(atFive, "netrunner", "Black ICE Breaker", "human", 5),
+    atFive,
+  );
+});
+
+test("unknown classes still degrade to no class features", () => {
+  assert.deepEqual(classFeaturesFor("timeweaver", "", 5), []);
+});
+
 console.log(`test-features: ${passed} tests passed.`);

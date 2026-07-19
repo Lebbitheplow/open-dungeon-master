@@ -3,19 +3,25 @@
 import {
   BookOpen,
   Check,
+  ChevronsLeft,
+  ChevronsRight,
   Link as LinkIcon,
   Map as MapIcon,
   MessagesSquare,
   ScrollText,
   Settings2,
   StickyNote,
+  Swords,
   UserPlus,
   Users,
   type LucideIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { cn } from "@/lib/cn";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { BattleMapPanel } from "@/app/campaigns/[campaignId]/BattleMapPanel";
+import { DmWhisperPanel } from "@/app/campaigns/[campaignId]/DmWhisperPanel";
+import { EncounterPanel } from "@/app/campaigns/[campaignId]/EncounterPanel";
 import { EventLog } from "@/app/campaigns/[campaignId]/EventLog";
 import { MapPanel } from "@/app/campaigns/[campaignId]/MapPanel";
 import { NotesPanel } from "@/app/campaigns/[campaignId]/NotesPanel";
@@ -30,12 +36,35 @@ import type {
 } from "@/app/campaigns/[campaignId]/useCampaignStream";
 import type { CampaignMember } from "@/lib/campaign-types";
 import type { Chapter } from "@/lib/db/chapters";
+import type { PublicEncounter } from "@/lib/db/encounters";
 import type { CharacterEvent } from "@/lib/db/character-events";
 import type { Note } from "@/lib/db/notes";
+import type { DmWhisper } from "@/lib/db/dm-whispers";
 import type { SideThread } from "@/lib/db/side-chat";
+import type { PlayerMapView } from "@/lib/battlemap/view";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
-type Tab = "party" | "map" | "story" | "notes" | "chat" | "log" | "settings";
+type Tab = "party" | "battle" | "map" | "story" | "notes" | "chat" | "log" | "settings";
+
+// Two widths only: the default rail and a roomier one. Per-browser
+// localStorage via useSyncExternalStore, same pattern as useChatChime:
+// server render is narrow and the client snapshot takes over at hydration.
+const WIDE_KEY = "odm_side_panel_wide";
+const WIDE_EVENT = "odm-side-panel-width";
+
+function subscribeWide(callback: () => void) {
+  window.addEventListener(WIDE_EVENT, callback);
+  return () => window.removeEventListener(WIDE_EVENT, callback);
+}
+
+function readWide() {
+  return window.localStorage.getItem(WIDE_KEY) === "1";
+}
+
+function setWide(wide: boolean) {
+  window.localStorage.setItem(WIDE_KEY, wide ? "1" : "0");
+  window.dispatchEvent(new Event(WIDE_EVENT));
+}
 
 // The session's right rail: party sheets, the current area map, story
 // chapters, table notes, and the stat-change log, tabbed to keep it narrow.
@@ -57,6 +86,9 @@ export function SidePanel({
   refreshNotes,
   sideThreads,
   refreshSideChat,
+  whispers,
+  whisperUnread,
+  refreshWhispers,
   chatTarget,
   onChatTargetHandled,
   onMessageUser,
@@ -65,6 +97,9 @@ export function SidePanel({
   inviteCode,
   midGameJoinOpen,
   campaign,
+  encounter,
+  battleMap,
+  refreshBattleMap,
 }: {
   campaignId: string;
   sheets: CharacterSheet[];
@@ -83,6 +118,9 @@ export function SidePanel({
   refreshNotes: () => Promise<void>;
   sideThreads: SideThread[];
   refreshSideChat: () => Promise<void>;
+  whispers: DmWhisper[];
+  whisperUnread: number;
+  refreshWhispers: () => Promise<void>;
   chatTarget: string | null;
   onChatTargetHandled: () => void;
   onMessageUser: (userId: string) => void;
@@ -91,9 +129,13 @@ export function SidePanel({
   inviteCode?: string;
   midGameJoinOpen?: boolean;
   campaign?: Parameters<typeof SessionSettings>[0]["campaign"];
+  encounter?: PublicEncounter | null;
+  battleMap?: PlayerMapView | null;
+  refreshBattleMap: () => Promise<void>;
 }) {
   const [tab, setTab] = useState<Tab>("party");
   const [inviteCopied, setInviteCopied] = useState(false);
+  const wide = useSyncExternalStore(subscribeWide, readWide, () => false);
 
   // "Message" on a party card jumps to the chat tab; SideChatPanel opens the
   // 1:1 thread from the same request. State-from-props during render, per
@@ -102,6 +144,18 @@ export function SidePanel({
   if (chatTarget && chatTarget !== seenChatTarget) {
     setSeenChatTarget(chatTarget);
     setTab("chat");
+  }
+
+  // Combat starting jumps to the battle map; the tab itself disappears when
+  // the encounter ends, so fall back off it. Same adjust-during-render
+  // pattern as chatTarget above.
+  const [seenMapId, setSeenMapId] = useState<string | null>(null);
+  if (battleMap && battleMap.mapId !== seenMapId) {
+    setSeenMapId(battleMap.mapId);
+    setTab("battle");
+  }
+  if (!battleMap && tab === "battle") {
+    setTab("party");
   }
 
   // Lead-only mid-game invite controls, shown on the Party tab.
@@ -121,8 +175,14 @@ export function SidePanel({
   // The lead sees every pending suggestion; members only their own.
   const pendingCount = notes.filter((note) => note.status === "pending").length;
   const sideUnread = sideThreads.reduce((sum, thread) => sum + thread.unread, 0);
+  const chatUnread = sideUnread + whisperUnread;
   const tabs: Array<[Tab, string, LucideIcon, string]> = [
     ["party", "Party", Users, "Character sheets, HP and conditions for the whole party."],
+    ...(battleMap
+      ? ([["battle", "Battle", Swords, "The tactical battle map. Move your token on your turn."]] as Array<
+          [Tab, string, LucideIcon, string]
+        >)
+      : []),
     ...(mapsEnabled
       ? ([["map", "Map", MapIcon, "The scene map and discovered locations."]] as Array<
           [Tab, string, LucideIcon, string]
@@ -140,8 +200,22 @@ export function SidePanel({
   ];
 
   return (
-    <aside className="hidden w-80 shrink-0 flex-col border-l border-stone-700/50 bg-gradient-to-b from-stone-950/70 to-stone-950/30 lg:flex">
-      <div className="flex gap-1 border-b border-stone-700/50 px-2 py-2">
+    <aside
+      className={cn(
+        "hidden shrink-0 flex-col border-l border-stone-700/50 bg-gradient-to-b from-stone-950/70 to-stone-950/30 transition-[width] duration-200 lg:flex",
+        wide ? "w-[26rem]" : "w-80",
+      )}
+    >
+      <div className="flex items-stretch gap-1 border-b border-stone-700/50 px-2 py-2">
+        <Tooltip content={wide ? "Narrow the panel" : "Widen the panel"} side="bottom">
+          <button
+            type="button"
+            onClick={() => setWide(!wide)}
+            className="flex items-center rounded-lg px-1 text-stone-500 transition-colors hover:bg-stone-900/60 hover:text-stone-300"
+          >
+            {wide ? <ChevronsRight className="size-4" /> : <ChevronsLeft className="size-4" />}
+          </button>
+        </Tooltip>
         {tabs.map(([value, label, Icon, tip]) => (
           <Tooltip key={value} content={tip} side="bottom">
           <button
@@ -154,16 +228,21 @@ export function SidePanel({
                 : "text-stone-500 hover:bg-stone-900/60 hover:text-stone-300",
             )}
           >
-            <Icon className="size-4" />
+            <Icon
+              className={cn("size-4", value === "chat" && chatUnread > 0 && "animate-wiggle")}
+            />
             <span className="eyebrow text-[9px] leading-none">{label}</span>
+            {value === "chat" && chatUnread > 0 ? (
+              <span className="absolute left-1.5 top-1 size-1.5 rounded-full bg-red-500" />
+            ) : null}
             {value === "notes" && pendingCount ? (
               <span className="absolute right-1.5 top-1 rounded-full bg-gradient-to-b from-amber-300 to-amber-500 px-1 text-[9px] font-semibold text-amber-950 shadow-glow-gold">
                 {pendingCount}
               </span>
             ) : null}
-            {value === "chat" && sideUnread ? (
+            {value === "chat" && chatUnread ? (
               <span className="absolute right-1.5 top-1 rounded-full bg-gradient-to-b from-amber-300 to-amber-500 px-1 text-[9px] font-semibold text-amber-950 shadow-glow-gold">
-                {sideUnread}
+                {chatUnread}
               </span>
             ) : null}
             {tab === value ? (
@@ -176,6 +255,16 @@ export function SidePanel({
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {tab === "party" ? (
           <>
+          {encounter ? (
+            <div className="mb-3">
+              <EncounterPanel
+                campaignId={campaignId}
+                encounter={encounter}
+                isLead={isLead}
+                embedded
+              />
+            </div>
+          ) : null}
           {isLead && inviteCode ? (
             <div className="mb-3 rounded-lg border border-stone-800 bg-stone-950/40 p-3">
               <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-stone-400">
@@ -225,9 +314,18 @@ export function SidePanel({
             members={members}
             refreshNotes={refreshNotes}
             onMessageUser={onMessageUser}
+            realDiceAllowed={campaign?.gameSettings?.dicePolicy === "real_allowed"}
             embedded
           />
           </>
+        ) : tab === "battle" && battleMap ? (
+          <BattleMapPanel
+            campaignId={campaignId}
+            view={battleMap}
+            encounter={encounter ?? null}
+            sheets={sheets}
+            refreshBattleMap={refreshBattleMap}
+          />
         ) : tab === "map" ? (
           <MapPanel
             campaignId={campaignId}
@@ -247,15 +345,24 @@ export function SidePanel({
             refreshNotes={refreshNotes}
           />
         ) : tab === "chat" ? (
-          <SideChatPanel
-            campaignId={campaignId}
-            members={members}
-            meUserId={meUserId}
-            threads={sideThreads}
-            refreshSideChat={refreshSideChat}
-            openThreadRequest={chatTarget}
-            onOpenHandled={onChatTargetHandled}
-          />
+          <div className="space-y-3">
+            <DmWhisperPanel
+              campaignId={campaignId}
+              whispers={whispers}
+              unread={whisperUnread}
+              sheets={sheets}
+              refreshWhispers={refreshWhispers}
+            />
+            <SideChatPanel
+              campaignId={campaignId}
+              members={members}
+              meUserId={meUserId}
+              threads={sideThreads}
+              refreshSideChat={refreshSideChat}
+              openThreadRequest={chatTarget}
+              onOpenHandled={onChatTargetHandled}
+            />
+          </div>
         ) : tab === "settings" && campaign ? (
           <SessionSettings campaign={campaign} isLead={isLead} />
         ) : (

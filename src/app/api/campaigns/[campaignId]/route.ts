@@ -16,8 +16,9 @@ import {
 import { listChapters } from "@/lib/db/chapters";
 import { listRecentCampaignEvents } from "@/lib/db/character-events";
 import { syncProgressToLibrary } from "@/lib/db/characters";
+import { activePublicEncounter } from "@/lib/db/encounters";
 import { listNotesVisibleTo } from "@/lib/db/notes";
-import { listOpenPendingRolls } from "@/lib/db/dm-turns";
+import { listOpenPendingRolls, publicPendingRoll } from "@/lib/db/dm-turns";
 import { listLocations } from "@/lib/db/locations";
 import { listRecentAudit } from "@/lib/db/sheet-audit";
 import { insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
@@ -51,12 +52,13 @@ export async function GET(
     sheets: listSheets(campaignId),
     messages: listRecentMessages(campaignId, 100),
     rolls: listRecentRolls(campaignId, 20),
-    pendingRolls: listOpenPendingRolls(campaignId),
+    pendingRolls: listOpenPendingRolls(campaignId).map(publicPendingRoll),
     auditLog: listRecentAudit(campaignId, 50),
     locations: listLocations(campaignId),
     chapters: listChapters(campaignId),
     notes: listNotesVisibleTo(campaignId, user.id, isLead(context)),
     characterEvents: listRecentCampaignEvents(campaignId, 30),
+    encounter: activePublicEncounter(campaignId),
     latestSeq: latestSeq(campaignId),
     // In-memory status so a reload mid-turn still shows the DM at work.
     dmStatus: getDmStatus(campaignId),

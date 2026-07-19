@@ -15,7 +15,10 @@ import {
   suggestedStartingHp,
 } from "@/lib/srd";
 import { ASI_LEVELS, applyAsiChoices } from "@/lib/srd/asi";
+import { expertiseSlotsFor, srdSubclassName, subclassLevelFor } from "@/lib/srd/features";
 import { defaultLoadout, suggestWeapons } from "@/lib/srd/weapons";
+import { classGenres, spellClassFor } from "@/lib/classes";
+import type { Genre } from "@/lib/schemas/game-settings";
 import AbilityEditor, { type AbilityMethod, type AbilityState } from "./AbilityEditor";
 import AsiFeatEditor from "./AsiFeatEditor";
 import ContentPicker from "./ContentPicker";
@@ -23,6 +26,7 @@ import EquipmentSection from "./EquipmentSection";
 import { useArchetypes, useBuilderOptions } from "./useBuilderOptions";
 
 const ALIGNMENTS = ["LG", "NG", "CG", "LN", "N", "CN", "LE", "NE", "CE"];
+const GENDERS = ["Female", "Male", "Nonbinary"];
 
 export type BuilderResult = { level: number; sheet: CreateSheetInput };
 
@@ -31,12 +35,16 @@ export type BuilderResult = { level: number; sheet: CreateSheetInput };
 // live derived stats. Used by /characters/new and the campaign flow.
 export default function CharacterBuilder({
   fixedLevel,
+  genre,
   submitLabel,
   onSubmit,
   busy,
   error,
 }: {
   fixedLevel?: number;
+  // Campaign genre: floats setting-appropriate classes to the top of the
+  // class picker. Absent in the library builder (default ordering).
+  genre?: Genre;
   submitLabel: string;
   onSubmit: (result: BuilderResult) => void;
   busy: boolean;
@@ -56,6 +64,7 @@ export default function CharacterBuilder({
     str: null, dex: null, con: null, int: null, wis: null, cha: null,
   });
   const [chosenSkills, setChosenSkills] = useState<string[]>([]);
+  const [expertisePicks, setExpertisePicks] = useState<string[]>([]);
   const [spells, setSpells] = useState<string[]>([]);
   const [equipment, setEquipment] = useState<Array<{ name: string; qty: number; slug?: string }>>([]);
   // Auto-added class weapons the user explicitly removed; reset on class change.
@@ -68,6 +77,8 @@ export default function CharacterBuilder({
   // content-pack races whose language text offers a pick).
   const [bonusLanguages, setBonusLanguages] = useState<string[]>([]);
   const [backstory, setBackstory] = useState("");
+  const [gender, setGender] = useState("");
+  const [appearance, setAppearance] = useState("");
   const [gold, setGold] = useState(15);
   const [hpOverride, setHpOverride] = useState<number | null>(null);
   const [acOverride, setAcOverride] = useState<number | null>(null);
@@ -77,6 +88,43 @@ export default function CharacterBuilder({
   const klass = classes.find((entry) => entry.id === classId) ?? classes[0];
   const background = backgrounds.find((entry) => entry.id === backgroundId) ?? backgrounds[0];
   const archetypes = useArchetypes(klass?.id ?? "");
+
+  // Genre-recommended classes float to the top; everything stays selectable
+  // (a fantasy wizard in a cyberpunk story is a legitimate choice). High
+  // fantasy keeps the default order: the SRD twelve are its baseline.
+  const recommendedClasses = useMemo(
+    () =>
+      genre && genre !== "custom" && genre !== "high_fantasy"
+        ? classes.filter((entry) => classGenres(entry.id).includes(genre))
+        : [],
+    [classes, genre],
+  );
+  const otherClasses = useMemo(
+    () =>
+      recommendedClasses.length
+        ? classes.filter(
+            (entry) => !recommendedClasses.some((match) => match.id === entry.id),
+          )
+        : classes,
+    [classes, recommendedClasses],
+  );
+  // Setting-specific backgrounds float to the top the same way classes do.
+  const recommendedBackgrounds = useMemo(
+    () =>
+      genre && genre !== "custom" && genre !== "high_fantasy"
+        ? backgrounds.filter((entry) => entry.genres?.includes(genre))
+        : [],
+    [backgrounds, genre],
+  );
+  const otherBackgrounds = useMemo(
+    () =>
+      recommendedBackgrounds.length
+        ? backgrounds.filter(
+            (entry) => !recommendedBackgrounds.some((match) => match.id === entry.id),
+          )
+        : backgrounds,
+    [backgrounds, recommendedBackgrounds],
+  );
   const effectiveLevel = fixedLevel ?? level;
   const asiSlotLevels = useMemo(
     () => ASI_LEVELS.filter((threshold) => effectiveLevel >= threshold),
@@ -109,9 +157,12 @@ export default function CharacterBuilder({
     if (!abilities || !race || !klass || !background) {
       return null;
     }
+    const skills = [...new Set([...chosenSkills, ...background.skills])];
     const proficiencies = {
       saves: klass.saves,
-      skills: [...new Set([...chosenSkills, ...background.skills])],
+      skills,
+      // Expertise picks only count while still proficient in the skill.
+      expertise: expertisePicks.filter((skillId) => skills.includes(skillId)),
       languages: [...new Set([...race.languages, ...bonusLanguages.filter(Boolean)])],
       tools: [] as string[],
       armor: klass.armor,
@@ -129,7 +180,7 @@ export default function CharacterBuilder({
       hpOverride ?? suggestedStartingHp(klass.id, race.id, abilities.con, effectiveLevel);
     const ac = acOverride ?? 10 + derived.abilityMods.dex;
     return { proficiencies, derived, maxHp, ac };
-  }, [abilities, race, klass, background, chosenSkills, bonusLanguages, effectiveLevel, hpOverride, acOverride]);
+  }, [abilities, race, klass, background, chosenSkills, expertisePicks, bonusLanguages, effectiveLevel, hpOverride, acOverride]);
 
   // Class-appropriate starting weapons ride along automatically (removable
   // chips) so no character begins the adventure unarmed.
@@ -165,9 +216,24 @@ export default function CharacterBuilder({
     }
   }
 
+  // Catalog classes have no Open5e archetypes; offer their built-in
+  // subclass once the chosen level reaches the class's subclass level.
+  const builtInSubclass = useMemo(() => {
+    if (!klass) {
+      return null;
+    }
+    const pickLevel = subclassLevelFor(klass.id);
+    return pickLevel !== null && effectiveLevel >= pickLevel
+      ? srdSubclassName(klass.id)
+      : null;
+  }, [klass, effectiveLevel]);
+
+  // Spell lists and advice go through the borrowed SRD list for catalog
+  // casters (a Netrunner searches wizard spells).
+  const spellSearchClass = klass ? spellClassFor(klass.id) : "";
   const spellAdvice =
     klass?.spellAbility && abilities
-      ? suggestedSpellCount(klass.id, effectiveLevel, abilityMod(abilities[klass.spellAbility]))
+      ? suggestedSpellCount(spellSearchClass, effectiveLevel, abilityMod(abilities[klass.spellAbility]))
       : null;
   const maxSpellLevel = useMemo(() => {
     if (!klass || klass.casterType === "none") {
@@ -224,7 +290,8 @@ export default function CharacterBuilder({
         { max, used: 0 },
       ]),
     );
-    const isKnownCaster = ["bard", "sorcerer", "warlock", "ranger"].includes(klass.id);
+    const isKnownCaster =
+      klass.knownCaster ?? ["bard", "sorcerer", "warlock", "ranger"].includes(klass.id);
     onSubmit({
       level: effectiveLevel,
       sheet: {
@@ -234,6 +301,8 @@ export default function CharacterBuilder({
         subclass,
         background: background.id,
         alignment,
+        gender,
+        appearance: appearance.trim(),
         abilities,
         maxHp: preview.maxHp,
         ac: preview.ac,
@@ -306,6 +375,13 @@ export default function CharacterBuilder({
           <span className="mb-1 block text-stone-400">Name</span>
           <input value={name} onChange={(event) => setName(event.target.value)} required maxLength={60} className={inputClass} />
         </label>
+        <label className="block">
+          <span className="mb-1 block text-stone-400">Gender</span>
+          <select value={gender} onChange={(event) => setGender(event.target.value)} className={inputClass}>
+            <option value="">Unspecified</option>
+            {GENDERS.map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+        </label>
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
             <span className="mb-1 block text-stone-400">Alignment</span>
@@ -377,20 +453,46 @@ export default function CharacterBuilder({
             onChange={(event) => { setClassId(event.target.value); setChosenSkills([]); setSubclass(""); setSpells([]); setRemovedAutoNames([]); }}
             className={inputClass}
           >
-            {classes.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
+            {recommendedClasses.length ? (
+              <>
+                <optgroup label="Recommended for this setting">
+                  {recommendedClasses.map((entry) => (
+                    <option key={entry.id} value={entry.id}>{entry.name}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="All classes">
+                  {otherClasses.map((entry) => (
+                    <option key={entry.id} value={entry.id}>{entry.name}</option>
+                  ))}
+                </optgroup>
+              </>
+            ) : (
+              otherClasses.map((entry) => (
+                <option key={entry.id} value={entry.id}>{entry.name}</option>
+              ))
+            )}
           </select>
           {klass ? (
             <span className="mt-1 block text-xs text-stone-500">
               d{klass.hitDie} hit die · saves {klass.saves.map((save) => save.toUpperCase()).join(", ")}
-              {klass.spellAbility ? ` · ${klass.spellAbility.toUpperCase()} caster` : ""}
+              {klass.spellAbility
+                ? ` · ${klass.spellAbility.toUpperCase()} caster${klass.castingLabel ? ` (spells flavored as ${klass.castingLabel})` : ""}`
+                : ""}
             </span>
           ) : null}
+          {klass?.blurb ? (
+            <span className="mt-1 block text-xs text-stone-500">{klass.blurb}</span>
+          ) : null}
         </label>
-        {archetypes.length ? (
+        {archetypes.length || builtInSubclass ? (
           <label className="block">
             <span className="mb-1 block text-stone-400">Subclass</span>
             <select value={subclass} onChange={(event) => setSubclass(event.target.value)} className={inputClass}>
               <option value="">None yet</option>
+              {builtInSubclass &&
+              !archetypes.some((entry) => entry.name.toLowerCase() === builtInSubclass.toLowerCase()) ? (
+                <option value={builtInSubclass}>{builtInSubclass}</option>
+              ) : null}
               {archetypes.map((entry) => <option key={entry.id} value={entry.name}>{entry.name}</option>)}
             </select>
           </label>
@@ -398,12 +500,32 @@ export default function CharacterBuilder({
         <label className="block">
           <span className="mb-1 block text-stone-400">Background</span>
           <select value={background?.id ?? ""} onChange={(event) => setBackgroundId(event.target.value)} className={inputClass}>
-            {backgrounds.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
+            {recommendedBackgrounds.length ? (
+              <>
+                <optgroup label="Recommended for this setting">
+                  {recommendedBackgrounds.map((entry) => (
+                    <option key={entry.id} value={entry.id}>{entry.name}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="All backgrounds">
+                  {otherBackgrounds.map((entry) => (
+                    <option key={entry.id} value={entry.id}>{entry.name}</option>
+                  ))}
+                </optgroup>
+              </>
+            ) : (
+              otherBackgrounds.map((entry) => (
+                <option key={entry.id} value={entry.id}>{entry.name}</option>
+              ))
+            )}
           </select>
           {background?.skills.length ? (
             <span className="mt-1 block text-xs text-stone-500">
               Grants {background.skills.map((skillId) => SRD_SKILLS.find((skill) => skill.id === skillId)?.name ?? skillId).join(", ")}
             </span>
+          ) : null}
+          {background?.blurb ? (
+            <span className="mt-1 block text-xs text-stone-500">{background.blurb}</span>
           ) : null}
         </label>
       </section>
@@ -414,10 +536,12 @@ export default function CharacterBuilder({
         scores={scores}
         onScoresChange={setScores}
         racialBonus={race?.asi ?? {}}
+        asiCount={asiSlotLevels.length}
       />
 
       {asiSlotLevels.length ? (
         <AsiFeatEditor
+          level={effectiveLevel}
           slotLevels={asiSlotLevels}
           baseScores={baseAbilities}
           choices={activeAsiChoices}
@@ -465,6 +589,44 @@ export default function CharacterBuilder({
         </section>
       ) : null}
 
+      {klass && expertiseSlotsFor(klass.id, effectiveLevel) > 0 && preview ? (
+        <section className="panel rounded-xl p-4">
+          <h2 className="eyebrow mb-2 text-xs text-amber-200/90">
+            Expertise (pick {expertiseSlotsFor(klass.id, effectiveLevel)}: doubled proficiency bonus)
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            {preview.proficiencies.skills.map((skillId) => {
+              const skill = SRD_SKILLS.find((entry) => entry.id === skillId);
+              const selected = expertisePicks.includes(skillId);
+              const slots = expertiseSlotsFor(klass.id, effectiveLevel);
+              return (
+                <button
+                  key={skillId}
+                  type="button"
+                  onClick={() =>
+                    setExpertisePicks((current) =>
+                      selected
+                        ? current.filter((entry) => entry !== skillId)
+                        : current.length < slots
+                          ? [...current, skillId]
+                          : current,
+                    )
+                  }
+                  className={cn(
+                    "rounded-full border px-3 py-1 text-xs",
+                    selected
+                      ? "border-amber-700 bg-amber-950 text-amber-200"
+                      : "border-stone-700 text-stone-300 hover:bg-stone-900",
+                  )}
+                >
+                  {skill?.name ?? skillId}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
       {klass?.spellAbility ? (
         <section className="panel rounded-xl p-4">
           <h2 className="eyebrow mb-1 text-xs text-amber-200/90">Spells</h2>
@@ -476,7 +638,7 @@ export default function CharacterBuilder({
           </p>
           <ContentPicker
             kind="spells"
-            extraParams={{ class: klass.id, level: String(maxSpellLevel) }}
+            extraParams={{ class: spellSearchClass, level: String(maxSpellLevel) }}
             placeholder="Search spells (e.g. cure wounds)"
             onPick={(entry) => setSpells((current) => (current.includes(entry.name) ? current : [...current, entry.name]))}
             renderMeta={(entry) => (entry.level === 0 ? "cantrip" : `level ${entry.level}`)}
@@ -503,6 +665,21 @@ export default function CharacterBuilder({
         chip={chip}
         inputClass={inputClass}
       />
+
+      <section className="panel rounded-xl p-4">
+        <h2 className="eyebrow mb-1 text-xs text-amber-200/90">Appearance (optional)</h2>
+        <p className="mb-2 text-xs text-stone-500">
+          Used to paint your character&apos;s portrait.
+        </p>
+        <textarea
+          value={appearance}
+          onChange={(event) => setAppearance(event.target.value)}
+          rows={2}
+          maxLength={500}
+          placeholder="Silver hair, weathered face, a scar across one eye..."
+          className={cn(inputClass, "resize-y")}
+        />
+      </section>
 
       <section className="panel rounded-xl p-4">
         <h2 className="eyebrow mb-1 text-xs text-amber-200/90">Backstory (optional)</h2>

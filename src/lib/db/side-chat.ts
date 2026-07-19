@@ -8,6 +8,11 @@ import { getDatabase, nowIso } from "@/lib/db/core";
 // module) and must never ride the campaign SSE stream, whose persisted
 // events any member can replay. Sends publish only a contentless ephemeral
 // "side_activity" event; each recipient re-fetches their own threads.
+//
+// The AI DM's private notes to players live in dm_whispers
+// (src/lib/db/dm-whispers.ts): an intentionally separate, DM-authored,
+// one-way channel. Do not unify the two; their privacy contracts point in
+// opposite directions.
 
 export type SideThreadKind = "dm" | "group";
 

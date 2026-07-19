@@ -20,9 +20,25 @@ export const hitDiceSchema = z.object({
 });
 export type HitDice = z.infer<typeof hitDiceSchema>;
 
+// Death-save track for a character at 0 HP. Null = not dying. Managed by
+// the server death engine (src/lib/dm/death.ts); never player- or
+// model-writable directly.
+export const deathSavesSchema = z
+  .object({
+    successes: z.number().int().min(0).max(3),
+    failures: z.number().int().min(0).max(3),
+    stable: z.boolean(),
+    dead: z.boolean(),
+  })
+  .nullable();
+export type DeathSaves = z.infer<typeof deathSavesSchema>;
+
 export const proficienciesSchema = z.object({
   saves: z.array(z.enum(ABILITIES)).max(6),
   skills: z.array(z.string().max(40)).max(18),
+  // Skills with doubled proficiency (rogue/bard expertise). The .default
+  // heals rows stored before the field existed.
+  expertise: z.array(z.string().max(40)).max(6).default([]),
   languages: z.array(z.string().max(40)).max(12),
   tools: z.array(z.string().max(60)).max(12),
   armor: z.array(z.string().max(40)).max(8),
@@ -97,6 +113,9 @@ export const createSheetSchema = z.object({
   subclass: z.string().trim().max(60).default(""),
   background: z.string().trim().max(60).default(""),
   alignment: z.string().trim().max(30).default(""),
+  gender: z.string().trim().max(30).default(""),
+  // Free-text physical description; feeds the auto-generated portrait.
+  appearance: z.string().trim().max(500).default(""),
   abilities: abilityScoresSchema,
   maxHp: z.number().int().min(1).max(500),
   ac: z.number().int().min(1).max(30),
@@ -136,6 +155,9 @@ export const patchSheetSchema = z.object({
   features: z.array(sheetFeatureSchema).max(80).optional(),
   // Level-up ASIs change ability scores, so players may patch them.
   abilities: abilityScoresSchema.optional(),
+  // Level-up expertise picks (rogue/bard); the server keeps only skills the
+  // sheet is actually proficient in.
+  expertise: z.array(z.string().max(40)).max(6).optional(),
   subclass: z.string().trim().max(60).optional(),
   portrait: attachmentSchema.nullable().optional(),
   notes: z.string().max(4000).optional(),
@@ -146,6 +168,35 @@ export type PatchSheetInput = z.infer<typeof patchSheetSchema>;
 // Everything the DM engine and the party lead may change, including the
 // identity fields players cannot touch in-play. Players stay limited to
 // patchSheetSchema.
+// Limited-use class-resource counters (Rage, Ki, Second Wind...), keyed by
+// resource id from src/lib/srd/class-resources.ts. Auto-populated from the
+// features list; spent by use_resource; refilled by rests.
+export const resourcesSchema = z.record(
+  z.string().max(40),
+  z.object({
+    max: z.number().int().min(0).max(200),
+    used: z.number().int().min(0).max(200),
+  }),
+);
+export type SheetResources = z.infer<typeof resourcesSchema>;
+
+// Duration/save metadata for active conditions, keyed by condition name.
+// Lives NEXT TO the plain `conditions` string list so its consumers never
+// change; the server maintains both together (src/lib/dm/condition-logic.ts).
+export const conditionMetaSchema = z.record(
+  z.string().max(40),
+  z.object({
+    rounds: z.number().int().min(1).max(100).optional(),
+    saveEnds: z
+      .object({
+        ability: z.enum(ABILITIES),
+        dc: z.number().int().min(1).max(30),
+      })
+      .optional(),
+  }),
+);
+export type ConditionMetaMap = z.infer<typeof conditionMetaSchema>;
+
 export const fullPatchSheetSchema = patchSheetSchema.extend({
   name: z.string().trim().min(1).max(60).optional(),
   race: z.string().trim().min(1).max(60).optional(),
@@ -155,6 +206,14 @@ export const fullPatchSheetSchema = patchSheetSchema.extend({
   speed: z.number().int().min(0).max(120).optional(),
   abilities: abilityScoresSchema.optional(),
   proficiencies: proficienciesSchema.optional(),
+  // Engine-managed fields; included here so audit pre-images round-trip
+  // through undo, but never exposed to update_sheet or player patches.
+  deathSaves: deathSavesSchema.optional(),
+  concentratingOn: z.string().trim().max(80).nullable().optional(),
+  conditionMeta: conditionMetaSchema.optional(),
+  resources: resourcesSchema.optional(),
+  // Exhaustion level 0-6 with real mechanical effects (condition-logic.ts).
+  exhaustion: z.number().int().min(0).max(6).optional(),
 });
 export type FullPatchSheetInput = z.infer<typeof fullPatchSheetSchema>;
 
@@ -185,6 +244,13 @@ export type CharacterSheet = {
   features: SheetFeature[];
   spellcasting: Spellcasting;
   conditions: string[];
+  conditionMeta: ConditionMetaMap;
+  resources: SheetResources;
+  exhaustion: number;
+  deathSaves: DeathSaves;
+  // Spell this character is concentrating on; null when none. Managed by
+  // the server (src/lib/dm/concentration.ts).
+  concentratingOn: string | null;
   portrait: SheetAttachment | null;
   notes: string;
   backstory: string;

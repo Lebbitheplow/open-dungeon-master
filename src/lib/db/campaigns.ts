@@ -12,8 +12,7 @@ import type {
 import type { StorySettings } from "@/lib/types";
 import { normalizeStoryArc, type StoryArc } from "@/lib/dm/arc-logic";
 
-// Who may act right now. Extensible: combat later adds an
-// {mode:"initiative"} variant; always branch on mode.
+// Who may act right now; always branch on mode.
 export type SpotlightFloor = {
   mode: "spotlight";
   userIds: string[];
@@ -21,12 +20,23 @@ export type SpotlightFloor = {
   // Releases only when every spotlighted user appears here.
   respondedUserIds: string[];
 };
+// Active combat: the floor follows the initiative order. userIds is the
+// current-turn PC's player; the order itself lives on the encounter row and
+// only advanceAfterTurn/skipCurrentTurn move it.
+export type InitiativeFloor = {
+  mode: "initiative";
+  encounterId: string;
+  userIds: string[];
+  currentName: string;
+  round: number;
+};
 export type Floor =
   | { mode: "open" }
   | SpotlightFloor
+  | InitiativeFloor
   // Held responses: nobody may act until the party lead releases; `next` is
   // the floor that takes effect on release.
-  | { mode: "hold"; next: { mode: "open" } | SpotlightFloor };
+  | { mode: "hold"; next: { mode: "open" } | SpotlightFloor | InitiativeFloor };
 
 export type Campaign = CampaignSummary & {
   scene: string;
@@ -74,6 +84,26 @@ export function canAct(floor: Floor, userId: string, kind: string): boolean {
   return floor.userIds.includes(userId);
 }
 
+function normalizeInitiative(raw: unknown): InitiativeFloor | null {
+  const floor = raw as InitiativeFloor | null;
+  if (
+    floor &&
+    floor.mode === "initiative" &&
+    typeof floor.encounterId === "string" &&
+    Array.isArray(floor.userIds) &&
+    floor.userIds.length
+  ) {
+    return {
+      mode: "initiative",
+      encounterId: floor.encounterId,
+      userIds: floor.userIds.map(String),
+      currentName: String(floor.currentName ?? ""),
+      round: Number(floor.round ?? 1) || 1,
+    };
+  }
+  return null;
+}
+
 function normalizeSpotlight(raw: unknown): SpotlightFloor | null {
   const floor = raw as SpotlightFloor | null;
   if (
@@ -103,8 +133,15 @@ export function normalizeFloor(raw: unknown): Floor {
   if (spotlight) {
     return spotlight;
   }
+  const initiative = normalizeInitiative(raw);
+  if (initiative) {
+    return initiative;
+  }
   if (floor && floor.mode === "hold") {
-    return { mode: "hold", next: normalizeSpotlight(floor.next) ?? { mode: "open" } };
+    return {
+      mode: "hold",
+      next: normalizeSpotlight(floor.next) ?? normalizeInitiative(floor.next) ?? { mode: "open" },
+    };
   }
   return { mode: "open" };
 }

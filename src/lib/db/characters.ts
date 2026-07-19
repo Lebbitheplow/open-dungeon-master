@@ -3,7 +3,7 @@ import { createSheet, getSheetById, getSheetForUser } from "@/lib/db/sheets";
 import { spellSlotsFor, suggestedStartingHp } from "@/lib/srd";
 import { earnedAsiCount, removeAsiChoices } from "@/lib/srd/asi";
 import { populateFeatures } from "@/lib/srd/features";
-import type { CharacterSheet, CreateSheetInput } from "@/lib/schemas/sheet";
+import type { CharacterSheet, CreateSheetInput, SheetAttachment } from "@/lib/schemas/sheet";
 
 // The per-user character library (table library_characters). Campaign play
 // COPIES a library character into character_sheets (copy-on-instantiate);
@@ -151,6 +151,24 @@ export function updateCharacter(
       nowIso(),
       id,
     );
+  return getCharacter(id);
+}
+
+// Portrait-only update from the library page; the rest of the sheet stays
+// untouched (the full editor path re-normalizes features and identity).
+export function updateCharacterPortrait(
+  userId: string,
+  id: string,
+  portrait: SheetAttachment | null,
+): LibraryCharacter | null {
+  const character = getCharacterForUser(userId, id);
+  if (!character) {
+    return null;
+  }
+  const stored: CreateSheetInput = { ...character.sheet, portrait };
+  getDatabase()
+    .prepare(`UPDATE library_characters SET sheet_json = ?, updated_at = ? WHERE id = ?`)
+    .run(JSON.stringify(stored), nowIso(), id);
   return getCharacter(id);
 }
 

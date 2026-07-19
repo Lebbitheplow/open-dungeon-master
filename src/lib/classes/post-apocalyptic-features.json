@@ -1,0 +1,203 @@
+{
+  "_note": "Feature tables for the post-apocalyptic classes. n = feature name, d = one-line rules text the DM treats as authoritative.",
+  "classes": {
+    "scavenger": {
+      "subclassLevel": 3,
+      "levels": {
+        "1": [
+          { "n": "Scrap Sense", "d": "1/short rest, search any ruin or wreck for 10 minutes and find one genuinely useful item (the DM decides what plausibly exists)." },
+          { "n": "Improvised Weapon Mastery", "d": "Improvised weapons count as proficient simple weapons dealing 1d6, or 1d8 two-handed." }
+        ],
+        "2": [{ "n": "Packrat", "d": "Carry capacity doubles; you always have basic supplies (rope, tape, wire, a light source)." }],
+        "3": [{ "n": "Haunt", "d": "Chooses a scavenger haunt (subclass)." }],
+        "5": [{ "n": "Extra Attack", "d": "Attack twice when taking the Attack action." }],
+        "6": [{ "n": "Trap Eye", "d": "Advantage to spot traps, ambushes, and unstable ground; +2 initiative in ruins." }],
+        "7": [{ "n": "Make It Work", "d": "1/rest, repair or rig a device, vehicle, or weapon in 1 minute; it works for a scene." }],
+        "9": [{ "n": "Waste-Wise", "d": "Advantage on saves against radiation, poison, and disease." }],
+        "10": [{ "n": "Deep Pockets", "d": "1/long rest, produce exactly the mundane item the party needs; you scavenged it earlier." }],
+        "11": [{ "n": "Junkyard Strikes", "d": "Your improvised and simple weapons deal +1d6 damage and count as magical." }],
+        "13": [{ "n": "Escape Artist", "d": "Disengage or Hide as a bonus action; escape grapples and restraints with advantage." }],
+        "14": [{ "n": "Scrap Sense (2 uses)", "d": "Scrap Sense has 2 uses per short rest and takes only 1 minute." }],
+        "15": [{ "n": "Built From Salvage", "d": "Your rigged devices from Make It Work last a day and can be handed to allies." }],
+        "17": [{ "n": "The Good Stuff", "d": "1/long rest, your search turns up something rare: old-world tech, ammo cache, or medicine (DM picks the form)." }],
+        "18": [{ "n": "Never Unarmed", "d": "When disarmed or emptied, you always find another weapon within reach this turn." }],
+        "20": [{ "n": "King of the Heap", "d": "Scrap Sense always finds two items; 1/day one of them is exactly what you ask for." }]
+      },
+      "subclass": {
+        "name": "Rustpicker",
+        "levels": {
+          "3": [
+            { "n": "Rust Reader", "d": "A glance tells you what a ruin held, when it fell, and what has moved through since." },
+            { "n": "Silent Salvage", "d": "Advantage on Stealth while in ruins or wreckage." }
+          ],
+          "7": [{ "n": "Tetanus Edge", "d": "1/turn, your improvised weapons deal +1d4 poison and the target cannot regain HP until your next turn." }],
+          "11": [{ "n": "Collapse Instinct", "d": "1/rest, trigger or predict a structural collapse: creatures in a 15-ft cube save (DEX) or take 4d6 bludgeoning and are restrained by rubble." }],
+          "15": [{ "n": "One With the Ruins", "d": "In ruins you cannot be surprised, tracked, or flanked, and your Scrap Sense recharges on any rest." }]
+        }
+      }
+    },
+    "road_warrior": {
+      "subclassLevel": 3,
+      "levels": {
+        "1": [
+          { "n": "Death or Glory", "d": "You may attack recklessly: advantage on melee attacks this turn, but attacks against you have advantage until your next turn." },
+          { "n": "Hardened", "d": "1/rest, reduce all damage you take this round by your CON modifier." }
+        ],
+        "2": [{ "n": "Wheelman", "d": "Advantage on checks to drive, ride, or repair vehicles; attacking from a moving vehicle carries no penalty." }],
+        "3": [{ "n": "Crew", "d": "Chooses a road crew (subclass)." }],
+        "5": [{ "n": "Extra Attack", "d": "Attack twice when taking the Attack action." }],
+        "6": [{ "n": "Fear No Rust", "d": "Advantage on saves against fear; allies within 10 ft add +1d4 to fear saves while you fight on." }],
+        "7": [{ "n": "Ram Speed", "d": "When you move 20+ ft straight toward a target and hit with a melee attack, deal +2d6 and shove it 10 ft." }],
+        "9": [{ "n": "Scar Tissue", "d": "Resistance to bludgeoning damage from nonmagical attacks." }],
+        "10": [{ "n": "Hardened (2 uses)", "d": "Hardened has 2 uses and reduces damage by twice your CON modifier." }],
+        "11": [{ "n": "Extra Attack (2)", "d": "Attack three times when taking the Attack action." }],
+        "13": [{ "n": "Blood and Chrome", "d": "While below half HP, your melee attacks deal +1d8 damage." }],
+        "14": [{ "n": "Road Rage", "d": "1/rest, when an ally within 30 ft drops to 0 HP, immediately move your speed and make one attack." }],
+        "15": [{ "n": "Unstoppable", "d": "Your speed cannot be reduced and you cannot be knocked prone while conscious." }],
+        "17": [{ "n": "Witnessed", "d": "1/long rest, when you drop to 0 HP, keep fighting: you remain conscious at 0 for 1 minute, then fall." }],
+        "18": [{ "n": "Warlord of the Wastes", "d": "Allies within 30 ft gain +1 to attack rolls while they can see you." }],
+        "20": [{ "n": "Ride Eternal", "d": "Death or Glory no longer grants enemies advantage against you." }]
+      },
+      "subclass": {
+        "name": "Highway Reaver",
+        "levels": {
+          "3": [
+            { "n": "Chained Hook", "d": "A hooked chain (1d8 piercing, 15-ft reach): on hit, drag the target 10 ft toward you." },
+            { "n": "Reaver's Toll", "d": "Advantage on Intimidation against travelers, traders, and rival crews." }
+          ],
+          "7": [{ "n": "Skull Takers", "d": "When you drop a creature, enemies within 15 ft save (WIS) or are frightened of you until your next turn." }],
+          "11": [{ "n": "Gore Drift", "d": "After you hit with Ram Speed, make one extra attack against a different creature within reach." }],
+          "15": [{ "n": "Last Ride of the Reaver", "d": "1/long rest, for 1 minute your speed doubles, Ram Speed deals +4d6, and you resist all damage." }]
+        }
+      }
+    },
+    "aberrant": {
+      "subclassLevel": 1,
+      "levels": {
+        "1": [
+          { "n": "Unstable Genome", "d": "Casts sorcerer-list spells as mutations using CHA; casting visibly warps your flesh for a moment." },
+          { "n": "Adaptive Hide", "d": "While unarmored, AC equals 13 + DEX modifier." }
+        ],
+        "2": [{ "n": "Rapid Adaptation", "d": "1/long rest, after taking elemental damage, gain resistance to that type until you rest." }],
+        "3": [{ "n": "Predator Senses", "d": "Darkvision 60 ft; advantage on Perception checks using smell." }],
+        "5": [{ "n": "Surge of Change", "d": "2/rest, cast a cantrip as a bonus action after casting a leveled mutation." }],
+        "7": [{ "n": "Regenerative Strain", "d": "Spend a hit die as a bonus action to heal, CHA-mod uses per long rest." }],
+        "9": [{ "n": "Toxic Blood", "d": "Immune to poison and disease; a creature that hits you with a bite takes 2d6 poison." }],
+        "11": [{ "n": "Chameleon Skin", "d": "Advantage on Stealth; 1/rest, turn near-invisible until you attack or cast." }],
+        "13": [{ "n": "Grafted Power", "d": "Learn two spells from any spell list; they count as mutations for you." }],
+        "15": [{ "n": "Hardened Mutation", "d": "1/long rest, regain expended slot levels equal to your CHA modifier when you drop below half HP." }],
+        "17": [{ "n": "Apex Genome", "d": "Resistance to two damage types of your choice, chosen each dawn." }],
+        "18": [{ "n": "Perfected Instability", "d": "Your mutations ignore resistance to their damage type." }],
+        "20": [{ "n": "The Next Step", "d": "1/long rest, for 1 minute your mutations of 3rd level or lower cost no slots and your Adaptive Hide grants +2 more AC." }]
+      },
+      "subclass": {
+        "name": "Chimeric Strain",
+        "levels": {
+          "1": [{ "n": "Chimeric Limb", "d": "A claw, tendril, or bone blade: a natural weapon dealing 1d8 + CHA slashing, and you can cast mutations through it." }],
+          "6": [{ "n": "Second Adaptation", "d": "Rapid Adaptation has 2 uses and can also grant a climb or swim speed for an hour." }],
+          "10": [{ "n": "Splintered Form", "d": "1/long rest, reaction when hit: split into a swarm shape until your next turn, taking half damage from the attack and moving through gaps freely." }],
+          "14": [{ "n": "Perfect Chimera", "d": "Your Chimeric Limb deals 2d8, counts as magical, and grants 10-ft reach." }]
+        }
+      }
+    },
+    "salvage_tech": {
+      "subclassLevel": 3,
+      "levels": {
+        "1": [
+          { "n": "Old-World Interface", "d": "You can operate, unlock, and read any pre-Fall technology given a minute of fiddling." },
+          { "n": "Percussive Maintenance", "d": "2/rest, whack a machine or construct: restore 1d8 + INT HP to it or clear one malfunction." }
+        ],
+        "2": [{ "n": "Rebuilt Arsenal", "d": "Casts wizard-list spells as reclaimed-tech effects using INT; your rebuilt rig is the focus." }],
+        "3": [{ "n": "Doctrine", "d": "Chooses a salvage doctrine (subclass)." }],
+        "5": [{ "n": "Power Cell Cache", "d": "1/rest, cast a 1st-level tech effect without expending a slot." }],
+        "6": [{ "n": "EMP Coil", "d": "1/rest, constructs and machines within 15 ft save (CON) or are stunned until your next turn." }],
+        "7": [{ "n": "Scrap Armor Weave", "d": "+1 AC; resistance to lightning damage." }],
+        "9": [{ "n": "Signal Whisperer", "d": "Detect and trace active tech, signals, and power sources within 1 mile." }],
+        "10": [{ "n": "Overcharged Rounds", "d": "1/turn, a firearm hit deals +1d8 lightning." }],
+        "11": [{ "n": "Field Fabricator", "d": "During a long rest, build one temporary device that duplicates a 2nd-level tech effect; anyone can trigger it." }],
+        "13": [{ "n": "Salvaged Shield Node", "d": "1/long rest, project a 10-ft energy dome for 1 minute: allies inside gain +2 AC and resistance to ranged weapon damage." }],
+        "14": [{ "n": "Power Cell Cache (3rd)", "d": "Power Cell Cache works for tech effects up to 3rd level." }],
+        "15": [{ "n": "Machine Empathy", "d": "Constructs and automated defenses must save (WIS) to target you over other creatures." }],
+        "17": [{ "n": "Prototype Rig", "d": "Choose one 5th-level tech effect; cast it 1/long rest without a slot." }],
+        "18": [{ "n": "The Old World Answers", "d": "1/long rest, ask the DM one question answerable from pre-Fall records; you recall the answer." }],
+        "20": [{ "n": "Reactor Heart", "d": "1/long rest, for 1 minute your tech effects of 4th level or lower cost no slots; you glow visibly." }]
+      },
+      "subclass": {
+        "name": "Reactor Cultist",
+        "levels": {
+          "3": [
+            { "n": "Blessed Isotope", "d": "1/turn, a damaging tech effect deals +1d6 radiant as the core flares." },
+            { "n": "Geiger Sense", "d": "You sense radiation precisely and are resistant to its effects." }
+          ],
+          "7": [{ "n": "Halo of the Core", "d": "1/rest, emit a 10-ft flare: enemies save (CON) or are blinded until your next turn." }],
+          "11": [{ "n": "Meltdown Ward", "d": "Immunity to radiant and necrotic damage from tech and radiation sources." }],
+          "15": [{ "n": "Second Sun", "d": "1/long rest, unleash the core: a 30-ft radius burst dealing 8d6 radiant (CON save halves); allies are spared." }]
+        }
+      }
+    },
+    "waste_preacher": {
+      "subclassLevel": 1,
+      "levels": {
+        "1": [
+          { "n": "Words for the End", "d": "Casts cleric-list spells as sermons using WIS; your voice carries conviction, not liturgy." },
+          { "n": "Flock's Shepherd", "d": "Bonus action: one ally within 30 ft gains temp HP equal to your level + WIS mod, WIS-mod uses per long rest." }
+        ],
+        "2": [{ "n": "Testify", "d": "1/rest, an audible sermon gives allies within 30 ft advantage on their next save against fear or despair." }],
+        "3": [{ "n": "Water From Stone", "d": "1/day, find or purify enough water and food for six people." }],
+        "5": [{ "n": "Lay On the Word", "d": "Your healing sermons add your WIS modifier again to HP restored." }],
+        "7": [{ "n": "Shepherd's Stare", "d": "Advantage on Intimidation and Persuasion against raiders, cultists, and the desperate." }],
+        "9": [{ "n": "Deliverance", "d": "1/rest, end one fear, charm, or curse effect on a creature within 30 ft." }],
+        "11": [{ "n": "Judgment", "d": "1/turn, a damaging sermon deals +1d8 radiant to one target." }],
+        "13": [{ "n": "Congregation", "d": "Flock's Shepherd can target two allies at once." }],
+        "15": [{ "n": "Walk Through the Valley", "d": "You and allies within 10 ft have resistance to necrotic damage and advantage against fear." }],
+        "17": [{ "n": "Prophet of the Wastes", "d": "1/long rest, receive a true omen about a planned course of action (weal, woe, or both)." }],
+        "18": [{ "n": "The Word Made Iron", "d": "Concentration on your sermons cannot be broken by damage." }],
+        "20": [{ "n": "Revelation", "d": "1/long rest, deliver the full sermon: allies within 60 ft regain 5d8 HP and are freed of fear, charm, and exhaustion by one level." }]
+      },
+      "subclass": {
+        "name": "Church of the Last Dawn",
+        "levels": {
+          "1": [{ "n": "Dawnlight", "d": "1/rest, your raised hand sheds sunlight in a 30-ft radius for 10 minutes; undead and mutants in it have disadvantage on attacks." }],
+          "6": [{ "n": "Baptism of Ash", "d": "When you heal a creature below half HP, it also gains +1 to attack rolls until your next turn." }],
+          "10": [{ "n": "Stand at the Dawn", "d": "1/long rest, when an ally within 30 ft drops to 0 HP, they instead drop to WIS-mod x 5 HP." }],
+          "14": [{ "n": "The Last Dawn Rises", "d": "Your Dawnlight damages: hostile undead and aberrations take 2d8 radiant entering or starting their turn in it." }]
+        }
+      }
+    },
+    "packmaster": {
+      "subclassLevel": 3,
+      "levels": {
+        "1": [
+          { "n": "Bonded Beast", "d": "A loyal wasteland beast fights beside you (AC 13 + your proficiency, HP 5 x level, attack 1d8 + WIS, obeys your commands)." },
+          { "n": "Pack Tactics Training", "d": "You and your beast have advantage on attacks against a creature the other is adjacent to." }
+        ],
+        "2": [{ "n": "Green Tongue", "d": "Casts druid-list spells as old bonds using WIS; you can always communicate simple ideas with beasts." }],
+        "3": [{ "n": "Pack Law", "d": "Chooses a pack law (subclass)." }],
+        "5": [{ "n": "Extra Attack", "d": "Attack twice when taking the Attack action; your beast attacks when you command it as a bonus action." }],
+        "6": [{ "n": "Scent the Wind", "d": "You and your beast track with advantage and cannot be surprised by beasts or mutants." }],
+        "7": [{ "n": "Mended Hide", "d": "Your healing bonds may target your beast at double effect." }],
+        "9": [{ "n": "Call the Wild", "d": "1/long rest, summon 1d4 local beasts to aid you for 10 minutes." }],
+        "10": [{ "n": "Alpha's Roar", "d": "1/rest, hostile beasts and mutants within 30 ft save (WIS) or cower (no move toward you) for 1 minute." }],
+        "11": [{ "n": "War Beast", "d": "Your beast's attacks deal 2d8 + WIS, count as magical, and it gains +2 AC." }],
+        "13": [{ "n": "Twin Bond", "d": "Bond a second, smaller beast (scout stats); see through either beast's senses within 1 mile." }],
+        "14": [{ "n": "Pack Endurance", "d": "When your beast would drop to 0 HP, 1/long rest it drops to 1 instead; the same holds for you while it lives." }],
+        "15": [{ "n": "Coordinated Takedown", "d": "When you and your beast hit the same target in a turn, it saves (STR) or is knocked prone and grappled." }],
+        "17": [{ "n": "Lord of the Green", "d": "Beasts and plants will not harm you unless magically forced; advantage on all WIS checks involving them." }],
+        "18": [{ "n": "The Pack Provides", "d": "Call the Wild summons 2d4 beasts and recharges on a short rest 1/day." }],
+        "20": [{ "n": "One Blood", "d": "While within 30 ft of your beast, you both resist all damage from creatures neither of you has yet wounded this fight." }]
+      },
+      "subclass": {
+        "name": "Alpha Bond",
+        "levels": {
+          "3": [
+            { "n": "Shared Fury", "d": "1/rest, you and your beast each gain +2 to damage rolls for 1 minute." },
+            { "n": "Den Mother's Eye", "d": "Your beast can guard a person or place independently and alert you at any distance within a mile." }
+          ],
+          "7": [{ "n": "Blood Bond", "d": "Reaction: when your beast within 30 ft takes damage, split it evenly between you." }],
+          "11": [{ "n": "Apex Pair", "d": "Your Pack Tactics Training advantage extends to all allies adjacent to your beast." }],
+          "15": [{ "n": "Legend of the Pack", "d": "1/long rest, your beast grows monstrous for 1 minute: double HP, +10 ft speed, attacks deal +2d8 and frighten (WIS save)." }]
+        }
+      }
+    }
+  }
+}

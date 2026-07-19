@@ -1,8 +1,9 @@
 "use client";
 
-import { Loader2, Plus, Trash2, UserRound } from "lucide-react";
+import { Camera, Loader2, Plus, Trash2, UserRound } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
 import { IconChip, PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
 
 type LibraryCharacter = {
@@ -14,7 +15,17 @@ type LibraryCharacter = {
   background: string;
   level: number;
   updatedAt: string;
+  portraitStatus?: "queued" | "generating" | "failed" | null;
+  sheet?: { portrait?: { url: string } | null };
 };
+
+function portraitPending(character: LibraryCharacter) {
+  return character.portraitStatus === "queued" || character.portraitStatus === "generating";
+}
+
+// Matches the ComfyUI generation timeout; polling stops even if the server
+// never resolves the job.
+const PORTRAIT_POLL_LIMIT = 240;
 
 function titleCase(value: string) {
   return value.replace(/[-_]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -24,6 +35,9 @@ export default function CharactersPage() {
   const [characters, setCharacters] = useState<LibraryCharacter[]>([]);
   const [loading, setLoading] = useState(true);
   const [authed, setAuthed] = useState(true);
+  const [croppingId, setCroppingId] = useState("");
+  const cropping = characters.find((character) => character.id === croppingId);
+  const pollCount = useRef(0);
 
   useEffect(() => {
     fetch("/api/characters")
@@ -41,6 +55,42 @@ export default function CharactersPage() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  // While a portrait renders in the background, re-fetch until it lands (or
+  // fails); the finished image then appears without a reload.
+  useEffect(() => {
+    if (!characters.some(portraitPending) || pollCount.current >= PORTRAIT_POLL_LIMIT) {
+      return;
+    }
+    const id = setTimeout(() => {
+      pollCount.current += 1;
+      fetch("/api/characters")
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data) => {
+          if (data?.characters) {
+            setCharacters(data.characters);
+          }
+        });
+    }, 2500);
+    return () => clearTimeout(id);
+  }, [characters]);
+
+  async function setPortrait(id: string, url: string) {
+    const response = await fetch(`/api/characters/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ portrait: { url } }),
+    });
+    if (response.ok) {
+      setCharacters((current) =>
+        current.map((character) =>
+          character.id === id
+            ? { ...character, sheet: { ...character.sheet, portrait: { url } } }
+            : character,
+        ),
+      );
+    }
+  }
 
   async function remove(id: string, name: string) {
     if (!window.confirm(`Delete ${name} from your library? This cannot be undone.`)) {
@@ -110,7 +160,31 @@ export default function CharactersPage() {
             >
               <a href={`/characters/${character.id}`} className="block">
                 <div className="flex items-center gap-3">
-                  <IconChip icon={UserRound} size="size-12" iconSize="size-5" />
+                  {character.sheet?.portrait?.url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={character.sheet.portrait.url}
+                      alt={character.name}
+                      className="size-12 shrink-0 rounded-lg border border-amber-500/30 object-cover"
+                    />
+                  ) : portraitPending(character) ? (
+                    <span
+                      title="Painting portrait..."
+                      className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-amber-500/30 bg-stone-900"
+                    >
+                      <Loader2 className="size-4 animate-spin text-amber-200" />
+                    </span>
+                  ) : (
+                    <span
+                      title={
+                        character.portraitStatus === "failed"
+                          ? "Portrait generation failed"
+                          : undefined
+                      }
+                    >
+                      <IconChip icon={UserRound} size="size-12" iconSize="size-5" />
+                    </span>
+                  )}
                   <div className="min-w-0">
                     <span className="block truncate font-medium text-stone-100">
                       {character.name}
@@ -136,10 +210,28 @@ export default function CharactersPage() {
               >
                 <Trash2 className="size-4" />
               </button>
+              <button
+                type="button"
+                onClick={() => setCroppingId(character.id)}
+                className="absolute right-3 top-10 hidden text-stone-600 hover:text-amber-300 group-hover:block"
+                title="Upload portrait"
+              >
+                <Camera className="size-4" />
+              </button>
             </li>
           ))}
         </ul>
       )}
+      {cropping ? (
+        <AvatarCropDialog
+          title={`Portrait for ${cropping.name}`}
+          onUploaded={(image) => {
+            setCroppingId("");
+            void setPortrait(cropping.id, image.url);
+          }}
+          onClose={() => setCroppingId("")}
+        />
+      ) : null}
     </main>
   );
 }

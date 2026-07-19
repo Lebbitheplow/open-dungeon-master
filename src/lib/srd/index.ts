@@ -3,6 +3,7 @@ import classesJson from "@/lib/srd/classes.json";
 import racesJson from "@/lib/srd/races.json";
 import skillsJson from "@/lib/srd/skills.json";
 import spellSlotsJson from "@/lib/srd/spell-slots.json";
+import { CUSTOM_CLASSES } from "@/lib/classes";
 import type { Ability, CharacterSheet } from "@/lib/schemas/sheet";
 
 export type SrdSkill = { id: string; name: string; ability: Ability };
@@ -42,8 +43,11 @@ const SLOT_TABLES = spellSlotsJson as unknown as {
   pact: Record<string, { slots: number; slotLevel: number }>;
 };
 
+// SRD classes first, then the setting-specific custom catalog.
+export const ALL_CLASSES: SrdClass[] = [...SRD_CLASSES, ...CUSTOM_CLASSES];
+
 export function findClass(id: string) {
-  return SRD_CLASSES.find((entry) => entry.id === id) ?? null;
+  return ALL_CLASSES.find((entry) => entry.id === id) ?? null;
 }
 
 export function findRace(id: string) {
@@ -114,10 +118,16 @@ export function computeSheetDerived(
     ]),
   ) as Record<Ability, number>;
 
+  const expertise = sheet.proficiencies.expertise ?? [];
   const skills = Object.fromEntries(
     SRD_SKILLS.map((skill) => [
       skill.id,
-      abilityMods[skill.ability] + (sheet.proficiencies.skills.includes(skill.id) ? pb : 0),
+      abilityMods[skill.ability] +
+        (expertise.includes(skill.id)
+          ? pb * 2
+          : sheet.proficiencies.skills.includes(skill.id)
+            ? pb
+            : 0),
     ]),
   );
 

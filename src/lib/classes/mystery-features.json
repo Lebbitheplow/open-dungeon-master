@@ -1,0 +1,215 @@
+{
+  "_note": "Feature tables for the mystery classes. n = feature name, d = one-line rules text the DM treats as authoritative.",
+  "classes": {
+    "detective": {
+      "subclassLevel": 3,
+      "levels": {
+        "1": [
+          { "n": "Keen Deduction", "d": "1/short rest, after examining a scene, person, or object, ask the DM one pointed question; the answer is a true, useful clue." },
+          { "n": "Case Notes", "d": "You recall any clue, name, date, or conversation from the current case verbatim." }
+        ],
+        "2": [{ "n": "Expertise", "d": "Double proficiency bonus in two skills you are proficient with." }],
+        "3": [{ "n": "Method", "d": "Chooses an investigative method (subclass)." }],
+        "5": [{ "n": "Reading People", "d": "After 1 minute of conversation, learn whether a creature has lied to you during it." }],
+        "6": [{ "n": "Connect the Threads", "d": "1/long rest, the DM tells you how two clues you hold relate, or that they do not." }],
+        "7": [{ "n": "Practiced Composure", "d": "Advantage on saves against fear and charm; con artists find you a hard mark." }],
+        "9": [{ "n": "Anticipate Violence", "d": "You cannot be surprised while conscious; +2 initiative." }],
+        "10": [{ "n": "Expertise (2 more skills)", "d": "Double proficiency bonus in two more proficient skills." }],
+        "11": [{ "n": "Perfect Recall", "d": "Case Notes extends to every case and everything you have ever read." }],
+        "13": [{ "n": "Pressure Point", "d": "1/rest, an interrogation question must be answered truthfully or the subject visibly refuses (WIS save to refuse quietly)." }],
+        "14": [{ "n": "Web of Informants", "d": "In any settlement, an hour and a few coins buy you the local word on a person, place, or event." }],
+        "15": [{ "n": "Deductive Counter", "d": "Reaction when attacked: your read of the attacker imposes disadvantage, INT-mod uses per long rest." }],
+        "17": [{ "n": "The Scene Speaks", "d": "Keen Deduction has 3 uses per short rest." }],
+        "18": [{ "n": "Mind Palace", "d": "1/long rest, reconstruct a past scene you visited in perfect detail; the DM answers three questions about it." }],
+        "20": [{ "n": "Elementary", "d": "1/long rest, name the culprit mechanism or motive; the DM confirms which parts of your theory are right." }]
+      },
+      "subclass": {
+        "name": "Consulting Detective",
+        "levels": {
+          "3": [
+            { "n": "Cold Read", "d": "On meeting a creature, learn its profession, recent whereabouts, or emotional state (pick one)." },
+            { "n": "Irregulars", "d": "Street contacts in any city fetch, watch, or tail for you (DM adjudicates scope)." }
+          ],
+          "7": [{ "n": "Sharpened Logic", "d": "Add half your proficiency bonus to INT and WIS checks you are not proficient in." }],
+          "11": [{ "n": "The Game Afoot", "d": "1/rest, grant yourself and allies within 30 ft advantage on the next check made in pursuit of a suspect." }],
+          "15": [{ "n": "Nemesis Study", "d": "Choose a named foe; advantage on all checks and saves opposing them until the case ends." }]
+        }
+      }
+    },
+    "alienist": {
+      "subclassLevel": 2,
+      "levels": {
+        "1": [
+          { "n": "Read the Mind's Wound", "d": "Double proficiency bonus on Insight; 1/rest, learn whether a creature is lying, afraid, or concealing something." },
+          { "n": "Talking Cure", "d": "During a short rest, one creature you counsel regains an extra hit die of HP and ends one fear or charm effect." }
+        ],
+        "2": [
+          { "n": "Clinical Practice", "d": "Casts wizard-list spells as psychological treatments using INT." },
+          { "n": "School of Thought", "d": "Chooses a school of thought (subclass)." }
+        ],
+        "3": [{ "n": "Trauma Map", "d": "After 10 minutes with a patient, learn their deepest current fear or fixation (the DM answers truthfully)." }],
+        "5": [{ "n": "Steadying Presence", "d": "Allies within 10 ft add +1d4 to saves against fear and madness." }],
+        "6": [{ "n": "Hypnotic Induction", "d": "1/long rest, a willing or restrained creature answers three questions truthfully under trance (WIS save resists if unwilling)." }],
+        "7": [{ "n": "Professional Detachment", "d": "Advantage on saves against fear, charm, and madness." }],
+        "9": [{ "n": "Break the Delusion", "d": "1/rest, end one charm, fear, or illusion effect on a creature within 30 ft." }],
+        "10": [{ "n": "Case Study", "d": "Pick a creature you have treated or studied; advantage on Insight and Persuasion against it permanently." }],
+        "11": [{ "n": "Depth Analysis", "d": "Your Talking Cure works on two creatures per rest and also removes one level of exhaustion." }],
+        "13": [{ "n": "The Unconscious Speaks", "d": "1/long rest, read a sleeping or unconscious creature's dreams for three true impressions." }],
+        "14": [{ "n": "Iron Composure", "d": "Immune to being frightened; your mind cannot be read unless you allow it." }],
+        "15": [{ "n": "Group Therapy", "d": "Your Steadying Presence radius is 30 ft; allies in it are immune to madness effects." }],
+        "17": [{ "n": "Radical Breakthrough", "d": "1/long rest, cure a creature of a long-term madness, phobia, or compulsion, including magical ones." }],
+        "18": [{ "n": "Master of the Couch", "d": "Hypnotic Induction needs only 1 minute and can be used on hostile creatures in conversation." }],
+        "20": [{ "n": "The Examined Mind", "d": "1/long rest, cast one treatment of 5th level or lower without a slot; it cannot be resisted by creatures you have a Trauma Map of." }]
+      },
+      "subclass": {
+        "name": "School of the Unconscious",
+        "levels": {
+          "2": [
+            { "n": "Dream Logic", "d": "1/rest, impose disadvantage on a creature's attack or check by voicing its doubt aloud (WIS save negates)." },
+            { "n": "Symbol Reading", "d": "Advantage on checks to interpret dreams, art, ciphers, and ritual symbolism." }
+          ],
+          "6": [{ "n": "Projection", "d": "1/long rest, an illusory double of a creature's guilt confronts it: it is frightened of you for 1 minute (WIS save negates)." }],
+          "10": [{ "n": "Shared Subconscious", "d": "1/long rest, link the party's minds for 10 minutes: silent communication and shared Insight results." }],
+          "14": [{ "n": "Archetype Made Flesh", "d": "1/long rest, your treatments treat one target's saving throw as if it rolled a 1." }]
+        }
+      }
+    },
+    "grifter": {
+      "subclassLevel": 3,
+      "levels": {
+        "1": [
+          { "n": "Silver Tongue", "d": "1/short rest, reroll a failed Deception or Persuasion check." },
+          { "n": "A New Face", "d": "10 minutes and small props give you a convincing new identity; Deception checks to hold it have advantage." }
+        ],
+        "2": [{ "n": "Expertise", "d": "Double proficiency bonus in two skills you are proficient with." }],
+        "3": [{ "n": "The Angle", "d": "Chooses a con specialty (subclass)." }],
+        "5": [{ "n": "Uncanny Dodge", "d": "Reaction: halve the damage of one attack that hits you." }],
+        "6": [{ "n": "Cold Read the Mark", "d": "After 1 minute of talk, learn what a creature most desires or most fears (pick one)." }],
+        "7": [{ "n": "Slippery", "d": "Disengage or Hide as a bonus action; escape grapples with advantage." }],
+        "9": [{ "n": "The Long Game", "d": "Maintain up to three full false identities with papers and reputations the DM treats as established." }],
+        "10": [{ "n": "Expertise (2 more skills)", "d": "Double proficiency bonus in two more proficient skills." }],
+        "11": [{ "n": "Twist the Knife", "d": "1/turn, +2d6 damage against a creature that is charmed, deceived by you, or unaware you are a threat." }],
+        "13": [{ "n": "Contingency Exit", "d": "1/long rest, when things go wrong, narrate a prepared escape (a bribed guard, a loose window); the DM makes it viable." }],
+        "14": [{ "n": "Mirror Talk", "d": "Advantage on saves against charm and against magic that would read your thoughts or force truth." }],
+        "15": [{ "n": "Silver Tongue (3 uses)", "d": "Silver Tongue recharges to 3 uses per short rest." }],
+        "17": [{ "n": "Everybody's Friend", "d": "1/long rest, a creature that can hear you treats you as a trusted friend for 10 minutes (WIS save negates)." }],
+        "18": [{ "n": "Vanish", "d": "Hide as a bonus action even in plain sight, 3/long rest." }],
+        "20": [{ "n": "The Perfect Con", "d": "1/long rest, declare a con you have been running this session; the DM retroactively honors the setup within reason." }]
+      },
+      "subclass": {
+        "name": "The Long Con",
+        "levels": {
+          "3": [
+            { "n": "Seed the Story", "d": "Plant a rumor in a settlement; within a day, most locals have heard and half believe it." },
+            { "n": "Patient Hands", "d": "Advantage on Sleight of Hand; observers have disadvantage to catch you." }
+          ],
+          "7": [{ "n": "Sunk Cost", "d": "A creature that has believed one of your lies has disadvantage on Insight against you thereafter." }],
+          "11": [{ "n": "The Shill Network", "d": "Hire and coordinate accomplices in any city; one favor per job is free." }],
+          "15": [{ "n": "House of Cards", "d": "1/long rest, reveal a con at the perfect moment: every enemy who believed it is stunned until their next turn (WIS save negates)." }]
+        }
+      }
+    },
+    "enforcer": {
+      "subclassLevel": 3,
+      "levels": {
+        "1": [
+          { "n": "Intimidating Presence", "d": "Double proficiency bonus on Intimidation; creatures of your level or lower avoid provoking you." },
+          { "n": "Bodyguard", "d": "Reaction when an adjacent ally is hit: take the hit instead." }
+        ],
+        "2": [{ "n": "Heavy Hands", "d": "Your unarmed strikes deal 1d6 + STR bludgeoning; you can grapple as a bonus action." }],
+        "3": [{ "n": "The Outfit", "d": "Chooses an enforcer background (subclass)." }],
+        "5": [{ "n": "Extra Attack", "d": "Attack twice when taking the Attack action." }],
+        "6": [{ "n": "Meat Shield", "d": "Bodyguard works for allies within 10 ft; you move up to 10 ft to intercept." }],
+        "7": [{ "n": "Hard to Kill", "d": "1/long rest, when you drop to 0 HP, drop to 1 instead." }],
+        "9": [{ "n": "Menace", "d": "1/rest, force every hostile creature within 30 ft to save (WIS) or be frightened of you for 1 minute." }],
+        "10": [{ "n": "Iron Jaw", "d": "Resistance to bludgeoning damage from nonmagical attacks." }],
+        "11": [{ "n": "Extra Attack (2)", "d": "Attack three times when taking the Attack action." }],
+        "13": [{ "n": "Immovable", "d": "Advantage against being moved, knocked prone, or grappled; your grapples escape at disadvantage." }],
+        "14": [{ "n": "Message Sent", "d": "After you drop a creature, its allies save (WIS) or are frightened of you until your next turn." }],
+        "15": [{ "n": "Guardian's Instinct", "d": "Allies within 10 ft gain +1 AC while you are conscious." }],
+        "17": [{ "n": "Unbreakable", "d": "Hard to Kill recharges on a short rest." }],
+        "18": [{ "n": "Wall of Muscle", "d": "Enemies treat all squares within 10 ft of you as difficult terrain." }],
+        "20": [{ "n": "Last Man Standing", "d": "While below half HP, resistance to all damage and your attacks deal +10 damage." }]
+      },
+      "subclass": {
+        "name": "Union Muscle",
+        "levels": {
+          "3": [
+            { "n": "Rally the Line", "d": "1/rest, allies within 30 ft gain temp HP equal to your level + CON mod." },
+            { "n": "Working Class Hero", "d": "Advantage on Persuasion with laborers, dockhands, and the working poor; they will hide or help you." }
+          ],
+          "7": [{ "n": "Picket Stance", "d": "Enemies leaving your reach provoke opportunity attacks even if they Disengage." }],
+          "11": [{ "n": "Solidarity", "d": "When you use Bodyguard, the attacker takes your STR mod + proficiency in damage." }],
+          "15": [{ "n": "General Strike", "d": "1/long rest, you and all allies within 30 ft each gain a reaction attack when any one of you is hit, for 1 minute." }]
+        }
+      }
+    },
+    "muckraker": {
+      "subclassLevel": 3,
+      "levels": {
+        "1": [
+          { "n": "Press Credentials", "d": "Plausible papers and patter get you into crime scenes, offices, and functions ordinary citizens cannot enter (DM adjudicates)." },
+          { "n": "Headline Instinct", "d": "1/rest, ask the DM who in the current scene knows something about your story; you get a true pointer." }
+        ],
+        "2": [{ "n": "Shorthand", "d": "You record conversations verbatim while appearing to doodle; double proficiency bonus on Investigation." }],
+        "3": [{ "n": "The Beat", "d": "Chooses a journalistic beat (subclass)." }],
+        "5": [{ "n": "Doorstep Ambush", "d": "A creature you surprise with a question answers before thinking: one truthful sentence (WIS save negates)." }],
+        "6": [{ "n": "Morgue File", "d": "Archives and old contacts yield the paper trail on any person or company within a day." }],
+        "7": [{ "n": "Duck the Consequences", "d": "Reaction: impose disadvantage on one attack against you, CHA-mod uses per long rest." }],
+        "9": [{ "n": "Byline Armor", "d": "Public figures hesitate: creatures who know you are press have disadvantage on Intimidation against you and think twice before violence." }],
+        "10": [{ "n": "Follow the Money", "d": "Given a name or ledger, the DM tells you where the money actually went." }],
+        "11": [{ "n": "Front Page Pressure", "d": "1/long rest, publish or threaten to: a named organization must respond publicly within a day, opening a door for the party." }],
+        "13": [{ "n": "Source Protection", "d": "Magic and interrogation cannot pull your sources or notes from you unless you allow it." }],
+        "14": [{ "n": "Two Steps Ahead", "d": "Advantage on initiative; you cannot be surprised by creatures you have investigated." }],
+        "15": [{ "n": "The Rolodex", "d": "Headline Instinct has 3 uses per rest and works on any topic, not just the current story." }],
+        "17": [{ "n": "Scandal Sense", "d": "On meeting a creature, learn whether it hides something that would ruin it (yes or no)." }],
+        "18": [{ "n": "Voice of the People", "d": "1/long rest, a crowd within earshot acts on your words: blocks a street, boos a villain, shelters a fugitive." }],
+        "20": [{ "n": "The Story of the Century", "d": "1/long rest, publish the truth: a named creature's public standing collapses, and its allies must save (WIS) or abandon it." }]
+      },
+      "subclass": {
+        "name": "The Byline Network",
+        "levels": {
+          "3": [
+            { "n": "Stringers Everywhere", "d": "In any settlement, tip-collectors report to you: learn the week's notable arrivals, deaths, and deals." },
+            { "n": "Print Deadline", "d": "Advantage on checks made under time pressure." }
+          ],
+          "7": [{ "n": "Wire Service", "d": "Send and receive coded messages between cities in hours, not days." }],
+          "11": [{ "n": "Syndicated", "d": "Your Front Page Pressure reaches every city on the wire; 2 uses per long rest." }],
+          "15": [{ "n": "The Editor's Desk", "d": "1/long rest, call in the full network: three true answers about any ongoing scheme, no matter how hidden." }]
+        }
+      }
+    },
+    "spirit_medium": {
+      "subclassLevel": 1,
+      "levels": {
+        "1": [
+          { "n": "Speak with the Departed", "d": "1/rest, commune with a spirit tied to a place, object, or body; it answers three brief questions truthfully as it understood things." },
+          { "n": "Spirit Ward", "d": "Bonus action: a shielding spirit grants you or an ally +2 AC until your next turn, WIS-mod uses per long rest." }
+        ],
+        "2": [{ "n": "Open Channel", "d": "Casts cleric-list spells as seance workings using WIS; the spirits are the conduit." }],
+        "3": [{ "n": "Grave Whispers", "d": "You sense any death that occurred in a room you enter, and roughly when and how violent." }],
+        "5": [{ "n": "Borrowed Voice", "d": "1/long rest, let a spirit speak through you: it converses with the party for 10 minutes." }],
+        "6": [{ "n": "Cold Spots", "d": "You automatically detect spirits, possession, and haunted objects within 30 ft." }],
+        "7": [{ "n": "Between Worlds", "d": "Resistance to necrotic damage; spirits cannot possess you unless you allow it." }],
+        "9": [{ "n": "Séance Circle", "d": "Your Speak with the Departed can include the whole party as witnesses, and the spirit can manifest visibly." }],
+        "10": [{ "n": "Unquiet Testimony", "d": "1/long rest, compel a spirit witness to relive its last hour aloud; the DM narrates what it saw." }],
+        "11": [{ "n": "Guardian Shade", "d": "A bound protective spirit follows you: 1/rest, it negates one attack that would hit you." }],
+        "13": [{ "n": "Ferrywoman's Due", "d": "1/long rest, lay a spirit to rest or release a possession without a contest; hostile entities get a CHA save." }],
+        "14": [{ "n": "The Veil Thins", "d": "See into the Ethereal Plane within 60 ft at will." }],
+        "15": [{ "n": "Chorus of the Dead", "d": "Spirit Ward can protect two creatures at once and also grants advantage on their next save." }],
+        "17": [{ "n": "Deathless Counsel", "d": "Speak with the Departed works on spirits of any age and has 3 uses per rest." }],
+        "18": [{ "n": "Anchor of the Living", "d": "1/long rest, when a creature within 30 ft dies, hold its spirit: it can be revived within 24 hours as if freshly dead." }],
+        "20": [{ "n": "Queen of the Quiet Court", "d": "1/long rest, call a procession of spirits: for 1 minute they obscure, terrify (WIS save), and strike (2d8 necrotic) as you direct." }]
+      },
+      "subclass": {
+        "name": "Circle of the Veil",
+        "levels": {
+          "1": [{ "n": "Second Sight", "d": "1/rest, glimpse a place, person, or event connected to a held object: one true image." }],
+          "6": [{ "n": "Ectoplasmic Shield", "d": "Reaction when hit: gain resistance to that instance of damage, WIS-mod uses per long rest." }],
+          "10": [{ "n": "Trance of the Crossing", "d": "1/long rest, project your spirit up to 1 mile for 10 minutes; your body is helpless but warded." }],
+          "14": [{ "n": "Mistress of the Threshold", "d": "Creatures you can see cannot become undead, and undead within 30 ft have disadvantage on saves against your workings." }]
+        }
+      }
+    }
+  }
+}

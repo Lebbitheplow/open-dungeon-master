@@ -16,6 +16,46 @@ import { refreshStoryArc } from "@/lib/dm/arc";
 import { arcTextTimeoutMs } from "@/lib/model-client";
 import { requestDmMessage } from "@/lib/dm/model";
 import { setDmStatus } from "@/lib/dm/status";
+import { listSheets } from "@/lib/db/sheets";
+import { milestoneXp } from "@/lib/srd/encounter-math";
+import { XP_THRESHOLDS } from "@/lib/srd";
+import { applyDmMutation } from "@/lib/dm/mutations";
+
+// Chapter-close milestone XP: each surviving character gains a slice of the
+// XP gap toward their next level.
+function awardChapterMilestoneXp(campaignId: string, chapterIndex: number) {
+  const campaign = getCampaignById(campaignId);
+  if (!campaign) {
+    return;
+  }
+  const sheets = listSheets(campaignId).filter((sheet) => !sheet.deathSaves?.dead);
+  if (!sheets.length) {
+    return;
+  }
+  const sheetsById = new Map(sheets.map((sheet) => [sheet.id, sheet]));
+  // Per-character amounts differ by level, so award one call per level tier.
+  const byAmount = new Map<number, string[]>();
+  for (const sheet of sheets) {
+    const amount = milestoneXp(sheet.level, XP_THRESHOLDS);
+    if (amount > 0) {
+      byAmount.set(amount, [...(byAmount.get(amount) ?? []), sheet.id]);
+    }
+  }
+  for (const [amount, characterIds] of byAmount) {
+    applyDmMutation(
+      campaign,
+      "",
+      "award_xp",
+      JSON.stringify({
+        characterIds,
+        amount,
+        reason: `chapter ${chapterIndex} milestone`,
+      }),
+      sheets,
+      sheetsById,
+    );
+  }
+}
 
 // Chapter closing: at a natural scene break (the party moved somewhere new)
 // or a hard size cap, the open chapter is sealed with an AI-written title,
@@ -126,6 +166,11 @@ export async function maybeCloseChapter(
     content: `Chapter ${result.closed.index}${result.closed.title ? `, "${result.closed.title}",` : ""} comes to a close.`,
   });
   publishWithSeq(campaignId, seq, "message_added", { message: divider });
+
+  // Milestone XP: surviving a chapter advances everyone a little, so
+  // roleplay-heavy campaigns level without the model remembering award_xp.
+  // Idempotent because a chapter closes exactly once.
+  awardChapterMilestoneXp(campaignId, result.closed.index);
 
   // Chapter boundaries are the arc's heartbeat: mark beats the chapter
   // accomplished, settle or open sub-arcs. Never throws (arc.ts swallows).

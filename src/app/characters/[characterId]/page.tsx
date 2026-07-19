@@ -2,7 +2,7 @@
 
 import { BookOpen, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import { PIXEL_ICONS, PixelTile } from "@/lib/ui";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import { abilityMod, formatModifier } from "@/lib/srd";
@@ -16,9 +16,14 @@ type LibraryCharacter = {
   background: string;
   level: number;
   xp: number;
+  portraitStatus?: "queued" | "generating" | "failed" | null;
   sheet: CreateSheetInput;
   updatedAt: string;
 };
+
+// Matches the ComfyUI generation timeout; polling stops even if the server
+// never resolves the job.
+const PORTRAIT_POLL_LIMIT = 240;
 
 type CharacterEvent = {
   id: string;
@@ -50,6 +55,7 @@ export default function CharacterDetailPage({
   const [character, setCharacter] = useState<LibraryCharacter | null>(null);
   const [events, setEvents] = useState<CharacterEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const pollCount = useRef(0);
 
   useEffect(() => {
     fetch(`/api/characters/${characterId}`)
@@ -62,6 +68,26 @@ export default function CharacterDetailPage({
       })
       .finally(() => setLoading(false));
   }, [characterId]);
+
+  // While the portrait renders in the background, re-fetch until it lands.
+  const portraitPending =
+    character?.portraitStatus === "queued" || character?.portraitStatus === "generating";
+  useEffect(() => {
+    if (!portraitPending || pollCount.current >= PORTRAIT_POLL_LIMIT) {
+      return;
+    }
+    const id = setTimeout(() => {
+      pollCount.current += 1;
+      fetch(`/api/characters/${characterId}`)
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data) => {
+          if (data?.character) {
+            setCharacter(data.character);
+          }
+        });
+    }, 2500);
+    return () => clearTimeout(id);
+  }, [portraitPending, character, characterId]);
 
   if (loading) {
     return (
@@ -96,7 +122,23 @@ export default function CharacterDetailPage({
           &larr; Back to your characters
         </Link>
         <div className="mt-2 flex items-center gap-3">
-          <PixelTile src={PIXEL_ICONS.characters} />
+          {sheet.portrait?.url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={sheet.portrait.url}
+              alt={character.name}
+              className="size-14 shrink-0 rounded-lg border border-amber-500/30 object-cover"
+            />
+          ) : portraitPending ? (
+            <span
+              title="Painting portrait..."
+              className="flex size-14 shrink-0 items-center justify-center rounded-lg border border-amber-500/30 bg-stone-900"
+            >
+              <Loader2 className="size-5 animate-spin text-amber-200" />
+            </span>
+          ) : (
+            <PixelTile src={PIXEL_ICONS.characters} />
+          )}
           <div>
             <h1 className="font-display text-2xl tracking-wide text-amber-50">{character.name}</h1>
             <p className="text-sm text-stone-400">
@@ -104,6 +146,9 @@ export default function CharacterDetailPage({
               {character.subclass ? ` (${character.subclass})` : ""}
               {character.background ? ` · ${titleCase(character.background)}` : ""}
             </p>
+            {!sheet.portrait && character.portraitStatus === "failed" ? (
+              <p className="text-xs text-stone-500">Portrait couldn&apos;t be generated.</p>
+            ) : null}
           </div>
         </div>
       </header>

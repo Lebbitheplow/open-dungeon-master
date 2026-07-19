@@ -6,6 +6,7 @@ import { IconChip, PIXEL_ICONS, PixelTile } from "@/lib/ui";
 import CharacterBuilder, {
   type BuilderResult,
 } from "@/app/characters/builder/CharacterBuilder";
+import type { Genre } from "@/lib/schemas/game-settings";
 
 type LibraryCharacter = {
   id: string;
@@ -14,6 +15,7 @@ type LibraryCharacter = {
   class: string;
   subclass: string;
   level: number;
+  sheet?: { portrait?: { url: string } | null };
 };
 
 function titleCase(value: string) {
@@ -30,6 +32,7 @@ export default function CampaignCharacterPage({
 }) {
   const { campaignId } = use(params);
   const [level, setLevel] = useState<number | null>(null);
+  const [genre, setGenre] = useState<Genre | undefined>(undefined);
   const [library, setLibrary] = useState<LibraryCharacter[]>([]);
   const [mode, setMode] = useState<"choose" | "create">("choose");
   const [busy, setBusy] = useState(false);
@@ -48,6 +51,7 @@ export default function CampaignCharacterPage({
           return;
         }
         setLevel(campaignData?.campaign?.startingLevel ?? 1);
+        setGenre(campaignData?.campaign?.gameSettings?.genre ?? undefined);
         const characters = charactersData?.characters ?? [];
         setLibrary(characters);
         if (!characters.length) {
@@ -129,7 +133,16 @@ export default function CampaignCharacterPage({
                   className="w-full rounded-lg border border-stone-800 bg-stone-950/70 p-4 text-left transition hover:border-amber-800/60 hover:bg-stone-900/70 disabled:opacity-50"
                 >
                   <div className="flex items-center gap-2">
-                    <IconChip icon={UserRound} size="size-8" iconSize="size-4" />
+                    {character.sheet?.portrait?.url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={character.sheet.portrait.url}
+                        alt={character.name}
+                        className="size-8 shrink-0 rounded-lg border border-amber-500/30 object-cover"
+                      />
+                    ) : (
+                      <IconChip icon={UserRound} size="size-8" iconSize="size-4" />
+                    )}
                     <span className="font-medium text-stone-100">{character.name}</span>
                   </div>
                   <p className="mt-1 text-sm text-stone-400">
@@ -168,6 +181,7 @@ export default function CampaignCharacterPage({
           ) : null}
           <CharacterBuilder
             fixedLevel={level}
+            genre={genre}
             submitLabel="Join the party"
             onSubmit={submitNew}
             busy={busy}

@@ -2,9 +2,14 @@ import { z } from "zod";
 import { isErrorResponse, requireMember, type MemberContext } from "@/lib/campaign-api";
 import { JOIN_NOTE_PREFIX } from "@/lib/campaign-types";
 import { allocateSeq } from "@/lib/db/campaigns";
-import { createCharacter, instantiateIntoCampaign } from "@/lib/db/characters";
+import {
+  createCharacter,
+  instantiateIntoCampaign,
+  updateCharacterPortrait,
+} from "@/lib/db/characters";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { createSheet, getSheetForUser, patchSheet } from "@/lib/db/sheets";
+import { queueLibraryPortrait } from "@/lib/portrait";
 import { createSheetSchema, patchSheetSchema } from "@/lib/schemas/sheet";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
@@ -106,6 +111,9 @@ export async function POST(
     parsed.data,
     libraryCharacter.id,
   );
+  // The finished render lands on this campaign clone too (portrait.ts
+  // mirrors to sheets whose portrait is still empty).
+  queueLibraryPortrait(libraryCharacter);
   publishPersisted(campaignId, "sheet_updated", { sheet });
   announceMidGameJoin(context, sheet);
 
@@ -137,6 +145,12 @@ export async function PATCH(
   }
 
   const updated = patchSheet(sheet.id, parsed.data);
+  // Portraits are cosmetic, so unlike stats they mirror to the library
+  // immediately instead of waiting for a campaign-end sync; /characters
+  // shows the photo right after an in-game upload.
+  if (parsed.data.portrait !== undefined && sheet.libraryCharacterId) {
+    updateCharacterPortrait(context.user.id, sheet.libraryCharacterId, parsed.data.portrait);
+  }
   publishPersisted(campaignId, "sheet_updated", { sheet: updated });
 
   return Response.json({ sheet: updated });

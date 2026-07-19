@@ -1,0 +1,209 @@
+{
+  "_note": "Feature tables for the steampunk classes. n = feature name, d = one-line rules text the DM treats as authoritative.",
+  "classes": {
+    "machinist": {
+      "subclassLevel": 3,
+      "levels": {
+        "1": [
+          { "n": "Arcanomechanical Casting", "d": "Casts wizard-list spells as assembled schematics using INT; the toolbelt is the focus." },
+          { "n": "Field Repair", "d": "2/rest, 1 minute of work restores 1d8 + INT HP to a construct, machine, or armored ally." }
+        ],
+        "2": [{ "n": "Blueprint Memory", "d": "After studying a machine or mechanism for a minute, you can describe, operate, or sabotage it competently." }],
+        "3": [{ "n": "Guild Chapter", "d": "Chooses an engineering chapter (subclass)." }],
+        "5": [{ "n": "Overpressure Valve", "d": "1/rest, cast a 1st-level schematic without expending a slot." }],
+        "6": [{ "n": "Clockwork Familiar", "d": "A small brass automaton assists you: it carries, fetches, and grants advantage on one check per rest." }],
+        "7": [{ "n": "Reinforced Chassis", "d": "+1 AC while wearing armor you have tuned (any armor after a long rest)." }],
+        "9": [{ "n": "Steamvent Burst", "d": "1/rest, adjacent creatures save (DEX) or take 3d8 fire and are pushed 10 ft when you vent your armor." }],
+        "10": [{ "n": "Precision Engineering", "d": "Your schematics ignore half cover and treat three-quarters cover as half." }],
+        "11": [{ "n": "Field Repair (2d8)", "d": "Field Repair restores 2d8 + INT and has 4 uses per rest." }],
+        "13": [{ "n": "Aether Capacitor", "d": "1/long rest, regain expended slot levels equal to your INT modifier." }],
+        "14": [{ "n": "Master Schematic", "d": "Choose one 3rd-level schematic; cast it 1/long rest without a slot." }],
+        "15": [{ "n": "Redundant Systems", "d": "Advantage on CON saves to maintain concentration on schematics." }],
+        "17": [{ "n": "Difference Engine Mind", "d": "1/rest, take the calculated answer: treat one INT-based check as a natural 20." }],
+        "18": [{ "n": "Perpetual Motion", "d": "Overpressure Valve works for schematics up to 3rd level, twice per rest." }],
+        "20": [{ "n": "Magnum Opus", "d": "1/long rest, cast one schematic of 6th level or lower without a slot; constructs and machines cannot resist it." }]
+      },
+      "subclass": {
+        "name": "Clockwork Savant",
+        "levels": {
+          "3": [
+            { "n": "Improved Familiar Frame", "d": "Your familiar gains a sting (1d8 + INT piercing, 30 ft) and HP equal to 3 x your level." },
+            { "n": "Wind-Up Ally", "d": "Command your familiar as a bonus action." }
+          ],
+          "7": [{ "n": "Gear Swarm", "d": "1/rest, loose a box of whirring gears: a 15-ft cube becomes difficult terrain and deals 2d6 slashing to creatures entering it, for 1 minute." }],
+          "11": [{ "n": "Twin Automata", "d": "Build a second familiar; both act on your command." }],
+          "15": [{ "n": "The Great Work Walks", "d": "1/long rest, your familiars merge into a brass juggernaut for 10 minutes (double HP, 2d10 + INT slam, you may ride it)." }]
+        }
+      }
+    },
+    "aeronaut": {
+      "subclassLevel": 3,
+      "levels": {
+        "1": [
+          { "n": "Sky Legs", "d": "Advantage on checks to climb, balance, and keep footing; falling damage you take is halved." },
+          { "n": "Daring Maneuver", "d": "1/turn, add +1d6 damage to an attack made after moving at least 15 ft in a straight or swinging line." }
+        ],
+        "2": [{ "n": "Rigging Runner", "d": "Climbing costs no extra movement; Dash as a bonus action." }],
+        "3": [{ "n": "Commission", "d": "Chooses an aeronaut commission (subclass)." }],
+        "5": [{ "n": "Extra Attack", "d": "Attack twice when taking the Attack action." }],
+        "6": [{ "n": "Grapnel Line", "d": "A launcher and line: swing or pull yourself 30 ft as part of your movement, INT-mod uses per rest." }],
+        "7": [{ "n": "Evasion", "d": "DEX saves for half damage deal none on a success, half on a failure." }],
+        "9": [{ "n": "Duelist's Flourish", "d": "Reaction when missed in melee: riposte with one weapon attack." }],
+        "10": [{ "n": "Weather Eye", "d": "You read wind and weather a day ahead and are never surprised by conditions aloft." }],
+        "11": [{ "n": "Greater Daring", "d": "Daring Maneuver rises to +2d6 and also applies to ranged attacks made while airborne or elevated." }],
+        "13": [{ "n": "Boarding Action", "d": "1/rest, when combat starts, immediately move your speed and make one attack." }],
+        "14": [{ "n": "Cat's Grace", "d": "Immune to falling damage while conscious; opportunity attacks against you have disadvantage." }],
+        "15": [{ "n": "Grapnel Ace", "d": "Grapnel Line can also disarm or trip (contested by STR) at 30 ft." }],
+        "17": [{ "n": "Sky Duelist", "d": "Your critical hits with one-handed weapons knock the target prone or disarm it (your choice)." }],
+        "18": [{ "n": "Master of the High Wire", "d": "Your speed increases by 10 ft; difficult terrain never slows you." }],
+        "20": [{ "n": "Legend of the Skies", "d": "When you roll initiative, gain a full extra turn before the first round begins." }]
+      },
+      "subclass": {
+        "name": "Sky Corsair",
+        "levels": {
+          "3": [
+            { "n": "Pistol and Blade", "d": "When you attack with a melee weapon, make one firearm attack as a bonus action." },
+            { "n": "Corsair's Swagger", "d": "Advantage on Intimidation and Persuasion aboard ships and in ports." }
+          ],
+          "7": [{ "n": "Powder Discipline", "d": "Your firearm attacks ignore half cover; reloading never costs you an attack." }],
+          "11": [{ "n": "Broadside", "d": "1/rest, fire at up to three targets in a 15-ft cone with a single attack roll each." }],
+          "15": [{ "n": "Terror of the Trade Winds", "d": "1/long rest, for 1 minute your Daring Maneuver applies to every attack and enemies who see you save (WIS) or are frightened." }]
+        }
+      }
+    },
+    "alchemist": {
+      "subclassLevel": 2,
+      "levels": {
+        "1": [
+          { "n": "Volatile Concoctions", "d": "Casts wizard-list spells as brewed formulae using INT; damaging formulae may be hurled as flasks." },
+          { "n": "Catalyst Stone", "d": "A prepared stone: 1/rest, add +1d4 to one formula's damage or healing." }
+        ],
+        "2": [{ "n": "School of Practice", "d": "Chooses an alchemical school (subclass)." }],
+        "3": [{ "n": "Reagent Pouch", "d": "You can identify any potion, poison, or chemical by smell and taste safely." }],
+        "5": [{ "n": "Emergency Draught", "d": "Brew 2 draughts per long rest: drinker regains 2d4 + INT HP as a bonus action." }],
+        "6": [{ "n": "Acid Resistant Apron", "d": "Resistance to acid and poison damage." }],
+        "7": [{ "n": "Fumes and Vapors", "d": "1/rest, a stinking cloud fills a 10-ft radius for 1 minute: creatures inside save (CON) or retch, losing their action." }],
+        "9": [{ "n": "Improved Catalyst", "d": "Catalyst Stone adds +1d8 and has 3 uses per rest." }],
+        "10": [{ "n": "Transmuter's Touch", "d": "10 minutes converts up to 1 cubic foot of one common material to another (wood to iron, water to acid)." }],
+        "11": [{ "n": "Sublimation", "d": "1/long rest, cast a formula of 3rd level or lower without expending a slot." }],
+        "13": [{ "n": "Philosopher's Draught", "d": "Emergency Draughts also cure one poison or disease and grant 1 hour of poison immunity." }],
+        "14": [{ "n": "Volatile Chain", "d": "Your damaging formulae may splash: one creature adjacent to the target takes your INT mod in the same damage type." }],
+        "15": [{ "n": "Stone of the Magnum Opus", "d": "Catalyst Stone can instead reroll all of a formula's dice, keeping the better total." }],
+        "17": [{ "n": "Elixir of Mastery", "d": "1/long rest, brew a greater elixir: drinker gains advantage on everything for 1 minute." }],
+        "18": [{ "n": "Alkahest", "d": "Your acid formulae ignore resistance and melt nonmagical barriers of 1 ft thickness or less." }],
+        "20": [{ "n": "The Great Work", "d": "1/long rest, cast one formula of 7th level or lower without a slot; its dice are maximized." }]
+      },
+      "subclass": {
+        "name": "The Vitriolic School",
+        "levels": {
+          "2": [
+            { "n": "Corrosive Focus", "d": "1/turn, a damaging formula deals +1d6 acid; you may change any formula's damage type to acid." },
+            { "n": "Etching Acid", "d": "Your acid damage reduces a hit target's AC by 1 until your next turn (not cumulative)." }
+          ],
+          "6": [{ "n": "Vitriol Ampoule", "d": "Reaction when hit in melee: the attacker takes 2d6 acid as an ampoule bursts, INT-mod uses per long rest." }],
+          "10": [{ "n": "Dissolving Mist", "d": "1/long rest, a 20-ft radius acid fog for 1 minute: 3d6 acid at the start of each creature's turn inside (CON save halves)." }],
+          "14": [{ "n": "Universal Solvent", "d": "Your acid formulae treat immunity as resistance; Etching Acid stacks to -3 AC." }]
+        }
+      }
+    },
+    "gadgeteer": {
+      "subclassLevel": 3,
+      "levels": {
+        "1": [
+          { "n": "Utility Gadgets", "d": "Pick two gadgets (grapnel, smoke bomb, arc lamp, ear trumpet, skeleton key, pocket shield); each usable INT-mod times per rest with sensible effects." },
+          { "n": "Overclock", "d": "1/rest, a gadget or machine you hold works at double effect for 1 minute." }
+        ],
+        "2": [{ "n": "Tinker's Speed", "d": "Draw, swap, or deploy gadgets as a bonus action." }],
+        "3": [{ "n": "Workshop", "d": "Chooses a workshop lineage (subclass)." }],
+        "5": [{ "n": "Extra Attack", "d": "Attack twice when taking the Attack action." }],
+        "6": [{ "n": "Third Gadget", "d": "Learn a third gadget; gadget saves against your effects use 8 + proficiency + INT." }],
+        "7": [{ "n": "Spring Heels", "d": "Your jump distance triples; ignore the first 20 ft of any fall." }],
+        "9": [{ "n": "Smoke Discipline", "d": "Your smoke bombs fill a 15-ft radius and you see through your own smoke." }],
+        "10": [{ "n": "Fourth Gadget", "d": "Learn a fourth gadget; Overclock has 2 uses per rest." }],
+        "11": [{ "n": "Sabotage", "d": "1/rest, a touched machine, trap, or construct malfunctions at the worst moment for its owner (DM adjudicates)." }],
+        "13": [{ "n": "Backup Rig", "d": "When an effect would destroy or disable a held gadget, it survives; 1/long rest, ignore being disarmed." }],
+        "14": [{ "n": "Fifth Gadget", "d": "Learn a fifth gadget." }],
+        "15": [{ "n": "Chain Deployment", "d": "Use two different gadgets with the same bonus action." }],
+        "17": [{ "n": "Signature Invention", "d": "Design one custom gadget with the DM; it is yours alone and recharges per short rest." }],
+        "18": [{ "n": "Perpetual Toolkit", "d": "All gadget uses recharge on a short rest." }],
+        "20": [{ "n": "One Gadget for Everything", "d": "1/long rest, declare you prepared exactly the right device for this situation; the DM makes it work once." }]
+      },
+      "subclass": {
+        "name": "Tinker Prodigy",
+        "levels": {
+          "3": [
+            { "n": "Prodigy's Precision", "d": "Add +1d4 to attack rolls made with gadget-augmented weapons (tech blades and firearms you have tuned)." },
+            { "n": "Quick Study", "d": "Advantage on checks to understand or copy unfamiliar technology." }
+          ],
+          "7": [{ "n": "Arc Coil", "d": "1/rest, your tuned weapon deals +2d8 lightning on one hit; the target cannot take reactions until its next turn." }],
+          "11": [{ "n": "Auto-Loader Harness", "d": "Once per turn, make one extra firearm attack as part of the Attack action." }],
+          "15": [{ "n": "Masterwork Arsenal", "d": "Your tuned weapons count as +2 magical weapons and their critical range improves to 19-20." }]
+        }
+      }
+    },
+    "aether_channeler": {
+      "subclassLevel": 1,
+      "levels": {
+        "1": [
+          { "n": "Conduit Body", "d": "Casts sorcerer-list spells as aetheric arts using CHA; sparks visibly arc across you when you cast." },
+          { "n": "Galvanic Discharge", "d": "1/rest, a creature that touches or melee-hits you takes 1d8 lightning." }
+        ],
+        "2": [{ "n": "Static Sense", "d": "Detect active machines, aether lines, and charged creatures within 30 ft." }],
+        "3": [{ "n": "Grounded Stance", "d": "Resistance to lightning damage." }],
+        "5": [{ "n": "Surge Casting", "d": "2/rest, cast a cantrip as a bonus action after casting a leveled art." }],
+        "7": [{ "n": "Power the Works", "d": "Your touch runs any machine without fuel for 1 hour, CHA-mod uses per long rest." }],
+        "9": [{ "n": "Capacitor Soul", "d": "1/long rest, absorb a lightning or aether effect targeting you: negate it and regain a 1st-level slot." }],
+        "11": [{ "n": "Storm Step", "d": "1/rest, turn to crackling energy and move 30 ft through creatures and objects as a bonus action." }],
+        "13": [{ "n": "Overcharge", "d": "1/long rest, a damaging art rolls maximum dice; you take 1d10 lightning backlash." }],
+        "15": [{ "n": "Aetheric Battery", "d": "1/long rest, regain expended slot levels equal to your CHA modifier." }],
+        "17": [{ "n": "Lightning Rod", "d": "Immunity to lightning damage; Galvanic Discharge is always active." }],
+        "18": [{ "n": "The Grid Bows", "d": "Machines and constructs have disadvantage on saves against your arts." }],
+        "20": [{ "n": "Living Dynamo", "d": "1/long rest, for 1 minute your arts of 3rd level or lower cost no slots." }]
+      },
+      "subclass": {
+        "name": "Storm Dynamo",
+        "levels": {
+          "1": [{ "n": "Dynamo Spark", "d": "1/turn, add your CHA modifier as lightning damage to a damaging art." }],
+          "6": [{ "n": "Chain Arc", "d": "1/rest, a single-target lightning art jumps to a second target within 15 ft for half damage." }],
+          "10": [{ "n": "Tempest Shell", "d": "1/long rest, a whirling storm shield for 1 minute: +2 AC and melee attackers take 2d8 lightning." }],
+          "14": [{ "n": "Heart of the Storm", "d": "Your lightning arts ignore resistance and treat immunity as resistance." }]
+        }
+      }
+    },
+    "steam_knight": {
+      "subclassLevel": 3,
+      "levels": {
+        "1": [
+          { "n": "Boiler Plate", "d": "Your tuned armor grants +1 AC and immunity to being pushed while conscious." },
+          { "n": "Piston Strike", "d": "1/turn, +1d6 bludgeoning on a melee hit as the pistons slam." }
+        ],
+        "2": [{ "n": "Head of Steam", "d": "Bonus action: build pressure. Your next Piston Strike this turn deals +2d6 instead." }],
+        "3": [{ "n": "Order of the Boiler", "d": "Chooses a knightly order (subclass)." }],
+        "5": [{ "n": "Extra Attack", "d": "Attack twice when taking the Attack action." }],
+        "6": [{ "n": "Steam Vent", "d": "1/rest, adjacent creatures save (CON) or are blinded by scalding mist until your next turn." }],
+        "7": [{ "n": "Locomotive Charge", "d": "When you move 15+ ft straight toward a creature and hit it, it saves (STR) or is knocked prone." }],
+        "9": [{ "n": "Pressure Seal", "d": "Advantage on saves against poison gas and drowning; the armor is airtight for 10 minutes." }],
+        "10": [{ "n": "Reinforced Boiler", "d": "Boiler Plate grants +2 AC; resistance to fire damage." }],
+        "11": [{ "n": "Extra Attack (2)", "d": "Attack three times when taking the Attack action." }],
+        "13": [{ "n": "Emergency Release", "d": "1/rest, when reduced below half HP, vent: attackers within 10 ft take 3d8 fire (DEX save halves)." }],
+        "14": [{ "n": "Juggernaut Frame", "d": "Your speed cannot be reduced; difficult terrain never slows you while armored." }],
+        "15": [{ "n": "Piston Barrage", "d": "Piston Strike applies to every melee hit, not once per turn." }],
+        "17": [{ "n": "Adamant Boiler", "d": "Critical hits against you become normal hits." }],
+        "18": [{ "n": "Full Throttle", "d": "1/long rest, double your speed and gain an extra action each turn for 1 minute; take 3d10 fire when it ends." }],
+        "20": [{ "n": "The Engine Eternal", "d": "While conscious, regain 5 HP at the start of your turn if below half HP; Head of Steam is free once per turn." }]
+      },
+      "subclass": {
+        "name": "Boilerplate Vanguard",
+        "levels": {
+          "3": [
+            { "n": "Hold the Line", "d": "Enemies within your reach treat the area as difficult terrain." },
+            { "n": "Shield Coupling", "d": "Adjacent allies gain +1 AC while you hold a shield." }
+          ],
+          "7": [{ "n": "Intercept Protocol", "d": "Reaction: swap places with an adjacent ally targeted by an attack; you become the target." }],
+          "11": [{ "n": "Bulwark Advance", "d": "Allies behind you have three-quarters cover against ranged attacks." }],
+          "15": [{ "n": "Unbreakable Vanguard", "d": "1/long rest, for 1 minute you and adjacent allies have resistance to all damage." }]
+        }
+      }
+    }
+  }
+}

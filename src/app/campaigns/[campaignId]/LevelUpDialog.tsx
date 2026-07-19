@@ -4,9 +4,10 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { Dices, Loader2, Search, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
-import { abilityMod, findClass, spellSlotsFor } from "@/lib/srd";
+import { abilityMod, findClass, findSkill, spellSlotsFor } from "@/lib/srd";
 import { applyAsiChoices, crossedAsiLevels } from "@/lib/srd/asi";
-import { populateFeatures, srdSubclassName, subclassLevelFor } from "@/lib/srd/features";
+import { expertiseSlotsFor, populateFeatures, srdSubclassName, subclassLevelFor } from "@/lib/srd/features";
+import { spellClassFor } from "@/lib/classes";
 import { suggestedSpellCount } from "@/lib/content/mechanics";
 import AsiFeatEditor from "@/app/characters/builder/AsiFeatEditor";
 import { useArchetypes } from "@/app/characters/builder/useBuilderOptions";
@@ -34,6 +35,7 @@ export function LevelUpDialog({
   const [hpGain, setHpGain] = useState<number | null>(null);
   const [asiChoices, setAsiChoices] = useState<Array<AsiChoice | null>>([]);
   const [subclassChoice, setSubclassChoice] = useState("");
+  const [expertisePicks, setExpertisePicks] = useState<string[]>([]);
   const [spellPicks, setSpellPicks] = useState<string[]>([]);
   const [spellQuery, setSpellQuery] = useState("");
   const [spellOptions, setSpellOptions] = useState<SpellRow[]>([]);
@@ -57,6 +59,16 @@ export function LevelUpDialog({
   );
   const asiResolved = asiLevels.every((_, index) => asiChoices[index]);
 
+  // Expertise: rogue 1/6 and bard 3/10 double proficiency in two skills
+  // each; the step appears when the new level grants unspent picks.
+  const currentExpertise = sheet.proficiencies.expertise ?? [];
+  const expertiseSlots = expertiseSlotsFor(sheet.class, targetLevel);
+  const expertiseToPick = Math.max(0, expertiseSlots - currentExpertise.length);
+  const expertiseOptions = sheet.proficiencies.skills.filter(
+    (skill) => !currentExpertise.includes(skill),
+  );
+  const needsExpertise = expertiseToPick > 0 && expertiseOptions.length > 0;
+
   const subclassLevel = subclassLevelFor(sheet.class);
   const needsSubclass =
     subclassLevel !== null &&
@@ -79,10 +91,11 @@ export function LevelUpDialog({
     () => [
       "hp",
       ...(asiLevels.length ? ["asi"] : []),
+      ...(needsExpertise ? ["expertise"] : []),
       ...(needsSubclass ? ["subclass"] : []),
       ...(sheet.spellcasting ? ["spells"] : []),
     ],
-    [asiLevels.length, needsSubclass, sheet.spellcasting],
+    [asiLevels.length, needsExpertise, needsSubclass, sheet.spellcasting],
   );
   const step = steps[stepIndex];
   const lastStep = stepIndex === steps.length - 1;
@@ -108,7 +121,8 @@ export function LevelUpDialog({
     }
     let cancelled = false;
     const params = new URLSearchParams({ q: spellQuery, limit: "60" });
-    params.set("class", sheet.class);
+    // Catalog casters borrow an SRD class's spell list.
+    params.set("class", spellClassFor(sheet.class));
     if (maxCastable !== null) {
       params.set("level", String(maxCastable));
     }
@@ -146,7 +160,7 @@ export function LevelUpDialog({
   );
   const allowance = sheet.spellcasting
     ? suggestedSpellCount(
-        sheet.class,
+        spellClassFor(sheet.class),
         targetLevel,
         abilityMod(sheet.abilities[sheet.spellcasting.ability]),
       )
@@ -233,6 +247,9 @@ export function LevelUpDialog({
           ...(newFeats.length
             ? { feats: [...new Set([...sheet.feats, ...newFeats])] }
             : {}),
+          ...(expertisePicks.length
+            ? { expertise: [...currentExpertise, ...expertisePicks] }
+            : {}),
           ...(needsSubclass && subclassChoice ? { subclass: subclassChoice } : {}),
           ...(spellcastingPatch ? { spellcasting: spellcastingPatch } : {}),
         }),
@@ -253,9 +270,11 @@ export function LevelUpDialog({
   const stepReady =
     step === "asi"
       ? asiResolved
-      : step === "subclass"
-        ? Boolean(subclassChoice) || subclassOptions.length === 0
-        : true;
+      : step === "expertise"
+        ? expertisePicks.length === Math.min(expertiseToPick, expertiseOptions.length)
+        : step === "subclass"
+          ? Boolean(subclassChoice) || subclassOptions.length === 0
+          : true;
 
   function nextOrApply() {
     if (lastStep) {
@@ -352,6 +371,43 @@ export function LevelUpDialog({
                     choices={asiLevels.map((_, index) => asiChoices[index] ?? null)}
                     onChange={setAsiChoices}
                   />
+                </>
+              ) : null}
+
+              {step === "expertise" ? (
+                <>
+                  <p className="text-stone-300">
+                    Expertise: pick {Math.min(expertiseToPick, expertiseOptions.length)} of{" "}
+                    {sheet.name}&apos;s proficient skills to DOUBLE their proficiency bonus in:
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {expertiseOptions.map((skillId) => {
+                      const picked = expertisePicks.includes(skillId);
+                      return (
+                        <button
+                          key={skillId}
+                          type="button"
+                          onClick={() =>
+                            setExpertisePicks((current) =>
+                              picked
+                                ? current.filter((entry) => entry !== skillId)
+                                : current.length < expertiseToPick
+                                  ? [...current, skillId]
+                                  : current,
+                            )
+                          }
+                          className={cn(
+                            "rounded-full border px-3 py-1 text-sm",
+                            picked
+                              ? "border-amber-600 bg-stone-900 text-amber-100"
+                              : "border-stone-700 hover:border-amber-800 hover:bg-stone-900",
+                          )}
+                        >
+                          {findSkill(skillId)?.name ?? skillId}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </>
               ) : null}
 

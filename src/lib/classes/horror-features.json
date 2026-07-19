@@ -1,0 +1,209 @@
+{
+  "_note": "Feature tables for the horror classes. n = feature name, d = one-line rules text the DM treats as authoritative.",
+  "classes": {
+    "exorcist": {
+      "subclassLevel": 3,
+      "levels": {
+        "1": [
+          { "n": "Rite of Repulsion", "d": "Action: fiends, undead, and spirits within 30 ft save (WIS) or must move away from you for 1 minute. WIS-mod uses per long rest." },
+          { "n": "Consecrated Tools", "d": "Your weapon attacks count as magical against fiends, undead, and spirits." }
+        ],
+        "2": [{ "n": "Liturgy", "d": "Casts cleric-list spells as rites using WIS; a holy symbol or ritual kit is the focus." }],
+        "3": [{ "n": "Order", "d": "Chooses an exorcist order (subclass)." }],
+        "5": [{ "n": "Sanctified Ground", "d": "10 minutes of ritual wards a 30-ft area for 8 hours; hostile spirits entering it are visible and take 1d8 radiant on entry." }],
+        "6": [{ "n": "Read the Possession", "d": "Recognize possession, hauntings, and curses on sight, and learn the entity's name category and goal." }],
+        "7": [{ "n": "Litany of Defense", "d": "You and allies within 10 ft have advantage on saves against fear and possession." }],
+        "9": [{ "n": "Binding Words", "d": "1/long rest, a spirit or fiend that fails against your Rite of Repulsion is also restrained for 1 minute." }],
+        "10": [{ "n": "Voice of Authority", "d": "Your Rite of Repulsion affects creatures immune to being frightened." }],
+        "11": [{ "n": "Greater Rite", "d": "Rite of Repulsion damage: affected creatures take 2d8 radiant when it takes hold." }],
+        "13": [{ "n": "Anathema", "d": "1/turn, +2d8 radiant damage on a weapon hit against fiends, undead, or spirits." }],
+        "14": [{ "n": "Unshakeable Faith", "d": "Immune to being frightened; advantage against charm." }],
+        "15": [{ "n": "Rite of Severance", "d": "1/long rest, a 1-minute ritual expels a possessing entity from a host (contested WIS, you have advantage)." }],
+        "17": [{ "n": "Sacred Bulwark", "d": "Resistance to necrotic and psychic damage." }],
+        "18": [{ "n": "Final Benediction", "d": "1/long rest, when an ally within 30 ft drops to 0 HP, they instead drop to WIS-mod x 5 HP." }],
+        "20": [{ "n": "The Unhosted Word", "d": "1/long rest, banish a fiend, undead, or spirit of CR 15 or lower to its home plane (CHA save negates)." }]
+      },
+      "subclass": {
+        "name": "Order of the Candle",
+        "levels": {
+          "3": [
+            { "n": "Candlelight Vigil", "d": "Bonus action: a warding light for 1 minute; allies in 10 ft add +1d4 to saves against the supernatural." },
+            { "n": "Wax and Wick", "d": "Your Sanctified Ground ritual takes 1 minute instead of 10." }
+          ],
+          "7": [{ "n": "Light Against the Dark", "d": "Your light reveals invisible and ethereal creatures within 10 ft." }],
+          "11": [{ "n": "Unguttering Flame", "d": "While your Vigil burns, you and allies in it cannot be possessed and resist necrotic damage." }],
+          "15": [{ "n": "The Last Candle", "d": "1/long rest, when you would drop to 0 HP, drop to 1 instead and your Vigil reignites at double radius." }]
+        }
+      }
+    },
+    "occultist": {
+      "subclassLevel": 3,
+      "levels": {
+        "1": [
+          { "n": "Forbidden Lore", "d": "Double proficiency bonus on Arcana and Religion checks." },
+          { "n": "Warding Sigil", "d": "1 minute of chalk-work wards a doorway or 5-ft line for 8 hours; the first hostile creature crossing takes 2d6 psychic (INT save halves)." }
+        ],
+        "2": [{ "n": "Pact of the Page", "d": "Casts warlock-list spells as invocations using INT; the grimoire is the focus." }],
+        "3": [{ "n": "The Patronless Path", "d": "Chooses an occult discipline (subclass)." }],
+        "5": [{ "n": "Whispered Names", "d": "Knowing a creature's true or use-name gives you advantage on your first spell attack or its first save against you each combat." }],
+        "6": [{ "n": "Borrowed Eyes", "d": "1/rest, see through the eyes of a creature you can see for 1 minute (WIS save negates)." }],
+        "7": [{ "n": "Ink-Stained Mind", "d": "Advantage on saves against madness, charm, and fear from aberrations and fiends." }],
+        "9": [{ "n": "Rite of the Threshold", "d": "Your Warding Sigil can cover a 15-ft radius and also blocks ethereal passage." }],
+        "10": [{ "n": "Marginalia", "d": "Learn two rituals from any spell list; cast them as rituals only." }],
+        "11": [{ "n": "The Debt Comes Due", "d": "1/long rest, when you expend your last spell slot, immediately regain it." }],
+        "13": [{ "n": "Apocrypha", "d": "Learn one 6th-level warlock spell; cast it 1/long rest without a slot." }],
+        "14": [{ "n": "Unblinking Study", "d": "You cannot be surprised by aberrations, fiends, or undead." }],
+        "15": [{ "n": "Palimpsest Soul", "d": "Resistance to psychic damage; your thoughts cannot be read unless you allow it." }],
+        "17": [{ "n": "Seventh Seal", "d": "Learn one 7th-level warlock spell; cast it 1/long rest without a slot." }],
+        "18": [{ "n": "The Final Chapter", "d": "1/long rest, reroll any one die you or a creature within 60 ft just rolled; the reroll stands." }],
+        "20": [{ "n": "Author of the Unwritten", "d": "1/long rest, cast any warlock spell of 5th level or lower without a slot, twinned to two targets." }]
+      },
+      "subclass": {
+        "name": "Keeper of the Veil",
+        "levels": {
+          "3": [
+            { "n": "Veilsight", "d": "See invisible and ethereal creatures within 30 ft." },
+            { "n": "Quiet the Voices", "d": "1/rest, an ally within 30 ft ends one charm, fear, or madness effect on itself." }
+          ],
+          "7": [{ "n": "Stitch the Tear", "d": "1/long rest, close a portal, summoning, or breach of CR/level 5 or lower as an action." }],
+          "11": [{ "n": "Walk Between", "d": "1/long rest, step through the Veil: teleport 60 ft to a space you can see." }],
+          "15": [{ "n": "Warden of the Threshold", "d": "Creatures cannot teleport into or out of a 30-ft radius around you unless you allow it." }]
+        }
+      }
+    },
+    "survivor": {
+      "subclassLevel": 3,
+      "levels": {
+        "1": [
+          { "n": "Adrenaline Surge", "d": "Dash, Disengage, or Hide as a bonus action, CON-mod uses per short rest." },
+          { "n": "Won't Die Here", "d": "1/day, when you drop to 0 HP, drop to 1 instead." }
+        ],
+        "2": [{ "n": "Scrounger's Instinct", "d": "1/rest, find one mundane useful item nearby (a weapon, keys, bandages); the DM decides what plausibly exists." }],
+        "3": [{ "n": "How They Made It", "d": "Chooses a survival style (subclass)." }],
+        "5": [{ "n": "Extra Attack", "d": "Attack twice when taking the Attack action." }],
+        "6": [{ "n": "Read the Room", "d": "Advantage on initiative; on your first turn, learn the most immediate danger in the scene." }],
+        "7": [{ "n": "Pain Tolerance", "d": "1/short rest, halve the damage of one hit against you." }],
+        "9": [{ "n": "Nine Lives", "d": "Won't Die Here recharges on a long rest and also ends one condition on you." }],
+        "10": [{ "n": "Hypervigilant", "d": "You cannot be surprised while conscious." }],
+        "11": [{ "n": "Desperate Strength", "d": "While below half HP, +2 to attack rolls and STR/DEX checks." }],
+        "13": [{ "n": "Last One Out", "d": "Allies within 10 ft may use your Adrenaline Surge movement options as a reaction when you do, 1/rest each." }],
+        "14": [{ "n": "Seen Worse", "d": "Immune to being frightened while any ally can see you." }],
+        "15": [{ "n": "Deep Reserves", "d": "Regain all Adrenaline Surge uses when you roll initiative with none left." }],
+        "17": [{ "n": "Death's Old Acquaintance", "d": "Advantage on death saves; stabilizing you takes no check." }],
+        "18": [{ "n": "Terminal Focus", "d": "1/long rest, take two full turns in the first round of combat." }],
+        "20": [{ "n": "The One Who Lives", "d": "Won't Die Here works 2/day, and each use also restores CON-mod x 5 HP." }]
+      },
+      "subclass": {
+        "name": "The Last One Standing",
+        "levels": {
+          "3": [
+            { "n": "Alone in the Dark", "d": "While no ally is within 10 ft, +1 AC and advantage on Stealth." },
+            { "n": "Grim Arithmetic", "d": "Learn the exact HP of any creature you can see that is below half." }
+          ],
+          "7": [{ "n": "Bitter Endurance", "d": "1/long rest, gain temp HP equal to twice your level when combat starts." }],
+          "11": [{ "n": "No Witnesses Left", "d": "Your attacks deal +1d8 damage against creatures that have downed an ally this fight." }],
+          "15": [{ "n": "Sole Survivor", "d": "While you are the last conscious party member, resist all damage and your speed doubles." }]
+        }
+      }
+    },
+    "slayer": {
+      "subclassLevel": 3,
+      "levels": {
+        "1": [
+          { "n": "Monster Lore", "d": "After seeing a creature act, learn one of its damage vulnerabilities, resistances, or special defenses." },
+          { "n": "Silvered Strikes", "d": "Your weapon attacks count as silvered and magical for overcoming resistance." }
+        ],
+        "2": [{ "n": "Hunter's Kit", "d": "Craft stakes, salt lines, and wardings during a rest; a warding gives one ally +2 AC against one monster type for a night." }],
+        "3": [{ "n": "Lodge", "d": "Chooses a slayer lodge (subclass)." }],
+        "5": [{ "n": "Extra Attack", "d": "Attack twice when taking the Attack action." }],
+        "6": [{ "n": "Iron Stomach", "d": "Advantage against poison, disease, and curses." }],
+        "7": [{ "n": "Quarry", "d": "Bonus action: mark a creature; your attacks against it deal +1d6 damage until it dies." }],
+        "9": [{ "n": "Flinchless", "d": "Advantage on saves against fear; allies within 10 ft add +1d4 to fear saves." }],
+        "10": [{ "n": "Tracker of the Strange", "d": "You can track any creature that has killed within the last week, even across water or rooftops." }],
+        "11": [{ "n": "Improved Quarry", "d": "Quarry damage rises to +2d6; marking is free when a creature harms an ally." }],
+        "13": [{ "n": "Called Shot", "d": "1/short rest, declare a called shot: on hit, the target also loses one movement mode, attack, or sense until your next turn." }],
+        "14": [{ "n": "Veteran's Guard", "d": "+1 AC; opportunity attacks against you have disadvantage." }],
+        "15": [{ "n": "Deathblow", "d": "Your critical hits against your Quarry deal maximum damage." }],
+        "17": [{ "n": "One Against the Night", "d": "1/long rest, for 1 minute your attacks ignore resistance and immunity to nonmagical damage." }],
+        "18": [{ "n": "The Long Hunt", "d": "You need no sleep during a hunt; a short rest gives you the benefits of a long rest 1/week." }],
+        "20": [{ "n": "Extinction", "d": "1/turn against your Quarry, reroll a missed attack; Quarry marks two creatures at once." }]
+      },
+      "subclass": {
+        "name": "Lodge of the Silver Stake",
+        "levels": {
+          "3": [
+            { "n": "Stake and Salt", "d": "Your Hunter's Kit wardings cover the whole party; craft two per rest." },
+            { "n": "Vampiric Scholar", "d": "Advantage on checks to identify or recall lore about undead and shapechangers." }
+          ],
+          "7": [{ "n": "Piercing the Heart", "d": "Your critical hits against undead or shapechangers stun them until the end of your next turn (CON save negates)." }],
+          "11": [{ "n": "Blessed Silver", "d": "Your Silvered Strikes deal +1d8 radiant against undead, fiends, and shapechangers." }],
+          "15": [{ "n": "The Stake Remembers", "d": "1/long rest, an attack against a creature at half HP or lower becomes an automatic critical if it hits." }]
+        }
+      }
+    },
+    "parapsychologist": {
+      "subclassLevel": 3,
+      "levels": {
+        "1": [
+          { "n": "Field Instruments", "d": "Your kit detects the unnatural: as an action, learn whether the supernatural is present within 60 ft and its rough direction." },
+          { "n": "Rational Mind", "d": "Advantage on saves against charm and fear." }
+        ],
+        "2": [{ "n": "Applied Theory", "d": "Casts wizard-list spells as calibrated apparatus effects using INT; the kit is the focus." }],
+        "3": [{ "n": "Research Program", "d": "Chooses a research program (subclass)." }],
+        "5": [{ "n": "Baseline Readings", "d": "After 1 minute of measurement, grant the party advantage on the next save any of them makes against a haunting or psychic effect." }],
+        "6": [{ "n": "Peer Review", "d": "1/rest, when an ally fails an INT, WIS, or CHA save within 30 ft, let them reroll with your guidance." }],
+        "7": [{ "n": "Calibrated Sensors", "d": "Your Field Instruments now reveal the entity's type and whether it is hostile." }],
+        "9": [{ "n": "Controlled Exposure", "d": "Resistance to psychic damage." }],
+        "10": [{ "n": "Documented Phenomena", "d": "Advantage on checks to identify supernatural creatures and effects you have measured before." }],
+        "11": [{ "n": "Grounding Rig", "d": "1/long rest, a 10-minute setup makes a 20-ft radius immune to teleportation and phasing for 1 hour." }],
+        "13": [{ "n": "Predictive Model", "d": "1/rest, after a creature you have measured attacks, impose disadvantage on that attack." }],
+        "14": [{ "n": "Clinical Detachment", "d": "Immune to being frightened while your instruments are in hand." }],
+        "15": [{ "n": "Resonance Lock", "d": "Your apparatus spells ignore resistance to psychic and force damage." }],
+        "17": [{ "n": "Unified Theory", "d": "Learn three spells from any spell list; they count as wizard-list apparatus effects for you." }],
+        "18": [{ "n": "Observer Effect", "d": "1/long rest, force an invisible, ethereal, or shapechanged creature within 60 ft into its true visible form for 1 minute (CHA save negates)." }],
+        "20": [{ "n": "Proof", "d": "1/long rest, your next apparatus spell is cast at maximum effect and cannot be resisted by legendary resistance." }]
+      },
+      "subclass": {
+        "name": "Society for Psychical Research",
+        "levels": {
+          "3": [
+            { "n": "Séance Protocol", "d": "1/long rest, a 10-minute session lets the party ask a lingering spirit three questions; it answers truthfully but briefly." },
+            { "n": "Automatic Writing", "d": "Advantage on Investigation checks in places where someone died violently." }
+          ],
+          "7": [{ "n": "Ectoplasmic Sample", "d": "After damaging a spirit, your party's attacks against it count as magical for 1 minute." }],
+          "11": [{ "n": "Controlled Manifestation", "d": "1/long rest, compel a spirit within 30 ft to manifest visibly and audibly for 10 minutes." }],
+          "15": [{ "n": "Beyond the Veil", "d": "1/long rest, you and up to three allies see and strike into the Ethereal Plane for 1 minute." }]
+        }
+      }
+    },
+    "apostate": {
+      "subclassLevel": 1,
+      "levels": {
+        "1": [
+          { "n": "Residue of the Rite", "d": "Casts sorcerer-list spells as stigmata using CHA; casting leaves visible marks on your skin." },
+          { "n": "Mark of the Cult", "d": "You recognize members, symbols, and workings of your former cult on sight." }
+        ],
+        "2": [{ "n": "Bleeding Power", "d": "1/rest, cast a 1st-level stigmata without a slot; take 1d4 necrotic that cannot be reduced." }],
+        "3": [{ "n": "Scar Tissue", "d": "Resistance to necrotic damage." }],
+        "5": [{ "n": "The Rite Remembers", "d": "2/rest, cast a cantrip as a bonus action after casting a leveled stigmata." }],
+        "7": [{ "n": "Hunted Instincts", "d": "Advantage on initiative when cultists or their summonings are present; you cannot be surprised by them." }],
+        "9": [{ "n": "Blood Ward", "d": "1/rest, reaction when hit: gain resistance to that damage type until your next turn." }],
+        "11": [{ "n": "Deeper Scars", "d": "Bleeding Power can cast up to 3rd-level stigmata; the backlash is 2d4 necrotic." }],
+        "13": [{ "n": "Turncoat's Insight", "d": "Advantage on saves against spells cast by fiends, cultists, and aberrations." }],
+        "15": [{ "n": "Unfinished Ritual", "d": "1/long rest, regain expended slot levels equal to your CHA modifier when you drop below half HP." }],
+        "17": [{ "n": "The Mark Burns Back", "d": "Reaction when a creature damages you with a spell: it takes your CHA mod + level in necrotic damage." }],
+        "18": [{ "n": "Apostasy Complete", "d": "Immune to charm and possession by fiends and aberrations." }],
+        "20": [{ "n": "Their Power, Your Hands", "d": "1/long rest, cast one stigmata of 5th level or lower without a slot at its maximum effect." }]
+      },
+      "subclass": {
+        "name": "Scarred Initiate",
+        "levels": {
+          "1": [{ "n": "First Scar", "d": "1/turn, add your CHA modifier as necrotic damage to a damaging stigmata." }],
+          "6": [{ "n": "Ritual Echo", "d": "1/long rest, duplicate a stigmata of 2nd level or lower you just cast at a second target for free." }],
+          "10": [{ "n": "Skin Like Scripture", "d": "While below half HP, +2 AC and your stigmata ignore resistance to necrotic." }],
+          "14": [{ "n": "The Rite Completed", "d": "1/long rest, for 1 minute your stigmata cost no verbal or somatic components and cannot be counterspelled." }]
+        }
+      }
+    }
+  }
+}

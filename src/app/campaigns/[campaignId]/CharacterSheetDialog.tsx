@@ -99,6 +99,9 @@ export function CharacterSheetDialog({
                   className="rounded-full bg-red-950 px-2 py-0.5 text-xs text-red-300"
                 >
                   {condition}
+                  {sheet.conditionMeta?.[condition]?.rounds
+                    ? ` (${sheet.conditionMeta[condition].rounds} rd)`
+                    : ""}
                 </span>
               ))}
             </div>

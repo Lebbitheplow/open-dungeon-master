@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Crown, Heart, ImagePlus, Save, Shield, StickyNote, UserRound } from "lucide-react";
+import { Check, Crown, Dices, Heart, ImagePlus, Save, Shield, StickyNote, UserRound } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { CharacterMenu } from "@/app/campaigns/[campaignId]/CharacterMenu";
@@ -12,6 +12,52 @@ import type { CampaignMember } from "@/lib/campaign-types";
 import type { Note } from "@/lib/db/notes";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { computeSheetDerived, formatModifier } from "@/lib/srd";
+
+// Mid-game physical-dice opt-in/out; the same per-member preference the
+// Lobby toggle writes. Turning it ON means the DM pauses on your rolls and
+// asks for the numbers from your real dice.
+function RealDiceToggle({
+  campaignId,
+  member,
+}: {
+  campaignId: string;
+  member: CampaignMember;
+}) {
+  const [busy, setBusy] = useState(false);
+  async function toggle() {
+    setBusy(true);
+    try {
+      await fetch(`/api/campaigns/${campaignId}/members/me`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ useRealDice: !member.useRealDice }),
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      disabled={busy}
+      title={
+        member.useRealDice
+          ? "The game pauses on your rolls and asks for your real dice results. Click to switch back to automatic digital rolls."
+          : "Roll your own physical dice: the game will tell you what to roll and wait for your result. Click to opt in."
+      }
+      className={cn(
+        "flex w-full items-center justify-center gap-1 rounded border py-1 text-xs disabled:opacity-50",
+        member.useRealDice
+          ? "border-amber-700 bg-amber-950/40 text-amber-200 hover:bg-amber-950/60"
+          : "border-stone-700 text-stone-400 hover:bg-stone-900",
+      )}
+    >
+      <Dices className="size-3" />
+      {member.useRealDice ? "Physical dice: ON" : "Physical dice: off"}
+    </button>
+  );
+}
 
 function SaveToLibraryButton({ campaignId }: { campaignId: string }) {
   const [state, setState] = useState<"idle" | "saving" | "saved">("idle");
@@ -63,6 +109,7 @@ export function PartyPanel({
   members = [],
   refreshNotes,
   onMessageUser,
+  realDiceAllowed = false,
 }: {
   sheets: CharacterSheet[];
   meUserId: string;
@@ -76,6 +123,7 @@ export function PartyPanel({
   members?: CampaignMember[];
   refreshNotes?: () => Promise<void>;
   onMessageUser?: (userId: string) => void;
+  realDiceAllowed?: boolean;
 }) {
   const [editingSheetId, setEditingSheetId] = useState("");
   const [viewingSheetId, setViewingSheetId] = useState("");
@@ -85,6 +133,7 @@ export function PartyPanel({
   const viewingSheet = sheets.find((sheet) => sheet.id === viewingSheetId);
   const croppingSheet = sheets.find((sheet) => sheet.id === croppingSheetId);
   const notesSheet = sheets.find((sheet) => sheet.id === notesSheetId);
+  const myMember = members.find((member) => member.userId === meUserId);
   const Wrapper = embedded ? "div" : "aside";
 
   async function setPortrait(sheet: CharacterSheet, url: string) {
@@ -198,6 +247,53 @@ export function PartyPanel({
               </span>
             </div>
 
+            {sheet.deathSaves ? (
+              <div className="mt-1.5 flex items-center gap-2">
+                <span
+                  className={cn(
+                    "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                    sheet.deathSaves.dead
+                      ? "border-stone-600 bg-stone-900 text-stone-400"
+                      : sheet.deathSaves.stable
+                        ? "border-amber-700 bg-amber-950/40 text-amber-300"
+                        : "border-red-700 bg-red-950/50 text-red-300",
+                  )}
+                >
+                  {sheet.deathSaves.dead ? "Dead" : sheet.deathSaves.stable ? "Stable" : "Dying"}
+                </span>
+                {!sheet.deathSaves.dead && !sheet.deathSaves.stable ? (
+                  <span className="flex items-center gap-1.5" title="Death saves: successes and failures">
+                    <span className="flex gap-0.5">
+                      {[0, 1, 2].map((pip) => (
+                        <span
+                          key={`s${pip}`}
+                          className={cn(
+                            "size-2 rounded-full border",
+                            pip < sheet.deathSaves!.successes
+                              ? "border-emerald-400 bg-emerald-500"
+                              : "border-stone-600 bg-transparent",
+                          )}
+                        />
+                      ))}
+                    </span>
+                    <span className="flex gap-0.5">
+                      {[0, 1, 2].map((pip) => (
+                        <span
+                          key={`f${pip}`}
+                          className={cn(
+                            "size-2 rounded-full border",
+                            pip < sheet.deathSaves!.failures
+                              ? "border-red-400 bg-red-500"
+                              : "border-stone-600 bg-transparent",
+                          )}
+                        />
+                      ))}
+                    </span>
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
+
             <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
               {(
                 [
@@ -221,16 +317,49 @@ export function PartyPanel({
               ))}
             </div>
 
-            {sheet.conditions.length ? (
+            {Object.keys(sheet.resources ?? {}).length ? (
               <div className="mt-1.5 flex flex-wrap gap-1">
+                {Object.entries(sheet.resources).map(([id, state]) => (
+                  <span
+                    key={id}
+                    className="rounded-full border border-stone-700/50 bg-stone-950/60 px-2 py-0.5 text-[10px] capitalize text-stone-300"
+                    title="Limited-use resource: remaining/max"
+                  >
+                    {id.replaceAll("_", " ")} {state.max - state.used}/{state.max}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+
+            {sheet.conditions.length || sheet.concentratingOn || (sheet.exhaustion ?? 0) > 0 ? (
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {(sheet.exhaustion ?? 0) > 0 ? (
+                  <span
+                    className="rounded-full bg-orange-950 px-2 py-0.5 text-xs text-orange-300"
+                    title="Exhaustion level (a long rest reduces it by one)"
+                  >
+                    exhaustion {sheet.exhaustion}
+                  </span>
+                ) : null}
                 {sheet.conditions.map((condition) => (
                   <span
                     key={condition}
                     className="rounded-full bg-red-950 px-2 py-0.5 text-xs text-red-300"
                   >
                     {condition}
+                    {sheet.conditionMeta?.[condition]?.rounds
+                      ? ` (${sheet.conditionMeta[condition].rounds} rd)`
+                      : ""}
                   </span>
                 ))}
+                {sheet.concentratingOn ? (
+                  <span
+                    className="rounded-full bg-sky-950 px-2 py-0.5 text-xs text-sky-300"
+                    title="Concentrating on this spell"
+                  >
+                    ◎ {sheet.concentratingOn}
+                  </span>
+                ) : null}
               </div>
             ) : null}
 
@@ -260,6 +389,9 @@ export function PartyPanel({
                   <ImagePlus className="size-3" />
                   {sheet.portrait ? "Change portrait" : "Add portrait"}
                 </button>
+                {realDiceAllowed && myMember ? (
+                  <RealDiceToggle campaignId={sheet.campaignId} member={myMember} />
+                ) : null}
                 {sheet.libraryCharacterId ? (
                   <SaveToLibraryButton campaignId={sheet.campaignId} />
                 ) : null}

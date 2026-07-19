@@ -60,6 +60,7 @@
   --animate-fade-up-slow: fade-up 420ms var(--ease-snap) both;
   --animate-scale-in: scale-in 180ms var(--ease-snap) both;
   --animate-twinkle: twinkle 3.2s ease-in-out infinite;
+  --animate-wiggle: wiggle 1.8s ease-in-out infinite;
 
   @keyframes fade-up {
     from {
@@ -106,6 +107,26 @@
     }
     50% {
       opacity: 1;
+    }
+  }
+  /* Unread-message attention: shake early in the cycle, then rest. */
+  @keyframes wiggle {
+    0%,
+    45%,
+    100% {
+      transform: rotate(0deg);
+    }
+    8% {
+      transform: rotate(-12deg);
+    }
+    16% {
+      transform: rotate(10deg);
+    }
+    24% {
+      transform: rotate(-8deg);
+    }
+    32% {
+      transform: rotate(6deg);
     }
   }
   @keyframes shimmer {

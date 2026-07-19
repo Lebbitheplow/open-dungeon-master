@@ -59,6 +59,15 @@ export async function POST(
         { status: 409 },
       );
     }
+    if (floor.mode === "initiative") {
+      return Response.json(
+        {
+          error: `It is ${floor.currentName || "another character"}'s turn in the initiative order. Use OOC for table talk.`,
+          floor,
+        },
+        { status: 409 },
+      );
+    }
     const waitingOn =
       floor.mode === "spotlight"
         ? listSheets(campaignId)

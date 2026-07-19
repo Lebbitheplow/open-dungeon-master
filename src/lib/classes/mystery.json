@@ -1,0 +1,59 @@
+{
+  "_note": "Original setting-specific classes for Open Dungeon Master. Not SRD-derived content.",
+  "classes": [
+    {
+      "id": "detective", "name": "Detective", "hitDie": 8,
+      "saves": ["int", "wis"], "casterType": "none", "spellAbility": null,
+      "armor": ["light"], "weapons": ["simple", "firearms"],
+      "skillChoices": { "count": 4, "from": ["deception", "history", "insight", "intimidation", "investigation", "perception", "sleight_of_hand", "stealth"] },
+      "genres": ["mystery"],
+      "blurb": "Nothing escapes them: a trained eye for detail, a memory like a case file, and a nose for lies.",
+      "spellListFrom": null, "knownCaster": false, "castingLabel": null
+    },
+    {
+      "id": "alienist", "name": "Alienist", "hitDie": 6,
+      "saves": ["int", "wis"], "casterType": "full", "spellAbility": "int",
+      "armor": [], "weapons": ["simple"],
+      "skillChoices": { "count": 2, "from": ["history", "insight", "investigation", "medicine", "persuasion", "perception"] },
+      "genres": ["mystery"],
+      "blurb": "A doctor of the mind whose treatments border on the uncanny: reading motives, unknotting fear, opening memory.",
+      "spellListFrom": "wizard", "knownCaster": false, "castingLabel": "Treatments"
+    },
+    {
+      "id": "grifter", "name": "Grifter", "hitDie": 8,
+      "saves": ["dex", "cha"], "casterType": "none", "spellAbility": null,
+      "armor": ["light"], "weapons": ["simple", "sword canes", "sidearms"],
+      "skillChoices": { "count": 4, "from": ["acrobatics", "deception", "insight", "performance", "persuasion", "sleight_of_hand", "stealth"] },
+      "genres": ["mystery"],
+      "blurb": "Charm as a weapon, a new name in every city, and a plan that is always three lies deep.",
+      "spellListFrom": null, "knownCaster": false, "castingLabel": null
+    },
+    {
+      "id": "enforcer", "name": "Enforcer", "hitDie": 10,
+      "saves": ["str", "con"], "casterType": "none", "spellAbility": null,
+      "armor": ["light", "medium"], "weapons": ["simple", "martial", "firearms"],
+      "skillChoices": { "count": 2, "from": ["athletics", "insight", "intimidation", "perception", "persuasion", "survival"] },
+      "genres": ["mystery"],
+      "blurb": "The wall between trouble and the people they protect. Big fists, bigger presence, unexpected patience.",
+      "spellListFrom": null, "knownCaster": false, "castingLabel": null
+    },
+    {
+      "id": "muckraker", "name": "Muckraker", "hitDie": 8,
+      "saves": ["dex", "cha"], "casterType": "none", "spellAbility": null,
+      "armor": ["light"], "weapons": ["simple", "sidearms"],
+      "skillChoices": { "count": 3, "from": ["deception", "history", "insight", "investigation", "perception", "persuasion", "stealth"] },
+      "genres": ["mystery"],
+      "blurb": "A reporter who follows the money, kicks over rocks, and prints what powerful people pay to bury.",
+      "spellListFrom": null, "knownCaster": false, "castingLabel": null
+    },
+    {
+      "id": "spirit_medium", "name": "Spirit Medium", "hitDie": 8,
+      "saves": ["wis", "cha"], "casterType": "full", "spellAbility": "wis",
+      "armor": ["light"], "weapons": ["simple", "occult"],
+      "skillChoices": { "count": 2, "from": ["arcana", "deception", "insight", "perception", "persuasion", "religion"] },
+      "genres": ["mystery", "horror"],
+      "blurb": "The dead talk to them, whether invited or not. Séances, warnings, and truths the living lie about.",
+      "spellListFrom": "cleric", "knownCaster": true, "castingLabel": "Seances"
+    }
+  ]
+}

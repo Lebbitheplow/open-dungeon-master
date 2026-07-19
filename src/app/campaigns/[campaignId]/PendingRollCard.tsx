@@ -42,9 +42,35 @@ export function PendingRollCard({
 
   const mine = pending.userId === meUserId;
   const character = sheets.find((sheet) => sheet.id === pending.characterId);
-  const label = `${character?.name ?? "Someone"}: ${pending.kind.replaceAll("_", " ")}${
-    pending.detail ? ` (${pending.detail.replaceAll("_", " ")})` : ""
-  }`;
+  // Attack-engine pendings already carry a full sentence in detail
+  // ("Kara: Longsword vs Goblin"); avoid stacking the name twice.
+  const detailText = pending.detail.replaceAll("_", " ");
+  const label = detailText.startsWith(`${character?.name ?? ""}:`)
+    ? detailText
+    : `${character?.name ?? "Someone"}: ${pending.kind.replaceAll("_", " ")}${
+        detailText ? ` (${detailText})` : ""
+      }`;
+  // Plain-words instruction: "Roll 2× d20 and 1× d8" from the faces list.
+  const diceSummary = (() => {
+    if (!faces.length) {
+      return "";
+    }
+    const counts = new Map<number, number>();
+    for (const sides of faces) {
+      counts.set(sides, (counts.get(sides) ?? 0) + 1);
+    }
+    const parts = [...counts.entries()].map(
+      ([sides, count]) => `${count} × d${sides}`,
+    );
+    return parts.length > 1
+      ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`
+      : parts[0];
+  })();
+  // Enter raw die faces only; any flat bonus applies server-side.
+  const flatModifier = /([+-]\d+)$/.exec(pending.expression.replaceAll(" ", ""))?.[1];
+  const modifierNote = flatModifier
+    ? `Enter the bare die numbers; the ${flatModifier} is added for you.`
+    : "";
   const advantageNote =
     pending.advantage === "advantage"
       ? "advantage: roll both, highest counts"
@@ -109,6 +135,12 @@ export function PendingRollCard({
       </div>
       {pending.reason ? (
         <p className="mt-0.5 text-xs text-amber-200/70">{pending.reason}</p>
+      ) : null}
+      {diceSummary ? (
+        <p className="mt-1 text-xs text-amber-100">
+          Roll {diceSummary} at your table and enter each die below.
+          {modifierNote ? ` ${modifierNote}` : ""} The game waits for your result.
+        </p>
       ) : null}
       {advantageNote ? (
         <p className="mt-0.5 text-xs text-amber-200/90">{advantageNote}</p>

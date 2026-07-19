@@ -1,5 +1,6 @@
 import classFeaturesJson from "@/lib/srd/class-features.json";
 import racesJson from "@/lib/srd/races.json";
+import { CUSTOM_CLASS_FEATURES } from "@/lib/classes";
 import type { SheetFeature } from "@/lib/schemas/sheet";
 
 type ClassFeatureTable = {
@@ -8,8 +9,12 @@ type ClassFeatureTable = {
   subclass: { name: string; levels: Record<string, string[]> };
 };
 
-const CLASS_FEATURES = (classFeaturesJson as unknown as { classes: Record<string, ClassFeatureTable> })
-  .classes;
+// SRD tables plus the custom-class catalog; ids never collide, so every
+// grant helper below works for both without call-site changes.
+const CLASS_FEATURES: Record<string, ClassFeatureTable> = {
+  ...(classFeaturesJson as unknown as { classes: Record<string, ClassFeatureTable> }).classes,
+  ...CUSTOM_CLASS_FEATURES,
+};
 
 function clampLevel(level: number) {
   return Math.max(1, Math.min(20, Math.floor(level)));
@@ -19,6 +24,19 @@ function clampLevel(level: number) {
 // outside the SRD table (custom/homebrew classes).
 export function subclassLevelFor(classId: string): number | null {
   return CLASS_FEATURES[classId]?.subclassLevel ?? null;
+}
+
+// SRD expertise grants: levels at which a class doubles proficiency in two
+// skills. Rogues at 1 and 6, bards at 3 and 10.
+const EXPERTISE_GRANTS: Record<string, number[]> = {
+  rogue: [1, 6],
+  bard: [3, 10],
+};
+
+// Total expertise picks a class has earned by `level` (2 per grant level).
+export function expertiseSlotsFor(classId: string, level: number): number {
+  const grants = EXPERTISE_GRANTS[classId] ?? [];
+  return grants.filter((grantLevel) => grantLevel <= clampLevel(level)).length * 2;
 }
 
 // The SRD subclass name for a class (e.g. "Champion" for fighter), or null

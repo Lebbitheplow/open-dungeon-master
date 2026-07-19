@@ -20,11 +20,15 @@ const MODES = [
 // Choices apply in order, so each card's selects reflect the scores after
 // every earlier card; abilities already at the 20 cap are disabled.
 export default function AsiFeatEditor({
+  level,
   slotLevels,
   baseScores,
   choices,
   onChange,
 }: {
+  // Character level for the builder's "Level N: X earned" heading; absent in
+  // the level-up dialog, which introduces the section with its own copy.
+  level?: number;
   slotLevels: number[];
   baseScores: AbilityScores | null;
   choices: Array<AsiChoice | null>;
@@ -39,12 +43,31 @@ export default function AsiFeatEditor({
     onChange(next);
   }
 
+  const unresolved = slotLevels.filter((_, index) => !choices[index]).length;
+
   return (
-    <section className="panel rounded-xl p-4">
-      <h2 className="eyebrow mb-1 text-xs text-amber-200/90">Ability score improvements</h2>
+    <section className="panel ornate rounded-xl border-amber-500/30 p-4">
+      <div className="mb-1 flex flex-wrap items-center gap-2">
+        <h2 className="eyebrow text-xs text-amber-200/90">
+          {level
+            ? `Level ${level}: ${slotLevels.length} ability score ${
+                slotLevels.length === 1 ? "improvement" : "improvements"
+              } earned`
+            : "Ability score improvements"}
+        </h2>
+        {unresolved > 0 ? (
+          <span className="rounded-full border border-amber-700 bg-amber-950/50 px-2 py-0.5 text-[11px] text-amber-200">
+            {unresolved} to pick
+          </span>
+        ) : (
+          <span className="rounded-full border border-stone-700 bg-stone-900 px-2 py-0.5 text-[11px] text-stone-400">
+            All picked
+          </span>
+        )}
+      </div>
       <p className="mb-3 text-xs text-stone-500">
-        Each of these levels grants +2 to one ability, +1 to two abilities, or a feat.
-        Scores cap at {ABILITY_SCORE_CAP}.
+        This is how higher-level characters raise their stats. Each earned level grants
+        +2 to one ability, +1 to two abilities, or a feat. Scores cap at {ABILITY_SCORE_CAP}.
       </p>
       {!baseScores ? (
         <p className="rounded-md border border-stone-800 bg-stone-900/60 p-3 text-xs text-stone-400">

@@ -41,12 +41,16 @@ export default function AbilityEditor({
   scores,
   onScoresChange,
   racialBonus,
+  asiCount = 0,
 }: {
   method: AbilityMethod;
   onMethodChange: (method: AbilityMethod) => void;
   scores: AbilityState;
   onScoresChange: (scores: AbilityState) => void;
   racialBonus: Partial<Record<Ability, number>>;
+  // Ability score improvements the chosen level has earned; > 0 adds a hint
+  // that base scores are level-1 rules and the bonuses are picked below.
+  asiCount?: number;
 }) {
   const inputClass =
     "w-full rounded-lg border border-stone-800 bg-stone-950 px-3 py-2 text-sm text-stone-200 outline-none focus:border-amber-300";
@@ -133,6 +137,15 @@ export default function AbilityEditor({
           </button>
         ) : null}
       </div>
+      {asiCount > 0 ? (
+        <p className="mb-3 text-xs text-stone-500">
+          These are your base scores, the same at every level. Your level has earned{" "}
+          <span className="text-amber-200">
+            {asiCount} ability score {asiCount === 1 ? "improvement" : "improvements"}
+          </span>{" "}
+          on top of them; pick those in the section below.
+        </p>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {ABILITY_KEYS.map((ability) => {
