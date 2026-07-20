@@ -76,7 +76,7 @@ export default function Home() {
 // reset; the server rejects campaign APIs until the password is changed.
 function ForcedPasswordChange({ onChanged }: { onChanged: () => void }) {
   return (
-    <main className="bg-starfield flex flex-1 items-center justify-center p-6">
+    <main className="bg-starfield flex flex-1 items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-sm animate-fade-up-slow">
         <div className="glass texture-noise rounded-xl p-6 shadow-elev-2">
           <h1 className="mb-1 font-display text-xl tracking-wide text-amber-50">
@@ -95,7 +95,7 @@ function ForcedPasswordChange({ onChanged }: { onChanged: () => void }) {
 
 function AuthScreen({ onAuthed }: { onAuthed: (user: SessionUser) => void }) {
   return (
-    <main className="bg-starfield flex flex-1 items-center justify-center p-6">
+    <main className="bg-starfield flex flex-1 items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-sm animate-fade-up-slow">
         <div className="mb-6 flex flex-col items-center gap-4 text-center">
           <PixelTile src={PIXEL_ICONS.story} size="size-16" className="animate-twinkle" />
@@ -185,7 +185,7 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
   }
 
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 p-6">
+    <main className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
       <header className="mb-8 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <PixelTile src={PIXEL_ICONS.story} />
@@ -270,12 +270,12 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
       </header>
 
       <section className="mb-8">
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <PixelTile src={PIXEL_ICONS.chats} size="size-9" />
             <h2 className="eyebrow text-sm text-amber-200/90">Your campaigns</h2>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button type="button" onClick={() => setSoloOpen(true)} className={ui.btnSecondary}>
               <BookOpen className="size-4" /> Solo adventure
             </button>

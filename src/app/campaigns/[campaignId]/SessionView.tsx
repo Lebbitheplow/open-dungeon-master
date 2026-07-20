@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CircleHelp, Dices, Loader2, Send, Volume2, VolumeX } from "lucide-react";
+import { CircleHelp, Dices, DoorOpen, Volume2, VolumeX } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { cn } from "@/lib/cn";
 import { JOIN_NOTE_PREFIX, latestUnintroducedJoin } from "@/lib/campaign-types";
@@ -9,26 +9,19 @@ import { PIXEL_ICONS, PixelTile } from "@/lib/ui";
 import { HelpDialog } from "@/components/HelpDialog";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { CharacterGate } from "@/app/campaigns/[campaignId]/CharacterGate";
+import { Composer, type InputKind } from "@/app/campaigns/[campaignId]/Composer";
 import { DiceOverlay } from "@/app/campaigns/[campaignId]/DiceOverlay";
-import { FloorBanners } from "@/app/campaigns/[campaignId]/FloorBanners";
 import { LevelUpDialog } from "@/app/campaigns/[campaignId]/LevelUpDialog";
 import { MessageList } from "@/app/campaigns/[campaignId]/MessageList";
-import { NewAdventurerBanner } from "@/app/campaigns/[campaignId]/NewAdventurerBanner";
-import { PendingRollCard } from "@/app/campaigns/[campaignId]/PendingRollCard";
-import { PushToTalk } from "@/app/campaigns/[campaignId]/PushToTalk";
+import {
+  BottomTabBar,
+  buildPanelTabs,
+  useSessionTabs,
+} from "@/app/campaigns/[campaignId]/SessionTabs";
 import { SidePanel } from "@/app/campaigns/[campaignId]/SidePanel";
 import { useChatChime } from "@/app/campaigns/[campaignId]/useChatChime";
 import { useNarrationAudio } from "@/app/campaigns/[campaignId]/useNarrationAudio";
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
-
-type InputKind = "do" | "say" | "ooc" | "lead";
-
-const KIND_TIPS: Record<InputKind, string> = {
-  do: "Act in the world. The DM narrates what happens.",
-  say: "Speak in character. Sent as dialogue in quotes.",
-  ooc: "Table talk. The DM does not respond, and it works even when the floor is locked.",
-  lead: "Party lead only. Send the DM an authoritative story direction.",
-};
 
 function subscribeDicePref(callback: () => void) {
   window.addEventListener("odm-dice3d-pref", callback);
@@ -89,6 +82,11 @@ export function SessionView({
   const chatUnreadTotal =
     state.sideThreads.reduce((sum, thread) => sum + thread.unread, 0) + state.whisperUnread;
   useChatChime(chatUnreadTotal, state.sideChatLoaded && state.whispersLoaded);
+  const pendingNoteCount = state.notes.filter((note) => note.status === "pending").length;
+  const { panelTab, setPanelTab, mobileView, setMobileView } = useSessionTabs({
+    chatTarget,
+    battleMap: state.battleMap,
+  });
   // Only tts_ready events newer than the seq present when the snapshot first
   // loaded autoplay; the backlog stays silent (replay buttons cover history).
   // Each narration is handed over exactly once: unrelated events (new chat
@@ -153,12 +151,32 @@ export function SessionView({
     messages.filter((message) => message.authorType === "dm").length === 1;
   const narrationBlocked = openingNarrationPlaying && kind !== "ooc";
   const inputBlocked = floorBlocked || holdBlocked || initiativeBlocked || narrationBlocked;
+  const placeholder = narrationBlocked
+    ? "The Dungeon Master is setting the scene... (OOC still open)"
+    : holdBlocked
+      ? "The party lead has the floor held for discussion... (OOC still open)"
+      : initiativeBlocked
+        ? `${floor.mode === "initiative" ? floor.currentName : "Another hero"}'s turn in combat... (OOC still open)`
+        : floorBlocked
+          ? `Waiting on ${spotlighted.map((sheet) => sheet.name).join(", ")}... (OOC still open)`
+          : kind === "do"
+            ? `What does ${mySheet?.name ?? "your character"} do?`
+            : kind === "say"
+              ? `What does ${mySheet?.name ?? "your character"} say?`
+              : kind === "ooc"
+                ? "Out-of-character note to the table"
+                : "Steer the story: an event or direction the DM must weave in";
   // A mid-game joiner without a character is gated to creation first.
   const needsCharacter = !mySheet && campaign.status === "active";
   // Lead prompt: a newcomer's join note the DM has not narrated past yet.
   const joinNotice = latestUnintroducedJoin(messages);
   const showJoinBanner =
     isLead && joinNotice !== null && dismissedJoinNotice !== joinNotice.id;
+  const panelTabs = buildPanelTabs({
+    hasBattleMap: Boolean(state.battleMap),
+    mapsEnabled: campaign.gameSettings?.mapsEnabled ?? true,
+    hasSettings: Boolean(campaign),
+  });
 
   async function releaseFloor() {
     await fetch(`/api/campaigns/${campaign!.id}/floor`, { method: "POST" });
@@ -213,7 +231,7 @@ export function SessionView({
 
   return (
     <main className="flex h-dvh flex-col">
-      <header className="glass z-10 flex items-center justify-between border-b border-stone-700/40 px-4 py-2.5">
+      <header className="glass z-10 flex items-center justify-between border-b border-stone-700/40 px-4 pb-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))]">
         <div className="flex min-w-0 items-center gap-2.5">
           <PixelTile src={PIXEL_ICONS.story} size="size-9" />
           <div className="min-w-0">
@@ -223,7 +241,7 @@ export function SessionView({
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <Tooltip
             content={dice3d ? "Turn off 3D dice animation" : "Turn on 3D dice animation"}
             side="bottom"
@@ -233,7 +251,7 @@ export function SessionView({
               onClick={toggleDice3d}
               aria-label={dice3d ? "Turn off 3D dice animation" : "Turn on 3D dice animation"}
               className={cn(
-                "rounded-md border p-1.5",
+                "rounded-md border p-2.5 sm:p-1.5",
                 dice3d
                   ? "border-amber-800 bg-amber-950/40 text-amber-400"
                   : "border-stone-700 text-stone-500 hover:text-stone-300",
@@ -268,7 +286,7 @@ export function SessionView({
                         : "Mute narration"
                   }
                   className={cn(
-                    "rounded-md border p-1.5",
+                    "rounded-md border p-2.5 sm:p-1.5",
                     narration.muted || !narration.unlocked
                       ? "border-stone-700 text-stone-500 hover:text-stone-300"
                       : "border-amber-800 bg-amber-950/40 text-amber-400",
@@ -290,7 +308,7 @@ export function SessionView({
                     step={0.05}
                     value={narration.volume}
                     onChange={(event) => narration.setVolume(Number(event.target.value))}
-                    className="w-16 accent-amber-600"
+                    className="hidden w-16 accent-amber-600 sm:block"
                     aria-label="Narration volume"
                   />
                 </Tooltip>
@@ -302,19 +320,29 @@ export function SessionView({
               type="button"
               onClick={() => setHelpOpen(true)}
               aria-label="Help"
-              className="rounded-md border border-stone-700 p-1.5 text-stone-500 hover:text-stone-300"
+              className="rounded-md border border-stone-700 p-2.5 text-stone-500 hover:text-stone-300 sm:p-1.5"
             >
               <CircleHelp className="size-4" />
             </button>
           </Tooltip>
-          <Link href="/" className="text-sm text-stone-500 hover:text-stone-300">
-            All campaigns
+          <Link
+            href="/"
+            aria-label="All campaigns"
+            className="flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-300"
+          >
+            <DoorOpen className="size-4 md:hidden" />
+            <span className="hidden md:inline">All campaigns</span>
           </Link>
         </div>
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div
+          className={cn(
+            "min-w-0 flex-1 flex-col",
+            mobileView === "chat" ? "flex" : "hidden lg:flex",
+          )}
+        >
           <MessageList
             messages={messages}
             rolls={rolls}
@@ -341,133 +369,41 @@ export function SessionView({
           {needsCharacter ? (
             <CharacterGate campaignId={campaign.id} />
           ) : (
-          <form
-            onSubmit={submit}
-            className="glass border-t border-stone-700/40 px-3 pb-3 pt-2.5"
-          >
-            <div className="mx-auto max-w-3xl sm:px-3">
-            {pendingRolls.map((pending) => (
-              <PendingRollCard
-                key={pending.id}
-                campaignId={campaign.id}
-                pending={pending}
-                sheets={sheets}
-                meUserId={me.id}
-                isLead={isLead}
-              />
-            ))}
-            <FloorBanners
+            <Composer
+              campaignId={campaign.id}
+              sheets={sheets}
+              meUserId={me.id}
+              isLead={isLead}
+              kind={kind}
+              onKindChange={setKind}
+              input={input}
+              setInput={setInput}
+              sending={sending}
+              error={error}
+              inputBlocked={inputBlocked}
+              placeholder={placeholder}
+              dmStatus={dmStatus}
+              pendingRolls={pendingRolls}
               floor={floor}
               spotlighted={spotlighted}
               heldSpotlightNames={heldSpotlightNames}
               encounter={state.encounter}
-              isLead={isLead}
-              onRelease={releaseFloor}
+              onReleaseFloor={releaseFloor}
+              joinBanner={
+                showJoinBanner
+                  ? {
+                      text: joinNotice.content.slice(JOIN_NOTE_PREFIX.length),
+                      onWriteIntro: () => {
+                        setKind("lead");
+                        composerRef.current?.focus();
+                      },
+                      onDismiss: () => setDismissedJoinNotice(joinNotice.id),
+                    }
+                  : null
+              }
+              composerRef={composerRef}
+              onSubmit={submit}
             />
-            {showJoinBanner ? (
-              <NewAdventurerBanner
-                campaignId={campaign.id}
-                text={joinNotice.content.slice(JOIN_NOTE_PREFIX.length)}
-                onWriteIntro={() => {
-                  setKind("lead");
-                  composerRef.current?.focus();
-                }}
-                onDismiss={() => setDismissedJoinNotice(joinNotice.id)}
-              />
-            ) : null}
-            <div className="mb-2 flex gap-1.5">
-              {(["do", "say", "ooc", ...(isLead ? (["lead"] as const) : [])] as const).map(
-                (option) => (
-                  <Tooltip key={option} content={KIND_TIPS[option]}>
-                    <button
-                      type="button"
-                      onClick={() => setKind(option)}
-                      className={cn(
-                        "rounded-full px-3 py-1 text-xs font-medium transition-all duration-150 ease-snap active:scale-95",
-                        kind === option
-                          ? option === "lead"
-                            ? "bg-gradient-to-b from-ember-400 to-ember-600 text-stone-950 shadow-glow-ember"
-                            : "bg-gradient-to-b from-amber-100 to-amber-400 text-amber-950 shadow-glow-gold"
-                          : "bg-stone-900/80 text-stone-400 hover:bg-stone-800 hover:text-stone-200",
-                      )}
-                    >
-                      {option === "do"
-                        ? "Do"
-                        : option === "say"
-                          ? "Say"
-                          : option === "ooc"
-                            ? "OOC"
-                            : "Direct"}
-                    </button>
-                  </Tooltip>
-                ),
-              )}
-              {dmStatus !== "idle" ? (
-                <span className="ml-auto flex items-center gap-1.5 text-xs text-stone-500">
-                  <Dices className="size-3.5 animate-bounce text-amber-600" />
-                  {dmStatus === "rolling"
-                    ? "DM rolling dice..."
-                    : dmStatus === "awaiting_rolls"
-                      ? "Waiting on real dice..."
-                      : dmStatus === "narrating"
-                        ? "DM narrating..."
-                        : dmStatus === "writing_chapter"
-                          ? "DM writing the chapter..."
-                          : dmStatus === "plotting_arc"
-                            ? "DM plotting the story arc..."
-                            : "DM at work..."}
-                </span>
-              ) : null}
-            </div>
-            <div className="texture-noise flex items-end gap-2 rounded-2xl border border-stone-700/70 bg-stone-950/90 p-2 shadow-elev-1 transition-[border-color,box-shadow] duration-200 focus-within:border-amber-400/60 focus-within:shadow-[0_0_0_3px_rgba(212,171,58,0.1),0_2px_12px_rgba(4,2,12,0.5)]">
-              <textarea
-                ref={composerRef}
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey) {
-                    event.preventDefault();
-                    submit(event);
-                  }
-                }}
-                rows={2}
-                disabled={inputBlocked}
-                placeholder={
-                  narrationBlocked
-                    ? "The Dungeon Master is setting the scene... (OOC still open)"
-                    : holdBlocked
-                    ? "The party lead has the floor held for discussion... (OOC still open)"
-                    : initiativeBlocked
-                    ? `${floor.mode === "initiative" ? floor.currentName : "Another hero"}'s turn in combat... (OOC still open)`
-                    : floorBlocked
-                    ? `Waiting on ${spotlighted.map((sheet) => sheet.name).join(", ")}... (OOC still open)`
-                    : kind === "do"
-                      ? `What does ${mySheet?.name ?? "your character"} do?`
-                      : kind === "say"
-                        ? `What does ${mySheet?.name ?? "your character"} say?`
-                        : kind === "ooc"
-                          ? "Out-of-character note to the table"
-                          : "Steer the story: an event or direction the DM must weave in"
-                }
-                className="flex-1 resize-none bg-transparent px-2 py-1.5 text-sm text-stone-200 outline-none disabled:opacity-50"
-              />
-              <PushToTalk
-                disabled={inputBlocked}
-                onTranscript={(text) =>
-                  setInput((current) => (current ? `${current} ${text}` : text))
-                }
-              />
-              <button
-                type="submit"
-                disabled={sending || !input.trim() || inputBlocked}
-                className="rounded-lg bg-gradient-to-b from-amber-100 via-amber-200 to-amber-400 p-2.5 text-amber-950 shadow-[0_1px_0_rgba(253,247,231,0.6)_inset] transition-all duration-150 ease-snap hover:-translate-y-px hover:shadow-glow-gold-strong active:translate-y-0 active:scale-95 disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none"
-              >
-                {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-              </button>
-            </div>
-            {error ? <p className="mt-1.5 text-sm text-red-400">{error}</p> : null}
-            </div>
-          </form>
           )}
         </div>
 
@@ -496,15 +432,33 @@ export function SessionView({
           onChatTargetHandled={() => setChatTarget(null)}
           onMessageUser={setChatTarget}
           mediaStatus={state.mediaStatus}
-          mapsEnabled={campaign.gameSettings?.mapsEnabled ?? true}
           inviteCode={campaign.inviteCode}
           midGameJoinOpen={campaign.gameSettings?.midGameJoinOpen ?? false}
           campaign={campaign}
           encounter={state.encounter}
           battleMap={state.battleMap}
           refreshBattleMap={refreshBattleMap}
+          tabs={panelTabs}
+          tab={panelTab}
+          onTabChange={setPanelTab}
+          pendingCount={pendingNoteCount}
+          chatUnread={chatUnreadTotal}
+          mobileVisible={mobileView === "panel"}
         />
       </div>
+
+      <BottomTabBar
+        tabs={panelTabs}
+        mobileView={mobileView}
+        panelTab={panelTab}
+        onSelectChat={() => setMobileView("chat")}
+        onSelectPanel={(tab) => {
+          setPanelTab(tab);
+          setMobileView("panel");
+        }}
+        chatUnread={chatUnreadTotal}
+        pendingCount={pendingNoteCount}
+      />
 
       <DiceOverlay latestRoll={state.latestRoll} enabled={dice3d} />
 

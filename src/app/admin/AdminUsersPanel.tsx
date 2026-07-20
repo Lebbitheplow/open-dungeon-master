@@ -213,7 +213,7 @@ export function AdminUsersPanel({ meId }: { meId: string }) {
             <AlertDialog.Content
               className={cn(
                 ui.dialog,
-                "fixed left-1/2 top-1/2 z-50 w-[24rem] -translate-x-1/2 -translate-y-1/2",
+                "fixed left-1/2 top-1/2 z-50 max-h-[85vh] w-[min(92vw,24rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto",
               )}
             >
               <AlertDialog.Title className="font-display text-lg tracking-wide text-amber-50">

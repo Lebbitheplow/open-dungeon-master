@@ -32,7 +32,7 @@ export default function AdminPage() {
 
   if (loading) {
     return (
-      <main className="mx-auto w-full max-w-3xl flex-1 p-6">
+      <main className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
         <div className="flex justify-center py-10">
           <Loader2 className="size-5 animate-spin text-stone-500" />
         </div>
@@ -42,7 +42,7 @@ export default function AdminPage() {
 
   if (!me?.isAdmin) {
     return (
-      <main className="mx-auto w-full max-w-3xl flex-1 p-6">
+      <main className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
         <p className="rounded-lg border border-stone-800 p-6 text-center text-stone-400">
           Admins only.{" "}
           <Link href="/" className="text-amber-200 hover:text-amber-400">
@@ -59,7 +59,7 @@ export default function AdminPage() {
   ];
 
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 p-6">
+    <main className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
       <header className="mb-6">
         <Link href="/" className="text-sm text-stone-500 hover:text-stone-300">
           &larr; All campaigns

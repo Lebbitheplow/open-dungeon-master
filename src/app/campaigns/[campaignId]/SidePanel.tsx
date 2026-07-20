@@ -1,20 +1,11 @@
 "use client";
 
 import {
-  BookOpen,
   Check,
   ChevronsLeft,
   ChevronsRight,
   Link as LinkIcon,
-  Map as MapIcon,
-  MessagesSquare,
-  ScrollText,
-  Settings2,
-  StickyNote,
-  Swords,
   UserPlus,
-  Users,
-  type LucideIcon,
 } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 import { cn } from "@/lib/cn";
@@ -30,6 +21,10 @@ import { SessionSettings } from "@/app/campaigns/[campaignId]/SessionSettings";
 import { SideChatPanel } from "@/app/campaigns/[campaignId]/SideChatPanel";
 import { StoryPanel } from "@/app/campaigns/[campaignId]/StoryPanel";
 import type {
+  PanelTab,
+  PanelTabDef,
+} from "@/app/campaigns/[campaignId]/SessionTabs";
+import type {
   AuditEntry,
   CampaignLocation,
   MediaStatus,
@@ -43,8 +38,6 @@ import type { DmWhisper } from "@/lib/db/dm-whispers";
 import type { SideThread } from "@/lib/db/side-chat";
 import type { PlayerMapView } from "@/lib/battlemap/view";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-
-type Tab = "party" | "battle" | "map" | "story" | "notes" | "chat" | "log" | "settings";
 
 // Two widths only: the default rail and a roomier one. Per-browser
 // localStorage via useSyncExternalStore, same pattern as useChatChime:
@@ -66,8 +59,11 @@ function setWide(wide: boolean) {
   window.dispatchEvent(new Event(WIDE_EVENT));
 }
 
-// The session's right rail: party sheets, the current area map, story
-// chapters, table notes, and the stat-change log, tabbed to keep it narrow.
+// The session's panel column: party sheets, the current area map, story
+// chapters, table notes, and the stat-change log. On desktop it is the tabbed
+// right rail; below lg it fills the screen when the bottom tab bar selects a
+// panel. Tab state lives in SessionView (SessionTabs) so the mobile bottom
+// bar and this rail stay in sync.
 export function SidePanel({
   campaignId,
   sheets,
@@ -93,13 +89,18 @@ export function SidePanel({
   onChatTargetHandled,
   onMessageUser,
   mediaStatus,
-  mapsEnabled,
   inviteCode,
   midGameJoinOpen,
   campaign,
   encounter,
   battleMap,
   refreshBattleMap,
+  tabs,
+  tab,
+  onTabChange,
+  pendingCount,
+  chatUnread,
+  mobileVisible,
 }: {
   campaignId: string;
   sheets: CharacterSheet[];
@@ -125,38 +126,21 @@ export function SidePanel({
   onChatTargetHandled: () => void;
   onMessageUser: (userId: string) => void;
   mediaStatus: Record<string, MediaStatus>;
-  mapsEnabled: boolean;
   inviteCode?: string;
   midGameJoinOpen?: boolean;
   campaign?: Parameters<typeof SessionSettings>[0]["campaign"];
   encounter?: PublicEncounter | null;
   battleMap?: PlayerMapView | null;
   refreshBattleMap: () => Promise<void>;
+  tabs: PanelTabDef[];
+  tab: PanelTab;
+  onTabChange: (tab: PanelTab) => void;
+  pendingCount: number;
+  chatUnread: number;
+  mobileVisible: boolean;
 }) {
-  const [tab, setTab] = useState<Tab>("party");
   const [inviteCopied, setInviteCopied] = useState(false);
   const wide = useSyncExternalStore(subscribeWide, readWide, () => false);
-
-  // "Message" on a party card jumps to the chat tab; SideChatPanel opens the
-  // 1:1 thread from the same request. State-from-props during render, per
-  // React's "adjusting state when a prop changes" pattern.
-  const [seenChatTarget, setSeenChatTarget] = useState<string | null>(null);
-  if (chatTarget && chatTarget !== seenChatTarget) {
-    setSeenChatTarget(chatTarget);
-    setTab("chat");
-  }
-
-  // Combat starting jumps to the battle map; the tab itself disappears when
-  // the encounter ends, so fall back off it. Same adjust-during-render
-  // pattern as chatTarget above.
-  const [seenMapId, setSeenMapId] = useState<string | null>(null);
-  if (battleMap && battleMap.mapId !== seenMapId) {
-    setSeenMapId(battleMap.mapId);
-    setTab("battle");
-  }
-  if (!battleMap && tab === "battle") {
-    setTab("party");
-  }
 
   // Lead-only mid-game invite controls, shown on the Party tab.
   async function toggleMidGameJoin() {
@@ -172,41 +156,16 @@ export function SidePanel({
     setInviteCopied(true);
     setTimeout(() => setInviteCopied(false), 1500);
   }
-  // The lead sees every pending suggestion; members only their own.
-  const pendingCount = notes.filter((note) => note.status === "pending").length;
-  const sideUnread = sideThreads.reduce((sum, thread) => sum + thread.unread, 0);
-  const chatUnread = sideUnread + whisperUnread;
-  const tabs: Array<[Tab, string, LucideIcon, string]> = [
-    ["party", "Party", Users, "Character sheets, HP and conditions for the whole party."],
-    ...(battleMap
-      ? ([["battle", "Battle", Swords, "The tactical battle map. Move your token on your turn."]] as Array<
-          [Tab, string, LucideIcon, string]
-        >)
-      : []),
-    ...(mapsEnabled
-      ? ([["map", "Map", MapIcon, "The scene map and discovered locations."]] as Array<
-          [Tab, string, LucideIcon, string]
-        >)
-      : []),
-    ["story", "Story", BookOpen, "Chapters and the tale so far."],
-    ["notes", "Notes", StickyNote, "Suggest story notes; the party lead approves them."],
-    ["chat", "Chat", MessagesSquare, "Side chat between players. The DM does not see it."],
-    ["log", "Log", ScrollText, "Dice rolls and DM stat changes, audited."],
-    ...(campaign
-      ? ([["settings", "Setup", Settings2, "Campaign settings, invites and game toggles."]] as Array<
-          [Tab, string, LucideIcon, string]
-        >)
-      : []),
-  ];
 
   return (
     <aside
       className={cn(
-        "hidden shrink-0 flex-col border-l border-stone-700/50 bg-gradient-to-b from-stone-950/70 to-stone-950/30 transition-[width] duration-200 lg:flex",
-        wide ? "w-[26rem]" : "w-80",
+        "shrink-0 flex-col bg-gradient-to-b from-stone-950/70 to-stone-950/30 lg:flex lg:border-l lg:border-stone-700/50 lg:transition-[width] lg:duration-200",
+        mobileVisible ? "flex w-full min-w-0" : "hidden",
+        wide ? "lg:w-[26rem]" : "lg:w-80",
       )}
     >
-      <div className="flex items-stretch gap-1 border-b border-stone-700/50 px-2 py-2">
+      <div className="hidden items-stretch gap-1 border-b border-stone-700/50 px-2 py-2 lg:flex">
         <Tooltip content={wide ? "Narrow the panel" : "Widen the panel"} side="bottom">
           <button
             type="button"
@@ -220,7 +179,7 @@ export function SidePanel({
           <Tooltip key={value} content={tip} side="bottom">
           <button
             type="button"
-            onClick={() => setTab(value)}
+            onClick={() => onTabChange(value)}
             className={cn(
               "relative flex flex-1 flex-col items-center gap-1 rounded-lg py-2 transition-all duration-150 ease-snap",
               tab === value
@@ -253,6 +212,7 @@ export function SidePanel({
         ))}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        <div className="mx-auto w-full max-w-2xl lg:max-w-none">
         {tab === "party" ? (
           <>
           {encounter ? (
@@ -374,6 +334,7 @@ export function SidePanel({
             isLead={isLead}
           />
         )}
+        </div>
       </div>
     </aside>
   );

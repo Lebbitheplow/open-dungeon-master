@@ -78,13 +78,21 @@ server refuses to start without `DB_ENCRYPTION_KEY` in `.env.server`.
 Run the app on all interfaces:
 
 ```bash
-npm run dev:tailscale
+npm run dev:lan    # development
+npm run start:lan  # production build (run npm run build first)
 ```
 
-Add your phone-facing hostname/IP to `ALLOWED_DEV_ORIGINS` in `.env.local`
-(comma-separated), then open `http://<your-machine>:3002` from the phone on
-the same tailnet. The image worker and Ollama can stay on `127.0.0.1` because
+For dev mode, add your phone-facing hostname/IP to `ALLOWED_DEV_ORIGINS` in
+`.env.local` (comma-separated), then open `http://<your-machine>:3005` from
+the phone. The image worker and Ollama can stay on `127.0.0.1` because
 browser requests go through the Next.js server.
+
+### Installing as an app
+
+When the app is reached over HTTPS (for example through a reverse proxy),
+the browser offers "Install app" / "Add to Home Screen" and it runs
+standalone with its own icon. Plain `http://<host>:3005` cannot install:
+browsers require a secure context for web-app installs.
 
 ## Local data
 

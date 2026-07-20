@@ -164,7 +164,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
   }
 
   return (
-    <main className="mx-auto w-full max-w-2xl flex-1 p-6">
+    <main className="mx-auto w-full max-w-2xl flex-1 p-4 sm:p-6">
       <header className="bg-starfield mb-6 -mx-6 -mt-6 px-6 pb-5 pt-6">
         <Link href="/" className="text-sm text-stone-500 transition-colors hover:text-stone-300">
           &larr; All campaigns

@@ -48,7 +48,7 @@ export default function JoinPage({ params }: { params: Promise<{ code: string }>
   }, [join]);
 
   return (
-    <main className="flex flex-1 items-center justify-center p-6">
+    <main className="flex flex-1 items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-sm rounded-xl border border-stone-800 bg-stone-950/70 p-6">
         <div className="mb-6 flex items-center gap-3">
           <PixelTile src={PIXEL_ICONS.chats} />

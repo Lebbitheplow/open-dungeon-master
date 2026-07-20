@@ -34,6 +34,7 @@ import type { EnemyAttack } from "@/lib/bestiary/statblock";
 import {
   advanceOrder,
   buildOrder,
+  coerceEncounterOutcome,
   critDamageExpression,
   numberDuplicates,
   pickEnemyTarget,
@@ -769,8 +770,11 @@ function handleEnemyAttack(
 
 // ---- end_encounter ----
 
+// Outcome is deliberately a free string: a rejected end_encounter used to
+// leave the fight stuck open while the narration declared it over.
+// coerceEncounterOutcome maps synonyms and infers from the roster.
 const endArgsSchema = z.object({
-  outcome: z.enum(["victory", "enemies_fled", "party_fled", "party_defeated", "truce"]),
+  outcome: z.string().max(80).optional(),
   reason: z.string().optional(),
 });
 
@@ -789,14 +793,16 @@ function handleEndEncounter(
   try {
     args = endArgsSchema.parse(JSON.parse(rawArguments || "{}"));
   } catch {
-    return {
-      error:
-        "Invalid arguments: end_encounter needs an outcome of victory, enemies_fled, party_fled, party_defeated, or truce.",
-    };
+    args = { outcome: undefined };
   }
+  const statuses = listEnemies(encounter.id).map((enemy) => enemy.status);
+  const { outcome, inferred } = coerceEncounterOutcome(args.outcome, statuses);
   return {
     ok: true,
-    ...finishEncounter(campaign, turn, encounter, args.outcome, sheets, sheetsById),
+    ...(inferred
+      ? { note: `Outcome "${args.outcome ?? ""}" was not recognized; recorded as ${outcome}.` }
+      : {}),
+    ...finishEncounter(campaign, turn, encounter, outcome, sheets, sheetsById),
   };
 }
 

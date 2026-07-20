@@ -96,7 +96,7 @@ export default function CampaignCharacterPage({
 
   if (level === null) {
     return (
-      <main className="mx-auto w-full max-w-3xl flex-1 p-6">
+      <main className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
         <div className="flex justify-center py-10">
           <Loader2 className="size-5 animate-spin text-stone-500" />
         </div>
@@ -105,7 +105,7 @@ export default function CampaignCharacterPage({
   }
 
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 p-6">
+    <main className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
       <header className="mb-6">
         <a href={`/campaigns/${campaignId}`} className="text-sm text-stone-500 hover:text-stone-300">
           &larr; Back to the lobby

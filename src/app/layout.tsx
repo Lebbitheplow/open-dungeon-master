@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Cinzel, Geist, Geist_Mono, Source_Serif_4 } from "next/font/google";
 import TopoBackground from "./TopoBackground";
 import "./globals.css";
@@ -30,6 +30,20 @@ const cinzel = Cinzel({
 export const metadata: Metadata = {
   title: "Open Dungeon Master",
   description: "Multiplayer D&D 5e campaigns with an AI Dungeon Master.",
+  applicationName: "Open Dungeon Master",
+  appleWebApp: {
+    capable: true,
+    title: "Open DM",
+    statusBarStyle: "black-translucent",
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#181420",
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({

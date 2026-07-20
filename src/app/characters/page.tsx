@@ -104,7 +104,7 @@ export default function CharactersPage() {
 
   if (!authed) {
     return (
-      <main className="mx-auto w-full max-w-3xl flex-1 p-6">
+      <main className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
         <p className="rounded-lg border border-stone-800 p-6 text-center text-stone-400">
           <Link href="/" className="text-amber-200 hover:text-amber-400">Log in</Link> to see your
           character library.
@@ -114,7 +114,7 @@ export default function CharactersPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 p-6">
+    <main className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
       <header className="mb-8 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <PixelTile src={PIXEL_ICONS.characters} />

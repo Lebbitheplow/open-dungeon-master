@@ -32,7 +32,7 @@ export default function NewCharacterPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 p-6">
+    <main className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
       <header className="mb-6">
         <Link href="/characters" className="text-sm text-stone-500 hover:text-stone-300">
           &larr; Back to your characters

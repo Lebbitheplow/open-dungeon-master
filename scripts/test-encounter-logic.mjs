@@ -5,7 +5,7 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { buildOrder, advanceOrder, enemyDamageMath, numberDuplicates, pickEnemyTarget, spliceIntoOrder } = await import(
+const { buildOrder, advanceOrder, coerceEncounterOutcome, enemyDamageMath, numberDuplicates, pickEnemyTarget, spliceIntoOrder } = await import(
   "../src/lib/dm/encounter-logic.ts"
 );
 
@@ -150,6 +150,27 @@ test("pickEnemyTarget without positions falls back to lowest AC", () => {
     "wizard",
   );
   assert.equal(pickEnemyTarget(null, []), null);
+});
+
+test("coerceEncounterOutcome: exact outcomes pass through", () => {
+  assert.deepEqual(coerceEncounterOutcome("victory", ["dead"]), { outcome: "victory", inferred: false });
+  assert.deepEqual(coerceEncounterOutcome("enemies_fled", ["alive"]), { outcome: "enemies_fled", inferred: false });
+});
+
+test("coerceEncounterOutcome: synonyms map", () => {
+  assert.equal(coerceEncounterOutcome("the bandits surrender", ["alive"]).outcome, "truce");
+  assert.equal(coerceEncounterOutcome("peace", ["alive"]).outcome, "truce");
+  assert.equal(coerceEncounterOutcome("retreat", ["alive"]).outcome, "enemies_fled");
+  assert.equal(coerceEncounterOutcome("enemies routed", ["alive"]).outcome, "enemies_fled");
+  assert.equal(coerceEncounterOutcome("we won", ["dead"]).outcome, "victory");
+  assert.equal(coerceEncounterOutcome("party flees", ["alive"]).outcome, "party_fled");
+  assert.equal(coerceEncounterOutcome("tpk", ["alive"]).outcome, "party_defeated");
+});
+
+test("coerceEncounterOutcome: unknown/missing infers from roster", () => {
+  assert.deepEqual(coerceEncounterOutcome(undefined, ["dead", "dead"]), { outcome: "victory", inferred: true });
+  assert.deepEqual(coerceEncounterOutcome("???", ["fled", "fled"]), { outcome: "enemies_fled", inferred: true });
+  assert.deepEqual(coerceEncounterOutcome("", ["alive", "dead"]), { outcome: "truce", inferred: true });
 });
 
 console.log(`test-encounter-logic: ${passed} passed`);
