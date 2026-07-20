@@ -714,6 +714,10 @@ function ensureSchema(db: Database.Database) {
     // cast_at_enemy, or end_turn); advanceAfterTurn only moves the pointer
     // past a PC on this list or with a landed non-initiative roll.
     ["resolved_character_ids_json", `TEXT NOT NULL DEFAULT '[]'`],
+    // Character ids that actually received a send_whisper this turn; finalize()
+    // marks a player's pending whisper answered only if its sender is here, so
+    // a turn that never replied cannot silently consume the message.
+    ["answered_whisper_character_ids_json", `TEXT NOT NULL DEFAULT '[]'`],
   ]);
 
   addColumns("encounters", [

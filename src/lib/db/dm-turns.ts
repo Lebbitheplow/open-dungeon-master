@@ -19,6 +19,10 @@ export type DmTurn = {
   // Player-to-DM whispers this turn consumed; marked answered in finalize()
   // so a failed turn leaves them pending for the next one to retry.
   playerWhisperIds: string[];
+  // Character ids that actually received a send_whisper this turn. finalize()
+  // marks a player's pending whisper answered only when its sender is here, so
+  // a turn that never replied cannot silently consume the message.
+  answeredWhisperCharacterIds: string[];
   // Enemies that already attacked this turn (via enemy_attack); the auto-act
   // fallback skips them so nothing swings twice.
   actedEnemyIds: string[];
@@ -42,6 +46,7 @@ type TurnRow = {
   narration_parts_json: string;
   roll_ids_json: string;
   player_whisper_ids_json: string;
+  answered_whisper_character_ids_json: string | null;
   acted_enemy_ids_json: string | null;
   resolved_character_ids_json: string | null;
   image_args_json: string | null;
@@ -62,6 +67,10 @@ function mapTurn(row: TurnRow): DmTurn {
     narrationParts: parseJson<string[]>(row.narration_parts_json, []),
     rollIds: parseJson<string[]>(row.roll_ids_json, []),
     playerWhisperIds: parseJson<string[]>(row.player_whisper_ids_json, []),
+    answeredWhisperCharacterIds: parseJson<string[]>(
+      row.answered_whisper_character_ids_json,
+      [],
+    ),
     actedEnemyIds: parseJson<string[]>(row.acted_enemy_ids_json, []),
     resolvedCharacterIds: parseJson<string[]>(row.resolved_character_ids_json, []),
     imageArgs: parseJson<DmTurn["imageArgs"]>(row.image_args_json, null),
@@ -104,7 +113,7 @@ export function saveDmTurn(turn: DmTurn) {
       `
         UPDATE dm_turns SET
           status = ?, call_index = ?, conversation_json = ?,
-          narration_parts_json = ?, roll_ids_json = ?, player_whisper_ids_json = ?, acted_enemy_ids_json = ?, resolved_character_ids_json = ?, image_args_json = ?,
+          narration_parts_json = ?, roll_ids_json = ?, player_whisper_ids_json = ?, answered_whisper_character_ids_json = ?, acted_enemy_ids_json = ?, resolved_character_ids_json = ?, image_args_json = ?,
           location_id = ?, mutation_count = ?, encounter_count = ?, updated_at = ?
         WHERE id = ?
       `,
@@ -116,6 +125,7 @@ export function saveDmTurn(turn: DmTurn) {
       JSON.stringify(turn.narrationParts),
       JSON.stringify(turn.rollIds),
       JSON.stringify(turn.playerWhisperIds),
+      JSON.stringify(turn.answeredWhisperCharacterIds),
       JSON.stringify(turn.actedEnemyIds),
       JSON.stringify(turn.resolvedCharacterIds),
       turn.imageArgs ? JSON.stringify(turn.imageArgs) : null,

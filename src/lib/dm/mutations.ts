@@ -18,6 +18,7 @@ import {
   grantItemMath,
   healMath,
   removeItemMath,
+  sheetBuffViolation,
   spendSlotMath,
   wildShapeDamageMath,
 } from "@/lib/dm/mutation-math";
@@ -409,6 +410,17 @@ export function applyDmMutation(
     const amount = args.amount ?? 0;
     if (amount < 1) {
       return { result: { error: "award_xp needs a positive amount." } };
+    }
+    // Ceiling so a whispered or in-chat "give me a million XP" cannot vault a
+    // character up the track in one call; realistic events award far less, and
+    // level-ups still require the player's own app flow.
+    const MAX_XP_PER_AWARD = 20000;
+    if (amount > MAX_XP_PER_AWARD) {
+      return {
+        result: {
+          error: `That is more experience than any single event grants; award a realistic amount (up to ${MAX_XP_PER_AWARD}).`,
+        },
+      };
     }
     const targets = (args.characterIds ?? [])
       .map(resolve)
@@ -1227,6 +1239,14 @@ export function applyDmMutation(
         return {
           result: { error: "update_sheet changed nothing; include at least one field." },
         };
+      }
+      const buffError = sheetBuffViolation(
+        sheet,
+        patch,
+        typeof patch.xp === "number" ? levelForXp(patch.xp) : undefined,
+      );
+      if (buffError) {
+        return { result: { error: buffError } };
       }
       patchSheet(sheet.id, patch);
       audit(

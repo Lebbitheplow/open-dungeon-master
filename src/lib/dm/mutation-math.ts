@@ -4,6 +4,40 @@
 export type SlotState = { max: number; used: number };
 export type EquipmentRow = { name: string; qty: number; slug?: string };
 
+// Server-side ceiling on DM sheet edits so no amount of prompting (public, or
+// on the private whisper line) can talk the DM into a cheat: an extra level, a
+// huge HP or gold jump, an ability past 20, hand-set XP. Legitimate modest
+// story changes (a rename, a curse, a single lead-directed level) still pass;
+// real advancement happens through the player's own level-up flow in the app.
+// xpTargetLevel is levelForXp(patch.xp), computed by the caller so this module
+// stays import-free; leave it undefined when the patch does not set xp.
+export function sheetBuffViolation(
+  sheet: { name: string; level: number; maxHp: number; gold: number },
+  patch: { level?: number; maxHp?: number; gold?: number; abilities?: Record<string, number> },
+  xpTargetLevel?: number,
+): string | null {
+  if (typeof patch.level === "number" && patch.level > sheet.level + 1) {
+    return `A character gains at most one level at a time, and a level-up is applied through the player's own choices in the app. ${sheet.name} stays at level ${sheet.level}.`;
+  }
+  if (typeof xpTargetLevel === "number" && xpTargetLevel > sheet.level + 1) {
+    return `Experience is earned through play with award_xp, not set by hand; ${sheet.name}'s XP is unchanged.`;
+  }
+  if (typeof patch.maxHp === "number" && patch.maxHp > sheet.maxHp + 12 * Math.max(1, sheet.level)) {
+    return `${sheet.name}'s maximum HP cannot jump that far from a single change; larger gains come from leveling up in the app.`;
+  }
+  if (typeof patch.gold === "number" && patch.gold - sheet.gold > 1000) {
+    return `Coin moves through purchases, loot, and roll_treasure, not a direct sheet edit; ${sheet.name}'s gold is unchanged.`;
+  }
+  if (patch.abilities) {
+    for (const [ability, score] of Object.entries(patch.abilities)) {
+      if (typeof score === "number" && score > 20) {
+        return `Ability scores cap at 20 here; leave ${sheet.name}'s ${ability.toUpperCase()} at 20 or lower.`;
+      }
+    }
+  }
+  return null;
+}
+
 // Damage soaks temp HP first; HP floors at 0. Returns the new pools plus
 // how much was absorbed and whether the character dropped.
 export function applyDamageMath(currentHp: number, tempHp: number, amount: number) {

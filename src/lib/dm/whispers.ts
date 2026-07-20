@@ -14,6 +14,24 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 export const WHISPER_CAP_PER_TURN = 5;
 
+// Fallback whisper text when the model produced no reply to a private player
+// message even after a nudge: the player is never left in silence.
+export const FALLBACK_WHISPER_MESSAGE =
+  "The DM takes in your words quietly and will weave them into the story.";
+
+// Inserts a DM->players whisper and pings recipients with the contentless
+// "whisper_activity" event. Shared by handleSendWhisper and the reply
+// backstop so both stay in lockstep on delivery.
+export function deliverWhisper(
+  campaignId: string,
+  turnId: string,
+  recipients: WhisperRecipient[],
+  message: string,
+) {
+  insertWhisper(campaignId, turnId, recipients, message);
+  publishEphemeral(campaignId, "whisper_activity", {});
+}
+
 // characterIds tolerates a comma-joined string and a singular characterId:
 // weak tool calling (and bracket-text salvage) sends both shapes.
 const whisperArgsSchema = z.object({
@@ -60,11 +78,13 @@ export function handleSendWhisper(
     characterId: sheet.id,
     characterName: sheet.name,
   }));
-  insertWhisper(campaign.id, turnId, recipients, args.message);
-  publishEphemeral(campaign.id, "whisper_activity", {});
+  deliverWhisper(campaign.id, turnId, recipients, args.message);
   return {
     ok: true,
     whisperedTo: recipients.map((recipient) => recipient.characterName),
+    // Character ids that got this whisper, so the turn can tell which pending
+    // player messages were actually answered.
+    whisperedCharacterIds: recipients.map((recipient) => recipient.characterId),
     note: "Delivered privately. Continue the shared scene without revealing it.",
   };
 }

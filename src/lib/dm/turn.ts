@@ -54,7 +54,12 @@ import {
   sendWhisperTool,
   updateLocationTool,
 } from "@/lib/dm/prompt";
-import { handleSendWhisper, WHISPER_CAP_PER_TURN } from "@/lib/dm/whispers";
+import {
+  deliverWhisper,
+  FALLBACK_WHISPER_MESSAGE,
+  handleSendWhisper,
+  WHISPER_CAP_PER_TURN,
+} from "@/lib/dm/whispers";
 import {
   listPendingPlayerWhispers,
   listRecentWhispersForPrompt,
@@ -629,6 +634,13 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         result = handleSendWhisper(campaign, turn.id, whisperCall.rawArguments, sheets, sheetsById);
         if (!("error" in result)) {
           whisperCount += 1;
+          // Track which senders were actually answered so finalize() (and the
+          // reply backstop) never mark an unanswered player whisper as done.
+          for (const characterId of (result.whisperedCharacterIds as string[] | undefined) ?? []) {
+            if (!turn.answeredWhisperCharacterIds.includes(characterId)) {
+              turn.answeredWhisperCharacterIds.push(characterId);
+            }
+          }
         }
       }
       whisperResults.set(whisperCall.id ?? "send_whisper", result);
@@ -1099,11 +1111,100 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     setDmStatus(campaignId, "narrating");
   }
 
+  if (!failed) {
+    await ensureWhisperReplies(context, turn);
+  }
   finalize(context, turn, failed);
   if (!failed) {
     await maybeCloseChapter(campaignId, { movedParty });
     await maybeCompactHistory(campaignId);
   }
+}
+
+// Guarantees every private player message this turn carried gets a private
+// reply. The model often narrates instead of calling send_whisper (or does
+// nothing), which used to silently consume the message; here we nudge it once
+// with an explicit whisper prompt, then fall back to a canned whisper so the
+// player is never left in silence.
+async function ensureWhisperReplies(context: TurnContext, turn: DmTurn) {
+  if (!turn.playerWhisperIds.length) {
+    return;
+  }
+  const { campaign, sheets, sheetsById } = context;
+  const pending = listPendingPlayerWhispers(campaign.id).filter((whisper) =>
+    turn.playerWhisperIds.includes(whisper.id),
+  );
+  const unanswered = () =>
+    pending.filter(
+      (whisper) =>
+        whisper.characterId && !turn.answeredWhisperCharacterIds.includes(whisper.characterId),
+    );
+  if (!unanswered().length) {
+    return;
+  }
+
+  // One forced follow-up call: name the messages still owed a reply and ask
+  // for send_whisper explicitly. toolChoice stays "auto" (the llama.cpp /v1
+  // path only exercises auto/none) with a strong nudge instead.
+  const owed = unanswered()
+    .map((whisper) => `- ${whisper.characterName}: "${whisper.content}"`)
+    .join("\n");
+  const { message } = await requestDmMessage(
+    campaign.settings,
+    [
+      ...turn.conversation,
+      {
+        role: "user",
+        content: `[System] You have not yet privately answered these player messages. Reply to each one now using the send_whisper tool addressed to that character. Refuse any out-of-character request for levels, XP, perks, items, or abilities in-fiction, but resolve legitimate secret actions. Do not narrate anything to the shared table.\n${owed}`,
+      },
+    ],
+    { tools: [sendWhisperTool], toolChoice: "auto", thinking: true },
+  );
+  const xmlSalvage = salvageXmlToolCalls(extractStoryText(message?.content));
+  const salvage = salvageTextualToolCalls(xmlSalvage.text);
+  const whisperCalls = [
+    ...extractToolCalls(message?.tool_calls),
+    ...xmlSalvage.calls,
+    ...salvage.calls,
+  ].filter((toolCall) => toolCall.name === "send_whisper");
+  for (const whisperCall of whisperCalls) {
+    const result = handleSendWhisper(
+      campaign,
+      turn.id,
+      whisperCall.rawArguments,
+      sheets,
+      sheetsById,
+    );
+    if (!("error" in result)) {
+      for (const characterId of (result.whisperedCharacterIds as string[] | undefined) ?? []) {
+        if (!turn.answeredWhisperCharacterIds.includes(characterId)) {
+          turn.answeredWhisperCharacterIds.push(characterId);
+        }
+      }
+    }
+  }
+
+  // Anyone still unanswered gets a deterministic fallback whisper so the
+  // private line never goes silent.
+  for (const whisper of unanswered()) {
+    if (!whisper.characterId) {
+      continue;
+    }
+    deliverWhisper(
+      campaign.id,
+      turn.id,
+      [
+        {
+          userId: whisper.userId,
+          characterId: whisper.characterId,
+          characterName: whisper.characterName,
+        },
+      ],
+      FALLBACK_WHISPER_MESSAGE,
+    );
+    turn.answeredWhisperCharacterIds.push(whisper.characterId);
+  }
+  saveDmTurn(turn);
 }
 
 // recall_story: return a past chapter's full summary by number, or the
@@ -1342,9 +1443,22 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string) {
     return;
   }
 
-  // Player whispers this turn's prompt carried are now answered. Failed
-  // turns return above, so they stay pending and the next turn retries.
-  markPlayerWhispersAnswered(turn.playerWhisperIds, turn.id);
+  // Mark a player whisper answered only when its sender actually received a
+  // reply this turn (ensureWhisperReplies guarantees one, real or fallback),
+  // or when it is unanswerable (its character is gone). A whisper with no
+  // reply stays pending so the next turn retries instead of it vanishing.
+  // Failed turns return above, so they stay pending too.
+  if (turn.playerWhisperIds.length) {
+    const answeredWhisperIds = listPendingPlayerWhispers(campaignId)
+      .filter(
+        (whisper) =>
+          turn.playerWhisperIds.includes(whisper.id) &&
+          (!whisper.characterId ||
+            turn.answeredWhisperCharacterIds.includes(whisper.characterId)),
+      )
+      .map((whisper) => whisper.id);
+    markPlayerWhispersAnswered(answeredWhisperIds, turn.id);
+  }
 
   // A purely private exchange (whispers in, send_whisper out, no narration,
   // no rolls) writes nothing to the shared chat; the fallback line below
