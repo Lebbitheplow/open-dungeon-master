@@ -68,6 +68,22 @@ export function serializeMapForPrompt(
   });
   lines.push(`Combatants: ${tokenLines.join("; ")}`);
 
+  // Precomputed PC-to-enemy ranges: tile counting on the ASCII grid is
+  // exactly the arithmetic small models get wrong, so these lines are the
+  // authoritative distances the prompt points at.
+  const pcTokens = tokens.filter((token) => token.kind === "pc");
+  const enemyTokens = tokens.filter((token) => token.kind === "enemy");
+  if (pcTokens.length && enemyTokens.length) {
+    const rows = pcTokens.map((pc) => {
+      const parts = enemyTokens.map((enemy) => {
+        const tilesApart = Math.max(Math.abs(pc.x - enemy.x), Math.abs(pc.y - enemy.y));
+        return `${enemy.name} ${tilesApart <= 1 ? "ADJACENT (melee range, 5 ft)" : `${tilesApart * 5} ft`}`;
+      });
+      return `- ${pc.name}: ${parts.join("; ")}`;
+    });
+    lines.push(`Distances (authoritative; do not re-count tiles):\n${rows.join("\n")}`);
+  }
+
   const lightParts: string[] = [`Ambient light: ${map.ambient}.`];
   if (map.lights.length) {
     lightParts.push(

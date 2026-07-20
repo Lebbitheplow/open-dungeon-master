@@ -7,6 +7,13 @@ import { cn } from "@/lib/cn";
 import { abilityMod, findClass, findSkill, spellSlotsFor } from "@/lib/srd";
 import { applyAsiChoices, crossedAsiLevels } from "@/lib/srd/asi";
 import { expertiseSlotsFor, populateFeatures, srdSubclassName, subclassLevelFor } from "@/lib/srd/features";
+import {
+  FIGHTING_STYLES,
+  chosenFightingStyles,
+  fightingStyleFeatureName,
+  fightingStyleSlots,
+  type FightingStyleId,
+} from "@/lib/srd/feature-effects";
 import { spellClassFor } from "@/lib/classes";
 import { suggestedSpellCount } from "@/lib/content/mechanics";
 import AsiFeatEditor from "@/app/characters/builder/AsiFeatEditor";
@@ -37,6 +44,7 @@ export function LevelUpDialog({
   const [subclassChoice, setSubclassChoice] = useState("");
   const [expertisePicks, setExpertisePicks] = useState<string[]>([]);
   const [spellPicks, setSpellPicks] = useState<string[]>([]);
+  const [stylePicks, setStylePicks] = useState<FightingStyleId[]>([]);
   const [spellQuery, setSpellQuery] = useState("");
   const [spellOptions, setSpellOptions] = useState<SpellRow[]>([]);
   const [packInstalled, setPackInstalled] = useState(true);
@@ -69,6 +77,19 @@ export function LevelUpDialog({
   );
   const needsExpertise = expertiseToPick > 0 && expertiseOptions.length > 0;
 
+  // Fighting styles: the class grants the slot, the player picks which one,
+  // and the pick is stored as a "choice"-sourced feature the regrant keeps.
+  // Independent of the subclass, so it can be resolved before one is chosen.
+  const styleSlots = fightingStyleSlots(
+    populateFeatures(sheet.features, sheet.class, sheet.subclass, sheet.race, targetLevel),
+  );
+  const currentStyles = chosenFightingStyles(sheet.features);
+  const stylesToPick = Math.max(0, styleSlots - currentStyles.length);
+  const needsStyle = stylesToPick > 0;
+  const styleOptions = FIGHTING_STYLES.filter(
+    (style) => !currentStyles.some((name) => name.toLowerCase() === style.name.toLowerCase()),
+  );
+
   const subclassLevel = subclassLevelFor(sheet.class);
   const needsSubclass =
     subclassLevel !== null &&
@@ -92,10 +113,11 @@ export function LevelUpDialog({
       "hp",
       ...(asiLevels.length ? ["asi"] : []),
       ...(needsExpertise ? ["expertise"] : []),
+      ...(needsStyle ? ["style"] : []),
       ...(needsSubclass ? ["subclass"] : []),
       ...(sheet.spellcasting ? ["spells"] : []),
     ],
-    [asiLevels.length, needsExpertise, needsSubclass, sheet.spellcasting],
+    [asiLevels.length, needsExpertise, needsStyle, needsSubclass, sheet.spellcasting],
   );
   const step = steps[stepIndex];
   const lastStep = stepIndex === steps.length - 1;
@@ -199,13 +221,19 @@ export function LevelUpDialog({
       const newFeats = choices.flatMap((choice) =>
         choice.mode === "feat" ? [choice.feat] : [],
       );
-      const features = populateFeatures(
-        sheet.features,
-        sheet.class,
-        effectiveSubclass,
-        sheet.race,
-        targetLevel,
-      );
+      const features = [
+        ...populateFeatures(
+          sheet.features,
+          sheet.class,
+          effectiveSubclass,
+          sheet.race,
+          targetLevel,
+        ),
+        ...stylePicks.map((id) => ({
+          name: fightingStyleFeatureName(id),
+          source: "choice" as const,
+        })),
+      ];
       let spellcastingPatch: CharacterSheet["spellcasting"] = null;
       if (sheet.spellcasting) {
         const nextSlots = Object.keys(slots).length
@@ -272,6 +300,8 @@ export function LevelUpDialog({
       ? asiResolved
       : step === "expertise"
         ? expertisePicks.length === Math.min(expertiseToPick, expertiseOptions.length)
+        : step === "style"
+        ? stylePicks.length === Math.min(stylesToPick, styleOptions.length)
         : step === "subclass"
           ? Boolean(subclassChoice) || subclassOptions.length === 0
           : true;
@@ -411,6 +441,44 @@ export function LevelUpDialog({
                 </>
               ) : null}
 
+              {step === "style" ? (
+                <>
+                  <p className="text-stone-300">
+                    Fighting Style: pick {stylesToPick} for {sheet.name}. The server applies it
+                    to every attack from here on.
+                  </p>
+                  <div className="space-y-1.5">
+                    {styleOptions.map((style) => {
+                      const picked = stylePicks.includes(style.id);
+                      return (
+                        <button
+                          key={style.id}
+                          type="button"
+                          onClick={() =>
+                            setStylePicks((current) =>
+                              picked
+                                ? current.filter((entry) => entry !== style.id)
+                                : current.length < stylesToPick
+                                  ? [...current, style.id]
+                                  : current,
+                            )
+                          }
+                          className={cn(
+                            "block w-full rounded-lg border px-3 py-2 text-left",
+                            picked
+                              ? "border-amber-600 bg-stone-900 text-amber-100"
+                              : "border-stone-700 hover:border-amber-800 hover:bg-stone-900",
+                          )}
+                        >
+                          <span className="block text-sm">{style.name}</span>
+                          <span className="block text-xs text-stone-400">{style.description}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : null}
+
               {step === "subclass" ? (
                 <>
                   <p className="text-stone-300">
@@ -484,6 +552,11 @@ export function LevelUpDialog({
                               <input
                                 type="checkbox"
                                 checked={spellPicks.includes(spell.name)}
+                                disabled={
+                                  !spellPicks.includes(spell.name) &&
+                                  remainingPicks !== null &&
+                                  spellPicks.length >= remainingPicks
+                                }
                                 onChange={() => toggleSpell(spell.name)}
                                 className="accent-amber-400"
                               />
@@ -522,8 +595,11 @@ export function LevelUpDialog({
                   {spellPicks.length ? (
                     <p className="text-xs text-stone-400">
                       Learning: <span className="text-amber-200">{spellPicks.join(", ")}</span>
-                      {remainingPicks !== null && spellPicks.length > remainingPicks ? (
-                        <span className="text-red-400"> (over the usual allowance)</span>
+                      {remainingPicks !== null && spellPicks.length >= remainingPicks ? (
+                        <span className="text-stone-500">
+                          {" "}
+                          (that is the full allowance at this level)
+                        </span>
                       ) : null}
                     </p>
                   ) : null}

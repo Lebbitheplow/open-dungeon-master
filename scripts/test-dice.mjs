@@ -101,4 +101,26 @@ test("crypto RNG stays in bounds over 10k rolls", () => {
   assert.equal(counts.size, 6, "all six faces should appear in 2000 rolls");
 });
 
+test("Great Weapon Fighting rerolls 1s and 2s once each", () => {
+  // Each die is resolved in turn, so a reroll consumes the very next value:
+  // 1 -> 5, 2 -> 6, then a clean 3.
+  const result = rollExpression("3d6+4", queueRng([1, 5, 2, 6, 3]), { rerollBelow: 2 });
+  assert.equal(result.total, 5 + 6 + 3 + 4);
+  const dice = result.terms[0].dice;
+  assert.deepEqual(dice.map((d) => d.value), [5, 6, 3]);
+  assert.deepEqual(dice.map((d) => d.rerolledFrom), [1, 2, undefined]);
+});
+
+test("a reroll is taken once, even into a worse face", () => {
+  const result = rollExpression("1d12", queueRng([2, 1]), { rerollBelow: 2 });
+  assert.equal(result.total, 1);
+  assert.equal(result.terms[0].dice[0].rerolledFrom, 2);
+});
+
+test("the reroll never touches a d20 attack roll", () => {
+  const result = rollExpression("1d20+3", queueRng([2]), { rerollBelow: 2 });
+  assert.equal(result.total, 5);
+  assert.equal(result.natural, 2);
+});
+
 console.log(`\n${passed} dice tests passed`);

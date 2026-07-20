@@ -1,28 +1,41 @@
 "use client";
 
 import { Loader2, X } from "lucide-react";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { cn } from "@/lib/cn";
-import { STANDARD_LANGUAGES, suggestedSpellCount } from "@/lib/content/mechanics";
+import {
+  STANDARD_LANGUAGES,
+  suggestedCantripCount,
+  suggestedSpellCount,
+} from "@/lib/content/mechanics";
 import type { Ability, AbilityScores, AsiChoice, CreateSheetInput } from "@/lib/schemas/sheet";
 import {
   SRD_SKILLS,
   abilityMod,
+  acBreakdownFor,
   computeSheetDerived,
   formatModifier,
   proficiencyBonus,
   spellSlotsFor,
   suggestedStartingHp,
 } from "@/lib/srd";
-import { ASI_LEVELS, applyAsiChoices } from "@/lib/srd/asi";
-import { expertiseSlotsFor, srdSubclassName, subclassLevelFor } from "@/lib/srd/features";
+import { ASI_LEVELS, applyAsiChoices, removeAsiChoices } from "@/lib/srd/asi";
+import { classFeaturesFor, expertiseSlotsFor, srdSubclassName, subclassLevelFor } from "@/lib/srd/features";
+import {
+  FIGHTING_STYLES,
+  fightingStyleFeatureName,
+  fightingStyleSlots,
+  type FightingStyleId,
+} from "@/lib/srd/feature-effects";
 import { defaultLoadout, suggestWeapons } from "@/lib/srd/weapons";
+import { defaultArmor, suggestArmor } from "@/lib/srd/armor";
 import { classGenres, spellClassFor } from "@/lib/classes";
 import type { Genre } from "@/lib/schemas/game-settings";
 import AbilityEditor, { type AbilityMethod, type AbilityState } from "./AbilityEditor";
 import AsiFeatEditor from "./AsiFeatEditor";
 import ContentPicker from "./ContentPicker";
 import EquipmentSection from "./EquipmentSection";
+import { RacialChoicesSection } from "./RacialChoicesSection";
 import { useArchetypes, useBuilderOptions } from "./useBuilderOptions";
 
 const ALIGNMENTS = ["LG", "NG", "CG", "LN", "N", "CN", "LE", "NE", "CE"];
@@ -36,6 +49,7 @@ export type BuilderResult = { level: number; sheet: CreateSheetInput };
 export default function CharacterBuilder({
   fixedLevel,
   genre,
+  initial,
   submitLabel,
   onSubmit,
   busy,
@@ -45,6 +59,9 @@ export default function CharacterBuilder({
   // Campaign genre: floats setting-appropriate classes to the top of the
   // class picker. Absent in the library builder (default ordering).
   genre?: Genre;
+  // Edit mode: prefill every field from an existing stored sheet (the
+  // library copy, which owns builder-only fields like ASI picks).
+  initial?: CreateSheetInput;
   submitLabel: string;
   onSubmit: (result: BuilderResult) => void;
   busy: boolean;
@@ -52,37 +69,117 @@ export default function CharacterBuilder({
 }) {
   const { races, classes, backgrounds, packInstalled } = useBuilderOptions();
 
-  const [name, setName] = useState("");
-  const [alignment, setAlignment] = useState("N");
+  const [name, setName] = useState(initial?.name ?? "");
+  const [alignment, setAlignment] = useState(initial?.alignment ?? "N");
   const [level, setLevel] = useState(fixedLevel ?? 1);
-  const [raceId, setRaceId] = useState("");
-  const [classId, setClassId] = useState("");
-  const [subclass, setSubclass] = useState("");
-  const [backgroundId, setBackgroundId] = useState("");
-  const [method, setMethod] = useState<AbilityMethod>("standard");
+  const [raceId, setRaceId] = useState(initial?.race ?? "");
+  const [classId, setClassId] = useState(initial?.class ?? "");
+  const [subclass, setSubclass] = useState(initial?.subclass ?? "");
+  const [backgroundId, setBackgroundId] = useState(initial?.background ?? "");
+  const [method, setMethod] = useState<AbilityMethod>(initial ? "roll" : "standard");
   const [scores, setScores] = useState<AbilityState>({
     str: null, dex: null, con: null, int: null, wis: null, cha: null,
   });
   const [chosenSkills, setChosenSkills] = useState<string[]>([]);
   const [expertisePicks, setExpertisePicks] = useState<string[]>([]);
-  const [spells, setSpells] = useState<string[]>([]);
-  const [equipment, setEquipment] = useState<Array<{ name: string; qty: number; slug?: string }>>([]);
+  const [stylePicks, setStylePicks] = useState<FightingStyleId[]>([]);
+  const [spells, setSpells] = useState<string[]>(() =>
+    initial?.spellcasting
+      ? [...new Set([...initial.spellcasting.known, ...initial.spellcasting.prepared])]
+      : [],
+  );
+  const [equipment, setEquipment] = useState<Array<{ name: string; qty: number; slug?: string }>>(
+    () =>
+      (initial?.equipment ?? []).map((item) => ({
+        name: item.name,
+        qty: item.qty,
+        ...(item.slug ? { slug: item.slug } : {}),
+      })),
+  );
   // Auto-added class weapons the user explicitly removed; reset on class change.
   const [removedAutoNames, setRemovedAutoNames] = useState<string[]>([]);
-  const [feats, setFeats] = useState<string[]>([]);
+  const [feats, setFeats] = useState<string[]>(() => {
+    if (!initial) {
+      return [];
+    }
+    // ASI-mode feats re-derive from the ASI cards; keep only the extras.
+    const asiFeats = new Set(
+      (initial.asiChoices ?? []).flatMap((choice) =>
+        choice.mode === "feat" ? [choice.feat] : [],
+      ),
+    );
+    return (initial.feats ?? []).filter((feat) => !asiFeats.has(feat));
+  });
   // One slot per ASI threshold the effective level has earned; kept full
   // length so lowering and re-raising the level restores earlier picks.
-  const [asiChoices, setAsiChoices] = useState<Array<AsiChoice | null>>([]);
+  const [asiChoices, setAsiChoices] = useState<Array<AsiChoice | null>>(
+    initial?.asiChoices ?? [],
+  );
   // Bonus languages of the player's choice (human, half-elf, high elf, and
   // content-pack races whose language text offers a pick).
   const [bonusLanguages, setBonusLanguages] = useState<string[]>([]);
-  const [backstory, setBackstory] = useState("");
-  const [gender, setGender] = useState("");
-  const [appearance, setAppearance] = useState("");
-  const [gold, setGold] = useState(15);
-  const [hpOverride, setHpOverride] = useState<number | null>(null);
-  const [acOverride, setAcOverride] = useState<number | null>(null);
+  // Racial choices that used to be lost entirely: half-elf's two +1 ability
+  // bumps and two skills, high elf's wizard cantrip, dwarf's tool pick.
+  // Stored on the sheet so edit mode can rehydrate them exactly.
+  const [racialAsi, setRacialAsi] = useState<Array<Ability | "">>(
+    initial?.racialChoices?.asi ?? [],
+  );
+  const [racialSkills, setRacialSkills] = useState<string[]>(
+    initial?.racialChoices?.skills ?? [],
+  );
+  const [racialCantrip, setRacialCantrip] = useState(
+    initial?.racialChoices?.cantrip ?? "",
+  );
+  const [racialTool, setRacialTool] = useState(initial?.racialChoices?.tool ?? "");
+  // One-shot acknowledgement for the "caster with no spells" warning.
+  const [spellWarningAck, setSpellWarningAck] = useState(false);
+  const [backstory, setBackstory] = useState(initial?.backstory ?? "");
+  const [gender, setGender] = useState(initial?.gender ?? "");
+  const [appearance, setAppearance] = useState(initial?.appearance ?? "");
+  const [gold, setGold] = useState(initial?.gold ?? 15);
+  const [hpOverride, setHpOverride] = useState<number | null>(initial?.maxHp ?? null);
+  const [acOverride, setAcOverride] = useState<number | null>(initial?.ac ?? null);
   const [localError, setLocalError] = useState("");
+
+  // Prefill pieces that need the async option lists: base ability scores
+  // (final scores minus ASI picks minus racial bonuses; slightly lossy for
+  // scores that hit the 20 cap), skill picks minus the background's fixed
+  // skills, and bonus languages beyond the race's own.
+  const hydratedInitial = useRef(false);
+  useEffect(() => {
+    if (!initial || hydratedInitial.current || !races.length || !backgrounds.length) {
+      return;
+    }
+    hydratedInitial.current = true;
+    const initialRace = races.find((entry) => entry.id === initial.race);
+    const initialBackground = backgrounds.find((entry) => entry.id === initial.background);
+    const withoutAsi = removeAsiChoices(initial.abilities, initial.asiChoices ?? []);
+    const base: Record<Ability, number> = { ...withoutAsi };
+    for (const [ability, bonus] of Object.entries(initialRace?.asi ?? {})) {
+      base[ability as Ability] -= bonus ?? 0;
+    }
+    // Racial bumps of the player's choice were baked in the same way.
+    if (initialRace?.asiChoice) {
+      for (const ability of initial.racialChoices?.asi ?? []) {
+        base[ability] -= initialRace.asiChoice.amount;
+      }
+    }
+    setScores(base);
+    // Skills granted by background or race are not class picks; the racial
+    // ones are restored from racialChoices instead.
+    const grantedSkills = new Set([
+      ...(initialBackground?.skills ?? []),
+      ...(initialRace?.skills ?? []),
+      ...(initial.racialChoices?.skills ?? []),
+    ]);
+    setChosenSkills(initial.proficiencies.skills.filter((skill) => !grantedSkills.has(skill)));
+    setExpertisePicks(initial.proficiencies.expertise ?? []);
+    setBonusLanguages(
+      initial.proficiencies.languages.filter(
+        (language) => !(initialRace?.languages ?? []).includes(language),
+      ),
+    );
+  }, [initial, races, backgrounds]);
 
   const race = races.find((entry) => entry.id === raceId) ?? races[0];
   const klass = classes.find((entry) => entry.id === classId) ?? classes[0];
@@ -145,8 +242,16 @@ export default function CharacterBuilder({
     for (const [ability, bonus] of Object.entries(race.asi)) {
       final[ability as Ability] += bonus ?? 0;
     }
+    // Races that grant ability bumps of the player's choice (half-elf).
+    if (race.asiChoice) {
+      for (const ability of racialAsi) {
+        if (ability) {
+          final[ability] += race.asiChoice.amount;
+        }
+      }
+    }
     return final as AbilityScores;
-  }, [scores, race]);
+  }, [scores, race, racialAsi]);
 
   const abilities = useMemo<AbilityScores | null>(
     () => (baseAbilities ? applyAsiChoices(baseAbilities, activeAsiChoices) : null),
@@ -157,14 +262,33 @@ export default function CharacterBuilder({
     if (!abilities || !race || !klass || !background) {
       return null;
     }
-    const skills = [...new Set([...chosenSkills, ...background.skills])];
+    // Skills come from four places, not two: the class picks, the
+    // background, the race's fixed grants (high elf Perception, half-orc
+    // Intimidation) and the race's choice grants (half-elf).
+    const skills = [
+      ...new Set([
+        ...chosenSkills,
+        ...background.skills,
+        ...(race.skills ?? []),
+        ...racialSkills.filter(Boolean),
+      ]),
+    ];
     const proficiencies = {
       saves: klass.saves,
       skills,
       // Expertise picks only count while still proficient in the skill.
       expertise: expertisePicks.filter((skillId) => skills.includes(skillId)),
       languages: [...new Set([...race.languages, ...bonusLanguages.filter(Boolean)])],
-      tools: [] as string[],
+      tools: [
+        ...new Set(
+          [
+            ...(klass.tools ?? []),
+            ...(background.tools ?? []),
+            ...(race.tools ?? []),
+            racialTool,
+          ].filter(Boolean),
+        ),
+      ],
       armor: klass.armor,
       weapons: klass.weapons,
     };
@@ -178,21 +302,67 @@ export default function CharacterBuilder({
     });
     const maxHp =
       hpOverride ?? suggestedStartingHp(klass.id, race.id, abilities.con, effectiveLevel);
-    const ac = acOverride ?? 10 + derived.abilityMods.dex;
-    return { proficiencies, derived, maxHp, ac };
-  }, [abilities, race, klass, background, chosenSkills, expertisePicks, bonusLanguages, effectiveLevel, hpOverride, acOverride]);
+    return { proficiencies, derived, maxHp };
+  }, [abilities, race, klass, background, chosenSkills, expertisePicks, bonusLanguages, racialSkills, racialTool, effectiveLevel, hpOverride]);
 
   // Class-appropriate starting weapons ride along automatically (removable
   // chips) so no character begins the adventure unarmed.
-  const autoLoadout = useMemo(() => (klass ? defaultLoadout(klass.weapons) : []), [klass]);
+  // Weapons AND armor: a fighter who starts with no armor in their pack
+  // would derive an unarmored AC, which is not what "plate proficiency"
+  // should feel like on turn one.
+  const autoLoadout = useMemo(
+    () => (klass ? [...defaultLoadout(klass.weapons), ...defaultArmor(klass.armor)] : []),
+    [klass],
+  );
   const suggestedWeapons = useMemo(() => (klass ? suggestWeapons(klass.weapons) : []), [klass]);
+  const suggestedArmor = useMemo(() => (klass ? suggestArmor(klass.armor) : []), [klass]);
+  const equipmentSuggestions = useMemo(
+    () => [
+      ...suggestedWeapons.map((weapon) => ({ name: weapon.name, note: weapon.damage })),
+      ...suggestedArmor.map((armor) => ({
+        name: armor.name,
+        note: armor.category === "shield" ? `+${armor.baseAc} AC` : `AC ${armor.baseAc}`,
+      })),
+    ],
+    [suggestedWeapons, suggestedArmor],
+  );
   const fullEquipment = useMemo(() => {
     const manualNames = new Set(equipment.map((item) => item.name));
     const auto = autoLoadout
       .filter((weapon) => !removedAutoNames.includes(weapon.name) && !manualNames.has(weapon.name))
       .map((weapon) => ({ name: weapon.name, qty: 1 }));
-    return [...auto, ...equipment];
-  }, [equipment, autoLoadout, removedAutoNames]);
+    // Backgrounds hand over a starting kit too, not just skills.
+    const backgroundGear = (background?.equipment ?? [])
+      .filter((name) => !removedAutoNames.includes(name) && !manualNames.has(name))
+      .map((name) => ({ name, qty: 1 }));
+    return [...auto, ...backgroundGear, ...equipment];
+  }, [equipment, autoLoadout, removedAutoNames, background]);
+
+  // AC is derived from the gear above, not typed: equipping a breastplate
+  // moves the number here and on the sheet. The player can still pin a value
+  // (homebrew armor, a DM ruling), which sets acOverride on the sheet and
+  // tells the server engine to stop recomputing it.
+  const acInfo = useMemo(() => {
+    if (!klass || !preview || !abilities) {
+      return null;
+    }
+    return acBreakdownFor({
+      class: klass.id,
+      level: effectiveLevel,
+      abilities,
+      proficiencies: preview.proficiencies,
+      equipment: fullEquipment,
+      features: classFeaturesFor(klass.id, subclass, effectiveLevel),
+    });
+  }, [klass, preview, abilities, fullEquipment, subclass, effectiveLevel]);
+  const ac = acOverride ?? acInfo?.ac ?? 10;
+
+  // Fighting styles the class has earned by this level. Stored on the sheet
+  // as "choice"-sourced features so the level-up regrant preserves them.
+  const styleSlots = useMemo(
+    () => (klass ? fightingStyleSlots(classFeaturesFor(klass.id, subclass, effectiveLevel)) : 0),
+    [klass, subclass, effectiveLevel],
+  );
 
   function addEquipmentItem(entry: { name: string; qty?: number; slug?: string }) {
     setEquipment((current) => {
@@ -235,6 +405,11 @@ export default function CharacterBuilder({
     klass?.spellAbility && abilities
       ? suggestedSpellCount(spellSearchClass, effectiveLevel, abilityMod(abilities[klass.spellAbility]))
       : null;
+  const cantripAdvice = klass?.spellAbility
+    ? suggestedCantripCount(spellSearchClass, effectiveLevel, klass.casterType)
+    : null;
+  // What this class calls its spells, used in the empty-spell-list warning.
+  const castingLabel = klass?.spellAbility ? (klass.castingLabel || "spells") : "";
   const maxSpellLevel = useMemo(() => {
     if (!klass || klass.casterType === "none") {
       return 0;
@@ -277,6 +452,31 @@ export default function CharacterBuilder({
       setLocalError(`Pick your bonus ${race.bonusLanguages === 1 ? "language" : "languages"} first.`);
       return;
     }
+    if (race.asiChoice && racialAsi.filter(Boolean).length < race.asiChoice.count) {
+      setLocalError(`Pick which abilities your ${race.name} bonus raises first.`);
+      return;
+    }
+    if (race.skillChoice && racialSkills.filter(Boolean).length < race.skillChoice.count) {
+      setLocalError(`Pick your ${race.name} skill proficiencies first.`);
+      return;
+    }
+    if (race.toolChoice && !racialTool) {
+      setLocalError(`Pick your ${race.name} tool proficiency first.`);
+      return;
+    }
+    if (race.cantripChoice && !racialCantrip) {
+      setLocalError(`Pick your ${race.name} cantrip first.`);
+      return;
+    }
+    // Casters with no spells at all can still be submitted (homebrew varies),
+    // but not by accident: one confirmation makes it a deliberate choice.
+    if (castingLabel && !spells.length && !spellWarningAck) {
+      setSpellWarningAck(true);
+      setLocalError(
+        `${name.trim() || "This character"} has no ${castingLabel.toLowerCase()} selected and will start unable to cast. Submit again to continue anyway.`,
+      );
+      return;
+    }
     setLocalError("");
     const resolvedAsiChoices = activeAsiChoices.filter(
       (choice): choice is AsiChoice => choice !== null,
@@ -292,6 +492,16 @@ export default function CharacterBuilder({
     );
     const isKnownCaster =
       klass.knownCaster ?? ["bard", "sorcerer", "warlock", "ranger"].includes(klass.id);
+    // A racial cantrip (high elf) joins the spell list for casters. A
+    // non-caster has nowhere to put it, so it rides along as a feature
+    // instead, which populateFeatures keeps and the DM prompt can see.
+    const spellsWithRacial =
+      racialCantrip && !spells.includes(racialCantrip) ? [...spells, racialCantrip] : spells;
+    const finalSpells = klass.spellAbility ? spellsWithRacial : spells;
+    const racialFeatures =
+      racialCantrip && !klass.spellAbility
+        ? [{ name: `Racial cantrip: ${racialCantrip}`, source: "story" as const }]
+        : [];
     onSubmit({
       level: effectiveLevel,
       sheet: {
@@ -305,7 +515,8 @@ export default function CharacterBuilder({
         appearance: appearance.trim(),
         abilities,
         maxHp: preview.maxHp,
-        ac: preview.ac,
+        ac,
+        acOverride: acOverride !== null,
         portrait: null,
         speed: race.speed,
         hitDice: {
@@ -317,16 +528,28 @@ export default function CharacterBuilder({
         equipment: fullEquipment,
         gold,
         feats: [...new Set([...asiFeats, ...feats])],
-        // Server-side creation populates SRD class features and racial
-        // traits; the builder only ever contributes an empty starting list.
-        features: [],
+        // Server-side creation populates SRD class features, racial traits
+        // and the background feature; the builder contributes only what has
+        // no other home, like a non-caster's racial cantrip.
+        features: [
+          ...racialFeatures,
+          ...stylePicks
+            .slice(0, styleSlots)
+            .map((id) => ({ name: fightingStyleFeatureName(id), source: "choice" as const })),
+        ],
         asiChoices: resolvedAsiChoices,
+        racialChoices: {
+          asi: racialAsi.filter((ability): ability is Ability => Boolean(ability)),
+          skills: racialSkills.filter(Boolean),
+          cantrip: racialCantrip,
+          tool: racialTool,
+        },
         spellcasting: klass.spellAbility
           ? {
               ability: klass.spellAbility,
               slots,
-              prepared: isKnownCaster ? [] : spells,
-              known: isKnownCaster ? spells : [],
+              prepared: isKnownCaster ? [] : finalSpells,
+              known: isKnownCaster ? finalSpells : [],
             }
           : null,
         notes: "",
@@ -370,7 +593,7 @@ export default function CharacterBuilder({
         </p>
       ) : null}
 
-      <section className="panel ornate grid gap-3 rounded-xl p-4 sm:grid-cols-2">
+      <section className="panel ornate grid grid-cols-1 gap-3 rounded-xl p-4 sm:grid-cols-2">
         <label className="block">
           <span className="mb-1 block text-stone-400">Name</span>
           <input value={name} onChange={(event) => setName(event.target.value)} required maxLength={60} className={inputClass} />
@@ -408,7 +631,14 @@ export default function CharacterBuilder({
           <span className="mb-1 block text-stone-400">Race</span>
           <select
             value={race?.id ?? ""}
-            onChange={(event) => { setRaceId(event.target.value); setBonusLanguages([]); }}
+            onChange={(event) => {
+              setRaceId(event.target.value);
+              setBonusLanguages([]);
+              setRacialAsi([]);
+              setRacialSkills([]);
+              setRacialCantrip("");
+              setRacialTool("");
+            }}
             className={inputClass}
           >
             {races.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
@@ -445,6 +675,33 @@ export default function CharacterBuilder({
               </select>
             ))}
           </div>
+        ) : null}
+        {race ? (
+          <RacialChoicesSection
+            race={race}
+            grantedSkills={[...chosenSkills, ...(background?.skills ?? []), ...(race.skills ?? [])]}
+            asi={racialAsi}
+            onAsiChange={(index, ability) =>
+              setRacialAsi((current) => {
+                const next = [...current];
+                next[index] = ability;
+                return next;
+              })
+            }
+            skills={racialSkills}
+            onSkillsChange={(index, skill) =>
+              setRacialSkills((current) => {
+                const next = [...current];
+                next[index] = skill;
+                return next;
+              })
+            }
+            cantrip={racialCantrip}
+            onCantripChange={setRacialCantrip}
+            tool={racialTool}
+            onToolChange={setRacialTool}
+            inputClass={inputClass}
+          />
         ) : null}
         <label className="block">
           <span className="mb-1 block text-stone-400">Class</span>
@@ -627,13 +884,52 @@ export default function CharacterBuilder({
         </section>
       ) : null}
 
+      {styleSlots > 0 ? (
+        <section className="panel rounded-xl p-4">
+          <h2 className="eyebrow mb-2 text-xs text-amber-200/90">
+            Fighting Style (pick {styleSlots})
+          </h2>
+          <div className="grid gap-1.5 sm:grid-cols-2">
+            {FIGHTING_STYLES.map((style) => {
+              const selected = stylePicks.includes(style.id);
+              return (
+                <button
+                  key={style.id}
+                  type="button"
+                  onClick={() =>
+                    setStylePicks((current) =>
+                      selected
+                        ? current.filter((entry) => entry !== style.id)
+                        : current.length < styleSlots
+                          ? [...current, style.id]
+                          : current,
+                    )
+                  }
+                  className={cn(
+                    "rounded-lg border px-3 py-2 text-left",
+                    selected
+                      ? "border-amber-700 bg-amber-950 text-amber-200"
+                      : "border-stone-700 text-stone-300 hover:bg-stone-900",
+                  )}
+                >
+                  <span className="block text-xs">{style.name}</span>
+                  <span className="block text-[11px] text-stone-500">{style.description}</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
       {klass?.spellAbility ? (
         <section className="panel rounded-xl p-4">
           <h2 className="eyebrow mb-1 text-xs text-amber-200/90">Spells</h2>
           <p className="mb-2 text-xs text-stone-500">
             {spellAdvice
-              ? `Suggested: ${spellAdvice.count} ${spellAdvice.label} at level ${effectiveLevel}. `
-              : ""}
+              ? `Suggested: ${spellAdvice.count} ${spellAdvice.label}${cantripAdvice ? ` and ${cantripAdvice} cantrips` : ""} at level ${effectiveLevel}. `
+              : cantripAdvice
+                ? `Suggested: ${cantripAdvice} cantrips at level ${effectiveLevel}. `
+                : ""}
             Up to level {maxSpellLevel} spells. Cantrips welcome. Not enforced; homebrew varies.
           </p>
           <ContentPicker
@@ -651,7 +947,7 @@ export default function CharacterBuilder({
 
       <EquipmentSection
         equipment={fullEquipment}
-        suggestions={suggestedWeapons}
+        suggestions={equipmentSuggestions}
         onAdd={addEquipmentItem}
         onAddMany={(entries) =>
           setEquipment((current) => {
@@ -730,15 +1026,31 @@ export default function CharacterBuilder({
               />
             </label>
             <label className="block">
-              <span className="block text-xs text-stone-500">AC</span>
+              <span className="block text-xs text-stone-500">
+                AC{acOverride === null ? "" : " (pinned)"}
+              </span>
               <input
                 type="number"
                 min={1}
                 max={30}
-                value={preview.ac}
+                value={ac}
                 onChange={(event) => setAcOverride(Number(event.target.value) || 10)}
                 className="w-20 rounded border border-stone-700 bg-stone-900 px-2 py-1"
               />
+              <span className="mt-1 block text-[11px] text-stone-500">
+                {acOverride === null
+                  ? (acInfo?.parts.join(" + ") ?? "")
+                  : "typed by hand; armor no longer changes it"}
+              </span>
+              {acOverride === null ? null : (
+                <button
+                  type="button"
+                  onClick={() => setAcOverride(null)}
+                  className="mt-1 text-[11px] text-amber-300/80 underline"
+                >
+                  use my armor instead
+                </button>
+              )}
             </label>
             <span className="self-end">Speed {race.speed} ft</span>
             <span className="self-end">Prof {formatModifier(proficiencyBonus(effectiveLevel))}</span>

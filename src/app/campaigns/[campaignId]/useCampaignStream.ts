@@ -202,7 +202,10 @@ function reducer(state: CampaignState, action: Action): CampaignState {
       switch (action.eventType) {
         case "message_added": {
           const message = payload.message as CampaignMessage;
-          next.messages = upsertBy(state.messages, message, (entry) => entry.id);
+          // Long sessions accumulate thousands of messages otherwise; cap
+          // like rolls/auditLog so render cost stays flat (the snapshot
+          // reload window is 100, so 200 keeps scrollback beyond it).
+          next.messages = upsertBy(state.messages, message, (entry) => entry.id).slice(-200);
           if (message.authorType === "dm") {
             next.dmDraft = "";
             next.dmStatus = "idle";
@@ -317,13 +320,21 @@ function reducer(state: CampaignState, action: Action): CampaignState {
           return next;
         case "sheet_updated": {
           const sheet = payload.sheet as CharacterSheet;
-          next.sheets = upsertBy(state.sheets, sheet, (entry) => entry.id);
+          // One sheet per user per campaign: a lobby switch changes the
+          // sheet id, so any other sheet of the same user is stale.
+          const pruned = state.sheets.filter(
+            (entry) => entry.id === sheet.id || entry.userId !== sheet.userId,
+          );
+          next.sheets = upsertBy(pruned, sheet, (entry) => entry.id);
           // A completed level-up clears its notice.
           next.levelUps = state.levelUps.filter(
             (notice) => !(notice.characterId === sheet.id && sheet.level >= notice.level),
           );
           return next;
         }
+        case "sheet_deleted":
+          next.sheets = state.sheets.filter((entry) => entry.id !== payload.sheetId);
+          return next;
         case "chapter_closed": {
           const closed = payload.chapter as Chapter | undefined;
           const opened = payload.opened as Chapter | undefined;
@@ -417,6 +428,7 @@ const PERSISTED_EVENTS = [
   "member_ready",
   "member_updated",
   "sheet_updated",
+  "sheet_deleted",
   "sheet_audit",
   "level_up_available",
   "campaign_updated",

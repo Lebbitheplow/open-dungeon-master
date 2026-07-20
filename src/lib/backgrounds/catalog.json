@@ -4,290 +4,837 @@
     {
       "id": "corpo_dropout",
       "name": "Corpo Dropout",
-      "skills": ["insight", "persuasion"],
+      "skills": [
+        "insight",
+        "persuasion"
+      ],
       "feature": "Severance Package",
-      "genres": ["cyberpunk"],
-      "blurb": "You walked out of a megacorp tower with insider skills, a few secrets, and a target on your back."
+      "genres": [
+        "cyberpunk"
+      ],
+      "blurb": "You walked out of a megacorp tower with insider skills, a few secrets, and a target on your back.",
+      "tools": [
+        "forgery kit"
+      ],
+      "languages": 1,
+      "equipment": [
+        "corporate ID (revoked)",
+        "tailored suit",
+        "encrypted tablet",
+        "20 gp"
+      ]
     },
     {
       "id": "street_doc",
       "name": "Street Doc",
-      "skills": ["medicine", "investigation"],
+      "skills": [
+        "medicine",
+        "investigation"
+      ],
       "feature": "Back-Alley Clinic",
-      "genres": ["cyberpunk"],
-      "blurb": "You patch up runners in an unlicensed clinic. No questions, credits up front, favors remembered."
+      "genres": [
+        "cyberpunk"
+      ],
+      "blurb": "You patch up runners in an unlicensed clinic. No questions, credits up front, favors remembered.",
+      "tools": [
+        "medic's kit",
+        "chemist's supplies"
+      ],
+      "languages": 0,
+      "equipment": [
+        "field surgery kit",
+        "stim doses",
+        "stained scrubs",
+        "15 gp"
+      ]
     },
     {
       "id": "fixers_runner",
       "name": "Fixer's Runner",
-      "skills": ["deception", "stealth"],
+      "skills": [
+        "deception",
+        "stealth"
+      ],
       "feature": "Favor Network",
-      "genres": ["cyberpunk"],
-      "blurb": "You moved packages and secrets for a fixer; half the undercity owes you or is owed by you."
+      "genres": [
+        "cyberpunk"
+      ],
+      "blurb": "You moved packages and secrets for a fixer; half the undercity owes you or is owed by you.",
+      "tools": [
+        "one gaming set"
+      ],
+      "languages": 1,
+      "equipment": [
+        "burner phone",
+        "courier bag",
+        "city transit pass",
+        "15 gp"
+      ]
     },
     {
       "id": "arcology_rat",
       "name": "Arcology Rat",
-      "skills": ["sleight_of_hand", "stealth"],
+      "skills": [
+        "sleight_of_hand",
+        "stealth"
+      ],
       "feature": "Service Tunnels",
-      "genres": ["cyberpunk"],
-      "blurb": "You grew up in the maintenance ducts of an arcology and know every vent, camera blind spot, and cargo lift."
+      "genres": [
+        "cyberpunk"
+      ],
+      "blurb": "You grew up in the maintenance ducts of an arcology and know every vent, camera blind spot, and cargo lift.",
+      "tools": [
+        "thieves' tools"
+      ],
+      "languages": 0,
+      "equipment": [
+        "maintenance keycard",
+        "climbing harness",
+        "worn jumpsuit",
+        "10 gp"
+      ]
     },
     {
       "id": "chrome_pit_fighter",
       "name": "Chrome Pit Fighter",
-      "skills": ["athletics", "intimidation"],
+      "skills": [
+        "athletics",
+        "intimidation"
+      ],
       "feature": "Ring Reputation",
-      "genres": ["cyberpunk"],
-      "blurb": "You fought augmented brawlers in the cage circuit, and the crowds still chant your handle."
+      "genres": [
+        "cyberpunk"
+      ],
+      "blurb": "You fought augmented brawlers in the cage circuit, and the crowds still chant your handle.",
+      "tools": [
+        "cybernetics maintenance kit"
+      ],
+      "languages": 0,
+      "equipment": [
+        "fight-night purse",
+        "hand wraps",
+        "trophy tooth",
+        "15 gp"
+      ]
     },
     {
       "id": "data_courier",
       "name": "Data Courier",
-      "skills": ["acrobatics", "perception"],
+      "skills": [
+        "acrobatics",
+        "perception"
+      ],
       "feature": "Dead Drop Protocol",
-      "genres": ["cyberpunk"],
-      "blurb": "You carried encrypted payloads through hostile grid sectors, sometimes in your own headware."
+      "genres": [
+        "cyberpunk"
+      ],
+      "blurb": "You carried encrypted payloads through hostile grid sectors, sometimes in your own headware.",
+      "tools": [
+        "electronics kit"
+      ],
+      "languages": 1,
+      "equipment": [
+        "shielded data case",
+        "route maps",
+        "dark courier jacket",
+        "15 gp"
+      ]
     },
     {
       "id": "guild_engineer",
       "name": "Guild Engineer",
-      "skills": ["history", "investigation"],
+      "skills": [
+        "history",
+        "investigation"
+      ],
       "feature": "Guild Credentials",
-      "genres": ["steampunk"],
-      "blurb": "A certified member of the engineers' guild, welcome in any workshop and fluent in blueprints."
+      "genres": [
+        "steampunk"
+      ],
+      "blurb": "A certified member of the engineers' guild, welcome in any workshop and fluent in blueprints.",
+      "tools": [
+        "tinker's tools",
+        "smith's tools"
+      ],
+      "languages": 1,
+      "equipment": [
+        "guild seal",
+        "measuring instruments",
+        "work leathers",
+        "20 gp"
+      ]
     },
     {
       "id": "airship_deckhand",
       "name": "Airship Deckhand",
-      "skills": ["acrobatics", "perception"],
+      "skills": [
+        "acrobatics",
+        "perception"
+      ],
       "feature": "Skyline Contacts",
-      "genres": ["steampunk"],
-      "blurb": "You crewed a trade airship, splicing rigging in gales and trading gossip in every port tower."
+      "genres": [
+        "steampunk"
+      ],
+      "blurb": "You crewed a trade airship, splicing rigging in gales and trading gossip in every port tower.",
+      "tools": [
+        "navigator's tools",
+        "vehicles (air)"
+      ],
+      "languages": 1,
+      "equipment": [
+        "rigging knife",
+        "50 ft rope",
+        "weathered coat",
+        "10 gp"
+      ]
     },
     {
       "id": "clockwork_apprentice",
       "name": "Clockwork Apprentice",
-      "skills": ["sleight_of_hand", "arcana"],
+      "skills": [
+        "sleight_of_hand",
+        "arcana"
+      ],
       "feature": "Tinker's Eye",
-      "genres": ["steampunk"],
-      "blurb": "You served a master artificer, winding automata and learning which gears hide the maker's tricks."
+      "genres": [
+        "steampunk"
+      ],
+      "blurb": "You served a master artificer, winding automata and learning which gears hide the maker's tricks.",
+      "tools": [
+        "tinker's tools"
+      ],
+      "languages": 0,
+      "equipment": [
+        "apprentice's toolroll",
+        "half-built automaton hand",
+        "goggles",
+        "15 gp"
+      ]
     },
     {
       "id": "union_stoker",
       "name": "Union Stoker",
-      "skills": ["athletics", "intimidation"],
+      "skills": [
+        "athletics",
+        "intimidation"
+      ],
       "feature": "Boiler Room Brotherhood",
-      "genres": ["steampunk"],
-      "blurb": "You shoveled coal in the great engine halls, and the laborers' union still counts you as family."
+      "genres": [
+        "steampunk"
+      ],
+      "blurb": "You shoveled coal in the great engine halls, and the laborers' union still counts you as family.",
+      "tools": [
+        "smith's tools"
+      ],
+      "languages": 0,
+      "equipment": [
+        "union token",
+        "shovel",
+        "soot-stained coveralls",
+        "10 gp"
+      ]
     },
     {
       "id": "aether_scholar",
       "name": "Aether Scholar",
-      "skills": ["arcana", "history"],
+      "skills": [
+        "arcana",
+        "history"
+      ],
       "feature": "Lecture Circuit",
-      "genres": ["steampunk"],
-      "blurb": "You studied the aether sciences at a famous academy and can talk your way into any symposium."
+      "genres": [
+        "steampunk"
+      ],
+      "blurb": "You studied the aether sciences at a famous academy and can talk your way into any symposium.",
+      "tools": [
+        "aether calipers"
+      ],
+      "languages": 2,
+      "equipment": [
+        "lecture notes",
+        "aether lens",
+        "academic robes",
+        "15 gp"
+      ]
     },
     {
       "id": "constabulary_inspector",
       "name": "Constabulary Inspector",
-      "skills": ["investigation", "insight"],
+      "skills": [
+        "investigation",
+        "insight"
+      ],
       "feature": "Old Warrant Card",
-      "genres": ["steampunk", "mystery"],
-      "blurb": "You walked a beat and closed cases for the city constabulary before turning in your badge."
+      "genres": [
+        "steampunk",
+        "mystery"
+      ],
+      "blurb": "You walked a beat and closed cases for the city constabulary before turning in your badge.",
+      "tools": [
+        "manacles",
+        "investigator's kit"
+      ],
+      "languages": 1,
+      "equipment": [
+        "warrant card",
+        "notebook",
+        "whistle",
+        "15 gp"
+      ]
     },
     {
       "id": "vault_born",
       "name": "Vault Born",
-      "skills": ["history", "medicine"],
+      "skills": [
+        "history",
+        "medicine"
+      ],
       "feature": "Vault Schooling",
-      "genres": ["post_apocalyptic"],
-      "blurb": "Raised in a sealed shelter on old-world books and drills, you stepped outside knowing everything but the wasteland."
+      "genres": [
+        "post_apocalyptic"
+      ],
+      "blurb": "Raised in a sealed shelter on old-world books and drills, you stepped outside knowing everything but the wasteland.",
+      "tools": [
+        "electronics kit"
+      ],
+      "languages": 1,
+      "equipment": [
+        "vault jumpsuit",
+        "dosimeter",
+        "instruction manual",
+        "20 gp"
+      ]
     },
     {
       "id": "wasteland_scavenger",
       "name": "Wasteland Scavenger",
-      "skills": ["survival", "investigation"],
+      "skills": [
+        "survival",
+        "investigation"
+      ],
       "feature": "Salvager's Nose",
-      "genres": ["post_apocalyptic"],
-      "blurb": "You strip ruins for parts and provisions, and you can tell worthwhile salvage from scrap at a glance."
+      "genres": [
+        "post_apocalyptic"
+      ],
+      "blurb": "You strip ruins for parts and provisions, and you can tell worthwhile salvage from scrap at a glance.",
+      "tools": [
+        "tinker's tools",
+        "trapper's tools"
+      ],
+      "languages": 0,
+      "equipment": [
+        "pry bar",
+        "sorting sack",
+        "dust mask",
+        "10 gp"
+      ]
     },
     {
       "id": "caravan_guard",
       "name": "Caravan Guard",
-      "skills": ["athletics", "perception"],
+      "skills": [
+        "athletics",
+        "perception"
+      ],
       "feature": "Trade Road Contacts",
-      "genres": ["post_apocalyptic"],
-      "blurb": "You escorted traders between settlements, and every waystation on the route knows your face."
+      "genres": [
+        "post_apocalyptic"
+      ],
+      "blurb": "You escorted traders between settlements, and every waystation on the route knows your face.",
+      "tools": [
+        "vehicles (land)"
+      ],
+      "languages": 1,
+      "equipment": [
+        "road map",
+        "bedroll",
+        "dented pauldron",
+        "15 gp"
+      ]
     },
     {
       "id": "cult_escapee",
       "name": "Cult Escapee",
-      "skills": ["deception", "religion"],
+      "skills": [
+        "deception",
+        "religion"
+      ],
       "feature": "Doctrine Fluency",
-      "genres": ["post_apocalyptic", "horror"],
-      "blurb": "You fled a doomsday congregation and can still recite its liturgy well enough to pass as faithful."
+      "genres": [
+        "post_apocalyptic",
+        "horror"
+      ],
+      "blurb": "You fled a doomsday congregation and can still recite its liturgy well enough to pass as faithful.",
+      "tools": [
+        "ritual implements"
+      ],
+      "languages": 1,
+      "equipment": [
+        "stolen doctrine book",
+        "branded token",
+        "plain robes",
+        "10 gp"
+      ]
     },
     {
       "id": "rad_zone_guide",
       "name": "Rad-Zone Guide",
-      "skills": ["survival", "nature"],
+      "skills": [
+        "survival",
+        "nature"
+      ],
       "feature": "Safe Passage",
-      "genres": ["post_apocalyptic"],
-      "blurb": "You lead travelers through glowing craters and storm fronts, reading hazards the way sailors read weather."
+      "genres": [
+        "post_apocalyptic"
+      ],
+      "blurb": "You lead travelers through glowing craters and storm fronts, reading hazards the way sailors read weather.",
+      "tools": [
+        "herbalism kit"
+      ],
+      "languages": 0,
+      "equipment": [
+        "geiger counter",
+        "route charts",
+        "patched hazard suit",
+        "10 gp"
+      ]
     },
     {
       "id": "settlement_medic",
       "name": "Settlement Medic",
-      "skills": ["medicine", "insight"],
+      "skills": [
+        "medicine",
+        "insight"
+      ],
       "feature": "Triage Instinct",
-      "genres": ["post_apocalyptic"],
-      "blurb": "You kept a settlement alive with scavenged medicine and steady hands when the raiders came."
+      "genres": [
+        "post_apocalyptic"
+      ],
+      "blurb": "You kept a settlement alive with scavenged medicine and steady hands when the raiders came.",
+      "tools": [
+        "medic's kit",
+        "herbalism kit"
+      ],
+      "languages": 0,
+      "equipment": [
+        "bandage roll",
+        "boiled instruments",
+        "apron",
+        "10 gp"
+      ]
     },
     {
       "id": "grave_digger",
       "name": "Grave Digger",
-      "skills": ["athletics", "religion"],
+      "skills": [
+        "athletics",
+        "religion"
+      ],
       "feature": "Consecrated Ground",
-      "genres": ["horror", "dark_fantasy"],
-      "blurb": "You tend the churchyard and its dead, and you know which graves are best left undisturbed."
+      "genres": [
+        "horror",
+        "dark_fantasy"
+      ],
+      "blurb": "You tend the churchyard and its dead, and you know which graves are best left undisturbed.",
+      "tools": [
+        "one artisan's tools"
+      ],
+      "languages": 0,
+      "equipment": [
+        "shovel",
+        "lantern",
+        "grave ledger",
+        "10 gp"
+      ]
     },
     {
       "id": "asylum_survivor",
       "name": "Asylum Survivor",
-      "skills": ["insight", "deception"],
+      "skills": [
+        "insight",
+        "deception"
+      ],
       "feature": "Seen Behind the Veil",
-      "genres": ["horror"],
-      "blurb": "They locked you away for what you claimed to see. You were right, and you learned to read people to get out."
+      "genres": [
+        "horror"
+      ],
+      "blurb": "They locked you away for what you claimed to see. You were right, and you learned to read people to get out.",
+      "tools": [],
+      "languages": 1,
+      "equipment": [
+        "hospital bracelet",
+        "journal of fragments",
+        "ill-fitting clothes",
+        "5 gp"
+      ]
     },
     {
       "id": "occult_librarian",
       "name": "Occult Librarian",
-      "skills": ["arcana", "history"],
+      "skills": [
+        "arcana",
+        "history"
+      ],
       "feature": "Forbidden Stacks",
-      "genres": ["horror", "mystery"],
-      "blurb": "You catalogued books that should not exist and remember exactly where the worst ones are shelved."
+      "genres": [
+        "horror",
+        "mystery"
+      ],
+      "blurb": "You catalogued books that should not exist and remember exactly where the worst ones are shelved.",
+      "tools": [
+        "calligrapher's supplies"
+      ],
+      "languages": 2,
+      "equipment": [
+        "reading glasses",
+        "catalogue of restricted works",
+        "ink and quill",
+        "15 gp"
+      ]
     },
     {
       "id": "seance_medium",
       "name": "Seance Medium",
-      "skills": ["religion", "performance"],
+      "skills": [
+        "religion",
+        "performance"
+      ],
       "feature": "Voices Beyond",
-      "genres": ["horror"],
-      "blurb": "You hold sittings for the grieving. Most nights it is theater; some nights something answers."
+      "genres": [
+        "horror"
+      ],
+      "blurb": "You hold sittings for the grieving. Most nights it is theater; some nights something answers.",
+      "tools": [
+        "séance kit"
+      ],
+      "languages": 1,
+      "equipment": [
+        "candles",
+        "spirit board",
+        "mourning clothes",
+        "10 gp"
+      ]
     },
     {
       "id": "cursed_bloodline",
       "name": "Cursed Bloodline",
-      "skills": ["arcana", "intimidation"],
+      "skills": [
+        "arcana",
+        "intimidation"
+      ],
       "feature": "Family Secret",
-      "genres": ["horror", "dark_fantasy"],
-      "blurb": "Your family name opens doors and ends conversations; everyone has heard what happens to your kin."
+      "genres": [
+        "horror",
+        "dark_fantasy"
+      ],
+      "blurb": "Your family name opens doors and ends conversations; everyone has heard what happens to your kin.",
+      "tools": [],
+      "languages": 1,
+      "equipment": [
+        "family signet",
+        "portrait locket",
+        "fine but dated clothes",
+        "20 gp"
+      ]
     },
     {
       "id": "night_watchman",
       "name": "Night Watchman",
-      "skills": ["perception", "athletics"],
+      "skills": [
+        "perception",
+        "athletics"
+      ],
       "feature": "Keys to the Town",
-      "genres": ["horror", "mystery"],
-      "blurb": "You walked the town's streets after dark with a lantern and a ring of keys, and you noticed things."
+      "genres": [
+        "horror",
+        "mystery"
+      ],
+      "blurb": "You walked the town's streets after dark with a lantern and a ring of keys, and you noticed things.",
+      "tools": [
+        "one gaming set"
+      ],
+      "languages": 0,
+      "equipment": [
+        "ring of keys",
+        "hooded lantern",
+        "truncheon",
+        "10 gp"
+      ]
     },
     {
       "id": "private_inquiry_agent",
       "name": "Private Inquiry Agent",
-      "skills": ["investigation", "insight"],
+      "skills": [
+        "investigation",
+        "insight"
+      ],
       "feature": "Client Ledger",
-      "genres": ["mystery"],
-      "blurb": "You take discreet cases for paying clients, and your ledger holds half the town's secrets."
+      "genres": [
+        "mystery"
+      ],
+      "blurb": "You take discreet cases for paying clients, and your ledger holds half the town's secrets.",
+      "tools": [
+        "investigator's kit",
+        "disguise kit"
+      ],
+      "languages": 0,
+      "equipment": [
+        "case ledger",
+        "magnifying glass",
+        "overcoat",
+        "15 gp"
+      ]
     },
     {
       "id": "beat_reporter",
       "name": "Beat Reporter",
-      "skills": ["persuasion", "investigation"],
+      "skills": [
+        "persuasion",
+        "investigation"
+      ],
       "feature": "Press Credentials",
-      "genres": ["mystery"],
-      "blurb": "You chase stories for the local paper, and a press card opens doors that stay shut to strangers."
+      "genres": [
+        "mystery"
+      ],
+      "blurb": "You chase stories for the local paper, and a press card opens doors that stay shut to strangers.",
+      "tools": [
+        "photographer's kit"
+      ],
+      "languages": 1,
+      "equipment": [
+        "press card",
+        "notepad",
+        "camera",
+        "15 gp"
+      ]
     },
     {
       "id": "reformed_burglar",
       "name": "Reformed Burglar",
-      "skills": ["sleight_of_hand", "stealth"],
+      "skills": [
+        "sleight_of_hand",
+        "stealth"
+      ],
       "feature": "Knows the Locks",
-      "genres": ["mystery"],
-      "blurb": "You went straight years ago, but you still see every house as a puzzle of latches and sight lines."
+      "genres": [
+        "mystery"
+      ],
+      "blurb": "You went straight years ago, but you still see every house as a puzzle of latches and sight lines.",
+      "tools": [
+        "thieves' tools"
+      ],
+      "languages": 0,
+      "equipment": [
+        "retired lockpick set",
+        "city map",
+        "dark coat",
+        "15 gp"
+      ]
     },
     {
       "id": "courtroom_clerk",
       "name": "Courtroom Clerk",
-      "skills": ["history", "persuasion"],
+      "skills": [
+        "history",
+        "persuasion"
+      ],
       "feature": "Paper Trail",
-      "genres": ["mystery"],
-      "blurb": "You filed the town's suits and wills for years, and you know where every record is buried."
+      "genres": [
+        "mystery"
+      ],
+      "blurb": "You filed the town's suits and wills for years, and you know where every record is buried.",
+      "tools": [
+        "calligrapher's supplies"
+      ],
+      "languages": 1,
+      "equipment": [
+        "case files",
+        "seal and wax",
+        "modest suit",
+        "15 gp"
+      ]
     },
     {
       "id": "disgraced_socialite",
       "name": "Disgraced Socialite",
-      "skills": ["deception", "persuasion"],
+      "skills": [
+        "deception",
+        "persuasion"
+      ],
       "feature": "Old Invitations",
-      "genres": ["mystery"],
-      "blurb": "Scandal cost you your standing, but you still know the guest lists, the grudges, and the back stairs."
+      "genres": [
+        "mystery"
+      ],
+      "blurb": "Scandal cost you your standing, but you still know the guest lists, the grudges, and the back stairs.",
+      "tools": [
+        "one gaming set"
+      ],
+      "languages": 1,
+      "equipment": [
+        "fine clothes (out of fashion)",
+        "old invitations",
+        "perfume bottle",
+        "25 gp"
+      ]
     },
     {
       "id": "police_informant",
       "name": "Police Informant",
-      "skills": ["deception", "perception"],
+      "skills": [
+        "deception",
+        "perception"
+      ],
       "feature": "Both Sides of the Badge",
-      "genres": ["mystery"],
-      "blurb": "You traded whispers to the law to stay free, and both the precinct and the street think you are theirs."
+      "genres": [
+        "mystery"
+      ],
+      "blurb": "You traded whispers to the law to stay free, and both the precinct and the street think you are theirs.",
+      "tools": [
+        "forgery kit"
+      ],
+      "languages": 0,
+      "equipment": [
+        "burner contact list",
+        "nondescript clothes",
+        "cash roll",
+        "15 gp"
+      ]
     },
     {
       "id": "plague_doctor",
       "name": "Plague Doctor",
-      "skills": ["medicine", "arcana"],
+      "skills": [
+        "medicine",
+        "arcana"
+      ],
       "feature": "Quarantine Pass",
-      "genres": ["dark_fantasy"],
-      "blurb": "You walked sealed districts in beak and wax, and guards still let your mask through the barricades."
+      "genres": [
+        "dark_fantasy"
+      ],
+      "blurb": "You walked sealed districts in beak and wax, and guards still let your mask through the barricades.",
+      "tools": [
+        "herbalism kit",
+        "alchemist's supplies"
+      ],
+      "languages": 1,
+      "equipment": [
+        "beaked mask",
+        "waxed coat",
+        "case of tinctures",
+        "15 gp"
+      ]
     },
     {
       "id": "witch_hunters_ward",
       "name": "Witch Hunter's Ward",
-      "skills": ["religion", "survival"],
+      "skills": [
+        "religion",
+        "survival"
+      ],
       "feature": "Hunter's Marks",
-      "genres": ["dark_fantasy"],
-      "blurb": "Raised by an order that burns the unclean, you can read their trail signs and their warrants."
+      "genres": [
+        "dark_fantasy"
+      ],
+      "blurb": "Raised by an order that burns the unclean, you can read their trail signs and their warrants.",
+      "tools": [
+        "manacles"
+      ],
+      "languages": 1,
+      "equipment": [
+        "hunter's ledger",
+        "silvered nail",
+        "travel cloak",
+        "15 gp"
+      ]
     },
     {
       "id": "penitent_pilgrim",
       "name": "Penitent Pilgrim",
-      "skills": ["religion", "athletics"],
+      "skills": [
+        "religion",
+        "athletics"
+      ],
       "feature": "Roadside Shrines",
-      "genres": ["dark_fantasy"],
-      "blurb": "You walk the old pilgrim roads atoning for something, and keepers of wayside shrines shelter you."
+      "genres": [
+        "dark_fantasy"
+      ],
+      "blurb": "You walk the old pilgrim roads atoning for something, and keepers of wayside shrines shelter you.",
+      "tools": [],
+      "languages": 1,
+      "equipment": [
+        "pilgrim's staff",
+        "prayer beads",
+        "rough habit",
+        "5 gp"
+      ]
     },
     {
       "id": "sellsword_deserter",
       "name": "Sellsword Deserter",
-      "skills": ["athletics", "deception"],
+      "skills": [
+        "athletics",
+        "deception"
+      ],
       "feature": "Company Tattoos",
-      "genres": ["dark_fantasy"],
-      "blurb": "You abandoned a mercenary company that does not forgive. You know their ways, and they know your name."
+      "genres": [
+        "dark_fantasy"
+      ],
+      "blurb": "You abandoned a mercenary company that does not forgive. You know their ways, and they know your name.",
+      "tools": [
+        "one gaming set",
+        "vehicles (land)"
+      ],
+      "languages": 0,
+      "equipment": [
+        "company tattoo",
+        "notched sword",
+        "bedroll",
+        "10 gp"
+      ]
     },
     {
       "id": "crypt_scribe",
       "name": "Crypt Scribe",
-      "skills": ["history", "arcana"],
+      "skills": [
+        "history",
+        "arcana"
+      ],
       "feature": "Necropolis Access",
-      "genres": ["dark_fantasy"],
-      "blurb": "You copied epitaphs and funerary rites in the great necropolis, and its wardens still admit you."
+      "genres": [
+        "dark_fantasy"
+      ],
+      "blurb": "You copied epitaphs and funerary rites in the great necropolis, and its wardens still admit you.",
+      "tools": [
+        "calligrapher's supplies"
+      ],
+      "languages": 2,
+      "equipment": [
+        "rubbing charcoal and vellum",
+        "crypt keys",
+        "dusty robes",
+        "10 gp"
+      ]
     },
     {
       "id": "beggar_prophet",
       "name": "Beggar Prophet",
-      "skills": ["insight", "performance"],
+      "skills": [
+        "insight",
+        "performance"
+      ],
       "feature": "Street Congregation",
-      "genres": ["dark_fantasy"],
-      "blurb": "You preach doom on street corners, and the desperate who listen bring you rumors and bread."
+      "genres": [
+        "dark_fantasy"
+      ],
+      "blurb": "You preach doom on street corners, and the desperate who listen bring you rumors and bread.",
+      "tools": [],
+      "languages": 1,
+      "equipment": [
+        "begging bowl",
+        "scrawled prophecies",
+        "rags",
+        "2 gp"
+      ]
     }
   ]
 }

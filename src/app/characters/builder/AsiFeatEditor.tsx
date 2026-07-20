@@ -142,7 +142,7 @@ export default function AsiFeatEditor({
                 ) : null}
 
                 {choice?.mode === "plus1x2" ? (
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {([0, 1] as const).map((half) => (
                       <label key={half} className="block">
                         <span className="mb-1 block text-xs text-stone-500">

@@ -103,9 +103,11 @@ export function racialTraitsFor(raceId: string): SheetFeature[] {
 }
 
 // Recompute the auto-granted class and race entries from SRD data while
-// keeping everything the table added by hand or story ("feat" and "story"
-// sources). Deduped by lowercased name; the SRD grant wins ties so regrants
-// stay idempotent across level-ups and re-instantiation at a new level.
+// keeping everything the table added by hand or story, the background
+// feature granted at creation, and the player's own class picks
+// ("feat", "choice", "story" and "background" sources).
+// Deduped by lowercased name; the SRD grant wins ties so regrants stay
+// idempotent across level-ups and re-instantiation at a new level.
 export function populateFeatures(
   existing: SheetFeature[],
   classId: string,
@@ -117,7 +119,10 @@ export function populateFeatures(
   const grantedNames = new Set(granted.map((feature) => feature.name.toLowerCase()));
   const kept = existing.filter(
     (feature) =>
-      (feature.source === "feat" || feature.source === "story") &&
+      (feature.source === "feat" ||
+        feature.source === "story" ||
+        feature.source === "choice" ||
+        feature.source === "background") &&
       !grantedNames.has(feature.name.toLowerCase()),
   );
   const seen = new Set<string>();

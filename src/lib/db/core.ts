@@ -209,6 +209,9 @@ function ensureSchema(db: Database.Database) {
       updated_at TEXT NOT NULL
     );
 
+    CREATE INDEX IF NOT EXISTS idx_library_characters_user
+      ON library_characters(user_id, updated_at);
+
     -- A DM narration turn as a persisted state machine, so a turn can park
     -- while waiting on a physical dice roll and resume later (surviving
     -- restarts). conversation_json holds the full model conversation.
@@ -293,6 +296,12 @@ function ensureSchema(db: Database.Database) {
 
     CREATE INDEX IF NOT EXISTS idx_character_events_library
       ON character_events(library_character_id, created_at);
+
+    CREATE INDEX IF NOT EXISTS idx_character_events_campaign
+      ON character_events(campaign_id, seq);
+
+    CREATE INDEX IF NOT EXISTS idx_character_events_character
+      ON character_events(campaign_character_id, created_at);
 
     -- Story chapters: closed spans of the campaign transcript with an AI
     -- title/summary/highlights, plus one open chapter accumulating messages.
@@ -491,6 +500,25 @@ function ensureSchema(db: Database.Database) {
       updated_at TEXT NOT NULL,
       PRIMARY KEY (map_id, character_id)
     );
+
+    -- Persistent NPCs and their disposition toward the party. Attitude is the
+    -- 5e social-interaction scale (hostile/indifferent/friendly); it persists
+    -- across sessions so an NPC the party angered stays angry. last_shift_turn
+    -- holds the dm_turn id of the most recent attitude change, guarding against
+    -- ratcheting attitude with repeated checks inside one exchange.
+    CREATE TABLE IF NOT EXISTS npcs (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      attitude TEXT NOT NULL DEFAULT 'indifferent'
+        CHECK (attitude IN ('hostile','indifferent','friendly')),
+      trait TEXT NOT NULL DEFAULT '',
+      location TEXT NOT NULL DEFAULT '',
+      last_shift_turn TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE (campaign_id, name)
+    );
   `);
 
   // Compaction memory: a rolling "story so far" summary plus a watermark of
@@ -568,9 +596,16 @@ function ensureSchema(db: Database.Database) {
 
   // NULL features_json marks a sheet from before features existed; the
   // backfill below fills it exactly once, so check before the column lands.
-  const sheetsNeedFeatureBackfill = !(
-    db.prepare(`PRAGMA table_info(character_sheets)`).all() as Array<{ name: string }>
-  ).some((column) => column.name === "features_json");
+  const sheetColumns = db.prepare(`PRAGMA table_info(character_sheets)`).all() as Array<{
+    name: string;
+  }>;
+  const sheetsNeedFeatureBackfill = !sheetColumns.some(
+    (column) => column.name === "features_json",
+  );
+  // Same one-shot trick for the AC engine: every sheet that exists before
+  // ac_override lands keeps its hand-typed armor class, so nobody logs in to
+  // find their character suddenly wearing different numbers.
+  const sheetsNeedAcOverride = !sheetColumns.some((column) => column.name === "ac_override");
 
   addColumns("character_sheets", [
     // Death-save track for a character at 0 HP; NULL = not dying. Managed
@@ -594,7 +629,28 @@ function ensureSchema(db: Database.Database) {
     ["resources_json", `TEXT`],
     // Exhaustion level 0-6; mechanical effects in src/lib/dm/condition-logic.ts.
     ["exhaustion", `INTEGER NOT NULL DEFAULT 0`],
+    // Active Wild Shape beast form and its own HP pool; NULL = own body.
+    // Damage routes here first (src/lib/dm/mutations.ts, apply_damage).
+    ["wild_shape_json", `TEXT`],
+    // AI companion party member: owned by an unloginable bot user row so
+    // UNIQUE(campaign_id, user_id) and the users FK stay satisfied. The DM
+    // drives these sheets (src/lib/dm/companion-tools.ts).
+    ["is_companion", `INTEGER NOT NULL DEFAULT 0`],
+    // 'party' = travels with the party until dismissed; 'guest' = scene-
+    // scoped ally the DM writes out when the scene ends.
+    ["companion_kind", `TEXT`],
+    // Short personality/voice brief the DM roleplays from.
+    ["personality", `TEXT NOT NULL DEFAULT ''`],
+    // 1 = the `ac` column is a hand-set number the AC engine must not
+    // recompute (src/lib/srd/armor.ts). Sheets created before the engine are
+    // backfilled to 1 so no existing character's armor class changes under
+    // them; new sheets derive their AC from what they wear.
+    ["ac_override", `INTEGER NOT NULL DEFAULT 0`],
   ]);
+
+  if (sheetsNeedAcOverride) {
+    db.prepare(`UPDATE character_sheets SET ac_override = 1`).run();
+  }
 
   // One-time: size resource counters for sheets created before the engine.
   backfillSheetResources(db);
@@ -654,6 +710,24 @@ function ensureSchema(db: Database.Database) {
     // Enemies that already attacked this turn; the auto-act fallback in
     // encounter-tools.ts skips them so nothing swings twice.
     ["acted_enemy_ids_json", `TEXT NOT NULL DEFAULT '[]'`],
+    // PCs whose combat turn was adjudicated this DM turn (pc_attack,
+    // cast_at_enemy, or end_turn); advanceAfterTurn only moves the pointer
+    // past a PC on this list or with a landed non-initiative roll.
+    ["resolved_character_ids_json", `TEXT NOT NULL DEFAULT '[]'`],
+  ]);
+
+  addColumns("encounters", [
+    // The action economy of whichever combatant is currently acting: action,
+    // bonus action, reaction, attacks made, and movement spent. Rebuilt from
+    // scratch whenever the initiative pointer moves, so it never needs a
+    // migration of its own (src/lib/dm/action-budget.ts).
+    ["turn_budget_json", `TEXT`],
+    // Combatants who were surprised when the fight began; they lose their
+    // first turn. Cleared once round 1 is over.
+    ["surprised_ids_json", `TEXT NOT NULL DEFAULT '[]'`],
+    // Enemy ids that have spent their reaction this round (opportunity
+    // attacks); emptied when the round wraps.
+    ["reactions_used_json", `TEXT NOT NULL DEFAULT '[]'`],
   ]);
 
   addColumns("encounter_enemies", [
@@ -832,19 +906,40 @@ function backfillSheetFeatures(db: Database.Database) {
 
 // Sheets created before the resource engine get counters sized from their
 // existing features list; NULL resources_json is the pre-migration marker.
+// Boot resync for every sheet: re-derive class/race features from the
+// current tables (keeping feat/story extras; populateFeatures is
+// idempotent) and re-size resources from those features, preserving spent
+// uses. Self-heals table fixes and matcher fixes on existing sheets — e.g.
+// the half-elf "Skill Versatility" trait once substring-matched "ki" and
+// stamped monk Ki onto any half-elf, and paladins predate Channel Divinity
+// landing in the base class table. Writes only rows that actually changed.
 function backfillSheetResources(db: Database.Database) {
   const sheets = db
     .prepare(
-      `SELECT id, level, abilities_json, features_json FROM character_sheets WHERE resources_json IS NULL`,
+      `SELECT id, class, subclass, race, level, abilities_json, features_json, resources_json
+         FROM character_sheets`,
     )
-    .all() as Array<{ id: string; level: number; abilities_json: string; features_json: string | null }>;
+    .all() as Array<{
+    id: string;
+    class: string;
+    subclass: string | null;
+    race: string;
+    level: number;
+    abilities_json: string;
+    features_json: string | null;
+    resources_json: string | null;
+  }>;
   if (!sheets.length) {
     return;
   }
-  const update = db.prepare(`UPDATE character_sheets SET resources_json = ? WHERE id = ?`);
+  const update = db.prepare(
+    `UPDATE character_sheets SET features_json = ?, resources_json = ? WHERE id = ?`,
+  );
   for (const row of sheets) {
     try {
-      const features = JSON.parse(row.features_json ?? "[]") as Array<{ name: string }>;
+      const existingFeatures = JSON.parse(row.features_json ?? "[]") as Parameters<
+        typeof populateFeatures
+      >[0];
       const abilities = JSON.parse(row.abilities_json) as Record<string, number>;
       const mods = Object.fromEntries(
         Object.entries(abilities).map(([ability, score]) => [
@@ -852,9 +947,24 @@ function backfillSheetResources(db: Database.Database) {
           Math.floor((score - 10) / 2),
         ]),
       );
-      update.run(JSON.stringify(populateResources(features, row.level, mods, undefined)), row.id);
+      const existingResources = row.resources_json
+        ? (JSON.parse(row.resources_json) as Parameters<typeof populateResources>[3])
+        : undefined;
+      const features = populateFeatures(
+        existingFeatures,
+        row.class,
+        row.subclass ?? "",
+        row.race,
+        row.level,
+      );
+      const resources = populateResources(features, row.level, mods, existingResources);
+      const nextFeatures = JSON.stringify(features);
+      const nextResources = JSON.stringify(resources);
+      if (nextFeatures !== row.features_json || nextResources !== row.resources_json) {
+        update.run(nextFeatures, nextResources, row.id);
+      }
     } catch {
-      update.run("{}", row.id);
+      // Unparseable rows stay untouched; the sheet UI can still fix them.
     }
   }
 }
@@ -871,9 +981,18 @@ function requireDbKey() {
   return key;
 }
 
+// Module-level (not on globalThis) so a dev HMR reload of this file re-runs
+// ensureSchema once on the next call, picking up schema edits; in prod it
+// runs exactly once per boot. It must NOT run per call: the boot resync
+// includes a full character_sheets backfill and table_info sweeps.
+let schemaEnsured = false;
+
 export function getDatabase() {
   if (globalThis.__localRoleplayDb) {
-    ensureSchema(globalThis.__localRoleplayDb);
+    if (!schemaEnsured) {
+      ensureSchema(globalThis.__localRoleplayDb);
+      schemaEnsured = true;
+    }
     return globalThis.__localRoleplayDb;
   }
 
@@ -894,6 +1013,7 @@ export function getDatabase() {
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
   ensureSchema(db);
+  schemaEnsured = true;
 
   globalThis.__localRoleplayDb = db;
   return db;

@@ -4,6 +4,7 @@ import { BookOpen, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { use, useEffect, useRef, useState } from "react";
 import { PIXEL_ICONS, PixelTile } from "@/lib/ui";
+import { ImageLightbox } from "@/components/ui/ImageLightbox";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import { abilityMod, formatModifier } from "@/lib/srd";
 
@@ -123,10 +124,10 @@ export default function CharacterDetailPage({
         </Link>
         <div className="mt-2 flex items-center gap-3">
           {sheet.portrait?.url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <ImageLightbox
               src={sheet.portrait.url}
               alt={character.name}
+              caption={character.name}
               className="size-14 shrink-0 rounded-lg border border-amber-500/30 object-cover"
             />
           ) : portraitPending ? (

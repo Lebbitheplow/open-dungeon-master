@@ -4,6 +4,9 @@ import {
   matchWeapon,
   type SrdWeapon,
 } from "@/lib/srd/weapons";
+import { magicItemBonus } from "@/lib/srd/armor";
+import type { CombatRiders } from "@/lib/srd/feature-effects";
+import { RAGING, rageDamageBonus } from "@/lib/srd/class-resources";
 import type { EquipmentItem } from "@/lib/schemas/sheet";
 import type { SheetDerived } from "@/lib/srd";
 
@@ -35,6 +38,19 @@ export type AttackProfile = {
   rangeTiles: number;
   proficient: boolean;
   improvised: boolean;
+  // Which ability drove the attack. Rage's bonus damage rides on melee
+  // Strength attacks specifically, so finesse picking DEX matters.
+  ability: "str" | "dex";
+  // The +1/+2/+3 a magic weapon's name declares, already folded into toHit
+  // and damageExpression; kept so the tool result can say why.
+  magicBonus: number;
+  // Two-handed or versatile-in-two-hands: Great Weapon Fighting rerolls
+  // this attack's damage dice.
+  twoHanded: boolean;
+  // Finesse or ranged: the attacks Sneak Attack is allowed to ride on.
+  sneakEligible: boolean;
+  // Human-readable notes for the tool result ("Archery: +2 to hit").
+  riderNotes: string[];
 };
 
 function itemMatchesTerm(itemName: string, term: string): boolean {
@@ -109,24 +125,59 @@ function withModifier(dice: string, modifier: number): string {
 
 export const DEFAULT_RANGED_TILES = 12;
 
+// Versatile weapons roll the bigger die in two hands. The SRD table stores
+// only the one-handed damage, so the step up is derived: d6 -> d8, d8 -> d10,
+// d10 -> d12, which is every versatile entry in the book.
+const VERSATILE_STEP_UP: Record<string, string> = { d6: "d8", d8: "d10", d10: "d12" };
+
+function versatileDice(dice: string): string {
+  const match = /^(\d+)(d\d+)$/.exec(dice);
+  const stepped = match ? VERSATILE_STEP_UP[match[2]] : undefined;
+  return match && stepped ? `${match[1]}${stepped}` : dice;
+}
+
+// How the character is holding the weapon and what else is in play, so the
+// fighting styles that care can be applied. Everything is optional: the
+// callers that have no opinion get plain SRD behavior.
+export type AttackStance = {
+  riders?: CombatRiders;
+  // True when they hold this weapon in both hands (versatile weapons step
+  // their damage die up and become Great Weapon Fighting candidates).
+  twoHanded?: boolean;
+  // The bonus-action attack of two-weapon fighting: no ability modifier on
+  // damage unless the Two-Weapon Fighting style says otherwise.
+  offHand?: boolean;
+};
+
 // Derives the full attack profile from the sheet's numbers and the weapon's
 // SRD properties: finesse picks the better of STR/DEX, ranged weapons use
 // DEX, thrown weapons use STR (or finesse), proficiency adds the bonus only
-// when the sheet's weapon training covers the weapon.
+// when the sheet's weapon training covers the weapon. Fighting styles,
+// Martial Arts, and magic bonuses ride in through `stance`.
 export function weaponAttackProfile(
   derived: Pick<SheetDerived, "abilityMods" | "proficiencyBonus">,
   weaponProfs: string[],
   resolved: ResolvedWeapon,
+  stance: AttackStance = {},
 ): AttackProfile {
   const { srd } = resolved;
+  const riders = stance.riders;
+  const notes: string[] = [];
   if (!srd) {
     // Unarmed strike (1 + STR, always proficient) or improvised 1d4 + STR.
-    const mod = derived.abilityMods.str;
-    const dice = resolved.unarmed ? "1" : "1d4";
+    // A monk's Martial Arts turns the unarmed strike into a real weapon:
+    // their own die, and DEX when it beats Strength.
+    const martial = resolved.unarmed ? (riders?.martialArtsDie ?? null) : null;
+    const useDex = Boolean(martial) && derived.abilityMods.dex > derived.abilityMods.str;
+    const mod = useDex ? derived.abilityMods.dex : derived.abilityMods.str;
+    const dice = martial ? `1${martial}` : resolved.unarmed ? "1" : "1d4";
+    if (martial) {
+      notes.push(`Martial Arts: 1${martial}${useDex ? " with DEX" : ""}`);
+    }
     return {
       weapon: resolved.displayName,
       toHit: mod + (resolved.unarmed ? derived.proficiencyBonus : 0),
-      damageExpression: withModifier(dice, mod),
+      damageExpression: withModifier(dice, stance.offHand && !riders?.twoWeaponKeepsAbility ? 0 : mod),
       damageType: "bludgeoning",
       ranged: false,
       thrown: !resolved.unarmed,
@@ -134,6 +185,11 @@ export function weaponAttackProfile(
       rangeTiles: 4,
       proficient: resolved.unarmed,
       improvised: !resolved.unarmed,
+      ability: useDex ? "dex" : "str",
+      magicBonus: 0,
+      twoHanded: false,
+      sneakEligible: false,
+      riderNotes: notes,
     };
   }
   const properties = srd.properties ?? [];
@@ -150,10 +206,46 @@ export function weaponAttackProfile(
   const rangeTiles = srd.rangeFt
     ? Math.max(1, Math.round(srd.rangeFt / 5))
     : DEFAULT_RANGED_TILES;
+  // A "+1 Longsword" adds its bonus to the attack roll and the damage, per
+  // the SRD magic-weapon rule; the name on the item is the whole contract.
+  const magicBonus = magicItemBonus(resolved.displayName);
+
+  const inherentlyTwoHanded = properties.includes("two-handed");
+  const versatile = properties.includes("versatile");
+  const twoHanded = inherentlyTwoHanded || (versatile && stance.twoHanded === true);
+  const damageDice = versatile && twoHanded ? versatileDice(dice) : dice;
+  if (versatile && twoHanded) {
+    notes.push(`two-handed: ${damageDice}`);
+  }
+
+  // Fighting-style riders. Archery is ranged-only, Dueling wants a single
+  // one-handed melee weapon, and the off-hand swing drops its modifier
+  // unless Two-Weapon Fighting is trained.
+  let toHitBonus = 0;
+  let damageBonus = 0;
+  if (riders) {
+    if (ranged && riders.rangedAttackBonus) {
+      toHitBonus += riders.rangedAttackBonus;
+      notes.push(`Archery: +${riders.rangedAttackBonus} to hit`);
+    }
+    if (!ranged && riders.meleeAttackBonus) {
+      toHitBonus += riders.meleeAttackBonus;
+      notes.push(`+${riders.meleeAttackBonus} to hit`);
+    }
+    if (!ranged && !twoHanded && !stance.offHand && riders.oneHandedMeleeDamageBonus) {
+      damageBonus += riders.oneHandedMeleeDamageBonus;
+      notes.push(`Dueling: +${riders.oneHandedMeleeDamageBonus} damage`);
+    }
+  }
+  const abilityToDamage = stance.offHand && !riders?.twoWeaponKeepsAbility ? 0 : mod;
+  if (stance.offHand && riders?.twoWeaponKeepsAbility) {
+    notes.push("Two-Weapon Fighting: off-hand keeps its modifier");
+  }
+
   return {
     weapon: resolved.displayName,
-    toHit: mod + (proficient ? derived.proficiencyBonus : 0),
-    damageExpression: withModifier(dice, mod),
+    toHit: mod + magicBonus + toHitBonus + (proficient ? derived.proficiencyBonus : 0),
+    damageExpression: withModifier(damageDice, abilityToDamage + magicBonus + damageBonus),
     damageType: type,
     ranged,
     thrown,
@@ -161,6 +253,13 @@ export function weaponAttackProfile(
     rangeTiles,
     proficient,
     improvised: false,
+    // Mirrors the `mod` choice above; a tie counts as Strength.
+    ability: finesse ? (dex > str ? "dex" : "str") : ranged && !thrown ? "dex" : "str",
+    magicBonus,
+    twoHanded,
+    // Sneak Attack rides on finesse and ranged weapons only.
+    sneakEligible: finesse || ranged,
+    riderNotes: notes,
   };
 }
 
@@ -189,39 +288,46 @@ export function spellAttackProfile(
     rangeTiles: 24,
     proficient: true,
     improvised: false,
+    // Spell attacks use the casting ability; neither rage case applies.
+    ability: "dex",
+    magicBonus: 0,
+    twoHanded: false,
+    sneakEligible: false,
+    riderNotes: [],
   };
 }
 
+// Rage's bonus damage, or 0 when it does not apply. SRD: melee weapon
+// attacks made with Strength only, so a raging barbarian's longbow and
+// their finesse rapier swung with Dexterity both get nothing.
+export function ragingMeleeBonus(
+  sheet: { conditions: string[]; level: number },
+  profile: Pick<AttackProfile, "ranged" | "ability">,
+): number {
+  const raging = sheet.conditions.some((entry) => entry.toLowerCase() === RAGING);
+  if (!raging || profile.ranged || profile.ability !== "str") {
+    return 0;
+  }
+  return rageDamageBonus(sheet.level);
+}
+
 // Mirrors the enemy_attack ruling: nat1 always misses, nat20 always hits
-// and crits, otherwise total vs AC.
+// and crits, otherwise total vs AC. `critRange` lowers the threshold for
+// Improved Critical (19) and Superior Critical (18); a natural roll at or
+// above it crits, though only a natural 20 also hits automatically.
 export function adjudicateHit(
   total: number,
   crit: "nat20" | "nat1" | undefined,
   targetAc: number,
+  options: { natural?: number; critRange?: number } = {},
 ): { hit: boolean; crit: boolean } {
-  const isCrit = crit === "nat20";
-  return { hit: crit !== "nat1" && (isCrit || total >= targetAc), crit: isCrit };
-}
-
-// The ammunition item a ranged weapon consumes, for the resource engine:
-// bows fire arrows, crossbows bolts, slings bullets, blowguns needles,
-// firearms rounds. Non-ammunition weapons return null.
-export function ammoKindFor(srd: SrdWeapon | null): string | null {
-  if (!srd || !(srd.properties ?? []).includes("ammunition")) {
-    return null;
+  if (crit === "nat1") {
+    return { hit: false, crit: false };
   }
-  const name = srd.name.toLowerCase();
-  if (name.includes("crossbow")) {
-    return "bolts";
-  }
-  if (name.includes("bow")) {
-    return "arrows";
-  }
-  if (name.includes("sling")) {
-    return "sling bullets";
-  }
-  if (name.includes("blowgun")) {
-    return "needles";
-  }
-  return "rounds";
+  const hit = crit === "nat20" || total >= targetAc;
+  const critRange = options.critRange ?? 20;
+  const inRange =
+    crit === "nat20" ||
+    (options.natural !== undefined && options.natural >= critRange && critRange < 20);
+  return { hit, crit: hit && inRange };
 }

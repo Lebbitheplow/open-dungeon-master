@@ -5,9 +5,19 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { resolveAttackWeapon, weaponAttackProfile, spellAttackProfile, adjudicateHit, splitDamage, ammoKindFor } =
-  await import("../src/lib/dm/attack-logic.ts");
+const {
+  resolveAttackWeapon,
+  weaponAttackProfile,
+  spellAttackProfile,
+  adjudicateHit,
+  ragingMeleeBonus,
+  splitDamage,
+} = await import("../src/lib/dm/attack-logic.ts");
 const { matchWeapon, isWeaponProficient } = await import("../src/lib/srd/weapons.ts");
+const { combatRiders } = await import("../src/lib/srd/feature-effects.ts");
+
+const ridersFor = (klass, level, ...names) =>
+  combatRiders({ class: klass, level, features: names.map((name) => ({ name })) });
 
 let passed = 0;
 function test(name, fn) {
@@ -158,14 +168,157 @@ test("adjudicateHit: nat1 always misses, nat20 always crits", () => {
   assert.deepEqual(adjudicateHit(14, undefined, 15), { hit: false, crit: false });
 });
 
-test("ammoKindFor maps weapon families", () => {
-  assert.equal(ammoKindFor(matchWeapon("longbow")), "arrows");
-  assert.equal(ammoKindFor(matchWeapon("heavy crossbow")), "bolts");
-  assert.equal(ammoKindFor(matchWeapon("sling")), "sling bullets");
-  assert.equal(ammoKindFor(matchWeapon("blowgun")), "needles");
-  assert.equal(ammoKindFor(matchWeapon("pistol")), "rounds");
-  assert.equal(ammoKindFor(matchWeapon("longsword")), null);
-  assert.equal(ammoKindFor(null), null);
+test("rage bonus applies to melee Strength attacks only", () => {
+  const raging = { conditions: ["raging"], level: 5 };
+  assert.equal(ragingMeleeBonus(raging, { ranged: false, ability: "str" }), 2);
+  // A finesse weapon swung with Dexterity, and any bow, get nothing.
+  assert.equal(ragingMeleeBonus(raging, { ranged: false, ability: "dex" }), 0);
+  assert.equal(ragingMeleeBonus(raging, { ranged: true, ability: "str" }), 0);
+  // Not raging: nothing at all.
+  assert.equal(
+    ragingMeleeBonus({ conditions: [], level: 5 }, { ranged: false, ability: "str" }),
+    0,
+  );
+});
+
+test("rage bonus scales at levels 9 and 16", () => {
+  const melee = { ranged: false, ability: "str" };
+  assert.equal(ragingMeleeBonus({ conditions: ["raging"], level: 8 }, melee), 2);
+  assert.equal(ragingMeleeBonus({ conditions: ["raging"], level: 9 }, melee), 3);
+  assert.equal(ragingMeleeBonus({ conditions: ["raging"], level: 16 }, melee), 4);
+});
+
+test("weapon profiles report which ability drove the attack", () => {
+  // STR 3 / DEX 1: a finesse rapier uses Strength here.
+  const rapier = weaponAttackProfile(derived, ["martial"], resolveAttackWeapon([], [], "rapier"));
+  assert.equal(rapier.ability, "str");
+  // STR -1 / DEX 4: the same rapier flips to Dexterity.
+  const finesse = weaponAttackProfile(dexDerived, ["martial"], resolveAttackWeapon([], [], "rapier"));
+  assert.equal(finesse.ability, "dex");
+  const bow = weaponAttackProfile(dexDerived, ["martial"], resolveAttackWeapon([], [], "shortbow"));
+  assert.equal(bow.ability, "dex");
+});
+
+test("a magic weapon's name adds its bonus to hit and damage", () => {
+  const plain = weaponAttackProfile(derived, ["martial"], resolveAttackWeapon([], [], "longsword"));
+  const magic = weaponAttackProfile(
+    derived,
+    ["martial"],
+    resolveAttackWeapon([{ name: "+2 Longsword", qty: 1 }], ["martial"], "longsword"),
+  );
+  assert.equal(magic.toHit, plain.toHit + 2);
+  assert.equal(magic.magicBonus, 2);
+  assert.equal(plain.damageExpression, "1d8+3");
+  assert.equal(magic.damageExpression, "1d8+5");
+});
+
+test("versatile weapons step up their die in two hands", () => {
+  const oneHanded = weaponAttackProfile(derived, ["martial"], resolveAttackWeapon([], [], "longsword"));
+  const twoHanded = weaponAttackProfile(
+    derived,
+    ["martial"],
+    resolveAttackWeapon([], [], "longsword"),
+    { twoHanded: true },
+  );
+  assert.equal(oneHanded.damageExpression, "1d8+3");
+  assert.equal(twoHanded.damageExpression, "1d10+3");
+  assert.equal(twoHanded.twoHanded, true);
+  // A greatsword is two-handed whether or not the caller says so.
+  const greatsword = weaponAttackProfile(derived, ["martial"], resolveAttackWeapon([], [], "greatsword"));
+  assert.equal(greatsword.twoHanded, true);
+});
+
+test("Archery lifts ranged to-hit only", () => {
+  const archery = ridersFor("fighter", 5, "Fighting Style: Archery");
+  const bow = weaponAttackProfile(dexDerived, ["martial"], resolveAttackWeapon([], [], "shortbow"), {
+    riders: archery,
+  });
+  const sword = weaponAttackProfile(dexDerived, ["martial"], resolveAttackWeapon([], [], "longsword"), {
+    riders: archery,
+  });
+  const plainBow = weaponAttackProfile(dexDerived, ["martial"], resolveAttackWeapon([], [], "shortbow"));
+  const plainSword = weaponAttackProfile(dexDerived, ["martial"], resolveAttackWeapon([], [], "longsword"));
+  assert.equal(bow.toHit, plainBow.toHit + 2);
+  assert.equal(sword.toHit, plainSword.toHit);
+  assert.match(bow.riderNotes.join(" "), /Archery/);
+});
+
+test("Dueling pays out one-handed melee only", () => {
+  const dueling = ridersFor("fighter", 5, "Fighting Style: Dueling");
+  const oneHanded = weaponAttackProfile(derived, ["martial"], resolveAttackWeapon([], [], "longsword"), {
+    riders: dueling,
+  });
+  assert.equal(oneHanded.damageExpression, "1d8+5");
+  // Both hands on the same weapon is not Dueling.
+  const bothHands = weaponAttackProfile(derived, ["martial"], resolveAttackWeapon([], [], "longsword"), {
+    riders: dueling,
+    twoHanded: true,
+  });
+  assert.equal(bothHands.damageExpression, "1d10+3");
+  // Neither is a bow.
+  const bow = weaponAttackProfile(derived, ["martial"], resolveAttackWeapon([], [], "shortbow"), {
+    riders: dueling,
+  });
+  assert.equal(bow.damageExpression, "1d6+1");
+});
+
+test("the off-hand swing loses its modifier without the style", () => {
+  const untrained = weaponAttackProfile(derived, ["martial"], resolveAttackWeapon([], [], "shortsword"), {
+    offHand: true,
+  });
+  assert.equal(untrained.damageExpression, "1d6");
+  const trained = weaponAttackProfile(derived, ["martial"], resolveAttackWeapon([], [], "shortsword"), {
+    offHand: true,
+    riders: ridersFor("ranger", 5, "Fighting Style: Two-Weapon Fighting"),
+  });
+  assert.equal(trained.damageExpression, "1d6+3");
+});
+
+test("Martial Arts arms the monk's unarmed strike", () => {
+  const monk = ridersFor("monk", 5, "Martial Arts");
+  const fist = weaponAttackProfile(dexDerived, [], resolveAttackWeapon([], [], "unarmed"), {
+    riders: monk,
+  });
+  // DEX 4 beats STR -1, and level 5 rolls a d6.
+  assert.equal(fist.damageExpression, "1d6+4");
+  assert.equal(fist.ability, "dex");
+  // Without the feature it is the SRD's 1 + STR.
+  const untrained = weaponAttackProfile(dexDerived, [], resolveAttackWeapon([], [], "unarmed"));
+  assert.equal(untrained.damageExpression, "1-1");
+});
+
+test("only finesse and ranged weapons can carry Sneak Attack", () => {
+  const rapier = weaponAttackProfile(derived, ["martial"], resolveAttackWeapon([], [], "rapier"));
+  const bow = weaponAttackProfile(derived, ["martial"], resolveAttackWeapon([], [], "shortbow"));
+  const maul = weaponAttackProfile(derived, ["martial"], resolveAttackWeapon([], [], "maul"));
+  assert.equal(rapier.sneakEligible, true);
+  assert.equal(bow.sneakEligible, true);
+  assert.equal(maul.sneakEligible, false);
+});
+
+test("an expanded crit range crits without changing what hits", () => {
+  // A natural 19 against AC 25 still misses, and still is not a crit.
+  assert.deepEqual(adjudicateHit(19, undefined, 25, { natural: 19, critRange: 19 }), {
+    hit: false,
+    crit: false,
+  });
+  // A natural 19 that beats the AC crits for a Champion.
+  assert.deepEqual(adjudicateHit(24, undefined, 20, { natural: 19, critRange: 19 }), {
+    hit: true,
+    crit: true,
+  });
+  // Without the feature the same roll is an ordinary hit.
+  assert.deepEqual(adjudicateHit(24, undefined, 20, { natural: 19 }), {
+    hit: true,
+    crit: false,
+  });
+  // A natural 1 is still a miss no matter the range.
+  assert.deepEqual(adjudicateHit(30, "nat1", 10, { natural: 1, critRange: 18 }), {
+    hit: false,
+    crit: false,
+  });
+  // A natural 20 always hits and crits.
+  assert.deepEqual(adjudicateHit(2, "nat20", 30, { natural: 20 }), { hit: true, crit: true });
 });
 
 console.log(`test-attack-logic: ${passed} tests passed`);

@@ -12,7 +12,7 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { memo, useState } from "react";
 import { cn } from "@/lib/cn";
 import type { PlayerMapView } from "@/lib/battlemap/view";
 
@@ -102,7 +102,7 @@ export function useSessionTabs({
 
 // Mobile-only navigation: the main game chat ("Table") plus every panel tab,
 // each filling the screen when selected. Hidden at lg and up.
-export function BottomTabBar({
+function BottomTabBarInner({
   tabs,
   mobileView,
   panelTab,
@@ -171,3 +171,5 @@ export function BottomTabBar({
     </nav>
   );
 }
+
+export const BottomTabBar = memo(BottomTabBarInner);

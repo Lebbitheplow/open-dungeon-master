@@ -9,6 +9,8 @@ import { rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
 import { healMath } from "@/lib/dm/mutation-math";
+import { resourceDef } from "@/lib/srd/class-resources";
+import { songOfRestDieFor } from "@/lib/srd/feature-effects";
 import {
   defaultShortRestDice,
   hitDiceExpression,
@@ -203,6 +205,10 @@ export function handleTakeRest(
     }
   }
 
+  // Song of Rest: each creature that spends at least one Hit Die regains
+  // ONE extra die, not one per die spent. The bard benefits too.
+  const songDie = partySongOfRestDie(sheets);
+
   const results: Array<Record<string, unknown>> = [];
   for (const [sheetId, requested] of plan) {
     const sheet = getSheetById(sheetId);
@@ -223,13 +229,18 @@ export function handleTakeRest(
       continue;
     }
     const conMod = computeSheetDerived(sheet).abilityMods.con;
-    const outcome = rollExpression(hitDiceExpression(sheet.hitDice.die, count, conMod));
+    const expression = `${hitDiceExpression(sheet.hitDice.die, count, conMod)}${
+      songDie ? `+1${songDie}` : ""
+    }`;
+    const outcome = rollExpression(expression);
     const roll = insertRoll({
       campaignId: campaign.id,
       characterId: sheet.id,
       requestedBy: "dm",
       kind: "custom",
-      detail: `short rest: ${count} hit ${count === 1 ? "die" : "dice"}`,
+      detail: `short rest: ${count} hit ${count === 1 ? "die" : "dice"}${
+        songDie ? ` + Song of Rest ${songDie}` : ""
+      }`,
       result: outcome,
     });
     publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", {
@@ -270,12 +281,88 @@ export function handleTakeRest(
       refilled.push(sheet.name);
     }
   }
+  // Arcane Recovery / Natural Recovery: a wizard or druid gets slots back on
+  // a short rest, once per day, spending the tracked use.
+  const recovered = applySlotRecovery(campaign, turnId, sheets, reason);
+
   tableNote(campaign, "The party takes a short rest.");
   return {
     ok: true,
     kind: "short",
     results: results.length ? results : "Nobody needed to spend hit dice.",
     ...(refilled.length ? { resourcesRefilled: refilled } : {}),
+    ...(songDie
+      ? {
+          songOfRest: `Song of Rest: everyone who spent a Hit Die regained an extra 1${songDie}.`,
+        }
+      : {}),
+    ...(recovered.length ? { slotsRecovered: recovered } : {}),
     note: "Narrate the breather from these real numbers.",
   };
+}
+
+
+// The best Song of Rest die anyone conscious in the party brings. Not a
+// limited resource: it applies at every short rest, so there is no counter
+// to spend, and one die goes to each creature that spent a Hit Die.
+function partySongOfRestDie(sheets: CharacterSheet[]): string | null {
+  let best: string | null = null;
+  for (const stale of sheets) {
+    const sheet = getSheetById(stale.id);
+    if (!sheet || sheet.currentHp <= 0 || sheet.deathSaves?.dead) {
+      continue;
+    }
+    const die = songOfRestDieFor(sheet);
+    if (die && (!best || Number(die.slice(1)) > Number(best.slice(1)))) {
+      best = die;
+    }
+  }
+  return best;
+}
+
+// Arcane Recovery and Natural Recovery: returns expended slots totalling
+// half the character's level, lowest slots first and never 6th or higher,
+// spending the once-per-day use.
+function applySlotRecovery(
+  campaign: Campaign,
+  turnId: string,
+  sheets: CharacterSheet[],
+  reason: string,
+): string[] {
+  const recovered: string[] = [];
+  for (const stale of sheets) {
+    const sheet = getSheetById(stale.id);
+    if (!sheet?.spellcasting || sheet.deathSaves?.dead) {
+      continue;
+    }
+    for (const id of ["arcane_recovery", "natural_recovery"]) {
+      const state = sheet.resources?.[id];
+      const def = resourceDef(id);
+      if (!state || state.used >= state.max || !def || def.effect.kind !== "recover_slots") {
+        continue;
+      }
+      let budget = def.effect.levels(sheet.level);
+      const slots = { ...sheet.spellcasting.slots };
+      const regained: string[] = [];
+      for (const level of [1, 2, 3, 4, 5]) {
+        const slot = slots[String(level)];
+        while (slot && slot.used > 0 && budget >= level) {
+          slots[String(level)] = { max: slot.max, used: slot.used - 1 };
+          slot.used -= 1;
+          budget -= level;
+          regained.push(`level ${level}`);
+        }
+      }
+      if (!regained.length) {
+        continue;
+      }
+      const patch = {
+        spellcasting: { ...sheet.spellcasting, slots },
+        resources: { ...sheet.resources, [id]: { max: state.max, used: state.used + 1 } },
+      };
+      auditRest(campaign, turnId, sheet, "rest_short", patch, reason);
+      recovered.push(`${sheet.name} (${def.displayName}): ${regained.join(", ")}`);
+    }
+  }
+  return recovered;
 }

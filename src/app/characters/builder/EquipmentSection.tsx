@@ -1,7 +1,6 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { SrdWeapon } from "@/lib/srd/weapons";
 import ContentPicker from "./ContentPicker";
 
 const STARTER_PACK: Array<{ name: string; qty: number }> = [
@@ -14,8 +13,8 @@ const STARTER_PACK: Array<{ name: string; qty: number }> = [
 ];
 
 // Equipment block of the character builder: class-appropriate starting
-// weapons arrive pre-added (removable), proficient weapons are one-click
-// suggestions, and the full item catalog stays searchable.
+// weapons and armor arrive pre-added (removable), proficient gear is a
+// one-click suggestion, and the full item catalog stays searchable.
 export default function EquipmentSection({
   equipment,
   suggestions,
@@ -28,7 +27,8 @@ export default function EquipmentSection({
   inputClass,
 }: {
   equipment: Array<{ name: string; qty: number; slug?: string }>;
-  suggestions: SrdWeapon[];
+  // Name plus a one-word stat to show beside it ("1d8 slashing", "AC 14").
+  suggestions: Array<{ name: string; note: string }>;
   onAdd: (entry: { name: string; qty?: number; slug?: string }) => void;
   onAddMany: (entries: Array<{ name: string; qty: number }>) => void;
   onRemove: (name: string) => void;
@@ -38,7 +38,7 @@ export default function EquipmentSection({
   inputClass: string;
 }) {
   const have = new Set(equipment.map((item) => item.name));
-  const openSuggestions = suggestions.filter((weapon) => !have.has(weapon.name));
+  const openSuggestions = suggestions.filter((entry) => !have.has(entry.name));
 
   return (
     <section className="panel rounded-xl p-4">
@@ -47,15 +47,15 @@ export default function EquipmentSection({
         <div className="mb-2">
           <p className="mb-1.5 text-xs text-stone-500">Suggested for your class:</p>
           <div className="flex flex-wrap gap-1.5">
-            {openSuggestions.map((weapon) => (
+            {openSuggestions.map((entry) => (
               <button
-                key={weapon.name}
+                key={entry.name}
                 type="button"
-                onClick={() => onAdd({ name: weapon.name })}
+                onClick={() => onAdd({ name: entry.name })}
                 className="rounded-full border border-amber-900/70 bg-amber-950/30 px-2.5 py-1 text-xs text-amber-200 hover:bg-amber-950/60"
               >
-                + {weapon.name}
-                <span className="ml-1 text-amber-200/50">{weapon.damage}</span>
+                + {entry.name}
+                <span className="ml-1 text-amber-200/50">{entry.note}</span>
               </button>
             ))}
           </div>

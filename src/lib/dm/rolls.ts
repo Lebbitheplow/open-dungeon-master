@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { d20Expression, type Advantage } from "@/lib/dice";
 import { exhaustionRollState, mergeAdvantage, rollDerivation } from "@/lib/dm/condition-logic";
+import { defenseRiders } from "@/lib/srd/feature-effects";
 import { normalizeAbility, normalizeAdvantage, normalizeRollKind } from "@/lib/dm/arg-coerce";
+import { dcForDifficulty, normalizeDifficulty } from "@/lib/srd/dc";
 import { DM_TOOL_NAME_PATTERN, toolTextRegex, xmlToolCallRegex } from "@/lib/dm/tool-text";
 import { computeSheetDerived, findSkill, SRD_SKILLS } from "@/lib/srd";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -27,6 +29,14 @@ export const rollArgsSchema = z.object({
     z.enum(["str", "dex", "con", "int", "wis", "cha"]).optional(),
   ),
   dc: z.coerce.number().int().min(1).max(40).optional(),
+  // A difficulty tier the server turns into the canonical DC (very_easy 5 ..
+  // nearly_impossible 30). When both are sent, an explicit dc wins.
+  difficulty: z.preprocess(
+    (value) => normalizeDifficulty(value) ?? undefined,
+    z
+      .enum(["very_easy", "easy", "moderate", "hard", "very_hard", "nearly_impossible"])
+      .optional(),
+  ),
   expression: z.string().max(60).optional(),
   advantage: z.preprocess(
     normalizeAdvantage,
@@ -38,6 +48,14 @@ export const rollArgsSchema = z.object({
   // kind=damage only: damage type, so resistances and immunities apply.
   damageType: z.string().optional(),
   reason: z.string().optional(),
+}).transform((args) => {
+  // Fold a difficulty tier down into a concrete dc so every downstream
+  // consumer (success computation, result text) sees one number. An explicit
+  // dc always wins over the tier.
+  if (args.dc === undefined && args.difficulty) {
+    return { ...args, dc: dcForDifficulty(args.difficulty) };
+  }
+  return args;
 });
 
 export type RollArgs = z.infer<typeof rollArgsSchema>;
@@ -360,6 +378,19 @@ export function salvageProseRollAsks(
   };
 }
 
+// An unspent Bardic Inspiration die a character is holding. The die size
+// rides in the condition name ("bardic inspiration (d8)"), written by
+// use_resource in src/lib/dm/resource-tools.ts.
+function findInspiration(conditions: string[]): { condition: string; die: string } | null {
+  for (const condition of conditions) {
+    const match = /^bardic inspiration \((d\d{1,2})\)$/i.exec(condition.trim());
+    if (match) {
+      return { condition, die: match[1].toLowerCase() };
+    }
+  }
+  return null;
+}
+
 // Resolve a request_roll call into a canonical expression using the sheet as
 // the only source of modifiers. Conditions on the sheet auto-derive
 // advantage/disadvantage (poisoned checks, restrained DEX saves) and can
@@ -369,7 +400,14 @@ export function resolveRollExpression(
   args: RollArgs,
   sheet: CharacterSheet | null,
 ):
-  | { expression: string; detail: string; conditionNotes?: string[] }
+  | {
+      expression: string;
+      detail: string;
+      conditionNotes?: string[];
+      // Condition name the caller must clear: an inspiration die was folded
+      // into the expression and is now spent.
+      spendInspiration?: string;
+    }
   | { autoFail: true; detail: string; notes: string[] }
   | { error: string } {
   const derivationKind =
@@ -379,9 +417,16 @@ export function resolveRollExpression(
     args.kind === "initiative"
       ? args.kind
       : null;
+  // A skill check is driven by the skill's own ability (Athletics is
+  // Strength), which rage and other ability-keyed effects need to see.
+  const skillAbility =
+    args.kind === "skill_check"
+      ? findSkill((args.skill ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_"))?.ability
+      : undefined;
+  const derivationAbility = args.ability ?? skillAbility;
   const derivation =
     sheet && derivationKind
-      ? rollDerivation(sheet.conditions, derivationKind, args.ability)
+      ? rollDerivation(sheet.conditions, derivationKind, derivationAbility)
       : { advantage: "none" as const, autoFail: false, notes: [] };
   if (derivation.autoFail) {
     return { autoFail: true, detail: args.ability ?? "", notes: derivation.notes };
@@ -390,12 +435,46 @@ export function resolveRollExpression(
     sheet && derivationKind
       ? exhaustionRollState(sheet.exhaustion ?? 0, derivationKind)
       : { advantage: "none" as const, note: null };
+  // A held Help die: the ally's assistance gives advantage on the next
+  // check, and is spent by taking it (src/lib/dm/action-tools.ts).
+  const helped =
+    sheet && derivationKind && derivationKind !== "initiative"
+      ? sheet.conditions.find((entry) => entry.trim().toLowerCase() === "helped") ?? null
+      : null;
+  // Feature-driven roll riders: Danger Sense grants advantage on the save
+  // ability it covers, Reliable Talent floors a proficient check.
+  const defense =
+    sheet && sheet.class
+      ? defenseRiders({ class: sheet.class, level: sheet.level, features: sheet.features })
+      : { saveAdvantage: new Set<string>() };
+  const dangerSense =
+    derivationKind === "saving_throw" &&
+    derivationAbility !== undefined &&
+    defense.saveAdvantage.has(derivationAbility);
   const advantage: Advantage = mergeAdvantage([
     args.advantage ?? "none",
     derivation.advantage,
     exhaustion.advantage,
+    ...(helped ? ["advantage" as const] : []),
+    ...(dangerSense ? ["advantage" as const] : []),
   ]);
-  const allNotes = [...derivation.notes, ...(exhaustion.note ? [exhaustion.note] : [])];
+  // A held Bardic Inspiration die rides along on the next d20 the character
+  // rolls and is spent by doing so; the caller clears the condition.
+  const inspiration =
+    sheet && derivationKind && derivationKind !== "initiative"
+      ? findInspiration(sheet.conditions)
+      : null;
+  const bonusDie = inspiration ? `+1${inspiration.die}` : "";
+  // Both carriers are spent the same way: the caller clears the condition.
+  const spent = [inspiration?.condition, helped].filter(Boolean) as string[];
+  const inspirationFields = spent.length ? { spendInspiration: spent.join("|") } : {};
+  const allNotes = [
+    ...derivation.notes,
+    ...(exhaustion.note ? [exhaustion.note] : []),
+    ...(inspiration ? [`spends their Bardic Inspiration die: +1${inspiration.die}`] : []),
+    ...(helped ? ["spends the Help their ally gave them: advantage"] : []),
+    ...(dangerSense ? [`Danger Sense: advantage on ${derivationAbility?.toUpperCase()} saves`] : []),
+  ];
   const conditionNotes = allNotes.length ? allNotes : undefined;
 
   if (args.kind === "skill_check") {
@@ -410,9 +489,10 @@ export function resolveRollExpression(
     }
     const derived = computeSheetDerived(sheet);
     return {
-      expression: d20Expression(derived.skills[skill.id] ?? 0, advantage),
+      expression: `${d20Expression(derived.skills[skill.id] ?? 0, advantage)}${bonusDie}`,
       detail: skill.id,
       ...(conditionNotes ? { conditionNotes } : {}),
+      ...inspirationFields,
     };
   }
 
@@ -429,9 +509,10 @@ export function resolveRollExpression(
         ? derived.saves[args.ability]
         : derived.abilityMods[args.ability];
     return {
-      expression: d20Expression(modifier, advantage),
+      expression: `${d20Expression(modifier, advantage)}${bonusDie}`,
       detail: args.ability,
       ...(conditionNotes ? { conditionNotes } : {}),
+      ...inspirationFields,
     };
   }
 

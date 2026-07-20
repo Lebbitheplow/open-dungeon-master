@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
+import { currentUser, unauthorized } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
@@ -14,7 +15,16 @@ const requestSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const body = requestSchema.parse(await request.json());
+  const user = await currentUser();
+  if (!user) {
+    return unauthorized();
+  }
+
+  const parsed = requestSchema.safeParse(await request.json().catch(() => ({})));
+  if (!parsed.success) {
+    return Response.json({ error: "Invalid upload." }, { status: 400 });
+  }
+  const body = parsed.data;
 
   if (!allowedTypes.has(body.type)) {
     return Response.json({ error: "Only PNG, JPEG, and WebP images are supported." }, { status: 415 });
@@ -39,6 +49,5 @@ export async function POST(request: Request) {
     name: body.name,
     type: body.type,
     url: `/uploads/${filename}`,
-    dataUrl: body.dataUrl,
   });
 }

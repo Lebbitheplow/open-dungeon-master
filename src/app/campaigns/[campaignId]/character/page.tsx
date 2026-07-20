@@ -1,12 +1,14 @@
 "use client";
 
 import { Loader2, Plus, UserRound } from "lucide-react";
-import { use, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, use, useEffect, useState } from "react";
 import { IconChip, PIXEL_ICONS, PixelTile } from "@/lib/ui";
 import CharacterBuilder, {
   type BuilderResult,
 } from "@/app/characters/builder/CharacterBuilder";
 import type { Genre } from "@/lib/schemas/game-settings";
+import type { CreateSheetInput } from "@/lib/schemas/sheet";
 
 type LibraryCharacter = {
   id: string;
@@ -15,7 +17,7 @@ type LibraryCharacter = {
   class: string;
   subclass: string;
   level: number;
-  sheet?: { portrait?: { url: string } | null };
+  sheet?: CreateSheetInput;
 };
 
 function titleCase(value: string) {
@@ -24,17 +26,22 @@ function titleCase(value: string) {
 
 // Join a campaign with a character: pick one from your library (adapted to
 // the campaign's starting level) or build a new one (also saved to your
-// library).
-export default function CampaignCharacterPage({
-  params,
-}: {
-  params: Promise<{ campaignId: string }>;
-}) {
-  const { campaignId } = use(params);
+// library). ?mode=edit reopens the builder prefilled with the current
+// character; ?mode=replace swaps it for another (both lobby-only, both
+// clearing the ready flag; editing re-renders the portrait).
+function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
+  // join = first character; edit = rebuild the current one in place;
+  // replace = switch to another or a brand-new one.
+  const requested = useSearchParams().get("mode");
+  const flow: "join" | "edit" | "replace" =
+    requested === "edit" || requested === "replace" ? requested : "join";
   const [level, setLevel] = useState<number | null>(null);
   const [genre, setGenre] = useState<Genre | undefined>(undefined);
   const [library, setLibrary] = useState<LibraryCharacter[]>([]);
-  const [mode, setMode] = useState<"choose" | "create">("choose");
+  const [mode, setMode] = useState<"choose" | "create">(
+    flow === "edit" ? "create" : "choose",
+  );
+  const [currentLibraryId, setCurrentLibraryId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -45,8 +52,11 @@ export default function CampaignCharacterPage({
         response.ok ? response.json() : null,
       ),
       fetch("/api/characters").then((response) => (response.ok ? response.json() : null)),
+      fetch(`/api/campaigns/${campaignId}/sheet`).then((response) =>
+        response.ok ? response.json() : null,
+      ),
     ])
-      .then(([campaignData, charactersData]) => {
+      .then(([campaignData, charactersData, sheetData]) => {
         if (cancelled) {
           return;
         }
@@ -54,6 +64,7 @@ export default function CampaignCharacterPage({
         setGenre(campaignData?.campaign?.gameSettings?.genre ?? undefined);
         const characters = charactersData?.characters ?? [];
         setLibrary(characters);
+        setCurrentLibraryId(sheetData?.sheet?.libraryCharacterId ?? null);
         if (!characters.length) {
           setMode("create");
         }
@@ -64,18 +75,23 @@ export default function CampaignCharacterPage({
     };
   }, [campaignId]);
 
-  async function post(body: unknown) {
+  const editCharacter =
+    flow === "edit" && currentLibraryId
+      ? (library.find((character) => character.id === currentLibraryId) ?? null)
+      : null;
+
+  async function send(body: unknown, method: "POST" | "PUT") {
     setBusy(true);
     setError("");
     try {
       const response = await fetch(`/api/campaigns/${campaignId}/sheet`, {
-        method: "POST",
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setError(data.error || "Could not create the character.");
+        setError(data.error || "Could not save the character.");
         return;
       }
       window.location.assign(`/campaigns/${campaignId}`);
@@ -87,11 +103,15 @@ export default function CampaignCharacterPage({
   }
 
   function pickFromLibrary(characterId: string) {
-    post({ libraryCharacterId: characterId });
+    send({ libraryCharacterId: characterId }, flow === "join" ? "POST" : "PUT");
   }
 
   function submitNew(result: BuilderResult) {
-    post(result.sheet);
+    if (flow === "edit" && editCharacter) {
+      send({ editLibraryCharacterId: editCharacter.id, sheet: result.sheet }, "PUT");
+      return;
+    }
+    send(result.sheet, flow === "join" ? "POST" : "PUT");
   }
 
   if (level === null) {
@@ -113,17 +133,26 @@ export default function CampaignCharacterPage({
         <div className="mt-2 flex items-center gap-3">
           <PixelTile src={PIXEL_ICONS.characters} />
           <h1 className="font-display text-2xl tracking-wide text-amber-50">
-            {mode === "choose" ? "Choose your character" : "Create your character"}
+            {flow === "edit"
+              ? "Edit your character"
+              : flow === "replace"
+                ? "Switch your character"
+                : mode === "choose"
+                  ? "Choose your character"
+                  : "Create your character"}
           </h1>
         </div>
         <p className="mt-1 text-sm text-stone-400">
           This campaign starts at level {level}.
+          {flow !== "join"
+            ? " Changing your character clears your ready status, and edits repaint the portrait."
+            : ""}
         </p>
       </header>
 
       {mode === "choose" ? (
         <section className="space-y-4">
-          <ul className="grid gap-3 sm:grid-cols-2">
+          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {library.map((character) => (
               <li key={character.id}>
                 <button
@@ -144,6 +173,11 @@ export default function CampaignCharacterPage({
                       <IconChip icon={UserRound} size="size-8" iconSize="size-4" />
                     )}
                     <span className="font-medium text-stone-100">{character.name}</span>
+                    {character.id === currentLibraryId ? (
+                      <span className="rounded-full bg-amber-950 px-2 py-0.5 text-xs text-amber-300">
+                        current
+                      </span>
+                    ) : null}
                   </div>
                   <p className="mt-1 text-sm text-stone-400">
                     Level {character.level} {titleCase(character.race)}{" "}
@@ -182,7 +216,14 @@ export default function CampaignCharacterPage({
           <CharacterBuilder
             fixedLevel={level}
             genre={genre}
-            submitLabel="Join the party"
+            initial={flow === "edit" ? editCharacter?.sheet : undefined}
+            submitLabel={
+              flow === "edit"
+                ? "Save changes"
+                : flow === "replace"
+                  ? "Replace your character"
+                  : "Join the party"
+            }
             onSubmit={submitNew}
             busy={busy}
             error={error}
@@ -190,5 +231,27 @@ export default function CampaignCharacterPage({
         </>
       )}
     </main>
+  );
+}
+
+// useSearchParams needs a Suspense boundary during prerender in Next 16.
+export default function CampaignCharacterPage({
+  params,
+}: {
+  params: Promise<{ campaignId: string }>;
+}) {
+  const { campaignId } = use(params);
+  return (
+    <Suspense
+      fallback={
+        <main className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
+          <div className="flex justify-center py-10">
+            <Loader2 className="size-5 animate-spin text-stone-500" />
+          </div>
+        </main>
+      }
+    >
+      <CampaignCharacterPageInner campaignId={campaignId} />
+    </Suspense>
   );
 }

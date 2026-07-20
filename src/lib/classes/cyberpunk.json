@@ -2,58 +2,241 @@
   "_note": "Original setting-specific classes for Open Dungeon Master. Not SRD-derived content.",
   "classes": [
     {
-      "id": "netrunner", "name": "Netrunner", "hitDie": 6,
-      "saves": ["int", "wis"], "casterType": "full", "spellAbility": "int",
-      "armor": [], "weapons": ["daggers", "sidearms"],
-      "skillChoices": { "count": 2, "from": ["arcana", "history", "insight", "investigation", "perception", "stealth"] },
-      "genres": ["cyberpunk"],
+      "id": "netrunner",
+      "name": "Netrunner",
+      "hitDie": 6,
+      "saves": [
+        "int",
+        "wis"
+      ],
+      "casterType": "full",
+      "spellAbility": "int",
+      "armor": [],
+      "weapons": [
+        "daggers",
+        "sidearms"
+      ],
+      "skillChoices": {
+        "count": 2,
+        "from": [
+          "arcana",
+          "history",
+          "insight",
+          "investigation",
+          "perception",
+          "stealth"
+        ]
+      },
+      "genres": [
+        "cyberpunk"
+      ],
       "blurb": "A console cowboy who cracks systems and minds alike, running intrusion programs from a battered cyberdeck.",
-      "spellListFrom": "wizard", "knownCaster": false, "castingLabel": "Programs"
+      "spellListFrom": "wizard",
+      "knownCaster": false,
+      "castingLabel": "Programs",
+      "tools": [
+        "hacking rig",
+        "electronics kit"
+      ]
     },
     {
-      "id": "street_samurai", "name": "Street Samurai", "hitDie": 10,
-      "saves": ["str", "dex"], "casterType": "none", "spellAbility": null,
-      "armor": ["light", "medium"], "weapons": ["simple", "martial", "firearms", "tech blades"],
-      "skillChoices": { "count": 2, "from": ["acrobatics", "athletics", "intimidation", "perception", "stealth", "survival"] },
-      "genres": ["cyberpunk"],
+      "id": "street_samurai",
+      "name": "Street Samurai",
+      "hitDie": 10,
+      "saves": [
+        "str",
+        "dex"
+      ],
+      "casterType": "none",
+      "spellAbility": null,
+      "armor": [
+        "light",
+        "medium"
+      ],
+      "weapons": [
+        "simple",
+        "martial",
+        "firearms",
+        "tech blades"
+      ],
+      "skillChoices": {
+        "count": 2,
+        "from": [
+          "acrobatics",
+          "athletics",
+          "intimidation",
+          "perception",
+          "stealth",
+          "survival"
+        ]
+      },
+      "genres": [
+        "cyberpunk"
+      ],
       "blurb": "Chromed to the teeth and faster than thought, a blade-and-bullet artist who sells violence with a warranty.",
-      "spellListFrom": null, "knownCaster": false, "castingLabel": null
+      "spellListFrom": null,
+      "knownCaster": false,
+      "castingLabel": null,
+      "tools": [
+        "cybernetics maintenance kit"
+      ]
     },
     {
-      "id": "rigger", "name": "Rigger", "hitDie": 8,
-      "saves": ["int", "con"], "casterType": "half", "spellAbility": "int",
-      "armor": ["light"], "weapons": ["simple", "sidearms"],
-      "skillChoices": { "count": 2, "from": ["arcana", "history", "insight", "investigation", "perception", "sleight_of_hand"] },
-      "genres": ["cyberpunk"],
+      "id": "rigger",
+      "name": "Rigger",
+      "hitDie": 8,
+      "saves": [
+        "int",
+        "con"
+      ],
+      "casterType": "half",
+      "spellAbility": "int",
+      "armor": [
+        "light"
+      ],
+      "weapons": [
+        "simple",
+        "sidearms"
+      ],
+      "skillChoices": {
+        "count": 2,
+        "from": [
+          "arcana",
+          "history",
+          "insight",
+          "investigation",
+          "perception",
+          "sleight_of_hand"
+        ]
+      },
+      "genres": [
+        "cyberpunk"
+      ],
       "blurb": "A drone whisperer who rides camera feeds, jury-rigs machines, and casts support routines through a loyal swarm.",
-      "spellListFrom": "wizard", "knownCaster": false, "castingLabel": "Drone Routines"
+      "spellListFrom": "wizard",
+      "knownCaster": false,
+      "castingLabel": "Drone Routines",
+      "tools": [
+        "drone controls",
+        "mechanic's tools",
+        "vehicles (land)"
+      ]
     },
     {
-      "id": "fixer", "name": "Fixer", "hitDie": 8,
-      "saves": ["dex", "cha"], "casterType": "none", "spellAbility": null,
-      "armor": ["light"], "weapons": ["simple", "sidearms"],
-      "skillChoices": { "count": 4, "from": ["deception", "insight", "intimidation", "investigation", "perception", "persuasion", "sleight_of_hand", "stealth"] },
-      "genres": ["cyberpunk"],
+      "id": "fixer",
+      "name": "Fixer",
+      "hitDie": 8,
+      "saves": [
+        "dex",
+        "cha"
+      ],
+      "casterType": "none",
+      "spellAbility": null,
+      "armor": [
+        "light"
+      ],
+      "weapons": [
+        "simple",
+        "sidearms"
+      ],
+      "skillChoices": {
+        "count": 4,
+        "from": [
+          "deception",
+          "insight",
+          "intimidation",
+          "investigation",
+          "perception",
+          "persuasion",
+          "sleight_of_hand",
+          "stealth"
+        ]
+      },
+      "genres": [
+        "cyberpunk"
+      ],
       "blurb": "The one who knows a guy. Contacts, favors, and a silver tongue open doors that guns cannot.",
-      "spellListFrom": null, "knownCaster": false, "castingLabel": null
+      "spellListFrom": null,
+      "knownCaster": false,
+      "castingLabel": null,
+      "tools": [
+        "forgery kit",
+        "gaming set"
+      ]
     },
     {
-      "id": "esper", "name": "Esper", "hitDie": 6,
-      "saves": ["con", "cha"], "casterType": "full", "spellAbility": "cha",
-      "armor": [], "weapons": ["simple"],
-      "skillChoices": { "count": 2, "from": ["arcana", "deception", "insight", "intimidation", "perception", "persuasion"] },
-      "genres": ["cyberpunk"],
+      "id": "esper",
+      "name": "Esper",
+      "hitDie": 6,
+      "saves": [
+        "con",
+        "cha"
+      ],
+      "casterType": "full",
+      "spellAbility": "cha",
+      "armor": [],
+      "weapons": [
+        "simple"
+      ],
+      "skillChoices": {
+        "count": 2,
+        "from": [
+          "arcana",
+          "deception",
+          "insight",
+          "intimidation",
+          "perception",
+          "persuasion"
+        ]
+      },
+      "genres": [
+        "cyberpunk"
+      ],
       "blurb": "A psychic surge burns behind their eyes: raw, unstable psionics that megacorp labs would kill to bottle.",
-      "spellListFrom": "sorcerer", "knownCaster": true, "castingLabel": "Psionics"
+      "spellListFrom": "sorcerer",
+      "knownCaster": true,
+      "castingLabel": "Psionics",
+      "tools": []
     },
     {
-      "id": "trauma_doc", "name": "Trauma Doc", "hitDie": 8,
-      "saves": ["wis", "int"], "casterType": "half", "spellAbility": "wis",
-      "armor": ["light"], "weapons": ["simple", "sidearms"],
-      "skillChoices": { "count": 2, "from": ["insight", "investigation", "medicine", "perception", "persuasion", "sleight_of_hand"] },
-      "genres": ["cyberpunk"],
+      "id": "trauma_doc",
+      "name": "Trauma Doc",
+      "hitDie": 8,
+      "saves": [
+        "wis",
+        "int"
+      ],
+      "casterType": "half",
+      "spellAbility": "wis",
+      "armor": [
+        "light"
+      ],
+      "weapons": [
+        "simple",
+        "sidearms"
+      ],
+      "skillChoices": {
+        "count": 2,
+        "from": [
+          "insight",
+          "investigation",
+          "medicine",
+          "perception",
+          "persuasion",
+          "sleight_of_hand"
+        ]
+      },
+      "genres": [
+        "cyberpunk"
+      ],
       "blurb": "Combat medic with a stim gun and a nanite pharmacy, keeping the crew breathing through the firefight.",
-      "spellListFrom": "cleric", "knownCaster": false, "castingLabel": "Nanomeds"
+      "spellListFrom": "cleric",
+      "knownCaster": false,
+      "castingLabel": "Nanomeds",
+      "tools": [
+        "medic's kit",
+        "chemist's supplies"
+      ]
     }
   ]
 }

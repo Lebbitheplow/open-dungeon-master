@@ -1,6 +1,6 @@
 {
   "name": "open-dungeon-master",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "description": "Multiplayer D&D 5e campaigns with an AI Dungeon Master, fully on-device",
   "license": "MIT",
@@ -15,6 +15,7 @@
     "start:lan": "next start -H 0.0.0.0 -p 3005",
     "lint": "eslint",
     "test": "node scripts/test-all.mjs",
+    "resources:generate": "node scripts/generate-class-resources.mjs",
     "test:dice": "node scripts/test-dice.mjs",
     "postinstall": "node scripts/copy-dice-assets.mjs"
   },

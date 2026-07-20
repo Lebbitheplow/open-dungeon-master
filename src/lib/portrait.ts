@@ -6,6 +6,8 @@ import { updateCharacterPortrait } from "@/lib/db/characters";
 import { listSheetsForLibraryCharacter, patchSheet } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
 import { enqueueMediaJob } from "@/lib/media-queue";
+import { genrePreset } from "@/lib/genres";
+import type { Genre } from "@/lib/schemas/game-settings";
 import { configuredDefaultStorySettings } from "@/lib/runtime-defaults";
 import type { CreateSheetInput, SheetAttachment } from "@/lib/schemas/sheet";
 
@@ -33,15 +35,17 @@ function deslug(value: string) {
   return value.replace(/[-_]/g, " ").trim();
 }
 
-// Deterministic prompt from the sheet's identity fields; genre-neutral
-// because classes span all six genre catalogs.
-function buildPortraitPrompt(sheet: CreateSheetInput): string {
+// Deterministic prompt from the sheet's identity fields. Genre-neutral by
+// default because classes span all six genre catalogs; callers that know the
+// campaign's genre pass its art style so the render matches the world.
+function buildPortraitPrompt(sheet: CreateSheetInput, style = ""): string {
   const identity = [sheet.gender, deslug(sheet.race), deslug(sheet.class)]
     .filter(Boolean)
     .join(" ");
   const parts = [
     "Tabletop RPG character portrait, head and shoulders, centered, looking at viewer",
     identity,
+    style,
     sheet.background ? `${deslug(sheet.background)} background` : "",
     sheet.appearance,
     (sheet.backstory || "").slice(0, 200),
@@ -79,6 +83,61 @@ export function mirrorToCampaignSheets(
       publishPersisted(sheet.campaignId, "sheet_updated", { sheet: updated });
     }
   }
+}
+
+// Fire-and-forget for AI companions: campaign sheets with no library row,
+// so the render patches the sheet directly. Same serial media queue.
+export function queueCompanionPortrait(sheet: {
+  id: string;
+  campaignId: string;
+  name: string;
+  race: string;
+  class: string;
+  background: string;
+  personality: string;
+  genre: Genre;
+}): void {
+  const map = statusMap();
+  map.set(sheet.id, "queued");
+  const prompt = buildPortraitPrompt(
+    {
+      gender: "",
+      race: sheet.race,
+      class: sheet.class,
+      background: sheet.background,
+      appearance: sheet.personality.slice(0, 160),
+      backstory: "",
+    } as CreateSheetInput,
+    genrePreset(sheet.genre).portraitStyle,
+  );
+  void enqueueMediaJob(`portrait ${sheet.id}`, async () => {
+    map.set(sheet.id, "generating");
+    try {
+      const settings = configuredDefaultStorySettings();
+      const image = await generateComfyImage({
+        url: settings.comfyUrl || undefined,
+        checkpoint: settings.comfyCheckpoint || undefined,
+        prompt,
+        mode: "fast",
+        aspect: "square",
+      });
+      const copied = copyIntoUploads(image.url);
+      const portrait: SheetAttachment = {
+        id: copied.id,
+        name: `${sheet.name} portrait`,
+        type: "image/png",
+        url: copied.url,
+      };
+      const updated = patchSheet(sheet.id, { portrait });
+      if (updated) {
+        publishPersisted(sheet.campaignId, "sheet_updated", { sheet: updated });
+      }
+      map.delete(sheet.id);
+    } catch (error) {
+      map.set(sheet.id, "failed");
+      console.error(`[portrait] companion generation failed for ${sheet.id}:`, error);
+    }
+  });
 }
 
 // Fire-and-forget from the creation routes: renders on the serial media

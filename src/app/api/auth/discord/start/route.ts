@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
+import { cookieSecure } from "@/lib/auth";
 import { OAUTH_COOKIE, discordCredentials, discordRedirectUri } from "@/lib/discord-oauth";
 
 export const runtime = "nodejs";
@@ -19,6 +20,7 @@ export async function GET(request: Request) {
   cookieStore.set(OAUTH_COOKIE, JSON.stringify({ state, link }), {
     httpOnly: true,
     sameSite: "lax",
+    secure: await cookieSecure(),
     path: "/",
     maxAge: 600,
   });

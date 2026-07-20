@@ -182,20 +182,30 @@ export function enemyDamageMath(
 
 // "1d8+3" -> "1d8+1d8+3": doubles every dice term for a critical hit while
 // leaving flat modifiers alone.
-export function critDamageExpression(expression: string): string {
+// `extraDice` adds that many more copies of the FIRST damage die on top of
+// the doubling, for Brutal Critical and the half-orc's Savage Attacks.
+export function critDamageExpression(expression: string, extraDice = 0): string {
   const compact = expression.replace(/\s+/g, "");
   const terms = compact.match(/[+-]?[^+-]+/g);
   if (!terms) {
     return compact;
   }
   const doubled: string[] = [];
+  let firstDie: string | null = null;
   for (const term of terms) {
     const sign = term.startsWith("-") ? "-" : "+";
     const body = term.replace(/^[+-]/, "");
     doubled.push(sign + body);
     if (/\d+d\d+/i.test(body)) {
       doubled.push(sign + body);
+      if (firstDie === null && sign === "+") {
+        // One die of that size, however many the weapon rolls.
+        firstDie = body.replace(/^\d+/, "1");
+      }
     }
+  }
+  for (let index = 0; index < extraDice && firstDie; index += 1) {
+    doubled.push(`+${firstDie}`);
   }
   return doubled.join("").replace(/^\+/, "");
 }

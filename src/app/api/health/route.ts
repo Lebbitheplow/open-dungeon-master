@@ -1,9 +1,17 @@
+import { currentUser } from "@/lib/auth";
 import { serverEnv } from "@/lib/server-env";
 import { LOCAL_TEXT_MODEL_IDS } from "@/lib/text-models";
 
 export const runtime = "nodejs";
 
 export async function GET() {
+  // Unauthenticated callers get a bare liveness probe; configuration details
+  // (model names, which keys are set, backend reachability) require a login.
+  const user = await currentUser();
+  if (!user) {
+    return Response.json({ ok: true });
+  }
+
   const workerUrl = serverEnv("FLUX_WORKER_URL", "http://127.0.0.1:7869");
   const ollamaUrl = serverEnv("OLLAMA_BASE_URL", "http://127.0.0.1:11434");
 

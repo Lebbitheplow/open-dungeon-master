@@ -5,8 +5,13 @@ import { insertCharacterEvent } from "@/lib/db/character-events";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { listConditions } from "@/lib/content";
 import { levelForXp } from "@/lib/srd";
+import { RAGING, spendRelentlessEndurance } from "@/lib/srd/class-resources";
 import { publishPersisted } from "@/lib/events";
-import { fullPatchSheetSchema, type CharacterSheet } from "@/lib/schemas/sheet";
+import {
+  fullPatchSheetSchema,
+  type CharacterSheet,
+  type FullPatchSheetInput,
+} from "@/lib/schemas/sheet";
 import {
   applyDamageMath,
   goldMath,
@@ -14,13 +19,16 @@ import {
   healMath,
   removeItemMath,
   spendSlotMath,
+  wildShapeDamageMath,
 } from "@/lib/dm/mutation-math";
 import { applyDamageDeathHook, healDeathHook } from "@/lib/dm/death";
+import { autoLevelCompanion } from "@/lib/dm/companion-tools";
 import {
   damageAdjust,
   describeExhaustion,
   pcResistances,
   pruneMeta,
+  removeConditions,
 } from "@/lib/dm/condition-logic";
 import { normalizeAbility, normalizeListAction } from "@/lib/dm/arg-coerce";
 import {
@@ -35,7 +43,12 @@ import {
   computeUseResource,
   resourceTools,
 } from "@/lib/dm/resource-tools";
-import { searchSpells } from "@/lib/content";
+import { searchSpells, spellDamageFor } from "@/lib/content";
+import { suggestedSpellCount } from "@/lib/content/mechanics";
+import { abilityMod, computeSheetDerived } from "@/lib/srd";
+import { insertRoll } from "@/lib/db/rolls";
+import { rollExpression } from "@/lib/dice";
+import { publishWithSeq } from "@/lib/events";
 
 // DM stat authority: the model changes sheets ONLY through these tools.
 // Every mutation is server-clamped, audit-logged, and published live.
@@ -89,13 +102,28 @@ export const mutationTools: ToolDef[] = [
     amount: { type: "integer", minimum: 1, maximum: 200 },
     type: { type: "string", description: "Damage type, e.g. slashing, fire." },
   }, ["amount"]),
-  tool("heal", "Restore a character's hit points, capped at their max. Healing a dying character any amount ends their death saves and wakes them. Pass temp:true to grant TEMPORARY hit points instead (they do not stack; the higher value wins).", {
-    amount: { type: "integer", minimum: 1, maximum: 200 },
+  tool("heal", "Restore a character's hit points, capped at their max. Healing a dying character any amount ends their death saves and wakes them. Pass temp:true to grant TEMPORARY hit points instead (they do not stack; the higher value wins). For a HEALING SPELL, pass spell (and the slot level it was cast at) instead of amount: the server rolls the spell's real dice, adds the caster's ability modifier, and shows the dice card.", {
+    amount: { type: "integer", minimum: 1, maximum: 200, description: "Flat hit points, for healing that is not a spell." },
+    spell: {
+      type: "string",
+      description:
+        "Healing spell being cast (Cure Wounds, Healing Word, Prayer of Healing). The server rolls it.",
+    },
+    level: {
+      type: "integer",
+      minimum: 1,
+      maximum: 9,
+      description: "Slot level the healing spell was cast at, for upcast scaling.",
+    },
+    casterId: {
+      type: "string",
+      description: "Who cast it, when a spell heals someone else; their ability modifier is added.",
+    },
     temp: {
       type: "boolean",
       description: "True = temporary hit points instead of healing.",
     },
-  }, ["amount"]),
+  }, []),
   tool(
     "stabilize",
     "Stabilize a DYING character at 0 HP without healing: a successful DC 10 Wisdom (Medicine) check or a healer's kit. They stop making death saves but stay unconscious at 0 HP.",
@@ -265,6 +293,10 @@ const argsSchema = z.object({
   targetCharacterId: z.string().optional(),
   price: z.coerce.number().int().min(0).max(100000).optional(),
   resource: z.string().optional(),
+  // use_resource, Wild Shape: the beast form's stat block.
+  form: z.string().optional(),
+  formHp: z.coerce.number().int().min(1).max(300).optional(),
+  formAc: z.coerce.number().int().min(1).max(30).optional(),
   condition: z.string().optional(),
   // set_condition durations.
   rounds: z.coerce.number().int().min(1).max(100).optional(),
@@ -275,6 +307,8 @@ const argsSchema = z.object({
   saveDc: z.coerce.number().int().min(1).max(30).optional(),
   level: z.coerce.number().int().optional(),
   spell: z.string().optional(),
+  // heal: who cast the healing spell, when it lands on someone else.
+  casterId: z.string().optional(),
   // learn_spell: add|remove; purchase: buy|sell (synonyms normalized).
   action: z.preprocess(
     normalizeListAction,
@@ -383,12 +417,22 @@ export function applyDmMutation(
       return { result: { error: "No valid characterIds from GAME STATE." } };
     }
     const levelUps: string[] = [];
+    const companionLevelUps: string[] = [];
     for (const sheet of targets) {
       const newXp = sheet.xp + amount;
       patchSheet(sheet.id, { xp: newXp });
       audit(campaign, turnId, sheet, "award_xp", { amount, newXp }, reason, { xp: newXp });
       publishSheet(campaign, sheet.id);
       if (levelForXp(newXp) > sheet.level) {
+        // Companions have no level-up dialog; the server applies a plain
+        // level-up right away instead of announcing an available one.
+        if (sheet.isCompanion) {
+          const leveled = autoLevelCompanion(campaign, sheet.id);
+          if (leveled) {
+            companionLevelUps.push(leveled);
+          }
+          continue;
+        }
         levelUps.push(sheet.name);
         publishPersisted(campaign.id, "level_up_available", {
           characterId: sheet.id,
@@ -411,6 +455,7 @@ export function applyDmMutation(
         awarded: amount,
         to: targets.map((sheet) => sheet.name),
         ...(levelUps.length ? { levelUpAvailable: levelUps } : {}),
+        ...(companionLevelUps.length ? { companionLevelUps } : {}),
       },
     };
   }
@@ -437,27 +482,112 @@ export function applyDmMutation(
         "",
         "",
       );
-      const math = applyDamageMath(sheet.currentHp, sheet.tempHp, adjusted.amount);
+      // Wild Shape: the beast's hit points take the blow first. While the
+      // form holds, the druid's own sheet is untouched and no death or
+      // concentration hook fires; when it breaks, only the excess carries
+      // through into the rest of this same call.
+      let carried = adjusted.amount;
+      let tempHpNow = sheet.tempHp;
+      let shapeInfo: Record<string, unknown> = {};
+      if (sheet.wildShape) {
+        const shape = wildShapeDamageMath(
+          sheet.wildShape.beastHp,
+          sheet.tempHp,
+          adjusted.amount,
+        );
+        const form = sheet.wildShape.form;
+        const patch: FullPatchSheetInput = shape.reverted
+          ? { wildShape: null, tempHp: shape.tempHp }
+          : {
+              wildShape: { ...sheet.wildShape, beastHp: shape.beastHp },
+              tempHp: shape.tempHp,
+            };
+        patchSheet(sheet.id, patch);
+        // currentHp rides along unchanged: it is what the event log reports
+        // and the druid's own pool genuinely did not move.
+        audit(
+          campaign,
+          turnId,
+          sheet,
+          "apply_damage",
+          { amount, form, currentHp: sheet.currentHp, ...shape },
+          reason,
+          patch,
+        );
+        publishSheet(campaign, sheet.id);
+        if (!shape.reverted) {
+          return {
+            result: {
+              ok: true,
+              form: `${form}: ${shape.beastHp}/${sheet.wildShape.beastMaxHp} HP`,
+              ...(adjusted.note ? { resistance: `${sheet.name} is ${adjusted.note}` } : {}),
+              ...(shape.absorbed ? { tempHpAbsorbed: shape.absorbed } : {}),
+              note: `The beast form absorbs it; ${sheet.name}'s own hit points are untouched.`,
+            },
+          };
+        }
+        carried = shape.carryover;
+        tempHpNow = shape.tempHp;
+        shapeInfo = {
+          wildShape: `${form} collapses and ${sheet.name} returns to their own body${
+            carried > 0 ? `, taking the remaining ${carried} damage` : " unharmed by the excess"
+          }.`,
+        };
+      }
+
+      const math = applyDamageMath(sheet.currentHp, tempHpNow, carried);
       patchSheet(sheet.id, { currentHp: math.currentHp, tempHp: math.tempHp });
       audit(campaign, turnId, sheet, "apply_damage", { amount, ...math, type: args.type ?? "" }, reason, {
         currentHp: math.currentHp,
         tempHp: math.tempHp,
       });
       publishSheet(campaign, sheet.id);
+      // Relentless Endurance: a half-orc who would drop stays up at 1 HP
+      // instead, once per long rest. The server burns the use itself, so
+      // the death engine never sees the drop.
+      if (math.dropped) {
+        const spent = spendRelentlessEndurance(sheet.resources);
+        if (spent) {
+          const patch: FullPatchSheetInput = { currentHp: 1, resources: spent };
+          patchSheet(sheet.id, patch);
+          audit(campaign, turnId, sheet, "apply_damage", { relentlessEndurance: true }, reason, patch);
+          publishSheet(campaign, sheet.id);
+          return {
+            result: {
+              ok: true,
+              hp: `1/${sheet.maxHp}`,
+              relentlessEndurance: true,
+              ...shapeInfo,
+              note: `${sheet.name} should have fallen, but Relentless Endurance holds them at 1 HP. The feature is now spent until a long rest.`,
+            },
+          };
+        }
+      }
+      // A barbarian knocked unconscious stops raging. Checked after
+      // Relentless Endurance, which keeps them on their feet still raging.
+      let rageInfo: Record<string, unknown> = {};
+      if (math.dropped && sheet.conditions.some((entry) => entry.toLowerCase() === RAGING)) {
+        const cleared = removeConditions(sheet.conditions, sheet.conditionMeta, [RAGING]);
+        const patch: FullPatchSheetInput = {
+          conditions: cleared.conditions,
+          conditionMeta: cleared.meta,
+        };
+        patchSheet(sheet.id, patch);
+        audit(campaign, turnId, sheet, "clear_condition", { condition: RAGING }, reason, patch);
+        publishSheet(campaign, sheet.id);
+        rageInfo = { rageEnded: `${sheet.name}'s rage ends as they fall.` };
+      }
       // Death engine: dropping to 0 starts the dying track; damage while
       // already down adds automatic failures; massive damage kills.
       const deathInfo = applyDamageDeathHook(campaign, turnId, sheet, math, args.crit === true);
       // Concentration: damage forces the CON save server-side.
-      const concentrationInfo = concentrationDamageHook(
-        campaign,
-        turnId,
-        sheet,
-        adjusted.amount,
-      );
+      const concentrationInfo = concentrationDamageHook(campaign, turnId, sheet, carried);
       return {
         result: {
           ok: true,
           hp: `${math.currentHp}/${sheet.maxHp}`,
+          ...shapeInfo,
+          ...rageInfo,
           ...(adjusted.note ? { resistance: `${sheet.name} is ${adjusted.note}` } : {}),
           ...(math.absorbed ? { tempHpAbsorbed: math.absorbed } : {}),
           ...(math.dropped && !("note" in deathInfo)
@@ -471,9 +601,51 @@ export function applyDmMutation(
       };
     }
     case "heal": {
-      const amount = args.amount ?? 0;
+      // A named healing spell is rolled by the server from the content
+      // pack's own dice, exactly as a healing potion is, so the model never
+      // decides how much a Cure Wounds restores.
+      let amount = args.amount ?? 0;
+      let healNote: string | null = null;
+      const healSpell = (args.spell ?? "").trim();
+      if (healSpell) {
+        const caster = (args.casterId ? resolve(args.casterId) : null) ?? sheet;
+        const scaled = spellDamageFor({
+          spell: healSpell,
+          userId: caster.userId,
+          casterLevel: caster.level,
+          slotLevel: args.level,
+        });
+        if (scaled) {
+          const derived = computeSheetDerived(caster);
+          const modifier = caster.spellcasting
+            ? derived.abilityMods[caster.spellcasting.ability]
+            : 0;
+          const expression = modifier > 0 ? `${scaled.dice}+${modifier}` : scaled.dice;
+          const outcome = rollExpression(expression);
+          const roll = insertRoll({
+            campaignId: campaign.id,
+            characterId: sheet.id,
+            requestedBy: "dm",
+            kind: "custom",
+            detail: `${healSpell} on ${sheet.name} (${expression})`,
+            result: outcome,
+          });
+          publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", {
+            roll,
+            source: "digital",
+          });
+          amount = Math.max(1, outcome.total);
+          healNote = `${healSpell}: ${scaled.note}, rolled ${amount}`;
+        }
+      }
       if (amount < 1) {
-        return { result: { error: "heal needs a positive amount." } };
+        return {
+          result: {
+            error: healSpell
+              ? `The server could not derive ${healSpell}'s healing; send heal again with an explicit amount.`
+              : "heal needs a positive amount, or a spell name to roll.",
+          },
+        };
       }
       if (sheet.deathSaves?.dead) {
         return {
@@ -507,7 +679,15 @@ export function applyDmMutation(
       publishSheet(campaign, sheet.id);
       // Any healing ends the dying state.
       const deathInfo = healDeathHook(campaign, turnId, sheet);
-      return { result: { ok: true, hp: `${math.currentHp}/${sheet.maxHp}`, ...deathInfo } };
+      return {
+        result: {
+          ok: true,
+          hp: `${math.currentHp}/${sheet.maxHp}`,
+          healed: amount,
+          ...(healNote ? { spell: healNote } : {}),
+          ...deathInfo,
+        },
+      };
     }
     case "stabilize": {
       const track = sheet.deathSaves;
@@ -655,7 +835,18 @@ export function applyDmMutation(
       if (!resourceName) {
         return { result: { error: "use_resource needs a resource name." } };
       }
-      const outcome = computeUseResource(sheet, resourceName, Math.max(1, args.amount ?? 1));
+      const target = args.targetCharacterId ? resolve(args.targetCharacterId) : sheet;
+      if (!target) {
+        return { result: { error: "Unknown targetCharacterId; use one from GAME STATE." } };
+      }
+      const outcome = computeUseResource(
+        campaign,
+        sheet,
+        target,
+        resourceName,
+        Math.max(1, args.amount ?? 1),
+        { name: args.form, hp: args.formHp, ac: args.formAc },
+      );
       if ("error" in outcome) {
         return { result: outcome };
       }
@@ -670,6 +861,41 @@ export function applyDmMutation(
         outcome.patch,
       );
       publishSheet(campaign, sheet.id);
+      // A feature that lands on someone else (Bardic Inspiration) patches
+      // the second sheet the same audited way.
+      if (outcome.patchTarget) {
+        patchSheet(outcome.patchTarget.characterId, outcome.patchTarget.patch);
+        const recipient = resolve(outcome.patchTarget.characterId);
+        if (recipient) {
+          audit(
+            campaign,
+            turnId,
+            recipient,
+            "use_resource",
+            { resource: resourceName, from: sheet.name },
+            reason,
+            outcome.patchTarget.patch,
+          );
+        }
+        publishSheet(campaign, outcome.patchTarget.characterId);
+      }
+      // Feature healing rides the standard heal mutation so the death
+      // engine sees it; recursion is safe (different tool name).
+      if (outcome.healTarget) {
+        const healed = applyDmMutation(
+          campaign,
+          turnId,
+          "heal",
+          JSON.stringify({
+            characterId: outcome.healTarget.characterId,
+            amount: outcome.healTarget.amount,
+            reason: resourceName,
+          }),
+          sheets,
+          sheetsById,
+        ).result;
+        return { result: { ...outcome.result, ...healed } };
+      }
       return { result: outcome.result };
     }
     case "set_condition": {
@@ -916,6 +1142,24 @@ export function applyDmMutation(
         const intoKnown = known.length > 0;
         if ((intoKnown ? known.length >= 80 : prepared.length >= 60)) {
           return { result: { error: `${sheet.name}'s spell list is full.` } };
+        }
+        // The class's real 5e ceiling. Cantrips do not count against it, and
+        // an unknown class (custom catalog) has no table to enforce.
+        const spellLevel = searchSpells({ q: spell, userId: sheet.userId, limit: 10 }).find(
+          (entry) => entry.name.trim().toLowerCase() === spell.toLowerCase(),
+        )?.level;
+        const ceiling = suggestedSpellCount(
+          sheet.class,
+          sheet.level,
+          abilityMod(sheet.abilities[sheet.spellcasting.ability]),
+        );
+        const current = intoKnown ? known.length : prepared.length;
+        if (ceiling && spellLevel !== 0 && current >= ceiling.count) {
+          return {
+            result: {
+              error: `${sheet.name} already has ${current} ${ceiling.label}, the most a level ${sheet.level} ${sheet.class} may hold. They must give one up first: call learn_spell with action=remove for the spell they drop.`,
+            },
+          };
         }
         const nextSpellcasting = {
           ...sheet.spellcasting,

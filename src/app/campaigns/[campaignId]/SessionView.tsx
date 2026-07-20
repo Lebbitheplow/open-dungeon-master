@@ -2,7 +2,15 @@
 
 import Link from "next/link";
 import { CircleHelp, Dices, DoorOpen, Volume2, VolumeX } from "lucide-react";
-import { type FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { cn } from "@/lib/cn";
 import { JOIN_NOTE_PREFIX, latestUnintroducedJoin } from "@/lib/campaign-types";
 import { PIXEL_ICONS, PixelTile } from "@/lib/ui";
@@ -17,6 +25,7 @@ import {
   BottomTabBar,
   buildPanelTabs,
   useSessionTabs,
+  type PanelTab,
 } from "@/app/campaigns/[campaignId]/SessionTabs";
 import { SidePanel } from "@/app/campaigns/[campaignId]/SidePanel";
 import { useChatChime } from "@/app/campaigns/[campaignId]/useChatChime";
@@ -71,10 +80,10 @@ export function SessionView({
     () => true,
   );
 
-  function toggleDice3d() {
+  const toggleDice3d = useCallback(() => {
     window.localStorage.setItem("odm:dice3d", dice3d ? "off" : "on");
     window.dispatchEvent(new Event("odm-dice3d-pref"));
-  }
+  }, [dice3d]);
 
   const narration = useNarrationAudio();
   // Chime on new private messages (side chats + DM whispers). The loaded
@@ -108,23 +117,30 @@ export function SessionView({
     }
   }, [latestTts, onTtsReady, loading, lastSeq]);
 
-  if (!campaign || !me) {
-    return null;
-  }
-
-  const mySheet = sheets.find((sheet) => sheet.userId === me.id);
+  // Everything below runs on every dm_delta while the DM narrates, so the
+  // values handed to the memoized panels are stabilized with useMemo and
+  // useCallback. All hooks must stay above the null guard further down.
+  const mySheet = useMemo(
+    () => sheets.find((sheet) => sheet.userId === me?.id),
+    [sheets, me?.id],
+  );
   const myLevelUp = mySheet
     ? levelUps.find((notice) => notice.characterId === mySheet.id)
     : undefined;
-  const floor = campaign.floor ?? { mode: "open" as const };
-  const isLead = campaign.leadUserId === me.id;
-  const spotlighted =
-    floor.mode === "spotlight"
-      ? sheets.filter((sheet) => floor.userIds.includes(sheet.userId))
-      : [];
+  // Memoized so the open-floor fallback object keeps a stable identity and
+  // does not invalidate the memos below on every render.
+  const floor = useMemo(() => campaign?.floor ?? { mode: "open" as const }, [campaign?.floor]);
+  const isLead = Boolean(campaign && me && campaign.leadUserId === me.id);
+  const spotlighted = useMemo(
+    () =>
+      floor.mode === "spotlight"
+        ? sheets.filter((sheet) => floor.mode === "spotlight" && floor.userIds.includes(sheet.userId))
+        : [],
+    [floor, sheets],
+  );
   const floorBlocked =
     floor.mode === "spotlight" &&
-    !floor.userIds.includes(me.id) &&
+    !floor.userIds.includes(me?.id ?? "") &&
     kind !== "ooc" &&
     kind !== "lead";
   // Held responses: the lead has not opened the floor after the last DM
@@ -133,15 +149,23 @@ export function SessionView({
   // Combat: only the current-turn player acts; everyone else waits.
   const initiativeBlocked =
     floor.mode === "initiative" &&
-    !floor.userIds.includes(me.id) &&
+    !floor.userIds.includes(me?.id ?? "") &&
     kind !== "ooc" &&
     kind !== "lead";
-  const heldSpotlightNames =
-    floor.mode === "hold" && floor.next.mode === "spotlight"
-      ? sheets
-          .filter((sheet) => floor.next.mode === "spotlight" && floor.next.userIds.includes(sheet.userId))
-          .map((sheet) => sheet.name)
-      : [];
+  const heldSpotlightNames = useMemo(
+    () =>
+      floor.mode === "hold" && floor.next.mode === "spotlight"
+        ? sheets
+            .filter(
+              (sheet) =>
+                floor.mode === "hold" &&
+                floor.next.mode === "spotlight" &&
+                floor.next.userIds.includes(sheet.userId),
+            )
+            .map((sheet) => sheet.name)
+        : [],
+    [floor, sheets],
+  );
   // The campaign's opening narration gets everyone's full attention: while
   // it plays for this user, do/say/lead input waits (OOC stays open).
   const firstDmMessageId = messages.find((message) => message.authorType === "dm")?.id;
@@ -167,66 +191,93 @@ export function SessionView({
                 ? "Out-of-character note to the table"
                 : "Steer the story: an event or direction the DM must weave in";
   // A mid-game joiner without a character is gated to creation first.
-  const needsCharacter = !mySheet && campaign.status === "active";
+  const needsCharacter = !mySheet && campaign?.status === "active";
   // Lead prompt: a newcomer's join note the DM has not narrated past yet.
   const joinNotice = latestUnintroducedJoin(messages);
   const showJoinBanner =
     isLead && joinNotice !== null && dismissedJoinNotice !== joinNotice.id;
-  const panelTabs = buildPanelTabs({
-    hasBattleMap: Boolean(state.battleMap),
-    mapsEnabled: campaign.gameSettings?.mapsEnabled ?? true,
-    hasSettings: Boolean(campaign),
-  });
+  const panelTabs = useMemo(
+    () =>
+      buildPanelTabs({
+        hasBattleMap: Boolean(state.battleMap),
+        mapsEnabled: campaign?.gameSettings?.mapsEnabled ?? true,
+        hasSettings: Boolean(campaign),
+      }),
+    [state.battleMap, campaign],
+  );
 
-  async function releaseFloor() {
-    await fetch(`/api/campaigns/${campaign!.id}/floor`, { method: "POST" });
-  }
+  const campaignId = campaign?.id;
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    const content = input.trim();
-    if (!content || sending || inputBlocked) {
-      return;
-    }
-    setSending(true);
-    setError("");
-    try {
-      const response =
-        kind === "lead"
-          ? await fetch(`/api/campaigns/${campaign!.id}/lead-note`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ content }),
-            })
-          : await fetch(`/api/campaigns/${campaign!.id}/actions`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ content, kind }),
-            });
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        setError(data.error || "Could not send your action.");
+  const releaseFloor = useCallback(async () => {
+    await fetch(`/api/campaigns/${campaignId}/floor`, { method: "POST" });
+  }, [campaignId]);
+
+  const submit = useCallback(
+    async (event: FormEvent) => {
+      event.preventDefault();
+      const content = input.trim();
+      if (!content || sending || inputBlocked) {
         return;
       }
-      setInput("");
-    } catch {
-      setError("Could not reach the server.");
-    } finally {
-      setSending(false);
-    }
-  }
+      setSending(true);
+      setError("");
+      try {
+        const response =
+          kind === "lead"
+            ? await fetch(`/api/campaigns/${campaignId}/lead-note`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ content }),
+              })
+            : await fetch(`/api/campaigns/${campaignId}/actions`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ content, kind }),
+              });
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          setError(data.error || "Could not send your action.");
+          return;
+        }
+        setInput("");
+      } catch {
+        setError("Could not reach the server.");
+      } finally {
+        setSending(false);
+      }
+    },
+    [campaignId, input, sending, inputBlocked, kind],
+  );
 
-  async function adjustHp(delta: number) {
-    if (!mySheet) {
-      return;
-    }
-    await fetch(`/api/campaigns/${campaign!.id}/sheet`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        currentHp: Math.max(0, Math.min(mySheet.maxHp, mySheet.currentHp + delta)),
-      }),
-    });
+  const clearChatTarget = useCallback(() => setChatTarget(null), []);
+  const selectChatView = useCallback(() => setMobileView("chat"), [setMobileView]);
+  const selectPanelView = useCallback(
+    (tab: PanelTab) => {
+      setPanelTab(tab);
+      setMobileView("panel");
+    },
+    [setPanelTab, setMobileView],
+  );
+
+  const joinNoticeId = joinNotice?.id;
+  const joinNoticeText = joinNotice?.content.slice(JOIN_NOTE_PREFIX.length);
+  const joinBanner = useMemo(
+    () =>
+      showJoinBanner && joinNoticeId
+        ? {
+            text: joinNoticeText ?? "",
+            onWriteIntro: () => {
+              setKind("lead");
+              composerRef.current?.focus();
+            },
+            onDismiss: () => setDismissedJoinNotice(joinNoticeId),
+          }
+        : null,
+    [showJoinBanner, joinNoticeId, joinNoticeText],
+  );
+
+  if (!campaign || !me) {
+    return null;
   }
 
   return (
@@ -389,18 +440,7 @@ export function SessionView({
               heldSpotlightNames={heldSpotlightNames}
               encounter={state.encounter}
               onReleaseFloor={releaseFloor}
-              joinBanner={
-                showJoinBanner
-                  ? {
-                      text: joinNotice.content.slice(JOIN_NOTE_PREFIX.length),
-                      onWriteIntro: () => {
-                        setKind("lead");
-                        composerRef.current?.focus();
-                      },
-                      onDismiss: () => setDismissedJoinNotice(joinNotice.id),
-                    }
-                  : null
-              }
+              joinBanner={joinBanner}
               composerRef={composerRef}
               onSubmit={submit}
             />
@@ -415,7 +455,6 @@ export function SessionView({
           isLead={isLead}
           leadUserId={campaign.leadUserId}
           canTransferLead={isLead || campaign.ownerUserId === me.id}
-          onAdjustHp={adjustHp}
           spotlightUserIds={floor.mode === "spotlight" ? floor.userIds : []}
           auditLog={auditLog}
           locations={locations}
@@ -429,7 +468,7 @@ export function SessionView({
           whisperUnread={state.whisperUnread}
           refreshWhispers={refreshWhispers}
           chatTarget={chatTarget}
-          onChatTargetHandled={() => setChatTarget(null)}
+          onChatTargetHandled={clearChatTarget}
           onMessageUser={setChatTarget}
           mediaStatus={state.mediaStatus}
           inviteCode={campaign.inviteCode}
@@ -451,16 +490,13 @@ export function SessionView({
         tabs={panelTabs}
         mobileView={mobileView}
         panelTab={panelTab}
-        onSelectChat={() => setMobileView("chat")}
-        onSelectPanel={(tab) => {
-          setPanelTab(tab);
-          setMobileView("panel");
-        }}
+        onSelectChat={selectChatView}
+        onSelectPanel={selectPanelView}
         chatUnread={chatUnreadTotal}
         pendingCount={pendingNoteCount}
       />
 
-      <DiceOverlay latestRoll={state.latestRoll} enabled={dice3d} />
+      {dice3d ? <DiceOverlay latestRoll={state.latestRoll} enabled /> : null}
 
       <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
 

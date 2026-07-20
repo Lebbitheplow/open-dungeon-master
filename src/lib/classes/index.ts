@@ -147,3 +147,20 @@ export const SRD_GENRE_TAGS: Record<string, Genre[]> = {
 export function classGenres(classId: string): Genre[] {
   return findCustomClass(classId)?.genres ?? SRD_GENRE_TAGS[classId] ?? [];
 }
+
+// Class ids that belong in a genre's world, the same rule the character
+// builder applies to its picker: high fantasy and custom worlds take the
+// whole catalog (empty list = no restriction), every other genre takes only
+// its tagged classes. Used to keep AI companions in setting.
+export function genreClassIds(genre: Genre): string[] {
+  if (genre === "high_fantasy" || genre === "custom") {
+    return [];
+  }
+  const custom = CUSTOM_CLASSES.filter((entry) => entry.genres.includes(genre)).map(
+    (entry) => entry.id,
+  );
+  const srd = Object.entries(SRD_GENRE_TAGS)
+    .filter(([, genres]) => genres.includes(genre))
+    .map(([classId]) => classId);
+  return [...custom, ...srd];
+}

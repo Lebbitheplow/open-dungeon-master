@@ -50,21 +50,3 @@ export function findCarriedItem(equipment: EquipmentItem[], term: string): Equip
     null
   );
 }
-
-// The carried item that serves as ammunition of the given kind ("arrows",
-// "bolts", "rounds"...). Matches singular/plural and common phrasings
-// ("Quiver of arrows", "Crossbow bolts x20", "bullets").
-export function ammoItemFor(equipment: EquipmentItem[], ammoKind: string): EquipmentItem | null {
-  const base = ammoKind.trim().toLowerCase().replace(/s$/, "");
-  if (!base) {
-    return null;
-  }
-  // "sling bullets" -> match on "bullet" too.
-  const fragments = [base, ...base.split(" ").filter((part) => part.length > 3)];
-  return (
-    equipment.find((item) => {
-      const name = item.name.toLowerCase();
-      return fragments.some((fragment) => name.includes(fragment));
-    }) ?? null
-  );
-}

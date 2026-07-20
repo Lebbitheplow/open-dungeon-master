@@ -1,11 +1,12 @@
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import {
   deleteSession,
   getSessionUser,
   insertSession,
   type User,
 } from "@/lib/db/users";
+import { serverEnv } from "@/lib/server-env";
 
 export const SESSION_COOKIE = "odm_session";
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -32,6 +33,17 @@ function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
+// Secure flag for auth cookies: COOKIE_SECURE=1/0 overrides; otherwise on
+// whenever the request arrived over https (reverse proxy sets the header).
+// Plain LAN http keeps working with the flag off.
+export async function cookieSecure(): Promise<boolean> {
+  const override = serverEnv("COOKIE_SECURE");
+  if (override === "1") return true;
+  if (override === "0") return false;
+  const proto = ((await headers()).get("x-forwarded-proto") ?? "").split(",")[0].trim();
+  return proto === "https";
+}
+
 export async function startSession(userId: string) {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
@@ -41,6 +53,7 @@ export async function startSession(userId: string) {
   cookieStore.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
+    secure: await cookieSecure(),
     path: "/",
     expires: expiresAt,
   });

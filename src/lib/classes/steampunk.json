@@ -2,58 +2,246 @@
   "_note": "Original setting-specific classes for Open Dungeon Master. Not SRD-derived content.",
   "classes": [
     {
-      "id": "machinist", "name": "Machinist", "hitDie": 8,
-      "saves": ["con", "int"], "casterType": "half", "spellAbility": "int",
-      "armor": ["light", "medium"], "weapons": ["simple", "firearms"],
-      "skillChoices": { "count": 2, "from": ["arcana", "history", "investigation", "perception", "sleight_of_hand", "survival"] },
-      "genres": ["steampunk"],
+      "id": "machinist",
+      "name": "Machinist",
+      "hitDie": 8,
+      "saves": [
+        "con",
+        "int"
+      ],
+      "casterType": "half",
+      "spellAbility": "int",
+      "armor": [
+        "light",
+        "medium"
+      ],
+      "weapons": [
+        "simple",
+        "firearms"
+      ],
+      "skillChoices": {
+        "count": 2,
+        "from": [
+          "arcana",
+          "history",
+          "investigation",
+          "perception",
+          "sleight_of_hand",
+          "survival"
+        ]
+      },
+      "genres": [
+        "steampunk"
+      ],
       "blurb": "Engineer-arcanist whose schematics bend aether through brass: spells assembled, not spoken.",
-      "spellListFrom": "wizard", "knownCaster": false, "castingLabel": "Schematics"
+      "spellListFrom": "wizard",
+      "knownCaster": false,
+      "castingLabel": "Schematics",
+      "tools": [
+        "tinker's tools",
+        "smith's tools"
+      ]
     },
     {
-      "id": "aeronaut", "name": "Aeronaut", "hitDie": 10,
-      "saves": ["dex", "int"], "casterType": "none", "spellAbility": null,
-      "armor": ["light"], "weapons": ["simple", "martial", "firearms"],
-      "skillChoices": { "count": 3, "from": ["acrobatics", "athletics", "insight", "perception", "sleight_of_hand", "survival"] },
-      "genres": ["steampunk"],
+      "id": "aeronaut",
+      "name": "Aeronaut",
+      "hitDie": 10,
+      "saves": [
+        "dex",
+        "int"
+      ],
+      "casterType": "none",
+      "spellAbility": null,
+      "armor": [
+        "light"
+      ],
+      "weapons": [
+        "simple",
+        "martial",
+        "firearms"
+      ],
+      "skillChoices": {
+        "count": 3,
+        "from": [
+          "acrobatics",
+          "athletics",
+          "insight",
+          "perception",
+          "sleight_of_hand",
+          "survival"
+        ]
+      },
+      "genres": [
+        "steampunk"
+      ],
       "blurb": "Sky-sailor and duelist, at home on rigging and rooftops, always one daring move ahead of gravity.",
-      "spellListFrom": null, "knownCaster": false, "castingLabel": null
+      "spellListFrom": null,
+      "knownCaster": false,
+      "castingLabel": null,
+      "tools": [
+        "navigator's tools",
+        "vehicles (air)"
+      ]
     },
     {
-      "id": "alchemist", "name": "Alchemist", "hitDie": 8,
-      "saves": ["con", "int"], "casterType": "full", "spellAbility": "int",
-      "armor": ["light"], "weapons": ["simple"],
-      "skillChoices": { "count": 2, "from": ["arcana", "history", "investigation", "medicine", "nature", "sleight_of_hand"] },
-      "genres": ["steampunk"],
+      "id": "alchemist",
+      "name": "Alchemist",
+      "hitDie": 8,
+      "saves": [
+        "con",
+        "int"
+      ],
+      "casterType": "full",
+      "spellAbility": "int",
+      "armor": [
+        "light"
+      ],
+      "weapons": [
+        "simple"
+      ],
+      "skillChoices": {
+        "count": 2,
+        "from": [
+          "arcana",
+          "history",
+          "investigation",
+          "medicine",
+          "nature",
+          "sleight_of_hand"
+        ]
+      },
+      "genres": [
+        "steampunk"
+      ],
       "blurb": "Magic in bottles: formulae brewed ahead of time, hurled, drunk, or poured, with the occasional glorious accident.",
-      "spellListFrom": "wizard", "knownCaster": false, "castingLabel": "Formulae"
+      "spellListFrom": "wizard",
+      "knownCaster": false,
+      "castingLabel": "Formulae",
+      "tools": [
+        "alchemist's supplies",
+        "herbalism kit"
+      ]
     },
     {
-      "id": "gadgeteer", "name": "Gadgeteer", "hitDie": 8,
-      "saves": ["dex", "int"], "casterType": "none", "spellAbility": null,
-      "armor": ["light"], "weapons": ["simple", "firearms", "tech blades"],
-      "skillChoices": { "count": 3, "from": ["acrobatics", "arcana", "investigation", "perception", "sleight_of_hand", "stealth"] },
-      "genres": ["steampunk"],
+      "id": "gadgeteer",
+      "name": "Gadgeteer",
+      "hitDie": 8,
+      "saves": [
+        "dex",
+        "int"
+      ],
+      "casterType": "none",
+      "spellAbility": null,
+      "armor": [
+        "light"
+      ],
+      "weapons": [
+        "simple",
+        "firearms",
+        "tech blades"
+      ],
+      "skillChoices": {
+        "count": 3,
+        "from": [
+          "acrobatics",
+          "arcana",
+          "investigation",
+          "perception",
+          "sleight_of_hand",
+          "stealth"
+        ]
+      },
+      "genres": [
+        "steampunk"
+      ],
       "blurb": "A walking workshop of grapnels, smoke, and spring-loaded surprises, with a gadget for every predicament.",
-      "spellListFrom": null, "knownCaster": false, "castingLabel": null
+      "spellListFrom": null,
+      "knownCaster": false,
+      "castingLabel": null,
+      "tools": [
+        "tinker's tools",
+        "thieves' tools"
+      ]
     },
     {
-      "id": "aether_channeler", "name": "Aether Channeler", "hitDie": 8,
-      "saves": ["con", "cha"], "casterType": "full", "spellAbility": "cha",
-      "armor": [], "weapons": ["simple"],
-      "skillChoices": { "count": 2, "from": ["arcana", "insight", "intimidation", "nature", "perception", "persuasion"] },
-      "genres": ["steampunk"],
+      "id": "aether_channeler",
+      "name": "Aether Channeler",
+      "hitDie": 8,
+      "saves": [
+        "con",
+        "cha"
+      ],
+      "casterType": "full",
+      "spellAbility": "cha",
+      "armor": [],
+      "weapons": [
+        "simple"
+      ],
+      "skillChoices": {
+        "count": 2,
+        "from": [
+          "arcana",
+          "insight",
+          "intimidation",
+          "nature",
+          "perception",
+          "persuasion"
+        ]
+      },
+      "genres": [
+        "steampunk"
+      ],
       "blurb": "A living conduit for the aether that drives the age: lightning in the veins and storms on a short leash.",
-      "spellListFrom": "sorcerer", "knownCaster": true, "castingLabel": "Aetheric Arts"
+      "spellListFrom": "sorcerer",
+      "knownCaster": true,
+      "castingLabel": "Aetheric Arts",
+      "tools": [
+        "aether calipers"
+      ]
     },
     {
-      "id": "steam_knight", "name": "Steam Knight", "hitDie": 10,
-      "saves": ["str", "con"], "casterType": "none", "spellAbility": null,
-      "armor": ["light", "medium", "heavy", "shields"], "weapons": ["simple", "martial", "firearms"],
-      "skillChoices": { "count": 2, "from": ["athletics", "history", "insight", "intimidation", "perception", "persuasion"] },
-      "genres": ["steampunk"],
+      "id": "steam_knight",
+      "name": "Steam Knight",
+      "hitDie": 10,
+      "saves": [
+        "str",
+        "con"
+      ],
+      "casterType": "none",
+      "spellAbility": null,
+      "armor": [
+        "light",
+        "medium",
+        "heavy",
+        "shields"
+      ],
+      "weapons": [
+        "simple",
+        "martial",
+        "firearms"
+      ],
+      "skillChoices": {
+        "count": 2,
+        "from": [
+          "athletics",
+          "history",
+          "insight",
+          "intimidation",
+          "perception",
+          "persuasion"
+        ]
+      },
+      "genres": [
+        "steampunk"
+      ],
       "blurb": "Armored in a hissing boilerplate shell, part cavalier and part locomotive, they hold the line and then become it.",
-      "spellListFrom": null, "knownCaster": false, "castingLabel": null
+      "spellListFrom": null,
+      "knownCaster": false,
+      "castingLabel": null,
+      "tools": [
+        "smith's tools",
+        "mechanic's tools"
+      ]
     }
   ]
 }

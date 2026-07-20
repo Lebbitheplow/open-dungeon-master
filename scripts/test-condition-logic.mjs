@@ -191,4 +191,30 @@ test("pcResistances: dwarf poison, tiefling fire, feature names", () => {
   assert.equal(pcResistances({ race: "human", features: [] }), "");
 });
 
+test("raging grants resistance to the three physical damage types", () => {
+  const resist = pcResistances({ race: "human", features: [], conditions: ["raging"] });
+  assert.equal(damageAdjust(13, "slashing", resist, "", "").amount, 6);
+  assert.equal(damageAdjust(13, "piercing", resist, "", "").amount, 6);
+  assert.equal(damageAdjust(13, "bludgeoning", resist, "", "").amount, 6);
+  // Rage does nothing against fire, and ends with the condition.
+  assert.equal(damageAdjust(13, "fire", resist, "", "").amount, 13);
+  assert.equal(
+    damageAdjust(13, "slashing", pcResistances({ race: "human", features: [], conditions: [] }), "", "")
+      .amount,
+    13,
+  );
+});
+
+test("raging grants advantage on Strength checks and saves only", () => {
+  assert.equal(rollDerivation(["raging"], "saving_throw", "str").advantage, "advantage");
+  assert.equal(rollDerivation(["raging"], "ability_check", "str").advantage, "advantage");
+  assert.equal(rollDerivation(["raging"], "skill_check", "str").advantage, "advantage");
+  assert.equal(rollDerivation(["raging"], "saving_throw", "dex").advantage, "none");
+  assert.equal(rollDerivation(["raging"], "initiative", "str").advantage, "none");
+});
+
+test("raging cancels against a disadvantage source, 5e-style", () => {
+  assert.equal(rollDerivation(["raging", "poisoned"], "ability_check", "str").advantage, "none");
+});
+
 console.log(`test-condition-logic: ${passed} tests passed`);

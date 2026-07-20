@@ -2,58 +2,245 @@
   "_note": "Original setting-specific classes for Open Dungeon Master. Not SRD-derived content.",
   "classes": [
     {
-      "id": "witch_hunter", "name": "Witch Hunter", "hitDie": 10,
-      "saves": ["str", "wis"], "casterType": "half", "spellAbility": "wis",
-      "armor": ["light", "medium"], "weapons": ["simple", "martial", "firearms"],
-      "skillChoices": { "count": 2, "from": ["arcana", "athletics", "insight", "intimidation", "investigation", "perception", "religion"] },
-      "genres": ["dark_fantasy"],
+      "id": "witch_hunter",
+      "name": "Witch Hunter",
+      "hitDie": 10,
+      "saves": [
+        "str",
+        "wis"
+      ],
+      "casterType": "half",
+      "spellAbility": "wis",
+      "armor": [
+        "light",
+        "medium"
+      ],
+      "weapons": [
+        "simple",
+        "martial",
+        "firearms"
+      ],
+      "skillChoices": {
+        "count": 2,
+        "from": [
+          "arcana",
+          "athletics",
+          "insight",
+          "intimidation",
+          "investigation",
+          "perception",
+          "religion"
+        ]
+      },
+      "genres": [
+        "dark_fantasy"
+      ],
       "blurb": "Grim inquisitor with litanies on the lips and silver shot in the gun, hunting the corruption behind pious faces.",
-      "spellListFrom": "paladin", "knownCaster": false, "castingLabel": "Litanies"
+      "spellListFrom": "paladin",
+      "knownCaster": false,
+      "castingLabel": "Litanies",
+      "tools": [
+        "manacles",
+        "gunsmith's tools"
+      ]
     },
     {
-      "id": "plague_doctor", "name": "Plague Doctor", "hitDie": 8,
-      "saves": ["con", "int"], "casterType": "half", "spellAbility": "int",
-      "armor": ["light"], "weapons": ["simple", "firearms"],
-      "skillChoices": { "count": 2, "from": ["arcana", "history", "insight", "investigation", "medicine", "nature"] },
-      "genres": ["dark_fantasy"],
+      "id": "plague_doctor",
+      "name": "Plague Doctor",
+      "hitDie": 8,
+      "saves": [
+        "con",
+        "int"
+      ],
+      "casterType": "half",
+      "spellAbility": "int",
+      "armor": [
+        "light"
+      ],
+      "weapons": [
+        "simple",
+        "firearms"
+      ],
+      "skillChoices": {
+        "count": 2,
+        "from": [
+          "arcana",
+          "history",
+          "insight",
+          "investigation",
+          "medicine",
+          "nature"
+        ]
+      },
+      "genres": [
+        "dark_fantasy"
+      ],
       "blurb": "Behind the beaked mask, a mind that reads sickness like scripture and turns remedies into weapons.",
-      "spellListFrom": "cleric", "knownCaster": false, "castingLabel": "Remedies"
+      "spellListFrom": "cleric",
+      "knownCaster": false,
+      "castingLabel": "Remedies",
+      "tools": [
+        "herbalism kit",
+        "alchemist's supplies"
+      ]
     },
     {
-      "id": "grave_knight", "name": "Grave Knight", "hitDie": 10,
-      "saves": ["con", "cha"], "casterType": "pact", "spellAbility": "cha",
-      "armor": ["light", "medium", "shields"], "weapons": ["simple", "martial"],
-      "skillChoices": { "count": 2, "from": ["arcana", "athletics", "history", "insight", "intimidation", "religion"] },
-      "genres": ["dark_fantasy"],
+      "id": "grave_knight",
+      "name": "Grave Knight",
+      "hitDie": 10,
+      "saves": [
+        "con",
+        "cha"
+      ],
+      "casterType": "pact",
+      "spellAbility": "cha",
+      "armor": [
+        "light",
+        "medium",
+        "shields"
+      ],
+      "weapons": [
+        "simple",
+        "martial"
+      ],
+      "skillChoices": {
+        "count": 2,
+        "from": [
+          "arcana",
+          "athletics",
+          "history",
+          "insight",
+          "intimidation",
+          "religion"
+        ]
+      },
+      "genres": [
+        "dark_fantasy"
+      ],
       "blurb": "Sworn to a power in the earth, they carry a blade that answers their call and an aura of the tomb.",
-      "spellListFrom": "warlock", "knownCaster": true, "castingLabel": "Oaths"
+      "spellListFrom": "warlock",
+      "knownCaster": true,
+      "castingLabel": "Oaths",
+      "tools": [
+        "smith's tools"
+      ]
     },
     {
-      "id": "penitent", "name": "Penitent", "hitDie": 12,
-      "saves": ["str", "wis"], "casterType": "none", "spellAbility": null,
-      "armor": [], "weapons": ["simple", "flails", "whips"],
-      "skillChoices": { "count": 2, "from": ["athletics", "insight", "intimidation", "medicine", "religion", "survival"] },
-      "genres": ["dark_fantasy"],
+      "id": "penitent",
+      "name": "Penitent",
+      "hitDie": 12,
+      "saves": [
+        "str",
+        "wis"
+      ],
+      "casterType": "none",
+      "spellAbility": null,
+      "armor": [],
+      "weapons": [
+        "simple",
+        "flails",
+        "whips"
+      ],
+      "skillChoices": {
+        "count": 2,
+        "from": [
+          "athletics",
+          "insight",
+          "intimidation",
+          "medicine",
+          "religion",
+          "survival"
+        ]
+      },
+      "genres": [
+        "dark_fantasy"
+      ],
       "blurb": "Every scar a prayer. They spend their own blood like coin and grow stronger the closer they walk to death.",
-      "spellListFrom": null, "knownCaster": false, "castingLabel": null
+      "spellListFrom": null,
+      "knownCaster": false,
+      "castingLabel": null,
+      "tools": []
     },
     {
-      "id": "dirgesinger", "name": "Dirgesinger", "hitDie": 8,
-      "saves": ["dex", "cha"], "casterType": "full", "spellAbility": "cha",
-      "armor": ["light"], "weapons": ["simple", "occult"],
-      "skillChoices": { "count": 3, "from": ["arcana", "deception", "history", "insight", "intimidation", "performance", "persuasion"] },
-      "genres": ["dark_fantasy"],
+      "id": "dirgesinger",
+      "name": "Dirgesinger",
+      "hitDie": 8,
+      "saves": [
+        "dex",
+        "cha"
+      ],
+      "casterType": "full",
+      "spellAbility": "cha",
+      "armor": [
+        "light"
+      ],
+      "weapons": [
+        "simple",
+        "occult"
+      ],
+      "skillChoices": {
+        "count": 3,
+        "from": [
+          "arcana",
+          "deception",
+          "history",
+          "insight",
+          "intimidation",
+          "performance",
+          "persuasion"
+        ]
+      },
+      "genres": [
+        "dark_fantasy"
+      ],
       "blurb": "A voice for the grieving and the graves: songs that mourn, curse, and occasionally raise what should stay down.",
-      "spellListFrom": "bard", "knownCaster": true, "castingLabel": "Dirges"
+      "spellListFrom": "bard",
+      "knownCaster": true,
+      "castingLabel": "Dirges",
+      "tools": [
+        "two musical instruments of your choice"
+      ]
     },
     {
-      "id": "vermin_lord", "name": "Ratcatcher", "hitDie": 8,
-      "saves": ["dex", "con"], "casterType": "none", "spellAbility": null,
-      "armor": ["light"], "weapons": ["simple", "firearms"],
-      "skillChoices": { "count": 3, "from": ["acrobatics", "animal_handling", "investigation", "perception", "sleight_of_hand", "stealth", "survival"] },
-      "genres": ["dark_fantasy"],
+      "id": "vermin_lord",
+      "name": "Ratcatcher",
+      "hitDie": 8,
+      "saves": [
+        "dex",
+        "con"
+      ],
+      "casterType": "none",
+      "spellAbility": null,
+      "armor": [
+        "light"
+      ],
+      "weapons": [
+        "simple",
+        "firearms"
+      ],
+      "skillChoices": {
+        "count": 3,
+        "from": [
+          "acrobatics",
+          "animal_handling",
+          "investigation",
+          "perception",
+          "sleight_of_hand",
+          "stealth",
+          "survival"
+        ]
+      },
+      "genres": [
+        "dark_fantasy"
+      ],
       "blurb": "King of the gutters. The rats scout for them, the sewers are their roads, and nothing in the city moves unseen.",
-      "spellListFrom": null, "knownCaster": false, "castingLabel": null
+      "spellListFrom": null,
+      "knownCaster": false,
+      "castingLabel": null,
+      "tools": [
+        "poisoner's kit",
+        "trapper's tools"
+      ]
     }
   ]
 }

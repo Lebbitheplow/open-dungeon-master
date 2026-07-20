@@ -13,6 +13,7 @@ import type { DmTurn } from "@/lib/db/dm-turns";
 import { d20Expression, isValidExpression, rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
 import { saveModFor, type SaveAbility } from "@/lib/bestiary/statblock";
+import { defenseRiders } from "@/lib/srd/feature-effects";
 import { computeSheetDerived } from "@/lib/srd";
 import {
   applyEnemyDamage,
@@ -148,6 +149,11 @@ const aoeDamageTool: ToolDef = {
         targets: {
           type: "string",
           description: "Fallback: comma-separated combatant names, mixed enemies and characters.",
+        },
+        casterId: {
+          type: "string",
+          description:
+            "If a player character cast this effect on their combat turn, their exact characterId; marks their turn as taken.",
         },
         reason: { type: "string", description: "Short in-fiction cause." },
       },
@@ -312,6 +318,7 @@ const aoeArgsSchema = z.object({
   enemyIds: z.array(z.string()).optional(),
   characterIds: z.array(z.string()).optional(),
   targets: z.string().max(400).optional(),
+  casterId: z.string().optional(),
   reason: z.string().optional(),
 });
 
@@ -497,12 +504,28 @@ function handleAoeDamage(
       source: "digital",
     });
     const success = saveOutcome.total >= args.dc;
-    const damageTaken = success ? (halfOnSave ? half : 0) : total;
+    // Evasion: on a Dexterity save for half, a made save takes nothing and a
+    // failed one takes half. Only for DEX saves against effects that would
+    // deal half on a success at all.
+    const evasion =
+      ability === "dex" &&
+      halfOnSave &&
+      defenseRiders({ class: sheet.class, level: sheet.level, features: sheet.features }).evasion;
+    const damageTaken = evasion
+      ? success
+        ? 0
+        : half
+      : success
+        ? halfOnSave
+          ? half
+          : 0
+        : total;
     const row: Record<string, unknown> = {
       target: sheet.name,
       save: saveOutcome.total,
       success,
       damage: damageTaken,
+      ...(evasion ? { evasion: success ? "no damage" : "half damage" } : {}),
     };
     if (damageTaken > 0) {
       const applied = applyDmMutation(
@@ -532,6 +555,17 @@ function handleAoeDamage(
       }
     }
     results.push(row);
+  }
+
+  // Casting an area spell is the character's action, not their whole turn:
+  // a human caster may still move or use a bonus action, so only end_turn
+  // advances past them. Companion casters resolve here so the auto-act
+  // backstop cannot act them a second time.
+  if (args.casterId) {
+    const caster = resolveSheetRef(args.casterId, sheets, sheetsById);
+    if (caster?.isCompanion && !turn.resolvedCharacterIds.includes(caster.id)) {
+      turn.resolvedCharacterIds.push(caster.id);
+    }
   }
 
   return {

@@ -1,15 +1,30 @@
 "use client";
 
-import { Check, Crown, Dices, Heart, ImagePlus, Save, Shield, StickyNote, UserRound } from "lucide-react";
-import { useState } from "react";
+import {
+  Bot,
+  Check,
+  Crown,
+  Dices,
+  Heart,
+  ImagePlus,
+  PawPrint,
+  Save,
+  Shield,
+  StickyNote,
+  UserPlus,
+  UserRound,
+} from "lucide-react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { CharacterMenu } from "@/app/campaigns/[campaignId]/CharacterMenu";
 import { CharacterNotesDialog } from "@/app/campaigns/[campaignId]/CharacterNotesDialog";
 import { CharacterSheetDialog } from "@/app/campaigns/[campaignId]/CharacterSheetDialog";
+import { CompanionBuilderDialog } from "@/app/campaigns/[campaignId]/CompanionBuilderDialog";
 import { LeadEditDialog } from "@/app/campaigns/[campaignId]/LeadEditDialog";
 import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
 import type { CampaignMember } from "@/lib/campaign-types";
 import type { Note } from "@/lib/db/notes";
+import type { Genre } from "@/lib/schemas/game-settings";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { computeSheetDerived, formatModifier } from "@/lib/srd";
 
@@ -59,6 +74,38 @@ function RealDiceToggle({
   );
 }
 
+// Nudges the DM to write an AI companion into the story (the DM decides who
+// arrives and how); shown while the table is below its companion cap.
+function RequestCompanionButton({ campaignId }: { campaignId: string }) {
+  const [state, setState] = useState<"idle" | "sending" | "sent">("idle");
+  async function request() {
+    setState("sending");
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/companions/request`, {
+        method: "POST",
+      });
+      setState(response.ok ? "sent" : "idle");
+      if (response.ok) {
+        setTimeout(() => setState("idle"), 4_000);
+      }
+    } catch {
+      setState("idle");
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={request}
+      disabled={state !== "idle"}
+      title="Ask the DM to write an ally with a real character sheet into the story"
+      className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-stone-700 py-2 text-xs text-stone-400 hover:bg-stone-900 hover:text-sky-200 disabled:opacity-60"
+    >
+      <Bot className="size-3.5" />
+      {state === "sent" ? "The DM has been asked" : "Request a companion"}
+    </button>
+  );
+}
+
 function SaveToLibraryButton({ campaignId }: { campaignId: string }) {
   const [state, setState] = useState<"idle" | "saving" | "saved">("idle");
   async function save() {
@@ -99,7 +146,6 @@ function SaveToLibraryButton({ campaignId }: { campaignId: string }) {
 export function PartyPanel({
   sheets,
   meUserId,
-  onAdjustHp,
   spotlightUserIds = [],
   embedded = false,
   isLead = false,
@@ -110,10 +156,15 @@ export function PartyPanel({
   refreshNotes,
   onMessageUser,
   realDiceAllowed = false,
+  inCombat = false,
+  campaignId = "",
+  companionsAvailable = false,
+  companionBuildAvailable = false,
+  companionGenre,
+  companionLevel = 1,
 }: {
   sheets: CharacterSheet[];
   meUserId: string;
-  onAdjustHp: (delta: number) => void;
   spotlightUserIds?: string[];
   embedded?: boolean;
   isLead?: boolean;
@@ -124,17 +175,40 @@ export function PartyPanel({
   refreshNotes?: () => Promise<void>;
   onMessageUser?: (userId: string) => void;
   realDiceAllowed?: boolean;
+  // Active encounter: the owner's counter steppers lock the recover side.
+  inCombat?: boolean;
+  // AI companions: when a party or guest slot is free, show the request button.
+  campaignId?: string;
+  companionsAvailable?: boolean;
+  // Manual build (lasting party companion) is offered only when the table
+  // allows party companions and a party slot is free.
+  companionBuildAvailable?: boolean;
+  companionGenre?: Genre;
+  companionLevel?: number;
 }) {
   const [editingSheetId, setEditingSheetId] = useState("");
   const [viewingSheetId, setViewingSheetId] = useState("");
   const [croppingSheetId, setCroppingSheetId] = useState("");
   const [notesSheetId, setNotesSheetId] = useState("");
+  const [buildingCompanion, setBuildingCompanion] = useState(false);
   const editingSheet = sheets.find((sheet) => sheet.id === editingSheetId);
   const viewingSheet = sheets.find((sheet) => sheet.id === viewingSheetId);
   const croppingSheet = sheets.find((sheet) => sheet.id === croppingSheetId);
   const notesSheet = sheets.find((sheet) => sheet.id === notesSheetId);
   const myMember = members.find((member) => member.userId === meUserId);
   const Wrapper = embedded ? "div" : "aside";
+
+  // Safety net for the Radix dropdown-opens-dialog race: whenever every
+  // dialog owned by this panel is closed, body pointer-events must be back;
+  // a stranded pointer-events:none makes the whole page unclickable.
+  const anyDialogOpen = Boolean(
+    editingSheetId || viewingSheetId || croppingSheetId || notesSheetId || buildingCompanion,
+  );
+  useEffect(() => {
+    if (!anyDialogOpen && document.body.style.pointerEvents === "none") {
+      document.body.style.pointerEvents = "";
+    }
+  }, [anyDialogOpen]);
 
   async function setPortrait(sheet: CharacterSheet, url: string) {
     await fetch(`/api/campaigns/${sheet.campaignId}/sheet`, {
@@ -157,7 +231,16 @@ export function PartyPanel({
       {sheets.map((sheet) => {
         const derived = computeSheetDerived(sheet);
         const mine = sheet.userId === meUserId;
-        const hpFraction = sheet.maxHp > 0 ? sheet.currentHp / sheet.maxHp : 0;
+        // Wild Shape: the beast's pool is what damage actually hits, so the
+        // bar tracks it and the druid's own hit points wait in the label.
+        const shape = sheet.wildShape;
+        const hpFraction = shape
+          ? shape.beastMaxHp > 0
+            ? shape.beastHp / shape.beastMaxHp
+            : 0
+          : sheet.maxHp > 0
+            ? sheet.currentHp / sheet.maxHp
+            : 0;
         const publicNoteCount = notes.filter(
           (note) => note.characterId === sheet.id && note.visibility === "public",
         ).length;
@@ -196,6 +279,12 @@ export function PartyPanel({
                   {sheet.userId === leadUserId ? (
                     <Crown className="size-3.5 shrink-0 text-amber-300" aria-label="Party lead" />
                   ) : null}
+                  {sheet.isCompanion ? (
+                    <Bot
+                      className="size-3.5 shrink-0 text-sky-300"
+                      aria-label="AI companion"
+                    />
+                  ) : null}
                 </span>
                 <span className="block text-xs text-stone-400">
                   {sheet.race.replaceAll("_", " ")} {sheet.class} {sheet.level}
@@ -221,31 +310,61 @@ export function PartyPanel({
                 onNotes={() => setNotesSheetId(sheet.id)}
                 onAdjust={() => setEditingSheetId(sheet.id)}
                 onMessage={
-                  onMessageUser && !mine ? () => onMessageUser(sheet.userId) : undefined
+                  onMessageUser && !mine && !sheet.isCompanion
+                    ? () => onMessageUser(sheet.userId)
+                    : undefined
                 }
               />
             </div>
 
+            {shape ? (
+              <div
+                className="mt-2 flex items-center gap-1.5 rounded-md border border-lime-800/60 bg-lime-950/40 px-2 py-1 text-xs text-lime-300"
+                title={`Wild Shaped: damage hits the beast's hit points first. ${sheet.name}'s own ${sheet.currentHp}/${sheet.maxHp} waits for them when the form breaks.`}
+              >
+                <PawPrint className="size-3.5 shrink-0" />
+                <span className="truncate capitalize">{shape.form}</span>
+              </div>
+            ) : null}
+
             <div className="mt-2 flex items-center gap-2 text-sm">
-              <Heart className="size-4 text-red-400" />
+              <Heart className={cn("size-4", shape ? "text-lime-400" : "text-red-400")} />
               <div className="h-2 flex-1 overflow-hidden rounded-full bg-stone-800/80 shadow-[0_1px_2px_rgba(4,2,12,0.6)_inset]">
                 <div
                   className={cn(
                     "h-full rounded-full transition-[width] duration-500 ease-snap",
-                    hpFraction > 0.5
-                      ? "bg-gradient-to-r from-emerald-600 to-emerald-400"
-                      : hpFraction > 0.25
-                        ? "bg-gradient-to-r from-amber-600 to-amber-400"
-                        : "bg-gradient-to-r from-red-700 to-ember-500",
+                    shape
+                      ? "bg-gradient-to-r from-lime-700 to-lime-400"
+                      : hpFraction > 0.5
+                        ? "bg-gradient-to-r from-emerald-600 to-emerald-400"
+                        : hpFraction > 0.25
+                          ? "bg-gradient-to-r from-amber-600 to-amber-400"
+                          : "bg-gradient-to-r from-red-700 to-ember-500",
                   )}
                   style={{ width: `${Math.max(0, Math.min(1, hpFraction)) * 100}%` }}
                 />
               </div>
-              <span className="font-mono text-xs">
-                {sheet.currentHp}
-                {sheet.tempHp ? `+${sheet.tempHp}` : ""}/{sheet.maxHp}
-              </span>
+              {shape ? (
+                <span
+                  className="font-mono text-xs text-lime-300"
+                  title={`Beast form hit points. ${sheet.name}'s own: ${sheet.currentHp}/${sheet.maxHp}`}
+                >
+                  {shape.beastHp}
+                  {sheet.tempHp ? `+${sheet.tempHp}` : ""}/{shape.beastMaxHp}
+                </span>
+              ) : (
+                <span className="font-mono text-xs">
+                  {sheet.currentHp}
+                  {sheet.tempHp ? `+${sheet.tempHp}` : ""}/{sheet.maxHp}
+                </span>
+              )}
             </div>
+
+            {shape ? (
+              <div className="mt-1 text-right font-mono text-[10px] text-stone-500">
+                own {sheet.currentHp}/{sheet.maxHp}
+              </div>
+            ) : null}
 
             {sheet.deathSaves ? (
               <div className="mt-1.5 flex items-center gap-2">
@@ -297,14 +416,22 @@ export function PartyPanel({
             <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
               {(
                 [
-                  ["AC", String(sheet.ac)],
+                  ["AC", String(shape ? shape.beastAc : sheet.ac)],
                   ["PP", String(derived.passivePerception)],
                   ["Init", formatModifier(derived.initiative)],
                 ] as const
               ).map(([statLabel, statValue]) => (
                 <span
                   key={statLabel}
-                  className="rounded-md border border-stone-700/50 bg-stone-950/60 py-1 shadow-[0_1px_2px_rgba(4,2,12,0.5)_inset]"
+                  className={cn(
+                    "rounded-md border border-stone-700/50 bg-stone-950/60 py-1 shadow-[0_1px_2px_rgba(4,2,12,0.5)_inset]",
+                    shape && statLabel === "AC" && "border-lime-800/60 text-lime-300",
+                  )}
+                  title={
+                    shape && statLabel === "AC"
+                      ? `The beast form's armor class; ${sheet.name}'s own is ${sheet.ac}.`
+                      : undefined
+                  }
                 >
                   <span className="eyebrow block text-[8px] text-stone-500">
                     {statLabel === "AC" ? (
@@ -365,22 +492,9 @@ export function PartyPanel({
 
             {mine ? (
               <div className="mt-2 space-y-1.5">
-                <div className="flex gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => onAdjustHp(-1)}
-                    className="flex-1 rounded border border-stone-700 py-1 text-xs hover:bg-stone-900"
-                  >
-                    -1 HP
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onAdjustHp(1)}
-                    className="flex-1 rounded border border-stone-700 py-1 text-xs hover:bg-stone-900"
-                  >
-                    +1 HP
-                  </button>
-                </div>
+                {/* Hit points are driven by the server rules engines now, so
+                    there is no manual HP stepper here; the lead's Adjust
+                    dialog remains for corrections. */}
                 <button
                   type="button"
                   onClick={() => setCroppingSheetId(sheet.id)}
@@ -402,6 +516,32 @@ export function PartyPanel({
         );
       })}
 
+      {campaignId && companionsAvailable && isLead ? (
+        <div className="space-y-1.5">
+          <RequestCompanionButton campaignId={campaignId} />
+          {companionBuildAvailable ? (
+            <button
+              type="button"
+              onClick={() => setBuildingCompanion(true)}
+              title="Build a companion yourself with the character creator"
+              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-stone-700 py-2 text-xs text-stone-400 hover:bg-stone-900 hover:text-sky-200"
+            >
+              <UserPlus className="size-3.5" />
+              Build a companion
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {buildingCompanion && campaignId ? (
+        <CompanionBuilderDialog
+          campaignId={campaignId}
+          genre={companionGenre}
+          level={companionLevel}
+          onClose={() => setBuildingCompanion(false)}
+        />
+      ) : null}
+
       {editingSheet ? (
         <LeadEditDialog
           campaignId={editingSheet.campaignId}
@@ -415,9 +555,14 @@ export function PartyPanel({
           sheet={viewingSheet}
           mine={viewingSheet.userId === meUserId}
           isLead={isLead}
+          inCombat={inCombat}
           onAdjust={() => {
+            // Close the sheet dialog fully before mounting the edit dialog;
+            // swapping two modals in one commit can strand the body scroll
+            // lock (same family of bug as the dropdown race above).
+            const sheetId = viewingSheet.id;
             setViewingSheetId("");
-            setEditingSheetId(viewingSheet.id);
+            setTimeout(() => setEditingSheetId(sheetId), 0);
           }}
           onClose={() => setViewingSheetId("")}
         />

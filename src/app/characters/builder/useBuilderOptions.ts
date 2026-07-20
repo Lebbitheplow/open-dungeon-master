@@ -26,6 +26,10 @@ export type BackgroundOption = {
   id: string;
   name: string;
   skills: string[];
+  // Grants beyond skills. Open5e pack rows leave these undefined.
+  tools?: string[];
+  languages?: number;
+  equipment?: string[];
   // Catalog-only extras; absent on SRD and Open5e rows.
   genres?: Genre[];
   blurb?: string;
@@ -48,6 +52,12 @@ function srdRaceOptions(): RaceOption[] {
     languages: race.languages,
     bonusLanguages: race.bonusLanguages ?? 0,
     traitsSummary: race.traits.join(" · "),
+    skills: race.skills,
+    skillChoice: race.skillChoice,
+    asiChoice: race.asiChoice,
+    cantripChoice: race.cantripChoice,
+    tools: race.tools,
+    toolChoice: race.toolChoice,
     note: race.traits.join(" · "),
   }));
 }
@@ -61,6 +71,7 @@ function customClassOptions(): ClassOption[] {
     skillChoices: klass.skillChoices,
     armor: klass.armor,
     weapons: klass.weapons,
+    tools: klass.tools ?? [],
     spellAbility: klass.spellAbility,
     casterType: klass.casterType,
     genres: klass.genres,
@@ -81,6 +92,7 @@ function srdClassOptions(): ClassOption[] {
       skillChoices: klass.skillChoices,
       armor: klass.armor,
       weapons: klass.weapons,
+      tools: klass.tools ?? [],
       spellAbility: klass.spellAbility,
       casterType: klass.casterType,
     })),
@@ -93,6 +105,9 @@ function customBackgroundOptions(): BackgroundOption[] {
     id: background.id,
     name: background.name,
     skills: background.skills,
+    tools: background.tools,
+    languages: background.languages,
+    equipment: background.equipment,
     genres: background.genres,
     blurb: background.blurb,
   }));
@@ -104,6 +119,9 @@ function srdBackgroundOptions(): BackgroundOption[] {
       id: background.id,
       name: background.name,
       skills: background.skills,
+      tools: background.tools,
+      languages: background.languages,
+      equipment: background.equipment,
     })),
     ...customBackgroundOptions(),
   ];

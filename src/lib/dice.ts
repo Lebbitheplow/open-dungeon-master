@@ -9,6 +9,9 @@ export type DieResult = {
   sides: number;
   value: number;
   kept: boolean;
+  // The discarded face when a Great Weapon Fighting reroll replaced it, so
+  // the dice card can show what happened.
+  rerolledFrom?: number;
 };
 
 export type DiceTerm = {
@@ -48,10 +51,21 @@ export function defaultRng(sides: number) {
   return randomInt(1, sides + 1);
 }
 
+export type RollOptions = {
+  // Great Weapon Fighting: reroll damage dice landing at or below this
+  // value, once each, and keep the new face even if it is worse. d20s are
+  // exempt: this is a damage-dice rule, never an attack-roll one.
+  rerollBelow?: number;
+};
+
 // Parses and rolls a dice expression: XdY terms with optional khN/klN keeps
 // and integer modifiers, joined by + or -. Examples: "1d20+5", "4d6kh3",
 // "2d20kl1+3", "8d6", "1d100-10".
-export function rollExpression(expression: string, rng: DieRng = defaultRng): RollResult {
+export function rollExpression(
+  expression: string,
+  rng: DieRng = defaultRng,
+  options: RollOptions = {},
+): RollResult {
   const compact = expression.replace(/\s+/g, "").toLowerCase();
   if (!compact) {
     throw new Error("Empty dice expression.");
@@ -98,10 +112,18 @@ export function rollExpression(expression: string, rng: DieRng = defaultRng): Ro
       keep = { mode: match[3] === "h" ? "highest" : "lowest", count: keepCount };
     }
 
-    const dice: DieResult[] = Array.from({ length: count }, () => {
+    const roll = () => {
       const value = rng(sides);
       if (!Number.isInteger(value) || value < 1 || value > sides) {
         throw new Error(`RNG returned an invalid d${sides} value: ${value}`);
+      }
+      return value;
+    };
+    const rerollBelow = sides === 20 ? 0 : (options.rerollBelow ?? 0);
+    const dice: DieResult[] = Array.from({ length: count }, () => {
+      const value = roll();
+      if (rerollBelow > 0 && value <= rerollBelow) {
+        return { sides, value: roll(), kept: true, rerolledFrom: value };
       }
       return { sides, value, kept: true };
     });

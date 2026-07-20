@@ -328,11 +328,16 @@ export async function requestCustomMessage(
 
   const endpoint = customChatEndpoint(trimmedBase);
   // Per-campaign key wins, then the admin-panel key, then the env vars.
+  // Fallback keys belong to the admin-configured backend: attaching them to
+  // any other URL would hand the server's key to whatever host a campaign's
+  // settings point at. The OpenRouter env key is already host-gated above.
+  const globalBase = (globalText.customBaseUrl || serverEnv("OPENAI_COMPAT_BASE_URL") || "").trim();
+  const isGlobalBackend = Boolean(globalBase) && customChatEndpoint(globalBase) === endpoint;
   const resolvedKey =
     (apiKey || "").trim() ||
-    globalText.customApiKey ||
+    (isGlobalBackend ? globalText.customApiKey : "") ||
     (isOpenRouter ? serverEnv("OPENROUTER_API_KEY") : "") ||
-    serverEnv("OPENAI_COMPAT_API_KEY");
+    (isGlobalBackend ? serverEnv("OPENAI_COMPAT_API_KEY") : "");
   const requestPayload: Record<string, unknown> = {
     model: resolvedModel,
     messages,
@@ -429,7 +434,7 @@ export async function requestCustomMessage(
       error: Response.json(
         {
           error: `${isOpenRouter ? "OpenRouter" : "Backend"} request failed (${upstream.status}).`,
-          detail: text.slice(0, 1000),
+          detail: text.slice(0, 300),
         },
         { status: upstream.status },
       ),
@@ -516,7 +521,7 @@ export async function requestCustomMessage(
         error: Response.json(
           {
             error: `${isOpenRouter ? "OpenRouter" : "Backend"} stream failed.`,
-            detail: upstreamError.slice(0, 1000),
+            detail: upstreamError.slice(0, 300),
           },
           { status: 502 },
         ),
@@ -532,9 +537,17 @@ export async function requestCustomMessage(
     };
   }
 
-  const data = (await upstream.json()) as {
-    choices?: Array<{ message?: UpstreamChatMessage }>;
-  };
+  let data: { choices?: Array<{ message?: UpstreamChatMessage }> };
+  try {
+    data = (await upstream.json()) as typeof data;
+  } catch {
+    return {
+      error: Response.json(
+        { error: "The backend returned an unreadable response." },
+        { status: 502 },
+      ),
+    };
+  }
 
   return { message: data?.choices?.[0]?.message };
 }
@@ -628,7 +641,7 @@ export async function requestLocalMessage(
       error: Response.json(
         {
           error: `Local model request failed (${upstream.status}).${hint}`,
-          detail: text.slice(0, 1000),
+          detail: text.slice(0, 300),
         },
         { status: 502 },
       ),
@@ -684,7 +697,7 @@ export async function requestLocalMessage(
         error: Response.json(
           {
             error: "Local model stream failed.",
-            detail: upstreamError.slice(0, 1000),
+            detail: upstreamError.slice(0, 300),
           },
           { status: 502 },
         ),
@@ -699,6 +712,16 @@ export async function requestLocalMessage(
     };
   }
 
-  const data = (await upstream.json()) as { message?: UpstreamChatMessage };
+  let data: { message?: UpstreamChatMessage };
+  try {
+    data = (await upstream.json()) as typeof data;
+  } catch {
+    return {
+      error: Response.json(
+        { error: "The backend returned an unreadable response." },
+        { status: 502 },
+      ),
+    };
+  }
   return { message: data?.message };
 }

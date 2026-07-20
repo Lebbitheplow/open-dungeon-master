@@ -11,7 +11,7 @@ import {
   CHARACTER_EVENT_KINDS,
   type CharacterEventKind,
 } from "@/lib/db/character-events";
-import type { CampaignMessage } from "@/lib/db/messages";
+import { countMessages, listMessagesPage } from "@/lib/db/messages";
 import { listSheets } from "@/lib/db/sheets";
 import { extractStoryText, stripReasoningArtifacts } from "@/lib/story-prompt";
 import { requestDmMessage } from "@/lib/dm/model";
@@ -21,17 +21,18 @@ import { requestDmMessage } from "@/lib/dm/model";
 const COMPACT_THRESHOLD = Number(process.env.DM_COMPACT_THRESHOLD || 120);
 const COMPACT_BATCH = 40;
 
-export async function maybeCompactHistory(campaignId: string, history: CampaignMessage[]) {
+export async function maybeCompactHistory(campaignId: string) {
   const campaign = getCampaignById(campaignId);
-  if (!campaign || history.length < COMPACT_THRESHOLD) {
+  const total = campaign ? countMessages(campaignId) : 0;
+  if (!campaign || total < COMPACT_THRESHOLD) {
     return;
   }
   const { summary, coveredCount } = getCampaignSummaryState(campaignId);
-  if (history.length - coveredCount < COMPACT_THRESHOLD) {
+  if (total - coveredCount < COMPACT_THRESHOLD) {
     return;
   }
 
-  const batch = history.slice(coveredCount, coveredCount + COMPACT_BATCH);
+  const batch = listMessagesPage(campaignId, coveredCount, COMPACT_BATCH);
   const transcript = batch
     .map((message) => `${message.authorType === "dm" ? "DM" : "Player"}: ${message.content}`)
     .join("\n\n");

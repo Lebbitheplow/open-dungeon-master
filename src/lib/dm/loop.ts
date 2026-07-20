@@ -4,6 +4,7 @@
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { getDmStatus, setDmStatus } from "@/lib/dm/status";
 import { startDmTurn } from "@/lib/dm/turn";
+import { registerDmWaker } from "@/lib/dm/wake";
 
 export { startDmTurn as runDmTurn } from "@/lib/dm/turn";
 
@@ -36,3 +37,7 @@ export function requestDmTurn(campaignId: string) {
     await startDmTurn(campaignId);
   });
 }
+
+// Modules inside the turn (initiative landing on an AI companion) wake the
+// DM through the registry instead of importing this module (cycle).
+registerDmWaker(requestDmTurn);

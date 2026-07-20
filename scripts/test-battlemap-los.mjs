@@ -5,7 +5,7 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { computeFov, visibleTiles, darkvisionTilesFromText } = await import(
+const { computeFov, coverBetween, visibleTiles, darkvisionTilesFromText } = await import(
   "../src/lib/battlemap/los.ts"
 );
 const { tileIndex } = await import("../src/lib/battlemap/types.ts");
@@ -121,6 +121,34 @@ test("darkvision text parsing", () => {
   assert.equal(darkvisionTilesFromText(["Keen Senses", "darkvision 120 feet"]), 24);
   assert.equal(darkvisionTilesFromText(["Brave", "Lucky"]), 0);
   assert.equal(darkvisionTilesFromText(["Darkvision"]), 12, "bare feature name defaults to 60 ft");
+});
+
+test("cover comes from what the target is tucked behind", () => {
+  // 5x3 open room with a single pillar at (2,1).
+  const rows = [".....", "..#..", "....."];
+  const terrain = rows.join("");
+  const width = 5;
+  const height = 3;
+
+  // Attacker at (0,1), target at (3,1): the pillar at (2,1) is orthogonally
+  // adjacent to the target and nearer the attacker. Half cover.
+  assert.equal(coverBetween(terrain, width, height, 0, 1, 3, 1), 2);
+  // From the far side the pillar is behind the attacker, not the target.
+  assert.equal(coverBetween(terrain, width, height, 4, 1, 3, 1), 0);
+  // Toe to toe there is nothing in between.
+  assert.equal(coverBetween(terrain, width, height, 2, 2, 3, 1), 0);
+  // Wide open ground grants nothing.
+  assert.equal(coverBetween(".....".repeat(3), width, height, 0, 0, 4, 0), 0);
+});
+
+test("a corner is three-quarters cover", () => {
+  // Target at (3,2) tucked behind a corner: wall to its left at (2,2) and
+  // above it at (3,1). An attacker up and to the left sees both.
+  const rows = [".....", "...#.", "..#..", "....."];
+  const terrain = rows.join("");
+  assert.equal(coverBetween(terrain, 5, 4, 0, 0, 3, 2), 5);
+  // Approaching from below, only the left-hand wall shields it.
+  assert.equal(coverBetween(terrain, 5, 4, 0, 3, 3, 2), 2);
 });
 
 console.log(`test-battlemap-los: ${passed} tests passed.`);

@@ -1,6 +1,7 @@
 "use client";
 
 import { Dices, Loader2, Send } from "lucide-react";
+import { memo } from "react";
 import type { Dispatch, FormEvent, RefObject, SetStateAction } from "react";
 import { cn } from "@/lib/cn";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -21,7 +22,7 @@ const KIND_TIPS: Record<InputKind, string> = {
 
 // The action composer at the bottom of the game chat: pending-roll cards,
 // floor banners, the join notice, kind pills and the input row.
-export function Composer({
+function ComposerInner({
   campaignId,
   sheets,
   meUserId,
@@ -82,11 +83,13 @@ export function Composer({
           />
         ))}
         <FloorBanners
+          campaignId={campaignId}
           floor={floor}
           spotlighted={spotlighted}
           heldSpotlightNames={heldSpotlightNames}
           encounter={encounter}
           isLead={isLead}
+          meUserId={meUserId}
           onRelease={onReleaseFloor}
         />
         {joinBanner ? (
@@ -176,3 +179,7 @@ export function Composer({
     </form>
   );
 }
+
+// Memoized for the same reason as SidePanel: unchanged props while the DM
+// streams narration into the message list.
+export const Composer = memo(ComposerInner);

@@ -1,13 +1,43 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { Loader2, Plus, Trash2, Wrench, X } from "lucide-react";
+import { Loader2, Trash2, Wrench, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
+import { spellClassFor } from "@/lib/classes";
+import MultiContentPicker from "@/app/characters/builder/MultiContentPicker";
 import type { CharacterSheet, EquipmentItem } from "@/lib/schemas/sheet";
 
 type ItemRow = { name: string; qty: string; slug?: string };
+
+// Removable name chips backing the spell and feat lists; adding goes
+// through the searchable multi-select pickers below each list.
+function ChipList({ values, onRemove }: { values: string[]; onRemove: (value: string) => void }) {
+  if (!values.length) {
+    return null;
+  }
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {values.map((value) => (
+        <span
+          key={value}
+          className="flex items-center gap-1 rounded-full bg-stone-800 px-2 py-0.5 text-xs text-stone-200"
+        >
+          {value}
+          <button
+            type="button"
+            onClick={() => onRemove(value)}
+            aria-label={`Remove ${value}`}
+            className="text-stone-500 hover:text-red-400"
+          >
+            <X className="size-3" />
+          </button>
+        </span>
+      ))}
+    </div>
+  );
+}
 
 // Party lead correction of any character's numbers, items, and spells, for
 // when the AI DM gets something wrong. Server clamps values and writes an
@@ -31,8 +61,8 @@ export function LeadEditDialog({
   const [items, setItems] = useState<ItemRow[]>(
     sheet.equipment.map((item) => ({ name: item.name, qty: String(item.qty), slug: item.slug })),
   );
-  const [prepared, setPrepared] = useState(sheet.spellcasting?.prepared.join(", ") ?? "");
-  const [known, setKnown] = useState(sheet.spellcasting?.known.join(", ") ?? "");
+  const [prepared, setPrepared] = useState<string[]>(sheet.spellcasting?.prepared ?? []);
+  const [known, setKnown] = useState<string[]>(sheet.spellcasting?.known ?? []);
   const [slots, setSlots] = useState<Record<string, { max: string; used: string }>>(() =>
     Object.fromEntries(
       Object.entries(sheet.spellcasting?.slots ?? {}).map(([level, slot]) => [
@@ -41,7 +71,7 @@ export function LeadEditDialog({
       ]),
     ),
   );
-  const [feats, setFeats] = useState(sheet.feats.join(", "));
+  const [feats, setFeats] = useState<string[]>(sheet.feats);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -100,16 +130,15 @@ export function LeadEditDialog({
             return [level, { max, used }];
           }),
         ),
-        prepared: splitList(prepared),
-        known: splitList(known),
+        prepared,
+        known,
       };
       if (JSON.stringify(nextSpellcasting) !== JSON.stringify(sheet.spellcasting)) {
         patch.spellcasting = nextSpellcasting;
       }
     }
-    const nextFeats = splitList(feats);
-    if (nextFeats.join("|") !== sheet.feats.join("|")) {
-      patch.feats = nextFeats;
+    if (feats.join("|") !== sheet.feats.join("|")) {
+      patch.feats = feats;
     }
     void (async () => {
       try {
@@ -193,12 +222,16 @@ export function LeadEditDialog({
             <span className="text-stone-500">Items</span>
             {items.map((row, index) => (
               <div key={index} className="flex items-center gap-2">
-                <input
-                  value={row.name}
-                  onChange={(event) => setItem(index, { name: event.target.value })}
-                  placeholder="Item name"
-                  className={field}
-                />
+                {row.slug ? (
+                  <span className={cn(field, "truncate")}>{row.name}</span>
+                ) : (
+                  <input
+                    value={row.name}
+                    onChange={(event) => setItem(index, { name: event.target.value })}
+                    placeholder="Item name"
+                    className={field}
+                  />
+                )}
                 <input
                   type="number"
                   min={1}
@@ -216,30 +249,79 @@ export function LeadEditDialog({
                 </button>
               </div>
             ))}
-            <button
-              type="button"
-              onClick={() => setItems((rows) => [...rows, { name: "", qty: "1" }])}
-              className={cn(ui.btnSmall, "mt-1 flex items-center gap-1")}
-            >
-              <Plus className="size-3" /> Add item
-            </button>
+            <div className="mt-1">
+              <MultiContentPicker
+                kind="items"
+                placeholder="Search items to add"
+                selectedNames={items.map((row) => row.name)}
+                onAdd={(entries) =>
+                  setItems((rows) => [
+                    ...rows,
+                    ...entries.map((entry) => ({
+                      name: entry.name,
+                      qty: "1",
+                      ...(entry.slug ? { slug: entry.slug } : {}),
+                    })),
+                  ])
+                }
+                renderMeta={(entry) =>
+                  [entry.kind, entry.rarity ?? entry.cost].filter(Boolean).join(" · ")
+                }
+              />
+            </div>
           </div>
 
           {sheet.spellcasting ? (
             <div className="mt-3 space-y-2 text-xs">
               <span className="text-stone-500">Spells</span>
-              <label className="block space-y-1">
-                <span className="text-stone-600">Known (comma separated)</span>
-                <input value={known} onChange={(event) => setKnown(event.target.value)} className={field} />
-              </label>
-              <label className="block space-y-1">
-                <span className="text-stone-600">Prepared (comma separated)</span>
-                <input
-                  value={prepared}
-                  onChange={(event) => setPrepared(event.target.value)}
-                  className={field}
+              <div className="space-y-1">
+                <span className="text-stone-600">Known</span>
+                <ChipList
+                  values={known}
+                  onRemove={(value) => setKnown((list) => list.filter((entry) => entry !== value))}
                 />
-              </label>
+                <MultiContentPicker
+                  kind="spells"
+                  extraParams={{ class: spellClassFor(sheet.class) }}
+                  placeholder="Search spells to add as known"
+                  selectedNames={known}
+                  onAdd={(entries) =>
+                    setKnown((list) => [...list, ...entries.map((entry) => entry.name)])
+                  }
+                  renderMeta={(entry) =>
+                    entry.level !== undefined
+                      ? entry.level === 0
+                        ? "cantrip"
+                        : `level ${entry.level}`
+                      : ""
+                  }
+                />
+              </div>
+              <div className="space-y-1">
+                <span className="text-stone-600">Prepared</span>
+                <ChipList
+                  values={prepared}
+                  onRemove={(value) =>
+                    setPrepared((list) => list.filter((entry) => entry !== value))
+                  }
+                />
+                <MultiContentPicker
+                  kind="spells"
+                  extraParams={{ class: spellClassFor(sheet.class) }}
+                  placeholder="Search spells to add as prepared"
+                  selectedNames={prepared}
+                  onAdd={(entries) =>
+                    setPrepared((list) => [...list, ...entries.map((entry) => entry.name)])
+                  }
+                  renderMeta={(entry) =>
+                    entry.level !== undefined
+                      ? entry.level === 0
+                        ? "cantrip"
+                        : `level ${entry.level}`
+                      : ""
+                  }
+                />
+              </div>
               <div className="flex flex-wrap gap-2">
                 {Object.entries(sheet.spellcasting.slots).map(([level]) => (
                   <label key={level} className="space-y-1">
@@ -277,15 +359,21 @@ export function LeadEditDialog({
             </div>
           ) : null}
 
-          <label className="mt-3 block space-y-1 text-xs">
-            <span className="text-stone-500">Feats (comma separated)</span>
-            <input
-              value={feats}
-              onChange={(event) => setFeats(event.target.value)}
-              placeholder="Alert, Lucky"
-              className={field}
+          <div className="mt-3 space-y-1 text-xs">
+            <span className="text-stone-500">Feats</span>
+            <ChipList
+              values={feats}
+              onRemove={(value) => setFeats((list) => list.filter((entry) => entry !== value))}
             />
-          </label>
+            <MultiContentPicker
+              kind="feats"
+              placeholder="Search feats to add"
+              selectedNames={feats}
+              onAdd={(entries) =>
+                setFeats((list) => [...list, ...entries.map((entry) => entry.name)])
+              }
+            />
+          </div>
           <label className="mt-2 block space-y-1 text-xs">
             <span className="text-stone-500">Reason (shown in the log)</span>
             <input

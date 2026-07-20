@@ -226,3 +226,47 @@ export function darkvisionTilesFromText(texts: string[]): number {
   }
   return bare ? 12 : 0;
 }
+
+// Cover from terrain, as the AC bonus the SRD grants the target: 0 for none,
+// +2 for half cover, +5 for three-quarters. A target with total cover cannot
+// be attacked at all, which hasLineOfSight already refuses.
+//
+// The approximation: a blocking tile orthogonally adjacent to the target and
+// lying on the ATTACKER'S side of it is something the target is tucked
+// behind. One such tile is half cover; two (a corner) is three-quarters.
+// Cheap, deterministic, and it matches what players expect from fighting
+// someone around a corner or out of an arrow slit.
+export function coverBetween(
+  terrain: string,
+  width: number,
+  height: number,
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+): 0 | 2 | 5 {
+  if (chebyshev(fromX, fromY, toX, toY) <= 1) {
+    // Toe to toe: nothing is between them.
+    return 0;
+  }
+  const towardX = Math.sign(fromX - toX);
+  const towardY = Math.sign(fromY - toY);
+  let shields = 0;
+  for (const [dx, dy] of [
+    [towardX, 0],
+    [0, towardY],
+  ]) {
+    if (dx === 0 && dy === 0) {
+      continue;
+    }
+    const x = toX + dx;
+    const y = toY + dy;
+    if (!inBounds(width, height, x, y)) {
+      continue;
+    }
+    if (blocksSight(tileAt(terrain, width, x, y))) {
+      shields += 1;
+    }
+  }
+  return shields === 0 ? 0 : shields === 1 ? 2 : 5;
+}

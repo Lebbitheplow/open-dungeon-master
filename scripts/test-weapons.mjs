@@ -9,7 +9,11 @@ import srdClasses from "../src/lib/srd/classes.json" with { type: "json" };
 const catalogDir = join(dirname(fileURLToPath(import.meta.url)), "../src/lib/classes");
 const catalogClasses = readdirSync(catalogDir)
   .filter((file) => file.endsWith(".json") && !file.endsWith("-features.json"))
-  .flatMap((file) => JSON.parse(readFileSync(join(catalogDir, file), "utf8")).classes);
+  .map((file) => JSON.parse(readFileSync(join(catalogDir, file), "utf8")))
+  // The classes dir also holds generated data (resources.json); only the
+  // catalog files carry a `classes` array.
+  .filter((parsed) => Array.isArray(parsed.classes))
+  .flatMap((parsed) => parsed.classes);
 
 let passed = 0;
 function test(name, fn) {

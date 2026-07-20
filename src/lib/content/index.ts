@@ -1,6 +1,7 @@
 import { getContentDb } from "@/lib/content/db";
 import { listHomebrew } from "@/lib/db/homebrew";
 import type { HomebrewKind } from "@/lib/schemas/homebrew";
+import { scaledSpellDice } from "@/lib/srd/spell-scaling";
 
 // Unified content entry: Open5e rows and homebrew rows share this shape so
 // pickers render one list. `data` is the raw normalized payload (Open5e API
@@ -333,4 +334,34 @@ export function getEntryDetail(
     documentSlug: row.document_slug,
     data: parseData(row.data_json),
   };
+}
+
+// The dice a named spell actually rolls for this caster, derived from the
+// content pack's own text rather than taken on trust from the model
+// (src/lib/srd/spell-scaling.ts). Null when the spell is unknown or its
+// wording does not parse, in which case the caller keeps the model's dice.
+export function spellDamageFor(input: {
+  spell: string;
+  userId: string;
+  casterLevel: number;
+  slotLevel?: number;
+}): { dice: string; note: string; spellLevel: number } | null {
+  const wanted = input.spell.trim().toLowerCase();
+  if (!wanted) {
+    return null;
+  }
+  const entry = searchSpells({ q: input.spell.trim(), userId: input.userId, limit: 10 }).find(
+    (row) => row.name.trim().toLowerCase() === wanted,
+  );
+  if (!entry) {
+    return null;
+  }
+  const scaled = scaledSpellDice({
+    spellLevel: entry.level,
+    desc: String(entry.data.desc ?? ""),
+    higherLevel: String(entry.data.higher_level ?? ""),
+    casterLevel: input.casterLevel,
+    slotLevel: input.slotLevel,
+  });
+  return scaled ? { ...scaled, spellLevel: entry.level } : null;
 }

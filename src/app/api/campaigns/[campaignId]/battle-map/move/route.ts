@@ -14,6 +14,10 @@ import { reachableTiles, speedToTiles } from "@/lib/battlemap/movement";
 import { tileIndex } from "@/lib/battlemap/types";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import { effectiveSpeed, exhaustionSpeed } from "@/lib/dm/condition-logic";
+import { getCampaignById } from "@/lib/db/campaigns";
+import { budgetApplies } from "@/lib/dm/action-budget";
+import { resolveOpportunityAttacks } from "@/lib/dm/opportunity";
+import { combatRiders } from "@/lib/srd/feature-effects";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -73,11 +77,12 @@ export async function POST(
   const { x, y } = parsed.data;
 
   // Grappled/restrained/paralyzed... = speed 0; exhaustion 2+ halves speed
-  // and 5+ zeroes it. The server refuses impossible moves.
-  const speed = exhaustionSpeed(
-    sheet.exhaustion ?? 0,
-    effectiveSpeed(sheet.conditions, sheet.speed),
-  );
+  // and 5+ zeroes it. Fast Movement and Unarmored Movement add to it while
+  // out of heavy armor, and the Dash action doubles whatever is left. The
+  // server refuses impossible moves.
+  const riders = combatRiders(sheet);
+  const base = sheet.speed + riders.unarmoredSpeedBonus;
+  const speed = exhaustionSpeed(sheet.exhaustion ?? 0, effectiveSpeed(sheet.conditions, base));
   if (speed <= 0) {
     const cause =
       sheet.conditions.join(", ") ||
@@ -87,7 +92,11 @@ export async function POST(
       { status: 409 },
     );
   }
-  const budget = Math.max(0, speedToTiles(speed) - token.movedThisRound);
+  const turnState = budgetApplies(encounter.turnBudget, sheet.id, encounter.round)
+    ? encounter.turnBudget
+    : null;
+  const dashed = turnState?.dashed ?? false;
+  const budget = Math.max(0, speedToTiles(speed) * (dashed ? 2 : 1) - token.movedThisRound);
   const occupied = occupiedTiles(map, listTokens(map.id), token);
   const reach = reachableTiles(map.terrain, map.width, map.height, occupied, token, budget);
   const cost = reach.get(tileIndex(map.width, x, y));
@@ -95,8 +104,20 @@ export async function POST(
     return Response.json({ error: "You cannot reach that tile this round." }, { status: 400 });
   }
 
+  const from = { x: token.x, y: token.y };
   moveToken(token.id, x, y, token.movedThisRound + cost);
   publishBattleMapUpdate(campaignId);
+
+  // Walking out of an enemy's reach is not free. Disengage suppresses it;
+  // the budget carries that decision from the take_action tool.
+  const campaign = getCampaignById(campaignId);
+  const opportunity = campaign
+    ? resolveOpportunityAttacks(campaign, sheet.id, from, { x, y }, turnState?.disengaged ?? false)
+    : { notes: [], downed: false };
+
   // Fresh self view in the response saves the mover a follow-up fetch.
-  return Response.json({ view: buildPlayerMapView(campaignId, user.id) });
+  return Response.json({
+    view: buildPlayerMapView(campaignId, user.id),
+    ...(opportunity.notes.length ? { opportunityAttacks: opportunity.notes } : {}),
+  });
 }

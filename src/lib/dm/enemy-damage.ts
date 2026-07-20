@@ -19,6 +19,7 @@ import { enemyDamageMath } from "@/lib/dm/encounter-logic";
 import { damageAdjust } from "@/lib/dm/condition-logic";
 import { applyDmMutation } from "@/lib/dm/mutations";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
+import { dismissGuestCompanions } from "@/lib/dm/companion-tools";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // The single server-side path for damage landing on an enemy. Used by the
@@ -97,10 +98,18 @@ export function finishEncounter(
   publishPersisted(campaign.id, "encounter_updated", { encounter: null });
   // Clients drop their fogged map view; the archived rows stay for history.
   publishBattleMapUpdate(campaign.id);
+  // Guest allies joined for this fight, so the fight ending writes them out;
+  // lasting party companions stay. XP above already counted them in.
+  const guestsGone = dismissGuestCompanions(campaign, "the fight ended");
 
   return {
     encounterOver: true,
     outcome,
+    ...(guestsGone.length
+      ? {
+          guestsDismissed: `${guestsGone.join(", ")} left with the scene; narrate the parting.`,
+        }
+      : {}),
     ...(xpEach > 0 ? { xpAwarded: `${xpEach} XP each` } : {}),
     ...(typeof xpResult.levelUpAvailable !== "undefined"
       ? { levelUpAvailable: xpResult.levelUpAvailable }

@@ -2,6 +2,7 @@ import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { healthState, type HealthState } from "@/lib/bestiary/health";
 import type { EnemyStats } from "@/lib/bestiary/statblock";
 import type { ConditionMetaMap } from "@/lib/schemas/sheet";
+import type { TurnBudget } from "@/lib/dm/action-budget";
 
 // Server-authoritative combat state. Enemy HP lives here and changes ONLY
 // through the encounter tools; the AI DM narrates from tool results, never
@@ -27,6 +28,14 @@ export type Encounter = {
   // Campaign seq when the pointer landed on the current PC; advancement
   // requires a player message from them with a later seq.
   waitingSeq: number;
+  // Action economy of the combatant currently acting; null before anyone
+  // has spent anything. Owned by src/lib/dm/action-budget.ts.
+  turnBudget: TurnBudget | null;
+  // Combatants who lose their first turn to surprise (character sheet ids
+  // and enemy ids). Emptied when round 1 ends.
+  surprisedIds: string[];
+  // Enemies that have spent their reaction this round (src/lib/dm/opportunity.ts).
+  reactionsUsed: string[];
   outcome: string;
   summary: string;
   createdAt: string;
@@ -62,6 +71,9 @@ type EncounterRow = {
   order_ready: number;
   order_json: string;
   waiting_seq: number;
+  turn_budget_json: string | null;
+  surprised_ids_json: string | null;
+  reactions_used_json: string | null;
   outcome: string;
   summary: string;
   created_at: string;
@@ -98,6 +110,9 @@ function mapEncounter(row: EncounterRow): Encounter {
     orderReady: Boolean(row.order_ready),
     order: parseJson<OrderEntry[]>(row.order_json, []),
     waitingSeq: row.waiting_seq,
+    turnBudget: parseJson<TurnBudget | null>(row.turn_budget_json, null),
+    surprisedIds: parseJson<string[]>(row.surprised_ids_json, []),
+    reactionsUsed: parseJson<string[]>(row.reactions_used_json, []),
     outcome: row.outcome,
     summary: row.summary,
     createdAt: row.created_at,
@@ -176,7 +191,8 @@ export function saveEncounter(encounter: Encounter) {
   getDatabase()
     .prepare(
       `UPDATE encounters SET status = ?, round = ?, turn_index = ?, order_ready = ?,
-       order_json = ?, waiting_seq = ?, outcome = ?, updated_at = ? WHERE id = ?`,
+       order_json = ?, waiting_seq = ?, turn_budget_json = ?, surprised_ids_json = ?,
+       reactions_used_json = ?, outcome = ?, updated_at = ? WHERE id = ?`,
     )
     .run(
       encounter.status,
@@ -185,6 +201,9 @@ export function saveEncounter(encounter: Encounter) {
       encounter.orderReady ? 1 : 0,
       JSON.stringify(encounter.order),
       encounter.waitingSeq,
+      encounter.turnBudget ? JSON.stringify(encounter.turnBudget) : null,
+      JSON.stringify(encounter.surprisedIds),
+      JSON.stringify(encounter.reactionsUsed),
       encounter.outcome,
       nowIso(),
       encounter.id,

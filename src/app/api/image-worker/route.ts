@@ -8,6 +8,7 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { z } from "zod";
+import { isErrorResponse, requireAdmin } from "@/lib/admin-api";
 import { getGlobalConfig } from "@/lib/db/app-settings";
 
 export const runtime = "nodejs";
@@ -181,7 +182,16 @@ async function startWorker() {
 }
 
 export async function POST(request: Request) {
-  const body = actionSchema.parse(await request.json().catch(() => ({})));
+  const admin = await requireAdmin();
+  if (isErrorResponse(admin)) {
+    return admin;
+  }
+
+  const parsed = actionSchema.safeParse(await request.json().catch(() => ({})));
+  if (!parsed.success) {
+    return Response.json({ error: "Unknown action." }, { status: 400 });
+  }
+  const body = parsed.data;
 
   if (body.action === "open-model-folder") {
     const folder = modelFolder();

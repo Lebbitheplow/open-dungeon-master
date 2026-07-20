@@ -1,12 +1,17 @@
 "use client";
 
-import { Dices, Hand, Map, Sparkles, UserPlus, Volume2 } from "lucide-react";
+import { Bot, Dices, Hand, Map, Sparkles, UserPlus, Volume2 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { GENRE_PRESETS, genrePreset } from "@/lib/genres";
 import { TTS_VOICES } from "@/lib/tts-voices";
-import type { DicePolicy, GameSettings, Genre } from "@/lib/schemas/game-settings";
+import {
+  COMPANION_LABELS,
+  type DicePolicy,
+  type GameSettings,
+  type Genre,
+} from "@/lib/schemas/game-settings";
 
 // Lobby game-settings section: the party lead edits live (PATCHes propagate to
 // everyone over SSE); other players see a read-only summary.
@@ -69,6 +74,10 @@ export function GameSettingsPanel({
           <span className="flex items-center gap-1.5">
             <Hand className="size-3.5 text-amber-200" />
             {settings.holdSubmissions ? "Lead opens responses each turn" : "Responses always open"}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Bot className="size-3.5 text-amber-200" />
+            AI companions: {COMPANION_LABELS[settings.companions]}
           </span>
         </div>
       </section>
@@ -200,6 +209,54 @@ export function GameSettingsPanel({
               Held responses {settings.holdSubmissions ? "on" : "off"}
             </button>
           </Tooltip>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="w-16 text-stone-500">Allies</span>
+          <Tooltip content="AI companions the DM plays: 'party members' travel with the party until dismissed; 'guests' are temporary allies for one scene or battle (a town soldier helping defend) and leave automatically when the fight ends. Auto picks full for solo play, guests only for multiplayer.">
+            <select
+              value={settings.companions}
+              onChange={(event) =>
+                patch({ companions: event.target.value as GameSettings["companions"] })
+              }
+              className={selectClass}
+            >
+              {(Object.keys(COMPANION_LABELS) as Array<GameSettings["companions"]>).map((mode) => (
+                <option key={mode} value={mode}>
+                  {COMPANION_LABELS[mode]}
+                </option>
+              ))}
+            </select>
+          </Tooltip>
+          {settings.companions !== "off" ? (
+            <>
+              {settings.companions !== "guests" ? (
+                <select
+                  value={settings.maxCompanions}
+                  onChange={(event) => patch({ maxCompanions: Number(event.target.value) })}
+                  className={selectClass}
+                  title="Most lasting party companions allowed at once"
+                >
+                  {[1, 2, 3, 4].map((count) => (
+                    <option key={count} value={count}>
+                      max {count} party
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+              <select
+                value={settings.maxGuests}
+                onChange={(event) => patch({ maxGuests: Number(event.target.value) })}
+                className={selectClass}
+                title="Most temporary guest allies allowed at once"
+              >
+                {[1, 2, 3, 4].map((count) => (
+                  <option key={count} value={count}>
+                    max {count} guest{count === 1 ? "" : "s"}
+                  </option>
+                ))}
+              </select>
+            </>
+          ) : null}
         </div>
       </div>
     </section>

@@ -13,6 +13,15 @@ function describeEntry(entry: AuditEntry, name: string): string {
   const delta = entry.delta;
   switch (entry.kind) {
     case "apply_damage":
+      // Wild Shape: the blow landed on the beast form, not the druid.
+      if (delta.form) {
+        return delta.reverted
+          ? `${name}'s ${delta.form} form breaks${Number(delta.carryover) > 0 ? `, ${delta.carryover} damage carrying through` : ""}`
+          : `${name}'s ${delta.form} form takes ${delta.amount} damage (${delta.beastHp} beast HP)`;
+      }
+      if (delta.relentlessEndurance) {
+        return `${name} holds on at 1 HP (Relentless Endurance)`;
+      }
       return `${name} takes ${delta.amount} damage${delta.type ? ` (${delta.type})` : ""} (${delta.currentHp} HP)`;
     case "heal":
       return `${name} heals ${delta.amount} (${delta.newHp} HP)`;
@@ -37,7 +46,10 @@ function describeEntry(entry: AuditEntry, name: string): string {
         ? `${name} sells ${delta.item}${Number(delta.qty) > 1 ? ` x${delta.qty}` : ""} for ${Number(delta.price) * Number(delta.qty ?? 1)} gold`
         : `${name} buys ${delta.item}${Number(delta.qty) > 1 ? ` x${delta.qty}` : ""} for ${Number(delta.price) * Number(delta.qty ?? 1)} gold`;
     case "use_resource":
-      return `${name} spends ${Number(delta.spent) > 1 ? `${delta.spent} uses of ` : ""}${delta.resource}`;
+      // The recipient side of a feature aimed at someone else.
+      return delta.from
+        ? `${name} receives ${delta.resource} from ${delta.from}`
+        : `${name} spends ${Number(delta.spent) > 1 ? `${delta.spent} uses of ` : ""}${delta.resource}`;
     case "grant_temp_hp":
       return `${name} gains ${delta.tempHp} temporary HP`;
     case "learn_spell":
@@ -53,6 +65,10 @@ function describeEntry(entry: AuditEntry, name: string): string {
     case "lead_edit": {
       const changed = Object.keys(delta).filter((key) => key !== "reason");
       return `Party lead corrected ${name}${changed.length ? ` (${changed.join(", ")})` : ""}`;
+    }
+    case "player_adjust": {
+      const changed = Object.keys(delta);
+      return `${name}'s player adjusted their counters${changed.length ? ` (${changed.join(", ")})` : ""}`;
     }
     default:
       return `${name}: ${entry.kind}`;

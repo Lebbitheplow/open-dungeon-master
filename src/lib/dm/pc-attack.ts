@@ -13,26 +13,34 @@ import {
 import { d20Expression, isValidExpression, rollExpression, type Advantage } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
+import { spellDamageFor } from "@/lib/content";
 import {
   adjudicateHit,
-  ammoKindFor,
+  ragingMeleeBonus,
   resolveAttackWeapon,
   spellAttackProfile,
   weaponAttackProfile,
   type AttackProfile,
 } from "@/lib/dm/attack-logic";
-import { ammoItemFor } from "@/lib/dm/item-logic";
+import { combatRiders } from "@/lib/srd/feature-effects";
 import { normalizeAdvantage } from "@/lib/dm/arg-coerce";
-import { removeItemMath } from "@/lib/dm/mutation-math";
 import {
   attackContext,
   exhaustionRollState,
   incapacitatedBy,
   mergeAdvantage,
+  removeConditions,
 } from "@/lib/dm/condition-logic";
 import { critDamageExpression } from "@/lib/dm/encounter-logic";
+import { applyDmMutation } from "@/lib/dm/mutations";
 import { applyEnemyDamage, resolveEnemyRef } from "@/lib/dm/enemy-damage";
-import { checkPcAttackRange } from "@/lib/dm/map-tools";
+import { allyAdjacentToEnemy, checkPcAttackRange, pcAttackSpatials } from "@/lib/dm/map-tools";
+import {
+  attacksAllowedFor,
+  budgetFor,
+  storeBudget,
+} from "@/lib/dm/action-tools";
+import { attacksLeft, claimOncePerTurn, spendAction, spendAttack } from "@/lib/dm/action-budget";
 import { resolveSheetRef } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -42,7 +50,9 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 // lands through applyEnemyDamage, so the model can no longer decide hits,
 // invent modifiers, or forget to apply damage. Physical-dice players still
 // roll their own d20 and damage via chained pending rolls. This module must
-// not import encounter-tools or mutations (the imports point the other way).
+// not import encounter-tools (the import points the other way); it does
+// import mutations for the Divine Smite slot spend, exactly as cast-tools
+// does, and mutations must never import back.
 
 type ToolDef = {
   type: "function";
@@ -81,6 +91,23 @@ export const pcAttackTool: ToolDef = {
           enum: ["none", "advantage", "disadvantage"],
           description: "Situational advantage or disadvantage from the fiction.",
         },
+        twoHanded: {
+          type: "boolean",
+          description:
+            "They swing a versatile weapon in both hands (bigger damage die). Ignore for other weapons.",
+        },
+        offHand: {
+          type: "boolean",
+          description:
+            "This is the bonus-action second attack of two-weapon fighting with a light weapon.",
+        },
+        smite: {
+          type: "integer",
+          minimum: 1,
+          maximum: 9,
+          description:
+            "Paladin Divine Smite: the spell slot level to burn on a hit. The server spends the slot and adds the radiant dice.",
+        },
       },
       required: ["characterId", "targetEnemyId"],
     },
@@ -98,6 +125,9 @@ const pcAttackArgsSchema = z.object({
     normalizeAdvantage,
     z.enum(["none", "advantage", "disadvantage"]).optional(),
   ),
+  twoHanded: z.coerce.boolean().optional(),
+  offHand: z.coerce.boolean().optional(),
+  smite: z.coerce.number().int().min(1).max(9).optional(),
 });
 
 function publishRoll(campaignId: string, roll: StoredRoll) {
@@ -151,9 +181,12 @@ export function handlePcAttack(
   }
 
   const derived = computeSheetDerived(sheet);
+  // Everything the character's features add to an attack: fighting styles,
+  // Martial Arts, Sneak Attack, crit range, Brutal Critical, Divine Smite.
+  const riders = combatRiders(sheet);
   let profile: AttackProfile;
-  let ammoNote: string | null = null;
-  let pendingAmmoKind: string | null = null;
+  // Set when the server derived the spell's dice itself, for the notes.
+  let scalingNote: string | null = null;
   if (args.spell?.trim()) {
     const spellName = args.spell.trim();
     if (!sheet.spellcasting) {
@@ -169,11 +202,22 @@ export function handlePcAttack(
         error: `${spellName} is not on ${sheet.name}'s spell list; they cannot cast it.`,
       };
     }
-    const damageArg = (args.damage ?? "").trim();
+    // The content pack knows what this spell rolls at this level, including
+    // cantrip scaling the model routinely forgets. Its answer wins; the
+    // model's dice are the fallback for spells that do not parse.
+    const scaled = spellDamageFor({
+      spell: spellName,
+      userId: sheet.userId,
+      casterLevel: sheet.level,
+    });
+    const damageArg = scaled?.dice ?? (args.damage ?? "").trim();
     if (!damageArg || !isValidExpression(damageArg)) {
       return {
         error: `Spell attacks need the spell's damage dice, e.g. damage="1d10". Send pc_attack again with a damage expression.`,
       };
+    }
+    if (scaled) {
+      scalingNote = scaled.note;
     }
     const spellProfile = spellAttackProfile(
       derived,
@@ -187,16 +231,22 @@ export function handlePcAttack(
     profile = spellProfile;
   } else {
     const resolved = resolveAttackWeapon(sheet.equipment, sheet.proficiencies.weapons, args.weapon);
-    profile = weaponAttackProfile(derived, sheet.proficiencies.weapons, resolved);
-    // Ammunition weapons need a carried ammo item; an empty quiver refuses
-    // the attack. The shot is spent below, after the range gate passes.
-    const ammoKind = ammoKindFor(resolved.srd);
-    if (ammoKind && !ammoItemFor(sheet.equipment, ammoKind)) {
-      return {
-        error: `${sheet.name} carries no ${ammoKind} for the ${profile.weapon}. They cannot fire it; pick another attack or have them find ammunition.`,
-      };
-    }
-    pendingAmmoKind = ammoKind;
+    profile = weaponAttackProfile(derived, sheet.proficiencies.weapons, resolved, {
+      riders,
+      twoHanded: args.twoHanded,
+      offHand: args.offHand,
+    });
+  }
+
+  // Rage adds its bonus to melee Strength weapon attacks for as long as the
+  // condition lasts; the server folds it into the damage dice so both the
+  // digital and physical-dice paths carry it.
+  const rageBonus = ragingMeleeBonus(sheet, profile);
+  if (rageBonus) {
+    profile = {
+      ...profile,
+      damageExpression: `${profile.damageExpression}+${rageBonus}`,
+    };
   }
 
   // Battle-map positions are authoritative; players move their own tokens,
@@ -210,23 +260,14 @@ export function handlePcAttack(
   if (rangeError) {
     return { error: rangeError };
   }
-
-  // The attack is definitely happening: spend the shot (hit or miss).
-  if (pendingAmmoKind) {
-    const ammoItem = ammoItemFor(sheet.equipment, pendingAmmoKind);
-    const removal = ammoItem ? removeItemMath(sheet.equipment, ammoItem.name, 1) : null;
-    if (ammoItem && removal) {
-      patchSheet(sheet.id, { equipment: removal.equipment });
-      const remaining = removal.equipment.find((entry) => entry.name === ammoItem.name)?.qty ?? 0;
-      publishPersisted(campaign.id, "sheet_updated", { sheet: getSheetById(sheet.id) });
-      ammoNote =
-        remaining <= 0
-          ? `That was ${sheet.name}'s LAST ${pendingAmmoKind.replace(/s$/, "")}; they are out of ammunition.`
-          : remaining <= 3
-            ? `${sheet.name} has only ${remaining} ${pendingAmmoKind} left.`
-            : null;
-    }
-  }
+  // Terrain cover raises the AC to beat; a shot past normal range is taken
+  // at disadvantage.
+  const spatials = pcAttackSpatials(encounter.id, sheet.id, enemy.id, {
+    ranged: profile.ranged,
+    rangeTiles: profile.rangeTiles,
+    thrown: profile.thrown,
+  });
+  const effectiveAc = enemy.ac + spatials.cover;
 
   // Conditions on both sides drive advantage and auto-crits; the model's
   // situational claim merges in as one more source.
@@ -241,12 +282,144 @@ export function handlePcAttack(
   if (exhaustion.note) {
     conditionContext.notes.push(exhaustion.note);
   }
+  if (rageBonus) {
+    conditionContext.notes.push(`raging: +${rageBonus} melee damage`);
+  }
+  for (const note of profile.riderNotes) {
+    conditionContext.notes.push(note);
+  }
+  if (scalingNote) {
+    conditionContext.notes.push(scalingNote);
+  }
+  if (spatials.cover) {
+    conditionContext.notes.push(
+      `${enemy.displayName} has ${spatials.cover === 2 ? "half" : "three-quarters"} cover: +${spatials.cover} AC`,
+    );
+  }
+  if (spatials.longRange) {
+    conditionContext.notes.push("beyond normal range: disadvantage");
+  }
   const advantage: Advantage = mergeAdvantage([
     conditionContext.advantage,
     exhaustion.advantage,
+    ...(spatials.longRange ? ["disadvantage" as const] : []),
   ]);
+
+  // Sneak Attack, decided here because it turns on the final advantage
+  // state: a finesse or ranged attack made with advantage, or with an ally
+  // adjacent to the target and no disadvantage. Once per turn is enforced by
+  // the model calling it on one swing; the dice ride the damage roll.
+  const sneak =
+    riders.sneakAttackDice > 0 &&
+    profile.sneakEligible &&
+    advantage !== "disadvantage" &&
+    (advantage === "advantage" || allyAdjacentToEnemy(encounter.id, sheet.id, enemy.id));
+  if (sneak) {
+    profile = {
+      ...profile,
+      damageExpression: `${profile.damageExpression}+${riders.sneakAttackDice}d6`,
+    };
+    conditionContext.notes.push(`Sneak Attack: +${riders.sneakAttackDice}d6`);
+  }
+
+  // Divine Smite: the slot is spent up front so a refused spend refuses the
+  // smite rather than handing out free radiant damage. 2d8 at 1st level,
+  // +1d8 per slot level above, +1d8 against undead and fiends.
+  let smiteNote: string | null = null;
+  if (args.smite) {
+    if (!riders.canSmite) {
+      return { error: `${sheet.name} has no Divine Smite.` };
+    }
+    if (profile.ranged) {
+      return { error: "Divine Smite rides on a melee weapon attack, not a ranged one." };
+    }
+    const spend = applyDmMutation(
+      campaign,
+      turn.id,
+      "use_spell_slot",
+      JSON.stringify({ characterId: sheet.id, level: args.smite, reason: "Divine Smite" }),
+      sheets,
+      sheetsById,
+    ).result;
+    if ("error" in spend) {
+      return spend;
+    }
+    // The stat block carries no creature type, so the name and content slug
+    // are what there is to go on; a miss just costs the extra die.
+    const undeadOrFiend = /undead|fiend|demon|devil|zombie|skeleton|ghoul|wraith|lich|vampire|specter|shadow|imp/i.test(
+      `${enemy.displayName} ${enemy.slug}`,
+    );
+    const dice = Math.min(6, 1 + args.smite) + (undeadOrFiend ? 1 : 0);
+    profile = {
+      ...profile,
+      damageExpression: `${profile.damageExpression}+${dice}d8`,
+    };
+    smiteNote = `Divine Smite (level ${args.smite} slot): +${dice}d8 radiant${
+      undeadOrFiend ? " against an undead or fiend" : ""
+    }`;
+    conditionContext.notes.push(smiteNote);
+  }
+
+  // The action economy: the first swing spends the Attack action, the rest
+  // come out of Extra Attack, and the off-hand swing is a bonus action. Only
+  // binds the character whose turn it actually is.
+  let budget = budgetFor(encounter, sheet.id, attacksAllowedFor(sheet));
+  if (budget) {
+    const spend = args.offHand
+      ? spendAction(budget, "bonus", "an off-hand attack", sheet.name)
+      : spendAttack(budget, sheet.name);
+    if (!spend.ok) {
+      return { error: spend.error };
+    }
+    budget = spend.budget;
+    if (sneak) {
+      // Sneak Attack is once per turn however many swings land.
+      const claimed = claimOncePerTurn(budget, "sneak_attack");
+      if (!claimed) {
+        profile = {
+          ...profile,
+          damageExpression: profile.damageExpression.replace(
+            `+${riders.sneakAttackDice}d6`,
+            "",
+          ),
+        };
+        conditionContext.notes = conditionContext.notes.filter(
+          (note) => !note.startsWith("Sneak Attack"),
+        );
+        conditionContext.notes.push("Sneak Attack already used this turn: no extra dice");
+      } else {
+        budget = claimed;
+      }
+    }
+    storeBudget(encounter, budget);
+  }
+
+  // Striking from hiding spends the hiding: the attack gives them away
+  // whether it lands or not.
+  if (sheet.conditions.some((entry) => entry.toLowerCase() === "hidden")) {
+    const cleared = removeConditions(sheet.conditions, sheet.conditionMeta, ["hidden"]);
+    const revealed = patchSheet(sheet.id, {
+      conditions: cleared.conditions,
+      conditionMeta: cleared.meta,
+    });
+    if (revealed) {
+      publishPersisted(campaign.id, "sheet_updated", { sheet: revealed });
+    }
+  }
+
   const toHitExpression = d20Expression(profile.toHit, advantage);
   const detail = `${sheet.name}: ${profile.weapon} vs ${enemy.displayName}`;
+
+  // Great Weapon Fighting rerolls 1s and 2s, but only on the two-handed
+  // melee swing it is written for.
+  const rerollBelow =
+    riders.greatWeaponRerollBelow && profile.twoHanded && !profile.ranged
+      ? riders.greatWeaponRerollBelow
+      : 0;
+  if (rerollBelow) {
+    conditionContext.notes.push(`Great Weapon Fighting: rerolling damage dice of ${rerollBelow} or less`);
+  }
+  const critExpression = critDamageExpression(profile.damageExpression, riders.critExtraDice);
 
   // Physical dice: park the to-hit roll for the player; the submit route
   // adjudicates it and, on a hit, parks the damage roll too.
@@ -267,11 +440,13 @@ export function handlePcAttack(
         attacker: sheet.name,
         weapon: profile.weapon,
         targetEnemyId: enemy.id,
-        targetAc: enemy.ac,
+        targetAc: effectiveAc,
         damageExpression: profile.damageExpression,
-        critDamageExpression: critDamageExpression(profile.damageExpression),
+        critDamageExpression: critExpression,
         damageType: profile.damageType,
         ...(conditionContext.autoCrit ? { autoCrit: true } : {}),
+        ...(riders.critRange < 20 ? { critRange: riders.critRange } : {}),
+        ...(rerollBelow ? { rerollBelow } : {}),
       },
     });
     publishPersisted(campaign.id, "roll_pending", { pendingRoll: publicPendingRoll(pending) });
@@ -292,18 +467,34 @@ export function handlePcAttack(
   publishRoll(campaign.id, hitRoll);
   turn.rollIds.push(hitRoll.id);
 
-  const adjudicated = adjudicateHit(hitOutcome.total, hitOutcome.crit, enemy.ac);
+  const adjudicated = adjudicateHit(hitOutcome.total, hitOutcome.crit, effectiveAc, {
+    natural: hitOutcome.natural,
+    critRange: riders.critRange,
+  });
   const hit = adjudicated.hit;
   const crit = adjudicated.crit || (hit && conditionContext.autoCrit);
   const base = {
     attacker: sheet.name,
     weapon: profile.weapon,
     rolled: hitOutcome.total,
-    vsAc: enemy.ac,
+    vsAc: effectiveAc,
     target: enemy.displayName,
     ...(profile.improvised ? { improvised: true } : {}),
     ...(conditionContext.notes.length ? { conditionEffects: conditionContext.notes } : {}),
-    ...(ammoNote ? { ammo: ammoNote } : {}),
+    // Extra Attack: the model has no way to know a level-5 fighter swings
+    // twice unless the engine says so on every swing.
+    ...(budget && attacksLeft(budget) > 0
+      ? {
+          attacksRemaining: attacksLeft(budget),
+          extraAttack: `${sheet.name} has ${attacksLeft(budget)} more attack${
+            attacksLeft(budget) === 1 ? "" : "s"
+          } this turn; call pc_attack again for each before ending their turn.`,
+        }
+      : riders.extraAttacks && !budget
+        ? {
+            extraAttack: `${sheet.name} attacks ${riders.extraAttacks + 1} times per Attack action.`,
+          }
+        : {}),
   };
   if (!hit) {
     return {
@@ -314,10 +505,8 @@ export function handlePcAttack(
     };
   }
 
-  const damageExpression = crit
-    ? critDamageExpression(profile.damageExpression)
-    : profile.damageExpression;
-  const damageOutcome = rollExpression(damageExpression);
+  const damageExpression = crit ? critExpression : profile.damageExpression;
+  const damageOutcome = rollExpression(damageExpression, undefined, { rerollBelow });
   const damageRoll = insertRoll({
     campaignId: campaign.id,
     characterId: sheet.id,
@@ -370,7 +559,10 @@ export function resolvePendingPcAttack(pending: PendingRoll, roll: StoredRoll): 
   if (!campaign || !turn) {
     return null;
   }
-  const adjudicated = adjudicateHit(roll.total, roll.breakdown.crit, context.targetAc);
+  const adjudicated = adjudicateHit(roll.total, roll.breakdown.crit, context.targetAc, {
+    natural: roll.breakdown.natural,
+    critRange: context.critRange,
+  });
   const hit = adjudicated.hit;
   const crit = adjudicated.crit || (hit && context.autoCrit === true);
   if (!hit) {
@@ -412,5 +604,9 @@ export function resolvePendingPcAttack(pending: PendingRoll, roll: StoredRoll): 
   });
   return `${context.attacker}'s ${context.weapon} attack rolled ${roll.total} vs AC ${context.targetAc}: HIT${
     crit ? " (CRITICAL: damage dice are doubled)" : ""
-  }. ${context.attacker} now rolls damage (${expression}); the server will apply it to ${enemy.displayName} automatically.`;
+  }. ${context.attacker} now rolls damage (${expression})${
+    context.rerollBelow
+      ? `, rerolling any die of ${context.rerollBelow} or less once for Great Weapon Fighting`
+      : ""
+  }; the server will apply it to ${enemy.displayName} automatically.`;
 }

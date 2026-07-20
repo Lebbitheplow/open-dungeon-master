@@ -12,6 +12,14 @@ export type RaceMechanics = {
   // Extra languages of the player's choice granted by the race.
   bonusLanguages: number;
   traitsSummary: string;
+  // Structured grants. Bundled SRD rows fill these in; Open5e pack rows
+  // leave them undefined rather than guess from trait prose.
+  skills?: string[];
+  skillChoice?: { count: number };
+  asiChoice?: { count: number; amount: number };
+  cantripChoice?: { list: string; count: number };
+  tools?: string[];
+  toolChoice?: { count: number; from: string[] };
 };
 
 // The 5e standard + exotic languages, for language pickers.
@@ -27,6 +35,7 @@ export type ClassMechanics = {
   skillChoices: { count: number; from: string[] };
   armor: string[];
   weapons: string[];
+  tools: string[];
   spellAbility: "int" | "wis" | "cha" | null;
   casterType: "none" | "full" | "half" | "pact";
 };
@@ -177,6 +186,10 @@ export function classMechanics(slug: string, data: Record<string, unknown>): Cla
       .split(",")
       .map((entry) => entry.trim())
       .filter(Boolean),
+    tools: String(data.prof_tools ?? "")
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean),
     spellAbility: spellAbility && casterType !== "none" ? spellAbility : spellAbility,
     casterType,
   };
@@ -192,6 +205,38 @@ const KNOWN_CASTER_TABLE: Record<string, number[]> = {
   warlock: [2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15],
   ranger: [0, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11],
 };
+
+// Cantrips known by level for the SRD cantrip-casting classes. Same
+// advisory role as the spells-known table: shown as guidance, never
+// enforced. Paladins and rangers get no cantrips, so they are absent.
+const CANTRIP_TABLE: Record<string, number[]> = {
+  // index = level - 1
+  bard: [2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
+  cleric: [3, 3, 3, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5],
+  druid: [2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
+  sorcerer: [4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6],
+  warlock: [2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
+  wizard: [3, 3, 3, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5],
+};
+
+// Cantrips a class of this kind knows at the given level, or null when the
+// class has no cantrips. Custom classes fall back to their caster type.
+export function suggestedCantripCount(
+  classSlug: string,
+  level: number,
+  casterType: ClassMechanics["casterType"] = "none",
+): number | null {
+  const clamped = Math.max(1, Math.min(20, level));
+  const table = CANTRIP_TABLE[classSlug.toLowerCase()];
+  if (table) {
+    return table[clamped - 1];
+  }
+  // Custom full and pact casters follow the common 2/3/4 progression.
+  if (casterType === "full" || casterType === "pact") {
+    return clamped >= 10 ? 4 : clamped >= 4 ? 3 : 2;
+  }
+  return null;
+}
 
 export function suggestedSpellCount(
   classSlug: string,

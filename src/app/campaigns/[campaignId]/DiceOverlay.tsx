@@ -14,7 +14,33 @@ type DiceBoxInstance = {
   initialize: () => Promise<void>;
   roll: (notation: string) => Promise<unknown>;
   clearDice: () => void;
+  renderer?: {
+    dispose: () => void;
+    forceContextLoss: () => void;
+    domElement: HTMLCanvasElement;
+  };
 };
+
+// Firefox caps live WebGL contexts (~32) and loses the oldest past that, so
+// every orphaned context from an undisposed box brings the tab closer to a
+// wedge; tear the renderer down whenever the overlay unmounts.
+function disposeBox(box: DiceBoxInstance | null) {
+  if (!box) {
+    return;
+  }
+  try {
+    box.clearDice();
+  } catch {
+    // Disposal must never throw during unmount.
+  }
+  try {
+    box.renderer?.dispose();
+    box.renderer?.forceContextLoss();
+    box.renderer?.domElement.remove();
+  } catch {
+    // Same: a half-initialized renderer is fine to abandon.
+  }
+}
 
 export function DiceOverlay({
   latestRoll,
@@ -28,6 +54,17 @@ export function DiceOverlay({
   const queueRef = useRef<string[][]>([]);
   const animatingRef = useRef(false);
   const seenSeqRef = useRef<number | null>(null);
+  const unmountedRef = useRef(false);
+
+  useEffect(() => {
+    unmountedRef.current = false;
+    return () => {
+      unmountedRef.current = true;
+      queueRef.current = [];
+      disposeBox(boxRef.current);
+      boxRef.current = null;
+    };
+  }, []);
 
   const pump = useCallback(async () => {
     if (animatingRef.current) {
@@ -72,6 +109,10 @@ export function DiceOverlay({
           baseScale: 85,
         }) as DiceBoxInstance;
         await box.initialize();
+        if (unmountedRef.current) {
+          disposeBox(box);
+          return null;
+        }
         boxRef.current = box;
         return box;
       } catch {

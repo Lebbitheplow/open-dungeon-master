@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import {
+  Bot,
   Check,
   Copy,
   Crown,
@@ -11,14 +12,17 @@ import {
   Pencil,
   Play,
   Trash2,
+  UserPlus,
   UserRound,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
+import { CompanionBuilderDialog } from "@/app/campaigns/[campaignId]/CompanionBuilderDialog";
 import { EditCampaignDialog } from "@/app/campaigns/[campaignId]/EditCampaignDialog";
 import { GameSettingsPanel } from "@/app/campaigns/[campaignId]/GameSettingsPanel";
+import { resolveCompanionMode } from "@/lib/schemas/game-settings";
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
 
 export function Lobby({ state, refresh }: { state: CampaignState; refresh: () => void }) {
@@ -27,6 +31,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
   const [copied, setCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [buildingCompanion, setBuildingCompanion] = useState(false);
   const [error, setError] = useState("");
 
   if (!campaign || !me) {
@@ -39,6 +44,15 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
   const isLead = campaign.leadUserId === me.id;
   // One-player campaigns skip the invite/party ceremony entirely.
   const isSolo = campaign.maxPlayers === 1;
+
+  // Lead/solo can prepare lasting party companions here. Only party companions
+  // are built manually, so the option shows only where they are allowed.
+  const companions = sheets.filter((sheet) => sheet.isCompanion);
+  const partyCompanions = companions.filter((sheet) => sheet.companionKind !== "guest");
+  const canBuildCompanion =
+    isLead &&
+    resolveCompanionMode(campaign.gameSettings, members.length) === "full" &&
+    partyCompanions.length < campaign.gameSettings.maxCompanions;
   const allReady = members.length > 0 && members.every((member) => member.ready);
   const allHaveSheets = members.every((member) =>
     sheets.some((sheet) => sheet.userId === member.userId),
@@ -136,6 +150,48 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ useRealDice: !myMember?.useRealDice }),
     });
+  }
+
+  // Lobby-only: drop your character so you can create or pick another. The
+  // sheet_deleted stream event flips the UI back to "Create your character".
+  async function removeCharacter() {
+    if (
+      !window.confirm(
+        `Remove ${mySheet?.name ?? "your character"} from this campaign? You can create or pick another afterwards.`,
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/campaigns/${campaign!.id}/sheet`, { method: "DELETE" });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        setError(data.error || "Could not remove the character.");
+      }
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Lead removes a prepared companion (same path the in-session dismiss uses).
+  async function dismissCompanion(characterId: string) {
+    setError("");
+    try {
+      const response = await fetch(
+        `/api/campaigns/${campaign!.id}/companions/${characterId}`,
+        { method: "DELETE" },
+      );
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        setError(data.error || "Could not remove the companion.");
+      }
+    } catch {
+      setError("Could not reach the server.");
+    }
   }
 
   async function deleteCampaign() {
@@ -339,6 +395,68 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
       </section>
       ) : null}
 
+      {isLead && (canBuildCompanion || partyCompanions.length > 0) ? (
+        <section className="mb-6">
+          <h2 className="eyebrow mb-3 flex items-center gap-1.5 text-sm text-amber-200/90">
+            <Bot className="size-4" /> Companions
+          </h2>
+          {partyCompanions.length ? (
+            <ul className="mb-2 space-y-2">
+              {partyCompanions.map((companion) => (
+                <li
+                  key={companion.id}
+                  className="panel flex items-center justify-between rounded-xl px-4 py-2.5"
+                >
+                  <div className="flex items-center gap-3">
+                    {companion.portrait ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={companion.portrait.url}
+                        alt=""
+                        className="size-10 rounded-lg border border-sky-500/30 object-cover"
+                      />
+                    ) : (
+                      <span className="flex size-10 items-center justify-center rounded-lg border border-stone-700/60 bg-stone-900">
+                        <Bot className="size-4 text-sky-300" />
+                      </span>
+                    )}
+                    <div>
+                      <p className="font-medium">{companion.name}</p>
+                      <p className="text-sm text-stone-400">
+                        {companion.race.replaceAll("_", " ")} {companion.class} {companion.level}
+                      </p>
+                    </div>
+                  </div>
+                  <Tooltip content="Remove this companion">
+                    <button
+                      type="button"
+                      onClick={() => dismissCompanion(companion.id)}
+                      aria-label={`Remove ${companion.name}`}
+                      className="rounded-full border border-stone-700 p-1.5 text-stone-500 hover:text-red-400"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </Tooltip>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {canBuildCompanion ? (
+            <button
+              type="button"
+              onClick={() => setBuildingCompanion(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-stone-700 px-3 py-3 text-sm text-stone-300 hover:border-sky-700/60 hover:bg-stone-900 hover:text-sky-200"
+            >
+              <UserPlus className="size-4" /> Add a companion
+            </button>
+          ) : (
+            <p className="text-center text-xs text-stone-500">
+              The party has its full number of companions.
+            </p>
+          )}
+        </section>
+      ) : null}
+
       <section className="space-y-3">
         {isSolo ? (
           !mySheet ? (
@@ -354,15 +472,37 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
               </Link>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={beginSolo}
-              disabled={busy}
-              className={cn(ui.btnPrimary, "w-full py-2.5")}
-            >
-              {busy ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
-              Begin the adventure
-            </button>
+            <>
+              <div className="flex flex-wrap items-center justify-center gap-2 text-xs">
+                <span className="text-stone-500">{mySheet.name}:</span>
+                <Link href={`/campaigns/${campaign.id}/character?mode=edit`} className={ui.btnSmall}>
+                  <Pencil className="size-3" /> Edit
+                </Link>
+                <Link
+                  href={`/campaigns/${campaign.id}/character?mode=replace`}
+                  className={ui.btnSmall}
+                >
+                  <UserRound className="size-3" /> Switch
+                </Link>
+                <button
+                  type="button"
+                  onClick={removeCharacter}
+                  disabled={busy}
+                  className={cn(ui.btnSmall, "text-red-300")}
+                >
+                  <Trash2 className="size-3" /> Remove
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={beginSolo}
+                disabled={busy}
+                className={cn(ui.btnPrimary, "w-full py-2.5")}
+              >
+                {busy ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
+                Begin the adventure
+              </button>
+            </>
           )
         ) : (
           <>
@@ -371,20 +511,48 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
                 Create your character
               </Link>
             ) : (
-              <button
-                type="button"
-                onClick={toggleReady}
-                disabled={busy}
-                className={cn(
-                  "flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 font-medium disabled:opacity-60",
-                  myMember?.ready
-                    ? "border border-stone-700 text-stone-300 hover:bg-stone-900"
-                    : "bg-emerald-700 text-emerald-50 hover:bg-emerald-600",
-                )}
-              >
-                {busy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
-                {myMember?.ready ? "Un-ready" : "Ready up"}
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={toggleReady}
+                  disabled={busy}
+                  className={cn(
+                    "flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 font-medium disabled:opacity-60",
+                    myMember?.ready
+                      ? "border border-stone-700 text-stone-300 hover:bg-stone-900"
+                      : "bg-emerald-700 text-emerald-50 hover:bg-emerald-600",
+                  )}
+                >
+                  {busy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+                  {myMember?.ready ? "Un-ready" : "Ready up"}
+                </button>
+                <div className="flex flex-wrap items-center justify-center gap-2 text-xs">
+                  <span className="text-stone-500">{mySheet.name}:</span>
+                  <Link
+                    href={`/campaigns/${campaign.id}/character?mode=edit`}
+                    className={ui.btnSmall}
+                  >
+                    <Pencil className="size-3" /> Edit
+                  </Link>
+                  <Link
+                    href={`/campaigns/${campaign.id}/character?mode=replace`}
+                    className={ui.btnSmall}
+                  >
+                    <UserRound className="size-3" /> Switch
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={removeCharacter}
+                    disabled={busy}
+                    className={cn(ui.btnSmall, "text-red-300")}
+                  >
+                    <Trash2 className="size-3" /> Remove
+                  </button>
+                </div>
+                <p className="text-center text-xs text-stone-600">
+                  Changing your character clears your ready status.
+                </p>
+              </>
             )}
 
             {isOwner ? (
@@ -426,6 +594,15 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
 
       {editing ? (
         <EditCampaignDialog campaign={campaign} onClose={() => setEditing(false)} />
+      ) : null}
+
+      {buildingCompanion ? (
+        <CompanionBuilderDialog
+          campaignId={campaign.id}
+          genre={campaign.gameSettings.genre}
+          level={campaign.startingLevel}
+          onClose={() => setBuildingCompanion(false)}
+        />
       ) : null}
     </main>
   );

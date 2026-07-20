@@ -20,9 +20,10 @@ import {
 } from "@/lib/db/dm-turns";
 import { PC_ATTACK_PARKED } from "@/lib/dm/pc-attack";
 import { normalizeEventKind } from "@/lib/dm/arg-coerce";
-import { insertCampaignMessage, listAllMessages } from "@/lib/db/messages";
+import { insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
 import { getRoll, insertRoll, listRecentRolls } from "@/lib/db/rolls";
-import { listSheets } from "@/lib/db/sheets";
+import { listSheets, patchSheet } from "@/lib/db/sheets";
+import { removeConditions } from "@/lib/dm/condition-logic";
 import { rollExpression } from "@/lib/dice";
 import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
 import { generateImageTool, parseGenerateImageToolCall } from "@/lib/image-tool";
@@ -42,6 +43,7 @@ import {
   salvageXmlToolCalls,
   type RollArgs,
 } from "@/lib/dm/rolls";
+import { fakeRollMarkerRegex } from "@/lib/dm/tool-text";
 import {
   buildDmMessages,
   movePartyTool,
@@ -76,12 +78,14 @@ import {
   upsertCurrentLocation,
 } from "@/lib/db/locations";
 import { maybeCompactHistory } from "@/lib/dm/compaction";
+import { createDeltaBatcher } from "@/lib/dm/delta-buffer";
 import {
   applyDmMutation,
   MUTATION_CAP_PER_TURN,
   MUTATION_TOOL_NAMES,
   mutationTools,
 } from "@/lib/dm/mutations";
+import { describeBudget } from "@/lib/dm/action-budget";
 import {
   advanceAfterTurn,
   applyEncounterCall,
@@ -93,6 +97,33 @@ import {
 } from "@/lib/dm/encounter-tools";
 import { autoApplyDamageRoll } from "@/lib/dm/enemy-damage";
 import { handleTakeRest, restTools } from "@/lib/dm/rest-tools";
+import {
+  checkTools,
+  CHECK_TOOL_NAMES,
+  handleCheckNotice,
+  handleGroupCheck,
+} from "@/lib/dm/check-tools";
+import { hazardTools, HAZARD_TOOL_NAMES, handleApplyHazard } from "@/lib/dm/hazard-tools";
+import {
+  socialTools,
+  SOCIAL_TOOL_NAMES,
+  handleSetNpc,
+  handleNpcReaction,
+  handleSocialCheck,
+  npcRosterForPrompt,
+} from "@/lib/dm/social-tools";
+import {
+  worldTools,
+  WORLD_TOOL_NAMES,
+  handleRollTreasure,
+  handleDamageObject,
+  handleTravel,
+} from "@/lib/dm/world-tools";
+import {
+  applyCompanionCall,
+  COMPANION_TOOL_NAMES,
+  companionTools,
+} from "@/lib/dm/companion-tools";
 import { getActiveEncounter, listEnemies } from "@/lib/db/encounters";
 import { getBattleMapForEncounter, listTokens } from "@/lib/db/battle-maps";
 import { serializeMapForPrompt } from "@/lib/battlemap/serialize";
@@ -111,6 +142,16 @@ const ENCOUNTER_NAMES = new Set<string>(ENCOUNTER_TOOL_NAMES);
 // resumeDmTurn, which appends the results and continues. Parked turns
 // survive restarts.
 const MAX_MODEL_CALLS = 4;
+
+// Tools whose results decide an attack/damage outcome: narration written in
+// the same model call is a premature guess and is withheld from players.
+const ATTACK_OUTCOME_TOOLS = new Set([
+  "pc_attack",
+  "cast_at_enemy",
+  "enemy_attack",
+  "damage_enemy",
+  "aoe_damage",
+]);
 
 type TurnContext = {
   campaign: Campaign;
@@ -144,6 +185,7 @@ function buildEncounterState(campaignId: string, sheets: CharacterSheet[]) {
     awaitingInitiative: encounter.orderReady
       ? []
       : sheets.filter((sheet) => !staged.has(sheet.id)).map((sheet) => sheet.name),
+    turnBudget: encounter.turnBudget ? describeBudget(encounter.turnBudget) : null,
     enemies: enemies.map((enemy) => ({
       enemyId: enemy.id,
       name: enemy.displayName,
@@ -218,7 +260,9 @@ export async function startDmTurn(campaignId: string) {
   }
   failStaleRunningTurns(campaignId);
 
-  const history = listAllMessages(campaignId);
+  // 400 recent messages always over-covers the prompt builder's 100k-char
+  // budget; the full transcript stays in the DB for compaction and chapters.
+  const history = listRecentMessages(campaignId, 400);
   // Coalesced follow-up turn with nothing new to answer (the previous turn
   // already covered every message): skip instead of narrating into silence.
   // Pending player whispers count as new input: they never appear in the
@@ -284,6 +328,7 @@ export async function startDmTurn(campaignId: string) {
         title: note.title,
         body: note.body,
       })),
+      npcs: npcRosterForPrompt(campaignId),
       recentWhispers: listRecentWhispersForPrompt(campaignId, 10),
       pendingPlayerWhispers: pendingWhispers.map((whisper) => ({
         from: whisper.characterName,
@@ -339,13 +384,45 @@ export async function resumeDmTurn(campaignId: string, turnId: string) {
     });
   }
 
+  // Positions may have changed while the turn was parked (the mover's own
+  // click-to-move never wakes the DM), so the map snapshot baked into the
+  // turn's GAME STATE can be stale. Hand the model a fresh one.
+  const context = loadContext(campaign);
+  const encounter = getActiveEncounter(campaignId);
+  if (encounter) {
+    const mapText = buildMapText(encounter.id, context.sheets);
+    if (mapText) {
+      turn.conversation.push({
+        role: "user",
+        content: `[GAME STATE UPDATE] Combatants may have moved while you waited on rolls. Current battle map (authoritative, replaces the one above):\n${mapText}`,
+      });
+    }
+  }
+
   turn.status = "running";
   saveDmTurn(turn);
   setDmStatus(campaignId, "narrating");
-  await advance(loadContext(campaign), turn);
+  await advance(context, turn);
 }
 
+// A throwing tool handler used to leave dm_turns stuck at 'running' until
+// failStaleRunningTurns reaped it ten minutes later, with the table watching
+// a DM that never speaks. Any unexpected throw now finalizes the turn at
+// once. Parked turns return with status 'awaiting_rolls' and are left alone.
 async function advance(context: TurnContext, turn: DmTurn) {
+  try {
+    await runAdvance(context, turn);
+  } catch (error) {
+    console.error("[dm-turn] advance failed", error);
+    if (turn.status === "running") {
+      finalize(context, turn, "The Dungeon Master hit an internal error and had to stop this turn.");
+    } else {
+      setDmStatus(context.campaign.id, "idle");
+    }
+  }
+}
+
+async function runAdvance(context: TurnContext, turn: DmTurn) {
   const { campaign, sheets, sheetsById, realDiceUserIds } = context;
   const campaignId = campaign.id;
   let failed = "";
@@ -376,14 +453,22 @@ async function advance(context: TurnContext, turn: DmTurn) {
       recordEventTool,
       recallStoryTool,
       sendWhisperTool,
+      ...checkTools,
+      ...hazardTools,
+      ...socialTools,
+      ...(inEncounter ? [] : worldTools),
       ...encounterTools(inEncounter),
       ...(inEncounter ? [] : restTools),
+      ...companionTools(campaign),
       ...(leanTools ? [] : mutationTools),
       ...(imageEnabled ? [generateImageTool] : []),
     ];
     // Fresh reasoning-artifact filter per model call; each call is its own
     // stream. Withheld trailing text is flushed after the call completes.
     const filter = createStreamingArtifactFilter();
+    const batcher = createDeltaBatcher((text) =>
+      publishEphemeral(campaignId, "dm_delta", { text }),
+    );
     const { message, error } = await requestDmMessage(campaign.settings, turn.conversation, {
       tools,
       // Force pure narration on the last permitted call so a tool-happy
@@ -397,21 +482,20 @@ async function advance(context: TurnContext, turn: DmTurn) {
       onDelta: (text) => {
         const visible = filter.push(text);
         if (visible) {
-          publishEphemeral(campaignId, "dm_delta", { text: visible });
+          batcher.push(visible);
         }
       },
     });
 
     if (error) {
+      batcher.flush();
       const payload = (await error.json().catch(() => null)) as { error?: string } | null;
       failed = payload?.error || "The Dungeon Master could not reach the model backend.";
       break;
     }
 
-    const trailing = filter.flush();
-    if (trailing) {
-      publishEphemeral(campaignId, "dm_delta", { text: trailing });
-    }
+    batcher.push(filter.flush());
+    batcher.flush();
     if (process.env.DM_DEBUG) {
       console.log(
         `[dm-debug] call ${turn.callIndex}: content=${JSON.stringify(String(message?.content ?? "").slice(0, 300))} tool_calls=${JSON.stringify(message?.tool_calls ?? null).slice(0, 500)}`,
@@ -451,11 +535,23 @@ async function advance(context: TurnContext, turn: DmTurn) {
           })),
         ]
       : message?.tool_calls;
-    if (visibleText?.trim()) {
-      turn.narrationParts.push(visibleText.trim());
-    }
-
     const toolCalls = [...extractToolCalls(message?.tool_calls), ...salvagedCalls];
+    // Text streamed alongside an attack-resolving tool call is the model
+    // guessing the outcome before the dice exist ("the blade bites deep" on
+    // what turns out to be a miss). Drop it from the persisted narration;
+    // the tool result comes back this same turn and the follow-up call
+    // narrates from the real numbers. It stays in the echoed assistant
+    // message, so the model keeps its own context.
+    const calledAttackTool = toolCalls.some((toolCall) =>
+      ATTACK_OUTCOME_TOOLS.has(toolCall.name),
+    );
+    // Hand-written "[roll:...]" markers rolled nothing (real markers are
+    // appended by finalize() from actual roll ids); drop them before the
+    // text is persisted so players never see dead bookkeeping tokens.
+    const narration = (visibleText ?? "").replace(fakeRollMarkerRegex(), "").trim();
+    if (narration && !calledAttackTool) {
+      turn.narrationParts.push(narration);
+    }
     const rollCalls = toolCalls.filter((toolCall) => toolCall.name === "request_roll");
     const inputCalls = toolCalls.filter(
       (toolCall) => toolCall.name === "request_player_input",
@@ -463,12 +559,31 @@ async function advance(context: TurnContext, turn: DmTurn) {
     const mutationCalls = toolCalls.filter((toolCall) => MUTATION_NAMES.has(toolCall.name));
     const encounterCalls = toolCalls.filter((toolCall) => ENCOUNTER_NAMES.has(toolCall.name));
     const restCalls = toolCalls.filter((toolCall) => toolCall.name === "take_rest");
+    const companionCalls = toolCalls.filter((toolCall) =>
+      COMPANION_TOOL_NAMES.has(toolCall.name),
+    );
     const locationCalls = toolCalls.filter(
       (toolCall) => toolCall.name === "move_party" || toolCall.name === "update_location",
     );
     const eventCalls = toolCalls.filter((toolCall) => toolCall.name === "record_event");
     const recallCalls = toolCalls.filter((toolCall) => toolCall.name === "recall_story");
     const whisperCalls = toolCalls.filter((toolCall) => toolCall.name === "send_whisper");
+    const checkCalls = toolCalls.filter((toolCall) =>
+      (CHECK_TOOL_NAMES as readonly string[]).includes(toolCall.name),
+    );
+    const hazardCalls = toolCalls.filter((toolCall) =>
+      (HAZARD_TOOL_NAMES as readonly string[]).includes(toolCall.name),
+    );
+    const socialCalls = toolCalls.filter((toolCall) =>
+      (SOCIAL_TOOL_NAMES as readonly string[]).includes(toolCall.name),
+    );
+    // A social_check or npc_reaction produces a roll the model must narrate
+    // from; a lone set_npc is bookkeeping like record_event.
+    const socialRollCalls = socialCalls.filter((toolCall) => toolCall.name !== "set_npc");
+    const setNpcCalls = socialCalls.filter((toolCall) => toolCall.name === "set_npc");
+    const worldCalls = toolCalls.filter((toolCall) =>
+      (WORLD_TOOL_NAMES as readonly string[]).includes(toolCall.name),
+    );
 
     // Location bookkeeping is synchronous and cheap; maps render async on
     // the media queue when vision allows.
@@ -545,12 +660,20 @@ async function advance(context: TurnContext, turn: DmTurn) {
     // bookkeeping (applied above); the turn can end without another call.
     const needsFollowUp =
       rollCalls.length > 0 ||
+      checkCalls.length > 0 ||
+      hazardCalls.length > 0 ||
+      socialRollCalls.length > 0 ||
+      worldCalls.length > 0 ||
       mutationCalls.length > 0 ||
       encounterCalls.length > 0 ||
       restCalls.length > 0 ||
+      companionCalls.length > 0 ||
       // The model asked for a chapter recall in order to use the answer.
       recallCalls.length > 0 ||
-      ((locationCalls.length > 0 || eventCalls.length > 0 || whisperCalls.length > 0) &&
+      ((locationCalls.length > 0 ||
+        eventCalls.length > 0 ||
+        whisperCalls.length > 0 ||
+        setNpcCalls.length > 0) &&
         !turn.narrationParts.length);
 
     if (!needsFollowUp) {
@@ -674,6 +797,35 @@ async function advance(context: TurnContext, turn: DmTurn) {
       });
     }
 
+    // Companion recruit/dismiss resolves synchronously: the sheet, order
+    // slot, and token exist before the model narrates the arrival. The
+    // fresh sheet list matters (the shared `sheets` snapshot predates it),
+    // so later tools in this turn resolve the new characterId via the DB.
+    for (const companionCall of companionCalls) {
+      const result = applyCompanionCall(
+        campaign,
+        companionCall.name,
+        companionCall.rawArguments,
+        listSheets(campaignId),
+      );
+      if (!("error" in result)) {
+        // Refresh the shared snapshot in place so pc_attack and friends can
+        // resolve the new (or removed) companion later this same turn.
+        const fresh = listSheets(campaignId);
+        sheets.length = 0;
+        sheets.push(...fresh);
+        sheetsById.clear();
+        for (const freshSheet of fresh) {
+          sheetsById.set(freshSheet.id, freshSheet);
+        }
+      }
+      turn.conversation.push({
+        role: "tool",
+        ...(companionCall.id ? { tool_call_id: companionCall.id } : {}),
+        content: JSON.stringify(result),
+      });
+    }
+
     // Rests resolve synchronously: hit dice roll server-side and every
     // sheet write is audited; the model narrates from the results.
     for (const restCall of restCalls) {
@@ -707,6 +859,70 @@ async function advance(context: TurnContext, turn: DmTurn) {
       turn.conversation.push({
         role: "tool",
         ...(mutationCall.id ? { tool_call_id: mutationCall.id } : {}),
+        content: JSON.stringify(result),
+      });
+    }
+
+    // Group checks and passive-notice gates resolve synchronously against the
+    // sheets: group_check rolls every participant and applies the half-succeed
+    // rule, check_notice compares passive scores with no dice.
+    for (const checkCall of checkCalls) {
+      const result =
+        checkCall.name === "group_check"
+          ? handleGroupCheck(campaign, turn, checkCall.rawArguments, sheets, sheetsById)
+          : handleCheckNotice(campaign, checkCall.rawArguments, sheets, sheetsById);
+      turn.conversation.push({
+        role: "tool",
+        ...(checkCall.id ? { tool_call_id: checkCall.id } : {}),
+        content: JSON.stringify(result),
+      });
+    }
+
+    // Traps, falls, and environmental hazards resolve synchronously: the
+    // server owns the save DC and damage dice and applies them per victim.
+    for (const hazardCall of hazardCalls) {
+      const result = handleApplyHazard(campaign, turn, hazardCall.rawArguments, sheets, sheetsById);
+      turn.conversation.push({
+        role: "tool",
+        ...(hazardCall.id ? { tool_call_id: hazardCall.id } : {}),
+        content: JSON.stringify(result),
+      });
+    }
+
+    // NPC bookkeeping and social checks resolve synchronously against the
+    // persisted NPC roster: attitude drives the check DC and shifts on a
+    // decisive result, at most once per exchange.
+    for (const socialCall of socialCalls) {
+      let result: Record<string, unknown>;
+      if (socialCall.name === "set_npc") {
+        result = handleSetNpc(campaign, socialCall.rawArguments);
+      } else if (socialCall.name === "npc_reaction") {
+        result = handleNpcReaction(campaign, turn, socialCall.rawArguments);
+      } else {
+        result = handleSocialCheck(campaign, turn, socialCall.rawArguments, sheets, sheetsById);
+      }
+      turn.conversation.push({
+        role: "tool",
+        ...(socialCall.id ? { tool_call_id: socialCall.id } : {}),
+        content: JSON.stringify(result),
+      });
+    }
+
+    // Treasure, object-breaking, and travel resolve synchronously: coins move
+    // through modify_gold, forced-march failures apply exhaustion, and an
+    // object break is read from the DMG table.
+    for (const worldCall of worldCalls) {
+      let result: Record<string, unknown>;
+      if (worldCall.name === "roll_treasure") {
+        result = handleRollTreasure(campaign, turn, worldCall.rawArguments, sheets, sheetsById);
+      } else if (worldCall.name === "travel") {
+        result = handleTravel(campaign, turn, worldCall.rawArguments, sheets, sheetsById);
+      } else {
+        result = handleDamageObject(worldCall.rawArguments);
+      }
+      turn.conversation.push({
+        role: "tool",
+        ...(worldCall.id ? { tool_call_id: worldCall.id } : {}),
         content: JSON.stringify(result),
       });
     }
@@ -767,6 +983,21 @@ async function advance(context: TurnContext, turn: DmTurn) {
           }),
         });
         continue;
+      }
+
+      // The inspiration die and a held Help are baked into the expression
+      // above, so they are spent whether the dice are digital or physical:
+      // clear them now. The field carries one or both, "|"-separated.
+      if (sheet && resolved.spendInspiration) {
+        const { conditions, meta } = removeConditions(
+          sheet.conditions,
+          sheet.conditionMeta,
+          resolved.spendInspiration.split("|"),
+        );
+        const updated = patchSheet(sheet.id, { conditions, conditionMeta: meta });
+        if (updated) {
+          publishPersisted(campaignId, "sheet_updated", { sheet: updated });
+        }
       }
 
       // Physical dice: park this call for the player instead of rolling.
@@ -871,7 +1102,7 @@ async function advance(context: TurnContext, turn: DmTurn) {
   finalize(context, turn, failed);
   if (!failed) {
     await maybeCloseChapter(campaignId, { movedParty });
-    await maybeCompactHistory(campaignId, listAllMessages(campaignId));
+    await maybeCompactHistory(campaignId);
   }
 }
 
@@ -1081,7 +1312,9 @@ function parseSpotlightUserIds(
       ...new Set(
         ids
           .map((requested) => resolveSheetRef(requested, sheets, sheetsById))
-          .filter((sheet): sheet is CharacterSheet => sheet !== null)
+          // A spotlight on an AI companion would hand the floor to a user
+          // nobody controls and freeze the table; only humans get it.
+          .filter((sheet): sheet is CharacterSheet => sheet !== null && !sheet.isCompanion)
           .map((sheet) => sheet.userId),
       ),
     ];
@@ -1138,11 +1371,6 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string) {
     content = `${turn.rollIds.map((id) => `[roll:${id}]`).join("\n")}\n\n${content}`;
   }
 
-  // Combat bookkeeping: if the current-turn PC acted this turn, hand the
-  // initiative pointer to the next living PC before the floor is (maybe)
-  // held below, so a hold wraps the NEW turn's floor.
-  advanceAfterTurn(context.campaign, turn);
-
   const imageEnabled =
     context.campaign.settings.imageGenerationEnabled && context.campaign.settings.autoImages;
   const seq = allocateSeq(campaignId);
@@ -1167,6 +1395,12 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string) {
   });
   publishWithSeq(campaignId, seq, "message_added", { message });
   setDmStatus(campaignId, "idle");
+
+  // Combat bookkeeping: if the current PC's turn was adjudicated, hand the
+  // initiative pointer to the next living PC now, after the narration
+  // landed, so the server's next-turn note follows it in the transcript.
+  // Runs before the hold below so a hold wraps the NEW turn's floor.
+  advanceAfterTurn(context.campaign, turn);
 
   // Held responses: after a successful narration the table is locked for
   // discussion until the lead releases. A spotlight set this turn becomes

@@ -8,7 +8,12 @@ import { ui } from "@/lib/ui";
 import { GENRE_PRESETS } from "@/lib/genres";
 import { TTS_VOICES } from "@/lib/tts-voices";
 import { CAMPAIGN_DIFFICULTIES, type CampaignDifficulty } from "@/lib/campaign-types";
-import type { DicePolicy, Genre } from "@/lib/schemas/game-settings";
+import {
+  COMPANION_LABELS,
+  type DicePolicy,
+  type GameSettings,
+  type Genre,
+} from "@/lib/schemas/game-settings";
 
 // solo: creates a one-player campaign (maxPlayers 1); the player count is
 // hidden and the lobby streamlines itself for a party of one.
@@ -36,6 +41,9 @@ export function CreateCampaignDialog({
   const [ttsEnabled, setTtsEnabled] = useState(true);
   const [ttsVoice, setTtsVoice] = useState<string>("af_heart");
   const [mapsEnabled, setMapsEnabled] = useState(true);
+  const [companions, setCompanions] = useState<GameSettings["companions"]>("auto");
+  const [maxCompanions, setMaxCompanions] = useState(2);
+  const [maxGuests, setMaxGuests] = useState(2);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -62,6 +70,9 @@ export function CreateCampaignDialog({
             ttsEnabled,
             ttsVoice,
             mapsEnabled,
+            companions,
+            maxCompanions,
+            maxGuests,
           },
         }),
       });
@@ -264,6 +275,64 @@ export function CreateCampaignDialog({
                 <span className="block font-medium">Maps</span>
                 <span className="block text-xs opacity-80">AI-drawn area maps</span>
               </button>
+            </div>
+
+            <div>
+              <span className="mb-1.5 block text-stone-400">AI allies</span>
+              <select
+                value={companions}
+                onChange={(event) =>
+                  setCompanions(event.target.value as GameSettings["companions"])
+                }
+                className={inputClass}
+              >
+                {(Object.keys(COMPANION_LABELS) as Array<GameSettings["companions"]>).map(
+                  (mode) => (
+                    <option key={mode} value={mode}>
+                      {COMPANION_LABELS[mode]}
+                    </option>
+                  ),
+                )}
+              </select>
+              <p className="mt-1 text-xs text-stone-500">
+                {solo
+                  ? "Party members travel with you until dismissed; guests are allies who show up for a scene or a battle and then leave."
+                  : "Guests are friendly NPCs the DM brings in for a scene or a battle; they fight with real stats and leave when the fight ends. Party members stay until dismissed."}
+              </p>
+              {companions !== "off" ? (
+                <div className="mt-2 grid grid-cols-2 gap-3">
+                  {companions !== "guests" ? (
+                    <label className="block">
+                      <span className="mb-1 block text-xs text-stone-500">Party members at once</span>
+                      <select
+                        value={maxCompanions}
+                        onChange={(event) => setMaxCompanions(Number(event.target.value))}
+                        className={inputClass}
+                      >
+                        {[1, 2, 3, 4].map((count) => (
+                          <option key={count} value={count}>
+                            {count}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                  <label className="block">
+                    <span className="mb-1 block text-xs text-stone-500">Guests at once</span>
+                    <select
+                      value={maxGuests}
+                      onChange={(event) => setMaxGuests(Number(event.target.value))}
+                      className={inputClass}
+                    >
+                      {[1, 2, 3, 4].map((count) => (
+                        <option key={count} value={count}>
+                          {count}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              ) : null}
             </div>
 
             {ttsEnabled ? (

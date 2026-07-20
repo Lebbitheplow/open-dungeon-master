@@ -5,8 +5,15 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { RESOURCE_DEFS, matchResource, populateResources, refillResources, resourceDef } =
-  await import("../src/lib/srd/class-resources.ts");
+const {
+  RESOURCE_DEFS,
+  matchResource,
+  populateResources,
+  rageDamageBonus,
+  refillResources,
+  resourceDef,
+  spendRelentlessEndurance,
+} = await import("../src/lib/srd/class-resources.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -93,6 +100,95 @@ test("every def has match terms and positive max at level 5", () => {
     assert.ok(def.match.length > 0, def.id);
     assert.ok(def.maxFor(5, mods) >= 1, def.id);
   }
+});
+
+test("word-boundary matching: racial traits never grant class pools", () => {
+  // Half-elf fighter regression: "Skill Versatility" contains "ki" as a
+  // substring and once granted monk Ki.
+  const halfElfFighter = populateResources(
+    [{ name: "Second Wind" }, { name: "Skill Versatility" }, { name: "Darkvision" }],
+    5,
+    mods,
+    undefined,
+  );
+  assert.equal(halfElfFighter.ki, undefined);
+  assert.ok(halfElfFighter.second_wind);
+  // Real monk Ki still matches.
+  assert.ok(populateResources([{ name: "Ki" }], 5, mods, undefined).ki);
+});
+
+test("exact matching: Road Rage is not barbarian Rage", () => {
+  const roadWarrior = populateResources([{ name: "Road Rage" }], 14, mods, undefined);
+  assert.equal(roadWarrior.rage, undefined);
+  assert.ok(populateResources([{ name: "Rage" }], 3, mods, undefined).rage);
+});
+
+test("paladin Channel Divinity feature grants the pool", () => {
+  const paladin = populateResources([{ name: "Channel Divinity" }], 3, mods, undefined);
+  assert.ok(paladin.channel_divinity);
+});
+
+test("every def carries an effect and guidance the model can read", () => {
+  for (const def of RESOURCE_DEFS) {
+    assert.ok(def.effect?.kind, def.id);
+    assert.ok(def.guidance && def.guidance.length > 20, def.id);
+  }
+});
+
+test("Second Wind heals 1d10 + fighter level", () => {
+  const effect = resourceDef("second_wind").effect;
+  assert.equal(effect.kind, "heal_self");
+  assert.equal(effect.dice(1, mods), "1d10+1");
+  assert.equal(effect.dice(11, mods), "1d10+11");
+});
+
+test("Lay on Hands heals straight from its pool", () => {
+  assert.equal(resourceDef("lay_on_hands").effect.kind, "heal_pool");
+});
+
+test("Rage applies the raging condition for 10 rounds", () => {
+  const effect = resourceDef("rage").effect;
+  assert.equal(effect.kind, "condition");
+  assert.equal(effect.condition, "raging");
+  assert.equal(effect.rounds, 10);
+});
+
+test("rage damage bonus steps at 9 and 16", () => {
+  assert.equal(rageDamageBonus(1), 2);
+  assert.equal(rageDamageBonus(8), 2);
+  assert.equal(rageDamageBonus(9), 3);
+  assert.equal(rageDamageBonus(15), 3);
+  assert.equal(rageDamageBonus(16), 4);
+});
+
+test("Bardic Inspiration die grows with bard level", () => {
+  const die = resourceDef("bardic_inspiration").effect.die;
+  assert.equal(die(1), "d6");
+  assert.equal(die(5), "d8");
+  assert.equal(die(10), "d10");
+  assert.equal(die(15), "d12");
+});
+
+test("Breath Weapon routes to the AoE engine with growing dice", () => {
+  const effect = resourceDef("breath_weapon").effect;
+  assert.equal(effect.kind, "aoe");
+  assert.equal(effect.dice(1), "2d6");
+  assert.equal(effect.dice(6), "3d6");
+  assert.equal(effect.dice(16), "5d6");
+});
+
+test("Relentless Endurance is the only passive def", () => {
+  const passive = RESOURCE_DEFS.filter((def) => def.passive).map((def) => def.id);
+  assert.deepEqual(passive, ["relentless_endurance"]);
+});
+
+test("Relentless Endurance spends once, then refuses", () => {
+  const first = spendRelentlessEndurance({ relentless_endurance: { max: 1, used: 0 } });
+  assert.deepEqual(first.relentless_endurance, { max: 1, used: 1 });
+  assert.equal(spendRelentlessEndurance(first), null);
+  // Absent feature: nothing to burn.
+  assert.equal(spendRelentlessEndurance({ rage: { max: 3, used: 0 } }), null);
+  assert.equal(spendRelentlessEndurance(undefined), null);
 });
 
 console.log(`test-class-resources: ${passed} tests passed`);

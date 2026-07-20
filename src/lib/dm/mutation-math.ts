@@ -22,6 +22,25 @@ export function applyDamageMath(currentHp: number, tempHp: number, amount: numbe
   };
 }
 
+// Damage taken while Wild Shaped: temp HP soaks first, then the beast
+// form's own pool, and only what is left over reaches the druid's real hit
+// points, reverting them mid-blow.
+export function wildShapeDamageMath(beastHp: number, tempHp: number, amount: number) {
+  const damage = Math.max(0, Math.floor(amount));
+  const absorbed = Math.min(tempHp, damage);
+  const remaining = damage - absorbed;
+  const toBeast = Math.min(beastHp, remaining);
+  const left = beastHp - toBeast;
+  return {
+    beastHp: left,
+    tempHp: tempHp - absorbed,
+    absorbed,
+    // What spills into the druid's own hit points once the form drops.
+    carryover: remaining - toBeast,
+    reverted: left <= 0 && damage > 0,
+  };
+}
+
 // Healing caps at max HP; a character at 0 stabilizes and rises.
 export function healMath(currentHp: number, maxHp: number, amount: number) {
   const healing = Math.max(0, Math.floor(amount));

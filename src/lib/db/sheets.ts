@@ -2,6 +2,9 @@ import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { touchCampaign } from "@/lib/db/campaigns";
 import { populateFeatures } from "@/lib/srd/features";
 import { populateResources } from "@/lib/srd/class-resources";
+import { deriveAc } from "@/lib/srd";
+import { ATTUNEMENT_SLOTS } from "@/lib/srd/armor";
+import { backgroundFeatureFor } from "@/lib/backgrounds";
 import type {
   CharacterSheet,
   CreateSheetInput,
@@ -26,6 +29,7 @@ type SheetRow = {
   current_hp: number;
   temp_hp: number;
   ac: number;
+  ac_override: number | null;
   speed: number;
   hit_dice_json: string;
   proficiencies_json: string;
@@ -37,12 +41,16 @@ type SheetRow = {
   conditions_json: string;
   condition_meta_json: string | null;
   resources_json: string | null;
+  wild_shape_json: string | null;
   exhaustion: number | null;
   death_saves_json: string | null;
   concentrating_on: string | null;
   portrait_json: string | null;
   notes: string;
   backstory: string | null;
+  is_companion: number | null;
+  companion_kind: string | null;
+  personality: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -81,6 +89,7 @@ function mapSheet(row: SheetRow): CharacterSheet {
     currentHp: row.current_hp,
     tempHp: row.temp_hp,
     ac: row.ac,
+    acOverride: row.ac_override === 1,
     speed: row.speed,
     hitDice: parseJson(row.hit_dice_json, { die: "d8" as const, total: 1, spent: 0 }),
     // Rows stored before the expertise field existed lack it; heal on read.
@@ -99,12 +108,19 @@ function mapSheet(row: SheetRow): CharacterSheet {
     conditions: parseJson(row.conditions_json, []),
     conditionMeta: parseJson<CharacterSheet["conditionMeta"]>(row.condition_meta_json, {}),
     resources: parseJson<CharacterSheet["resources"]>(row.resources_json, {}),
+    wildShape: parseJson<CharacterSheet["wildShape"]>(row.wild_shape_json, null),
     exhaustion: row.exhaustion ?? 0,
     deathSaves: parseJson<CharacterSheet["deathSaves"]>(row.death_saves_json, null),
     concentratingOn: row.concentrating_on ?? null,
     portrait: parseJson<CharacterSheet["portrait"]>(row.portrait_json, null),
     notes: row.notes,
     backstory: row.backstory ?? "",
+    isCompanion: row.is_companion === 1,
+    companionKind:
+      row.companion_kind === "party" || row.companion_kind === "guest"
+        ? row.companion_kind
+        : null,
+    personality: row.personality ?? "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -113,11 +129,59 @@ function mapSheet(row: SheetRow): CharacterSheet {
 const SHEET_COLUMNS = `
   id, campaign_id, user_id, library_character_id, name, race, class, subclass,
   background, alignment, level, xp,
-  abilities_json, max_hp, current_hp, temp_hp, ac, speed, hit_dice_json,
+  abilities_json, max_hp, current_hp, temp_hp, ac, ac_override, speed, hit_dice_json,
   proficiencies_json, equipment_json, gold, feats_json, features_json,
-  spellcasting_json, conditions_json, condition_meta_json, resources_json, exhaustion, death_saves_json, concentrating_on,
-  portrait_json, notes, backstory, created_at, updated_at
+  spellcasting_json, conditions_json, condition_meta_json, resources_json, wild_shape_json, exhaustion, death_saves_json, concentrating_on,
+  portrait_json, notes, backstory, is_companion, companion_kind, personality, created_at, updated_at
 `;
+
+// Flags a freshly created sheet as an AI companion. Kept out of the main
+// INSERT so every existing creation path stays untouched.
+export function markSheetAsCompanion(
+  sheetId: string,
+  kind: "party" | "guest",
+  personality: string,
+): CharacterSheet | null {
+  getDatabase()
+    .prepare(
+      `UPDATE character_sheets SET is_companion = 1, companion_kind = ?, personality = ? WHERE id = ?`,
+    )
+    .run(kind, personality, sheetId);
+  return getSheetById(sheetId);
+}
+
+// Backgrounds grant a named feature ("Shelter of the Faithful"). It is added
+// once at creation with source "background", which populateFeatures keeps
+// across level-ups and boot resyncs.
+function withBackgroundFeature(
+  features: CreateSheetInput["features"],
+  background: string,
+): NonNullable<CreateSheetInput["features"]> {
+  const list = features ?? [];
+  const granted = backgroundFeatureFor(background);
+  if (!granted) {
+    return list;
+  }
+  const label = `${granted.name} (${granted.background})`;
+  if (list.some((feature) => feature.name.toLowerCase() === label.toLowerCase())) {
+    return list;
+  }
+  return [...list, { name: label, source: "background" as const }];
+}
+
+// The attunement cap is enforced here rather than in the UI so no path
+// (player toggle, DM update_sheet, undo) can slip a fourth item through;
+// extras past the third are simply un-attuned, keeping the earlier picks.
+function capAttunement(equipment: CharacterSheet["equipment"]): CharacterSheet["equipment"] {
+  let attuned = 0;
+  return equipment.map((item) => {
+    if (!item.attuned) {
+      return item;
+    }
+    attuned += 1;
+    return attuned <= ATTUNEMENT_SLOTS ? item : { ...item, attuned: false };
+  });
+}
 
 export function createSheet(
   campaignId: string,
@@ -132,7 +196,7 @@ export function createSheet(
   // Every creation path lands here, so the SRD class features and racial
   // traits are always granted for the level the sheet actually starts at.
   const features = populateFeatures(
-    input.features ?? [],
+    withBackgroundFeature(input.features ?? [], input.background),
     input.class,
     input.subclass,
     input.race,
@@ -147,18 +211,33 @@ export function createSheet(
     ]),
   );
   const resources = populateResources(features, level, abilityMods, undefined);
+  // Unless the AC is pinned, it comes from the gear they are actually
+  // carrying rather than the builder's suggestion. An absent flag means a
+  // library character stored before the engine: its equipment list has no
+  // armor in it, so its saved AC is the only truthful number available.
+  const acOverride = input.acOverride ?? true;
+  const ac = acOverride
+    ? input.ac
+    : deriveAc({
+        class: input.class,
+        level,
+        abilities: input.abilities,
+        proficiencies: input.proficiencies,
+        equipment: input.equipment,
+        features,
+      });
 
   db.prepare(
     `
       INSERT INTO character_sheets (
         id, campaign_id, user_id, library_character_id, name, race, class,
         subclass, background, alignment,
-        level, xp, abilities_json, max_hp, current_hp, temp_hp, ac, speed,
+        level, xp, abilities_json, max_hp, current_hp, temp_hp, ac, ac_override, speed,
         hit_dice_json, proficiencies_json, equipment_json, gold, feats_json,
         features_json, resources_json, spellcasting_json, conditions_json, portrait_json,
         notes, backstory, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?, ?)
     `,
   ).run(
     id,
@@ -175,7 +254,8 @@ export function createSheet(
     JSON.stringify(input.abilities),
     input.maxHp,
     input.maxHp,
-    input.ac,
+    ac,
+    acOverride ? 1 : 0,
     input.speed,
     JSON.stringify(input.hitDice),
     JSON.stringify(input.proficiencies),
@@ -213,6 +293,20 @@ export function getSheetForUser(campaignId: string, userId: string): CharacterSh
     .prepare(`SELECT ${SHEET_COLUMNS} FROM character_sheets WHERE campaign_id = ? AND user_id = ?`)
     .get(campaignId, userId) as SheetRow | undefined;
   return row ? mapSheet(row) : null;
+}
+
+// Lobby-only character removal (delete, switch, or recreate); returns the
+// removed sheet so callers can publish sheet_deleted. Dependent rows
+// (pending rolls, tokens) cascade via foreign keys where defined; the lobby
+// has none of them yet.
+export function deleteSheetForUser(campaignId: string, userId: string): CharacterSheet | null {
+  const existing = getSheetForUser(campaignId, userId);
+  if (!existing) {
+    return null;
+  }
+  getDatabase().prepare(`DELETE FROM character_sheets WHERE id = ?`).run(existing.id);
+  touchCampaign(campaignId);
+  return existing;
 }
 
 // All campaign copies of a library character; used to land the auto-generated
@@ -262,6 +356,9 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
     currentHp: patch.currentHp ?? existing.currentHp,
     tempHp: patch.tempHp ?? existing.tempHp,
     maxHp: patch.maxHp ?? existing.maxHp,
+    // Setting an AC by hand pins it; clearing the flag hands it back to the
+    // armor engine, which recomputes it below.
+    acOverride: patch.acOverride ?? (patch.ac !== undefined ? true : existing.acOverride),
     ac: patch.ac ?? existing.ac,
     xp: patch.xp ?? existing.xp,
     level: patch.level ?? existing.level,
@@ -286,8 +383,9 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
             existing.resources,
           )
         : existing.resources),
-    equipment: patch.equipment ?? existing.equipment,
+    equipment: capAttunement(patch.equipment ?? existing.equipment),
     hitDice: patch.hitDice ?? existing.hitDice,
+    wildShape: patch.wildShape !== undefined ? patch.wildShape : existing.wildShape,
     exhaustion: patch.exhaustion ?? existing.exhaustion,
     spellcasting: patch.spellcasting !== undefined ? patch.spellcasting : existing.spellcasting,
     deathSaves: patch.deathSaves !== undefined ? patch.deathSaves : existing.deathSaves,
@@ -301,15 +399,29 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
     backstory: patch.backstory ?? existing.backstory,
   };
 
+  // The armor engine owns the AC unless a human pinned it: buying a
+  // breastplate, equipping a shield, or gaining Unarmored Defense changes
+  // the number here rather than waiting for someone to retype it.
+  if (!next.acOverride) {
+    next.ac = deriveAc({
+      class: next.class,
+      level: next.level,
+      abilities: next.abilities,
+      proficiencies: next.proficiencies,
+      equipment: next.equipment,
+      features: next.features,
+    });
+  }
+
   getDatabase()
     .prepare(
       `
         UPDATE character_sheets SET
           name = ?, race = ?, class = ?, background = ?, alignment = ?,
           speed = ?, abilities_json = ?, proficiencies_json = ?,
-          current_hp = ?, temp_hp = ?, max_hp = ?, ac = ?, xp = ?, level = ?,
+          current_hp = ?, temp_hp = ?, max_hp = ?, ac = ?, ac_override = ?, xp = ?, level = ?,
           gold = ?, conditions_json = ?, condition_meta_json = ?, resources_json = ?, equipment_json = ?, hit_dice_json = ?,
-          spellcasting_json = ?, exhaustion = ?, death_saves_json = ?, concentrating_on = ?,
+          spellcasting_json = ?, wild_shape_json = ?, exhaustion = ?, death_saves_json = ?, concentrating_on = ?,
           feats_json = ?, features_json = ?, subclass = ?,
           portrait_json = ?, notes = ?, backstory = ?, updated_at = ?
         WHERE id = ?
@@ -328,6 +440,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
       next.tempHp,
       next.maxHp,
       next.ac,
+      next.acOverride ? 1 : 0,
       next.xp,
       next.level,
       next.gold,
@@ -337,6 +450,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
       JSON.stringify(next.equipment),
       JSON.stringify(next.hitDice),
       JSON.stringify(next.spellcasting),
+      next.wildShape ? JSON.stringify(next.wildShape) : null,
       next.exhaustion,
       next.deathSaves ? JSON.stringify(next.deathSaves) : null,
       next.concentratingOn,

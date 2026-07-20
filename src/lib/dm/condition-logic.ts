@@ -4,6 +4,9 @@
 // encounter-logic.ts so scripts/test-condition-logic.mjs can exercise every
 // branch; both the PC and enemy sides of combat read from this one table.
 
+import { RAGING } from "@/lib/srd/class-resources";
+import { magicItemRiders } from "@/lib/srd/magic-items";
+
 export type AdvantageState = "none" | "advantage" | "disadvantage";
 export type SaveAbilityId = "str" | "dex" | "con" | "int" | "wis" | "cha";
 
@@ -28,6 +31,10 @@ const TARGET_GRANTS_ADVANTAGE = ["restrained", "blinded", ...INCAPACITATING];
 const AUTO_CRIT_TARGETS = ["paralyzed", "unconscious"];
 // The attacker's own attack rolls suffer disadvantage.
 const ATTACKER_DISADVANTAGE = ["prone", "restrained", "poisoned", "blinded", "frightened"];
+// The Dodge action's condition: attacks against them roll at disadvantage
+// and they get advantage on DEX saves. Applied by take_action
+// (src/lib/dm/action-tools.ts); named here because the mechanics are here.
+export const DODGING = "dodging";
 // Ability checks suffer disadvantage.
 const CHECK_DISADVANTAGE = ["poisoned", "frightened"];
 
@@ -82,6 +89,12 @@ export function attackContext(input: {
     sources.push("advantage");
     notes.push("attacker is invisible: advantage");
   }
+  // Attacking from hiding: advantage, and the attack gives the position
+  // away (the caller clears the condition).
+  if (has(input.attackerConditions, ["hidden"])) {
+    sources.push("advantage");
+    notes.push("attacker is hidden: advantage, and the attack reveals them");
+  }
 
   if (has(input.targetConditions, ["prone"])) {
     sources.push(input.adjacent ? "advantage" : "disadvantage");
@@ -97,6 +110,12 @@ export function attackContext(input: {
   if (has(input.targetConditions, ["invisible"])) {
     sources.push("disadvantage");
     notes.push("target is invisible: disadvantage");
+  }
+  // Dodge only helps a target who can actually see it coming: an
+  // incapacitated dodger gets nothing, per the SRD.
+  if (has(input.targetConditions, [DODGING]) && !isIncapacitated(input.targetConditions)) {
+    sources.push("disadvantage");
+    notes.push("target is dodging: disadvantage");
   }
 
   const critName = has(input.targetConditions, AUTO_CRIT_TARGETS);
@@ -130,12 +149,23 @@ export function rollDerivation(
       sources.push("disadvantage");
       notes.push("restrained: disadvantage on DEX saves");
     }
+    // The other half of the Dodge action.
+    if (ability === "dex" && has(conditions, [DODGING]) && !isIncapacitated(conditions)) {
+      sources.push("advantage");
+      notes.push("dodging: advantage on DEX saves");
+    }
   } else {
     const down = has(conditions, CHECK_DISADVANTAGE);
     if (down) {
       sources.push("disadvantage");
       notes.push(`${down}: disadvantage on ability checks`);
     }
+  }
+  // Rage: advantage on Strength checks and Strength saves (not attacks;
+  // those get the damage bonus instead).
+  if (ability === "str" && kind !== "initiative" && has(conditions, [RAGING])) {
+    sources.push("advantage");
+    notes.push("raging: advantage on Strength checks and saves");
   }
   return { advantage: mergeAdvantage(sources), autoFail: false, notes };
 }
@@ -296,15 +326,21 @@ export function damageAdjust(
   return { amount, note: null };
 }
 
-// Racial and feature-derived damage resistances a sheet carries, as a
-// keyword string damageAdjust can match against. Conservative: only
-// unambiguous SRD grants are recognized.
+// Racial, feature, and condition-derived damage resistances a sheet
+// carries, as a keyword string damageAdjust can match against.
+// Conservative: only unambiguous SRD grants are recognized.
 export function pcResistances(sheet: {
   race: string;
   features: Array<{ name: string }>;
+  conditions?: string[];
+  equipment?: Array<{ name: string; attuned?: boolean }>;
 }): string {
   const out: string[] = [];
   const race = sheet.race.toLowerCase();
+  // Rage: resistance to the three physical damage types, for its duration.
+  if (has(sheet.conditions ?? [], [RAGING])) {
+    out.push("bludgeoning", "piercing", "slashing");
+  }
   const featureNames = sheet.features.map((feature) => feature.name.toLowerCase());
   const hasFeature = (fragment: string) =>
     featureNames.some((name) => name.includes(fragment));
@@ -316,6 +352,10 @@ export function pcResistances(sheet: {
   }
   if (race.includes("tiefling") || hasFeature("hellish resistance")) {
     out.push("fire");
+  }
+  // Worn magic items (Ring of Resistance, resistant armor) add their types.
+  if (sheet.equipment) {
+    out.push(...magicItemRiders(sheet.equipment).resistances);
   }
   return [...new Set(out)].join(", ");
 }

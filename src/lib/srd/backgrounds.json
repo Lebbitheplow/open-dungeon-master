@@ -1,18 +1,265 @@
 {
   "_license": "Acolyte derives from the SRD 5.1, (c) Wizards of the Coast LLC, CC-BY-4.0. Other entries are generic skill pairings for convenience.",
   "backgrounds": [
-    { "id": "acolyte", "name": "Acolyte", "skills": ["insight", "religion"], "feature": "Shelter of the Faithful" },
-    { "id": "charlatan", "name": "Charlatan", "skills": ["deception", "sleight_of_hand"], "feature": "False Identity" },
-    { "id": "criminal", "name": "Criminal", "skills": ["deception", "stealth"], "feature": "Criminal Contact" },
-    { "id": "entertainer", "name": "Entertainer", "skills": ["acrobatics", "performance"], "feature": "By Popular Demand" },
-    { "id": "folk_hero", "name": "Folk Hero", "skills": ["animal_handling", "survival"], "feature": "Rustic Hospitality" },
-    { "id": "guild_artisan", "name": "Guild Artisan", "skills": ["insight", "persuasion"], "feature": "Guild Membership" },
-    { "id": "hermit", "name": "Hermit", "skills": ["medicine", "religion"], "feature": "Discovery" },
-    { "id": "noble", "name": "Noble", "skills": ["history", "persuasion"], "feature": "Position of Privilege" },
-    { "id": "outlander", "name": "Outlander", "skills": ["athletics", "survival"], "feature": "Wanderer" },
-    { "id": "sage", "name": "Sage", "skills": ["arcana", "history"], "feature": "Researcher" },
-    { "id": "sailor", "name": "Sailor", "skills": ["athletics", "perception"], "feature": "Ship's Passage" },
-    { "id": "soldier", "name": "Soldier", "skills": ["athletics", "intimidation"], "feature": "Military Rank" },
-    { "id": "urchin", "name": "Urchin", "skills": ["sleight_of_hand", "stealth"], "feature": "City Secrets" }
+    {
+      "id": "acolyte",
+      "name": "Acolyte",
+      "skills": [
+        "insight",
+        "religion"
+      ],
+      "feature": "Shelter of the Faithful",
+      "tools": [],
+      "languages": 2,
+      "equipment": [
+        "holy symbol",
+        "prayer book",
+        "5 sticks of incense",
+        "vestments",
+        "common clothes",
+        "15 gp"
+      ]
+    },
+    {
+      "id": "charlatan",
+      "name": "Charlatan",
+      "skills": [
+        "deception",
+        "sleight_of_hand"
+      ],
+      "feature": "False Identity",
+      "tools": [
+        "disguise kit",
+        "forgery kit"
+      ],
+      "languages": 0,
+      "equipment": [
+        "fine clothes",
+        "disguise kit",
+        "con tools",
+        "15 gp"
+      ]
+    },
+    {
+      "id": "criminal",
+      "name": "Criminal",
+      "skills": [
+        "deception",
+        "stealth"
+      ],
+      "feature": "Criminal Contact",
+      "tools": [
+        "thieves' tools",
+        "one gaming set"
+      ],
+      "languages": 0,
+      "equipment": [
+        "crowbar",
+        "dark common clothes with hood",
+        "15 gp"
+      ]
+    },
+    {
+      "id": "entertainer",
+      "name": "Entertainer",
+      "skills": [
+        "acrobatics",
+        "performance"
+      ],
+      "feature": "By Popular Demand",
+      "tools": [
+        "disguise kit",
+        "one musical instrument"
+      ],
+      "languages": 0,
+      "equipment": [
+        "musical instrument",
+        "costume",
+        "favor of an admirer",
+        "15 gp"
+      ]
+    },
+    {
+      "id": "folk_hero",
+      "name": "Folk Hero",
+      "skills": [
+        "animal_handling",
+        "survival"
+      ],
+      "feature": "Rustic Hospitality",
+      "tools": [
+        "one artisan's tools",
+        "vehicles (land)"
+      ],
+      "languages": 0,
+      "equipment": [
+        "artisan's tools",
+        "shovel",
+        "iron pot",
+        "common clothes",
+        "10 gp"
+      ]
+    },
+    {
+      "id": "guild_artisan",
+      "name": "Guild Artisan",
+      "skills": [
+        "insight",
+        "persuasion"
+      ],
+      "feature": "Guild Membership",
+      "tools": [
+        "one artisan's tools"
+      ],
+      "languages": 1,
+      "equipment": [
+        "artisan's tools",
+        "letter of introduction from your guild",
+        "traveler's clothes",
+        "15 gp"
+      ]
+    },
+    {
+      "id": "hermit",
+      "name": "Hermit",
+      "skills": [
+        "medicine",
+        "religion"
+      ],
+      "feature": "Discovery",
+      "tools": [
+        "herbalism kit"
+      ],
+      "languages": 1,
+      "equipment": [
+        "scroll case of notes",
+        "winter blanket",
+        "common clothes",
+        "herbalism kit",
+        "5 gp"
+      ]
+    },
+    {
+      "id": "noble",
+      "name": "Noble",
+      "skills": [
+        "history",
+        "persuasion"
+      ],
+      "feature": "Position of Privilege",
+      "tools": [
+        "one gaming set"
+      ],
+      "languages": 1,
+      "equipment": [
+        "fine clothes",
+        "signet ring",
+        "scroll of pedigree",
+        "25 gp"
+      ]
+    },
+    {
+      "id": "outlander",
+      "name": "Outlander",
+      "skills": [
+        "athletics",
+        "survival"
+      ],
+      "feature": "Wanderer",
+      "tools": [
+        "one musical instrument"
+      ],
+      "languages": 1,
+      "equipment": [
+        "staff",
+        "hunting trap",
+        "trophy from an animal you killed",
+        "traveler's clothes",
+        "10 gp"
+      ]
+    },
+    {
+      "id": "sage",
+      "name": "Sage",
+      "skills": [
+        "arcana",
+        "history"
+      ],
+      "feature": "Researcher",
+      "tools": [],
+      "languages": 2,
+      "equipment": [
+        "bottle of black ink",
+        "quill",
+        "small knife",
+        "letter from a dead colleague",
+        "common clothes",
+        "10 gp"
+      ]
+    },
+    {
+      "id": "sailor",
+      "name": "Sailor",
+      "skills": [
+        "athletics",
+        "perception"
+      ],
+      "feature": "Ship's Passage",
+      "tools": [
+        "navigator's tools",
+        "vehicles (water)"
+      ],
+      "languages": 0,
+      "equipment": [
+        "belaying pin (club)",
+        "50 ft silk rope",
+        "lucky charm",
+        "common clothes",
+        "10 gp"
+      ]
+    },
+    {
+      "id": "soldier",
+      "name": "Soldier",
+      "skills": [
+        "athletics",
+        "intimidation"
+      ],
+      "feature": "Military Rank",
+      "tools": [
+        "one gaming set",
+        "vehicles (land)"
+      ],
+      "languages": 0,
+      "equipment": [
+        "insignia of rank",
+        "trophy from a fallen enemy",
+        "gaming set",
+        "common clothes",
+        "10 gp"
+      ]
+    },
+    {
+      "id": "urchin",
+      "name": "Urchin",
+      "skills": [
+        "sleight_of_hand",
+        "stealth"
+      ],
+      "feature": "City Secrets",
+      "tools": [
+        "disguise kit",
+        "thieves' tools"
+      ],
+      "languages": 0,
+      "equipment": [
+        "small knife",
+        "map of your home city",
+        "pet mouse",
+        "token of your parents",
+        "common clothes",
+        "10 gp"
+      ]
+    }
   ]
 }

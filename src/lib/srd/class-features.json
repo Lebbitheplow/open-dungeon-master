@@ -4,283 +4,653 @@
     "barbarian": {
       "subclassLevel": 3,
       "levels": {
-        "1": ["Rage", "Unarmored Defense"],
-        "2": ["Reckless Attack", "Danger Sense"],
-        "3": ["Primal Path"],
-        "5": ["Extra Attack", "Fast Movement"],
-        "7": ["Feral Instinct"],
-        "9": ["Brutal Critical (1 die)"],
-        "11": ["Relentless Rage"],
-        "13": ["Brutal Critical (2 dice)"],
-        "15": ["Persistent Rage"],
-        "17": ["Brutal Critical (3 dice)"],
-        "18": ["Indomitable Might"],
-        "20": ["Primal Champion"]
+        "1": [
+          "Rage",
+          "Unarmored Defense"
+        ],
+        "2": [
+          "Reckless Attack",
+          "Danger Sense"
+        ],
+        "3": [
+          "Primal Path"
+        ],
+        "5": [
+          "Extra Attack",
+          "Fast Movement"
+        ],
+        "7": [
+          "Feral Instinct"
+        ],
+        "9": [
+          "Brutal Critical (1 die)"
+        ],
+        "11": [
+          "Relentless Rage"
+        ],
+        "13": [
+          "Brutal Critical (2 dice)"
+        ],
+        "15": [
+          "Persistent Rage"
+        ],
+        "17": [
+          "Brutal Critical (3 dice)"
+        ],
+        "18": [
+          "Indomitable Might"
+        ],
+        "20": [
+          "Primal Champion"
+        ]
       },
       "subclass": {
         "name": "Path of the Berserker",
         "levels": {
-          "3": ["Frenzy"],
-          "6": ["Mindless Rage"],
-          "10": ["Intimidating Presence"],
-          "14": ["Retaliation"]
+          "3": [
+            "Frenzy"
+          ],
+          "6": [
+            "Mindless Rage"
+          ],
+          "10": [
+            "Intimidating Presence"
+          ],
+          "14": [
+            "Retaliation"
+          ]
         }
       }
     },
     "bard": {
       "subclassLevel": 3,
       "levels": {
-        "1": ["Spellcasting", "Bardic Inspiration (d6)"],
-        "2": ["Jack of All Trades", "Song of Rest (d6)"],
-        "3": ["Bard College", "Expertise"],
-        "5": ["Bardic Inspiration (d8)", "Font of Inspiration"],
-        "6": ["Countercharm"],
-        "9": ["Song of Rest (d8)"],
-        "10": ["Bardic Inspiration (d10)", "Expertise", "Magical Secrets"],
-        "13": ["Song of Rest (d10)"],
-        "14": ["Magical Secrets"],
-        "15": ["Bardic Inspiration (d12)"],
-        "17": ["Song of Rest (d12)"],
-        "18": ["Magical Secrets"],
-        "20": ["Superior Inspiration"]
+        "1": [
+          "Spellcasting",
+          "Bardic Inspiration (d6)"
+        ],
+        "2": [
+          "Jack of All Trades",
+          "Song of Rest (d6)"
+        ],
+        "3": [
+          "Bard College",
+          "Expertise"
+        ],
+        "5": [
+          "Bardic Inspiration (d8)",
+          "Font of Inspiration"
+        ],
+        "6": [
+          "Countercharm"
+        ],
+        "9": [
+          "Song of Rest (d8)"
+        ],
+        "10": [
+          "Bardic Inspiration (d10)",
+          "Expertise",
+          "Magical Secrets"
+        ],
+        "13": [
+          "Song of Rest (d10)"
+        ],
+        "14": [
+          "Magical Secrets"
+        ],
+        "15": [
+          "Bardic Inspiration (d12)"
+        ],
+        "17": [
+          "Song of Rest (d12)"
+        ],
+        "18": [
+          "Magical Secrets"
+        ],
+        "20": [
+          "Superior Inspiration"
+        ]
       },
       "subclass": {
         "name": "College of Lore",
         "levels": {
-          "3": ["Cutting Words", "Bonus Proficiencies (Lore)"],
-          "6": ["Additional Magical Secrets"],
-          "14": ["Peerless Skill"]
+          "3": [
+            "Cutting Words",
+            "Bonus Proficiencies (Lore)"
+          ],
+          "6": [
+            "Additional Magical Secrets"
+          ],
+          "14": [
+            "Peerless Skill"
+          ]
         }
       }
     },
     "cleric": {
       "subclassLevel": 1,
       "levels": {
-        "1": ["Spellcasting", "Divine Domain"],
-        "2": ["Channel Divinity (1/rest)", "Channel Divinity: Turn Undead"],
-        "5": ["Destroy Undead (CR 1/2)"],
-        "6": ["Channel Divinity (2/rest)"],
-        "8": ["Destroy Undead (CR 1)"],
-        "10": ["Divine Intervention"],
-        "11": ["Destroy Undead (CR 2)"],
-        "14": ["Destroy Undead (CR 3)"],
-        "17": ["Destroy Undead (CR 4)"],
-        "18": ["Channel Divinity (3/rest)"],
-        "20": ["Divine Intervention Improvement"]
+        "1": [
+          "Spellcasting",
+          "Divine Domain"
+        ],
+        "2": [
+          "Channel Divinity (1/rest)",
+          "Channel Divinity: Turn Undead"
+        ],
+        "5": [
+          "Destroy Undead (CR 1/2)"
+        ],
+        "6": [
+          "Channel Divinity (2/rest)"
+        ],
+        "8": [
+          "Destroy Undead (CR 1)"
+        ],
+        "10": [
+          "Divine Intervention"
+        ],
+        "11": [
+          "Destroy Undead (CR 2)"
+        ],
+        "14": [
+          "Destroy Undead (CR 3)"
+        ],
+        "17": [
+          "Destroy Undead (CR 4)"
+        ],
+        "18": [
+          "Channel Divinity (3/rest)"
+        ],
+        "20": [
+          "Divine Intervention Improvement"
+        ]
       },
       "subclass": {
         "name": "Life Domain",
         "levels": {
-          "1": ["Bonus Proficiency (heavy armor)", "Disciple of Life"],
-          "2": ["Channel Divinity: Preserve Life"],
-          "6": ["Blessed Healer"],
-          "8": ["Divine Strike"],
-          "17": ["Supreme Healing"]
+          "1": [
+            "Bonus Proficiency (heavy armor)",
+            "Disciple of Life"
+          ],
+          "2": [
+            "Channel Divinity: Preserve Life"
+          ],
+          "6": [
+            "Blessed Healer"
+          ],
+          "8": [
+            "Divine Strike"
+          ],
+          "17": [
+            "Supreme Healing"
+          ]
         }
       }
     },
     "druid": {
       "subclassLevel": 2,
       "levels": {
-        "1": ["Druidic", "Spellcasting"],
-        "2": ["Wild Shape", "Druid Circle"],
-        "4": ["Wild Shape Improvement"],
-        "8": ["Wild Shape Improvement"],
-        "18": ["Timeless Body", "Beast Spells"],
-        "20": ["Archdruid"]
+        "1": [
+          "Druidic",
+          "Spellcasting"
+        ],
+        "2": [
+          "Wild Shape",
+          "Druid Circle"
+        ],
+        "4": [
+          "Wild Shape Improvement"
+        ],
+        "8": [
+          "Wild Shape Improvement"
+        ],
+        "18": [
+          "Timeless Body",
+          "Beast Spells"
+        ],
+        "20": [
+          "Archdruid"
+        ]
       },
       "subclass": {
         "name": "Circle of the Land",
         "levels": {
-          "2": ["Bonus Cantrip", "Natural Recovery"],
-          "3": ["Circle Spells"],
-          "6": ["Land's Stride"],
-          "10": ["Nature's Ward"],
-          "14": ["Nature's Sanctuary"]
+          "2": [
+            "Bonus Cantrip",
+            "Natural Recovery"
+          ],
+          "3": [
+            "Circle Spells"
+          ],
+          "6": [
+            "Land's Stride"
+          ],
+          "10": [
+            "Nature's Ward"
+          ],
+          "14": [
+            "Nature's Sanctuary"
+          ]
         }
       }
     },
     "fighter": {
       "subclassLevel": 3,
       "levels": {
-        "1": ["Fighting Style", "Second Wind"],
-        "2": ["Action Surge (1 use)"],
-        "3": ["Martial Archetype"],
-        "5": ["Extra Attack"],
-        "9": ["Indomitable (1 use)"],
-        "11": ["Extra Attack (2)"],
-        "13": ["Indomitable (2 uses)"],
-        "17": ["Action Surge (2 uses)", "Indomitable (3 uses)"],
-        "20": ["Extra Attack (3)"]
+        "1": [
+          "Fighting Style",
+          "Second Wind"
+        ],
+        "2": [
+          "Action Surge (1 use)"
+        ],
+        "3": [
+          "Martial Archetype"
+        ],
+        "5": [
+          "Extra Attack"
+        ],
+        "9": [
+          "Indomitable (1 use)"
+        ],
+        "11": [
+          "Extra Attack (2)"
+        ],
+        "13": [
+          "Indomitable (2 uses)"
+        ],
+        "17": [
+          "Action Surge (2 uses)",
+          "Indomitable (3 uses)"
+        ],
+        "20": [
+          "Extra Attack (3)"
+        ]
       },
       "subclass": {
         "name": "Champion",
         "levels": {
-          "3": ["Improved Critical"],
-          "7": ["Remarkable Athlete"],
-          "10": ["Additional Fighting Style"],
-          "15": ["Superior Critical"],
-          "18": ["Survivor"]
+          "3": [
+            "Improved Critical"
+          ],
+          "7": [
+            "Remarkable Athlete"
+          ],
+          "10": [
+            "Additional Fighting Style"
+          ],
+          "15": [
+            "Superior Critical"
+          ],
+          "18": [
+            "Survivor"
+          ]
         }
       }
     },
     "monk": {
       "subclassLevel": 3,
       "levels": {
-        "1": ["Unarmored Defense", "Martial Arts"],
-        "2": ["Ki", "Unarmored Movement"],
-        "3": ["Monastic Tradition", "Deflect Missiles"],
-        "4": ["Slow Fall"],
-        "5": ["Extra Attack", "Stunning Strike"],
-        "6": ["Ki-Empowered Strikes"],
-        "7": ["Evasion", "Stillness of Mind"],
-        "9": ["Unarmored Movement Improvement"],
-        "10": ["Purity of Body"],
-        "13": ["Tongue of the Sun and Moon"],
-        "14": ["Diamond Soul"],
-        "15": ["Timeless Body"],
-        "18": ["Empty Body"],
-        "20": ["Perfect Self"]
+        "1": [
+          "Unarmored Defense",
+          "Martial Arts"
+        ],
+        "2": [
+          "Ki",
+          "Unarmored Movement"
+        ],
+        "3": [
+          "Monastic Tradition",
+          "Deflect Missiles"
+        ],
+        "4": [
+          "Slow Fall"
+        ],
+        "5": [
+          "Extra Attack",
+          "Stunning Strike"
+        ],
+        "6": [
+          "Ki-Empowered Strikes"
+        ],
+        "7": [
+          "Evasion",
+          "Stillness of Mind"
+        ],
+        "9": [
+          "Unarmored Movement Improvement"
+        ],
+        "10": [
+          "Purity of Body"
+        ],
+        "13": [
+          "Tongue of the Sun and Moon"
+        ],
+        "14": [
+          "Diamond Soul"
+        ],
+        "15": [
+          "Timeless Body"
+        ],
+        "18": [
+          "Empty Body"
+        ],
+        "20": [
+          "Perfect Self"
+        ]
       },
       "subclass": {
         "name": "Way of the Open Hand",
         "levels": {
-          "3": ["Open Hand Technique"],
-          "6": ["Wholeness of Body"],
-          "11": ["Tranquility"],
-          "17": ["Quivering Palm"]
+          "3": [
+            "Open Hand Technique"
+          ],
+          "6": [
+            "Wholeness of Body"
+          ],
+          "11": [
+            "Tranquility"
+          ],
+          "17": [
+            "Quivering Palm"
+          ]
         }
       }
     },
     "paladin": {
       "subclassLevel": 3,
       "levels": {
-        "1": ["Divine Sense", "Lay on Hands"],
-        "2": ["Fighting Style", "Spellcasting", "Divine Smite"],
-        "3": ["Divine Health", "Sacred Oath"],
-        "5": ["Extra Attack"],
-        "6": ["Aura of Protection"],
-        "10": ["Aura of Courage"],
-        "11": ["Improved Divine Smite"],
-        "14": ["Cleansing Touch"],
-        "18": ["Aura Improvements"]
+        "1": [
+          "Divine Sense",
+          "Lay on Hands"
+        ],
+        "2": [
+          "Fighting Style",
+          "Spellcasting",
+          "Divine Smite"
+        ],
+        "3": [
+          "Channel Divinity",
+          "Divine Health",
+          "Sacred Oath"
+        ],
+        "5": [
+          "Extra Attack"
+        ],
+        "6": [
+          "Aura of Protection"
+        ],
+        "10": [
+          "Aura of Courage"
+        ],
+        "11": [
+          "Improved Divine Smite"
+        ],
+        "14": [
+          "Cleansing Touch"
+        ],
+        "18": [
+          "Aura Improvements"
+        ]
       },
       "subclass": {
         "name": "Oath of Devotion",
         "levels": {
-          "3": ["Channel Divinity: Sacred Weapon", "Channel Divinity: Turn the Unholy"],
-          "7": ["Aura of Devotion"],
-          "15": ["Purity of Spirit"],
-          "20": ["Holy Nimbus"]
+          "3": [
+            "Channel Divinity: Sacred Weapon",
+            "Channel Divinity: Turn the Unholy"
+          ],
+          "7": [
+            "Aura of Devotion"
+          ],
+          "15": [
+            "Purity of Spirit"
+          ],
+          "20": [
+            "Holy Nimbus"
+          ]
         }
       }
     },
     "ranger": {
       "subclassLevel": 3,
       "levels": {
-        "1": ["Favored Enemy", "Natural Explorer"],
-        "2": ["Fighting Style", "Spellcasting"],
-        "3": ["Ranger Archetype", "Primeval Awareness"],
-        "5": ["Extra Attack"],
-        "6": ["Favored Enemy Improvement", "Natural Explorer Improvement"],
-        "8": ["Land's Stride"],
-        "10": ["Natural Explorer Improvement", "Hide in Plain Sight"],
-        "14": ["Favored Enemy Improvement", "Vanish"],
-        "18": ["Feral Senses"],
-        "20": ["Foe Slayer"]
+        "1": [
+          "Favored Enemy",
+          "Natural Explorer"
+        ],
+        "2": [
+          "Fighting Style",
+          "Spellcasting"
+        ],
+        "3": [
+          "Ranger Archetype",
+          "Primeval Awareness"
+        ],
+        "5": [
+          "Extra Attack"
+        ],
+        "6": [
+          "Favored Enemy Improvement",
+          "Natural Explorer Improvement"
+        ],
+        "8": [
+          "Land's Stride"
+        ],
+        "10": [
+          "Natural Explorer Improvement",
+          "Hide in Plain Sight"
+        ],
+        "14": [
+          "Favored Enemy Improvement",
+          "Vanish"
+        ],
+        "18": [
+          "Feral Senses"
+        ],
+        "20": [
+          "Foe Slayer"
+        ]
       },
       "subclass": {
         "name": "Hunter",
         "levels": {
-          "3": ["Hunter's Prey"],
-          "7": ["Defensive Tactics"],
-          "11": ["Multiattack"],
-          "15": ["Superior Hunter's Defense"]
+          "3": [
+            "Hunter's Prey"
+          ],
+          "7": [
+            "Defensive Tactics"
+          ],
+          "11": [
+            "Multiattack"
+          ],
+          "15": [
+            "Superior Hunter's Defense"
+          ]
         }
       }
     },
     "rogue": {
       "subclassLevel": 3,
       "levels": {
-        "1": ["Expertise", "Sneak Attack", "Thieves' Cant"],
-        "2": ["Cunning Action"],
-        "3": ["Roguish Archetype"],
-        "5": ["Uncanny Dodge"],
-        "6": ["Expertise"],
-        "7": ["Evasion"],
-        "11": ["Reliable Talent"],
-        "14": ["Blindsense"],
-        "15": ["Slippery Mind"],
-        "18": ["Elusive"],
-        "20": ["Stroke of Luck"]
+        "1": [
+          "Expertise",
+          "Sneak Attack",
+          "Thieves' Cant"
+        ],
+        "2": [
+          "Cunning Action"
+        ],
+        "3": [
+          "Roguish Archetype"
+        ],
+        "5": [
+          "Uncanny Dodge"
+        ],
+        "6": [
+          "Expertise"
+        ],
+        "7": [
+          "Evasion"
+        ],
+        "11": [
+          "Reliable Talent"
+        ],
+        "14": [
+          "Blindsense"
+        ],
+        "15": [
+          "Slippery Mind"
+        ],
+        "18": [
+          "Elusive"
+        ],
+        "20": [
+          "Stroke of Luck"
+        ]
       },
       "subclass": {
         "name": "Thief",
         "levels": {
-          "3": ["Fast Hands", "Second-Story Work"],
-          "9": ["Supreme Sneak"],
-          "13": ["Use Magic Device"],
-          "17": ["Thief's Reflexes"]
+          "3": [
+            "Fast Hands",
+            "Second-Story Work"
+          ],
+          "9": [
+            "Supreme Sneak"
+          ],
+          "13": [
+            "Use Magic Device"
+          ],
+          "17": [
+            "Thief's Reflexes"
+          ]
         }
       }
     },
     "sorcerer": {
       "subclassLevel": 1,
       "levels": {
-        "1": ["Spellcasting", "Sorcerous Origin"],
-        "2": ["Font of Magic"],
-        "3": ["Metamagic"],
-        "10": ["Metamagic Option"],
-        "17": ["Metamagic Option"],
-        "20": ["Sorcerous Restoration"]
+        "1": [
+          "Spellcasting",
+          "Sorcerous Origin"
+        ],
+        "2": [
+          "Font of Magic"
+        ],
+        "3": [
+          "Metamagic"
+        ],
+        "10": [
+          "Metamagic Option"
+        ],
+        "17": [
+          "Metamagic Option"
+        ],
+        "20": [
+          "Sorcerous Restoration"
+        ]
       },
       "subclass": {
         "name": "Draconic Bloodline",
         "levels": {
-          "1": ["Dragon Ancestor", "Draconic Resilience"],
-          "6": ["Elemental Affinity"],
-          "14": ["Dragon Wings"],
-          "18": ["Draconic Presence"]
+          "1": [
+            "Dragon Ancestor",
+            "Draconic Resilience"
+          ],
+          "6": [
+            "Elemental Affinity"
+          ],
+          "14": [
+            "Dragon Wings"
+          ],
+          "18": [
+            "Draconic Presence"
+          ]
         }
       }
     },
     "warlock": {
       "subclassLevel": 1,
       "levels": {
-        "1": ["Otherworldly Patron", "Pact Magic"],
-        "2": ["Eldritch Invocations"],
-        "3": ["Pact Boon"],
-        "11": ["Mystic Arcanum (6th level)"],
-        "13": ["Mystic Arcanum (7th level)"],
-        "15": ["Mystic Arcanum (8th level)"],
-        "17": ["Mystic Arcanum (9th level)"],
-        "20": ["Eldritch Master"]
+        "1": [
+          "Otherworldly Patron",
+          "Pact Magic"
+        ],
+        "2": [
+          "Eldritch Invocations"
+        ],
+        "3": [
+          "Pact Boon"
+        ],
+        "11": [
+          "Mystic Arcanum (6th level)"
+        ],
+        "13": [
+          "Mystic Arcanum (7th level)"
+        ],
+        "15": [
+          "Mystic Arcanum (8th level)"
+        ],
+        "17": [
+          "Mystic Arcanum (9th level)"
+        ],
+        "20": [
+          "Eldritch Master"
+        ]
       },
       "subclass": {
         "name": "The Fiend",
         "levels": {
-          "1": ["Dark One's Blessing"],
-          "6": ["Dark One's Own Luck"],
-          "10": ["Fiendish Resilience"],
-          "14": ["Hurl Through Hell"]
+          "1": [
+            "Dark One's Blessing"
+          ],
+          "6": [
+            "Dark One's Own Luck"
+          ],
+          "10": [
+            "Fiendish Resilience"
+          ],
+          "14": [
+            "Hurl Through Hell"
+          ]
         }
       }
     },
     "wizard": {
       "subclassLevel": 2,
       "levels": {
-        "1": ["Spellcasting", "Arcane Recovery"],
-        "2": ["Arcane Tradition"],
-        "18": ["Spell Mastery"],
-        "20": ["Signature Spells"]
+        "1": [
+          "Spellcasting",
+          "Arcane Recovery"
+        ],
+        "2": [
+          "Arcane Tradition"
+        ],
+        "18": [
+          "Spell Mastery"
+        ],
+        "20": [
+          "Signature Spells"
+        ]
       },
       "subclass": {
         "name": "School of Evocation",
         "levels": {
-          "2": ["Evocation Savant", "Sculpt Spells"],
-          "6": ["Potent Cantrip"],
-          "10": ["Empowered Evocation"],
-          "14": ["Overchannel"]
+          "2": [
+            "Evocation Savant",
+            "Sculpt Spells"
+          ],
+          "6": [
+            "Potent Cantrip"
+          ],
+          "10": [
+            "Empowered Evocation"
+          ],
+          "14": [
+            "Overchannel"
+          ]
         }
       }
     }

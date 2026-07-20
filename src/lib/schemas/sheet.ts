@@ -52,15 +52,24 @@ export const equipmentItemSchema = z.object({
   // Optional link to a content-db entry (Open5e slug or "homebrew:<id>");
   // free-text items stay valid.
   slug: z.string().trim().max(80).optional(),
+  // Worn/wielded right now: drives the derived AC (src/lib/srd/armor.ts).
+  // Optional so rows written before the field keep validating; when NO item
+  // on a sheet carries it, the AC engine treats everything as worn.
+  equipped: z.boolean().optional(),
+  // Magic item currently attuned. Capped at 3 per character by patchSheet.
+  attuned: z.boolean().optional(),
 });
 export type EquipmentItem = z.infer<typeof equipmentItemSchema>;
 
-// A class feature, racial trait, feat, or story-granted ability. `source`
-// drives regranting: "class" and "race" entries are recomputed from SRD data
-// on level-up while "feat" and "story" entries are always preserved.
+// A class feature, racial trait, feat, player-made class choice, or
+// story-granted ability. `source` drives regranting: "class" and "race"
+// entries are recomputed from SRD data on level-up while the others are
+// always preserved. "choice" is how a player's pick within a class feature
+// is stored (a fighting style: "Fighting Style: Archery"), which is why it
+// survives the regrant that wipes the plain "Fighting Style" entry.
 export const sheetFeatureSchema = z.object({
   name: z.string().trim().min(1).max(80),
-  source: z.enum(["class", "race", "feat", "story"]).default("story"),
+  source: z.enum(["class", "race", "background", "feat", "choice", "story"]).default("story"),
   level: z.number().int().min(1).max(20).optional(),
 });
 export type SheetFeature = z.infer<typeof sheetFeatureSchema>;
@@ -119,6 +128,12 @@ export const createSheetSchema = z.object({
   abilities: abilityScoresSchema,
   maxHp: z.number().int().min(1).max(500),
   ac: z.number().int().min(1).max(30),
+  // True = `ac` is a hand-set number the armor engine must leave alone.
+  // False = the server derives it from equipped armor on every write
+  // (src/lib/srd/armor.ts). Deliberately NOT defaulted: a payload that omits
+  // it is a library character saved before the engine existed, and createSheet
+  // pins those so nobody's stored character loses their armor class.
+  acOverride: z.boolean().optional(),
   speed: z.number().int().min(0).max(120).default(30),
   hitDice: hitDiceSchema,
   proficiencies: proficienciesSchema,
@@ -129,6 +144,18 @@ export const createSheetSchema = z.object({
   // The ASI choices baked into `abilities`, in threshold order. Stored so
   // instantiating at a lower campaign level can reverse the extra ones.
   asiChoices: z.array(asiChoiceSchema).max(5).default([]),
+  // Choices a race offers rather than fixes (half-elf's two +1 bumps and
+  // two skills, high elf's cantrip, dwarf's tool). Their effects are baked
+  // into `abilities` and `proficiencies`; these are stored so reopening the
+  // builder can rehydrate the exact picks instead of guessing.
+  racialChoices: z
+    .object({
+      asi: z.array(z.enum(ABILITIES)).max(3).default([]),
+      skills: z.array(z.string().trim().min(1).max(40)).max(4).default([]),
+      cantrip: z.string().trim().max(80).default(""),
+      tool: z.string().trim().max(60).default(""),
+    })
+    .optional(),
   spellcasting: spellcastingSchema.default(null),
   portrait: attachmentSchema.nullable().default(null),
   notes: z.string().max(4000).default(""),
@@ -143,7 +170,10 @@ export const patchSheetSchema = z.object({
   currentHp: z.number().int().min(0).max(500).optional(),
   tempHp: z.number().int().min(0).max(200).optional(),
   maxHp: z.number().int().min(1).max(500).optional(),
+  // Setting `ac` by hand implies an override; clear the flag to hand the
+  // armor class back to the engine.
   ac: z.number().int().min(1).max(30).optional(),
+  acOverride: z.boolean().optional(),
   xp: z.number().int().min(0).max(1000000).optional(),
   level: z.number().int().min(1).max(20).optional(),
   gold: z.number().int().min(0).max(1000000).optional(),
@@ -197,6 +227,20 @@ export const conditionMetaSchema = z.record(
 );
 export type ConditionMetaMap = z.infer<typeof conditionMetaSchema>;
 
+// An active Wild Shape form. The druid's own hit points are untouched while
+// shaped (5e: they are remembered and returned to on revert); damage lands
+// on the beast pool and only the excess spills through. Null when the
+// character is in their own body.
+export const wildShapeSchema = z
+  .object({
+    form: z.string().trim().min(1).max(60),
+    beastHp: z.number().int().min(0).max(300),
+    beastMaxHp: z.number().int().min(1).max(300),
+    beastAc: z.number().int().min(1).max(30),
+  })
+  .nullable();
+export type WildShape = z.infer<typeof wildShapeSchema>;
+
 export const fullPatchSheetSchema = patchSheetSchema.extend({
   name: z.string().trim().min(1).max(60).optional(),
   race: z.string().trim().min(1).max(60).optional(),
@@ -212,6 +256,7 @@ export const fullPatchSheetSchema = patchSheetSchema.extend({
   concentratingOn: z.string().trim().max(80).nullable().optional(),
   conditionMeta: conditionMetaSchema.optional(),
   resources: resourcesSchema.optional(),
+  wildShape: wildShapeSchema.optional(),
   // Exhaustion level 0-6 with real mechanical effects (condition-logic.ts).
   exhaustion: z.number().int().min(0).max(6).optional(),
 });
@@ -234,7 +279,10 @@ export type CharacterSheet = {
   maxHp: number;
   currentHp: number;
   tempHp: number;
+  // Always the character's real armor class: derived from equipped armor on
+  // every write unless acOverride pins it (src/lib/srd/armor.ts).
   ac: number;
+  acOverride: boolean;
   speed: number;
   hitDice: HitDice;
   proficiencies: Proficiencies;
@@ -246,6 +294,9 @@ export type CharacterSheet = {
   conditions: string[];
   conditionMeta: ConditionMetaMap;
   resources: SheetResources;
+  // Active beast form, or null. Managed by the server (use_resource +
+  // apply_damage in src/lib/dm/mutations.ts).
+  wildShape: WildShape;
   exhaustion: number;
   deathSaves: DeathSaves;
   // Spell this character is concentrating on; null when none. Managed by
@@ -254,6 +305,13 @@ export type CharacterSheet = {
   portrait: SheetAttachment | null;
   notes: string;
   backstory: string;
+  // AI companion party member: the sheet belongs to an unloginable bot user
+  // and the DM drives it (src/lib/dm/companion-tools.ts). 'party' travels
+  // with the party until dismissed; 'guest' is a scene-scoped ally.
+  isCompanion: boolean;
+  companionKind: "party" | "guest" | null;
+  // Personality/voice brief the DM roleplays the companion from.
+  personality: string;
   createdAt: string;
   updatedAt: string;
 };

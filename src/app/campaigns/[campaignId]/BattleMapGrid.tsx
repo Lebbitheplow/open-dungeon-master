@@ -1,5 +1,6 @@
 "use client";
 
+import { memo, useEffect, useMemo, useRef } from "react";
 import { cn } from "@/lib/cn";
 import type { MapTheme } from "@/lib/battlemap/generate";
 import type { PlayerMapView } from "@/lib/battlemap/view";
@@ -113,26 +114,182 @@ function WallDecoration({ kind, x, y }: { kind: Palette["wallDeco"]; x: number; 
   );
 }
 
-export function BattleMapGrid({
-  view,
-  sheets,
-  onTileClick,
-}: {
-  view: PlayerMapView;
-  sheets: CharacterSheet[];
-  onTileClick?: (x: number, y: number) => void;
-}) {
+// Memoized: the session view re-renders on every SSE event (including each
+// streamed narration token), and rebuilding width*height SVG cells each
+// time is Firefox's slowest path. The click handler routes through a ref so
+// the parent's inline closure never invalidates the memo.
+export const BattleMapGrid = memo(
+  function BattleMapGrid({
+    view,
+    sheets,
+    onTileClick,
+  }: {
+    view: PlayerMapView;
+    sheets: CharacterSheet[];
+    onTileClick?: (x: number, y: number) => void;
+  }) {
+    const clickRef = useRef(onTileClick);
+    useEffect(() => {
+      clickRef.current = onTileClick;
+    });
+    const { width, height } = view;
+    const palette = PALETTES[view.theme] ?? PALETTES.field;
+    const portraitsByRef = new Map(
+      sheets.filter((sheet) => sheet.portrait).map((sheet) => [sheet.id, sheet.portrait!.url]),
+    );
+    const currentName = view.currentTurnName.toLowerCase();
+
+    // The terrain/fog/reachable cell layer only changes when the view
+    // projection itself changes; token/light layers below stay cheap.
+    const cells = useMemo(() => buildCells(view, palette), [view, palette]);
+
+    // Delegated tile clicks: the memoized cell layer carries data attributes
+    // instead of per-rect closures, so cells never rebuild for a new handler.
+    function handleSvgClick(event: React.MouseEvent<SVGSVGElement>) {
+      const target = event.target as SVGElement;
+      const x = target.dataset?.tileX;
+      const y = target.dataset?.tileY;
+      if (x !== undefined && y !== undefined) {
+        clickRef.current?.(Number(x), Number(y));
+      }
+    }
+
+    return (
+      <svg
+        viewBox={`0 0 ${width * TILE} ${height * TILE}`}
+        className="h-auto w-full select-none rounded-lg border border-stone-800 bg-stone-950"
+        role="img"
+        aria-label="Battle map"
+        onClick={handleSvgClick}
+      >
+        <defs>
+          <radialGradient id="torchglow">
+            <stop offset="0%" stopColor="#fbbf24" stopOpacity={0.3} />
+            <stop offset="70%" stopColor="#f59e0b" stopOpacity={0.1} />
+            <stop offset="100%" stopColor="#f59e0b" stopOpacity={0} />
+          </radialGradient>
+          <radialGradient id="mapvignette">
+            <stop offset="60%" stopColor="#000" stopOpacity={0} />
+            <stop offset="100%" stopColor="#000" stopOpacity={0.4} />
+          </radialGradient>
+          {view.tokens.map((token) =>
+            portraitsByRef.has(token.refId) ? (
+              <clipPath key={`clip-${token.id}`} id={`token-clip-${token.id}`}>
+                <circle
+                  cx={token.x * TILE + TILE / 2}
+                  cy={token.y * TILE + TILE / 2}
+                  r={TILE / 2 - 4}
+                />
+              </clipPath>
+            ) : null,
+          )}
+        </defs>
+        {cells}
+        {view.lights.map((light, index) => (
+          <circle
+            key={`light-${index}`}
+            cx={light.x * TILE + TILE / 2}
+            cy={light.y * TILE + TILE / 2}
+            r={light.radius * TILE}
+            fill="url(#torchglow)"
+            pointerEvents="none"
+          />
+        ))}
+        {view.tokens.map((token) => {
+          const cx = token.x * TILE + TILE / 2;
+          const cy = token.y * TILE + TILE / 2;
+          const portrait = portraitsByRef.get(token.refId);
+          const isCurrent =
+            !token.down && currentName !== "" && token.name.toLowerCase() === currentName;
+          const ring = token.down
+            ? "#57534e"
+            : token.mine
+              ? "#fbbf24"
+              : token.kind === "enemy"
+                ? "#dc2626"
+                : "#78716c";
+          return (
+            <g key={token.id} pointerEvents="none" opacity={token.down ? 0.75 : 1}>
+              <ellipse
+                cx={cx}
+                cy={cy + TILE / 2 - 5}
+                rx={TILE / 2.6}
+                ry={3.5}
+                fill="#000"
+                opacity={0.35}
+              />
+              <circle
+                cx={cx}
+                cy={cy}
+                r={TILE / 2 - 3}
+                fill={token.kind === "enemy" ? "#450a0a" : "#1c1917"}
+                stroke={ring}
+                strokeWidth={token.mine || isCurrent ? 2.5 : 1.5}
+                className={cn(isCurrent && "animate-pulse")}
+              />
+              {portrait ? (
+                <image
+                  href={portrait}
+                  x={token.x * TILE + 4}
+                  y={token.y * TILE + 4}
+                  width={TILE - 8}
+                  height={TILE - 8}
+                  preserveAspectRatio="xMidYMid slice"
+                  clipPath={`url(#token-clip-${token.id})`}
+                  opacity={token.down ? 0.45 : 1}
+                />
+              ) : (
+                <text
+                  x={cx}
+                  y={cy + 4.5}
+                  textAnchor="middle"
+                  fontSize={13}
+                  fontWeight={700}
+                  fill={token.down ? "#a8a29e" : token.kind === "enemy" ? "#fca5a5" : "#e7e5e4"}
+                >
+                  {token.name.charAt(0).toUpperCase()}
+                </text>
+              )}
+              {token.down ? (
+                <text
+                  x={cx}
+                  y={cy + 5}
+                  textAnchor="middle"
+                  fontSize={15}
+                  fontWeight={700}
+                  fill="#ef4444"
+                >
+                  ✕
+                </text>
+              ) : null}
+            </g>
+          );
+        })}
+        <rect
+          x={0}
+          y={0}
+          width={width * TILE}
+          height={height * TILE}
+          fill="url(#mapvignette)"
+          pointerEvents="none"
+        />
+      </svg>
+    );
+  },
+  (prev, next) =>
+    prev.view === next.view &&
+    prev.sheets === next.sheets &&
+    // Only presence matters; the handler itself is read through a ref.
+    (prev.onTileClick === undefined) === (next.onTileClick === undefined),
+);
+
+function buildCells(view: PlayerMapView, palette: Palette) {
   const { width, height } = view;
-  const palette = PALETTES[view.theme] ?? PALETTES.field;
   const visible = new Set(view.visible);
   const explored = new Set(view.explored);
   const reachable = new Set(view.reachable);
-  const portraitsByRef = new Map(
-    sheets.filter((sheet) => sheet.portrait).map((sheet) => [sheet.id, sheet.portrait!.url]),
-  );
-  const currentName = view.currentTurnName.toLowerCase();
 
-  const cells = Array.from({ length: width * height }, (_, idx) => {
+  return Array.from({ length: width * height }, (_, idx) => {
     const x = idx % width;
     const y = Math.floor(idx / width);
     const ch = view.terrain[idx];
@@ -193,120 +350,11 @@ export function BattleMapGrid({
             stroke="#f59e0b"
             strokeOpacity={0.45}
             className="cursor-pointer"
-            onClick={() => onTileClick?.(x, y)}
+            data-tile-x={x}
+            data-tile-y={y}
           />
         ) : null}
       </g>
     );
   });
-
-  return (
-    <svg
-      viewBox={`0 0 ${width * TILE} ${height * TILE}`}
-      className="h-auto w-full select-none rounded-lg border border-stone-800 bg-stone-950"
-      role="img"
-      aria-label="Battle map"
-    >
-      <defs>
-        <radialGradient id="torchglow">
-          <stop offset="0%" stopColor="#fbbf24" stopOpacity={0.3} />
-          <stop offset="70%" stopColor="#f59e0b" stopOpacity={0.1} />
-          <stop offset="100%" stopColor="#f59e0b" stopOpacity={0} />
-        </radialGradient>
-        <radialGradient id="mapvignette">
-          <stop offset="60%" stopColor="#000" stopOpacity={0} />
-          <stop offset="100%" stopColor="#000" stopOpacity={0.4} />
-        </radialGradient>
-        {view.tokens.map((token) =>
-          portraitsByRef.has(token.refId) ? (
-            <clipPath key={`clip-${token.id}`} id={`token-clip-${token.id}`}>
-              <circle cx={token.x * TILE + TILE / 2} cy={token.y * TILE + TILE / 2} r={TILE / 2 - 4} />
-            </clipPath>
-          ) : null,
-        )}
-      </defs>
-      {cells}
-      {view.lights.map((light, index) => (
-        <circle
-          key={`light-${index}`}
-          cx={light.x * TILE + TILE / 2}
-          cy={light.y * TILE + TILE / 2}
-          r={light.radius * TILE}
-          fill="url(#torchglow)"
-          pointerEvents="none"
-        />
-      ))}
-      {view.tokens.map((token) => {
-        const cx = token.x * TILE + TILE / 2;
-        const cy = token.y * TILE + TILE / 2;
-        const portrait = portraitsByRef.get(token.refId);
-        const isCurrent =
-          !token.down && currentName !== "" && token.name.toLowerCase() === currentName;
-        const ring = token.down
-          ? "#57534e"
-          : token.mine
-            ? "#fbbf24"
-            : token.kind === "enemy"
-              ? "#dc2626"
-              : "#78716c";
-        return (
-          <g key={token.id} pointerEvents="none" opacity={token.down ? 0.75 : 1}>
-            <ellipse cx={cx} cy={cy + TILE / 2 - 5} rx={TILE / 2.6} ry={3.5} fill="#000" opacity={0.35} />
-            <circle
-              cx={cx}
-              cy={cy}
-              r={TILE / 2 - 3}
-              fill={token.kind === "enemy" ? "#450a0a" : "#1c1917"}
-              stroke={ring}
-              strokeWidth={token.mine || isCurrent ? 2.5 : 1.5}
-              className={cn(isCurrent && "animate-pulse")}
-            />
-            {portrait ? (
-              <image
-                href={portrait}
-                x={token.x * TILE + 4}
-                y={token.y * TILE + 4}
-                width={TILE - 8}
-                height={TILE - 8}
-                preserveAspectRatio="xMidYMid slice"
-                clipPath={`url(#token-clip-${token.id})`}
-                opacity={token.down ? 0.45 : 1}
-              />
-            ) : (
-              <text
-                x={cx}
-                y={cy + 4.5}
-                textAnchor="middle"
-                fontSize={13}
-                fontWeight={700}
-                fill={token.down ? "#a8a29e" : token.kind === "enemy" ? "#fca5a5" : "#e7e5e4"}
-              >
-                {token.name.charAt(0).toUpperCase()}
-              </text>
-            )}
-            {token.down ? (
-              <text
-                x={cx}
-                y={cy + 5}
-                textAnchor="middle"
-                fontSize={15}
-                fontWeight={700}
-                fill="#ef4444"
-              >
-                ✕
-              </text>
-            ) : null}
-          </g>
-        );
-      })}
-      <rect
-        x={0}
-        y={0}
-        width={width * TILE}
-        height={height * TILE}
-        fill="url(#mapvignette)"
-        pointerEvents="none"
-      />
-    </svg>
-  );
 }

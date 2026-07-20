@@ -1,20 +1,11 @@
 "use client";
 
 import { Loader2, Plus } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { cn } from "@/lib/cn";
+import { useContentSearch, type PickerEntry } from "./useContentSearch";
 
-export type PickerEntry = {
-  slug: string;
-  name: string;
-  source: "open5e" | "homebrew";
-  data: Record<string, unknown>;
-  level?: number;
-  school?: string;
-  kind?: string;
-  rarity?: string;
-  cost?: string;
-};
+export type { PickerEntry } from "./useContentSearch";
 
 // Debounced search-and-add against /api/content/[kind]. Used for spells,
 // items, and feats in the character builder.
@@ -31,41 +22,11 @@ export default function ContentPicker({
   onPick: (entry: PickerEntry) => void;
   renderMeta?: (entry: PickerEntry) => string;
 }) {
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<PickerEntry[]>([]);
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { query, setQuery, results, setResults, open, setOpen, loading } = useContentSearch(
+    kind,
+    extraParams,
+  );
   const container = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!query.trim()) {
-      return;
-    }
-    if (timer.current) {
-      clearTimeout(timer.current);
-    }
-    timer.current = setTimeout(async () => {
-      setLoading(true);
-      try {
-        const params = new URLSearchParams({ q: query.trim(), limit: "12", ...extraParams });
-        const response = await fetch(`/api/content/${kind}?${params}`);
-        if (response.ok) {
-          const data = await response.json();
-          setResults(data.results ?? []);
-          setOpen(true);
-        }
-      } finally {
-        setLoading(false);
-      }
-    }, 250);
-    return () => {
-      if (timer.current) {
-        clearTimeout(timer.current);
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, kind, JSON.stringify(extraParams)]);
 
   useEffect(() => {
     function onClickOutside(event: MouseEvent) {
@@ -75,7 +36,7 @@ export default function ContentPicker({
     }
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
-  }, []);
+  }, [setOpen]);
 
   return (
     <div ref={container} className="relative">

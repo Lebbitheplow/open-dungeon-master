@@ -87,7 +87,9 @@ export function describeTrack(track: DeathSaves): string {
 // pre-mutation sheet. Returns extra fields merged into the tool result.
 export function applyDamageDeathHook(
   campaign: Campaign,
-  turnId: string,
+  // Null for damage the server applies outside a DM turn, such as an
+  // opportunity attack triggered by a player's own token move.
+  turnId: string | null,
   preSheet: CharacterSheet,
   math: { currentHp: number; dropped: boolean; overkill: number },
   crit: boolean,

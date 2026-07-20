@@ -4,7 +4,7 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { longRestPatch, defaultShortRestDice, hitDiceExpression } = await import(
+const { longRestPatch, defaultShortRestDice, hitDiceExpression, shortRestResourcePatch, slotsRefillOnShortRest } = await import(
   "../src/lib/dm/rest-logic.ts"
 );
 
@@ -119,6 +119,59 @@ test("long rest converts legacy exhaustion condition strings", async () => {
   const patch = longRestPatch(sheet);
   assert.equal(patch.exhaustion, 0);
   assert.deepEqual(patch.conditions, ["prone"]);
+});
+
+test("a long rest drops a wild shape form and any lingering rage", () => {
+  const patch = longRestPatch(
+    makeSheet({
+      conditions: ["raging"],
+      conditionMeta: { raging: { rounds: 4 } },
+      wildShape: { form: "dire wolf", beastHp: 20, beastMaxHp: 37, beastAc: 14 },
+    }),
+  );
+  assert.equal(patch.wildShape, null);
+  assert.deepEqual(patch.conditions, []);
+  assert.deepEqual(patch.conditionMeta, {});
+});
+
+const casterSheet = (klass, slots, resources = {}) => ({
+  class: klass,
+  currentHp: 10,
+  maxHp: 20,
+  hitDice: { die: "d8", total: 5, spent: 0 },
+  conditions: [],
+  conditionMeta: {},
+  exhaustion: 0,
+  resources,
+  spellcasting: { ability: "cha", slots, prepared: [], known: [] },
+});
+
+test("only pact casters get their slots back on a short rest", () => {
+  assert.equal(slotsRefillOnShortRest({ class: "warlock" }), true);
+  assert.equal(slotsRefillOnShortRest({ class: "wizard" }), false);
+  assert.equal(slotsRefillOnShortRest({ class: "fighter" }), false);
+});
+
+test("a warlock's pact slots refill on a short rest", () => {
+  const warlock = casterSheet("warlock", { 2: { max: 2, used: 2 } });
+  const patch = shortRestResourcePatch(warlock);
+  assert.deepEqual(patch.spellcasting.slots, { 2: { max: 2, used: 0 } });
+});
+
+test("a wizard's slots survive a short rest untouched", () => {
+  const wizard = casterSheet("wizard", { 1: { max: 4, used: 3 } });
+  assert.equal(shortRestResourcePatch(wizard), null);
+});
+
+test("a short rest with nothing to restore writes nothing", () => {
+  const warlock = casterSheet("warlock", { 2: { max: 2, used: 0 } });
+  assert.equal(shortRestResourcePatch(warlock), null);
+});
+
+test("short-recharge resources refill alongside the slots", () => {
+  const monk = casterSheet("monk", {}, { ki: { max: 5, used: 5 } });
+  const patch = shortRestResourcePatch(monk);
+  assert.equal(patch.resources.ki.used, 0);
 });
 
 console.log(`test-rest-logic: ${passed} tests passed.`);

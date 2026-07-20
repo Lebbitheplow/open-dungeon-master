@@ -1,11 +1,10 @@
-// Consumable knowledge for use_item: potion tiers, item matching, ammo
-// lookup.
+// Consumable knowledge for use_item: potion tiers, item matching.
 import assert from "node:assert/strict";
 import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { ammoItemFor, consumableEffect, findCarriedItem } = await import(
+const { consumableEffect, findCarriedItem } = await import(
   "../src/lib/dm/item-logic.ts"
 );
 
@@ -41,13 +40,6 @@ test("findCarriedItem fuzzy matches", () => {
   assert.equal(findCarriedItem(pack, "healing potion").name, "Potion of Healing");
   assert.equal(findCarriedItem(pack, "Potion").name, "Potion of Healing");
   assert.equal(findCarriedItem(pack, "shield"), null);
-});
-
-test("ammoItemFor matches quivers and plurals", () => {
-  assert.equal(ammoItemFor(pack, "arrows").name, "Quiver of Arrows");
-  assert.equal(ammoItemFor(pack, "bolts").name, "Crossbow bolts");
-  assert.equal(ammoItemFor(pack, "rounds"), null);
-  assert.equal(ammoItemFor([{ name: "Sling bullets", qty: 5 }], "sling bullets").name, "Sling bullets");
 });
 
 console.log(`test-item-logic: ${passed} tests passed`);

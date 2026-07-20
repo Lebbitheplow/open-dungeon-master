@@ -7,7 +7,7 @@ import {
   Link as LinkIcon,
   UserPlus,
 } from "lucide-react";
-import { useState, useSyncExternalStore } from "react";
+import { memo, useState, useSyncExternalStore } from "react";
 import { cn } from "@/lib/cn";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { BattleMapPanel } from "@/app/campaigns/[campaignId]/BattleMapPanel";
@@ -37,6 +37,7 @@ import type { Note } from "@/lib/db/notes";
 import type { DmWhisper } from "@/lib/db/dm-whispers";
 import type { SideThread } from "@/lib/db/side-chat";
 import type { PlayerMapView } from "@/lib/battlemap/view";
+import { companionSlotsFree, resolveCompanionMode } from "@/lib/schemas/game-settings";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // Two widths only: the default rail and a roomier one. Per-browser
@@ -64,7 +65,7 @@ function setWide(wide: boolean) {
 // right rail; below lg it fills the screen when the bottom tab bar selects a
 // panel. Tab state lives in SessionView (SessionTabs) so the mobile bottom
 // bar and this rail stay in sync.
-export function SidePanel({
+function SidePanelInner({
   campaignId,
   sheets,
   members,
@@ -72,7 +73,6 @@ export function SidePanel({
   isLead,
   leadUserId,
   canTransferLead,
-  onAdjustHp,
   spotlightUserIds,
   auditLog,
   locations,
@@ -109,7 +109,6 @@ export function SidePanel({
   isLead: boolean;
   leadUserId: string;
   canTransferLead: boolean;
-  onAdjustHp: (delta: number) => void;
   spotlightUserIds: string[];
   auditLog: AuditEntry[];
   locations: CampaignLocation[];
@@ -265,7 +264,6 @@ export function SidePanel({
           <PartyPanel
             sheets={sheets}
             meUserId={meUserId}
-            onAdjustHp={onAdjustHp}
             spotlightUserIds={spotlightUserIds}
             isLead={isLead}
             leadUserId={leadUserId}
@@ -275,6 +273,33 @@ export function SidePanel({
             refreshNotes={refreshNotes}
             onMessageUser={onMessageUser}
             realDiceAllowed={campaign?.gameSettings?.dicePolicy === "real_allowed"}
+            inCombat={Boolean(encounter)}
+            campaignId={campaignId}
+            companionsAvailable={
+              campaign?.gameSettings
+                ? companionSlotsFree(
+                    campaign.gameSettings,
+                    members.length,
+                    sheets
+                      .filter((sheet) => sheet.isCompanion)
+                      .map((sheet) => (sheet.companionKind === "guest" ? "guest" : "party")),
+                  )
+                : false
+            }
+            companionBuildAvailable={
+              campaign?.gameSettings
+                ? resolveCompanionMode(campaign.gameSettings, members.length) === "full" &&
+                  sheets.filter((sheet) => sheet.isCompanion && sheet.companionKind !== "guest")
+                    .length < campaign.gameSettings.maxCompanions
+                : false
+            }
+            companionGenre={campaign?.gameSettings?.genre}
+            companionLevel={(() => {
+              const levels = sheets.filter((sheet) => !sheet.isCompanion).map((sheet) => sheet.level);
+              return levels.length
+                ? Math.max(1, Math.round(levels.reduce((sum, n) => sum + n, 0) / levels.length))
+                : (campaign?.startingLevel ?? 1);
+            })()}
             embedded
           />
           </>
@@ -339,3 +364,7 @@ export function SidePanel({
     </aside>
   );
 }
+
+// Memoized: the session view re-renders on every streamed DM token, and
+// this panel's props are unchanged during narration.
+export const SidePanel = memo(SidePanelInner);

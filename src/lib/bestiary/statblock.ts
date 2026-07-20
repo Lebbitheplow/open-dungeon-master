@@ -222,3 +222,10 @@ export function saveModFor(stats: EnemyStats, ability: SaveAbility): number {
   }
   return Math.min(5, Math.round(stats.cr * 0.3));
 }
+
+// An enemy's passive Perception: the 5e formula against its Wisdom. Used by
+// the Hide action so a stealth roll is compared to something real rather
+// than left to the model's judgement.
+export function passivePerceptionFor(stats: EnemyStats): number {
+  return 10 + saveModFor(stats, "wis");
+}

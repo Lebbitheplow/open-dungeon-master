@@ -5,7 +5,7 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { buildOrder, advanceOrder, coerceEncounterOutcome, enemyDamageMath, numberDuplicates, pickEnemyTarget, spliceIntoOrder } = await import(
+const { buildOrder, advanceOrder, coerceEncounterOutcome, critDamageExpression, enemyDamageMath, numberDuplicates, pickEnemyTarget, spliceIntoOrder } = await import(
   "../src/lib/dm/encounter-logic.ts"
 );
 
@@ -171,6 +171,15 @@ test("coerceEncounterOutcome: unknown/missing infers from roster", () => {
   assert.deepEqual(coerceEncounterOutcome(undefined, ["dead", "dead"]), { outcome: "victory", inferred: true });
   assert.deepEqual(coerceEncounterOutcome("???", ["fled", "fled"]), { outcome: "enemies_fled", inferred: true });
   assert.deepEqual(coerceEncounterOutcome("", ["alive", "dead"]), { outcome: "truce", inferred: true });
+});
+
+test("critical extra dice add one more of the first damage die", () => {
+  // Brutal Critical 2: doubled dice plus two extra d12s.
+  assert.equal(critDamageExpression("1d12+4", 2), "1d12+1d12+4+1d12+1d12");
+  // A greatsword rolls 2d6, so the extra die is a single d6.
+  assert.equal(critDamageExpression("2d6+3", 1), "2d6+2d6+3+1d6");
+  // No extra dice leaves the old behavior untouched.
+  assert.equal(critDamageExpression("1d8+2"), "1d8+1d8+2");
 });
 
 console.log(`test-encounter-logic: ${passed} passed`);

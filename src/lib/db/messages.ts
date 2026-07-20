@@ -140,6 +140,21 @@ export function listAllMessages(campaignId: string): CampaignMessage[] {
   return rows.map(mapMessage);
 }
 
+// A window of the seq-ascending transcript: offset is an index into that
+// ordering, matching the compaction engine's coveredCount semantics.
+export function listMessagesPage(
+  campaignId: string,
+  offset: number,
+  limit: number,
+): CampaignMessage[] {
+  const rows = getDatabase()
+    .prepare(
+      `SELECT * FROM campaign_messages WHERE campaign_id = ? ORDER BY seq ASC LIMIT ? OFFSET ?`,
+    )
+    .all(campaignId, limit, offset) as MessageRow[];
+  return rows.map(mapMessage);
+}
+
 export function countMessages(campaignId: string): number {
   const row = getDatabase()
     .prepare(`SELECT COUNT(*) AS count FROM campaign_messages WHERE campaign_id = ?`)

@@ -11,13 +11,14 @@ import {
 } from "@/lib/db/battle-maps";
 import { generateBattleMap, fnv1a } from "@/lib/battlemap/generate";
 import { findPath, speedToTiles, walkPathWithBudget } from "@/lib/battlemap/movement";
-import { hasLineOfSight } from "@/lib/battlemap/los";
+import { coverBetween, hasLineOfSight } from "@/lib/battlemap/los";
 import { bestFiringPosition } from "@/lib/battlemap/tactics";
 import { occupiedTiles } from "@/lib/battlemap/view";
 import { chebyshev, tileIndex, type BattleToken } from "@/lib/battlemap/types";
 import { getCurrentLocation } from "@/lib/db/locations";
 import { publishEphemeral } from "@/lib/events";
 import { resolveSheetRef } from "@/lib/dm/rolls";
+import { resolvePcOpportunityAttacks } from "@/lib/dm/opportunity";
 import { effectiveSpeed } from "@/lib/dm/condition-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { z } from "zod";
@@ -220,6 +221,7 @@ export function handleMoveToken(
     spent = walk.spent;
     clamped = !walk.reachedEnd;
   }
+  const origin = { x: resolved.token.x, y: resolved.token.y };
   moveToken(
     resolved.token.id,
     landing.x,
@@ -227,10 +229,35 @@ export function handleMoveToken(
     resolved.kind === "enemy" ? resolved.token.movedThisRound + spent : resolved.token.movedThisRound,
   );
   publishBattleMapUpdate(campaign.id);
+
+  // An enemy breaking away from a character eats their opportunity attack,
+  // exactly as the reverse does when a player walks off. Forced movement
+  // (a shove, a gust of wind) provokes nothing.
+  const opportunity =
+    resolved.kind === "enemy" && !args.forced
+      ? resolvePcOpportunityAttacks(campaign, resolved.token.refId, origin, landing)
+      : [];
+  // Fresh ranges from the landing tile, so the model narrates the new
+  // distances instead of remembering the pre-move map.
+  const opposing = tokens.filter(
+    (other) => other.id !== resolved.token.id && other.kind !== resolved.kind,
+  );
+  const distances = opposing.map((other) => {
+    const tilesApart = Math.max(Math.abs(landing.x - other.x), Math.abs(landing.y - other.y));
+    return `${other.name}: ${tilesApart <= 1 ? "ADJACENT (5 ft)" : `${tilesApart * 5} ft`}`;
+  });
   return {
     ok: true,
     name: resolved.token.name,
     at: `(${landing.x},${landing.y})`,
+    ...(distances.length ? { distancesNow: distances.join("; ") } : {}),
+    ...(opportunity.length
+      ? {
+          opportunityAttacks: opportunity,
+          opportunityNote:
+            "The server already rolled and applied these; narrate them, and do not call pc_attack for them.",
+        }
+      : {}),
     ...(clamped
       ? {
           note: `Speed limited the move: ${resolved.token.name} stopped at (${landing.x},${landing.y}) short of (${args.x},${args.y}).`,
@@ -241,10 +268,65 @@ export function handleMoveToken(
 
 // ---- spatial checks for pc_attack ----
 
+// Sneak Attack's second trigger: another enemy of the target is within 5 ft
+// of it, meaning any PC token other than the attacker standing adjacent.
+// Null map = no spatial information, so the caller falls back to the
+// advantage trigger alone rather than guessing.
+export function allyAdjacentToEnemy(
+  encounterId: string,
+  attackerCharacterId: string,
+  enemyId: string,
+): boolean {
+  const map = getBattleMapForEncounter(encounterId);
+  if (!map) {
+    return false;
+  }
+  const target = getTokenByRef(map.id, enemyId);
+  if (!target) {
+    return false;
+  }
+  return listTokens(map.id).some(
+    (token) =>
+      token.kind === "pc" &&
+      token.refId !== attackerCharacterId &&
+      chebyshev(token.x, token.y, target.x, target.y) <= 1,
+  );
+}
+
 // Read-only range gate for player attacks: PCs are never auto-moved (players
 // walk their own tokens), so an out-of-reach attack is refused with the
 // distance spelled out. No map = no spatial enforcement. Returns an error
 // string, or null when the attack may proceed.
+// What the map says about an attack beyond whether it is legal: the cover
+// the target enjoys and whether the shot is past its normal range. Returned
+// alongside the refusal so pc_attack can fold both into the roll.
+export type AttackSpatials = { cover: 0 | 2 | 5; longRange: boolean };
+
+export function pcAttackSpatials(
+  encounterId: string,
+  characterId: string,
+  enemyId: string,
+  options: { ranged: boolean; rangeTiles: number; thrown: boolean },
+): AttackSpatials {
+  const none: AttackSpatials = { cover: 0, longRange: false };
+  const map = getBattleMapForEncounter(encounterId);
+  if (!map) {
+    return none;
+  }
+  const attacker = getTokenByRef(map.id, characterId);
+  const target = getTokenByRef(map.id, enemyId);
+  if (!attacker || !target) {
+    return none;
+  }
+  const distance = chebyshev(attacker.x, attacker.y, target.x, target.y);
+  return {
+    cover: coverBetween(map.terrain, map.width, map.height, attacker.x, attacker.y, target.x, target.y),
+    // Past the weapon's normal range but inside its long range: the SRD
+    // penalty is disadvantage, and checkPcAttackRange allows up to double.
+    longRange: (options.ranged || options.thrown) && distance > options.rangeTiles,
+  };
+}
+
 export function checkPcAttackRange(
   encounterId: string,
   characterId: string,
@@ -273,13 +355,15 @@ export function checkPcAttackRange(
     target.x,
     target.y,
   );
-  if ((options.ranged || options.thrown) && distance <= options.rangeTiles) {
+  // The SRD long-range rule: a ranged weapon reaches twice its normal range,
+  // at disadvantage. Past that it cannot reach at all.
+  if ((options.ranged || options.thrown) && distance <= options.rangeTiles * 2) {
     return sighted
       ? null
       : `${attacker.name} has no line of sight to ${target.name}; something blocks the shot. They must move their token to a sightline first or pick another target.`;
   }
   if (options.ranged || options.thrown) {
-    return `${attacker.name} is ${distance * 5} ft from ${target.name}, beyond this attack's ${options.rangeTiles * 5} ft range. They must move their token closer or pick another target.`;
+    return `${attacker.name} is ${distance * 5} ft from ${target.name}, beyond this attack's ${options.rangeTiles * 10} ft maximum range. They must move their token closer or pick another target.`;
   }
   return `${attacker.name} is ${distance * 5} ft from ${target.name}, out of melee reach (${options.reachTiles * 5} ft). They must move their token adjacent first or attack with a ranged weapon.`;
 }

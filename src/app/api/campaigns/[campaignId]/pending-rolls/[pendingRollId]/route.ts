@@ -36,18 +36,21 @@ export async function POST(
     return context;
   }
 
+  // Body parsing happens before the pending-roll lookup on purpose: with no
+  // await between the status check and resolvePendingRoll below, concurrent
+  // double-submits cannot both insert a roll row (better-sqlite3 is sync).
+  const raw = await request.json().catch(() => ({}));
+  const parsed = submitSchema.safeParse(raw);
+  if (!parsed.success) {
+    return Response.json({ error: "Invalid roll submission." }, { status: 400 });
+  }
+
   const pending = getPendingRoll(pendingRollId);
   if (!pending || pending.campaignId !== campaignId) {
     return Response.json({ error: "Roll not found." }, { status: 404 });
   }
   if (pending.status !== "pending") {
     return Response.json({ error: "That roll was already resolved." }, { status: 409 });
-  }
-
-  const raw = await request.json().catch(() => ({}));
-  const parsed = submitSchema.safeParse(raw);
-  if (!parsed.success) {
-    return Response.json({ error: "Invalid roll submission." }, { status: 400 });
   }
 
   const isFallback = "fallback" in parsed.data;

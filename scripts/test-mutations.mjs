@@ -7,6 +7,7 @@ import {
   healMath,
   removeItemMath,
   spendSlotMath,
+  wildShapeDamageMath,
 } from "../src/lib/dm/mutation-math.ts";
 
 let passed = 0;
@@ -72,6 +73,33 @@ test("item granting merges by name", () => {
   const equipment = [{ name: "Torch", qty: 1 }];
   assert.equal(grantItemMath(equipment, "torch", 2).equipment[0].qty, 3);
   assert.equal(grantItemMath(equipment, "Dagger", 1).equipment.length, 2);
+});
+
+test("wild shape: the beast pool takes the hit and the druid is untouched", () => {
+  const result = wildShapeDamageMath(37, 0, 12);
+  assert.equal(result.beastHp, 25);
+  assert.equal(result.reverted, false);
+  assert.equal(result.carryover, 0);
+});
+
+test("wild shape: breaking the form carries only the excess through", () => {
+  const result = wildShapeDamageMath(8, 0, 20);
+  assert.equal(result.beastHp, 0);
+  assert.equal(result.reverted, true);
+  assert.equal(result.carryover, 12);
+});
+
+test("wild shape: exactly lethal damage reverts with nothing carried", () => {
+  const result = wildShapeDamageMath(8, 0, 8);
+  assert.equal(result.reverted, true);
+  assert.equal(result.carryover, 0);
+});
+
+test("wild shape: temp HP soaks before the beast pool", () => {
+  const result = wildShapeDamageMath(10, 4, 6);
+  assert.equal(result.absorbed, 4);
+  assert.equal(result.tempHp, 0);
+  assert.equal(result.beastHp, 8);
 });
 
 console.log(`${passed} mutation tests passed`);

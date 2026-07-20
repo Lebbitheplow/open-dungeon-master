@@ -1,5 +1,6 @@
-import { pruneMeta } from "@/lib/dm/condition-logic";
-import { refillResources } from "@/lib/srd/class-resources";
+import { pruneMeta, removeConditions } from "@/lib/dm/condition-logic";
+import { RAGING, refillResources } from "@/lib/srd/class-resources";
+import { findClass } from "@/lib/srd";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
 
 // Pure 5e rest math, database-free so scripts/test-rest-logic.mjs can
@@ -15,6 +16,8 @@ export function longRestPatch(sheet: CharacterSheet): FullPatchSheetInput {
     tempHp: 0,
     deathSaves: null,
     concentratingOn: null,
+    // Nobody sleeps through a night still shaped or still raging.
+    wildShape: null,
     hitDice: {
       ...sheet.hitDice,
       spent: Math.max(0, sheet.hitDice.spent - recovered),
@@ -48,18 +51,54 @@ export function longRestPatch(sheet: CharacterSheet): FullPatchSheetInput {
       patch.conditionMeta = pruneMeta(patch.conditions, sheet.conditionMeta);
     }
   }
+  // A rage never survives the night, whatever its remaining rounds said.
+  const conditions = patch.conditions ?? sheet.conditions;
+  if (conditions.some((condition) => condition.toLowerCase() === RAGING)) {
+    const cleared = removeConditions(conditions, patch.conditionMeta ?? sheet.conditionMeta, [
+      RAGING,
+    ]);
+    patch.conditions = cleared.conditions;
+    patch.conditionMeta = cleared.meta;
+  }
   return patch;
 }
 
-// Short rest: only short-recharge resources (Ki, Second Wind, Action
-// Surge, Channel Divinity, Wild Shape...) refill. Returns null when nothing
-// changes so callers can skip the write.
+// Whether this character's spell slots come back on a SHORT rest. Warlock
+// Pact Magic does; every other caster waits for the night. Missing this is
+// why a warlock played at roughly half their intended power: longRestPatch
+// refilled their slots and nothing else ever did.
+export function slotsRefillOnShortRest(sheet: Pick<CharacterSheet, "class">): boolean {
+  return findClass(sheet.class)?.casterType === "pact";
+}
+
+// Short rest: short-recharge resources (Ki, Second Wind, Action Surge,
+// Channel Divinity, Wild Shape...) refill, and a pact caster's slots come
+// back with them. Returns null when nothing changes so callers can skip the
+// write.
 export function shortRestResourcePatch(sheet: CharacterSheet): FullPatchSheetInput | null {
   const next = refillResources(sheet.resources, "short");
   const changed = Object.entries(next).some(
     ([id, state]) => state.used !== sheet.resources?.[id]?.used,
   );
-  return changed ? { resources: next } : null;
+  const patch: FullPatchSheetInput = {};
+  if (changed) {
+    patch.resources = next;
+  }
+  if (sheet.spellcasting && slotsRefillOnShortRest(sheet)) {
+    const slots = Object.fromEntries(
+      Object.entries(sheet.spellcasting.slots).map(([level, slot]) => [
+        level,
+        { max: slot.max, used: 0 },
+      ]),
+    );
+    const slotsChanged = Object.entries(sheet.spellcasting.slots).some(
+      ([, slot]) => slot.used > 0,
+    );
+    if (slotsChanged) {
+      patch.spellcasting = { ...sheet.spellcasting, slots };
+    }
+  }
+  return Object.keys(patch).length ? patch : null;
 }
 
 // How many hit dice a short rest should spend for a character when the

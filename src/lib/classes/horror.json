@@ -2,58 +2,243 @@
   "_note": "Original setting-specific classes for Open Dungeon Master. Not SRD-derived content.",
   "classes": [
     {
-      "id": "exorcist", "name": "Exorcist", "hitDie": 8,
-      "saves": ["wis", "cha"], "casterType": "half", "spellAbility": "wis",
-      "armor": ["light"], "weapons": ["simple", "occult"],
-      "skillChoices": { "count": 2, "from": ["arcana", "history", "insight", "medicine", "perception", "religion"] },
-      "genres": ["horror"],
+      "id": "exorcist",
+      "name": "Exorcist",
+      "hitDie": 8,
+      "saves": [
+        "wis",
+        "cha"
+      ],
+      "casterType": "half",
+      "spellAbility": "wis",
+      "armor": [
+        "light"
+      ],
+      "weapons": [
+        "simple",
+        "occult"
+      ],
+      "skillChoices": {
+        "count": 2,
+        "from": [
+          "arcana",
+          "history",
+          "insight",
+          "medicine",
+          "perception",
+          "religion"
+        ]
+      },
+      "genres": [
+        "horror"
+      ],
       "blurb": "Armed with rites, salt, and stubborn faith, they drive out the things that wear people like coats.",
-      "spellListFrom": "cleric", "knownCaster": false, "castingLabel": "Rites"
+      "spellListFrom": "cleric",
+      "knownCaster": false,
+      "castingLabel": "Rites",
+      "tools": [
+        "holy kit"
+      ]
     },
     {
-      "id": "occultist", "name": "Occultist", "hitDie": 6,
-      "saves": ["int", "cha"], "casterType": "pact", "spellAbility": "int",
-      "armor": [], "weapons": ["simple", "occult"],
-      "skillChoices": { "count": 2, "from": ["arcana", "deception", "history", "insight", "investigation", "religion"] },
-      "genres": ["horror", "dark_fantasy"],
+      "id": "occultist",
+      "name": "Occultist",
+      "hitDie": 6,
+      "saves": [
+        "int",
+        "cha"
+      ],
+      "casterType": "pact",
+      "spellAbility": "int",
+      "armor": [],
+      "weapons": [
+        "simple",
+        "occult"
+      ],
+      "skillChoices": {
+        "count": 2,
+        "from": [
+          "arcana",
+          "deception",
+          "history",
+          "insight",
+          "investigation",
+          "religion"
+        ]
+      },
+      "genres": [
+        "horror",
+        "dark_fantasy"
+      ],
       "blurb": "A scholar who read the forbidden pages anyway, trading pieces of sleep and sanity for real power.",
-      "spellListFrom": "warlock", "knownCaster": true, "castingLabel": "Invocations"
+      "spellListFrom": "warlock",
+      "knownCaster": true,
+      "castingLabel": "Invocations",
+      "tools": [
+        "calligrapher's supplies"
+      ]
     },
     {
-      "id": "survivor", "name": "Survivor", "hitDie": 10,
-      "saves": ["dex", "con"], "casterType": "none", "spellAbility": null,
-      "armor": ["light"], "weapons": ["simple", "firearms"],
-      "skillChoices": { "count": 3, "from": ["acrobatics", "athletics", "insight", "medicine", "perception", "stealth", "survival"] },
-      "genres": ["horror", "post_apocalyptic"],
+      "id": "survivor",
+      "name": "Survivor",
+      "hitDie": 10,
+      "saves": [
+        "dex",
+        "con"
+      ],
+      "casterType": "none",
+      "spellAbility": null,
+      "armor": [
+        "light"
+      ],
+      "weapons": [
+        "simple",
+        "firearms"
+      ],
+      "skillChoices": {
+        "count": 3,
+        "from": [
+          "acrobatics",
+          "athletics",
+          "insight",
+          "medicine",
+          "perception",
+          "stealth",
+          "survival"
+        ]
+      },
+      "genres": [
+        "horror",
+        "post_apocalyptic"
+      ],
       "blurb": "They have outlived everyone who called them lucky. Fast hands, cold nerve, and an exit always in mind.",
-      "spellListFrom": null, "knownCaster": false, "castingLabel": null
+      "spellListFrom": null,
+      "knownCaster": false,
+      "castingLabel": null,
+      "tools": [
+        "improvised repair kit"
+      ]
     },
     {
-      "id": "slayer", "name": "Slayer", "hitDie": 10,
-      "saves": ["str", "con"], "casterType": "none", "spellAbility": null,
-      "armor": ["light", "medium"], "weapons": ["simple", "martial", "firearms"],
-      "skillChoices": { "count": 2, "from": ["arcana", "athletics", "intimidation", "investigation", "perception", "survival"] },
-      "genres": ["horror", "dark_fantasy"],
+      "id": "slayer",
+      "name": "Slayer",
+      "hitDie": 10,
+      "saves": [
+        "str",
+        "con"
+      ],
+      "casterType": "none",
+      "spellAbility": null,
+      "armor": [
+        "light",
+        "medium"
+      ],
+      "weapons": [
+        "simple",
+        "martial",
+        "firearms"
+      ],
+      "skillChoices": {
+        "count": 2,
+        "from": [
+          "arcana",
+          "athletics",
+          "intimidation",
+          "investigation",
+          "perception",
+          "survival"
+        ]
+      },
+      "genres": [
+        "horror",
+        "dark_fantasy"
+      ],
       "blurb": "A monster hunter of the old orders: silver on the blade, lore in the head, and no illusions left.",
-      "spellListFrom": null, "knownCaster": false, "castingLabel": null
+      "spellListFrom": null,
+      "knownCaster": false,
+      "castingLabel": null,
+      "tools": [
+        "smith's tools",
+        "alchemist's supplies"
+      ]
     },
     {
-      "id": "parapsychologist", "name": "Parapsychologist", "hitDie": 8,
-      "saves": ["int", "wis"], "casterType": "half", "spellAbility": "int",
-      "armor": ["light"], "weapons": ["simple", "firearms"],
-      "skillChoices": { "count": 2, "from": ["arcana", "history", "insight", "investigation", "medicine", "perception"] },
-      "genres": ["horror", "mystery"],
+      "id": "parapsychologist",
+      "name": "Parapsychologist",
+      "hitDie": 8,
+      "saves": [
+        "int",
+        "wis"
+      ],
+      "casterType": "half",
+      "spellAbility": "int",
+      "armor": [
+        "light"
+      ],
+      "weapons": [
+        "simple",
+        "firearms"
+      ],
+      "skillChoices": {
+        "count": 2,
+        "from": [
+          "arcana",
+          "history",
+          "insight",
+          "investigation",
+          "medicine",
+          "perception"
+        ]
+      },
+      "genres": [
+        "horror",
+        "mystery"
+      ],
       "blurb": "Science aimed at the impossible: field instruments, careful notes, and effects the journals refuse to print.",
-      "spellListFrom": "wizard", "knownCaster": false, "castingLabel": "Apparatus"
+      "spellListFrom": "wizard",
+      "knownCaster": false,
+      "castingLabel": "Apparatus",
+      "tools": [
+        "field instruments",
+        "photographer's kit"
+      ]
     },
     {
-      "id": "apostate", "name": "Apostate", "hitDie": 8,
-      "saves": ["con", "cha"], "casterType": "full", "spellAbility": "cha",
-      "armor": [], "weapons": ["simple", "occult"],
-      "skillChoices": { "count": 2, "from": ["arcana", "deception", "insight", "intimidation", "persuasion", "religion"] },
-      "genres": ["horror"],
+      "id": "apostate",
+      "name": "Apostate",
+      "hitDie": 8,
+      "saves": [
+        "con",
+        "cha"
+      ],
+      "casterType": "full",
+      "spellAbility": "cha",
+      "armor": [],
+      "weapons": [
+        "simple",
+        "occult"
+      ],
+      "skillChoices": {
+        "count": 2,
+        "from": [
+          "arcana",
+          "deception",
+          "insight",
+          "intimidation",
+          "persuasion",
+          "religion"
+        ]
+      },
+      "genres": [
+        "horror"
+      ],
       "blurb": "They escaped the cult, but the ritual finished anyway. Now its power lives under their skin.",
-      "spellListFrom": "sorcerer", "knownCaster": true, "castingLabel": "Stigmata"
+      "spellListFrom": "sorcerer",
+      "knownCaster": true,
+      "castingLabel": "Stigmata",
+      "tools": [
+        "ritual implements"
+      ]
     }
   ]
 }

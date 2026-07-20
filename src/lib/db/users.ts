@@ -63,6 +63,38 @@ export function createUser(
   };
 }
 
+// Unloginable owner row for an AI companion sheet: character_sheets has a
+// users FK plus UNIQUE(campaign_id, user_id), so every companion needs its
+// own real user. The 'comp_' id prefix keeps them out of admin listings.
+export function createCompanionUser(companionName: string): User {
+  const db = getDatabase();
+  const id = `comp_${crypto.randomUUID()}`;
+  const slug = companionName.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 24) || "companion";
+  const username = `companion-${slug}-${id.slice(5, 13)}`;
+  db.prepare(
+    `INSERT INTO users (id, username, password_hash, created_at, is_admin) VALUES (?, ?, ?, ?, 0)`,
+  ).run(id, username, NO_PASSWORD_SENTINEL, nowIso());
+  return {
+    id,
+    username,
+    avatar: null,
+    createdAt: nowIso(),
+    isAdmin: false,
+    mustChangePassword: false,
+  };
+}
+
+export function isCompanionUserId(userId: string): boolean {
+  return userId.startsWith("comp_");
+}
+
+export function deleteCompanionUser(userId: string) {
+  if (!isCompanionUserId(userId)) {
+    return;
+  }
+  getDatabase().prepare(`DELETE FROM users WHERE id = ?`).run(userId);
+}
+
 export function getUserByUsername(username: string): (User & { passwordHash: string }) | null {
   const row = getDatabase()
     .prepare(`SELECT ${USER_COLUMNS} FROM users WHERE username = ?`)
@@ -108,6 +140,7 @@ export function listUsers(): AdminUserSummary[] {
         SELECT ${USER_COLUMNS}, discord_id,
           (SELECT COUNT(*) FROM campaign_members m WHERE m.user_id = users.id) AS campaign_count
         FROM users
+        WHERE id NOT LIKE 'comp\\_%' ESCAPE '\\'
         ORDER BY created_at ASC
       `,
     )

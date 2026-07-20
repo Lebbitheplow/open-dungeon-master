@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { currentUser, unauthorized } from "@/lib/auth";
 import { comfyStatus, resolveComfyUrl } from "@/lib/comfyui";
 
 export const runtime = "nodejs";
@@ -10,11 +11,19 @@ const requestSchema = z.object({
 
 // Reachability + checkpoint list for the Images panel's ComfyUI backend.
 export async function POST(request: Request) {
-  const body = requestSchema.parse(await request.json().catch(() => ({})));
-  const status = await comfyStatus(body.url);
+  const user = await currentUser();
+  if (!user) {
+    return unauthorized();
+  }
+
+  const parsed = requestSchema.safeParse(await request.json().catch(() => ({})));
+  if (!parsed.success) {
+    return Response.json({ error: "Invalid request." }, { status: 400 });
+  }
+  const status = await comfyStatus(parsed.data.url);
 
   return Response.json({
     ...status,
-    url: resolveComfyUrl(body.url),
+    url: resolveComfyUrl(parsed.data.url),
   });
 }

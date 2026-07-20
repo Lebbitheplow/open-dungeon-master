@@ -1,5 +1,4 @@
 import { configValue, getGlobalConfig } from "@/lib/app-config";
-import { serverEnv } from "@/lib/server-env";
 
 export const OAUTH_COOKIE = "odm_oauth";
 

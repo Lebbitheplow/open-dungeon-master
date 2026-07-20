@@ -19,7 +19,15 @@
       "languages": [
         "Common",
         "Dwarvish"
-      ]
+      ],
+      "toolChoice": {
+        "count": 1,
+        "from": [
+          "smith's tools",
+          "brewer's supplies",
+          "mason's tools"
+        ]
+      }
     },
     {
       "id": "high_elf",
@@ -41,7 +49,14 @@
         "Common",
         "Elvish"
       ],
-      "bonusLanguages": 1
+      "bonusLanguages": 1,
+      "skills": [
+        "perception"
+      ],
+      "cantripChoice": {
+        "list": "wizard",
+        "count": 1
+      }
     },
     {
       "id": "lightfoot_halfling",
@@ -121,6 +136,9 @@
       "languages": [
         "Common",
         "Gnomish"
+      ],
+      "tools": [
+        "tinker's tools"
       ]
     },
     {
@@ -145,7 +163,10 @@
         "Elvish",
         "one of your choice"
       ],
-      "bonusLanguages": 1
+      "bonusLanguages": 1,
+      "skillChoice": {
+        "count": 2
+      }
     },
     {
       "id": "half_orc",
@@ -165,6 +186,9 @@
       "languages": [
         "Common",
         "Orc"
+      ],
+      "skills": [
+        "intimidation"
       ]
     },
     {

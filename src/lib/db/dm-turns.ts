@@ -22,6 +22,9 @@ export type DmTurn = {
   // Enemies that already attacked this turn (via enemy_attack); the auto-act
   // fallback skips them so nothing swings twice.
   actedEnemyIds: string[];
+  // PCs whose combat turn was adjudicated this DM turn; the initiative
+  // pointer only advances past a PC on this list (or with a landed roll).
+  resolvedCharacterIds: string[];
   imageArgs: { prompt: string; reason?: string } | null;
   locationId: string | null;
   mutationCount: number;
@@ -40,6 +43,7 @@ type TurnRow = {
   roll_ids_json: string;
   player_whisper_ids_json: string;
   acted_enemy_ids_json: string | null;
+  resolved_character_ids_json: string | null;
   image_args_json: string | null;
   location_id: string | null;
   mutation_count: number;
@@ -59,6 +63,7 @@ function mapTurn(row: TurnRow): DmTurn {
     rollIds: parseJson<string[]>(row.roll_ids_json, []),
     playerWhisperIds: parseJson<string[]>(row.player_whisper_ids_json, []),
     actedEnemyIds: parseJson<string[]>(row.acted_enemy_ids_json, []),
+    resolvedCharacterIds: parseJson<string[]>(row.resolved_character_ids_json, []),
     imageArgs: parseJson<DmTurn["imageArgs"]>(row.image_args_json, null),
     locationId: row.location_id ?? null,
     mutationCount: row.mutation_count,
@@ -99,7 +104,7 @@ export function saveDmTurn(turn: DmTurn) {
       `
         UPDATE dm_turns SET
           status = ?, call_index = ?, conversation_json = ?,
-          narration_parts_json = ?, roll_ids_json = ?, player_whisper_ids_json = ?, acted_enemy_ids_json = ?, image_args_json = ?,
+          narration_parts_json = ?, roll_ids_json = ?, player_whisper_ids_json = ?, acted_enemy_ids_json = ?, resolved_character_ids_json = ?, image_args_json = ?,
           location_id = ?, mutation_count = ?, encounter_count = ?, updated_at = ?
         WHERE id = ?
       `,
@@ -112,6 +117,7 @@ export function saveDmTurn(turn: DmTurn) {
       JSON.stringify(turn.rollIds),
       JSON.stringify(turn.playerWhisperIds),
       JSON.stringify(turn.actedEnemyIds),
+      JSON.stringify(turn.resolvedCharacterIds),
       turn.imageArgs ? JSON.stringify(turn.imageArgs) : null,
       turn.locationId,
       turn.mutationCount,
@@ -158,6 +164,10 @@ export type PendingAttack = {
   damageType?: string;
   // Condition-derived: any hit is a critical hit (paralyzed target, etc).
   autoCrit?: boolean;
+  // Improved/Superior Critical: the natural roll that crits, when below 20.
+  critRange?: number;
+  // Great Weapon Fighting: reroll damage dice at or below this value.
+  rerollBelow?: number;
 };
 
 export type PendingRoll = {

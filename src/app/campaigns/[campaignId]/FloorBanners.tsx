@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Check, Hand, Swords } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { Floor } from "@/lib/db/campaigns";
@@ -7,22 +8,41 @@ import type { PublicEncounter } from "@/lib/db/encounters";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // Spotlight, held-responses, and initiative banners above the composer;
-// the lead gets the release/skip buttons.
+// the lead gets the release/skip buttons, the current player gets End turn.
 export function FloorBanners({
+  campaignId,
   floor,
   spotlighted,
   heldSpotlightNames,
   encounter,
   isLead,
+  meUserId = "",
   onRelease,
 }: {
+  campaignId: string;
   floor: Floor;
   spotlighted: CharacterSheet[];
   heldSpotlightNames: string[];
   encounter?: PublicEncounter | null;
   isLead: boolean;
+  meUserId?: string;
   onRelease: () => void;
 }) {
+  const [endingTurn, setEndingTurn] = useState(false);
+  const myInitiativeTurn =
+    floor.mode === "initiative" && meUserId !== "" && floor.userIds.includes(meUserId);
+
+  // Attacks no longer end the turn by themselves (movement and bonus
+  // actions stay open), so this is the player's way to say "done".
+  async function endTurn() {
+    setEndingTurn(true);
+    try {
+      await fetch(`/api/campaigns/${campaignId}/encounter/end-turn`, { method: "POST" });
+    } finally {
+      setEndingTurn(false);
+    }
+  }
+
   return (
     <>
       {floor.mode === "initiative" ? (
@@ -54,16 +74,29 @@ export function FloorBanners({
               )}
             </span>
           </span>
-          {isLead ? (
-            <button
-              type="button"
-              onClick={onRelease}
-              className="ml-3 shrink-0 text-red-200 hover:text-red-300"
-              title="Skip the current player's turn"
-            >
-              Skip turn
-            </button>
-          ) : null}
+          <span className="ml-3 flex shrink-0 items-center gap-3">
+            {myInitiativeTurn ? (
+              <button
+                type="button"
+                onClick={endTurn}
+                disabled={endingTurn}
+                className="rounded border border-red-800 bg-red-950/60 px-2 py-0.5 font-medium text-red-100 hover:bg-red-900/60 disabled:opacity-50"
+                title="Done with your action, movement, and bonus action? End your combat turn."
+              >
+                End turn
+              </button>
+            ) : null}
+            {isLead ? (
+              <button
+                type="button"
+                onClick={onRelease}
+                className="text-red-200 hover:text-red-300"
+                title="Skip the current player's turn"
+              >
+                Skip turn
+              </button>
+            ) : null}
+          </span>
         </div>
       ) : null}
       {floor.mode === "spotlight" ? (
