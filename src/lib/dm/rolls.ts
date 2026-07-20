@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { d20Expression, type Advantage } from "@/lib/dice";
 import { exhaustionRollState, mergeAdvantage, rollDerivation } from "@/lib/dm/condition-logic";
+import { normalizeAbility, normalizeAdvantage, normalizeRollKind } from "@/lib/dm/arg-coerce";
 import { DM_TOOL_NAME_PATTERN, toolTextRegex, xmlToolCallRegex } from "@/lib/dm/tool-text";
 import { computeSheetDerived, findSkill, SRD_SKILLS } from "@/lib/srd";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -8,20 +9,29 @@ import type { StreamedToolCall } from "@/lib/model-client";
 
 export const rollArgsSchema = z.object({
   characterId: z.string().optional(),
-  kind: z.enum([
-    "skill_check",
-    "saving_throw",
-    "ability_check",
-    "attack",
-    "damage",
-    "initiative",
-    "custom",
-  ]),
+  kind: z.preprocess(
+    normalizeRollKind,
+    z.enum([
+      "skill_check",
+      "saving_throw",
+      "ability_check",
+      "attack",
+      "damage",
+      "initiative",
+      "custom",
+    ]),
+  ),
   skill: z.string().optional(),
-  ability: z.enum(["str", "dex", "con", "int", "wis", "cha"]).optional(),
-  dc: z.number().int().min(1).max(40).optional(),
+  ability: z.preprocess(
+    normalizeAbility,
+    z.enum(["str", "dex", "con", "int", "wis", "cha"]).optional(),
+  ),
+  dc: z.coerce.number().int().min(1).max(40).optional(),
   expression: z.string().max(60).optional(),
-  advantage: z.enum(["none", "advantage", "disadvantage"]).optional(),
+  advantage: z.preprocess(
+    normalizeAdvantage,
+    z.enum(["none", "advantage", "disadvantage"]).optional(),
+  ),
   // kind=damage only: the enemy this damage strikes; the server applies the
   // rolled total to that enemy the moment the dice resolve.
   targetEnemyId: z.string().optional(),

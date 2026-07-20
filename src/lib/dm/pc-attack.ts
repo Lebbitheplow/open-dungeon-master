@@ -22,6 +22,7 @@ import {
   type AttackProfile,
 } from "@/lib/dm/attack-logic";
 import { ammoItemFor } from "@/lib/dm/item-logic";
+import { normalizeAdvantage } from "@/lib/dm/arg-coerce";
 import { removeItemMath } from "@/lib/dm/mutation-math";
 import {
   attackContext,
@@ -93,7 +94,10 @@ const pcAttackArgsSchema = z.object({
   spell: z.string().max(80).optional(),
   damage: z.string().max(30).optional(),
   damageType: z.string().max(30).optional(),
-  advantage: z.enum(["none", "advantage", "disadvantage"]).optional(),
+  advantage: z.preprocess(
+    normalizeAdvantage,
+    z.enum(["none", "advantage", "disadvantage"]).optional(),
+  ),
 });
 
 function publishRoll(campaignId: string, roll: StoredRoll) {

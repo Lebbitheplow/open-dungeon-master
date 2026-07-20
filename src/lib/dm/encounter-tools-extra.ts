@@ -23,6 +23,7 @@ import {
 import { addEnemiesTool, handleAddEnemies } from "@/lib/dm/encounter-spawn";
 import { applyDmMutation, canonicalCondition } from "@/lib/dm/mutations";
 import { pruneMeta, rollDerivation } from "@/lib/dm/condition-logic";
+import { normalizeAbility } from "@/lib/dm/arg-coerce";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import { resolveSheetRef } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -167,7 +168,10 @@ const enemyRefArgsSchema = z.object({
   enemyId: z.string(),
   condition: z.string().optional(),
   rounds: z.coerce.number().int().min(1).max(100).optional(),
-  saveAbility: z.enum(["str", "dex", "con", "int", "wis", "cha"]).optional(),
+  saveAbility: z.preprocess(
+    normalizeAbility,
+    z.enum(["str", "dex", "con", "int", "wis", "cha"]).optional(),
+  ),
   saveDc: z.coerce.number().int().min(1).max(30).optional(),
   reason: z.string().optional(),
 });
@@ -302,7 +306,7 @@ function handleEnemyCondition(
 const aoeArgsSchema = z.object({
   damage: z.union([z.string().max(30), z.number().int().min(1).max(300)]),
   type: z.string().optional(),
-  saveAbility: z.enum(["str", "dex", "con", "int", "wis", "cha"]),
+  saveAbility: z.preprocess(normalizeAbility, z.enum(["str", "dex", "con", "int", "wis", "cha"])),
   dc: z.coerce.number().int().min(1).max(30),
   halfOnSave: z.boolean().optional(),
   enemyIds: z.array(z.string()).optional(),

@@ -60,6 +60,7 @@ import {
   extraEncounterTools,
 } from "@/lib/dm/encounter-tools-extra";
 import { handlePcAttack, pcAttackTool } from "@/lib/dm/pc-attack";
+import { normalizeAdvantage } from "@/lib/dm/arg-coerce";
 import { castAtEnemyTool, handleCastAtEnemy } from "@/lib/dm/cast-tools";
 import {
   attackContext,
@@ -577,7 +578,10 @@ const attackArgsSchema = z.object({
   enemyId: z.string(),
   targetCharacterId: z.string(),
   attack: z.string().optional(),
-  advantage: z.enum(["none", "advantage", "disadvantage"]).optional(),
+  advantage: z.preprocess(
+    normalizeAdvantage,
+    z.enum(["none", "advantage", "disadvantage"]).optional(),
+  ),
 });
 
 function pickAttack(enemy: EncounterEnemy, requested: string | undefined): EnemyAttack | null {

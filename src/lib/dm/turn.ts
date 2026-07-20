@@ -19,6 +19,7 @@ import {
   type DmTurn,
 } from "@/lib/db/dm-turns";
 import { PC_ATTACK_PARKED } from "@/lib/dm/pc-attack";
+import { normalizeEventKind } from "@/lib/dm/arg-coerce";
 import { insertCampaignMessage, listAllMessages } from "@/lib/db/messages";
 import { getRoll, insertRoll, listRecentRolls } from "@/lib/db/rolls";
 import { listSheets } from "@/lib/db/sheets";
@@ -954,10 +955,9 @@ function handleRecordEvent(
   if (!sheet) {
     return { error: "Unknown characterId; use one from GAME STATE." };
   }
-  const kind = String(args.kind ?? "story") as CharacterEventKind;
-  if (!CHARACTER_EVENT_KINDS.includes(kind)) {
-    return { error: `kind must be one of: ${CHARACTER_EVENT_KINDS.join(", ")}.` };
-  }
+  // Unknown kinds fall back to "story" instead of erroring: a milestone is
+  // always worth recording under some kind.
+  const kind = normalizeEventKind(args.kind, CHARACTER_EVENT_KINDS) as CharacterEventKind;
   const summary = String(args.summary ?? "").trim().slice(0, 300);
   if (!summary) {
     return { error: "record_event needs a one-sentence summary." };

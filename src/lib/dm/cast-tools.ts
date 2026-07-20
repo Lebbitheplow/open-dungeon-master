@@ -11,6 +11,7 @@ import { saveModFor, type SaveAbility } from "@/lib/bestiary/statblock";
 import { applyDmMutation, canonicalCondition } from "@/lib/dm/mutations";
 import { applyEnemyDamage, publishEncounter, resolveEnemyRef } from "@/lib/dm/enemy-damage";
 import { resolveSheetRef } from "@/lib/dm/rolls";
+import { normalizeAbility } from "@/lib/dm/arg-coerce";
 import type { ConditionMeta } from "@/lib/dm/condition-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -83,7 +84,7 @@ const castArgsSchema = z.object({
   characterId: z.string(),
   targetEnemyId: z.string(),
   spell: z.string().max(80),
-  saveAbility: z.enum(["str", "dex", "con", "int", "wis", "cha"]),
+  saveAbility: z.preprocess(normalizeAbility, z.enum(["str", "dex", "con", "int", "wis", "cha"])),
   level: z.coerce.number().int().min(1).max(9).optional(),
   damage: z.string().max(30).optional(),
   damageType: z.string().max(30).optional(),

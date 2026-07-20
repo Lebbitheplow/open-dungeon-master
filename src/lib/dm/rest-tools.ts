@@ -16,6 +16,7 @@ import {
   shortRestResourcePatch,
 } from "@/lib/dm/rest-logic";
 import { resolveSheetRef } from "@/lib/dm/rolls";
+import { normalizeRestKind } from "@/lib/dm/arg-coerce";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
 
 // The rest engine: short rests spend hit dice with real server rolls, long
@@ -63,7 +64,7 @@ export const takeRestTool: ToolDef = {
 export const restTools: ToolDef[] = [takeRestTool];
 
 const restArgsSchema = z.object({
-  kind: z.enum(["short", "long"]),
+  kind: z.preprocess(normalizeRestKind, z.enum(["short", "long"])),
   spend: z
     .array(z.object({ characterId: z.string(), dice: z.number().int().min(1).max(20) }))
     .optional(),
@@ -85,7 +86,7 @@ function parseRestArgs(rawArguments: string): z.infer<typeof restArgsSchema> | n
   }
   const flat = z
     .object({
-      kind: z.enum(["short", "long"]),
+      kind: z.preprocess(normalizeRestKind, z.enum(["short", "long"])),
       characterId: z.string().optional(),
       dice: z.coerce.number().int().min(1).max(20).optional(),
       reason: z.string().optional(),

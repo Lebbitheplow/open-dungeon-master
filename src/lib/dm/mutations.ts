@@ -22,6 +22,7 @@ import {
   pcResistances,
   pruneMeta,
 } from "@/lib/dm/condition-logic";
+import { normalizeAbility, normalizeListAction } from "@/lib/dm/arg-coerce";
 import {
   breakConcentration,
   concentrationDamageHook,
@@ -246,7 +247,7 @@ const updateSheetPatchSchema = fullPatchSheetSchema.pick({
 const argsSchema = z.object({
   characterId: z.string().optional(),
   characterIds: z.array(z.string()).optional(),
-  amount: z.number().int().optional(),
+  amount: z.coerce.number().int().optional(),
   type: z.string().optional(),
   // Internal: set by enemy_attack on a natural 20 so damage on a dying
   // target counts two death-save failures. Not exposed in the tool schema.
@@ -256,9 +257,9 @@ const argsSchema = z.object({
   ritual: z.coerce.boolean().optional(),
   // heal: temporary hit points instead of healing.
   temp: z.coerce.boolean().optional(),
-  delta: z.number().int().optional(),
+  delta: z.coerce.number().int().optional(),
   name: z.string().optional(),
-  qty: z.number().int().optional(),
+  qty: z.coerce.number().int().optional(),
   // use_item / purchase / use_resource.
   item: z.string().optional(),
   targetCharacterId: z.string().optional(),
@@ -267,12 +268,18 @@ const argsSchema = z.object({
   condition: z.string().optional(),
   // set_condition durations.
   rounds: z.coerce.number().int().min(1).max(100).optional(),
-  saveAbility: z.enum(["str", "dex", "con", "int", "wis", "cha"]).optional(),
+  saveAbility: z.preprocess(
+    normalizeAbility,
+    z.enum(["str", "dex", "con", "int", "wis", "cha"]).optional(),
+  ),
   saveDc: z.coerce.number().int().min(1).max(30).optional(),
-  level: z.number().int().optional(),
+  level: z.coerce.number().int().optional(),
   spell: z.string().optional(),
-  // learn_spell: add|remove; purchase: buy|sell.
-  action: z.enum(["add", "remove", "buy", "sell"]).optional(),
+  // learn_spell: add|remove; purchase: buy|sell (synonyms normalized).
+  action: z.preprocess(
+    normalizeListAction,
+    z.enum(["add", "remove", "buy", "sell"]).optional(),
+  ),
   reason: z.string().optional(),
 });
 
