@@ -10,6 +10,7 @@ import type { CampaignMessage } from "@/lib/db/messages";
 import type { StoredRoll } from "@/lib/db/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { RollCard } from "@/app/campaigns/[campaignId]/RollCard";
+import { DM_STATUS_PHRASES } from "@/app/campaigns/[campaignId]/dmStatusPhrases";
 import type {
   CampaignLocation,
   DmStatus,
@@ -20,6 +21,36 @@ function formatElapsed(fromIso: string, now: number): string {
   const seconds = Math.max(0, Math.floor((now - Date.parse(fromIso)) / 1000));
   const minutes = Math.floor(seconds / 60);
   return `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+// FNV-1a plus a murmur-style finalizer. The avalanche matters: a weaker mix
+// leaves the six-entry pools reachable only at half their entries.
+function hashString(value: string): number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < value.length; i += 1) {
+    h ^= value.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  h ^= h >>> 16;
+  h = Math.imul(h, 2246822507);
+  h ^= h >>> 13;
+  h = Math.imul(h, 3266489909);
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+
+// Flavor line shown while the DM works. Picked deterministically from the
+// latest message id rather than with Math.random, so it stays put through the
+// animate-pulse re-renders and survives hydration, while still varying from
+// one turn to the next. Keyed on the id (not the message count, which the
+// 200-message cap pins in long sessions) and salted with the status, so the
+// beats within a single turn read differently too.
+function dmStatusPhrase(status: DmStatus, turnKey: string): string {
+  if (status === "idle") {
+    return "";
+  }
+  const pool = DM_STATUS_PHRASES[status];
+  return pool[hashString(turnKey + status) % pool.length];
 }
 
 // Placeholder for media still on the render queue. The durable pending
@@ -294,6 +325,7 @@ export function MessageList({
   const bottomRef = useRef<HTMLDivElement>(null);
   const nearBottomRef = useRef(true);
   const scrollPendingRef = useRef(false);
+  const statusPhrase = dmStatusPhrase(dmStatus, messages[messages.length - 1]?.id ?? "");
   const rollsById = useMemo(() => new Map(rolls.map((roll) => [roll.id, roll])), [rolls]);
   const sheetsById = useMemo(
     () => new Map(sheets.map((sheet) => [sheet.id, sheet])),
@@ -374,17 +406,7 @@ export function MessageList({
         </div>
       ) : dmStatus !== "idle" ? (
         <p className="flex animate-pulse items-center gap-2 font-serif text-base italic text-stone-500">
-          {dmStatus === "rolling"
-            ? "The dice clatter across the table…"
-            : dmStatus === "awaiting_rolls"
-              ? "The table waits on real dice…"
-              : dmStatus === "thinking"
-                ? "The DM weighs the outcome…"
-                : dmStatus === "writing_chapter"
-                  ? "The DM writes the chapter into the record…"
-                  : dmStatus === "plotting_arc"
-                    ? "The DM plots the road ahead…"
-                    : "The next passage is forming…"}
+          {statusPhrase}
         </p>
       ) : null}
 
