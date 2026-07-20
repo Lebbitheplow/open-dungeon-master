@@ -1,48 +1,125 @@
 # Open Dungeon Master
 
-Multiplayer Dungeons & Dragons 5e campaigns run by an AI Dungeon Master, fully
-on your own machine. A fork of [Open Dungeon](https://github.com/newideas99/open-dungeon)
-that adds campaigns, player accounts, structured 5e character sheets, a
-server-side dice engine, and a rules-aware DM that requests rolls instead of
-inventing outcomes.
+Multiplayer (and solo) Dungeons & Dragons 5e campaigns run by an AI Dungeon
+Master, fully on your own machine. A local model is the creative mind and
+narrator; a stack of server-side engines enforces the 5e rules for both the
+players and the DM.
+
+It started as a fork of [Open Dungeon](https://github.com/newideas99/open-dungeon)
+to add multiplayer, and grew into a different app. The narrator no longer owns
+the numbers: dice, hit points, character sheets, spell slots, conditions, and
+the death track are computed and clamped by the backend, and the model changes
+game state only through tools the server validates. The AI drives the session,
+requesting rolls, starting encounters, and playing NPCs and companions, and it
+follows a secret story arc it regenerates as the campaign moves.
+
+## How it works
+
+- **The engines own the rules.** The model narrates and makes creative calls,
+  but it can only touch game state through server tools that are clamped,
+  audit-logged, and published live to every player. It never states a roll
+  result, never edits its own numbers, and treats player messages as intent,
+  not outcome.
+- **The AI drives the table.** It asks the server for rolls (`request_roll`),
+  starts and runs combat, plays NPCs and AI companions, moves the party, and
+  decides when to spotlight specific players for input.
+- **It follows a secret story arc.** Every campaign gets a hidden spine
+  (premise, stakes, antagonist, ordered beats, quest sub-arcs) generated when
+  the campaign starts and refreshed with a small clamped delta each time a
+  chapter closes, so the plot advances without the model rewriting history.
+  Player-safe pieces surface as the quest log; the DM-only hooks stay hidden.
 
 ## Features
 
-- **Campaigns and lobbies**: create a campaign, share an invite code, ready up,
-  and play with your party in real time (SSE-based live updates).
-- **Player accounts**: username/password auth (no email needed), optional
-  "Sign in with Discord", per-user password change, and admin password resets.
-- **Admin panel** at `/admin`: server-wide model/image/voice settings, a
-  sign-up on/off switch, and user management (promote, reset password, delete).
-- **Private side chats**: whisper another player or open a group side chat
-  during the session. Only the people in the chat can read it; the AI DM and
-  the campaign transcript never see it.
-- **Structured 5e character sheets**: race, class, background, abilities,
-  saves, skills, HP, AC, spell slots, conditions, equipment. Derived stats are
-  computed from SRD 5.1 data, never invented by the model.
-- **Server-side dice**: every check, save, and attack is rolled by the backend.
-  The DM asks for rolls through a `request_roll` tool call, the server rolls,
-  and the model narrates the actual result.
-- **AI Dungeon Master**: a guardrailed DM prompt built from authoritative game
-  state (party sheets, scene, quest log, recent rolls, rolling story summary),
-  with story chapters, campaign notes, maps, TTS narration, and push-to-talk.
-- The original single-player narrator still works, unchanged, at `/solo`.
+**Play modes**
+- **Multiplayer campaigns**: create a campaign, share an invite code, ready up
+  in the lobby, and play with your party in real time (SSE live updates), with
+  a party lead who can steer settings, rolls, and turn order.
+- **Solo play**: a one-player campaign that runs the full engine set and the
+  same AI DM, no party required.
+- **Reusable character library**: characters are saved to your profile and
+  instantiated into campaigns by copy, adapted to the campaign's starting
+  level; durable progress syncs back when the campaign ends or on demand.
 
-Later phases (combat engine, encounters, factions, economy, NPC memory) are
-tracked in [docs/ROADMAP.md](docs/ROADMAP.md).
+**AI companion party members**
+- The DM can create full AI-controlled party members with real character
+  sheets that auto-level with the party and act in dialogue and combat
+  (`add_companion` / `dismiss_companion`). In `auto` mode a solo player gets
+  lasting companions, while a multiplayer table gets scene-scoped guests.
+
+**Server-enforced 5e rules engines**
+- **Combat**: initiative and turn order, action economy (action / bonus /
+  reaction / movement), opportunity attacks for both sides, server-resolved
+  player attacks (to-hit, damage, crits, Extra Attack, Sneak Attack, Divine
+  Smite), fighting styles, death saves, concentration, and AoE save-for-half
+  with Evasion.
+- **Encounters**: monsters resolved from the imported stat blocks and spawned
+  with an XP-budget guardrail so the DM cannot drop an unfair fight; enemies
+  are rolled entirely server-side and players never see raw enemy HP.
+- **Conditions**: the full SRD condition table with durations and save-ends,
+  plus the 1-6 exhaustion track.
+- **Rest & resources**: short and long rests, hit-dice spending, Warlock pact
+  slots on a short rest, Arcane/Natural Recovery, and limited-use class
+  features (29 SRD counters plus 235 generated custom-class counters).
+- **Spellcasting**: spell-slot spend with level / cantrip / ritual validation,
+  upcast and cantrip scaling from the content pack, server-rolled healing, and
+  enforced spells-known / prepared limits.
+- **AC, martial, and progression**: Armor Class derived from armor, shield,
+  DEX cap, magic `+N`, and features; Unarmored Defense; fighting styles;
+  expertise; attunement caps; magic-item effects; XP and milestone leveling.
+- **Exploration & social**: passive-check gating of traps, secret doors, and
+  lies; group checks; travel pace and forced-march exhaustion; hazards and
+  falling damage; object durability; CR-scaled treasure; and Charisma checks
+  that shift persisted NPC attitude.
+- The authoritative ledger of exactly what is enforced, what is guidance, and
+  what is out of scope is [docs/rules-coverage.md](docs/rules-coverage.md).
+
+**Characters**
+- Structured SRD 5.1 character sheets (race, class, background, abilities,
+  saves, skills, HP, AC, spell slots, conditions, equipment); every derived
+  stat is computed from data, never invented by the model.
+- 48 classes (12 SRD plus 6 custom classes for each of 6 genres) and 49
+  backgrounds (13 SRD plus 36 genre backgrounds), with 8 genre presets.
+- A guided creation wizard (point buy / standard array / rolled stats, racial
+  choices, searchable spell / equipment / feat pickers) and a step-by-step
+  level-up flow, plus a character portrait auto-generated by ComfyUI at
+  creation.
+
+**Story, maps, and memory**
+- Secret story arc and chapters, rolling-summary compaction so long campaigns
+  stay in context, durable `record_event` memories per character, and a live
+  quest log.
+- Procedural themed **battle maps** with per-character fog of war (recursive
+  shadowcasting line of sight, cover, darkvision), tokens, and movement.
+
+**Session tools**
+- Private DM-to-player whispers, campaign and character notes with lead
+  approval, and player-to-player side chats the AI DM and the transcript never
+  see.
+- A 3D dice tray, DM voice narration (TTS) with per-user mute and volume,
+  push-to-talk, and a mobile / installable PWA layout.
+
+**Accounts and admin**
+- Username / password auth (no email needed), optional "Sign in with Discord",
+  per-user password change, and admin password resets.
+- An `/admin` panel for server-wide model / image / voice settings, a sign-up
+  on/off switch, and user management; every stat mutation is audit-logged and
+  can be undone.
 
 ## Requirements
 
-- **Node 22+** — `npm install` pulls everything else the app itself needs.
+- **Node 22+** (npm). `npm install` pulls everything the app itself needs.
 - **A text model backend** (one of):
   - [llama.cpp](https://github.com/ggml-org/llama.cpp) `llama-server` at
-    `http://127.0.0.1:8001` serving a model named `qwen3.6-35b` — this is the
-    default and preferred configuration (see below), or
+    `http://127.0.0.1:8001` serving a model named `qwen3.6-35b`. This is the
+    default and preferred configuration (see below). Or:
   - any other OpenAI-compatible server with tool calling: Ollama, LM Studio,
     vLLM, TabbyAPI, KoboldCpp, or a remote API like OpenRouter.
-- **Optional services** (each feature simply stays off without it):
-  - [ComfyUI](https://github.com/comfyanonymous/ComfyUI) at `:8188` for inline
-    scene images and maps ([docs/image-generation.md](docs/image-generation.md))
+- **Optional services** (each feature simply stays off, or falls back to a
+  placeholder, without it):
+  - [ComfyUI](https://github.com/comfyanonymous/ComfyUI) at `:8188` for
+    character portraits, inline scene art, and battle maps
+    ([docs/image-generation.md](docs/image-generation.md))
   - [Kokoro-FastAPI](https://github.com/remsky/Kokoro-FastAPI) at `:8880` for
     DM voice narration
   - a faster-whisper server at `:8870` for push-to-talk
@@ -61,7 +138,7 @@ npm run dev        # http://localhost:3000, or:
 npm run dev:lan    # 0.0.0.0:3005 so your party can reach it on the LAN
 ```
 
-Then start the DM model with llama.cpp's `llama-server` — see
+Then start the DM model with llama.cpp's `llama-server`. See
 [the default DM model](#the-default-dm-model-qwen36-35b-on-llamacpp) below
 for the exact command and settings.
 
@@ -78,32 +155,68 @@ npm run start:lan   # 0.0.0.0:3005
 ## The default DM model (qwen3.6-35b on llama.cpp)
 
 The app defaults to llama.cpp's `llama-server` at `http://127.0.0.1:8001/v1`
-serving Qwen3.6-35B (MoE, q8_0) under the model name `qwen3.6-35b`, with a
-64K context window and Qwen's recommended samplers. A small default context
-silently truncates the DM prompt (party sheets, scene, story summary), which
-makes the model loop — the 64K window is what makes the difference. Run it:
+serving Qwen3.6-35B-A3B (a MoE model, q8) under the model name `qwen3.6-35b`,
+with a **64K context window** and Qwen's recommended samplers. A small default
+context silently truncates the DM prompt (party sheets, scene, story summary),
+which makes the model loop; the 64K window is what makes the difference. Run
+it:
 
 ```bash
 llama-server -m Qwen3.6-35B-A3B-Q8_0.gguf \
   -c 65536 --jinja \
   --flash-attn on --cache-type-k q8_0 --cache-type-v q8_0 \
-  --temp 0.7 --top-p 0.8 --top-k 20 --min-p 0.0 \
+  --temp 0.7 --top-p 0.95 --top-k 20 --min-p 0.0 \
   --port 8001 --alias qwen3.6-35b
 ```
 
-`--jinja` enables tool calling, which the dice engine and all sheet
-bookkeeping require. In llama-server's router mode the same settings live in
-the model's preset INI instead of flags. If your server runs with
-`--api-key`, put the key in `.env.server` as `OPENAI_COMPAT_API_KEY`.
+`--jinja` enables tool calling, which the dice engine and every sheet mutation
+depend on. In llama-server's router mode the same settings live in the model's
+preset INI instead of flags. If your server runs with `--api-key`, put the key
+in `.env.server` as `OPENAI_COMPAT_API_KEY`.
+
+### Tool calls need thinking mode
+
+This is the setting that matters most for a working table, and it is not
+obvious. Under the long DM prompt, qwen3.6-35b in non-thinking mode surfaces
+tool calls only about one turn in five: it narrates fights instead of starting
+an encounter, asks a player to roll in prose instead of calling
+`request_roll`, and generally stops driving the engines. With reasoning
+enabled it calls tools reliably.
+
+The app handles this per request, so you do not configure it on the server:
+
+- It sends `chat_template_kwargs: { enable_thinking: true }` on the
+  **tool-decision** model calls only, and keeps the **final narration** call
+  non-thinking so it still streams to players smoothly.
+- Set `DM_THINKING=0` to force thinking off everywhere. That makes turns fast
+  but tool calls unreliable; it is a fallback, not a normal mode.
+
+### Reasoning budget and latency
+
+Left uncapped, a reasoning-enabled decision call can occasionally spiral for
+minutes on a hard turn. Cap the reasoning budget on the server to roughly
+1024-2048 tokens (llama-server's `--reasoning-budget`, or the equivalent key
+in the preset INI). Expect the tradeoff: tool-decision calls run about 50-100s
+and a full turn about 1.5-3 minutes on a single local GPU. Combat and multi-tool
+turns sit at the longer end.
+
+### presence_penalty
+
+Keep `presence_penalty` at 0 for the DM. A meaningful presence penalty under
+the long prompt suppresses tool calls (the model paraphrases the tool in prose
+instead of emitting it). The app pins `presence_penalty: 0` in every request so
+a server-side preset penalty cannot break tool calling; if you drive the model
+from somewhere else, set it to 0 there too.
 
 ### The same model on other LLM software
 
 The setup is pure settings, so it ports to any OpenAI-compatible server with
 tool calling. The key settings to replicate anywhere: **context 65536,
-temperature 0.7, top-p 0.8, top-k 20, min-p 0**. Then point the app at your
-server (admin panel, campaign Text Model settings, or
-`OPENAI_COMPAT_BASE_URL`). For Ollama, the committed
-[Modelfile](models/qwen3.6-dm.Modelfile) bakes the same settings in:
+temperature 0.7, top-p 0.95, top-k 20, min-p 0, presence_penalty 0**, plus a
+way to enable reasoning for tool calls. Then point the app at your server
+(admin panel, campaign Text Model settings, or `OPENAI_COMPAT_BASE_URL`). For
+Ollama, the committed [Modelfile](models/qwen3.6-dm.Modelfile) bakes the same
+settings in:
 
 ```bash
 ollama pull qwen3.6:35b-a3b-q8_0
@@ -113,12 +226,36 @@ ollama create qwen3.6-dm -f models/qwen3.6-dm.Modelfile
 
 More backends and model guidance: [docs/text-backends.md](docs/text-backends.md).
 
+## Image generation (ComfyUI)
+
+ComfyUI at `COMFYUI_URL` (default `http://127.0.0.1:8188`) drives three things:
+character portraits generated once at character creation, inline scene art
+during play, and the top-down battle maps. Any checkpoint works; the genre
+preset supplies the art style. If ComfyUI is down or busy, these features fail
+soft to a placeholder or a plain icon and the session keeps going.
+
+All GPU-heavy media (ComfyUI images and TTS) run on a **single serial media
+queue**. On a shared-memory iGPU the image model and the DM model compete for
+the same pool, so jobs are serialized to avoid out-of-memory stalls rather than
+run in parallel. Details and worker configuration are in
+[docs/image-generation.md](docs/image-generation.md).
+
+## Voice (TTS and push-to-talk)
+
+- **DM narration**: [Kokoro-FastAPI](https://github.com/remsky/Kokoro-FastAPI)
+  at `KOKORO_URL` (default `http://127.0.0.1:8880`) renders each DM message to
+  speech on the media queue, with a per-campaign voice and per-user mute /
+  volume / replay.
+- **Push-to-talk**: a faster-whisper server at `STT_URL` (default
+  `http://127.0.0.1:8870`, model `STT_MODEL`) transcribes your voice with a
+  confirm-then-send step.
+
 ## Configuration and settings precedence
 
-Most things are configurable in the app itself. When the same setting exists
-in several places, the order is:
+Most things are configurable in the app itself. When the same setting exists in
+several places, the order is:
 
-1. **Campaign settings** (in-game Text Model / image panels) — always win
+1. **Campaign settings** (in-game Text Model / image panels), which always win
 2. **Admin panel** (`/admin`, stored in the database)
 3. **Environment variables** (`.env.server`, see
    [docs/configuration.md](docs/configuration.md))
@@ -131,26 +268,27 @@ Secrets (API keys, `DB_ENCRYPTION_KEY`, Discord credentials) belong in
 
 Log in as an admin and open `/admin` (linked from the account menu):
 
-- **Server settings**: default text model backend/URL/API key, ComfyUI / FLUX
-  worker URLs and checkpoint, TTS/STT URLs, Discord sign-in credentials, and
-  the sign-up toggle (close registration once your party is in).
-- **Users**: list everyone, promote/demote admins, delete accounts, and reset
-  passwords — a temporary password is shown once, and the user must set a new
+- **Server settings**: default text model backend / URL / API key, ComfyUI and
+  image-worker URLs and checkpoint, TTS / STT URLs, Discord sign-in
+  credentials, and the sign-up toggle (close registration once your party is
+  in).
+- **Users**: list everyone, promote / demote admins, delete accounts, and reset
+  passwords; a temporary password is shown once, and the user must set a new
   one at their next login.
 
 ## Discord sign-in (optional)
 
 1. Create an application at <https://discord.com/developers/applications>.
 2. Under OAuth2, add the redirect URI
-   `<public-url>/api/auth/discord/callback` using the exact URL players
-   reach the app on: `http://<lan-host>:3005/...` on a LAN, or
+   `<public-url>/api/auth/discord/callback` using the exact URL players reach
+   the app on: `http://<lan-host>:3005/...` on a LAN, or
    `https://your.domain/...` behind a reverse proxy.
 3. Put the Client ID and Client Secret in the admin panel (or
    `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` in `.env.server`).
 4. Behind a reverse proxy: set the **Public URL** in the admin panel's Server
    section (or `APP_PUBLIC_URL` in `.env.server`) to the address players use,
    e.g. `https://your.domain`. Without it the app falls back to
-   `X-Forwarded-Host`/`X-Forwarded-Proto` headers, then the raw request
+   `X-Forwarded-Host` / `X-Forwarded-Proto` headers, then the raw request
    origin.
 
 The "Sign in with Discord" button appears automatically once both are set.
@@ -160,24 +298,17 @@ Existing users can link Discord to their account from Settings.
 
 All state lives in a local SQLite database at `data/local-roleplay.sqlite`
 (override with `SQLITE_DB_PATH`), encrypted at rest with the
-`DB_ENCRYPTION_KEY` from `.env.server` — losing the key means losing the
-data. The database driver is synchronous and the app assumes **one Next.js
-process owns the database file**. Do not run `npm run dev` and a production
-service against the same `data/` directory; point dev at a scratch database
-with `SQLITE_DB_PATH`.
-
-## Solo mode
-
-The upstream single-player experience is preserved at `/solo`: Do / Say /
-Story input, Continue, Retry, Erase, inline edit, long-story memory, and
-inline scene images. Upstream guides still apply:
-[text backends](docs/text-backends.md),
-[image generation](docs/image-generation.md),
-[configuration](docs/configuration.md).
+`DB_ENCRYPTION_KEY` from `.env.server`; losing the key means losing the data.
+The read-only Open5e content pack (`data/content/open5e.sqlite`) stays
+unencrypted. The database driver is synchronous and the app assumes **one
+Next.js process owns the database file**. Do not run `npm run dev` and a
+production service against the same `data/` directory; point dev at a scratch
+database with `SQLITE_DB_PATH`.
 
 ## Credits and licenses
 
 - Forked from [Open Dungeon](https://github.com/newideas99/open-dungeon) by
   Jacob Ferrari, MIT licensed. See [LICENSE](LICENSE).
 - Game rules data derives from the System Reference Document 5.1 by Wizards of
-  the Coast LLC, licensed under CC-BY-4.0. See [docs/LICENSES.md](docs/LICENSES.md).
+  the Coast LLC, licensed under CC-BY-4.0. See
+  [docs/LICENSES.md](docs/LICENSES.md).

@@ -30,14 +30,9 @@ repo: accept the terms on the model page, then set your token in
 `.env`). Windows/Linux use the standard `flux2-4b-sdnq` route by default, so
 the gated token is not required for the normal GPU/CPU path.
 
-Start the worker from the **Images** panel with **Start**, or from a second
-terminal while your shell is in the Open Dungeon repo:
-
-```bash
-npm run image:server
-```
-
-The **Models** button in the Images panel opens the local model/cache folder
+Start the worker from the **Images** panel with **Start**; the app launches
+and supervises the process for you. The **Models** button in the Images panel
+opens the local model/cache folder
 so you can inspect the patched MFLUX checkout.
 
 CLI routes behind the app's two FLUX backends:
@@ -51,8 +46,7 @@ long-side. Square, portrait, and landscape aspects are exposed in the UI.
 Reference images are capped at two per request. MFLUX runs resident by
 default on Apple Silicon: the worker keeps the model loaded between
 generations. On Windows, the worker automatically maps MFLUX requests to the
-SDNQ backend because MLX is not available there. See
-[image_server/README.md](../image_server/README.md) for details.
+SDNQ backend because MLX is not available there.
 
 ## ComfyUI
 
