@@ -118,7 +118,7 @@ model's narration and does not persist.
 | A hazard catching several PCs at once | enforced | `dm/encounter-tools-extra.ts aoe_damage` |
 | Falling damage (1d6 per 10 ft, cap 20d6) | enforced | `srd/hazards.ts`, `dm/hazard-tools.ts apply_hazard` |
 | Trap / generic hazard save + tiered damage | enforced | `dm/hazard-tools.ts apply_hazard` via `cast_at_player` |
-| Suffocation / drowning | guidance | formulas in `srd/hazards.ts`; not yet stateful-tracked |
+| Suffocation / drowning | enforced | `dm/hazard-tools.ts apply_hazard` (CON-derived survival, drop to 0 HP) |
 | Extreme cold / heat, frigid water | guidance | save/DC in `srd/hazards.ts`; not yet tool-applied |
 | Object durability (object AC + HP by size) | enforced | `srd/objects.ts`, `dm/world-tools.ts damage_object` |
 | Treasure by CR (individual + hoard tables) | enforced | `srd/treasure.ts`, `dm/world-tools.ts roll_treasure` |

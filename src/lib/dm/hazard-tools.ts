@@ -6,8 +6,11 @@ import { rollExpression } from "@/lib/dice";
 import { applyDmMutation } from "@/lib/dm/mutations";
 import { handleCastAtPlayer } from "@/lib/dm/cast-tools";
 import { resolveSheetRef } from "@/lib/dm/rolls";
+import { computeSheetDerived } from "@/lib/srd";
 import {
+  breathHoldMinutes,
   fallingDamageDice,
+  suffocationRounds,
   trapProfile,
   type TrapSeverity,
 } from "@/lib/srd/hazards";
@@ -40,15 +43,20 @@ export const hazardTools: ToolDef[] = [
     function: {
       name: "apply_hazard",
       description:
-        "Resolve a trap, a fall, or an environmental hazard against one or more characters with real 5e numbers. The server computes the damage and (for traps) the save DC from the book and applies the save and damage itself, so you never invent them. Use this instead of damage_enemy for any harm from the environment. Call it BEFORE narrating the result and narrate exactly what it reports. Types: 'falling' (pass feet; 1d6 per 10 ft, no save), 'trap' (pass severity; a Dexterity save and damage scaled to each victim's level), or 'generic' (pass your own damage dice, saveAbility, and dc for a bespoke hazard like a gout of flame).",
+        "Resolve a trap, a fall, or an environmental hazard against one or more characters with real 5e numbers. The server computes the damage and (for traps) the save DC from the book and applies the save and damage itself, so you never invent them. Use this instead of damage_enemy for any harm from the environment. Call it BEFORE narrating the result and narrate exactly what it reports. Types: 'falling' (pass feet; 1d6 per 10 ft, no save), 'trap' (pass severity; a Dexterity save and damage scaled to each victim's level), 'generic' (pass your own damage dice, saveAbility, and dc for a bespoke hazard like a gout of flame), or 'suffocation'/'drowning' (a character out of air; pass roundsWithoutAir and the server derives from their Constitution how long they last before dropping to 0 HP).",
       parameters: {
         type: "object",
         additionalProperties: false,
         properties: {
           type: {
             type: "string",
-            enum: ["falling", "trap", "generic"],
+            enum: ["falling", "trap", "generic", "suffocation", "drowning"],
             description: "Which hazard math to use.",
+          },
+          roundsWithoutAir: {
+            type: "integer",
+            description:
+              "suffocation/drowning only: how many rounds the character has already gone without air. 0 means they have just run out. The server compares this to how long their Constitution lets them last.",
           },
           characterIds: {
             type: "array",
@@ -98,9 +106,10 @@ export const hazardTools: ToolDef[] = [
 ];
 
 const hazardSchema = z.object({
-  type: z.enum(["falling", "trap", "generic"]),
+  type: z.enum(["falling", "trap", "generic", "suffocation", "drowning"]),
   characterIds: z.array(z.string()).min(1),
   feet: z.coerce.number().int().min(0).max(1000).optional(),
+  roundsWithoutAir: z.coerce.number().int().min(0).max(100).optional(),
   severity: z.enum(["setback", "dangerous", "deadly"]).optional(),
   saveAbility: z.enum(["str", "dex", "con", "int", "wis", "cha"]).optional(),
   dc: z.coerce.number().int().min(1).max(30).optional(),
@@ -178,6 +187,57 @@ export function handleApplyHazard(
     };
   }
 
+  // suffocation / drowning: no save and no damage roll. A creature can hold
+  // its breath for 1 + CON mod minutes, then survives CON-mod rounds before it
+  // drops to 0 HP and is dying (PHB). The server owns that math from each
+  // victim's real Constitution and applies the drop itself, so how long
+  // someone lasts and when they go down is never the model's to fudge.
+  if (args.type === "suffocation" || args.type === "drowning") {
+    const out = args.roundsWithoutAir ?? 0;
+    const perTarget = targets.map((sheet) => {
+      const conMod = computeSheetDerived(sheet).abilityMods.con;
+      const survival = suffocationRounds(conMod);
+      if (out <= survival) {
+        return {
+          name: sheet.name,
+          holdBreathMinutes: breathHoldMinutes(conMod),
+          survivalRounds: survival,
+          roundsWithoutAir: out,
+          roundsLeft: survival - out,
+          dropped: false,
+        };
+      }
+      // Past the limit: they drop straight to 0 HP and begin dying. Damage
+      // equal to their whole HP pool (temp included) floors them at 0 and
+      // hands them to the server's death-save machinery.
+      const applied = applyDmMutation(
+        campaign,
+        turn.id,
+        "apply_damage",
+        JSON.stringify({
+          characterId: sheet.id,
+          amount: sheet.currentHp + (sheet.tempHp ?? 0),
+          reason: `${source} (out of air)`,
+        }),
+        sheets,
+        sheetsById,
+      ).result;
+      return {
+        name: sheet.name,
+        survivalRounds: survival,
+        roundsWithoutAir: out,
+        dropped: true,
+        ...applied,
+      };
+    });
+    return {
+      ok: true,
+      type: args.type,
+      results: perTarget,
+      note: "Breath math resolved from Constitution; anyone past their limit is at 0 HP and dying. Narrate the struggle for air.",
+    };
+  }
+
   // trap / generic: a save-then-damage effect. Each victim gets their own
   // profile (a trap scales to that character's level) and runs through the
   // shared cast_at_player engine, so conditions, resistances, and the save
@@ -229,5 +289,7 @@ export function handleApplyHazard(
 function defaultSource(args: z.infer<typeof hazardSchema>): string {
   if (args.type === "falling") return "the fall";
   if (args.type === "trap") return "a trap";
+  if (args.type === "suffocation") return "suffocation";
+  if (args.type === "drowning") return "drowning";
   return "the hazard";
 }
