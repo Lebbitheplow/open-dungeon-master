@@ -7,6 +7,7 @@ import {
   Loader2,
   LogOut,
   Plus,
+  ScrollText,
   Settings,
   ShieldCheck,
   Swords,
@@ -21,6 +22,7 @@ import { IconChip, PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
 import type { CampaignSummary, SessionUser } from "@/lib/campaign-types";
 import { CreateCampaignDialog } from "@/app/CreateCampaignDialog";
 import { HelpDialog } from "@/components/HelpDialog";
+import { HowToPlayDialog } from "@/components/HowToPlayDialog";
 import { Tooltip } from "@/components/ui/Tooltip";
 import AuthForm from "@/app/AuthForm";
 import { ChangePasswordForm } from "@/app/ChangePasswordForm";
@@ -94,6 +96,8 @@ function ForcedPasswordChange({ onChanged }: { onChanged: () => void }) {
 }
 
 function AuthScreen({ onAuthed }: { onAuthed: (user: SessionUser) => void }) {
+  const [howToOpen, setHowToOpen] = useState(false);
+
   return (
     <main className="bg-starfield flex flex-1 items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-sm animate-fade-up-slow">
@@ -113,7 +117,19 @@ function AuthScreen({ onAuthed }: { onAuthed: (user: SessionUser) => void }) {
         <div className="glass texture-noise rounded-xl p-6 shadow-elev-2">
           <AuthForm onAuthed={onAuthed} />
         </div>
+
+        <div className="mt-4 text-center">
+          <button
+            type="button"
+            onClick={() => setHowToOpen(true)}
+            className="inline-flex items-center gap-1.5 text-xs text-stone-500 transition-colors hover:text-amber-200"
+          >
+            <ScrollText className="size-3.5" /> How to play
+          </button>
+        </div>
       </div>
+
+      <HowToPlayDialog open={howToOpen} onOpenChange={setHowToOpen} />
     </main>
   );
 }
@@ -124,6 +140,7 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
   const [createOpen, setCreateOpen] = useState(false);
   const [soloOpen, setSoloOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [howToOpen, setHowToOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [joinError, setJoinError] = useState("");
   const [joining, setJoining] = useState(false);
@@ -196,7 +213,14 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
             <p className="text-sm text-stone-500">Signed in as {user.username}</p>
           </div>
         </div>
-        <DropdownMenu.Root>
+        <div className="flex items-center gap-2">
+          <Tooltip content="What this app is and how a table works" side="bottom">
+            <button type="button" onClick={() => setHowToOpen(true)} className={ui.btnSmall}>
+              <ScrollText className="size-4" />
+              <span className="hidden sm:inline">How to play</span>
+            </button>
+          </Tooltip>
+          <DropdownMenu.Root>
           <Tooltip content="Account and app menu" side="bottom">
           <DropdownMenu.Trigger asChild>
             <button
@@ -266,7 +290,8 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
               </DropdownMenu.Item>
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
-        </DropdownMenu.Root>
+          </DropdownMenu.Root>
+        </div>
       </header>
 
       <section className="mb-8">
@@ -404,6 +429,7 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
         }}
       />
       <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+      <HowToPlayDialog open={howToOpen} onOpenChange={setHowToOpen} />
     </main>
   );
 }

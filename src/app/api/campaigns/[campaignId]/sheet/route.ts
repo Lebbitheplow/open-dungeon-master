@@ -159,8 +159,8 @@ export async function POST(
 // Replace the caller's lobby character: switch to a library character,
 // edit the current one in place, or build a brand-new one. All three
 // shapes re-run the copy-on-instantiate path so level adaptation stays
-// authoritative; editing clears the portrait (the builder submits a null
-// portrait) and queues a fresh render.
+// authoritative; the builder submits back the portrait it was prefilled
+// with, so a fresh render only queues when the player cleared it.
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ campaignId: string }> },

@@ -1,14 +1,22 @@
 "use client";
 
-import { Loader2, X } from "lucide-react";
+import { Camera, Loader2, UserRound, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
 import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
 import {
   STANDARD_LANGUAGES,
   suggestedCantripCount,
   suggestedSpellCount,
 } from "@/lib/content/mechanics";
-import type { Ability, AbilityScores, AsiChoice, CreateSheetInput } from "@/lib/schemas/sheet";
+import type {
+  Ability,
+  AbilityScores,
+  AsiChoice,
+  CreateSheetInput,
+  SheetAttachment,
+} from "@/lib/schemas/sheet";
 import {
   SRD_SKILLS,
   abilityMod,
@@ -136,6 +144,11 @@ export default function CharacterBuilder({
   const [backstory, setBackstory] = useState(initial?.backstory ?? "");
   const [gender, setGender] = useState(initial?.gender ?? "");
   const [appearance, setAppearance] = useState(initial?.appearance ?? "");
+  // An uploaded photo here means the creation routes skip the ComfyUI render
+  // entirely (they only queue one when the sheet arrives without a portrait).
+  // Edit mode keeps the existing portrait unless the player clears it.
+  const [portrait, setPortrait] = useState<SheetAttachment | null>(initial?.portrait ?? null);
+  const [cropping, setCropping] = useState(false);
   const [gold, setGold] = useState(initial?.gold ?? 15);
   const [hpOverride, setHpOverride] = useState<number | null>(initial?.maxHp ?? null);
   const [acOverride, setAcOverride] = useState<number | null>(initial?.ac ?? null);
@@ -517,7 +530,7 @@ export default function CharacterBuilder({
         maxHp: preview.maxHp,
         ac,
         acOverride: acOverride !== null,
-        portrait: null,
+        portrait,
         speed: race.speed,
         hitDice: {
           die: `d${klass.hitDie}` as "d6" | "d8" | "d10" | "d12",
@@ -963,9 +976,44 @@ export default function CharacterBuilder({
       />
 
       <section className="panel rounded-xl p-4">
-        <h2 className="eyebrow mb-1 text-xs text-amber-200/90">Appearance (optional)</h2>
+        <h2 className="eyebrow mb-1 text-xs text-amber-200/90">Portrait (optional)</h2>
+        <div className="mb-3 flex items-center gap-3">
+          {portrait?.url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={portrait.url}
+              alt="Character portrait"
+              className="size-16 shrink-0 rounded-lg border border-amber-500/30 object-cover"
+            />
+          ) : (
+            <span className="flex size-16 shrink-0 items-center justify-center rounded-lg border border-stone-800 bg-stone-950 text-stone-600">
+              <UserRound className="size-6" />
+            </span>
+          )}
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" onClick={() => setCropping(true)} className={ui.btnSmall}>
+                <Camera className="size-3.5" />
+                {portrait ? "Replace photo" : "Upload a photo"}
+              </button>
+              {portrait ? (
+                <button type="button" onClick={() => setPortrait(null)} className={ui.btnSmall}>
+                  {initial?.portrait && portrait.url === initial.portrait.url
+                    ? "Regenerate portrait"
+                    : "Remove photo"}
+                </button>
+              ) : null}
+            </div>
+            <p className="mt-1.5 text-xs text-stone-500">
+              {portrait
+                ? "This photo is used as-is; no portrait is painted for you."
+                : "A portrait is painted for you after you save."}
+            </p>
+          </div>
+        </div>
+        <h3 className="mb-1 text-xs text-stone-400">Appearance</h3>
         <p className="mb-2 text-xs text-stone-500">
-          Used to paint your character&apos;s portrait.
+          Used to paint your character&apos;s portrait if you don&apos;t upload a photo.
         </p>
         <textarea
           value={appearance}
@@ -1073,6 +1121,17 @@ export default function CharacterBuilder({
         {busy ? <Loader2 className="size-4 animate-spin" /> : null}
         {submitLabel}
       </button>
+
+      {cropping ? (
+        <AvatarCropDialog
+          title={`Portrait for ${name.trim() || "your character"}`}
+          onUploaded={(image) => {
+            setCropping(false);
+            setPortrait({ id: image.id, name: image.name, type: image.type, url: image.url });
+          }}
+          onClose={() => setCropping(false)}
+        />
+      ) : null}
     </form>
   );
 }

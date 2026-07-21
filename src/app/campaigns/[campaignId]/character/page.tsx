@@ -28,7 +28,8 @@ function titleCase(value: string) {
 // the campaign's starting level) or build a new one (also saved to your
 // library). ?mode=edit reopens the builder prefilled with the current
 // character; ?mode=replace swaps it for another (both lobby-only, both
-// clearing the ready flag; editing re-renders the portrait).
+// clearing the ready flag; an edit keeps the existing portrait unless the
+// builder's regenerate control cleared it).
 function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
   // join = first character; edit = rebuild the current one in place;
   // replace = switch to another or a brand-new one.
@@ -145,7 +146,7 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
         <p className="mt-1 text-sm text-stone-400">
           This campaign starts at level {level}.
           {flow !== "join"
-            ? " Changing your character clears your ready status, and edits repaint the portrait."
+            ? " Changing your character clears your ready status."
             : ""}
         </p>
       </header>
