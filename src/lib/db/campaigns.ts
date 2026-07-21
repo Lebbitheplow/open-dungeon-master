@@ -453,19 +453,33 @@ export function setDmOutline(campaignId: string, outline: string) {
     .run(outline.slice(0, 8_000), nowIso(), campaignId);
 }
 
-// Persists the structured story arc. Serialized whole; if an arc somehow
-// outgrows the cap, oldest settled sub-arcs are shed rather than writing
-// truncated (corrupt) JSON.
-const STORY_ARC_CHAR_CAP = 16_000;
+// Persists the structured story arc. Serialized whole; if a multi-act arc
+// outgrows the cap, oldest settled events and then settled sub-arcs are shed
+// rather than writing truncated (corrupt) JSON. Pending plans and the beat
+// spine are never dropped here.
+const STORY_ARC_CHAR_CAP = 32_000;
 
 export function setStoryArc(campaignId: string, arc: StoryArc) {
-  const trimmed: StoryArc = { ...arc, subArcs: [...arc.subArcs] };
+  // Defensive spreads: every in-app caller passes a normalized arc, but a
+  // hand-written or legacy-shaped object must not throw here.
+  const trimmed: StoryArc = {
+    ...arc,
+    subArcs: [...(arc.subArcs ?? [])],
+    events: [...(arc.events ?? [])],
+  };
   let serialized = JSON.stringify(trimmed);
-  while (serialized.length > STORY_ARC_CHAR_CAP && trimmed.subArcs.length) {
-    const settled = trimmed.subArcs.findIndex(
-      (subArc) => subArc.status === "resolved" || subArc.status === "abandoned",
-    );
-    trimmed.subArcs.splice(settled >= 0 ? settled : 0, 1);
+  while (serialized.length > STORY_ARC_CHAR_CAP) {
+    const settledEvent = trimmed.events.findIndex((event) => event.status !== "pending");
+    if (settledEvent >= 0) {
+      trimmed.events.splice(settledEvent, 1);
+    } else if (trimmed.subArcs.length) {
+      const settled = trimmed.subArcs.findIndex(
+        (subArc) => subArc.status === "resolved" || subArc.status === "abandoned",
+      );
+      trimmed.subArcs.splice(settled >= 0 ? settled : 0, 1);
+    } else {
+      break;
+    }
     serialized = JSON.stringify(trimmed);
   }
   getDatabase()

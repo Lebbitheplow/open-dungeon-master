@@ -44,8 +44,10 @@ import {
   type RollArgs,
 } from "@/lib/dm/rolls";
 import { fakeRollMarkerRegex } from "@/lib/dm/tool-text";
+import { handleCompleteBeat } from "@/lib/dm/arc";
 import {
   buildDmMessages,
+  completeBeatTool,
   movePartyTool,
   recallStoryTool,
   recordEventTool,
@@ -438,7 +440,10 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
   // DM_LEAN_TOOLS=1 trims the mutation tools if the model's tool fidelity
   // suffers under the full set.
   const leanTools = process.env.DM_LEAN_TOOLS === "1";
-  let movedParty = false;
+  // Chapters close on story progress, not message volume: the DM reports a
+  // finished beat with complete_beat and that ends the chapter. One per
+  // advance() run, so a single reply can never burn several beats.
+  let beatCompleted = false;
   // Whisper cap is per advance() run, not persisted: a resumed turn simply
   // gets a fresh allowance, which the bounded call loop keeps small.
   let whisperCount = 0;
@@ -458,6 +463,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       recordEventTool,
       recallStoryTool,
       sendWhisperTool,
+      ...(campaign.storyArc ? [completeBeatTool] : []),
       ...checkTools,
       ...hazardTools,
       ...socialTools,
@@ -571,6 +577,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       (toolCall) => toolCall.name === "move_party" || toolCall.name === "update_location",
     );
     const eventCalls = toolCalls.filter((toolCall) => toolCall.name === "record_event");
+    const beatCalls = toolCalls.filter((toolCall) => toolCall.name === "complete_beat");
     const recallCalls = toolCalls.filter((toolCall) => toolCall.name === "recall_story");
     const whisperCalls = toolCalls.filter((toolCall) => toolCall.name === "send_whisper");
     const checkCalls = toolCalls.filter((toolCall) =>
@@ -596,7 +603,6 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     for (const locationCall of locationCalls) {
       const result = handleLocationCall(campaign, locationCall.name, locationCall.rawArguments);
       if (result.movedToNewLocation) {
-        movedParty = true;
         delete result.movedToNewLocation;
         // Link the narration message finalize() writes to the new area so
         // the chat can show its map inline; only when a map exists or one
@@ -622,6 +628,12 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         eventCall.id ?? "record_event",
         handleRecordEvent(campaign, eventCall.rawArguments, sheets, sheetsById),
       );
+    }
+    const beatResults = new Map<string, Record<string, unknown>>();
+    for (const beatCall of beatCalls) {
+      const outcome = handleCompleteBeat(campaignId, beatCall.rawArguments, beatCompleted);
+      beatCompleted = beatCompleted || outcome.completed;
+      beatResults.set(beatCall.id ?? "complete_beat", outcome.result);
     }
     // Whispers deliver immediately (like events); recipients are notified
     // via a contentless ephemeral, so narration never carries the secret.
@@ -752,6 +764,14 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         content: JSON.stringify(
           eventResults.get(eventCall.id ?? "record_event") ?? { ok: true },
         ),
+      });
+    }
+
+    for (const beatCall of beatCalls) {
+      turn.conversation.push({
+        role: "tool",
+        ...(beatCall.id ? { tool_call_id: beatCall.id } : {}),
+        content: JSON.stringify(beatResults.get(beatCall.id ?? "complete_beat") ?? { ok: true }),
       });
     }
 
@@ -1116,7 +1136,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
   }
   finalize(context, turn, failed);
   if (!failed) {
-    await maybeCloseChapter(campaignId, { movedParty });
+    await maybeCloseChapter(campaignId, { beatCompleted });
     await maybeCompactHistory(campaignId);
   }
 }

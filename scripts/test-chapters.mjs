@@ -8,21 +8,23 @@ function test(name, fn) {
   passed += 1;
 }
 
-const limits = { min: 25, max: 80 };
+const limits = { min: 8, max: 80 };
 
-test("no close below the minimum even when the party moved", () => {
-  assert.equal(shouldCloseChapter(24, true, limits), false);
+test("no close below the floor even when a beat finished", () => {
+  assert.equal(shouldCloseChapter(7, true, limits), false);
 });
 
-test("scene break past the minimum closes", () => {
-  assert.equal(shouldCloseChapter(25, true, limits), true);
+test("a finished beat past the floor closes", () => {
+  assert.equal(shouldCloseChapter(8, true, limits), true);
 });
 
-test("no scene break means no close under the cap", () => {
+// The whole point of beat pacing: a party that spends a long scene
+// searching, shopping, or talking finishes no beat and keeps its chapter.
+test("a long chapter with no finished beat stays open under the cap", () => {
   assert.equal(shouldCloseChapter(79, false, limits), false);
 });
 
-test("hard cap closes without movement", () => {
+test("hard cap closes even when no beat ever finished", () => {
   assert.equal(shouldCloseChapter(80, false, limits), true);
 });
 

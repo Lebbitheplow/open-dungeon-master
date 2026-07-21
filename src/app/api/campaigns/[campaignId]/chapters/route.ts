@@ -36,6 +36,6 @@ export async function POST(
   if (isErrorResponse(context)) {
     return context;
   }
-  enqueueDmJob(campaignId, () => maybeCloseChapter(campaignId, { movedParty: false, manual: true }));
+  enqueueDmJob(campaignId, () => maybeCloseChapter(campaignId, { beatCompleted: false, manual: true }));
   return Response.json({ ok: true }, { status: 202 });
 }

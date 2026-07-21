@@ -9,7 +9,7 @@
 // map-tools.ts, and src/lib/image-tool.ts.
 
 export const DM_TOOL_NAME_PATTERN =
-  "request_roll|group_check|check_notice|apply_hazard|set_npc|npc_reaction|social_check|roll_treasure|damage_object|travel|request_player_input|move_party|update_location|record_event|recall_story|send_whisper|generate_image|apply_damage|heal|stabilize|take_rest|award_xp|modify_gold|grant_item|remove_item|set_enemy_condition|clear_enemy_condition|set_condition|clear_condition|use_item|purchase|use_resource|use_spell_slot|learn_spell|update_sheet|start_encounter|add_enemies|add_companion|dismiss_companion|pc_attack|cast_at_enemy|cast_at_player|damage_enemy|enemy_attack|enemy_flees|aoe_damage|move_token|take_action|use_reaction|end_turn|end_encounter";
+  "request_roll|group_check|check_notice|apply_hazard|set_npc|npc_reaction|social_check|roll_treasure|damage_object|travel|request_player_input|move_party|update_location|record_event|complete_beat|recall_story|send_whisper|generate_image|apply_damage|heal|stabilize|take_rest|award_xp|modify_gold|grant_item|remove_item|set_enemy_condition|clear_enemy_condition|set_condition|clear_condition|use_item|purchase|use_resource|use_spell_slot|learn_spell|update_sheet|start_encounter|add_enemies|add_companion|dismiss_companion|pc_attack|cast_at_enemy|cast_at_player|damage_enemy|enemy_attack|enemy_flees|aoe_damage|move_token|take_action|use_reaction|end_turn|end_encounter";
 
 export function toolTextRegex(): RegExp {
   return new RegExp(`\\[(${DM_TOOL_NAME_PATTERN})\\b([^\\]]*)\\]`, "g");

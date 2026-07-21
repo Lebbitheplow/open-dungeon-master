@@ -3,17 +3,22 @@ import { stripReasoningArtifacts } from "../story-prompt.ts";
 // Pure chapter-close decisions, kept free of alias imports so node test
 // scripts (scripts/test-chapters.mjs) can load them directly.
 
-// Close at a natural scene break once past the minimum, or unconditionally
-// at the hard cap so slow-burn campaigns still get chapters.
+// Chapters are paced by the STORY, not by message volume: a chapter closes
+// when the DM reports a finished story-arc beat (complete_beat). The
+// message counts are only guardrails around that signal - a floor so a beat
+// finished in three exchanges does not produce a stub chapter, and a hard
+// cap so a campaign whose model never calls the tool (or that has no arc at
+// all) still gets chapters. A party that spends twenty messages searching
+// one room completes no beat and therefore stays in the same chapter.
 export function shouldCloseChapter(
   messageCount: number,
-  movedParty: boolean,
+  beatCompleted: boolean,
   options: { min: number; max: number },
 ): boolean {
   if (messageCount >= options.max) {
     return true;
   }
-  return movedParty && messageCount >= options.min;
+  return beatCompleted && messageCount >= options.min;
 }
 
 // Parse the model's chapter JSON with a never-wedge fallback: any failure

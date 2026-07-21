@@ -36,6 +36,7 @@ Core rules you must always follow:
 - One roll per uncertain action; do not chain repeated rolls for the same attempt. Trivial actions (walking, talking, buying a drink) need no roll, but no roll does not mean no bookkeeping: every purchase, sale, or trade goes through ONE purchase call (the server moves the gold and the item together and refuses what the purse cannot cover; an unaffordable price is a fact of the scene). Gifts, loot, and theft still use grant_item/remove_item with modify_gold only when coins alone move. Never narrate money or items changing hands without the tool call.
 - Keep every player involved. If one player has dominated recent scenes, create an opening for the others. When the party splits, cut between them briefly.
 - Advance the story. Every reply should either reveal something, raise the stakes, or demand a decision. No filler.
+- Story pacing runs on the arc in GAME STATE, which marks exactly one beat [NOW]. The moment your narration shows the party ACCOMPLISHING that beat, call complete_beat in that same reply. This is the only thing that ends a chapter, so it must not be skipped: if the scene you just wrote achieved the [NOW] beat, the call belongs in it. Equally, do not call it early. Exploration, searching, shopping, travel, downtime, and conversation leave the beat open no matter how many exchanges they take, and a thorough party is never behind schedule.
 - Keep the party's location current: whenever a scene opens somewhere new or the party moves to a different area, call move_party with the area's name and a concrete layout description before narrating. Use update_location when they learn more about the current area. GAME STATE's location block must always match the fiction.
 - For a hoard or a defeated foe's loot, call roll_treasure with the challenge's CR instead of inventing a gold figure: the server rolls the coin value, splits it among the party, and moves the gold, then tells you how many magic items to hand out with grant_item. For a hard overland journey, call travel with the hours and pace: the server reports the pace's effect on watchfulness and rolls the forced-march Constitution saves that tire the party past 8 hours. To resolve breaking a door, chest, or rope, call damage_object with its material, size, and the damage dealt; the server reads its AC and HP from the book and tells you whether it gives way. Do not decide loot value, march fatigue, or whether an object breaks by feel when these tools settle it.
 - Your long-term memory is the chapter index in GAME STATE. When players reference people, places, promises, or events you cannot see in recent history or the current chapter summary, call recall_story with the chapter number or a search query BEFORE answering, and stay consistent with what it returns. Never guess about past chapters and never contradict recorded history.
@@ -661,6 +662,29 @@ export const recordEventTool = {
         summary: { type: "string", description: "One sentence, past tense." },
       },
       required: ["characterId", "kind", "summary"],
+    },
+  },
+} as const;
+
+// Story pacing: the DM reports when play actually reached the [NOW] beat.
+// This is what ends a chapter, so exploration and downtime never spend one.
+export const completeBeatTool = {
+  type: "function",
+  function: {
+    name: "complete_beat",
+    description:
+      "Report that the party just accomplished the [NOW] beat of the story arc, in the same reply that narrates it happening. Required whenever that beat is achieved; it is what ends a chapter. Not for working toward it: searching, shopping, travel, talk, and rest leave the beat open. Once per reply.",
+    parameters: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        beat: {
+          type: "integer",
+          description:
+            "The beat's number from GAME STATE. Omit for the current [NOW] beat, which is almost always the right one.",
+        },
+      },
+      required: [],
     },
   },
 } as const;

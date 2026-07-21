@@ -12,7 +12,7 @@ import {
 } from "@/lib/db/messages";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { parseChapterJson, shouldCloseChapter } from "@/lib/dm/chapter-logic";
-import { refreshStoryArc } from "@/lib/dm/arc";
+import { judgeBeatCompleted, refreshStoryArc } from "@/lib/dm/arc";
 import { arcTextTimeoutMs } from "@/lib/model-client";
 import { requestDmMessage } from "@/lib/dm/model";
 import { setDmStatus } from "@/lib/dm/status";
@@ -57,13 +57,38 @@ function awardChapterMilestoneXp(campaignId: string, chapterIndex: number) {
   }
 }
 
-// Chapter closing: at a natural scene break (the party moved somewhere new)
-// or a hard size cap, the open chapter is sealed with an AI-written title,
-// summary, and highlights, and the next chapter opens. The rolling
-// story_summary restarts at the boundary; closed history is owned by the
-// chapter summaries injected into GAME STATE.
+// Chapter closing: when the DM reports a finished story-arc beat (the
+// complete_beat tool) past a small floor, or at a hard size cap, the open
+// chapter is sealed with an AI-written title, summary, and highlights, and
+// the next chapter opens. The rolling story_summary restarts at the
+// boundary; closed history is owned by the chapter summaries injected into
+// GAME STATE. Pacing therefore follows the story: exploration, shopping,
+// and downtime can run as long as the table likes without spending a
+// chapter, because none of it finishes a beat.
 
-const CHAPTER_MIN = Number(process.env.DM_CHAPTER_MIN || 25);
+// Floor under the beat signal, not a target: a beat wrapped up in a few
+// exchanges keeps the chapter open until there is enough to summarize.
+const CHAPTER_MIN = Number(process.env.DM_CHAPTER_MIN || 8);
+// A finished beat is STICKY for the chapter it happened in. Without this a
+// beat completed below the floor (a beat the party wrapped up in three
+// exchanges) would be thrown away as a close trigger and the chapter would
+// wait for the NEXT beat, drifting the chapter index out of step with the
+// story. In memory rather than a column: losing it to a restart only means
+// the chapter closes on a later beat or the hard cap, never a wrong close.
+declare global {
+  var __odmChapterBeatPending: Map<string, boolean> | undefined;
+}
+const beatPending = (globalThis.__odmChapterBeatPending ??= new Map<string, boolean>());
+
+// How many messages may pass between beat-judge checks. The judge only runs
+// once a chapter is already past the floor (so it could actually close),
+// which keeps it to roughly one small call every few turns.
+const JUDGE_EVERY = Number(process.env.DM_BEAT_JUDGE_EVERY || 6);
+declare global {
+  var __odmChapterBeatJudged: Map<string, number> | undefined;
+}
+const lastJudged = (globalThis.__odmChapterBeatJudged ??= new Map<string, number>());
+
 const CHAPTER_MAX = Number(process.env.DM_CHAPTER_MAX || 80);
 const MANUAL_MIN = 5;
 const TRANSCRIPT_CHAR_BUDGET = 24_000;
@@ -92,7 +117,7 @@ function countChapterMessages(campaignId: string, chapter: Chapter): number {
 // the party lead's explicit close, which skips the automatic thresholds.
 export async function maybeCloseChapter(
   campaignId: string,
-  signals: { movedParty: boolean; manual?: boolean },
+  signals: { beatCompleted: boolean; manual?: boolean },
 ) {
   const campaign = getCampaignById(campaignId);
   if (!campaign) {
@@ -100,14 +125,35 @@ export async function maybeCloseChapter(
   }
   const chapter = ensureOpenChapter(campaignId);
   const messageCount = countChapterMessages(campaignId, chapter);
+  if (signals.beatCompleted) {
+    beatPending.set(campaignId, true);
+  }
+  const beatDone = beatPending.get(campaignId) ?? false;
+  if (process.env.DM_DEBUG) {
+    console.log(
+      `[dm-debug] chapter ${chapter.index}: messages=${messageCount} beatCompleted=${signals.beatCompleted} beatPending=${beatDone} manual=${Boolean(signals.manual)} floor=${CHAPTER_MIN} cap=${CHAPTER_MAX}`,
+    );
+  }
   if (signals.manual) {
     if (messageCount < MANUAL_MIN) {
       return;
     }
-  } else if (
-    !shouldCloseChapter(messageCount, signals.movedParty, { min: CHAPTER_MIN, max: CHAPTER_MAX })
-  ) {
-    return;
+  } else if (!shouldCloseChapter(messageCount, beatDone, { min: CHAPTER_MIN, max: CHAPTER_MAX })) {
+    // The DM narrates a beat landing far more reliably than it calls
+    // complete_beat, so a chapter that is long enough to close but has no
+    // beat signal gets a cheap yes/no check instead of drifting to the cap.
+    if (
+      beatDone ||
+      messageCount < CHAPTER_MIN ||
+      messageCount - (lastJudged.get(campaignId) ?? 0) < JUDGE_EVERY
+    ) {
+      return;
+    }
+    lastJudged.set(campaignId, messageCount);
+    if (!(await judgeBeatCompleted(campaignId))) {
+      return;
+    }
+    beatPending.set(campaignId, true);
   }
 
   const seqEnd = latestSeq(campaignId);
@@ -150,6 +196,9 @@ export async function maybeCloseChapter(
     setDmStatus(campaignId, "idle");
     return;
   }
+
+  beatPending.delete(campaignId);
+  lastJudged.delete(campaignId);
 
   // The rolling summary now only covers the new open chapter.
   setCampaignSummaryState(campaignId, "", countMessagesUpToSeq(campaignId, seqEnd));

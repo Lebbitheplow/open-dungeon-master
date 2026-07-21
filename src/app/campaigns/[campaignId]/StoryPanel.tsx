@@ -178,6 +178,13 @@ function ArcCard({ campaignId }: { campaignId: string }) {
   const openThreads = arc?.subArcs.filter(
     (subArc) => subArc.status === "active" || subArc.status === "pending",
   );
+  const cast = arc?.cast.filter((npc) => npc.status === "active");
+  const plannedEvents = arc?.events.filter((event) => event.status === "pending");
+  // Beats carry their act, so the flat list renders as act groups while the
+  // displayed numbers stay the arc's own 1-based beat numbers.
+  const actGroups = arc
+    ? Array.from(new Set(arc.beats.map((beat) => beat.act))).sort((a, b) => a - b)
+    : [];
 
   return (
     <div className="rounded-lg border border-stone-800 bg-stone-950/40 p-2.5">
@@ -206,25 +213,71 @@ function ArcCard({ campaignId }: { campaignId: string }) {
               {arc.antagonist ? (
                 <p className="text-[11px] leading-4 text-stone-400">Antagonist: {arc.antagonist}</p>
               ) : null}
-              <ol className="space-y-0.5">
-                {arc.beats.map((beat, index) => (
-                  <li
-                    key={index}
-                    className={`text-[11px] leading-4 ${
-                      beat.status === "done"
-                        ? "text-stone-600 line-through"
-                        : beat.status === "active"
-                          ? "text-amber-200"
-                          : "text-stone-400"
-                    }`}
-                  >
-                    {index + 1}. {beat.status === "active" ? "(now) " : ""}
-                    {beat.text}
-                  </li>
-                ))}
-              </ol>
+              {actGroups.map((act) => (
+                <div key={act}>
+                  <p className="text-[11px] font-medium text-stone-400">Act {act}</p>
+                  <ol className="mt-0.5 space-y-0.5">
+                    {arc.beats.map((beat, index) =>
+                      beat.act === act ? (
+                        <li
+                          key={index}
+                          className={`text-[11px] leading-4 ${
+                            beat.status === "done" || beat.status === "skipped"
+                              ? "text-stone-600 line-through"
+                              : beat.status === "active"
+                                ? "text-amber-200"
+                                : "text-stone-400"
+                          }`}
+                        >
+                          {index + 1}. {beat.status === "active" ? "(now) " : ""}
+                          {beat.status === "skipped" ? "(skipped) " : ""}
+                          {beat.text}
+                          {beat.detail ? (
+                            <span className="text-stone-500"> [{beat.detail}]</span>
+                          ) : null}
+                        </li>
+                      ) : null,
+                    )}
+                  </ol>
+                </div>
+              ))}
               {arc.finale ? (
                 <p className="text-[11px] leading-4 text-stone-400">Finale: {arc.finale}</p>
+              ) : null}
+              {cast?.length ? (
+                <div>
+                  <p className="text-[11px] font-medium text-stone-400">Recurring cast</p>
+                  <ul className="mt-0.5 space-y-0.5">
+                    {cast.map((npc) => (
+                      <li key={npc.id} className="list-none text-[11px] leading-4 text-stone-400">
+                        {npc.name}
+                        {npc.role ? `, ${npc.role}` : ""}
+                        {npc.agenda ? (
+                          <span className="text-stone-500"> wants: {npc.agenda}</span>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {plannedEvents?.length ? (
+                <div>
+                  <p className="text-[11px] font-medium text-stone-400">
+                    Planned events (may never fire)
+                  </p>
+                  <ul className="mt-0.5 space-y-0.5">
+                    {plannedEvents.map((event) => (
+                      <li key={event.id} className="list-none text-[11px] leading-4 text-stone-400">
+                        {event.name}
+                        <span className="text-stone-500">
+                          {" "}
+                          [{event.kind.replaceAll("_", " ")}]
+                          {event.trigger ? ` when ${event.trigger}` : ""}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ) : null}
               {openThreads?.length ? (
                 <div>
