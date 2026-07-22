@@ -55,14 +55,16 @@ test("every catalog class has a feature table with a subclass", () => {
     assert.ok(table.subclassLevel >= 1 && table.subclassLevel <= 3, `${klass.id}: odd subclassLevel`);
     assert.ok(table.levels["1"]?.length >= 2, `${klass.id}: fewer than 2 level-1 features`);
     assert.ok(table.levels["20"]?.length >= 1, `${klass.id}: no capstone`);
-    assert.ok(table.subclass.name.length > 0, `${klass.id}: unnamed subclass`);
+    assert.equal(table.subclasses.length, 1, `${klass.id}: expected exactly one subclass`);
+    const subclass = table.subclasses[0];
+    assert.ok(subclass.name.length > 0, `${klass.id}: unnamed subclass`);
     assert.ok(
-      Object.keys(table.subclass.levels).length >= 3,
+      Object.keys(subclass.levels).length >= 3,
       `${klass.id}: subclass has fewer than 3 feature levels`,
     );
     for (const [levels, where] of [
       [table.levels, "base"],
-      [table.subclass.levels, "subclass"],
+      [subclass.levels, "subclass"],
     ]) {
       for (const [levelKey, names] of Object.entries(levels)) {
         const level = Number(levelKey);

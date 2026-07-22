@@ -3,6 +3,8 @@
 import { Check, Loader2, Plus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
+import { InfoButton } from "@/components/ui/InfoDialog";
+import { describeContentEntry, spellSummary } from "@/lib/help";
 import { useContentSearch, type PickerEntry } from "./useContentSearch";
 
 export type MultiPick = { name: string; slug?: string };
@@ -96,21 +98,24 @@ export default function MultiContentPicker({
         ) : null}
       </div>
       {open && (results.length || trimmedQuery || unavailable) ? (
-        <ul className="mt-1 max-h-48 overflow-y-auto rounded-lg border border-stone-800 bg-stone-950">
+        <ul className="mt-1 max-h-48 overflow-y-auto rounded-lg panel panel-smoke">
           {results.map((entry) => {
             const key = entry.name.trim().toLowerCase();
             const alreadyOn = selectedLower.has(key);
             const picked = pendingLower.has(key);
             return (
-              <li key={entry.slug}>
+              <li
+                key={entry.slug}
+                className={cn(
+                  "flex items-center gap-1 pr-2 hover:bg-stone-800",
+                  alreadyOn && "opacity-50",
+                )}
+              >
                 <button
                   type="button"
                   disabled={alreadyOn}
                   onClick={() => togglePending(entry)}
-                  className={cn(
-                    "flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm hover:bg-stone-800",
-                    alreadyOn && "opacity-50",
-                  )}
+                  className="flex grow items-center justify-between gap-2 px-3 py-1.5 text-left text-sm"
                 >
                   <span className="flex items-center gap-1.5">
                     {picked || alreadyOn ? (
@@ -130,6 +135,12 @@ export default function MultiContentPicker({
                         : (renderMeta?.(entry) ?? "")}
                   </span>
                 </button>
+                <InfoButton
+                  label={entry.name}
+                  meta={kind === "spells" ? spellSummary(entry.data) : undefined}
+                  text={describeContentEntry(entry.data)}
+                  reference={entry.source === "homebrew" ? undefined : { kind, slug: entry.slug }}
+                />
               </li>
             );
           })}

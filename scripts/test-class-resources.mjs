@@ -191,4 +191,28 @@ test("Relentless Endurance spends once, then refuses", () => {
   assert.equal(spendRelentlessEndurance(undefined), null);
 });
 
+const { parseFontOfMagic } = await import("../src/lib/dm/resource-tools.ts");
+
+test("Font of Magic variants parse direction and slot level", () => {
+  assert.deepEqual(parseFontOfMagic("create a 2nd-level slot"), {
+    direction: "create_slot",
+    level: 2,
+  });
+  assert.deepEqual(parseFontOfMagic("make a level 3 spell slot"), {
+    direction: "create_slot",
+    level: 3,
+  });
+  assert.deepEqual(parseFontOfMagic("convert my 3rd-level slot into points"), {
+    direction: "recover_points",
+    level: 3,
+  });
+  assert.deepEqual(parseFontOfMagic("break a 1st level slot into sorcery points"), {
+    direction: "recover_points",
+    level: 1,
+  });
+  // A plain Metamagic spend carries no slot talk and is not a conversion.
+  assert.equal(parseFontOfMagic("quickened spell"), null);
+  assert.equal(parseFontOfMagic(undefined), null);
+});
+
 console.log(`test-class-resources: ${passed} tests passed`);

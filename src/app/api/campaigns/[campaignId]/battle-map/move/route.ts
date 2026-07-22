@@ -17,7 +17,7 @@ import { effectiveSpeed, exhaustionSpeed } from "@/lib/dm/condition-logic";
 import { getCampaignById } from "@/lib/db/campaigns";
 import { budgetApplies } from "@/lib/dm/action-budget";
 import { resolveOpportunityAttacks } from "@/lib/dm/opportunity";
-import { combatRiders } from "@/lib/srd/feature-effects";
+import { speedFor } from "@/lib/srd";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -77,11 +77,10 @@ export async function POST(
   const { x, y } = parsed.data;
 
   // Grappled/restrained/paralyzed... = speed 0; exhaustion 2+ halves speed
-  // and 5+ zeroes it. Fast Movement and Unarmored Movement add to it while
-  // out of heavy armor, and the Dash action doubles whatever is left. The
-  // server refuses impossible moves.
-  const riders = combatRiders(sheet);
-  const base = sheet.speed + riders.unarmoredSpeedBonus;
+  // and 5+ zeroes it. speedFor applies the class bonuses with their armor
+  // gates and the heavy-armor Strength penalty, and the Dash action doubles
+  // whatever is left. The server refuses impossible moves.
+  const base = speedFor(sheet);
   const speed = exhaustionSpeed(sheet.exhaustion ?? 0, effectiveSpeed(sheet.conditions, base));
   if (speed <= 0) {
     const cause =

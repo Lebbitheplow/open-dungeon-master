@@ -321,4 +321,23 @@ test("an expanded crit range crits without changing what hits", () => {
   assert.deepEqual(adjudicateHit(2, "nat20", 30, { natural: 20 }), { hit: true, crit: true });
 });
 
+test("the heavy property lands on the profile for the Small-creature rule", () => {
+  const derived = {
+    abilityMods: { str: 3, dex: 1, con: 2, int: 0, wis: 0, cha: 0 },
+    proficiencyBonus: 2,
+  };
+  const greataxe = weaponAttackProfile(derived, ["martial"], {
+    displayName: "Greataxe",
+    srd: matchWeapon("Greataxe"),
+    unarmed: false,
+  });
+  assert.equal(greataxe.heavy, true);
+  const shortsword = weaponAttackProfile(derived, ["martial"], {
+    displayName: "Shortsword",
+    srd: matchWeapon("Shortsword"),
+    unarmed: false,
+  });
+  assert.equal(shortsword.heavy, false);
+});
+
 console.log(`test-attack-logic: ${passed} tests passed`);

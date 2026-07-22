@@ -9,11 +9,12 @@ import { rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
 import { healMath } from "@/lib/dm/mutation-math";
-import { resourceDef } from "@/lib/srd/class-resources";
+import { resourceDef, resourceLevel } from "@/lib/srd/class-resources";
 import { songOfRestDieFor } from "@/lib/srd/feature-effects";
 import {
   defaultShortRestDice,
-  hitDiceExpression,
+  hitDicePlanExpression,
+  shortRestDicePlan,
   longRestPatch,
   shortRestResourcePatch,
 } from "@/lib/dm/rest-logic";
@@ -229,7 +230,9 @@ export function handleTakeRest(
       continue;
     }
     const conMod = computeSheetDerived(sheet).abilityMods.con;
-    const expression = `${hitDiceExpression(sheet.hitDice.die, count, conMod)}${
+    // Multiclass sheets draw from their per-class pools, biggest die first
+    // (the same order patchSheet reconciles the spent counter in).
+    const expression = `${hitDicePlanExpression(shortRestDicePlan(sheet, count), conMod)}${
       songDie ? `+1${songDie}` : ""
     }`;
     const outcome = rollExpression(expression);
@@ -341,7 +344,8 @@ function applySlotRecovery(
       if (!state || state.used >= state.max || !def || def.effect.kind !== "recover_slots") {
         continue;
       }
-      let budget = def.effect.levels(sheet.level);
+      // Multiclass: Arcane/Natural Recovery reads the wizard/druid levels.
+      let budget = def.effect.levels(resourceLevel(def, sheet));
       const slots = { ...sheet.spellcasting.slots };
       const regained: string[] = [];
       for (const level of [1, 2, 3, 4, 5]) {

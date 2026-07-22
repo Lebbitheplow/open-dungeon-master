@@ -5,6 +5,12 @@
 // branch; both the PC and enemy sides of combat read from this one table.
 
 import { RAGING } from "@/lib/srd/class-resources";
+import {
+  conditionIncomingAttackState,
+  conditionResistances,
+  conditionSpeed,
+} from "@/lib/srd/condition-effects";
+import { defenseRiders } from "@/lib/srd/feature-effects";
 import { magicItemRiders } from "@/lib/srd/magic-items";
 
 export type AdvantageState = "none" | "advantage" | "disadvantage";
@@ -53,7 +59,9 @@ export function incapacitatedBy(conditions: string[]): string | null {
 }
 
 export function effectiveSpeed(conditions: string[], baseSpeed: number): number {
-  return has(conditions, SPEED_ZERO) ? 0 : baseSpeed;
+  // Effect conditions adjust the speed (haste x2, longstrider +10) before
+  // the hard zeroes (grappled, restrained, incapacitated) override.
+  return has(conditions, SPEED_ZERO) ? 0 : conditionSpeed(conditions, baseSpeed);
 }
 
 // Merges advantage sources 5e-style: any advantage plus any disadvantage
@@ -117,6 +125,10 @@ export function attackContext(input: {
     sources.push("disadvantage");
     notes.push("target is dodging: disadvantage");
   }
+  // Effect conditions on the target (blur, faerie fire, protected).
+  const incoming = conditionIncomingAttackState(input.targetConditions);
+  sources.push(...incoming.sources);
+  notes.push(...incoming.notes);
 
   const critName = has(input.targetConditions, AUTO_CRIT_TARGETS);
   const autoCrit = Boolean(critName && input.adjacent);
@@ -334,9 +346,33 @@ export function pcResistances(sheet: {
   features: Array<{ name: string }>;
   conditions?: string[];
   equipment?: Array<{ name: string; attuned?: boolean }>;
+  class?: string;
+  level?: number;
 }): string {
   const out: string[] = [];
   const race = sheet.race.toLowerCase();
+  // Typed feature effects (parsed subclass features, Heart of the Storm).
+  if (sheet.class) {
+    out.push(
+      ...defenseRiders({
+        class: sheet.class,
+        level: sheet.level ?? 1,
+        features: sheet.features,
+      }).resistances,
+    );
+  }
+  // Lineage traits name their resistance directly: "Fire Resistance",
+  // "Celestial Resistance (necrotic and radiant)".
+  const TYPES = [
+    "acid", "bludgeoning", "cold", "fire", "force", "lightning", "necrotic",
+    "piercing", "poison", "psychic", "radiant", "slashing", "thunder",
+  ];
+  for (const feature of sheet.features) {
+    const name = feature.name.toLowerCase();
+    if (name.includes("resistance")) {
+      out.push(...TYPES.filter((type) => name.includes(type)));
+    }
+  }
   // Rage: resistance to the three physical damage types, for its duration.
   if (has(sheet.conditions ?? [], [RAGING])) {
     out.push("bludgeoning", "piercing", "slashing");
@@ -353,6 +389,8 @@ export function pcResistances(sheet: {
   if (race.includes("tiefling") || hasFeature("hellish resistance")) {
     out.push("fire");
   }
+  // Effect conditions (blade ward, stoneskin) grant theirs for a duration.
+  out.push(...conditionResistances(sheet.conditions ?? []));
   // Worn magic items (Ring of Resistance, resistant armor) add their types.
   if (sheet.equipment) {
     out.push(...magicItemRiders(sheet.equipment).resistances);

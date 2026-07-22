@@ -12,6 +12,7 @@ import {
 } from "@/lib/db/messages";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { parseChapterJson, shouldCloseChapter } from "@/lib/dm/chapter-logic";
+import { arcExhausted } from "@/lib/dm/arc-logic";
 import { judgeBeatCompleted, refreshStoryArc } from "@/lib/dm/arc";
 import { arcTextTimeoutMs } from "@/lib/model-client";
 import { requestDmMessage } from "@/lib/dm/model";
@@ -69,16 +70,21 @@ function awardChapterMilestoneXp(campaignId: string, chapterIndex: number) {
 // Floor under the beat signal, not a target: a beat wrapped up in a few
 // exchanges keeps the chapter open until there is enough to summarize.
 const CHAPTER_MIN = Number(process.env.DM_CHAPTER_MIN || 8);
-// A finished beat is STICKY for the chapter it happened in. Without this a
-// beat completed below the floor (a beat the party wrapped up in three
-// exchanges) would be thrown away as a close trigger and the chapter would
-// wait for the NEXT beat, drifting the chapter index out of step with the
-// story. In memory rather than a column: losing it to a restart only means
-// the chapter closes on a later beat or the hard cap, never a wrong close.
+// Completed beats required before a chapter may close (below the cap). Two
+// by default, so a chapter reads as a real episode of the saga rather than
+// one scene, and the campaign-spanning arc stretches across many chapters.
+const CHAPTER_BEATS = Math.max(1, Number(process.env.DM_CHAPTER_BEATS || 2));
+// Finished beats are STICKY counts for the chapter they happened in.
+// Without this a beat completed below the floor (a beat the party wrapped
+// up in three exchanges) would be thrown away as a close trigger and the
+// chapter would wait for the NEXT beat, drifting the chapter index out of
+// step with the story. In memory rather than a column: losing it to a
+// restart only means the chapter closes on a later beat or the hard cap,
+// never a wrong close.
 declare global {
-  var __odmChapterBeatPending: Map<string, boolean> | undefined;
+  var __odmChapterBeatCount: Map<string, number> | undefined;
 }
-const beatPending = (globalThis.__odmChapterBeatPending ??= new Map<string, boolean>());
+const beatCounts = (globalThis.__odmChapterBeatCount ??= new Map<string, number>());
 
 // How many messages may pass between beat-judge checks. The judge only runs
 // once a chapter is already past the floor (so it could actually close),
@@ -126,24 +132,27 @@ export async function maybeCloseChapter(
   const chapter = ensureOpenChapter(campaignId);
   const messageCount = countChapterMessages(campaignId, chapter);
   if (signals.beatCompleted) {
-    beatPending.set(campaignId, true);
+    beatCounts.set(campaignId, (beatCounts.get(campaignId) ?? 0) + 1);
   }
-  const beatDone = beatPending.get(campaignId) ?? false;
+  let beatsDone = beatCounts.get(campaignId) ?? 0;
+  const exhausted = campaign.storyArc ? arcExhausted(campaign.storyArc) : false;
+  const limits = { min: CHAPTER_MIN, max: CHAPTER_MAX, beatsRequired: CHAPTER_BEATS };
   if (process.env.DM_DEBUG) {
     console.log(
-      `[dm-debug] chapter ${chapter.index}: messages=${messageCount} beatCompleted=${signals.beatCompleted} beatPending=${beatDone} manual=${Boolean(signals.manual)} floor=${CHAPTER_MIN} cap=${CHAPTER_MAX}`,
+      `[dm-debug] chapter ${chapter.index}: messages=${messageCount} beatCompleted=${signals.beatCompleted} beatsDone=${beatsDone}/${CHAPTER_BEATS} exhausted=${exhausted} manual=${Boolean(signals.manual)} floor=${CHAPTER_MIN} cap=${CHAPTER_MAX}`,
     );
   }
   if (signals.manual) {
     if (messageCount < MANUAL_MIN) {
       return;
     }
-  } else if (!shouldCloseChapter(messageCount, beatDone, { min: CHAPTER_MIN, max: CHAPTER_MAX })) {
+  } else if (!shouldCloseChapter(messageCount, beatsDone, exhausted, limits)) {
     // The DM narrates a beat landing far more reliably than it calls
-    // complete_beat, so a chapter that is long enough to close but has no
-    // beat signal gets a cheap yes/no check instead of drifting to the cap.
+    // complete_beat, so a chapter that is long enough to close but is still
+    // short on beat signals gets a cheap yes/no check instead of drifting
+    // to the cap.
     if (
-      beatDone ||
+      beatsDone >= CHAPTER_BEATS ||
       messageCount < CHAPTER_MIN ||
       messageCount - (lastJudged.get(campaignId) ?? 0) < JUDGE_EVERY
     ) {
@@ -153,7 +162,14 @@ export async function maybeCloseChapter(
     if (!(await judgeBeatCompleted(campaignId))) {
       return;
     }
-    beatPending.set(campaignId, true);
+    beatsDone += 1;
+    beatCounts.set(campaignId, beatsDone);
+    // The judge advanced the arc, so recompute exhaustion before deciding.
+    const refreshed = getCampaignById(campaignId);
+    const nowExhausted = refreshed?.storyArc ? arcExhausted(refreshed.storyArc) : false;
+    if (!shouldCloseChapter(messageCount, beatsDone, nowExhausted, limits)) {
+      return;
+    }
   }
 
   const seqEnd = latestSeq(campaignId);
@@ -197,7 +213,7 @@ export async function maybeCloseChapter(
     return;
   }
 
-  beatPending.delete(campaignId);
+  beatCounts.delete(campaignId);
   lastJudged.delete(campaignId);
 
   // The rolling summary now only covers the new open chapter.

@@ -79,6 +79,73 @@ function parseUses(desc) {
   return null;
 }
 
+// The typed effect the description states, when its phrasing is one the
+// server can execute (src/lib/srd/class-resources.ts effectFromFx). Healing,
+// saves with damage/conditions, area bursts, teleports, invisibility, and
+// flight all read reliably; everything else stays narrative guidance.
+const FX_ABILITIES = /(STR|DEX|CON|INT|WIS|CHA)/;
+const FX_CONDITIONS =
+  /(blinded|charmed|deafened|frightened|grappled|incapacitated|paralyzed|petrified|poisoned|restrained|stunned|prone)/i;
+
+function parseFx(desc) {
+  const text = desc;
+  // Healing: "an ally regains 3d6 + WIS HP", "regain 10 + level HP".
+  const heal =
+    /regains?\s+(\d+(?:d\d+)?)\s*(?:\+\s*(WIS|CHA|CON|INT|STR|DEX|level))?\s*(?:HP|hit points)/i.exec(
+      text,
+    );
+  if (heal) {
+    const dice = `${heal[1]}${heal[2] ? `+${heal[2].toLowerCase()}` : ""}`;
+    const selfHeal = /\byou\b[^.]{0,40}regain|regain[^.]{0,20}\byour\b/i.test(text) &&
+      !/all(y|ies)|creature|touch/i.test(text.slice(0, text.indexOf(heal[0])));
+    return selfHeal ? { kind: "heal_self", dice } : { kind: "heal_target", dice };
+  }
+  // An inspiration-style handed die: "gains a d6 to add to one attack,
+  // check, or save".
+  const inspire = /gains?\s+a\s+(d\d+)\b[^.]{0,60}(?:add|attack|check|save)/i.exec(text);
+  if (inspire) {
+    return { kind: "inspire", die: inspire[1].toLowerCase() };
+  }
+  // Save-based effects, single-target or area. Both phrasings: "a Wisdom
+  // save" and "saves (WIS)".
+  const save =
+    new RegExp(`${FX_ABILITIES.source}\\w*\\s+sav`, "i").exec(text) ??
+    new RegExp(`sav(?:e|es|ing)?\\s*\\(${FX_ABILITIES.source}\\)`, "i").exec(text);
+  if (save) {
+    const ability = save[1].toLowerCase();
+    // The healing branch has already claimed its dice, so the first dice
+    // expression here is the effect's damage ("deals 4d10 necrotic",
+    // "10d10 necrotic (CON save halves)").
+    const dice = /(\d+d\d+)/.exec(text)?.[1];
+    const condition = FX_CONDITIONS.exec(text)?.[1]?.toLowerCase();
+    const area = /each creature|cone|line\b|radius|burst/i.test(text);
+    if (area && dice) {
+      return { kind: "aoe", dice, save: ability };
+    }
+    if (dice || condition) {
+      return {
+        kind: "enemy_save",
+        save: ability,
+        ...(condition ? { condition } : {}),
+        ...(dice ? { dice } : {}),
+      };
+    }
+  }
+  // Teleports: "teleport up to 60 ft".
+  const teleport = /teleport[^.]{0,40}?(\d+)\s*(?:ft|feet)/i.exec(text);
+  if (teleport) {
+    return { kind: "teleport", feet: Number(teleport[1]) };
+  }
+  // Invisibility and flight land as their tracked conditions.
+  if (/turns? invisible|become(?:s)? invisible|\binvisibility\b/i.test(text)) {
+    return { kind: "buff", condition: "invisible", rounds: 10 };
+  }
+  if (/fly(?:ing)? speed/i.test(text)) {
+    return { kind: "buff", condition: "flying", rounds: 10 };
+  }
+  return undefined;
+}
+
 function collect() {
   const byId = new Map();
   const files = readdirSync(classesDir).filter((name) => name.endsWith("-features.json"));
@@ -114,6 +181,7 @@ function collect() {
               }
               continue;
             }
+            const fx = parseFx(feat.d);
             byId.set(id, {
               id,
               displayName: base,
@@ -124,6 +192,7 @@ function collect() {
               recharge: parsedUses.recharge,
               upgrades: isUpgrade ? [{ match: feat.n.trim().toLowerCase(), uses: parsedUses.uses }] : [],
               guidance: feat.d,
+              ...(fx ? { fx } : {}),
             });
           }
         }

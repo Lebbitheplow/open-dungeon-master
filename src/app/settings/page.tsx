@@ -1,8 +1,10 @@
 "use client";
 
+import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { Check, Link2, Loader2, ShieldCheck, Trash2, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { cn } from "@/lib/cn";
 import { PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
 import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
 import { ChangePasswordForm } from "@/app/ChangePasswordForm";
@@ -14,6 +16,7 @@ type Me = {
   isAdmin?: boolean;
   discordLinked?: boolean;
   discordAvailable?: boolean;
+  hasPassword?: boolean;
 };
 
 // Account settings: today, the profile picture shown across campaigns.
@@ -23,6 +26,10 @@ export default function SettingsPage() {
   const [cropping, setCropping] = useState(false);
   const [saving, setSaving] = useState(false);
   const [passwordChanged, setPasswordChanged] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+  const [deleting, setDeleting] = useState(false);
   // Seeded from the Discord link redirect (?linked=1 / ?error=...).
   const [discordNotice] = useState(() => {
     if (typeof window === "undefined") return "";
@@ -60,6 +67,33 @@ export default function SettingsPage() {
       setSaving(false);
     }
   }
+
+  async function deleteAccount() {
+    if (!me) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      const response = await fetch("/api/profile", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(me.hasPassword ? { password: deleteConfirm } : {}),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setDeleteError(data.error || "Could not delete your account.");
+        setDeleting(false);
+        return;
+      }
+      window.location.href = "/";
+    } catch {
+      setDeleteError("Could not delete your account.");
+      setDeleting(false);
+    }
+  }
+
+  // The confirm button unlocks on the right password, or on typing DELETE for
+  // Discord-only accounts that have no password.
+  const deleteReady = me?.hasPassword ? deleteConfirm.length > 0 : deleteConfirm === "DELETE";
 
   if (loading) {
     return (
@@ -181,12 +215,99 @@ export default function SettingsPage() {
         </p>
       ) : null}
 
+      <section className="texture-noise mt-4 rounded-xl border border-red-900/40 bg-stone-950/60 p-5 shadow-elev-1">
+        <h2 className="mb-3 text-sm font-medium text-red-300">Delete account</h2>
+        <p className="mb-4 text-xs text-stone-400">
+          Permanently deletes your account, the campaigns you created, and your character sheets.
+          This cannot be undone.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            setDeleteConfirm("");
+            setDeleteError("");
+            setConfirmingDelete(true);
+          }}
+          className={cn(ui.btnSmall, "hover:border-red-500/50 hover:text-red-400")}
+        >
+          <Trash2 className="size-3.5" /> Delete account
+        </button>
+      </section>
+
       {cropping ? (
         <AvatarCropDialog
           title="Profile picture"
           onUploaded={(image) => setAvatar({ url: image.url })}
           onClose={() => setCropping(false)}
         />
+      ) : null}
+
+      {confirmingDelete ? (
+        <AlertDialog.Root
+          open
+          onOpenChange={(open) => {
+            if (!open && !deleting) setConfirmingDelete(false);
+          }}
+        >
+          <AlertDialog.Portal>
+            <AlertDialog.Overlay className="fixed inset-0 z-50 bg-black/70" />
+            <AlertDialog.Content
+              className={cn(
+                ui.dialog,
+                "fixed left-1/2 top-1/2 z-50 max-h-[85vh] w-[min(92vw,24rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto",
+              )}
+            >
+              <AlertDialog.Title className="font-display text-lg tracking-wide text-amber-50">
+                Delete your account?
+              </AlertDialog.Title>
+              <AlertDialog.Description className="mt-2 text-xs text-stone-400">
+                This permanently deletes your account, the campaigns you created, and your character
+                sheets. Messages you wrote in other people&apos;s campaigns stay in those
+                transcripts. This cannot be undone.
+              </AlertDialog.Description>
+              <div className="mt-4">
+                {me.hasPassword ? (
+                  <label className="block text-xs text-stone-400">
+                    Enter your password to confirm
+                    <input
+                      type="password"
+                      autoFocus
+                      value={deleteConfirm}
+                      onChange={(event) => setDeleteConfirm(event.target.value)}
+                      className={cn(ui.input, "mt-1")}
+                    />
+                  </label>
+                ) : (
+                  <label className="block text-xs text-stone-400">
+                    Type DELETE to confirm
+                    <input
+                      type="text"
+                      autoFocus
+                      value={deleteConfirm}
+                      onChange={(event) => setDeleteConfirm(event.target.value)}
+                      className={cn(ui.input, "mt-1")}
+                    />
+                  </label>
+                )}
+                {deleteError ? <p className="mt-2 text-xs text-red-400">{deleteError}</p> : null}
+              </div>
+              <div className="mt-4 flex justify-end gap-2">
+                <AlertDialog.Cancel className={ui.btnSmall} disabled={deleting}>
+                  Cancel
+                </AlertDialog.Cancel>
+                <button
+                  type="button"
+                  onClick={deleteAccount}
+                  disabled={!deleteReady || deleting}
+                  className={cn(ui.btnPrimary, "from-red-200 via-red-300 to-red-500 text-red-950")}
+                >
+                  {deleting ? <Loader2 className="size-4 animate-spin" /> : null}
+                  Delete forever
+                </button>
+              </div>
+            </AlertDialog.Content>
+          </AlertDialog.Portal>
+        </AlertDialog.Root>
       ) : null}
     </main>
   );

@@ -6,6 +6,7 @@ import {
   getEnemy,
   listEnemies,
   patchEnemyHp,
+  setEnemyConcentration,
   type Encounter,
   type EncounterEnemy,
 } from "@/lib/db/encounters";
@@ -15,6 +16,9 @@ import { markRollApplied, type StoredRoll } from "@/lib/db/rolls";
 import { getBattleMapForEncounter, removeTokenByRef } from "@/lib/db/battle-maps";
 import { publishPersisted } from "@/lib/events";
 import { healthState } from "@/lib/bestiary/health";
+import { saveModFor } from "@/lib/bestiary/statblock";
+import { d20Expression, rollExpression } from "@/lib/dice";
+import { clearSpellConditionsByName } from "@/lib/dm/concentration";
 import { enemyDamageMath } from "@/lib/dm/encounter-logic";
 import { damageAdjust } from "@/lib/dm/condition-logic";
 import { applyDmMutation } from "@/lib/dm/mutations";
@@ -175,6 +179,28 @@ export function applyEnemyDamage(
     health: healthState(updated.currentHp, updated.maxHp),
     ...(adjusted.note ? { damageApplied: adjusted.amount, damageNote: adjusted.note } : {}),
   };
+  // Enemy concentration: damage forces the CON save (DC 10 or half the
+  // damage); death breaks it outright. A break ends the spell's conditions
+  // on everyone it was holding (the same cleanup a PC's break runs).
+  if (enemy.concentration) {
+    const spell = enemy.concentration;
+    if (math.dropped) {
+      setEnemyConcentration(enemy.id, null);
+      clearSpellConditionsByName(campaign, spell);
+      base.concentrationBroken = `${updated.displayName}'s ${spell} ends with its death; the spell's effects fade.`;
+    } else {
+      const dc = Math.max(10, Math.floor(adjusted.amount / 2));
+      const outcome = rollExpression(d20Expression(saveModFor(enemy.stats, "con")));
+      const held = outcome.total >= dc;
+      if (!held) {
+        setEnemyConcentration(enemy.id, null);
+        clearSpellConditionsByName(campaign, spell);
+      }
+      base.concentration = held
+        ? `${updated.displayName} keeps concentrating on ${spell} (CON save ${outcome.total} vs DC ${dc}).`
+        : `${updated.displayName} loses concentration on ${spell} (CON save ${outcome.total} vs DC ${dc}); the spell's effects end.`;
+    }
+  }
   if (math.dropped) {
     base.dead = true;
     base.note = `${updated.displayName} is slain. You may now narrate its death.`;

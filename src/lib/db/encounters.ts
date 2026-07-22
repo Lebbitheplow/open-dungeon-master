@@ -57,6 +57,9 @@ export type EncounterEnemy = {
   xp: number;
   conditions: string[];
   conditionMeta: ConditionMetaMap;
+  // Spell this enemy is concentrating on, or null. Best-effort server
+  // tracking (src/lib/dm/enemy-damage.ts breaks it on damage).
+  concentration: string | null;
   stats: EnemyStats;
   createdAt: string;
   updatedAt: string;
@@ -95,6 +98,7 @@ type EnemyRow = {
   xp: number;
   conditions_json: string;
   condition_meta_json: string | null;
+  concentration: string | null;
   stat_json: string;
   created_at: string;
   updated_at: string;
@@ -136,6 +140,7 @@ function mapEnemy(row: EnemyRow): EncounterEnemy {
     xp: row.xp,
     conditions: parseJson<string[]>(row.conditions_json, []),
     conditionMeta: parseJson<ConditionMetaMap>(row.condition_meta_json, {}),
+    concentration: row.concentration ?? null,
     stats: parseJson<EnemyStats>(row.stat_json, {
       ac: row.ac,
       maxHp: row.max_hp,
@@ -299,6 +304,16 @@ export function patchEnemyConditions(
       .prepare(`UPDATE encounter_enemies SET conditions_json = ?, updated_at = ? WHERE id = ?`)
       .run(JSON.stringify(conditions.slice(0, 10)), nowIso(), enemyId);
   }
+  return getEnemy(enemyId);
+}
+
+export function setEnemyConcentration(
+  enemyId: string,
+  spell: string | null,
+): EncounterEnemy | null {
+  getDatabase()
+    .prepare(`UPDATE encounter_enemies SET concentration = ?, updated_at = ? WHERE id = ?`)
+    .run(spell, nowIso(), enemyId);
   return getEnemy(enemyId);
 }
 

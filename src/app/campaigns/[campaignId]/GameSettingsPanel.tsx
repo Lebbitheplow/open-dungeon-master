@@ -6,8 +6,12 @@ import { cn } from "@/lib/cn";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { GENRE_PRESETS, genrePreset } from "@/lib/genres";
 import { TTS_VOICES } from "@/lib/tts-voices";
+import { VoicePreviewButton } from "@/components/VoicePreviewButton";
 import {
+  CAMPAIGN_LENGTH_LABELS,
+  CAMPAIGN_LENGTHS,
   COMPANION_LABELS,
+  type CampaignLengthSetting,
   type DicePolicy,
   type GameSettings,
   type Genre,
@@ -52,6 +56,8 @@ export function GameSettingsPanel({
             <Sparkles className="size-3.5 text-amber-200" />
             {preset.name}
             {settings.aiStorySetup ? " · AI story setup" : ""}
+            {" · "}
+            {CAMPAIGN_LENGTH_LABELS[settings.campaignLength].split(" (")[0]} campaign
           </span>
           <span className="flex items-center gap-1.5">
             <Dices className="size-3.5 text-amber-200" />
@@ -117,6 +123,24 @@ export function GameSettingsPanel({
           </div>
         ) : null}
         <div className="flex flex-wrap items-center gap-2">
+          <span className="w-16 text-stone-500">Length</span>
+          <Tooltip content="How far the DM plans the story ahead (acts, bosses, side quests). Changing it mid-campaign applies when the next saga is planned; any length continues with a sequel saga if you play past the finale.">
+            <select
+              value={settings.campaignLength}
+              onChange={(event) =>
+                patch({ campaignLength: event.target.value as CampaignLengthSetting })
+              }
+              className={selectClass}
+            >
+              {CAMPAIGN_LENGTHS.map((value) => (
+                <option key={value} value={value}>
+                  {CAMPAIGN_LENGTH_LABELS[value]}
+                </option>
+              ))}
+            </select>
+          </Tooltip>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
           <span className="w-16 text-stone-500">Dice</span>
           <select
             value={settings.dicePolicy}
@@ -142,17 +166,20 @@ export function GameSettingsPanel({
             {settings.ttsEnabled ? "On" : "Off"}
           </button>
           {settings.ttsEnabled ? (
-            <select
-              value={settings.ttsVoice}
-              onChange={(event) => patch({ ttsVoice: event.target.value })}
-              className={selectClass}
-            >
-              {TTS_VOICES.map((voice) => (
-                <option key={voice.id} value={voice.id}>
-                  {voice.label}
-                </option>
-              ))}
-            </select>
+            <>
+              <select
+                value={settings.ttsVoice}
+                onChange={(event) => patch({ ttsVoice: event.target.value })}
+                className={selectClass}
+              >
+                {TTS_VOICES.map((voice) => (
+                  <option key={voice.id} value={voice.id}>
+                    {voice.label}
+                  </option>
+                ))}
+              </select>
+              <VoicePreviewButton voice={settings.ttsVoice} />
+            </>
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">

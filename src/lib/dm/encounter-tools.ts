@@ -24,7 +24,7 @@ import { insertCampaignMessage } from "@/lib/db/messages";
 import { listOpenPendingRolls, saveDmTurn, type DmTurn } from "@/lib/db/dm-turns";
 import { d20Expression, rollExpression, type Advantage } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
-import { computeSheetDerived } from "@/lib/srd";
+import { computeSheetDerived, effectiveAcFor } from "@/lib/srd";
 import { encounterCeiling, evaluateEncounter } from "@/lib/srd/encounter-math";
 import { suggestEnemies } from "@/lib/bestiary";
 import { synthesizeStats } from "@/lib/bestiary/synthesize";
@@ -767,7 +767,7 @@ function handleEnemyAttack(
     turn.rollIds.push(hitRoll.id);
 
     const natCrit = hitOutcome.crit === "nat20";
-    const hit = hitOutcome.crit !== "nat1" && (natCrit || hitOutcome.total >= target.ac);
+    const hit = hitOutcome.crit !== "nat1" && (natCrit || hitOutcome.total >= effectiveAcFor(target));
     const crit = natCrit || (hit && conditionContext.autoCrit);
     if (!hit) {
       swings.push({
@@ -834,7 +834,7 @@ function handleEnemyAttack(
 
   return {
     attack: attack.name,
-    vsAc: target.ac,
+    vsAc: effectiveAcFor(target),
     target: target.name,
     ...(totalSwings > 1 ? { multiattack: `${totalSwings} attacks` } : {}),
     swings,
@@ -1001,7 +1001,7 @@ export function applyEncounterCall(
       return { result };
     }
     case "use_reaction":
-      return { result: handleUseReaction(campaign, rawArguments, sheets, sheetsById) };
+      return { result: handleUseReaction(campaign, turn, rawArguments, sheets, sheetsById) };
     case "end_turn":
       return { result: handleEndTurn(campaign, turn, rawArguments, sheets, sheetsById) };
     case "damage_enemy":
@@ -1120,7 +1120,7 @@ function autoActSkippedEnemies(
         const token = map ? getTokenByRef(map.id, sheet.id) : null;
         return {
           characterId: sheet.id,
-          ac: sheet.ac,
+          ac: effectiveAcFor(sheet),
           position: token ? { x: token.x, y: token.y } : null,
         };
       }),

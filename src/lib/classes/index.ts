@@ -41,11 +41,13 @@ type RawFeatureTable = {
   subclass: { name: string; levels: Record<string, RawFeature[]> };
 };
 
-// Same shape features.ts uses for the SRD tables (names only).
+// Same shape features.ts uses for the SRD tables (names only). Genre classes
+// ship exactly one subclass each, so it is wrapped into the list features.ts
+// expects rather than changing the six catalog files.
 export type CustomFeatureTable = {
   subclassLevel: number;
   levels: Record<string, string[]>;
-  subclass: { name: string; levels: Record<string, string[]> };
+  subclasses: Array<{ name: string; levels: Record<string, string[]> }>;
 };
 
 type DefinitionsFile = { classes: CustomClass[] };
@@ -90,10 +92,12 @@ for (const file of FEATURE_FILES) {
     CUSTOM_CLASS_FEATURES[classId] = {
       subclassLevel: table.subclassLevel,
       levels: stripNames(table.levels),
-      subclass: {
-        name: table.subclass.name,
-        levels: stripNames(table.subclass.levels),
-      },
+      subclasses: [
+        {
+          name: table.subclass.name,
+          levels: stripNames(table.subclass.levels),
+        },
+      ],
     };
     const descriptions: Record<string, string> = {};
     for (const features of Object.values(table.levels)) {

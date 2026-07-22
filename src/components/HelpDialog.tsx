@@ -170,6 +170,22 @@ export function HelpDialog({
         </p>
       </Section>
 
+      <Section icon={BookOpen} title="New to D&amp;D?">
+        <p>
+          You do not need to know the rules to play; the DM and the server handle them. When a term
+          comes up that you do not recognize, look for the small info button next to it: every
+          feature, spell and stat on your sheet explains itself.
+        </p>
+        <p>
+          The{" "}
+          <Link href="/reference" className="text-amber-300 underline-offset-2 hover:underline">
+            rules reference
+          </Link>{" "}
+          collects the basics in plain language and lets you search every spell, feat, item and
+          condition the app knows about.
+        </p>
+      </Section>
+
       <Section icon={BookOpen} title="About">
         <p>
           Open Dungeon Master is a self-hosted, multiplayer Dungeons &amp; Dragons 5e platform run

@@ -49,6 +49,8 @@ export type AttackProfile = {
   twoHanded: boolean;
   // Finesse or ranged: the attacks Sneak Attack is allowed to ride on.
   sneakEligible: boolean;
+  // SRD heavy property: Small creatures attack with it at disadvantage.
+  heavy: boolean;
   // Human-readable notes for the tool result ("Archery: +2 to hit").
   riderNotes: string[];
 };
@@ -189,6 +191,7 @@ export function weaponAttackProfile(
       magicBonus: 0,
       twoHanded: false,
       sneakEligible: false,
+      heavy: false,
       riderNotes: notes,
     };
   }
@@ -259,6 +262,7 @@ export function weaponAttackProfile(
     twoHanded,
     // Sneak Attack rides on finesse and ranged weapons only.
     sneakEligible: finesse || ranged,
+    heavy: properties.includes("heavy"),
     riderNotes: notes,
   };
 }
@@ -293,6 +297,7 @@ export function spellAttackProfile(
     magicBonus: 0,
     twoHanded: false,
     sneakEligible: false,
+    heavy: false,
     riderNotes: [],
   };
 }
@@ -301,14 +306,16 @@ export function spellAttackProfile(
 // attacks made with Strength only, so a raging barbarian's longbow and
 // their finesse rapier swung with Dexterity both get nothing.
 export function ragingMeleeBonus(
-  sheet: { conditions: string[]; level: number },
+  sheet: { conditions: string[]; level: number; classes?: Array<{ id: string; level: number }> },
   profile: Pick<AttackProfile, "ranged" | "ability">,
 ): number {
   const raging = sheet.conditions.some((entry) => entry.toLowerCase() === RAGING);
   if (!raging || profile.ranged || profile.ability !== "str") {
     return 0;
   }
-  return rageDamageBonus(sheet.level);
+  // Multiclass: the bonus reads the BARBARIAN level, not the character's.
+  const barbarian = sheet.classes?.find((entry) => entry.id.toLowerCase() === "barbarian");
+  return rageDamageBonus(barbarian && (sheet.classes?.length ?? 0) > 1 ? barbarian.level : sheet.level);
 }
 
 // Mirrors the enemy_attack ruling: nat1 always misses, nat20 always hits

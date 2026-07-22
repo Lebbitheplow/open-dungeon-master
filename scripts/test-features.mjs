@@ -5,8 +5,15 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { classFeaturesFor, racialTraitsFor, populateFeatures, subclassLevelFor, srdSubclassName } =
-  await import("../src/lib/srd/features.ts");
+const {
+  classFeaturesFor,
+  racialTraitsFor,
+  populateFeatures,
+  subclassLevelFor,
+  subclassNamesFor,
+  subclassSpellsFor,
+  subclassFeatureDescription,
+} = await import("../src/lib/srd/features.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -107,10 +114,67 @@ test("subclass pick levels", () => {
   assert.equal(subclassLevelFor("timeweaver"), null);
 });
 
-test("srd subclass names resolve", () => {
-  assert.equal(srdSubclassName("fighter"), "Champion");
-  assert.equal(srdSubclassName("warlock"), "The Fiend");
-  assert.equal(srdSubclassName("timeweaver"), null);
+test("subclass names resolve, SRD first then the authored options", () => {
+  const fighter = subclassNamesFor("fighter");
+  assert.equal(fighter[0], "Champion");
+  assert.ok(fighter.includes("Battle Master"));
+  assert.ok(fighter.includes("Eldritch Knight"));
+  assert.ok(subclassNamesFor("warlock").includes("The Fiend"));
+  assert.ok(subclassNamesFor("warlock").includes("The Hexblade"));
+  assert.deepEqual(subclassNamesFor("timeweaver"), []);
+});
+
+test("every SRD class offers more than the one SRD subclass", () => {
+  for (const classId of [
+    "barbarian", "bard", "cleric", "druid", "fighter", "monk",
+    "paladin", "ranger", "rogue", "sorcerer", "warlock", "wizard",
+  ]) {
+    assert.ok(
+      subclassNamesFor(classId).length >= 7,
+      `${classId} offers only ${subclassNamesFor(classId).length} subclasses`,
+    );
+  }
+});
+
+test("authored subclasses grant their own features, not the SRD one's", () => {
+  const moon = names(classFeaturesFor("druid", "Circle of the Moon", 6));
+  assert.ok(moon.includes("Combat Wild Shape"));
+  assert.ok(moon.includes("Primal Strike"));
+  assert.ok(!moon.includes("Natural Recovery"), "Land features leaked into Moon");
+  const stars = names(classFeaturesFor("druid", "Circle of Stars", 2));
+  assert.ok(stars.includes("Starry Form"));
+  assert.ok(!names(classFeaturesFor("druid", "Circle of Stars", 1)).includes("Starry Form"));
+});
+
+test("a content-pack slug still finds its authored table", () => {
+  assert.ok(names(classFeaturesFor("druid", "circle-of-the-moon", 2)).includes("Circle Forms"));
+  assert.ok(names(classFeaturesFor("rogue", "assassin", 3)).includes("Assassinate"));
+});
+
+test("an exact name wins over a loose match on another subclass", () => {
+  const land = names(classFeaturesFor("druid", "Circle of the Land", 2));
+  assert.ok(land.includes("Natural Recovery"));
+  assert.ok(!land.includes("Combat Wild Shape"));
+});
+
+test("subclass spell lists arrive at the levels the table names", () => {
+  assert.deepEqual(subclassSpellsFor("cleric", "Life Domain", 5), []);
+  const war = subclassSpellsFor("cleric", "War Domain", 5);
+  assert.ok(war.includes("Divine Favor"));
+  assert.ok(war.includes("Spirit Guardians"));
+  assert.ok(!war.includes("Stoneskin"), "7th-level spells arrived early");
+  assert.deepEqual(subclassSpellsFor("cleric", "War Domain", 0), ["Divine Favor", "Shield of Faith"]);
+  assert.deepEqual(subclassSpellsFor("fighter", "Champion", 20), []);
+});
+
+test("authored features carry rules text for the DM prompt", () => {
+  assert.ok(subclassFeatureDescription("druid", "Circle of Stars", "Starry Form"));
+  assert.equal(subclassFeatureDescription("fighter", "Champion", "Improved Critical"), null);
+  // Same feature name, different domain, different damage type.
+  const nature = subclassFeatureDescription("cleric", "Nature Domain", "Divine Strike");
+  const death = subclassFeatureDescription("cleric", "Death Domain", "Divine Strike");
+  assert.ok(nature.includes("cold"));
+  assert.ok(death.includes("necrotic"));
 });
 
 test("catalog class grants its level-1 features", () => {
@@ -121,7 +185,7 @@ test("catalog class grants its level-1 features", () => {
 
 test("catalog subclass grants at its subclass level", () => {
   assert.equal(subclassLevelFor("netrunner"), 2);
-  assert.equal(srdSubclassName("netrunner"), "Black ICE Breaker");
+  assert.deepEqual(subclassNamesFor("netrunner"), ["Black ICE Breaker"]);
   const granted = names(classFeaturesFor("netrunner", "Black ICE Breaker", 2));
   assert.ok(granted.includes("ICE Pick"));
   assert.ok(granted.includes("Lethal Payload"));

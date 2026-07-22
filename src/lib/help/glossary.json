@@ -1,0 +1,264 @@
+{
+  "_license": "Original content for Open Dungeon Master. Plain-language explanations of core 5e concepts for players who have never played, written from scratch. Mechanics only; no publisher's descriptive text is reproduced. See docs/LICENSES.md.",
+  "_shape": "terms[] = { id, term, short, long? }. `short` is one sentence for a tooltip-sized read; `long` adds the detail a first-timer needs. Look up with glossaryTerm(id) from src/lib/help.",
+  "terms": [
+    {
+      "id": "ability_score",
+      "term": "Ability score",
+      "short": "One of six numbers describing what your character is naturally good at.",
+      "long": "The six are Strength, Dexterity, Constitution, Intelligence, Wisdom and Charisma. Most scores land between 8 and 18 at first level. What actually gets added to your rolls is the modifier derived from the score: 10 or 11 gives +0, every 2 points above that adds +1, every 2 below subtracts 1."
+    },
+    {
+      "id": "modifier",
+      "term": "Modifier",
+      "short": "The bonus or penalty an ability score adds to your rolls.",
+      "long": "Work it out by subtracting 10 from the score and halving the result, rounding down. A score of 16 gives +3, a score of 8 gives -1. You will see modifiers written with a sign, like +3, everywhere on your sheet."
+    },
+    {
+      "id": "str",
+      "term": "Strength",
+      "short": "Raw physical power: hitting things with heavy weapons, shoving, climbing, lifting.",
+      "long": "Most melee weapons use Strength for their attack and damage rolls. It also covers the Athletics skill, and the saving throw against being pushed or restrained."
+    },
+    {
+      "id": "dex",
+      "term": "Dexterity",
+      "short": "Agility and precision: light weapons, bows, armor class, dodging.",
+      "long": "Dexterity adds to your armor class in light and medium armor, decides your initiative, and powers finesse and ranged weapons. Its saving throw is the one you make to dodge fireballs and traps."
+    },
+    {
+      "id": "con",
+      "term": "Constitution",
+      "short": "Toughness and stamina. It raises your hit points at every level.",
+      "long": "You never roll a Constitution check, but its saving throw comes up constantly: resisting poison, surviving exhaustion, and holding concentration on a spell when you take damage."
+    },
+    {
+      "id": "int",
+      "term": "Intelligence",
+      "short": "Reasoning and recall. The casting ability for wizards.",
+      "long": "It covers Arcana, History, Investigation, Nature and Religion. Its saving throw resists illusions and effects that attack the mind directly."
+    },
+    {
+      "id": "wis",
+      "term": "Wisdom",
+      "short": "Perceptiveness and judgement. The casting ability for clerics, druids and rangers.",
+      "long": "It covers Perception, Insight, Medicine, Survival and Animal Handling, and sets your passive Perception. Its saving throw resists charms, fear and mind control, which makes it one of the most valuable saves in the game."
+    },
+    {
+      "id": "cha",
+      "term": "Charisma",
+      "short": "Force of personality. The casting ability for bards, sorcerers, warlocks and paladins.",
+      "long": "It covers Persuasion, Deception, Intimidation and Performance. Its saving throw resists banishment and possession."
+    },
+    {
+      "id": "armor_class",
+      "term": "Armor Class (AC)",
+      "short": "How hard you are to hit. An attacker must roll this number or higher to land a hit.",
+      "long": "Your AC comes from your armor, your shield, your Dexterity, and any magic or class feature that adds to it. The app works it out for you from what you are wearing. Higher is better, and most characters sit between 12 and 20."
+    },
+    {
+      "id": "hit_points",
+      "term": "Hit points (HP)",
+      "short": "How much damage you can take before you drop.",
+      "long": "At 0 hit points you fall unconscious and start making death saving throws. Healing brings you back. Your maximum grows every level, based on your class's hit die and your Constitution modifier."
+    },
+    {
+      "id": "temp_hp",
+      "term": "Temporary hit points",
+      "short": "A buffer that soaks damage before your real hit points do.",
+      "long": "They are not healing and do not stack: a new source replaces the old one rather than adding to it. They vanish on a long rest, and any left over when the effect ends are simply lost."
+    },
+    {
+      "id": "hit_dice",
+      "term": "Hit Dice",
+      "short": "A pool of dice you spend during a short rest to heal yourself.",
+      "long": "You have one per character level, of the size your class uses. Spend one on a short rest to roll it and regain that many hit points plus your Constitution modifier. You get half of them back on a long rest, so they are a resource to ration across a day of adventuring."
+    },
+    {
+      "id": "ability_check",
+      "term": "Ability check",
+      "short": "A d20 roll plus a modifier, made when the outcome of something is uncertain.",
+      "long": "The DM sets a difficulty number and you try to meet or beat it. Climbing a wall is a Strength check, spotting an ambush is a Wisdom check. If you are proficient in a relevant skill you add your proficiency bonus too."
+    },
+    {
+      "id": "saving_throw",
+      "term": "Saving throw",
+      "short": "A d20 roll to resist something happening to you, rather than to make something happen.",
+      "long": "A dragon breathes fire and you make a Dexterity save to take half damage. A vampire tries to charm you and you make a Wisdom save to shrug it off. Each class is proficient in two of the six saves, adding its proficiency bonus to those."
+    },
+    {
+      "id": "proficiency_bonus",
+      "term": "Proficiency bonus",
+      "short": "A bonus you add to anything you are trained in. It grows from +2 to +6 as you level.",
+      "long": "It applies to attacks with weapons you are proficient with, skills you are proficient in, your two saving throw proficiencies, and your spell save DC. It is +2 at levels 1 to 4 and rises by 1 every four levels after that."
+    },
+    {
+      "id": "advantage",
+      "term": "Advantage",
+      "short": "Roll two d20s and keep the higher one.",
+      "long": "You get it when circumstances favour you: attacking an unaware enemy, or acting on information an ally gave you. Advantage and disadvantage cancel out exactly, no matter how many sources of each you have, and they never stack with themselves."
+    },
+    {
+      "id": "disadvantage",
+      "term": "Disadvantage",
+      "short": "Roll two d20s and keep the lower one.",
+      "long": "You get it when circumstances work against you: attacking at long range, fighting blind, or acting while poisoned or frightened. It cancels out with advantage exactly."
+    },
+    {
+      "id": "initiative",
+      "term": "Initiative",
+      "short": "A Dexterity roll at the start of a fight that sets the turn order.",
+      "long": "Everyone rolls once, and the round then runs from highest to lowest. The order holds until the fight ends."
+    },
+    {
+      "id": "action",
+      "term": "Action",
+      "short": "The main thing you do on your turn: attack, cast a spell, dash, hide, help an ally.",
+      "long": "Each turn you get one action, one bonus action, your movement, and one reaction that you can use before your next turn. Most turns are an action plus movement; bonus actions only exist when a feature or spell specifically grants one."
+    },
+    {
+      "id": "bonus_action",
+      "term": "Bonus action",
+      "short": "A quick extra thing on your turn, but only when something specifically grants one.",
+      "long": "You cannot invent a bonus action: a class feature, a spell or a weapon has to say it uses one. You get at most one per turn, so features that compete for it force a real choice."
+    },
+    {
+      "id": "reaction",
+      "term": "Reaction",
+      "short": "One response you can make between your turns, triggered by something specific.",
+      "long": "The most common one is an opportunity attack when an enemy walks out of your reach. Spells like shield and features like Uncanny Dodge also use it. You get one and it comes back at the start of your turn."
+    },
+    {
+      "id": "attack_roll",
+      "term": "Attack roll",
+      "short": "A d20 plus your ability modifier and proficiency bonus, against the target's AC.",
+      "long": "Meet or beat the AC and you hit, then roll the weapon or spell's damage. A natural 20 always hits and doubles the damage dice, and a natural 1 always misses."
+    },
+    {
+      "id": "critical_hit",
+      "term": "Critical hit",
+      "short": "A natural 20 on an attack roll. You roll all the damage dice twice.",
+      "long": "Only the dice double, not the flat modifiers. Some features widen the range so a 19 counts too."
+    },
+    {
+      "id": "spell_slot",
+      "term": "Spell slot",
+      "short": "The fuel for casting a spell. You have a limited number of each level per day.",
+      "long": "Casting a 1st-level spell spends a 1st-level slot or higher. Casting a spell with a bigger slot than it needs often makes it stronger, which is called upcasting. Most casters get their slots back on a long rest; warlocks get theirs back on a short one."
+    },
+    {
+      "id": "cantrip",
+      "term": "Cantrip",
+      "short": "A level 0 spell you can cast as often as you like, with no slot.",
+      "long": "Cantrips get stronger on their own at character levels 5, 11 and 17, which is why an attack cantrip stays useful all game."
+    },
+    {
+      "id": "spell_save_dc",
+      "term": "Spell save DC",
+      "short": "The number an enemy must beat to resist your spell.",
+      "long": "It is 8 plus your proficiency bonus plus your spellcasting ability modifier. The app calculates it for you and shows it on your sheet."
+    },
+    {
+      "id": "concentration",
+      "term": "Concentration",
+      "short": "Some spells only last while you keep concentrating, and you can only concentrate on one at a time.",
+      "long": "Casting a second concentration spell ends the first. Taking damage forces a Constitution saving throw against 10 or half the damage, whichever is higher, and failing it ends the spell. Being knocked unconscious ends it too."
+    },
+    {
+      "id": "ritual",
+      "term": "Ritual",
+      "short": "A spell you can cast without spending a slot by taking 10 extra minutes over it.",
+      "long": "Only spells marked as rituals can be cast this way, and only if your class supports ritual casting. It is free but far too slow for combat."
+    },
+    {
+      "id": "prepared_spells",
+      "term": "Prepared and known spells",
+      "short": "Which spells you actually have available today.",
+      "long": "Some classes know a fixed short list forever, like bards and sorcerers. Others, like clerics and wizards, choose a fresh set after each long rest from a much bigger pool. Either way you can only cast what is on the list, and only while you have slots left."
+    },
+    {
+      "id": "short_rest",
+      "term": "Short rest",
+      "short": "About an hour of downtime. You can spend Hit Dice to heal and recover some abilities.",
+      "long": "Features that say short rest come back, including warlock spell slots, monk ki, and a fighter's Second Wind and Action Surge. You can take several in a day."
+    },
+    {
+      "id": "long_rest",
+      "term": "Long rest",
+      "short": "About eight hours of sleep. You regain all hit points and almost everything else.",
+      "long": "You get all your spell slots and long-rest features back and half your spent Hit Dice. You only benefit from one per 24 hours."
+    },
+    {
+      "id": "death_save",
+      "term": "Death saving throw",
+      "short": "At 0 hit points you roll a d20 each turn to see whether you stabilize or die.",
+      "long": "10 or higher is a success, under 10 is a failure. Three successes and you stabilize; three failures and you die. A natural 20 puts you back up at 1 hit point, a natural 1 counts as two failures, and any healing at all wakes you immediately."
+    },
+    {
+      "id": "condition",
+      "term": "Condition",
+      "short": "A status effect that changes what you can do, like poisoned, frightened or stunned.",
+      "long": "Most conditions let you repeat a saving throw at the end of your turns to shake them off. The app tracks the ones you have and applies their effects to your rolls automatically."
+    },
+    {
+      "id": "exhaustion",
+      "term": "Exhaustion",
+      "short": "A stacking penalty from six levels of increasing severity. Level 6 is death.",
+      "long": "It comes from forced marches, going without sleep, and a few powerful abilities that trade stamina for effect. A long rest with food and drink removes one level."
+    },
+    {
+      "id": "attunement",
+      "term": "Attunement",
+      "short": "A bond with a magic item, formed over a short rest. You can hold three at once.",
+      "long": "Items that require attunement do nothing until you attune to them, so the three-slot limit is a real choice about which magic you carry."
+    },
+    {
+      "id": "difficult_terrain",
+      "term": "Difficult terrain",
+      "short": "Ground that costs double movement: rubble, deep snow, undergrowth, a crowd.",
+      "long": "Moving 10 feet through it uses 20 feet of your speed. Some features let you ignore it."
+    },
+    {
+      "id": "cover",
+      "term": "Cover",
+      "short": "Something between you and an attacker makes you harder to hit.",
+      "long": "Half cover gives +2 AC and +2 on Dexterity saves, three-quarters cover gives +5, and total cover means you cannot be targeted directly at all."
+    },
+    {
+      "id": "opportunity_attack",
+      "term": "Opportunity attack",
+      "short": "A free swing when an enemy walks out of your reach.",
+      "long": "It uses your reaction and happens as they leave. Taking the Disengage action avoids provoking it, which is why rogues get Disengage as a bonus action."
+    },
+    {
+      "id": "passive_perception",
+      "term": "Passive Perception",
+      "short": "A standing score for what you notice without looking. 10 plus your Perception bonus.",
+      "long": "The DM checks it against hidden things so nobody has to keep rolling. A higher passive Perception means traps and ambushes are spotted before they matter."
+    },
+    {
+      "id": "skill",
+      "term": "Skill",
+      "short": "A narrow area of expertise attached to an ability, like Stealth or Persuasion.",
+      "long": "Being proficient in a skill adds your proficiency bonus to checks that use it. You do not need proficiency to try, only to be reliably good at it."
+    },
+    {
+      "id": "expertise",
+      "term": "Expertise",
+      "short": "Doubled proficiency bonus on a chosen skill, so you rarely fail at it.",
+      "long": "Rogues and bards get it. On a skill you already have proficiency in, it makes you the party's clear specialist."
+    },
+    {
+      "id": "level",
+      "term": "Level",
+      "short": "How experienced your character is, from 1 to 20. Higher levels bring more hit points, features and spells.",
+      "long": "Levelling happens between sessions or at a milestone in the story. The app walks you through each choice a new level gives you."
+    },
+    {
+      "id": "subclass",
+      "term": "Subclass",
+      "short": "A specialization within your class, chosen at level 1, 2 or 3 depending on the class.",
+      "long": "Two fighters can play completely differently based on this one choice: a Battle Master spends dice on tactical maneuvers, an Eldritch Knight casts wizard spells. It is the biggest single decision about how your character plays."
+    }
+  ]
+}

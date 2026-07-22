@@ -134,6 +134,10 @@ npm install
 # The database is encrypted at rest; generate a key once and keep it safe.
 echo "DB_ENCRYPTION_KEY=$(openssl rand -hex 32)" > .env.server
 
+# Build the content pack: spells, feats, items, subclasses, monsters.
+# Downloads from api.open5e.com once, then caches for offline re-runs.
+node scripts/import-open5e.mjs
+
 npm run dev        # http://localhost:3000, or:
 npm run dev:lan    # 0.0.0.0:3005 so your party can reach it on the LAN
 ```
@@ -141,6 +145,23 @@ npm run dev:lan    # 0.0.0.0:3005 so your party can reach it on the LAN
 Then start the DM model with llama.cpp's `llama-server`. See
 [the default DM model](#the-default-dm-model-qwen36-35b-on-llamacpp) below
 for the exact command and settings.
+
+### Content pack
+
+`node scripts/import-open5e.mjs` builds `data/content/open5e.sqlite`, the
+read-only pack holding every spell, feat, item, subclass, lineage and monster
+the character builder and the DM can reach for. Raw API pages are cached under
+`data/content/raw/`, so later runs need no network; `--refresh` re-downloads
+them, and `CONTENT_DB_PATH` points the app at a pack somewhere else.
+
+Run it before your first session. The app still boots without the pack, but it
+falls back to the much smaller bundled SRD 5.1 data in `src/lib/srd/` and shows
+a hint to run the import, so players will find most content missing.
+
+The pack is not committed: it is third-party open-licensed content (OGL, ORC
+and CC-BY documents from Kobold Press, Level Up and others) that is rebuildable
+from the script in one command. See [docs/content.md](docs/content.md) for the
+import's three layers and [docs/LICENSES.md](docs/LICENSES.md) for licensing.
 
 **The first account registered becomes the server admin.** To promote someone
 on an existing install: `node scripts/make-admin.mjs <username>`.
@@ -312,3 +333,9 @@ database with `SQLITE_DB_PATH`.
 - Game rules data derives from the System Reference Document 5.1 by Wizards of
   the Coast LLC, licensed under CC-BY-4.0. See
   [docs/LICENSES.md](docs/LICENSES.md).
+- Expanded options (the widely played subclasses, spells, feats and lineages
+  that no open dataset carries) are original content: the mechanics are stated
+  in our own wording, and no publisher's descriptive text is reproduced.
+
+Dungeons & Dragons and D&D are trademarks of Wizards of the Coast LLC. This
+project is not affiliated with, endorsed, or sponsored by Wizards of the Coast.

@@ -7,6 +7,7 @@ import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
 import { saveModFor } from "@/lib/bestiary/statblock";
+import { allySaveAura } from "@/lib/dm/aura";
 import { removeConditions, tickConditions } from "@/lib/dm/condition-logic";
 import { publishEncounter } from "@/lib/dm/enemy-damage";
 
@@ -71,7 +72,9 @@ export function tickEncounterConditions(campaign: Campaign, encounter: Encounter
       if (!conditions.includes(due.name)) {
         continue;
       }
-      const saveMod = computeSheetDerived(sheet).saves[due.ability];
+      // A nearby paladin's aura rides re-saves too (map-scoped).
+      const aura = allySaveAura(campaign.id, sheet);
+      const saveMod = computeSheetDerived(sheet).saves[due.ability] + (aura?.bonus ?? 0);
       const outcome = rollExpression(d20Expression(saveMod));
       const roll = insertRoll({
         campaignId: campaign.id,
@@ -103,7 +106,20 @@ export function tickEncounterConditions(campaign: Campaign, encounter: Encounter
       conditions.length !== sheet.conditions.length ||
       JSON.stringify(meta) !== JSON.stringify(sheet.conditionMeta)
     ) {
-      const updated = patchSheet(sheet.id, { conditions, conditionMeta: meta });
+      // Polymorph's duration running out reverts the transformation with
+      // the condition.
+      const polymorphEnded =
+        sheet.wildShape?.kind === "polymorph" &&
+        sheet.conditions.some((name) => name.toLowerCase() === "polymorphed") &&
+        !conditions.some((name) => name.toLowerCase() === "polymorphed");
+      if (polymorphEnded) {
+        lines.push(`${sheet.name} reverts to their own body as the polymorph ends.`);
+      }
+      const updated = patchSheet(sheet.id, {
+        conditions,
+        conditionMeta: meta,
+        ...(polymorphEnded ? { wildShape: null } : {}),
+      });
       if (updated) {
         publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
       }

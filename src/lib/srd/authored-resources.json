@@ -1,0 +1,1631 @@
+{
+ "_note": "Limited-use features from the authored content layer: the subclasses in src/lib/srd/subclasses.json and the lineages added to src/lib/srd/races.json, as spendable counters. Same row shape as src/lib/classes/resources.json plus `proficiency` (uses = that multiple of the proficiency bonus), `scale` (a descending [level, uses] table) and `byLevel` (a pool sized by character level). Original wording, like the tables themselves. A feature listed here is enforced: use_resource spends it and rests refill it.",
+ "resources": [
+  {
+   "id": "sub_superiority_dice",
+   "displayName": "Superiority Dice",
+   "match": [
+    "combat superiority",
+    "superiority dice",
+    "maneuvers"
+   ],
+   "uses": 4,
+   "ability": null,
+   "scale": [
+    [
+     15,
+     6
+    ],
+    [
+     7,
+     5
+    ],
+    [
+     3,
+     4
+    ]
+   ],
+   "recharge": "short",
+   "guidance": "Spent on a maneuver attached to an attack: Trip, Disarm, Riposte, Precision, Menacing, Commander's Strike and the rest. The die is added to the damage or to the roll the maneuver names, and its save DC is 8 + proficiency + Strength or Dexterity."
+  },
+  {
+   "id": "sub_psionic_energy",
+   "displayName": "Psionic Energy Dice",
+   "match": [
+    "psionic power (psi warrior)",
+    "psionic power (soulknife)",
+    "psionic energy"
+   ],
+   "uses": 4,
+   "ability": null,
+   "proficiency": 2,
+   "recharge": "long",
+   "guidance": "The shared pool behind every psionic feature of this subclass. One die returns on a short rest; the rest on a long rest. The die size grows with level: d6, then d8 at 5th, d10 at 11th and d12 at 17th."
+  },
+  {
+   "id": "sub_fighting_spirit",
+   "displayName": "Fighting Spirit",
+   "match": [
+    "fighting spirit"
+   ],
+   "uses": 3,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "A bonus action granting advantage on weapon attacks this turn plus temporary hit points: 5 at 3rd level, 10 at 10th, 15 at 15th.",
+   "fx": {
+    "kind": "buff",
+    "condition": "fighting spirit",
+    "rounds": 1,
+    "tempHp": "5"
+   }
+  },
+  {
+   "id": "sub_giants_might",
+   "displayName": "Giant's Might",
+   "match": [
+    "giant's might"
+   ],
+   "uses": 2,
+   "ability": null,
+   "proficiency": 1,
+   "recharge": "long",
+   "guidance": "A bonus action for 1 minute: become Large, advantage on Strength checks and saves, and one extra damage die per turn.",
+   "fx": {
+    "kind": "buff",
+    "condition": "giant's might",
+    "rounds": 10
+   }
+  },
+  {
+   "id": "sub_runic_shield",
+   "displayName": "Runic Shield",
+   "match": [
+    "runic shield"
+   ],
+   "uses": 2,
+   "ability": null,
+   "proficiency": 1,
+   "recharge": "long",
+   "guidance": "A reaction forcing an attacker to reroll a hit against an ally within 60 feet."
+  },
+  {
+   "id": "sub_unleash_incarnation",
+   "displayName": "Unleash Incarnation",
+   "match": [
+    "unleash incarnation"
+   ],
+   "uses": 1,
+   "ability": "con",
+   "recharge": "long",
+   "guidance": "One extra melee attack made from the echo's space when taking the Attack action. Resolve it with pc_attack like any other."
+  },
+  {
+   "id": "sub_reclaim_potential",
+   "displayName": "Reclaim Potential",
+   "match": [
+    "reclaim potential"
+   ],
+   "uses": 1,
+   "ability": "con",
+   "recharge": "long",
+   "guidance": "When the echo is destroyed by damage, gain 2d6 + Constitution modifier temporary hit points.",
+   "fx": {
+    "kind": "temp_hp",
+    "dice": "2d6+con"
+   }
+  },
+  {
+   "id": "sub_shadow_martyr",
+   "displayName": "Shadow Martyr",
+   "match": [
+    "shadow martyr"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "A reaction making the echo the target of an attack aimed at another creature."
+  },
+  {
+   "id": "sub_warding_maneuver",
+   "displayName": "Warding Maneuver",
+   "match": [
+    "warding maneuver"
+   ],
+   "uses": 1,
+   "ability": "con",
+   "recharge": "long",
+   "guidance": "A reaction adding 1d8 to an ally's AC against one attack, halving the damage if it still hits."
+  },
+  {
+   "id": "sub_strength_before_death",
+   "displayName": "Strength before Death",
+   "match": [
+    "strength before death"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "A reaction on taking damage that grants a full extra turn before the damage lands."
+  },
+  {
+   "id": "sub_arcane_shot",
+   "displayName": "Arcane Shot",
+   "match": [
+    "arcane shot"
+   ],
+   "uses": 2,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "An arrow's magical rider, chosen from the options known and applied on a hit: Banishing, Beguiling, Bursting, Enfeebling, Grasping, Piercing, Seeking or Shadow. Its save DC is 8 + proficiency + Intelligence."
+  },
+  {
+   "id": "sub_warding_flare",
+   "displayName": "Warding Flare",
+   "match": [
+    "warding flare",
+    "improved warding flare"
+   ],
+   "uses": 1,
+   "ability": "wis",
+   "recharge": "long",
+   "guidance": "A reaction imposing disadvantage on one attack roll, against the cleric and, from 6th level, an ally within 30 feet."
+  },
+  {
+   "id": "sub_wrath_of_the_storm",
+   "displayName": "Wrath of the Storm",
+   "match": [
+    "wrath of the storm"
+   ],
+   "uses": 1,
+   "ability": "wis",
+   "recharge": "long",
+   "guidance": "A reaction dealing 2d8 lightning or thunder damage to a creature that hit the cleric in melee, halved on a Dexterity save.",
+   "fx": {
+    "kind": "enemy_save",
+    "save": "dex",
+    "dice": "2d8"
+   }
+  },
+  {
+   "id": "sub_war_priest",
+   "displayName": "War Priest",
+   "match": [
+    "war priest"
+   ],
+   "uses": 1,
+   "ability": "wis",
+   "recharge": "long",
+   "guidance": "A bonus-action weapon attack after taking the Attack action. Resolve it with pc_attack."
+  },
+  {
+   "id": "sub_eyes_of_the_grave",
+   "displayName": "Eyes of the Grave",
+   "match": [
+    "eyes of the grave"
+   ],
+   "uses": 1,
+   "ability": "wis",
+   "recharge": "long",
+   "guidance": "An action sensing undead within 60 feet, through walls but not a foot of stone or thin metal."
+  },
+  {
+   "id": "sub_sentinel_at_deaths_door",
+   "displayName": "Sentinel at Death's Door",
+   "match": [
+    "sentinel at death's door"
+   ],
+   "uses": 1,
+   "ability": "wis",
+   "recharge": "long",
+   "guidance": "A reaction turning a critical hit against a creature within 30 feet into an ordinary hit."
+  },
+  {
+   "id": "sub_eyes_of_night",
+   "displayName": "Eyes of Night",
+   "match": [
+    "eyes of night"
+   ],
+   "uses": 1,
+   "ability": "wis",
+   "recharge": "long",
+   "guidance": "Share the cleric's 300-foot darkvision with willing creatures within 10 feet for an hour."
+  },
+  {
+   "id": "sub_steps_of_night",
+   "displayName": "Steps of Night",
+   "match": [
+    "steps of night"
+   ],
+   "uses": 2,
+   "ability": null,
+   "proficiency": 1,
+   "recharge": "long",
+   "guidance": "A bonus action in dim light or darkness granting a flying speed equal to the walking speed for 1 minute.",
+   "fx": {
+    "kind": "buff",
+    "condition": "flying",
+    "rounds": 10
+   }
+  },
+  {
+   "id": "sub_balm_of_the_summer_court",
+   "displayName": "Balm of the Summer Court",
+   "match": [
+    "balm of the summer court"
+   ],
+   "uses": 1,
+   "ability": null,
+   "scale": [
+    [
+     1,
+     1
+    ]
+   ],
+   "byLevel": true,
+   "recharge": "long",
+   "guidance": "A pool of d6s equal to the druid's level. Spend any number as a bonus action to heal a creature within 120 feet that many d6, plus 1 temporary hit point per die.",
+   "fx": {
+    "kind": "heal_dice_pool",
+    "die": "d6"
+   }
+  },
+  {
+   "id": "sub_hidden_paths",
+   "displayName": "Hidden Paths",
+   "match": [
+    "hidden paths"
+   ],
+   "uses": 1,
+   "ability": "wis",
+   "recharge": "long",
+   "guidance": "A bonus action teleporting the druid 60 feet, or a willing creature they touch 30 feet.",
+   "fx": {
+    "kind": "teleport",
+    "feet": 60
+   }
+  },
+  {
+   "id": "sub_spirit_totem",
+   "displayName": "Spirit Totem",
+   "match": [
+    "spirit totem"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "A bonus action raising a 30-foot Bear, Hawk or Unicorn spirit aura for 1 minute.",
+   "fx": {
+    "kind": "buff",
+    "condition": "spirit totem: bear",
+    "rounds": 10,
+    "variants": [
+     "spirit totem: bear",
+     "spirit totem: hawk",
+     "spirit totem: unicorn"
+    ]
+   }
+  },
+  {
+   "id": "sub_faithful_summons",
+   "displayName": "Faithful Summons",
+   "match": [
+    "faithful summons"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "Triggers on its own when the druid drops to 0 hit points: four dire wolves appear and defend them for an hour."
+  },
+  {
+   "id": "sub_fungal_infestation",
+   "displayName": "Fungal Infestation",
+   "match": [
+    "fungal infestation"
+   ],
+   "uses": 1,
+   "ability": "wis",
+   "recharge": "long",
+   "guidance": "A reaction reanimating a beast or humanoid that just died within 10 feet as a zombie under the druid's command for an hour."
+  },
+  {
+   "id": "sub_star_map",
+   "displayName": "Star Map",
+   "match": [
+    "star map"
+   ],
+   "uses": 2,
+   "ability": null,
+   "proficiency": 1,
+   "recharge": "long",
+   "guidance": "Free castings of guiding bolt from the map, without a spell slot. Resolve the attack with cast_at_enemy."
+  },
+  {
+   "id": "sub_cosmic_omen",
+   "displayName": "Cosmic Omen",
+   "match": [
+    "cosmic omen"
+   ],
+   "uses": 2,
+   "ability": null,
+   "proficiency": 1,
+   "recharge": "long",
+   "guidance": "A reaction adding a d6 (Weal) or subtracting one (Woe) on an attack, check or save by a creature within 30 feet. The omen is chosen after each long rest and does not change until the next one.",
+   "fx": {
+    "kind": "inspire",
+    "die": "d6"
+   }
+  },
+  {
+   "id": "sub_blazing_revival",
+   "displayName": "Blazing Revival",
+   "match": [
+    "blazing revival"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "Triggers when the druid drops to 0 hit points while the wildfire spirit is out: the spirit is destroyed and the druid returns at half their hit point maximum."
+  },
+  {
+   "id": "sub_walker_in_dreams",
+   "displayName": "Walker in Dreams",
+   "match": [
+    "walker in dreams"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "A free casting of dream, scrying or teleportation circle after a short rest, without a slot."
+  },
+  {
+   "id": "sub_enthralling_performance",
+   "displayName": "Enthralling Performance",
+   "match": [
+    "enthralling performance"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "After a minute of performance, up to a proficiency-bonus number of humanoids within 60 feet are charmed for an hour on a failed Wisdom save.",
+   "fx": {
+    "kind": "enemy_save",
+    "save": "wis",
+    "condition": "charmed"
+   }
+  },
+  {
+   "id": "sub_mantle_of_majesty",
+   "displayName": "Mantle of Majesty",
+   "match": [
+    "mantle of majesty"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "A bonus action granting a minute of free command castings, with listeners unable to attack the bard while charmed."
+  },
+  {
+   "id": "sub_unbreakable_majesty",
+   "displayName": "Unbreakable Majesty",
+   "match": [
+    "unbreakable majesty"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "A bonus action for 1 minute: an attacker must pass a Charisma save or lose the attack and be unable to target the bard that turn."
+  },
+  {
+   "id": "sub_words_of_terror",
+   "displayName": "Words of Terror",
+   "match": [
+    "words of terror"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "A minute of private conversation frightens a humanoid for an hour on a failed Wisdom save.",
+   "fx": {
+    "kind": "enemy_save",
+    "save": "wis",
+    "condition": "frightened"
+   }
+  },
+  {
+   "id": "sub_mantle_of_whispers",
+   "displayName": "Mantle of Whispers",
+   "match": [
+    "mantle of whispers"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "A reaction capturing the shadow of a humanoid that died within 30 feet, wearable as their identity for an hour."
+  },
+  {
+   "id": "sub_shadow_lore",
+   "displayName": "Shadow Lore",
+   "match": [
+    "shadow lore"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "A whispered secret charms a creature within 30 feet for 8 hours on a failed Wisdom save, and it obeys reasonable requests.",
+   "fx": {
+    "kind": "enemy_save",
+    "save": "wis",
+    "condition": "charmed"
+   }
+  },
+  {
+   "id": "sub_infectious_inspiration",
+   "displayName": "Infectious Inspiration",
+   "match": [
+    "infectious inspiration"
+   ],
+   "uses": 1,
+   "ability": "cha",
+   "recharge": "long",
+   "guidance": "A reaction copying a successful Bardic Inspiration die onto another creature within 60 feet, without spending an inspiration use."
+  },
+  {
+   "id": "sub_performance_of_creation",
+   "displayName": "Performance of Creation",
+   "match": [
+    "performance of creation"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "An action creating a nonmagical item worth up to 20 times the bard's level. A spell slot buys extra uses."
+  },
+  {
+   "id": "sub_animating_performance",
+   "displayName": "Animating Performance",
+   "match": [
+    "animating performance"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "An action animating a Large or smaller object as a dancing item that acts on the bard's turn. A spell slot buys extra uses."
+  },
+  {
+   "id": "sub_spirit_session",
+   "displayName": "Spirit Session",
+   "match": [
+    "spirit session"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "An hour-long seance granting one divination or necromancy spell, castable until the next long rest."
+  },
+  {
+   "id": "sub_zealous_presence",
+   "displayName": "Zealous Presence",
+   "match": [
+    "zealous presence"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "A bonus action granting up to ten allies within 60 feet advantage on attacks and saves until the barbarian's next turn."
+  },
+  {
+   "id": "sub_consult_the_spirits",
+   "displayName": "Consult the Spirits",
+   "match": [
+    "consult the spirits"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "A free casting of augury or clairvoyance using Wisdom, with no slot or components."
+  },
+  {
+   "id": "sub_magic_awareness",
+   "displayName": "Magic Awareness",
+   "match": [
+    "magic awareness"
+   ],
+   "uses": 2,
+   "ability": null,
+   "proficiency": 1,
+   "recharge": "long",
+   "guidance": "An action sensing spells and magic items within 60 feet, through most barriers."
+  },
+  {
+   "id": "sub_bolstering_magic",
+   "displayName": "Bolstering Magic",
+   "match": [
+    "bolstering magic"
+   ],
+   "uses": 2,
+   "ability": null,
+   "proficiency": 1,
+   "recharge": "long",
+   "guidance": "Touch an ally to grant a bonus d3 on attacks and ability checks for 10 minutes, or restore one expended spell slot of 3rd level or lower."
+  },
+  {
+   "id": "sub_infectious_fury",
+   "displayName": "Infectious Fury",
+   "match": [
+    "infectious fury"
+   ],
+   "uses": 2,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "A natural-weapon hit forces a Wisdom save: the target either attacks a creature of the barbarian's choice or takes 2d12 psychic damage.",
+   "fx": {
+    "kind": "enemy_save",
+    "save": "wis",
+    "dice": "2d12"
+   }
+  },
+  {
+   "id": "sub_call_the_hunt",
+   "displayName": "Call the Hunt",
+   "match": [
+    "call the hunt"
+   ],
+   "uses": 1,
+   "ability": "con",
+   "recharge": "long",
+   "guidance": "A bonus action when raging: up to five allies each add a weapon damage die to one hit per turn, and the barbarian gains 5 temporary hit points per ally who accepts."
+  },
+  {
+   "id": "sub_hexblades_curse",
+   "displayName": "Hexblade's Curse",
+   "match": [
+    "hexblade's curse"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "A bonus action cursing a creature for 1 minute: bonus damage equal to the warlock's proficiency bonus, critical hits on a 19 or 20 against it, and hit points back when it dies."
+  },
+  {
+   "id": "sub_fey_presence",
+   "displayName": "Fey Presence",
+   "match": [
+    "fey presence"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "An action charming or frightening every creature in a 10-foot cube that fails a Wisdom save, until the end of the warlock's next turn.",
+   "fx": {
+    "kind": "enemy_save",
+    "save": "wis",
+    "condition": "charmed"
+   }
+  },
+  {
+   "id": "sub_misty_escape",
+   "displayName": "Misty Escape",
+   "match": [
+    "misty escape"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "A reaction on taking damage that turns the warlock invisible and teleports them 60 feet.",
+   "fx": {
+    "kind": "buff",
+    "condition": "invisible",
+    "rounds": 1
+   }
+  },
+  {
+   "id": "sub_entropic_ward",
+   "displayName": "Entropic Ward",
+   "match": [
+    "entropic ward"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "A reaction imposing disadvantage on an attack; if it then misses, the warlock has advantage on their next attack against that creature."
+  },
+  {
+   "id": "sub_healing_light",
+   "displayName": "Healing Light",
+   "match": [
+    "healing light"
+   ],
+   "uses": 2,
+   "ability": null,
+   "byLevel": true,
+   "levelPlus": 1,
+   "recharge": "long",
+   "guidance": "A pool of d6s equal to 1 + the warlock's level. Spend up to their Charisma modifier of them as a bonus action to heal a creature within 60 feet.",
+   "fx": {
+    "kind": "heal_dice_pool",
+    "die": "d6"
+   }
+  },
+  {
+   "id": "sub_searing_vengeance",
+   "displayName": "Searing Vengeance",
+   "match": [
+    "searing vengeance"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "Instead of rolling a death save, rise at half hit points, blinding enemies within 30 feet and dealing 2d8 + Charisma radiant damage to them."
+  },
+  {
+   "id": "sub_accursed_specter",
+   "displayName": "Accursed Specter",
+   "match": [
+    "accursed specter"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "A humanoid the warlock kills rises as an obedient specter with extra temporary hit points until the next long rest."
+  },
+  {
+   "id": "sub_tentacle_of_the_deep",
+   "displayName": "Tentacle of the Deep",
+   "match": [
+    "tentacle of the deep"
+   ],
+   "uses": 2,
+   "ability": null,
+   "proficiency": 1,
+   "recharge": "long",
+   "guidance": "A bonus action summoning a spectral tentacle for 1 minute: a 10-foot reach attack for 1d8 cold damage that also halves the target's speed.",
+   "fx": {
+    "kind": "buff",
+    "condition": "tentacle of the deep",
+    "rounds": 10
+   }
+  },
+  {
+   "id": "sub_fathomless_plunge",
+   "displayName": "Fathomless Plunge",
+   "match": [
+    "fathomless plunge"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "Teleport the warlock and up to five willing creatures to a body of water within a mile."
+  },
+  {
+   "id": "sub_form_of_dread",
+   "displayName": "Form of Dread",
+   "match": [
+    "form of dread"
+   ],
+   "uses": 2,
+   "ability": null,
+   "proficiency": 1,
+   "recharge": "long",
+   "guidance": "A bonus action for 1 minute: 1d10 + warlock level temporary hit points, immunity to being frightened, and one creature hit each turn is frightened on a failed Wisdom save.",
+   "fx": {
+    "kind": "buff",
+    "condition": "form of dread",
+    "rounds": 10,
+    "tempHp": "1d10+level"
+   }
+  },
+  {
+   "id": "sub_necrotic_husk",
+   "displayName": "Necrotic Husk",
+   "match": [
+    "necrotic husk"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "Instead of dropping to 0 hit points, stay at 1 and deal necrotic damage equal to the warlock's level to each creature within 30 feet."
+  },
+  {
+   "id": "sub_spirit_projection",
+   "displayName": "Spirit Projection",
+   "match": [
+    "spirit projection"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "An hour of spirit form: resistance to most damage, movement through solid matter, and necrotic and psychic spell damage that heals the warlock."
+  },
+  {
+   "id": "sub_defy_death",
+   "displayName": "Defy Death",
+   "match": [
+    "defy death"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "Regain 1d8 + Constitution modifier hit points on succeeding at a death save or stabilizing a creature.",
+   "fx": {
+    "kind": "heal_self",
+    "dice": "1d8+con"
+   }
+  },
+  {
+   "id": "sub_indestructible_life",
+   "displayName": "Indestructible Life",
+   "match": [
+    "indestructible life"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "A bonus action healing 1d8 + warlock level and reattaching severed body parts.",
+   "fx": {
+    "kind": "heal_self",
+    "dice": "1d8+level"
+   }
+  },
+  {
+   "id": "sub_genies_vessel",
+   "displayName": "Bottled Respite",
+   "match": [
+    "genie's vessel",
+    "sanctuary vessel"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "Retreat inside the vessel for up to 10 minutes; from 10th level up to five companions come too and gain temporary hit points on a short rest inside."
+  },
+  {
+   "id": "sub_limited_wish",
+   "displayName": "Limited Wish",
+   "match": [
+    "limited wish"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "Replicate any spell of 6th level or lower without components. In the fiction this needs several days to recharge, so grant it sparingly."
+  },
+  {
+   "id": "sub_tides_of_chaos",
+   "displayName": "Tides of Chaos",
+   "match": [
+    "tides of chaos"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "Advantage on one attack, ability check or saving throw. The DM may trigger a Wild Magic Surge afterwards to restore the use."
+  },
+  {
+   "id": "sub_favored_by_the_gods",
+   "displayName": "Favored by the Gods",
+   "match": [
+    "favored by the gods"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "Add 2d4 to a failed saving throw or a missed attack, possibly turning it into a success."
+  },
+  {
+   "id": "sub_unearthly_recovery",
+   "displayName": "Unearthly Recovery",
+   "match": [
+    "unearthly recovery"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "A bonus action at half hit points or less, restoring hit points equal to half the sorcerer's maximum."
+  },
+  {
+   "id": "sub_strength_of_the_grave",
+   "displayName": "Strength of the Grave",
+   "match": [
+    "strength of the grave"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "A Charisma save against 5 + the damage leaves the sorcerer at 1 hit point instead of 0."
+  },
+  {
+   "id": "sub_restore_balance",
+   "displayName": "Restore Balance",
+   "match": [
+    "restore balance"
+   ],
+   "uses": 2,
+   "ability": null,
+   "proficiency": 1,
+   "recharge": "long",
+   "guidance": "A reaction cancelling advantage or disadvantage on a roll by a creature within 60 feet."
+  },
+  {
+   "id": "sub_trance_of_order",
+   "displayName": "Trance of Order",
+   "match": [
+    "trance of order"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "A minute during which attacks against the sorcerer cannot have advantage and any d20 of 9 or lower counts as a 10 on their attacks, checks and saves.",
+   "fx": {
+    "kind": "buff",
+    "condition": "trance of order",
+    "rounds": 10
+   }
+  },
+  {
+   "id": "sub_clockwork_cavalcade",
+   "displayName": "Clockwork Cavalcade",
+   "match": [
+    "clockwork cavalcade"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "A 30-foot cube healing 100 hit points among creatures in it, ending spells of 6th level or lower and repairing objects."
+  },
+  {
+   "id": "sub_warping_implosion",
+   "displayName": "Warping Implosion",
+   "match": [
+    "warping implosion"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "Teleport 120 feet, pulling creatures toward the vacated space for 3d10 force damage on a failed Strength save.",
+   "fx": {
+    "kind": "aoe",
+    "dice": "3d10",
+    "save": "str"
+   }
+  },
+  {
+   "id": "sub_lunar_phenomenon",
+   "displayName": "Lunar Phenomenon",
+   "match": [
+    "lunar phenomenon"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "A 30-foot burst matching the current moon phase: healing, blinding radiance or a burst of speed."
+  },
+  {
+   "id": "sub_portent",
+   "displayName": "Portent Dice",
+   "match": [
+    "portent",
+    "greater portent"
+   ],
+   "uses": 2,
+   "ability": null,
+   "scale": [
+    [
+     14,
+     3
+    ],
+    [
+     2,
+     2
+    ]
+   ],
+   "recharge": "long",
+   "guidance": "Rolled after each long rest and kept as fixed numbers. Spend one to replace the result of an attack, check or save by the wizard or a creature they can see, declared before the roll."
+  },
+  {
+   "id": "sub_illusory_self",
+   "displayName": "Illusory Self",
+   "match": [
+    "illusory self"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "A reaction interposing an illusory duplicate so an attack that would hit misses instead."
+  },
+  {
+   "id": "sub_instinctive_charm",
+   "displayName": "Instinctive Charm",
+   "match": [
+    "instinctive charm"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "A reaction redirecting an attack aimed at the wizard onto another creature within the attacker's reach, on a failed Wisdom save."
+  },
+  {
+   "id": "sub_hypnotic_gaze",
+   "displayName": "Hypnotic Gaze",
+   "match": [
+    "hypnotic gaze"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "An action charming and incapacitating a creature within 5 feet until the end of the wizard's next turn, extendable each turn as an action."
+  },
+  {
+   "id": "sub_benign_transposition",
+   "displayName": "Benign Transposition",
+   "match": [
+    "benign transposition"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "Teleport 30 feet or swap places with a willing creature. Also recharges whenever the wizard casts a conjuration spell of 1st level or higher.",
+   "fx": {
+    "kind": "teleport",
+    "feet": 30
+   }
+  },
+  {
+   "id": "sub_shapechanger",
+   "displayName": "Shapechanger",
+   "match": [
+    "shapechanger"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "A free self-polymorph into a beast of challenge rating 1 or lower, without a spell slot."
+  },
+  {
+   "id": "sub_bladesong",
+   "displayName": "Bladesong",
+   "match": [
+    "bladesong"
+   ],
+   "uses": 2,
+   "ability": null,
+   "proficiency": 1,
+   "recharge": "short",
+   "guidance": "A bonus action for 1 minute: add the Intelligence modifier to AC, 10 feet of speed, advantage on Acrobatics, and a bonus on concentration saves. It ends if the wizard wears medium or heavy armor or a shield, or is incapacitated.",
+   "fx": {
+    "kind": "buff",
+    "condition": "bladesong",
+    "rounds": 10
+   }
+  },
+  {
+   "id": "sub_chronal_shift",
+   "displayName": "Chronal Shift",
+   "match": [
+    "chronal shift"
+   ],
+   "uses": 2,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "A reaction forcing a creature within 30 feet to reroll an attack, check or save, before or after the result is known."
+  },
+  {
+   "id": "sub_momentary_stasis",
+   "displayName": "Momentary Stasis",
+   "match": [
+    "momentary stasis"
+   ],
+   "uses": 2,
+   "ability": null,
+   "proficiency": 1,
+   "recharge": "long",
+   "guidance": "A Large or smaller creature within 60 feet is incapacitated and frozen in time until the end of the wizard's next turn on a failed Constitution save.",
+   "fx": {
+    "kind": "enemy_save",
+    "save": "con",
+    "condition": "incapacitated"
+   }
+  },
+  {
+   "id": "sub_arcane_abeyance",
+   "displayName": "Arcane Abeyance",
+   "match": [
+    "arcane abeyance"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "Store a spell of 4th level or lower in a bead that any creature can break to cast it, using the wizard's spellcasting numbers."
+  },
+  {
+   "id": "sub_violent_attraction",
+   "displayName": "Violent Attraction",
+   "match": [
+    "violent attraction"
+   ],
+   "uses": 2,
+   "ability": null,
+   "proficiency": 1,
+   "recharge": "long",
+   "guidance": "A reaction adding 1d10 to a weapon damage roll or 2d10 per 10 feet to falling damage within 60 feet."
+  },
+  {
+   "id": "sub_event_horizon",
+   "displayName": "Event Horizon",
+   "match": [
+    "event horizon"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "A minute of crushing gravity in a 30-foot radius: 2d10 force damage and no movement on a failed Strength save. A 4th-level slot buys extra uses.",
+   "fx": {
+    "kind": "aoe",
+    "dice": "2d10",
+    "save": "str"
+   }
+  },
+  {
+   "id": "sub_manifest_mind",
+   "displayName": "Manifest Mind",
+   "match": [
+    "manifest mind"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "A bonus action projecting the spellbook's spirit up to 300 feet, letting the wizard cast from its position. A spell slot buys extra uses."
+  },
+  {
+   "id": "sub_master_scrivener",
+   "displayName": "Master Scrivener",
+   "match": [
+    "master scrivener"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "After a long rest, create a spell scroll of a 1st or 2nd-level spell from the book, cast at maximum effect."
+  },
+  {
+   "id": "sub_one_with_the_word",
+   "displayName": "One with the Word",
+   "match": [
+    "one with the word"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "Avoid death by destroying the book's magic, which then takes days of study to rebuild."
+  },
+  {
+   "id": "sub_hunters_sense",
+   "displayName": "Hunter's Sense",
+   "match": [
+    "hunter's sense"
+   ],
+   "uses": 1,
+   "ability": "wis",
+   "recharge": "long",
+   "guidance": "An action revealing a creature's damage immunities, resistances and vulnerabilities, or that it has none."
+  },
+  {
+   "id": "sub_magic_users_nemesis",
+   "displayName": "Magic-User's Nemesis",
+   "match": [
+    "magic-user's nemesis"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "A reaction forcing a caster or teleporter within 60 feet to make a Wisdom save or lose the spell and the action."
+  },
+  {
+   "id": "sub_ethereal_step",
+   "displayName": "Ethereal Step",
+   "match": [
+    "ethereal step"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "A bonus-action etherealness lasting a single turn."
+  },
+  {
+   "id": "sub_detect_portal",
+   "displayName": "Detect Portal",
+   "match": [
+    "detect portal"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "Sense the distance and direction to the closest planar portal within a mile."
+  },
+  {
+   "id": "sub_writhing_tide",
+   "displayName": "Writhing Tide",
+   "match": [
+    "writhing tide"
+   ],
+   "uses": 2,
+   "ability": null,
+   "proficiency": 1,
+   "recharge": "long",
+   "guidance": "A bonus action granting a 10-foot flying speed for 1 minute, carried by the swarm.",
+   "fx": {
+    "kind": "buff",
+    "condition": "flying",
+    "rounds": 10
+   }
+  },
+  {
+   "id": "sub_swarming_dispersal",
+   "displayName": "Swarming Dispersal",
+   "match": [
+    "swarming dispersal"
+   ],
+   "uses": 2,
+   "ability": null,
+   "proficiency": 1,
+   "recharge": "long",
+   "guidance": "A reaction granting resistance to the damage just taken and teleporting the ranger 30 feet.",
+   "fx": {
+    "kind": "teleport",
+    "feet": 30
+   }
+  },
+  {
+   "id": "sub_misty_wanderer",
+   "displayName": "Misty Wanderer",
+   "match": [
+    "misty wanderer"
+   ],
+   "uses": 1,
+   "ability": "wis",
+   "recharge": "long",
+   "guidance": "A free misty step that can bring one willing creature within 5 feet along.",
+   "fx": {
+    "kind": "teleport",
+    "feet": 30
+   }
+  },
+  {
+   "id": "sub_fey_reinforcements",
+   "displayName": "Fey Reinforcements",
+   "match": [
+    "fey reinforcements"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "A free casting of summon fey without a spell slot; the summoned fey can turn invisible."
+  },
+  {
+   "id": "sub_drake_companion",
+   "displayName": "Drake Companion",
+   "match": [
+    "drake companion"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "Summon the bonded drake for an hour. It acts on the ranger's turn, adds their proficiency bonus to its rolls, and can be resummoned with a spell slot."
+  },
+  {
+   "id": "sub_drakes_breath",
+   "displayName": "Drake's Breath",
+   "match": [
+    "drake's breath"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "The drake exhales a 30-foot cone for 8d6 of its damage type, halved on a Dexterity save. A 3rd-level slot buys extra uses.",
+   "fx": {
+    "kind": "aoe",
+    "dice": "8d6",
+    "save": "dex"
+   }
+  },
+  {
+   "id": "sub_wails_from_the_grave",
+   "displayName": "Wails from the Grave",
+   "match": [
+    "wails from the grave"
+   ],
+   "uses": 2,
+   "ability": null,
+   "proficiency": 1,
+   "recharge": "long",
+   "guidance": "After a sneak attack, a second creature within 30 feet takes half the sneak attack dice in necrotic damage."
+  },
+  {
+   "id": "sub_ghost_walk",
+   "displayName": "Ghost Walk",
+   "match": [
+    "ghost walk"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "A bonus action granting 10 minutes of spectral form: a 10-foot fly speed and movement through creatures and objects. A soul trinket buys extra uses."
+  },
+  {
+   "id": "sub_psychic_veil",
+   "displayName": "Psychic Veil",
+   "match": [
+    "psychic veil"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "An hour of invisibility, ending early if the rogue deals damage or forces a saving throw. A Psionic Energy die buys extra uses.",
+   "fx": {
+    "kind": "buff",
+    "condition": "invisible",
+    "rounds": 100
+   }
+  },
+  {
+   "id": "sub_rend_mind",
+   "displayName": "Rend Mind",
+   "match": [
+    "rend mind"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "A sneak attack with Psychic Blades stuns a creature for 1 minute on a failed Wisdom save. Three Psionic Energy dice buy extra uses.",
+   "fx": {
+    "kind": "enemy_save",
+    "save": "wis",
+    "condition": "stunned"
+   }
+  },
+  {
+   "id": "sub_spell_thief",
+   "displayName": "Spell Thief",
+   "match": [
+    "spell thief"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "A reaction stealing a spell cast at the rogue on a failed save by the caster, denying it to them for 8 hours and letting the rogue cast it once."
+  },
+  {
+   "id": "sub_unerring_eye",
+   "displayName": "Unerring Eye",
+   "match": [
+    "unerring eye"
+   ],
+   "uses": 1,
+   "ability": "wis",
+   "recharge": "long",
+   "guidance": "An action sensing illusions, shapechangers and other magical deception within 30 feet, without learning what is hidden."
+  },
+  {
+   "id": "sub_master_duelist",
+   "displayName": "Master Duelist",
+   "match": [
+    "master duelist"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "Reroll a missed attack, with advantage."
+  },
+  {
+   "id": "sub_wholeness_of_body_mercy",
+   "displayName": "Hand of Ultimate Mercy",
+   "match": [
+    "hand of ultimate mercy"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "Spend 5 ki to return a creature dead no more than 24 hours to life with 4d10 + Wisdom hit points, free of every condition it died with.",
+   "fx": {
+    "kind": "heal_target",
+    "dice": "4d10+wis"
+   }
+  },
+  {
+   "id": "sub_breath_of_the_dragon",
+   "displayName": "Breath of the Dragon",
+   "match": [
+    "breath of the dragon"
+   ],
+   "uses": 2,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "Replace one Attack-action attack with a 20-foot cone or 30-foot line dealing the martial arts die in the monk's chosen damage type, halved on a Dexterity save. Ki buys extra uses.",
+   "fx": {
+    "kind": "aoe",
+    "dice": "2d6",
+    "save": "dex"
+   }
+  },
+  {
+   "id": "sub_wings_unfurled",
+   "displayName": "Wings Unfurled",
+   "match": [
+    "wings unfurled"
+   ],
+   "uses": 2,
+   "ability": null,
+   "proficiency": 1,
+   "recharge": "long",
+   "guidance": "While airborne, gain a flying speed equal to the walking speed for that turn."
+  },
+  {
+   "id": "sub_aspect_of_the_wyrm",
+   "displayName": "Aspect of the Wyrm",
+   "match": [
+    "aspect of the wyrm"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "A bonus action raising a 10-foot aura for 1 minute that either frightens enemies or grants allies resistance to the monk's damage type. Three ki buys extra uses.",
+   "fx": {
+    "kind": "buff",
+    "condition": "aspect of the wyrm: frighten",
+    "rounds": 10,
+    "variants": [
+     "aspect of the wyrm: frighten",
+     "aspect of the wyrm: ward"
+    ]
+   }
+  },
+  {
+   "id": "sub_glorious_defense",
+   "displayName": "Glorious Defense",
+   "match": [
+    "glorious defense"
+   ],
+   "uses": 1,
+   "ability": "cha",
+   "recharge": "long",
+   "guidance": "A reaction adding the paladin's Charisma modifier to the AC of themselves or an ally within 10 feet; if the attack then misses, they may attack the attacker."
+  },
+  {
+   "id": "sub_undying_sentinel",
+   "displayName": "Undying Sentinel",
+   "match": [
+    "undying sentinel"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "Triggers on its own: drop to 1 hit point instead of 0."
+  },
+  {
+   "id": "race_stones_endurance",
+   "displayName": "Stone's Endurance",
+   "match": [
+    "stone's endurance"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "A reaction reducing incoming damage by 1d12 + the goliath's Constitution modifier."
+  },
+  {
+   "id": "race_healing_hands",
+   "displayName": "Healing Hands",
+   "match": [
+    "healing hands"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "Touch a creature to restore hit points equal to the aasimar's level.",
+   "fx": {
+    "kind": "heal_target",
+    "dice": "level"
+   }
+  },
+  {
+   "id": "race_celestial_revelation",
+   "displayName": "Celestial Revelation",
+   "match": [
+    "celestial revelation"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "A minute of transformation from 3rd level: spectral wings granting flight, and extra radiant damage once per turn."
+  },
+  {
+   "id": "race_hidden_step",
+   "displayName": "Hidden Step",
+   "match": [
+    "hidden step"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "A bonus action turning the firbolg invisible until the start of their next turn, or until they attack, cast or force a save.",
+   "fx": {
+    "kind": "buff",
+    "condition": "invisible",
+    "rounds": 1
+   }
+  },
+  {
+   "id": "race_firbolg_magic",
+   "displayName": "Firbolg Magic",
+   "match": [
+    "firbolg magic"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "A free casting of detect magic or disguise self, using Wisdom, without a slot. Disguise self can change the firbolg's size between Medium and Small."
+  },
+  {
+   "id": "race_fury_of_the_small",
+   "displayName": "Fury of the Small",
+   "match": [
+    "fury of the small"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "Extra damage equal to the goblin's level on a hit against a creature larger than them."
+  },
+  {
+   "id": "race_hungry_jaws",
+   "displayName": "Hungry Jaws",
+   "match": [
+    "hungry jaws"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "A bonus-action bite that, on a hit, also grants temporary hit points equal to the lizardfolk's Constitution modifier.",
+   "fx": {
+    "kind": "temp_hp",
+    "dice": "con"
+   }
+  },
+  {
+   "id": "race_genasi_magic",
+   "displayName": "Elemental Legacy",
+   "match": [
+    "reach to the blaze",
+    "call to the wave",
+    "mingle with the wind",
+    "merge with stone"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "The genasi's inherited spell, cast without a slot: burning hands, create or destroy water, levitate or pass without trace depending on their element. The matching cantrip is at will and does not use this counter."
+  },
+  {
+   "id": "art_flash_of_genius",
+   "displayName": "Flash of Genius",
+   "match": [
+    "flash of genius"
+   ],
+   "uses": 1,
+   "ability": "int",
+   "recharge": "long",
+   "guidance": "A reaction adding the artificer's Intelligence modifier to an ability check or saving throw by them or an ally within 30 feet."
+  },
+  {
+   "id": "art_right_tool",
+   "displayName": "The Right Tool for the Job",
+   "match": [
+    "the right tool for the job"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "An hour with tinker's tools conjures any set of artisan's tools needed, lasting until the next use."
+  },
+  {
+   "id": "art_experimental_elixir",
+   "displayName": "Experimental Elixir",
+   "match": [
+    "experimental elixir"
+   ],
+   "uses": 1,
+   "ability": null,
+   "scale": [
+    [
+     15,
+     3
+    ],
+    [
+     9,
+     2
+    ],
+    [
+     3,
+     1
+    ]
+   ],
+   "recharge": "long",
+   "guidance": "Elixirs brewed on a long rest, each with a random effect: healing, swiftness, resilience, boldness, flight or transformation. Extra elixirs can be brewed by spending a spell slot."
+  },
+  {
+   "id": "art_eldritch_cannon",
+   "displayName": "Eldritch Cannon",
+   "match": [
+    "eldritch cannon"
+   ],
+   "uses": 1,
+   "ability": null,
+   "scale": [
+    [
+     15,
+     2
+    ],
+    [
+     3,
+     1
+    ]
+   ],
+   "recharge": "long",
+   "guidance": "A bonus action builds a flamethrower, force ballista or protector cannon that acts on the artificer's command. A spell slot buys extra uses."
+  },
+  {
+   "id": "art_spell_storing_item",
+   "displayName": "Spell-Storing Item",
+   "match": [
+    "spell-storing item"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "After a long rest, store a 1st or 2nd-level artificer spell in an item; the holder can cast it twice the artificer's Intelligence modifier in times."
+  },
+  {
+   "id": "art_arcane_jolt",
+   "displayName": "Arcane Jolt",
+   "match": [
+    "arcane jolt"
+   ],
+   "uses": 1,
+   "ability": "int",
+   "recharge": "long",
+   "guidance": "Once per turn, a magic-weapon or Steel Defender hit deals an extra 2d6 force damage, or heals a creature within 30 feet 2d6. Rises to 4d6 at 15th level."
+  },
+  {
+   "id": "art_restorative_reagents",
+   "displayName": "Restorative Reagents",
+   "match": [
+    "restorative reagents"
+   ],
+   "uses": 2,
+   "ability": null,
+   "proficiency": 1,
+   "recharge": "long",
+   "guidance": "Free castings of lesser restoration without a spell slot."
+  },
+  {
+   "id": "sub_starry_form",
+   "displayName": "Starry Form",
+   "match": [
+    "starry form"
+   ],
+   "uses": 2,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "A bonus action spends one Wild Shape use to take a starry form for 10 minutes: Archer (a bonus-action luminous arrow, resolved by the server), Chalice (healing spells also heal a second creature 1d8 + WIS), or Dragon (concentration saves treat a low d20 as a 10). Pass variant to choose; the constellation's mechanics apply automatically. This counter mirrors Wild Shape uses.",
+   "fx": {
+    "kind": "buff",
+    "condition": "starry form: archer",
+    "rounds": 100,
+    "variants": [
+     "starry form: archer",
+     "starry form: chalice",
+     "starry form: dragon"
+    ]
+   }
+  }
+ ]
+}

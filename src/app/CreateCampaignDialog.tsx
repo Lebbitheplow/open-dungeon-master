@@ -7,9 +7,13 @@ import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { GENRE_PRESETS } from "@/lib/genres";
 import { TTS_VOICES } from "@/lib/tts-voices";
+import { VoicePreviewButton } from "@/components/VoicePreviewButton";
 import { CAMPAIGN_DIFFICULTIES, type CampaignDifficulty } from "@/lib/campaign-types";
 import {
+  CAMPAIGN_LENGTH_LABELS,
+  CAMPAIGN_LENGTHS,
   COMPANION_LABELS,
+  type CampaignLengthSetting,
   type DicePolicy,
   type GameSettings,
   type Genre,
@@ -34,6 +38,7 @@ export function CreateCampaignDialog({
   const [maxPlayers, setMaxPlayers] = useState(5);
   const [startingLevel, setStartingLevel] = useState(1);
   const [difficulty, setDifficulty] = useState<CampaignDifficulty>("normal");
+  const [campaignLength, setCampaignLength] = useState<CampaignLengthSetting>("standard");
   const [genre, setGenre] = useState<Genre>("high_fantasy");
   const [customGenreText, setCustomGenreText] = useState("");
   const [aiStorySetup, setAiStorySetup] = useState(true);
@@ -66,6 +71,7 @@ export function CreateCampaignDialog({
             genre,
             customGenreText: customGenreText.trim(),
             aiStorySetup,
+            campaignLength,
             dicePolicy,
             ttsEnabled,
             ttsVoice,
@@ -224,6 +230,25 @@ export function CreateCampaignDialog({
               </label>
             </div>
 
+            <label className="block">
+              <span className="mb-1 block text-stone-400">Campaign length</span>
+              <select
+                value={campaignLength}
+                onChange={(event) => setCampaignLength(event.target.value as CampaignLengthSetting)}
+                className={inputClass}
+              >
+                {CAMPAIGN_LENGTHS.map((value) => (
+                  <option key={value} value={value}>
+                    {CAMPAIGN_LENGTH_LABELS[value]}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-stone-500">
+                How far the DM plans the story ahead. Any length keeps going if you play past the
+                finale: a sequel saga picks up where the last one ended.
+              </p>
+            </label>
+
             <div>
               <span className="mb-1.5 block text-stone-400">Dice</span>
               <div className="flex gap-2">
@@ -336,20 +361,23 @@ export function CreateCampaignDialog({
             </div>
 
             {ttsEnabled ? (
-              <label className="block">
+              <div className="block">
                 <span className="mb-1 block text-stone-400">Narrator voice</span>
-                <select
-                  value={ttsVoice}
-                  onChange={(event) => setTtsVoice(event.target.value)}
-                  className={inputClass}
-                >
-                  {TTS_VOICES.map((voice) => (
-                    <option key={voice.id} value={voice.id}>
-                      {voice.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={ttsVoice}
+                    onChange={(event) => setTtsVoice(event.target.value)}
+                    className={inputClass}
+                  >
+                    {TTS_VOICES.map((voice) => (
+                      <option key={voice.id} value={voice.id}>
+                        {voice.label}
+                      </option>
+                    ))}
+                  </select>
+                  <VoicePreviewButton voice={ttsVoice} />
+                </div>
+              </div>
             ) : null}
 
             {error ? <p className="text-red-400">{error}</p> : null}

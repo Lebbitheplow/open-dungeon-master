@@ -9,7 +9,14 @@
 // the model gets handed so it at least narrates the feature correctly.
 //
 // Pure and dependency-light (like class-resources.ts and condition-logic.ts)
-// so scripts/test-feature-effects.mjs can exercise every branch.
+// so scripts/test-feature-effects.mjs can exercise every branch. The authored
+// subclass and feat catalogs are JSON imports parsed at load: their regular
+// phrasing ("Once per turn a weapon hit deals an extra 1d8 fire damage,
+// rising to 2d8 at 14th level", "you gain resistance to poison damage")
+// becomes typed riders without hand-maintaining a second table.
+
+import subclassesJson from "@/lib/srd/subclasses.json";
+import authoredFeatsJson from "@/lib/srd/authored-feats.json";
 
 export type FightingStyleId =
   | "archery"
@@ -59,8 +66,42 @@ export type FeatureEffect =
   | { kind: "initiative_bonus"; amount: number }
   // Flat passive Perception / Investigation bonus (Observant feat: +5).
   | { kind: "passive_bonus"; amount: number }
-  // Walking speed, unarmored (Fast Movement, Unarmored Movement).
-  | { kind: "speed_bonus"; amount: (level: number) => number; unarmoredOnly?: boolean }
+  // Walking speed bonus; `gate` names the equipment that switches it off
+  // (Fast Movement: heavy armor; Unarmored Movement: any armor or shield).
+  | {
+      kind: "speed_bonus";
+      amount: (level: number) => number;
+      gate?: "heavy_armor" | "armor_or_shield";
+    }
+  // Half the proficiency bonus (rounded down) on ability checks that do not
+  // already use it, initiative included. Jack of All Trades covers every
+  // ability; Remarkable Athlete only STR, DEX, and CON.
+  | { kind: "half_proficiency"; scope: "all" | "physical" }
+  // Extra damage dice on landed attacks (Divine Strike, Improved Divine
+  // Smite, Divine Fury). `when` restricts the carrier; oncePerTurn rides the
+  // turn budget; requiresCondition gates it (Divine Fury: raging).
+  | {
+      kind: "weapon_damage_rider";
+      dice: (level: number) => string;
+      type: string;
+      when: "weapon" | "melee" | "ranged";
+      oncePerTurn?: boolean;
+      requiresCondition?: string;
+    }
+  // Always-on damage resistances (lineages, Heart of the Storm).
+  | { kind: "resistance"; types: string[] }
+  // The character's weapon/unarmed attacks count as magical (Primal Strike,
+  // Ki-Empowered Strikes).
+  | { kind: "magical_attacks" }
+  // Initiative bonus equal to an ability modifier (Dread Ambusher: WIS).
+  | { kind: "initiative_ability"; ability: "str" | "dex" | "con" | "int" | "wis" | "cha" }
+  // An ability modifier added to a named attack-roll spell's damage
+  // (Agonizing Blast: +CHA per Eldritch Blast beam).
+  | {
+      kind: "cantrip_damage_ability";
+      spell: string;
+      ability: "str" | "dex" | "con" | "int" | "wis" | "cha";
+    }
   // No server-enforceable payload; `guidance` carries the SRD truth.
   | { kind: "narrative" };
 
@@ -171,6 +212,12 @@ export const FEATURE_EFFECTS: FeatureDef[] = [
     guidance: "Observant: +5 to passive Perception and passive Investigation.",
   },
   {
+    // The warforged lineage's built-in plating, applied by the AC engine.
+    match: ["integrated protection"],
+    effects: [{ kind: "ac_bonus", amount: 1 }],
+    guidance: "Integrated Protection: +1 AC from armor built into the warforged's body.",
+  },
+  {
     match: ["fighting style: archery"],
     effects: [{ kind: "attack_bonus", amount: 2, when: "ranged" }],
     guidance: "Archery: +2 on every ranged weapon attack roll. The server applies it.",
@@ -275,7 +322,7 @@ export const FEATURE_EFFECTS: FeatureDef[] = [
     match: ["aura of protection"],
     effects: [{ kind: "save_bonus", ability: "cha", min: 1 }],
     guidance:
-      "Aura of Protection: the paladin and every ally within 10 feet add the paladin's Charisma modifier (minimum +1) to their saving throws.",
+      "Aura of Protection: the paladin and every ally within 10 feet add the paladin's Charisma modifier (minimum +1) to their saving throws. During a mapped encounter the server applies it to allies from token positions; outside one, apply it yourself when the fiction has them close.",
   },
   {
     match: ["danger sense"],
@@ -290,6 +337,18 @@ export const FEATURE_EFFECTS: FeatureDef[] = [
       "Evasion: on a Dexterity save for half damage they instead take none on a success and half on a failure. The server applies it.",
   },
   {
+    match: ["jack of all trades"],
+    effects: [{ kind: "half_proficiency", scope: "all" }],
+    guidance:
+      "Jack of All Trades: half their proficiency bonus (rounded down) on every ability check that does not already use it, initiative included. The server applies it.",
+  },
+  {
+    match: ["remarkable athlete"],
+    effects: [{ kind: "half_proficiency", scope: "physical" }],
+    guidance:
+      "Remarkable Athlete: half their proficiency bonus (rounded down) on Strength, Dexterity, and Constitution checks that do not already use it, initiative included. The server applies it.",
+  },
+  {
     // Recognized but not yet enforced in the dice engine (a floored d20 has
     // no expression form); the guidance keeps the model honest meanwhile.
     match: ["reliable talent"],
@@ -299,7 +358,7 @@ export const FEATURE_EFFECTS: FeatureDef[] = [
   },
   {
     match: ["fast movement"],
-    effects: [{ kind: "speed_bonus", amount: () => 10, unarmoredOnly: true }],
+    effects: [{ kind: "speed_bonus", amount: () => 10, gate: "heavy_armor" }],
     guidance: "Fast Movement: +10 feet of speed while not wearing heavy armor.",
   },
   {
@@ -309,13 +368,186 @@ export const FEATURE_EFFECTS: FeatureDef[] = [
         kind: "speed_bonus",
         amount: (level) =>
           level >= 18 ? 30 : level >= 14 ? 25 : level >= 10 ? 20 : level >= 6 ? 15 : 10,
-        unarmoredOnly: true,
+        gate: "armor_or_shield",
       },
     ],
     guidance:
       "Unarmored Movement: extra speed while wearing no armor and no shield, and from 9th level they run up walls and across water.",
   },
+  {
+    match: ["improved divine smite"],
+    effects: [
+      {
+        kind: "weapon_damage_rider",
+        dice: () => "1d8",
+        type: "radiant",
+        when: "melee",
+      },
+    ],
+    guidance:
+      "Improved Divine Smite: every melee weapon hit deals an extra 1d8 radiant damage. The server rolls it.",
+  },
+  {
+    match: ["primal strike", "ki-empowered strikes"],
+    effects: [{ kind: "magical_attacks" }],
+    guidance:
+      "Their natural/unarmed attacks count as magical for overcoming resistance and immunity to nonmagical damage.",
+  },
+  {
+    match: ["divine fury"],
+    effects: [
+      {
+        kind: "weapon_damage_rider",
+        dice: (level) => `1d6+${Math.floor(clampLevel(level) / 2)}`,
+        type: "radiant or necrotic",
+        when: "weapon",
+        oncePerTurn: true,
+        requiresCondition: "raging",
+      },
+    ],
+    guidance:
+      "Divine Fury: while raging, the first creature they hit each turn takes an extra 1d6 + half their barbarian level radiant or necrotic damage. The server rolls it.",
+  },
+  {
+    match: ["dread ambusher"],
+    effects: [{ kind: "initiative_ability", ability: "wis" }],
+    guidance:
+      "Dread Ambusher: their Wisdom modifier is added to initiative (the server applies it), and on their first combat turn they gain 10 feet of speed and one extra attack dealing +1d8.",
+  },
+  {
+    match: ["invocation: agonizing blast", "agonizing blast"],
+    effects: [{ kind: "cantrip_damage_ability", spell: "eldritch blast", ability: "cha" }],
+    guidance:
+      "Agonizing Blast: their Charisma modifier is added to each Eldritch Blast beam's damage. The server applies it on pc_attack.",
+  },
 ];
+
+// ---- Authored-catalog parsing ----
+//
+// The subclass and feat catalogs state their mechanics in regular phrasing;
+// these parsers lift the enforceable patterns into typed effects at load.
+// A name granted by several subclasses with diverging payloads (each domain's
+// Divine Strike types differ) keeps the shared dice and drops the type.
+
+const DAMAGE_TYPE_WORDS = [
+  "acid", "bludgeoning", "cold", "fire", "force", "lightning", "necrotic",
+  "piercing", "poison", "psychic", "radiant", "slashing", "thunder",
+];
+
+export function parseFeatureEffects(desc: string): FeatureEffect[] {
+  const out: FeatureEffect[] = [];
+  // "Once per turn a weapon hit deals an extra 1d8 fire damage, rising to
+  // 2d8 at 14th level." (the Divine Strike family and kin).
+  const strike =
+    /once per turn[^.]{0,40}?hit deals an extra (\d+d\d+)\s*([a-z]+)?/i.exec(desc);
+  if (strike) {
+    const base = strike[1];
+    const rising = /rising to (\d+d\d+) at (\d+)(?:st|nd|rd|th) level/i.exec(desc);
+    const upgraded = rising?.[1];
+    const upgradeAt = rising ? Number(rising[2]) : null;
+    const typeWord = (strike[2] ?? "").toLowerCase();
+    // "1d8 cold, fire or lightning" or "of the weapon's type": no one type.
+    const afterType = desc.slice((strike.index ?? 0) + strike[0].length, (strike.index ?? 0) + strike[0].length + 20);
+    const singleType =
+      DAMAGE_TYPE_WORDS.includes(typeWord) && !/^\s*(?:,| or )/.test(afterType)
+        ? typeWord
+        : "";
+    out.push({
+      kind: "weapon_damage_rider",
+      dice: (level) =>
+        upgraded && upgradeAt && clampLevel(level) >= upgradeAt ? upgraded : base,
+      type: singleType,
+      when: "weapon",
+      oncePerTurn: true,
+    });
+  }
+  // Always-on resistances: "you gain/have resistance to poison damage" or a
+  // leading "Resistance to psychic damage, and ...", with no trigger words
+  // in the clause (a rage-gated or spent resistance stays narrative).
+  const sentence =
+    /[^.]*\byou (?:gain|have|grant(?:s)? you)? ?resistance to[^.,]*/i.exec(desc)?.[0] ??
+    /^Resistance to[^.,]*/i.exec(desc)?.[0];
+  if (sentence && !/while|when |until|spend|reaction|rage|minute|hour|bonus action/i.test(sentence)) {
+    const types = DAMAGE_TYPE_WORDS.filter((word) =>
+      new RegExp(`\\b${word}\\b`, "i").test(sentence),
+    );
+    if (types.length) {
+      out.push({ kind: "resistance", types });
+    }
+  }
+  // "your attacks count as magical".
+  if (/counts? as magical/i.test(desc)) {
+    out.push({ kind: "magical_attacks" });
+  }
+  return out;
+}
+
+// Every authored subclass feature and feat, parsed once. Same-named
+// features from different subclasses merge: agreeing payloads keep the
+// type, diverging ones drop it (the dice always agree in practice).
+type AuthoredFeatureRow = { n: string; d: string };
+const AUTHORED_PARSED = new Map<string, { effects: FeatureEffect[]; guidance: string }>();
+{
+  const rows: AuthoredFeatureRow[] = [];
+  const classes = (subclassesJson as unknown as {
+    classes: Record<string, Array<{ levels: Record<string, AuthoredFeatureRow[]> }>>;
+  }).classes;
+  for (const entries of Object.values(classes)) {
+    for (const entry of entries) {
+      for (const features of Object.values(entry.levels)) {
+        rows.push(...features);
+      }
+    }
+  }
+  const feats = (authoredFeatsJson as unknown as { feats: Array<{ name: string; desc?: string; d?: string }> }).feats;
+  for (const feat of feats) {
+    rows.push({ n: feat.name, d: feat.desc ?? feat.d ?? "" });
+  }
+  for (const row of rows) {
+    const name = normalize(row.n);
+    // The static table wins for names it already covers.
+    if (FEATURE_EFFECTS.some((def) => def.match.includes(name))) {
+      continue;
+    }
+    const effects = parseFeatureEffects(row.d);
+    if (!effects.length) {
+      continue;
+    }
+    const existing = AUTHORED_PARSED.get(name);
+    if (!existing) {
+      AUTHORED_PARSED.set(name, { effects, guidance: row.d });
+      continue;
+    }
+    // Divergence on the same name: keep riders whose dice agree, drop types
+    // that differ, drop resistances that differ.
+    const merged: FeatureEffect[] = [];
+    for (const effect of existing.effects) {
+      const twin = effects.find((candidate) => candidate.kind === effect.kind);
+      if (!twin) {
+        continue;
+      }
+      if (effect.kind === "weapon_damage_rider" && twin.kind === "weapon_damage_rider") {
+        merged.push({
+          ...effect,
+          type: effect.type === twin.type ? effect.type : "",
+        });
+      } else if (effect.kind === "resistance" && twin.kind === "resistance") {
+        const shared = effect.types.filter((type) => twin.types.includes(type));
+        if (shared.length) {
+          merged.push({ kind: "resistance", types: shared });
+        }
+      } else {
+        merged.push(effect);
+      }
+    }
+    AUTHORED_PARSED.set(name, { effects: merged, guidance: existing.guidance });
+  }
+  for (const [name, parsed] of AUTHORED_PARSED) {
+    if (parsed.effects.length) {
+      FEATURE_EFFECTS.push({ match: [name], effects: parsed.effects, guidance: parsed.guidance });
+    }
+  }
+}
 
 function normalize(name: string) {
   return name.trim().toLowerCase().replace(/\s+/g, " ");
@@ -326,10 +558,15 @@ function normalize(name: string) {
 // counts as a plain "Extra Attack".
 export function effectsFor(input: {
   class: string;
-  features: Array<{ name: string }>;
-}): Array<{ def: FeatureDef; effect: FeatureEffect; feature: string }> {
+  features: Array<{ name: string; classId?: string }>;
+}): Array<{ def: FeatureDef; effect: FeatureEffect; feature: string; featureClassId?: string }> {
   const wantedClass = normalize(input.class);
-  const out: Array<{ def: FeatureDef; effect: FeatureEffect; feature: string }> = [];
+  const out: Array<{
+    def: FeatureDef;
+    effect: FeatureEffect;
+    feature: string;
+    featureClassId?: string;
+  }> = [];
   for (const feature of input.features) {
     const name = normalize(feature.name);
     const matches = FEATURE_EFFECTS.filter(
@@ -353,7 +590,12 @@ export function effectsFor(input: {
     }
     if (best) {
       for (const effect of best.effects) {
-        out.push({ def: best, effect, feature: feature.name });
+        out.push({
+          def: best,
+          effect,
+          feature: feature.name,
+          ...(feature.classId ? { featureClassId: feature.classId } : {}),
+        });
       }
     }
   }
@@ -391,14 +633,47 @@ export type CombatRiders = {
   critExtraDice: number;
   canSmite: boolean;
   unarmoredSpeedBonus: number;
+  // Each speed bonus with the equipment that switches it off, for consumers
+  // that can see what is worn; unarmoredSpeedBonus stays the ungated max.
+  speedBonuses: Array<{ amount: number; gate: "heavy_armor" | "armor_or_shield" | null }>;
+  // Extra damage dice on landed attacks (Divine Strike, Improved Divine
+  // Smite), resolved to this level's dice.
+  damageRiders: Array<{
+    feature: string;
+    dice: string;
+    type: string;
+    when: "weapon" | "melee" | "ranged";
+    oncePerTurn: boolean;
+    requiresCondition?: string;
+  }>;
+  // Weapon and unarmed attacks count as magical for overcoming resistance.
+  magicalAttacks: boolean;
+  // Ability modifiers riding named attack-roll spells (Agonizing Blast).
+  cantripAbilityRiders: Array<{ feature: string; spell: string; ability: string }>;
 };
 
 export function combatRiders(sheet: {
   class: string;
   level: number;
-  features: Array<{ name: string }>;
+  features: Array<{ name: string; classId?: string }>;
+  // Multiclass class list; when present, a level-scaled feature resolves
+  // with its granting class's level (rogue 5 / fighter 3 sneak-attacks with
+  // rogue dice, not character-level dice). Absent = single-class, where the
+  // character level is the class level and nothing changes.
+  classes?: Array<{ id: string; level: number }>;
 }): CombatRiders {
   const level = clampLevel(sheet.level);
+  // The level a feature's scaling resolves at: its granting class's when
+  // the sheet is multiclassed and the feature is tagged, else the sheet's.
+  const levelFor = (featureClassId: string | undefined) => {
+    if (!featureClassId || !sheet.classes || sheet.classes.length < 2) {
+      return level;
+    }
+    const held = sheet.classes.find(
+      (entry) => entry.id.toLowerCase() === featureClassId.toLowerCase(),
+    )?.level;
+    return held ? clampLevel(held) : level;
+  };
   const riders: CombatRiders = {
     acBonus: 0,
     acBonusRequiresArmor: false,
@@ -414,8 +689,13 @@ export function combatRiders(sheet: {
     critExtraDice: 0,
     canSmite: false,
     unarmoredSpeedBonus: 0,
+    speedBonuses: [],
+    damageRiders: [],
+    magicalAttacks: false,
+    cantripAbilityRiders: [],
   };
-  for (const { effect } of effectsFor(sheet)) {
+  for (const { effect, feature, featureClassId } of effectsFor(sheet)) {
+    const scaledLevel = levelFor(featureClassId);
     switch (effect.kind) {
       case "ac_bonus":
         riders.acBonus += effect.amount;
@@ -442,25 +722,50 @@ export function combatRiders(sheet: {
         riders.extraAttacks = Math.max(riders.extraAttacks, effect.attacks);
         break;
       case "sneak_attack":
-        riders.sneakAttackDice = sneakAttackDice(level);
+        riders.sneakAttackDice = sneakAttackDice(scaledLevel);
         break;
       case "martial_arts":
-        riders.martialArtsDie = martialArtsDie(level);
+        riders.martialArtsDie = martialArtsDie(scaledLevel);
         break;
       case "crit_range":
         riders.critRange = Math.min(riders.critRange, effect.low);
         break;
       case "crit_dice":
         riders.critExtraDice +=
-          typeof effect.dice === "function" ? effect.dice(level) : effect.dice;
+          typeof effect.dice === "function" ? effect.dice(scaledLevel) : effect.dice;
         break;
       case "smite":
         riders.canSmite = true;
         break;
-      case "speed_bonus":
-        riders.unarmoredSpeedBonus = Math.max(riders.unarmoredSpeedBonus, effect.amount(level));
+      case "speed_bonus": {
+        const amount = effect.amount(scaledLevel);
+        riders.unarmoredSpeedBonus = Math.max(riders.unarmoredSpeedBonus, amount);
+        riders.speedBonuses.push({ amount, gate: effect.gate ?? null });
+        break;
+      }
+      case "weapon_damage_rider":
+        riders.damageRiders.push({
+          feature,
+          dice: effect.dice(scaledLevel),
+          type: effect.type,
+          when: effect.when,
+          oncePerTurn: Boolean(effect.oncePerTurn),
+          ...(effect.requiresCondition ? { requiresCondition: effect.requiresCondition } : {}),
+        });
+        break;
+      case "magical_attacks":
+        riders.magicalAttacks = true;
+        break;
+      case "cantrip_damage_ability":
+        riders.cantripAbilityRiders.push({
+          feature,
+          spell: effect.spell,
+          ability: effect.ability,
+        });
         break;
       case "narrative":
+        break;
+      default:
         break;
     }
   }
@@ -514,9 +819,16 @@ export type DefenseRiders = {
   evasion: boolean;
   // Reliable Talent: proficient ability checks floor a low d20 at 10.
   reliableTalent: boolean;
-  // Flat adds from feats (Alert, Observant).
+  // Flat adds from feats (Alert, Observant) and ability-driven initiative
+  // features (Dread Ambusher).
   initiativeBonus: number;
   passiveBonus: number;
+  // Always-on damage resistances from features and lineages.
+  resistances: string[];
+  // Half proficiency on ability checks that lack it: "all" (Jack of All
+  // Trades) or "physical" for STR/DEX/CON only (Remarkable Athlete). The
+  // broader scope wins when a sheet somehow carries both.
+  halfProficiency: "all" | "physical" | null;
 };
 
 export function defenseRiders(
@@ -532,9 +844,17 @@ export function defenseRiders(
     reliableTalent: false,
     initiativeBonus: 0,
     passiveBonus: 0,
+    resistances: [],
+    halfProficiency: null,
   };
   for (const { effect } of effectsFor(sheet)) {
     switch (effect.kind) {
+      case "resistance":
+        riders.resistances.push(...effect.types);
+        break;
+      case "initiative_ability":
+        riders.initiativeBonus += Math.max(0, abilityMods?.[effect.ability] ?? 0);
+        break;
       case "save_bonus":
         riders.saveBonus += Math.max(effect.min, abilityMods?.[effect.ability] ?? 0);
         break;
@@ -553,9 +873,23 @@ export function defenseRiders(
       case "passive_bonus":
         riders.passiveBonus += effect.amount;
         break;
+      case "half_proficiency":
+        riders.halfProficiency = riders.halfProficiency === "all" ? "all" : effect.scope;
+        break;
       default:
         break;
     }
   }
   return riders;
+}
+
+// Whether a half-proficiency scope covers checks of this ability.
+export function halfProficiencyCovers(
+  scope: "all" | "physical" | null,
+  ability: string,
+): boolean {
+  if (scope === "all") {
+    return true;
+  }
+  return scope === "physical" && (ability === "str" || ability === "dex" || ability === "con");
 }

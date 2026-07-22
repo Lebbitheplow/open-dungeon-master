@@ -185,6 +185,14 @@ function ArcCard({ campaignId }: { campaignId: string }) {
   const actGroups = arc
     ? Array.from(new Set(arc.beats.map((beat) => beat.act))).sort((a, b) => a - b)
     : [];
+  // Acts still ahead exist only as saga sketches; they render as muted rows
+  // below the detailed acts.
+  const aheadSketches =
+    arc?.saga?.sketches.filter((sketch) => sketch.status === "sketch" && sketch.act > arc.acts) ??
+    [];
+  const currentAct = arc
+    ? (arc.beats.find((beat) => beat.status === "active")?.act ?? arc.acts)
+    : 0;
 
   return (
     <div className="rounded-lg border border-stone-800 bg-stone-950/40 p-2.5">
@@ -206,6 +214,16 @@ function ArcCard({ campaignId }: { campaignId: string }) {
             </p>
           ) : arc ? (
             <>
+              {arc.saga ? (
+                <p className="text-[11px] font-medium leading-4 text-amber-200">
+                  {arc.saga.sagaIndex > 1 ? `Saga ${arc.saga.sagaIndex} (sequel): ` : ""}
+                  &ldquo;{arc.saga.title}&rdquo;
+                  <span className="font-normal text-stone-400">
+                    {" "}
+                    &middot; act {currentAct} of {arc.saga.plannedActs}
+                  </span>
+                </p>
+              ) : null}
               <p className="text-[11px] leading-4 text-stone-300">{arc.premise}</p>
               {arc.stakes ? (
                 <p className="text-[11px] leading-4 text-stone-400">Stakes: {arc.stakes}</p>
@@ -241,8 +259,38 @@ function ArcCard({ campaignId }: { campaignId: string }) {
                   </ol>
                 </div>
               ))}
+              {aheadSketches.length ? (
+                <div>
+                  <p className="text-[11px] font-medium text-stone-500">Acts ahead (sketches)</p>
+                  <ul className="mt-0.5 space-y-0.5">
+                    {aheadSketches.map((sketch) => (
+                      <li key={sketch.act} className="list-none text-[11px] leading-4 text-stone-500">
+                        Act {sketch.act}: {sketch.milestone}
+                        {sketch.boss ? (
+                          <span className="text-stone-600"> &middot; boss: {sketch.boss.name}</span>
+                        ) : null}
+                        {sketch.allies.length ? (
+                          <span className="text-stone-600">
+                            {" "}
+                            &middot; {sketch.allies.length} planned all
+                            {sketch.allies.length === 1 ? "y" : "ies"}
+                          </span>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
               {arc.finale ? (
-                <p className="text-[11px] leading-4 text-stone-400">Finale: {arc.finale}</p>
+                <p className="text-[11px] leading-4 text-stone-400">
+                  Finale: {arc.finale}
+                  {arc.saga?.finaleBoss ? (
+                    <span className="text-stone-500">
+                      {" "}
+                      &middot; final boss: {arc.saga.finaleBoss.name}
+                    </span>
+                  ) : null}
+                </p>
               ) : null}
               {cast?.length ? (
                 <div>
@@ -286,6 +334,21 @@ function ArcCard({ campaignId }: { campaignId: string }) {
                     {openThreads.map((subArc) => (
                       <li key={subArc.id} className="list-none text-[11px] leading-4 text-stone-400">
                         {subArc.name}: {subArc.goal}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {arc.saga?.priorSagas.length ? (
+                <div>
+                  <p className="text-[11px] font-medium text-stone-500">Previous sagas</p>
+                  <ul className="mt-0.5 space-y-0.5">
+                    {arc.saga.priorSagas.map((prior, index) => (
+                      <li key={index} className="list-none text-[11px] leading-4 text-stone-500">
+                        &ldquo;{prior.title}&rdquo;
+                        {prior.resolution ? (
+                          <span className="text-stone-600"> &middot; {prior.resolution}</span>
+                        ) : null}
                       </li>
                     ))}
                   </ul>

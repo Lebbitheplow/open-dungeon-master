@@ -13,7 +13,7 @@ import {
   resolveAttackWeapon,
   weaponAttackProfile,
 } from "@/lib/dm/attack-logic";
-import { computeSheetDerived } from "@/lib/srd";
+import { computeSheetDerived, effectiveAcFor } from "@/lib/srd";
 import { combatRiders } from "@/lib/srd/feature-effects";
 import { enemyDamageMath } from "@/lib/dm/encounter-logic";
 import { patchEnemyHp } from "@/lib/db/encounters";
@@ -131,10 +131,10 @@ export function resolveOpportunityAttacks(
       roll: hitRoll,
       source: "digital",
     });
-    const adjudicated = adjudicateHit(hitOutcome.total, hitOutcome.crit, sheet.ac);
+    const adjudicated = adjudicateHit(hitOutcome.total, hitOutcome.crit, effectiveAcFor(sheet));
     if (!adjudicated.hit) {
       notes.push(
-        `${enemy.displayName} takes an opportunity attack as ${sheet.name} pulls away and misses (${hitOutcome.total} vs AC ${sheet.ac}).`,
+        `${enemy.displayName} takes an opportunity attack as ${sheet.name} pulls away and misses (${hitOutcome.total} vs AC ${effectiveAcFor(sheet)}).`,
       );
       continue;
     }

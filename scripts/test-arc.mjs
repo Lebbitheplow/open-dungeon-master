@@ -248,7 +248,7 @@ test("acts flatten into indexed beats tagged with their act", () => {
   assert.ok(arc.events.every((event) => event.status === "pending"));
 });
 
-test("v1 arc rows migrate: beats get act 1, layers default empty", () => {
+test("v1/v2 arc rows migrate: beats get act 1, layers default empty, saga null", () => {
   const legacy = {
     version: 1,
     premise: "An old campaign already in progress.",
@@ -260,13 +260,14 @@ test("v1 arc rows migrate: beats get act 1, layers default empty", () => {
     subArcs: [{ id: "sa1", name: "A thread", goal: "do a thing", hook: "secret", status: "active" }],
   };
   const arc = normalizeStoryArc(legacy);
-  assert.equal(arc.version, 2);
+  assert.equal(arc.version, 3);
   assert.equal(arc.acts, 1);
   assert.ok(arc.beats.every((beat) => beat.act === 1));
   assert.equal(arc.beats[0].status, "done");
   assert.equal(arc.beats[1].status, "active");
   assert.deepEqual(arc.cast, []);
   assert.deepEqual(arc.events, []);
+  assert.equal(arc.saga, null);
   assert.ok(needsEnrichment(arc));
 });
 

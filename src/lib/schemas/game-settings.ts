@@ -15,6 +15,13 @@ export type Genre = (typeof GENRES)[number];
 export const DICE_POLICIES = ["digital_only", "real_allowed"] as const;
 export type DicePolicy = (typeof DICE_POLICIES)[number];
 
+// How far the secret story saga is planned: how many acts the arc spans and
+// how many bosses/threads it seeds. Read when a saga is generated (activation,
+// lead regenerate, the v2 upgrade pass, and each sequel saga), so changing it
+// mid-campaign applies when the next saga is planned.
+export const CAMPAIGN_LENGTHS = ["short", "standard", "epic"] as const;
+export type CampaignLengthSetting = (typeof CAMPAIGN_LENGTHS)[number];
+
 // Game-facing campaign settings. Stored in campaigns.game_settings_json,
 // separate from settings_json (the model/image StorySettings) so the two
 // never fight over shape.
@@ -22,6 +29,7 @@ export const gameSettingsSchema = z.object({
   genre: z.enum(GENRES).default("high_fantasy"),
   customGenreText: z.string().trim().max(500).default(""),
   aiStorySetup: z.boolean().default(true),
+  campaignLength: z.enum(CAMPAIGN_LENGTHS).default("standard"),
   dicePolicy: z.enum(DICE_POLICIES).default("digital_only"),
   ttsEnabled: z.boolean().default(true),
   ttsVoice: z.string().trim().max(40).default("af_heart"),
@@ -46,6 +54,12 @@ export const gameSettingsSchema = z.object({
 export type GameSettings = z.infer<typeof gameSettingsSchema>;
 
 // Shared by the create dialog and the lobby settings panel.
+export const CAMPAIGN_LENGTH_LABELS: Record<CampaignLengthSetting, string> = {
+  short: "Short (3 acts, a focused adventure)",
+  standard: "Standard (4-5 acts)",
+  epic: "Epic (6-8 acts, a sprawling saga)",
+};
+
 export const COMPANION_LABELS: Record<GameSettings["companions"], string> = {
   auto: "Auto (solo: full; multiplayer: guests only)",
   full: "Party members and guests",

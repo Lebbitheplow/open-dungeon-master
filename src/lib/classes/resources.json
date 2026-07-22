@@ -109,7 +109,12 @@
       "ability": null,
       "recharge": "long",
       "upgrades": [],
-      "guidance": "1/long rest, one drone turns invisible for 1 minute."
+      "guidance": "1/long rest, one drone turns invisible for 1 minute.",
+      "fx": {
+        "kind": "buff",
+        "condition": "invisible",
+        "rounds": 10
+      }
     },
     {
       "id": "cyberpunk_grease_the_wheels",
@@ -189,7 +194,11 @@
       "ability": null,
       "recharge": "long",
       "upgrades": [],
-      "guidance": "1/long rest, an ally at 0 HP within 30 ft instantly regains 3d6 + WIS HP."
+      "guidance": "1/long rest, an ally at 0 HP within 30 ft instantly regains 3d6 + WIS HP.",
+      "fx": {
+        "kind": "heal_target",
+        "dice": "3d6+wis"
+      }
     },
     {
       "id": "cyberpunk_nanite_reserve",
@@ -339,7 +348,11 @@
       "ability": null,
       "recharge": "short",
       "upgrades": [],
-      "guidance": "Each drone regains 2d6 HP at the start of your turn, once per rest each."
+      "guidance": "Each drone regains 2d6 HP at the start of your turn, once per rest each.",
+      "fx": {
+        "kind": "heal_target",
+        "dice": "2d6"
+      }
     },
     {
       "id": "cyberpunk_signal_tap",
@@ -399,7 +412,11 @@
       "ability": "wis",
       "recharge": "long",
       "upgrades": [],
-      "guidance": "Bonus action touch: an ally regains 1d6 + WIS HP. Uses per long rest equal WIS modifier."
+      "guidance": "Bonus action touch: an ally regains 1d6 + WIS HP. Uses per long rest equal WIS modifier.",
+      "fx": {
+        "kind": "heal_target",
+        "dice": "1d6+wis"
+      }
     },
     {
       "id": "cyberpunk_storm_of_blades",
@@ -459,7 +476,12 @@
       "ability": null,
       "recharge": "long",
       "upgrades": [],
-      "guidance": "1/long rest, a creature hit by your psionic saves (WIS) or is stunned until your next turn."
+      "guidance": "1/long rest, a creature hit by your psionic saves (WIS) or is stunned until your next turn.",
+      "fx": {
+        "kind": "enemy_save",
+        "save": "wis",
+        "condition": "stunned"
+      }
     },
     {
       "id": "cyberpunk_the_net_remembers",
@@ -489,7 +511,11 @@
       "ability": null,
       "recharge": "long",
       "upgrades": [],
-      "guidance": "1/long rest while below half HP, bonus action to regain 10 + level HP."
+      "guidance": "1/long rest while below half HP, bonus action to regain 10 + level HP.",
+      "fx": {
+        "kind": "heal_target",
+        "dice": "10+level"
+      }
     },
     {
       "id": "dark_fantasy_apotheosis_of_suffering",
@@ -624,7 +650,12 @@
       "ability": null,
       "recharge": "short",
       "upgrades": [],
-      "guidance": "1/rest, when a fiend or undead hits you, it takes 3d8 radiant (CON save halves)."
+      "guidance": "1/rest, when a fiend or undead hits you, it takes 3d8 radiant (CON save halves).",
+      "fx": {
+        "kind": "enemy_save",
+        "save": "con",
+        "dice": "3d8"
+      }
     },
     {
       "id": "dark_fantasy_garden_of_grief",
@@ -639,7 +670,11 @@
       "ability": null,
       "recharge": "long",
       "upgrades": [],
-      "guidance": "1/long rest, a 20-ft radius garden of black roses for 1 minute: allies in it regain 1d6 HP per turn, enemies are slowed."
+      "guidance": "1/long rest, a 20-ft radius garden of black roses for 1 minute: allies in it regain 1d6 HP per turn, enemies are slowed.",
+      "fx": {
+        "kind": "heal_target",
+        "dice": "1d6"
+      }
     },
     {
       "id": "dark_fantasy_grave_grip",
@@ -654,7 +689,12 @@
       "ability": null,
       "recharge": "short",
       "upgrades": [],
-      "guidance": "1/rest, spectral hands erupt in a 15-ft cube: creatures save (STR) or are restrained until your next turn."
+      "guidance": "1/rest, spectral hands erupt in a 15-ft cube: creatures save (STR) or are restrained until your next turn.",
+      "fx": {
+        "kind": "enemy_save",
+        "save": "str",
+        "condition": "restrained"
+      }
     },
     {
       "id": "dark_fantasy_immolate_the_sin",
@@ -744,7 +784,12 @@
       "ability": null,
       "recharge": "long",
       "upgrades": [],
-      "guidance": "1/long rest, choose life or death for a touched creature: full HP restored, or 10d10 necrotic (CON save halves)."
+      "guidance": "1/long rest, choose life or death for a touched creature: full HP restored, or 10d10 necrotic (CON save halves).",
+      "fx": {
+        "kind": "enemy_save",
+        "save": "con",
+        "dice": "10d10"
+      }
     },
     {
       "id": "dark_fantasy_murder_of_crows",
@@ -804,7 +849,11 @@
       "ability": null,
       "recharge": "short",
       "upgrades": [],
-      "guidance": "1/rest, teleport 30 ft in a swirl of dead petals as a bonus action."
+      "guidance": "1/rest, teleport 30 ft in a swirl of dead petals as a bonus action.",
+      "fx": {
+        "kind": "teleport",
+        "feet": 30
+      }
     },
     {
       "id": "dark_fantasy_purging_flame",
@@ -834,7 +883,12 @@
       "ability": null,
       "recharge": "long",
       "upgrades": [],
-      "guidance": "1/long rest, a 20-ft radius circle for 10 minutes: enemies treat it as difficult terrain and take 2d6 poison entering (CON save halves)."
+      "guidance": "1/long rest, a 20-ft radius circle for 10 minutes: enemies treat it as difficult terrain and take 2d6 poison entering (CON save halves).",
+      "fx": {
+        "kind": "aoe",
+        "dice": "2d6",
+        "save": "con"
+      }
     },
     {
       "id": "dark_fantasy_rat_tide",
@@ -849,7 +903,12 @@
       "ability": null,
       "recharge": "short",
       "upgrades": [],
-      "guidance": "1/rest, a swarm floods a 15-ft cube: difficult terrain, and creatures inside save (DEX) or take 2d6 piercing and are distracted (disadvantage on their next attack)."
+      "guidance": "1/rest, a swarm floods a 15-ft cube: difficult terrain, and creatures inside save (DEX) or take 2d6 piercing and are distracted (disadvantage on their next attack).",
+      "fx": {
+        "kind": "enemy_save",
+        "save": "dex",
+        "dice": "2d6"
+      }
     },
     {
       "id": "dark_fantasy_requiem_inspiration",
@@ -864,7 +923,11 @@
       "ability": "cha",
       "recharge": "long",
       "upgrades": [],
-      "guidance": "Bonus action: an ally within 60 ft gains a d6 to add to one attack, check, or save; CHA-mod uses per long rest."
+      "guidance": "Bonus action: an ally within 60 ft gains a d6 to add to one attack, check, or save; CHA-mod uses per long rest.",
+      "fx": {
+        "kind": "inspire",
+        "die": "d6"
+      }
     },
     {
       "id": "dark_fantasy_song_that_ends",
@@ -1059,7 +1122,12 @@
       "ability": null,
       "recharge": "short",
       "upgrades": [],
-      "guidance": "1/rest, a scream: creatures in a 15-ft cone save (CON) or take 3d6 fire and are deafened for 1 minute."
+      "guidance": "1/rest, a scream: creatures in a 15-ft cone save (CON) or take 3d6 fire and are deafened for 1 minute.",
+      "fx": {
+        "kind": "aoe",
+        "dice": "3d6",
+        "save": "con"
+      }
     },
     {
       "id": "horror_adrenaline_surge",
@@ -1659,7 +1727,11 @@
       "ability": null,
       "recharge": "long",
       "upgrades": [],
-      "guidance": "1/long rest, step through the Veil: teleport 60 ft to a space you can see."
+      "guidance": "1/long rest, step through the Veil: teleport 60 ft to a space you can see.",
+      "fx": {
+        "kind": "teleport",
+        "feet": 60
+      }
     },
     {
       "id": "horror_won_t_die_here",
@@ -1959,7 +2031,12 @@
       "ability": null,
       "recharge": "long",
       "upgrades": [],
-      "guidance": "1/long rest, reveal a con at the perfect moment: every enemy who believed it is stunned until their next turn (WIS save negates)."
+      "guidance": "1/long rest, reveal a con at the perfect moment: every enemy who believed it is stunned until their next turn (WIS save negates).",
+      "fx": {
+        "kind": "enemy_save",
+        "save": "wis",
+        "condition": "stunned"
+      }
     },
     {
       "id": "mystery_hypnotic_induction",
@@ -1974,7 +2051,12 @@
       "ability": null,
       "recharge": "long",
       "upgrades": [],
-      "guidance": "1/long rest, a willing or restrained creature answers three questions truthfully under trance (WIS save resists if unwilling)."
+      "guidance": "1/long rest, a willing or restrained creature answers three questions truthfully under trance (WIS save resists if unwilling).",
+      "fx": {
+        "kind": "enemy_save",
+        "save": "wis",
+        "condition": "restrained"
+      }
     },
     {
       "id": "mystery_keen_deduction",
@@ -2004,7 +2086,12 @@
       "ability": null,
       "recharge": "short",
       "upgrades": [],
-      "guidance": "1/rest, force every hostile creature within 30 ft to save (WIS) or be frightened of you for 1 minute."
+      "guidance": "1/rest, force every hostile creature within 30 ft to save (WIS) or be frightened of you for 1 minute.",
+      "fx": {
+        "kind": "enemy_save",
+        "save": "wis",
+        "condition": "frightened"
+      }
     },
     {
       "id": "mystery_mind_palace",
@@ -2049,7 +2136,12 @@
       "ability": null,
       "recharge": "long",
       "upgrades": [],
-      "guidance": "1/long rest, an illusory double of a creature's guilt confronts it: it is frightened of you for 1 minute (WIS save negates)."
+      "guidance": "1/long rest, an illusory double of a creature's guilt confronts it: it is frightened of you for 1 minute (WIS save negates).",
+      "fx": {
+        "kind": "enemy_save",
+        "save": "wis",
+        "condition": "frightened"
+      }
     },
     {
       "id": "mystery_queen_of_the_quiet_court",
@@ -2064,7 +2156,12 @@
       "ability": null,
       "recharge": "long",
       "upgrades": [],
-      "guidance": "1/long rest, call a procession of spirits: for 1 minute they obscure, terrify (WIS save), and strike (2d8 necrotic) as you direct."
+      "guidance": "1/long rest, call a procession of spirits: for 1 minute they obscure, terrify (WIS save), and strike (2d8 necrotic) as you direct.",
+      "fx": {
+        "kind": "enemy_save",
+        "save": "wis",
+        "dice": "2d8"
+      }
     },
     {
       "id": "mystery_radical_breakthrough",
@@ -2429,7 +2526,13 @@
       "ability": null,
       "recharge": "short",
       "upgrades": [],
-      "guidance": "1/rest, trigger or predict a structural collapse: creatures in a 15-ft cube save (DEX) or take 4d6 bludgeoning and are restrained by rubble."
+      "guidance": "1/rest, trigger or predict a structural collapse: creatures in a 15-ft cube save (DEX) or take 4d6 bludgeoning and are restrained by rubble.",
+      "fx": {
+        "kind": "enemy_save",
+        "save": "dex",
+        "condition": "restrained",
+        "dice": "4d6"
+      }
     },
     {
       "id": "post_apocalyptic_dawnlight",
@@ -2489,7 +2592,12 @@
       "ability": null,
       "recharge": "short",
       "upgrades": [],
-      "guidance": "1/rest, constructs and machines within 15 ft save (CON) or are stunned until your next turn."
+      "guidance": "1/rest, constructs and machines within 15 ft save (CON) or are stunned until your next turn.",
+      "fx": {
+        "kind": "enemy_save",
+        "save": "con",
+        "condition": "stunned"
+      }
     },
     {
       "id": "post_apocalyptic_flock_s_shepherd",
@@ -2519,7 +2627,12 @@
       "ability": null,
       "recharge": "short",
       "upgrades": [],
-      "guidance": "1/rest, emit a 10-ft flare: enemies save (CON) or are blinded until your next turn."
+      "guidance": "1/rest, emit a 10-ft flare: enemies save (CON) or are blinded until your next turn.",
+      "fx": {
+        "kind": "enemy_save",
+        "save": "con",
+        "condition": "blinded"
+      }
     },
     {
       "id": "post_apocalyptic_hardened",
@@ -2594,7 +2707,12 @@
       "ability": null,
       "recharge": "long",
       "upgrades": [],
-      "guidance": "1/long rest, your beast grows monstrous for 1 minute: double HP, +10 ft speed, attacks deal +2d8 and frighten (WIS save)."
+      "guidance": "1/long rest, your beast grows monstrous for 1 minute: double HP, +10 ft speed, attacks deal +2d8 and frighten (WIS save).",
+      "fx": {
+        "kind": "enemy_save",
+        "save": "wis",
+        "dice": "2d8"
+      }
     },
     {
       "id": "post_apocalyptic_make_it_work",
@@ -2744,7 +2862,11 @@
       "ability": null,
       "recharge": "long",
       "upgrades": [],
-      "guidance": "1/long rest, deliver the full sermon: allies within 60 ft regain 5d8 HP and are freed of fear, charm, and exhaustion by one level."
+      "guidance": "1/long rest, deliver the full sermon: allies within 60 ft regain 5d8 HP and are freed of fear, charm, and exhaustion by one level.",
+      "fx": {
+        "kind": "heal_target",
+        "dice": "5d8"
+      }
     },
     {
       "id": "post_apocalyptic_road_rage",
@@ -2809,7 +2931,12 @@
       "ability": null,
       "recharge": "long",
       "upgrades": [],
-      "guidance": "1/long rest, unleash the core: a 30-ft radius burst dealing 8d6 radiant (CON save halves); allies are spared."
+      "guidance": "1/long rest, unleash the core: a 30-ft radius burst dealing 8d6 radiant (CON save halves); allies are spared.",
+      "fx": {
+        "kind": "aoe",
+        "dice": "8d6",
+        "save": "con"
+      }
     },
     {
       "id": "post_apocalyptic_shared_fury",
@@ -3139,7 +3266,12 @@
       "ability": null,
       "recharge": "long",
       "upgrades": [],
-      "guidance": "1/long rest, a 20-ft radius acid fog for 1 minute: 3d6 acid at the start of each creature's turn inside (CON save halves)."
+      "guidance": "1/long rest, a 20-ft radius acid fog for 1 minute: 3d6 acid at the start of each creature's turn inside (CON save halves).",
+      "fx": {
+        "kind": "aoe",
+        "dice": "3d6",
+        "save": "con"
+      }
     },
     {
       "id": "steampunk_elixir_of_mastery",
@@ -3169,7 +3301,12 @@
       "ability": null,
       "recharge": "short",
       "upgrades": [],
-      "guidance": "1/rest, when reduced below half HP, vent: attackers within 10 ft take 3d8 fire (DEX save halves)."
+      "guidance": "1/rest, when reduced below half HP, vent: attackers within 10 ft take 3d8 fire (DEX save halves).",
+      "fx": {
+        "kind": "enemy_save",
+        "save": "dex",
+        "dice": "3d8"
+      }
     },
     {
       "id": "steampunk_field_repair",
@@ -3394,7 +3531,12 @@
       "ability": null,
       "recharge": "short",
       "upgrades": [],
-      "guidance": "1/rest, adjacent creatures save (CON) or are blinded by scalding mist until your next turn."
+      "guidance": "1/rest, adjacent creatures save (CON) or are blinded by scalding mist until your next turn.",
+      "fx": {
+        "kind": "enemy_save",
+        "save": "con",
+        "condition": "blinded"
+      }
     },
     {
       "id": "steampunk_steamvent_burst",
@@ -3409,7 +3551,12 @@
       "ability": null,
       "recharge": "short",
       "upgrades": [],
-      "guidance": "1/rest, adjacent creatures save (DEX) or take 3d8 fire and are pushed 10 ft when you vent your armor."
+      "guidance": "1/rest, adjacent creatures save (DEX) or take 3d8 fire and are pushed 10 ft when you vent your armor.",
+      "fx": {
+        "kind": "enemy_save",
+        "save": "dex",
+        "dice": "3d8"
+      }
     },
     {
       "id": "steampunk_storm_step",
@@ -3484,7 +3631,12 @@
       "ability": null,
       "recharge": "long",
       "upgrades": [],
-      "guidance": "1/long rest, for 1 minute your Daring Maneuver applies to every attack and enemies who see you save (WIS) or are frightened."
+      "guidance": "1/long rest, for 1 minute your Daring Maneuver applies to every attack and enemies who see you save (WIS) or are frightened.",
+      "fx": {
+        "kind": "enemy_save",
+        "save": "wis",
+        "condition": "frightened"
+      }
     },
     {
       "id": "steampunk_the_great_work",

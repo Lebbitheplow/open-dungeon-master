@@ -5,7 +5,7 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { parseMonster, saveModFor } = await import("../src/lib/bestiary/statblock.ts");
+const { parseMonster, saveModFor, sizeRank } = await import("../src/lib/bestiary/statblock.ts");
 const { synthesizeStats } = await import("../src/lib/bestiary/synthesize.ts");
 const { healthState } = await import("../src/lib/bestiary/health.ts");
 const { critDamageExpression } = await import("../src/lib/dm/encounter-logic.ts");
@@ -179,6 +179,21 @@ test("multiattack parsing", async () => {
     0.5,
   );
   assert.equal(parsed.attacksPerTurn, 2);
+});
+
+test("creature size parses and ranks for the grapple cap", () => {
+  const parsed = parseMonster({ size: "Large", hit_points: 30 }, 1);
+  assert.equal(parsed.size, "Large");
+  // Synthesized stats and old snapshots carry no size and rank as Medium.
+  assert.equal(synthesizeStats(2).size, undefined);
+  assert.equal(sizeRank(undefined), sizeRank("Medium"));
+  assert.ok(sizeRank("Tiny") < sizeRank("Small"));
+  assert.ok(sizeRank("Small") < sizeRank("Medium"));
+  assert.ok(sizeRank("Large") < sizeRank("Huge"));
+  assert.ok(sizeRank("Huge") < sizeRank("Gargantuan"));
+  // A Medium attacker can grapple up to Large, never Huge.
+  assert.ok(sizeRank("Large") <= sizeRank("Medium") + 1);
+  assert.ok(sizeRank("Huge") > sizeRank("Medium") + 1);
 });
 
 console.log(`test-statblock: ${passed} passed`);

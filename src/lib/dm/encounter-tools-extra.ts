@@ -13,8 +13,11 @@ import type { DmTurn } from "@/lib/db/dm-turns";
 import { d20Expression, isValidExpression, rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
 import { saveModFor, type SaveAbility } from "@/lib/bestiary/statblock";
+import { allySaveAura } from "@/lib/dm/aura";
+import { trackEnemyConcentration } from "@/lib/dm/cast-tools";
 import { defenseRiders } from "@/lib/srd/feature-effects";
-import { computeSheetDerived } from "@/lib/srd";
+import { computeSheetDerived, spellSaveDcFor } from "@/lib/srd";
+import { spellDamageFor, spellMechanicsFor } from "@/lib/content";
 import {
   applyEnemyDamage,
   finishEncounter,
@@ -23,7 +26,8 @@ import {
 } from "@/lib/dm/enemy-damage";
 import { addEnemiesTool, handleAddEnemies } from "@/lib/dm/encounter-spawn";
 import { applyDmMutation, canonicalCondition } from "@/lib/dm/mutations";
-import { pruneMeta, rollDerivation } from "@/lib/dm/condition-logic";
+import { mergeAdvantage, pruneMeta, rollDerivation } from "@/lib/dm/condition-logic";
+import { conditionRollRiders } from "@/lib/srd/condition-effects";
 import { normalizeAbility } from "@/lib/dm/arg-coerce";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import { resolveSheetRef } from "@/lib/dm/rolls";
@@ -154,6 +158,22 @@ const aoeDamageTool: ToolDef = {
           type: "string",
           description:
             "If a player character cast this effect on their combat turn, their exact characterId; marks their turn as taken.",
+        },
+        casterEnemyId: {
+          type: "string",
+          description:
+            "If a specific ENEMY cast this: its enemyId from GAME STATE. With spell set, the server tracks the enemy's concentration and breaks it when the enemy takes damage or dies.",
+        },
+        spell: {
+          type: "string",
+          description:
+            "The spell being cast, when this is a player's spell (e.g. Fireball). With casterId set, the server spends the slot and derives the real dice, save, and DC itself, overriding the numbers above.",
+        },
+        level: {
+          type: "integer",
+          minimum: 1,
+          maximum: 9,
+          description: "Slot level to spend for a player's spell (upcasting scales the dice).",
         },
         reason: { type: "string", description: "Short in-fiction cause." },
       },
@@ -319,6 +339,9 @@ const aoeArgsSchema = z.object({
   characterIds: z.array(z.string()).optional(),
   targets: z.string().max(400).optional(),
   casterId: z.string().optional(),
+  casterEnemyId: z.string().optional(),
+  spell: z.string().max(80).optional(),
+  level: z.coerce.number().int().min(1).max(9).optional(),
   reason: z.string().optional(),
 });
 
@@ -378,6 +401,61 @@ function handleAoeDamage(
       error:
         "aoe_damage needs at least one valid target: enemyIds and/or characterIds from GAME STATE.",
     };
+  }
+
+  // A named player spell hands the server the real mechanics: the slot
+  // spends, the dice scale with it, and the save comes from the pack's own
+  // text and the caster's sheet. The model's numbers are the fallback.
+  const corrections: string[] = [];
+  const casterSheet = args.casterId ? resolveSheetRef(args.casterId, sheets, sheetsById) : null;
+  if (args.spell && casterSheet) {
+    const resolved = spellMechanicsFor({ spell: args.spell, userId: casterSheet.userId });
+    if (resolved?.mech.resolution === "save") {
+      if (resolved.spellLevel >= 1) {
+        const spend = applyDmMutation(
+          campaign,
+          turn.id,
+          "use_spell_slot",
+          JSON.stringify({
+            characterId: casterSheet.id,
+            level: args.level ?? resolved.spellLevel,
+            spell: args.spell,
+            reason: (args.reason ?? "").slice(0, 200),
+          }),
+          sheets,
+          sheetsById,
+        ).result;
+        if ("error" in spend) {
+          return spend;
+        }
+      }
+      const scaled = spellDamageFor({
+        spell: args.spell,
+        userId: casterSheet.userId,
+        casterLevel: casterSheet.level,
+        slotLevel: args.level,
+      });
+      if (scaled) {
+        args.damage = scaled.dice;
+        corrections.push(scaled.note);
+      }
+      if (resolved.mech.save && resolved.mech.save !== args.saveAbility) {
+        corrections.push(
+          `${resolved.name} forces a ${resolved.mech.save.toUpperCase()} save; the server rolled the real one.`,
+        );
+        args.saveAbility = resolved.mech.save;
+      }
+      args.halfOnSave = Boolean(resolved.mech.halfOnSave);
+      if (resolved.mech.damageType) {
+        args.type = resolved.mech.damageType;
+      }
+      // Multiclass: the DC follows the class whose list carries the spell.
+      const realDc = spellSaveDcFor(casterSheet, args.spell ?? "");
+      if (realDc && realDc !== args.dc) {
+        corrections.push(`Save DC ${realDc} from ${casterSheet.name}'s sheet.`);
+        args.dc = realDc;
+      }
+    }
   }
 
   // The damage rolls once for the whole effect.
@@ -487,8 +565,16 @@ function handleAoeDamage(
       results.push(row);
       continue;
     }
-    const saveMod = computeSheetDerived(sheet).saves[ability];
-    const saveOutcome = rollExpression(d20Expression(saveMod, derivation.advantage));
+    // A nearby paladin's aura covers allies caught in the blast too.
+    const aura = allySaveAura(campaign.id, sheet);
+    const saveMod = computeSheetDerived(sheet).saves[ability] + (aura?.bonus ?? 0);
+    // Effect conditions (Bless's +1d4, Haste's DEX-save advantage) ride the
+    // save exactly as they do on a requested roll.
+    const effects = conditionRollRiders(sheet.conditions, "save", ability);
+    const advantage = mergeAdvantage([derivation.advantage, ...effects.advantageSources]);
+    const saveOutcome = rollExpression(
+      `${d20Expression(saveMod, advantage)}${effects.diceSuffix}`,
+    );
     const roll = insertRoll({
       campaignId: campaign.id,
       characterId: sheet.id,
@@ -568,6 +654,10 @@ function handleAoeDamage(
     }
   }
 
+  // An enemy caster's concentration spell (Web, Cloud of Daggers) is
+  // tracked so damage to the caster can end the effect.
+  const enemyConcentration = trackEnemyConcentration(campaign, args.casterEnemyId, args.spell);
+
   return {
     ok: true,
     damageRolled: total,
@@ -575,7 +665,9 @@ function handleAoeDamage(
     saveAbility: ability,
     halfOnSave,
     results,
+    ...(corrections.length ? { corrected: corrections } : {}),
     ...(unmatched.length ? { unmatchedTargets: unmatched } : {}),
+    ...(enemyConcentration ? { enemyConcentration } : {}),
     ...encounterOver,
   };
 }

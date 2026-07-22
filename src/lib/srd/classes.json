@@ -2,6 +2,42 @@
   "_license": "Data derived from the SRD 5.1, (c) Wizards of the Coast LLC, CC-BY-4.0. See docs/LICENSES.md.",
   "classes": [
     {
+      "id": "artificer",
+      "name": "Artificer",
+      "hitDie": 8,
+      "saves": [
+        "con",
+        "int"
+      ],
+      "casterType": "artificer",
+      "spellAbility": "int",
+      "armor": [
+        "light",
+        "medium",
+        "shields"
+      ],
+      "weapons": [
+        "simple weapons"
+      ],
+      "tools": [
+        "thieves' tools",
+        "tinker's tools",
+        "one type of artisan's tools"
+      ],
+      "skillChoices": {
+        "count": 2,
+        "from": [
+          "arcana",
+          "history",
+          "investigation",
+          "medicine",
+          "nature",
+          "perception",
+          "sleight_of_hand"
+        ]
+      }
+    },
+    {
       "id": "barbarian",
       "name": "Barbarian",
       "hitDie": 12,
@@ -152,6 +188,9 @@
       },
       "tools": [
         "herbalism kit"
+      ],
+      "languages": [
+        "Druidic"
       ]
     },
     {
@@ -324,6 +363,9 @@
       },
       "tools": [
         "thieves' tools"
+      ],
+      "languages": [
+        "Thieves' Cant"
       ]
     },
     {

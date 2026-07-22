@@ -1,6 +1,44 @@
 {
   "_license": "Feature names derived from the SRD 5.1 by Wizards of the Coast LLC, licensed under CC-BY-4.0. Ability Score Improvements are intentionally omitted (handled by the ASI system).",
   "classes": {
+    "artificer": {
+      "subclassLevel": 3,
+      "levels": {
+        "1": [
+          "Magical Tinkering",
+          "Spellcasting"
+        ],
+        "2": [
+          "Infuse Item"
+        ],
+        "3": [
+          "Artificer Specialist",
+          "The Right Tool for the Job"
+        ],
+        "6": [
+          "Tool Expertise"
+        ],
+        "7": [
+          "Flash of Genius"
+        ],
+        "10": [
+          "Magic Item Adept"
+        ],
+        "11": [
+          "Spell-Storing Item"
+        ],
+        "14": [
+          "Magic Item Savant"
+        ],
+        "18": [
+          "Magic Item Master"
+        ],
+        "20": [
+          "Soul of Artifice"
+        ]
+      },
+      "subclasses": []
+    },
     "barbarian": {
       "subclassLevel": 3,
       "levels": {
@@ -44,23 +82,25 @@
           "Primal Champion"
         ]
       },
-      "subclass": {
-        "name": "Path of the Berserker",
-        "levels": {
-          "3": [
-            "Frenzy"
-          ],
-          "6": [
-            "Mindless Rage"
-          ],
-          "10": [
-            "Intimidating Presence"
-          ],
-          "14": [
-            "Retaliation"
-          ]
+      "subclasses": [
+        {
+          "name": "Path of the Berserker",
+          "levels": {
+            "3": [
+              "Frenzy"
+            ],
+            "6": [
+              "Mindless Rage"
+            ],
+            "10": [
+              "Intimidating Presence"
+            ],
+            "14": [
+              "Retaliation"
+            ]
+          }
         }
-      }
+      ]
     },
     "bard": {
       "subclassLevel": 3,
@@ -111,21 +151,23 @@
           "Superior Inspiration"
         ]
       },
-      "subclass": {
-        "name": "College of Lore",
-        "levels": {
-          "3": [
-            "Cutting Words",
-            "Bonus Proficiencies (Lore)"
-          ],
-          "6": [
-            "Additional Magical Secrets"
-          ],
-          "14": [
-            "Peerless Skill"
-          ]
+      "subclasses": [
+        {
+          "name": "College of Lore",
+          "levels": {
+            "3": [
+              "Cutting Words",
+              "Bonus Proficiencies (Lore)"
+            ],
+            "6": [
+              "Additional Magical Secrets"
+            ],
+            "14": [
+              "Peerless Skill"
+            ]
+          }
         }
-      }
+      ]
     },
     "cleric": {
       "subclassLevel": 1,
@@ -166,27 +208,29 @@
           "Divine Intervention Improvement"
         ]
       },
-      "subclass": {
-        "name": "Life Domain",
-        "levels": {
-          "1": [
-            "Bonus Proficiency (heavy armor)",
-            "Disciple of Life"
-          ],
-          "2": [
-            "Channel Divinity: Preserve Life"
-          ],
-          "6": [
-            "Blessed Healer"
-          ],
-          "8": [
-            "Divine Strike"
-          ],
-          "17": [
-            "Supreme Healing"
-          ]
+      "subclasses": [
+        {
+          "name": "Life Domain",
+          "levels": {
+            "1": [
+              "Bonus Proficiency (heavy armor)",
+              "Disciple of Life"
+            ],
+            "2": [
+              "Channel Divinity: Preserve Life"
+            ],
+            "6": [
+              "Blessed Healer"
+            ],
+            "8": [
+              "Divine Strike"
+            ],
+            "17": [
+              "Supreme Healing"
+            ]
+          }
         }
-      }
+      ]
     },
     "druid": {
       "subclassLevel": 2,
@@ -213,27 +257,29 @@
           "Archdruid"
         ]
       },
-      "subclass": {
-        "name": "Circle of the Land",
-        "levels": {
-          "2": [
-            "Bonus Cantrip",
-            "Natural Recovery"
-          ],
-          "3": [
-            "Circle Spells"
-          ],
-          "6": [
-            "Land's Stride"
-          ],
-          "10": [
-            "Nature's Ward"
-          ],
-          "14": [
-            "Nature's Sanctuary"
-          ]
+      "subclasses": [
+        {
+          "name": "Circle of the Land",
+          "levels": {
+            "2": [
+              "Bonus Cantrip",
+              "Natural Recovery"
+            ],
+            "3": [
+              "Circle Spells"
+            ],
+            "6": [
+              "Land's Stride"
+            ],
+            "10": [
+              "Nature's Ward"
+            ],
+            "14": [
+              "Nature's Sanctuary"
+            ]
+          }
         }
-      }
+      ]
     },
     "fighter": {
       "subclassLevel": 3,
@@ -268,26 +314,28 @@
           "Extra Attack (3)"
         ]
       },
-      "subclass": {
-        "name": "Champion",
-        "levels": {
-          "3": [
-            "Improved Critical"
-          ],
-          "7": [
-            "Remarkable Athlete"
-          ],
-          "10": [
-            "Additional Fighting Style"
-          ],
-          "15": [
-            "Superior Critical"
-          ],
-          "18": [
-            "Survivor"
-          ]
+      "subclasses": [
+        {
+          "name": "Champion",
+          "levels": {
+            "3": [
+              "Improved Critical"
+            ],
+            "7": [
+              "Remarkable Athlete"
+            ],
+            "10": [
+              "Additional Fighting Style"
+            ],
+            "15": [
+              "Superior Critical"
+            ],
+            "18": [
+              "Survivor"
+            ]
+          }
         }
-      }
+      ]
     },
     "monk": {
       "subclassLevel": 3,
@@ -340,23 +388,25 @@
           "Perfect Self"
         ]
       },
-      "subclass": {
-        "name": "Way of the Open Hand",
-        "levels": {
-          "3": [
-            "Open Hand Technique"
-          ],
-          "6": [
-            "Wholeness of Body"
-          ],
-          "11": [
-            "Tranquility"
-          ],
-          "17": [
-            "Quivering Palm"
-          ]
+      "subclasses": [
+        {
+          "name": "Way of the Open Hand",
+          "levels": {
+            "3": [
+              "Open Hand Technique"
+            ],
+            "6": [
+              "Wholeness of Body"
+            ],
+            "11": [
+              "Tranquility"
+            ],
+            "17": [
+              "Quivering Palm"
+            ]
+          }
         }
-      }
+      ]
     },
     "paladin": {
       "subclassLevel": 3,
@@ -394,24 +444,26 @@
           "Aura Improvements"
         ]
       },
-      "subclass": {
-        "name": "Oath of Devotion",
-        "levels": {
-          "3": [
-            "Channel Divinity: Sacred Weapon",
-            "Channel Divinity: Turn the Unholy"
-          ],
-          "7": [
-            "Aura of Devotion"
-          ],
-          "15": [
-            "Purity of Spirit"
-          ],
-          "20": [
-            "Holy Nimbus"
-          ]
+      "subclasses": [
+        {
+          "name": "Oath of Devotion",
+          "levels": {
+            "3": [
+              "Channel Divinity: Sacred Weapon",
+              "Channel Divinity: Turn the Unholy"
+            ],
+            "7": [
+              "Aura of Devotion"
+            ],
+            "15": [
+              "Purity of Spirit"
+            ],
+            "20": [
+              "Holy Nimbus"
+            ]
+          }
         }
-      }
+      ]
     },
     "ranger": {
       "subclassLevel": 3,
@@ -453,23 +505,25 @@
           "Foe Slayer"
         ]
       },
-      "subclass": {
-        "name": "Hunter",
-        "levels": {
-          "3": [
-            "Hunter's Prey"
-          ],
-          "7": [
-            "Defensive Tactics"
-          ],
-          "11": [
-            "Multiattack"
-          ],
-          "15": [
-            "Superior Hunter's Defense"
-          ]
+      "subclasses": [
+        {
+          "name": "Hunter",
+          "levels": {
+            "3": [
+              "Hunter's Prey"
+            ],
+            "7": [
+              "Defensive Tactics"
+            ],
+            "11": [
+              "Multiattack"
+            ],
+            "15": [
+              "Superior Hunter's Defense"
+            ]
+          }
         }
-      }
+      ]
     },
     "rogue": {
       "subclassLevel": 3,
@@ -510,24 +564,26 @@
           "Stroke of Luck"
         ]
       },
-      "subclass": {
-        "name": "Thief",
-        "levels": {
-          "3": [
-            "Fast Hands",
-            "Second-Story Work"
-          ],
-          "9": [
-            "Supreme Sneak"
-          ],
-          "13": [
-            "Use Magic Device"
-          ],
-          "17": [
-            "Thief's Reflexes"
-          ]
+      "subclasses": [
+        {
+          "name": "Thief",
+          "levels": {
+            "3": [
+              "Fast Hands",
+              "Second-Story Work"
+            ],
+            "9": [
+              "Supreme Sneak"
+            ],
+            "13": [
+              "Use Magic Device"
+            ],
+            "17": [
+              "Thief's Reflexes"
+            ]
+          }
         }
-      }
+      ]
     },
     "sorcerer": {
       "subclassLevel": 1,
@@ -552,24 +608,26 @@
           "Sorcerous Restoration"
         ]
       },
-      "subclass": {
-        "name": "Draconic Bloodline",
-        "levels": {
-          "1": [
-            "Dragon Ancestor",
-            "Draconic Resilience"
-          ],
-          "6": [
-            "Elemental Affinity"
-          ],
-          "14": [
-            "Dragon Wings"
-          ],
-          "18": [
-            "Draconic Presence"
-          ]
+      "subclasses": [
+        {
+          "name": "Draconic Bloodline",
+          "levels": {
+            "1": [
+              "Dragon Ancestor",
+              "Draconic Resilience"
+            ],
+            "6": [
+              "Elemental Affinity"
+            ],
+            "14": [
+              "Dragon Wings"
+            ],
+            "18": [
+              "Draconic Presence"
+            ]
+          }
         }
-      }
+      ]
     },
     "warlock": {
       "subclassLevel": 1,
@@ -600,23 +658,25 @@
           "Eldritch Master"
         ]
       },
-      "subclass": {
-        "name": "The Fiend",
-        "levels": {
-          "1": [
-            "Dark One's Blessing"
-          ],
-          "6": [
-            "Dark One's Own Luck"
-          ],
-          "10": [
-            "Fiendish Resilience"
-          ],
-          "14": [
-            "Hurl Through Hell"
-          ]
+      "subclasses": [
+        {
+          "name": "The Fiend",
+          "levels": {
+            "1": [
+              "Dark One's Blessing"
+            ],
+            "6": [
+              "Dark One's Own Luck"
+            ],
+            "10": [
+              "Fiendish Resilience"
+            ],
+            "14": [
+              "Hurl Through Hell"
+            ]
+          }
         }
-      }
+      ]
     },
     "wizard": {
       "subclassLevel": 2,
@@ -635,24 +695,26 @@
           "Signature Spells"
         ]
       },
-      "subclass": {
-        "name": "School of Evocation",
-        "levels": {
-          "2": [
-            "Evocation Savant",
-            "Sculpt Spells"
-          ],
-          "6": [
-            "Potent Cantrip"
-          ],
-          "10": [
-            "Empowered Evocation"
-          ],
-          "14": [
-            "Overchannel"
-          ]
+      "subclasses": [
+        {
+          "name": "School of Evocation",
+          "levels": {
+            "2": [
+              "Evocation Savant",
+              "Sculpt Spells"
+            ],
+            "6": [
+              "Potent Cantrip"
+            ],
+            "10": [
+              "Empowered Evocation"
+            ],
+            "14": [
+              "Overchannel"
+            ]
+          }
         }
-      }
+      ]
     }
   }
 }

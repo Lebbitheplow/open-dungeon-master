@@ -11,12 +11,18 @@ import { acBreakdownFor, computeSheetDerived, formatModifier, SRD_SKILLS } from 
 import { ATTUNEMENT_SLOTS, matchArmor } from "@/lib/srd/armor";
 import { matchMagicItem, magicItemRiders } from "@/lib/srd/magic-items";
 import { RESOURCE_DEFS } from "@/lib/srd/class-resources";
+import { GameTerm } from "@/components/ui/GameTerm";
+import { InfoButton, InfoChipList } from "@/components/ui/InfoDialog";
+import { contentSlug, describeFeature } from "@/lib/help";
 
 function titleCase(value: string) {
   return value.replace(/[-_]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 const RESOURCE_NAMES = new Map(RESOURCE_DEFS.map((def) => [def.id, def.displayName]));
+// Every resource already carries a line explaining what spending it does; it
+// was written for the DM model and reads just as well for the player.
+const RESOURCE_HELP = new Map(RESOURCE_DEFS.map((def) => [def.id, def.guidance]));
 
 const stepButton =
   "flex items-center justify-center rounded border border-stone-700 p-0.5 text-stone-300 hover:bg-stone-800 disabled:opacity-40";
@@ -103,8 +109,12 @@ export function CharacterSheetDialog({
                   {sheet.name}
                 </Dialog.Title>
                 <p className="text-xs text-stone-400">
-                  Level {sheet.level} {titleCase(sheet.race)} {titleCase(sheet.class)}
-                  {sheet.subclass ? ` (${titleCase(sheet.subclass)})` : ""}
+                  Level {sheet.level} {titleCase(sheet.race)}{" "}
+                  {(sheet.classes?.length ?? 0) > 1
+                    ? (sheet.classes ?? [])
+                        .map((entry) => `${titleCase(entry.id)} ${entry.level}`)
+                        .join(" / ")
+                    : `${titleCase(sheet.class)}${sheet.subclass ? ` (${titleCase(sheet.subclass)})` : ""}`}
                   {sheet.background ? ` · ${titleCase(sheet.background)}` : ""}
                   {sheet.alignment ? ` · ${sheet.alignment}` : ""}
                 </p>
@@ -129,11 +139,16 @@ export function CharacterSheetDialog({
                   : armor.parts.join(" + ")
               }
             >
-              <Shield className="size-4 text-stone-400" /> AC {sheet.ac}
+              <Shield className="size-4 text-stone-400" />{" "}
+              <GameTerm id="armor_class">AC</GameTerm> {sheet.ac}
             </span>
             <span>Speed {sheet.speed} ft</span>
-            <span>Init {formatModifier(derived.initiative)}</span>
-            <span>PP {derived.passivePerception}</span>
+            <span>
+              <GameTerm id="initiative">Init</GameTerm> {formatModifier(derived.initiative)}
+            </span>
+            <span>
+              <GameTerm id="passive_perception">PP</GameTerm> {derived.passivePerception}
+            </span>
             <span>PB {formatModifier(derived.proficiencyBonus)}</span>
             <span>{sheet.gold} gp</span>
             <span>
@@ -190,7 +205,7 @@ export function CharacterSheetDialog({
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <section>
               <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
-                Saving throws
+                <GameTerm id="saving_throw">Saving throws</GameTerm>
               </h3>
               <div className="grid grid-cols-3 gap-x-2 gap-y-1 text-xs text-stone-300">
                 {ABILITIES.map((ability) => (
@@ -207,7 +222,7 @@ export function CharacterSheetDialog({
             </section>
             <section>
               <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
-                Skills
+                <GameTerm id="skill">Skills</GameTerm>
               </h3>
               <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs text-stone-300">
                 {SRD_SKILLS.map((skill) => (
@@ -236,7 +251,9 @@ export function CharacterSheetDialog({
               </h3>
               {Object.keys(sheet.spellcasting.slots).length ? (
                 <div className="flex flex-wrap items-center gap-1.5 text-xs text-stone-400">
-                  <span>Slots:</span>
+                  <span>
+                    <GameTerm id="spell_slot">Slots</GameTerm>:
+                  </span>
                   {Object.entries(sheet.spellcasting.slots).map(([slotLevel, slot]) => (
                     <span
                       key={slotLevel}
@@ -272,11 +289,16 @@ export function CharacterSheetDialog({
                 </div>
               ) : null}
               {[...sheet.spellcasting.known, ...sheet.spellcasting.prepared].length ? (
-                <p className="mt-1 text-xs text-stone-300">
-                  {[...new Set([...sheet.spellcasting.known, ...sheet.spellcasting.prepared])].join(
-                    ", ",
-                  )}
-                </p>
+                <div className="mt-1">
+                  <InfoChipList
+                    items={[
+                      ...new Set([...sheet.spellcasting.known, ...sheet.spellcasting.prepared]),
+                    ].map((spell) => ({
+                      name: spell,
+                      reference: { kind: "spells", slug: contentSlug(spell), name: spell },
+                    }))}
+                  />
+                </div>
               ) : null}
             </section>
           ) : null}
@@ -289,7 +311,7 @@ export function CharacterSheetDialog({
               <div className="space-y-1.5 text-xs text-stone-300">
                 <div className="flex items-center gap-2">
                   <span className="w-36 shrink-0 text-stone-400">
-                    Hit dice ({sheet.hitDice.die})
+                    <GameTerm id="hit_dice">Hit dice</GameTerm> ({sheet.hitDice.die})
                   </span>
                   {mine ? (
                     <button
@@ -321,8 +343,12 @@ export function CharacterSheetDialog({
                 </div>
                 {Object.entries(sheet.resources).map(([id, pool]) => (
                   <div key={id} className="flex items-center gap-2">
-                    <span className="w-36 shrink-0 text-stone-400">
+                    <span className="flex w-36 shrink-0 items-center gap-1 text-stone-400">
                       {RESOURCE_NAMES.get(id) ?? titleCase(id)}
+                      <InfoButton
+                        label={RESOURCE_NAMES.get(id) ?? titleCase(id)}
+                        text={RESOURCE_HELP.get(id)}
+                      />
                     </span>
                     {mine ? (
                       <button
@@ -446,13 +472,14 @@ export function CharacterSheetDialog({
               <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
                 Features &amp; Traits
               </h3>
-              <p className="text-xs text-stone-300">
-                {sheet.features
-                  .map((feature) =>
-                    feature.source === "story" ? `${feature.name} (story)` : feature.name,
-                  )
-                  .join(", ")}
-              </p>
+              <InfoChipList
+                items={sheet.features.map((feature) => ({
+                  name: feature.name,
+                  note: feature.source === "story" ? "(story)" : undefined,
+                  meta: feature.level ? `Level ${feature.level}` : undefined,
+                  text: describeFeature(sheet.class, sheet.subclass, feature.name),
+                }))}
+              />
             </section>
           ) : null}
 
@@ -461,7 +488,13 @@ export function CharacterSheetDialog({
               <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
                 Feats
               </h3>
-              <p className="text-xs text-stone-300">{sheet.feats.join(", ")}</p>
+              <InfoChipList
+                items={sheet.feats.map((feat) => ({
+                  name: feat,
+                  text: describeFeature(sheet.class, sheet.subclass, feat),
+                  reference: { kind: "feats", slug: contentSlug(feat), name: feat },
+                }))}
+              />
             </section>
           ) : null}
 

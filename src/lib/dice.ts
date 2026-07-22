@@ -45,7 +45,9 @@ const MAX_SIDES = 100;
 const MIN_SIDES = 2;
 const MAX_TERMS = 20;
 
-const TERM_PATTERN = /^(?:(\d{1,3})d(\d{1,3})(?:k([hl])(\d{1,3}))?|(\d{1,7}))$/i;
+// XdY, optional khN/klN keep, optional fN floor (Reliable Talent: "1d20f10"
+// treats a kept face below N as N), or a flat integer.
+const TERM_PATTERN = /^(?:(\d{1,3})d(\d{1,3})(?:k([hl])(\d{1,3}))?(?:f(\d{1,3}))?|(\d{1,7}))$/i;
 
 export function defaultRng(sides: number) {
   return randomInt(1, sides + 1);
@@ -89,8 +91,8 @@ export function rollExpression(
       throw new Error(`Invalid dice term: ${rawTerm}`);
     }
 
-    if (match[5] !== undefined) {
-      terms.push({ kind: "modifier", sign, value: Number(match[5]) });
+    if (match[6] !== undefined) {
+      terms.push({ kind: "modifier", sign, value: Number(match[6]) });
       continue;
     }
 
@@ -140,6 +142,18 @@ export function rollExpression(
       });
     }
 
+    // The floor raises kept faces below it (Reliable Talent's 10), keeping
+    // the original face visible on the card.
+    const floorAt = match[5] ? Number(match[5]) : 0;
+    if (floorAt > 0) {
+      for (const die of dice) {
+        if (die.kept && die.value < floorAt) {
+          die.rerolledFrom = die.value;
+          die.value = Math.min(sides, floorAt);
+        }
+      }
+    }
+
     const subtotal = dice.reduce((sum, die) => sum + (die.kept ? die.value : 0), 0);
     terms.push({ kind: "dice", sign, count, sides, keep, dice, subtotal });
   }
@@ -152,10 +166,19 @@ export function rollExpression(
 
   const result: RollResult = { expression: compact, total, terms };
 
-  // Crit detection: exactly one dice term whose kept dice are a single d20.
+  // Crit detection: the leading term is a d20 keeping a single die, and no
+  // other d20 term competes. Rider dice from effect conditions ("1d20+5+1d4"
+  // for a blessed attack) leave the natural face detectable.
   const diceTerms = terms.filter((term): term is DiceTerm => term.kind === "dice");
-  if (diceTerms.length === 1 && diceTerms[0].sides === 20 && diceTerms[0].sign === 1) {
-    const keptDice = diceTerms[0].dice.filter((die) => die.kept);
+  const lead = terms[0];
+  if (
+    lead &&
+    lead.kind === "dice" &&
+    lead.sides === 20 &&
+    lead.sign === 1 &&
+    diceTerms.filter((term) => term.sides === 20).length === 1
+  ) {
+    const keptDice = lead.dice.filter((die) => die.kept);
     if (keptDice.length === 1) {
       result.natural = keptDice[0].value;
       if (result.natural === 20) {

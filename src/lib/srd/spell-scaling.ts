@@ -144,6 +144,93 @@ export function upcastDamage(
   };
 }
 
+// ---- Mechanics parsers ----
+//
+// The same regular SRD phrasing that yields the damage dice also states the
+// save, the half-on-save rule, the damage type, and the condition applied.
+// Each parser returns null rather than guess; the caller falls back to an
+// authored mechanics row or, failing that, the model's own arguments.
+
+const ABILITY_BY_WORD = {
+  strength: "str",
+  dexterity: "dex",
+  constitution: "con",
+  intelligence: "int",
+  wisdom: "wis",
+  charisma: "cha",
+} as const;
+
+export type ParsedSaveAbility = (typeof ABILITY_BY_WORD)[keyof typeof ABILITY_BY_WORD];
+
+// "must succeed on a Dexterity saving throw", "must make a Wisdom saving
+// throw". The first save named is the spell's save.
+export function saveAbilityFor(desc: string): ParsedSaveAbility | null {
+  const match =
+    /(strength|dexterity|constitution|intelligence|wisdom|charisma)\s+saving\s+throw/i.exec(desc);
+  return match ? ABILITY_BY_WORD[match[1].toLowerCase() as keyof typeof ABILITY_BY_WORD] : null;
+}
+
+// "or half as much damage on a successful one/save", "half as much on a
+// success", "taking ... on a failure and half on a success".
+export function halfOnSaveFor(desc: string): boolean {
+  return (
+    /half\s+as\s+much\s+damage/i.test(desc) ||
+    /half\s+as\s+much[^.]{0,40}?success/i.test(desc) ||
+    /success[^.]{0,40}?\bhalf\b/i.test(desc) ||
+    /failure\s+and\s+half\b/i.test(desc)
+  );
+}
+
+const DAMAGE_TYPES = [
+  "acid", "bludgeoning", "cold", "fire", "force", "lightning", "necrotic",
+  "piercing", "poison", "psychic", "radiant", "slashing", "thunder",
+];
+
+// The type attached to the spell's damage clause ("8d6 fire damage").
+export function damageTypeFor(desc: string): string | null {
+  const pattern = new RegExp(
+    `(?:\\dd\\d+|damage)[^.]{0,30}?\\b(${DAMAGE_TYPES.join("|")})\\b\\s+damage`,
+    "i",
+  );
+  const match = pattern.exec(desc);
+  if (match) {
+    return match[1].toLowerCase();
+  }
+  const loose = new RegExp(`\\b(${DAMAGE_TYPES.join("|")})\\b\\s+damage`, "i").exec(desc);
+  return loose ? loose[1].toLowerCase() : null;
+}
+
+const APPLIED_CONDITIONS = [
+  "blinded", "charmed", "deafened", "frightened", "grappled", "incapacitated",
+  "paralyzed", "petrified", "poisoned", "restrained", "stunned", "unconscious",
+  "prone",
+];
+
+// The condition a failed save applies: "or be frightened", "is knocked
+// prone", "becomes poisoned". Bounded to the standard list so prose about
+// e.g. "charmed allies" elsewhere in a long description cannot misfire.
+export function conditionAppliedFor(desc: string): string | null {
+  const list = APPLIED_CONDITIONS.join("|");
+  const patterns = [
+    new RegExp(`\\bor\\s+(?:be(?:come)?s?\\s+|is\\s+)?(?:knocked\\s+|pushed\\s+)?(${list})\\b`, "i"),
+    new RegExp(`failed\\s+save[^.]{0,80}?\\b(${list})\\b`, "i"),
+    new RegExp(`\\bis\\s+(?:knocked\\s+)?(${list})\\b`, "i"),
+  ];
+  for (const pattern of patterns) {
+    const match = pattern.exec(desc);
+    if (match) {
+      return match[1].toLowerCase();
+    }
+  }
+  return null;
+}
+
+// "Make a ranged/melee spell attack against ...".
+export function attackKindFor(desc: string): "melee" | "ranged" | null {
+  const match = /make\s+a\s+(ranged|melee)\s+spell\s+attack/i.exec(desc);
+  return match ? (match[1].toLowerCase() as "melee" | "ranged") : null;
+}
+
 // The single entry point the tools use: what this spell rolls for this
 // caster and slot. `slotLevel` is undefined for cantrips.
 export function scaledSpellDice(input: {

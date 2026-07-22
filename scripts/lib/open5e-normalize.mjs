@@ -102,6 +102,149 @@ export function normalizeClassRows(raw) {
   return { cls, archetypes };
 }
 
+// --- Open5e v2 ---
+//
+// v2 covers sources v1 never got (SRD 5.2, Black Flag, Gate Pass Gazette) and
+// describes classes as level-tagged feature lists instead of one prose blob.
+// Its rows use `key` where v1 used `slug` and nest the document, so each of
+// these lands on exactly the same column shape as its v1 sibling and no query
+// in src/lib/content/index.ts has to know which half a row came from.
+
+function v2Document(raw) {
+  return String(raw.document?.key || raw.document || "");
+}
+
+// v2 keys are prefixed by document ("srd-2024_acid-arrow"). The bare slug is
+// what sheets and the SRD tables use, so it is preferred; the importer only
+// falls back to the prefixed key when the bare one is already taken by a v1
+// row, which keeps v1 slugs stable for existing characters.
+export function v2Slug(raw) {
+  const key = String(raw.key || "");
+  const bare = key.includes("_") ? key.slice(key.indexOf("_") + 1) : key;
+  return { bare: bare || slugify(raw.name), key: key || slugify(raw.name) };
+}
+
+export function normalizeSpellV2(raw) {
+  const { bare, key } = v2Slug(raw);
+  return {
+    slug: bare,
+    altSlug: key,
+    name: raw.name,
+    document_slug: v2Document(raw),
+    level: Number.isInteger(raw.level) ? raw.level : 0,
+    school: String(raw.school?.name || raw.school || "").toLowerCase(),
+    classes_csv: csv((Array.isArray(raw.classes) ? raw.classes : []).map((entry) => entry.name)),
+    ritual: raw.ritual ? 1 : 0,
+    concentration: raw.concentration ? 1 : 0,
+    data: raw,
+  };
+}
+
+export function normalizeFeatV2(raw) {
+  const { bare, key } = v2Slug(raw);
+  // The pickers render `desc`; v2 splits a feat's real content into benefits.
+  const benefits = (Array.isArray(raw.benefits) ? raw.benefits : [])
+    .map((benefit) => String(benefit.desc || "").trim())
+    .filter(Boolean);
+  const desc = [String(raw.desc || "").trim(), ...benefits].filter(Boolean).join("\n\n");
+  return {
+    slug: bare,
+    altSlug: key,
+    name: raw.name,
+    document_slug: v2Document(raw),
+    data: { ...raw, desc, prerequisite: raw.prerequisite || "" },
+  };
+}
+
+export function normalizeBackgroundV2(raw) {
+  const { bare, key } = v2Slug(raw);
+  const benefits = Array.isArray(raw.benefits) ? raw.benefits : [];
+  const skillText = benefits
+    .filter((benefit) => String(benefit.type || "").includes("skill"))
+    .map((benefit) => benefit.desc)
+    .join(", ");
+  const desc = [
+    String(raw.desc || "").trim(),
+    ...benefits.map((benefit) =>
+      [benefit.name, benefit.desc].filter(Boolean).join(": ").trim(),
+    ),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+  return {
+    slug: bare,
+    altSlug: key,
+    name: raw.name,
+    document_slug: v2Document(raw),
+    skills_csv: csv(skillText.split(/[,;]/)),
+    data: { ...raw, desc },
+  };
+}
+
+// v2 calls races species and keeps subspecies in a separate endpoint, so a
+// species row is always a parent here.
+export function normalizeSpeciesV2(raw) {
+  const { bare, key } = v2Slug(raw);
+  const parentKey = raw.subrace_of?.key || raw.species?.key || "";
+  return {
+    slug: bare,
+    altSlug: key,
+    name: raw.name,
+    document_slug: v2Document(raw),
+    is_subrace: parentKey ? 1 : 0,
+    parent_slug: parentKey ? v2Slug({ key: parentKey, name: parentKey }).bare : "",
+    data: raw,
+  };
+}
+
+// v2 flattens classes and subclasses into one endpoint: a row with
+// `subclass_of` is an archetype of that class. Its features carry the level
+// they are gained at, which is what makes v2 worth importing at all.
+export function normalizeClassRowsV2(raw) {
+  const { bare, key } = v2Slug(raw);
+  const hitDie = Number.parseInt(String(raw.hit_dice || "").replace(/^\d*d/i, ""), 10);
+  const features = (Array.isArray(raw.features) ? raw.features : []).map((feature) => ({
+    name: feature.name,
+    desc: feature.desc,
+    levels: (Array.isArray(feature.gained_at) ? feature.gained_at : [])
+      .map((entry) => entry.level)
+      .filter((level) => Number.isInteger(level)),
+  }));
+  const parentKey = raw.subclass_of?.key || raw.subclass_of || "";
+  const base = {
+    slug: bare,
+    altSlug: key,
+    name: raw.name,
+    document_slug: v2Document(raw),
+    data: { ...raw, features },
+  };
+  if (parentKey) {
+    return {
+      archetype: { ...base, class_slug: v2Slug({ key: parentKey, name: parentKey }).bare },
+    };
+  }
+  return {
+    cls: { ...base, hit_die: Number.isFinite(hitDie) ? hitDie : 8 },
+  };
+}
+
+export function normalizeDocumentV2(raw) {
+  const title = raw.display_name || raw.name || raw.key;
+  return {
+    slug: String(raw.key || ""),
+    altSlug: String(raw.key || ""),
+    name: title,
+    title,
+    license: (Array.isArray(raw.licenses) ? raw.licenses : [])
+      .map((entry) => entry.name)
+      .filter(Boolean)
+      .join(", "),
+    author: String(raw.publisher?.name || ""),
+    url: String(raw.permalink || raw.url || ""),
+    data: raw,
+  };
+}
+
 export function normalizeWeapon(raw) {
   return {
     slug: raw.slug,

@@ -1,6 +1,7 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { createSheet, getSheetById, getSheetForUser } from "@/lib/db/sheets";
 import { spellSlotsFor, suggestedStartingHp } from "@/lib/srd";
+import { slotTableFor } from "@/lib/srd/multiclass";
 import { earnedAsiCount, removeAsiChoices } from "@/lib/srd/asi";
 import { populateFeatures } from "@/lib/srd/features";
 import type { CharacterSheet, CreateSheetInput, SheetAttachment } from "@/lib/schemas/sheet";
@@ -216,6 +217,46 @@ export function instantiateIntoCampaign(
     sheet.asiChoices = storedChoices.slice(0, keptChoiceCount);
   }
 
+  // A multiclassed library character adapting to a lower level sheds levels
+  // from the LAST class first (acquisition order = array order); classes
+  // stripped to zero drop entirely, along with their hit-die pool and
+  // caster entry. Up-scaling adds levels to the primary class.
+  if ((sheet.classes ?? []).length > 1) {
+    let excess = (sheet.classes ?? []).reduce((sum, entry) => sum + entry.level, 0) - level;
+    const classes = (sheet.classes ?? []).map((entry) => ({ ...entry }));
+    for (let index = classes.length - 1; index > 0 && excess > 0; index -= 1) {
+      const take = Math.min(classes[index].level, excess);
+      classes[index].level -= take;
+      excess -= take;
+    }
+    if (excess !== 0) {
+      classes[0].level = Math.max(1, Math.min(20, classes[0].level - excess));
+    }
+    sheet.classes = classes.filter((entry) => entry.level > 0);
+    const keptIds = new Set(sheet.classes.map((entry) => entry.id.toLowerCase()));
+    sheet.hitDicePools =
+      sheet.hitDicePools
+        ?.filter((pool) => keptIds.has(pool.classId.toLowerCase()))
+        .map((pool) => ({
+          ...pool,
+          total:
+            sheet.classes!.find((entry) => entry.id.toLowerCase() === pool.classId.toLowerCase())
+              ?.level ?? pool.total,
+          spent: 0,
+        })) ?? null;
+    if (sheet.classes.length < 2) {
+      sheet.hitDicePools = null;
+    }
+    if (sheet.spellcasting?.casters?.length) {
+      sheet.spellcasting.casters = sheet.spellcasting.casters.filter((caster) =>
+        keptIds.has(caster.classId.toLowerCase()),
+      );
+      if (!keptIds.has("warlock")) {
+        delete sheet.spellcasting.pact;
+      }
+    }
+  }
+
   sheet.hitDice = { ...sheet.hitDice, total: level, spent: 0 };
   if (level !== character.level) {
     const suggested = suggestedStartingHp(sheet.class, sheet.race, sheet.abilities.con, level);
@@ -227,7 +268,10 @@ export function instantiateIntoCampaign(
         : Math.max(1, Math.round((sheet.maxHp / Math.max(1, character.level)) * level));
   }
   if (sheet.spellcasting) {
-    const slots = spellSlotsFor(sheet.class, level);
+    const slots =
+      (sheet.classes ?? []).length > 1
+        ? slotTableFor({ class: sheet.class, classes: sheet.classes })
+        : spellSlotsFor(sheet.class, level);
     if (Object.keys(slots).length) {
       sheet.spellcasting.slots = Object.fromEntries(
         Object.entries(slots).map(([slotLevel, max]) => [slotLevel, { max, used: 0 }]),
@@ -252,6 +296,10 @@ export function syncProgressToLibrary(sheetId: string): LibraryCharacter | null 
   const merged: CreateSheetInput = {
     ...character.sheet,
     subclass: sheet.subclass,
+    // Multiclass progression survives the round-trip (pools rest fresh).
+    classes: sheet.classes,
+    hitDicePools:
+      sheet.hitDicePools?.map((pool) => ({ ...pool, spent: 0 })) ?? null,
     equipment: sheet.equipment,
     gold: sheet.gold,
     feats: sheet.feats,

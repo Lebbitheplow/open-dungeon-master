@@ -1,5 +1,5 @@
 import { currentUser } from "@/lib/auth";
-import { getUserDiscordId } from "@/lib/db/users";
+import { NO_PASSWORD_SENTINEL, getUserByUsername, getUserDiscordId } from "@/lib/db/users";
 import { discordCredentials } from "@/lib/discord-oauth";
 
 export const runtime = "nodejs";
@@ -17,6 +17,7 @@ export async function GET() {
           mustChangePassword: user.mustChangePassword,
           discordLinked: getUserDiscordId(user.id) !== null,
           discordAvailable: discordCredentials() !== null,
+          hasPassword: getUserByUsername(user.username)?.passwordHash !== NO_PASSWORD_SENTINEL,
         }
       : null,
   });

@@ -28,7 +28,22 @@ import {
   suggestedStartingHp,
 } from "@/lib/srd";
 import { ASI_LEVELS, applyAsiChoices, removeAsiChoices } from "@/lib/srd/asi";
-import { classFeaturesFor, expertiseSlotsFor, srdSubclassName, subclassLevelFor } from "@/lib/srd/features";
+import {
+  classFeaturesFor,
+  expertiseSlotsFor,
+  subclassLevelFor,
+  subclassNamesFor,
+  subclassSpellsFor,
+} from "@/lib/srd/features";
+import { GameTerm } from "@/components/ui/GameTerm";
+import { InfoButton } from "@/components/ui/InfoDialog";
+import { describeFeature, describeRace, starterSpellsFor } from "@/lib/help";
+import {
+  findOptionByFeatureName,
+  openOptionSlots,
+  optionFeatureName,
+  type OptionSlot,
+} from "@/lib/srd/options";
 import {
   FIGHTING_STYLES,
   fightingStyleFeatureName,
@@ -38,6 +53,7 @@ import {
 import { defaultLoadout, suggestWeapons } from "@/lib/srd/weapons";
 import { defaultArmor, suggestArmor } from "@/lib/srd/armor";
 import { classGenres, spellClassFor } from "@/lib/classes";
+import { GENRE_PRESETS } from "@/lib/genres";
 import type { Genre } from "@/lib/schemas/game-settings";
 import AbilityEditor, { type AbilityMethod, type AbilityState } from "./AbilityEditor";
 import AsiFeatEditor from "./AsiFeatEditor";
@@ -48,6 +64,33 @@ import { useArchetypes, useBuilderOptions } from "./useBuilderOptions";
 
 const ALIGNMENTS = ["LG", "NG", "CG", "LN", "N", "CN", "LE", "NE", "CE"];
 const GENDERS = ["Female", "Male", "Nonbinary"];
+
+// Splits a flat option list into the standard (SRD/content-pack) entries and
+// the other settings' catalog entries, grouped by each entry's primary genre.
+// Only catalog rows carry `genres`, so "no genres" IS the standard bucket.
+// Used when no genre steers the picker (high fantasy, custom, or the library
+// builder) so a new player can tell a Netrunner is not a high-fantasy class;
+// everything stays selectable either way.
+function groupBySourceSetting<T extends { id: string; genres?: Genre[] }>(
+  options: T[],
+): { standard: T[]; packs: Array<{ genre: Genre; label: string; options: T[] }> } {
+  const standard: T[] = [];
+  const byGenre = new Map<Genre, T[]>();
+  for (const option of options) {
+    const source = option.genres?.[0];
+    if (!source) {
+      standard.push(option);
+      continue;
+    }
+    byGenre.set(source, [...(byGenre.get(source) ?? []), option]);
+  }
+  const packs = GENRE_PRESETS.filter((preset) => byGenre.has(preset.id)).map((preset) => ({
+    genre: preset.id,
+    label: preset.name,
+    options: byGenre.get(preset.id) ?? [],
+  }));
+  return { standard, packs };
+}
 
 export type BuilderResult = { level: number; sheet: CreateSheetInput };
 
@@ -139,6 +182,14 @@ export default function CharacterBuilder({
     initial?.racialChoices?.cantrip ?? "",
   );
   const [racialTool, setRacialTool] = useState(initial?.racialChoices?.tool ?? "");
+  const [cantripNames, setCantripNames] = useState<string[]>([]);
+  // Prefixed feature names, e.g. "Invocation: Agonizing Blast".
+  const [optionPicks, setOptionPicks] = useState<string[]>(() =>
+    (initial?.features ?? [])
+      .filter((feature) => feature.source === "choice")
+      .map((feature) => feature.name)
+      .filter((name) => findOptionByFeatureName(name) !== null),
+  );
   // One-shot acknowledgement for the "caster with no spells" warning.
   const [spellWarningAck, setSpellWarningAck] = useState(false);
   const [backstory, setBackstory] = useState(initial?.backstory ?? "");
@@ -235,6 +286,17 @@ export default function CharacterBuilder({
         : backgrounds,
     [backgrounds, recommendedBackgrounds],
   );
+  // With no recommended tier (high fantasy, custom, library builder), the
+  // other settings' entries separate out under their source setting instead
+  // of blending into the standard list unlabeled.
+  const classGroups = useMemo(
+    () => (recommendedClasses.length ? null : groupBySourceSetting(otherClasses)),
+    [recommendedClasses, otherClasses],
+  );
+  const backgroundGroups = useMemo(
+    () => (recommendedBackgrounds.length ? null : groupBySourceSetting(otherBackgrounds)),
+    [recommendedBackgrounds, otherBackgrounds],
+  );
   const effectiveLevel = fixedLevel ?? level;
   const asiSlotLevels = useMemo(
     () => ASI_LEVELS.filter((threshold) => effectiveLevel >= threshold),
@@ -291,7 +353,16 @@ export default function CharacterBuilder({
       skills,
       // Expertise picks only count while still proficient in the skill.
       expertise: expertisePicks.filter((skillId) => skills.includes(skillId)),
-      languages: [...new Set([...race.languages, ...bonusLanguages.filter(Boolean)])],
+      // A class teaches its own secret tongue: Druidic to a druid, Thieves'
+      // Cant to a rogue. Without this a druid could never speak Druidic even
+      // though the feature says they do.
+      languages: [
+        ...new Set([
+          ...race.languages,
+          ...bonusLanguages.filter(Boolean),
+          ...(klass?.languages ?? []),
+        ]),
+      ],
       tools: [
         ...new Set(
           [
@@ -302,8 +373,10 @@ export default function CharacterBuilder({
           ].filter(Boolean),
         ),
       ],
-      armor: klass.armor,
-      weapons: klass.weapons,
+      // Races can teach combat training too: mountain dwarf armor, drow
+      // and wood elf weapons.
+      armor: [...new Set([...klass.armor, ...(race.armor ?? [])])],
+      weapons: [...new Set([...klass.weapons, ...(race.weapons ?? [])])],
     };
     const derived = computeSheetDerived({
       abilities,
@@ -399,17 +472,39 @@ export default function CharacterBuilder({
     }
   }
 
-  // Catalog classes have no Open5e archetypes; offer their built-in
-  // subclass once the chosen level reaches the class's subclass level.
-  const builtInSubclass = useMemo(() => {
+  // The subclasses we have real feature tables for, offered once the chosen
+  // level reaches the class's subclass level. Content-pack archetypes are
+  // listed after them: those are prose only, so a player picking one gets no
+  // features, and these should be the obvious choice.
+  const builtInSubclasses = useMemo(() => {
     if (!klass) {
-      return null;
+      return [];
     }
     const pickLevel = subclassLevelFor(klass.id);
-    return pickLevel !== null && effectiveLevel >= pickLevel
-      ? srdSubclassName(klass.id)
-      : null;
+    return pickLevel !== null && effectiveLevel >= pickLevel ? subclassNamesFor(klass.id) : [];
   }, [klass, effectiveLevel]);
+
+  // Pack archetypes we already have a table for would otherwise appear twice.
+  const packOnlyArchetypes = useMemo(() => {
+    const known = new Set(builtInSubclasses.map((name) => name.toLowerCase()));
+    return archetypes.filter((entry) => !known.has(entry.name.toLowerCase()));
+  }, [archetypes, builtInSubclasses]);
+
+  // The pack row behind the chosen subclass, which carries its write-up.
+  const chosenArchetype = useMemo(
+    () =>
+      archetypes.find((entry) => entry.name.toLowerCase() === subclass.trim().toLowerCase()) ??
+      null,
+    [archetypes, subclass],
+  );
+
+  // What this class and subclass actually hand the character at this level.
+  // The builder already computed these for the preview; showing them turns a
+  // blind dropdown choice into an informed one.
+  const grantedFeatures = useMemo(
+    () => (klass ? classFeaturesFor(klass.id, subclass, effectiveLevel) : []),
+    [klass, subclass, effectiveLevel],
+  );
 
   // Spell lists and advice go through the borrowed SRD list for catalog
   // casters (a Netrunner searches wizard spells).
@@ -421,8 +516,52 @@ export default function CharacterBuilder({
   const cantripAdvice = klass?.spellAbility
     ? suggestedCantripCount(spellSearchClass, effectiveLevel, klass.casterType)
     : null;
+  // Invocations, maneuvers, metamagic, pact boons, infusions, runes and
+  // elemental disciplines: the pick-lists that used to be feature names with
+  // no way to choose them. Stored like fighting styles, as prefixed
+  // "choice" features that survive level-ups.
+  const optionSlots = useMemo(
+    () =>
+      klass
+        ? openOptionSlots({
+            classId: klass.id,
+            subclass,
+            level: effectiveLevel,
+            features: optionPicks.map((name) => ({ name })),
+          })
+        : [],
+    [klass, subclass, effectiveLevel, optionPicks],
+  );
+
+  function toggleOption(slot: OptionSlot, name: string) {
+    const featureName = optionFeatureName(slot.kind, name);
+    setOptionPicks((current) => {
+      if (current.includes(featureName)) {
+        return current.filter((entry) => entry !== featureName);
+      }
+      return slot.chosen.length < slot.total ? [...current, featureName] : current;
+    });
+  }
+
+  // Opening suggestions, so a player who has never seen a 5e spell list is
+  // not left staring at an empty search box.
+  const starters = useMemo(
+    () => (klass?.spellAbility ? starterSpellsFor(klass.id) : null),
+    [klass],
+  );
   // What this class calls its spells, used in the empty-spell-list warning.
   const castingLabel = klass?.spellAbility ? (klass.castingLabel || "spells") : "";
+  const starterCantripNames = useMemo(
+    () => starters?.cantrips.map((pick) => pick.n.toLowerCase()) ?? [],
+    [starters],
+  );
+  // Which chosen names are cantrips, so the two counters read separately.
+  // Seeded from the recommendations and topped up by the picker, which knows
+  // each row's level.
+  const chosenCantrips = useMemo(() => {
+    const known = new Set([...cantripNames.map((name) => name.toLowerCase()), ...starterCantripNames]);
+    return spells.filter((name) => known.has(name.toLowerCase()));
+  }, [spells, cantripNames, starterCantripNames]);
   const maxSpellLevel = useMemo(() => {
     if (!klass || klass.casterType === "none") {
       return 0;
@@ -510,7 +649,12 @@ export default function CharacterBuilder({
     // instead, which populateFeatures keeps and the DM prompt can see.
     const spellsWithRacial =
       racialCantrip && !spells.includes(racialCantrip) ? [...spells, racialCantrip] : spells;
-    const finalSpells = klass.spellAbility ? spellsWithRacial : spells;
+    // Domain, circle, oath and patron spells are always prepared and free:
+    // they ride onto the list on top of whatever the player picked.
+    const grantedSpells = subclassSpellsFor(klass.id, subclass, effectiveLevel).filter(
+      (spell) => !spellsWithRacial.some((entry) => entry.toLowerCase() === spell.toLowerCase()),
+    );
+    const finalSpells = klass.spellAbility ? [...spellsWithRacial, ...grantedSpells] : spells;
     const racialFeatures =
       racialCantrip && !klass.spellAbility
         ? [{ name: `Racial cantrip: ${racialCantrip}`, source: "story" as const }]
@@ -537,6 +681,10 @@ export default function CharacterBuilder({
           total: effectiveLevel,
           spent: 0,
         },
+        // Characters are always built single-class; multiclassing happens
+        // at level-up in play.
+        classes: [],
+        hitDicePools: null,
         proficiencies: preview.proficiencies,
         equipment: fullEquipment,
         gold,
@@ -549,6 +697,10 @@ export default function CharacterBuilder({
           ...stylePicks
             .slice(0, styleSlots)
             .map((id) => ({ name: fightingStyleFeatureName(id), source: "choice" as const })),
+          // Invocations, maneuvers, metamagic and the rest ride along as
+          // "choice" features, the same shape as a fighting style, so the
+          // level-up regrant preserves them.
+          ...optionPicks.map((name) => ({ name, source: "choice" as const })),
         ],
         asiChoices: resolvedAsiChoices,
         racialChoices: {
@@ -656,7 +808,16 @@ export default function CharacterBuilder({
           >
             {races.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
           </select>
-          {race?.note ? <span className="mt-1 line-clamp-2 block text-xs text-stone-500">{race.note}</span> : null}
+          {race?.note ? (
+            <span className="mt-1 flex items-start gap-1 text-xs text-stone-500">
+              <span className="line-clamp-2 grow">{race.note}</span>
+              <InfoButton
+                label={race.name}
+                text={describeRace(race.id) ?? race.note}
+                reference={{ kind: "races", slug: race.id }}
+              />
+            </span>
+          ) : null}
         </label>
         {race && race.bonusLanguages > 0 ? (
           <div className="block">
@@ -720,7 +881,7 @@ export default function CharacterBuilder({
           <span className="mb-1 block text-stone-400">Class</span>
           <select
             value={klass?.id ?? ""}
-            onChange={(event) => { setClassId(event.target.value); setChosenSkills([]); setSubclass(""); setSpells([]); setRemovedAutoNames([]); }}
+            onChange={(event) => { setClassId(event.target.value); setChosenSkills([]); setSubclass(""); setSpells([]); setRemovedAutoNames([]); setOptionPicks([]); }}
             className={inputClass}
           >
             {recommendedClasses.length ? (
@@ -736,6 +897,21 @@ export default function CharacterBuilder({
                   ))}
                 </optgroup>
               </>
+            ) : classGroups?.packs.length ? (
+              <>
+                <optgroup label="Standard classes (high fantasy)">
+                  {classGroups.standard.map((entry) => (
+                    <option key={entry.id} value={entry.id}>{entry.name}</option>
+                  ))}
+                </optgroup>
+                {classGroups.packs.map((pack) => (
+                  <optgroup key={pack.genre} label={`From the ${pack.label} setting`}>
+                    {pack.options.map((entry) => (
+                      <option key={entry.id} value={entry.id}>{entry.name}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </>
             ) : (
               otherClasses.map((entry) => (
                 <option key={entry.id} value={entry.id}>{entry.name}</option>
@@ -743,29 +919,101 @@ export default function CharacterBuilder({
             )}
           </select>
           {klass ? (
-            <span className="mt-1 block text-xs text-stone-500">
-              d{klass.hitDie} hit die · saves {klass.saves.map((save) => save.toUpperCase()).join(", ")}
-              {klass.spellAbility
-                ? ` · ${klass.spellAbility.toUpperCase()} caster${klass.castingLabel ? ` (spells flavored as ${klass.castingLabel})` : ""}`
-                : ""}
+            <span className="mt-1 flex flex-wrap items-center gap-x-1 text-xs text-stone-500">
+              <GameTerm id="hit_dice">d{klass.hitDie} hit die</GameTerm> ·{" "}
+              <GameTerm id="saving_throw">saves</GameTerm>{" "}
+              {klass.saves.map((save) => save.toUpperCase()).join(", ")}
+              {klass.spellAbility ? (
+                <>
+                  {" · "}
+                  <GameTerm id={klass.spellAbility}>{klass.spellAbility.toUpperCase()}</GameTerm>{" "}
+                  caster
+                  {klass.castingLabel ? ` (spells flavored as ${klass.castingLabel})` : ""}
+                </>
+              ) : null}
+              <InfoButton
+                label={klass.name}
+                text={klass.blurb || klass.desc}
+                reference={{ kind: "classes", slug: klass.id }}
+              />
             </span>
           ) : null}
           {klass?.blurb ? (
             <span className="mt-1 block text-xs text-stone-500">{klass.blurb}</span>
           ) : null}
         </label>
-        {archetypes.length || builtInSubclass ? (
+        {packOnlyArchetypes.length || builtInSubclasses.length ? (
           <label className="block">
             <span className="mb-1 block text-stone-400">Subclass</span>
             <select value={subclass} onChange={(event) => setSubclass(event.target.value)} className={inputClass}>
               <option value="">None yet</option>
-              {builtInSubclass &&
-              !archetypes.some((entry) => entry.name.toLowerCase() === builtInSubclass.toLowerCase()) ? (
-                <option value={builtInSubclass}>{builtInSubclass}</option>
+              {builtInSubclasses.length ? (
+                <optgroup label="Full features">
+                  {builtInSubclasses.map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </optgroup>
               ) : null}
-              {archetypes.map((entry) => <option key={entry.id} value={entry.name}>{entry.name}</option>)}
+              {packOnlyArchetypes.length ? (
+                <optgroup label="From the content pack">
+                  {packOnlyArchetypes.map((entry) => (
+                    <option key={entry.id} value={entry.name}>{entry.name}</option>
+                  ))}
+                </optgroup>
+              ) : null}
             </select>
+            <span className="mt-1 flex items-start gap-1 text-xs text-stone-500">
+              {subclass ? (
+                <>
+                  <span className="grow">
+                    {chosenArchetype?.desc
+                      ? chosenArchetype.desc.split("\n")[0]
+                      : "A specialization within your class."}
+                  </span>
+                  <InfoButton
+                    label={subclass}
+                    text={chosenArchetype?.desc}
+                    reference={
+                      chosenArchetype ? { kind: "archetypes", slug: chosenArchetype.id } : undefined
+                    }
+                  />
+                </>
+              ) : (
+                <>
+                  <span className="grow">
+                    Your <GameTerm id="subclass">subclass</GameTerm> is the biggest choice about how
+                    this character plays. Pick one to read what it does.
+                  </span>
+                </>
+              )}
+            </span>
           </label>
+        ) : null}
+        {grantedFeatures.length ? (
+          <div className="rounded-lg border border-stone-800 bg-stone-950/60 p-3">
+            <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-amber-200/80">
+              What you gain at level {effectiveLevel}
+            </p>
+            <div className="flex flex-wrap gap-x-3 gap-y-1">
+              {grantedFeatures.map((feature) => (
+                <span
+                  key={`${feature.name}-${feature.level ?? 0}`}
+                  className="flex items-center gap-1 text-xs text-stone-300"
+                >
+                  {feature.name}
+                  <InfoButton
+                    label={feature.name}
+                    meta={feature.level ? `Level ${feature.level}` : undefined}
+                    text={klass ? describeFeature(klass.id, subclass, feature.name) : null}
+                  />
+                </span>
+              ))}
+            </div>
+            <p className="mt-1.5 text-[11px] text-stone-600">
+              Tap any name to read what it does. Racial traits and background perks are added on top
+              when the character is saved.
+            </p>
+          </div>
         ) : null}
         <label className="block">
           <span className="mb-1 block text-stone-400">Background</span>
@@ -783,15 +1031,39 @@ export default function CharacterBuilder({
                   ))}
                 </optgroup>
               </>
+            ) : backgroundGroups?.packs.length ? (
+              <>
+                <optgroup label="Standard backgrounds (high fantasy)">
+                  {backgroundGroups.standard.map((entry) => (
+                    <option key={entry.id} value={entry.id}>{entry.name}</option>
+                  ))}
+                </optgroup>
+                {backgroundGroups.packs.map((pack) => (
+                  <optgroup key={pack.genre} label={`From the ${pack.label} setting`}>
+                    {pack.options.map((entry) => (
+                      <option key={entry.id} value={entry.id}>{entry.name}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </>
             ) : (
               otherBackgrounds.map((entry) => (
                 <option key={entry.id} value={entry.id}>{entry.name}</option>
               ))
             )}
           </select>
-          {background?.skills.length ? (
-            <span className="mt-1 block text-xs text-stone-500">
-              Grants {background.skills.map((skillId) => SRD_SKILLS.find((skill) => skill.id === skillId)?.name ?? skillId).join(", ")}
+          {background ? (
+            <span className="mt-1 flex items-start gap-1 text-xs text-stone-500">
+              <span className="grow">
+                {background.skills.length
+                  ? `Grants ${background.skills.map((skillId) => SRD_SKILLS.find((skill) => skill.id === skillId)?.name ?? skillId).join(", ")}`
+                  : "What your character did before adventuring."}
+              </span>
+              <InfoButton
+                label={background.name}
+                text={background.blurb || background.desc}
+                reference={{ kind: "backgrounds", slug: background.id }}
+              />
             </span>
           ) : null}
           {background?.blurb ? (
@@ -934,22 +1206,169 @@ export default function CharacterBuilder({
         </section>
       ) : null}
 
+      {optionSlots.map((slot) => (
+        <section key={slot.kind} className="panel rounded-xl p-4">
+          <h2 className="eyebrow mb-1 text-xs text-amber-200/90">
+            {slot.label} (pick {slot.total})
+          </h2>
+          <p className="mb-2 text-xs text-stone-500">
+            {slot.remaining > 0 ? (
+              <span className="text-amber-300">
+                {slot.remaining} still to choose.{" "}
+              </span>
+            ) : null}
+            These are real abilities your character gets. Tap the info button on any one to read
+            what it does.
+          </p>
+          <div className="grid gap-1.5 sm:grid-cols-2">
+            {slot.options.map((option) => {
+              const selected = slot.chosen.some(
+                (name) => name.toLowerCase() === option.n.toLowerCase(),
+              );
+              return (
+                <div
+                  key={option.n}
+                  className={cn(
+                    "flex items-start gap-1 rounded-lg border px-3 py-2",
+                    selected
+                      ? "border-amber-700 bg-amber-950 text-amber-200"
+                      : "border-stone-700 text-stone-300 hover:bg-stone-900",
+                  )}
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggleOption(slot, option.n)}
+                    className="grow text-left"
+                  >
+                    <span className="block text-xs">{option.n}</span>
+                    <span className="block text-[11px] text-stone-500">
+                      {option.req ? `Requires ${option.req}. ` : ""}
+                      {option.d}
+                    </span>
+                  </button>
+                  <InfoButton
+                    label={option.n}
+                    meta={option.req ? `Requires ${option.req}` : undefined}
+                    text={option.d}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ))}
+
       {klass?.spellAbility ? (
         <section className="panel rounded-xl p-4">
           <h2 className="eyebrow mb-1 text-xs text-amber-200/90">Spells</h2>
-          <p className="mb-2 text-xs text-stone-500">
-            {spellAdvice
-              ? `Suggested: ${spellAdvice.count} ${spellAdvice.label}${cantripAdvice ? ` and ${cantripAdvice} cantrips` : ""} at level ${effectiveLevel}. `
-              : cantripAdvice
-                ? `Suggested: ${cantripAdvice} cantrips at level ${effectiveLevel}. `
-                : ""}
-            Up to level {maxSpellLevel} spells. Cantrips welcome. Not enforced; homebrew varies.
-          </p>
+          {/* Counts, so nobody leaves picks unspent without noticing. The
+              picker knows each spell's level, so chosen cantrips are counted
+              separately from levelled spells. */}
+          <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+            {cantripAdvice ? (
+              <span
+                className={cn(
+                  chosenCantrips.length >= cantripAdvice ? "text-stone-500" : "text-amber-300",
+                )}
+              >
+                <GameTerm id="cantrip">Cantrips</GameTerm> {chosenCantrips.length}/{cantripAdvice}
+              </span>
+            ) : null}
+            {spellAdvice ? (
+              <span
+                className={cn(
+                  spells.length - chosenCantrips.length >= spellAdvice.count
+                    ? "text-stone-500"
+                    : "text-amber-300",
+                )}
+              >
+                {spellAdvice.label} {Math.max(0, spells.length - chosenCantrips.length)}/
+                {spellAdvice.count}
+              </span>
+            ) : null}
+            <span className="text-stone-500">
+              Up to level {maxSpellLevel}. Suggestions, not limits; homebrew varies.
+            </span>
+          </div>
+          {starters ? (
+            <div className="mb-3 rounded-lg border border-stone-800 bg-stone-950/60 p-3">
+              <p className="text-xs text-stone-400">{starters.why}</p>
+              <p className="mt-2 mb-1.5 text-[11px] font-medium uppercase tracking-wide text-amber-200/80">
+                Good picks if you are new
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {[...starters.cantrips, ...starters.spells].map((pick) => {
+                  const chosen = spells.some(
+                    (entry) => entry.toLowerCase() === pick.n.toLowerCase(),
+                  );
+                  return (
+                    <span key={pick.n} className="flex items-center">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSpells((current) =>
+                            chosen
+                              ? current.filter(
+                                  (entry) => entry.toLowerCase() !== pick.n.toLowerCase(),
+                                )
+                              : [...current, pick.n],
+                          )
+                        }
+                        className={cn(
+                          "rounded-l-full border py-0.5 pl-2.5 pr-1.5 text-xs transition-colors",
+                          chosen
+                            ? "border-amber-600 bg-amber-950/40 text-amber-100"
+                            : "border-stone-700 text-stone-300 hover:border-amber-800",
+                        )}
+                      >
+                        {chosen ? "\u2713 " : "+ "}
+                        {pick.n}
+                      </button>
+                      <span
+                        className={cn(
+                          "rounded-r-full border border-l-0 py-0.5 pl-1 pr-2",
+                          chosen ? "border-amber-600 bg-amber-950/40" : "border-stone-700",
+                        )}
+                      >
+                        <InfoButton label={pick.n} text={pick.d} />
+                      </span>
+                    </span>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setSpells((current) => [
+                    ...current,
+                    ...[...starters.cantrips, ...starters.spells]
+                      .map((pick) => pick.n)
+                      .filter(
+                        (name) =>
+                          !current.some((entry) => entry.toLowerCase() === name.toLowerCase()),
+                      ),
+                  ])
+                }
+                className="mt-2 text-xs text-amber-300 underline-offset-2 hover:underline"
+              >
+                Add all recommended
+              </button>
+            </div>
+          ) : null}
           <ContentPicker
             kind="spells"
             extraParams={{ class: spellSearchClass, level: String(maxSpellLevel) }}
             placeholder="Search spells (e.g. cure wounds)"
-            onPick={(entry) => setSpells((current) => (current.includes(entry.name) ? current : [...current, entry.name]))}
+            onPick={(entry) => {
+              if (entry.level === 0) {
+                setCantripNames((current) =>
+                  current.includes(entry.name) ? current : [...current, entry.name],
+                );
+              }
+              setSpells((current) =>
+                current.includes(entry.name) ? current : [...current, entry.name],
+              );
+            }}
             renderMeta={(entry) => (entry.level === 0 ? "cantrip" : `level ${entry.level}`)}
           />
           <div className="mt-2 flex flex-wrap gap-1.5">

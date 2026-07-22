@@ -12,8 +12,10 @@ import {
 } from "@/lib/db/dm-turns";
 import { d20Expression, isValidExpression, rollExpression, type Advantage } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
-import { computeSheetDerived } from "@/lib/srd";
-import { spellDamageFor } from "@/lib/content";
+import { computeSheetDerived, sizeForRace, spellAttackFor } from "@/lib/srd";
+import { classLevelFor } from "@/lib/srd/multiclass";
+import { spellDamageFor, spellMechanicsFor } from "@/lib/content";
+import { castRedirect } from "@/lib/dm/cast-tools";
 import {
   adjudicateHit,
   ragingMeleeBonus,
@@ -23,6 +25,13 @@ import {
   type AttackProfile,
 } from "@/lib/dm/attack-logic";
 import { combatRiders } from "@/lib/srd/feature-effects";
+import {
+  conditionExtraActions,
+  conditionOnHitDice,
+  conditionRollRiders,
+  grantedAttackDice,
+  grantedAttackFor,
+} from "@/lib/srd/condition-effects";
 import { normalizeAdvantage } from "@/lib/dm/arg-coerce";
 import {
   attackContext,
@@ -33,7 +42,9 @@ import {
 } from "@/lib/dm/condition-logic";
 import { critDamageExpression } from "@/lib/dm/encounter-logic";
 import { applyDmMutation } from "@/lib/dm/mutations";
-import { applyEnemyDamage, resolveEnemyRef } from "@/lib/dm/enemy-damage";
+import { applyEnemyDamage, publishEncounter, resolveEnemyRef } from "@/lib/dm/enemy-damage";
+import { patchEnemyConditions } from "@/lib/db/encounters";
+import { saveModFor } from "@/lib/bestiary/statblock";
 import { allyAdjacentToEnemy, checkPcAttackRange, pcAttackSpatials } from "@/lib/dm/map-tools";
 import {
   attacksAllowedFor,
@@ -108,6 +119,11 @@ export const pcAttackTool: ToolDef = {
           description:
             "Paladin Divine Smite: the spell slot level to burn on a hit. The server spends the slot and adds the radiant dice.",
         },
+        maneuver: {
+          type: "string",
+          description:
+            "Battle Master maneuver riding this weapon attack (e.g. 'Trip Attack', 'Precision Attack', 'Menacing Attack'). The server spends a Superiority Die, adds it to the damage (Precision: to the attack roll), and rolls the target's save against the maneuver's rider.",
+        },
       },
       required: ["characterId", "targetEnemyId"],
     },
@@ -128,7 +144,23 @@ const pcAttackArgsSchema = z.object({
   twoHanded: z.coerce.boolean().optional(),
   offHand: z.coerce.boolean().optional(),
   smite: z.coerce.number().int().min(1).max(9).optional(),
+  maneuver: z.string().max(60).optional(),
 });
+
+// Battle Master superiority die by fighter level.
+export function superiorityDie(level: number): string {
+  if (level >= 18) return "d12";
+  if (level >= 10) return "d10";
+  return "d8";
+}
+
+// The condition a maneuver's rider save decides, when it has one.
+const MANEUVER_RIDERS: Array<{ match: RegExp; condition: string; save: "str" | "wis" }> = [
+  { match: /trip/i, condition: "prone", save: "str" },
+  { match: /menacing/i, condition: "frightened", save: "wis" },
+  { match: /disarm/i, condition: "disarmed", save: "str" },
+  { match: /goading/i, condition: "goaded", save: "wis" },
+];
 
 function publishRoll(campaignId: string, roll: StoredRoll) {
   publishWithSeq(campaignId, allocateSeq(campaignId), "roll_result", {
@@ -187,11 +219,57 @@ export function handlePcAttack(
   let profile: AttackProfile;
   // Set when the server derived the spell's dice itself, for the notes.
   let scalingNote: string | null = null;
-  if (args.spell?.trim()) {
+  // An attack option a condition grants (Starry Form's Archer, Spiritual
+  // Weapon): the server owns its dice and it rides a bonus action.
+  const grantedTerm = [args.weapon, args.spell].filter(Boolean).join(" ").trim();
+  const granted = grantedTerm ? grantedAttackFor(sheet.conditions, grantedTerm) : null;
+  let grantedBonusAction = false;
+  if (granted) {
+    if (derived.spellAttack === null) {
+      return { error: `${sheet.name} has no spell attack bonus for ${granted.attack.name}.` };
+    }
+    const dice = grantedAttackDice(granted.attack, sheet.level);
+    const abilityMod =
+      granted.attack.abilityToDamage && sheet.spellcasting
+        ? derived.abilityMods[sheet.spellcasting.ability]
+        : 0;
+    profile = {
+      weapon: granted.attack.name,
+      toHit: derived.spellAttack,
+      damageExpression:
+        abilityMod > 0 ? `${dice}+${abilityMod}` : abilityMod < 0 ? `${dice}${abilityMod}` : dice,
+      damageType: granted.attack.type,
+      ranged: granted.attack.ranged,
+      thrown: false,
+      reachTiles: 1,
+      rangeTiles: 12,
+      proficient: true,
+      improvised: false,
+      ability: "dex",
+      magicBonus: 0,
+      twoHanded: false,
+      sneakEligible: false,
+      heavy: false,
+      riderNotes: [
+        `${granted.condition}: ${dice}${granted.attack.type ? ` ${granted.attack.type}` : ""}${
+          granted.attack.bonusAction ? ", a bonus action" : ""
+        }`,
+      ],
+    };
+    grantedBonusAction = granted.attack.bonusAction;
+  } else if (args.spell?.trim()) {
     const spellName = args.spell.trim();
     if (!sheet.spellcasting) {
       return { error: `${sheet.name} cannot cast spells.` };
     }
+    // The content pack knows how a known spell resolves; a save or buff
+    // spell aimed through pc_attack is redirected to the right tool.
+    const resolvedMech = spellMechanicsFor({ spell: spellName, userId: sheet.userId });
+    const redirect = castRedirect(resolvedMech, "attack");
+    if (redirect) {
+      return { error: redirect };
+    }
+    const mechDamageType = resolvedMech?.mech.damageType;
     const spellList = [...sheet.spellcasting.known, ...sheet.spellcasting.prepared];
     const onList = spellList.some(
       (entry) => entry.toLowerCase().includes(spellName.toLowerCase()) ||
@@ -219,16 +297,62 @@ export function handlePcAttack(
     if (scaled) {
       scalingNote = scaled.note;
     }
+    // Multiclass: the to-hit follows the class whose list carries the spell.
     const spellProfile = spellAttackProfile(
-      derived,
+      { spellAttack: spellAttackFor(sheet, spellName) ?? derived.spellAttack },
       spellName,
       damageArg,
-      (args.damageType ?? "").trim().toLowerCase(),
+      (args.damageType ?? mechDamageType ?? "").trim().toLowerCase(),
     );
     if (!spellProfile) {
       return { error: `${sheet.name} has no spell attack bonus.` };
     }
     profile = spellProfile;
+    // Option riders on named attack spells (Agonizing Blast: +CHA per
+    // Eldritch Blast beam).
+    for (const rider of riders.cantripAbilityRiders) {
+      if (spellName.toLowerCase().includes(rider.spell)) {
+        const mod =
+          derived.abilityMods[rider.ability as keyof typeof derived.abilityMods] ?? 0;
+        if (mod > 0) {
+          profile = {
+            ...profile,
+            damageExpression: `${profile.damageExpression}+${mod}`,
+            riderNotes: [...profile.riderNotes, `${rider.feature}: +${mod} damage`],
+          };
+        }
+      }
+    }
+  } else if (sheet.wildShape?.attacks?.length) {
+    // Transformed: the form's natural attacks replace the sheet's weapons,
+    // with the statblock's own to-hit and damage. A named attack matches
+    // loosely ("bite the goblin" -> Bite); no name takes the first attack.
+    const wantedAttack = (args.weapon ?? "").trim().toLowerCase();
+    const natural =
+      sheet.wildShape.attacks.find(
+        (attack) =>
+          wantedAttack &&
+          (attack.name.toLowerCase().includes(wantedAttack) ||
+            wantedAttack.includes(attack.name.toLowerCase())),
+      ) ?? sheet.wildShape.attacks[0];
+    profile = {
+      weapon: `${sheet.wildShape.form} ${natural.name}`,
+      toHit: natural.toHit,
+      damageExpression: natural.damage,
+      damageType: natural.type,
+      ranged: false,
+      thrown: false,
+      reachTiles: 1,
+      rangeTiles: 1,
+      proficient: true,
+      improvised: false,
+      ability: "str",
+      magicBonus: 0,
+      twoHanded: false,
+      sneakEligible: false,
+      heavy: false,
+      riderNotes: [`natural attack while transformed (${sheet.wildShape.form})`],
+    };
   } else {
     const resolved = resolveAttackWeapon(sheet.equipment, sheet.proficiencies.weapons, args.weapon);
     profile = weaponAttackProfile(derived, sheet.proficiencies.weapons, resolved, {
@@ -246,6 +370,47 @@ export function handlePcAttack(
     profile = {
       ...profile,
       damageExpression: `${profile.damageExpression}+${rageBonus}`,
+    };
+  }
+
+  // Effect conditions riding the attacker's hits (Divine Favor's +1d4
+  // radiant, Hunter's Mark, Hex, enlarged/reduced) fold into the damage
+  // expression so both dice paths carry them.
+  const onHit = conditionOnHitDice(sheet.conditions);
+  if (onHit.suffix) {
+    profile = {
+      ...profile,
+      damageExpression: `${profile.damageExpression}${onHit.suffix}`,
+    };
+  }
+
+  // Feature damage riders (Divine Strike, Improved Divine Smite, Divine
+  // Fury) ride weapon attacks only; once-per-turn ones are reconciled with
+  // the turn budget below, mirroring Sneak Attack.
+  const featureRiders =
+    args.spell || granted
+      ? []
+      : riders.damageRiders.filter((rider) => {
+          if (rider.when === "melee" && profile.ranged) {
+            return false;
+          }
+          if (rider.when === "ranged" && !profile.ranged) {
+            return false;
+          }
+          if (
+            rider.requiresCondition &&
+            !sheet.conditions.some(
+              (entry) => entry.toLowerCase() === rider.requiresCondition,
+            )
+          ) {
+            return false;
+          }
+          return true;
+        });
+  for (const rider of featureRiders) {
+    profile = {
+      ...profile,
+      damageExpression: `${profile.damageExpression}+${rider.dice}`,
     };
   }
 
@@ -299,10 +464,97 @@ export function handlePcAttack(
   if (spatials.longRange) {
     conditionContext.notes.push("beyond normal range: disadvantage");
   }
+  // A Battle Master maneuver riding this swing: the pick is validated, the
+  // Superiority Die spends up front, and the die lands on the damage (or the
+  // attack roll for Precision). Rider saves resolve after a hit below.
+  let maneuverInfo: {
+    name: string;
+    die: string;
+    precision: boolean;
+    rider: { condition: string; save: "str" | "wis" } | null;
+  } | null = null;
+  if (args.maneuver?.trim()) {
+    if (args.spell || granted) {
+      return { error: "Maneuvers ride weapon attacks, not spells." };
+    }
+    const term = args.maneuver.trim().toLowerCase();
+    const picks = sheet.features
+      .map((feature) => feature.name)
+      .filter((name) => name.toLowerCase().startsWith("maneuver"));
+    const known = picks.some((name) => {
+      const bare = name.toLowerCase().replace(/^maneuver:\s*/, "");
+      return bare.includes(term) || term.includes(bare);
+    });
+    if (!known) {
+      return {
+        error: `${sheet.name} knows no maneuver "${args.maneuver}".${
+          picks.length ? ` Their maneuvers: ${picks.join(", ")}.` : " They have no maneuver picks."
+        }`,
+      };
+    }
+    const spend = applyDmMutation(
+      campaign,
+      turn.id,
+      "use_resource",
+      JSON.stringify({
+        characterId: sheet.id,
+        resource: "Superiority Dice",
+        reason: args.maneuver.trim(),
+      }),
+      sheets,
+      sheetsById,
+    ).result;
+    if ("error" in spend) {
+      return spend;
+    }
+    // Multiclass: the superiority die grows with FIGHTER levels.
+    const die = superiorityDie(classLevelFor(sheet, "fighter") || sheet.level);
+    const precision = /precision/i.test(term);
+    maneuverInfo = {
+      name: args.maneuver.trim(),
+      die,
+      precision,
+      rider: MANEUVER_RIDERS.find((entry) => entry.match.test(term)) ?? null,
+    };
+    if (!precision) {
+      profile = {
+        ...profile,
+        damageExpression: `${profile.damageExpression}+1${die}`,
+      };
+    }
+    conditionContext.notes.push(
+      `${maneuverInfo.name}: Superiority Die spent, +1${die} ${
+        precision ? "to the attack roll" : "damage"
+      }${maneuverInfo.rider ? `, ${maneuverInfo.rider.save.toUpperCase()} save rider on a hit` : ""}`,
+    );
+  }
+
+  // Effect conditions on the attacker's own roll: Bless's +1d4, Bane's
+  // -1d4, True Strike's one-shot advantage.
+  const attackRiders = conditionRollRiders(sheet.conditions, "attack");
+  conditionContext.notes.push(...attackRiders.notes, ...onHit.notes);
+  for (const rider of featureRiders) {
+    conditionContext.notes.push(
+      `${rider.feature}: +${rider.dice}${rider.type ? ` ${rider.type}` : ""} damage`,
+    );
+  }
+  if (riders.magicalAttacks && !args.spell) {
+    conditionContext.notes.push("their attacks count as magical for overcoming resistance");
+  }
+  // SRD heavy property: Small creatures swing oversized weapons at
+  // disadvantage.
+  const smallWithHeavy = profile.heavy && sizeForRace(sheet.race) === "Small";
+  if (smallWithHeavy) {
+    conditionContext.notes.push(
+      `${profile.weapon} is a heavy weapon and ${sheet.name} is Small: disadvantage`,
+    );
+  }
   const advantage: Advantage = mergeAdvantage([
     conditionContext.advantage,
     exhaustion.advantage,
+    ...attackRiders.advantageSources,
     ...(spatials.longRange ? ["disadvantage" as const] : []),
+    ...(smallWithHeavy ? ["disadvantage" as const] : []),
   ]);
 
   // Sneak Attack, decided here because it turns on the final advantage
@@ -363,15 +615,25 @@ export function handlePcAttack(
   // The action economy: the first swing spends the Attack action, the rest
   // come out of Extra Attack, and the off-hand swing is a bonus action. Only
   // binds the character whose turn it actually is.
-  let budget = budgetFor(encounter, sheet.id, attacksAllowedFor(sheet));
+  let budget = budgetFor(
+    encounter,
+    sheet.id,
+    attacksAllowedFor(sheet),
+    conditionExtraActions(sheet.conditions),
+  );
   if (budget) {
-    const spend = args.offHand
-      ? spendAction(budget, "bonus", "an off-hand attack", sheet.name)
-      : spendAttack(budget, sheet.name);
+    const spend = grantedBonusAction
+      ? spendAction(budget, "bonus", `the ${profile.weapon} attack`, sheet.name)
+      : args.offHand
+        ? spendAction(budget, "bonus", "an off-hand attack", sheet.name)
+        : spendAttack(budget, sheet.name);
     if (!spend.ok) {
       return { error: spend.error };
     }
     budget = spend.budget;
+    if (spend.note) {
+      conditionContext.notes.push(spend.note);
+    }
     if (sneak) {
       // Sneak Attack is once per turn however many swings land.
       const claimed = claimOncePerTurn(budget, "sneak_attack");
@@ -391,13 +653,38 @@ export function handlePcAttack(
         budget = claimed;
       }
     }
+    // Once-per-turn feature riders (Divine Strike) spend their turn slot the
+    // same way.
+    for (const rider of featureRiders) {
+      if (!rider.oncePerTurn) {
+        continue;
+      }
+      const claimed = claimOncePerTurn(budget, `rider:${rider.feature.toLowerCase()}`);
+      if (!claimed) {
+        profile = {
+          ...profile,
+          damageExpression: profile.damageExpression.replace(`+${rider.dice}`, ""),
+        };
+        conditionContext.notes = conditionContext.notes.filter(
+          (note) => !note.startsWith(`${rider.feature}:`),
+        );
+        conditionContext.notes.push(`${rider.feature} already used this turn: no extra dice`);
+      } else {
+        budget = claimed;
+      }
+    }
     storeBudget(encounter, budget);
   }
 
-  // Striking from hiding spends the hiding: the attack gives them away
-  // whether it lands or not.
-  if (sheet.conditions.some((entry) => entry.toLowerCase() === "hidden")) {
-    const cleared = removeConditions(sheet.conditions, sheet.conditionMeta, ["hidden"]);
+  // Striking from hiding spends the hiding (the attack gives them away
+  // whether it lands or not), and one-shot riders like True Strike are
+  // spent by this roll: clear them all together.
+  const spentConditions = [
+    ...(sheet.conditions.some((entry) => entry.toLowerCase() === "hidden") ? ["hidden"] : []),
+    ...attackRiders.spent,
+  ];
+  if (spentConditions.length) {
+    const cleared = removeConditions(sheet.conditions, sheet.conditionMeta, spentConditions);
     const revealed = patchSheet(sheet.id, {
       conditions: cleared.conditions,
       conditionMeta: cleared.meta,
@@ -407,7 +694,11 @@ export function handlePcAttack(
     }
   }
 
-  const toHitExpression = d20Expression(profile.toHit, advantage);
+  const toHitRiderSuffix = `${attackRiders.diceSuffix}${
+    maneuverInfo?.precision ? `+1${maneuverInfo.die}` : ""
+  }`;
+
+  const toHitExpression = `${d20Expression(profile.toHit, advantage)}${toHitRiderSuffix}`;
   const detail = `${sheet.name}: ${profile.weapon} vs ${enemy.displayName}`;
 
   // Great Weapon Fighting rerolls 1s and 2s, but only on the two-handed
@@ -531,7 +822,49 @@ export function handlePcAttack(
   if (!("error" in applied)) {
     markRollApplied(damageRoll.id, enemy.id);
   }
+
+  // A maneuver's rider save (Trip -> prone, Menacing -> frightened) resolves
+  // against the enemy's real stat block once the hit lands.
+  const maneuverOutcome: Record<string, unknown> = {};
+  if (maneuverInfo?.rider && !applied.dead && !applied.encounterOver) {
+    const fresh = resolveEnemyRef(encounter.id, enemy.id);
+    if (fresh && fresh.status === "alive") {
+      const dc =
+        8 +
+        derived.proficiencyBonus +
+        Math.max(derived.abilityMods.str, derived.abilityMods.dex);
+      const saveOutcome = rollExpression(
+        d20Expression(saveModFor(fresh.stats, maneuverInfo.rider.save)),
+      );
+      const saveRoll = insertRoll({
+        campaignId: campaign.id,
+        characterId: null,
+        requestedBy: "dm",
+        kind: "saving_throw",
+        detail: `${fresh.displayName}: ${maneuverInfo.rider.save.toUpperCase()} save vs ${maneuverInfo.name}`,
+        dc,
+        result: saveOutcome,
+      });
+      turn.rollIds.push(saveRoll.id);
+      publishRoll(campaign.id, saveRoll);
+      if (saveOutcome.total < dc) {
+        const condition = maneuverInfo.rider.condition;
+        if (!fresh.conditions.includes(condition)) {
+          patchEnemyConditions(fresh.id, [...fresh.conditions, condition], {
+            ...fresh.conditionMeta,
+            // Prone lasts until the creature stands; the rest fade fast.
+            ...(condition === "prone" ? {} : { [condition]: { rounds: 1 } }),
+          });
+          publishEncounter(campaign.id);
+        }
+        maneuverOutcome.maneuver = `${maneuverInfo.name}: ${fresh.displayName} fails the ${maneuverInfo.rider.save.toUpperCase()} save (${saveOutcome.total} vs DC ${dc}) and is ${condition}.`;
+      } else {
+        maneuverOutcome.maneuver = `${maneuverInfo.name}: ${fresh.displayName} holds (${saveOutcome.total} vs DC ${dc}); no ${maneuverInfo.rider.condition}.`;
+      }
+    }
+  }
   return {
+    ...maneuverOutcome,
     ...base,
     hit: true,
     ...(crit ? { crit: true } : {}),

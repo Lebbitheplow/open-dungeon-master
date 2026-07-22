@@ -38,6 +38,9 @@ export type EnemyStats = {
   // Attacks per turn from the Multiattack action (1 when absent). Optional:
   // stat_json rows snapshotted before this field existed lack it.
   attacksPerTurn?: number;
+  // Creature size (Tiny..Gargantuan). Optional: synthesized stats and old
+  // snapshots lack it and are treated as Medium.
+  size?: string;
 };
 
 // "The wolf makes two bite attacks." -> 2, clamped to 3 so a bad parse can
@@ -206,7 +209,18 @@ export function parseMonster(data: Record<string, unknown>, crFromRow: number): 
     cr,
     xp: xpForCr(cr),
     attacksPerTurn,
+    ...(asString(data.size) ? { size: asString(data.size) } : {}),
   };
+}
+
+// Size comparison for the grapple/shove cap: a creature can only grab or
+// push a target at most one size larger than itself. Unknown sizes read as
+// Medium so old stat snapshots stay grabbable.
+const SIZE_ORDER = ["tiny", "small", "medium", "large", "huge", "gargantuan"];
+
+export function sizeRank(size: string | undefined): number {
+  const index = SIZE_ORDER.indexOf((size ?? "").trim().toLowerCase());
+  return index === -1 ? SIZE_ORDER.indexOf("medium") : index;
 }
 
 // Save modifier for an enemy, with a fallback for stat snapshots taken

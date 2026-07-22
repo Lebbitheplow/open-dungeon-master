@@ -1,0 +1,123 @@
+{
+  "_license": "Original content for Open Dungeon Master. Suggested opening spell lists for players who do not know 5e. These are editorial recommendations plus one line on why each pick is useful; no publisher's text is reproduced.",
+  "_note": "A new player facing an empty search box does not know that a druid wants Goodberry or that a wizard wants Shield, so they pick nothing and their character is weaker for it. The builder offers these as one-tap picks alongside the full searchable list, and nothing here is forced: they are a starting point, not a restriction.",
+  "_shape": "classes[classId] = { why: one line on how the class casts, cantrips: [{ n: name, d: why it is a good pick }], spells: [...] }. Custom genre casters borrow a list through spellClassFor().",
+  "classes": {
+    "bard": {
+      "why": "You know a small fixed list of spells and cast with Charisma. Pick a mix of one good damage option and several ways to control a scene.",
+      "cantrips": [
+        { "n": "Vicious Mockery", "d": "Damage plus disadvantage on their next attack, at range, for free." },
+        { "n": "Minor Illusion", "d": "The most flexible problem-solver in the game once you get used to it." },
+        { "n": "Prestidigitation", "d": "Small magical tricks that solve small problems constantly." }
+      ],
+      "spells": [
+        { "n": "Healing Word", "d": "A bonus action that gets a downed ally back on their feet from 60 feet away." },
+        { "n": "Faerie Fire", "d": "Advantage on every attack against everything caught in it. Excellent with a big party." },
+        { "n": "Dissonant Whispers", "d": "Strong damage that also forces the target to run away from you." },
+        { "n": "Sleep", "d": "Ends an early fight outright against weak enemies." }
+      ]
+    },
+    "cleric": {
+      "why": "You prepare spells fresh after each long rest from the whole cleric list, so you can adapt daily. Wisdom is your casting ability.",
+      "cantrips": [
+        { "n": "Sacred Flame", "d": "Reliable ranged damage that ignores cover well." },
+        { "n": "Guidance", "d": "A free d4 on an ally's ability check. Use it constantly outside combat." },
+        { "n": "Thaumaturgy", "d": "Booming voice and small omens; surprisingly persuasive." }
+      ],
+      "spells": [
+        { "n": "Cure Wounds", "d": "The straightforward heal when someone needs real hit points back." },
+        { "n": "Healing Word", "d": "A bonus action revive at range. Often better than Cure Wounds in a fight." },
+        { "n": "Bless", "d": "Adds a d4 to attacks and saves for three allies. One of the best low-level spells there is." },
+        { "n": "Guiding Bolt", "d": "Big radiant damage and the next attack against the target has advantage." }
+      ]
+    },
+    "druid": {
+      "why": "You prepare spells fresh after each long rest from the whole druid list. Wisdom is your casting ability, and you also have Wild Shape.",
+      "cantrips": [
+        { "n": "Produce Flame", "d": "A light source and a ranged attack in one." },
+        { "n": "Shillelagh", "d": "Lets you fight with your club using Wisdom, so you need no Strength." },
+        { "n": "Guidance", "d": "A free d4 on an ally's ability check, over and over." }
+      ],
+      "spells": [
+        { "n": "Goodberry", "d": "Ten berries that each heal 1 hit point and feed someone for a day. Quietly one of the best 1st-level spells." },
+        { "n": "Entangle", "d": "Restrains a group of enemies in a 20-foot square." },
+        { "n": "Cure Wounds", "d": "Your direct heal." },
+        { "n": "Faerie Fire", "d": "Advantage on attacks against everything it catches." }
+      ]
+    },
+    "paladin": {
+      "why": "You prepare a small list from the paladin spells and cast with Charisma. Most of your damage still comes from your weapon and Divine Smite.",
+      "cantrips": [],
+      "spells": [
+        { "n": "Bless", "d": "A d4 on attacks and saves for three allies. Almost always your best use of a slot." },
+        { "n": "Cure Wounds", "d": "Healing on top of Lay on Hands." },
+        { "n": "Shield of Faith", "d": "A bonus action for +2 AC on you or an ally." },
+        { "n": "Compelled Duel", "d": "Pins one dangerous enemy on you and away from the squishy party members." }
+      ]
+    },
+    "ranger": {
+      "why": "You know a small fixed list and cast with Wisdom. Your spells mostly sharpen your weapon attacks and your travel.",
+      "cantrips": [],
+      "spells": [
+        { "n": "Hunter's Mark", "d": "An extra 1d6 on every hit against your target, all day. Take this first." },
+        { "n": "Cure Wounds", "d": "The party's backup healing." },
+        { "n": "Goodberry", "d": "Cheap healing and food that solves survival problems." },
+        { "n": "Absorb Elements", "d": "A reaction that halves an elemental hit and adds damage to your next attack." }
+      ]
+    },
+    "sorcerer": {
+      "why": "You know a very small fixed list, so pick versatile spells. Charisma is your casting ability, and Metamagic bends what you cast.",
+      "cantrips": [
+        { "n": "Fire Bolt", "d": "Your reliable at-will damage at long range." },
+        { "n": "Prestidigitation", "d": "Endless small utility." },
+        { "n": "Minor Illusion", "d": "Distraction, cover and misdirection for free." },
+        { "n": "Mage Hand", "d": "Handles things you would rather not touch yourself." }
+      ],
+      "spells": [
+        { "n": "Shield", "d": "A reaction for +5 AC that turns a hit into a miss. Never a wasted slot." },
+        { "n": "Magic Missile", "d": "Damage that simply cannot miss." },
+        { "n": "Chromatic Orb", "d": "Your big single-target hit, in whatever damage type the fight needs." }
+      ]
+    },
+    "warlock": {
+      "why": "You have very few slots but they come back on a short rest and always cast at their highest level. Charisma is your casting ability.",
+      "cantrips": [
+        { "n": "Eldritch Blast", "d": "The best attack cantrip in the game and the core of most warlocks. Take it." },
+        { "n": "Minor Illusion", "d": "Flexible trickery that costs nothing." }
+      ],
+      "spells": [
+        { "n": "Hex", "d": "Extra damage on every hit plus disadvantage on one ability. Pairs perfectly with Eldritch Blast." },
+        { "n": "Armor of Agathys", "d": "Temporary hit points that hurt anyone who hits you, and it scales beautifully with your slots." },
+        { "n": "Hellish Rebuke", "d": "A reaction that punishes whoever just damaged you." }
+      ]
+    },
+    "wizard": {
+      "why": "You have the largest spell list in the game and prepare fresh each day from your spellbook. Intelligence is your casting ability.",
+      "cantrips": [
+        { "n": "Fire Bolt", "d": "Your reliable at-will damage." },
+        { "n": "Mage Hand", "d": "A remote hand for traps, levers and pockets." },
+        { "n": "Prestidigitation", "d": "The utility cantrip you will use most often." },
+        { "n": "Minor Illusion", "d": "Solves more problems than it has any right to." }
+      ],
+      "spells": [
+        { "n": "Shield", "d": "A reaction for +5 AC. The single best 1st-level wizard spell." },
+        { "n": "Magic Missile", "d": "Damage that always lands." },
+        { "n": "Sleep", "d": "Can end a fight before it starts at low level." },
+        { "n": "Detect Magic", "d": "A ritual, so it costs you nothing to cast, and it answers constant questions." },
+        { "n": "Mage Armor", "d": "AC 13 plus Dexterity all day if you wear no armor." }
+      ]
+    },
+    "artificer": {
+      "why": "You prepare a small list and cast with Intelligence, using your tools as a focus. Your infusions matter as much as your spells.",
+      "cantrips": [
+        { "n": "Guidance", "d": "A free d4 on ability checks, all day." },
+        { "n": "Mending", "d": "Repairs objects, which comes up more than you would think." }
+      ],
+      "spells": [
+        { "n": "Cure Wounds", "d": "You are often the party's only healer." },
+        { "n": "Faerie Fire", "d": "Advantage on attacks against everything it catches." },
+        { "n": "Absorb Elements", "d": "A reaction that halves elemental damage." }
+      ]
+    }
+  }
+}

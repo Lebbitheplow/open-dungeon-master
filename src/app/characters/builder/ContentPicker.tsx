@@ -3,6 +3,8 @@
 import { Loader2, Plus } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { cn } from "@/lib/cn";
+import { InfoButton } from "@/components/ui/InfoDialog";
+import { describeContentEntry, spellSummary } from "@/lib/help";
 import { useContentSearch, type PickerEntry } from "./useContentSearch";
 
 export type { PickerEntry } from "./useContentSearch";
@@ -60,9 +62,9 @@ export default function ContentPicker({
         ) : null}
       </div>
       {open && results.length ? (
-        <ul className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto panel rounded-lg">
+        <ul className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto panel panel-smoke rounded-lg">
           {results.map((entry) => (
-            <li key={entry.slug}>
+            <li key={entry.slug} className="flex items-center gap-1 pr-2 hover:bg-stone-800">
               <button
                 type="button"
                 onClick={() => {
@@ -70,7 +72,7 @@ export default function ContentPicker({
                   setQuery("");
                   setOpen(false);
                 }}
-                className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-stone-800"
+                className="flex grow items-center justify-between gap-2 px-3 py-2 text-left"
               >
                 <span className="flex items-center gap-1.5">
                   <Plus className="size-3.5 shrink-0 text-amber-200" />
@@ -86,6 +88,16 @@ export default function ContentPicker({
                     : (renderMeta?.(entry) ?? "")}
                 </span>
               </button>
+              {/* The row already carries the full entry, so reading a spell
+                  before adding it costs no extra request. */}
+              <InfoButton
+                label={entry.name}
+                meta={kind === "spells" ? spellSummary(entry.data) : undefined}
+                text={describeContentEntry(entry.data)}
+                reference={
+                  entry.source === "homebrew" ? undefined : { kind, slug: entry.slug }
+                }
+              />
             </li>
           ))}
         </ul>

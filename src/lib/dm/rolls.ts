@@ -1,11 +1,12 @@
 import { z } from "zod";
 import { d20Expression, type Advantage } from "@/lib/dice";
 import { exhaustionRollState, mergeAdvantage, rollDerivation } from "@/lib/dm/condition-logic";
-import { defenseRiders } from "@/lib/srd/feature-effects";
+import { conditionRollRiders } from "@/lib/srd/condition-effects";
+import { defenseRiders, halfProficiencyCovers } from "@/lib/srd/feature-effects";
 import { normalizeAbility, normalizeAdvantage, normalizeRollKind } from "@/lib/dm/arg-coerce";
 import { dcForDifficulty, normalizeDifficulty } from "@/lib/srd/dc";
 import { DM_TOOL_NAME_PATTERN, toolTextRegex, xmlToolCallRegex } from "@/lib/dm/tool-text";
-import { computeSheetDerived, findSkill, SRD_SKILLS } from "@/lib/srd";
+import { acBreakdownFor, computeSheetDerived, findSkill, SRD_SKILLS } from "@/lib/srd";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { StreamedToolCall } from "@/lib/model-client";
 
@@ -399,6 +400,10 @@ function findInspiration(conditions: string[]): { condition: string; die: string
 export function resolveRollExpression(
   args: RollArgs,
   sheet: CharacterSheet | null,
+  // Context this pure module cannot read itself: an ally's aura covering
+  // the roller (dm/aura.ts, saving throws only). Callers with campaign
+  // access pass it; test doubles and modifier-only callers omit it.
+  extras?: { saveBonus?: number; saveNote?: string },
 ):
   | {
       expression: string;
@@ -446,17 +451,44 @@ export function resolveRollExpression(
   const defense =
     sheet && sheet.class
       ? defenseRiders({ class: sheet.class, level: sheet.level, features: sheet.features })
-      : { saveAdvantage: new Set<string>() };
+      : { saveAdvantage: new Set<string>(), halfProficiency: null };
   const dangerSense =
     derivationKind === "saving_throw" &&
     derivationAbility !== undefined &&
     defense.saveAdvantage.has(derivationAbility);
+  // What the character is wearing, for the armor rules below. Test doubles
+  // and partial sheets without equipment skip these.
+  const wornBreakdown =
+    sheet && sheet.class && Array.isArray(sheet.equipment) && derivationKind
+      ? acBreakdownFor(sheet)
+      : null;
+  // SRD: armor worn without training = disadvantage on every STR- or
+  // DEX-based ability check, skill check, and saving throw.
+  const armorUntrained =
+    Boolean(wornBreakdown?.unproficient) &&
+    (derivationAbility === "str" || derivationAbility === "dex");
+  // Effect conditions (bless, bane, guidance, haste...) add their dice and
+  // advantage to the holder's own rolls; one-shot riders land in `spent`.
+  const effectKind =
+    derivationKind === "saving_throw"
+      ? ("save" as const)
+      : derivationKind === "skill_check" || derivationKind === "ability_check"
+        ? ("check" as const)
+        : derivationKind === "initiative"
+          ? ("initiative" as const)
+          : null;
+  const effects =
+    sheet && effectKind
+      ? conditionRollRiders(sheet.conditions, effectKind, derivationAbility)
+      : { diceSuffix: "", advantageSources: [], notes: [], spent: [] };
   const advantage: Advantage = mergeAdvantage([
     args.advantage ?? "none",
     derivation.advantage,
     exhaustion.advantage,
+    ...effects.advantageSources,
     ...(helped ? ["advantage" as const] : []),
     ...(dangerSense ? ["advantage" as const] : []),
+    ...(armorUntrained ? ["disadvantage" as const] : []),
   ]);
   // A held Bardic Inspiration die rides along on the next d20 the character
   // rolls and is spent by doing so; the caller clears the condition.
@@ -464,16 +496,20 @@ export function resolveRollExpression(
     sheet && derivationKind && derivationKind !== "initiative"
       ? findInspiration(sheet.conditions)
       : null;
-  const bonusDie = inspiration ? `+1${inspiration.die}` : "";
-  // Both carriers are spent the same way: the caller clears the condition.
-  const spent = [inspiration?.condition, helped].filter(Boolean) as string[];
+  const bonusDie = `${inspiration ? `+1${inspiration.die}` : ""}${effects.diceSuffix}`;
+  // All one-shot carriers are spent the same way: the caller clears them.
+  const spent = [inspiration?.condition, helped, ...effects.spent].filter(Boolean) as string[];
   const inspirationFields = spent.length ? { spendInspiration: spent.join("|") } : {};
   const allNotes = [
     ...derivation.notes,
     ...(exhaustion.note ? [exhaustion.note] : []),
     ...(inspiration ? [`spends their Bardic Inspiration die: +1${inspiration.die}`] : []),
+    ...effects.notes,
     ...(helped ? ["spends the Help their ally gave them: advantage"] : []),
     ...(dangerSense ? [`Danger Sense: advantage on ${derivationAbility?.toUpperCase()} saves`] : []),
+    ...(armorUntrained
+      ? ["wearing armor they are not trained in: disadvantage on STR and DEX rolls"]
+      : []),
   ];
   const conditionNotes = allNotes.length ? allNotes : undefined;
 
@@ -488,10 +524,35 @@ export function resolveRollExpression(
       return { error: `Unknown skill "${args.skill ?? ""}". Use a 5e skill id like "stealth".` };
     }
     const derived = computeSheetDerived(sheet);
+    // Reliable Talent: a proficient check treats a d20 face of 9 or lower
+    // as a 10, via the dice engine's floor suffix.
+    const proficientSkill =
+      sheet.proficiencies.skills.includes(skill.id) ||
+      (sheet.proficiencies.expertise ?? []).includes(skill.id);
+    const reliable =
+      proficientSkill &&
+      Boolean(
+        (defense as { reliableTalent?: boolean }).reliableTalent,
+      );
+    // Worn armor tagged noisy (scale, plate...) imposes disadvantage on
+    // Stealth checks; the AC breakdown already knows what is worn.
+    const armorStealth = skill.id === "stealth" && Boolean(wornBreakdown?.stealthDisadvantage);
+    const finalAdvantage = armorStealth
+      ? mergeAdvantage([advantage, "disadvantage"])
+      : advantage;
+    const base = d20Expression(derived.skills[skill.id] ?? 0, finalAdvantage).replace(
+      /^(\d+d20(?:k[hl]\d+)?)/,
+      reliable ? "$1f10" : "$1",
+    );
+    const skillNotes = [
+      ...(conditionNotes ?? []),
+      ...(reliable ? ["Reliable Talent: a d20 face below 10 counts as 10"] : []),
+      ...(armorStealth ? ["their armor imposes disadvantage on Stealth"] : []),
+    ];
     return {
-      expression: `${d20Expression(derived.skills[skill.id] ?? 0, advantage)}${bonusDie}`,
+      expression: `${base}${bonusDie}`,
       detail: skill.id,
-      ...(conditionNotes ? { conditionNotes } : {}),
+      ...(skillNotes.length ? { conditionNotes: skillNotes } : {}),
       ...inspirationFields,
     };
   }
@@ -504,14 +565,30 @@ export function resolveRollExpression(
       return { error: `${args.kind} needs an ability (str, dex, con, int, wis, cha).` };
     }
     const derived = computeSheetDerived(sheet);
+    // Jack of All Trades / Remarkable Athlete: raw ability checks never
+    // carry proficiency, so a covered ability always gets the half bonus.
+    const halfScope =
+      (defense as { halfProficiency?: "all" | "physical" | null }).halfProficiency ?? null;
+    const halfBonus =
+      args.kind === "ability_check" && halfProficiencyCovers(halfScope, args.ability)
+        ? Math.floor(derived.proficiencyBonus / 2)
+        : 0;
+    const auraBonus = args.kind === "saving_throw" ? (extras?.saveBonus ?? 0) : 0;
     const modifier =
-      args.kind === "saving_throw"
+      (args.kind === "saving_throw"
         ? derived.saves[args.ability]
-        : derived.abilityMods[args.ability];
+        : derived.abilityMods[args.ability]) +
+      halfBonus +
+      auraBonus;
+    const abilityNotes = [
+      ...(conditionNotes ?? []),
+      ...(halfBonus ? [`half proficiency on ability checks: +${halfBonus}`] : []),
+      ...(auraBonus && extras?.saveNote ? [extras.saveNote] : []),
+    ];
     return {
       expression: `${d20Expression(modifier, advantage)}${bonusDie}`,
       detail: args.ability,
-      ...(conditionNotes ? { conditionNotes } : {}),
+      ...(abilityNotes.length ? { conditionNotes: abilityNotes } : {}),
       ...inspirationFields,
     };
   }
@@ -522,7 +599,7 @@ export function resolveRollExpression(
     }
     const derived = computeSheetDerived(sheet);
     return {
-      expression: d20Expression(derived.initiative, advantage),
+      expression: `${d20Expression(derived.initiative, advantage)}${effects.diceSuffix}`,
       detail: "initiative",
       ...(conditionNotes ? { conditionNotes } : {}),
     };

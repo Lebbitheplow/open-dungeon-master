@@ -1,0 +1,3731 @@
+{
+ "_note": "The checklist of every official 5e spell, by book. Names and metadata only, no rules text: this is a list of facts, not expression. scripts/test-content-completeness.mjs asserts every entry here resolves in the content pack, so a spell that is absent fails the build by name instead of waiting for a player to report it. When a player names a spell that is not here, add it here first.",
+ "_shape": "spells[] = { n: name, b: book, l: level, s: school, c: classes csv, a: [other names the same spell is printed under], missing: true while it still needs authoring }. Books: phb, xge, tce, ftd, scc, egw, bomt, ai.",
+ "_counts": {
+  "total": 517,
+  "missing": 0
+ },
+ "spells": [
+  {
+   "n": "Horrid Wilting",
+   "b": "xge",
+   "a": [
+    "Abi-Dalzim's Horrid Wilting"
+   ],
+   "l": 8,
+   "s": "necromancy",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Absorb Elements",
+   "b": "xge",
+   "l": 1,
+   "s": "abjuration",
+   "c": "artificer,druid,ranger,sorcerer,wizard"
+  },
+  {
+   "n": "Acid Splash",
+   "b": "phb",
+   "l": 0,
+   "s": "conjuration",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Scorcher",
+   "b": "xge",
+   "a": [
+    "Aganazzar's Scorcher"
+   ],
+   "l": 2,
+   "s": "evocation",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Aid",
+   "b": "phb",
+   "l": 2,
+   "s": "abjuration",
+   "c": "cleric"
+  },
+  {
+   "n": "Alarm",
+   "b": "phb",
+   "l": 1,
+   "s": "abjuration",
+   "c": "ranger,wizard"
+  },
+  {
+   "n": "Alter Self",
+   "b": "phb",
+   "l": 2,
+   "s": "transmutation",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Animal Friendship",
+   "b": "phb",
+   "l": 1,
+   "s": "enchantment",
+   "c": "druid,ranger,bard"
+  },
+  {
+   "n": "Animal Messenger",
+   "b": "phb",
+   "l": 2,
+   "s": "enchantment",
+   "c": "druid,ranger,bard"
+  },
+  {
+   "n": "Animal Shapes",
+   "b": "phb",
+   "l": 8,
+   "s": "transmutation",
+   "c": "druid"
+  },
+  {
+   "n": "Animate Dead",
+   "b": "phb",
+   "l": 3,
+   "s": "necromancy",
+   "c": "cleric,wizard"
+  },
+  {
+   "n": "Animate Objects",
+   "b": "phb",
+   "l": 5,
+   "s": "transmutation",
+   "c": "bard,sorcerer,wizard"
+  },
+  {
+   "n": "Antilife Shell",
+   "b": "phb",
+   "l": 5,
+   "s": "abjuration",
+   "c": "druid"
+  },
+  {
+   "n": "Antimagic Field",
+   "b": "phb",
+   "l": 8,
+   "s": "abjuration",
+   "c": "cleric,wizard"
+  },
+  {
+   "n": "Antipathy/Sympathy",
+   "b": "phb",
+   "l": 8,
+   "s": "enchantment",
+   "c": "druid,wizard"
+  },
+  {
+   "n": "Arcane Eye",
+   "b": "phb",
+   "l": 4,
+   "s": "divination",
+   "c": "cleric,wizard"
+  },
+  {
+   "n": "Arcane Gate",
+   "b": "phb",
+   "l": 6,
+   "s": "conjuration",
+   "c": "sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Arcane Lock",
+   "b": "phb",
+   "l": 2,
+   "s": "abjuration",
+   "c": "wizard"
+  },
+  {
+   "n": "Armor of Agathys",
+   "b": "phb",
+   "l": 1,
+   "s": "abjuration",
+   "c": "warlock"
+  },
+  {
+   "n": "Arms of Hadar",
+   "b": "phb",
+   "l": 1,
+   "s": "conjuration",
+   "c": "warlock"
+  },
+  {
+   "n": "Blazing Stride",
+   "b": "ftd",
+   "a": [
+    "Ashardalon's Stride",
+    "Stride of Ashardalon"
+   ],
+   "l": 3,
+   "s": "transmutation",
+   "c": "artificer,ranger,sorcerer,wizard"
+  },
+  {
+   "n": "Astral Projection",
+   "b": "phb",
+   "l": 9,
+   "s": "necromancy",
+   "c": "cleric,warlock,wizard"
+  },
+  {
+   "n": "Augury",
+   "b": "phb",
+   "l": 2,
+   "s": "divination",
+   "c": "cleric"
+  },
+  {
+   "n": "Aura of Life",
+   "b": "phb",
+   "l": 4,
+   "s": "abjuration",
+   "c": "cleric,paladin"
+  },
+  {
+   "n": "Aura of Purity",
+   "b": "phb",
+   "l": 4,
+   "s": "abjuration",
+   "c": "paladin"
+  },
+  {
+   "n": "Aura of Vitality",
+   "b": "phb",
+   "l": 3,
+   "s": "evocation",
+   "c": "cleric,druid,paladin"
+  },
+  {
+   "n": "Awaken",
+   "b": "phb",
+   "l": 5,
+   "s": "transmutation",
+   "c": "druid,bard"
+  },
+  {
+   "n": "Bane",
+   "b": "phb",
+   "l": 1,
+   "s": "enchantment",
+   "c": "cleric,bard"
+  },
+  {
+   "n": "Banishing Smite",
+   "b": "phb",
+   "l": 5,
+   "s": "abjuration",
+   "c": "paladin"
+  },
+  {
+   "n": "Banishment",
+   "b": "phb",
+   "l": 4,
+   "s": "abjuration",
+   "c": "cleric,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Barkskin",
+   "b": "phb",
+   "l": 2,
+   "s": "transmutation",
+   "c": "cleric,druid,ranger"
+  },
+  {
+   "n": "Beacon of Hope",
+   "b": "phb",
+   "l": 3,
+   "s": "abjuration",
+   "c": "cleric"
+  },
+  {
+   "n": "Beast Bond",
+   "b": "xge",
+   "l": 1,
+   "s": "divination",
+   "c": "druid,ranger"
+  },
+  {
+   "n": "Beast Sense",
+   "b": "phb",
+   "l": 2,
+   "s": "divination",
+   "c": "druid,ranger"
+  },
+  {
+   "n": "Befuddlement",
+   "b": "srd2024",
+   "l": 8,
+   "s": "enchantment",
+   "c": "bard,druid,warlock,wizard"
+  },
+  {
+   "n": "Bestow Curse",
+   "b": "phb",
+   "l": 3,
+   "s": "necromancy",
+   "c": "cleric,bard,wizard"
+  },
+  {
+   "n": "Arcane Hand",
+   "b": "phb",
+   "a": [
+    "Bigby's Hand"
+   ],
+   "l": 5,
+   "s": "evocation",
+   "c": "artificer,wizard"
+  },
+  {
+   "n": "Blade Barrier",
+   "b": "phb",
+   "l": 6,
+   "s": "evocation",
+   "c": "cleric"
+  },
+  {
+   "n": "Blade of Disaster",
+   "b": "tce",
+   "l": 9,
+   "s": "conjuration",
+   "c": "warlock,wizard"
+  },
+  {
+   "n": "Blade Ward",
+   "b": "phb",
+   "l": 0,
+   "s": "abjuration",
+   "c": "bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Bless",
+   "b": "phb",
+   "l": 1,
+   "s": "enchantment",
+   "c": "cleric"
+  },
+  {
+   "n": "Blight",
+   "b": "phb",
+   "l": 4,
+   "s": "necromancy",
+   "c": "druid,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Blinding Smite",
+   "b": "phb",
+   "l": 3,
+   "s": "evocation",
+   "c": "paladin"
+  },
+  {
+   "n": "Blindness/Deafness",
+   "b": "phb",
+   "l": 2,
+   "s": "necromancy",
+   "c": "cleric,bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Blink",
+   "b": "phb",
+   "l": 3,
+   "s": "transmutation",
+   "c": "cleric,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Blur",
+   "b": "phb",
+   "l": 2,
+   "s": "illusion",
+   "c": "druid,sorcerer,wizard"
+  },
+  {
+   "n": "Bones of the Earth",
+   "b": "xge",
+   "l": 6,
+   "s": "transmutation",
+   "c": "druid"
+  },
+  {
+   "n": "Booming Blade",
+   "b": "tce",
+   "l": 0,
+   "s": "evocation",
+   "c": "artificer,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Borrowed Knowledge",
+   "b": "scc",
+   "l": 2,
+   "s": "divination",
+   "c": "bard,cleric,warlock,wizard"
+  },
+  {
+   "n": "Branding Smite",
+   "b": "phb",
+   "l": 2,
+   "s": "evocation",
+   "c": "paladin"
+  },
+  {
+   "n": "Burning Hands",
+   "b": "phb",
+   "l": 1,
+   "s": "evocation",
+   "c": "cleric,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Call Lightning",
+   "b": "phb",
+   "l": 3,
+   "s": "conjuration",
+   "c": "cleric,druid"
+  },
+  {
+   "n": "Calm Emotions",
+   "b": "phb",
+   "l": 2,
+   "s": "enchantment",
+   "c": "cleric,bard,warlock"
+  },
+  {
+   "n": "Catapult",
+   "b": "xge",
+   "l": 6,
+   "s": "transmutation",
+   "c": "sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Catnap",
+   "b": "xge",
+   "l": 3,
+   "s": "enchantment",
+   "c": "bard,sorcerer,wizard"
+  },
+  {
+   "n": "Cause Fear",
+   "b": "xge",
+   "l": 1,
+   "s": "necromancy",
+   "c": "warlock,wizard"
+  },
+  {
+   "n": "Ceremony",
+   "b": "xge",
+   "l": 1,
+   "s": "evocation",
+   "c": "cleric,herald"
+  },
+  {
+   "n": "Chain Lightning",
+   "b": "phb",
+   "l": 6,
+   "s": "evocation",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Chaos Bolt",
+   "b": "xge",
+   "l": 1,
+   "s": "evocation",
+   "c": "sorcerer"
+  },
+  {
+   "n": "Charm Monster",
+   "b": "xge",
+   "l": 4,
+   "s": "enchantment",
+   "c": "bard,druid,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Charm Person",
+   "b": "phb",
+   "l": 1,
+   "s": "enchantment",
+   "c": "cleric,druid,bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Chill Touch",
+   "b": "phb",
+   "l": 0,
+   "s": "necromancy",
+   "c": "sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Chromatic Orb",
+   "b": "phb",
+   "l": 1,
+   "s": "evocation",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Circle of Death",
+   "b": "phb",
+   "l": 6,
+   "s": "necromancy",
+   "c": "sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Circle of Power",
+   "b": "phb",
+   "l": 5,
+   "s": "abjuration",
+   "c": "paladin"
+  },
+  {
+   "n": "Clairvoyance",
+   "b": "phb",
+   "l": 3,
+   "s": "divination",
+   "c": "cleric,bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Clone",
+   "b": "phb",
+   "l": 8,
+   "s": "necromancy",
+   "c": "wizard"
+  },
+  {
+   "n": "Cloud of Daggers",
+   "b": "phb",
+   "l": 2,
+   "s": "conjuration",
+   "c": "bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Cloudkill",
+   "b": "phb",
+   "l": 5,
+   "s": "conjuration",
+   "c": "druid,sorcerer,wizard"
+  },
+  {
+   "n": "Color Spray",
+   "b": "phb",
+   "l": 1,
+   "s": "illusion",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Command",
+   "b": "phb",
+   "l": 1,
+   "s": "enchantment",
+   "c": "cleric,warlock"
+  },
+  {
+   "n": "Commune",
+   "b": "phb",
+   "l": 5,
+   "s": "divination",
+   "c": "cleric"
+  },
+  {
+   "n": "Commune with Nature",
+   "b": "phb",
+   "l": 5,
+   "s": "divination",
+   "c": "druid,ranger"
+  },
+  {
+   "n": "Compelled Duel",
+   "b": "phb",
+   "l": 1,
+   "s": "enchantment",
+   "c": "paladin"
+  },
+  {
+   "n": "Comprehend Languages",
+   "b": "phb",
+   "l": 1,
+   "s": "divination",
+   "c": "bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Compulsion",
+   "b": "phb",
+   "l": 4,
+   "s": "enchantment",
+   "c": "bard"
+  },
+  {
+   "n": "Cone of Cold",
+   "b": "phb",
+   "l": 5,
+   "s": "evocation",
+   "c": "druid,sorcerer,wizard"
+  },
+  {
+   "n": "Confusion",
+   "b": "phb",
+   "l": 4,
+   "s": "enchantment",
+   "c": "cleric,druid,bard,sorcerer,wizard"
+  },
+  {
+   "n": "Conjure Animals",
+   "b": "phb",
+   "l": 3,
+   "s": "conjuration",
+   "c": "druid,ranger"
+  },
+  {
+   "n": "Conjure Barrage",
+   "b": "phb",
+   "l": 3,
+   "s": "conjuration",
+   "c": "ranger"
+  },
+  {
+   "n": "Conjure Celestial",
+   "b": "phb",
+   "l": 7,
+   "s": "conjuration",
+   "c": "cleric"
+  },
+  {
+   "n": "Conjure Elemental",
+   "b": "phb",
+   "l": 5,
+   "s": "conjuration",
+   "c": "druid,wizard"
+  },
+  {
+   "n": "Conjure Fey",
+   "b": "phb",
+   "l": 6,
+   "s": "conjuration",
+   "c": "druid,warlock"
+  },
+  {
+   "n": "Conjure Minor Elementals",
+   "b": "phb",
+   "l": 4,
+   "s": "conjuration",
+   "c": "druid,wizard"
+  },
+  {
+   "n": "Conjure Volley",
+   "b": "phb",
+   "l": 5,
+   "s": "conjuration",
+   "c": "ranger"
+  },
+  {
+   "n": "Conjure Woodland Beings",
+   "b": "phb",
+   "l": 4,
+   "s": "conjuration",
+   "c": "druid,ranger"
+  },
+  {
+   "n": "Contact Other Plane",
+   "b": "phb",
+   "l": 5,
+   "s": "divination",
+   "c": "warlock,wizard"
+  },
+  {
+   "n": "Contagion",
+   "b": "phb",
+   "l": 5,
+   "s": "necromancy",
+   "c": "cleric,druid"
+  },
+  {
+   "n": "Contingency",
+   "b": "phb",
+   "l": 6,
+   "s": "evocation",
+   "c": "wizard"
+  },
+  {
+   "n": "Continual Flame",
+   "b": "phb",
+   "l": 2,
+   "s": "evocation",
+   "c": "cleric,wizard"
+  },
+  {
+   "n": "Control Flames",
+   "b": "xge",
+   "l": 0,
+   "s": "transmutation",
+   "c": "druid,sorcerer,wizard"
+  },
+  {
+   "n": "Control Water",
+   "b": "phb",
+   "l": 4,
+   "s": "transmutation",
+   "c": "cleric,druid,wizard"
+  },
+  {
+   "n": "Control Weather",
+   "b": "phb",
+   "l": 8,
+   "s": "transmutation",
+   "c": "cleric,druid,wizard"
+  },
+  {
+   "n": "Control Winds",
+   "b": "xge",
+   "l": 5,
+   "s": "transmutation",
+   "c": "druid,sorcerer,wizard"
+  },
+  {
+   "n": "Cordon of Arrows",
+   "b": "phb",
+   "l": 2,
+   "s": "transmutation",
+   "c": "ranger"
+  },
+  {
+   "n": "Counterspell",
+   "b": "phb",
+   "l": 3,
+   "s": "abjuration",
+   "c": "sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Create Bonfire",
+   "b": "xge",
+   "l": 0,
+   "s": "conjuration",
+   "c": "artificer,druid,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Create Food and Water",
+   "b": "phb",
+   "l": 3,
+   "s": "conjuration",
+   "c": "cleric,druid"
+  },
+  {
+   "n": "Create Homunculus",
+   "b": "xge",
+   "l": 6,
+   "s": "transmutation",
+   "c": "wizard"
+  },
+  {
+   "n": "Create or Destroy Water",
+   "b": "phb",
+   "l": 1,
+   "s": "transmutation",
+   "c": "cleric,druid"
+  },
+  {
+   "n": "Create Undead",
+   "b": "phb",
+   "l": 6,
+   "s": "necromancy",
+   "c": "cleric,warlock,wizard"
+  },
+  {
+   "n": "Creation",
+   "b": "phb",
+   "l": 5,
+   "s": "illusion",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Crown of Madness",
+   "b": "phb",
+   "l": 2,
+   "s": "enchantment",
+   "c": "bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Crown of Stars",
+   "b": "xge",
+   "l": 7,
+   "s": "evocation",
+   "c": "sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Crusader's Mantle",
+   "b": "phb",
+   "l": 3,
+   "s": "evocation",
+   "c": "paladin"
+  },
+  {
+   "n": "Cure Wounds",
+   "b": "phb",
+   "l": 1,
+   "s": "evocation",
+   "c": "cleric,druid,ranger,bard"
+  },
+  {
+   "n": "Dancing Lights",
+   "b": "phb",
+   "l": 0,
+   "s": "evocation",
+   "c": "bard,sorcerer,wizard"
+  },
+  {
+   "n": "Danse Macabre",
+   "b": "xge",
+   "l": 5,
+   "s": "necromancy",
+   "c": "warlock,wizard"
+  },
+  {
+   "n": "Dark Star",
+   "b": "egw",
+   "l": 8,
+   "s": "evocation",
+   "c": "warlock,wizard"
+  },
+  {
+   "n": "Darkness",
+   "b": "phb",
+   "l": 2,
+   "s": "evocation",
+   "c": "druid,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Darkvision",
+   "b": "phb",
+   "l": 2,
+   "s": "transmutation",
+   "c": "druid,ranger,sorcerer,wizard"
+  },
+  {
+   "n": "Dawn",
+   "b": "xge",
+   "l": 5,
+   "s": "evocation",
+   "c": "cleric,wizard"
+  },
+  {
+   "n": "Daylight",
+   "b": "phb",
+   "l": 3,
+   "s": "evocation",
+   "c": "cleric,druid,ranger,sorcerer"
+  },
+  {
+   "n": "Death Ward",
+   "b": "phb",
+   "l": 4,
+   "s": "abjuration",
+   "c": "cleric"
+  },
+  {
+   "n": "Delayed Blast Fireball",
+   "b": "phb",
+   "l": 7,
+   "s": "evocation",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Demiplane",
+   "b": "phb",
+   "l": 8,
+   "s": "conjuration",
+   "c": "warlock,wizard"
+  },
+  {
+   "n": "Destructive Wave",
+   "b": "phb",
+   "l": 5,
+   "s": "evocation",
+   "c": "paladin"
+  },
+  {
+   "n": "Detect Evil and Good",
+   "b": "phb",
+   "l": 1,
+   "s": "divination",
+   "c": "cleric"
+  },
+  {
+   "n": "Detect Magic",
+   "b": "phb",
+   "l": 1,
+   "s": "divination",
+   "c": "cleric,druid,ranger,bard,sorcerer,wizard"
+  },
+  {
+   "n": "Detect Poison and Disease",
+   "b": "phb",
+   "l": 1,
+   "s": "divination",
+   "c": "cleric,druid,ranger"
+  },
+  {
+   "n": "Detect Thoughts",
+   "b": "phb",
+   "l": 2,
+   "s": "divination",
+   "c": "bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Dimension Door",
+   "b": "phb",
+   "l": 4,
+   "s": "conjuration",
+   "c": "cleric,bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Disguise Self",
+   "b": "phb",
+   "l": 1,
+   "s": "illusion",
+   "c": "cleric,bard,sorcerer,wizard"
+  },
+  {
+   "n": "Disintegrate",
+   "b": "phb",
+   "l": 6,
+   "s": "transmutation",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Dispel Evil and Good",
+   "b": "phb",
+   "l": 5,
+   "s": "abjuration",
+   "c": "cleric"
+  },
+  {
+   "n": "Dispel Magic",
+   "b": "phb",
+   "l": 3,
+   "s": "abjuration",
+   "c": "cleric,druid,bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Dissonant Whispers",
+   "b": "phb",
+   "l": 1,
+   "s": "enchantment",
+   "c": "bard"
+  },
+  {
+   "n": "Divination",
+   "b": "phb",
+   "l": 4,
+   "s": "divination",
+   "c": "cleric,druid"
+  },
+  {
+   "n": "Divine Favor",
+   "b": "phb",
+   "l": 1,
+   "s": "evocation",
+   "c": "cleric"
+  },
+  {
+   "n": "Divine Smite",
+   "b": "srd2024",
+   "l": 1,
+   "s": "evocation",
+   "c": "paladin"
+  },
+  {
+   "n": "Divine Word",
+   "b": "phb",
+   "l": 7,
+   "s": "evocation",
+   "c": "cleric"
+  },
+  {
+   "n": "Dominate Beast",
+   "b": "phb",
+   "l": 4,
+   "s": "enchantment",
+   "c": "cleric,druid,sorcerer,warlock"
+  },
+  {
+   "n": "Dominate Monster",
+   "b": "phb",
+   "l": 8,
+   "s": "enchantment",
+   "c": "bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Dominate Person",
+   "b": "phb",
+   "l": 5,
+   "s": "enchantment",
+   "c": "cleric,bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Draconic Transformation",
+   "b": "ftd",
+   "l": 7,
+   "s": "transmutation",
+   "c": "druid,sorcerer,wizard"
+  },
+  {
+   "n": "Dragon's Breath",
+   "b": "xge",
+   "l": 2,
+   "s": "transmutation",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Drawmij's Instant Summons",
+   "b": "phb",
+   "a": [
+    "Instant Summons"
+   ],
+   "l": 6,
+   "s": "conjuration",
+   "c": "wizard"
+  },
+  {
+   "n": "Dream",
+   "b": "phb",
+   "l": 5,
+   "s": "illusion",
+   "c": "druid,bard,warlock,wizard"
+  },
+  {
+   "n": "Dream of the Blue Veil",
+   "b": "tce",
+   "l": 7,
+   "s": "conjuration",
+   "c": "bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Druid Grove",
+   "b": "xge",
+   "l": 6,
+   "s": "abjuration",
+   "c": "druid"
+  },
+  {
+   "n": "Druidcraft",
+   "b": "phb",
+   "l": 0,
+   "s": "transmutation",
+   "c": "druid"
+  },
+  {
+   "n": "Dust Devil",
+   "b": "xge",
+   "l": 2,
+   "s": "conjuration",
+   "c": "druid,sorcerer,wizard"
+  },
+  {
+   "n": "Earth Tremor",
+   "b": "xge",
+   "l": 1,
+   "s": "evocation",
+   "c": "bard,druid,sorcerer,wizard"
+  },
+  {
+   "n": "Earthbind",
+   "b": "xge",
+   "l": 2,
+   "s": "transmutation",
+   "c": "druid,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Earthquake",
+   "b": "phb",
+   "l": 8,
+   "s": "evocation",
+   "c": "cleric,druid,sorcerer"
+  },
+  {
+   "n": "Eldritch Blast",
+   "b": "phb",
+   "l": 0,
+   "s": "evocation",
+   "c": "warlock"
+  },
+  {
+   "n": "Elemental Bane",
+   "b": "xge",
+   "l": 4,
+   "s": "transmutation",
+   "c": "druid,warlock,wizard"
+  },
+  {
+   "n": "Elemental Weapon",
+   "b": "phb",
+   "l": 3,
+   "s": "transmutation",
+   "c": "artificer,druid,paladin,ranger"
+  },
+  {
+   "n": "Elementalism",
+   "b": "srd2024",
+   "l": 0,
+   "s": "transmutation",
+   "c": "druid,sorcerer,wizard"
+  },
+  {
+   "n": "Enemies Abound",
+   "b": "xge",
+   "l": 3,
+   "s": "enchantment",
+   "c": "bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Enervation",
+   "b": "xge",
+   "l": 5,
+   "s": "necromancy",
+   "c": "sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Enhance Ability",
+   "b": "phb",
+   "l": 2,
+   "s": "transmutation",
+   "c": "cleric,druid,bard,sorcerer"
+  },
+  {
+   "n": "Enlarge/Reduce",
+   "b": "phb",
+   "l": 2,
+   "s": "transmutation",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Ensnaring Strike",
+   "b": "phb",
+   "l": 1,
+   "s": "conjuration",
+   "c": "ranger"
+  },
+  {
+   "n": "Entangle",
+   "b": "phb",
+   "l": 1,
+   "s": "conjuration",
+   "c": "druid"
+  },
+  {
+   "n": "Enthrall",
+   "b": "phb",
+   "l": 2,
+   "s": "enchantment",
+   "c": "bard,warlock"
+  },
+  {
+   "n": "Erupting Earth",
+   "b": "xge",
+   "l": 3,
+   "s": "transmutation",
+   "c": "druid,sorcerer,wizard"
+  },
+  {
+   "n": "Etherealness",
+   "b": "phb",
+   "l": 7,
+   "s": "transmutation",
+   "c": "cleric,bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Evard's Black Tentacles",
+   "b": "phb",
+   "a": [
+    "Black Tentacles"
+   ],
+   "l": 4,
+   "s": "conjuration",
+   "c": "warlock,wizard"
+  },
+  {
+   "n": "Expeditious Retreat",
+   "b": "phb",
+   "l": 1,
+   "s": "transmutation",
+   "c": "sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Eyebite",
+   "b": "phb",
+   "l": 6,
+   "s": "necromancy",
+   "c": "bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Fabricate",
+   "b": "phb",
+   "l": 4,
+   "s": "transmutation",
+   "c": "wizard"
+  },
+  {
+   "n": "Faerie Fire",
+   "b": "phb",
+   "l": 1,
+   "s": "evocation",
+   "c": "cleric,druid,bard,warlock"
+  },
+  {
+   "n": "False Life",
+   "b": "phb",
+   "l": 1,
+   "s": "necromancy",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Far Step",
+   "b": "xge",
+   "l": 5,
+   "s": "conjuration",
+   "c": "sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Fear",
+   "b": "phb",
+   "l": 3,
+   "s": "illusion",
+   "c": "bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Feather Fall",
+   "b": "phb",
+   "l": 1,
+   "s": "transmutation",
+   "c": "bard,sorcerer,wizard"
+  },
+  {
+   "n": "Feeblemind",
+   "b": "phb",
+   "l": 8,
+   "s": "enchantment",
+   "c": "druid,bard,warlock,wizard"
+  },
+  {
+   "n": "Feign Death",
+   "b": "phb",
+   "l": 3,
+   "s": "necromancy",
+   "c": "bard,cleric,druid,wizard"
+  },
+  {
+   "n": "Find Familiar",
+   "b": "phb",
+   "l": 1,
+   "s": "conjuration",
+   "c": "wizard"
+  },
+  {
+   "n": "Find Greater Steed",
+   "b": "xge",
+   "l": 4,
+   "s": "conjuration",
+   "c": "paladin"
+  },
+  {
+   "n": "Find Steed",
+   "b": "phb",
+   "l": 2,
+   "s": "conjuration",
+   "c": "paladin"
+  },
+  {
+   "n": "Find the Path",
+   "b": "phb",
+   "l": 6,
+   "s": "divination",
+   "c": "cleric,druid,bard"
+  },
+  {
+   "n": "Find Traps",
+   "b": "phb",
+   "l": 2,
+   "s": "divination",
+   "c": "cleric,druid,ranger"
+  },
+  {
+   "n": "Finger of Death",
+   "b": "phb",
+   "l": 7,
+   "s": "necromancy",
+   "c": "sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Fire Bolt",
+   "b": "phb",
+   "l": 0,
+   "s": "evocation",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Fire Shield",
+   "b": "phb",
+   "l": 4,
+   "s": "evocation",
+   "c": "warlock,wizard"
+  },
+  {
+   "n": "Fire Storm",
+   "b": "phb",
+   "l": 7,
+   "s": "evocation",
+   "c": "cleric,druid,sorcerer"
+  },
+  {
+   "n": "Fireball",
+   "b": "phb",
+   "l": 3,
+   "s": "evocation",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Platinum Shield",
+   "b": "ftd",
+   "a": [
+    "Fizban's Platinum Shield"
+   ],
+   "l": 6,
+   "s": "abjuration",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Flame Arrows",
+   "b": "xge",
+   "l": 3,
+   "s": "transmutation",
+   "c": "druid,ranger,sorcerer,wizard"
+  },
+  {
+   "n": "Flame Blade",
+   "b": "phb",
+   "l": 2,
+   "s": "evocation",
+   "c": "druid"
+  },
+  {
+   "n": "Flame Strike",
+   "b": "phb",
+   "l": 5,
+   "s": "evocation",
+   "c": "cleric,warlock"
+  },
+  {
+   "n": "Flaming Sphere",
+   "b": "phb",
+   "l": 2,
+   "s": "conjuration",
+   "c": "cleric,druid,wizard"
+  },
+  {
+   "n": "Flesh to Stone",
+   "b": "phb",
+   "l": 6,
+   "s": "transmutation",
+   "c": "warlock,wizard"
+  },
+  {
+   "n": "Fly",
+   "b": "phb",
+   "l": 3,
+   "s": "transmutation",
+   "c": "sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Fog Cloud",
+   "b": "phb",
+   "l": 1,
+   "s": "conjuration",
+   "c": "cleric,druid,ranger,sorcerer,wizard"
+  },
+  {
+   "n": "Forbiddance",
+   "b": "phb",
+   "l": 6,
+   "s": "abjuration",
+   "c": "cleric"
+  },
+  {
+   "n": "Forcecage",
+   "b": "phb",
+   "l": 7,
+   "s": "evocation",
+   "c": "bard,warlock,wizard"
+  },
+  {
+   "n": "Foresight",
+   "b": "phb",
+   "l": 9,
+   "s": "divination",
+   "c": "druid,bard,warlock,wizard"
+  },
+  {
+   "n": "Fortune's Favor",
+   "b": "egw",
+   "l": 2,
+   "s": "divination",
+   "c": "wizard"
+  },
+  {
+   "n": "Freedom of Movement",
+   "b": "phb",
+   "l": 4,
+   "s": "abjuration",
+   "c": "cleric,druid,ranger,bard"
+  },
+  {
+   "n": "Friends",
+   "b": "phb",
+   "l": 0,
+   "s": "enchantment",
+   "c": "bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Frostbite",
+   "b": "xge",
+   "l": 5,
+   "s": "evocation",
+   "c": "sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Speedy Courier",
+   "b": "ai",
+   "a": [
+    "Galder's Speedy Courier"
+   ],
+   "l": 3,
+   "s": "conjuration",
+   "c": "artificer,bard,sorcerer,wizard"
+  },
+  {
+   "n": "Conjured Tower",
+   "b": "ai",
+   "a": [
+    "Galder's Tower",
+    "Tower"
+   ],
+   "l": 4,
+   "s": "conjuration",
+   "c": "wizard"
+  },
+  {
+   "n": "Gaseous Form",
+   "b": "phb",
+   "l": 3,
+   "s": "transmutation",
+   "c": "druid,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Gate",
+   "b": "phb",
+   "l": 9,
+   "s": "conjuration",
+   "c": "cleric,sorcerer,wizard"
+  },
+  {
+   "n": "Geas",
+   "b": "phb",
+   "l": 5,
+   "s": "enchantment",
+   "c": "cleric,druid,bard,wizard"
+  },
+  {
+   "n": "Gentle Repose",
+   "b": "phb",
+   "l": 2,
+   "s": "necromancy",
+   "c": "cleric,wizard"
+  },
+  {
+   "n": "Giant Insect",
+   "b": "phb",
+   "l": 4,
+   "s": "transmutation",
+   "c": "druid"
+  },
+  {
+   "n": "Gift of Alacrity",
+   "b": "tce",
+   "l": 1,
+   "s": "divination",
+   "c": "wizard"
+  },
+  {
+   "n": "Gift of Gab",
+   "b": "bomt",
+   "l": 2,
+   "s": "enchantment",
+   "c": "bard,rogue,warlock"
+  },
+  {
+   "n": "Glibness",
+   "b": "phb",
+   "l": 8,
+   "s": "transmutation",
+   "c": "bard,warlock"
+  },
+  {
+   "n": "Globe of Invulnerability",
+   "b": "phb",
+   "l": 6,
+   "s": "abjuration",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Glyph of Warding",
+   "b": "phb",
+   "l": 3,
+   "s": "abjuration",
+   "c": "cleric,bard,wizard"
+  },
+  {
+   "n": "Goodberry",
+   "b": "phb",
+   "l": 1,
+   "s": "transmutation",
+   "c": "druid,ranger"
+  },
+  {
+   "n": "Grasping Vine",
+   "b": "phb",
+   "l": 4,
+   "s": "conjuration",
+   "c": "druid,ranger"
+  },
+  {
+   "n": "Gravity Fissure",
+   "b": "egw",
+   "l": 6,
+   "s": "evocation",
+   "c": "wizard"
+  },
+  {
+   "n": "Gravity Sinkhole",
+   "b": "tce",
+   "l": 4,
+   "s": "evocation",
+   "c": "wizard"
+  },
+  {
+   "n": "Grease",
+   "b": "phb",
+   "l": 1,
+   "s": "conjuration",
+   "c": "wizard"
+  },
+  {
+   "n": "Greater Invisibility",
+   "b": "phb",
+   "l": 4,
+   "s": "illusion",
+   "c": "druid,bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Greater Restoration",
+   "b": "phb",
+   "l": 5,
+   "s": "abjuration",
+   "c": "cleric,druid,bard"
+  },
+  {
+   "n": "Green-Flame Blade",
+   "b": "tce",
+   "l": 0,
+   "s": "evocation",
+   "c": "artificer,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Guardian of Faith",
+   "b": "phb",
+   "l": 4,
+   "s": "conjuration",
+   "c": "cleric"
+  },
+  {
+   "n": "Guardian of Nature",
+   "b": "xge",
+   "l": 4,
+   "s": "transmutation",
+   "c": "druid,ranger"
+  },
+  {
+   "n": "Guards and Wards",
+   "b": "phb",
+   "l": 6,
+   "s": "abjuration",
+   "c": "bard,wizard"
+  },
+  {
+   "n": "Guidance",
+   "b": "phb",
+   "l": 0,
+   "s": "divination",
+   "c": "cleric,druid"
+  },
+  {
+   "n": "Guiding Bolt",
+   "b": "phb",
+   "l": 1,
+   "s": "evocation",
+   "c": "cleric"
+  },
+  {
+   "n": "Gust",
+   "b": "xge",
+   "l": 0,
+   "s": "transmutation",
+   "c": "druid,sorcerer,wizard"
+  },
+  {
+   "n": "Gust of Wind",
+   "b": "phb",
+   "l": 2,
+   "s": "evocation",
+   "c": "cleric,druid,sorcerer,wizard"
+  },
+  {
+   "n": "Hail of Thorns",
+   "b": "phb",
+   "l": 1,
+   "s": "conjuration",
+   "c": "ranger"
+  },
+  {
+   "n": "Hallow",
+   "b": "phb",
+   "l": 5,
+   "s": "evocation",
+   "c": "cleric,warlock"
+  },
+  {
+   "n": "Hallucinatory Terrain",
+   "b": "phb",
+   "l": 4,
+   "s": "illusion",
+   "c": "druid,bard,warlock,wizard"
+  },
+  {
+   "n": "Harm",
+   "b": "phb",
+   "l": 6,
+   "s": "necromancy",
+   "c": "cleric"
+  },
+  {
+   "n": "Haste",
+   "b": "phb",
+   "l": 3,
+   "s": "transmutation",
+   "c": "druid,sorcerer,wizard"
+  },
+  {
+   "n": "Heal",
+   "b": "phb",
+   "l": 6,
+   "s": "evocation",
+   "c": "cleric,druid"
+  },
+  {
+   "n": "Healing Spirit",
+   "b": "xge",
+   "l": 2,
+   "s": "conjuration",
+   "c": "druid,ranger"
+  },
+  {
+   "n": "Healing Word",
+   "b": "phb",
+   "l": 1,
+   "s": "evocation",
+   "c": "cleric,druid,bard"
+  },
+  {
+   "n": "Heat Metal",
+   "b": "phb",
+   "l": 2,
+   "s": "transmutation",
+   "c": "druid,bard"
+  },
+  {
+   "n": "Hellish Rebuke",
+   "b": "phb",
+   "l": 1,
+   "s": "evocation",
+   "c": "warlock"
+  },
+  {
+   "n": "Heroes' Feast",
+   "b": "phb",
+   "l": 6,
+   "s": "conjuration",
+   "c": "cleric,druid"
+  },
+  {
+   "n": "Heroism",
+   "b": "phb",
+   "l": 1,
+   "s": "enchantment",
+   "c": "bard"
+  },
+  {
+   "n": "Hex",
+   "b": "phb",
+   "l": 1,
+   "s": "enchantment",
+   "c": "warlock"
+  },
+  {
+   "n": "Hold Monster",
+   "b": "phb",
+   "l": 5,
+   "s": "enchantment",
+   "c": "cleric,bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Hold Person",
+   "b": "phb",
+   "l": 2,
+   "s": "enchantment",
+   "c": "cleric,druid,bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Holy Aura",
+   "b": "phb",
+   "l": 8,
+   "s": "abjuration",
+   "c": "cleric"
+  },
+  {
+   "n": "Holy Weapon",
+   "b": "xge",
+   "l": 5,
+   "s": "evocation",
+   "c": "cleric,paladin"
+  },
+  {
+   "n": "Hunger of Hadar",
+   "b": "phb",
+   "l": 3,
+   "s": "conjuration",
+   "c": "warlock"
+  },
+  {
+   "n": "Hunter's Mark",
+   "b": "phb",
+   "l": 1,
+   "s": "divination",
+   "c": "ranger"
+  },
+  {
+   "n": "Hypnotic Pattern",
+   "b": "phb",
+   "l": 3,
+   "s": "illusion",
+   "c": "bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Ice Knife",
+   "b": "xge",
+   "l": 1,
+   "s": "conjuration",
+   "c": "druid,sorcerer,wizard"
+  },
+  {
+   "n": "Ice Storm",
+   "b": "phb",
+   "l": 4,
+   "s": "evocation",
+   "c": "cleric,druid,sorcerer,wizard"
+  },
+  {
+   "n": "Identify",
+   "b": "phb",
+   "l": 1,
+   "s": "divination",
+   "c": "cleric,bard,wizard"
+  },
+  {
+   "n": "Illusory Dragon",
+   "b": "xge",
+   "l": 8,
+   "s": "illusion",
+   "c": "wizard"
+  },
+  {
+   "n": "Illusory Script",
+   "b": "phb",
+   "l": 1,
+   "s": "illusion",
+   "c": "bard,warlock,wizard"
+  },
+  {
+   "n": "Immolation",
+   "b": "xge",
+   "l": 5,
+   "s": "evocation",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Immovable Object",
+   "b": "egw",
+   "l": 2,
+   "s": "transmutation",
+   "c": "artificer,bard,sorcerer,wizard"
+  },
+  {
+   "n": "Imprisonment",
+   "b": "phb",
+   "l": 9,
+   "s": "abjuration",
+   "c": "warlock,wizard"
+  },
+  {
+   "n": "Incendiary Cloud",
+   "b": "phb",
+   "l": 8,
+   "s": "conjuration",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Infernal Calling",
+   "b": "xge",
+   "l": 5,
+   "s": "conjuration",
+   "c": "warlock,wizard"
+  },
+  {
+   "n": "Infestation",
+   "b": "xge",
+   "l": 0,
+   "s": "conjuration",
+   "c": "druid,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Inflict Wounds",
+   "b": "phb",
+   "l": 1,
+   "s": "necromancy",
+   "c": "cleric"
+  },
+  {
+   "n": "Insect Plague",
+   "b": "phb",
+   "l": 5,
+   "s": "conjuration",
+   "c": "cleric,druid,sorcerer"
+  },
+  {
+   "n": "Intellect Fortress",
+   "b": "tce",
+   "l": 3,
+   "s": "abjuration",
+   "c": "artificer,bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Investiture of Flame",
+   "b": "xge",
+   "l": 6,
+   "s": "transmutation",
+   "c": "druid,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Investiture of Ice",
+   "b": "xge",
+   "l": 6,
+   "s": "transmutation",
+   "c": "druid,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Investiture of Stone",
+   "b": "xge",
+   "l": 6,
+   "s": "transmutation",
+   "c": "druid,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Investiture of Wind",
+   "b": "xge",
+   "l": 6,
+   "s": "transmutation",
+   "c": "druid,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Invisibility",
+   "b": "phb",
+   "l": 2,
+   "s": "illusion",
+   "c": "druid,bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Jump",
+   "b": "phb",
+   "l": 1,
+   "s": "transmutation",
+   "c": "druid,ranger,sorcerer,wizard"
+  },
+  {
+   "n": "Kinetic Jaunt",
+   "b": "scc",
+   "l": 2,
+   "s": "transmutation",
+   "c": "artificer,bard,sorcerer,wizard"
+  },
+  {
+   "n": "Knock",
+   "b": "phb",
+   "l": 2,
+   "s": "transmutation",
+   "c": "bard,sorcerer,wizard"
+  },
+  {
+   "n": "Legend Lore",
+   "b": "phb",
+   "l": 5,
+   "s": "divination",
+   "c": "cleric,bard,wizard"
+  },
+  {
+   "n": "Leomund's Secret Chest",
+   "b": "phb",
+   "a": [
+    "Secret Chest"
+   ],
+   "l": 4,
+   "s": "conjuration",
+   "c": "wizard"
+  },
+  {
+   "n": "Leomund's Tiny Hut",
+   "b": "phb",
+   "a": [
+    "Tiny Hut"
+   ],
+   "l": 3,
+   "s": "evocation",
+   "c": "bard,wizard"
+  },
+  {
+   "n": "Lesser Restoration",
+   "b": "phb",
+   "l": 2,
+   "s": "abjuration",
+   "c": "cleric,druid,ranger,bard"
+  },
+  {
+   "n": "Levitate",
+   "b": "phb",
+   "l": 2,
+   "s": "transmutation",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Life Transference",
+   "b": "xge",
+   "l": 3,
+   "s": "necromancy",
+   "c": "cleric,wizard"
+  },
+  {
+   "n": "Light",
+   "b": "phb",
+   "l": 0,
+   "s": "evocation",
+   "c": "cleric,bard,sorcerer,wizard"
+  },
+  {
+   "n": "Lightning Arrow",
+   "b": "phb",
+   "l": 3,
+   "s": "transmutation",
+   "c": "ranger"
+  },
+  {
+   "n": "Lightning Bolt",
+   "b": "phb",
+   "l": 3,
+   "s": "evocation",
+   "c": "druid,sorcerer,wizard"
+  },
+  {
+   "n": "Lightning Lure",
+   "b": "tce",
+   "l": 0,
+   "s": "evocation",
+   "c": "artificer,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Locate Animals or Plants",
+   "b": "phb",
+   "l": 2,
+   "s": "divination",
+   "c": "druid,ranger,bard"
+  },
+  {
+   "n": "Locate Creature",
+   "b": "phb",
+   "l": 4,
+   "s": "divination",
+   "c": "cleric,druid,ranger,bard,wizard"
+  },
+  {
+   "n": "Locate Object",
+   "b": "phb",
+   "l": 2,
+   "s": "divination",
+   "c": "cleric,druid,ranger,bard,wizard"
+  },
+  {
+   "n": "Longstrider",
+   "b": "phb",
+   "l": 1,
+   "s": "transmutation",
+   "c": "druid,ranger,bard,wizard"
+  },
+  {
+   "n": "Maddening Darkness",
+   "b": "xge",
+   "l": 8,
+   "s": "evocation",
+   "c": "warlock,wizard"
+  },
+  {
+   "n": "Maelstrom",
+   "b": "xge",
+   "l": 5,
+   "s": "evocation",
+   "c": "druid"
+  },
+  {
+   "n": "Mage Armor",
+   "b": "phb",
+   "l": 1,
+   "s": "abjuration",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Mage Hand",
+   "b": "phb",
+   "l": 0,
+   "s": "conjuration",
+   "c": "bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Magic Circle",
+   "b": "phb",
+   "l": 3,
+   "s": "abjuration",
+   "c": "cleric,warlock,wizard"
+  },
+  {
+   "n": "Magic Jar",
+   "b": "phb",
+   "l": 6,
+   "s": "necromancy",
+   "c": "wizard"
+  },
+  {
+   "n": "Magic Missile",
+   "b": "phb",
+   "l": 1,
+   "s": "evocation",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Magic Mouth",
+   "b": "phb",
+   "l": 2,
+   "s": "illusion",
+   "c": "bard,wizard"
+  },
+  {
+   "n": "Magic Stone",
+   "b": "xge",
+   "l": 0,
+   "s": "transmutation",
+   "c": "artificer,druid,warlock"
+  },
+  {
+   "n": "Magic Weapon",
+   "b": "phb",
+   "l": 2,
+   "s": "transmutation",
+   "c": "cleric,wizard"
+  },
+  {
+   "n": "Magnify Gravity",
+   "b": "egw",
+   "l": 1,
+   "s": "transmutation",
+   "c": "wizard"
+  },
+  {
+   "n": "Major Image",
+   "b": "phb",
+   "l": 3,
+   "s": "illusion",
+   "c": "bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Mass Cure Wounds",
+   "b": "phb",
+   "l": 5,
+   "s": "conjuration",
+   "c": "cleric,druid,bard"
+  },
+  {
+   "n": "Mass Heal",
+   "b": "phb",
+   "l": 9,
+   "s": "conjuration",
+   "c": "cleric"
+  },
+  {
+   "n": "Mass Healing Word",
+   "b": "phb",
+   "l": 3,
+   "s": "evocation",
+   "c": "cleric"
+  },
+  {
+   "n": "Mass Polymorph",
+   "b": "xge",
+   "l": 9,
+   "s": "transmutation",
+   "c": "bard,sorcerer,wizard"
+  },
+  {
+   "n": "Mass Suggestion",
+   "b": "phb",
+   "l": 6,
+   "s": "enchantment",
+   "c": "bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Earthen Grasp",
+   "b": "xge",
+   "a": [
+    "Maximilian's Earthen Grasp"
+   ],
+   "l": 2,
+   "s": "transmutation",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Maze",
+   "b": "phb",
+   "l": 8,
+   "s": "conjuration",
+   "c": "wizard"
+  },
+  {
+   "n": "Meld into Stone",
+   "b": "phb",
+   "l": 3,
+   "s": "transmutation",
+   "c": "druid"
+  },
+  {
+   "n": "Melf's Acid Arrow",
+   "b": "phb",
+   "a": [
+    "Acid Arrow"
+   ],
+   "l": 2,
+   "s": "evocation",
+   "c": "druid,wizard"
+  },
+  {
+   "n": "Minute Meteors",
+   "b": "xge",
+   "a": [
+    "Melf's Minute Meteors"
+   ],
+   "l": 3,
+   "s": "evocation",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Mending",
+   "b": "phb",
+   "l": 0,
+   "s": "transmutation",
+   "c": "cleric,druid,bard,sorcerer,wizard"
+  },
+  {
+   "n": "Mental Prison",
+   "b": "xge",
+   "l": 6,
+   "s": "illusion",
+   "c": "sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Message",
+   "b": "phb",
+   "l": 0,
+   "s": "transmutation",
+   "c": "bard,sorcerer,wizard"
+  },
+  {
+   "n": "Meteor Swarm",
+   "b": "phb",
+   "l": 9,
+   "s": "evocation",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Mighty Fortress",
+   "b": "xge",
+   "l": 8,
+   "s": "conjuration",
+   "c": "wizard"
+  },
+  {
+   "n": "Mind Blank",
+   "b": "phb",
+   "l": 8,
+   "s": "abjuration",
+   "c": "bard,wizard"
+  },
+  {
+   "n": "Mind Sliver",
+   "b": "tce",
+   "l": 0,
+   "s": "enchantment",
+   "c": "sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Mind Spike",
+   "b": "xge",
+   "l": 2,
+   "s": "divination",
+   "c": "sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Minor Illusion",
+   "b": "phb",
+   "l": 0,
+   "s": "illusion",
+   "c": "bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Mirage Arcane",
+   "b": "phb",
+   "l": 7,
+   "s": "illusion",
+   "c": "druid,bard,wizard"
+  },
+  {
+   "n": "Mirror Image",
+   "b": "phb",
+   "l": 2,
+   "s": "illusion",
+   "c": "cleric,druid,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Mislead",
+   "b": "phb",
+   "l": 5,
+   "s": "illusion",
+   "c": "bard,wizard"
+  },
+  {
+   "n": "Misty Step",
+   "b": "phb",
+   "l": 2,
+   "s": "conjuration",
+   "c": "druid,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Modify Memory",
+   "b": "phb",
+   "l": 5,
+   "s": "enchantment",
+   "c": "cleric,bard,wizard"
+  },
+  {
+   "n": "Mold Earth",
+   "b": "xge",
+   "l": 0,
+   "s": "transmutation",
+   "c": "druid,sorcerer,wizard"
+  },
+  {
+   "n": "Moonbeam",
+   "b": "phb",
+   "l": 2,
+   "s": "evocation",
+   "c": "druid"
+  },
+  {
+   "n": "Mordenkainen's Faithful Hound",
+   "b": "phb",
+   "a": [
+    "Faithful Hound"
+   ],
+   "l": 4,
+   "s": "conjuration",
+   "c": "wizard"
+  },
+  {
+   "n": "Mordenkainen's Magnificent Mansion",
+   "b": "phb",
+   "a": [
+    "Magnificent Mansion"
+   ],
+   "l": 7,
+   "s": "conjuration",
+   "c": "bard,wizard"
+  },
+  {
+   "n": "Mordenkainen's Private Sanctum",
+   "b": "phb",
+   "a": [
+    "Private Sanctum"
+   ],
+   "l": 4,
+   "s": "abjuration",
+   "c": "wizard"
+  },
+  {
+   "n": "Mordenkainen's Sword",
+   "b": "phb",
+   "a": [
+    "Arcane Sword"
+   ],
+   "l": 7,
+   "s": "evocation",
+   "c": "bard,wizard"
+  },
+  {
+   "n": "Move Earth",
+   "b": "phb",
+   "l": 6,
+   "s": "transmutation",
+   "c": "druid,sorcerer,wizard"
+  },
+  {
+   "n": "Draconic Mischief",
+   "b": "ftd",
+   "a": [
+    "Nathair's Mischief",
+    "Mischief"
+   ],
+   "l": 2,
+   "s": "illusion",
+   "c": "artificer,bard,sorcerer,wizard"
+  },
+  {
+   "n": "Negative Energy Flood",
+   "b": "xge",
+   "l": 5,
+   "s": "necromancy",
+   "c": "warlock,wizard"
+  },
+  {
+   "n": "Nondetection",
+   "b": "phb",
+   "l": 3,
+   "s": "abjuration",
+   "c": "cleric,ranger,bard,wizard"
+  },
+  {
+   "n": "Nystul's Magic Aura",
+   "b": "phb",
+   "a": [
+    "Arcanist's Magic Aura"
+   ],
+   "l": 2,
+   "s": "illusion",
+   "c": "wizard"
+  },
+  {
+   "n": "Otiluke's Freezing Sphere",
+   "b": "phb",
+   "a": [
+    "Freezing Sphere"
+   ],
+   "l": 6,
+   "s": "evocation",
+   "c": "wizard"
+  },
+  {
+   "n": "Otiluke's Resilient Sphere",
+   "b": "phb",
+   "a": [
+    "Resilient Sphere"
+   ],
+   "l": 4,
+   "s": "evocation",
+   "c": "wizard"
+  },
+  {
+   "n": "Otto's Irresistible Dance",
+   "b": "phb",
+   "a": [
+    "Irresistible Dance"
+   ],
+   "l": 6,
+   "s": "enchantment",
+   "c": "bard,wizard"
+  },
+  {
+   "n": "Pass without Trace",
+   "b": "phb",
+   "l": 2,
+   "s": "abjuration",
+   "c": "druid"
+  },
+  {
+   "n": "Passwall",
+   "b": "phb",
+   "l": 5,
+   "s": "transmutation",
+   "c": "druid,wizard"
+  },
+  {
+   "n": "Phantasmal Force",
+   "b": "phb",
+   "l": 2,
+   "s": "illusion",
+   "c": "bard,sorcerer,wizard"
+  },
+  {
+   "n": "Phantasmal Killer",
+   "b": "phb",
+   "l": 4,
+   "s": "illusion",
+   "c": "wizard"
+  },
+  {
+   "n": "Phantom Steed",
+   "b": "phb",
+   "l": 3,
+   "s": "illusion",
+   "c": "wizard"
+  },
+  {
+   "n": "Planar Ally",
+   "b": "phb",
+   "l": 6,
+   "s": "conjuration",
+   "c": "cleric"
+  },
+  {
+   "n": "Planar Binding",
+   "b": "phb",
+   "l": 5,
+   "s": "abjuration",
+   "c": "cleric,druid,bard,wizard"
+  },
+  {
+   "n": "Plane Shift",
+   "b": "phb",
+   "l": 7,
+   "s": "conjuration",
+   "c": "cleric,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Plant Growth",
+   "b": "phb",
+   "l": 3,
+   "s": "transmutation",
+   "c": "cleric,druid,ranger,bard,warlock"
+  },
+  {
+   "n": "Poison Spray",
+   "b": "phb",
+   "l": 0,
+   "s": "conjuration",
+   "c": "druid,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Polymorph",
+   "b": "phb",
+   "l": 4,
+   "s": "transmutation",
+   "c": "cleric,druid,bard,sorcerer,wizard"
+  },
+  {
+   "n": "Power Word Heal",
+   "b": "srd2024",
+   "l": 9,
+   "s": "enchantment",
+   "c": "bard,cleric"
+  },
+  {
+   "n": "Power Word Kill",
+   "b": "phb",
+   "l": 9,
+   "s": "enchantment",
+   "c": "bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Power Word Pain",
+   "b": "xge",
+   "l": 4,
+   "s": "enchantment",
+   "c": "cleric,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Power Word Stun",
+   "b": "phb",
+   "l": 8,
+   "s": "enchantment",
+   "c": "bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Prayer of Healing",
+   "b": "phb",
+   "l": 2,
+   "s": "evocation",
+   "c": "cleric"
+  },
+  {
+   "n": "Prestidigitation",
+   "b": "phb",
+   "l": 0,
+   "s": "transmutation",
+   "c": "bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Primal Savagery",
+   "b": "xge",
+   "l": 0,
+   "s": "transmutation",
+   "c": "druid"
+  },
+  {
+   "n": "Primordial Ward",
+   "b": "xge",
+   "l": 6,
+   "s": "abjuration",
+   "c": "druid"
+  },
+  {
+   "n": "Prismatic Spray",
+   "b": "phb",
+   "l": 7,
+   "s": "evocation",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Prismatic Wall",
+   "b": "phb",
+   "l": 9,
+   "s": "abjuration",
+   "c": "wizard"
+  },
+  {
+   "n": "Produce Flame",
+   "b": "phb",
+   "l": 0,
+   "s": "conjuration",
+   "c": "druid"
+  },
+  {
+   "n": "Programmed Illusion",
+   "b": "phb",
+   "l": 6,
+   "s": "illusion",
+   "c": "bard,wizard"
+  },
+  {
+   "n": "Project Image",
+   "b": "phb",
+   "l": 7,
+   "s": "illusion",
+   "c": "bard,wizard"
+  },
+  {
+   "n": "Protection from Energy",
+   "b": "phb",
+   "l": 3,
+   "s": "abjuration",
+   "c": "cleric,druid,ranger,sorcerer,wizard"
+  },
+  {
+   "n": "Protection from Evil and Good",
+   "b": "phb",
+   "l": 1,
+   "s": "abjuration",
+   "c": "cleric,warlock,wizard"
+  },
+  {
+   "n": "Protection from Poison",
+   "b": "phb",
+   "l": 2,
+   "s": "abjuration",
+   "c": "cleric,druid,ranger"
+  },
+  {
+   "n": "Psychic Scream",
+   "b": "xge",
+   "l": 9,
+   "s": "enchantment",
+   "c": "bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Pulse Wave",
+   "b": "egw",
+   "l": 3,
+   "s": "evocation",
+   "c": "wizard"
+  },
+  {
+   "n": "Puppet",
+   "b": "ai",
+   "l": 1,
+   "s": "enchantment",
+   "c": "bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Purify Food and Drink",
+   "b": "phb",
+   "l": 1,
+   "s": "transmutation",
+   "c": "cleric,druid"
+  },
+  {
+   "n": "Pyrotechnics",
+   "b": "xge",
+   "l": 2,
+   "s": "transmutation",
+   "c": "bard,sorcerer,wizard"
+  },
+  {
+   "n": "Raise Dead",
+   "b": "phb",
+   "l": 5,
+   "s": "necromancy",
+   "c": "cleric,bard"
+  },
+  {
+   "n": "Rary's Telepathic Bond",
+   "b": "phb",
+   "a": [
+    "Telepathic Bond"
+   ],
+   "l": 5,
+   "s": "divination",
+   "c": "wizard"
+  },
+  {
+   "n": "Psychic Lance",
+   "b": "ftd",
+   "a": [
+    "Raulothim's Psychic Lance"
+   ],
+   "l": 4,
+   "s": "enchantment",
+   "c": "bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Ravenous Void",
+   "b": "egw",
+   "l": 9,
+   "s": "evocation",
+   "c": "wizard"
+  },
+  {
+   "n": "Ray of Enfeeblement",
+   "b": "phb",
+   "l": 2,
+   "s": "necromancy",
+   "c": "warlock,wizard"
+  },
+  {
+   "n": "Ray of Frost",
+   "b": "phb",
+   "l": 0,
+   "s": "evocation",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Ray of Sickness",
+   "b": "phb",
+   "l": 1,
+   "s": "necromancy",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Reality Break",
+   "b": "egw",
+   "l": 8,
+   "s": "conjuration",
+   "c": "wizard"
+  },
+  {
+   "n": "Regenerate",
+   "b": "phb",
+   "l": 7,
+   "s": "transmutation",
+   "c": "cleric,druid,bard"
+  },
+  {
+   "n": "Reincarnate",
+   "b": "phb",
+   "l": 5,
+   "s": "transmutation",
+   "c": "druid"
+  },
+  {
+   "n": "Remove Curse",
+   "b": "phb",
+   "l": 3,
+   "s": "abjuration",
+   "c": "cleric,warlock,wizard"
+  },
+  {
+   "n": "Resistance",
+   "b": "phb",
+   "l": 0,
+   "s": "abjuration",
+   "c": "cleric,druid"
+  },
+  {
+   "n": "Resurrection",
+   "b": "phb",
+   "l": 7,
+   "s": "necromancy",
+   "c": "cleric,bard"
+  },
+  {
+   "n": "Reverse Gravity",
+   "b": "phb",
+   "l": 7,
+   "s": "transmutation",
+   "c": "druid,sorcerer,wizard"
+  },
+  {
+   "n": "Revivify",
+   "b": "phb",
+   "l": 3,
+   "s": "conjuration",
+   "c": "cleric"
+  },
+  {
+   "n": "Binding Ice",
+   "b": "ftd",
+   "a": [
+    "Rime's Binding Ice"
+   ],
+   "l": 3,
+   "s": "evocation",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Rope Trick",
+   "b": "phb",
+   "l": 2,
+   "s": "transmutation",
+   "c": "wizard"
+  },
+  {
+   "n": "Sacred Flame",
+   "b": "phb",
+   "l": 0,
+   "s": "evocation",
+   "c": "cleric"
+  },
+  {
+   "n": "Sanctuary",
+   "b": "phb",
+   "l": 1,
+   "s": "abjuration",
+   "c": "cleric"
+  },
+  {
+   "n": "Sapping Sting",
+   "b": "tce",
+   "l": 0,
+   "s": "necromancy",
+   "c": "wizard"
+  },
+  {
+   "n": "Scatter",
+   "b": "xge",
+   "l": 6,
+   "s": "conjuration",
+   "c": "sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Scorching Ray",
+   "b": "phb",
+   "l": 2,
+   "s": "evocation",
+   "c": "cleric,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Scrying",
+   "b": "phb",
+   "l": 5,
+   "s": "divination",
+   "c": "cleric,druid,bard,warlock,wizard"
+  },
+  {
+   "n": "Searing Smite",
+   "b": "phb",
+   "l": 1,
+   "s": "evocation",
+   "c": "paladin"
+  },
+  {
+   "n": "See Invisibility",
+   "b": "phb",
+   "l": 2,
+   "s": "divination",
+   "c": "bard,sorcerer,wizard"
+  },
+  {
+   "n": "Seeming",
+   "b": "phb",
+   "l": 5,
+   "s": "illusion",
+   "c": "bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Sending",
+   "b": "phb",
+   "l": 3,
+   "s": "evocation",
+   "c": "cleric,bard,warlock,wizard"
+  },
+  {
+   "n": "Sequester",
+   "b": "phb",
+   "l": 7,
+   "s": "transmutation",
+   "c": "wizard"
+  },
+  {
+   "n": "Shadow Blade",
+   "b": "xge",
+   "l": 2,
+   "s": "illusion",
+   "c": "sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Shadow of Moil",
+   "b": "xge",
+   "l": 4,
+   "s": "necromancy",
+   "c": "warlock"
+  },
+  {
+   "n": "Shape Water",
+   "b": "xge",
+   "l": 0,
+   "s": "transmutation",
+   "c": "druid,sorcerer,wizard"
+  },
+  {
+   "n": "Shapechange",
+   "b": "phb",
+   "l": 9,
+   "s": "transmutation",
+   "c": "druid,wizard"
+  },
+  {
+   "n": "Shatter",
+   "b": "phb",
+   "l": 2,
+   "s": "evocation",
+   "c": "cleric,bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Shield",
+   "b": "phb",
+   "l": 1,
+   "s": "abjuration",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Shield of Faith",
+   "b": "phb",
+   "l": 1,
+   "s": "abjuration",
+   "c": "cleric"
+  },
+  {
+   "n": "Shillelagh",
+   "b": "phb",
+   "l": 0,
+   "s": "transmutation",
+   "c": "druid"
+  },
+  {
+   "n": "Shining Smite",
+   "b": "srd2024",
+   "l": 2,
+   "s": "transmutation",
+   "c": "paladin"
+  },
+  {
+   "n": "Shocking Grasp",
+   "b": "phb",
+   "l": 0,
+   "s": "evocation",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Sickening Radiance",
+   "b": "xge",
+   "l": 4,
+   "s": "evocation",
+   "c": "sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Silence",
+   "b": "phb",
+   "l": 2,
+   "s": "illusion",
+   "c": "cleric,druid,ranger,bard"
+  },
+  {
+   "n": "Silent Image",
+   "b": "phb",
+   "l": 1,
+   "s": "illusion",
+   "c": "bard,sorcerer,wizard"
+  },
+  {
+   "n": "Silvery Barbs",
+   "b": "scc",
+   "l": 1,
+   "s": "enchantment",
+   "c": "bard,sorcerer,wizard"
+  },
+  {
+   "n": "Simulacrum",
+   "b": "phb",
+   "l": 7,
+   "s": "illusion",
+   "c": "wizard"
+  },
+  {
+   "n": "Skill Empowerment",
+   "b": "xge",
+   "l": 5,
+   "s": "transmutation",
+   "c": "artificer,bard,sorcerer,wizard"
+  },
+  {
+   "n": "Skywrite",
+   "b": "xge",
+   "l": 2,
+   "s": "transmutation",
+   "c": "artificer,bard,druid,wizard"
+  },
+  {
+   "n": "Sleep",
+   "b": "phb",
+   "l": 1,
+   "s": "enchantment",
+   "c": "bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Sleet Storm",
+   "b": "phb",
+   "l": 3,
+   "s": "conjuration",
+   "c": "cleric,druid,sorcerer,wizard"
+  },
+  {
+   "n": "Slow",
+   "b": "phb",
+   "l": 3,
+   "s": "transmutation",
+   "c": "druid,sorcerer,wizard"
+  },
+  {
+   "n": "Snare",
+   "b": "xge",
+   "l": 1,
+   "s": "abjuration",
+   "c": "artificer,druid,ranger,wizard"
+  },
+  {
+   "n": "Snowball Swarm",
+   "b": "xge",
+   "a": [
+    "Snilloc's Snowball Swarm"
+   ],
+   "l": 2,
+   "s": "evocation",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Sorcerous Burst",
+   "b": "srd2024",
+   "l": 0,
+   "s": "evocation",
+   "c": "sorcerer"
+  },
+  {
+   "n": "Soul Cage",
+   "b": "xge",
+   "l": 6,
+   "s": "necromancy",
+   "c": "warlock,wizard"
+  },
+  {
+   "n": "Spare the Dying",
+   "b": "phb",
+   "l": 0,
+   "s": "necromancy",
+   "c": "cleric"
+  },
+  {
+   "n": "Speak with Animals",
+   "b": "phb",
+   "l": 1,
+   "s": "divination",
+   "c": "cleric,druid,ranger,bard"
+  },
+  {
+   "n": "Speak with Dead",
+   "b": "phb",
+   "l": 3,
+   "s": "necromancy",
+   "c": "cleric,bard"
+  },
+  {
+   "n": "Speak with Plants",
+   "b": "phb",
+   "l": 3,
+   "s": "transmutation",
+   "c": "druid,ranger,bard"
+  },
+  {
+   "n": "Spider Climb",
+   "b": "phb",
+   "l": 2,
+   "s": "transmutation",
+   "c": "druid,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Spike Growth",
+   "b": "phb",
+   "l": 2,
+   "s": "transmutation",
+   "c": "cleric,druid,ranger"
+  },
+  {
+   "n": "Spirit Guardians",
+   "b": "phb",
+   "l": 3,
+   "s": "conjuration",
+   "c": "cleric"
+  },
+  {
+   "n": "Spirit Shroud",
+   "b": "tce",
+   "l": 3,
+   "s": "necromancy",
+   "c": "cleric,paladin,warlock,wizard"
+  },
+  {
+   "n": "Spiritual Weapon",
+   "b": "phb",
+   "l": 2,
+   "s": "evocation",
+   "c": "cleric"
+  },
+  {
+   "n": "Spray of Cards",
+   "b": "bomt",
+   "l": 0,
+   "s": "conjuration",
+   "c": "bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Staggering Smite",
+   "b": "phb",
+   "l": 4,
+   "s": "evocation",
+   "c": "paladin"
+  },
+  {
+   "n": "Starry Wisp",
+   "b": "srd2024",
+   "l": 0,
+   "s": "evocation",
+   "c": "bard,druid"
+  },
+  {
+   "n": "Steel Wind Strike",
+   "b": "xge",
+   "l": 5,
+   "s": "conjuration",
+   "c": "ranger,wizard"
+  },
+  {
+   "n": "Stinking Cloud",
+   "b": "phb",
+   "l": 3,
+   "s": "conjuration",
+   "c": "druid,bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Stone Shape",
+   "b": "phb",
+   "l": 4,
+   "s": "transmutation",
+   "c": "cleric,druid,wizard"
+  },
+  {
+   "n": "Stoneskin",
+   "b": "phb",
+   "l": 4,
+   "s": "abjuration",
+   "c": "cleric,druid,ranger,sorcerer,wizard"
+  },
+  {
+   "n": "Storm of Vengeance",
+   "b": "phb",
+   "l": 9,
+   "s": "conjuration",
+   "c": "druid"
+  },
+  {
+   "n": "Storm Sphere",
+   "b": "xge",
+   "l": 4,
+   "s": "evocation",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Sudden Awakening",
+   "b": "ai",
+   "l": 1,
+   "s": "transmutation",
+   "c": "bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Suggestion",
+   "b": "phb",
+   "l": 2,
+   "s": "enchantment",
+   "c": "cleric,bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Summon Aberration",
+   "b": "tce",
+   "l": 4,
+   "s": "conjuration",
+   "c": "warlock,wizard"
+  },
+  {
+   "n": "Summon Beast",
+   "b": "tce",
+   "l": 2,
+   "s": "conjuration",
+   "c": "druid,ranger"
+  },
+  {
+   "n": "Summon Celestial",
+   "b": "tce",
+   "l": 5,
+   "s": "conjuration",
+   "c": "cleric,paladin"
+  },
+  {
+   "n": "Summon Construct",
+   "b": "tce",
+   "l": 4,
+   "s": "conjuration",
+   "c": "artificer,wizard"
+  },
+  {
+   "n": "Summon Draconic Spirit",
+   "b": "ftd",
+   "l": 5,
+   "s": "conjuration",
+   "c": "druid,sorcerer,wizard"
+  },
+  {
+   "n": "Summon Dragon",
+   "b": "srd2024",
+   "l": 5,
+   "s": "conjuration",
+   "c": "wizard"
+  },
+  {
+   "n": "Summon Elemental",
+   "b": "tce",
+   "l": 4,
+   "s": "conjuration",
+   "c": "druid,ranger,wizard"
+  },
+  {
+   "n": "Summon Fey",
+   "b": "tce",
+   "l": 3,
+   "s": "conjuration",
+   "c": "druid,ranger,warlock,wizard"
+  },
+  {
+   "n": "Summon Fiend",
+   "b": "tce",
+   "l": 6,
+   "s": "conjuration",
+   "c": "warlock,wizard"
+  },
+  {
+   "n": "Summon Greater Demon",
+   "b": "xge",
+   "l": 4,
+   "s": "conjuration",
+   "c": "warlock,wizard"
+  },
+  {
+   "n": "Summon Lesser Demons",
+   "b": "xge",
+   "l": 3,
+   "s": "conjuration",
+   "c": "warlock,wizard"
+  },
+  {
+   "n": "Summon Shadowspawn",
+   "b": "tce",
+   "l": 3,
+   "s": "conjuration",
+   "c": "warlock,wizard"
+  },
+  {
+   "n": "Summon Undead",
+   "b": "tce",
+   "l": 3,
+   "s": "necromancy",
+   "c": "warlock,wizard"
+  },
+  {
+   "n": "Sunbeam",
+   "b": "phb",
+   "l": 6,
+   "s": "evocation",
+   "c": "druid,sorcerer,wizard"
+  },
+  {
+   "n": "Sunburst",
+   "b": "phb",
+   "l": 8,
+   "s": "evocation",
+   "c": "druid,sorcerer,wizard"
+  },
+  {
+   "n": "Swift Quiver",
+   "b": "phb",
+   "l": 5,
+   "s": "transmutation",
+   "c": "ranger"
+  },
+  {
+   "n": "Sword Burst",
+   "b": "tce",
+   "l": 0,
+   "s": "conjuration",
+   "c": "artificer,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Symbol",
+   "b": "phb",
+   "l": 7,
+   "s": "abjuration",
+   "c": "cleric,bard,wizard"
+  },
+  {
+   "n": "Synaptic Static",
+   "b": "xge",
+   "l": 5,
+   "s": "enchantment",
+   "c": "bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Caustic Brew",
+   "b": "tce",
+   "a": [
+    "Tasha's Caustic Brew"
+   ],
+   "l": 1,
+   "s": "evocation",
+   "c": "artificer,sorcerer,wizard"
+  },
+  {
+   "n": "Tasha's Hideous Laughter",
+   "b": "phb",
+   "a": [
+    "Hideous Laughter"
+   ],
+   "l": 1,
+   "s": "enchantment",
+   "c": "bard,warlock,wizard"
+  },
+  {
+   "n": "Mind Whip",
+   "b": "tce",
+   "a": [
+    "Tasha's Mind Whip"
+   ],
+   "l": 2,
+   "s": "enchantment",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Otherworldly Guise",
+   "b": "tce",
+   "a": [
+    "Tasha's Otherworldly Guise"
+   ],
+   "l": 6,
+   "s": "transmutation",
+   "c": "sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Telekinesis",
+   "b": "phb",
+   "l": 5,
+   "s": "transmutation",
+   "c": "sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Telepathy",
+   "b": "phb",
+   "l": 8,
+   "s": "evocation",
+   "c": "wizard"
+  },
+  {
+   "n": "Teleport",
+   "b": "phb",
+   "l": 7,
+   "s": "conjuration",
+   "c": "bard,sorcerer,wizard"
+  },
+  {
+   "n": "Teleportation Circle",
+   "b": "phb",
+   "l": 5,
+   "s": "conjuration",
+   "c": "bard,sorcerer,wizard"
+  },
+  {
+   "n": "Temple of the Gods",
+   "b": "xge",
+   "l": 7,
+   "s": "conjuration",
+   "c": "cleric"
+  },
+  {
+   "n": "Temporal Shunt",
+   "b": "tce",
+   "l": 5,
+   "s": "transmutation",
+   "c": "wizard"
+  },
+  {
+   "n": "Tenser's Floating Disk",
+   "b": "phb",
+   "a": [
+    "Floating Disk"
+   ],
+   "l": 1,
+   "s": "conjuration",
+   "c": "wizard"
+  },
+  {
+   "n": "Arcane Transformation",
+   "b": "xge",
+   "l": 6,
+   "s": "transmutation",
+   "c": "wizard",
+   "a": [
+    "Tenser's Transformation"
+   ]
+  },
+  {
+   "n": "Tether Essence",
+   "b": "egw",
+   "l": 7,
+   "s": "necromancy",
+   "c": "wizard"
+  },
+  {
+   "n": "Thaumaturgy",
+   "b": "phb",
+   "l": 0,
+   "s": "transmutation",
+   "c": "cleric"
+  },
+  {
+   "n": "Thorn Whip",
+   "b": "phb",
+   "l": 0,
+   "s": "transmutation",
+   "c": "artificer,druid"
+  },
+  {
+   "n": "Thunder Step",
+   "b": "xge",
+   "l": 3,
+   "s": "conjuration",
+   "c": "sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Thunderclap",
+   "b": "xge",
+   "l": 3,
+   "s": "evocation",
+   "c": "cleric,sorcerer,wizard"
+  },
+  {
+   "n": "Thunderous Smite",
+   "b": "phb",
+   "l": 1,
+   "s": "evocation",
+   "c": "paladin"
+  },
+  {
+   "n": "Thunderwave",
+   "b": "phb",
+   "l": 1,
+   "s": "evocation",
+   "c": "cleric,druid,bard,sorcerer,wizard"
+  },
+  {
+   "n": "Tidal Wave",
+   "b": "xge",
+   "l": 3,
+   "s": "conjuration",
+   "c": "druid,sorcerer,wizard"
+  },
+  {
+   "n": "Time Ravage",
+   "b": "xge",
+   "l": 9,
+   "s": "necromancy",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Time Stop",
+   "b": "phb",
+   "l": 9,
+   "s": "transmutation",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Tiny Servant",
+   "b": "xge",
+   "l": 3,
+   "s": "transmutation",
+   "c": "artificer,wizard"
+  },
+  {
+   "n": "Toll the Dead",
+   "b": "xge",
+   "l": 0,
+   "s": "necromancy",
+   "c": "cleric,warlock,wizard"
+  },
+  {
+   "n": "Tongues",
+   "b": "phb",
+   "l": 3,
+   "s": "divination",
+   "c": "cleric,bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Transmute Rock",
+   "b": "xge",
+   "l": 5,
+   "s": "transmutation",
+   "c": "artificer,druid,wizard"
+  },
+  {
+   "n": "Transport via Plants",
+   "b": "phb",
+   "l": 6,
+   "s": "conjuration",
+   "c": "druid"
+  },
+  {
+   "n": "Tree Stride",
+   "b": "phb",
+   "l": 5,
+   "s": "conjuration",
+   "c": "cleric,druid,ranger"
+  },
+  {
+   "n": "True Polymorph",
+   "b": "phb",
+   "l": 9,
+   "s": "transmutation",
+   "c": "bard,warlock,wizard"
+  },
+  {
+   "n": "True Resurrection",
+   "b": "phb",
+   "l": 9,
+   "s": "necromancy",
+   "c": "cleric,druid"
+  },
+  {
+   "n": "True Seeing",
+   "b": "phb",
+   "l": 6,
+   "s": "divination",
+   "c": "cleric,bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "True Strike",
+   "b": "phb",
+   "l": 0,
+   "s": "divination",
+   "c": "bard,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Tsunami",
+   "b": "phb",
+   "l": 8,
+   "s": "conjuration",
+   "c": "druid"
+  },
+  {
+   "n": "Unseen Servant",
+   "b": "phb",
+   "l": 1,
+   "s": "conjuration",
+   "c": "bard,warlock,wizard"
+  },
+  {
+   "n": "Vampiric Touch",
+   "b": "phb",
+   "l": 3,
+   "s": "necromancy",
+   "c": "warlock,wizard"
+  },
+  {
+   "n": "Vicious Mockery",
+   "b": "phb",
+   "l": 0,
+   "s": "enchantment",
+   "c": "bard"
+  },
+  {
+   "n": "Vitriolic Sphere",
+   "b": "xge",
+   "l": 4,
+   "s": "evocation",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Vortex Warp",
+   "b": "tce",
+   "l": 2,
+   "s": "conjuration",
+   "c": "artificer,sorcerer,wizard"
+  },
+  {
+   "n": "Wall of Fire",
+   "b": "phb",
+   "l": 4,
+   "s": "evocation",
+   "c": "cleric,druid,sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Wall of Force",
+   "b": "phb",
+   "l": 5,
+   "s": "evocation",
+   "c": "wizard"
+  },
+  {
+   "n": "Wall of Ice",
+   "b": "phb",
+   "l": 6,
+   "s": "evocation",
+   "c": "wizard"
+  },
+  {
+   "n": "Wall of Light",
+   "b": "xge",
+   "l": 5,
+   "s": "evocation",
+   "c": "sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Wall of Sand",
+   "b": "xge",
+   "l": 3,
+   "s": "evocation",
+   "c": "wizard"
+  },
+  {
+   "n": "Wall of Stone",
+   "b": "phb",
+   "l": 5,
+   "s": "evocation",
+   "c": "druid,sorcerer,wizard"
+  },
+  {
+   "n": "Wall of Thorns",
+   "b": "phb",
+   "l": 6,
+   "s": "conjuration",
+   "c": "druid"
+  },
+  {
+   "n": "Wall of Water",
+   "b": "xge",
+   "l": 3,
+   "s": "evocation",
+   "c": "druid,sorcerer,wizard"
+  },
+  {
+   "n": "Warding Bond",
+   "b": "phb",
+   "l": 2,
+   "s": "abjuration",
+   "c": "cleric"
+  },
+  {
+   "n": "Warding Wind",
+   "b": "xge",
+   "l": 2,
+   "s": "evocation",
+   "c": "bard,druid,sorcerer,wizard"
+  },
+  {
+   "n": "Water Breathing",
+   "b": "phb",
+   "l": 3,
+   "s": "transmutation",
+   "c": "druid,ranger,sorcerer,wizard"
+  },
+  {
+   "n": "Water Walk",
+   "b": "phb",
+   "l": 3,
+   "s": "transmutation",
+   "c": "cleric,druid,ranger,sorcerer"
+  },
+  {
+   "n": "Watery Sphere",
+   "b": "xge",
+   "l": 4,
+   "s": "conjuration",
+   "c": "druid,sorcerer,wizard"
+  },
+  {
+   "n": "Web",
+   "b": "phb",
+   "l": 2,
+   "s": "conjuration",
+   "c": "druid,sorcerer,wizard"
+  },
+  {
+   "n": "Weird",
+   "b": "phb",
+   "l": 9,
+   "s": "illusion",
+   "c": "wizard"
+  },
+  {
+   "n": "Whirlwind",
+   "b": "xge",
+   "l": 7,
+   "s": "evocation",
+   "c": "druid,sorcerer,wizard"
+  },
+  {
+   "n": "Wild Cunning",
+   "b": "ai",
+   "l": 1,
+   "s": "transmutation",
+   "c": "druid,ranger"
+  },
+  {
+   "n": "Wind Walk",
+   "b": "phb",
+   "l": 6,
+   "s": "transmutation",
+   "c": "druid"
+  },
+  {
+   "n": "Wind Wall",
+   "b": "phb",
+   "l": 3,
+   "s": "evocation",
+   "c": "cleric,druid,ranger"
+  },
+  {
+   "n": "Wish",
+   "b": "phb",
+   "l": 9,
+   "s": "conjuration",
+   "c": "sorcerer,wizard"
+  },
+  {
+   "n": "Witch Bolt",
+   "b": "phb",
+   "l": 1,
+   "s": "evocation",
+   "c": "sorcerer,warlock,wizard"
+  },
+  {
+   "n": "Wither and Bloom",
+   "b": "tce",
+   "l": 2,
+   "s": "necromancy",
+   "c": "druid,sorcerer,wizard"
+  },
+  {
+   "n": "Word of Radiance",
+   "b": "xge",
+   "l": 0,
+   "s": "evocation",
+   "c": "cleric"
+  },
+  {
+   "n": "Word of Recall",
+   "b": "phb",
+   "l": 6,
+   "s": "conjuration",
+   "c": "cleric"
+  },
+  {
+   "n": "Wrath of Nature",
+   "b": "xge",
+   "l": 5,
+   "s": "evocation",
+   "c": "druid,ranger"
+  },
+  {
+   "n": "Wrathful Smite",
+   "b": "phb",
+   "l": 1,
+   "s": "evocation",
+   "c": "paladin"
+  },
+  {
+   "n": "Wristpocket",
+   "b": "egw",
+   "l": 2,
+   "s": "conjuration",
+   "c": "wizard"
+  },
+  {
+   "n": "Zephyr Strike",
+   "b": "xge",
+   "l": 1,
+   "s": "transmutation",
+   "c": "ranger"
+  },
+  {
+   "n": "Zone of Truth",
+   "b": "phb",
+   "l": 2,
+   "s": "enchantment",
+   "c": "cleric,bard"
+  }
+ ]
+}

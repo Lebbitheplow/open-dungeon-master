@@ -7,7 +7,9 @@ import { register } from "node:module";
 register("./lib/register-alias.mjs", import.meta.url);
 
 const { populateFeatures } = await import("../src/lib/srd/features.ts");
-const { SRD_BACKGROUNDS, SRD_CLASSES, SRD_RACES } = await import("../src/lib/srd/index.ts");
+const { SRD_BACKGROUNDS, SRD_CLASSES, SRD_RACES, sizeForRace, speedFor } = await import(
+  "../src/lib/srd/index.ts"
+);
 const { CUSTOM_BACKGROUNDS, backgroundFeatureFor } = await import(
   "../src/lib/backgrounds/index.ts"
 );
@@ -104,6 +106,70 @@ test("cantrip advice matches the SRD tables and custom caster fallback", () => {
   assert.equal(suggestedCantripCount("netrunner", 1, "full"), 2);
   assert.equal(suggestedCantripCount("netrunner", 10, "full"), 4);
   assert.equal(suggestedCantripCount("street_samurai", 5, "none"), null);
+});
+
+test("the subrace variants carry their structural grants", () => {
+  const byId = Object.fromEntries(SRD_RACES.map((race) => [race.id, race]));
+  assert.deepEqual(byId.mountain_dwarf.armor, ["light", "medium"]);
+  assert.ok(byId.wood_elf.weapons.includes("longbows"));
+  assert.equal(byId.wood_elf.speed, 35);
+  assert.ok(byId.drow.weapons.includes("hand crossbows"));
+  assert.deepEqual(byId.variant_human.asiChoice, { count: 2, amount: 1 });
+  assert.deepEqual(byId.variant_human.skillChoice, { count: 1 });
+  assert.equal(byId.deep_gnome.languages.includes("Undercommon"), true);
+});
+
+test("sizeForRace: Small races are Small, everything else (and unknowns) Medium", () => {
+  assert.equal(sizeForRace("stout_halfling"), "Small");
+  assert.equal(sizeForRace("forest_gnome"), "Small");
+  assert.equal(sizeForRace("goblin"), "Small");
+  assert.equal(sizeForRace("mountain_dwarf"), "Medium");
+  // Content-pack slugs normalize; homebrew defaults to Medium.
+  assert.equal(sizeForRace("Lightfoot-Halfling"), "Small");
+  assert.equal(sizeForRace("dragonkin homebrew"), "Medium");
+});
+
+test("speedFor gates class speed bonuses on what is worn", () => {
+  const monk = (equipment) => ({
+    class: "monk",
+    level: 10,
+    speed: 30,
+    abilities: { str: 10, dex: 14, con: 12, int: 10, wis: 14, cha: 10 },
+    proficiencies: { armor: [] },
+    equipment,
+    features: [{ name: "Unarmored Movement" }],
+  });
+  assert.equal(speedFor(monk([])), 50);
+  // Any armor or a shield switches Unarmored Movement off.
+  assert.equal(speedFor(monk([{ name: "Leather", equipped: true }])), 30);
+  assert.equal(speedFor(monk([{ name: "Shield", equipped: true }])), 30);
+
+  const barbarian = (equipment) => ({
+    class: "barbarian",
+    level: 5,
+    speed: 30,
+    abilities: { str: 16, dex: 14, con: 16, int: 8, wis: 10, cha: 10 },
+    proficiencies: { armor: ["light", "medium", "heavy", "shields"] },
+    equipment,
+    features: [{ name: "Fast Movement" }],
+  });
+  // Fast Movement survives medium armor, dies in heavy.
+  assert.equal(speedFor(barbarian([{ name: "Scale Mail", equipped: true }])), 40);
+  assert.equal(speedFor(barbarian([{ name: "Chain Mail", equipped: true }])), 30);
+});
+
+test("heavy armor below its Strength requirement costs 10 feet", () => {
+  const weakling = {
+    class: "fighter",
+    level: 1,
+    speed: 30,
+    abilities: { str: 10, dex: 10, con: 12, int: 10, wis: 10, cha: 10 },
+    proficiencies: { armor: ["heavy"] },
+    equipment: [{ name: "Plate", equipped: true }],
+    features: [],
+  };
+  assert.equal(speedFor(weakling), 20);
+  assert.equal(speedFor({ ...weakling, abilities: { ...weakling.abilities, str: 15 } }), 30);
 });
 
 console.log(`\ntest-character-grants: ${passed} tests passed.`);

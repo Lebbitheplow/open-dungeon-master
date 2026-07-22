@@ -123,4 +123,28 @@ test("the reroll never touches a d20 attack roll", () => {
   assert.equal(result.natural, 2);
 });
 
+test("the floor suffix raises a low kept face (Reliable Talent)", () => {
+  const result = rollExpression("1d20f10+5", queueRng([4]));
+  assert.equal(result.total, 15);
+  assert.equal(result.terms[0].dice[0].rerolledFrom, 4);
+  const high = rollExpression("1d20f10+5", queueRng([17]));
+  assert.equal(high.total, 22);
+});
+
+test("the floor plays with advantage keeps", () => {
+  // 2d20kh1f10: both faces low, the kept one floors at 10.
+  const result = rollExpression("2d20kh1f10+2", queueRng([3, 7]));
+  assert.equal(result.total, 12);
+});
+
+test("a bless rider die keeps the lead d20's natural face", () => {
+  const result = rollExpression("1d20+5+1d4", queueRng([20, 3]));
+  assert.equal(result.total, 28);
+  assert.equal(result.natural, 20);
+  assert.equal(result.crit, "nat20");
+  const fumble = rollExpression("2d20kl1+1+1d4", queueRng([1, 15, 2]));
+  assert.equal(fumble.natural, 1);
+  assert.equal(fumble.crit, "nat1");
+});
+
 console.log(`\n${passed} dice tests passed`);

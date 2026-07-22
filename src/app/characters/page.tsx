@@ -115,7 +115,7 @@ export default function CharactersPage() {
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
-      <header className="mb-8 flex items-center justify-between">
+      <header className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <PixelTile src={PIXEL_ICONS.characters} />
           <div>

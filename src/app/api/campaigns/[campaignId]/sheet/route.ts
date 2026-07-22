@@ -15,8 +15,21 @@ import { queueLibraryPortrait } from "@/lib/portrait";
 import { createSheetSchema, patchSheetSchema } from "@/lib/schemas/sheet";
 import { suggestedSpellCount } from "@/lib/content/mechanics";
 import { spellClassFor } from "@/lib/classes";
-import { abilityMod } from "@/lib/srd";
-import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { abilityMod, findClass, findSkill } from "@/lib/srd";
+import { populateFeaturesForClasses, subclassSpellsFor } from "@/lib/srd/features";
+import {
+  canMulticlassInto,
+  classListFor,
+  multiclassGrantsFor,
+  pactSlotsFor,
+  slotTableFor,
+  type MulticlassGrant,
+} from "@/lib/srd/multiclass";
+import type {
+  CharacterSheet,
+  FullPatchSheetInput,
+  PatchSheetInput,
+} from "@/lib/schemas/sheet";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 
 // A character arriving after the adventure started gets a table note so the
@@ -47,6 +60,240 @@ const editSchema = z.object({
   editLibraryCharacterId: z.string().min(1),
   sheet: createSheetSchema,
 });
+
+// A multiclass level-up: the client names the class taking the level and
+// the server builds everything else itself, so a crafted request can never
+// invent a class array, skip a prerequisite, or walk off with proficiencies
+// the multiclass rules do not grant. Returns the engine patch to apply, or
+// an error string.
+function buildMulticlassLevelUp(
+  sheet: CharacterSheet,
+  data: PatchSheetInput,
+): { patch: FullPatchSheetInput } | { error: string } {
+  const targetLevel = data.level ?? sheet.level;
+  const gained = targetLevel - sheet.level;
+  if (gained < 1 || targetLevel > 20) {
+    return { error: "Invalid level gain." };
+  }
+  const classId = (data.levelUpClass ?? "").trim().toLowerCase() || classListFor(sheet)[0].id;
+  const klass = findClass(classId);
+  if (!klass) {
+    return { error: `Unknown class "${classId}".` };
+  }
+
+  const nextClasses = classListFor(sheet).map((entry) => ({ ...entry }));
+  const existing = nextClasses.find((entry) => entry.id.toLowerCase() === classId);
+  let grants: MulticlassGrant | null = null;
+  if (existing) {
+    if (existing.level + gained > 20) {
+      return { error: `${klass.name} is already at its level cap.` };
+    }
+    existing.level += gained;
+  } else {
+    const check = canMulticlassInto(sheet, classId);
+    if (!check.ok) {
+      return { error: check.error ?? "Cannot multiclass into that class." };
+    }
+    nextClasses.push({ id: klass.id, subclass: "", level: gained });
+    grants = multiclassGrantsFor(klass.id);
+  }
+  const leveled = nextClasses.find((entry) => entry.id.toLowerCase() === classId)!;
+  // The subclass pick from the dialog belongs to the class being leveled.
+  if (data.subclass !== undefined && data.subclass.trim() && !leveled.subclass) {
+    leveled.subclass = data.subclass.trim();
+  }
+
+  // Multiclass proficiency grants land server-side (never saves, per RAW),
+  // plus the one class-skill pick some grants offer.
+  let proficiencies = sheet.proficiencies;
+  const union = (current: string[], added: string[]) => [
+    ...current,
+    ...added.filter(
+      (entry) => !current.some((held) => held.toLowerCase() === entry.toLowerCase()),
+    ),
+  ];
+  if (grants) {
+    proficiencies = {
+      ...proficiencies,
+      armor: union(proficiencies.armor, grants.armor),
+      weapons: union(proficiencies.weapons, grants.weapons),
+      tools: union(proficiencies.tools, grants.tools),
+    };
+    const skillPick = (data.levelUpSkill ?? "").trim().toLowerCase();
+    if (skillPick && grants.skillChoice) {
+      const allowed =
+        !grants.skillChoice.from.length || grants.skillChoice.from.includes(skillPick);
+      if (findSkill(skillPick) && allowed && !proficiencies.skills.includes(skillPick)) {
+        proficiencies = { ...proficiencies, skills: [...proficiencies.skills, skillPick] };
+      }
+    }
+  }
+  // Expertise picks fold in here because patchSheet ignores the bare
+  // `expertise` field whenever proficiencies are patched alongside it.
+  if (data.expertise) {
+    proficiencies = {
+      ...proficiencies,
+      expertise: data.expertise.filter((skill) => proficiencies.skills.includes(skill)),
+    };
+  }
+
+  // Per-class hit-die pools: created from the pre-level-up sheet on the
+  // first multiclass level, extended in place afterwards.
+  let pools = sheet.hitDicePools?.map((pool) => ({ ...pool })) ?? null;
+  if (nextClasses.length >= 2) {
+    if (!pools?.length) {
+      pools = [
+        {
+          classId: sheet.class,
+          die: sheet.hitDice.die,
+          total: sheet.level,
+          spent: sheet.hitDice.spent,
+        },
+      ];
+    }
+    const pool = pools.find((entry) => entry.classId.toLowerCase() === classId);
+    if (pool) {
+      pool.total = Math.min(20, pool.total + gained);
+    } else {
+      pools.push({
+        classId: klass.id,
+        die: `d${klass.hitDie}` as "d6" | "d8" | "d10" | "d12",
+        total: gained,
+        spent: 0,
+      });
+    }
+  }
+
+  // Server-side feature regrant per class at its own level; the client's
+  // list rides along as `existing` so its choice picks (fighting styles,
+  // invocations) survive exactly as in the single-class flow.
+  const features = populateFeaturesForClasses(
+    data.features ?? sheet.features,
+    nextClasses,
+    sheet.race,
+  );
+
+  // Per-class spellcasting: each caster class keeps its own ability and
+  // lists, the slot pool is shared via the multiclass table, and Pact Magic
+  // is tracked apart.
+  let spellcasting = sheet.spellcasting;
+  const anyCaster = nextClasses.some(
+    (entry) => (findClass(entry.id)?.casterType ?? "none") !== "none",
+  );
+  if (anyCaster && (spellcasting || (klass.casterType !== "none" && klass.spellAbility))) {
+    const casters = (
+      spellcasting?.casters?.map((caster) => ({
+        ...caster,
+        known: [...caster.known],
+        prepared: [...caster.prepared],
+      })) ?? []
+    );
+    if (!casters.length && spellcasting) {
+      // Seed from the legacy single-caster fields; the owner is the first
+      // caster class the sheet already had.
+      const owner = classListFor(sheet).find(
+        (entry) => (findClass(entry.id)?.casterType ?? "none") !== "none",
+      );
+      casters.push({
+        classId: owner?.id ?? sheet.class,
+        ability: spellcasting.ability,
+        known: [...spellcasting.known],
+        prepared: [...spellcasting.prepared],
+      });
+    }
+    if (klass.casterType !== "none" && klass.spellAbility) {
+      let mine = casters.find((caster) => caster.classId.toLowerCase() === classId);
+      if (!mine) {
+        mine = { classId: klass.id, ability: klass.spellAbility, known: [], prepared: [] };
+        casters.push(mine);
+      }
+      const allowance = suggestedSpellCount(
+        spellClassFor(klass.id),
+        leveled.level,
+        abilityMod((data.abilities ?? sheet.abilities)[mine.ability]),
+      );
+      const heldNames = new Set(
+        [...mine.known, ...mine.prepared].map((name) => name.toLowerCase()),
+      );
+      const picks = (data.levelUpSpells ?? []).filter(
+        (name) => !heldNames.has(name.toLowerCase()),
+      );
+      const intoKnown = allowance?.label === "spells known";
+      if (allowance) {
+        const held = (intoKnown ? mine.known : mine.prepared).length + picks.length;
+        if (held > allowance.count) {
+          return {
+            error: `A ${klass.name} ${leveled.level} may hold ${allowance.count} ${allowance.label}; that list would have ${held}.`,
+          };
+        }
+      }
+      // Subclass spells (domain, circle, oath, patron) arrive free.
+      const granted = subclassSpellsFor(klass.id, leveled.subclass, leveled.level).filter(
+        (name) =>
+          !heldNames.has(name.toLowerCase()) &&
+          !picks.some((pick) => pick.toLowerCase() === name.toLowerCase()),
+      );
+      if (intoKnown) {
+        mine.known.push(...picks, ...granted);
+      } else {
+        mine.prepared.push(...picks, ...granted);
+      }
+    }
+    const table = slotTableFor({ class: sheet.class, classes: nextClasses });
+    const slots = Object.fromEntries(
+      Object.entries(table).map(([slotLevel, max]) => [
+        slotLevel,
+        { max, used: Math.min(spellcasting?.slots?.[slotLevel]?.used ?? 0, max) },
+      ]),
+    );
+    const warlockLevel =
+      nextClasses.find((entry) => findClass(entry.id)?.casterType === "pact")?.level ?? 0;
+    const pactInfo = pactSlotsFor(warlockLevel);
+    const dedupe = (names: string[]) => {
+      const seen = new Set<string>();
+      return names.filter((name) => {
+        const key = name.toLowerCase();
+        if (seen.has(key)) {
+          return false;
+        }
+        seen.add(key);
+        return true;
+      });
+    };
+    spellcasting = {
+      // Mirrors for every existing consumer: the primary caster's ability,
+      // and the union of every class's lists.
+      ability: casters[0]?.ability ?? spellcasting?.ability ?? klass.spellAbility ?? "int",
+      slots,
+      known: dedupe(casters.flatMap((caster) => caster.known)).slice(0, 80),
+      prepared: dedupe(casters.flatMap((caster) => caster.prepared)).slice(0, 60),
+      casters,
+      ...(pactInfo
+        ? {
+            pact: {
+              level: pactInfo.level,
+              max: pactInfo.max,
+              used: Math.min(spellcasting?.pact?.used ?? 0, pactInfo.max),
+            },
+          }
+        : {}),
+    };
+  }
+
+  return {
+    patch: {
+      ...(data.currentHp !== undefined ? { currentHp: data.currentHp } : {}),
+      ...(data.maxHp !== undefined ? { maxHp: data.maxHp } : {}),
+      ...(data.abilities ? { abilities: data.abilities } : {}),
+      ...(data.feats ? { feats: data.feats } : {}),
+      classes: nextClasses,
+      ...(pools?.length ? { hitDicePools: pools } : {}),
+      proficiencies,
+      features,
+      ...(spellcasting !== sheet.spellcasting ? { spellcasting } : {}),
+    },
+  };
+}
 
 // Character changes (edit, switch, delete, recreate) are lobby-only; once
 // the adventure starts, the sheet is locked to the lead/engine paths.
@@ -343,6 +590,24 @@ export async function PATCH(
       },
       { status: 403 },
     );
+  }
+
+  // Multiclass path: an already-multiclassed sheet levels any of its
+  // classes, or a single-class sheet takes a first level in a NEW class.
+  // The server builds the class array, hit-die pools, proficiency grants,
+  // and per-class spellcasting itself from the named class.
+  const wantedClass = (parsed.data.levelUpClass ?? "").trim().toLowerCase();
+  const takesNewClass =
+    Boolean(wantedClass) &&
+    !classListFor(sheet).some((entry) => entry.id.toLowerCase() === wantedClass);
+  if (levelingUp && ((sheet.classes?.length ?? 0) > 0 || takesNewClass)) {
+    const built = buildMulticlassLevelUp(sheet, parsed.data);
+    if ("error" in built) {
+      return Response.json({ error: built.error }, { status: 400 });
+    }
+    const leveled = patchSheet(sheet.id, built.patch);
+    publishPersisted(campaignId, "sheet_updated", { sheet: leveled });
+    return Response.json({ sheet: leveled });
   }
 
   // A level-up may not hand out more spells than the class's 5e table

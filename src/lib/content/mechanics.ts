@@ -20,6 +20,9 @@ export type RaceMechanics = {
   cantripChoice?: { list: string; count: number };
   tools?: string[];
   toolChoice?: { count: number; from: string[] };
+  // Race-taught combat training (mountain dwarf armor, drow weapons).
+  armor?: string[];
+  weapons?: string[];
 };
 
 // The 5e standard + exotic languages, for language pickers.
@@ -37,7 +40,7 @@ export type ClassMechanics = {
   weapons: string[];
   tools: string[];
   spellAbility: "int" | "wis" | "cha" | null;
-  casterType: "none" | "full" | "half" | "pact";
+  casterType: "none" | "full" | "half" | "pact" | "artificer";
 };
 
 const ABILITY_BY_NAME: Record<string, Ability> = {
@@ -166,7 +169,9 @@ export function classMechanics(slug: string, data: Record<string, unknown>): Cla
       : null;
 
   const baseSlug = slug.toLowerCase();
-  const casterType = FULL_CASTERS.has(baseSlug)
+  const casterType = baseSlug === "artificer"
+    ? ("artificer" as const)
+    : FULL_CASTERS.has(baseSlug)
     ? ("full" as const)
     : HALF_CASTERS.has(baseSlug)
       ? ("half" as const)

@@ -454,9 +454,9 @@ export function setDmOutline(campaignId: string, outline: string) {
 }
 
 // Persists the structured story arc. Serialized whole; if a multi-act arc
-// outgrows the cap, oldest settled events and then settled sub-arcs are shed
-// rather than writing truncated (corrupt) JSON. Pending plans and the beat
-// spine are never dropped here.
+// outgrows the cap, oldest settled events, then settled sub-arcs, then the
+// saga's history and sketch extras are shed rather than writing truncated
+// (corrupt) JSON. Pending plans and the beat spine are never dropped here.
 const STORY_ARC_CHAR_CAP = 32_000;
 
 export function setStoryArc(campaignId: string, arc: StoryArc) {
@@ -466,17 +466,45 @@ export function setStoryArc(campaignId: string, arc: StoryArc) {
     ...arc,
     subArcs: [...(arc.subArcs ?? [])],
     events: [...(arc.events ?? [])],
+    saga: arc.saga
+      ? {
+          ...arc.saga,
+          sketches: (arc.saga.sketches ?? []).map((sketch) => ({ ...sketch })),
+          priorSagas: [...(arc.saga.priorSagas ?? [])],
+        }
+      : (arc.saga ?? null),
   };
   let serialized = JSON.stringify(trimmed);
   while (serialized.length > STORY_ARC_CHAR_CAP) {
     const settledEvent = trimmed.events.findIndex((event) => event.status !== "pending");
     if (settledEvent >= 0) {
       trimmed.events.splice(settledEvent, 1);
-    } else if (trimmed.subArcs.length) {
-      const settled = trimmed.subArcs.findIndex(
-        (subArc) => subArc.status === "resolved" || subArc.status === "abandoned",
+    } else if (
+      trimmed.subArcs.some((subArc) => subArc.status === "resolved" || subArc.status === "abandoned")
+    ) {
+      trimmed.subArcs.splice(
+        trimmed.subArcs.findIndex(
+          (subArc) => subArc.status === "resolved" || subArc.status === "abandoned",
+        ),
+        1,
       );
-      trimmed.subArcs.splice(settled >= 0 ? settled : 0, 1);
+    } else if (trimmed.saga && trimmed.saga.priorSagas.length) {
+      trimmed.saga.priorSagas.splice(0, 1);
+    } else if (
+      trimmed.saga &&
+      trimmed.saga.sketches.some(
+        (sketch) => sketch.status !== "sketch" && (sketch.allies.length || sketch.hooks.length),
+      )
+    ) {
+      // Finished acts no longer need their planning extras.
+      for (const sketch of trimmed.saga.sketches) {
+        if (sketch.status !== "sketch") {
+          sketch.allies = [];
+          sketch.hooks = [];
+        }
+      }
+    } else if (trimmed.subArcs.length) {
+      trimmed.subArcs.splice(0, 1);
     } else {
       break;
     }

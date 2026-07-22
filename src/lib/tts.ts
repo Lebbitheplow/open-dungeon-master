@@ -1,9 +1,10 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { publishPersisted } from "@/lib/events";
 import { publishMediaStatus } from "@/lib/dm/images";
 import { stripToolText } from "@/lib/dm/tool-text";
 import { enqueueMediaJob } from "@/lib/media-queue";
+import { TTS_VOICES } from "@/lib/tts-voices";
 import { configValue, getGlobalConfig } from "@/lib/app-config";
 
 // Narration TTS via the local Kokoro-FastAPI service (:8880). Audio is
@@ -90,4 +91,45 @@ export function enqueueNarrationAudio(
       url: `/generated-audio/${campaignId}/${messageId}.mp3`,
     });
   });
+}
+
+// Voice previews: Kokoro ships no sample clips, but one short line renders in
+// well under a second, so the first request for a voice generates it and every
+// later one is served from disk. Kept off the media queue on purpose, so a
+// preview never waits behind a portrait render; Kokoro runs on CPU here and
+// does not contend with the GPU jobs that queue exists to serialize.
+const PREVIEW_LINE = "The tavern door creaks open. Roll for initiative, adventurer.";
+
+const previewRenders = new Map<string, Promise<string>>();
+
+export function isPreviewableVoice(voice: string): boolean {
+  return TTS_VOICES.some((entry) => entry.id === voice);
+}
+
+export function voicePreviewPath(voice: string): string {
+  return path.join(process.cwd(), "public", "generated-audio", "previews", `${voice}.mp3`);
+}
+
+export function renderVoicePreview(voice: string): Promise<string> {
+  if (!isPreviewableVoice(voice)) {
+    return Promise.reject(new Error(`Unknown voice: ${voice}`));
+  }
+  const file = voicePreviewPath(voice);
+  if (existsSync(file)) {
+    return Promise.resolve(file);
+  }
+  const inFlight = previewRenders.get(voice);
+  if (inFlight) {
+    return inFlight;
+  }
+  const render = (async () => {
+    const audio = await kokoroSpeech(PREVIEW_LINE, voice);
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, audio);
+    return file;
+  })().finally(() => {
+    previewRenders.delete(voice);
+  });
+  previewRenders.set(voice, render);
+  return render;
 }

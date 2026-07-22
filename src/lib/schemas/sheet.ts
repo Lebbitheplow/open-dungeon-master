@@ -20,6 +20,29 @@ export const hitDiceSchema = z.object({
 });
 export type HitDice = z.infer<typeof hitDiceSchema>;
 
+// One class a character has levels in. A single-class sheet keeps the
+// scalar class/subclass/level fields and an empty `classes` array; the
+// multiclass helpers (src/lib/srd/multiclass.ts) derive a one-entry list
+// from the scalars so consumers never branch on which shape they hold.
+export const classEntrySchema = z.object({
+  id: z.string().trim().min(1).max(60),
+  subclass: z.string().trim().max(60).default(""),
+  level: z.number().int().min(1).max(20),
+});
+export type ClassEntry = z.infer<typeof classEntrySchema>;
+
+// Per-class hit-die pools for multiclassed characters (a barbarian 3 /
+// rogue 2 carries 3d12 and 2d8). Authoritative when present; the legacy
+// single `hitDice` field is kept as a mirror (total = summed pools, die =
+// the primary class's) so every existing consumer keeps rendering.
+export const hitDicePoolSchema = z.object({
+  classId: z.string().trim().min(1).max(60),
+  die: z.enum(["d6", "d8", "d10", "d12"]),
+  total: z.number().int().min(1).max(20),
+  spent: z.number().int().min(0).max(20),
+});
+export type HitDicePool = z.infer<typeof hitDicePoolSchema>;
+
 // Death-save track for a character at 0 HP. Null = not dying. Managed by
 // the server death engine (src/lib/dm/death.ts); never player- or
 // model-writable directly.
@@ -71,6 +94,10 @@ export const sheetFeatureSchema = z.object({
   name: z.string().trim().min(1).max(80),
   source: z.enum(["class", "race", "background", "feat", "choice", "story"]).default("story"),
   level: z.number().int().min(1).max(20).optional(),
+  // Which class granted a "class"-sourced feature; absent = the primary
+  // class. Set on regrant so level-scaled features (Sneak Attack, Martial
+  // Arts) resolve against the granting class's level on multiclass sheets.
+  classId: z.string().trim().max(60).optional(),
 });
 export type SheetFeature = z.infer<typeof sheetFeatureSchema>;
 
@@ -97,6 +124,32 @@ export const spellcastingSchema = z
     // Spells known (for known-casters); prepared casters leave this empty
     // and use `prepared` alone.
     known: z.array(z.string().trim().min(1).max(80)).max(80).default([]),
+    // Per-class casting for multiclassed characters: each caster class
+    // keeps its own ability and lists while `slots` becomes the SHARED
+    // multiclass pool. Absent = single-class; the legacy fields above stay
+    // authoritative. The primary caster's ability/known/prepared are
+    // mirrored into them so every existing consumer keeps working.
+    casters: z
+      .array(
+        z.object({
+          classId: z.string().trim().min(1).max(60),
+          ability: z.enum(["int", "wis", "cha"]),
+          known: z.array(z.string().trim().min(1).max(80)).max(80).default([]),
+          prepared: z.array(z.string().trim().min(1).max(80)).max(60).default([]),
+        }),
+      )
+      .max(3)
+      .optional(),
+    // Warlock Pact Magic tracked apart from the shared pool: pact slots
+    // are all one level, refill on a short rest, and never mix into the
+    // multiclass slot table.
+    pact: z
+      .object({
+        level: z.number().int().min(1).max(5),
+        max: z.number().int().min(0).max(4),
+        used: z.number().int().min(0).max(4),
+      })
+      .optional(),
   })
   .nullable();
 export type Spellcasting = z.infer<typeof spellcastingSchema>;
@@ -136,6 +189,11 @@ export const createSheetSchema = z.object({
   acOverride: z.boolean().optional(),
   speed: z.number().int().min(0).max(120).default(30),
   hitDice: hitDiceSchema,
+  // Multiclass state carried through the library round-trip. Characters are
+  // always CREATED single-class (multiclassing happens at level-up); these
+  // only hold values when a campaign sheet that multiclassed synced back.
+  classes: z.array(classEntrySchema).max(3).default([]),
+  hitDicePools: z.array(hitDicePoolSchema).max(3).nullable().default(null),
   proficiencies: proficienciesSchema,
   equipment: z.array(equipmentItemSchema).max(60).default([]),
   gold: z.number().int().min(0).max(1000000).default(0),
@@ -189,6 +247,18 @@ export const patchSheetSchema = z.object({
   // sheet is actually proficient in.
   expertise: z.array(z.string().max(40)).max(6).optional(),
   subclass: z.string().trim().max(60).optional(),
+  // Which class takes the new level (existing or a new multiclass). The
+  // server validates prerequisites, builds the classes array itself, and
+  // applies the multiclass proficiency grants; the client never writes the
+  // array directly.
+  levelUpClass: z.string().trim().max(60).optional(),
+  // The one class-skill pick some multiclass grants offer (rogue, ranger,
+  // bard); validated server-side against the grant's list.
+  levelUpSkill: z.string().trim().max(40).optional(),
+  // New spell picks for the class taking the level, on the multiclass path
+  // only (the single-class flow patches spellcasting whole, as ever). The
+  // server checks them against that class's own allowance at ITS level.
+  levelUpSpells: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
   portrait: attachmentSchema.nullable().optional(),
   notes: z.string().max(4000).optional(),
   backstory: z.string().trim().max(2000).optional(),
@@ -227,19 +297,82 @@ export const conditionMetaSchema = z.record(
 );
 export type ConditionMetaMap = z.infer<typeof conditionMetaSchema>;
 
-// An active Wild Shape form. The druid's own hit points are untouched while
-// shaped (5e: they are remembered and returned to on revert); damage lands
-// on the beast pool and only the excess spills through. Null when the
-// character is in their own body.
+// An active transformation (Wild Shape or Polymorph). The character's own
+// hit points are untouched while shaped (5e: they are remembered and
+// returned to on revert); damage lands on the beast pool and only the
+// excess spills through. Null when the character is in their own body.
+// The optional fields arrived with the beast-form table
+// (src/lib/srd/beast-forms.ts); rows stored before it lack them and keep
+// the old HP-pool-only behavior.
 export const wildShapeSchema = z
   .object({
     form: z.string().trim().min(1).max(60),
     beastHp: z.number().int().min(0).max(300),
     beastMaxHp: z.number().int().min(1).max(300),
     beastAc: z.number().int().min(1).max(30),
+    // "wildshape" keeps the character's mental stats; "polymorph" replaces
+    // every score the form carries. Missing = "wildshape".
+    kind: z.enum(["wildshape", "polymorph"]).optional(),
+    // The form's ability scores, overriding the sheet's while transformed.
+    // Wild Shape stores only STR/DEX/CON; Polymorph stores all six.
+    abilities: z
+      .object({
+        str: z.number().int().min(1).max(30).optional(),
+        dex: z.number().int().min(1).max(30).optional(),
+        con: z.number().int().min(1).max(30).optional(),
+        int: z.number().int().min(1).max(30).optional(),
+        wis: z.number().int().min(1).max(30).optional(),
+        cha: z.number().int().min(1).max(30).optional(),
+      })
+      .optional(),
+    // The form's walking speed in feet.
+    speed: z.number().int().min(0).max(120).optional(),
+    // Natural attacks with statblock numbers; pc_attack uses these while
+    // transformed instead of the sheet's weapons.
+    attacks: z
+      .array(
+        z.object({
+          name: z.string().trim().min(1).max(40),
+          toHit: z.number().int().min(-5).max(20),
+          damage: z.string().trim().min(1).max(30),
+          type: z.string().trim().max(20),
+        }),
+      )
+      .max(4)
+      .optional(),
   })
   .nullable();
 export type WildShape = z.infer<typeof wildShapeSchema>;
+
+// A creature bound to the character: a familiar (Find Familiar / Pact of
+// the Chain), a Beast Master companion, a Drakewarden drake, or a story
+// pet. Lives on the owner's sheet (no user row, no full sheet); the DM
+// drives it through the pet tools (src/lib/dm/pet-tools.ts) and damage can
+// be routed at it by name through apply_damage.
+export const petSchema = z.object({
+  name: z.string().trim().min(1).max(60),
+  kind: z.enum(["familiar", "beast_companion", "drake", "other"]),
+  // The species/form behind the name ("owl", "wolf", "drake").
+  form: z.string().trim().min(1).max(60),
+  hp: z.number().int().min(0).max(300),
+  maxHp: z.number().int().min(1).max(300),
+  ac: z.number().int().min(1).max(30),
+  speed: z.number().int().min(0).max(120),
+  attacks: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(40),
+        toHit: z.number().int().min(-5).max(20),
+        damage: z.string().trim().min(1).max(30),
+        type: z.string().trim().max(20),
+      }),
+    )
+    .max(3)
+    .default([]),
+  // One line of senses/traits for the DM to narrate.
+  notes: z.string().trim().max(300).default(""),
+});
+export type SheetPet = z.infer<typeof petSchema>;
 
 export const fullPatchSheetSchema = patchSheetSchema.extend({
   name: z.string().trim().min(1).max(60).optional(),
@@ -257,8 +390,17 @@ export const fullPatchSheetSchema = patchSheetSchema.extend({
   conditionMeta: conditionMetaSchema.optional(),
   resources: resourcesSchema.optional(),
   wildShape: wildShapeSchema.optional(),
+  // Bound creatures (familiars, animal companions, drakes); managed by the
+  // pet engine (src/lib/dm/pet-tools.ts), never player-patchable directly.
+  pets: z.array(petSchema).max(3).optional(),
   // Exhaustion level 0-6 with real mechanical effects (condition-logic.ts).
   exhaustion: z.number().int().min(0).max(6).optional(),
+  // The multiclass array and per-class hit-die pools. Engine- and
+  // lead-managed: players level up through levelUpClass, never by writing
+  // these directly. Patching `classes` re-syncs the scalar mirrors
+  // (class/subclass = first entry, level = summed) in patchSheet.
+  classes: z.array(classEntrySchema).max(3).optional(),
+  hitDicePools: z.array(hitDicePoolSchema).max(3).optional(),
 });
 export type FullPatchSheetInput = z.infer<typeof fullPatchSheetSchema>;
 
@@ -285,6 +427,12 @@ export type CharacterSheet = {
   acOverride: boolean;
   speed: number;
   hitDice: HitDice;
+  // Multiclass state. Empty `classes` = single-class (the scalars above are
+  // the truth); non-empty = the array is authoritative and the scalars are
+  // mirrors (class/subclass = first entry, level = summed). hitDicePools is
+  // null until the first multiclass level-up creates per-class pools.
+  classes: ClassEntry[];
+  hitDicePools: HitDicePool[] | null;
   proficiencies: Proficiencies;
   equipment: EquipmentItem[];
   gold: number;
@@ -297,6 +445,8 @@ export type CharacterSheet = {
   // Active beast form, or null. Managed by the server (use_resource +
   // apply_damage in src/lib/dm/mutations.ts).
   wildShape: WildShape;
+  // Bound creatures: familiars, animal companions, drakes.
+  pets: SheetPet[];
   exhaustion: number;
   deathSaves: DeathSaves;
   // Spell this character is concentrating on; null when none. Managed by

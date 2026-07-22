@@ -33,12 +33,16 @@ export type TurnBudget = {
   dashed: boolean;
   // Set by the Disengage action: leaving a reach provokes nothing this turn.
   disengaged: boolean;
+  // Extra actions still available this turn (Haste grants one, usable for
+  // one weapon attack, Dash, Disengage, Hide, or Use an Object).
+  extraActions?: number;
 };
 
 export function freshBudget(input: {
   ownerId: string;
   round: number;
   attacksAllowed?: number;
+  extraActions?: number;
 }): TurnBudget {
   return {
     ownerId: input.ownerId,
@@ -51,6 +55,7 @@ export function freshBudget(input: {
     oncePerTurn: [],
     dashed: false,
     disengaged: false,
+    ...(input.extraActions ? { extraActions: input.extraActions } : {}),
   };
 }
 
@@ -65,8 +70,21 @@ export function budgetApplies(
 }
 
 export type SpendResult =
-  | { ok: true; budget: TurnBudget }
+  | { ok: true; budget: TurnBudget; note?: string }
   | { ok: false; error: string };
+
+// The Haste extra action, spent when the normal slot is gone. Null when
+// none remains.
+function spendExtraAction(budget: TurnBudget, what: string, who: string): SpendResult | null {
+  if ((budget.extraActions ?? 0) <= 0) {
+    return null;
+  }
+  return {
+    ok: true,
+    budget: { ...budget, extraActions: (budget.extraActions ?? 0) - 1 },
+    note: `${who} spends their extra action (Haste) on ${what}.`,
+  };
+}
 
 // Spends the action, bonus action, or reaction. The refusal text is written
 // for the model: it says what is gone and what remains, so it narrates a
@@ -78,6 +96,10 @@ export function spendAction(
   who: string,
 ): SpendResult {
   if (kind === "action" && budget.actionUsed) {
+    const extra = spendExtraAction(budget, what, who);
+    if (extra) {
+      return extra;
+    }
     return {
       ok: false,
       error: `${who} has already used their action this turn; ${what} needs one. They can still move${
@@ -112,6 +134,21 @@ export function spendAction(
 // rest come free until Extra Attack runs out. Off-hand attacks are a bonus
 // action instead and go through spendAction.
 export function spendAttack(budget: TurnBudget, who: string): SpendResult {
+  if (budget.attacksMade >= budget.attacksAllowed || (budget.attacksMade === 0 && budget.actionUsed)) {
+    // The normal Attack action is gone; the Haste extra action buys exactly
+    // one more weapon attack.
+    const extra = spendExtraAction(budget, "one weapon attack", who);
+    if (extra && extra.ok) {
+      return {
+        ...extra,
+        budget: {
+          ...extra.budget,
+          actionUsed: true,
+          attacksMade: Math.max(extra.budget.attacksMade, extra.budget.attacksAllowed),
+        },
+      };
+    }
+  }
   if (budget.attacksMade >= budget.attacksAllowed) {
     // The action is spent AND the swings are gone: no more attacking.
     return {
@@ -164,6 +201,9 @@ export function describeBudget(budget: TurnBudget): string {
   }
   if (!budget.reactionUsed) {
     parts.push("reaction");
+  }
+  if ((budget.extraActions ?? 0) > 0) {
+    parts.push("an extra action (Haste)");
   }
   if (budget.dashed) {
     parts.push("doubled movement (Dash)");

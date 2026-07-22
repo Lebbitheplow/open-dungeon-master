@@ -8,24 +8,48 @@ function test(name, fn) {
   passed += 1;
 }
 
-const limits = { min: 8, max: 80 };
+const limits = { min: 8, max: 80, beatsRequired: 2 };
 
-test("no close below the floor even when a beat finished", () => {
-  assert.equal(shouldCloseChapter(7, true, limits), false);
+test("no close below the floor even with enough beats finished", () => {
+  assert.equal(shouldCloseChapter(7, 2, false, limits), false);
+  assert.equal(shouldCloseChapter(7, 5, true, limits), false);
 });
 
-test("a finished beat past the floor closes", () => {
-  assert.equal(shouldCloseChapter(8, true, limits), true);
+test("one finished beat past the floor is not yet a chapter", () => {
+  assert.equal(shouldCloseChapter(8, 1, false, limits), false);
+  assert.equal(shouldCloseChapter(40, 1, false, limits), false);
+});
+
+test("the required beat count past the floor closes", () => {
+  assert.equal(shouldCloseChapter(8, 2, false, limits), true);
+  assert.equal(shouldCloseChapter(8, 3, false, limits), true);
+});
+
+test("a single required beat behaves like the old pacing", () => {
+  assert.equal(shouldCloseChapter(8, 1, false, { ...limits, beatsRequired: 1 }), true);
 });
 
 // The whole point of beat pacing: a party that spends a long scene
 // searching, shopping, or talking finishes no beat and keeps its chapter.
 test("a long chapter with no finished beat stays open under the cap", () => {
-  assert.equal(shouldCloseChapter(79, false, limits), false);
+  assert.equal(shouldCloseChapter(79, 0, false, limits), false);
 });
 
 test("hard cap closes even when no beat ever finished", () => {
-  assert.equal(shouldCloseChapter(80, false, limits), true);
+  assert.equal(shouldCloseChapter(80, 0, false, limits), true);
+});
+
+// An exhausted act must close promptly: the next act (or sequel saga) is
+// only planned at chapter close, even when the beat count is short, and
+// even at zero beats (a chapter can open exhausted after a failed planning
+// pass; closing again is the retry).
+test("an exhausted arc past the floor closes regardless of beat count", () => {
+  assert.equal(shouldCloseChapter(8, 1, true, limits), true);
+  assert.equal(shouldCloseChapter(8, 0, true, limits), true);
+});
+
+test("an exhausted arc below the floor still waits for the floor", () => {
+  assert.equal(shouldCloseChapter(5, 1, true, limits), false);
 });
 
 test("clean JSON parses fully", () => {

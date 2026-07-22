@@ -30,6 +30,38 @@
       }
     },
     {
+      "id": "mountain_dwarf",
+      "name": "Dwarf (Mountain)",
+      "speed": 25,
+      "size": "Medium",
+      "asi": {
+        "str": 2,
+        "con": 2
+      },
+      "traits": [
+        "Darkvision 60 ft",
+        "Dwarven Resilience (adv. vs poison)",
+        "Stonecunning",
+        "Dwarven Armor Training (light and medium armor)"
+      ],
+      "languages": [
+        "Common",
+        "Dwarvish"
+      ],
+      "toolChoice": {
+        "count": 1,
+        "from": [
+          "smith's tools",
+          "brewer's supplies",
+          "mason's tools"
+        ]
+      },
+      "armor": [
+        "light",
+        "medium"
+      ]
+    },
+    {
       "id": "high_elf",
       "name": "Elf (High)",
       "speed": 30,
@@ -59,6 +91,67 @@
       }
     },
     {
+      "id": "wood_elf",
+      "name": "Elf (Wood)",
+      "speed": 35,
+      "size": "Medium",
+      "asi": {
+        "dex": 2,
+        "wis": 1
+      },
+      "traits": [
+        "Darkvision 60 ft",
+        "Fey Ancestry (adv. vs charm, immune to magical sleep)",
+        "Trance",
+        "Perception proficiency (Keen Senses)",
+        "Fleet of Foot (35 ft speed)",
+        "Mask of the Wild (hide when lightly obscured by nature)"
+      ],
+      "languages": [
+        "Common",
+        "Elvish"
+      ],
+      "skills": [
+        "perception"
+      ],
+      "weapons": [
+        "longswords",
+        "shortswords",
+        "shortbows",
+        "longbows"
+      ]
+    },
+    {
+      "id": "drow",
+      "name": "Elf (Drow)",
+      "speed": 30,
+      "size": "Medium",
+      "asi": {
+        "dex": 2,
+        "cha": 1
+      },
+      "traits": [
+        "Superior Darkvision 120 ft",
+        "Sunlight Sensitivity (disadvantage on attacks and sight-based Perception in direct sunlight)",
+        "Fey Ancestry (adv. vs charm, immune to magical sleep)",
+        "Trance",
+        "Perception proficiency (Keen Senses)",
+        "Drow Magic (dancing lights cantrip)"
+      ],
+      "languages": [
+        "Common",
+        "Elvish"
+      ],
+      "skills": [
+        "perception"
+      ],
+      "weapons": [
+        "rapiers",
+        "shortswords",
+        "hand crossbows"
+      ]
+    },
+    {
       "id": "lightfoot_halfling",
       "name": "Halfling (Lightfoot)",
       "speed": 25,
@@ -72,6 +165,26 @@
         "Brave (adv. vs frightened)",
         "Halfling Nimbleness",
         "Naturally Stealthy"
+      ],
+      "languages": [
+        "Common",
+        "Halfling"
+      ]
+    },
+    {
+      "id": "stout_halfling",
+      "name": "Halfling (Stout)",
+      "speed": 25,
+      "size": "Small",
+      "asi": {
+        "dex": 2,
+        "con": 1
+      },
+      "traits": [
+        "Lucky (reroll nat 1 on d20)",
+        "Brave (adv. vs frightened)",
+        "Halfling Nimbleness",
+        "Stout Resilience (adv. vs poison, resistance to poison damage)"
       ],
       "languages": [
         "Common",
@@ -98,6 +211,28 @@
         "Common"
       ],
       "bonusLanguages": 1
+    },
+    {
+      "id": "variant_human",
+      "name": "Human (Variant)",
+      "speed": 30,
+      "size": "Medium",
+      "asi": {},
+      "asiChoice": {
+        "count": 2,
+        "amount": 1
+      },
+      "traits": [
+        "One feat of your choice (pick it in the feats section)",
+        "One skill proficiency of your choice"
+      ],
+      "languages": [
+        "Common"
+      ],
+      "bonusLanguages": 1,
+      "skillChoice": {
+        "count": 1
+      }
     },
     {
       "id": "dragonborn",
@@ -139,6 +274,46 @@
       ],
       "tools": [
         "tinker's tools"
+      ]
+    },
+    {
+      "id": "forest_gnome",
+      "name": "Gnome (Forest)",
+      "speed": 25,
+      "size": "Small",
+      "asi": {
+        "int": 2,
+        "dex": 1
+      },
+      "traits": [
+        "Darkvision 60 ft",
+        "Gnome Cunning (adv. on INT/WIS/CHA saves vs magic)",
+        "Natural Illusionist (minor illusion cantrip)",
+        "Speak with Small Beasts"
+      ],
+      "languages": [
+        "Common",
+        "Gnomish"
+      ]
+    },
+    {
+      "id": "deep_gnome",
+      "name": "Gnome (Deep)",
+      "speed": 25,
+      "size": "Small",
+      "asi": {
+        "int": 2,
+        "dex": 1
+      },
+      "traits": [
+        "Superior Darkvision 120 ft",
+        "Gnome Cunning (adv. on INT/WIS/CHA saves vs magic)",
+        "Stone Camouflage (adv. on Stealth in rocky terrain)"
+      ],
+      "languages": [
+        "Common",
+        "Gnomish",
+        "Undercommon"
       ]
     },
     {
@@ -209,6 +384,338 @@
         "Common",
         "Infernal"
       ]
+    },
+    {
+      "id": "aasimar",
+      "name": "Aasimar",
+      "speed": 30,
+      "size": "Medium",
+      "asi": {
+        "cha": 2,
+        "wis": 1
+      },
+      "traits": [
+        "Darkvision 60 ft",
+        "Celestial Resistance (necrotic and radiant)",
+        "Healing Hands (heal a touched creature your level in HP, 1/long rest)",
+        "Light Bearer (the light cantrip)",
+        "Celestial Revelation (winged flight and radiant damage from 3rd level, 1/long rest)"
+      ],
+      "languages": [
+        "Common",
+        "Celestial"
+      ]
+    },
+    {
+      "id": "goliath",
+      "name": "Goliath",
+      "speed": 30,
+      "size": "Medium",
+      "asi": {
+        "str": 2,
+        "con": 1
+      },
+      "traits": [
+        "Stone's Endurance (reduce damage by 1d12 + CON, 1/short rest)",
+        "Powerful Build (count as one size larger for carrying)",
+        "Mountain Born (cold and altitude adapted)",
+        "Athletics proficiency (Natural Athlete)"
+      ],
+      "languages": [
+        "Common",
+        "Giant"
+      ],
+      "skills": [
+        "athletics"
+      ]
+    },
+    {
+      "id": "firbolg",
+      "name": "Firbolg",
+      "speed": 30,
+      "size": "Medium",
+      "asi": {
+        "wis": 2,
+        "str": 1
+      },
+      "traits": [
+        "Firbolg Magic (detect magic and disguise self, 1/short rest each)",
+        "Hidden Step (turn invisible until your next turn as a bonus action, 1/short rest)",
+        "Powerful Build (count as one size larger for carrying)",
+        "Speech of Beast and Leaf (beasts and plants understand you)"
+      ],
+      "languages": [
+        "Common",
+        "Elvish",
+        "Giant"
+      ]
+    },
+    {
+      "id": "tabaxi",
+      "name": "Tabaxi",
+      "speed": 30,
+      "size": "Medium",
+      "asi": {
+        "dex": 2,
+        "cha": 1
+      },
+      "traits": [
+        "Darkvision 60 ft",
+        "Feline Agility (double your speed for a turn, refreshed by not moving)",
+        "Cat's Claws (20 ft climb speed, 1d4 slashing unarmed strike)",
+        "Perception proficiency (Cat's Talent)",
+        "Stealth proficiency (Cat's Talent)"
+      ],
+      "languages": [
+        "Common"
+      ],
+      "skills": [
+        "perception",
+        "stealth"
+      ]
+    },
+    {
+      "id": "kenku",
+      "name": "Kenku",
+      "speed": 30,
+      "size": "Medium",
+      "asi": {
+        "dex": 2,
+        "wis": 1
+      },
+      "traits": [
+        "Expert Forgery (advantage on checks to duplicate writing and craftwork)",
+        "Mimicry (reproduce any sound you have heard)",
+        "Kenku Training (two skills of your choice)"
+      ],
+      "languages": [
+        "Common",
+        "Auran"
+      ],
+      "skillChoice": {
+        "count": 2
+      }
+    },
+    {
+      "id": "tortle",
+      "name": "Tortle",
+      "speed": 30,
+      "size": "Medium",
+      "asi": {
+        "str": 2,
+        "wis": 1
+      },
+      "traits": [
+        "Natural Armor (AC 17, unmodified by Dexterity)",
+        "Shell Defense (withdraw for +4 AC and save advantage, at the cost of movement and actions)",
+        "Hold Breath (up to 1 hour)",
+        "Claws (1d4 slashing unarmed strike)",
+        "Survival proficiency (Tortle Instinct)"
+      ],
+      "languages": [
+        "Common",
+        "Aquan"
+      ],
+      "skills": [
+        "survival"
+      ]
+    },
+    {
+      "id": "fire_genasi",
+      "name": "Genasi (Fire)",
+      "speed": 30,
+      "size": "Medium",
+      "asi": {
+        "con": 2,
+        "int": 1
+      },
+      "traits": [
+        "Darkvision 60 ft",
+        "Fire Resistance",
+        "Reach to the Blaze (produce flame, then burning hands 1/long rest from 3rd level)"
+      ],
+      "languages": [
+        "Common",
+        "Primordial"
+      ]
+    },
+    {
+      "id": "water_genasi",
+      "name": "Genasi (Water)",
+      "speed": 30,
+      "size": "Medium",
+      "asi": {
+        "con": 2,
+        "wis": 1
+      },
+      "traits": [
+        "Acid Resistance",
+        "Amphibious (breathe air and water)",
+        "30 ft swim speed",
+        "Call to the Wave (shape water, then create or destroy water 1/long rest from 3rd level)"
+      ],
+      "languages": [
+        "Common",
+        "Primordial"
+      ]
+    },
+    {
+      "id": "air_genasi",
+      "name": "Genasi (Air)",
+      "speed": 30,
+      "size": "Medium",
+      "asi": {
+        "con": 2,
+        "dex": 1
+      },
+      "traits": [
+        "Lightning Resistance",
+        "Unending Breath (hold your breath indefinitely)",
+        "Mingle with the Wind (levitate 1/long rest from 3rd level)"
+      ],
+      "languages": [
+        "Common",
+        "Primordial"
+      ]
+    },
+    {
+      "id": "earth_genasi",
+      "name": "Genasi (Earth)",
+      "speed": 30,
+      "size": "Medium",
+      "asi": {
+        "con": 2,
+        "str": 1
+      },
+      "traits": [
+        "Darkvision 60 ft",
+        "Earth Walk (difficult terrain of earth or stone costs no extra movement)",
+        "Merge with Stone (pass without trace 1/long rest from 3rd level)"
+      ],
+      "languages": [
+        "Common",
+        "Primordial"
+      ]
+    },
+    {
+      "id": "changeling",
+      "name": "Changeling",
+      "speed": 30,
+      "size": "Medium",
+      "asi": {
+        "cha": 2,
+        "dex": 1
+      },
+      "traits": [
+        "Shapechanger (alter your appearance as an action, no action economy cost to revert)",
+        "Changeling Instincts (two social or insight skills of your choice)"
+      ],
+      "languages": [
+        "Common"
+      ],
+      "skillChoice": {
+        "count": 2
+      }
+    },
+    {
+      "id": "warforged",
+      "name": "Warforged",
+      "speed": 30,
+      "size": "Medium",
+      "asi": {
+        "con": 2,
+        "str": 1
+      },
+      "traits": [
+        "Constructed Resilience (no need to eat, drink or sleep; immune to disease, poison and magical sleep)",
+        "Integrated Protection (+1 AC)",
+        "Sentry's Rest (6 hours of inactive alertness in place of sleep)",
+        "One skill and one tool of your choice (Specialized Design)"
+      ],
+      "languages": [
+        "Common"
+      ],
+      "skillChoice": {
+        "count": 1
+      },
+      "toolChoice": {
+        "count": 1,
+        "from": [
+          "smith's tools",
+          "tinker's tools",
+          "thieves' tools",
+          "carpenter's tools"
+        ]
+      }
+    },
+    {
+      "id": "goblin",
+      "name": "Goblin",
+      "speed": 30,
+      "size": "Small",
+      "asi": {
+        "dex": 2,
+        "con": 1
+      },
+      "traits": [
+        "Darkvision 60 ft",
+        "Fury of the Small (extra damage equal to your level once per short rest against a larger creature)",
+        "Nimble Escape (Disengage or Hide as a bonus action)"
+      ],
+      "languages": [
+        "Common",
+        "Goblin"
+      ]
+    },
+    {
+      "id": "bugbear",
+      "name": "Bugbear",
+      "speed": 30,
+      "size": "Medium",
+      "asi": {
+        "str": 2,
+        "dex": 1
+      },
+      "traits": [
+        "Darkvision 60 ft",
+        "Long-Limbed (5 extra feet of reach on melee attacks on your turn)",
+        "Powerful Build (count as one size larger for carrying)",
+        "Surprise Attack (2d6 extra damage on a surprised creature in the first round)",
+        "Stealth proficiency (Sneaky)"
+      ],
+      "languages": [
+        "Common",
+        "Goblin"
+      ],
+      "skills": [
+        "stealth"
+      ]
+    },
+    {
+      "id": "lizardfolk",
+      "name": "Lizardfolk",
+      "speed": 30,
+      "size": "Medium",
+      "asi": {
+        "con": 2,
+        "wis": 1
+      },
+      "traits": [
+        "Natural Armor (AC 13 + DEX)",
+        "Bite (1d6 piercing unarmed strike)",
+        "Hold Breath (up to 15 minutes)",
+        "30 ft swim speed",
+        "Hungry Jaws (a bonus-action bite granting temporary hit points, 1/short rest)",
+        "Two skills from a survival list (Cunning Artisan)"
+      ],
+      "languages": [
+        "Common",
+        "Draconic"
+      ],
+      "skillChoice": {
+        "count": 2
+      }
     }
-  ]
+  ],
+  "_license_authored": "The lineages below the SRD nine are original content for Open Dungeon Master: their trait lines are written from scratch to state the mechanics. No publisher's descriptive text is reproduced."
 }

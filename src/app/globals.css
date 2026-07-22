@@ -251,10 +251,13 @@ body::before {
 
   /* Dialogs and popup menus get a smokier panel: a heavier fill plus
      backdrop blur so the table behind them recedes instead of reading
-     through. Radix menus render with role="menu". */
+     through. Radix menus render with role="menu"; hand-built dropdowns are
+     plain lists, so they opt in with .panel-smoke alongside .panel. */
+  .panel-smoke,
   [role="dialog"].panel,
   [role="alertdialog"].panel,
-  [role="menu"].panel {
+  [role="menu"].panel,
+  [role="listbox"].panel {
     background:
       linear-gradient(180deg, rgba(41, 34, 71, 0.94), rgba(13, 11, 28, 0.97)),
       radial-gradient(ellipse 120% 60% at 50% -20%, rgba(107, 99, 148, 0.14), transparent 60%);
@@ -304,6 +307,15 @@ body::before {
   }
 }
 
+/* Layering scale. Everything that floats picks one of these tiers; anything
+   left on z-auto loses to all of them, which is how info modals ended up
+   painting behind the pickers that opened them.
+     z-20/z-30  dropdowns anchored to a field (ContentPicker results)
+     z-40/z-50  page dialogs, their overlays, and Radix menus
+     z-[60]     the shared Dialog shell and ImageLightbox, always opened from
+                one of the above
+     z-[70]     tooltips, which can sit inside any of them */
+
 /* Radix dialogs and dropdowns animate on their data-state. */
 [data-radix-popper-content-wrapper] > [data-state="open"],
 [role="dialog"][data-state="open"] {
@@ -335,6 +347,15 @@ button,
 textarea,
 input {
   font: inherit;
+}
+
+/* Native select popups are drawn by the browser, so utilities on the <select>
+   never reach them. Give the rows the same near-opaque night fill the custom
+   dropdowns use, or they read through onto the page. */
+option,
+optgroup {
+  background-color: #0d0b1c;
+  color: #e7e5e4;
 }
 
 * {

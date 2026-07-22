@@ -4,6 +4,7 @@ import { getSheetForUser } from "@/lib/db/sheets";
 import { insertRoll } from "@/lib/db/rolls";
 import { d20Expression, rollExpression, type Advantage } from "@/lib/dice";
 import { computeSheetDerived, findSkill } from "@/lib/srd";
+import { allySaveAura } from "@/lib/dm/aura";
 import { publishPersisted } from "@/lib/events";
 import { ABILITIES } from "@/lib/schemas/sheet";
 
@@ -74,8 +75,11 @@ export async function POST(
         return Response.json({ error: "Missing ability." }, { status: 400 });
       }
       detail = ability;
+      // A nearby paladin's aura covers self-service saves too (map-scoped).
+      const aura = input.kind === "saving_throw" ? allySaveAura(campaignId, sheet) : null;
       const modifier =
-        input.kind === "saving_throw" ? derived.saves[ability] : derived.abilityMods[ability];
+        (input.kind === "saving_throw" ? derived.saves[ability] : derived.abilityMods[ability]) +
+        (aura?.bonus ?? 0);
       expression = d20Expression(modifier, advantage);
     }
   }

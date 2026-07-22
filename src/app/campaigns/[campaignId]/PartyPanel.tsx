@@ -287,7 +287,10 @@ export function PartyPanel({
                   ) : null}
                 </span>
                 <span className="block text-xs text-stone-400">
-                  {sheet.race.replaceAll("_", " ")} {sheet.class} {sheet.level}
+                  {sheet.race.replaceAll("_", " ")}{" "}
+                  {(sheet.classes?.length ?? 0) > 1
+                    ? (sheet.classes ?? []).map((entry) => `${entry.id} ${entry.level}`).join(" / ")
+                    : `${sheet.class} ${sheet.level}`}
                 </span>
               </span>
               </button>
@@ -365,6 +368,23 @@ export function PartyPanel({
                 own {sheet.currentHp}/{sheet.maxHp}
               </div>
             ) : null}
+
+            {(sheet.pets ?? []).map((pet) => (
+              <div
+                key={pet.name}
+                className="mt-1 flex items-center justify-between text-[10px] text-stone-400"
+                title={pet.notes || pet.form}
+              >
+                <span className="flex min-w-0 items-center gap-1 truncate">
+                  <PawPrint className="size-3 shrink-0 text-stone-500" />
+                  {pet.name}
+                  {pet.name.toLowerCase() !== pet.form.toLowerCase() ? ` (${pet.form})` : ""}
+                </span>
+                <span className={cn("font-mono", pet.hp <= 0 && "text-red-400")}>
+                  {pet.hp}/{pet.maxHp}
+                </span>
+              </div>
+            ))}
 
             {sheet.deathSaves ? (
               <div className="mt-1.5 flex items-center gap-2">

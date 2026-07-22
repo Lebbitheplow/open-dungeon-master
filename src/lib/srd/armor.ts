@@ -153,21 +153,27 @@ const UNARMORED_FORMULAS: Array<{ match: string; classes: string[]; formula: Una
 
 // Which unarmored formula a character carries, if any. Unarmored Defense is
 // one feature name shared by two classes with different abilities, so the
-// class breaks the tie.
+// class breaks the tie. Multiclass sheets pass their whole class list in
+// acquisition order; the earliest class with a matching formula wins (RAW:
+// a character only ever gained one Unarmored Defense, their first).
 export function unarmoredFormulaFor(
-  classId: string,
+  classId: string | string[],
   features: Array<{ name: string }>,
 ): UnarmoredFormula | null {
   const names = features.map((feature) => feature.name.trim().toLowerCase());
-  const wantedClass = classId.trim().toLowerCase();
+  const wantedClasses = (Array.isArray(classId) ? classId : [classId]).map((entry) =>
+    entry.trim().toLowerCase(),
+  );
   const candidates = UNARMORED_FORMULAS.filter((entry) =>
     names.some((name) => name === entry.match || name.startsWith(`${entry.match} `)),
   );
-  return (
-    candidates.find((entry) => entry.classes.includes(wantedClass))?.formula ??
-    candidates.find((entry) => entry.classes.length === 0)?.formula ??
-    null
-  );
+  for (const wanted of wantedClasses) {
+    const owned = candidates.find((entry) => entry.classes.includes(wanted));
+    if (owned) {
+      return owned.formula;
+    }
+  }
+  return candidates.find((entry) => entry.classes.length === 0)?.formula ?? null;
 }
 
 export type AcBreakdown = {

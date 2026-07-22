@@ -1,6 +1,10 @@
 // The feature-effects table: what a name on a character sheet actually does.
 import assert from "node:assert/strict";
-import {
+import { register } from "node:module";
+
+register("./lib/register-alias.mjs", import.meta.url);
+
+const {
   FEATURE_EFFECTS,
   FIGHTING_STYLES,
   chosenFightingStyles,
@@ -10,11 +14,13 @@ import {
   fightingStyleSlots,
   guidanceFor,
   martialArtsDie,
+  parseFeatureEffects,
   sneakAttackDice,
   songOfRestDie,
   songOfRestDieFor,
   defenseRiders,
-} from "../src/lib/srd/feature-effects.ts";
+  halfProficiencyCovers,
+} = await import("../src/lib/srd/feature-effects.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -124,6 +130,34 @@ test("unarmored movement scales and fast movement is flat", () => {
   assert.equal(riders("monk", 18, "Unarmored Movement").unarmoredSpeedBonus, 30);
 });
 
+test("speed bonuses carry their armor gates", () => {
+  const fast = riders("barbarian", 5, "Fast Movement").speedBonuses;
+  assert.deepEqual(fast, [{ amount: 10, gate: "heavy_armor" }]);
+  const monk = riders("monk", 10, "Unarmored Movement").speedBonuses;
+  assert.deepEqual(monk, [{ amount: 20, gate: "armor_or_shield" }]);
+});
+
+test("half proficiency: Jack of All Trades covers all, Remarkable Athlete physical", () => {
+  const defense = (klass, ...names) =>
+    defenseRiders({ class: klass, level: 5, features: names.map((name) => ({ name })) });
+  assert.equal(defense("bard").halfProficiency, null);
+  assert.equal(defense("bard", "Jack of All Trades").halfProficiency, "all");
+  assert.equal(defense("fighter", "Remarkable Athlete").halfProficiency, "physical");
+  // Both on one sheet: the broader scope wins regardless of order.
+  assert.equal(
+    defense("bard", "Remarkable Athlete", "Jack of All Trades").halfProficiency,
+    "all",
+  );
+  assert.equal(
+    defense("bard", "Jack of All Trades", "Remarkable Athlete").halfProficiency,
+    "all",
+  );
+  assert.equal(halfProficiencyCovers("all", "cha"), true);
+  assert.equal(halfProficiencyCovers("physical", "cha"), false);
+  assert.equal(halfProficiencyCovers("physical", "dex"), true);
+  assert.equal(halfProficiencyCovers(null, "dex"), false);
+});
+
 test("Divine Smite is recognized as an attack rider", () => {
   assert.equal(riders("paladin", 5, "Divine Smite").canSmite, true);
   assert.equal(riders("fighter", 5, "Extra Attack").canSmite, false);
@@ -196,6 +230,58 @@ test("Evasion and the feats are recognized as riders", () => {
   assert.equal(defense("fighter", 1, {}, "Observant").passiveBonus, 5);
   // Reliable Talent is recognized even though it is not yet enforced.
   assert.equal(defense("rogue", 11, {}, "Reliable Talent").reliableTalent, true);
+});
+
+test("parseFeatureEffects reads the Divine Strike phrasing with its upgrade", () => {
+  const effects = parseFeatureEffects(
+    "Once per turn a weapon hit deals an extra 1d8 fire damage, rising to 2d8 at 14th level.",
+  );
+  assert.equal(effects.length, 1);
+  assert.equal(effects[0].kind, "weapon_damage_rider");
+  assert.equal(effects[0].type, "fire");
+  assert.equal(effects[0].dice(8), "1d8");
+  assert.equal(effects[0].dice(14), "2d8");
+  assert.ok(effects[0].oncePerTurn);
+});
+
+test("parseFeatureEffects drops the type when the text offers a choice", () => {
+  const effects = parseFeatureEffects(
+    "Once per turn a weapon hit deals an extra 1d8 cold, fire or lightning damage, rising to 2d8 at 14th level.",
+  );
+  assert.equal(effects[0].type, "");
+});
+
+test("parseFeatureEffects reads always-on resistances but not gated ones", () => {
+  const always = parseFeatureEffects(
+    "Resistance to lightning and thunder damage, and casting a spell of those types hurts nearby creatures.",
+  );
+  assert.deepEqual(always[0], { kind: "resistance", types: ["lightning", "thunder"] });
+  const gated = parseFeatureEffects("While raging you have resistance to psychic damage.");
+  assert.equal(gated.length, 0);
+});
+
+test("Divine Strike, Improved Divine Smite, and Primal Strike land as riders", () => {
+  const strike = combatRiders({ class: "cleric", level: 14, features: [{ name: "Divine Strike" }] });
+  assert.equal(strike.damageRiders.length, 1);
+  assert.equal(strike.damageRiders[0].dice, "2d8");
+  const smite = combatRiders({
+    class: "paladin",
+    level: 11,
+    features: [{ name: "Improved Divine Smite" }],
+  });
+  assert.equal(smite.damageRiders[0].type, "radiant");
+  assert.equal(smite.damageRiders[0].when, "melee");
+  assert.equal(smite.damageRiders[0].oncePerTurn, false);
+  const primal = combatRiders({ class: "druid", level: 6, features: [{ name: "Primal Strike" }] });
+  assert.ok(primal.magicalAttacks);
+});
+
+test("Dread Ambusher adds WIS to initiative through defenseRiders", () => {
+  const riders = defenseRiders(
+    { class: "ranger", level: 3, features: [{ name: "Dread Ambusher" }] },
+    { str: 0, dex: 2, con: 1, int: 0, wis: 3, cha: 0 },
+  );
+  assert.equal(riders.initiativeBonus, 3);
 });
 
 console.log(`test-feature-effects: ${passed} passed`);

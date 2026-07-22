@@ -632,6 +632,9 @@ function ensureSchema(db: Database.Database) {
     // Active Wild Shape beast form and its own HP pool; NULL = own body.
     // Damage routes here first (src/lib/dm/mutations.ts, apply_damage).
     ["wild_shape_json", `TEXT`],
+    // Bound creatures (familiars, animal companions, drakes); managed by
+    // the pet engine (src/lib/dm/pet-tools.ts). NULL = none.
+    ["pets_json", `TEXT`],
     // AI companion party member: owned by an unloginable bot user row so
     // UNIQUE(campaign_id, user_id) and the users FK stay satisfied. The DM
     // drives these sheets (src/lib/dm/companion-tools.ts).
@@ -646,6 +649,13 @@ function ensureSchema(db: Database.Database) {
     // backfilled to 1 so no existing character's armor class changes under
     // them; new sheets derive their AC from what they wear.
     ["ac_override", `INTEGER NOT NULL DEFAULT 0`],
+    // Multiclass class list [{id, subclass, level}]; NULL/empty = the
+    // scalar class/subclass/level columns are the truth. When present, the
+    // scalars are mirrors (src/lib/db/sheets.ts keeps them in sync).
+    ["classes_json", `TEXT`],
+    // Per-class hit-die pools [{classId, die, total, spent}]; NULL until
+    // the first multiclass level-up. hit_dice_json stays the summed mirror.
+    ["hit_dice_pools_json", `TEXT`],
   ]);
 
   if (sheetsNeedAcOverride) {
@@ -741,6 +751,11 @@ function ensureSchema(db: Database.Database) {
     // Duration/save-ends metadata keyed by condition name; ticked at round
     // wrap (src/lib/dm/condition-tick.ts).
     ["condition_meta_json", `TEXT NOT NULL DEFAULT '{}'`],
+    // Spell this enemy is concentrating on (best-effort: recorded when the
+    // model casts through the tools with casterEnemyId); damage forces the
+    // CON save and a break clears the spell's conditions
+    // (src/lib/dm/enemy-damage.ts).
+    ["concentration", `TEXT`],
   ]);
 
   addColumns("pending_rolls", [

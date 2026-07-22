@@ -5,6 +5,9 @@ import Link from "next/link";
 import { use, useEffect, useRef, useState } from "react";
 import { PIXEL_ICONS, PixelTile } from "@/lib/ui";
 import { ImageLightbox } from "@/components/ui/ImageLightbox";
+import { GameTerm } from "@/components/ui/GameTerm";
+import { InfoChipList } from "@/components/ui/InfoDialog";
+import { contentSlug, describeFeature } from "@/lib/help";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import { abilityMod, formatModifier } from "@/lib/srd";
 
@@ -166,16 +169,28 @@ export default function CharacterDetailPage({
           ))}
         </div>
         <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-sm text-stone-300 sm:grid-cols-4">
-          <span>HP {sheet.maxHp}</span>
-          <span>AC {sheet.ac}</span>
+          <span>
+            <GameTerm id="hit_points">HP</GameTerm> {sheet.maxHp}
+          </span>
+          <span>
+            <GameTerm id="armor_class">AC</GameTerm> {sheet.ac}
+          </span>
           <span>Speed {sheet.speed} ft</span>
           <span>Gold {sheet.gold}</span>
         </div>
         {sheet.spellcasting ? (
-          <p className="mt-2 text-sm text-stone-400">
-            Spells:{" "}
-            {[...sheet.spellcasting.known, ...sheet.spellcasting.prepared].join(", ") || "none chosen"}
-          </p>
+          <div className="mt-2 text-sm text-stone-400">
+            <span className="mb-1 block">Spells:</span>
+            <InfoChipList
+              items={[
+                ...new Set([...sheet.spellcasting.known, ...sheet.spellcasting.prepared]),
+              ].map((spell) => ({
+                name: spell,
+                reference: { kind: "spells", slug: contentSlug(spell), name: spell },
+              }))}
+              emptyText="None chosen."
+            />
+          </div>
         ) : null}
         {sheet.equipment.length ? (
           <p className="mt-1 text-sm text-stone-400">
@@ -186,17 +201,29 @@ export default function CharacterDetailPage({
           </p>
         ) : null}
         {sheet.features?.length ? (
-          <p className="mt-1 text-sm text-stone-400">
-            Features &amp; traits:{" "}
-            {sheet.features
-              .map((feature) =>
-                feature.source === "story" ? `${feature.name} (story)` : feature.name,
-              )
-              .join(", ")}
-          </p>
+          <div className="mt-2 text-sm text-stone-400">
+            <span className="mb-1 block">Features &amp; traits:</span>
+            <InfoChipList
+              items={sheet.features.map((feature) => ({
+                name: feature.name,
+                note: feature.source === "story" ? "(story)" : undefined,
+                meta: feature.level ? `Level ${feature.level}` : undefined,
+                text: describeFeature(sheet.class, sheet.subclass, feature.name),
+              }))}
+            />
+          </div>
         ) : null}
         {sheet.feats.length ? (
-          <p className="mt-1 text-sm text-stone-400">Feats: {sheet.feats.join(", ")}</p>
+          <div className="mt-2 text-sm text-stone-400">
+            <span className="mb-1 block">Feats:</span>
+            <InfoChipList
+              items={sheet.feats.map((feat) => ({
+                name: feat,
+                text: describeFeature(sheet.class, sheet.subclass, feat),
+                reference: { kind: "feats", slug: contentSlug(feat), name: feat },
+              }))}
+            />
+          </div>
         ) : null}
         {sheet.backstory ? (
           <p className="mt-2 whitespace-pre-wrap text-sm text-stone-400">

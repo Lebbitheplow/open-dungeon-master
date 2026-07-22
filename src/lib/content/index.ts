@@ -2,6 +2,12 @@ import { getContentDb } from "@/lib/content/db";
 import { listHomebrew } from "@/lib/db/homebrew";
 import type { HomebrewKind } from "@/lib/schemas/homebrew";
 import { scaledSpellDice } from "@/lib/srd/spell-scaling";
+import {
+  authoredSpellRow,
+  parseSpellMech,
+  spellMechFor,
+  type SpellMech,
+} from "@/lib/srd/spell-mechanics";
 
 // Unified content entry: Open5e rows and homebrew rows share this shape so
 // pickers render one list. `data` is the raw normalized payload (Open5e API
@@ -20,6 +26,10 @@ export type SpellEntry = ContentEntry & {
   classes: string[];
   ritual: boolean;
   concentration: boolean;
+  // Other names this spell is printed under, lowercased. The SRD renames the
+  // wizard-named PHB spells, so "Acid Arrow" also answers to "Melf's Acid
+  // Arrow". Callers that need an exact name match must use spellNameMatches.
+  aliases: string[];
 };
 
 export type ItemEntry = ContentEntry & {
@@ -77,8 +87,9 @@ export function searchSpells(
   const db = getContentDb();
   const rows: SpellEntry[] = [];
   if (db) {
-    const clauses = ["name LIKE ?"];
-    const params: unknown[] = [likeParam(options.q)];
+    // Alias matching is what makes a book name find an SRD-titled row.
+    const clauses = ["(name LIKE ? OR aliases_csv LIKE ?)"];
+    const params: unknown[] = [likeParam(options.q), likeParam((options.q ?? "").toLowerCase())];
     if (options.classSlug) {
       clauses.push("classes_csv LIKE ?");
       params.push(`%${options.classSlug.toLowerCase()}%`);
@@ -101,6 +112,7 @@ export function searchSpells(
       classes_csv: string;
       ritual: number;
       concentration: number;
+      aliases_csv: string;
       data_json: string;
     }>;
     rows.push(
@@ -114,6 +126,7 @@ export function searchSpells(
         classes: row.classes_csv ? row.classes_csv.split(",") : [],
         ritual: row.ritual === 1,
         concentration: row.concentration === 1,
+        aliases: row.aliases_csv ? row.aliases_csv.split("|") : [],
         data: parseData(row.data_json),
       })),
     );
@@ -125,8 +138,33 @@ export function searchSpells(
     classes: Array.isArray(entry.data.classes) ? (entry.data.classes as string[]) : [],
     ritual: entry.data.ritual === true,
     concentration: entry.data.concentration === true,
+    aliases: [] as string[],
   }));
   return [...rows, ...brews];
+}
+
+// Does this row answer to `name`? Every caller that wants one specific spell
+// out of a search must go through this rather than comparing `entry.name`,
+// or a book name silently fails to match its SRD-titled row.
+export function spellNameMatches(entry: SpellEntry, name: string): boolean {
+  const wanted = name.trim().toLowerCase();
+  return (
+    entry.name.trim().toLowerCase() === wanted ||
+    entry.aliases.some((alias) => alias.trim().toLowerCase() === wanted)
+  );
+}
+
+// The one spell a name refers to, alias-aware.
+export function findSpellByName(name: string, userId?: string): SpellEntry | null {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    return null;
+  }
+  return (
+    searchSpells({ q: trimmed, userId, limit: 20 }).find((entry) =>
+      spellNameMatches(entry, trimmed),
+    ) ?? null
+  );
 }
 
 export function searchItems(
@@ -346,13 +384,7 @@ export function spellDamageFor(input: {
   casterLevel: number;
   slotLevel?: number;
 }): { dice: string; note: string; spellLevel: number } | null {
-  const wanted = input.spell.trim().toLowerCase();
-  if (!wanted) {
-    return null;
-  }
-  const entry = searchSpells({ q: input.spell.trim(), userId: input.userId, limit: 10 }).find(
-    (row) => row.name.trim().toLowerCase() === wanted,
-  );
+  const entry = findSpellByName(input.spell, input.userId);
   if (!entry) {
     return null;
   }
@@ -364,4 +396,46 @@ export function spellDamageFor(input: {
     slotLevel: input.slotLevel,
   });
   return scaled ? { ...scaled, spellLevel: entry.level } : null;
+}
+
+// The structured mechanics a spell resolves with: authored `mech` rows and
+// the SRD overrides first, prose parsing second, null for spells no pack
+// knows (homebrew keeps the model-supplied fallback). The cast tools treat a
+// non-null answer as authoritative over the model's arguments.
+export type ResolvedSpellMech = {
+  mech: SpellMech;
+  name: string;
+  spellLevel: number;
+  concentration: boolean;
+};
+
+export function spellMechanicsFor(input: {
+  spell: string;
+  userId?: string;
+}): ResolvedSpellMech | null {
+  const entry = findSpellByName(input.spell, input.userId);
+  if (entry) {
+    const mech =
+      spellMechFor([entry.name, ...entry.aliases, input.spell]) ??
+      parseSpellMech({
+        desc: String(entry.data.desc ?? ""),
+        higherLevel: String(entry.data.higher_level ?? ""),
+      });
+    return mech
+      ? { mech, name: entry.name, spellLevel: entry.level, concentration: entry.concentration }
+      : null;
+  }
+  // No content database (or an unbundled name): the authored layer still
+  // answers on its own.
+  const authored = authoredSpellRow(input.spell);
+  const mech = spellMechFor([input.spell]) ?? (authored ? parseSpellMech({ desc: authored.desc }) : null);
+  if (!mech) {
+    return null;
+  }
+  return {
+    mech,
+    name: authored?.name ?? input.spell,
+    spellLevel: authored?.level ?? 1,
+    concentration: authored?.concentration ?? false,
+  };
 }

@@ -93,6 +93,7 @@ import {
   mutationTools,
 } from "@/lib/dm/mutations";
 import { describeBudget } from "@/lib/dm/action-budget";
+import { castBuffTool, handleCastBuff } from "@/lib/dm/cast-tools";
 import {
   advanceAfterTurn,
   applyEncounterCall,
@@ -111,6 +112,15 @@ import {
   handleGroupCheck,
 } from "@/lib/dm/check-tools";
 import { hazardTools, HAZARD_TOOL_NAMES, handleApplyHazard } from "@/lib/dm/hazard-tools";
+import { allySaveAura } from "@/lib/dm/aura";
+import {
+  petTools,
+  PET_TOOL_NAMES,
+  handleSummonPet,
+  handlePetAttack,
+  handleDamagePet,
+  handleDismissPet,
+} from "@/lib/dm/pet-tools";
 import {
   socialTools,
   SOCIAL_TOOL_NAMES,
@@ -215,6 +225,7 @@ function buildEncounterState(campaignId: string, sheets: CharacterSheet[]) {
       resist: enemy.stats.resist,
       immune: enemy.stats.immune,
       vulnerable: enemy.stats.vulnerable,
+      concentration: enemy.concentration,
     })),
     map: buildMapText(encounter.id, sheets),
   };
@@ -466,9 +477,11 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       ...(campaign.storyArc ? [completeBeatTool] : []),
       ...checkTools,
       ...hazardTools,
+      ...petTools,
       ...socialTools,
       ...(inEncounter ? [] : worldTools),
       ...encounterTools(inEncounter),
+      castBuffTool,
       ...(inEncounter ? [] : restTools),
       ...companionTools(campaign),
       ...(leanTools ? [] : mutationTools),
@@ -569,6 +582,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     );
     const mutationCalls = toolCalls.filter((toolCall) => MUTATION_NAMES.has(toolCall.name));
     const encounterCalls = toolCalls.filter((toolCall) => ENCOUNTER_NAMES.has(toolCall.name));
+    const castBuffCalls = toolCalls.filter((toolCall) => toolCall.name === "cast_buff");
     const restCalls = toolCalls.filter((toolCall) => toolCall.name === "take_rest");
     const companionCalls = toolCalls.filter((toolCall) =>
       COMPANION_TOOL_NAMES.has(toolCall.name),
@@ -585,6 +599,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     );
     const hazardCalls = toolCalls.filter((toolCall) =>
       (HAZARD_TOOL_NAMES as readonly string[]).includes(toolCall.name),
+    );
+    const petCalls = toolCalls.filter((toolCall) =>
+      (PET_TOOL_NAMES as readonly string[]).includes(toolCall.name),
     );
     const socialCalls = toolCalls.filter((toolCall) =>
       (SOCIAL_TOOL_NAMES as readonly string[]).includes(toolCall.name),
@@ -686,6 +703,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       rollCalls.length > 0 ||
       checkCalls.length > 0 ||
       hazardCalls.length > 0 ||
+      petCalls.length > 0 ||
       socialRollCalls.length > 0 ||
       worldCalls.length > 0 ||
       mutationCalls.length > 0 ||
@@ -858,6 +876,23 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       });
     }
 
+    // Buff casts resolve synchronously: the slot spends, the effect lands
+    // as a tracked condition, and the model narrates from the result.
+    for (const castBuffCall of castBuffCalls) {
+      const result = handleCastBuff(
+        campaign,
+        turn,
+        castBuffCall.rawArguments,
+        sheets,
+        sheetsById,
+      );
+      turn.conversation.push({
+        role: "tool",
+        ...(castBuffCall.id ? { tool_call_id: castBuffCall.id } : {}),
+        content: JSON.stringify(result),
+      });
+    }
+
     // Rests resolve synchronously: hit dice roll server-side and every
     // sheet write is audited; the model narrates from the results.
     for (const restCall of restCalls) {
@@ -917,6 +952,26 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       turn.conversation.push({
         role: "tool",
         ...(hazardCall.id ? { tool_call_id: hazardCall.id } : {}),
+        content: JSON.stringify(result),
+      });
+    }
+
+    // Familiars, companions, and drakes: summons validate the granting
+    // feature, attacks roll real dice, damage lands on the pet's own pool.
+    for (const petCall of petCalls) {
+      let result: Record<string, unknown>;
+      if (petCall.name === "summon_pet") {
+        result = handleSummonPet(campaign, turn, petCall.rawArguments, sheets, sheetsById);
+      } else if (petCall.name === "pet_attack") {
+        result = handlePetAttack(campaign, turn, petCall.rawArguments, sheets, sheetsById);
+      } else if (petCall.name === "damage_pet") {
+        result = handleDamagePet(campaign, petCall.rawArguments, sheets, sheetsById);
+      } else {
+        result = handleDismissPet(campaign, petCall.rawArguments, sheets, sheetsById);
+      }
+      turn.conversation.push({
+        role: "tool",
+        ...(petCall.id ? { tool_call_id: petCall.id } : {}),
         content: JSON.stringify(result),
       });
     }
@@ -993,7 +1048,13 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         });
         continue;
       }
-      const resolved = resolveRollExpression(parsedArgs, sheet);
+      const aura =
+        parsedArgs.kind === "saving_throw" && sheet ? allySaveAura(campaignId, sheet) : null;
+      const resolved = resolveRollExpression(
+        parsedArgs,
+        sheet,
+        aura ? { saveBonus: aura.bonus, saveNote: aura.note } : undefined,
+      );
       if ("error" in resolved) {
         turn.conversation.push({
           role: "tool",

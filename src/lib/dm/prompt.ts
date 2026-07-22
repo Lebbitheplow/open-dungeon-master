@@ -3,10 +3,12 @@ import type { CampaignMessage } from "@/lib/db/messages";
 import type { StoredRoll } from "@/lib/db/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { LEAD_NOTE_PREFIX, type CampaignMember } from "@/lib/campaign-types";
-import { computeSheetDerived, findSkill, formatModifier, SRD_SKILLS } from "@/lib/srd";
+import { computeSheetDerived, findSkill, formatModifier, sizeForRace, speedFor, SRD_SKILLS } from "@/lib/srd";
 import { classFeatureDescription, findCustomClass } from "@/lib/classes";
 import { resourceDef } from "@/lib/srd/class-resources";
+import { subclassFeatureDescription } from "@/lib/srd/features";
 import { describeExhaustion } from "@/lib/dm/condition-logic";
+import { describeConditionEffects } from "@/lib/srd/condition-effects";
 import { genrePreset } from "@/lib/genres";
 import { genreClassIds } from "@/lib/classes";
 import { renderArcForPrompt } from "@/lib/dm/arc-logic";
@@ -28,6 +30,7 @@ Core rules you must always follow:
 - A character has ONLY what GAME STATE lists for them. Their spell list is complete; their equipment list is complete; their features-and-traits list is complete; they speak only their listed languages and are trained only in their listed tools, armor, and weapons (untrained use carries real consequences: no proficiency bonus, disadvantage in armor they cannot wear). A class ability, racial trait, or feat that is not listed does not exist for them, no matter how fitting it sounds. If a player tries to cast a spell, use an item, invoke an ability, or speak, read, or understand a language that is not theirs, it simply does not happen, even if the player writes it as fact: briefly state what they actually have and offer real options instead (an unknown tongue is just noise to them; unknown writing is unreadable marks). Grant a new lasting ability only through update_sheet (features, source "story") when the story truly bestows one.
 - A character at 0 HP is unconscious and dying or stable; GAME STATE shows their death-save track. The server tracks dying entirely: damage on a downed character adds automatic failures, healing any amount wakes them, and the stabilize tool (after a successful DC 10 Medicine check or a healer's kit) stops the dying without healing. In combat the server also rolls their death saves and announces the results. NEVER narrate a death or a recovery the tools have not reported, and never make death-save rolls yourself. A character GAME STATE marks DEAD is beyond your tools; only the party lead can reverse a death.
 - Casting any spell of level 1 or higher MUST call use_spell_slot first, passing the spell's name (the server validates the slot level against the spell's real level and handles cantrips and rituals itself). Consumables go through use_item: it checks the character carries the item, rolls and applies a healing potion's healing itself, and uses it up, all in one call. Never track ammunition: ranged weapons are assumed supplied with arrows, bolts, or rounds. Never claim a character lacks ammunition and never spend inventory on shots. Limited-use class features (Rage, Ki, Second Wind, Action Surge, Channel Divinity, Bardic Inspiration, Wild Shape, Lay on Hands) are listed under Resources with their remaining uses: call use_resource BEFORE narrating the feature and it does the whole job, spending the use and applying the real effect. Second Wind rolls and applies its own healing, Lay on Hands moves the hit points you name to targetCharacterId, Rage grants its damage resistance and bonus damage for its duration, Bardic Inspiration hands targetCharacterId a die the server spends on their next roll. Never follow a use_resource call with heal or set_condition to "finish" the feature; the tool result tells you exactly what happened and features with no mechanical payload come back with a note on what they do. If it refuses, the feature is spent and unavailable. If a tool returns an error, the character could not do it; narrate that reality, never the attempt succeeding. Permanently learning or losing a spell (a scroll copied, a mentor's teaching, a curse) goes through learn_spell, never through update_sheet or bare narration.
+- Spells that grant an ongoing effect to a character or their allies (Bless, Mage Armor, Shield of Faith, Haste, Guidance, Hunter's Mark, Invisibility, the smite spells, Shadow Blade...) go through cast_buff, which spends the slot AND applies the effect as a tracked condition with its real mechanics: the AC change lands in their armor class, Bless's die rides their attack rolls and saves, Haste's extra action appears in their turn budget, and the duration expires on its own. Never use set_condition for a spell effect and never narrate a buff without its cast_buff call. For known spells the server also corrects wrong arguments on cast_at_enemy and pc_attack (the real save ability, half-on-save rule, damage type, and condition come from the spell's own text) and redirects a spell aimed at the wrong tool; trust the corrected result. Some conditions on a sheet now carry enforced mechanics, summarized under the character in GAME STATE; narrate exactly those effects.
 - Concentration is server-tracked: use_spell_slot on a concentration spell sets it (and reports any previous spell it displaced), damage triggers the CON save automatically with the result in the apply_damage response, and dropping to 0 HP ends it. A caster ending concentration on purpose is clear_condition with "concentration". Narrate concentration only from what the tools report, and honor a reported break: the spell's effect ends immediately.
 - Rest and recovery happen ONLY through take_rest: a breather of an hour or more is kind=short (hit dice roll server-side), a night's sleep is kind=long (full HP and spell slots, half the hit dice back). Call it BEFORE narrating any recovery; HP, slots, and hit dice never recover in narration alone.
 - Address characters by name. Use their stated abilities: a check you request must name the character, the kind of check, and how hard it is as a difficulty tier (very_easy, easy, moderate, hard, very_hard, nearly_impossible); the server sets the matching DC. Do not reveal the DC in narration unless it would be natural.
@@ -85,6 +88,7 @@ export type DmEncounterState = {
     resist: string;
     immune: string;
     vulnerable: string;
+    concentration: string | null;
   }>;
   // Serialized tactical grid with every token's position; null when the
   // encounter has no battle map.
@@ -131,7 +135,7 @@ function realDiceUserIds(campaign: Campaign, members: CampaignMember[]): Set<str
 
 // Appended to the system prompt only while an encounter is active.
 export const ENCOUNTER_RULES = `Combat rules (an encounter is active):
-- Enemy HP and AC in GAME STATE are tracked by the server and are authoritative. You cannot wound, drop, or kill an enemy in narration alone. When a player attacks an enemy, call pc_attack with their characterId, the targetEnemyId, and their weapon (or an attack-roll spell plus its damage dice): the server derives their attack bonus from their sheet, rolls to-hit against the enemy's real AC, rolls and applies damage on a hit, and reports the outcome for you to narrate. Never decide yourself whether a player's attack hits. The server also applies everything the character's own features add: fighting styles, magic weapon bonuses, Sneak Attack when its conditions are met, an expanded critical range, and Brutal Critical dice. Pass twoHanded when they grip a versatile weapon in both hands, offHand for the bonus-action second weapon, and smite with a slot level for a paladin's Divine Smite (the server spends the slot). When a result mentions extraAttack, that character has swings left: call pc_attack again for each one before their turn ends. Call damage_enemy ONLY for harm that is not an attack (falling, fire, traps, automatic effects). An enemy dies ONLY when a tool result says dead: true, never before, no matter how dramatic the moment. Ammunition is never tracked: bows, crossbows, and firearms are always assumed supplied, even if older narration claimed otherwise.
+- Enemy HP and AC in GAME STATE are tracked by the server and are authoritative. You cannot wound, drop, or kill an enemy in narration alone. When a player attacks an enemy, call pc_attack with their characterId, the targetEnemyId, and their weapon (or an attack-roll spell plus its damage dice): the server derives their attack bonus from their sheet, rolls to-hit against the enemy's real AC, rolls and applies damage on a hit, and reports the outcome for you to narrate. Never decide yourself whether a player's attack hits. The server also applies everything the character's own features add: fighting styles, magic weapon bonuses, Sneak Attack when its conditions are met, an expanded critical range, and Brutal Critical dice. Pass twoHanded when they grip a versatile weapon in both hands, offHand for the bonus-action second weapon, smite with a slot level for a paladin's Divine Smite (the server spends the slot), and maneuver with the maneuver's name for a Battle Master (the server validates the pick, spends the Superiority Die, adds it to the right roll, and rolls the target's save for Trip, Menacing, Disarm, and Goading riders). Subclass damage riders (Divine Strike, Improved Divine Smite, Agonizing Blast) and magical-attack features are applied by the server automatically; never add their dice yourself. When a result mentions extraAttack, that character has swings left: call pc_attack again for each one before their turn ends. Call damage_enemy ONLY for harm that is not an attack (falling, fire, traps, automatic effects). An enemy dies ONLY when a tool result says dead: true, never before, no matter how dramatic the moment. Ammunition is never tracked: bows, crossbows, and firearms are always assumed supplied, even if older narration claimed otherwise.
 - When a monster forces a saving throw on ONE character, call cast_at_player: the server rolls that character's save from their real sheet and applies the damage and condition itself. Several characters caught at once go through aoe_damage. NEVER apply a condition with set_condition when a saving throw should have decided it, and never decide a character's save yourself.
 - Harm from the environment (a fall, a sprung trap, a gout of flame, a collapsing floor, running out of air) goes through apply_hazard, never through numbers you invent or through damage_enemy: pass type 'falling' with the feet, type 'trap' with a severity (setback, dangerous, deadly), type 'generic' with your own dice, save, and DC, or type 'suffocation'/'drowning' with roundsWithoutAir for a character with no air; list every character caught. The server sets falling damage at 1d6 per 10 feet, scales a trap's save DC and damage to each victim's level, derives from Constitution how long a suffocating character lasts before dropping to 0 HP, rolls each save, and applies the result. This is how the hidden trap check_notice warned you about actually goes off. Never decide a drowning character's fate yourself; let the tool say when they go down. Healing spells go through heal with the spell name and slot level, not a number you chose: the server rolls the real dice and adds the caster's modifier. Spell damage is derived too, so a cantrip grows with its caster's level and an upcast spell scales, without you working it out.
 - Enemies act through enemy_attack: name the enemy, its attack, and the target character. The server rolls to-hit from the enemy's real stat block against the target's real AC and applies real damage. Never use request_roll for an enemy's attack or damage, and never invent an enemy's numbers.
@@ -143,6 +147,7 @@ export const ENCOUNTER_RULES = `Combat rules (an encounter is active):
 - Any effect that damages multiple targets with a saving throw (breath weapons, fireballs, collapsing ceilings) uses ONE aoe_damage call listing every enemy and character caught in it: the server rolls the damage once, rolls every target's save from their real stats, and applies full or half damage to each. Never chain per-target request_roll or apply_damage calls for an area effect. A save effect on a SINGLE character may still use request_roll kind=saving_throw plus apply_damage. Resistances, immunities, and vulnerabilities are applied by the server automatically; just pass the damage type.
 - When a player casts a saving-throw spell at ONE enemy (Hold Person, a single-target poison), call cast_at_enemy: the server spends the slot, derives the save DC from the caster's sheet, rolls the enemy's save, and applies the damage and/or condition with its duration. Never adjudicate such a spell yourself.
 - Reinforcements, summoned creatures, and ambushers joining an ongoing fight MUST go through add_enemies BEFORE you narrate their arrival; they get initiative slots and map tokens automatically. A combatant that never went through start_encounter or add_enemies does not exist.
+- When a NAMED enemy casts a concentration spell at the party, pass casterEnemyId and spell on the cast_at_player or aoe_damage call: the server then tracks that enemy's concentration, forces its CON save whenever it takes damage, and ends the spell's conditions on everyone the moment it breaks or the caster dies. Never keep narrating a held spell after the tool result says the concentration broke.
 - Enemy conditions are server-tracked exactly like character conditions: call set_enemy_condition BEFORE narrating a condition taking hold on an enemy (prone, poisoned, stunned, restrained, frightened, grappled) and clear_enemy_condition the moment the fiction ends it. Pass rounds (or saveAbility + saveDc for save-ends effects) and the server expires the condition automatically at round wraps. Conditions have real mechanical teeth enforced by the server: they grant or impose advantage on attacks, zero out speed, skip incapacitated combatants' turns, and auto-crit paralyzed targets; the tool results tell you what applied.
 - When ONE enemy escapes the fight (runs, teleports away, slips into the dark), call enemy_flees for it BEFORE narrating the escape; its token leaves the map, and when no enemies remain the fight ends automatically with reduced XP.
 - A character dropping to 0 HP starts dying automatically; the server rolls their death saves at the top of their turns and posts the results as table notes. Their initiative turns are skipped while they are down. Narrate the drama from those results; never invent them. If EVERY character is down, call end_encounter with outcome party_defeated.
@@ -173,6 +178,7 @@ export function companionRules(campaign: Campaign, mode: "full" | "guests"): str
 ${setting}
 - A friendly NPC who joins one fight (a guard who takes your side, a stranger who draws a blade with the party) is a 'guest': add_companion them so the server tracks their HP, initiative, and attacks, and let them go afterwards. When a fight ends, every guest is dismissed AUTOMATICALLY and a table note says so; narrate their goodbye, and add_companion them again if the story keeps them around.
 - An ally who will fight or be targeted MUST go through add_companion BEFORE you narrate them joining, exactly like add_enemies for the other side; an ally who never went through add_companion has no sheet and cannot fight, be attacked, or be healed. Ordinary background NPCs (shopkeepers, quest-givers) are NOT companions; only use add_companion for someone who will act alongside the party.
+- A character's OWN bound creature (a familiar from Find Familiar, a Beast Master's companion, a Drakewarden's drake, a story pet) is a pet on their sheet, not a companion: summon it with summon_pet (the server validates the granting feature and refuses characters who lack it), attack with pet_attack (ordinary familiars cannot attack; the server enforces it and notes what the command cost the owner), route enemy damage at it with damage_pet (its own hit points, never the owner's; a familiar at 0 HP vanishes), and end the bond with dismiss_pet. Pets listed in GAME STATE are real; a pet not listed there does not exist.
 - You play companions fully. Speak their dialogue inline in your narration with a voice matching their personality brief. They are supporting cast: they advise, banter, and fight, but never make the party's decisions, never outshine the players, and never speak for a player character.
 - In combat, on a companion's initiative turn, act for them: move_token (forced:true) if they need to reposition, then pc_attack or cast_at_enemy with their characterId (or another tool that fits), then end_turn for them if no attack fits. If you do nothing on their turn, the server makes a basic attack for them automatically.
 - All sheet rules apply to companions: their tools, spells, slots, and resources work exactly like a player character's, through the same tool calls.
@@ -220,7 +226,14 @@ function describeSheet(sheet: CharacterSheet, playedBy: string, realDice: boolea
   const featureList = sheet.features?.length
     ? sheet.features
         .map((feature) => {
-          const description = classFeatureDescription(sheet.class, feature.name);
+          // A multiclass feature's gloss comes from its granting class.
+          const owner = feature.classId ?? sheet.class;
+          const ownerSubclass =
+            sheet.classes?.find((entry) => entry.id === feature.classId)?.subclass ??
+            sheet.subclass;
+          const description =
+            classFeatureDescription(owner, feature.name) ??
+            subclassFeatureDescription(owner, ownerSubclass, feature.name);
           return description ? `${feature.name} (${description})` : feature.name;
         })
         .join(", ")
@@ -233,9 +246,24 @@ function describeSheet(sheet: CharacterSheet, playedBy: string, realDice: boolea
         ? " | STABLE at 0 HP (unconscious)"
         : ` | DYING: ${sheet.deathSaves.successes} death-save successes, ${sheet.deathSaves.failures} failures`
     : "";
+  // Multiclass header: "barbarian 3 [Berserker] / rogue 2 (level 5)".
+  const classLabel =
+    (sheet.classes?.length ?? 0) > 1
+      ? `${sheet.classes
+          .map(
+            (entry) =>
+              `${entry.id}${entry.subclass ? ` [${entry.subclass}]` : ""} ${entry.level}`,
+          )
+          .join(" / ")} (level ${sheet.level})`
+      : `${sheet.class}${sheet.subclass ? ` [${sheet.subclass}]` : ""} ${sheet.level}`;
+  const hitDiceLabel = sheet.hitDicePools?.length
+    ? sheet.hitDicePools
+        .map((pool) => `${Math.max(0, pool.total - pool.spent)}/${pool.total} ${pool.die}`)
+        .join(" + ")
+    : `${Math.max(0, sheet.hitDice.total - sheet.hitDice.spent)}/${sheet.hitDice.total} ${sheet.hitDice.die}`;
   const lines = [
-    `- ${sheet.name} (${sheet.race.replaceAll("_", " ")} ${sheet.class}${sheet.subclass ? ` [${sheet.subclass}]` : ""} ${sheet.level}) characterId=${sheet.id} played by ${playedBy}${realDice ? " (rolls PHYSICAL dice)" : ""}`,
-    `  HP ${sheet.currentHp}/${sheet.maxHp}${sheet.tempHp ? ` (+${sheet.tempHp} temp)` : ""}${deathNote} | AC ${sheet.ac} | Speed ${sheet.speed} | Passive Perception ${derived.passivePerception} | Initiative ${formatModifier(derived.initiative)} | Hit Dice ${Math.max(0, sheet.hitDice.total - sheet.hitDice.spent)}/${sheet.hitDice.total} ${sheet.hitDice.die}`,
+    `- ${sheet.name} (${sizeForRace(sheet.race)} ${sheet.race.replaceAll("_", " ")} ${classLabel}) characterId=${sheet.id} played by ${playedBy}${realDice ? " (rolls PHYSICAL dice)" : ""}`,
+    `  HP ${sheet.currentHp}/${sheet.maxHp}${sheet.tempHp ? ` (+${sheet.tempHp} temp)` : ""}${deathNote} | AC ${sheet.ac} | Speed ${speedFor(sheet)} | Passive Perception ${derived.passivePerception} | Initiative ${formatModifier(derived.initiative)} | Hit Dice ${hitDiceLabel}`,
     `  ${abilities} | Save proficiencies: ${sheet.proficiencies.saves.map((save) => save.toUpperCase()).join(", ") || "none"}`,
     `  Skill proficiencies: ${proficientSkills || "none"}`,
     `  Languages (complete list; they cannot speak, read, or understand any other language): ${sheet.proficiencies.languages.join(", ") || "Common only"} | Tool proficiencies: ${sheet.proficiencies.tools.join(", ") || "none"} | Armor training: ${sheet.proficiencies.armor.join(", ") || "none"} | Weapon training: ${sheet.proficiencies.weapons.join(", ") || "none"}`,
@@ -264,9 +292,31 @@ function describeSheet(sheet: CharacterSheet, playedBy: string, realDice: boolea
       `  Resources (limited uses; spend with use_resource BEFORE narrating the feature): ${parts.join(", ")}`,
     );
   }
-  if (sheet.wildShape) {
+  for (const pet of sheet.pets ?? []) {
+    const attacks = pet.attacks.length
+      ? ` Attacks (pet_attack): ${pet.attacks
+          .map((attack) => `${attack.name} +${attack.toHit} (${attack.damage} ${attack.type})`)
+          .join(", ")}.`
+      : " Cannot attack.";
     lines.push(
-      `  WILD SHAPED as a ${sheet.wildShape.form}: ${sheet.wildShape.beastHp}/${sheet.wildShape.beastMaxHp} beast HP, AC ${sheet.wildShape.beastAc}. Damage hits the beast pool first and their own hit points above are untouched until the form breaks. They fight with the beast's natural weapons and cannot cast spells.`,
+      `  Pet: ${pet.name} (${pet.form}, ${pet.kind.replaceAll("_", " ")}): ${pet.hp}/${pet.maxHp} HP, AC ${pet.ac}, speed ${pet.speed} ft.${attacks}${pet.notes ? ` ${pet.notes}` : ""}`,
+    );
+  }
+  if (sheet.wildShape) {
+    const shape = sheet.wildShape;
+    const label = shape.kind === "polymorph" ? "POLYMORPHED into" : "WILD SHAPED as";
+    const stats = shape.abilities
+      ? ` ${Object.entries(shape.abilities)
+          .map(([ability, score]) => `${ability.toUpperCase()} ${score}`)
+          .join("/")}.`
+      : "";
+    const attacks = shape.attacks?.length
+      ? ` Natural attacks (use pc_attack): ${shape.attacks
+          .map((attack) => `${attack.name} +${attack.toHit} (${attack.damage} ${attack.type})`)
+          .join(", ")}.`
+      : "";
+    lines.push(
+      `  ${label} a ${shape.form}: ${shape.beastHp}/${shape.beastMaxHp} beast HP, AC ${shape.beastAc}${shape.speed !== undefined ? `, speed ${shape.speed} ft` : ""}.${stats}${attacks} Damage hits the beast pool first and their own hit points above are untouched until the form breaks. They fight with the beast's natural weapons and cannot cast spells${shape.kind === "polymorph" ? " or speak" : ""}.`,
     );
   }
   if ((sheet.exhaustion ?? 0) > 0) {
@@ -286,12 +336,40 @@ function describeSheet(sheet: CharacterSheet, playedBy: string, realDice: boolea
       return condition;
     });
     lines.push(`  Conditions: ${described.join(", ")}`);
+    // Effect conditions (Bless, Haste, Starry Form...) carry enforced
+    // mechanics; the summary keeps the model narrating what actually applies.
+    for (const summary of describeConditionEffects(sheet.conditions)) {
+      lines.push(`    ${summary}`);
+    }
   }
   if (sheet.spellcasting) {
-    const spellList = [...sheet.spellcasting.known, ...sheet.spellcasting.prepared];
-    lines.push(
-      `  Spell slots: ${slots || "none"} | Save DC ${derived.spellSaveDc} | Spells (complete list, they can cast nothing else): ${spellList.join(", ") || "none"}${sheet.concentratingOn ? ` | Concentrating on: ${sheet.concentratingOn}` : ""}`,
-    );
+    const pact = sheet.spellcasting.pact;
+    const pactLabel = pact
+      ? ` | Pact slots (short-rest): L${pact.level} ${pact.max - pact.used}/${pact.max}`
+      : "";
+    if (sheet.spellcasting.casters?.length) {
+      // Multiclass: each caster class lists its own DC and spells; the slot
+      // pool is shared across them (Pact Magic apart).
+      lines.push(`  Spell slots (SHARED across their caster classes): ${slots || "none"}${pactLabel}`);
+      for (const caster of sheet.spellcasting.casters) {
+        const casterSpells = [...caster.known, ...caster.prepared];
+        const dc =
+          8 +
+          derived.proficiencyBonus +
+          derived.abilityMods[caster.ability as keyof typeof derived.abilityMods];
+        lines.push(
+          `    As a ${caster.classId} (${caster.ability.toUpperCase()}, Save DC ${dc}): ${casterSpells.join(", ") || "none"}`,
+        );
+      }
+      lines.push(
+        `    They can cast nothing beyond those lists.${sheet.concentratingOn ? ` Concentrating on: ${sheet.concentratingOn}` : ""}`,
+      );
+    } else {
+      const spellList = [...sheet.spellcasting.known, ...sheet.spellcasting.prepared];
+      lines.push(
+        `  Spell slots: ${slots || "none"}${pactLabel} | Save DC ${derived.spellSaveDc} | Spells (complete list, they can cast nothing else): ${spellList.join(", ") || "none"}${sheet.concentratingOn ? ` | Concentrating on: ${sheet.concentratingOn}` : ""}`,
+      );
+    }
   } else {
     lines.push(`  Spellcasting: none (cannot cast any spells)`);
   }
@@ -410,6 +488,9 @@ export function buildGameStateBlock(state: DmGameState): string {
       }
       if (enemy.conditions.length) {
         parts.push(`conditions: ${enemy.conditions.join(", ")}`);
+      }
+      if (enemy.concentration) {
+        parts.push(`CONCENTRATING on ${enemy.concentration} (damage forces its CON save; a break ends the effect)`);
       }
       lines.push(parts.join(" | "));
     }

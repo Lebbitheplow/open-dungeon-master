@@ -4,21 +4,37 @@ import { stripReasoningArtifacts } from "../story-prompt.ts";
 // scripts (scripts/test-chapters.mjs) can load them directly.
 
 // Chapters are paced by the STORY, not by message volume: a chapter closes
-// when the DM reports a finished story-arc beat (complete_beat). The
-// message counts are only guardrails around that signal - a floor so a beat
-// finished in three exchanges does not produce a stub chapter, and a hard
-// cap so a campaign whose model never calls the tool (or that has no arc at
-// all) still gets chapters. A party that spends twenty messages searching
-// one room completes no beat and therefore stays in the same chapter.
+// once the DM has reported enough finished story-arc beats (complete_beat),
+// beatsRequired of them, so each chapter reads as a real episode rather
+// than a single scene. The message counts are only guardrails around that
+// signal - a floor so beats finished in three exchanges do not produce a
+// stub chapter, and a hard cap so a campaign whose model never calls the
+// tool (or that has no arc at all) still gets chapters. A party that spends
+// twenty messages searching one room completes no beat and therefore stays
+// in the same chapter.
+//
+// The arcExhausted clause closes promptly on a finished act even when the
+// beat count is short: the next act (or sequel saga) is only planned at
+// chapter close, so an exhausted arc coasting toward the cap would leave
+// the DM steering by nothing. It applies even at zero completed beats,
+// because a chapter can OPEN with an exhausted arc (the planning pass
+// failed at the previous close) and closing again is precisely the retry.
 export function shouldCloseChapter(
   messageCount: number,
-  beatCompleted: boolean,
-  options: { min: number; max: number },
+  beatsCompleted: number,
+  arcExhausted: boolean,
+  options: { min: number; max: number; beatsRequired: number },
 ): boolean {
   if (messageCount >= options.max) {
     return true;
   }
-  return beatCompleted && messageCount >= options.min;
+  if (messageCount < options.min) {
+    return false;
+  }
+  if (arcExhausted) {
+    return true;
+  }
+  return beatsCompleted >= options.beatsRequired;
 }
 
 // Parse the model's chapter JSON with a never-wedge fallback: any failure

@@ -43,10 +43,12 @@ import {
   computeUseItem,
   computeUseResource,
   resourceTools,
+  rollHealing,
 } from "@/lib/dm/resource-tools";
-import { searchSpells, spellDamageFor } from "@/lib/content";
+import { searchSpells, spellDamageFor, spellNameMatches } from "@/lib/content";
 import { suggestedSpellCount } from "@/lib/content/mechanics";
-import { abilityMod, computeSheetDerived } from "@/lib/srd";
+import { abilityMod, computeSheetDerived, findClass } from "@/lib/srd";
+import { spellClassFor } from "@/lib/classes";
 import { insertRoll } from "@/lib/db/rolls";
 import { rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
@@ -298,6 +300,8 @@ const argsSchema = z.object({
   form: z.string().optional(),
   formHp: z.coerce.number().int().min(1).max(300).optional(),
   formAc: z.coerce.number().int().min(1).max(30).optional(),
+  // use_resource: the chosen option of a feature with variants.
+  variant: z.string().optional(),
   condition: z.string().optional(),
   // set_condition durations.
   rounds: z.coerce.number().int().min(1).max(100).optional(),
@@ -508,8 +512,25 @@ export function applyDmMutation(
           adjusted.amount,
         );
         const form = sheet.wildShape.form;
+        // A polymorph breaking on damage also drops its tracked condition.
+        const dropPolymorph =
+          shape.reverted &&
+          sheet.wildShape.kind === "polymorph" &&
+          sheet.conditions.some((name) => name.toLowerCase() === "polymorphed");
+        const clearedConditions = dropPolymorph
+          ? removeConditions(sheet.conditions, sheet.conditionMeta, ["polymorphed"])
+          : null;
         const patch: FullPatchSheetInput = shape.reverted
-          ? { wildShape: null, tempHp: shape.tempHp }
+          ? {
+              wildShape: null,
+              tempHp: shape.tempHp,
+              ...(clearedConditions
+                ? {
+                    conditions: clearedConditions.conditions,
+                    conditionMeta: clearedConditions.meta,
+                  }
+                : {}),
+            }
           : {
               wildShape: { ...sheet.wildShape, beastHp: shape.beastHp },
               tempHp: shape.tempHp,
@@ -858,6 +879,7 @@ export function applyDmMutation(
         resourceName,
         Math.max(1, args.amount ?? 1),
         { name: args.form, hp: args.formHp, ac: args.formAc },
+        args.variant,
       );
       if ("error" in outcome) {
         return { result: outcome };
@@ -1036,6 +1058,81 @@ export function applyDmMutation(
       // otherwise. A missing spell arg is tolerated (weak tool calling must
       // not break casting), so the slot check still runs.
       const spell = (args.spell ?? "").trim();
+      // Combat Wild Shape: while transformed, a slot becomes 1d8 healing per
+      // slot level, restoring the beast form's pool. Called as
+      // use_spell_slot with spell="Combat Wild Shape".
+      if (/combat wild shape/i.test(spell)) {
+        const hasFeature = sheet.features.some((feature) =>
+          feature.name.toLowerCase().includes("combat wild shape"),
+        );
+        if (!hasFeature) {
+          return { result: { error: `${sheet.name} has no Combat Wild Shape.` } };
+        }
+        if (!sheet.wildShape) {
+          return {
+            result: {
+              error: `${sheet.name} is not wild shaped; the bonus-action healing works only while transformed.`,
+            },
+          };
+        }
+        if (level < 1) {
+          return { result: { error: "Combat Wild Shape healing needs the slot level to burn." } };
+        }
+        const slot = sheet.spellcasting?.slots[String(level)];
+        const math = slot ? spendSlotMath(slot) : null;
+        if (!math) {
+          return { result: { error: `${sheet.name} has no free level ${level} spell slot.` } };
+        }
+        const healed = rollHealing(campaign, sheet, "Combat Wild Shape", `${level}d8`);
+        const beastHp = Math.min(
+          sheet.wildShape.beastMaxHp,
+          sheet.wildShape.beastHp + Math.max(1, healed),
+        );
+        const patch: FullPatchSheetInput = {
+          spellcasting: sheet.spellcasting
+            ? { ...sheet.spellcasting, slots: { ...sheet.spellcasting.slots, [String(level)]: math } }
+            : sheet.spellcasting,
+          wildShape: { ...sheet.wildShape, beastHp },
+        };
+        patchSheet(sheet.id, patch);
+        audit(
+          campaign,
+          turnId,
+          sheet,
+          "use_spell_slot",
+          { level, spell: "Combat Wild Shape", healed, beastHp },
+          reason,
+          patch,
+        );
+        publishSheet(campaign, sheet.id);
+        return {
+          result: {
+            ok: true,
+            healingRolled: healed,
+            form: `${sheet.wildShape.form}: ${beastHp}/${sheet.wildShape.beastMaxHp} HP`,
+            slot: `level ${level}: ${math.max - math.used}/${math.max} left`,
+            note: "A bonus action; the healing lands on the beast form's pool.",
+          },
+        };
+      }
+      // 5e: no spellcasting while transformed. A polymorphed creature has a
+      // beast's mind; a wild-shaped druid regains casting only at level 18
+      // (Beast Spells). Combat Wild Shape returned above.
+      if (sheet.wildShape) {
+        const polymorphed = sheet.wildShape.kind === "polymorph";
+        const beastSpells =
+          !polymorphed &&
+          sheet.features.some((feature) => feature.name.toLowerCase().includes("beast spells"));
+        if (!beastSpells) {
+          return {
+            result: {
+              error: polymorphed
+                ? `${sheet.name} is polymorphed into a ${sheet.wildShape.form} and cannot cast spells; the form has no capacity for it. The spell waits until the transformation ends.`
+                : `${sheet.name} is wild shaped as a ${sheet.wildShape.form} and cannot cast spells in beast form (that unlocks with Beast Spells at druid level 18). They can revert with use_resource on Wild Shape, or spend a slot on Combat Wild Shape healing if they have it.`,
+            },
+          };
+        }
+      }
       if (spell && sheet.spellcasting) {
         const spellList = [...sheet.spellcasting.known, ...sheet.spellcasting.prepared];
         const knows = spellList.some((entry) => entry.trim().toLowerCase() === spell.toLowerCase());
@@ -1052,7 +1149,7 @@ export function applyDmMutation(
       // spells may skip the slot entirely.
       const known = spell
         ? searchSpells({ q: spell, userId: sheet.userId, limit: 10 }).find(
-            (entry) => entry.name.trim().toLowerCase() === spell.toLowerCase(),
+            (entry) => spellNameMatches(entry, spell),
           )
         : undefined;
       if (known && known.level === 0) {
@@ -1085,18 +1182,48 @@ export function applyDmMutation(
           },
         };
       }
-      const slot = sheet.spellcasting?.slots[String(level)];
-      const math = slot ? spendSlotMath(slot) : null;
+      // Multiclass warlock: a Pact Magic slot of the right level is spent
+      // first when the spell sits on the warlock entry's list (it comes
+      // back on a short rest, so burning it before the shared pool is
+      // strictly kind); shared slots are the fallback in both directions.
+      const pact = sheet.spellcasting?.pact;
+      const warlockEntry = sheet.spellcasting?.casters?.find(
+        (caster) => findClass(caster.classId)?.casterType === "pact",
+      );
+      const onWarlockList =
+        !spell ||
+        Boolean(
+          warlockEntry &&
+            [...warlockEntry.known, ...warlockEntry.prepared].some(
+              (entry) => entry.trim().toLowerCase() === spell.toLowerCase(),
+            ),
+        );
+      let math: { max: number; used: number } | null = null;
+      let spentPact = false;
+      if (pact && pact.level === level && pact.used < pact.max && onWarlockList) {
+        math = { max: pact.max, used: pact.used + 1 };
+        spentPact = true;
+      } else {
+        const slot = sheet.spellcasting?.slots[String(level)];
+        math = slot ? spendSlotMath(slot) : null;
+        // Last resort: the pact slot covers a shared-pool miss at its level.
+        if (!math && pact && pact.level === level && pact.used < pact.max) {
+          math = { max: pact.max, used: pact.used + 1 };
+          spentPact = true;
+        }
+      }
       if (!math) {
         return {
           result: { error: `${sheet.name} has no free level ${level} spell slot.` },
         };
       }
       const nextSpellcasting = sheet.spellcasting
-        ? {
-            ...sheet.spellcasting,
-            slots: { ...sheet.spellcasting.slots, [String(level)]: math },
-          }
+        ? spentPact
+          ? { ...sheet.spellcasting, pact: { level, ...math } }
+          : {
+              ...sheet.spellcasting,
+              slots: { ...sheet.spellcasting.slots, [String(level)]: math },
+            }
         : sheet.spellcasting;
       patchSheet(sheet.id, { spellcasting: nextSpellcasting });
       audit(
@@ -1126,7 +1253,7 @@ export function applyDmMutation(
       return {
         result: {
           ok: true,
-          slot: `level ${level}: ${math.max - math.used}/${math.max} left`,
+          slot: `${spentPact ? "pact slot " : ""}level ${level}: ${math.max - math.used}/${math.max} left`,
           ...concentrationInfo,
         },
       };
@@ -1157,26 +1284,68 @@ export function applyDmMutation(
         }
         // The class's real 5e ceiling. Cantrips do not count against it, and
         // an unknown class (custom catalog) has no table to enforce.
+        // Multiclass: the spell joins a caster entry with allowance headroom
+        // at ITS class level (the first that has room); the legacy fields
+        // stay the union mirror.
         const spellLevel = searchSpells({ q: spell, userId: sheet.userId, limit: 10 }).find(
-          (entry) => entry.name.trim().toLowerCase() === spell.toLowerCase(),
+          (entry) => spellNameMatches(entry, spell),
         )?.level;
-        const ceiling = suggestedSpellCount(
-          sheet.class,
-          sheet.level,
-          abilityMod(sheet.abilities[sheet.spellcasting.ability]),
-        );
-        const current = intoKnown ? known.length : prepared.length;
-        if (ceiling && spellLevel !== 0 && current >= ceiling.count) {
-          return {
-            result: {
-              error: `${sheet.name} already has ${current} ${ceiling.label}, the most a level ${sheet.level} ${sheet.class} may hold. They must give one up first: call learn_spell with action=remove for the spell they drop.`,
-            },
-          };
+        const casters = sheet.spellcasting.casters ?? [];
+        let targetCaster: (typeof casters)[number] | null = null;
+        if (casters.length) {
+          const classLevels = Object.fromEntries(
+            (sheet.classes ?? []).map((entry) => [entry.id.toLowerCase(), entry.level]),
+          );
+          for (const caster of casters) {
+            const level = classLevels[caster.classId.toLowerCase()] ?? sheet.level;
+            const cap = suggestedSpellCount(
+              spellClassFor(caster.classId),
+              level,
+              abilityMod(sheet.abilities[caster.ability]),
+            );
+            const held = (caster.known.length ? caster.known : caster.prepared).length;
+            if (!cap || spellLevel === 0 || held < cap.count) {
+              targetCaster = caster;
+              break;
+            }
+          }
+          if (!targetCaster) {
+            return {
+              result: {
+                error: `${sheet.name}'s caster classes are all at their spells-held ceiling. They must give one up first: call learn_spell with action=remove for the spell they drop.`,
+              },
+            };
+          }
+        } else {
+          const ceiling = suggestedSpellCount(
+            sheet.class,
+            sheet.level,
+            abilityMod(sheet.abilities[sheet.spellcasting.ability]),
+          );
+          const current = intoKnown ? known.length : prepared.length;
+          if (ceiling && spellLevel !== 0 && current >= ceiling.count) {
+            return {
+              result: {
+                error: `${sheet.name} already has ${current} ${ceiling.label}, the most a level ${sheet.level} ${sheet.class} may hold. They must give one up first: call learn_spell with action=remove for the spell they drop.`,
+              },
+            };
+          }
         }
         const nextSpellcasting = {
           ...sheet.spellcasting,
           known: intoKnown ? [...known, spell] : known,
           prepared: intoKnown ? prepared : [...prepared, spell],
+          ...(targetCaster
+            ? {
+                casters: casters.map((caster) =>
+                  caster === targetCaster
+                    ? caster.known.length
+                      ? { ...caster, known: [...caster.known, spell] }
+                      : { ...caster, prepared: [...caster.prepared, spell] }
+                    : caster,
+                ),
+              }
+            : {}),
         };
         patchSheet(sheet.id, { spellcasting: nextSpellcasting });
         audit(campaign, turnId, sheet, "learn_spell", { action, spell }, reason, {
@@ -1200,6 +1369,17 @@ export function applyDmMutation(
         ...sheet.spellcasting,
         known: known.filter((entry) => !matches(entry)),
         prepared: prepared.filter((entry) => !matches(entry)),
+        // A removal comes off every caster entry that lists it, keeping the
+        // per-class lists and the union mirror agreeing.
+        ...(sheet.spellcasting.casters?.length
+          ? {
+              casters: sheet.spellcasting.casters.map((caster) => ({
+                ...caster,
+                known: caster.known.filter((entry) => !matches(entry)),
+                prepared: caster.prepared.filter((entry) => !matches(entry)),
+              })),
+            }
+          : {}),
       };
       patchSheet(sheet.id, { spellcasting: nextSpellcasting });
       audit(campaign, turnId, sheet, "learn_spell", { action, spell }, reason, {

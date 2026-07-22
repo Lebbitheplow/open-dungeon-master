@@ -36,8 +36,8 @@ export function ImageLightbox({
         </button>
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/85" />
-        <Dialog.Content className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 p-4 outline-none sm:p-8">
+        <Dialog.Overlay className="fixed inset-0 z-[60] bg-black/85" />
+        <Dialog.Content className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-3 p-4 outline-none sm:p-8">
           <Dialog.Title className="sr-only">{label}</Dialog.Title>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img

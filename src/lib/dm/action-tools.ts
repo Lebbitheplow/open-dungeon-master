@@ -12,9 +12,13 @@ import { insertRoll } from "@/lib/db/rolls";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
-import { computeSheetDerived } from "@/lib/srd";
+import { acBreakdownFor, computeSheetDerived, sizeForRace } from "@/lib/srd";
+import {
+  conditionBlocksReactions,
+  conditionExtraActions,
+} from "@/lib/srd/condition-effects";
 import { combatRiders } from "@/lib/srd/feature-effects";
-import { passivePerceptionFor, saveModFor } from "@/lib/bestiary/statblock";
+import { passivePerceptionFor, saveModFor, sizeRank } from "@/lib/bestiary/statblock";
 import {
   budgetApplies,
   freshBudget,
@@ -24,6 +28,8 @@ import {
 } from "@/lib/dm/action-budget";
 
 import { resolveEnemyRef, publishEncounter } from "@/lib/dm/enemy-damage";
+// For the Shield spell's slot spend; mutations never imports back.
+import { applyDmMutation } from "@/lib/dm/mutations";
 import { resolveSheetRef } from "@/lib/dm/rolls";
 import { DODGING } from "@/lib/dm/condition-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -104,6 +110,10 @@ export const actionTools: ToolDef[] = [
             type: "string",
             description: "What they react with, e.g. 'Shield', 'Uncanny Dodge', 'Cutting Words'.",
           },
+          targetCharacterId: {
+            type: "string",
+            description: "Protection style only: the ally being covered.",
+          },
           reason: { type: "string", description: "Short in-fiction cause." },
         },
         required: ["characterId", "feature"],
@@ -124,6 +134,8 @@ const takeActionSchema = z.object({
 const useReactionSchema = z.object({
   characterId: z.string(),
   feature: z.string().max(80),
+  // The ally a Protection-style reaction covers.
+  targetCharacterId: z.string().optional(),
   reason: z.string().optional(),
 });
 
@@ -151,6 +163,9 @@ export function budgetFor(
   encounter: Encounter | null,
   ownerId: string,
   attacksAllowed: number,
+  // Extra actions per turn from effect conditions (Haste); only seeds a
+  // FRESH budget so spending one mid-turn sticks.
+  extraActions = 0,
 ): TurnBudget | null {
   if (!encounter || currentCombatantId(encounter) !== ownerId) {
     return null;
@@ -163,7 +178,7 @@ export function budgetFor(
       attacksAllowed: Math.max(encounter.turnBudget.attacksAllowed, attacksAllowed),
     };
   }
-  return freshBudget({ ownerId, round: encounter.round, attacksAllowed });
+  return freshBudget({ ownerId, round: encounter.round, attacksAllowed, extraActions });
 }
 
 export function storeBudget(encounter: Encounter, budget: TurnBudget) {
@@ -238,7 +253,12 @@ export function handleTakeAction(
   }
 
   const encounter = getActiveEncounter(campaign.id);
-  const budget = budgetFor(encounter, sheet.id, attacksAllowedFor(sheet));
+  const budget = budgetFor(
+    encounter,
+    sheet.id,
+    attacksAllowedFor(sheet),
+    conditionExtraActions(sheet.conditions),
+  );
   if (budget && encounter) {
     const spend = spendAction(budget, ACTION_COST[args.action], args.action, sheet.name);
     if (!spend.ok) {
@@ -281,7 +301,11 @@ export function handleTakeAction(
       };
     }
     case "hide": {
-      const stealth = rollExpression(d20Expression(derived.skills.stealth ?? 0));
+      // Noisy armor (scale, plate...) makes hiding a disadvantage roll.
+      const noisyArmor = acBreakdownFor(sheet).stealthDisadvantage;
+      const stealth = rollExpression(
+        d20Expression(derived.skills.stealth ?? 0, noisyArmor ? "disadvantage" : "none"),
+      );
       const roll = insertRoll({
         campaignId: campaign.id,
         characterId: sheet.id,
@@ -313,6 +337,7 @@ export function handleTakeAction(
         stealth: stealth.total,
         ...(watchers.length ? { vsPassivePerception: sharpest } : {}),
         hidden,
+        ...(noisyArmor ? { armor: "their armor imposed disadvantage on the Stealth roll" } : {}),
         note: hidden
           ? `${sheet.name} is hidden. Their next attack has advantage and reveals them; the server applies both.`
           : `${sheet.name} stays in plain sight: ${stealth.total} does not beat a passive Perception of ${sharpest}.`,
@@ -343,6 +368,12 @@ export function handleTakeAction(
       const enemy = args.targetEnemyId ? resolveEnemyRef(encounter.id, args.targetEnemyId) : null;
       if (!enemy || enemy.status !== "alive") {
         return { error: `${args.action} needs a living targetEnemyId from GAME STATE.` };
+      }
+      // SRD: the target can be at most one size larger than the attacker.
+      if (sizeRank(enemy.stats.size) > sizeRank(sizeForRace(sheet.race)) + 1) {
+        return {
+          error: `${enemy.displayName} is ${enemy.stats.size}: too large for ${sheet.name} (${sizeForRace(sheet.race)}) to ${args.action}. A creature can only ${args.action} a target at most one size larger than itself.`,
+        };
       }
       // SRD contest: the attacker's Athletics against the target's better of
       // Athletics (STR) and Acrobatics (DEX). The stat block has no skills,
@@ -449,6 +480,7 @@ const REACTION_NOTES: Array<{ match: RegExp; note: string }> = [
 
 export function handleUseReaction(
   campaign: Campaign,
+  turn: DmTurn,
   rawArguments: string,
   sheets: CharacterSheet[],
   sheetsById: Map<string, CharacterSheet>,
@@ -471,6 +503,13 @@ export function handleUseReaction(
   if (!encounter) {
     return { error: "Reactions only exist in combat; there is no active encounter." };
   }
+  // Slow and its kin switch reactions off entirely.
+  const blocked = conditionBlocksReactions(sheet.conditions);
+  if (blocked) {
+    return {
+      error: `${sheet.name} is ${blocked} and cannot take reactions; ${args.feature} does not happen.`,
+    };
+  }
 
   // A reaction is spent on someone ELSE's turn, so it cannot live in the
   // acting combatant's turn budget. Both sides of the table share
@@ -480,8 +519,65 @@ export function handleUseReaction(
       error: `${sheet.name} has already used their reaction this round; it comes back at the start of their next turn. ${args.feature} does not happen.`,
     };
   }
+
+  // The Shield SPELL has a real server payload: the slot is spent and the
+  // +5 AC lands as a registry condition until their next turn, so enemy
+  // swings genuinely test the higher number. A refused spend refuses the
+  // reaction (and leaves it unspent).
+  const spellList = sheet.spellcasting
+    ? [...sheet.spellcasting.known, ...sheet.spellcasting.prepared]
+    : [];
+  const isShieldSpell =
+    /^shield\b/i.test(args.feature.trim()) &&
+    !/of faith|master|bash|protection/i.test(args.feature) &&
+    spellList.some((entry) => /^shield\b(?!.*of faith)/i.test(entry.trim()));
+  if (isShieldSpell) {
+    const spend = applyDmMutation(
+      campaign,
+      turn.id,
+      "use_spell_slot",
+      JSON.stringify({ characterId: sheet.id, level: 1, spell: "Shield", reason: "Shield reaction" }),
+      sheets,
+      sheetsById,
+    ).result;
+    if ("error" in spend) {
+      return spend;
+    }
+    encounter.reactionsUsed = [...encounter.reactionsUsed, sheet.id];
+    saveEncounter(encounter);
+    addSheetCondition(campaign, sheet, "shielded", 1);
+    const updated = getSheetById(sheet.id);
+    return {
+      ok: true,
+      reaction: args.feature,
+      spent: `${sheet.name}'s reaction and a level-1 slot are spent.`,
+      applied: `Shield: +5 AC until the start of their next turn; their AC is now ${
+        updated?.ac ?? sheet.ac + 5
+      }. The server applied it. If the triggering attack rolled below that, it misses; narrate accordingly.`,
+    };
+  }
+
   encounter.reactionsUsed = [...encounter.reactionsUsed, sheet.id];
   saveEncounter(encounter);
+
+  // The Protection fighting style covers an ally with a real condition:
+  // the triggering attack (and any other until the protector's next turn)
+  // rolls at disadvantage against them.
+  if (/protection/i.test(args.feature)) {
+    const allyRef = args.targetCharacterId
+      ? resolveSheetRef(args.targetCharacterId, sheets, sheetsById)
+      : null;
+    const ally = allyRef ? (getSheetById(allyRef.id) ?? allyRef) : null;
+    if (ally && ally.id !== sheet.id) {
+      addSheetCondition(campaign, ally, "protected", 1);
+      return {
+        ok: true,
+        reaction: args.feature,
+        spent: `${sheet.name}'s reaction is used until the start of their next turn.`,
+        applied: `${ally.name} is protected: attacks against them roll at disadvantage until ${sheet.name}'s next turn. The server applies it; if the triggering attack already hit, re-read it at disadvantage.`,
+      };
+    }
+  }
 
   const known = REACTION_NOTES.find((entry) => entry.match.test(args.feature));
   return {

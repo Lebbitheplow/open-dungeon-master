@@ -21,6 +21,10 @@ export type ClassOption = { id: string; name: string } & ClassMechanics & {
     knownCaster?: boolean;
     castingLabel?: string | null;
     spellListFrom?: string | null;
+    // The content pack's write-up, shown under the class select.
+    desc?: string;
+    // Secret languages the class teaches (Druidic, Thieves' Cant).
+    languages?: string[];
   };
 export type BackgroundOption = {
   id: string;
@@ -33,8 +37,15 @@ export type BackgroundOption = {
   // Catalog-only extras; absent on SRD and Open5e rows.
   genres?: Genre[];
   blurb?: string;
+  // The content pack's write-up, shown under the background select.
+  desc?: string;
 };
-export type ArchetypeOption = { id: string; name: string };
+// `desc` is the subclass write-up shown in the builder before a pick is made.
+// For the authored subclasses it holds the whole level-by-level feature table
+// with its rules text, built by insertAuthoredContent in
+// scripts/import-open5e.mjs, so a new player can read what a circle or an
+// oath actually does before committing to it.
+export type ArchetypeOption = { id: string; name: string; desc: string };
 
 type ContentRow = {
   slug: string;
@@ -58,6 +69,8 @@ function srdRaceOptions(): RaceOption[] {
     cantripChoice: race.cantripChoice,
     tools: race.tools,
     toolChoice: race.toolChoice,
+    armor: race.armor,
+    weapons: race.weapons,
     note: race.traits.join(" · "),
   }));
 }
@@ -87,6 +100,7 @@ function srdClassOptions(): ClassOption[] {
     ...SRD_CLASSES.map((klass) => ({
       id: klass.id,
       name: klass.name,
+      languages: klass.languages,
       hitDie: klass.hitDie,
       saves: klass.saves,
       skillChoices: klass.skillChoices,
@@ -178,6 +192,10 @@ export function useBuilderOptions() {
             id: row.slug,
             name: row.name,
             ...classMechanics(row.slug, row.data),
+            desc: String(row.data?.desc ?? ""),
+            // Open5e rows say nothing about Druidic or Thieves' Cant, so the
+            // bundled SRD entry supplies them.
+            languages: SRD_CLASSES.find((klass) => klass.id === row.slug)?.languages,
           }));
           const packIds = new Set(packOptions.map((option) => option.id));
           setClasses([
@@ -193,6 +211,7 @@ export function useBuilderOptions() {
             id: row.slug,
             name: row.name,
             skills: skillsInText(row.data.skill_proficiencies),
+            desc: String(row.data?.desc ?? ""),
           }));
           const packBackgroundIds = new Set(packBackgrounds.map((option) => option.id));
           setBackgrounds([
@@ -235,7 +254,11 @@ export function useArchetypes(classId: string) {
       .then((data) => {
         if (!cancelled && data?.results) {
           setArchetypes(
-            (data.results as ContentRow[]).map((row) => ({ id: row.slug, name: row.name })),
+            (data.results as ContentRow[]).map((row) => ({
+              id: row.slug,
+              name: row.name,
+              desc: String(row.data?.desc ?? ""),
+            })),
           );
         }
       })

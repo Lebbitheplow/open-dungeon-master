@@ -9,11 +9,14 @@ import { resolveSheetRef } from "@/lib/dm/rolls";
 import { computeSheetDerived } from "@/lib/srd";
 import {
   breathHoldMinutes,
+  extremeColdSave,
+  extremeHeatSave,
   fallingDamageDice,
   suffocationRounds,
   trapProfile,
   type TrapSeverity,
 } from "@/lib/srd/hazards";
+import { pcResistances } from "@/lib/dm/condition-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // Traps and environmental hazards used to be pure narration routed through the
@@ -43,14 +46,22 @@ export const hazardTools: ToolDef[] = [
     function: {
       name: "apply_hazard",
       description:
-        "Resolve a trap, a fall, or an environmental hazard against one or more characters with real 5e numbers. The server computes the damage and (for traps) the save DC from the book and applies the save and damage itself, so you never invent them. Use this instead of damage_enemy for any harm from the environment. Call it BEFORE narrating the result and narrate exactly what it reports. Types: 'falling' (pass feet; 1d6 per 10 ft, no save), 'trap' (pass severity; a Dexterity save and damage scaled to each victim's level), 'generic' (pass your own damage dice, saveAbility, and dc for a bespoke hazard like a gout of flame), or 'suffocation'/'drowning' (a character out of air; pass roundsWithoutAir and the server derives from their Constitution how long they last before dropping to 0 HP).",
+        "Resolve a trap, a fall, or an environmental hazard against one or more characters with real 5e numbers. The server computes the damage and (for traps) the save DC from the book and applies the save and damage itself, so you never invent them. Use this instead of damage_enemy for any harm from the environment. Call it BEFORE narrating the result and narrate exactly what it reports. Types: 'falling' (pass feet; 1d6 per 10 ft, no save), 'trap' (pass severity; a Dexterity save and damage scaled to each victim's level), 'generic' (pass your own damage dice, saveAbility, and dc for a bespoke hazard like a gout of flame), 'suffocation'/'drowning' (a character out of air; pass roundsWithoutAir and the server derives from their Constitution how long they last before dropping to 0 HP), or 'extreme_cold'/'extreme_heat' (one CON save per hour of exposure; a failure is a level of exhaustion, applied automatically).",
       parameters: {
         type: "object",
         additionalProperties: false,
         properties: {
           type: {
             type: "string",
-            enum: ["falling", "trap", "generic", "suffocation", "drowning"],
+            enum: [
+              "falling",
+              "trap",
+              "generic",
+              "suffocation",
+              "drowning",
+              "extreme_cold",
+              "extreme_heat",
+            ],
             description: "Which hazard math to use.",
           },
           roundsWithoutAir: {
@@ -106,7 +117,15 @@ export const hazardTools: ToolDef[] = [
 ];
 
 const hazardSchema = z.object({
-  type: z.enum(["falling", "trap", "generic", "suffocation", "drowning"]),
+  type: z.enum([
+    "falling",
+    "trap",
+    "generic",
+    "suffocation",
+    "drowning",
+    "extreme_cold",
+    "extreme_heat",
+  ]),
   characterIds: z.array(z.string()).min(1),
   feet: z.coerce.number().int().min(0).max(1000).optional(),
   roundsWithoutAir: z.coerce.number().int().min(0).max(100).optional(),
@@ -235,6 +254,42 @@ export function handleApplyHazard(
       type: args.type,
       results: perTarget,
       note: "Breath math resolved from Constitution; anyone past their limit is at 0 HP and dying. Narrate the struggle for air.",
+    };
+  }
+
+  // Extreme cold / heat (DMG): one CON save per hour of exposure; a failure
+  // is a level of exhaustion, which the exhaustion track enforces from
+  // there. Cold resistance or immunity shrugs it off entirely.
+  if (args.type === "extreme_cold" || args.type === "extreme_heat") {
+    const save = args.type === "extreme_cold" ? extremeColdSave() : extremeHeatSave(1);
+    const wanted = args.type === "extreme_cold" ? "cold" : "fire";
+    const perTarget = targets.map((sheet) => {
+      if (pcResistances(sheet).includes(wanted)) {
+        return {
+          name: sheet.name,
+          immune: `${wanted} resistance: unaffected by the ${args.type === "extreme_cold" ? "cold" : "heat"}`,
+        };
+      }
+      const result = handleCastAtPlayer(
+        campaign,
+        turn,
+        JSON.stringify({
+          characterId: sheet.id,
+          source,
+          saveAbility: save.ability,
+          dc: args.dc ?? save.dc,
+          condition: "exhaustion",
+        }),
+        sheets,
+        sheetsById,
+      );
+      return { name: sheet.name, ...result };
+    });
+    return {
+      ok: true,
+      type: args.type,
+      results: perTarget,
+      note: "One save per hour of exposure; a failure is a level of exhaustion, applied by the server. Cold-weather gear or fitting resistances negate it; call again for each further hour.",
     };
   }
 

@@ -1,6 +1,6 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { touchCampaign } from "@/lib/db/campaigns";
-import { populateFeatures } from "@/lib/srd/features";
+import { populateFeaturesForClasses } from "@/lib/srd/features";
 import { populateResources } from "@/lib/srd/class-resources";
 import { deriveAc } from "@/lib/srd";
 import { ATTUNEMENT_SLOTS } from "@/lib/srd/armor";
@@ -32,6 +32,8 @@ type SheetRow = {
   ac_override: number | null;
   speed: number;
   hit_dice_json: string;
+  classes_json: string | null;
+  hit_dice_pools_json: string | null;
   proficiencies_json: string;
   equipment_json: string;
   gold: number;
@@ -42,6 +44,7 @@ type SheetRow = {
   condition_meta_json: string | null;
   resources_json: string | null;
   wild_shape_json: string | null;
+  pets_json: string | null;
   exhaustion: number | null;
   death_saves_json: string | null;
   concentrating_on: string | null;
@@ -92,6 +95,8 @@ function mapSheet(row: SheetRow): CharacterSheet {
     acOverride: row.ac_override === 1,
     speed: row.speed,
     hitDice: parseJson(row.hit_dice_json, { die: "d8" as const, total: 1, spent: 0 }),
+    classes: parseJson<CharacterSheet["classes"]>(row.classes_json, []),
+    hitDicePools: parseJson<CharacterSheet["hitDicePools"]>(row.hit_dice_pools_json, null),
     // Rows stored before the expertise field existed lack it; heal on read.
     proficiencies: (() => {
       const parsed = parseJson<CharacterSheet["proficiencies"]>(
@@ -109,6 +114,7 @@ function mapSheet(row: SheetRow): CharacterSheet {
     conditionMeta: parseJson<CharacterSheet["conditionMeta"]>(row.condition_meta_json, {}),
     resources: parseJson<CharacterSheet["resources"]>(row.resources_json, {}),
     wildShape: parseJson<CharacterSheet["wildShape"]>(row.wild_shape_json, null),
+    pets: parseJson<CharacterSheet["pets"]>(row.pets_json, []),
     exhaustion: row.exhaustion ?? 0,
     deathSaves: parseJson<CharacterSheet["deathSaves"]>(row.death_saves_json, null),
     concentratingOn: row.concentrating_on ?? null,
@@ -130,8 +136,9 @@ const SHEET_COLUMNS = `
   id, campaign_id, user_id, library_character_id, name, race, class, subclass,
   background, alignment, level, xp,
   abilities_json, max_hp, current_hp, temp_hp, ac, ac_override, speed, hit_dice_json,
+  classes_json, hit_dice_pools_json,
   proficiencies_json, equipment_json, gold, feats_json, features_json,
-  spellcasting_json, conditions_json, condition_meta_json, resources_json, wild_shape_json, exhaustion, death_saves_json, concentrating_on,
+  spellcasting_json, conditions_json, condition_meta_json, resources_json, wild_shape_json, pets_json, exhaustion, death_saves_json, concentrating_on,
   portrait_json, notes, backstory, is_companion, companion_kind, personality, created_at, updated_at
 `;
 
@@ -195,12 +202,15 @@ export function createSheet(
   const now = nowIso();
   // Every creation path lands here, so the SRD class features and racial
   // traits are always granted for the level the sheet actually starts at.
-  const features = populateFeatures(
+  // A multiclassed library character re-entering play grants per class.
+  const classList =
+    (input.classes ?? []).length > 1
+      ? input.classes
+      : [{ id: input.class, subclass: input.subclass, level }];
+  const features = populateFeaturesForClasses(
     withBackgroundFeature(input.features ?? [], input.background),
-    input.class,
-    input.subclass,
+    classList,
     input.race,
-    level,
   );
   // Limited-use counters (Rage, Ki, Second Wind...) sized for the features
   // just granted; the resource engine spends and refills them.
@@ -210,7 +220,13 @@ export function createSheet(
       Math.floor((score - 10) / 2),
     ]),
   );
-  const resources = populateResources(features, level, abilityMods, undefined);
+  const resources = populateResources(
+    features,
+    level,
+    abilityMods,
+    undefined,
+    classList.length > 1 ? classList : undefined,
+  );
   // Unless the AC is pinned, it comes from the gear they are actually
   // carrying rather than the builder's suggestion. An absent flag means a
   // library character stored before the engine: its equipment list has no
@@ -221,6 +237,7 @@ export function createSheet(
     : deriveAc({
         class: input.class,
         level,
+        classes: classList.length > 1 ? classList : undefined,
         abilities: input.abilities,
         proficiencies: input.proficiencies,
         equipment: input.equipment,
@@ -233,11 +250,11 @@ export function createSheet(
         id, campaign_id, user_id, library_character_id, name, race, class,
         subclass, background, alignment,
         level, xp, abilities_json, max_hp, current_hp, temp_hp, ac, ac_override, speed,
-        hit_dice_json, proficiencies_json, equipment_json, gold, feats_json,
+        hit_dice_json, classes_json, hit_dice_pools_json, proficiencies_json, equipment_json, gold, feats_json,
         features_json, resources_json, spellcasting_json, conditions_json, portrait_json,
         notes, backstory, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?, ?)
     `,
   ).run(
     id,
@@ -258,6 +275,10 @@ export function createSheet(
     acOverride ? 1 : 0,
     input.speed,
     JSON.stringify(input.hitDice),
+    classList.length > 1 ? JSON.stringify(classList) : null,
+    classList.length > 1 && input.hitDicePools?.length
+      ? JSON.stringify(input.hitDicePools)
+      : null,
     JSON.stringify(input.proficiencies),
     JSON.stringify(input.equipment),
     input.gold,
@@ -327,16 +348,104 @@ export function listSheets(campaignId: string): CharacterSheet[] {
   return rows.map(mapSheet);
 }
 
+// Mirror of per-class hit-die pools into the legacy single hitDice field:
+// die = the primary class's pool, totals and spents summed. Every existing
+// consumer (UI counters, prompt, rest planners) keeps reading hitDice.
+function poolsMirror(
+  pools: NonNullable<CharacterSheet["hitDicePools"]>,
+  primaryClassId: string | undefined,
+): CharacterSheet["hitDice"] {
+  const primary =
+    pools.find((pool) => pool.classId.toLowerCase() === (primaryClassId ?? "").toLowerCase()) ??
+    pools[0];
+  const total = Math.min(20, pools.reduce((sum, pool) => sum + pool.total, 0));
+  const spent = Math.min(total, pools.reduce((sum, pool) => sum + pool.spent, 0));
+  return { die: primary.die, total, spent };
+}
+
+// A bare hitDice patch (the usage +/- buttons, short-rest spends) arrives as
+// a change to the summed mirror; fold the spent delta into the pools,
+// biggest die first in both directions (spending big dice heals more, and
+// recovering them first is strictly kinder).
+function adjustPoolsSpent(
+  pools: NonNullable<CharacterSheet["hitDicePools"]>,
+  delta: number,
+): NonNullable<CharacterSheet["hitDicePools"]> {
+  const next = pools.map((pool) => ({ ...pool }));
+  const byDie = [...next].sort(
+    (a, b) => Number(b.die.slice(1)) - Number(a.die.slice(1)),
+  );
+  let remaining = delta;
+  while (remaining > 0) {
+    const pool = byDie.find((candidate) => candidate.spent < candidate.total);
+    if (!pool) {
+      break;
+    }
+    pool.spent += 1;
+    remaining -= 1;
+  }
+  while (remaining < 0) {
+    const pool = byDie.find((candidate) => candidate.spent > 0);
+    if (!pool) {
+      break;
+    }
+    pool.spent -= 1;
+    remaining += 1;
+  }
+  return next;
+}
+
 export function patchSheet(sheetId: string, patch: FullPatchSheetInput): CharacterSheet | null {
   const existing = getSheetById(sheetId);
   if (!existing) {
     return null;
   }
 
+  // Multiclass: the classes array is authoritative when present, and the
+  // scalar class/subclass/level fields are mirrors of it. Scalar patches on
+  // a multiclass sheet (lead edits, update_sheet) fold into the primary
+  // entry so the two shapes can never disagree.
+  let classes = patch.classes ?? existing.classes;
+  if (!patch.classes && existing.classes.length > 0) {
+    classes = existing.classes.map((entry, index) =>
+      index === 0
+        ? {
+            ...entry,
+            id: patch.class ?? entry.id,
+            subclass: patch.subclass ?? entry.subclass,
+            level:
+              patch.level !== undefined
+                ? Math.max(1, Math.min(20, entry.level + (patch.level - existing.level)))
+                : entry.level,
+          }
+        : entry,
+    );
+  }
+  const usingClasses = classes.length > 0;
+  const summedLevel = Math.min(
+    20,
+    classes.reduce((sum, entry) => sum + entry.level, 0),
+  );
+
+  let hitDicePools =
+    patch.hitDicePools !== undefined ? patch.hitDicePools : existing.hitDicePools;
+  if (
+    hitDicePools?.length &&
+    patch.hitDicePools === undefined &&
+    patch.hitDice !== undefined
+  ) {
+    hitDicePools = adjustPoolsSpent(
+      hitDicePools,
+      patch.hitDice.spent - existing.hitDice.spent,
+    );
+  }
+
   const next = {
     name: patch.name ?? existing.name,
     race: patch.race ?? existing.race,
-    class: patch.class ?? existing.class,
+    class: usingClasses ? classes[0].id : (patch.class ?? existing.class),
+    classes,
+    hitDicePools,
     background: patch.background ?? existing.background,
     alignment: patch.alignment ?? existing.alignment,
     speed: patch.speed ?? existing.speed,
@@ -361,7 +470,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
     acOverride: patch.acOverride ?? (patch.ac !== undefined ? true : existing.acOverride),
     ac: patch.ac ?? existing.ac,
     xp: patch.xp ?? existing.xp,
-    level: patch.level ?? existing.level,
+    level: usingClasses ? summedLevel : (patch.level ?? existing.level),
     gold: patch.gold ?? existing.gold,
     conditions: patch.conditions ?? existing.conditions,
     conditionMeta: patch.conditionMeta ?? existing.conditionMeta,
@@ -370,10 +479,13 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
     // patch (rests, use_resource) wins.
     resources:
       patch.resources ??
-      (patch.level !== undefined || patch.features !== undefined || patch.abilities !== undefined
+      (patch.level !== undefined ||
+      patch.features !== undefined ||
+      patch.abilities !== undefined ||
+      patch.classes !== undefined
         ? populateResources(
             patch.features ?? existing.features,
-            patch.level ?? existing.level,
+            usingClasses ? summedLevel : (patch.level ?? existing.level),
             Object.fromEntries(
               Object.entries(patch.abilities ?? existing.abilities).map(([ability, score]) => [
                 ability,
@@ -381,11 +493,15 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
               ]),
             ),
             existing.resources,
+            classes.length ? classes : undefined,
           )
         : existing.resources),
     equipment: capAttunement(patch.equipment ?? existing.equipment),
-    hitDice: patch.hitDice ?? existing.hitDice,
+    hitDice: hitDicePools?.length
+      ? poolsMirror(hitDicePools, classes[0]?.id)
+      : (patch.hitDice ?? existing.hitDice),
     wildShape: patch.wildShape !== undefined ? patch.wildShape : existing.wildShape,
+    pets: patch.pets ?? existing.pets,
     exhaustion: patch.exhaustion ?? existing.exhaustion,
     spellcasting: patch.spellcasting !== undefined ? patch.spellcasting : existing.spellcasting,
     deathSaves: patch.deathSaves !== undefined ? patch.deathSaves : existing.deathSaves,
@@ -393,7 +509,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
       patch.concentratingOn !== undefined ? patch.concentratingOn : existing.concentratingOn,
     feats: patch.feats ?? existing.feats,
     features: patch.features ?? existing.features,
-    subclass: patch.subclass ?? existing.subclass,
+    subclass: usingClasses ? classes[0].subclass : (patch.subclass ?? existing.subclass),
     portrait: patch.portrait !== undefined ? patch.portrait : existing.portrait,
     notes: patch.notes ?? existing.notes,
     backstory: patch.backstory ?? existing.backstory,
@@ -406,10 +522,14 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
     next.ac = deriveAc({
       class: next.class,
       level: next.level,
+      classes: next.classes.length ? next.classes : undefined,
       abilities: next.abilities,
       proficiencies: next.proficiencies,
       equipment: next.equipment,
       features: next.features,
+      // Effect conditions (Shield of Faith, Mage Armor, Barkskin) move the
+      // stored AC while they hold; expiry recomputes it right back.
+      conditions: next.conditions,
     });
   }
 
@@ -421,8 +541,9 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
           speed = ?, abilities_json = ?, proficiencies_json = ?,
           current_hp = ?, temp_hp = ?, max_hp = ?, ac = ?, ac_override = ?, xp = ?, level = ?,
           gold = ?, conditions_json = ?, condition_meta_json = ?, resources_json = ?, equipment_json = ?, hit_dice_json = ?,
-          spellcasting_json = ?, wild_shape_json = ?, exhaustion = ?, death_saves_json = ?, concentrating_on = ?,
+          spellcasting_json = ?, wild_shape_json = ?, pets_json = ?, exhaustion = ?, death_saves_json = ?, concentrating_on = ?,
           feats_json = ?, features_json = ?, subclass = ?,
+          classes_json = ?, hit_dice_pools_json = ?,
           portrait_json = ?, notes = ?, backstory = ?, updated_at = ?
         WHERE id = ?
       `,
@@ -451,12 +572,15 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
       JSON.stringify(next.hitDice),
       JSON.stringify(next.spellcasting),
       next.wildShape ? JSON.stringify(next.wildShape) : null,
+      next.pets.length ? JSON.stringify(next.pets) : null,
       next.exhaustion,
       next.deathSaves ? JSON.stringify(next.deathSaves) : null,
       next.concentratingOn,
       JSON.stringify(next.feats),
       JSON.stringify(next.features),
       next.subclass,
+      next.classes.length ? JSON.stringify(next.classes) : null,
+      next.hitDicePools?.length ? JSON.stringify(next.hitDicePools) : null,
       next.portrait ? JSON.stringify(next.portrait) : null,
       next.notes,
       next.backstory,
