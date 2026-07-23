@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { Heart, Minus, Plus, PawPrint, Shield, UserRound, Wrench, X } from "lucide-react";
+import { FileDown, Heart, Minus, Plus, PawPrint, Shield, UserRound, Wrench, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
+import { downloadCharacterSheetPdf } from "@/lib/pdf/download";
 import { ImageLightbox } from "@/components/ui/ImageLightbox";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { ABILITIES } from "@/lib/schemas/sheet";
@@ -65,6 +66,16 @@ export function CharacterSheetDialog({
   const magic = magicItemRiders(sheet.equipment);
   const anyEquipped = sheet.equipment.some((item) => item.equipped);
   const [busy, setBusy] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
+
+  async function handleDownloadPdf() {
+    setPdfBusy(true);
+    try {
+      await downloadCharacterSheetPdf(sheet);
+    } finally {
+      setPdfBusy(false);
+    }
+  }
 
   // Fire-and-forget: the sheet_updated SSE event refreshes the sheet prop,
   // so the new counts render without local reconciliation.
@@ -517,8 +528,17 @@ export function CharacterSheetDialog({
             </section>
           ) : null}
 
-          {isLead && onAdjust ? (
-            <div className="mt-4 flex justify-end">
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={handleDownloadPdf}
+              disabled={pdfBusy}
+              className={ui.btnSmall}
+              title="Download this character sheet as a fillable PDF"
+            >
+              <FileDown className="size-3.5" /> {pdfBusy ? "Preparing..." : "Download PDF"}
+            </button>
+            {isLead && onAdjust ? (
               <button
                 type="button"
                 onClick={onAdjust}
@@ -527,8 +547,8 @@ export function CharacterSheetDialog({
               >
                 <Wrench className="size-3.5" /> Adjust
               </button>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

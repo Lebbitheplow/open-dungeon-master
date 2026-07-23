@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, Loader2 } from "lucide-react";
+import { BookOpen, FileDown, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { use, useEffect, useRef, useState } from "react";
 import { PIXEL_ICONS, PixelTile } from "@/lib/ui";
@@ -10,6 +10,8 @@ import { InfoChipList } from "@/components/ui/InfoDialog";
 import { contentSlug, describeFeature } from "@/lib/help";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import { abilityMod, formatModifier } from "@/lib/srd";
+import { downloadCharacterSheetPdf } from "@/lib/pdf/download";
+import { libraryToPdfCharacter } from "@/lib/pdf/character-sheet-pdf";
 
 type LibraryCharacter = {
   id: string;
@@ -59,7 +61,20 @@ export default function CharacterDetailPage({
   const [character, setCharacter] = useState<LibraryCharacter | null>(null);
   const [events, setEvents] = useState<CharacterEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pdfBusy, setPdfBusy] = useState(false);
   const pollCount = useRef(0);
+
+  async function handleDownloadPdf() {
+    if (!character) {
+      return;
+    }
+    setPdfBusy(true);
+    try {
+      await downloadCharacterSheetPdf(libraryToPdfCharacter(character));
+    } finally {
+      setPdfBusy(false);
+    }
+  }
 
   useEffect(() => {
     fetch(`/api/characters/${characterId}`)
@@ -126,6 +141,15 @@ export default function CharacterDetailPage({
           &larr; Back to your characters
         </Link>
         <div className="mt-2 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleDownloadPdf}
+            disabled={pdfBusy}
+            className="ml-auto order-last inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 px-3 py-1.5 text-sm text-amber-100 hover:bg-amber-500/10 disabled:opacity-50"
+            title="Download this character sheet as a fillable PDF"
+          >
+            <FileDown className="size-4" /> {pdfBusy ? "Preparing..." : "Download PDF"}
+          </button>
           {sheet.portrait?.url ? (
             <ImageLightbox
               src={sheet.portrait.url}
