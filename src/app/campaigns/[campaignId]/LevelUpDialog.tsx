@@ -52,11 +52,15 @@ export function LevelUpDialog({
   campaignId,
   sheet,
   targetLevel,
+  multiclassAllowed = true,
   onDone,
 }: {
   campaignId: string;
   sheet: CharacterSheet;
   targetLevel: number;
+  // Campaign setting: offers the class step's new-class options only when
+  // the table allows multiclassing (already-split sheets keep theirs).
+  multiclassAllowed?: boolean;
   onDone: () => void;
 }) {
   const [rolledHp, setRolledHp] = useState<number | null>(null);
@@ -104,7 +108,7 @@ export function LevelUpDialog({
 
   // Eligible-first list of classes the character could multiclass into.
   const newClassOptions = useMemo(() => {
-    if (classList.length >= MULTICLASS_CAP) {
+    if (!multiclassAllowed || classList.length >= MULTICLASS_CAP) {
       return [];
     }
     return ALL_CLASSES.filter(
@@ -112,7 +116,7 @@ export function LevelUpDialog({
     )
       .map((candidate) => ({ option: candidate, check: canMulticlassInto(sheet, candidate.id) }))
       .sort((a, b) => Number(b.check.ok) - Number(a.check.ok));
-  }, [classList, sheet]);
+  }, [classList, sheet, multiclassAllowed]);
   const needsClassStep = classList.length > 1 || newClassOptions.some((entry) => entry.check.ok);
 
   // Some multiclass grants include one class-skill pick (rogue, ranger,

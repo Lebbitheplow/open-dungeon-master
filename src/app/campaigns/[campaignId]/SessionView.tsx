@@ -507,6 +507,7 @@ export function SessionView({
           campaignId={campaign.id}
           sheet={mySheet}
           targetLevel={myLevelUp.level}
+          multiclassAllowed={campaign.gameSettings?.multiclassingEnabled ?? true}
           onDone={() =>
             setDismissedLevelUp(`${myLevelUp.characterId}:${myLevelUp.level}`)
           }

@@ -34,6 +34,10 @@ export const gameSettingsSchema = z.object({
   ttsEnabled: z.boolean().default(true),
   ttsVoice: z.string().trim().max(40).default("af_heart"),
   mapsEnabled: z.boolean().default(true),
+  // Whether characters may take levels in a second (or third) class at
+  // level-up. On by default; turning it off keeps the level-up flow
+  // single-class (already-multiclassed characters keep what they have).
+  multiclassingEnabled: z.boolean().default(true),
   // Lets new players join with the invite code after the adventure started.
   midGameJoinOpen: z.boolean().default(false),
   // After each DM narration, block do and say for everyone until the party

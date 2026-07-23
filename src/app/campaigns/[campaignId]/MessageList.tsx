@@ -9,6 +9,7 @@ import { ImageLightbox } from "@/components/ui/ImageLightbox";
 import type { CampaignMessage } from "@/lib/db/messages";
 import type { StoredRoll } from "@/lib/db/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { D20Spinner } from "@/components/ui/D20Spinner";
 import { RollCard } from "@/app/campaigns/[campaignId]/RollCard";
 import { DM_STATUS_PHRASES } from "@/app/campaigns/[campaignId]/dmStatusPhrases";
 import type {
@@ -405,8 +406,9 @@ export function MessageList({
           </p>
         </div>
       ) : dmStatus !== "idle" ? (
-        <p className="flex animate-pulse items-center gap-2 font-serif text-base italic text-stone-500">
-          {statusPhrase}
+        <p className="flex items-center gap-2 font-serif text-base italic text-stone-500">
+          <D20Spinner className="size-5 shrink-0 text-amber-600" />
+          <span className="animate-pulse">{statusPhrase}</span>
         </p>
       ) : null}
 

@@ -600,6 +600,14 @@ export async function PATCH(
   const takesNewClass =
     Boolean(wantedClass) &&
     !classListFor(sheet).some((entry) => entry.id.toLowerCase() === wantedClass);
+  // Campaign setting: a table with multiclassing off refuses NEW classes;
+  // characters already split still level their existing classes normally.
+  if (takesNewClass && context.campaign.gameSettings?.multiclassingEnabled === false) {
+    return Response.json(
+      { error: "Multiclassing is turned off for this campaign (a lobby setting the owner controls)." },
+      { status: 403 },
+    );
+  }
   if (levelingUp && ((sheet.classes?.length ?? 0) > 0 || takesNewClass)) {
     const built = buildMulticlassLevelUp(sheet, parsed.data);
     if ("error" in built) {

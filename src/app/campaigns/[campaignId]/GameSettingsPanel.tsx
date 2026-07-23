@@ -74,6 +74,10 @@ export function GameSettingsPanel({
             {settings.mapsEnabled ? "Maps on" : "Maps off"}
           </span>
           <span className="flex items-center gap-1.5">
+            <Dices className="size-3.5 text-amber-200" />
+            {settings.multiclassingEnabled ? "Multiclassing allowed" : "Multiclassing off"}
+          </span>
+          <span className="flex items-center gap-1.5">
             <UserPlus className="size-3.5 text-amber-200" />
             {settings.midGameJoinOpen ? "Mid-game joining open" : "Mid-game joining closed"}
           </span>
@@ -208,6 +212,20 @@ export function GameSettingsPanel({
           >
             Maps {settings.mapsEnabled ? "on" : "off"}
           </button>
+          <Tooltip content="Let characters take levels in a second or third class at level-up (5e multiclassing, prerequisites enforced)">
+            <button
+              type="button"
+              onClick={() => patch({ multiclassingEnabled: !settings.multiclassingEnabled })}
+              className={cn(
+                "rounded-md border px-2 py-1",
+                settings.multiclassingEnabled
+                  ? "border-amber-700 bg-amber-950/50 text-amber-200"
+                  : "border-stone-700 text-stone-400",
+              )}
+            >
+              Multiclassing {settings.multiclassingEnabled ? "on" : "off"}
+            </button>
+          </Tooltip>
           <Tooltip content="Allow new players to join with the invite code after the adventure starts">
             <button
               type="button"

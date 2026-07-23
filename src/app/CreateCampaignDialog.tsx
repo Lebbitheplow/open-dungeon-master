@@ -46,6 +46,7 @@ export function CreateCampaignDialog({
   const [ttsEnabled, setTtsEnabled] = useState(true);
   const [ttsVoice, setTtsVoice] = useState<string>("af_heart");
   const [mapsEnabled, setMapsEnabled] = useState(true);
+  const [multiclassingEnabled, setMulticlassingEnabled] = useState(true);
   const [companions, setCompanions] = useState<GameSettings["companions"]>("auto");
   const [maxCompanions, setMaxCompanions] = useState(2);
   const [maxGuests, setMaxGuests] = useState(2);
@@ -76,6 +77,7 @@ export function CreateCampaignDialog({
             ttsEnabled,
             ttsVoice,
             mapsEnabled,
+            multiclassingEnabled,
             companions,
             maxCompanions,
             maxGuests,
@@ -299,6 +301,14 @@ export function CreateCampaignDialog({
               >
                 <span className="block font-medium">Maps</span>
                 <span className="block text-xs opacity-80">AI-drawn area maps</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMulticlassingEnabled(!multiclassingEnabled)}
+                className={toggleClass(multiclassingEnabled)}
+              >
+                <span className="block font-medium">Multiclassing</span>
+                <span className="block text-xs opacity-80">Second classes at level-up</span>
               </button>
             </div>
 

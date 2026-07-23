@@ -61,6 +61,8 @@
   --animate-scale-in: scale-in 180ms var(--ease-snap) both;
   --animate-twinkle: twinkle 3.2s ease-in-out infinite;
   --animate-wiggle: wiggle 1.8s ease-in-out infinite;
+  --animate-d20-roll: d20-roll 2.4s ease-in-out infinite;
+  --animate-d20-face: d20-face 2.4s linear infinite;
 
   @keyframes fade-up {
     from {
@@ -136,6 +138,69 @@
     to {
       background-position: -50% 0;
     }
+  }
+  /* Die tumble: hold on six landed orientations, snapping quickly between so
+     it reads as a d20 rolling and settling rather than a flat spin. */
+  @keyframes d20-roll {
+    0%,
+    13% {
+      transform: rotate(0deg);
+    }
+    16.6%,
+    30% {
+      transform: rotate(60deg);
+    }
+    33.3%,
+    46.6% {
+      transform: rotate(120deg);
+    }
+    50%,
+    63.3% {
+      transform: rotate(180deg);
+    }
+    66.6%,
+    80% {
+      transform: rotate(240deg);
+    }
+    83.3%,
+    96.6% {
+      transform: rotate(300deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+  /* Face swap: each stacked number is visible for one sixth of the cycle,
+     staggered by a negative delay per number so exactly one shows at a time. */
+  @keyframes d20-face {
+    0% {
+      opacity: 1;
+    }
+    15% {
+      opacity: 1;
+    }
+    17% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-d20-roll {
+    animation: none;
+  }
+  .animate-d20-face {
+    animation: none;
+  }
+  /* Freeze on a single readable face when motion is reduced. */
+  .animate-d20-face:not(:first-of-type) {
+    opacity: 0;
+  }
+  .animate-d20-face:first-of-type {
+    opacity: 1;
   }
 }
 

@@ -1,9 +1,10 @@
 "use client";
 
-import { Dices, Loader2, Send } from "lucide-react";
+import { Loader2, Send } from "lucide-react";
 import { memo } from "react";
 import type { Dispatch, FormEvent, RefObject, SetStateAction } from "react";
 import { cn } from "@/lib/cn";
+import { D20Spinner } from "@/components/ui/D20Spinner";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { FloorBanners } from "@/app/campaigns/[campaignId]/FloorBanners";
 import { NewAdventurerBanner } from "@/app/campaigns/[campaignId]/NewAdventurerBanner";
@@ -129,7 +130,7 @@ function ComposerInner({
           )}
           {dmStatus !== "idle" ? (
             <span className="ml-auto flex items-center gap-1.5 text-xs text-stone-500">
-              <Dices className="size-3.5 animate-bounce text-amber-600" />
+              <D20Spinner className="size-3.5 shrink-0 text-amber-600" />
               {dmStatus === "rolling"
                 ? "DM rolling dice..."
                 : dmStatus === "awaiting_rolls"

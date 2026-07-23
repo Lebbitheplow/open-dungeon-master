@@ -59,8 +59,14 @@ import AbilityEditor, { type AbilityMethod, type AbilityState } from "./AbilityE
 import AsiFeatEditor from "./AsiFeatEditor";
 import ContentPicker from "./ContentPicker";
 import EquipmentSection from "./EquipmentSection";
+import OptionPicker, { type PickerGroup, type PickerOption } from "./OptionPicker";
 import { RacialChoicesSection } from "./RacialChoicesSection";
-import { useArchetypes, useBuilderOptions } from "./useBuilderOptions";
+import {
+  useArchetypes,
+  useBuilderOptions,
+  type BackgroundOption,
+  type ClassOption,
+} from "./useBuilderOptions";
 
 const ALIGNMENTS = ["LG", "NG", "CG", "LN", "N", "CN", "LE", "NE", "CE"];
 const GENDERS = ["Female", "Male", "Nonbinary"];
@@ -498,6 +504,110 @@ export default function CharacterBuilder({
     [archetypes, subclass],
   );
 
+  // Rows for the race/class/subclass/background dropdowns, each carrying the
+  // info wiring for its InfoButton so any option can be read before choosing,
+  // the same way the spell picker works.
+  const raceGroups = useMemo<PickerGroup[]>(
+    () => [
+      {
+        label: null,
+        options: races.map((entry) => ({
+          id: entry.id,
+          name: entry.name,
+          infoText: describeRace(entry.id) ?? entry.note,
+          reference: { kind: "races", slug: entry.id, name: entry.name },
+        })),
+      },
+    ],
+    [races],
+  );
+  const classPickerGroups = useMemo<PickerGroup[]>(() => {
+    const toOption = (entry: ClassOption): PickerOption => ({
+      id: entry.id,
+      name: entry.name,
+      meta: entry.spellAbility ? `d${entry.hitDie} · caster` : `d${entry.hitDie}`,
+      infoText: entry.blurb || entry.desc,
+      reference: { kind: "classes", slug: entry.id, name: entry.name },
+    });
+    if (recommendedClasses.length) {
+      return [
+        { label: "Recommended for this setting", options: recommendedClasses.map(toOption) },
+        { label: "All classes", options: otherClasses.map(toOption) },
+      ];
+    }
+    if (classGroups?.packs.length) {
+      return [
+        { label: "Standard classes (high fantasy)", options: classGroups.standard.map(toOption) },
+        ...classGroups.packs.map((pack) => ({
+          label: `From the ${pack.label} setting`,
+          options: pack.options.map(toOption),
+        })),
+      ];
+    }
+    return [{ label: null, options: otherClasses.map(toOption) }];
+  }, [recommendedClasses, otherClasses, classGroups]);
+  const subclassGroups = useMemo<PickerGroup[]>(() => {
+    const groups: PickerGroup[] = [{ label: null, options: [{ id: "", name: "None yet" }] }];
+    if (builtInSubclasses.length) {
+      groups.push({
+        label: "Full features",
+        options: builtInSubclasses.map((name) => {
+          const match = archetypes.find(
+            (entry) => entry.name.toLowerCase() === name.toLowerCase(),
+          );
+          return {
+            id: name,
+            name,
+            infoText: match?.desc,
+            reference: match ? { kind: "archetypes", slug: match.id, name } : undefined,
+          };
+        }),
+      });
+    }
+    if (packOnlyArchetypes.length) {
+      groups.push({
+        label: "From the content pack",
+        options: packOnlyArchetypes.map((entry) => ({
+          id: entry.name,
+          name: entry.name,
+          infoText: entry.desc,
+          reference: { kind: "archetypes", slug: entry.id, name: entry.name },
+        })),
+      });
+    }
+    return groups;
+  }, [builtInSubclasses, packOnlyArchetypes, archetypes]);
+  const backgroundPickerGroups = useMemo<PickerGroup[]>(() => {
+    const toOption = (entry: BackgroundOption): PickerOption => ({
+      id: entry.id,
+      name: entry.name,
+      meta: entry.skills
+        .map((skillId) => SRD_SKILLS.find((skill) => skill.id === skillId)?.name ?? skillId)
+        .join(", "),
+      infoText: entry.blurb || entry.desc,
+      reference: { kind: "backgrounds", slug: entry.id, name: entry.name },
+    });
+    if (recommendedBackgrounds.length) {
+      return [
+        { label: "Recommended for this setting", options: recommendedBackgrounds.map(toOption) },
+        { label: "All backgrounds", options: otherBackgrounds.map(toOption) },
+      ];
+    }
+    if (backgroundGroups?.packs.length) {
+      return [
+        {
+          label: "Standard backgrounds (high fantasy)",
+          options: backgroundGroups.standard.map(toOption),
+        },
+        ...backgroundGroups.packs.map((pack) => ({
+          label: `From the ${pack.label} setting`,
+          options: pack.options.map(toOption),
+        })),
+      ];
+    }
+    return [{ label: null, options: otherBackgrounds.map(toOption) }];
+  }, [recommendedBackgrounds, otherBackgrounds, backgroundGroups]);
+
   // What this class and subclass actually hand the character at this level.
   // The builder already computed these for the preview; showing them turns a
   // blind dropdown choice into an informed one.
@@ -794,20 +904,19 @@ export default function CharacterBuilder({
         </div>
         <label className="block">
           <span className="mb-1 block text-stone-400">Race</span>
-          <select
+          <OptionPicker
             value={race?.id ?? ""}
-            onChange={(event) => {
-              setRaceId(event.target.value);
+            groups={raceGroups}
+            className={inputClass}
+            onChange={(id) => {
+              setRaceId(id);
               setBonusLanguages([]);
               setRacialAsi([]);
               setRacialSkills([]);
               setRacialCantrip("");
               setRacialTool("");
             }}
-            className={inputClass}
-          >
-            {races.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
-          </select>
+          />
           {race?.note ? (
             <span className="mt-1 flex items-start gap-1 text-xs text-stone-500">
               <span className="line-clamp-2 grow">{race.note}</span>
@@ -879,45 +988,12 @@ export default function CharacterBuilder({
         ) : null}
         <label className="block">
           <span className="mb-1 block text-stone-400">Class</span>
-          <select
+          <OptionPicker
             value={klass?.id ?? ""}
-            onChange={(event) => { setClassId(event.target.value); setChosenSkills([]); setSubclass(""); setSpells([]); setRemovedAutoNames([]); setOptionPicks([]); }}
+            groups={classPickerGroups}
             className={inputClass}
-          >
-            {recommendedClasses.length ? (
-              <>
-                <optgroup label="Recommended for this setting">
-                  {recommendedClasses.map((entry) => (
-                    <option key={entry.id} value={entry.id}>{entry.name}</option>
-                  ))}
-                </optgroup>
-                <optgroup label="All classes">
-                  {otherClasses.map((entry) => (
-                    <option key={entry.id} value={entry.id}>{entry.name}</option>
-                  ))}
-                </optgroup>
-              </>
-            ) : classGroups?.packs.length ? (
-              <>
-                <optgroup label="Standard classes (high fantasy)">
-                  {classGroups.standard.map((entry) => (
-                    <option key={entry.id} value={entry.id}>{entry.name}</option>
-                  ))}
-                </optgroup>
-                {classGroups.packs.map((pack) => (
-                  <optgroup key={pack.genre} label={`From the ${pack.label} setting`}>
-                    {pack.options.map((entry) => (
-                      <option key={entry.id} value={entry.id}>{entry.name}</option>
-                    ))}
-                  </optgroup>
-                ))}
-              </>
-            ) : (
-              otherClasses.map((entry) => (
-                <option key={entry.id} value={entry.id}>{entry.name}</option>
-              ))
-            )}
-          </select>
+            onChange={(id) => { setClassId(id); setChosenSkills([]); setSubclass(""); setSpells([]); setRemovedAutoNames([]); setOptionPicks([]); }}
+          />
           {klass ? (
             <span className="mt-1 flex flex-wrap items-center gap-x-1 text-xs text-stone-500">
               <GameTerm id="hit_dice">d{klass.hitDie} hit die</GameTerm> ·{" "}
@@ -938,30 +1014,17 @@ export default function CharacterBuilder({
               />
             </span>
           ) : null}
-          {klass?.blurb ? (
-            <span className="mt-1 block text-xs text-stone-500">{klass.blurb}</span>
-          ) : null}
         </label>
         {packOnlyArchetypes.length || builtInSubclasses.length ? (
           <label className="block">
             <span className="mb-1 block text-stone-400">Subclass</span>
-            <select value={subclass} onChange={(event) => setSubclass(event.target.value)} className={inputClass}>
-              <option value="">None yet</option>
-              {builtInSubclasses.length ? (
-                <optgroup label="Full features">
-                  {builtInSubclasses.map((name) => (
-                    <option key={name} value={name}>{name}</option>
-                  ))}
-                </optgroup>
-              ) : null}
-              {packOnlyArchetypes.length ? (
-                <optgroup label="From the content pack">
-                  {packOnlyArchetypes.map((entry) => (
-                    <option key={entry.id} value={entry.name}>{entry.name}</option>
-                  ))}
-                </optgroup>
-              ) : null}
-            </select>
+            <OptionPicker
+              value={subclass}
+              groups={subclassGroups}
+              placeholder="None yet"
+              className={inputClass}
+              onChange={setSubclass}
+            />
             <span className="mt-1 flex items-start gap-1 text-xs text-stone-500">
               {subclass ? (
                 <>
@@ -982,7 +1045,8 @@ export default function CharacterBuilder({
                 <>
                   <span className="grow">
                     Your <GameTerm id="subclass">subclass</GameTerm> is the biggest choice about how
-                    this character plays. Pick one to read what it does.
+                    this character plays. Tap the info icon next to any option to read what it does
+                    before choosing.
                   </span>
                 </>
               )}
@@ -1017,41 +1081,12 @@ export default function CharacterBuilder({
         ) : null}
         <label className="block">
           <span className="mb-1 block text-stone-400">Background</span>
-          <select value={background?.id ?? ""} onChange={(event) => setBackgroundId(event.target.value)} className={inputClass}>
-            {recommendedBackgrounds.length ? (
-              <>
-                <optgroup label="Recommended for this setting">
-                  {recommendedBackgrounds.map((entry) => (
-                    <option key={entry.id} value={entry.id}>{entry.name}</option>
-                  ))}
-                </optgroup>
-                <optgroup label="All backgrounds">
-                  {otherBackgrounds.map((entry) => (
-                    <option key={entry.id} value={entry.id}>{entry.name}</option>
-                  ))}
-                </optgroup>
-              </>
-            ) : backgroundGroups?.packs.length ? (
-              <>
-                <optgroup label="Standard backgrounds (high fantasy)">
-                  {backgroundGroups.standard.map((entry) => (
-                    <option key={entry.id} value={entry.id}>{entry.name}</option>
-                  ))}
-                </optgroup>
-                {backgroundGroups.packs.map((pack) => (
-                  <optgroup key={pack.genre} label={`From the ${pack.label} setting`}>
-                    {pack.options.map((entry) => (
-                      <option key={entry.id} value={entry.id}>{entry.name}</option>
-                    ))}
-                  </optgroup>
-                ))}
-              </>
-            ) : (
-              otherBackgrounds.map((entry) => (
-                <option key={entry.id} value={entry.id}>{entry.name}</option>
-              ))
-            )}
-          </select>
+          <OptionPicker
+            value={background?.id ?? ""}
+            groups={backgroundPickerGroups}
+            className={inputClass}
+            onChange={setBackgroundId}
+          />
           {background ? (
             <span className="mt-1 flex items-start gap-1 text-xs text-stone-500">
               <span className="grow">
@@ -1065,9 +1100,6 @@ export default function CharacterBuilder({
                 reference={{ kind: "backgrounds", slug: background.id }}
               />
             </span>
-          ) : null}
-          {background?.blurb ? (
-            <span className="mt-1 block text-xs text-stone-500">{background.blurb}</span>
           ) : null}
         </label>
       </section>
