@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
+import { ImageLightbox } from "@/components/ui/ImageLightbox";
 import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
 import { ChangePasswordForm } from "@/app/ChangePasswordForm";
 
@@ -137,10 +138,10 @@ export default function SettingsPage() {
         <h2 className="mb-3 text-sm font-medium text-stone-300">Profile picture</h2>
         <div className="flex items-center gap-5">
           {me.avatar ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <ImageLightbox
               src={me.avatar.url}
               alt="Your avatar"
+              caption="Your avatar"
               className="size-24 rounded-full border-2 border-amber-500/40 object-cover shadow-glow-gold"
             />
           ) : (

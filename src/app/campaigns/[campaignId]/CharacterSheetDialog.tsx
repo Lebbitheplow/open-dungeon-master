@@ -5,6 +5,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { Heart, Minus, Plus, PawPrint, Shield, UserRound, Wrench, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
+import { ImageLightbox } from "@/components/ui/ImageLightbox";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { ABILITIES } from "@/lib/schemas/sheet";
 import { acBreakdownFor, computeSheetDerived, formatModifier, SRD_SKILLS } from "@/lib/srd";
@@ -93,10 +94,10 @@ export function CharacterSheetDialog({
           <div className="mb-3 flex items-start justify-between gap-3">
             <div className="flex items-center gap-3">
               {sheet.portrait ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <ImageLightbox
                   src={sheet.portrait.url}
                   alt={sheet.name}
+                  caption={sheet.name}
                   className="size-14 rounded-lg border border-stone-700 object-cover"
                 />
               ) : (
