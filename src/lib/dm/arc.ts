@@ -38,6 +38,8 @@ import { arcTextTimeoutMs } from "@/lib/model-client";
 import { requestDmMessage } from "@/lib/dm/model";
 import { stripReasoningArtifacts } from "@/lib/story-prompt";
 import { setDmStatus } from "@/lib/dm/status";
+import { renderWorldArcsForPrompt } from "@/lib/dm/world-arc-logic";
+import { ensureWorldArcs } from "@/lib/dm/world-arc";
 
 // Story-arc generation and upkeep. The arc is the DM's secret spine: a saga
 // sized by the lead's campaign-length setting is generated once at campaign
@@ -215,6 +217,12 @@ export async function generateStoryArc(
     }
     setStoryArc(campaignId, arc);
     setQuestLog(campaignId, activeQuestLines(arc));
+    // The off-screen clocks orbit the fresh arc; a failure here simply
+    // retries at the next chapter close (ensureWorldArcs is self-healing).
+    const withWorld = await ensureWorldArcs(campaignId, arc);
+    if (withWorld !== arc) {
+      setStoryArc(campaignId, withWorld);
+    }
   } catch (error) {
     if (process.env.DM_DEBUG) {
       console.log("[dm-debug] arc generation threw:", error);
@@ -354,7 +362,7 @@ export async function judgeBeatCompleted(campaignId: string): Promise<boolean> {
   }
 }
 
-const REFRESH_SYSTEM = `You maintain the AI DM's secret story arc between chapters of a D&D 5e campaign. Keep it brief and answer quickly. Compare the arc with what actually happened in the chapter that just closed and reply with ONLY a strict JSON object, no code fences, shaped exactly: {"beatsDone": int[], "beatsSkipped": int[], "beatAnnotations": [{"beat": int, "detail": string}], "beatRewrites": [{"beat": int, "text": string}], "activeBeat": int|null, "subArcUpdates": [{"id": string, "status": "active"|"resolved"|"abandoned", "resolution": string}], "newSubArcs": [{"name": string, "goal": string, "hook": string, "beats": string[]}], "eventsFired": string[], "eventsDropped": string[], "newEvents": [${EVENT_SHAPE}], "castUpdates": [{"id": string, "notes": string, "status": "active"|"gone"}], "newCast": [{"name": string, "role": string, "agenda": string, "notes": string}], "sketchUpdates": [{"act": int, "milestone": string, "boss": ${BOSS_SHAPE}|null, "allies": string[]}]}
+const REFRESH_SYSTEM = `You maintain the AI DM's secret story arc between chapters of a D&D 5e campaign. Keep it brief and answer quickly. Compare the arc with what actually happened in the chapter that just closed and reply with ONLY a strict JSON object, no code fences, shaped exactly: {"beatsDone": int[], "beatsSkipped": int[], "beatAnnotations": [{"beat": int, "detail": string}], "beatRewrites": [{"beat": int, "text": string}], "activeBeat": int|null, "subArcUpdates": [{"id": string, "status": "active"|"resolved"|"abandoned", "resolution": string}], "newSubArcs": [{"name": string, "goal": string, "hook": string, "beats": string[]}], "eventsFired": string[], "eventsDropped": string[], "newEvents": [${EVENT_SHAPE}], "castUpdates": [{"id": string, "notes": string, "status": "active"|"gone"}], "newCast": [{"name": string, "role": string, "agenda": string, "notes": string}], "sketchUpdates": [{"act": int, "milestone": string, "boss": ${BOSS_SHAPE}|null, "allies": string[]}], "worldArcUpdates": [{"id": string, "stance": "unaware"|"ignoring"|"opposing"|"aiding"|"fleeing", "consequence": string}]}
 
 Be conservative. Empty arrays are a correct answer when little changed.
 - beatsDone: mark a main beat done only if the chapter clearly accomplished it. Never renumber existing beats.
@@ -366,6 +374,7 @@ Be conservative. Empty arrays are a correct answer when little changed.
 - castUpdates: notes record how an NPC now stands with the party; status "gone" when they die or leave for good. newCast: at most 2, for people the players made important.
 - newSubArcs: at most 2, only for genuinely new threads.
 - sketchUpdates: at most 2, only for FUTURE acts (listed as "ahead, sketch only") whose plan this chapter invalidated, for example when the party already slew a planned boss. Set boss to null if the planned boss is gone, or name the replacement.
+- worldArcUpdates: for each listed off-screen world arc (ids "wa1"...), judge the party's stance from the chapter: "unaware" (they have not learned of it), "ignoring" (they know and chose to look away), "opposing", "aiding", or "fleeing". When they knowingly ignored or fled a direct threat, also record a one-sentence permanent consequence of that choice. Omit arcs whose stance is unchanged.
 
 ${EVENT_RULES}
 
@@ -665,10 +674,13 @@ export async function refreshStoryArc(
       .filter(Boolean)
       .join("\n");
 
+    const worldArcLines = renderWorldArcsForPrompt(arc.worldArcs);
     const raw = await arcModelCall(
       campaignId,
       REFRESH_SYSTEM,
-      `Current arc:\n${renderArcForPrompt(arc)}\n\n${chapterLines}`,
+      [`Current arc:\n${renderArcForPrompt(arc)}`, worldArcLines, chapterLines]
+        .filter(Boolean)
+        .join("\n\n"),
       "arc refresh",
     );
     if (raw === null) {
@@ -700,6 +712,9 @@ export async function refreshStoryArc(
         next = await extendStoryArc(campaignId, next);
       }
     }
+    // Replenish the off-screen clocks only when none are live (so at most
+    // once per act in practice); no-op while any world arc still ticks.
+    next = await ensureWorldArcs(campaignId, next);
     setStoryArc(campaignId, next);
     setQuestLog(campaignId, activeQuestLines(next));
   } catch (error) {

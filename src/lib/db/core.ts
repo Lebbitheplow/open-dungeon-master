@@ -519,6 +519,145 @@ function ensureSchema(db: Database.Database) {
       updated_at TEXT NOT NULL,
       UNIQUE (campaign_id, name)
     );
+
+    -- World-state fact sheet (the "divergence register"): discrete facts
+    -- extracted at chapter close (plus manual pins and simulation results),
+    -- injected into GAME STATE as server-tracked canon. known_by scopes who
+    -- may read a fact through the API: 'party' (everyone), 'dm' (prompt-only
+    -- secret), or a JSON array of character ids. Superseding keeps history:
+    -- a new fact about the same subject retires the old row instead of
+    -- editing it. embedding stays NULL until the semantic index fills it.
+    CREATE TABLE IF NOT EXISTS world_facts (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      category TEXT NOT NULL
+        CHECK (category IN ('location','npc','promise','world','party','lore')),
+      subject TEXT NOT NULL DEFAULT '',
+      fact TEXT NOT NULL,
+      known_by TEXT NOT NULL DEFAULT 'party',
+      pinned INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'active'
+        CHECK (status IN ('active','superseded','retired')),
+      source TEXT NOT NULL DEFAULT 'chapter'
+        CHECK (source IN ('chapter','compaction','manual','simulation')),
+      source_seq INTEGER,
+      embedding BLOB,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_world_facts
+      ON world_facts(campaign_id, status, category);
+
+    -- Semantic memory index: verbatim transcript spans ("scenes") from
+    -- closed chapters with local MiniLM embeddings (384-dim Float32 BLOBs),
+    -- built at chapter close by src/lib/dm/memory-index.ts. Two-phase
+    -- recall: cosine over chapter-summary embeddings picks chapters, then
+    -- cosine over their scenes returns verbatim text. Brute-force JS math;
+    -- no vector extension.
+    CREATE TABLE IF NOT EXISTS scene_chunks (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      chapter_id TEXT NOT NULL,
+      seq_start INTEGER NOT NULL,
+      seq_end INTEGER NOT NULL,
+      text TEXT NOT NULL,
+      embedding BLOB NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_scene_chunks
+      ON scene_chunks(campaign_id, chapter_id);
+
+    -- Full world-state snapshots at chapter boundaries, so the party lead can
+    -- rewind the campaign to the start of any chapter (src/lib/dm/rollback.ts).
+    -- 'boundary' rows are captured when a chapter opens; the single
+    -- 'pre_rollback' row per campaign is the safety copy taken just before a
+    -- rewind rewrites everything.
+    CREATE TABLE IF NOT EXISTS chapter_snapshots (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      chapter_index INTEGER NOT NULL,
+      boundary_seq INTEGER NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'boundary'
+        CHECK (kind IN ('boundary','pre_rollback')),
+      snapshot_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      UNIQUE (campaign_id, chapter_index, kind)
+    );
+
+    -- Lead-authored world lore (the world bible): structured entries the DM
+    -- prompt samples from and search_lore queries. Pinned entries always
+    -- reach the prompt; the rest compete on embedding similarity.
+    CREATE TABLE IF NOT EXISTS lore_entries (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      category TEXT NOT NULL CHECK (category IN
+        ('geography','factions','history','magic','culture','religion','other')),
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      tags_json TEXT NOT NULL DEFAULT '[]',
+      pinned INTEGER NOT NULL DEFAULT 0,
+      embedding BLOB,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_lore_entries
+      ON lore_entries(campaign_id, category);
+
+    -- House-rules chunks: campaigns.house_rules_text split into retrievable
+    -- pieces (src/lib/dm/rules-logic.ts). Rechunked on every save; enabled and
+    -- pinned flags survive by fuzzy match. Pinned chunks always reach the
+    -- prompt; enabled ones compete on embedding similarity per turn.
+    CREATE TABLE IF NOT EXISTS rule_chunks (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      chunk_index INTEGER NOT NULL,
+      heading TEXT NOT NULL DEFAULT '',
+      text TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      pinned INTEGER NOT NULL DEFAULT 0,
+      embedding BLOB,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_rule_chunks
+      ON rule_chunks(campaign_id, chunk_index);
+
+    -- DM-proposed inventory/gold changes awaiting the owning player's answer
+    -- (game setting inventoryApprovals). The original tool args are stored so
+    -- approval replays the exact mutation through applyDmMutation.
+    CREATE TABLE IF NOT EXISTS item_proposals (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      turn_id TEXT,
+      character_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      tool_name TEXT NOT NULL,
+      args_json TEXT NOT NULL,
+      summary TEXT NOT NULL DEFAULT '',
+      reason TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending','approved','declined','expired','cancelled')),
+      seq INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      resolved_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_item_proposals
+      ON item_proposals(campaign_id, status);
+
+    -- Procedural region map: seeded terrain grid (one char per tile), known
+    -- locations anchored at tile coordinates, and lead-placed pins
+    -- (src/lib/overworld/generate.ts). One per campaign, lazily created.
+    CREATE TABLE IF NOT EXISTS overworld_maps (
+      campaign_id TEXT PRIMARY KEY REFERENCES campaigns(id) ON DELETE CASCADE,
+      seed INTEGER NOT NULL,
+      width INTEGER NOT NULL DEFAULT 48,
+      height INTEGER NOT NULL DEFAULT 36,
+      terrain TEXT NOT NULL,
+      anchors_json TEXT NOT NULL DEFAULT '{}',
+      pins_json TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
 
   // Compaction memory: a rolling "story so far" summary plus a watermark of
@@ -568,6 +707,11 @@ function ensureSchema(db: Database.Database) {
     // Party lead: the player who can steer the story and fix stats when the
     // AI DM errs. Null means the campaign owner leads.
     ["party_lead_user_id", `TEXT`],
+    // World-simulation counters and pending sparks (world-tick-logic.ts).
+    ["world_tick_json", `TEXT NOT NULL DEFAULT ''`],
+    // Lead-authored house rules; chunked into rule_chunks on save for
+    // per-turn retrieval (src/lib/dm/rules-logic.ts).
+    ["house_rules_text", `TEXT NOT NULL DEFAULT ''`],
   ]);
 
   const userColumns = db.prepare(`PRAGMA table_info(users)`).all() as Array<{ name: string }>;
@@ -776,6 +920,18 @@ function ensureSchema(db: Database.Database) {
     // damage_enemy double-apply guard checks both.
     ["target_enemy_id", `TEXT`],
     ["applied", `INTEGER NOT NULL DEFAULT 0`],
+    // Campaign seq at insert time, stamped going forward so chapter rewind
+    // can delete by position; NULL rows fall back to created_at.
+    ["seq", `INTEGER`],
+  ]);
+
+  addColumns("campaign_notes", [
+    // 'dm' marks a note the AI DM suggested via write_campaign_note; the FK
+    // on author_user_id forces those rows to carry the campaign owner's id,
+    // so this flag is what distinguishes them in the UI.
+    ["author_kind", `TEXT NOT NULL DEFAULT 'user'`],
+    // MiniLM embedding of title+body for search_lore; NULL until indexed.
+    ["embedding", `BLOB`],
   ]);
 
   addColumns("dm_whispers", [
@@ -797,6 +953,29 @@ function ensureSchema(db: Database.Database) {
     // Set once the lead undoes this entry: id of the compensating row.
     ["reverted_by", `TEXT`],
     ["reverted_at", `TEXT`],
+  ]);
+
+  addColumns("chapters", [
+    // MiniLM embedding of the chapter summary, for phase-1 chapter picking
+    // in semantic recall. NULL until the chapter is indexed.
+    ["embedding", `BLOB`],
+  ]);
+
+  addColumns("npcs", [
+    // NPC agency (src/lib/dm/npc-logic.ts): six -3..+3 personality axes
+    // (drive/diligence/boldness/warmth/empathy/composure), empty = untracked.
+    ["personality_json", `TEXT NOT NULL DEFAULT ''`],
+    // {scene?, session?: {text, progress, target}, ambition?}; the session
+    // goal advances via background dice at chapter close.
+    ["goals_json", `TEXT NOT NULL DEFAULT ''`],
+    // Directed NPC-to-NPC edges: [{npcName, score -3..3, note?}].
+    ["relations_json", `TEXT NOT NULL DEFAULT '[]'`],
+    // Per-character relation meters: [{characterId, score -3..3}].
+    ["bonds_json", `TEXT NOT NULL DEFAULT '[]'`],
+    // {ignored, engaged} chapter counters; being ignored cools an NPC.
+    ["pressure_json", `TEXT NOT NULL DEFAULT ''`],
+    // Link to the story arc's cast entry (ArcNpc id) when name-matched.
+    ["arc_cast_id", `TEXT NOT NULL DEFAULT ''`],
   ]);
 
   // Portraits uploaded in-game used to reach the library only on campaign

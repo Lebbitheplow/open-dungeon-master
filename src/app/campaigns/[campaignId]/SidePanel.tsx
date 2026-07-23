@@ -14,8 +14,11 @@ import { BattleMapPanel } from "@/app/campaigns/[campaignId]/BattleMapPanel";
 import { DmWhisperPanel } from "@/app/campaigns/[campaignId]/DmWhisperPanel";
 import { EncounterPanel } from "@/app/campaigns/[campaignId]/EncounterPanel";
 import { EventLog } from "@/app/campaigns/[campaignId]/EventLog";
+import { FactsPanel } from "@/app/campaigns/[campaignId]/FactsPanel";
+import { LorePanel } from "@/app/campaigns/[campaignId]/LorePanel";
 import { MapPanel } from "@/app/campaigns/[campaignId]/MapPanel";
 import { NotesPanel } from "@/app/campaigns/[campaignId]/NotesPanel";
+import { OverworldPanel } from "@/app/campaigns/[campaignId]/OverworldPanel";
 import { PartyPanel } from "@/app/campaigns/[campaignId]/PartyPanel";
 import { SessionSettings } from "@/app/campaigns/[campaignId]/SessionSettings";
 import { SideChatPanel } from "@/app/campaigns/[campaignId]/SideChatPanel";
@@ -34,6 +37,7 @@ import type { Chapter } from "@/lib/db/chapters";
 import type { PublicEncounter } from "@/lib/db/encounters";
 import type { CharacterEvent } from "@/lib/db/character-events";
 import type { Note } from "@/lib/db/notes";
+import type { WorldFact } from "@/lib/db/facts";
 import type { DmWhisper } from "@/lib/db/dm-whispers";
 import type { SideThread } from "@/lib/db/side-chat";
 import type { PlayerMapView } from "@/lib/battlemap/view";
@@ -78,8 +82,10 @@ function SidePanelInner({
   locations,
   chapters,
   notes,
+  facts,
   characterEvents,
   refreshNotes,
+  refreshFacts,
   sideThreads,
   refreshSideChat,
   whispers,
@@ -114,8 +120,10 @@ function SidePanelInner({
   locations: CampaignLocation[];
   chapters: Chapter[];
   notes: Note[];
+  facts: WorldFact[];
   characterEvents: CharacterEvent[];
   refreshNotes: () => Promise<void>;
+  refreshFacts: () => Promise<void>;
   sideThreads: SideThread[];
   refreshSideChat: () => Promise<void>;
   whispers: DmWhisper[];
@@ -312,14 +320,31 @@ function SidePanelInner({
             refreshBattleMap={refreshBattleMap}
           />
         ) : tab === "map" ? (
-          <MapPanel
-            campaignId={campaignId}
-            locations={locations}
-            isLead={isLead}
-            mediaStatus={mediaStatus}
-          />
+          <div className="space-y-3">
+            <OverworldPanel
+              campaignId={campaignId}
+              genre={campaign?.gameSettings?.genre ?? "high_fantasy"}
+              isLead={isLead}
+            />
+            <MapPanel
+              campaignId={campaignId}
+              locations={locations}
+              isLead={isLead}
+              mediaStatus={mediaStatus}
+            />
+          </div>
         ) : tab === "story" ? (
           <StoryPanel campaignId={campaignId} chapters={chapters} isLead={isLead} />
+        ) : tab === "facts" ? (
+          <div className="space-y-3">
+            <FactsPanel
+              campaignId={campaignId}
+              facts={facts}
+              isLead={isLead}
+              refreshFacts={refreshFacts}
+            />
+            <LorePanel campaignId={campaignId} isLead={isLead} />
+          </div>
         ) : tab === "notes" ? (
           <NotesPanel
             campaignId={campaignId}

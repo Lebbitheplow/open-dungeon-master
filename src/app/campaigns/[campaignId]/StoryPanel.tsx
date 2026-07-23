@@ -1,10 +1,65 @@
 "use client";
 
-import { BookOpen, Check, ChevronDown, ChevronRight, Compass, Loader2, Pencil, RefreshCw, Scissors, X } from "lucide-react";
-import { useState } from "react";
+import * as AlertDialog from "@radix-ui/react-alert-dialog";
+import { BookOpen, Check, ChevronDown, ChevronRight, Compass, Loader2, Pencil, RefreshCw, Rewind, Scissors, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
 import type { Chapter } from "@/lib/db/chapters";
 import type { StoryArc } from "@/lib/dm/arc-logic";
 import { ExportMenu } from "./ExportMenu";
+
+// Confirmation for a chapter rewind (the server answered 409 with the
+// consequences). Rewinds are destructive: everything after the boundary is
+// deleted and the world snaps back to how it stood.
+function ConfirmRewindDialog({
+  chapterIndex,
+  warnings,
+  busy,
+  onConfirm,
+  onCancel,
+}: {
+  chapterIndex: number;
+  warnings: string[];
+  busy: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <AlertDialog.Root open onOpenChange={(open) => !open && onCancel()}>
+      <AlertDialog.Portal>
+        <AlertDialog.Overlay className="fixed inset-0 z-50 bg-black/70" />
+        <AlertDialog.Content
+          className={cn(
+            ui.dialog,
+            "fixed left-1/2 top-1/2 z-50 max-h-[85vh] w-[min(92vw,22rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto",
+          )}
+        >
+          <AlertDialog.Title className="font-display text-lg tracking-wide text-amber-50">
+            Rewind to Chapter {chapterIndex}?
+          </AlertDialog.Title>
+          <AlertDialog.Description className="mt-2 text-xs text-stone-400">
+            The story returns to the start of Chapter {chapterIndex}. Sheets, NPCs, facts, and the
+            world roll back with it. This cannot be undone.
+          </AlertDialog.Description>
+          <ul className="mt-2 space-y-1">
+            {warnings.slice(0, 8).map((warning, index) => (
+              <li key={index} className="text-[11px] leading-4 text-amber-300/80">
+                {warning}
+              </li>
+            ))}
+          </ul>
+          <div className="mt-4 flex justify-end gap-2">
+            <AlertDialog.Cancel className={ui.btnSmall}>Cancel</AlertDialog.Cancel>
+            <button type="button" onClick={onConfirm} disabled={busy} className={ui.btnPrimary}>
+              {busy ? <Loader2 className="size-4 animate-spin" /> : null} Rewind
+            </button>
+          </div>
+        </AlertDialog.Content>
+      </AlertDialog.Portal>
+    </AlertDialog.Root>
+  );
+}
 
 // Story-so-far browser: every closed chapter with its title, highlights,
 // and expandable summary, plus the chapter in progress. The party lead can
@@ -13,10 +68,12 @@ function ChapterCard({
   campaignId,
   chapter,
   isLead,
+  onRewind,
 }: {
   campaignId: string;
   chapter: Chapter;
   isLead: boolean;
+  onRewind?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -77,13 +134,25 @@ function ChapterCard({
             <p className="text-[11px] italic text-stone-600">No summary recorded.</p>
           )}
           {isLead ? (
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              className="flex items-center gap-1 text-[11px] text-stone-500 hover:text-stone-300"
-            >
-              <Pencil className="size-3" /> Edit
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="flex items-center gap-1 text-[11px] text-stone-500 hover:text-stone-300"
+              >
+                <Pencil className="size-3" /> Edit
+              </button>
+              {onRewind ? (
+                <button
+                  type="button"
+                  onClick={onRewind}
+                  title="Rewind the whole campaign to the start of this chapter"
+                  className="flex items-center gap-1 text-[11px] text-stone-500 hover:text-amber-300"
+                >
+                  <Rewind className="size-3" /> Rewind to start
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </div>
       ) : null}
@@ -398,8 +467,57 @@ export function StoryPanel({
   isLead: boolean;
 }) {
   const [closing, setClosing] = useState(false);
+  const [rewindable, setRewindable] = useState<number[]>([]);
+  const [rewindTarget, setRewindTarget] = useState<{
+    chapterIndex: number;
+    warnings: string[];
+  } | null>(null);
+  const [rewindBusy, setRewindBusy] = useState(false);
   const closed = chapters.filter((chapter) => chapter.status === "closed");
   const open = chapters.find((chapter) => chapter.status === "open");
+
+  // Which chapters have a boundary snapshot to rewind to; lead-only UI.
+  useEffect(() => {
+    if (!isLead) {
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/campaigns/${campaignId}/chapters`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!cancelled && data && Array.isArray(data.rewindableChapters)) {
+          setRewindable(data.rewindableChapters as number[]);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [campaignId, isLead, chapters.length]);
+
+  async function postRewind(chapterIndex: number, confirm: boolean) {
+    setRewindBusy(true);
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/chapters/rollback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chapterIndex, confirm }),
+      });
+      if (response.status === 409) {
+        const data = await response.json().catch(() => ({}));
+        setRewindTarget({
+          chapterIndex,
+          warnings: Array.isArray(data.warnings) ? data.warnings : [],
+        });
+        return;
+      }
+      // Success or failure, the confirm dialog is done; the campaign_rewound
+      // event reloads the whole view.
+      setRewindTarget(null);
+    } finally {
+      setRewindBusy(false);
+    }
+  }
 
   async function closeChapter() {
     setClosing(true);
@@ -451,6 +569,17 @@ export function StoryPanel({
             )}
           </button>
         ) : null}
+        {isLead && open && rewindable.includes(open.index) ? (
+          <button
+            type="button"
+            onClick={() => void postRewind(open.index, false)}
+            disabled={rewindBusy}
+            title="Discard this chapter's progress and return to how it began"
+            className="mt-1.5 flex w-full items-center justify-center gap-1 rounded border border-stone-700 py-1 text-[11px] text-stone-400 hover:bg-stone-900 disabled:opacity-50"
+          >
+            <Rewind className="size-3" /> Restart this chapter
+          </button>
+        ) : null}
       </div>
       <ol className="space-y-2">
         {[...closed].reverse().map((chapter) => (
@@ -459,9 +588,23 @@ export function StoryPanel({
             campaignId={campaignId}
             chapter={chapter}
             isLead={isLead}
+            onRewind={
+              isLead && rewindable.includes(chapter.index)
+                ? () => void postRewind(chapter.index, false)
+                : undefined
+            }
           />
         ))}
       </ol>
+      {rewindTarget ? (
+        <ConfirmRewindDialog
+          chapterIndex={rewindTarget.chapterIndex}
+          warnings={rewindTarget.warnings}
+          busy={rewindBusy}
+          onConfirm={() => void postRewind(rewindTarget.chapterIndex, true)}
+          onCancel={() => setRewindTarget(null)}
+        />
+      ) : null}
     </div>
   );
 }

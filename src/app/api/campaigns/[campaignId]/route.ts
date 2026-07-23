@@ -13,12 +13,15 @@ import {
   setCampaignStatus,
   updateCampaignInfo,
 } from "@/lib/db/campaigns";
-import { listChapters } from "@/lib/db/chapters";
+import { ensureOpenChapter, listChapters } from "@/lib/db/chapters";
+import { captureBoundarySnapshot } from "@/lib/db/snapshots";
 import { listRecentCampaignEvents } from "@/lib/db/character-events";
 import { syncProgressToLibrary } from "@/lib/db/characters";
 import { activePublicEncounter } from "@/lib/db/encounters";
 import { listNotesVisibleTo } from "@/lib/db/notes";
 import { listOpenPendingRolls, publicPendingRoll } from "@/lib/db/dm-turns";
+import { listOpenItemProposals } from "@/lib/db/item-proposals";
+import { publicItemProposal } from "@/lib/dm/proposal-intercept";
 import { listLocations } from "@/lib/db/locations";
 import { listRecentAudit } from "@/lib/db/sheet-audit";
 import { insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
@@ -59,6 +62,7 @@ export async function GET(
     notes: listNotesVisibleTo(campaignId, user.id, isLead(context)),
     characterEvents: listRecentCampaignEvents(campaignId, 30),
     encounter: activePublicEncounter(campaignId),
+    itemProposals: listOpenItemProposals(campaignId).map(publicItemProposal),
     latestSeq: latestSeq(campaignId),
     // In-memory status so a reload mid-turn still shows the DM at work.
     dmStatus: getDmStatus(campaignId),
@@ -177,6 +181,12 @@ export async function PATCH(
     // (whether the table wrote it or the setup pass just did); the kickoff
     // narration behind it on the queue already steers by the arc.
     enqueueDmJob(campaignId, () => generateStoryArc(campaignId));
+    // Chapter 1's rewind point: the settled pre-adventure world (setup and
+    // arc done, opening narration not yet written).
+    enqueueDmJob(campaignId, async () => {
+      ensureOpenChapter(campaignId);
+      captureBoundarySnapshot(campaignId, 1, latestSeq(campaignId));
+    });
     requestDmTurn(campaignId);
   }
 

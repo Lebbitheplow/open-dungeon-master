@@ -9,6 +9,9 @@ import { GENRE_PRESETS } from "@/lib/genres";
 import { TTS_VOICES } from "@/lib/tts-voices";
 import { VoicePreviewButton } from "@/components/VoicePreviewButton";
 import { CAMPAIGN_DIFFICULTIES, type CampaignDifficulty } from "@/lib/campaign-types";
+import { InfoButton } from "@/components/ui/InfoDialog";
+import { LIVING_WORLD_INFO } from "@/app/campaigns/[campaignId]/GameSettingsPanel";
+import { submitWorldSetup, WorldSetupFields, type LoreDraft } from "@/app/WorldSetupFields";
 import {
   CAMPAIGN_LENGTH_LABELS,
   CAMPAIGN_LENGTHS,
@@ -47,6 +50,10 @@ export function CreateCampaignDialog({
   const [ttsVoice, setTtsVoice] = useState<string>("af_heart");
   const [mapsEnabled, setMapsEnabled] = useState(true);
   const [multiclassingEnabled, setMulticlassingEnabled] = useState(true);
+  const [worldSimulation, setWorldSimulation] = useState(true);
+  const [inventoryApprovals, setInventoryApprovals] = useState(false);
+  const [houseRules, setHouseRules] = useState("");
+  const [loreDrafts, setLoreDrafts] = useState<LoreDraft[]>([]);
   const [companions, setCompanions] = useState<GameSettings["companions"]>("auto");
   const [maxCompanions, setMaxCompanions] = useState(2);
   const [maxGuests, setMaxGuests] = useState(2);
@@ -78,6 +85,8 @@ export function CreateCampaignDialog({
             ttsVoice,
             mapsEnabled,
             multiclassingEnabled,
+            worldSimulation,
+            inventoryApprovals,
             companions,
             maxCompanions,
             maxGuests,
@@ -89,6 +98,9 @@ export function CreateCampaignDialog({
         setError(data.error || "Could not create the campaign.");
         return;
       }
+      // House rules and starting lore land right after the campaign row
+      // exists; anything that fails to post can be re-entered in the lobby.
+      await submitWorldSetup(data.campaign.id, houseRules, loreDrafts);
       onCreated(data.campaign.id);
     } catch {
       setError("Could not reach the server.");
@@ -310,7 +322,41 @@ export function CreateCampaignDialog({
                 <span className="block font-medium">Multiclassing</span>
                 <span className="block text-xs opacity-80">Second classes at level-up</span>
               </button>
+              <div className="relative flex">
+                <button
+                  type="button"
+                  onClick={() => setWorldSimulation(!worldSimulation)}
+                  className={toggleClass(worldSimulation)}
+                >
+                  <span className="block font-medium">Living world</span>
+                  <span className="block text-xs opacity-80">
+                    Off-screen schemes and rumors advance on their own
+                  </span>
+                </button>
+                <InfoButton
+                  label="What does Living World do?"
+                  text={LIVING_WORLD_INFO}
+                  className="absolute right-1.5 top-1.5"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setInventoryApprovals(!inventoryApprovals)}
+                className={toggleClass(inventoryApprovals)}
+              >
+                <span className="block font-medium">Item offers</span>
+                <span className="block text-xs opacity-80">
+                  Players confirm DM loot and gold changes
+                </span>
+              </button>
             </div>
+
+            <WorldSetupFields
+              houseRules={houseRules}
+              setHouseRules={setHouseRules}
+              loreDrafts={loreDrafts}
+              setLoreDrafts={setLoreDrafts}
+            />
 
             <div>
               <span className="mb-1.5 block text-stone-400">AI allies</span>

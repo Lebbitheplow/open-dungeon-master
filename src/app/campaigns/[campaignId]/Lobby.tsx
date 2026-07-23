@@ -22,6 +22,8 @@ import { PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
 import { CompanionBuilderDialog } from "@/app/campaigns/[campaignId]/CompanionBuilderDialog";
 import { EditCampaignDialog } from "@/app/campaigns/[campaignId]/EditCampaignDialog";
 import { GameSettingsPanel } from "@/app/campaigns/[campaignId]/GameSettingsPanel";
+import { LorePanel } from "@/app/campaigns/[campaignId]/LorePanel";
+import { RulesPanel } from "@/app/campaigns/[campaignId]/RulesPanel";
 import { resolveCompanionMode } from "@/lib/schemas/game-settings";
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
 
@@ -289,6 +291,11 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
         settings={campaign.gameSettings}
         isLead={isLead}
       />
+
+      <section className="mb-6 space-y-3">
+        <RulesPanel campaignId={campaign.id} settings={campaign.gameSettings} isLead={isLead} />
+        <LorePanel campaignId={campaign.id} isLead={isLead} />
+      </section>
 
       {campaign.gameSettings.dicePolicy === "real_allowed" && mySheet ? (
         <section className="mb-6 flex items-center justify-between rounded-lg border border-stone-800 bg-stone-950/60 px-4 py-3">

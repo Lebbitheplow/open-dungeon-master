@@ -20,6 +20,7 @@ import {
 } from "@/lib/dm/rest-logic";
 import { resolveSheetRef } from "@/lib/dm/rolls";
 import { normalizeRestKind } from "@/lib/dm/arg-coerce";
+import { tickWorldTimeskip } from "@/lib/dm/world-tick";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
 
 // The rest engine: short rests spend hit dice with real server rolls, long
@@ -177,6 +178,9 @@ export function handleTakeRest(
       rested.push(sheet.name);
     }
     tableNote(campaign, "The party takes a long rest.");
+    // A night passing is a timeskip: the off-screen world moves too (world
+    // arcs, NPC goals), with results landing as DM-only facts and sparks.
+    tickWorldTimeskip(campaign.id, 3);
     return {
       ok: true,
       kind: "long",

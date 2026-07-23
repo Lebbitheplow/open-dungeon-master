@@ -1,6 +1,6 @@
 "use client";
 
-import { Crown, ImageOff, Loader2, UserPlus, Volume2 } from "lucide-react";
+import { Crown, ImageOff, Loader2, Pin, ShieldQuestion, UserPlus, Volume2 } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { JOIN_NOTE_PREFIX, LEAD_NOTE_PREFIX, type CampaignMember } from "@/lib/campaign-types";
@@ -160,6 +160,8 @@ const MessageItem = memo(function MessageItem({
   sheets,
   mediaStatus,
   onReplayAudio,
+  onPinCanon,
+  onLoreCheck,
 }: {
   message: CampaignMessage;
   rollsById: Map<string, StoredRoll>;
@@ -169,6 +171,8 @@ const MessageItem = memo(function MessageItem({
   sheets: CharacterSheet[];
   mediaStatus: Record<string, MediaStatus>;
   onReplayAudio?: (messageId: string) => void;
+  onPinCanon?: (message: CampaignMessage) => void;
+  onLoreCheck?: (message: CampaignMessage) => void;
 }) {
   if (message.authorType === "system") {
     if (message.content.startsWith(LEAD_NOTE_PREFIX)) {
@@ -204,6 +208,26 @@ const MessageItem = memo(function MessageItem({
           <span className="h-px w-8 bg-gradient-to-r from-transparent to-amber-500/60" />
           Dungeon Master
           <span className="h-px flex-1 bg-gradient-to-r from-amber-500/40 to-transparent" />
+          {onLoreCheck ? (
+            <button
+              type="button"
+              onClick={() => onLoreCheck(message)}
+              title="Lore check: flag this passage (or your selected text) against the campaign record"
+              className="text-stone-600 opacity-0 transition hover:text-amber-200 group-hover:opacity-100"
+            >
+              <ShieldQuestion className="size-3.5" />
+            </button>
+          ) : null}
+          {onPinCanon ? (
+            <button
+              type="button"
+              onClick={() => onPinCanon(message)}
+              title="Pin as canon: keep this passage (or your selected text) in front of the DM permanently"
+              className="text-stone-600 opacity-0 transition hover:text-amber-200 group-hover:opacity-100"
+            >
+              <Pin className="size-3.5" />
+            </button>
+          ) : null}
           {onReplayAudio ? (
             <button
               type="button"
@@ -311,6 +335,8 @@ export function MessageList({
   dmDraft,
   mediaStatus = {},
   onReplayAudio,
+  onPinCanon,
+  onLoreCheck,
 }: {
   messages: CampaignMessage[];
   rolls: StoredRoll[];
@@ -321,6 +347,8 @@ export function MessageList({
   dmDraft: string;
   mediaStatus?: Record<string, MediaStatus>;
   onReplayAudio?: (messageId: string) => void;
+  onPinCanon?: (message: CampaignMessage) => void;
+  onLoreCheck?: (message: CampaignMessage) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -351,6 +379,24 @@ export function MessageList({
   const stableReplay = useMemo(
     () => (hasReplay ? (messageId: string) => replayRef.current?.(messageId) : undefined),
     [hasReplay],
+  );
+  const pinRef = useRef(onPinCanon);
+  useEffect(() => {
+    pinRef.current = onPinCanon;
+  });
+  const hasPin = Boolean(onPinCanon);
+  const stablePin = useMemo(
+    () => (hasPin ? (message: CampaignMessage) => pinRef.current?.(message) : undefined),
+    [hasPin],
+  );
+  const loreRef = useRef(onLoreCheck);
+  useEffect(() => {
+    loreRef.current = onLoreCheck;
+  });
+  const hasLore = Boolean(onLoreCheck);
+  const stableLore = useMemo(
+    () => (hasLore ? (message: CampaignMessage) => loreRef.current?.(message) : undefined),
+    [hasLore],
   );
 
   // Follow the conversation only while the reader is already at the bottom;
@@ -391,6 +437,8 @@ export function MessageList({
           sheets={sheets}
           mediaStatus={mediaStatus}
           onReplayAudio={stableReplay}
+          onPinCanon={stablePin}
+          onLoreCheck={stableLore}
         />
       ))}
 

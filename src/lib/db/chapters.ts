@@ -32,6 +32,11 @@ type ChapterRow = {
   updated_at: string;
 };
 
+// Explicit column list so the embedding BLOB never rides along on ordinary
+// chapter reads (listChapters runs every DM turn).
+const CHAPTER_COLUMNS =
+  "id, campaign_id, chapter_index, title, summary, highlights_json, seq_start, seq_end, status, created_at, updated_at";
+
 function mapChapter(row: ChapterRow): Chapter {
   return {
     id: row.id,
@@ -50,21 +55,21 @@ function mapChapter(row: ChapterRow): Chapter {
 
 export function listChapters(campaignId: string): Chapter[] {
   const rows = getDatabase()
-    .prepare(`SELECT * FROM chapters WHERE campaign_id = ? ORDER BY chapter_index ASC`)
+    .prepare(`SELECT ${CHAPTER_COLUMNS} FROM chapters WHERE campaign_id = ? ORDER BY chapter_index ASC`)
     .all(campaignId) as ChapterRow[];
   return rows.map(mapChapter);
 }
 
 export function getChapter(chapterId: string): Chapter | null {
   const row = getDatabase()
-    .prepare(`SELECT * FROM chapters WHERE id = ?`)
+    .prepare(`SELECT ${CHAPTER_COLUMNS} FROM chapters WHERE id = ?`)
     .get(chapterId) as ChapterRow | undefined;
   return row ? mapChapter(row) : null;
 }
 
 export function getOpenChapter(campaignId: string): Chapter | null {
   const row = getDatabase()
-    .prepare(`SELECT * FROM chapters WHERE campaign_id = ? AND status = 'open'`)
+    .prepare(`SELECT ${CHAPTER_COLUMNS} FROM chapters WHERE campaign_id = ? AND status = 'open'`)
     .get(campaignId) as ChapterRow | undefined;
   return row ? mapChapter(row) : null;
 }
@@ -134,6 +139,30 @@ export function closeChapterRow(
     ).run(nextId, chapter.campaignId, chapter.index + 1, input.seqEnd + 1, now, now);
   })();
   return { closed: getChapter(chapterId)!, opened: getChapter(nextId)! };
+}
+
+// Semantic-index support: the chapter summary's MiniLM embedding, used for
+// phase-1 chapter picking in recall (src/lib/dm/memory-index.ts).
+export function setChapterEmbedding(chapterId: string, embedding: Buffer) {
+  getDatabase()
+    .prepare(`UPDATE chapters SET embedding = ? WHERE id = ?`)
+    .run(embedding, chapterId);
+}
+
+export function listChapterEmbeddings(
+  campaignId: string,
+): Array<{ id: string; index: number; embedding: Buffer | null }> {
+  return getDatabase()
+    .prepare(
+      `SELECT id, chapter_index, embedding FROM chapters
+       WHERE campaign_id = ? AND status = 'closed'
+       ORDER BY chapter_index ASC`,
+    )
+    .all(campaignId)
+    .map((row) => {
+      const raw = row as { id: string; chapter_index: number; embedding: Buffer | null };
+      return { id: raw.id, index: raw.chapter_index, embedding: raw.embedding };
+    });
 }
 
 // Party lead edits to a closed chapter's title/summary/highlights.

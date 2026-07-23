@@ -15,6 +15,7 @@ import {
 } from "@/lib/srd/treasure";
 import { objectProfile, type ObjectMaterial, type ObjectSize } from "@/lib/srd/objects";
 import { forcedMarchHours, forcedMarchSaveDc, paceEffect, type TravelPace } from "@/lib/srd/travel";
+import { tickWorldTimeskip } from "@/lib/dm/world-tick";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // The remaining DM-utility engines: CR-scaled treasure the server actually
@@ -289,6 +290,10 @@ export function handleTravel(
   const pace: TravelPace = args.pace ?? "normal";
   const effect = paceEffect(pace);
   const extra = forcedMarchHours(args.hours);
+
+  // A journey is a timeskip: the off-screen world moves roughly once per
+  // four hours on the road (world arcs, NPC goals; zero model calls).
+  tickWorldTimeskip(campaign.id, Math.max(1, Math.round(args.hours / 4)));
 
   const paceNote =
     pace === "fast"

@@ -40,6 +40,10 @@ export const gameSettingsSchema = z.object({
   multiclassingEnabled: z.boolean().default(true),
   // Lets new players join with the invite code after the adventure started.
   midGameJoinOpen: z.boolean().default(false),
+  // The living-world engines: off-screen world arcs advancing on background
+  // dice, surprise/encounter sparks, and NPC goal simulation during
+  // timeskips. Off preserves pre-engine behavior exactly.
+  worldSimulation: z.boolean().default(true),
   // After each DM narration, block do and say for everyone until the party
   // lead opens responses. OOC and lead directions stay available.
   holdSubmissions: z.boolean().default(false),
@@ -53,6 +57,27 @@ export const gameSettingsSchema = z.object({
   // own cap so a temporary ally never eats a party slot.
   maxCompanions: z.number().int().min(1).max(4).default(2),
   maxGuests: z.number().int().min(1).max(4).default(2),
+  // When on, DM-initiated item and gold changes to player characters become
+  // pending offers the owning player accepts or declines instead of applying
+  // immediately (src/lib/dm/proposal-logic.ts). Off preserves auto-apply.
+  inventoryApprovals: z.boolean().default(false),
+  // Optional 5e variant rules the server engines and DM prompt honor.
+  // Rendered as one line each in the prompt by src/lib/dm/rules-logic.ts.
+  variantRules: z
+    .object({
+      flanking: z.boolean().default(false),
+      criticalFumbles: z.boolean().default(false),
+      encumbrance: z.boolean().default(false),
+      lingeringInjuries: z.boolean().default(false),
+      restVariant: z.enum(["standard", "gritty", "heroic"]).default("standard"),
+    })
+    .default({
+      flanking: false,
+      criticalFumbles: false,
+      encumbrance: false,
+      lingeringInjuries: false,
+      restVariant: "standard",
+    }),
 });
 
 export type GameSettings = z.infer<typeof gameSettingsSchema>;

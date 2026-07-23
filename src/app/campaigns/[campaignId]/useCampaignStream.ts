@@ -10,6 +10,7 @@ import type { CampaignMessage } from "@/lib/db/messages";
 import type { Note } from "@/lib/db/notes";
 import type { StoredRoll } from "@/lib/db/rolls";
 import type { DmWhisper } from "@/lib/db/dm-whispers";
+import type { WorldFact } from "@/lib/db/facts";
 import type { SideThread } from "@/lib/db/side-chat";
 import type { PlayerMapView } from "@/lib/battlemap/view";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -64,6 +65,18 @@ export type LevelUpNotice = {
   level: number;
 };
 
+// A DM item/gold offer awaiting the owning player (inventoryApprovals).
+export type ItemProposal = {
+  id: string;
+  characterId: string;
+  userId: string;
+  toolName: string;
+  summary: string;
+  reason: string;
+  status: string;
+  createdAt: string;
+};
+
 export type CampaignLocation = {
   id: string;
   name: string;
@@ -97,8 +110,13 @@ export type CampaignState = {
   whispers: DmWhisper[];
   whisperUnread: number;
   whispersLoaded: boolean;
+  // World-state facts visible to this member (facts_updated is contentless;
+  // each member pulls their own scoped view).
+  facts: WorldFact[];
   characterEvents: CharacterEvent[];
   encounter: PublicEncounter | null;
+  // Open DM item/gold offers (inventoryApprovals).
+  itemProposals: ItemProposal[];
   // The caller's fogged battle-map projection; null outside combat.
   battleMap: PlayerMapView | null;
   narrationAudio: Record<string, string>;
@@ -131,8 +149,10 @@ const initialState: CampaignState = {
   whispers: [],
   whisperUnread: 0,
   whispersLoaded: false,
+  facts: [],
   characterEvents: [],
   encounter: null,
+  itemProposals: [],
   battleMap: null,
   narrationAudio: {},
   latestTts: null,
@@ -148,6 +168,7 @@ type Action =
   | { type: "notes"; notes: Note[] }
   | { type: "sideThreads"; sideThreads: SideThread[] }
   | { type: "whispers"; whispers: DmWhisper[]; unread: number }
+  | { type: "facts"; facts: WorldFact[] }
   | { type: "battleMap"; view: PlayerMapView | null }
   | { type: "error"; error: string }
   | { type: "event"; eventType: string; seq: number | null; payload: Record<string, unknown> };
@@ -186,6 +207,8 @@ function reducer(state: CampaignState, action: Action): CampaignState {
         whisperUnread: action.unread,
         whispersLoaded: true,
       };
+    case "facts":
+      return { ...state, facts: action.facts };
     case "battleMap":
       return { ...state, battleMap: action.view };
     case "error":
@@ -388,6 +411,20 @@ function reducer(state: CampaignState, action: Action): CampaignState {
             ? { ...state.campaign, ...(payload as Partial<Campaign>) }
             : state.campaign;
           return next;
+        case "item_proposal_added": {
+          const proposal = payload.proposal as ItemProposal | undefined;
+          if (proposal) {
+            next.itemProposals = upsertBy(state.itemProposals, proposal, (entry) => entry.id);
+          }
+          return next;
+        }
+        case "item_proposal_resolved": {
+          const proposal = payload.proposal as ItemProposal | undefined;
+          if (proposal) {
+            next.itemProposals = state.itemProposals.filter((entry) => entry.id !== proposal.id);
+          }
+          return next;
+        }
         case "encounter_updated":
           next.encounter = (payload.encounter as PublicEncounter | null) ?? null;
           return next;
@@ -396,6 +433,15 @@ function reducer(state: CampaignState, action: Action): CampaignState {
             ? { ...state.campaign, floor: payload.floor as Campaign["floor"] }
             : state.campaign;
           return next;
+        case "message_updated": {
+          const updated = payload.message as CampaignMessage | undefined;
+          if (updated) {
+            next.messages = state.messages.map((message) =>
+              message.id === updated.id ? updated : message,
+            );
+          }
+          return next;
+        }
         case "image_ready":
           next.messages = state.messages.map((message) =>
             message.id === payload.messageId
@@ -422,6 +468,7 @@ function reducer(state: CampaignState, action: Action): CampaignState {
 
 const PERSISTED_EVENTS = [
   "message_added",
+  "message_updated",
   "roll_result",
   "roll_pending",
   "member_joined",
@@ -445,6 +492,9 @@ const PERSISTED_EVENTS = [
   "location_updated",
   "location_map_ready",
   "tts_ready",
+  "campaign_rewound",
+  "item_proposal_added",
+  "item_proposal_resolved",
 ];
 const EPHEMERAL_EVENTS = [
   "dm_status",
@@ -452,6 +502,7 @@ const EPHEMERAL_EVENTS = [
   "media_status",
   "side_activity",
   "whisper_activity",
+  "facts_updated",
   "battle_map_updated",
 ];
 const EPHEMERAL_EVENT_SET = new Set(EPHEMERAL_EVENTS);
@@ -491,6 +542,7 @@ export function useCampaignStream(campaignId: string) {
           notes: data.notes ?? [],
           characterEvents: data.characterEvents ?? [],
           encounter: data.encounter ?? null,
+          itemProposals: data.itemProposals ?? [],
           dmStatus: data.dmStatus ?? "idle",
           lastSeq,
         },
@@ -563,6 +615,21 @@ export function useCampaignStream(campaignId: string) {
     }
   }, [campaignId]);
 
+  // World facts follow the same privacy pattern: facts_updated is
+  // contentless and each member fetches their own known_by-scoped view.
+  const refreshFacts = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/facts`);
+      if (!response.ok) {
+        return;
+      }
+      const data = await response.json();
+      dispatch({ type: "facts", facts: data.facts ?? [] });
+    } catch {
+      // transient; the next facts_updated event retries
+    }
+  }, [campaignId]);
+
   useEffect(() => {
     let source: EventSource | null = null;
     let cancelled = false;
@@ -573,6 +640,7 @@ export function useCampaignStream(campaignId: string) {
       }
       void refreshSideChat();
       void refreshWhispers();
+      void refreshFacts();
       void refreshBattleMap();
       source = new EventSource(`/api/campaigns/${campaignId}/events?lastSeq=${lastSeq}`);
       const handle = (eventType: string) => (event: MessageEvent) => {
@@ -589,11 +657,24 @@ export function useCampaignStream(campaignId: string) {
           if (eventType === "note_suggested") {
             void refreshNotes();
           }
+          // A rewind mass-deletes state that incremental events cannot
+          // express; reload everything from the snapshot endpoint.
+          if (eventType === "campaign_rewound") {
+            void refresh();
+            void refreshNotes();
+            void refreshSideChat();
+            void refreshWhispers();
+            void refreshFacts();
+            void refreshBattleMap();
+          }
           if (eventType === "side_activity") {
             void refreshSideChat();
           }
           if (eventType === "whisper_activity") {
             void refreshWhispers();
+          }
+          if (eventType === "facts_updated") {
+            void refreshFacts();
           }
           // encounter_updated too: the map exists the moment
           // start_encounter lands, before any battle_map_updated ping.
@@ -613,7 +694,7 @@ export function useCampaignStream(campaignId: string) {
       cancelled = true;
       source?.close();
     };
-  }, [campaignId, refresh, refreshNotes, refreshSideChat, refreshWhispers, refreshBattleMap]);
+  }, [campaignId, refresh, refreshNotes, refreshSideChat, refreshWhispers, refreshFacts, refreshBattleMap]);
 
-  return { state, refresh, refreshNotes, refreshSideChat, refreshWhispers, refreshBattleMap };
+  return { state, refresh, refreshNotes, refreshSideChat, refreshWhispers, refreshFacts, refreshBattleMap };
 }

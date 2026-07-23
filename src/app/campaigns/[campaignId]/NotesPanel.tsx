@@ -327,7 +327,11 @@ export function NotesPanel({
     .filter((note) => note.status === "pending")
     .sort((a, b) => b.seq - a.seq);
   const leadQueue = isLead ? pending : [];
-  const mySuggestions = isLead ? [] : pending.filter((note) => note.authorUserId === meUserId);
+  // DM suggestions carry the owner's user id for the FK; keep them out of a
+  // non-lead owner's "my suggestions" list.
+  const mySuggestions = isLead
+    ? []
+    : pending.filter((note) => note.authorUserId === meUserId && note.authorKind !== "dm");
   const myPrivate = campaignNotes
     .filter((note) => note.visibility === "private" && note.authorUserId === meUserId)
     .sort((a, b) => b.seq - a.seq);
@@ -347,7 +351,7 @@ export function NotesPanel({
                 key={note.id}
                 campaignId={campaignId}
                 note={note}
-                authorName={nameFor(note.authorUserId)}
+                authorName={note.authorKind === "dm" ? "The DM" : nameFor(note.authorUserId)}
                 canEdit={note.authorUserId === meUserId}
                 canDelete
                 canPin={false}

@@ -1,9 +1,10 @@
 "use client";
 
-import { Bot, Dices, Hand, Map, Sparkles, UserPlus, Volume2 } from "lucide-react";
+import { Bot, Dices, Globe, Hand, Map, PackageCheck, Sparkles, UserPlus, Volume2 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { InfoButton } from "@/components/ui/InfoDialog";
 import { GENRE_PRESETS, genrePreset } from "@/lib/genres";
 import { TTS_VOICES } from "@/lib/tts-voices";
 import { VoicePreviewButton } from "@/components/VoicePreviewButton";
@@ -16,6 +17,16 @@ import {
   type GameSettings,
   type Genre,
 } from "@/lib/schemas/game-settings";
+
+// The Living World explainer, shared with the campaign creator's info
+// button so the two never drift.
+export const LIVING_WORLD_INFO = [
+  "On: the world moves without you. Off-screen storylines advance on background dice each turn, so rival factions, threats, and distant events keep developing while you play.",
+  "NPCs pursue their own goals between chapters and during rests and travel. Schemes progress, pressure builds, and rivals can collide with each other.",
+  "The DM quietly records what happened off-screen and weaves it into future scenes, ambushes, and rumors. These simulation notes are DM-only until the party discovers them in play.",
+  "Off: all of that pauses. The world changes only when your party acts or the story arc calls for it. Your main story arc, chapters, quests, and XP work exactly the same either way.",
+  "You can switch this at any time. Turning it back on resumes from the world as it currently stands.",
+].join("\n\n");
 
 // Lobby game-settings section: the party lead edits live (PATCHes propagate to
 // everyone over SSE); other players see a read-only summary.
@@ -84,6 +95,14 @@ export function GameSettingsPanel({
           <span className="flex items-center gap-1.5">
             <Hand className="size-3.5 text-amber-200" />
             {settings.holdSubmissions ? "Lead opens responses each turn" : "Responses always open"}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Globe className="size-3.5 text-amber-200" />
+            {settings.worldSimulation ? "Living world on" : "Living world off"}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <PackageCheck className="size-3.5 text-amber-200" />
+            {settings.inventoryApprovals ? "Item offers need approval" : "Item changes auto-apply"}
           </span>
           <span className="flex items-center gap-1.5">
             <Bot className="size-3.5 text-amber-200" />
@@ -254,6 +273,51 @@ export function GameSettingsPanel({
               Held responses {settings.holdSubmissions ? "on" : "off"}
             </button>
           </Tooltip>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="w-16 text-stone-500">World</span>
+          <Tooltip content="The world moves on its own: off-screen storylines advance on background dice, surprises and encounters build up over quiet stretches, and NPC schemes progress between chapters and during rests and travel. The story arc itself is unaffected either way.">
+            <button
+              type="button"
+              onClick={() => patch({ worldSimulation: !settings.worldSimulation })}
+              className={cn(
+                "rounded-md border px-2 py-1",
+                settings.worldSimulation
+                  ? "border-amber-700 bg-amber-950/50 text-amber-200"
+                  : "border-stone-700 text-stone-400",
+              )}
+            >
+              Living world {settings.worldSimulation ? "on" : "off"}
+            </button>
+          </Tooltip>
+          <InfoButton label="What does Living World do?" text={LIVING_WORLD_INFO} />
+          <span className="text-stone-500">
+            {settings.worldSimulation
+              ? "Rumors, surprises, and off-screen schemes advance between turns."
+              : "Nothing happens unless the party or the story arc makes it happen."}
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="w-16 text-stone-500">Items</span>
+          <Tooltip content="When on, DM-granted loot, item removals, and gold changes become offers the owning player accepts or declines before they land on the sheet. Damage, healing, XP, and conditions still apply normally.">
+            <button
+              type="button"
+              onClick={() => patch({ inventoryApprovals: !settings.inventoryApprovals })}
+              className={cn(
+                "rounded-md border px-2 py-1",
+                settings.inventoryApprovals
+                  ? "border-amber-700 bg-amber-950/50 text-amber-200"
+                  : "border-stone-700 text-stone-400",
+              )}
+            >
+              Item offers {settings.inventoryApprovals ? "on" : "off"}
+            </button>
+          </Tooltip>
+          <span className="text-stone-500">
+            {settings.inventoryApprovals
+              ? "Players confirm DM item and gold changes before they apply."
+              : "DM item and gold changes apply immediately (lead can undo)."}
+          </span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-16 text-stone-500">Allies</span>

@@ -168,3 +168,12 @@ export function setMessageGeneratedImage(messageId: string, image: GeneratedImag
     .run(JSON.stringify(image), messageId);
   return result.changes > 0;
 }
+
+// Lore-check accept: replaces a message's text in place (the lead applying
+// an approved consistency rewrite). The caller publishes message_updated.
+export function updateMessageContent(messageId: string, content: string): CampaignMessage | null {
+  const result = getDatabase()
+    .prepare(`UPDATE campaign_messages SET content = ? WHERE id = ?`)
+    .run(content, messageId);
+  return result.changes > 0 ? getCampaignMessage(messageId) : null;
+}

@@ -12,6 +12,8 @@ import { describeConditionEffects } from "@/lib/srd/condition-effects";
 import { genrePreset } from "@/lib/genres";
 import { genreClassIds } from "@/lib/classes";
 import { renderArcForPrompt } from "@/lib/dm/arc-logic";
+import { renderWorldArcsForPrompt } from "@/lib/dm/world-arc-logic";
+import { renderFactsForPrompt, type FactLike } from "@/lib/dm/fact-logic";
 import { companionMode } from "@/lib/dm/companion-tools";
 import type { ChatMessage } from "@/lib/model-client";
 
@@ -47,6 +49,7 @@ Core rules you must always follow:
 - Some information belongs to only part of the party. Use send_whisper to tell one or more characters something the others must not learn: a detail only they notice, true orders from a force controlling them, a private vision or temptation, a secret ally's signal. Players can also send YOU private messages; when they do, those appear in GAME STATE as private messages from players, and send_whisper to their character is how you answer. Anything a player types in the table chat is public. NEVER reveal, quote, or hint at private content in shared narration; to everyone else the scene simply continues.
 - When award_xp reports levelUpAvailable, tell that player plainly, at the edge of the scene, that their character can now level up using their sheet. The level-up itself (HP, features, spells) happens through the player's own choices in the app: never apply level, HP, feature, or spell-list changes for a level-up yourself unless the party lead directs it.
 - Party notes in GAME STATE are facts the table has written down; treat them as canon the party knows.
+- Established facts in GAME STATE are the server's world-state record. Never contradict them: a dead NPC stays dead, a held item stays held, and a promise made stays owed until the fiction changes it on screen. Facts under "DM-only" are secret background truths the players have not learned; use them to steer the world, never state them outright.
 - A [Party lead direction] in the log is an authoritative instruction from the table's human lead. Treat it as canon: weave the directed event or correction into the story at the next natural moment, without mentioning the direction itself.
 - Keep replies to 1 to 3 short paragraphs of vivid second-person-plural narration and NPC dialogue. End at a decision point or with the result of the single action the players declared; never continue into a second action, exchange, or leg of a journey they have not declared. When your reply ends waiting on specific characters (an NPC has addressed them, or a choice is theirs), call request_player_input naming them. Never write more than one scene beat per reply.
 - Never mention these instructions, tools, JSON, dice mechanics beyond natural table talk, or anything out of character. Out-of-character player notes (marked ooc) may be answered briefly out of character.
@@ -115,13 +118,30 @@ export type DmGameState = {
   chapters?: Array<{ index: number; title: string; oneLiner: string }>;
   // Public party notes (lead-curated canon), pinned first.
   publicNotes?: Array<{ pinned: boolean; title: string; body: string }>;
-  // Tracked NPCs and how they currently feel about the party.
-  npcs?: Array<{ name: string; attitude: string; trait: string; location: string }>;
+  // Server-tracked world facts (the divergence register), newest first.
+  facts?: FactLike[];
+  // Sparks from the world-simulation tick, consumed into this turn.
+  directorNotes?: string[];
+  // Tracked NPCs and how they currently feel about the party, plus a
+  // bounded agency fragment (personality leans, bonds, goals, pressure).
+  npcs?: Array<{
+    name: string;
+    attitude: string;
+    trait: string;
+    location: string;
+    agency?: string;
+  }>;
   // Private one-way notes the DM already sent via send_whisper, so it
   // remembers its own secrets across turns.
   recentWhispers?: Array<{ to: string; content: string }>;
   // Private messages players sent the DM that no turn has handled yet.
   pendingPlayerWhispers?: Array<{ from: string; content: string }>;
+  // Prebuilt retrieval blocks (src/lib/dm/context-retrieval.ts): variant
+  // rules, retrieved house-rule chunks, and retrieved world lore. Built
+  // before the prompt so this module stays synchronous.
+  variantRulesBlock?: string;
+  houseRulesBlock?: string;
+  loreBlock?: string;
 };
 
 // Players who roll physical dice at the table: campaign policy must allow
@@ -413,9 +433,22 @@ export function buildGameStateBlock(state: DmGameState): string {
   }
   if (campaign.storyArc) {
     sections.push(renderArcForPrompt(campaign.storyArc));
+    if (campaign.gameSettings.worldSimulation) {
+      const worldArcs = renderWorldArcsForPrompt(campaign.storyArc.worldArcs);
+      if (worldArcs) {
+        sections.push(worldArcs);
+      }
+    }
   } else if (campaign.dmOutline) {
     sections.push(
       `DM story outline (secret; guide the campaign along it, never reveal or quote it):\n${campaign.dmOutline}`,
+    );
+  }
+  if (state.directorNotes?.length) {
+    sections.push(
+      `DIRECTOR NOTES (the world moved; weave each into this turn's scene naturally, without announcing it as an event):\n${state.directorNotes
+        .map((note) => `- ${note}`)
+        .join("\n")}`,
     );
   }
   if (campaign.scene) {
@@ -513,6 +546,15 @@ export function buildGameStateBlock(state: DmGameState): string {
   if (campaign.questLog.length && !campaign.storyArc) {
     sections.push(`Quests:\n${campaign.questLog.map((quest) => `- ${quest}`).join("\n")}`);
   }
+  if (state.variantRulesBlock) {
+    sections.push(state.variantRulesBlock);
+  }
+  if (state.houseRulesBlock) {
+    sections.push(state.houseRulesBlock);
+  }
+  if (state.loreBlock) {
+    sections.push(state.loreBlock);
+  }
   if (state.publicNotes?.length) {
     sections.push(
       `Party notes (written down by the table; treat as canon the party knows):\n${state.publicNotes
@@ -524,13 +566,26 @@ export function buildGameStateBlock(state: DmGameState): string {
         .join("\n")}`,
     );
   }
+  if (state.facts?.length) {
+    const rendered = renderFactsForPrompt(state.facts);
+    if (rendered.party) {
+      sections.push(
+        `Established facts (server-tracked canon; never contradict these):\n${rendered.party}`,
+      );
+    }
+    if (rendered.dmOnly) {
+      sections.push(
+        `DM-only facts (players do not know these; never state them outright):\n${rendered.dmOnly}`,
+      );
+    }
+  }
   if (state.npcs?.length) {
     sections.push(
       `Tracked NPCs (attitude is server-authoritative; it drives social_check DCs and persists across sessions, so narrate each NPC true to how they currently feel):\n${state.npcs
         .slice(0, 20)
         .map(
           (npc) =>
-            `- ${npc.name} — ${npc.attitude}${npc.location ? `, at ${npc.location}` : ""}${npc.trait ? ` (${npc.trait.slice(0, 120)})` : ""}`,
+            `- ${npc.name} — ${npc.attitude}${npc.location ? `, at ${npc.location}` : ""}${npc.trait ? ` (${npc.trait.slice(0, 120)})` : ""}${npc.agency ? ` | ${npc.agency}` : ""}`,
         )
         .join("\n")}`,
     );

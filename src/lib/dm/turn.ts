@@ -69,6 +69,13 @@ import {
 } from "@/lib/db/dm-whispers";
 import { listChapters } from "@/lib/db/chapters";
 import { listPublicCampaignNotes } from "@/lib/db/notes";
+import { listActiveFacts } from "@/lib/db/facts";
+import { consumePendingSparks, tickWorldState } from "@/lib/dm/world-tick";
+import { handleRecallStory } from "@/lib/dm/recall";
+import { handleSearchLore, searchLoreTool } from "@/lib/dm/lore-search";
+import { handleWriteCampaignNote, writeCampaignNoteTool } from "@/lib/dm/note-tools";
+import { buildTurnRetrieval } from "@/lib/dm/context-retrieval";
+import { maybeProposeItemChange } from "@/lib/dm/proposal-intercept";
 import { maybeCloseChapter } from "@/lib/dm/chapter-close";
 import {
   hasRecentIdenticalEvent,
@@ -304,9 +311,15 @@ export async function startDmTurn(campaignId: string) {
   ensureInitiativeProgress(campaign);
   const { summary } = getCampaignSummaryState(campaignId);
   const currentLocation = getCurrentLocation(campaignId);
+  // Variant rules always ride; house rules and world lore are retrieved
+  // against the current moment (one MiniLM embed, keyword fallback).
+  const retrieval = await buildTurnRetrieval(campaign, history);
   const conversation = buildDmMessages(
     {
       campaign,
+      variantRulesBlock: retrieval.variantRulesBlock,
+      houseRulesBlock: retrieval.houseRulesBlock,
+      loreBlock: retrieval.loreBlock,
       members: listMembers(campaignId),
       sheets: context.sheets,
       encounter: buildEncounterState(campaignId, context.sheets),
@@ -346,6 +359,14 @@ export async function startDmTurn(campaignId: string) {
         title: note.title,
         body: note.body,
       })),
+      facts: listActiveFacts(campaignId).map((fact) => ({
+        category: fact.category,
+        subject: fact.subject,
+        fact: fact.fact,
+        pinned: fact.pinned,
+        knownBy: fact.knownBy,
+      })),
+      directorNotes: consumePendingSparks(campaignId).map((spark) => spark.text),
       npcs: npcRosterForPrompt(campaignId),
       recentWhispers: listRecentWhispersForPrompt(campaignId, 10),
       pendingPlayerWhispers: pendingWhispers.map((whisper) => ({
@@ -458,6 +479,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
   // Whisper cap is per advance() run, not persisted: a resumed turn simply
   // gets a fresh allowance, which the bounded call loop keeps small.
   let whisperCount = 0;
+  // One suggested note per advance() run keeps the DM from papering the
+  // lead's approval queue in a single reply.
+  let noteCount = 0;
 
   while (turn.callIndex < MAX_MODEL_CALLS) {
     const finalCall = turn.callIndex === MAX_MODEL_CALLS - 1;
@@ -473,6 +497,8 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       updateLocationTool,
       recordEventTool,
       recallStoryTool,
+      searchLoreTool,
+      writeCampaignNoteTool,
       sendWhisperTool,
       ...(campaign.storyArc ? [completeBeatTool] : []),
       ...checkTools,
@@ -593,6 +619,8 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     const eventCalls = toolCalls.filter((toolCall) => toolCall.name === "record_event");
     const beatCalls = toolCalls.filter((toolCall) => toolCall.name === "complete_beat");
     const recallCalls = toolCalls.filter((toolCall) => toolCall.name === "recall_story");
+    const searchLoreCalls = toolCalls.filter((toolCall) => toolCall.name === "search_lore");
+    const noteCalls = toolCalls.filter((toolCall) => toolCall.name === "write_campaign_note");
     const whisperCalls = toolCalls.filter((toolCall) => toolCall.name === "send_whisper");
     const checkCalls = toolCalls.filter((toolCall) =>
       (CHECK_TOOL_NAMES as readonly string[]).includes(toolCall.name),
@@ -636,8 +664,30 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     for (const recallCall of recallCalls) {
       recallResults.set(
         recallCall.id ?? "recall_story",
-        handleRecallStory(campaignId, recallCall.rawArguments),
+        await handleRecallStory(campaignId, recallCall.rawArguments),
       );
+    }
+    const searchLoreResults = new Map<string, Record<string, unknown>>();
+    for (const searchLoreCall of searchLoreCalls) {
+      searchLoreResults.set(
+        searchLoreCall.id ?? "search_lore",
+        await handleSearchLore(campaignId, searchLoreCall.rawArguments),
+      );
+    }
+    // Notes deliver as pending suggestions immediately (like whispers); the
+    // lead approves them in the notes panel.
+    const noteResults = new Map<string, Record<string, unknown>>();
+    for (const noteCall of noteCalls) {
+      let result: Record<string, unknown>;
+      if (noteCount >= 1) {
+        result = { error: "Note limit reached for this turn." };
+      } else {
+        result = handleWriteCampaignNote(campaign, noteCall.rawArguments);
+        if (!("error" in result)) {
+          noteCount += 1;
+        }
+      }
+      noteResults.set(noteCall.id ?? "write_campaign_note", result);
     }
     const eventResults = new Map<string, Record<string, unknown>>();
     for (const eventCall of eventCalls) {
@@ -710,11 +760,14 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       encounterCalls.length > 0 ||
       restCalls.length > 0 ||
       companionCalls.length > 0 ||
-      // The model asked for a chapter recall in order to use the answer.
+      // The model asked for a chapter recall or lore search in order to
+      // use the answer.
       recallCalls.length > 0 ||
+      searchLoreCalls.length > 0 ||
       ((locationCalls.length > 0 ||
         eventCalls.length > 0 ||
         whisperCalls.length > 0 ||
+        noteCalls.length > 0 ||
         setNpcCalls.length > 0) &&
         !turn.narrationParts.length);
 
@@ -799,6 +852,26 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         ...(recallCall.id ? { tool_call_id: recallCall.id } : {}),
         content: JSON.stringify(
           recallResults.get(recallCall.id ?? "recall_story") ?? { ok: true },
+        ),
+      });
+    }
+
+    for (const searchLoreCall of searchLoreCalls) {
+      turn.conversation.push({
+        role: "tool",
+        ...(searchLoreCall.id ? { tool_call_id: searchLoreCall.id } : {}),
+        content: JSON.stringify(
+          searchLoreResults.get(searchLoreCall.id ?? "search_lore") ?? { ok: true },
+        ),
+      });
+    }
+
+    for (const noteCall of noteCalls) {
+      turn.conversation.push({
+        role: "tool",
+        ...(noteCall.id ? { tool_call_id: noteCall.id } : {}),
+        content: JSON.stringify(
+          noteResults.get(noteCall.id ?? "write_campaign_note") ?? { ok: true },
         ),
       });
     }
@@ -911,14 +984,26 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       if (turn.mutationCount >= MUTATION_CAP_PER_TURN) {
         result = { error: "Mutation limit reached for this turn." };
       } else {
-        result = applyDmMutation(
+        // inventoryApprovals: item/gold changes to player characters stage
+        // as offers the owning player answers; null falls through to the
+        // normal auto-apply path.
+        const proposed = maybeProposeItemChange(
           campaign,
           turn.id,
           mutationCall.name,
           mutationCall.rawArguments,
-          sheets,
           sheetsById,
-        ).result;
+        );
+        result =
+          proposed ??
+          applyDmMutation(
+            campaign,
+            turn.id,
+            mutationCall.name,
+            mutationCall.rawArguments,
+            sheets,
+            sheetsById,
+          ).result;
         if (!("error" in result)) {
           turn.mutationCount += 1;
         }
@@ -1199,6 +1284,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
   if (!failed) {
     await maybeCloseChapter(campaignId, { beatCompleted });
     await maybeCompactHistory(campaignId);
+    // The world-simulation heartbeat: pure dice, sparks land in the NEXT
+    // turn's prompt, so background clocks never trigger model calls.
+    tickWorldState(campaignId);
   }
 }
 
@@ -1286,64 +1374,6 @@ async function ensureWhisperReplies(context: TurnContext, turn: DmTurn) {
     turn.answeredWhisperCharacterIds.push(whisper.characterId);
   }
   saveDmTurn(turn);
-}
-
-// recall_story: return a past chapter's full summary by number, or the
-// best matches for a query over titles, summaries, and highlights.
-function handleRecallStory(campaignId: string, rawArguments: string): Record<string, unknown> {
-  let args: { chapter?: unknown; query?: unknown };
-  try {
-    args = JSON.parse(rawArguments || "{}");
-  } catch {
-    return { error: "Invalid arguments." };
-  }
-  const closed = listChapters(campaignId).filter((chapter) => chapter.status === "closed");
-  if (!closed.length) {
-    return { error: "No closed chapters yet; the story is still in its first chapter." };
-  }
-  const describe = (chapter: (typeof closed)[number]) => ({
-    chapter: chapter.index,
-    title: chapter.title,
-    summary: chapter.summary,
-    highlights: chapter.highlights,
-  });
-  const requested = Number(args.chapter);
-  if (Number.isInteger(requested) && requested > 0) {
-    const match = closed.find((chapter) => chapter.index === requested);
-    return match
-      ? describe(match)
-      : {
-          error: `No closed chapter ${requested}.`,
-          availableChapters: closed.map((chapter) => `${chapter.index}. ${chapter.title}`),
-        };
-  }
-  const query = String(args.query ?? "").trim().toLowerCase();
-  if (!query) {
-    return {
-      error: "Give a chapter number or a query.",
-      availableChapters: closed.map((chapter) => `${chapter.index}. ${chapter.title}`),
-    };
-  }
-  const terms = query.split(/\s+/).filter((term) => term.length > 2);
-  const scored = closed
-    .map((chapter) => {
-      const haystack =
-        `${chapter.title} ${chapter.summary} ${chapter.highlights.join(" ")}`.toLowerCase();
-      const score = terms.reduce(
-        (sum, term) => sum + (haystack.includes(term) ? 1 : 0),
-        haystack.includes(query) ? 3 : 0,
-      );
-      return { chapter, score };
-    })
-    .filter((entry) => entry.score > 0)
-    .sort((a, b) => b.score - a.score);
-  if (!scored.length) {
-    return {
-      error: "Nothing matched.",
-      availableChapters: closed.map((chapter) => `${chapter.index}. ${chapter.title}`),
-    };
-  }
-  return { matches: scored.slice(0, 2).map((entry) => describe(entry.chapter)) };
 }
 
 // record_event: a lasting milestone on the character's permanent record

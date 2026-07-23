@@ -18,9 +18,12 @@ import { HelpDialog } from "@/components/HelpDialog";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { CharacterGate } from "@/app/campaigns/[campaignId]/CharacterGate";
 import { Composer, type InputKind } from "@/app/campaigns/[campaignId]/Composer";
+import { ItemProposalBar } from "@/app/campaigns/[campaignId]/ItemProposalBar";
 import { DiceOverlay } from "@/app/campaigns/[campaignId]/DiceOverlay";
 import { LevelUpDialog } from "@/app/campaigns/[campaignId]/LevelUpDialog";
+import { LoreCheckDialog } from "@/app/campaigns/[campaignId]/LoreCheckDialog";
 import { MessageList } from "@/app/campaigns/[campaignId]/MessageList";
+import type { CampaignMessage } from "@/lib/db/messages";
 import {
   BottomTabBar,
   buildPanelTabs,
@@ -40,12 +43,14 @@ function subscribeDicePref(callback: () => void) {
 export function SessionView({
   state,
   refreshNotes,
+  refreshFacts,
   refreshSideChat,
   refreshWhispers,
   refreshBattleMap,
 }: {
   state: CampaignState;
   refreshNotes: () => Promise<void>;
+  refreshFacts: () => Promise<void>;
   refreshSideChat: () => Promise<void>;
   refreshWhispers: () => Promise<void>;
   refreshBattleMap: () => Promise<void>;
@@ -72,6 +77,12 @@ export function SessionView({
   // "Message" on a party card: SidePanel switches to the chat tab and opens
   // the 1:1 thread with this user.
   const [chatTarget, setChatTarget] = useState<string | null>(null);
+  // Lore check: the flagged message plus whatever text was selected when
+  // the flag was raised (captured at click, before the dialog steals focus).
+  const [loreCheck, setLoreCheck] = useState<{
+    message: CampaignMessage;
+    selection: string;
+  } | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const dice3d = useSyncExternalStore(
@@ -415,6 +426,47 @@ export function SessionView({
                   }
                 : undefined
             }
+            onLoreCheck={(message) => {
+              const selection = window.getSelection()?.toString().trim() ?? "";
+              setLoreCheck({
+                message,
+                selection: selection.length > 3 ? selection : "",
+              });
+            }}
+            onPinCanon={
+              isLead
+                ? async (message) => {
+                    // The lead's selected text inside the message wins;
+                    // otherwise the passage's opening is pinned.
+                    const selection = window.getSelection()?.toString().trim() ?? "";
+                    const excerpt = (selection.length > 3 ? selection : message.content)
+                      .trim()
+                      .slice(0, 300);
+                    if (!excerpt) {
+                      return;
+                    }
+                    await fetch(`/api/campaigns/${campaign.id}/facts`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        category: "lore",
+                        subject: "",
+                        fact: excerpt,
+                        sourceSeq: message.seq,
+                      }),
+                    });
+                    await refreshFacts();
+                  }
+                : undefined
+            }
+          />
+
+          <ItemProposalBar
+            campaignId={campaign.id}
+            proposals={state.itemProposals}
+            sheets={sheets}
+            meUserId={me.id}
+            isLead={isLead}
           />
 
           {needsCharacter ? (
@@ -460,8 +512,10 @@ export function SessionView({
           locations={locations}
           chapters={state.chapters}
           notes={state.notes}
+          facts={state.facts}
           characterEvents={state.characterEvents}
           refreshNotes={refreshNotes}
+          refreshFacts={refreshFacts}
           sideThreads={state.sideThreads}
           refreshSideChat={refreshSideChat}
           whispers={state.whispers}
@@ -499,6 +553,16 @@ export function SessionView({
       {dice3d ? <DiceOverlay latestRoll={state.latestRoll} enabled /> : null}
 
       <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+
+      {loreCheck ? (
+        <LoreCheckDialog
+          campaignId={campaign.id}
+          message={loreCheck.message}
+          selection={loreCheck.selection}
+          isLead={isLead}
+          onClose={() => setLoreCheck(null)}
+        />
+      ) : null}
 
       {myLevelUp &&
       mySheet &&

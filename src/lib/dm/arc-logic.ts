@@ -1,4 +1,10 @@
 import { stripReasoningArtifacts } from "../story-prompt.ts";
+import {
+  applyWorldArcUpdates,
+  normalizeWorldArcs,
+  type WorldArc,
+  type WorldArcUpdate,
+} from "./world-arc-logic.ts";
 
 // Pure story-arc logic, kept free of alias imports so node test scripts
 // (scripts/test-arc.mjs) can load it directly. The arc is the DM's secret
@@ -154,6 +160,9 @@ export type StoryArc = {
   cast: ArcNpc[];
   events: ArcEvent[];
   subArcs: SubArc[];
+  // Off-screen clocks advancing on background dice (world-arc-logic.ts).
+  // Additive: [] on every arc that predates the world-simulation engine.
+  worldArcs: WorldArc[];
   updatedAt: string;
 };
 
@@ -185,6 +194,9 @@ export type ArcDelta = {
     boss?: { name: string; detail: string } | null;
     allies?: string[];
   }>;
+  // Chapter-close stance judgments for the off-screen world arcs; ignoring
+  // or fleeing may carry a permanent consequence.
+  worldArcUpdates: WorldArcUpdate[];
 };
 
 // A whole new act, appended when the party plays past the current finale.
@@ -548,6 +560,7 @@ export function normalizeStoryArc(raw: unknown): StoryArc | null {
     cast,
     events,
     subArcs,
+    worldArcs: normalizeWorldArcs(record.worldArcs),
     updatedAt: str(record.updatedAt, 40) || new Date().toISOString(),
   };
 }
@@ -813,6 +826,32 @@ export function parseArcDeltaJson(raw: string): ArcDelta | null {
     }
   }
 
+  const worldArcUpdates: ArcDelta["worldArcUpdates"] = [];
+  for (const entry of Array.isArray(record.worldArcUpdates) ? record.worldArcUpdates : []) {
+    const update = entry as Record<string, unknown> | null;
+    const id = str(update?.id, 12);
+    if (!id) {
+      continue;
+    }
+    const item: ArcDelta["worldArcUpdates"][number] = { id };
+    if (
+      update?.stance === "unaware" ||
+      update?.stance === "ignoring" ||
+      update?.stance === "opposing" ||
+      update?.stance === "aiding" ||
+      update?.stance === "fleeing"
+    ) {
+      item.stance = update.stance;
+    }
+    const consequence = str(update?.consequence, DETAIL_CAP);
+    if (consequence) {
+      item.consequence = consequence;
+    }
+    if (item.stance || item.consequence) {
+      worldArcUpdates.push(item);
+    }
+  }
+
   return {
     beatsDone: beatNumbers(record.beatsDone),
     beatsSkipped: beatNumbers(record.beatsSkipped),
@@ -827,6 +866,7 @@ export function parseArcDeltaJson(raw: string): ArcDelta | null {
     newCast: parsePlannedCast(record.newCast, MAX_NEW_CAST),
     beatRewrites,
     sketchUpdates,
+    worldArcUpdates,
   };
 }
 
@@ -1039,6 +1079,11 @@ function cloneArc(arc: StoryArc): StoryArc {
     events: arc.events.map((event) => ({ ...event })),
     subArcs: arc.subArcs.map((subArc) => ({ ...subArc })),
     saga: cloneSaga(arc.saga),
+    worldArcs: arc.worldArcs.map((worldArc) => ({
+      ...worldArc,
+      rungs: [...worldArc.rungs],
+      consequences: [...worldArc.consequences],
+    })),
   };
 }
 
@@ -1165,6 +1210,8 @@ export function applyArcDelta(arc: StoryArc, delta: ArcDelta): StoryArc {
   }
 
   appendEvents(next, delta.newEvents.slice(0, MAX_NEW_EVENTS));
+
+  next.worldArcs = applyWorldArcUpdates(next.worldArcs, delta.worldArcUpdates ?? []);
 
   next.updatedAt = new Date().toISOString();
   return next;

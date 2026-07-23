@@ -6,6 +6,7 @@ import type { CampaignDifficulty } from "@/lib/campaign-types";
 import type { GameSettings } from "@/lib/schemas/game-settings";
 import { EditCampaignDialog } from "@/app/campaigns/[campaignId]/EditCampaignDialog";
 import { GameSettingsPanel } from "@/app/campaigns/[campaignId]/GameSettingsPanel";
+import { RulesPanel } from "@/app/campaigns/[campaignId]/RulesPanel";
 
 // Setup tab of the session side panel: the lead edits campaign details and
 // game settings mid-adventure; everyone else sees a read-only summary.
@@ -59,6 +60,16 @@ export function SessionSettings({
           settings={campaign.gameSettings}
           isLead={isLead}
         />
+      ) : null}
+
+      {campaign.gameSettings ? (
+        <div className="mt-3">
+          <RulesPanel
+            campaignId={campaign.id}
+            settings={campaign.gameSettings}
+            isLead={isLead}
+          />
+        </div>
       ) : null}
 
       {editing ? <EditCampaignDialog campaign={campaign} onClose={() => setEditing(false)} /> : null}

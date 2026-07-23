@@ -521,6 +521,22 @@ export function setQuestLog(campaignId: string, quests: string[]) {
     .run(JSON.stringify(quests.slice(0, 20)), nowIso(), campaignId);
 }
 
+// The per-turn world-simulation counters and pending sparks
+// (src/lib/dm/world-tick-logic.ts). Raw string accessors: parsing lives in
+// the pure logic module so test scripts can exercise it directly.
+export function getWorldTickJson(campaignId: string): string {
+  const row = getDatabase()
+    .prepare(`SELECT world_tick_json FROM campaigns WHERE id = ?`)
+    .get(campaignId) as { world_tick_json?: string } | undefined;
+  return row?.world_tick_json ?? "";
+}
+
+export function setWorldTickJson(campaignId: string, serialized: string) {
+  getDatabase()
+    .prepare(`UPDATE campaigns SET world_tick_json = ? WHERE id = ?`)
+    .run(serialized, campaignId);
+}
+
 export function getFloor(campaignId: string): Floor {
   const row = getDatabase()
     .prepare(`SELECT floor_json FROM campaigns WHERE id = ?`)

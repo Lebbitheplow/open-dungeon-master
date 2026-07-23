@@ -1,9 +1,20 @@
 import { getDatabase, nowIso } from "@/lib/db/core";
+import {
+  parseBonds,
+  parseGoals,
+  parsePersonality,
+  parsePressure,
+  parseRelations,
+  type NpcAgency,
+} from "@/lib/dm/npc-logic";
 
 // Persistent NPCs and their disposition toward the party. Before this, an
 // NPC's attitude lived only in the model's narration and reset every turn;
 // now a grudge or a friendship survives sessions and drives the DC of the
-// next social check (src/lib/dm/social.ts).
+// next social check (src/lib/dm/social.ts). The agency columns add inner
+// life on top: personality axes, goals advanced by background dice, bonds
+// per character, NPC-to-NPC relations, and a pressure meter
+// (src/lib/dm/npc-logic.ts).
 
 export type Attitude = "hostile" | "indifferent" | "friendly";
 
@@ -15,6 +26,8 @@ export type Npc = {
   trait: string;
   location: string;
   lastShiftTurn: string;
+  agency: NpcAgency;
+  arcCastId: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -27,6 +40,12 @@ type NpcRow = {
   trait: string;
   location: string;
   last_shift_turn: string;
+  personality_json: string;
+  goals_json: string;
+  relations_json: string;
+  bonds_json: string;
+  pressure_json: string;
+  arc_cast_id: string;
   created_at: string;
   updated_at: string;
 };
@@ -40,6 +59,14 @@ function mapNpc(row: NpcRow): Npc {
     trait: row.trait,
     location: row.location,
     lastShiftTurn: row.last_shift_turn,
+    agency: {
+      personality: parsePersonality(row.personality_json),
+      goals: parseGoals(row.goals_json),
+      relations: parseRelations(row.relations_json),
+      bonds: parseBonds(row.bonds_json),
+      pressure: parsePressure(row.pressure_json),
+    },
+    arcCastId: row.arc_cast_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -124,4 +151,37 @@ export function setNpcAttitude(id: string, attitude: Attitude, turnId: string): 
 
 export function deleteNpc(id: string): boolean {
   return getDatabase().prepare(`DELETE FROM npcs WHERE id = ?`).run(id).changes > 0;
+}
+
+// Writes any subset of the agency state; untouched pieces keep their column.
+export function patchNpcAgency(
+  id: string,
+  patch: Partial<NpcAgency> & { arcCastId?: string },
+): Npc | null {
+  const db = getDatabase();
+  const row = db.prepare(`SELECT * FROM npcs WHERE id = ?`).get(id) as NpcRow | undefined;
+  if (!row) {
+    return null;
+  }
+  db.prepare(
+    `UPDATE npcs
+     SET personality_json = ?, goals_json = ?, relations_json = ?,
+         bonds_json = ?, pressure_json = ?, arc_cast_id = ?, updated_at = ?
+     WHERE id = ?`,
+  ).run(
+    patch.personality !== undefined
+      ? patch.personality
+        ? JSON.stringify(patch.personality)
+        : ""
+      : row.personality_json,
+    patch.goals !== undefined ? JSON.stringify(patch.goals) : row.goals_json,
+    patch.relations !== undefined ? JSON.stringify(patch.relations) : row.relations_json,
+    patch.bonds !== undefined ? JSON.stringify(patch.bonds) : row.bonds_json,
+    patch.pressure !== undefined ? JSON.stringify(patch.pressure) : row.pressure_json,
+    patch.arcCastId !== undefined ? patch.arcCastId : row.arc_cast_id,
+    nowIso(),
+    id,
+  );
+  const updated = db.prepare(`SELECT * FROM npcs WHERE id = ?`).get(id) as NpcRow | undefined;
+  return updated ? mapNpc(updated) : null;
 }

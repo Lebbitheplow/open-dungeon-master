@@ -10,8 +10,13 @@ import {
   insertCampaignMessage,
   listMessagesInSeqRange,
 } from "@/lib/db/messages";
-import { publishPersisted, publishWithSeq } from "@/lib/events";
+import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
 import { parseChapterJson, shouldCloseChapter } from "@/lib/dm/chapter-logic";
+import { recordExtractedFacts } from "@/lib/db/facts";
+import type { FactCandidate } from "@/lib/dm/fact-logic";
+import { advanceNpcAgency } from "@/lib/dm/npc-agency";
+import { captureBoundarySnapshot } from "@/lib/db/snapshots";
+import { indexChapter } from "@/lib/dm/memory-index";
 import { arcExhausted } from "@/lib/dm/arc-logic";
 import { judgeBeatCompleted, refreshStoryArc } from "@/lib/dm/arc";
 import { arcTextTimeoutMs } from "@/lib/model-client";
@@ -177,7 +182,12 @@ export async function maybeCloseChapter(
   const previous = previousChapterLines(campaignId, chapter.index);
   setDmStatus(campaignId, "writing_chapter");
 
-  let parsed = { title: `Chapter ${chapter.index}`, summary: "", highlights: [] as string[] };
+  let parsed = {
+    title: `Chapter ${chapter.index}`,
+    summary: "",
+    highlights: [] as string[],
+    facts: [] as FactCandidate[],
+  };
   try {
     const { message, error } = await requestDmMessage(
       campaign.settings,
@@ -185,7 +195,7 @@ export async function maybeCloseChapter(
         {
           role: "system",
           content:
-            'You are closing a chapter of an ongoing D&D 5e campaign. Return STRICT JSON only, no code fences, shaped: {"title": string, "summary": string, "highlights": string[]}. title: evocative, at most 60 characters, no surrounding quotes. summary: past tense, at most 250 words, preserving plot threads, NPCs, promises, loot, and decisions. highlights: 3 to 6 one-sentence standout moments.',
+            'You are closing a chapter of an ongoing D&D 5e campaign. Return STRICT JSON only, no code fences, shaped: {"title": string, "summary": string, "highlights": string[], "facts": [{"category": "location"|"npc"|"promise"|"world"|"party"|"lore", "subject": string, "fact": string}]}. title: evocative, at most 60 characters, no surrounding quotes. summary: past tense, at most 250 words, preserving plot threads, NPCs, promises, loot, and decisions. highlights: 3 to 6 one-sentence standout moments. facts: up to 8 durable world-state facts this chapter established (who is where, who holds what, alliances, deaths, promises, debts); subject names who or what each fact is about; fact is one past-tense sentence under 300 characters; empty array if nothing durable changed.',
         },
         {
           role: "user",
@@ -207,10 +217,30 @@ export async function maybeCloseChapter(
     // never wedges on a chapter boundary.
   }
 
-  const result = closeChapterRow(chapter.id, { ...parsed, seqEnd });
+  const result = closeChapterRow(chapter.id, {
+    title: parsed.title,
+    summary: parsed.summary,
+    highlights: parsed.highlights,
+    seqEnd,
+  });
   if (!result) {
     setDmStatus(campaignId, "idle");
     return;
+  }
+
+  // Fold the chapter's durable facts into the world-state sheet (deduped;
+  // same-subject facts supersede what was on file). Never blocks a close.
+  if (parsed.facts.length) {
+    try {
+      const inserted = recordExtractedFacts(campaignId, parsed.facts, "chapter", {
+        sourceSeq: seqEnd,
+      });
+      if (inserted.length) {
+        publishEphemeral(campaignId, "facts_updated", {});
+      }
+    } catch (error) {
+      console.error("[facts] chapter extraction failed", error);
+    }
   }
 
   beatCounts.delete(campaignId);
@@ -240,6 +270,35 @@ export async function maybeCloseChapter(
   // Chapter boundaries are the arc's heartbeat: mark beats the chapter
   // accomplished, settle or open sub-arcs. Never throws (arc.ts swallows).
   await refreshStoryArc(campaignId, result.closed);
+
+  // NPC lives move on between chapters: pressure counters, background goal
+  // dice, and goal collisions, all deterministic. Never blocks a close.
+  try {
+    advanceNpcAgency(campaignId, transcript);
+  } catch (error) {
+    console.error("[npc-agency] chapter pass failed", error);
+  }
+
+  // Freeze the settled world as the new chapter's rewind point, after every
+  // close-time cascade (facts, XP, arc, NPC agency) has landed. Never
+  // blocks a close.
+  try {
+    captureBoundarySnapshot(campaignId, result.opened.index, seqEnd);
+  } catch (error) {
+    console.error("[rollback] boundary snapshot failed", error);
+  }
+
+  // Fire-and-forget semantic indexing of the sealed chapter (CPU-only, so
+  // it can run alongside GPU turns without contention).
+  void indexChapter(campaignId, result.closed.id);
+}
+
+// Chapter rewind (src/lib/dm/rollback.ts) clears the in-memory beat
+// counters; stale counts would close the reopened chapter on beats from the
+// timeline that no longer happened.
+export function resetChapterMemory(campaignId: string) {
+  beatCounts.delete(campaignId);
+  lastJudged.delete(campaignId);
 }
 
 function previousChapterLines(campaignId: string, beforeIndex: number): string {

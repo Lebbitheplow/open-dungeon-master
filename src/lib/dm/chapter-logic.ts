@@ -1,4 +1,5 @@
 import { stripReasoningArtifacts } from "../story-prompt.ts";
+import { normalizeCandidate, type FactCandidate } from "./fact-logic.ts";
 
 // Pure chapter-close decisions, kept free of alias imports so node test
 // scripts (scripts/test-chapters.mjs) can load them directly.
@@ -39,11 +40,18 @@ export function shouldCloseChapter(
 
 // Parse the model's chapter JSON with a never-wedge fallback: any failure
 // still yields a usable title so the campaign is never stuck mid-close.
+// The facts array is a later addition; legacy output without it (and models
+// that drop it) parse exactly as before with facts: [].
 export function parseChapterJson(
   raw: string,
   chapterIndex: number,
-): { title: string; summary: string; highlights: string[] } {
-  const fallback = { title: `Chapter ${chapterIndex}`, summary: "", highlights: [] as string[] };
+): { title: string; summary: string; highlights: string[]; facts: FactCandidate[] } {
+  const fallback = {
+    title: `Chapter ${chapterIndex}`,
+    summary: "",
+    highlights: [] as string[],
+    facts: [] as FactCandidate[],
+  };
   const cleaned = stripReasoningArtifacts(raw || "")
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/```\s*$/, "")
@@ -58,13 +66,20 @@ export function parseChapterJson(
       title?: unknown;
       summary?: unknown;
       highlights?: unknown;
+      facts?: unknown;
     };
     const title = String(parsed.title ?? "").trim().slice(0, 80);
     const summary = String(parsed.summary ?? "").trim();
     const highlights = Array.isArray(parsed.highlights)
       ? parsed.highlights.map((entry) => String(entry).trim()).filter(Boolean).slice(0, 6)
       : [];
-    return { title: title || fallback.title, summary, highlights };
+    const facts = Array.isArray(parsed.facts)
+      ? parsed.facts
+          .map((entry) => normalizeCandidate((entry ?? {}) as Record<string, unknown>))
+          .filter((entry): entry is FactCandidate => entry !== null)
+          .slice(0, 8)
+      : [];
+    return { title: title || fallback.title, summary, highlights, facts };
   } catch {
     return fallback;
   }

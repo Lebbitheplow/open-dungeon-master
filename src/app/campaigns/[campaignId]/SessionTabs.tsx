@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BookMarked,
   BookOpen,
   Map as MapIcon,
   MessageSquareText,
@@ -21,6 +22,7 @@ export type PanelTab =
   | "battle"
   | "map"
   | "story"
+  | "facts"
   | "notes"
   | "chat"
   | "log"
@@ -52,6 +54,7 @@ export function buildPanelTabs({
       ? ([["map", "Map", MapIcon, "The scene map and discovered locations."]] as PanelTabDef[])
       : []),
     ["story", "Story", BookOpen, "Chapters and the tale so far."],
+    ["facts", "Facts", BookMarked, "The world-state record: facts the DM never contradicts."],
     ["notes", "Notes", StickyNote, "Suggest story notes; the party lead approves them."],
     ["chat", "Chat", MessagesSquare, "Side chat between players. The DM does not see it."],
     ["log", "Log", ScrollText, "Dice rolls and DM stat changes, audited."],

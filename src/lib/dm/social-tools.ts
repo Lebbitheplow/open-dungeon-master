@@ -5,10 +5,19 @@ import { insertRoll } from "@/lib/db/rolls";
 import {
   getNpcByName,
   listNpcs,
+  patchNpcAgency,
   setNpcAttitude,
   upsertNpc,
   type Attitude,
+  type Npc,
 } from "@/lib/db/npcs";
+import { listSheets } from "@/lib/db/sheets";
+import {
+  agencyFragment,
+  derivePersonality,
+  driftPersonality,
+  shiftBond,
+} from "@/lib/dm/npc-logic";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
@@ -61,6 +70,15 @@ export const socialTools: ToolDef[] = [
             description: "A short note on their personality, bond, or goal, for your own recall.",
           },
           location: { type: "string", description: "Where they are usually found." },
+          goal: {
+            type: "string",
+            description:
+              "What they are actively working toward right now (a scheme, an errand, a hunt). The server advances it in the background between chapters, so give real NPCs real goals.",
+          },
+          ambition: {
+            type: "string",
+            description: "Their long-term defining want, if the story has revealed one.",
+          },
         },
         required: ["name"],
       },
@@ -118,6 +136,54 @@ function publishRoll(campaignId: string, roll: ReturnType<typeof insertRoll>) {
   publishWithSeq(campaignId, allocateSeq(campaignId), "roll_result", { roll, source: "digital" });
 }
 
+// ---- agency bootstrap shared by set_npc and npc_reaction ----
+
+// Fills in what registration can derive for free: a deterministic starting
+// personality, the session goal / ambition the model supplied, and a link
+// to the story arc's planned cast when the name matches (which also seeds
+// the ambition from the cast agenda the arc pass wrote).
+function bootstrapAgency(
+  campaign: Campaign,
+  npc: Npc,
+  supplied: { goal?: string; ambition?: string },
+): Npc {
+  const patch: Parameters<typeof patchNpcAgency>[1] = {};
+  if (!npc.agency.personality) {
+    patch.personality = derivePersonality(npc.name, npc.attitude, npc.trait);
+  }
+  const cast = !npc.arcCastId
+    ? campaign.storyArc?.cast?.find(
+        (entry) =>
+          entry.status !== "gone" &&
+          entry.name.trim().toLowerCase() === npc.name.trim().toLowerCase(),
+      )
+    : undefined;
+  if (cast) {
+    patch.arcCastId = cast.id;
+  }
+  const goals = { ...npc.agency.goals };
+  let goalsChanged = false;
+  if (supplied.goal?.trim()) {
+    const text = supplied.goal.trim().slice(0, 200);
+    if (goals.session?.text !== text) {
+      goals.session = { text, progress: 0, target: 3 };
+      goalsChanged = true;
+    }
+  }
+  const ambition = supplied.ambition?.trim() || (!goals.ambition ? cast?.agenda?.trim() : "");
+  if (ambition && goals.ambition !== ambition) {
+    goals.ambition = ambition.slice(0, 300);
+    goalsChanged = true;
+  }
+  if (goalsChanged) {
+    patch.goals = goals;
+  }
+  if (!Object.keys(patch).length) {
+    return npc;
+  }
+  return patchNpcAgency(npc.id, patch) ?? npc;
+}
+
 // ---- set_npc ----
 
 const setNpcSchema = z.object({
@@ -125,6 +191,8 @@ const setNpcSchema = z.object({
   attitude: z.enum(["hostile", "indifferent", "friendly"]).optional(),
   trait: z.string().max(300).optional(),
   location: z.string().max(120).optional(),
+  goal: z.string().max(300).optional(),
+  ambition: z.string().max(300).optional(),
 });
 
 export function handleSetNpc(campaign: Campaign, rawArguments: string): Record<string, unknown> {
@@ -134,17 +202,22 @@ export function handleSetNpc(campaign: Campaign, rawArguments: string): Record<s
   } catch {
     return { error: "Invalid arguments: set_npc needs at least a name." };
   }
-  const npc = upsertNpc({
-    campaignId: campaign.id,
-    name: args.name,
-    attitude: args.attitude,
-    trait: args.trait,
-    location: args.location,
-  });
+  const npc = bootstrapAgency(
+    campaign,
+    upsertNpc({
+      campaignId: campaign.id,
+      name: args.name,
+      attitude: args.attitude,
+      trait: args.trait,
+      location: args.location,
+    }),
+    { goal: args.goal, ambition: args.ambition },
+  );
   return {
     ok: true,
     npc: npc.name,
     attitude: npc.attitude,
+    ...(npc.agency.goals.session ? { goal: npc.agency.goals.session.text } : {}),
     note: `${npc.name} is tracked as ${npc.attitude}. Their attitude persists until the story or a social_check changes it.`,
   };
 }
@@ -182,13 +255,17 @@ export function handleNpcReaction(
   publishRoll(campaign.id, roll);
   turn.rollIds.push(roll.id);
   const attitude = reactionAttitude(outcome.total);
-  const npc = upsertNpc({
-    campaignId: campaign.id,
-    name: args.name,
-    attitude,
-    trait: args.trait,
-    location: args.location,
-  });
+  const npc = bootstrapAgency(
+    campaign,
+    upsertNpc({
+      campaignId: campaign.id,
+      name: args.name,
+      attitude,
+      trait: args.trait,
+      location: args.location,
+    }),
+    {},
+  );
   return {
     ok: true,
     npc: npc.name,
@@ -269,6 +346,14 @@ export function handleSocialCheck(
     if (updated) {
       finalAttitude = updated.attitude;
       shifted = true;
+      // A decisive shift also moves this character's personal bond and
+      // drifts the NPC's personality, under the same per-exchange guard.
+      const personality =
+        npc.agency.personality ?? derivePersonality(npc.name, npc.attitude, npc.trait);
+      patchNpcAgency(npc.id, {
+        bonds: shiftBond(npc.agency.bonds, sheet.id, outcome.direction ?? "up"),
+        personality: driftPersonality(personality, args.approach, outcome.direction ?? "up"),
+      });
     }
   }
 
@@ -308,17 +393,23 @@ function buildSocialNote(
   return base;
 }
 
-// A compact roster for the GAME STATE block: tracked NPCs and their attitude.
+// A compact roster for the GAME STATE block: tracked NPCs, their attitude,
+// and a bounded agency fragment (personality leans, bonds, goals, pressure).
 export function npcRosterForPrompt(campaignId: string): Array<{
   name: string;
   attitude: Attitude;
   trait: string;
   location: string;
+  agency: string;
 }> {
+  const bondNames = new Map(
+    listSheets(campaignId).map((sheet) => [sheet.id, sheet.name]),
+  );
   return listNpcs(campaignId).map((npc) => ({
     name: npc.name,
     attitude: npc.attitude,
     trait: npc.trait,
     location: npc.location,
+    agency: agencyFragment(npc.agency, bondNames),
   }));
 }

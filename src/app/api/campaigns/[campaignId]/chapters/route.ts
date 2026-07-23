@@ -1,5 +1,6 @@
 import { isErrorResponse, requireLead, requireMember } from "@/lib/campaign-api";
 import { ensureOpenChapter, listChapters } from "@/lib/db/chapters";
+import { listRewindableChapters } from "@/lib/db/snapshots";
 import { countMessagesUpToSeq } from "@/lib/db/messages";
 import { latestSeq } from "@/lib/db/campaigns";
 import { maybeCloseChapter } from "@/lib/dm/chapter-close";
@@ -22,7 +23,12 @@ export async function GET(
   const openMessageCount =
     countMessagesUpToSeq(campaignId, latestSeq(campaignId)) -
     (open.seqStart > 0 ? countMessagesUpToSeq(campaignId, open.seqStart - 1) : 0);
-  return Response.json({ chapters: listChapters(campaignId), openMessageCount });
+  return Response.json({
+    chapters: listChapters(campaignId),
+    openMessageCount,
+    // Chapters the lead may rewind to (a boundary snapshot exists).
+    rewindableChapters: listRewindableChapters(campaignId),
+  });
 }
 
 // Party lead: close the current chapter now. Runs on the DM queue so the

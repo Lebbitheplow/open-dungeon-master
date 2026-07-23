@@ -1,4 +1,5 @@
 import { getDatabase, nowIso } from "@/lib/db/core";
+import { embed, vectorToBuffer } from "@/lib/embeddings";
 
 // Campaign and character notes. Campaign scope (characterId null) covers the
 // lead's public party notes, member suggestions (public + pending), and
@@ -11,12 +12,16 @@ import { getDatabase, nowIso } from "@/lib/db/core";
 
 export type NoteVisibility = "public" | "private";
 export type NoteStatus = "active" | "pending";
+// 'dm' marks a suggestion the AI DM wrote via write_campaign_note; the row
+// still carries a real member's user id to satisfy the FK.
+export type NoteAuthorKind = "user" | "dm";
 
 export type Note = {
   id: string;
   campaignId: string;
   characterId: string | null;
   authorUserId: string;
+  authorKind: NoteAuthorKind;
   visibility: NoteVisibility;
   status: NoteStatus;
   pinned: boolean;
@@ -32,6 +37,7 @@ type NoteRow = {
   campaign_id: string;
   character_id: string | null;
   author_user_id: string;
+  author_kind: NoteAuthorKind;
   visibility: NoteVisibility;
   status: NoteStatus;
   pinned: number;
@@ -48,6 +54,7 @@ function mapNote(row: NoteRow): Note {
     campaignId: row.campaign_id,
     characterId: row.character_id,
     authorUserId: row.author_user_id,
+    authorKind: row.author_kind === "dm" ? "dm" : "user",
     visibility: row.visibility,
     status: row.status,
     pinned: row.pinned === 1,
@@ -63,6 +70,7 @@ export function insertNote(input: {
   campaignId: string;
   characterId: string | null;
   authorUserId: string;
+  authorKind?: NoteAuthorKind;
   visibility: NoteVisibility;
   status: NoteStatus;
   title: string;
@@ -75,10 +83,10 @@ export function insertNote(input: {
     .prepare(
       `
         INSERT INTO campaign_notes (
-          id, campaign_id, character_id, author_user_id, visibility, status,
-          pinned, title, body, seq, created_at, updated_at
+          id, campaign_id, character_id, author_user_id, author_kind,
+          visibility, status, pinned, title, body, seq, created_at, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)
       `,
     )
     .run(
@@ -86,6 +94,7 @@ export function insertNote(input: {
       input.campaignId,
       input.characterId,
       input.authorUserId,
+      input.authorKind ?? "user",
       input.visibility,
       input.status,
       input.title.slice(0, 120),
@@ -94,6 +103,7 @@ export function insertNote(input: {
       now,
       now,
     );
+  void embedNote(id);
   return getNoteById(id)!;
 }
 
@@ -124,7 +134,29 @@ export function updateNote(
       nowIso(),
       noteId,
     );
+  if (patch.title !== undefined || patch.body !== undefined) {
+    void embedNote(noteId);
+  }
   return getNoteById(noteId);
+}
+
+// Fire-and-forget MiniLM embedding for search_lore; NULL just means the
+// note only matches by keyword.
+async function embedNote(noteId: string) {
+  try {
+    const note = getNoteById(noteId);
+    if (!note) {
+      return;
+    }
+    const [vector] = await embed([`${note.title}\n${note.body}`]);
+    if (vector) {
+      getDatabase()
+        .prepare(`UPDATE campaign_notes SET embedding = ? WHERE id = ?`)
+        .run(vectorToBuffer(vector), noteId);
+    }
+  } catch (error) {
+    console.error("[notes] embedding failed", error);
+  }
 }
 
 export function deleteNote(noteId: string): boolean {
