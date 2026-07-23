@@ -26,6 +26,7 @@ import { HowToPlayDialog } from "@/components/HowToPlayDialog";
 import { Tooltip } from "@/components/ui/Tooltip";
 import AuthForm from "@/app/AuthForm";
 import { ChangePasswordForm } from "@/app/ChangePasswordForm";
+import { ExportMenu } from "@/app/campaigns/[campaignId]/ExportMenu";
 
 export default function Home() {
   const [checking, setChecking] = useState(true);
@@ -362,22 +363,25 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
                       {campaign.playerCount}/{campaign.maxPlayers}
                       {campaign.maxPlayers === 1 ? " · solo" : " adventurers"}
                     </span>
-                    {campaign.role === "owner" ? (
-                      <Tooltip content="Delete this campaign">
-                        <button
-                          type="button"
-                          aria-label="Delete this campaign"
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            deleteCampaign(campaign);
-                          }}
-                          className="rounded-md p-1 text-stone-600 opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
-                        >
-                          <Trash2 className="size-4" />
-                        </button>
-                      </Tooltip>
-                    ) : null}
+                    <span className="flex items-center gap-1">
+                      <ExportMenu campaignId={campaign.id} variant="tile-icon" />
+                      {campaign.role === "owner" ? (
+                        <Tooltip content="Delete this campaign">
+                          <button
+                            type="button"
+                            aria-label="Delete this campaign"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              deleteCampaign(campaign);
+                            }}
+                            className="rounded-md p-1 text-stone-600 opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
+                          >
+                            <Trash2 className="size-4" />
+                          </button>
+                        </Tooltip>
+                      ) : null}
+                    </span>
                   </div>
                 </a>
               </li>

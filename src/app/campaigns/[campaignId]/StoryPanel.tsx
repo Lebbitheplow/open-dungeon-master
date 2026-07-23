@@ -4,6 +4,7 @@ import { BookOpen, Check, ChevronDown, ChevronRight, Compass, Loader2, Pencil, R
 import { useState } from "react";
 import type { Chapter } from "@/lib/db/chapters";
 import type { StoryArc } from "@/lib/dm/arc-logic";
+import { ExportMenu } from "./ExportMenu";
 
 // Story-so-far browser: every closed chapter with its title, highlights,
 // and expandable summary, plus the chapter in progress. The party lead can
@@ -425,6 +426,7 @@ export function StoryPanel({
   return (
     <div className="space-y-2">
       {isLead ? <ArcCard campaignId={campaignId} /> : null}
+      <ExportMenu campaignId={campaignId} />
       <div className="rounded-lg border border-dashed border-stone-800 p-2.5">
         <p className="flex items-center gap-1.5 text-xs text-stone-400">
           <BookOpen className="size-3.5 text-amber-600" />

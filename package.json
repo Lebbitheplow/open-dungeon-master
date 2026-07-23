@@ -27,6 +27,8 @@
     "@radix-ui/react-tooltip": "^1.2.12",
     "better-sqlite3-multiple-ciphers": "^12.11.1",
     "clsx": "^2.1.1",
+    "docx": "^9.7.1",
+    "jszip": "^3.10.1",
     "lucide-react": "^1.16.0",
     "next": "16.2.6",
     "pdf-lib": "^1.17.1",
