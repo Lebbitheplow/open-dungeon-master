@@ -23,6 +23,9 @@
 /public/uploads
 /.serena
 
+# local model cache (transformers.js auto-downloads on first run)
+/models/embeddings/
+
 # production
 /build
 

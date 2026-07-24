@@ -17,6 +17,7 @@
     "test": "node scripts/test-all.mjs",
     "resources:generate": "node scripts/generate-class-resources.mjs",
     "test:dice": "node scripts/test-dice.mjs",
+    "fetch-model": "node scripts/fetch-embedding-model.mjs",
     "postinstall": "node scripts/copy-dice-assets.mjs"
   },
   "dependencies": {

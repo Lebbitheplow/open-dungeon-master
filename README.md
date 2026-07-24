@@ -105,6 +105,107 @@ a secret story arc it regenerates as the campaign moves.
 The authoritative ledger of exactly what is enforced, what is guidance, and what is
 out of scope is [docs/rules-coverage.md](docs/rules-coverage.md).
 
+## Systems &amp; engines
+
+The app is a stack of about fifty focused engines. The split is deliberate: pure
+rules math lives in `src/lib/srd/` (database-free, each with its own test), and the
+server-side enforcement and tool handlers live in `src/lib/dm/`. The model narrates
+and makes creative calls, but it never adjudicates: every number below is computed
+and clamped by code.
+
+### Combat (server-enforced)
+
+- **PC attack engine** - resolves player weapon and spell attacks: weapon pick, to-hit, damage, AC adjudication, and feature riders.
+- **Enemy damage and enemy attack engines** - the single server path for damage landing on an enemy and for monster attacks rolled against PC AC; also owns encounter-finish.
+- **Death and dying engine** - death-save state at 0 HP, auto-rolled saves on skipped turns, massive-damage instant death, and stabilize/heal clears.
+- **Conditions engine** - the SRD condition table with round and save-ends durations and resistances, plus a named buff-condition registry (Bless, Shield of Faith, and the like).
+- **Concentration engine** - casting sets and breaks it, incoming damage forces the CON save server-side, and dropping to 0 HP ends it.
+- **Action economy and multiattack engine** - the per-turn action/bonus/reaction budget, Extra Attack, once-per-turn riders like Sneak Attack, Dash/Disengage, and Haste.
+- **Opportunity attack engine** - fires when a token leaves an enemy's reach and resolves the reaction attack server-side.
+- **Spell and cast engine** - derives save DC, half-on-save, damage type, and applied conditions from data; covers cast-at-enemy, cast-at-player, area-of-effect, and buffs.
+- **Aura engine** - position-aware Aura of Protection reaching nearby allies on the battle map, non-stacking.
+- **Initiative and encounter engine** - deterministic initiative order, enemy spawning, and the encounter turn pointer.
+
+### Character sheet rules
+
+- **Sheet derivation engine** - central compute of AC, saves, spell attack and DC, and passive scores from what the character actually is and wears.
+- **Armor and AC engine** - the SRD armor table plus AC math (DEX caps, STR requirements, shields), shared by the server and the character builder.
+- **Weapons engine** - the SRD weapon table with proficiency and the properties (finesse, thrown, reach, ammunition) the attack engine reads.
+- **Class features engine** - grants SRD and genre-class features by level and subclass, including subclass always-prepared spells.
+- **Feature effects engine** - turns feature names into typed mechanical riders (fighting styles, damage riders, defenses) and parses authored prose into them.
+- **Class resource pools engine** - Rage, Ki, Channel Divinity, Second Wind, Lay on Hands, Bardic Inspiration and the rest: counts, recharge type, and effects.
+- **Spell scaling engine** - cantrip tier scaling and per-slot damage and heal increases derived from SRD data rather than trusted to the model.
+- **Class options engine** - invocations, maneuvers, metamagic, pact boons, infusions, runes, and disciplines stored as choice-sourced features.
+- **ASI and point-buy engine** - ability-score-improvement thresholds (cap 20) and the standard 27-point point buy for creation.
+- **Rest engine** - short and long rest math: hit-dice recovery, slot and resource refill, and condition pruning.
+- **Multiclass engine** - ability prerequisites both ways, the shared multiclass slot table, per-class caster contribution, and a 3-class cap.
+
+### Transformations, pets, and companions
+
+- **Transformation and polymorph engine** - real beast stat blocks for Wild Shape and Polymorph, with overflow damage and form reversion.
+- **Pet and familiar engine** - familiars, the Beast Master companion, the Drakewarden drake, and story pets, each validated against its source feature.
+- **Companion engine** - full companion characters with their own sheet and bot user, added to initiative and the battle map and auto-leveled with the party.
+
+### Items and anti-cheat
+
+- **Magic item effects engine** - mechanical items (AC, save bonuses, resistances) gated by carried, equipped, and attuned state, feeding the same AC engine.
+- **Consumables and items logic** - healing-potion tiers, generic consumable detection, and ammunition lookup.
+- **Sheet mutation guard** - a server ceiling on DM-driven sheet edits that blocks illegitimate level, HP, gold, ability, and XP jumps no matter how the model is prompted.
+- **Inventory approval engine** - an optional mode that turns DM inventory and gold changes into player-approved proposals instead of applying them immediately.
+
+### Leveling and XP
+
+- **XP and leveling engine** - the XP thresholds and level-for-XP math (the level-up itself is applied through the player's own in-app flow).
+- **Milestone XP engine** - chapter-close awards, so roleplay-heavy campaigns still level.
+
+### World simulation
+
+- **Overworld and region map generation** - seeded value-noise terrain on a 96x72 grid with genre reskins, reconciling locations to anchors lazily as the party travels.
+- **Battle map generation** - seeded tactical maps (terrain, lighting, spawns, line of sight and cover, movement budgets, pathfinding), regenerable from the encounter.
+- **Location persistence** - structured per-area layout, exits, and connections so narration stays spatially consistent, plus an illustrated top-down map image.
+- **Living-world tick engine** - a zero-model-call heartbeat that advances world state on dice and computes encounter pressure after each narration.
+- **World arcs** - one or two escalating off-screen storylines that advance whether or not the party engages them.
+- **NPC agency** - once-per-chapter goal advancement for every tracked NPC with no model call, surfacing outcomes as rumors and world facts.
+- **World facts register** - authoritative player-visible and DM-only facts extracted from play and fed to prompts as canon or rumor.
+- **Social and NPC attitude system** - attitudes tracked across sessions and `social_check` rolls against attitude-derived DCs that can shift them.
+- **World utility engines** - CR-scaled treasure moved into real purses, object durability, and forced-march exhaustion via real CON saves.
+
+### Narrative
+
+- **Story arc and saga engine** - a three-tier secret spine (campaign-spanning saga, current-act beats, quest-scale sub-arcs) refreshed with clamped deltas and sequel chaining.
+- **Chapter engine** - chapters close on completed story beats rather than message volume, triggering XP, fact extraction, NPC agency, memory indexing, and a snapshot.
+- **Recap and compaction** - a rolling campaign summary and history compaction that keep prompts bounded.
+- **Chapter rewind and snapshots** - a full world-state snapshot at each chapter open; a lead-confirmed rewind restores a boundary after taking a safety copy.
+- **Story export** - finished campaigns and chapters exported to DOCX, ODT, or HTML.
+
+### Memory and retrieval (RAG)
+
+- **Semantic recall and memory index** - MiniLM (384-dim) two-phase recall over chapter summaries then verbatim scene chunks, behind the `recall_story` tool.
+- **World lore builder** - lead-authored, embedded canon retrieved per turn, with `search_lore` searching lore, facts, notes, and chapter memory at once.
+- **House rules and rules manager** - embedded house-rules text plus structured variant toggles, retrieved into the prompt's variant and house-rules blocks.
+- **Per-turn context retrieval** - embeds the current moment once and rides only the most relevant lore and rule chunks into the prompt.
+- **Lore check** - a player-flagged consistency verifier that returns a verdict, citations, and a suggested rewrite.
+
+### AI and LLM integration
+
+- **Model client (dual provider)** - streaming against an OpenAI-compatible `/chat/completions` server (llama.cpp, LM Studio, vLLM, OpenRouter) or a local Ollama.
+- **DM turn engine** - a persisted park/resume state machine and tool-calling loop (up to four rounds) that salvages malformed tool calls and streams filtered narration.
+- **DM prompt and tool families** - a rules-as-tools system prompt covering rolls, checks, encounters, casts, resources, rests, conditions, items, hazards, NPCs, notes, maps, and world.
+- **TTS narration** - local Kokoro renders each DM message on the serial media queue, autoplayed latest-only with per-user mute.
+- **STT push-to-talk** - proxies audio to a local faster-whisper service, kept off the network.
+- **Portrait generation** - a one-shot ComfyUI character portrait at creation, with an icon fallback.
+
+### Platform and multiplayer
+
+- **Event bus (SSE)** - per-campaign publish/subscribe, the real-time multiplayer backbone.
+- **Media queue** - a global serial GPU queue (one ComfyUI or TTS job at a time) since the iGPU shares memory with the DM model.
+- **Whispers and side-chat** - one-way DM-to-player whispers and private player-to-player threads that never enter the DM prompt or the shared stream.
+- **Turn, lead, and pending-roll flow** - lead controls, turn coalescing, and parked physical-dice roll requests.
+- **Auth** - session cookies with scrypt hashing, optional Discord OAuth, and reverse-proxy-aware origin resolution.
+- **Login throttle** - a per-username-and-IP lockout with backoff.
+- **Admin panel and global config** - admin-gated settings with database-over-env-over-default precedence and a sign-ups toggle.
+- **Encrypted storage** - single-writer SQLite encrypted at rest (ChaCha20) alongside the read-only Open5e content pack.
+
 ## Requirements
 
 - **Node 22+** (npm). `npm install` pulls everything the app itself needs.
@@ -137,9 +238,19 @@ echo "DB_ENCRYPTION_KEY=$(openssl rand -hex 32)" > .env.server
 # Downloads from api.open5e.com once, then caches for offline re-runs.
 node scripts/import-open5e.mjs
 
+# Warm the local embedding model (MiniLM, ~86MB) into models/embeddings.
+# Optional: the app auto-downloads it on first use, but this pulls it now
+# so an offline machine has it ready.
+npm run fetch-model
+
 npm run dev        # http://localhost:3000, or:
 npm run dev:lan    # 0.0.0.0:3005 so your party can reach it on the LAN
 ```
+
+The **embedding model** (MiniLM, used for semantic story recall and lore search) is no
+longer bundled in the repo. transformers.js downloads it from HuggingFace into
+`models/embeddings/` the first time the app needs it, so first use requires network;
+`npm run fetch-model` fetches it ahead of time.
 
 Then start the DM model with llama.cpp's `llama-server`. See
 [The default DM model](#the-default-dm-model-qwen36-35b-on-llamacpp) below for the
