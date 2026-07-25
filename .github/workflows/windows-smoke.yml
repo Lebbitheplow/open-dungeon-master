@@ -1,5 +1,10 @@
 name: Windows smoke
 
+# Catches Windows-specific breakage in the install, lint and build path.
+# The Python setup, the setup-windows.ps1 validation and the two check:image-*
+# steps were dropped: none of those scripts exist any more, so every run since
+# the fork has failed on them.
+
 on:
   push:
     branches: [main]
@@ -22,23 +27,8 @@ jobs:
           node-version: "24"
           cache: npm
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.11"
-
       - name: Install npm dependencies
         run: npm ci
-
-      - name: Validate Windows launcher
-        shell: pwsh
-        run: ./scripts/setup-windows.ps1 -ValidateOnly
-
-      - name: Check image routing
-        run: npm run check:image-routing
-
-      - name: Smoke image server HTTP path
-        run: npm run check:image-server-http
 
       - name: Lint
         run: npm run lint
