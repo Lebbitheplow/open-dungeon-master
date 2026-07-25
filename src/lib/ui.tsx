@@ -23,6 +23,12 @@ export const ui = {
     "inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-amber-500/25 bg-stone-900/50 px-3 font-display text-[13px] uppercase tracking-[0.12em] text-stone-200 shadow-[0_1px_0_rgba(233,230,244,0.06)_inset,0_2px_6px_rgba(4,2,12,0.4)] transition-all duration-150 ease-snap hover:border-amber-500/50 hover:bg-stone-800/70 hover:text-amber-100 hover:shadow-glow-gold active:scale-[0.98] disabled:opacity-50",
   btnSmall:
     "inline-flex items-center gap-1.5 rounded-lg border border-stone-600/60 bg-stone-900/50 px-3 py-1.5 text-sm text-stone-300 shadow-[0_1px_0_rgba(233,230,244,0.05)_inset] transition-all duration-150 ease-snap hover:border-amber-500/40 hover:bg-stone-800/70 hover:text-amber-100 active:scale-[0.97] disabled:opacity-50",
+  // Small icon action pinned to a card or message. Fades in on hover for mouse
+  // users and stays visible on touch (see .reveal-on-hover in globals.css).
+  // The padding keeps the tap target reachable on a phone; add a negative
+  // margin at call sites where the surrounding row is tight.
+  iconAction:
+    "reveal-on-hover rounded-md p-1.5 text-stone-600 hover:text-amber-200 focus-visible:text-amber-200",
   // Fields
   input:
     "w-full rounded-lg border border-stone-700/70 bg-stone-950/80 px-3 py-2 text-sm text-stone-100 shadow-[0_2px_6px_rgba(4,2,12,0.45)_inset] outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-stone-500 focus:border-amber-400/70 focus:shadow-[0_0_0_3px_rgba(212,171,58,0.12),0_2px_6px_rgba(4,2,12,0.45)_inset]",

@@ -46,7 +46,7 @@ export function ExportMenu({
               event.preventDefault();
               event.stopPropagation();
             }}
-            className="rounded-md p-1 text-stone-600 opacity-0 transition-opacity hover:text-amber-300 group-hover:opacity-100"
+            className={cn(ui.iconAction, "hover:text-amber-300")}
           >
             <FileDown className="size-4" />
           </button>

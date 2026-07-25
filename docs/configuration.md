@@ -47,6 +47,20 @@ falls through to the env var.
 
 Secrets (model API keys) belong in `.env.server`, never in code or `.env.local`.
 
+### In a container
+
+Every default above points at `127.0.0.1`, which inside a container means the
+container itself. `docker-compose.yml` therefore overrides the service URLs to
+`host.docker.internal` (llama.cpp, Ollama, ComfyUI, Kokoro, STT) and sets
+`CONTENT_DB_PATH=/app/content/open5e.sqlite`, since the baked content pack has
+to live outside the `/app/data` volume. Set anything you want to change in a
+`.env` file next to the compose file rather than in `.env.server`: the image has
+no `.env.server`, and real environment variables take precedence over it anyway.
+
+`DB_ENCRYPTION_KEY` is optional there. Left unset, the entrypoint generates one
+into `/app/data/.db-key` on first boot and prints it once. See the Docker section
+of the README.
+
 ### Database encryption
 
 The app database is encrypted at rest with SQLite3 Multiple Ciphers. The

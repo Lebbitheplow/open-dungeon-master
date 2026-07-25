@@ -1,0 +1,27 @@
+# Build inputs only. Everything the image needs at runtime is generated inside
+# the build stage, so host state and host secrets never enter the context.
+.git
+.github
+node_modules
+.next
+
+# Host runtime state; the container keeps its own in named volumes.
+data
+models
+logs
+public/dice-box
+public/uploads
+public/generated
+public/generated-audio
+
+# Never bake secrets into an image layer. The DB key comes in as an env var.
+.env
+.env.*
+
+# Docker artifacts and archives.
+Dockerfile
+.dockerignore
+docker-compose*.yml
+*.tar
+*.tar.gz
+*.tgz

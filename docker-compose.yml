@@ -1,0 +1,69 @@
+# Open Dungeon Master. One container, one process. The app uses a synchronous
+# SQLite writer, an in-process event bus and an in-process media queue, so it
+# must never be scaled past a single replica.
+#
+#   docker compose pull && docker compose up -d   ->  http://localhost:3005
+#
+# `pull` fetches the published image from Docker Hub. Set ODM_IMAGE in .env to
+# pull from GHCR instead, or ODM_IMAGE_TAG=0.10.1 to pin a release. To build it
+# yourself from a clone, use `docker compose up -d --build`.
+#
+# The AI services stay on the host. The defaults below reach them through
+# host.docker.internal; override any of them in a .env file next to this file,
+# which Docker Compose reads automatically. On Linux you can instead share the
+# host network stack: see docker-compose.host-net.yml.
+
+services:
+  open-dungeon-master:
+    image: ${ODM_IMAGE:-lebbi/open-dungeon-master}:${ODM_IMAGE_TAG:-latest}
+    build:
+      context: .
+    container_name: open-dungeon-master
+    restart: unless-stopped
+    ports:
+      - "${ODM_PORT:-3005}:3005"
+    extra_hosts:
+      # Lets the container reach services bound to the host's loopback.
+      - "host.docker.internal:host-gateway"
+    environment:
+      # Leave empty to have a key generated into the data volume on first boot.
+      # Whatever you set here wins over the stored one.
+      DB_ENCRYPTION_KEY: ${DB_ENCRYPTION_KEY:-}
+
+      # Text backend: llama.cpp, or any OpenAI-compatible server.
+      OPENAI_COMPAT_BASE_URL: ${OPENAI_COMPAT_BASE_URL:-http://host.docker.internal:8001/v1}
+      OPENAI_COMPAT_MODEL: ${OPENAI_COMPAT_MODEL:-qwen3.6-35b}
+      OPENAI_COMPAT_API_KEY: ${OPENAI_COMPAT_API_KEY:-}
+      DEFAULT_TEXT_PROVIDER: ${DEFAULT_TEXT_PROVIDER:-custom}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-}
+
+      # Images and speech. Each is optional; the app degrades gracefully.
+      COMFYUI_URL: ${COMFYUI_URL:-http://host.docker.internal:8188}
+      KOKORO_URL: ${KOKORO_URL:-http://host.docker.internal:8880}
+      STT_URL: ${STT_URL:-http://host.docker.internal:8870}
+
+      # Set these when running behind a reverse proxy. APP_PUBLIC_URL also fixes
+      # the Discord OAuth callback URL.
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:-}
+
+      # Verbose DM turn logging.
+      DM_DEBUG: ${DM_DEBUG:-}
+    volumes:
+      # public/ has to stay writable and keep its build-time assets, so the
+      # three runtime directories are mounted individually instead of mounting
+      # over public/ as a whole.
+      - odm-data:/app/data
+      - odm-uploads:/app/public/uploads
+      - odm-generated:/app/public/generated
+      - odm-audio:/app/public/generated-audio
+
+volumes:
+  odm-data:
+  odm-uploads:
+  odm-generated:
+  odm-audio:

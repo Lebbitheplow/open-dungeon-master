@@ -375,7 +375,7 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
                               event.stopPropagation();
                               deleteCampaign(campaign);
                             }}
-                            className="rounded-md p-1 text-stone-600 opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
+                            className={cn(ui.iconAction, "hover:text-red-400")}
                           >
                             <Trash2 className="size-4" />
                           </button>

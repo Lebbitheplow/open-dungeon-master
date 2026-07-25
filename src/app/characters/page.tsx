@@ -4,6 +4,7 @@ import { Camera, Loader2, Plus, Trash2, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
+import { cn } from "@/lib/cn";
 import { IconChip, PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
 
 type LibraryCharacter = {
@@ -205,7 +206,8 @@ export default function CharactersPage() {
               <button
                 type="button"
                 onClick={() => remove(character.id, character.name)}
-                className="absolute right-3 top-3 hidden text-stone-600 hover:text-red-400 group-hover:block"
+                className={cn("absolute right-2 top-2", ui.iconAction, "hover:text-red-400")}
+                aria-label={`Delete ${character.name}`}
                 title="Delete"
               >
                 <Trash2 className="size-4" />
@@ -213,7 +215,8 @@ export default function CharactersPage() {
               <button
                 type="button"
                 onClick={() => setCroppingId(character.id)}
-                className="absolute right-3 top-10 hidden text-stone-600 hover:text-amber-300 group-hover:block"
+                className={cn("absolute right-2 top-10", ui.iconAction, "hover:text-amber-300")}
+                aria-label={`Upload a portrait for ${character.name}`}
                 title="Upload portrait"
               >
                 <Camera className="size-4" />

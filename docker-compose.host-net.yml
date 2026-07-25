@@ -1,0 +1,20 @@
+# Linux-only override: share the host network stack so the container reaches
+# llama.cpp, ComfyUI, Kokoro and STT on 127.0.0.1 exactly as a host install does.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.host-net.yml up -d
+#
+# The app then binds the host's port 3005 directly and ODM_PORT has no effect.
+# Needs Docker Compose v2.24+ for the !reset tag, and does not work on Docker
+# Desktop for macOS or Windows.
+
+services:
+  open-dungeon-master:
+    network_mode: host
+    ports: !reset []
+    extra_hosts: !reset []
+    environment:
+      OPENAI_COMPAT_BASE_URL: ${OPENAI_COMPAT_BASE_URL:-http://127.0.0.1:8001/v1}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://127.0.0.1:11434}
+      COMFYUI_URL: ${COMFYUI_URL:-http://127.0.0.1:8188}
+      KOKORO_URL: ${KOKORO_URL:-http://127.0.0.1:8880}
+      STT_URL: ${STT_URL:-http://127.0.0.1:8870}

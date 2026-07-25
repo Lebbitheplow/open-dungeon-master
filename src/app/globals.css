@@ -360,6 +360,26 @@ body::before {
     font-weight: 600;
   }
 
+  /* Icon actions that fade in when their card or message is hovered. Touch
+     devices have no hover at all, so there they stay visible permanently:
+     otherwise delete, replay narration and pin are unreachable on a phone.
+     Keyboard focus reveals them too. Written as plain CSS rather than
+     Tailwind variants so the hover/no-hover ordering is deterministic. */
+  .reveal-on-hover {
+    transition:
+      opacity 150ms var(--ease-snap),
+      color 150ms var(--ease-snap);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .reveal-on-hover {
+      opacity: 0;
+    }
+    .group:hover .reveal-on-hover,
+    .reveal-on-hover:focus-visible {
+      opacity: 1;
+    }
+  }
+
   /* Illuminated drop cap on the opening paragraph of DM narration. */
   .narration > p:first-of-type::first-letter {
     font-family: var(--font-display), Georgia, serif;

@@ -3,6 +3,7 @@
 import { Crown, ImageOff, Loader2, Pin, ShieldQuestion, UserPlus, Volume2 } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
 import { JOIN_NOTE_PREFIX, LEAD_NOTE_PREFIX, type CampaignMember } from "@/lib/campaign-types";
 import { stripToolText } from "@/lib/dm/tool-text";
 import { ImageLightbox } from "@/components/ui/ImageLightbox";
@@ -212,8 +213,9 @@ const MessageItem = memo(function MessageItem({
             <button
               type="button"
               onClick={() => onLoreCheck(message)}
+              aria-label="Lore check this passage"
               title="Lore check: flag this passage (or your selected text) against the campaign record"
-              className="text-stone-600 opacity-0 transition hover:text-amber-200 group-hover:opacity-100"
+              className={cn(ui.iconAction, "-my-1.5")}
             >
               <ShieldQuestion className="size-3.5" />
             </button>
@@ -222,8 +224,9 @@ const MessageItem = memo(function MessageItem({
             <button
               type="button"
               onClick={() => onPinCanon(message)}
+              aria-label="Pin this passage as canon"
               title="Pin as canon: keep this passage (or your selected text) in front of the DM permanently"
-              className="text-stone-600 opacity-0 transition hover:text-amber-200 group-hover:opacity-100"
+              className={cn(ui.iconAction, "-my-1.5")}
             >
               <Pin className="size-3.5" />
             </button>
@@ -232,8 +235,9 @@ const MessageItem = memo(function MessageItem({
             <button
               type="button"
               onClick={() => onReplayAudio(message.id)}
+              aria-label="Replay narration"
               title="Replay narration"
-              className="text-stone-600 opacity-0 transition hover:text-amber-200 group-hover:opacity-100"
+              className={cn(ui.iconAction, "-my-1.5")}
             >
               <Volume2 className="size-3.5" />
             </button>

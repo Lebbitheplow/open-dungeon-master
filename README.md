@@ -208,7 +208,9 @@ and clamped by code.
 
 ## Requirements
 
-- **Node 22+** (npm). `npm install` pulls everything the app itself needs.
+- **Node 22+** (npm). `npm install` pulls everything the app itself needs. Or
+  **Docker**, if you would rather not install a toolchain at all: see
+  [Run with Docker](#run-with-docker).
 - **A text model backend** (one of):
   - [llama.cpp](https://github.com/ggml-org/llama.cpp) `llama-server` at
     `http://127.0.0.1:8001` serving a model named `qwen3.6-35b`. This is the default
@@ -280,6 +282,111 @@ For real sessions build and run the production server:
 npm run build
 npm run start:lan   # 0.0.0.0:3005
 ```
+
+## Run with Docker
+
+The image is the whole install. It carries the built app, the Open5e content pack and
+the MiniLM embedding model, so a fresh container needs no network and no setup steps.
+Only the AI services stay outside, on the host.
+
+Every GitHub release is published to both registries as linux/amd64:
+
+```bash
+docker pull lebbi/open-dungeon-master:latest                 # Docker Hub
+docker pull ghcr.io/lebbitheplow/open-dungeon-master:latest  # GHCR
+```
+
+Grab the compose file and start it:
+
+```bash
+curl -O https://raw.githubusercontent.com/Lebbitheplow/open-dungeon-master/main/docker-compose.yml
+docker compose pull
+docker compose up -d        # http://localhost:3005
+```
+
+`:latest` follows the newest release; pin one with `ODM_IMAGE_TAG=0.10.1` in `.env`. The
+compose file pulls from Docker Hub by default; set
+`ODM_IMAGE=ghcr.io/lebbitheplow/open-dungeon-master` in `.env` to use GHCR instead. To
+build the image yourself from a clone rather than pulling it, use
+`docker compose up -d --build`.
+
+Nothing else is required. On first boot the container generates a database encryption
+key, stores it in the data volume, and prints it once:
+
+```
+docker compose logs | head -20
+```
+
+**Back that key up.** The database is encrypted at rest with it and there is no
+recovery path without it. If you would rather manage it yourself, put
+`DB_ENCRYPTION_KEY=...` in a `.env` file next to `docker-compose.yml` before the first
+start; an explicit key always wins over the stored one.
+
+### Pointing at your AI services
+
+The container reaches the host through `host.docker.internal`, so llama.cpp on
+`127.0.0.1:8001` becomes `http://host.docker.internal:8001/v1`. Every URL is
+overridable in `.env`; copy [.env.docker.example](.env.docker.example) for the full
+list.
+
+```bash
+cp .env.docker.example .env    # then edit, then: docker compose up -d
+```
+
+On Linux you can instead share the host network stack, which makes the plain
+`127.0.0.1` defaults work exactly as they do in a host install:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.host-net.yml up -d
+```
+
+### Data, backups and maintenance
+
+Four named volumes hold everything worth keeping: `odm-data` (the encrypted database
+and the generated key), `odm-uploads` (avatars and portraits), `odm-generated` (scene
+art and maps) and `odm-audio` (cached narration). `docker compose down` leaves them
+alone; `docker compose down -v` destroys them.
+
+Maintenance scripts need the database key, so run them through the entrypoint, which
+loads it:
+
+```bash
+docker compose exec open-dungeon-master ./scripts/docker-entrypoint.sh \
+  node scripts/make-admin.mjs <username>
+```
+
+**Run exactly one container.** The app is a single synchronous SQLite writer with an
+in-process event bus, so it cannot be replicated or pointed at a shared volume from two
+hosts. See [Storage and the single-writer rule](#storage-and-the-single-writer-rule).
+
+To move to a newer release: `docker compose pull && docker compose up -d`. The volumes
+carry over. If you build locally instead, `docker compose up -d --build` refreshes the
+content pack from api.open5e.com, so the build needs network; the running container
+never does.
+
+### Publishing (maintainers)
+
+[.github/workflows/docker-publish.yml](.github/workflows/docker-publish.yml) builds and
+pushes whenever a GitHub release is published. A release tagged `v0.10.1` publishes
+`0.10.1`, `0.10` and, unless it is marked as a pre-release, `latest`. The workflow then
+starts the pushed image and waits for `/api/health` before it counts as successful, and
+it can be re-run by hand from the Actions tab.
+
+**GHCR needs no setup** - it authenticates with the built-in `GITHUB_TOKEN`. A brand new
+package is private, so make it public once (Packages > open-dungeon-master > Package
+settings > Change visibility) for other people to pull it.
+
+**Docker Hub is optional.** Set two repository secrets and it publishes there too;
+without them the workflow succeeds and publishes to GHCR only.
+
+- `DOCKERHUB_USERNAME` - your Docker ID, shown in the top-right menu on hub.docker.com.
+  It is not necessarily your GitHub username, even if you sign in through GitHub.
+- `DOCKERHUB_TOKEN` - Account settings > Personal access tokens, Read/Write scope.
+  Signing in through GitHub OAuth does not change this; a token is still how CI
+  authenticates.
+
+To publish under a different Docker ID, change `DOCKERHUB_IMAGE` in the workflow and the
+`image:` default in `docker-compose.yml` to match.
 
 ## The default DM model (qwen3.6-35b on llama.cpp)
 
