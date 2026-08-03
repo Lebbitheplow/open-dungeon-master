@@ -38,6 +38,10 @@ export type NpcGoals = {
 };
 
 export type NpcRelation = { npcName: string; score: number; note?: string };
+// SUPERSEDED by the relationships table (src/lib/dm/relationship-logic.ts):
+// how an NPC feels about one character now lives on the approval meter. This
+// type and its parser survive only so the one-time backfill in
+// src/lib/db/core.ts can still read the old column.
 export type NpcBond = { characterId: string; score: number };
 export type NpcPressure = { ignored: number; engaged: number };
 
@@ -219,26 +223,6 @@ export function driftPersonality(
   return next;
 }
 
-// ---- bonds ----
-
-// A decisive attitude shift also moves the acting character's personal bond
-// one step in the same direction. Same once-per-exchange guard as attitude:
-// the caller only invokes this when the shift actually landed.
-export function shiftBond(
-  bonds: NpcBond[],
-  characterId: string,
-  direction: "up" | "down",
-): NpcBond[] {
-  const delta = direction === "up" ? 1 : -1;
-  const existing = bonds.find((bond) => bond.characterId === characterId);
-  if (!existing) {
-    return [...bonds, { characterId, score: clampAxis(delta) }];
-  }
-  return bonds.map((bond) =>
-    bond.characterId === characterId ? { ...bond, score: clampAxis(bond.score + delta) } : bond,
-  );
-}
-
 // Moves a directed NPC-to-NPC edge, creating it at the delta when new.
 export function shiftRelation(
   relations: NpcRelation[],
@@ -363,12 +347,10 @@ export function pressureState(pressure: NpcPressure): "ignored" | "engaged" | nu
 // ---- roster rendering ----
 
 // The compact agency fragment appended to an NPC's roster line, bounded so
-// twenty NPCs cannot blow up GAME STATE. bondNames resolves characterId to
-// a display name; unknown ids are skipped.
-export function agencyFragment(
-  agency: NpcAgency,
-  bondNames: Map<string, string>,
-): string {
+// twenty NPCs cannot blow up GAME STATE. How this NPC feels about individual
+// characters is NOT here: that is the approval meter, which renders as its
+// own GAME STATE section (src/lib/dm/relationship-tools.ts).
+export function agencyFragment(agency: NpcAgency): string {
   const parts: string[] = [];
   if (agency.personality) {
     const p = agency.personality;
@@ -384,13 +366,6 @@ export function agencyFragment(
     if (notable.length) {
       parts.push(notable.join(", "));
     }
-  }
-  const bonds = agency.bonds
-    .filter((bond) => bond.score !== 0 && bondNames.has(bond.characterId))
-    .slice(0, 4)
-    .map((bond) => `${bondNames.get(bond.characterId)} ${bond.score > 0 ? "+" : ""}${bond.score}`);
-  if (bonds.length) {
-    parts.push(`bonds: ${bonds.join(", ")}`);
   }
   if (agency.goals.session) {
     parts.push(

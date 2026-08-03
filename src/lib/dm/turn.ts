@@ -137,6 +137,14 @@ import {
   npcRosterForPrompt,
 } from "@/lib/dm/social-tools";
 import {
+  relationshipTools,
+  RELATIONSHIP_TOOL_NAMES,
+  handleRelationshipBeat,
+  handleRomanceAdvance,
+  handleRelationshipEnd,
+  relationshipRosterForPrompt,
+} from "@/lib/dm/relationship-tools";
+import {
   worldTools,
   WORLD_TOOL_NAMES,
   handleRollTreasure,
@@ -368,6 +376,10 @@ export async function startDmTurn(campaignId: string) {
       })),
       directorNotes: consumePendingSparks(campaignId).map((spark) => spark.text),
       npcs: npcRosterForPrompt(campaignId),
+      relationships:
+        campaign.gameSettings.relationships === "off"
+          ? []
+          : relationshipRosterForPrompt(campaignId),
       recentWhispers: listRecentWhispersForPrompt(campaignId, 10),
       pendingPlayerWhispers: pendingWhispers.map((whisper) => ({
         from: whisper.characterName,
@@ -505,6 +517,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       ...hazardTools,
       ...petTools,
       ...socialTools,
+      ...(inEncounter ? [] : relationshipTools(campaign)),
       ...(inEncounter ? [] : worldTools),
       ...encounterTools(inEncounter),
       castBuffTool,
@@ -638,6 +651,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // from; a lone set_npc is bookkeeping like record_event.
     const socialRollCalls = socialCalls.filter((toolCall) => toolCall.name !== "set_npc");
     const setNpcCalls = socialCalls.filter((toolCall) => toolCall.name === "set_npc");
+    const relationshipCalls = toolCalls.filter((toolCall) =>
+      (RELATIONSHIP_TOOL_NAMES as readonly string[]).includes(toolCall.name),
+    );
     const worldCalls = toolCalls.filter((toolCall) =>
       (WORLD_TOOL_NAMES as readonly string[]).includes(toolCall.name),
     );
@@ -755,6 +771,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       hazardCalls.length > 0 ||
       petCalls.length > 0 ||
       socialRollCalls.length > 0 ||
+      // Every relationship call reports an outcome (how the deed landed, a
+      // yes, a refusal) the model must narrate from rather than guess at.
+      relationshipCalls.length > 0 ||
       worldCalls.length > 0 ||
       mutationCalls.length > 0 ||
       encounterCalls.length > 0 ||
@@ -1076,6 +1095,37 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       turn.conversation.push({
         role: "tool",
         ...(socialCall.id ? { tool_call_id: socialCall.id } : {}),
+        content: JSON.stringify(result),
+      });
+    }
+
+    // Standing resolves synchronously against the relationship ledger: a
+    // deed is weighed against the subject's own nature, an overture rolls a
+    // real Charisma skill, and a romance moves at most once per exchange.
+    for (const relationshipCall of relationshipCalls) {
+      let result: Record<string, unknown>;
+      if (relationshipCall.name === "relationship_beat") {
+        result = handleRelationshipBeat(
+          campaign,
+          turn,
+          relationshipCall.rawArguments,
+          sheets,
+          sheetsById,
+        );
+      } else if (relationshipCall.name === "romance_advance") {
+        result = handleRomanceAdvance(
+          campaign,
+          turn,
+          relationshipCall.rawArguments,
+          sheets,
+          sheetsById,
+        );
+      } else {
+        result = handleRelationshipEnd(campaign, relationshipCall.rawArguments, sheets, sheetsById);
+      }
+      turn.conversation.push({
+        role: "tool",
+        ...(relationshipCall.id ? { tool_call_id: relationshipCall.id } : {}),
         content: JSON.stringify(result),
       });
     }

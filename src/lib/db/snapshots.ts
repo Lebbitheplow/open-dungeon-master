@@ -182,6 +182,7 @@ export function restoreSnapshot(campaignId: string, payload: SnapshotPayload) {
     "encounters",
     "character_sheets",
     "npcs",
+    "relationships",
     "locations",
     "world_facts",
     "overworld_maps",

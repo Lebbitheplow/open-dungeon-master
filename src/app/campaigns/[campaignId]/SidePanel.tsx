@@ -14,6 +14,7 @@ import { BattleMapPanel } from "@/app/campaigns/[campaignId]/BattleMapPanel";
 import { DmWhisperPanel } from "@/app/campaigns/[campaignId]/DmWhisperPanel";
 import { EncounterPanel } from "@/app/campaigns/[campaignId]/EncounterPanel";
 import { EventLog } from "@/app/campaigns/[campaignId]/EventLog";
+import { BondsPanel } from "@/app/campaigns/[campaignId]/BondsPanel";
 import { FactsPanel } from "@/app/campaigns/[campaignId]/FactsPanel";
 import { LorePanel } from "@/app/campaigns/[campaignId]/LorePanel";
 import { MapPanel } from "@/app/campaigns/[campaignId]/MapPanel";
@@ -107,6 +108,7 @@ function SidePanelInner({
   pendingCount,
   chatUnread,
   mobileVisible,
+  relationshipsVersion,
 }: {
   campaignId: string;
   sheets: CharacterSheet[];
@@ -145,6 +147,9 @@ function SidePanelInner({
   pendingCount: number;
   chatUnread: number;
   mobileVisible: boolean;
+  // Bumped by the relationships_updated ephemeral; the Bonds panel refetches
+  // its own scoped view when it changes.
+  relationshipsVersion: number;
 }) {
   const [inviteCopied, setInviteCopied] = useState(false);
   const wide = useSyncExternalStore(subscribeWide, readWide, () => false);
@@ -345,6 +350,8 @@ function SidePanelInner({
             />
             <LorePanel campaignId={campaignId} isLead={isLead} />
           </div>
+        ) : tab === "bonds" ? (
+          <BondsPanel campaignId={campaignId} refreshKey={relationshipsVersion} />
         ) : tab === "notes" ? (
           <NotesPanel
             campaignId={campaignId}

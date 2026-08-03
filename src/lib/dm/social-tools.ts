@@ -11,13 +11,16 @@ import {
   type Attitude,
   type Npc,
 } from "@/lib/db/npcs";
-import { listSheets } from "@/lib/db/sheets";
+import { agencyFragment, derivePersonality, driftPersonality } from "@/lib/dm/npc-logic";
+import { ensureRelationship, patchRelationship } from "@/lib/db/relationships";
 import {
-  agencyFragment,
-  derivePersonality,
-  driftPersonality,
-  shiftBond,
-} from "@/lib/dm/npc-logic";
+  applyApproval,
+  approvalRollModifier,
+  friendshipTier,
+  SOCIAL_CHECK_SWING,
+  TIER_LABEL,
+} from "@/lib/dm/relationship-logic";
+import { publishRelationshipsUpdated } from "@/lib/dm/relationship-tools";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
@@ -321,7 +324,23 @@ export function handleSocialCheck(
     return { error: "error" in resolved ? resolved.error : `${sheet.name} cannot make that check.` };
   }
   const dc = socialCheckDc(npc.attitude);
-  const rolled = rollExpression(resolved.expression);
+  // Attitude is how this NPC feels about the PARTY; the approval meter is how
+  // they feel about THIS character. Standing with someone makes them easier
+  // to sway, bounded to +/-4 so a friendship never trivializes a hard ask.
+  const relationship = ensureRelationship({
+    campaignId: campaign.id,
+    characterId: sheet.id,
+    characterName: sheet.name,
+    subjectKind: "npc",
+    subjectName: npc.name,
+    subjectId: npc.id,
+  });
+  const standingModifier = approvalRollModifier(relationship.approval);
+  const rolled = rollExpression(
+    standingModifier === 0
+      ? resolved.expression
+      : `${resolved.expression}${standingModifier > 0 ? "+" : ""}${standingModifier}`,
+  );
   const roll = insertRoll({
     campaignId: campaign.id,
     characterId: sheet.id,
@@ -341,17 +360,25 @@ export function handleSocialCheck(
   const alreadyShifted = npc.lastShiftTurn === turn.id;
   let finalAttitude = npc.attitude;
   let shifted = false;
+  let approval = relationship.approval;
   if (outcome.shifted && !alreadyShifted) {
     const updated = setNpcAttitude(npc.id, outcome.attitude, turn.id);
     if (updated) {
       finalAttitude = updated.attitude;
       shifted = true;
-      // A decisive shift also moves this character's personal bond and
+      // A decisive exchange moves this character's own standing with them and
       // drifts the NPC's personality, under the same per-exchange guard.
+      // Being talked around warms someone; being bullied or caught out does
+      // the opposite, and the meter is where that is remembered.
+      approval = applyApproval(
+        approval,
+        outcome.direction === "down" ? -SOCIAL_CHECK_SWING : SOCIAL_CHECK_SWING,
+      );
+      patchRelationship(relationship.id, { approval });
+      publishRelationshipsUpdated(campaign.id);
       const personality =
         npc.agency.personality ?? derivePersonality(npc.name, npc.attitude, npc.trait);
       patchNpcAgency(npc.id, {
-        bonds: shiftBond(npc.agency.bonds, sheet.id, outcome.direction ?? "up"),
         personality: driftPersonality(personality, args.approach, outcome.direction ?? "up"),
       });
     }
@@ -363,12 +390,14 @@ export function handleSocialCheck(
     character: sheet.name,
     skill,
     roll: rolled.total,
+    ...(standingModifier !== 0 ? { standingModifier } : {}),
     dc,
     success: outcome.success,
     startingAttitude: npc.attitude,
     attitude: finalAttitude,
     attitudeShifted: shifted ? outcome.direction : null,
-    note: buildSocialNote(sheet.name, npc.name, outcome.success, shifted, finalAttitude, outcome.direction, alreadyShifted && outcome.shifted),
+    standing: friendshipTier(approval),
+    note: buildSocialNote(sheet.name, npc.name, outcome.success, shifted, finalAttitude, outcome.direction, alreadyShifted && outcome.shifted, approval),
   };
 }
 
@@ -380,21 +409,25 @@ function buildSocialNote(
   attitude: Attitude,
   direction: "up" | "down" | null,
   guarded: boolean,
+  approval: number,
 ): string {
   const base = success
     ? `${character} gets through to ${npc}: the check beats the DC. Narrate ${npc} yielding as far as ${attitude} disposition allows.`
     : `${character} fails to sway ${npc}. Narrate the refusal or the words falling flat.`;
+  const standing = ` ${npc} stands ${TIER_LABEL[friendshipTier(approval)]} toward ${character} personally.`;
   if (shifted) {
-    return `${base} ${npc} is now ${attitude} (${direction === "up" ? "warmer" : "more hostile"}).`;
+    return `${base} ${npc} is now ${attitude} toward the party (${direction === "up" ? "warmer" : "more hostile"}).${standing}`;
   }
   if (guarded) {
-    return `${base} ${npc}'s attitude already moved this exchange, so it holds at ${attitude}.`;
+    return `${base} ${npc}'s attitude already moved this exchange, so it holds at ${attitude}.${standing}`;
   }
-  return base;
+  return `${base}${standing}`;
 }
 
-// A compact roster for the GAME STATE block: tracked NPCs, their attitude,
-// and a bounded agency fragment (personality leans, bonds, goals, pressure).
+// A compact roster for the GAME STATE block: tracked NPCs, their attitude
+// toward the party, and a bounded agency fragment (personality leans, goals,
+// pressure). How they feel about individual characters is the approval meter
+// and renders in its own section.
 export function npcRosterForPrompt(campaignId: string): Array<{
   name: string;
   attitude: Attitude;
@@ -402,14 +435,11 @@ export function npcRosterForPrompt(campaignId: string): Array<{
   location: string;
   agency: string;
 }> {
-  const bondNames = new Map(
-    listSheets(campaignId).map((sheet) => [sheet.id, sheet.name]),
-  );
   return listNpcs(campaignId).map((npc) => ({
     name: npc.name,
     attitude: npc.attitude,
     trait: npc.trait,
     location: npc.location,
-    agency: agencyFragment(npc.agency, bondNames),
+    agency: agencyFragment(npc.agency),
   }));
 }

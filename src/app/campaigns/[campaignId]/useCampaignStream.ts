@@ -113,6 +113,9 @@ export type CampaignState = {
   // World-state facts visible to this member (facts_updated is contentless;
   // each member pulls their own scoped view).
   facts: WorldFact[];
+  // Bumped by the contentless relationships_updated ephemeral; the Bonds
+  // panel fetches its own tier-scoped view when this changes.
+  relationshipsVersion: number;
   characterEvents: CharacterEvent[];
   encounter: PublicEncounter | null;
   // Open DM item/gold offers (inventoryApprovals).
@@ -150,6 +153,7 @@ const initialState: CampaignState = {
   whisperUnread: 0,
   whispersLoaded: false,
   facts: [],
+  relationshipsVersion: 0,
   characterEvents: [],
   encounter: null,
   itemProposals: [],
@@ -302,6 +306,11 @@ function reducer(state: CampaignState, action: Action): CampaignState {
               : location,
           );
           next.mediaStatus = withoutKey(state.mediaStatus, String(payload.locationId ?? ""));
+          return next;
+        // Contentless: standing is scoped per member (players see tier
+        // words, the lead sees numbers), so the panel refetches its own view.
+        case "relationships_updated":
+          next.relationshipsVersion = state.relationshipsVersion + 1;
           return next;
         case "media_status": {
           const targetId = String(payload.targetId ?? "");
@@ -503,6 +512,7 @@ const EPHEMERAL_EVENTS = [
   "side_activity",
   "whisper_activity",
   "facts_updated",
+  "relationships_updated",
   "battle_map_updated",
 ];
 const EPHEMERAL_EVENT_SET = new Set(EPHEMERAL_EVENTS);

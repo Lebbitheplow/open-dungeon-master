@@ -15,6 +15,7 @@ import { parseChapterJson, shouldCloseChapter } from "@/lib/dm/chapter-logic";
 import { recordExtractedFacts } from "@/lib/db/facts";
 import type { FactCandidate } from "@/lib/dm/fact-logic";
 import { advanceNpcAgency } from "@/lib/dm/npc-agency";
+import { advanceRelationships } from "@/lib/dm/relationship-tick";
 import { captureBoundarySnapshot } from "@/lib/db/snapshots";
 import { indexChapter } from "@/lib/dm/memory-index";
 import { arcExhausted } from "@/lib/dm/arc-logic";
@@ -279,9 +280,18 @@ export async function maybeCloseChapter(
     console.error("[npc-agency] chapter pass failed", error);
   }
 
+  // Relationships move with the chapter too: repeated-beat fatigue forgives
+  // itself, and someone the party has not seen for chapters pulls at the
+  // story.
+  try {
+    advanceRelationships(campaignId, transcript);
+  } catch (error) {
+    console.error("[relationships] chapter pass failed", error);
+  }
+
   // Freeze the settled world as the new chapter's rewind point, after every
-  // close-time cascade (facts, XP, arc, NPC agency) has landed. Never
-  // blocks a close.
+  // close-time cascade (facts, XP, arc, NPC agency, relationships) has landed.
+  // Never blocks a close.
   try {
     captureBoundarySnapshot(campaignId, result.opened.index, seqEnd);
   } catch (error) {

@@ -98,7 +98,7 @@ async function assembleEvidence(request: LoreCheckRequest): Promise<string[]> {
     const npc = request.npcName ? getNpcByName(campaignId, request.npcName) : null;
     const roster = npc ? [npc] : listNpcs(campaignId).slice(0, 8);
     const lines = roster.map((entry) => {
-      const fragment = agencyFragment(entry.agency, new Map());
+      const fragment = agencyFragment(entry.agency);
       return `[fact:npc-${entry.name}] ${entry.name}: ${entry.attitude}${entry.trait ? `, ${entry.trait}` : ""}${fragment ? ` | ${fragment}` : ""}`;
     });
     if (lines.length) {

@@ -62,7 +62,7 @@ function worldContext(campaignId: string): string {
   const party = listSheets(campaignId)
     .map(
       (sheet) =>
-        `- ${sheet.name}: level ${sheet.level} ${sheet.race} ${sheet.class}${sheet.subclass ? ` (${sheet.subclass})` : ""}, background ${sheet.background || "unknown"}${sheet.backstory ? `\n  backstory: ${sheet.backstory.slice(0, 400)}` : ""}`,
+        `- ${sheet.name}: level ${sheet.level} ${sheet.race} ${sheet.class}${sheet.subclass ? ` (${sheet.subclass})` : ""}, background ${sheet.background || "unknown"}, ${sheet.spellcasting ? "casts spells" : "casts nothing at all"}${sheet.backstory ? `\n  backstory: ${sheet.backstory.slice(0, 400)}` : ""}`,
     )
     .join("\n");
   return [
@@ -126,6 +126,30 @@ function partyCompositionContext(campaignId: string): string {
   return `Party composition notes; the plan must keep these promises (tie at least one boss, ally, or event to each line):\n${lines.join("\n")}`;
 }
 
+// Capability roster for the passes that write real beats. They see the arc
+// and the chapters but never the sheets, and a planner told not to gate the
+// story behind magic nobody has needs to know who is actually holding what.
+// Deliberately coarse: spell lists change at every level, and the question a
+// beat turns on is only whether ANYONE at this table can do the thing.
+// Saga generation skips it because worldContext already carries the roster.
+function partyCapabilityContext(campaignId: string): string {
+  const lines = listSheets(campaignId).map(
+    (sheet) =>
+      `- ${sheet.name}: level ${sheet.level} ${sheet.subclass ? `${sheet.subclass} ` : ""}${sheet.class}${sheet.isCompanion ? " (AI companion)" : ""}, ${sheet.spellcasting ? "casts spells" : "casts nothing at all"}.`,
+  );
+  if (!lines.length) {
+    return "";
+  }
+  return `Who is actually at this table; every beat you write must be reachable by these people:\n${lines.join("\n")}`;
+}
+
+// The planning-side half of the DM's "never gate the story behind a
+// capability nobody has" rule. A beat whose only road runs through a
+// dispelled ward is unplayable at a party with no caster, and the DM cannot
+// rescue it at the table without abandoning the beat, so it must never be
+// written in the first place.
+const SOLVABLE_RULE = `Every beat, sub-arc step, and event must be reachable by THIS party, so read the roster before you write one. Never make the only way forward a spell, proficiency, or item nobody has: no "dispel the ward" with no caster who could, no "read the Draconic tablet" with no reader. Build the obstacle around what these characters can actually do, or write in the ally, item, or second route that gets them through.`;
+
 const EVENT_SHAPE =
   '{"kind": "npc_encounter"|"ally"|"twist"|"betrayal"|"deadline"|"discovery"|"setpiece", "name": string, "detail": string, "trigger": string, "actHint": int|null}';
 
@@ -161,6 +185,8 @@ Reply with ONLY a strict JSON object, no code fences, shaped exactly: ${SAGA_SHA
 ${sagaFieldRules(profile)}
 
 ${EVENT_RULES}
+
+${SOLVABLE_RULE}
 
 ${SAGA_STYLE_RULES}`;
 }
@@ -392,6 +418,8 @@ newEvents: at most 2 additional planned moments for the act; include one ally ev
 
 ${EVENT_RULES}
 
+${SOLVABLE_RULE}
+
 If play has invalidated parts of the sketch (a dead boss, a betrayed ally), adapt the act to what is true now rather than forcing the sketch. Reuse the campaign's existing cast and open threads instead of inventing a fresh world, and honor the party composition notes when they are given. Do NOT re-propose an event the arc already lists. Every string under 200 characters. Players never see this.`;
 
 const UPGRADE_SYSTEM = `An ongoing D&D 5e campaign has a story arc but no saga plan above it. Wrap the existing arc into a longer saga: treat the acts already written as the saga's opening acts and sketch ONLY the acts still ahead. Keep it brief and answer quickly.
@@ -399,6 +427,8 @@ const UPGRADE_SYSTEM = `An ongoing D&D 5e campaign has a story arc but no saga p
 Reply with ONLY a strict JSON object, no code fences, shaped exactly: {"title": string, "plannedActs": int, "sketches": [{"milestone": string, "boss": ${BOSS_SHAPE}, "allies": string[], "hooks": string[]}], "finaleBoss": ${BOSS_SHAPE}}
 
 title: a name for the whole saga, existing acts included. sketches: one entry per FUTURE act, in order, escalating toward a new larger finale beyond the arc's current one; each has a one-sentence milestone, a named boss the act builds toward (with one sentence of detail), 0 to 2 planned companion or ally encounters, and 0 to 2 hooks into a specific party member's abilities, pets, or backstory. finaleBoss: the last act's boss. plannedActs: the total number of acts including the ones already written.
+
+${SOLVABLE_RULE}
 
 You may NOT change, reword, reorder, or renumber the existing beats or acts: those already happened or are in play. Grow the future out of the arc's own antagonist, threats, and unfinished threads, and honor the party composition notes when they are given. Every string under 200 characters. Players never see this.`;
 
@@ -412,6 +442,8 @@ ${sagaFieldRules(profile)}
 
 ${EVENT_RULES}
 
+${SOLVABLE_RULE}
+
 Sequel rules: grow the new premise and stakes out of the concluded saga's consequences (a power vacuum, a surviving lieutenant, a debt come due, something the party's own victory unleashed). Never recycle a dead antagonist as the villain again. Reuse surviving cast members the party cares about in cast, and let act 1 open in the aftermath of the finale the party just played. ${SAGA_STYLE_RULES}`;
 }
 
@@ -422,6 +454,8 @@ Reply with ONLY a strict JSON object, no code fences, shaped exactly: {"beats": 
 beats: 3 to 4 ordered beats for the new act, one short sentence each, growing out of what the party actually did rather than repeating the old plot. finale: what this act escalates toward. antagonist: keep the existing one if they survived and still matter, otherwise name who steps into the role now (an escalation of the old threat, a survivor with a grudge, or something the party's own victory unleashed). newEvents: at most 2 planned special moments for the new act.
 
 ${EVENT_RULES}
+
+${SOLVABLE_RULE}
 
 Reuse the campaign's existing cast and unfinished threads instead of inventing a fresh world. Do NOT re-propose an event the arc already lists; newEvents is only for moments that do not exist yet. Every string under 200 characters. Players never see this.`;
 
@@ -496,6 +530,7 @@ async function extendStoryArc(campaignId: string, arc: StoryArc): Promise<StoryA
     [
       `Completed arc:\n${renderArcForPrompt(arc)}`,
       chapters ? `Chapters the party actually played:\n${chapters}` : "",
+      partyCapabilityContext(campaignId),
     ]
       .filter(Boolean)
       .join("\n\n"),
@@ -534,6 +569,7 @@ async function upgradeToSaga(campaignId: string, arc: StoryArc): Promise<StoryAr
     [
       `Current arc:\n${renderArcForPrompt(arc)}`,
       chapters ? `Chapters the party actually played:\n${chapters}` : "",
+      partyCapabilityContext(campaignId),
       partyCompositionContext(campaignId),
       `Sketch ${minFuture === maxFuture ? String(minFuture) : `${minFuture} to ${maxFuture}`} future act${maxFuture === 1 ? "" : "s"}.`,
     ]
@@ -579,6 +615,7 @@ async function detailNextAct(campaignId: string, arc: StoryArc): Promise<StoryAr
       `Current arc:\n${renderArcForPrompt(arc)}`,
       `The next act's sketch:\n${sketchLines}`,
       chapters ? `Chapters the party actually played:\n${chapters}` : "",
+      partyCapabilityContext(campaignId),
       partyCompositionContext(campaignId),
     ]
       .filter(Boolean)
@@ -615,6 +652,7 @@ async function chainSaga(campaignId: string, arc: StoryArc): Promise<StoryArc> {
     [
       `The concluded saga:\n${renderArcForPrompt(arc)}`,
       chapters ? `Chapters the party actually played:\n${chapters}` : "",
+      partyCapabilityContext(campaignId),
       partyCompositionContext(campaignId),
     ]
       .filter(Boolean)

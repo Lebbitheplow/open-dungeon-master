@@ -3,6 +3,7 @@
 import {
   BookMarked,
   BookOpen,
+  Heart,
   Map as MapIcon,
   MessageSquareText,
   MessagesSquare,
@@ -23,6 +24,7 @@ export type PanelTab =
   | "map"
   | "story"
   | "facts"
+  | "bonds"
   | "notes"
   | "chat"
   | "log"
@@ -40,10 +42,12 @@ export function buildPanelTabs({
   hasBattleMap,
   mapsEnabled,
   hasSettings,
+  relationshipsEnabled,
 }: {
   hasBattleMap: boolean;
   mapsEnabled: boolean;
   hasSettings: boolean;
+  relationshipsEnabled: boolean;
 }): PanelTabDef[] {
   return [
     ["party", "Party", Users, "Character sheets, HP and conditions for the whole party."],
@@ -55,6 +59,16 @@ export function buildPanelTabs({
       : []),
     ["story", "Story", BookOpen, "Chapters and the tale so far."],
     ["facts", "Facts", BookMarked, "The world-state record: facts the DM never contradicts."],
+    ...(relationshipsEnabled
+      ? ([
+          [
+            "bonds",
+            "Bonds",
+            Heart,
+            "Where each character stands with the NPCs and companions they have dealt with.",
+          ],
+        ] as PanelTabDef[])
+      : []),
     ["notes", "Notes", StickyNote, "Suggest story notes; the party lead approves them."],
     ["chat", "Chat", MessagesSquare, "Side chat between players. The DM does not see it."],
     ["log", "Log", ScrollText, "Dice rolls and DM stat changes, audited."],

@@ -520,6 +520,47 @@ function ensureSchema(db: Database.Database) {
       UNIQUE (campaign_id, name)
     );
 
+    -- How one character and one NPC or AI companion actually stand with each
+    -- other (src/lib/dm/relationship-logic.ts). approval is a single
+    -- -100..100 meter running from open hostility to devotion, with the
+    -- friendship tier DERIVED from it (never stored, so word and number
+    -- cannot disagree) and romance as an explicit ladder gated behind it.
+    --
+    -- Kept in its own table rather than on npcs or character_sheets because
+    -- a bond must outlive both: a companion's sheet is deleted when they are
+    -- dismissed, and someone the party leaves behind still has to remember
+    -- what they are to each other when they turn up three chapters later.
+    -- subject_id is a convenience link to the npcs row or companion sheet
+    -- and may go stale; subject_name is what identifies the relationship.
+    -- last_shift_turn guards against moving the romance twice in one
+    -- exchange. This table supersedes the old npcs.bonds_json, which the
+    -- one-time backfill below folds in and nothing reads afterward.
+    CREATE TABLE IF NOT EXISTS relationships (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      character_id TEXT NOT NULL,
+      character_name TEXT NOT NULL,
+      subject_kind TEXT NOT NULL DEFAULT 'npc'
+        CHECK (subject_kind IN ('npc','companion')),
+      subject_name TEXT NOT NULL,
+      subject_id TEXT NOT NULL DEFAULT '',
+      approval INTEGER NOT NULL DEFAULT 0,
+      romance TEXT NOT NULL DEFAULT 'none'
+        CHECK (romance IN ('none','interested','courting','together','betrothed','married')),
+      status TEXT NOT NULL DEFAULT 'active'
+        CHECK (status IN ('active','parted','ended')),
+      flags_json TEXT NOT NULL DEFAULT '[]',
+      memories_json TEXT NOT NULL DEFAULT '[]',
+      beats_json TEXT NOT NULL DEFAULT '{}',
+      apart_chapters INTEGER NOT NULL DEFAULT 0,
+      last_shift_turn TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE (campaign_id, character_id, subject_name)
+    );
+    CREATE INDEX IF NOT EXISTS idx_relationships_campaign
+      ON relationships(campaign_id, status);
+
     -- World-state fact sheet (the "divergence register"): discrete facts
     -- extracted at chapter close (plus manual pins and simulation results),
     -- injected into GAME STATE as server-tracked canon. known_by scopes who
@@ -970,13 +1011,55 @@ function ensureSchema(db: Database.Database) {
     ["goals_json", `TEXT NOT NULL DEFAULT ''`],
     // Directed NPC-to-NPC edges: [{npcName, score -3..3, note?}].
     ["relations_json", `TEXT NOT NULL DEFAULT '[]'`],
-    // Per-character relation meters: [{characterId, score -3..3}].
+    // SUPERSEDED by the relationships table: the old per-character meter,
+    // [{characterId, score -3..3}]. The backfill below folds every row into
+    // an approval score; nothing reads or writes this column afterward. The
+    // column stays so an older build could still open the database.
     ["bonds_json", `TEXT NOT NULL DEFAULT '[]'`],
     // {ignored, engaged} chapter counters; being ignored cools an NPC.
     ["pressure_json", `TEXT NOT NULL DEFAULT ''`],
     // Link to the story arc's cast entry (ArcNpc id) when name-matched.
     ["arc_cast_id", `TEXT NOT NULL DEFAULT ''`],
   ]);
+
+  // The romance meter was generalized into the relationship meter: one
+  // approval score spanning hostility to devotion, with romance as a ladder
+  // on top. A table rebuild rather than a rename because the old stage CHECK
+  // named a rung ('warm') the new ladder does not have, and SQLite cannot
+  // alter a CHECK. Rows carry over with their meter intact; 'warm' (an
+  // unspoken spark) is now simply a high approval with no romance declared.
+  const legacyRomances = db
+    .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'romances'`)
+    .get();
+  if (legacyRomances) {
+    db.exec(`
+      INSERT OR IGNORE INTO relationships (
+        id, campaign_id, character_id, character_name, subject_kind, subject_name,
+        subject_id, approval, romance, status, flags_json, memories_json, beats_json,
+        apart_chapters, last_shift_turn, created_at, updated_at
+      )
+      SELECT id, campaign_id, character_id, character_name, subject_kind, subject_name,
+             subject_id, affection,
+             CASE stage WHEN 'warm' THEN 'none' ELSE stage END,
+             status, flags_json, memories_json, gestures_json,
+             apart_chapters, last_shift_turn, created_at, updated_at
+      FROM romances;
+      DROP TABLE romances;
+    `);
+  }
+
+  // Folds the old npcs.bonds_json meters into the relationships table so a
+  // grudge or a friendship earned before the meter existed arrives at the
+  // tier it always meant. One-time, guarded by an app_settings marker.
+  const bondMarker = db
+    .prepare(`SELECT key FROM app_settings WHERE key = 'npc_bond_backfill_done'`)
+    .get();
+  if (!bondMarker) {
+    backfillNpcBonds(db);
+    db.prepare(
+      `INSERT INTO app_settings (key, value_json, updated_at) VALUES (?, ?, ?)`,
+    ).run("npc_bond_backfill_done", "true", new Date().toISOString());
+  }
 
   // Portraits uploaded in-game used to reach the library only on campaign
   // end; they now mirror immediately. One-time catch-up for portraits that
@@ -1024,6 +1107,60 @@ function backfillSheetPortraits(db: Database.Database) {
       }
     } catch {
       // Unparseable blobs stay untouched.
+    }
+  }
+}
+
+// Folds every npcs.bonds_json entry into a relationships row at the meter
+// value the coarse -3..+3 score always stood for. Skips bonds whose
+// character sheet is gone and never overwrites a relationship the new
+// system already opened.
+function backfillNpcBonds(db: Database.Database) {
+  const npcs = db
+    .prepare(`SELECT id, campaign_id, name, bonds_json FROM npcs WHERE bonds_json != '[]'`)
+    .all() as Array<{ id: string; campaign_id: string; name: string; bonds_json: string }>;
+  if (!npcs.length) {
+    return;
+  }
+  const sheetName = db.prepare(`SELECT name FROM character_sheets WHERE id = ?`);
+  const insert = db.prepare(
+    `INSERT OR IGNORE INTO relationships
+       (id, campaign_id, character_id, character_name, subject_kind, subject_name,
+        subject_id, approval, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'npc', ?, ?, ?, ?, ?)`,
+  );
+  const now = new Date().toISOString();
+  for (const npc of npcs) {
+    let bonds: Array<{ characterId?: unknown; score?: unknown }>;
+    try {
+      const parsed = JSON.parse(npc.bonds_json);
+      bonds = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      continue;
+    }
+    for (const bond of bonds) {
+      const characterId = typeof bond?.characterId === "string" ? bond.characterId : "";
+      const score = Math.round(Number(bond?.score ?? 0));
+      if (!characterId || !score) {
+        continue;
+      }
+      const sheet = sheetName.get(characterId) as { name: string } | undefined;
+      if (!sheet) {
+        continue;
+      }
+      insert.run(
+        crypto.randomUUID(),
+        npc.campaign_id,
+        characterId,
+        sheet.name,
+        npc.name,
+        npc.id,
+        // Mirrors approvalFromBond in src/lib/dm/relationship-logic.ts; kept
+        // as a literal here so the schema pass imports nothing.
+        Math.max(-100, Math.min(100, score * 15)),
+        now,
+        now,
+      );
     }
   }
 }

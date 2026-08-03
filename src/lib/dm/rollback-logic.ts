@@ -9,6 +9,7 @@
 export const SNAPSHOT_TABLES = [
   "character_sheets",
   "npcs",
+  "relationships",
   "locations",
   "world_facts",
   "encounters",

@@ -213,6 +213,7 @@ export function SessionView({
         hasBattleMap: Boolean(state.battleMap),
         mapsEnabled: campaign?.gameSettings?.mapsEnabled ?? true,
         hasSettings: Boolean(campaign),
+        relationshipsEnabled: campaign?.gameSettings?.relationships !== "off",
       }),
     [state.battleMap, campaign],
   );
@@ -537,6 +538,7 @@ export function SessionView({
           pendingCount={pendingNoteCount}
           chatUnread={chatUnreadTotal}
           mobileVisible={mobileView === "panel"}
+          relationshipsVersion={state.relationshipsVersion}
         />
       </div>
 

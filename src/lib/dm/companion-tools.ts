@@ -8,6 +8,10 @@ import {
   patchSheet,
 } from "@/lib/db/sheets";
 import { createCompanionUser, deleteCompanionUser } from "@/lib/db/users";
+import {
+  partRelationshipsWithSubject,
+  rejoinRelationshipsWithSubject,
+} from "@/lib/db/relationships";
 import { insertCharacterEvent } from "@/lib/db/character-events";
 import {
   activePublicEncounter,
@@ -400,6 +404,9 @@ export function finalizeNewCompanion(
   const created = createSheet(campaign.id, botUser.id, level, input);
   const sheet = markSheetAsCompanion(created.id, kind, personality) ?? created;
   publishPersisted(campaign.id, "sheet_updated", { sheet });
+  // A companion the party once travelled with can be written back in; every
+  // standing with them picks up exactly where it stopped.
+  rejoinRelationshipsWithSubject(campaign.id, sheet.name, sheet.id);
   insertCharacterEvent({
     libraryCharacterId: null,
     campaignCharacterId: sheet.id,
@@ -538,6 +545,10 @@ function removeCompanion(campaign: Campaign, sheet: CharacterSheet, reason?: str
     kind: "story",
     summary: `${sheet.name} left the party${reason ? `: ${reason}` : "."}`,
   });
+  // Their sheet goes, but what the party felt for them does not: a bond with
+  // a departing companion is parted, not ended, so it comes back whole if
+  // the story brings them back (src/lib/db/relationships.ts).
+  partRelationshipsWithSubject(campaign.id, sheet.name);
   publishPersisted(campaign.id, "sheet_deleted", { sheetId: sheet.id, userId: sheet.userId });
   // The bot user owns nothing but this sheet; the FK cascade removes it.
   deleteCompanionUser(sheet.userId);

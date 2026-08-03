@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, Dices, Globe, Hand, Map, PackageCheck, Sparkles, UserPlus, Volume2 } from "lucide-react";
+import { Bot, Dices, Globe, Hand, Heart, Map, PackageCheck, Sparkles, UserPlus, Volume2 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -103,6 +103,14 @@ export function GameSettingsPanel({
           <span className="flex items-center gap-1.5">
             <PackageCheck className="size-3.5 text-amber-200" />
             {settings.inventoryApprovals ? "Item offers need approval" : "Item changes auto-apply"}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Heart className="size-3.5 text-amber-200" />
+            {settings.relationships === "off"
+              ? "Bonds off"
+              : settings.romance !== "off"
+                ? "Bonds and romance tracked"
+                : "Bonds tracked, romance off"}
           </span>
           <span className="flex items-center gap-1.5">
             <Bot className="size-3.5 text-amber-200" />
@@ -317,6 +325,48 @@ export function GameSettingsPanel({
             {settings.inventoryApprovals
               ? "Players confirm DM item and gold changes before they apply."
               : "DM item and gold changes apply immediately (lead can undo)."}
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="w-16 text-stone-500">Bonds</span>
+          <Tooltip content="How each NPC and AI companion feels about each character, tracked by the server on one meter from hostile through neutral to devoted. Deeds move it, and the same deed lands differently on different people: mercy wins over a kind healer and irritates a hard-bitten mercenary. Standing shows in the Bonds tab and colors how the DM plays them.">
+            <button
+              type="button"
+              onClick={() =>
+                patch({ relationships: settings.relationships === "off" ? "on" : "off" })
+              }
+              className={cn(
+                "rounded-md border px-2 py-1",
+                settings.relationships !== "off"
+                  ? "border-amber-700 bg-amber-950/50 text-amber-200"
+                  : "border-stone-700 text-stone-400",
+              )}
+            >
+              Bonds {settings.relationships !== "off" ? "on" : "off"}
+            </button>
+          </Tooltip>
+          {settings.relationships !== "off" ? (
+            <Tooltip content="The romance ladder on top of the bond meter: interested, courting, together, betrothed, married. Nobody can be romanced who does not already like the character, players always make the first move, and intimate scenes always fade to black.">
+              <button
+                type="button"
+                onClick={() => patch({ romance: settings.romance === "off" ? "on" : "off" })}
+                className={cn(
+                  "rounded-md border px-2 py-1",
+                  settings.romance !== "off"
+                    ? "border-amber-700 bg-amber-950/50 text-amber-200"
+                    : "border-stone-700 text-stone-400",
+                )}
+              >
+                Romance {settings.romance !== "off" ? "on" : "off"}
+              </button>
+            </Tooltip>
+          ) : null}
+          <span className="text-stone-500">
+            {settings.relationships === "off"
+              ? "The DM tracks no personal standing; NPCs react to the party as a whole."
+              : settings.romance !== "off"
+                ? "Standing is tracked per character, and romance can grow from it."
+                : "Standing is tracked per character; romance is off."}
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-2">

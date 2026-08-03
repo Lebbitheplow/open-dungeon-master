@@ -57,6 +57,15 @@ export const gameSettingsSchema = z.object({
   // own cap so a temporary ally never eats a party slot.
   maxCompanions: z.number().int().min(1).max(4).default(2),
   maxGuests: z.number().int().min(1).max(4).default(2),
+  // Server-tracked standing between each character and each NPC or AI
+  // companion: one approval meter from hostility to devotion, plus a memory
+  // of the beats that got them there (src/lib/dm/relationship-logic.ts).
+  // 'off' removes the tools and the prompt rules entirely.
+  relationships: z.enum(["on", "off"]).default("on"),
+  // The romance ladder layered on top of the approval meter (interested,
+  // courting, together, betrothed, married). Requires relationships to be
+  // on. Intimate scenes always fade to black; there is no explicit mode.
+  romance: z.enum(["on", "off"]).default("on"),
   // When on, DM-initiated item and gold changes to player characters become
   // pending offers the owning player accepts or declines instead of applying
   // immediately (src/lib/dm/proposal-logic.ts). Off preserves auto-apply.

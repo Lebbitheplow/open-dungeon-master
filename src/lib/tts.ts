@@ -8,9 +8,10 @@ import { TTS_VOICES } from "@/lib/tts-voices";
 import { configValue, getGlobalConfig } from "@/lib/app-config";
 
 // Narration TTS via the local Kokoro-FastAPI service (:8880). Audio is
-// rendered on the serial media queue after a DM message persists, saved
-// under public/generated-audio, and announced with a tts_ready event that
-// clients autoplay (latest-only) with per-user mute.
+// rendered on the media queue's own "tts" lane after a DM message persists,
+// so narration never waits behind a ComfyUI render, saved under
+// public/generated-audio, and announced with a tts_ready event that clients
+// autoplay (latest-only) with per-user mute.
 
 const CHUNK_CHAR_LIMIT = 1_800;
 
@@ -69,34 +70,38 @@ export function enqueueNarrationAudio(
     return Promise.resolve();
   }
   publishMediaStatus(campaignId, "tts", messageId, "queued");
-  return enqueueMediaJob(`tts ${messageId}`, async () => {
-    publishMediaStatus(campaignId, "tts", messageId, "generating");
-    const chunks = chunkSentences(speech);
-    const buffers: Buffer[] = [];
-    try {
-      for (const chunk of chunks) {
-        buffers.push(await kokoroSpeech(chunk, voice));
+  return enqueueMediaJob(
+    `tts ${messageId}`,
+    async () => {
+      publishMediaStatus(campaignId, "tts", messageId, "generating");
+      const chunks = chunkSentences(speech);
+      const buffers: Buffer[] = [];
+      try {
+        for (const chunk of chunks) {
+          buffers.push(await kokoroSpeech(chunk, voice));
+        }
+      } catch (error) {
+        publishMediaStatus(campaignId, "tts", messageId, "failed");
+        throw error;
       }
-    } catch (error) {
-      publishMediaStatus(campaignId, "tts", messageId, "failed");
-      throw error;
-    }
-    // Kokoro-FastAPI emits plain MPEG frames; concatenation plays cleanly.
-    const audio = Buffer.concat(buffers);
-    const directory = path.join(process.cwd(), "public", "generated-audio", campaignId);
-    mkdirSync(directory, { recursive: true });
-    writeFileSync(path.join(directory, `${messageId}.mp3`), audio);
-    publishPersisted(campaignId, "tts_ready", {
-      messageId,
-      url: `/generated-audio/${campaignId}/${messageId}.mp3`,
-    });
-  });
+      // Kokoro-FastAPI emits plain MPEG frames; concatenation plays cleanly.
+      const audio = Buffer.concat(buffers);
+      const directory = path.join(process.cwd(), "public", "generated-audio", campaignId);
+      mkdirSync(directory, { recursive: true });
+      writeFileSync(path.join(directory, `${messageId}.mp3`), audio);
+      publishPersisted(campaignId, "tts_ready", {
+        messageId,
+        url: `/generated-audio/${campaignId}/${messageId}.mp3`,
+      });
+    },
+    "tts",
+  );
 }
 
 // Voice previews: Kokoro ships no sample clips, but one short line renders in
 // well under a second, so the first request for a voice generates it and every
-// later one is served from disk. Kept off the media queue on purpose, so a
-// preview never waits behind a portrait render; Kokoro runs on CPU here and
+// later one is served from disk. Kept off the media queue entirely on purpose,
+// so a preview never waits behind narration either; Kokoro runs on CPU here and
 // does not contend with the GPU jobs that queue exists to serialize.
 const PREVIEW_LINE = "The tavern door creaks open. Roll for initiative, adventurer.";
 

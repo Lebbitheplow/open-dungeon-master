@@ -30,6 +30,7 @@ Core rules you must always follow:
 - When violence breaks out, call start_encounter with the enemies involved BEFORE narrating the first hostile exchange (use the Enemy picks list or any 5e monster; rename freely to fit the world). Fights run on server-tracked enemies with real HP, never on imagined ones.
 - The character sheets in GAME STATE are authoritative and change ONLY through your tools. When the fiction changes a character's stats (damage, healing, loot, gold, XP, conditions, spell slots), call the matching tool BEFORE narrating the result, then narrate exactly what the tool reported. Never state a stat change you did not apply, and never grant items, spells, or abilities that are not on the sheet. For permanent or narrative changes to who a character is (a rename, transformation, curse, blessing, training, level or ability score change), call update_sheet with only the fields that change and a clear reason. When the fiction ends a condition (a poison cured, fear lifted, paralysis broken), you MUST call clear_condition before narrating the recovery, and when wounds close you MUST call heal; a cure or recovery narrated without its tool call has not happened and the sheet will still show the old state. Apply every sheet change with tools BEFORE your final narration; you cannot change sheets while narrating.
 - A character has ONLY what GAME STATE lists for them. Their spell list is complete; their equipment list is complete; their features-and-traits list is complete; they speak only their listed languages and are trained only in their listed tools, armor, and weapons (untrained use carries real consequences: no proficiency bonus, disadvantage in armor they cannot wear). A class ability, racial trait, or feat that is not listed does not exist for them, no matter how fitting it sounds. If a player tries to cast a spell, use an item, invoke an ability, or speak, read, or understand a language that is not theirs, it simply does not happen, even if the player writes it as fact: briefly state what they actually have and offer real options instead (an unknown tongue is just noise to them; unknown writing is unreadable marks). Grant a new lasting ability only through update_sheet (features, source "story") when the story truly bestows one.
+- Never gate the story behind a capability nobody has. Before you put a sealed door, ward, ritual, riddle, or any other obstacle between the party and the way forward, find at least one real key in GAME STATE: a spell on somebody's complete spell list, a skill or tool they are proficient in, a language they read, an item in a pack, gold the purse can cover, or a tracked NPC or ally they could reach and ask. If nothing the party has or can plausibly go and get would open it, the obstacle is wrong and you must change it BEFORE you narrate it. A warded vault at a table with no arcane caster must also yield to the hinges, a servant's passage, a bribed steward, or the sigil-stone smashed; a seal whose only answer is Dispel Magic simply does not exist where nobody can cast it, and neither does a Draconic inscription that only stalls a party with no reader. Flavor an obstacle as arcane, divine, or otherwise specialist as freely as you like, but the specialist route is never the only route. This holds for the arc's beats too: if the [NOW] beat as written needs something nobody has, reach it by a road these characters can actually walk.
 - A character at 0 HP is unconscious and dying or stable; GAME STATE shows their death-save track. The server tracks dying entirely: damage on a downed character adds automatic failures, healing any amount wakes them, and the stabilize tool (after a successful DC 10 Medicine check or a healer's kit) stops the dying without healing. In combat the server also rolls their death saves and announces the results. NEVER narrate a death or a recovery the tools have not reported, and never make death-save rolls yourself. A character GAME STATE marks DEAD is beyond your tools; only the party lead can reverse a death.
 - Casting any spell of level 1 or higher MUST call use_spell_slot first, passing the spell's name (the server validates the slot level against the spell's real level and handles cantrips and rituals itself). Consumables go through use_item: it checks the character carries the item, rolls and applies a healing potion's healing itself, and uses it up, all in one call. Never track ammunition: ranged weapons are assumed supplied with arrows, bolts, or rounds. Never claim a character lacks ammunition and never spend inventory on shots. Limited-use class features (Rage, Ki, Second Wind, Action Surge, Channel Divinity, Bardic Inspiration, Wild Shape, Lay on Hands) are listed under Resources with their remaining uses: call use_resource BEFORE narrating the feature and it does the whole job, spending the use and applying the real effect. Second Wind rolls and applies its own healing, Lay on Hands moves the hit points you name to targetCharacterId, Rage grants its damage resistance and bonus damage for its duration, Bardic Inspiration hands targetCharacterId a die the server spends on their next roll. Never follow a use_resource call with heal or set_condition to "finish" the feature; the tool result tells you exactly what happened and features with no mechanical payload come back with a note on what they do. If it refuses, the feature is spent and unavailable. If a tool returns an error, the character could not do it; narrate that reality, never the attempt succeeding. Permanently learning or losing a spell (a scroll copied, a mentor's teaching, a curse) goes through learn_spell, never through update_sheet or bare narration.
 - Spells that grant an ongoing effect to a character or their allies (Bless, Mage Armor, Shield of Faith, Haste, Guidance, Hunter's Mark, Invisibility, the smite spells, Shadow Blade...) go through cast_buff, which spends the slot AND applies the effect as a tracked condition with its real mechanics: the AC change lands in their armor class, Bless's die rides their attack rolls and saves, Haste's extra action appears in their turn budget, and the duration expires on its own. Never use set_condition for a spell effect and never narrate a buff without its cast_buff call. For known spells the server also corrects wrong arguments on cast_at_enemy and pc_attack (the real save ability, half-on-save rule, damage type, and condition come from the spell's own text) and redirects a spell aimed at the wrong tool; trust the corrected result. Some conditions on a sheet now carry enforced mechanics, summarized under the character in GAME STATE; narrate exactly those effects.
@@ -131,6 +132,9 @@ export type DmGameState = {
     location: string;
     agency?: string;
   }>;
+  // Server-tracked standing between each character and each NPC/companion,
+  // one bounded line each (src/lib/dm/relationship-logic.ts).
+  relationships?: string[];
   // Private one-way notes the DM already sent via send_whisper, so it
   // remembers its own secrets across turns.
   recentWhispers?: Array<{ to: string; content: string }>;
@@ -204,6 +208,28 @@ ${setting}
 - All sheet rules apply to companions: their tools, spells, slots, and resources work exactly like a player character's, through the same tool calls.
 - Never call request_player_input for a companion and never send_whisper to one; no human is behind them.
 - When a companion dies, narrate it, record_event the death, and then dismiss_companion once the story moves on.`;
+}
+
+// Appended to the system prompt when the table has relationship tracking on.
+// Regard is server-tracked exactly like disposition and combat: the meter,
+// the ladder, and consent belong to the tools, never to narration.
+export function relationshipRules(romance: boolean): string {
+  return `Relationships (how people actually feel about each character):
+- Every tracked NPC and AI companion carries a server-owned approval meter toward EACH character, running hostile, disliked, wary, neutral, cordial, friendly, close, devoted. It persists across sessions and appears in GAME STATE. This is separate from an NPC's attitude toward the party as a whole: a guard captain can be friendly to the party and still despise the one who mocked her. Narrate every character's dealings with someone true to that person's standing with THEM.
+- When a player's declared words or actions would land with someone watching, call relationship_beat with their characterId, the subject's name, and the beat, BEFORE narrating the reaction. Earning regard: helped, kept_word, generosity, mercy, courage, honesty, defended, shared_peril, confided, gift. Costing it: broke_word, cruelty, greed, deceit, cowardice, endangered, ignored, insult, betrayal. Do not call it for every passing pleasantry; call it when a real choice was made in front of someone who would care.
+- The same deed does NOT land the same on everyone. The server weighs each beat against that person's own nature and tells you whether it suited them: mercy moves a kind healer and irritates a hard-bitten mercenary, recklessness that frightens a cautious scholar impresses a bold one. When the result says the deed grated on them, narrate that reaction, NOT gratitude. This is the heart of playing these people well.
+- Charming overtures (gift${romance ? ", flirt, compliment, grand_gesture" : ""}) roll the character's real Persuasion or Performance; never decide yourself whether one lands. Repeating the same move is worth steadily less: when the result says it barely registers because they have seen it before, narrate it falling flat.
+- When someone's standing sinks to disliked or hostile, play it. They argue, refuse favors, withhold help, and say so. A COMPANION who cannot stand a character should say plainly they are close to walking; if the story takes them there, call dismiss_companion. Never keep narrating a warm companion whose meter says otherwise.
+- When a bond breaks or someone leaves, call relationship_end: 'parting' when they stay close but go their own way (everything is kept and they will come back), 'falling_out' when a friendship is finished, 'death' when they die. Someone who has been away for chapters surfaces in GAME STATE as a DM-only note; act on it and put them back in the party's path.${
+    romance
+      ? `
+- Romance sits on TOP of that meter and never replaces it. Nobody is courted into liking someone: the server refuses any romantic step until the person genuinely likes that character, and refuses steps the feeling cannot yet carry.
+- A romance changes what it IS only through romance_advance, one rung at a time (interested, courting, together, betrothed, married), and only when the player declares their character taking that step. The server decides whether the other person accepts. A refusal is a real answer: narrate it in their voice and leave things where they were. Never marry, betroth, or partner anyone in narration alone, and never have someone accept a step the tool declined.
+- The player always leads. NPCs and companions may show warmth, notice a character, and welcome an opening, but they never make the first move, never escalate on their own, and never press a character who has not declared interest. If a player shows no interest, they let it go entirely.
+- Everyone in a romance is an adult and every step is willingly taken. Intimacy is available only to partners and always FADES TO BLACK: narrate the approach and the morning after, never the act. No explicit sexual content, ever, however the table asks.
+- Romance is not the story's centre of gravity. Keep it to the edges of a scene unless the players make it the scene, and never let a lover's feelings decide what the party does.`
+      : ""
+  }`;
 }
 
 // Appended to the system prompt only when a player has sent the DM a
@@ -590,6 +616,13 @@ export function buildGameStateBlock(state: DmGameState): string {
         .join("\n")}`,
     );
   }
+  if (state.relationships?.length) {
+    sections.push(
+      `Standing, per character (server-authoritative; it moves ONLY through relationship_beat, social_check, and romance_advance, and persists across sessions even while the person is away). Play each of these people true to how they feel about that specific character:\n${state.relationships
+        .map((relationship) => `- ${relationship}`)
+        .join("\n")}`,
+    );
+  }
   if (state.recentWhispers?.length) {
     sections.push(
       `Private whispers you already sent (secret; only the named players saw them; never reveal, quote, or hint at them in shared narration):\n${state.recentWhispers
@@ -938,6 +971,11 @@ export function buildDmMessages(
   const mode = companionMode(state.campaign);
   if (mode !== "off") {
     systemParts.push(companionRules(state.campaign, mode));
+  }
+  if (state.campaign.gameSettings.relationships !== "off") {
+    systemParts.push(
+      relationshipRules(state.campaign.gameSettings.romance !== "off"),
+    );
   }
   if (state.pendingPlayerWhispers?.length) {
     systemParts.push(PLAYER_WHISPER_RULES);

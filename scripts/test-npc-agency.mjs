@@ -15,7 +15,6 @@ import {
   parsePressure,
   parseRelations,
   pressureState,
-  shiftBond,
   shiftRelation,
   tickPressure,
 } from "../src/lib/dm/npc-logic.ts";
@@ -75,16 +74,8 @@ test("drift moves the right axes and clamps", () => {
   assert.equal(cowed.warmth, 2);
 });
 
-test("bond shift creates then moves and clamps", () => {
-  let bonds = shiftBond([], "c1", "up");
-  assert.deepEqual(bonds, [{ characterId: "c1", score: 1 }]);
-  for (let index = 0; index < 5; index += 1) {
-    bonds = shiftBond(bonds, "c1", "up");
-  }
-  assert.equal(bonds[0].score, 3);
-  bonds = shiftBond(bonds, "c2", "down");
-  assert.deepEqual(bonds[1], { characterId: "c2", score: -1 });
-});
+// How an NPC feels about an individual character is no longer a bond on the
+// NPC row; it is the approval meter (scripts/test-relationships.mjs).
 
 test("relation shift is directed and noted", () => {
   let relations = shiftRelation([], "Brekk", -1, "rival");
@@ -140,23 +131,15 @@ test("pressure ticks, resets on engagement, and caps", () => {
 });
 
 test("roster fragment is informative and bounded", () => {
-  const fragment = agencyFragment(
-    {
-      personality: { drive: 3, diligence: 0, boldness: -2, warmth: 2, empathy: 0, composure: 0 },
-      goals: { session: { text: "seize the mill", progress: 1, target: 3 } },
-      relations: [{ npcName: "Brekk", score: -2 }],
-      bonds: [
-        { characterId: "c1", score: 2 },
-        { characterId: "cx", score: 3 },
-      ],
-      pressure: { ignored: 3, engaged: 0 },
-    },
-    new Map([["c1", "Avery"]]),
-  );
+  const fragment = agencyFragment({
+    personality: { drive: 3, diligence: 0, boldness: -2, warmth: 2, empathy: 0, composure: 0 },
+    goals: { session: { text: "seize the mill", progress: 1, target: 3 } },
+    relations: [{ npcName: "Brekk", score: -2 }],
+    bonds: [],
+    pressure: { ignored: 3, engaged: 0 },
+  });
   assert.ok(fragment.includes("driven"));
   assert.ok(fragment.includes("not bold"));
-  assert.ok(fragment.includes("Avery +2"));
-  assert.ok(!fragment.includes("cx"));
   assert.ok(fragment.includes("seize the mill (1/3)"));
   assert.ok(fragment.includes("Brekk -2"));
   assert.ok(fragment.includes("ignored"));
@@ -164,10 +147,13 @@ test("roster fragment is informative and bounded", () => {
 });
 
 test("empty agency renders an empty fragment", () => {
-  const fragment = agencyFragment(
-    { personality: null, goals: {}, relations: [], bonds: [], pressure: { ignored: 0, engaged: 0 } },
-    new Map(),
-  );
+  const fragment = agencyFragment({
+    personality: null,
+    goals: {},
+    relations: [],
+    bonds: [],
+    pressure: { ignored: 0, engaged: 0 },
+  });
   assert.equal(fragment, "");
 });
 
