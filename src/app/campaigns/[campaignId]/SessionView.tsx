@@ -23,6 +23,7 @@ import { ItemProposalBar } from "@/app/campaigns/[campaignId]/ItemProposalBar";
 import { DiceOverlay } from "@/app/campaigns/[campaignId]/DiceOverlay";
 import { LevelUpDialog } from "@/app/campaigns/[campaignId]/LevelUpDialog";
 import { LoreCheckDialog } from "@/app/campaigns/[campaignId]/LoreCheckDialog";
+import { RenarrateDialog } from "@/app/campaigns/[campaignId]/RenarrateDialog";
 import { MessageList } from "@/app/campaigns/[campaignId]/MessageList";
 import type { CampaignMessage } from "@/lib/db/messages";
 import {
@@ -89,6 +90,8 @@ export function SessionView({
     message: CampaignMessage;
     selection: string;
   } | null>(null);
+  // Narration reroll: the DM message whose prose the lead is rerolling.
+  const [renarrate, setRenarrate] = useState<CampaignMessage | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const dice3d = useSyncExternalStore(
@@ -461,6 +464,27 @@ export function SessionView({
                 selection: selection.length > 3 ? selection : "",
               });
             }}
+            onRenarrate={isLead ? (message) => setRenarrate(message) : undefined}
+            onSelectVariant={
+              isLead
+                ? async (message, index) => {
+                    // The server publishes message_updated, so every player's
+                    // chat swaps to the picked take.
+                    const response = await fetch(
+                      `/api/campaigns/${campaign.id}/messages/${message.id}/renarrate`,
+                      {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ action: "select", index }),
+                      },
+                    );
+                    if (!response.ok) {
+                      const data = await response.json().catch(() => ({}));
+                      setError(data.error || "Could not switch takes.");
+                    }
+                  }
+                : undefined
+            }
             onPinCanon={
               isLead
                 ? async (message) => {
@@ -597,6 +621,18 @@ export function SessionView({
           selection={loreCheck.selection}
           isLead={isLead}
           onClose={() => setLoreCheck(null)}
+        />
+      ) : null}
+
+      {renarrate ? (
+        <RenarrateDialog
+          campaignId={campaign.id}
+          message={
+            // Track the live message so the take counter in the dialog
+            // follows the variant the reroll just added.
+            messages.find((entry) => entry.id === renarrate.id) ?? renarrate
+          }
+          onClose={() => setRenarrate(null)}
         />
       ) : null}
 

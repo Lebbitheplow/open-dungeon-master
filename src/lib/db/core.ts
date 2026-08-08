@@ -920,6 +920,15 @@ function ensureSchema(db: Database.Database) {
     // can render that location's map inline. The map itself stays on the
     // locations row; this is only a reference.
     ["location_id", `TEXT`],
+    // Narration rerolls (src/lib/dm/renarrate.ts): every prose variant the
+    // lead has generated for this message, and which one currently stands.
+    // content always mirrors variants_json[variant_index].
+    ["variants_json", `TEXT`],
+    ["variant_index", `INTEGER`],
+    // The dm_turns row this message was narrated from, so a reroll can find
+    // the stored conversation to re-run the final narration call against.
+    // Null on messages written before this column existed.
+    ["dm_turn_id", `TEXT`],
   ]);
 
   addColumns("dm_turns", [

@@ -1,6 +1,17 @@
 "use client";
 
-import { Crown, ImageOff, Loader2, Pin, ShieldQuestion, UserPlus, Volume2 } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Crown,
+  ImageOff,
+  Loader2,
+  Pin,
+  RefreshCw,
+  ShieldQuestion,
+  UserPlus,
+  Volume2,
+} from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
@@ -163,6 +174,8 @@ const MessageItem = memo(function MessageItem({
   onReplayAudio,
   onPinCanon,
   onLoreCheck,
+  onRenarrate,
+  onSelectVariant,
 }: {
   message: CampaignMessage;
   rollsById: Map<string, StoredRoll>;
@@ -174,6 +187,10 @@ const MessageItem = memo(function MessageItem({
   onReplayAudio?: (messageId: string) => void;
   onPinCanon?: (message: CampaignMessage) => void;
   onLoreCheck?: (message: CampaignMessage) => void;
+  // Reroll this narration's prose (lead only, latest DM message only).
+  onRenarrate?: (message: CampaignMessage) => void;
+  // Browse the rerolled takes; the picked one is what the table reads.
+  onSelectVariant?: (message: CampaignMessage, index: number) => void;
 }) {
   if (message.authorType === "system") {
     if (message.content.startsWith(LEAD_NOTE_PREFIX)) {
@@ -209,6 +226,48 @@ const MessageItem = memo(function MessageItem({
           <span className="h-px w-8 bg-gradient-to-r from-transparent to-amber-500/60" />
           Dungeon Master
           <span className="h-px flex-1 bg-gradient-to-r from-amber-500/40 to-transparent" />
+          {(() => {
+            // Reroll takes: the counter only appears once a second one exists.
+            const variants = message.variants ?? [];
+            const index = message.variantIndex ?? 0;
+            if (variants.length < 2 || !onSelectVariant) {
+              return null;
+            }
+            return (
+              <span className="flex items-center gap-0.5 font-mono text-[10px] normal-case tracking-normal text-stone-500">
+                <button
+                  type="button"
+                  onClick={() => onSelectVariant(message, index - 1)}
+                  disabled={index <= 0}
+                  aria-label="Previous take"
+                  className={cn(ui.iconAction, "-my-1.5 p-1 disabled:opacity-30")}
+                >
+                  <ChevronLeft className="size-3.5" />
+                </button>
+                {index + 1} / {variants.length}
+                <button
+                  type="button"
+                  onClick={() => onSelectVariant(message, index + 1)}
+                  disabled={index >= variants.length - 1}
+                  aria-label="Next take"
+                  className={cn(ui.iconAction, "-my-1.5 p-1 disabled:opacity-30")}
+                >
+                  <ChevronRight className="size-3.5" />
+                </button>
+              </span>
+            );
+          })()}
+          {onRenarrate ? (
+            <button
+              type="button"
+              onClick={() => onRenarrate(message)}
+              aria-label="Reroll this narration"
+              title="Reroll: have the DM write this moment again, with the same dice and outcome"
+              className={cn(ui.iconAction, "-my-1.5")}
+            >
+              <RefreshCw className="size-3.5" />
+            </button>
+          ) : null}
           {onLoreCheck ? (
             <button
               type="button"
@@ -341,6 +400,8 @@ export function MessageList({
   onReplayAudio,
   onPinCanon,
   onLoreCheck,
+  onRenarrate,
+  onSelectVariant,
 }: {
   messages: CampaignMessage[];
   rolls: StoredRoll[];
@@ -353,6 +414,8 @@ export function MessageList({
   onReplayAudio?: (messageId: string) => void;
   onPinCanon?: (message: CampaignMessage) => void;
   onLoreCheck?: (message: CampaignMessage) => void;
+  onRenarrate?: (message: CampaignMessage) => void;
+  onSelectVariant?: (message: CampaignMessage, index: number) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -402,6 +465,39 @@ export function MessageList({
     () => (hasLore ? (message: CampaignMessage) => loreRef.current?.(message) : undefined),
     [hasLore],
   );
+  const renarrateRef = useRef(onRenarrate);
+  useEffect(() => {
+    renarrateRef.current = onRenarrate;
+  });
+  const hasRenarrate = Boolean(onRenarrate);
+  const stableRenarrate = useMemo(
+    () =>
+      hasRenarrate ? (message: CampaignMessage) => renarrateRef.current?.(message) : undefined,
+    [hasRenarrate],
+  );
+  const selectVariantRef = useRef(onSelectVariant);
+  useEffect(() => {
+    selectVariantRef.current = onSelectVariant;
+  });
+  const hasSelectVariant = Boolean(onSelectVariant);
+  const stableSelectVariant = useMemo(
+    () =>
+      hasSelectVariant
+        ? (message: CampaignMessage, index: number) =>
+            selectVariantRef.current?.(message, index)
+        : undefined,
+    [hasSelectVariant],
+  );
+  // Only the newest DM message can be rerolled; the server enforces the same
+  // rule, this just keeps the button off every older passage.
+  const latestDmMessageId = useMemo(() => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      if (messages[index].authorType === "dm") {
+        return messages[index].id;
+      }
+    }
+    return "";
+  }, [messages]);
 
   // Follow the conversation only while the reader is already at the bottom;
   // scrolling up to reread must not be yanked back. During narration
@@ -443,6 +539,14 @@ export function MessageList({
           onReplayAudio={stableReplay}
           onPinCanon={stablePin}
           onLoreCheck={stableLore}
+          onRenarrate={
+            // No turn link, no reroll: messages narrated before this feature
+            // shipped have no stored conversation to replay.
+            message.id === latestDmMessageId && message.dmTurnId
+              ? stableRenarrate
+              : undefined
+          }
+          onSelectVariant={stableSelectVariant}
         />
       ))}
 

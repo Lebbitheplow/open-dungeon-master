@@ -1667,6 +1667,10 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string) {
           }
         : undefined,
     locationId: turn.locationId ?? undefined,
+    // Links the narration back to the conversation it came from so the lead
+    // can reroll its prose (src/lib/dm/renarrate.ts) without re-running the
+    // turn's tools.
+    dmTurnId: turn.id,
   });
   publishWithSeq(campaignId, seq, "message_added", { message });
   setDmStatus(campaignId, "idle");
