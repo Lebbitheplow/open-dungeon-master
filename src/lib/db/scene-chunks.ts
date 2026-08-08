@@ -1,4 +1,5 @@
 import { getDatabase, nowIso } from "@/lib/db/core";
+import { parseWitnesses, serializeWitnesses } from "@/lib/dm/witness-logic";
 
 // Verbatim transcript spans with embeddings: the storage half of the
 // semantic memory index (src/lib/dm/memory-index.ts builds and queries it).
@@ -11,6 +12,10 @@ export type SceneChunkRow = {
   seqEnd: number;
   text: string;
   embedding: Buffer;
+  // 1-5; see src/lib/dm/importance-logic.ts.
+  importance: number;
+  // Tracked NPCs present in this span; see src/lib/dm/witness-logic.ts.
+  witnesses: string[];
 };
 
 type RawRow = {
@@ -21,6 +26,8 @@ type RawRow = {
   seq_end: number;
   text: string;
   embedding: Buffer;
+  importance: number | null;
+  witnesses_json: string | null;
 };
 
 function mapRow(row: RawRow): SceneChunkRow {
@@ -32,6 +39,8 @@ function mapRow(row: RawRow): SceneChunkRow {
     seqEnd: row.seq_end,
     text: row.text,
     embedding: row.embedding,
+    importance: row.importance ?? 3,
+    witnesses: parseWitnesses(row.witnesses_json ?? "[]"),
   };
 }
 
@@ -48,8 +57,8 @@ export function insertSceneChunks(
 ): void {
   const db = getDatabase();
   const insert = db.prepare(
-    `INSERT INTO scene_chunks (id, campaign_id, chapter_id, seq_start, seq_end, text, embedding, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO scene_chunks (id, campaign_id, chapter_id, seq_start, seq_end, text, embedding, importance, witnesses_json, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const now = nowIso();
   const run = db.transaction((rows: Array<Omit<SceneChunkRow, "id">>) => {
@@ -62,6 +71,8 @@ export function insertSceneChunks(
         row.seqEnd,
         row.text,
         row.embedding,
+        row.importance,
+        serializeWitnesses(row.witnesses),
         now,
       );
     }

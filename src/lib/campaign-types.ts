@@ -31,6 +31,25 @@ export type CampaignSummary = {
   updatedAt: string;
 };
 
+// What a player is doing when they hit send. Shared by the composer and the
+// routes on purpose: this used to live in Composer.tsx while the actions
+// route re-declared its own narrower enum, so the two could drift, and a
+// mode the server did not recognise fell through to "do" silently.
+//
+// "lead" is labelled "Direct" in the UI and posts to /lead-note; "ask" posts
+// to /ask and never touches the story; everything else posts to /actions.
+export const INPUT_KINDS = ["do", "say", "ooc", "ask", "lead"] as const;
+export type InputKind = (typeof INPUT_KINDS)[number];
+
+// The modes that do not consume the floor: table talk and questions work
+// during a hold, a spotlight, another player's initiative turn, and while
+// the DM is narrating.
+export const FLOOR_EXEMPT_KINDS: readonly InputKind[] = ["ooc", "ask", "lead"];
+
+export function isFloorExempt(kind: InputKind): boolean {
+  return FLOOR_EXEMPT_KINDS.includes(kind);
+}
+
 // Marks system messages the party lead injected to steer the story; the DM
 // prompt reframes them as authoritative table direction and the client
 // styles them as a lead note.

@@ -12,13 +12,24 @@ import { PendingRollCard } from "@/app/campaigns/[campaignId]/PendingRollCard";
 import { PushToTalk } from "@/app/campaigns/[campaignId]/PushToTalk";
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
 
-export type InputKind = "do" | "say" | "ooc" | "lead";
+import type { InputKind } from "@/lib/campaign-types";
+import type { AskScope, AskVisibility } from "@/lib/dm/ask-logic";
+
+export type { InputKind };
 
 const KIND_TIPS: Record<InputKind, string> = {
   do: "Act in the world. The DM narrates what happens.",
   say: "Speak in character. Sent as dialogue in quotes.",
   ooc: "Table talk. The DM does not respond, and it works even when the floor is locked.",
+  ask: "Ask the DM about the story, the world, the rules, or your sheet. The story does not move.",
   lead: "Party lead only. Send the DM an authoritative story direction.",
+};
+
+const SCOPE_LABELS: Record<AskScope | "auto", string> = {
+  auto: "Auto",
+  story: "Story",
+  rules: "Rules",
+  sheet: "My sheet",
 };
 
 // The action composer at the bottom of the game chat: pending-roll cards,
@@ -30,6 +41,10 @@ function ComposerInner({
   isLead,
   kind,
   onKindChange,
+  askScope,
+  onAskScopeChange,
+  askVisibility,
+  onAskVisibilityChange,
   input,
   setInput,
   sending,
@@ -53,6 +68,10 @@ function ComposerInner({
   isLead: boolean;
   kind: InputKind;
   onKindChange: (kind: InputKind) => void;
+  askScope: AskScope | "auto";
+  onAskScopeChange: (scope: AskScope | "auto") => void;
+  askVisibility: AskVisibility;
+  onAskVisibilityChange: (visibility: AskVisibility) => void;
   input: string;
   setInput: Dispatch<SetStateAction<string>>;
   sending: boolean;
@@ -102,7 +121,7 @@ function ComposerInner({
           />
         ) : null}
         <div className="mb-2 flex gap-1.5">
-          {(["do", "say", "ooc", ...(isLead ? (["lead"] as const) : [])] as const).map(
+          {(["do", "say", "ooc", "ask", ...(isLead ? (["lead"] as const) : [])] as const).map(
             (option) => (
               <Tooltip key={option} content={KIND_TIPS[option]}>
                 <button
@@ -123,7 +142,9 @@ function ComposerInner({
                       ? "Say"
                       : option === "ooc"
                         ? "OOC"
-                        : "Direct"}
+                        : option === "ask"
+                          ? "Ask"
+                          : "Direct"}
                 </button>
               </Tooltip>
             ),
@@ -145,6 +166,51 @@ function ComposerInner({
             </span>
           ) : null}
         </div>
+        {kind === "ask" ? (
+          <div className="mb-2 flex flex-wrap items-center gap-1.5 text-[11px] text-stone-500">
+            <span className="text-stone-500">About</span>
+            {(["auto", "story", "rules", "sheet"] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => onAskScopeChange(option)}
+                className={cn(
+                  "rounded-full border px-2 py-1 transition-colors sm:py-0.5",
+                  askScope === option
+                    ? "border-amber-700 bg-amber-950/40 text-amber-200"
+                    : "border-stone-700 text-stone-400 hover:text-stone-200",
+                )}
+              >
+                {SCOPE_LABELS[option]}
+              </button>
+            ))}
+            <span className="ml-2 text-stone-500">Seen by</span>
+            {(["private", "table"] as const).map((option) => (
+              <Tooltip
+                key={option}
+                content={
+                  option === "private"
+                    ? "Only you see the question and the answer."
+                    : "The whole table sees the question and the answer."
+                }
+              >
+                <button
+                  type="button"
+                  onClick={() => onAskVisibilityChange(option)}
+                  className={cn(
+                    "rounded-full border px-2 py-1 transition-colors sm:py-0.5",
+                    askVisibility === option
+                      ? "border-amber-700 bg-amber-950/40 text-amber-200"
+                      : "border-stone-700 text-stone-400 hover:text-stone-200",
+                  )}
+                >
+                  {option === "private" ? "Just me" : "The table"}
+                </button>
+              </Tooltip>
+            ))}
+            <span className="ml-auto italic text-stone-600">The story does not move.</span>
+          </div>
+        ) : null}
         <div className="texture-noise flex items-end gap-2 rounded-2xl border border-stone-700/70 bg-stone-950/90 p-2 shadow-elev-1 transition-[border-color,box-shadow] duration-200 focus-within:border-amber-400/60 focus-within:shadow-[0_0_0_3px_rgba(212,171,58,0.1),0_2px_12px_rgba(4,2,12,0.5)]">
           <textarea
             ref={composerRef}

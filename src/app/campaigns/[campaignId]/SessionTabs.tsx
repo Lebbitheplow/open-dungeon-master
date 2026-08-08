@@ -5,6 +5,7 @@ import {
   BookOpen,
   Heart,
   Map as MapIcon,
+  MessageCircleQuestion,
   MessageSquareText,
   MessagesSquare,
   ScrollText,
@@ -20,6 +21,7 @@ import type { PlayerMapView } from "@/lib/battlemap/view";
 
 export type PanelTab =
   | "party"
+  | "ask"
   | "battle"
   | "map"
   | "story"
@@ -69,6 +71,12 @@ export function buildPanelTabs({
           ],
         ] as PanelTabDef[])
       : []),
+    [
+      "ask",
+      "Ask",
+      MessageCircleQuestion,
+      "Questions you put to the DM, and the answers. Asking never moves the story.",
+    ],
     ["notes", "Notes", StickyNote, "Suggest story notes; the party lead approves them."],
     ["chat", "Chat", MessagesSquare, "Side chat between players. The DM does not see it."],
     ["log", "Log", ScrollText, "Dice rolls and DM stat changes, audited."],

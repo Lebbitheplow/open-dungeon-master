@@ -149,19 +149,34 @@ export function setChapterEmbedding(chapterId: string, embedding: Buffer) {
     .run(embedding, chapterId);
 }
 
+// title and summary come along so phase-1 recall can score chapters
+// lexically as well as by embedding; a chapter whose summary names the person
+// being asked about should place even when its vector does not stand out.
 export function listChapterEmbeddings(
   campaignId: string,
-): Array<{ id: string; index: number; embedding: Buffer | null }> {
+): Array<{ id: string; index: number; title: string; summary: string; embedding: Buffer | null }> {
   return getDatabase()
     .prepare(
-      `SELECT id, chapter_index, embedding FROM chapters
+      `SELECT id, chapter_index, title, summary, embedding FROM chapters
        WHERE campaign_id = ? AND status = 'closed'
        ORDER BY chapter_index ASC`,
     )
     .all(campaignId)
     .map((row) => {
-      const raw = row as { id: string; chapter_index: number; embedding: Buffer | null };
-      return { id: raw.id, index: raw.chapter_index, embedding: raw.embedding };
+      const raw = row as {
+        id: string;
+        chapter_index: number;
+        title: string | null;
+        summary: string | null;
+        embedding: Buffer | null;
+      };
+      return {
+        id: raw.id,
+        index: raw.chapter_index,
+        title: raw.title ?? "",
+        summary: raw.summary ?? "",
+        embedding: raw.embedding,
+      };
     });
 }
 

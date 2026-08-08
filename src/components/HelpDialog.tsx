@@ -101,13 +101,19 @@ export function HelpDialog({
           Out-of-character table talk. The DM does not respond to it, and it stays available even
           when the floor is locked during narration or a spotlight.
         </ModeRow>
+        <ModeRow label="Ask">
+          Put a question to the DM about the story, the world, the rules, or your own character
+          sheet. The answer cites what the campaign has on record and appears in the Ask panel.
+          Asking never moves the story, so it works during narration and while the floor is
+          locked. Choose whether the answer is just for you or for the whole table.
+        </ModeRow>
         <ModeRow label="Direct" lead>
           Party lead only. Send the DM an authoritative story direction it must weave into the
           tale.
         </ModeRow>
         <p>
           Sometimes the DM puts one player in the spotlight and waits for them to act. While the
-          floor is locked for you, a banner explains why, and OOC still works.
+          floor is locked for you, a banner explains why, and OOC and Ask still work.
         </p>
       </Section>
 

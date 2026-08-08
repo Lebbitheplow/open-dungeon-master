@@ -1,8 +1,8 @@
 import { getDatabase } from "@/lib/db/core";
 import { listLoreWithEmbeddings } from "@/lib/db/lore";
-import { bufferToVector, cosine, embed } from "@/lib/embeddings";
+import { embed, similarityOf } from "@/lib/embeddings";
 import { searchScenes } from "@/lib/dm/memory-index";
-import { scoreLoreByKeywords } from "@/lib/dm/world-lore-logic";
+import { computeIdf, fuseRanked, lexicalScore } from "@/lib/dm/fusion-logic";
 
 // search_lore: the DM's world-knowledge search. One query runs against
 // every canon source at once: the lead's world lore entries, the
@@ -48,10 +48,7 @@ export const searchLoreTool = {
 
 const RESULT_LIMIT = 8;
 const TEXT_CLIP = 400;
-const KEYWORD_FLOOR = 0.34;
 const VECTOR_FLOOR = 0.28;
-
-type LoreHit = { source: string; ref: string; text: string; score: number };
 
 // Fact categories that a tool-call category filter maps onto.
 const FACT_CATEGORY_MAP: Record<string, string[]> = {
@@ -66,39 +63,22 @@ const FACT_CATEGORY_MAP: Record<string, string[]> = {
   religion: ["lore", "world"],
 };
 
-function keywordScore(query: string, haystack: string): number {
-  const words = query
-    .toLowerCase()
-    .split(/[^a-z0-9']+/)
-    .filter((word) => word.length > 2);
-  if (!words.length) {
-    return 0;
-  }
-  const lowered = haystack.toLowerCase();
-  let hits = 0;
-  for (const word of words) {
-    if (lowered.includes(word)) {
-      hits += 1;
-    }
-  }
-  return hits / words.length;
-}
-
-function scored(
-  queryVector: Float32Array | null,
-  embedding: Buffer | null,
-  fallback: () => number,
-): number | null {
-  if (queryVector && embedding) {
-    const vector = bufferToVector(embedding);
-    if (vector) {
-      const similarity = cosine(queryVector, vector);
-      return similarity >= VECTOR_FLOOR ? similarity : null;
-    }
-  }
-  const score = fallback();
-  return score >= KEYWORD_FLOOR ? score : null;
-}
+// One candidate from any source. Everything competes in a single fused
+// ranking: previously each source was scored on whichever scale happened to
+// apply (cosine when it had an embedding, a keyword fraction when it did
+// not, and searchScenes' own similarity for chapters), then all four were
+// sorted against each other as though those numbers meant the same thing.
+type LoreCandidate = {
+  id: string;
+  source: string;
+  ref: string;
+  text: string;
+  // What lexical scoring reads, which is usually wider than the shown text.
+  haystack: string;
+  embedding: Buffer | null;
+  // Pre-computed similarity for sources that already did the cosine work.
+  similarity?: number | null;
+};
 
 export async function handleSearchLore(
   campaignId: string,
@@ -123,7 +103,7 @@ export async function handleSearchLore(
     // Keyword fallback carries the search.
   }
 
-  const hits: LoreHit[] = [];
+  const candidates: LoreCandidate[] = [];
   const db = getDatabase();
 
   // Lead-authored world lore.
@@ -135,15 +115,14 @@ export async function handleSearchLore(
       if (category !== "any" && entry.category !== category) {
         continue;
       }
-      const score = scored(queryVector, embedding, () => scoreLoreByKeywords(query, entry));
-      if (score !== null) {
-        hits.push({
-          source: "world lore",
-          ref: `${entry.category}: ${entry.title}`,
-          text: entry.body.slice(0, TEXT_CLIP),
-          score,
-        });
-      }
+      candidates.push({
+        id: `lore:${entry.id}`,
+        source: "world lore",
+        ref: `${entry.category}: ${entry.title}`,
+        text: entry.body.slice(0, TEXT_CLIP),
+        haystack: `${entry.title} ${entry.tags.join(" ")} ${entry.body}`,
+        embedding,
+      });
     }
   }
 
@@ -151,10 +130,11 @@ export async function handleSearchLore(
   const factCategories = category === "any" ? null : (FACT_CATEGORY_MAP[category] ?? null);
   const factRows = db
     .prepare(
-      `SELECT category, subject, fact, embedding FROM world_facts
+      `SELECT id, category, subject, fact, embedding FROM world_facts
        WHERE campaign_id = ? AND status = 'active'`,
     )
     .all(campaignId) as Array<{
+    id: string;
     category: string;
     subject: string;
     fact: string;
@@ -164,62 +144,76 @@ export async function handleSearchLore(
     if (factCategories && !factCategories.includes(row.category)) {
       continue;
     }
-    const score = scored(queryVector, row.embedding, () =>
-      keywordScore(query, `${row.subject} ${row.fact}`),
-    );
-    if (score !== null) {
-      hits.push({
-        source: "fact",
-        ref: `${row.category}${row.subject ? `: ${row.subject}` : ""}`,
-        text: row.fact.slice(0, TEXT_CLIP),
-        score,
-      });
-    }
+    candidates.push({
+      id: `fact:${row.id}`,
+      source: "fact",
+      ref: `${row.category}${row.subject ? `: ${row.subject}` : ""}`,
+      text: row.fact.slice(0, TEXT_CLIP),
+      haystack: `${row.subject} ${row.fact}`,
+      embedding: row.embedding,
+    });
   }
 
   // Public active party notes (never private notes or pending suggestions).
   const noteRows = db
     .prepare(
-      `SELECT title, body, embedding FROM campaign_notes
+      `SELECT id, title, body, embedding FROM campaign_notes
        WHERE campaign_id = ? AND character_id IS NULL
          AND visibility = 'public' AND status = 'active'`,
     )
-    .all(campaignId) as Array<{ title: string; body: string; embedding: Buffer | null }>;
+    .all(campaignId) as Array<{
+    id: string;
+    title: string;
+    body: string;
+    embedding: Buffer | null;
+  }>;
   for (const row of noteRows) {
-    const score = scored(queryVector, row.embedding, () =>
-      keywordScore(query, `${row.title} ${row.body}`),
-    );
-    if (score !== null) {
-      hits.push({
-        source: "party note",
-        ref: row.title || "note",
-        text: row.body.slice(0, TEXT_CLIP),
-        score,
-      });
-    }
+    candidates.push({
+      id: `note:${row.id}`,
+      source: "party note",
+      ref: row.title || "note",
+      text: row.body.slice(0, TEXT_CLIP),
+      haystack: `${row.title} ${row.body}`,
+      embedding: row.embedding,
+    });
   }
 
-  // Chapter memory: verbatim scenes from the semantic index.
+  // Chapter memory: verbatim scenes from the semantic index, already fused
+  // and MMR-diversified in searchScenes. They join the same pool so a
+  // transcript excerpt can genuinely outrank a lore entry.
   try {
     const scenes = await searchScenes(campaignId, query);
-    for (const scene of scenes.slice(0, 2)) {
-      hits.push({
+    for (const scene of scenes) {
+      candidates.push({
+        id: `scene:${scene.chapterIndex}:${scene.seqStart}`,
         source: "past chapter",
         ref: `chapter ${scene.chapterIndex}`,
         text: scene.text.slice(0, TEXT_CLIP),
-        score: scene.similarity,
+        haystack: scene.text,
+        embedding: null,
+        similarity: scene.similarity || null,
       });
     }
   } catch {
     // Chapter memory unavailable; the other sources still answer.
   }
 
-  hits.sort((a, b) => b.score - a.score);
-  const results = hits.slice(0, RESULT_LIMIT).map(({ source, ref, text }) => ({
-    source,
-    ref,
-    text,
-  }));
+  const idf = computeIdf(candidates.map((candidate) => candidate.haystack));
+  const byId = new Map(candidates.map((candidate) => [candidate.id, candidate]));
+  const results = fuseRanked(
+    candidates.map((candidate) => ({
+      id: candidate.id,
+      lexical: lexicalScore(query, candidate.haystack, idf),
+      similarity:
+        candidate.similarity !== undefined
+          ? candidate.similarity
+          : similarityOf(queryVector, candidate.embedding),
+    })),
+    { similarityFloor: VECTOR_FLOOR, limit: RESULT_LIMIT },
+  )
+    .map((id) => byId.get(id))
+    .filter((candidate): candidate is LoreCandidate => candidate !== undefined)
+    .map(({ source, ref, text }) => ({ source, ref, text }));
   if (!results.length) {
     return {
       results: [],

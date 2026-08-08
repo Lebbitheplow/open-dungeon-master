@@ -11,18 +11,75 @@ import {
   CHARACTER_EVENT_KINDS,
   type CharacterEventKind,
 } from "@/lib/db/character-events";
+import { getDatabase } from "@/lib/db/core";
 import { countMessages, listMessagesPage } from "@/lib/db/messages";
 import { recordExtractedFacts } from "@/lib/db/facts";
 import { listSheets } from "@/lib/db/sheets";
 import { publishEphemeral } from "@/lib/events";
 import { extractStoryText, stripReasoningArtifacts } from "@/lib/story-prompt";
 import { normalizeCandidate, type FactCandidate } from "@/lib/dm/fact-logic";
-import { requestDmMessage } from "@/lib/dm/model";
+import { requestUtilityMessage } from "@/lib/dm/model";
 
 // Rolling-summary compaction, mirroring the solo narrator: once the log
 // grows past a threshold, fold the oldest passages into the campaign summary.
 const COMPACT_THRESHOLD = Number(process.env.DM_COMPACT_THRESHOLD || 120);
 const COMPACT_BATCH = 40;
+
+// Recorded milestones in a seq range: the kinds a table would still be
+// talking about a month later. Routine item pickups are exactly what
+// compaction is for and are left out.
+function protectedMoments(
+  campaignId: string,
+  seqStart: number,
+  seqEnd: number,
+  limit: number,
+): string[] {
+  try {
+    const rows = getDatabase()
+      .prepare(
+        `SELECT kind, summary FROM character_events
+         WHERE campaign_id = ? AND seq BETWEEN ? AND ?
+           AND kind IN ('death','level_up','story','relationship')
+         ORDER BY seq DESC LIMIT ?`,
+      )
+      .all(campaignId, seqStart, seqEnd, limit) as Array<{ kind: string; summary: string }>;
+    return rows.reverse().map((row) => `- [${row.kind}] ${row.summary}`);
+  } catch (error) {
+    // Losing this only costs summary quality; never fail the compaction.
+    console.error("[compaction] protected-moment lookup failed", error);
+    return [];
+  }
+}
+
+const SUMMARY_MAX_CHARS = 8_000;
+const MILESTONE_BLOCK_MAX = 1_500;
+const MILESTONE_HEADING = "Recorded milestones (verbatim from the server's record):";
+
+// Removes a previously appended milestone block. The stored summary is fed
+// back in as "existing summary" on the next compaction, and without this the
+// model would fold the block into prose and then have a freshly rebuilt one
+// appended after it, saying the same thing twice and growing every round.
+function stripMilestoneBlock(summary: string): string {
+  const index = summary.indexOf(MILESTONE_HEADING);
+  return index < 0 ? summary : summary.slice(0, index).trimEnd();
+}
+
+// The protected tail of the summary, rebuilt from the record on every
+// compaction so it never accumulates duplicates.
+function milestoneBlock(campaignId: string, coveredThroughSeq: number): string {
+  const lines = protectedMoments(campaignId, 0, coveredThroughSeq, 12);
+  if (!lines.length) {
+    return "";
+  }
+  let block = `\n\n${MILESTONE_HEADING}\n`;
+  for (const line of lines) {
+    if (block.length + line.length + 1 > MILESTONE_BLOCK_MAX) {
+      break;
+    }
+    block += `${line}\n`;
+  }
+  return block.trimEnd();
+}
 
 export async function maybeCompactHistory(campaignId: string) {
   const campaign = getCampaignById(campaignId);
@@ -40,7 +97,19 @@ export async function maybeCompactHistory(campaignId: string) {
     .map((message) => `${message.authorType === "dm" ? "DM" : "Player"}: ${message.content}`)
     .join("\n\n");
 
-  const { message } = await requestDmMessage(
+  // Compaction is lossy by design, so tell the summarizer which moments the
+  // server already knows were memorable. These come off the record
+  // (character_events), not from re-reading the prose. The prompt hint helps
+  // the model weave them in; the block appended after the call is what
+  // actually guarantees they survive.
+  const mustKeep = protectedMoments(
+    campaignId,
+    batch[0]?.seq ?? 0,
+    batch[batch.length - 1]?.seq ?? 0,
+    12,
+  ).join("\n");
+
+  const { message } = await requestUtilityMessage(
     campaign.settings,
     [
       {
@@ -50,7 +119,15 @@ export async function maybeCompactHistory(campaignId: string) {
       },
       {
         role: "user",
-        content: `Existing summary:\n${summary || "(none yet)"}\n\nNew passages to fold in:\n${transcript}`,
+        content: [
+          `Existing summary:\n${stripMilestoneBlock(summary) || "(none yet)"}`,
+          mustKeep
+            ? `These moments are recorded milestones and MUST appear in the updated summary, named explicitly:\n${mustKeep}`
+            : "",
+          `New passages to fold in:\n${transcript}`,
+        ]
+          .filter(Boolean)
+          .join("\n\n"),
       },
     ],
     {},
@@ -58,7 +135,15 @@ export async function maybeCompactHistory(campaignId: string) {
 
   const updated = extractStoryText(message?.content);
   if (updated) {
-    setCampaignSummaryState(campaignId, updated.slice(0, 8_000), coveredCount + batch.length);
+    // Structural protection, not a request: the milestone block is appended
+    // to the stored summary after the model has spoken, so a summarizer that
+    // ignored the hint (or a small utility model that paraphrased a death
+    // into "the party moved on") still cannot lose it. Rebuilt from the
+    // record each time rather than accumulated, and budgeted so it can never
+    // be the thing that gets clipped.
+    const block = milestoneBlock(campaignId, batch[batch.length - 1]?.seq ?? 0);
+    const body = updated.slice(0, Math.max(0, SUMMARY_MAX_CHARS - block.length));
+    setCampaignSummaryState(campaignId, `${body}${block}`, coveredCount + batch.length);
     await extractCharacterEvents(campaign, transcript);
   }
 }
@@ -73,7 +158,7 @@ async function extractCharacterEvents(campaign: Campaign, transcript: string) {
   if (!sheets.length) {
     return;
   }
-  const { message, error } = await requestDmMessage(
+  const { message, error } = await requestUtilityMessage(
     campaign.settings,
     [
       {

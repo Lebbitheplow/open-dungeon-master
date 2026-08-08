@@ -2,6 +2,8 @@ import { z } from "zod";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getSheetById } from "@/lib/db/sheets";
 import { insertRoll } from "@/lib/db/rolls";
+import { listActiveFacts } from "@/lib/db/facts";
+import { renderWitnessNote } from "@/lib/dm/witness-logic";
 import {
   getNpcByName,
   listNpcs,
@@ -434,12 +436,26 @@ export function npcRosterForPrompt(campaignId: string): Array<{
   trait: string;
   location: string;
   agency: string;
+  aliases: string[];
+  witnessNote: string;
 }> {
+  // Facts are read once for the whole roster; witness notes are per-NPC.
+  const facts = listActiveFacts(campaignId).map((fact) => ({
+    category: fact.category as string,
+    subject: fact.subject,
+    fact: fact.fact,
+    witnessedBy: fact.witnessedBy,
+  }));
   return listNpcs(campaignId).map((npc) => ({
     name: npc.name,
     attitude: npc.attitude,
     trait: npc.trait,
     location: npc.location,
     agency: agencyFragment(npc.agency),
+    // Other spellings this NPC has answered to, so the model knows the
+    // short form in the transcript and the full name here are one person.
+    aliases: npc.aliases,
+    // What this NPC has no on-screen reason to know (witness-logic.ts).
+    witnessNote: renderWitnessNote(npc.name, facts),
   }));
 }

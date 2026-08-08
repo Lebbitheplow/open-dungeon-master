@@ -75,5 +75,18 @@ export function normalizeSettings(settings?: Partial<StorySettings>): StorySetti
   merged.customApiKey =
     typeof merged.customApiKey === "string" ? merged.customApiKey.trim().slice(0, 400) : "";
 
+  // The optional utility model. An empty utilityModel means "off"; since the
+  // shipped default is empty, campaigns saved before this field existed keep
+  // running everything on the story model.
+  if (!isTextProvider(merged.utilityProvider)) {
+    merged.utilityProvider = defaultSettings.utilityProvider;
+  }
+  merged.utilityModel =
+    typeof merged.utilityModel === "string" ? merged.utilityModel.trim().slice(0, 200) : "";
+  merged.utilityBaseUrl =
+    typeof merged.utilityBaseUrl === "string" ? merged.utilityBaseUrl.trim().slice(0, 500) : "";
+  merged.utilityApiKey =
+    typeof merged.utilityApiKey === "string" ? merged.utilityApiKey.trim().slice(0, 400) : "";
+
   return merged;
 }

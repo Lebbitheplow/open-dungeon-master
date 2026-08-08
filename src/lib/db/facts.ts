@@ -1,4 +1,5 @@
 import { latestSeq } from "@/lib/db/campaigns";
+import { parseWitnesses, serializeWitnesses } from "@/lib/dm/witness-logic";
 import { getDatabase, nowIso } from "@/lib/db/core";
 import {
   classifyCandidate,
@@ -31,6 +32,8 @@ export type WorldFact = {
   subject: string;
   fact: string;
   knownBy: FactKnownBy;
+  // Tracked NPCs present when this was established; see witness-logic.ts.
+  witnessedBy: string[];
   pinned: boolean;
   status: WorldFactStatus;
   source: WorldFactSource;
@@ -46,6 +49,7 @@ type WorldFactRow = {
   subject: string;
   fact: string;
   known_by: string;
+  witnessed_by: string | null;
   pinned: number;
   status: WorldFactStatus;
   source: WorldFactSource;
@@ -62,6 +66,7 @@ function mapFact(row: WorldFactRow): WorldFact {
     subject: row.subject,
     fact: row.fact,
     knownBy: parseKnownBy(row.known_by),
+    witnessedBy: parseWitnesses(row.witnessed_by ?? "[]"),
     pinned: row.pinned === 1,
     status: row.status,
     source: row.source,
@@ -72,7 +77,7 @@ function mapFact(row: WorldFactRow): WorldFact {
 }
 
 const FACT_COLUMNS =
-  "id, campaign_id, category, subject, fact, known_by, pinned, status, source, source_seq, created_at, updated_at";
+  "id, campaign_id, category, subject, fact, known_by, witnessed_by, pinned, status, source, source_seq, created_at, updated_at";
 
 export function getFactById(factId: string): WorldFact | null {
   const row = getDatabase()
@@ -114,6 +119,7 @@ export function insertFact(input: {
   subject: string;
   fact: string;
   knownBy?: FactKnownBy;
+  witnessedBy?: string[];
   pinned?: boolean;
   source: WorldFactSource;
   sourceSeq?: number | null;
@@ -124,10 +130,10 @@ export function insertFact(input: {
     .prepare(
       `
         INSERT INTO world_facts (
-          id, campaign_id, category, subject, fact, known_by, pinned,
+          id, campaign_id, category, subject, fact, known_by, witnessed_by, pinned,
           status, source, source_seq, created_at, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
       `,
     )
     .run(
@@ -137,6 +143,7 @@ export function insertFact(input: {
       normalizeSubject(input.subject),
       input.fact.slice(0, FACT_MAX_CHARS),
       serializeKnownBy(input.knownBy ?? "party"),
+      serializeWitnesses(input.witnessedBy ?? []),
       input.pinned ? 1 : 0,
       input.source,
       // Every fact carries the campaign position it was learned at, so
@@ -208,7 +215,7 @@ export function recordExtractedFacts(
   campaignId: string,
   candidates: FactCandidate[],
   source: WorldFactSource,
-  options: { knownBy?: FactKnownBy; sourceSeq?: number | null } = {},
+  options: { knownBy?: FactKnownBy; sourceSeq?: number | null; witnessedBy?: string[] } = {},
 ): WorldFact[] {
   const inserted: WorldFact[] = [];
   for (const candidate of candidates) {
@@ -227,6 +234,7 @@ export function recordExtractedFacts(
         subject: candidate.subject,
         fact: candidate.fact,
         knownBy: options.knownBy ?? "party",
+        witnessedBy: options.witnessedBy ?? [],
         source,
         sourceSeq: options.sourceSeq ?? null,
       }),

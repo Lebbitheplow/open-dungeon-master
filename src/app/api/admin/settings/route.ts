@@ -19,6 +19,10 @@ function maskedConfig(config: GlobalConfig) {
       customBaseUrl: config.text.customBaseUrl,
       customModel: config.text.customModel,
       hasCustomApiKey: config.text.customApiKey !== "",
+      utilityProvider: config.text.utilityProvider,
+      utilityModel: config.text.utilityModel,
+      utilityBaseUrl: config.text.utilityBaseUrl,
+      hasUtilityApiKey: config.text.utilityApiKey !== "",
     },
     images: config.images,
     speech: config.speech,
@@ -63,6 +67,10 @@ const patchSchema = z.object({
       customBaseUrl: z.string().trim().max(500).optional(),
       customModel: z.string().trim().max(200).optional(),
       customApiKey: z.string().trim().max(400).optional(),
+      utilityProvider: z.enum(["", "local", "custom"]).optional(),
+      utilityModel: z.string().trim().max(200).optional(),
+      utilityBaseUrl: z.string().trim().max(500).optional(),
+      utilityApiKey: z.string().trim().max(400).optional(),
     })
     .optional(),
   images: z

@@ -66,8 +66,11 @@ export async function handleRecallStory(
       scenes: scenes.map((scene) => ({
         chapter: scene.chapterIndex,
         transcript: scene.text,
+        // Who was on screen, so an NPC is not made to remember a moment
+        // they were absent for (src/lib/dm/witness-logic.ts).
+        present: scene.witnesses,
       })),
-      note: "The transcript excerpts are the actual past play, verbatim; stay strictly consistent with them.",
+      note: "The transcript excerpts are the actual past play, verbatim; stay strictly consistent with them. 'present' lists the tracked NPCs who were there; anyone not listed has no on-screen reason to know what happened in that excerpt.",
     };
   }
 

@@ -14,6 +14,7 @@ import { BattleMapPanel } from "@/app/campaigns/[campaignId]/BattleMapPanel";
 import { DmWhisperPanel } from "@/app/campaigns/[campaignId]/DmWhisperPanel";
 import { EncounterPanel } from "@/app/campaigns/[campaignId]/EncounterPanel";
 import { EventLog } from "@/app/campaigns/[campaignId]/EventLog";
+import { AskPanel } from "@/app/campaigns/[campaignId]/AskPanel";
 import { BondsPanel } from "@/app/campaigns/[campaignId]/BondsPanel";
 import { FactsPanel } from "@/app/campaigns/[campaignId]/FactsPanel";
 import { LorePanel } from "@/app/campaigns/[campaignId]/LorePanel";
@@ -40,6 +41,7 @@ import type { CharacterEvent } from "@/lib/db/character-events";
 import type { Note } from "@/lib/db/notes";
 import type { WorldFact } from "@/lib/db/facts";
 import type { DmWhisper } from "@/lib/db/dm-whispers";
+import type { CampaignAsk } from "@/lib/db/asks";
 import type { SideThread } from "@/lib/db/side-chat";
 import type { PlayerMapView } from "@/lib/battlemap/view";
 import { companionSlotsFree, resolveCompanionMode } from "@/lib/schemas/game-settings";
@@ -92,6 +94,9 @@ function SidePanelInner({
   whispers,
   whisperUnread,
   refreshWhispers,
+  asks,
+  asksLoaded,
+  askPending,
   chatTarget,
   onChatTargetHandled,
   onMessageUser,
@@ -131,6 +136,9 @@ function SidePanelInner({
   whispers: DmWhisper[];
   whisperUnread: number;
   refreshWhispers: () => Promise<void>;
+  asks: CampaignAsk[];
+  asksLoaded: boolean;
+  askPending: string;
   chatTarget: string | null;
   onChatTargetHandled: () => void;
   onMessageUser: (userId: string) => void;
@@ -350,6 +358,13 @@ function SidePanelInner({
             />
             <LorePanel campaignId={campaignId} isLead={isLead} />
           </div>
+        ) : tab === "ask" ? (
+          <AskPanel
+            asks={asks}
+            meUserId={meUserId}
+            loaded={asksLoaded}
+            pendingQuestion={askPending}
+          />
         ) : tab === "bonds" ? (
           <BondsPanel campaignId={campaignId} refreshKey={relationshipsVersion} />
         ) : tab === "notes" ? (

@@ -1,4 +1,5 @@
-import { getDatabase, nowIso } from "@/lib/db/core";
+import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
+import { matchEntity, mergeAliases, normalizeName } from "@/lib/dm/entity-logic";
 import {
   parseBonds,
   parseGoals,
@@ -26,6 +27,8 @@ export type Npc = {
   trait: string;
   location: string;
   lastShiftTurn: string;
+  // Other spellings this NPC has answered to; see src/lib/dm/entity-logic.ts.
+  aliases: string[];
   agency: NpcAgency;
   arcCastId: string;
   createdAt: string;
@@ -40,6 +43,7 @@ type NpcRow = {
   trait: string;
   location: string;
   last_shift_turn: string;
+  aliases_json: string;
   personality_json: string;
   goals_json: string;
   relations_json: string;
@@ -59,6 +63,7 @@ function mapNpc(row: NpcRow): Npc {
     trait: row.trait,
     location: row.location,
     lastShiftTurn: row.last_shift_turn,
+    aliases: parseJson<string[]>(row.aliases_json, []),
     agency: {
       personality: parsePersonality(row.personality_json),
       goals: parseGoals(row.goals_json),
@@ -80,13 +85,68 @@ export function listNpcs(campaignId: string): Npc[] {
   ).map(mapNpc);
 }
 
+// Looks an NPC up by any name they have answered to.
+//
+// The literal spelling is tried first, so the common case stays a single
+// indexed lookup. Only when that misses does it fall back to entity
+// resolution across every known name and alias, which is what keeps
+// "Marla", "Marla Venn", and "Captain Marla" pointing at one row with one
+// attitude and one approval meter instead of forking into three.
+//
+// Fuzzy matches are deliberately NOT accepted here. "Aldric" and "Alaric"
+// may be two different people, and silently answering a social check against
+// the wrong NPC is worse than not finding one; those surface as lead-facing
+// suggestions instead (see suggestNpcMerges).
 export function getNpcByName(campaignId: string, name: string): Npc | null {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    return null;
+  }
   const row = getDatabase()
     .prepare(
       `SELECT * FROM npcs WHERE campaign_id = ? AND name = ? COLLATE NOCASE LIMIT 1`,
     )
-    .get(campaignId, name.trim()) as NpcRow | undefined;
-  return row ? mapNpc(row) : null;
+    .get(campaignId, trimmed) as NpcRow | undefined;
+  if (row) {
+    return mapNpc(row);
+  }
+
+  const roster = listNpcs(campaignId);
+  if (!roster.length) {
+    return null;
+  }
+  // Aliases are matched alongside canonical names, then mapped back.
+  const ownerByName = new Map<string, Npc>();
+  for (const npc of roster) {
+    ownerByName.set(npc.name, npc);
+    for (const alias of npc.aliases) {
+      if (!ownerByName.has(alias)) {
+        ownerByName.set(alias, npc);
+      }
+    }
+  }
+  const match = matchEntity(trimmed, [...ownerByName.keys()]);
+  if (!match || match.needsConfirmation) {
+    return null;
+  }
+  return ownerByName.get(match.name) ?? null;
+}
+
+// Fuzzy near-misses across the roster, for the party lead to confirm or
+// dismiss. Never applied automatically.
+export function suggestNpcMerges(
+  campaignId: string,
+): Array<{ name: string; matches: string }> {
+  const roster = listNpcs(campaignId);
+  const suggestions: Array<{ name: string; matches: string }> = [];
+  for (let index = 0; index < roster.length; index += 1) {
+    const others = roster.slice(index + 1).map((npc) => npc.name);
+    const match = matchEntity(roster[index].name, others);
+    if (match?.needsConfirmation) {
+      suggestions.push({ name: roster[index].name, matches: match.name });
+    }
+  }
+  return suggestions;
 }
 
 // Registers an NPC or updates the mutable descriptive fields of an existing
@@ -103,18 +163,26 @@ export function upsertNpc(input: {
   const now = nowIso();
   const existing = getNpcByName(input.campaignId, input.name);
   if (existing) {
+    // Registering a known NPC under a new spelling records that spelling
+    // rather than creating a second row. The canonical name never changes,
+    // so nothing already written about them has to be rewritten.
+    const aliases =
+      normalizeName(input.name) === normalizeName(existing.name)
+        ? existing.aliases
+        : mergeAliases(existing.aliases, input.name);
     db.prepare(
       `UPDATE npcs
-       SET attitude = ?, trait = ?, location = ?, updated_at = ?
+       SET attitude = ?, trait = ?, location = ?, aliases_json = ?, updated_at = ?
        WHERE id = ?`,
     ).run(
       input.attitude ?? existing.attitude,
       input.trait ?? existing.trait,
       input.location ?? existing.location,
+      JSON.stringify(aliases),
       now,
       existing.id,
     );
-    return getNpcByName(input.campaignId, input.name) ?? existing;
+    return mapNpc(db.prepare(`SELECT * FROM npcs WHERE id = ?`).get(existing.id) as NpcRow);
   }
   const id = crypto.randomUUID();
   db.prepare(

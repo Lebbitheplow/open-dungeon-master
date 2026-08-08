@@ -50,6 +50,7 @@ Core rules you must always follow:
 - Some information belongs to only part of the party. Use send_whisper to tell one or more characters something the others must not learn: a detail only they notice, true orders from a force controlling them, a private vision or temptation, a secret ally's signal. Players can also send YOU private messages; when they do, those appear in GAME STATE as private messages from players, and send_whisper to their character is how you answer. Anything a player types in the table chat is public. NEVER reveal, quote, or hint at private content in shared narration; to everyone else the scene simply continues.
 - When award_xp reports levelUpAvailable, tell that player plainly, at the edge of the scene, that their character can now level up using their sheet. The level-up itself (HP, features, spells) happens through the player's own choices in the app: never apply level, HP, feature, or spell-list changes for a level-up yourself unless the party lead directs it.
 - Party notes in GAME STATE are facts the table has written down; treat them as canon the party knows.
+- What each NPC KNOWS is bounded by what they were there for. A tracked NPC marked "was not present for: ..." has no on-screen reason to know those things: they must not cite them, allude to them, or act on them as though they had been told. They may still have heard a rumor, and you may play that, but then it is hearsay in their mouth, uncertain and second hand, never the precise private detail. Facts about the world at large, common lore, and public places are known to everyone and are never listed as missed. Never have an NPC quote a secret struck in a room they were not in.
 - Established facts in GAME STATE are the server's world-state record. Never contradict them: a dead NPC stays dead, a held item stays held, and a promise made stays owed until the fiction changes it on screen. Facts under "DM-only" are secret background truths the players have not learned; use them to steer the world, never state them outright.
 - A [Party lead direction] in the log is an authoritative instruction from the table's human lead. Treat it as canon: weave the directed event or correction into the story at the next natural moment, without mentioning the direction itself.
 - Keep replies to 1 to 3 short paragraphs of vivid second-person-plural narration and NPC dialogue. End at a decision point or with the result of the single action the players declared; never continue into a second action, exchange, or leg of a journey they have not declared. When your reply ends waiting on specific characters (an NPC has addressed them, or a choice is theirs), call request_player_input naming them. Never write more than one scene beat per reply.
@@ -131,6 +132,8 @@ export type DmGameState = {
     trait: string;
     location: string;
     agency?: string;
+    aliases?: string[];
+    witnessNote?: string;
   }>;
   // Server-tracked standing between each character and each NPC/companion,
   // one bounded line each (src/lib/dm/relationship-logic.ts).
@@ -246,7 +249,14 @@ export const PLAYER_WHISPER_RULES = `Private player messages: one or more player
 // player rolls real dice, so digital-only tables see no prompt change.
 export const REAL_DICE_RULE = `Physical dice at this table: some players roll their own real dice (marked "rolls PHYSICAL dice" in the Party list). When you call request_roll for one of their characters, the game pauses until that player enters the number they rolled. In the narration accompanying such a request, address that character directly and ask their player to roll the dice and tell you the result. Do this only for marked players; everyone else's dice are rolled automatically, so never ask them for a number. A pc_attack for a marked player pauses twice: first they enter their d20 attack roll, and on a hit the game pauses again for their damage dice; the server adjudicates and applies both.`;
 
-function describeSheet(sheet: CharacterSheet, playedBy: string, realDice: boolean): string {
+// Exported so Ask can answer sheet questions from exactly the same rendering
+// the DM sees, rather than growing a second, drifting description of a
+// character.
+export function describeSheet(
+  sheet: CharacterSheet,
+  playedBy: string,
+  realDice: boolean,
+): string {
   const derived = computeSheetDerived(sheet);
   const abilities = (Object.entries(sheet.abilities) as Array<[string, number]>)
     .map(([ability, score]) => `${ability.toUpperCase()} ${score}(${formatModifier(derived.abilityMods[ability as keyof typeof derived.abilityMods])})`)
@@ -611,7 +621,7 @@ export function buildGameStateBlock(state: DmGameState): string {
         .slice(0, 20)
         .map(
           (npc) =>
-            `- ${npc.name} — ${npc.attitude}${npc.location ? `, at ${npc.location}` : ""}${npc.trait ? ` (${npc.trait.slice(0, 120)})` : ""}${npc.agency ? ` | ${npc.agency}` : ""}`,
+            `- ${npc.name} — ${npc.attitude}${npc.location ? `, at ${npc.location}` : ""}${npc.trait ? ` (${npc.trait.slice(0, 120)})` : ""}${npc.aliases?.length ? ` [also called: ${npc.aliases.slice(0, 4).join(", ")}]` : ""}${npc.witnessNote ? ` | ${npc.witnessNote}` : ""}${npc.agency ? ` | ${npc.agency}` : ""}`,
         )
         .join("\n")}`,
     );

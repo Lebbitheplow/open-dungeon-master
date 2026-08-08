@@ -12,7 +12,8 @@ import {
   useSyncExternalStore,
 } from "react";
 import { cn } from "@/lib/cn";
-import { JOIN_NOTE_PREFIX, latestUnintroducedJoin } from "@/lib/campaign-types";
+import { JOIN_NOTE_PREFIX, isFloorExempt, latestUnintroducedJoin } from "@/lib/campaign-types";
+import type { AskScope, AskVisibility } from "@/lib/dm/ask-logic";
 import { PIXEL_ICONS, PixelTile } from "@/lib/ui";
 import { HelpDialog } from "@/components/HelpDialog";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -46,6 +47,7 @@ export function SessionView({
   refreshFacts,
   refreshSideChat,
   refreshWhispers,
+  refreshAsks,
   refreshBattleMap,
 }: {
   state: CampaignState;
@@ -53,6 +55,7 @@ export function SessionView({
   refreshFacts: () => Promise<void>;
   refreshSideChat: () => Promise<void>;
   refreshWhispers: () => Promise<void>;
+  refreshAsks: () => Promise<void>;
   refreshBattleMap: () => Promise<void>;
 }) {
   const {
@@ -70,6 +73,9 @@ export function SessionView({
   } = state;
   const [input, setInput] = useState("");
   const [kind, setKind] = useState<InputKind>("do");
+  const [askScope, setAskScope] = useState<AskScope | "auto">("auto");
+  const [askVisibility, setAskVisibility] = useState<AskVisibility>("private");
+  const [askPending, setAskPending] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [dismissedLevelUp, setDismissedLevelUp] = useState("");
@@ -149,20 +155,16 @@ export function SessionView({
         : [],
     [floor, sheets],
   );
+  // Table talk, questions, and lead directions never wait on the floor.
+  const exempt = isFloorExempt(kind);
   const floorBlocked =
-    floor.mode === "spotlight" &&
-    !floor.userIds.includes(me?.id ?? "") &&
-    kind !== "ooc" &&
-    kind !== "lead";
+    floor.mode === "spotlight" && !floor.userIds.includes(me?.id ?? "") && !exempt;
   // Held responses: the lead has not opened the floor after the last DM
-  // narration. OOC and lead directions stay available.
-  const holdBlocked = floor.mode === "hold" && kind !== "ooc" && kind !== "lead";
+  // narration. OOC, Ask, and lead directions stay available.
+  const holdBlocked = floor.mode === "hold" && !exempt;
   // Combat: only the current-turn player acts; everyone else waits.
   const initiativeBlocked =
-    floor.mode === "initiative" &&
-    !floor.userIds.includes(me?.id ?? "") &&
-    kind !== "ooc" &&
-    kind !== "lead";
+    floor.mode === "initiative" && !floor.userIds.includes(me?.id ?? "") && !exempt;
   const heldSpotlightNames = useMemo(
     () =>
       floor.mode === "hold" && floor.next.mode === "spotlight"
@@ -184,7 +186,9 @@ export function SessionView({
     Boolean(firstDmMessageId) &&
     narration.playingMessageId === firstDmMessageId &&
     messages.filter((message) => message.authorType === "dm").length === 1;
-  const narrationBlocked = openingNarrationPlaying && kind !== "ooc";
+  // The opening narration gets the table's attention, but a question about
+  // it is exactly the kind of thing someone wants to ask while it plays.
+  const narrationBlocked = openingNarrationPlaying && kind !== "ooc" && kind !== "ask";
   const inputBlocked = floorBlocked || holdBlocked || initiativeBlocked || narrationBlocked;
   const placeholder = narrationBlocked
     ? "The Dungeon Master is setting the scene... (OOC still open)"
@@ -200,7 +204,9 @@ export function SessionView({
               ? `What does ${mySheet?.name ?? "your character"} say?`
               : kind === "ooc"
                 ? "Out-of-character note to the table"
-                : "Steer the story: an event or direction the DM must weave in";
+                : kind === "ask"
+                  ? "Ask the DM about the story, the world, the rules, or your sheet"
+                  : "Steer the story: an event or direction the DM must weave in";
   // A mid-game joiner without a character is gated to creation first.
   const needsCharacter = !mySheet && campaign?.status === "active";
   // Lead prompt: a newcomer's join note the DM has not narrated past yet.
@@ -233,6 +239,12 @@ export function SessionView({
       }
       setSending(true);
       setError("");
+      // An ask can take a while on a local model and answers into the side
+      // panel rather than the transcript, so echo the question immediately;
+      // otherwise the composer just empties and nothing visibly happens.
+      if (kind === "ask") {
+        setAskPending(content);
+      }
       try {
         const response =
           kind === "lead"
@@ -241,24 +253,39 @@ export function SessionView({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ content }),
               })
-            : await fetch(`/api/campaigns/${campaignId}/actions`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ content, kind }),
-              });
+            : kind === "ask"
+              ? await fetch(`/api/campaigns/${campaignId}/ask`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    question: content,
+                    scope: askScope,
+                    visibility: askVisibility,
+                  }),
+                })
+              : await fetch(`/api/campaigns/${campaignId}/actions`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ content, kind }),
+                });
         if (!response.ok) {
           const data = await response.json().catch(() => ({}));
-          setError(data.error || "Could not send your action.");
+          setError(data.error || (kind === "ask" ? "The DM could not answer." : "Could not send your action."));
           return;
+        }
+        if (kind === "ask") {
+          await refreshAsks();
+          setPanelTab("ask");
         }
         setInput("");
       } catch {
         setError("Could not reach the server.");
       } finally {
         setSending(false);
+        setAskPending("");
       }
     },
-    [campaignId, input, sending, inputBlocked, kind],
+    [campaignId, input, sending, inputBlocked, kind, askScope, askVisibility, refreshAsks, setPanelTab],
   );
 
   const clearChatTarget = useCallback(() => setChatTarget(null), []);
@@ -480,6 +507,10 @@ export function SessionView({
               isLead={isLead}
               kind={kind}
               onKindChange={setKind}
+              askScope={askScope}
+              onAskScopeChange={setAskScope}
+              askVisibility={askVisibility}
+              onAskVisibilityChange={setAskVisibility}
               input={input}
               setInput={setInput}
               sending={sending}
@@ -522,6 +553,9 @@ export function SessionView({
           whispers={state.whispers}
           whisperUnread={state.whisperUnread}
           refreshWhispers={refreshWhispers}
+          asks={state.asks}
+          asksLoaded={state.asksLoaded}
+          askPending={askPending}
           chatTarget={chatTarget}
           onChatTargetHandled={clearChatTarget}
           onMessageUser={setChatTarget}

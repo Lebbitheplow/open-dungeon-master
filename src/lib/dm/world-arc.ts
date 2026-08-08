@@ -1,7 +1,7 @@
 import { getCampaignById } from "@/lib/db/campaigns";
 import { listChapters } from "@/lib/db/chapters";
 import { arcTextTimeoutMs } from "@/lib/model-client";
-import { requestDmMessage } from "@/lib/dm/model";
+import { requestUtilityMessage } from "@/lib/dm/model";
 import { renderArcForPrompt, type StoryArc } from "@/lib/dm/arc-logic";
 import { parseWorldArcsJson, type WorldArc } from "@/lib/dm/world-arc-logic";
 
@@ -32,7 +32,7 @@ export async function generateWorldArcs(
     .slice(-4)
     .map((chapter) => `${chapter.index}. "${chapter.title}"`)
     .join("\n");
-  const { message, error } = await requestDmMessage(
+  const { message, error } = await requestUtilityMessage(
     campaign.settings,
     [
       { role: "system", content: GENERATE_SYSTEM },

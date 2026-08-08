@@ -333,11 +333,18 @@ export async function requestCustomMessage(
   // settings point at. The OpenRouter env key is already host-gated above.
   const globalBase = (globalText.customBaseUrl || serverEnv("OPENAI_COMPAT_BASE_URL") || "").trim();
   const isGlobalBackend = Boolean(globalBase) && customChatEndpoint(globalBase) === endpoint;
+  // The optional utility backend gets the same treatment: its key is host-
+  // gated to its own configured URL, so pointing a campaign elsewhere cannot
+  // borrow it.
+  const utilityBase = (globalText.utilityBaseUrl || serverEnv("UTILITY_TEXT_BASE_URL") || "").trim();
+  const isUtilityBackend = Boolean(utilityBase) && customChatEndpoint(utilityBase) === endpoint;
   const resolvedKey =
     (apiKey || "").trim() ||
     (isGlobalBackend ? globalText.customApiKey : "") ||
+    (isUtilityBackend ? globalText.utilityApiKey : "") ||
     (isOpenRouter ? serverEnv("OPENROUTER_API_KEY") : "") ||
-    (isGlobalBackend ? serverEnv("OPENAI_COMPAT_API_KEY") : "");
+    (isGlobalBackend ? serverEnv("OPENAI_COMPAT_API_KEY") : "") ||
+    (isUtilityBackend ? serverEnv("UTILITY_TEXT_API_KEY") : "");
   const requestPayload: Record<string, unknown> = {
     model: resolvedModel,
     messages,

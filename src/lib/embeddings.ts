@@ -57,6 +57,21 @@ export function cosine(a: Float32Array, b: Float32Array): number {
   return sum;
 }
 
+// Cosine between the query and a stored BLOB, or null when there is nothing
+// to compare: no query vector (the embedder was unavailable) or no embedding
+// on the row yet. Rank fusion reads null as "this signal has no opinion",
+// which is meaningfully different from a similarity of zero.
+export function similarityOf(
+  queryVector: Float32Array | null,
+  embedding: Buffer | null,
+): number | null {
+  if (!queryVector || !embedding) {
+    return null;
+  }
+  const vector = bufferToVector(embedding);
+  return vector ? cosine(queryVector, vector) : null;
+}
+
 // BLOB column round-trip.
 export function vectorToBuffer(vector: Float32Array): Buffer {
   return Buffer.from(vector.buffer, vector.byteOffset, vector.byteLength);

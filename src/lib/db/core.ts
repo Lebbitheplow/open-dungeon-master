@@ -699,6 +699,35 @@ function ensureSchema(db: Database.Database) {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    -- Ask: a player's out-of-character question to the DM and its grounded
+    -- answer. Deliberately NOT a campaign_messages row and deliberately
+    -- without a seq, because an ask must not progress the story: no message
+    -- in the transcript, no DM turn, no chapter tick, and nothing that ever
+    -- reaches a later prompt. Keeping it in its own table is what makes that
+    -- structural rather than a rule someone has to remember.
+    --
+    -- visibility 'private' is the asker's alone; 'table' is readable by every
+    -- member. Like dm_whispers, content never rides the shared SSE stream:
+    -- sends publish a contentless ask_activity event and each client fetches
+    -- the rows it is allowed to see.
+    CREATE TABLE IF NOT EXISTS campaign_asks (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      character_id TEXT,
+      visibility TEXT NOT NULL DEFAULT 'private'
+        CHECK (visibility IN ('private','table')),
+      scope TEXT NOT NULL CHECK (scope IN ('story','rules','sheet')),
+      question TEXT NOT NULL,
+      answer TEXT NOT NULL DEFAULT '',
+      citations_json TEXT NOT NULL DEFAULT '[]',
+      status TEXT NOT NULL DEFAULT 'answered'
+        CHECK (status IN ('answered','failed')),
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_campaign_asks
+      ON campaign_asks(campaign_id, created_at);
   `);
 
   // Compaction memory: a rolling "story so far" summary plus a watermark of
@@ -1002,7 +1031,38 @@ function ensureSchema(db: Database.Database) {
     ["embedding", `BLOB`],
   ]);
 
+  addColumns("world_facts", [
+    // Tracked NPC names present when this fact was established
+    // (src/lib/dm/witness-logic.ts). known_by scopes which PLAYERS may read
+    // a fact; this is the other half, scoping which NPCs have an on-screen
+    // reason to know it, so a shopkeeper across town cannot cite a secret
+    // struck in a cellar. Empty means "not tracked", which is deliberately
+    // read as ambient rather than secret: facts recorded before this column
+    // existed must not make every NPC abruptly amnesiac.
+    ["witnessed_by", `TEXT NOT NULL DEFAULT '[]'`],
+  ]);
+
+  addColumns("scene_chunks", [
+    // How memorable this span was, 1-5, scored from what the server actually
+    // recorded over its seq range (src/lib/dm/importance-logic.ts): deaths,
+    // milestones, closed beats, relationship shifts. Feeds recall as a third
+    // ranking so a shopping trip stops competing with a character's death on
+    // similarity alone. 3 = the neutral default, which is also what rows
+    // indexed before this column existed keep.
+    ["importance", `INTEGER NOT NULL DEFAULT 3`],
+    // Tracked NPC names appearing in this span, so recall can say who was
+    // actually there for the moment it returns.
+    ["witnesses_json", `TEXT NOT NULL DEFAULT '[]'`],
+  ]);
+
   addColumns("npcs", [
+    // Other spellings this NPC has been called, e.g. ["Marla", "Captain
+    // Marla"] on the row named "Marla Venn" (src/lib/dm/entity-logic.ts).
+    // Merging records the variant here instead of rewriting campaign_messages:
+    // past narration keeps the words it was written with, and the lexical
+    // retriever still matches them because aliases ride along in the
+    // searchable text.
+    ["aliases_json", `TEXT NOT NULL DEFAULT '[]'`],
     // NPC agency (src/lib/dm/npc-logic.ts): six -3..+3 personality axes
     // (drive/diligence/boldness/warmth/empathy/composure), empty = untracked.
     ["personality_json", `TEXT NOT NULL DEFAULT ''`],

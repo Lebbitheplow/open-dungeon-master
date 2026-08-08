@@ -2,25 +2,27 @@ import type { Campaign } from "@/lib/db/campaigns";
 import type { CampaignMessage } from "@/lib/db/messages";
 import { listLoreWithEmbeddings } from "@/lib/db/lore";
 import { listRuleChunksWithEmbeddings } from "@/lib/db/rules";
-import { bufferToVector, cosine, embed } from "@/lib/embeddings";
-import {
-  renderLoreForPrompt,
-  scoreLoreByKeywords,
-  type WorldLoreEntry,
-} from "@/lib/dm/world-lore-logic";
-import {
-  renderHouseRules,
-  renderVariantRules,
-  scoreRuleByKeywords,
-} from "@/lib/dm/rules-logic";
+import { embed, similarityOf } from "@/lib/embeddings";
+import { renderLoreForPrompt, type WorldLoreEntry } from "@/lib/dm/world-lore-logic";
+import { renderHouseRules, renderVariantRules } from "@/lib/dm/rules-logic";
+import { computeIdf, fuseRanked, lexicalScore } from "@/lib/dm/fusion-logic";
 
 // Per-turn retrieval for the DM prompt: one MiniLM embed of the current
-// moment (latest player messages + scene) scores the enabled house-rule
-// chunks and world-lore entries; only the most relevant few ride the
-// prompt. Pinned items skip retrieval entirely. Every path tolerates NULL
-// embeddings (keyword fallback) and an unavailable embedder, so retrieval
-// can never break a turn.
+// moment (latest player messages + scene) is fused with IDF-weighted lexical
+// scoring over the enabled house-rule chunks and world-lore entries; only the
+// most relevant few ride the prompt. Pinned items skip retrieval entirely.
+// Every path tolerates NULL embeddings and an unavailable embedder, so
+// retrieval can never break a turn.
+//
+// This used to be strictly either/or: cosine when an embedding existed and
+// keyword overlap only when it did not, which threw the lexical signal away
+// on every healthy turn. It also compared cosine similarities and keyword
+// fractions against the same 0.3 threshold, two scales that never meant the
+// same thing. Both are now handled by rank fusion (src/lib/dm/fusion-logic.ts),
+// which reads order rather than magnitude.
 
+// Cosine-only eligibility. Lexical eligibility is any overlap at all, so a
+// rare proper noun still qualifies a candidate that cosine would have missed.
 const SIMILARITY_FLOOR = 0.3;
 const RULES_TOP = 3;
 const LORE_TOP = 2;
@@ -46,18 +48,31 @@ function buildQuery(campaign: Campaign, history: CampaignMessage[]): string {
   return [campaign.scene, ...playerLines].filter(Boolean).join("\n").slice(0, 1_200);
 }
 
-function scoreWith(
+// Fuses one corpus and returns the picked entries in fused order.
+function pickFused<T>(
+  entries: Array<{ id: string; text: string; embedding: Buffer | null; value: T }>,
+  query: string,
   queryVector: Float32Array | null,
-  embedding: Buffer | null,
-  keywordScore: () => number,
-): number {
-  if (queryVector && embedding) {
-    const vector = bufferToVector(embedding);
-    if (vector) {
-      return cosine(queryVector, vector);
-    }
+  limit: number,
+): T[] {
+  if (!entries.length) {
+    return [];
   }
-  return keywordScore();
+  // IDF is computed over this corpus, so "dragon" is rare in a campaign that
+  // never mentions dragons and unremarkable in one about nothing else.
+  const idf = computeIdf(entries.map((entry) => entry.text));
+  const byId = new Map(entries.map((entry) => [entry.id, entry.value]));
+  const picked = fuseRanked(
+    entries.map((entry) => ({
+      id: entry.id,
+      lexical: lexicalScore(query, entry.text, idf),
+      similarity: similarityOf(queryVector, entry.embedding),
+    })),
+    { similarityFloor: SIMILARITY_FLOOR, limit },
+  );
+  return picked
+    .map((id) => byId.get(id))
+    .filter((value): value is T => value !== undefined);
 }
 
 export async function buildTurnRetrieval(
@@ -86,33 +101,35 @@ export async function buildTurnRetrieval(
       }
 
       const pinnedRules = rules.filter((entry) => entry.chunk.pinned).map((entry) => entry.chunk);
-      const retrievedRules = rules
-        .filter((entry) => !entry.chunk.pinned)
-        .map((entry) => ({
-          chunk: entry.chunk,
-          score: scoreWith(queryVector, entry.embedding, () =>
-            scoreRuleByKeywords(query, entry.chunk),
-          ),
-        }))
-        .filter((entry) => entry.score >= SIMILARITY_FLOOR)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, RULES_TOP)
-        .map((entry) => entry.chunk);
+      const retrievedRules = pickFused(
+        rules
+          .filter((entry) => !entry.chunk.pinned)
+          .map((entry) => ({
+            id: entry.chunk.id,
+            text: `${entry.chunk.heading} ${entry.chunk.text}`,
+            embedding: entry.embedding,
+            value: entry.chunk,
+          })),
+        query,
+        queryVector,
+        RULES_TOP,
+      );
       houseRulesBlock = renderHouseRules(pinnedRules, retrievedRules);
 
       const pinnedLore = lore.filter((entry) => entry.entry.pinned).map((entry) => entry.entry);
-      const retrievedLore = lore
-        .filter((entry) => !entry.entry.pinned)
-        .map((entry) => ({
-          entry: entry.entry,
-          score: scoreWith(queryVector, entry.embedding, () =>
-            scoreLoreByKeywords(query, entry.entry),
-          ),
-        }))
-        .filter((entry) => entry.score >= SIMILARITY_FLOOR)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, LORE_TOP)
-        .map((entry) => entry.entry as WorldLoreEntry);
+      const retrievedLore = pickFused(
+        lore
+          .filter((entry) => !entry.entry.pinned)
+          .map((entry) => ({
+            id: entry.entry.id,
+            text: `${entry.entry.title} ${entry.entry.tags.join(" ")} ${entry.entry.body}`,
+            embedding: entry.embedding,
+            value: entry.entry as WorldLoreEntry,
+          })),
+        query,
+        queryVector,
+        LORE_TOP,
+      );
       loreBlock = renderLoreForPrompt(pinnedLore, retrievedLore);
     }
   } catch (error) {

@@ -32,10 +32,25 @@ export function configuredDefaultStorySettings(): StorySettings {
     ? requestedLocalModel
     : DEFAULT_STORY_SETTINGS.localTextModel;
 
+  // Optional utility model: admin panel > env > off. An unset provider
+  // defaults to "local", since the common setup is a small Ollama model
+  // beside a llama-server story model.
+  const requestedUtilityProvider =
+    cfg.text.utilityProvider || clean(serverEnv("UTILITY_TEXT_PROVIDER"));
+  const utilityProvider = isTextProvider(requestedUtilityProvider)
+    ? requestedUtilityProvider
+    : DEFAULT_STORY_SETTINGS.utilityProvider;
+
   return {
     ...DEFAULT_STORY_SETTINGS,
     textProvider,
     localTextModel,
+    utilityProvider,
+    utilityModel: cfg.text.utilityModel || clean(serverEnv("UTILITY_TEXT_MODEL")),
+    utilityBaseUrl: cfg.text.utilityBaseUrl || clean(serverEnv("UTILITY_TEXT_BASE_URL")),
+    // Like customApiKey, the global utility key is applied at request time in
+    // model-client and never copied into per-campaign settings.
+    utilityApiKey: "",
     customBaseUrl: customBaseUrl || DEFAULT_STORY_SETTINGS.customBaseUrl,
     customModel: customModel || DEFAULT_STORY_SETTINGS.customModel,
     // The global API key never lands in per-campaign settings; it is applied

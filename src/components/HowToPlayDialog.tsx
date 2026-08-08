@@ -112,6 +112,10 @@ export function HowToPlayDialog({
         <ModeRow label="OOC">
           Out-of-character table talk. The DM does not read it or respond to it.
         </ModeRow>
+        <ModeRow label="Ask">
+          Ask the DM a question about the story, the world, the rules, or your sheet. You get an
+          answer without the story moving on.
+        </ModeRow>
       </Section>
 
       <Section icon={Hourglass} title="One turn at a time">

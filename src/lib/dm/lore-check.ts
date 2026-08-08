@@ -4,7 +4,7 @@ import { listActiveFacts } from "@/lib/db/facts";
 import { getCampaignMessage } from "@/lib/db/messages";
 import { getNpcByName, listNpcs } from "@/lib/db/npcs";
 import { arcTextTimeoutMs } from "@/lib/model-client";
-import { requestDmMessage } from "@/lib/dm/model";
+import { requestUtilityMessage } from "@/lib/dm/model";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { scoreChaptersByKeywords } from "@/lib/dm/recall-logic";
 import { searchScenes } from "@/lib/dm/memory-index";
@@ -133,7 +133,7 @@ export async function runLoreCheck(
   // Queued behind any live narration so the single model server never
   // interleaves two jobs for this campaign.
   await enqueueDmJob(request.campaignId, async () => {
-    const { message: reply, error } = await requestDmMessage(
+    const { message: reply, error } = await requestUtilityMessage(
       campaign.settings,
       [
         { role: "system", content: CHECK_SYSTEM },

@@ -85,6 +85,18 @@ export type StorySettings = {
   customBaseUrl: string;
   customModel: string;
   customApiKey: string;
+  // OPTIONAL second model for mechanical work: history compaction, chapter
+  // summaries and fact extraction, world-arc ticks, lore checks, and Ask
+  // answers. None of it is narration, so a small fast model does it well
+  // while the story model keeps its weights and prompt cache resident.
+  //
+  // Leave utilityModel empty to disable. Every one of those calls then falls
+  // back to the story model and the app behaves exactly as it did before, so
+  // a machine that can only hold one model loses nothing.
+  utilityProvider: TextProvider;
+  utilityModel: string;
+  utilityBaseUrl: string;
+  utilityApiKey: string;
   imageMode: ImageMode;
   imageBackend: ImageBackend;
   // ComfyUI backend: server URL and checkpoint filename. Both optional —

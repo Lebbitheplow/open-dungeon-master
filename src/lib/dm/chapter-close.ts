@@ -13,6 +13,8 @@ import {
 import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
 import { parseChapterJson, shouldCloseChapter } from "@/lib/dm/chapter-logic";
 import { recordExtractedFacts } from "@/lib/db/facts";
+import { listNpcs } from "@/lib/db/npcs";
+import { detectWitnesses } from "@/lib/dm/witness-logic";
 import type { FactCandidate } from "@/lib/dm/fact-logic";
 import { advanceNpcAgency } from "@/lib/dm/npc-agency";
 import { advanceRelationships } from "@/lib/dm/relationship-tick";
@@ -21,7 +23,7 @@ import { indexChapter } from "@/lib/dm/memory-index";
 import { arcExhausted } from "@/lib/dm/arc-logic";
 import { judgeBeatCompleted, refreshStoryArc } from "@/lib/dm/arc";
 import { arcTextTimeoutMs } from "@/lib/model-client";
-import { requestDmMessage } from "@/lib/dm/model";
+import { requestUtilityMessage } from "@/lib/dm/model";
 import { setDmStatus } from "@/lib/dm/status";
 import { listSheets } from "@/lib/db/sheets";
 import { milestoneXp } from "@/lib/srd/encounter-math";
@@ -190,7 +192,7 @@ export async function maybeCloseChapter(
     facts: [] as FactCandidate[],
   };
   try {
-    const { message, error } = await requestDmMessage(
+    const { message, error } = await requestUtilityMessage(
       campaign.settings,
       [
         {
@@ -233,8 +235,19 @@ export async function maybeCloseChapter(
   // same-subject facts supersede what was on file). Never blocks a close.
   if (parsed.facts.length) {
     try {
+      // Stamp who was on screen during the chapter, so an NPC can later be
+      // held to what they could plausibly have witnessed. Chapter-level
+      // rather than per-fact: the extraction gives no per-fact provenance,
+      // and over-crediting a witness is the safe direction to err (the
+      // prompt treats witness data as evidence of knowledge, never as proof
+      // of ignorance).
+      const witnessedBy = detectWitnesses(
+        transcript,
+        listNpcs(campaignId).map((npc) => ({ name: npc.name, aliases: npc.aliases })),
+      );
       const inserted = recordExtractedFacts(campaignId, parsed.facts, "chapter", {
         sourceSeq: seqEnd,
+        witnessedBy,
       });
       if (inserted.length) {
         publishEphemeral(campaignId, "facts_updated", {});

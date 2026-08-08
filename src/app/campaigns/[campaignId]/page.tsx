@@ -19,6 +19,7 @@ export default function CampaignPage({
     refreshNotes,
     refreshSideChat,
     refreshWhispers,
+    refreshAsks,
     refreshFacts,
     refreshBattleMap,
   } = useCampaignStream(campaignId);
@@ -51,6 +52,7 @@ export default function CampaignPage({
       refreshFacts={refreshFacts}
       refreshSideChat={refreshSideChat}
       refreshWhispers={refreshWhispers}
+      refreshAsks={refreshAsks}
       refreshBattleMap={refreshBattleMap}
     />
   );

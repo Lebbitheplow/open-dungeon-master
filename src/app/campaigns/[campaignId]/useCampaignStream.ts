@@ -10,6 +10,7 @@ import type { CampaignMessage } from "@/lib/db/messages";
 import type { Note } from "@/lib/db/notes";
 import type { StoredRoll } from "@/lib/db/rolls";
 import type { DmWhisper } from "@/lib/db/dm-whispers";
+import type { CampaignAsk } from "@/lib/db/asks";
 import type { WorldFact } from "@/lib/db/facts";
 import type { SideThread } from "@/lib/db/side-chat";
 import type { PlayerMapView } from "@/lib/battlemap/view";
@@ -110,6 +111,9 @@ export type CampaignState = {
   whispers: DmWhisper[];
   whisperUnread: number;
   whispersLoaded: boolean;
+  // Ask: the caller's own questions plus every table-visible one.
+  asks: CampaignAsk[];
+  asksLoaded: boolean;
   // World-state facts visible to this member (facts_updated is contentless;
   // each member pulls their own scoped view).
   facts: WorldFact[];
@@ -152,6 +156,8 @@ const initialState: CampaignState = {
   whispers: [],
   whisperUnread: 0,
   whispersLoaded: false,
+  asks: [],
+  asksLoaded: false,
   facts: [],
   relationshipsVersion: 0,
   characterEvents: [],
@@ -172,6 +178,7 @@ type Action =
   | { type: "notes"; notes: Note[] }
   | { type: "sideThreads"; sideThreads: SideThread[] }
   | { type: "whispers"; whispers: DmWhisper[]; unread: number }
+  | { type: "asks"; asks: CampaignAsk[] }
   | { type: "facts"; facts: WorldFact[] }
   | { type: "battleMap"; view: PlayerMapView | null }
   | { type: "error"; error: string }
@@ -204,6 +211,8 @@ function reducer(state: CampaignState, action: Action): CampaignState {
       return { ...state, notes: action.notes };
     case "sideThreads":
       return { ...state, sideThreads: action.sideThreads, sideChatLoaded: true };
+    case "asks":
+      return { ...state, asks: action.asks, asksLoaded: true };
     case "whispers":
       return {
         ...state,
@@ -511,6 +520,7 @@ const EPHEMERAL_EVENTS = [
   "media_status",
   "side_activity",
   "whisper_activity",
+  "ask_activity",
   "facts_updated",
   "relationships_updated",
   "battle_map_updated",
@@ -625,6 +635,22 @@ export function useCampaignStream(campaignId: string) {
     }
   }, [campaignId]);
 
+  // Ask uses the same privacy pattern: ask_activity is contentless and
+  // fires only for table-visible asks; each member pulls the rows they may
+  // read (their own, plus anything shared with the table).
+  const refreshAsks = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/ask`);
+      if (!response.ok) {
+        return;
+      }
+      const data = await response.json();
+      dispatch({ type: "asks", asks: data.asks ?? [] });
+    } catch {
+      // transient; the next ask_activity event retries
+    }
+  }, [campaignId]);
+
   // World facts follow the same privacy pattern: facts_updated is
   // contentless and each member fetches their own known_by-scoped view.
   const refreshFacts = useCallback(async () => {
@@ -650,6 +676,7 @@ export function useCampaignStream(campaignId: string) {
       }
       void refreshSideChat();
       void refreshWhispers();
+      void refreshAsks();
       void refreshFacts();
       void refreshBattleMap();
       source = new EventSource(`/api/campaigns/${campaignId}/events?lastSeq=${lastSeq}`);
@@ -674,6 +701,7 @@ export function useCampaignStream(campaignId: string) {
             void refreshNotes();
             void refreshSideChat();
             void refreshWhispers();
+            void refreshAsks();
             void refreshFacts();
             void refreshBattleMap();
           }
@@ -682,6 +710,9 @@ export function useCampaignStream(campaignId: string) {
           }
           if (eventType === "whisper_activity") {
             void refreshWhispers();
+          }
+          if (eventType === "ask_activity") {
+            void refreshAsks();
           }
           if (eventType === "facts_updated") {
             void refreshFacts();
@@ -704,7 +735,16 @@ export function useCampaignStream(campaignId: string) {
       cancelled = true;
       source?.close();
     };
-  }, [campaignId, refresh, refreshNotes, refreshSideChat, refreshWhispers, refreshFacts, refreshBattleMap]);
+  }, [campaignId, refresh, refreshNotes, refreshSideChat, refreshWhispers, refreshAsks, refreshFacts, refreshBattleMap]);
 
-  return { state, refresh, refreshNotes, refreshSideChat, refreshWhispers, refreshFacts, refreshBattleMap };
+  return {
+    state,
+    refresh,
+    refreshNotes,
+    refreshSideChat,
+    refreshWhispers,
+    refreshAsks,
+    refreshFacts,
+    refreshBattleMap,
+  };
 }

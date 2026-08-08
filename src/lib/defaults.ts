@@ -20,6 +20,16 @@ export const DEFAULT_STORY_SETTINGS: StorySettings = {
   // qwen3.6-35b = the llama-server router preset for qwen3.6-35b-a3b Q8.
   customModel: "qwen3.6-35b",
   customApiKey: "",
+  // OFF by default: a second model is a hardware luxury, so the shipped
+  // default keeps everything on the story model. Set utilityModel in the
+  // campaign's model settings to split the mechanical work off. On the Ollama
+  // side "Gemma4:e4b-it-qat" (~3 GB resident) pairs well with a llama-server
+  // story model, since the two processes hold their weights independently and
+  // neither evicts the other's prompt cache.
+  utilityProvider: "local",
+  utilityModel: "",
+  utilityBaseUrl: "",
+  utilityApiKey: "",
   imageMode: "fast",
   // This machine (AMD gfx1151) can't run the bundled mflux/sdnq workers, so
   // route images through the local ComfyUI (empty comfyUrl falls back to

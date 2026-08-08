@@ -18,6 +18,13 @@ export const globalConfigSchema = z.object({
       customBaseUrl: z.string().trim().max(500).default(""),
       customModel: z.string().trim().max(200).default(""),
       customApiKey: z.string().trim().max(400).default(""),
+      // Optional second model for mechanical work (compaction, chapter
+      // summaries, world-arc ticks, lore checks, Ask). Blank utilityModel
+      // means "off": those calls run on the story model, as they always did.
+      utilityProvider: z.enum(["", "local", "custom"]).default(""),
+      utilityModel: z.string().trim().max(200).default(""),
+      utilityBaseUrl: z.string().trim().max(500).default(""),
+      utilityApiKey: z.string().trim().max(400).default(""),
     })
     .prefault({}),
   images: z
