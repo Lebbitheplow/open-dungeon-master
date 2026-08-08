@@ -45,6 +45,7 @@ import {
 } from "@/lib/dm/rolls";
 import { fakeRollMarkerRegex } from "@/lib/dm/tool-text";
 import { handleCompleteBeat } from "@/lib/dm/arc";
+import { enforceEngineBoundary } from "@/lib/dm/narration-guard";
 import {
   buildDmMessages,
   completeBeatTool,
@@ -1329,6 +1330,10 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
 
   if (!failed) {
     await ensureWhisperReplies(context, turn);
+    // Last stop before the narration is persisted: cross-check the prose
+    // against the outcomes this turn's tools actually resolved, and spend a
+    // remaining model call on a rewrite when they disagree.
+    await enforceEngineBoundary(campaign, turn, MAX_MODEL_CALLS - turn.callIndex, sheets);
   }
   finalize(context, turn, failed);
   if (!failed) {

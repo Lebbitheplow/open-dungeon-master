@@ -70,6 +70,12 @@ export const gameSettingsSchema = z.object({
   // pending offers the owning player accepts or declines instead of applying
   // immediately (src/lib/dm/proposal-logic.ts). Off preserves auto-apply.
   inventoryApprovals: z.boolean().default(false),
+  // Cross-check the DM's finished narration against the tool outcomes the
+  // turn actually resolved (a hit narrated on a miss, a death the hit points
+  // deny, a damage figure no die produced), and spend one corrective model
+  // call when the prose and the engine disagree (src/lib/dm/engine-boundary.ts).
+  // On by default; off costs nothing but the check.
+  narrationGuard: z.boolean().default(true),
   // Optional 5e variant rules the server engines and DM prompt honor.
   // Rendered as one line each in the prompt by src/lib/dm/rules-logic.ts.
   variantRules: z
