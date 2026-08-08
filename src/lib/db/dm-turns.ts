@@ -148,6 +148,31 @@ export function failStaleRunningTurns(campaignId: string, olderThanMinutes = 10)
     .run(nowIso(), campaignId, cutoff);
 }
 
+// The campaign's newest turn. A halted turn is only retryable while it is
+// still the latest one; once the story moved on, replaying its conversation
+// would narrate into a scene that no longer matches.
+export function getLatestDmTurnId(campaignId: string): string | null {
+  const row = getDatabase()
+    .prepare(
+      `SELECT id FROM dm_turns WHERE campaign_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1`,
+    )
+    .get(campaignId) as { id: string } | undefined;
+  return row?.id ?? null;
+}
+
+// Atomically take ownership of a failed turn for a retry. better-sqlite3 is
+// synchronous, so the conditional UPDATE is the whole race guard: two players
+// hitting Retry at the same moment, only one gets changes > 0 and the loser
+// is told the turn is already running.
+export function claimFailedDmTurn(turnId: string): DmTurn | null {
+  const result = getDatabase()
+    .prepare(
+      `UPDATE dm_turns SET status = 'running', updated_at = ? WHERE id = ? AND status = 'failed'`,
+    )
+    .run(nowIso(), turnId);
+  return result.changes > 0 ? getDmTurn(turnId) : null;
+}
+
 export function getAwaitingTurn(campaignId: string): DmTurn | null {
   const row = getDatabase()
     .prepare(

@@ -15,6 +15,11 @@ export type CampaignMessage = {
   // Set on DM messages that moved the party somewhere new; the chat renders
   // that location's map inline (the map itself lives on the locations row).
   locationId?: string;
+  // The dm_turns row this message refers to. Set on the "DM ran into a
+  // problem" system notice so the lead can retry that exact turn from its
+  // persisted conversation; cleared the moment a retry is claimed, which is
+  // what makes the banner disappear for every client at once.
+  dmTurnId?: string;
   createdAt: string;
 };
 
@@ -29,6 +34,7 @@ type MessageRow = {
   image_request_json: string | null;
   generated_image_json: string | null;
   location_id: string | null;
+  dm_turn_id: string | null;
   created_at: string;
 };
 
@@ -44,6 +50,7 @@ function mapMessage(row: MessageRow): CampaignMessage {
     imageRequest: parseJson<ImageRequest | undefined>(row.image_request_json, undefined),
     generatedImage: parseJson<GeneratedImage | undefined>(row.generated_image_json, undefined),
     locationId: row.location_id ?? undefined,
+    dmTurnId: row.dm_turn_id ?? undefined,
     createdAt: row.created_at,
   };
 }
@@ -57,6 +64,7 @@ export function insertCampaignMessage(input: {
   content: string;
   imageRequest?: ImageRequest;
   locationId?: string;
+  dmTurnId?: string;
 }): CampaignMessage {
   const id = crypto.randomUUID();
   getDatabase()
@@ -64,9 +72,9 @@ export function insertCampaignMessage(input: {
       `
         INSERT INTO campaign_messages (
           id, campaign_id, seq, author_type, user_id, character_id, content,
-          image_request_json, location_id, created_at
+          image_request_json, location_id, dm_turn_id, created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
     )
     .run(
@@ -79,6 +87,7 @@ export function insertCampaignMessage(input: {
       input.content,
       input.imageRequest ? JSON.stringify(input.imageRequest) : null,
       input.locationId ?? null,
+      input.dmTurnId ?? null,
       nowIso(),
     );
   touchCampaign(input.campaignId);
@@ -167,6 +176,26 @@ export function setMessageGeneratedImage(messageId: string, image: GeneratedImag
     .prepare(`UPDATE campaign_messages SET generated_image_json = ? WHERE id = ?`)
     .run(JSON.stringify(image), messageId);
   return result.changes > 0;
+}
+
+// Retry claim: drops a halted notice's link to its DM turn so the retry
+// banner stops being offered. Conditional on the turn id, so it doubles as a
+// second guard against two leads retrying the same turn (better-sqlite3 is
+// synchronous, so only one caller can see changes > 0). The caller publishes
+// message_updated.
+export function clearMessageDmTurn(messageId: string, dmTurnId: string): CampaignMessage | null {
+  const result = getDatabase()
+    .prepare(`UPDATE campaign_messages SET dm_turn_id = NULL WHERE id = ? AND dm_turn_id = ?`)
+    .run(messageId, dmTurnId);
+  return result.changes > 0 ? getCampaignMessage(messageId) : null;
+}
+
+// The halted notice pointing at a turn, if it is still offering a retry.
+export function findMessageForDmTurn(dmTurnId: string): CampaignMessage | null {
+  const row = getDatabase()
+    .prepare(`SELECT * FROM campaign_messages WHERE dm_turn_id = ? ORDER BY seq DESC LIMIT 1`)
+    .get(dmTurnId) as MessageRow | undefined;
+  return row ? mapMessage(row) : null;
 }
 
 // Lore-check accept: replaces a message's text in place (the lead applying

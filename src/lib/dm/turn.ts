@@ -18,6 +18,7 @@ import {
   saveDmTurn,
   type DmTurn,
 } from "@/lib/db/dm-turns";
+import { DM_HALTED_PREFIX } from "@/lib/campaign-types";
 import { PC_ATTACK_PARKED } from "@/lib/dm/pc-attack";
 import { normalizeEventKind } from "@/lib/dm/arg-coerce";
 import { insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
@@ -173,7 +174,9 @@ const ENCOUNTER_NAMES = new Set<string>(ENCOUNTER_TOOL_NAMES);
 // awaiting_rolls, and the queue job ends. Submitting the roll enqueues
 // resumeDmTurn, which appends the results and continues. Parked turns
 // survive restarts.
-const MAX_MODEL_CALLS = 4;
+// Exported for the retry path (src/lib/dm/retry-turn.ts), which has to know
+// where a resumed turn may re-enter the loop.
+export const MAX_MODEL_CALLS = 4;
 
 // Tools whose results decide an attack/damage outcome: narration written in
 // the same model call is a premature guess and is withheld from players.
@@ -454,6 +457,13 @@ export async function resumeDmTurn(campaignId: string, turnId: string) {
   saveDmTurn(turn);
   setDmStatus(campaignId, "narrating");
   await advance(context, turn);
+}
+
+// Retry entry point (src/lib/dm/retry-turn.ts): re-enter a halted turn from
+// its persisted conversation. Lives here because advance() and loadContext()
+// are turn internals; the retry's own guards run before this is called.
+export async function reenterDmTurn(campaign: Campaign, turn: DmTurn) {
+  await advance(loadContext(campaign), turn);
 }
 
 // A throwing tool handler used to leave dm_turns stuck at 'running' until
@@ -1595,7 +1605,11 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string) {
       campaignId,
       seq,
       authorType: "system",
-      content: `The DM ran into a problem: ${failed}`,
+      content: `${DM_HALTED_PREFIX}${failed}`,
+      // Link the notice to the halted turn so the lead can retry it from its
+      // persisted conversation (src/lib/dm/retry-turn.ts) instead of retyping
+      // the action, which would duplicate it in the transcript.
+      dmTurnId: turn.id,
     });
     publishWithSeq(campaignId, seq, "message_added", { message });
     setDmStatus(campaignId, "idle");

@@ -922,6 +922,17 @@ function ensureSchema(db: Database.Database) {
     ["location_id", `TEXT`],
   ]);
 
+  // Its own addColumns call rather than an entry in the block above: that
+  // helper reads PRAGMA table_info once per call, so a second entry for a
+  // column another feature already listed would try the ALTER twice. A
+  // separate call re-reads and stays a no-op.
+  addColumns("campaign_messages", [
+    // The dm_turns row a system notice refers to. Set on the "DM ran into a
+    // problem" notice so the lead can retry that exact turn from its
+    // persisted conversation; NULL once the retry is claimed.
+    ["dm_turn_id", `TEXT`],
+  ]);
+
   addColumns("dm_turns", [
     // Pending location reference for the message finalize() will write;
     // persisted so it survives a turn parked on physical dice.

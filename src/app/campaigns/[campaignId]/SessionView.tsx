@@ -435,6 +435,8 @@ export function SessionView({
         >
           <MessageList
             messages={messages}
+            campaignId={campaign.id}
+            canRetryTurn={isLead}
             rolls={rolls}
             sheets={sheets}
             members={state.members}

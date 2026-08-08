@@ -4,7 +4,8 @@ import { Crown, ImageOff, Loader2, Pin, ShieldQuestion, UserPlus, Volume2 } from
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
-import { JOIN_NOTE_PREFIX, LEAD_NOTE_PREFIX, type CampaignMember } from "@/lib/campaign-types";
+import { DM_HALTED_PREFIX, JOIN_NOTE_PREFIX, LEAD_NOTE_PREFIX, type CampaignMember } from "@/lib/campaign-types";
+import { HaltedTurnBanner } from "@/app/campaigns/[campaignId]/HaltedTurnBanner";
 import { stripToolText } from "@/lib/dm/tool-text";
 import { ImageLightbox } from "@/components/ui/ImageLightbox";
 import type { CampaignMessage } from "@/lib/db/messages";
@@ -154,6 +155,8 @@ function DmContent({ content, rollsById, sheetsById }: {
 // props that actually changed re-render their row.
 const MessageItem = memo(function MessageItem({
   message,
+  campaignId,
+  canRetryTurn,
   rollsById,
   sheetsById,
   membersById,
@@ -165,6 +168,8 @@ const MessageItem = memo(function MessageItem({
   onLoreCheck,
 }: {
   message: CampaignMessage;
+  campaignId: string;
+  canRetryTurn: boolean;
   rollsById: Map<string, StoredRoll>;
   sheetsById: Map<string, CharacterSheet>;
   membersById: Map<string, CampaignMember>;
@@ -176,6 +181,19 @@ const MessageItem = memo(function MessageItem({
   onLoreCheck?: (message: CampaignMessage) => void;
 }) {
   if (message.authorType === "system") {
+    // A halted turn whose dm_turns row is still retryable. Both halves of the
+    // test matter: the link is cleared once a retry is claimed, and the
+    // prefix keeps any other turn-linked message out of this branch.
+    if (message.dmTurnId && message.content.startsWith(DM_HALTED_PREFIX)) {
+      return (
+        <HaltedTurnBanner
+          campaignId={campaignId}
+          turnId={message.dmTurnId}
+          content={message.content}
+          canRetry={canRetryTurn}
+        />
+      );
+    }
     if (message.content.startsWith(LEAD_NOTE_PREFIX)) {
       return (
         <div className="mx-auto max-w-xl rounded-lg border border-amber-900/60 bg-amber-950/30 px-4 py-2.5">
@@ -331,6 +349,8 @@ const MessageItem = memo(function MessageItem({
 
 export function MessageList({
   messages,
+  campaignId,
+  canRetryTurn = false,
   rolls,
   sheets,
   members = [],
@@ -343,6 +363,11 @@ export function MessageList({
   onLoreCheck,
 }: {
   messages: CampaignMessage[];
+  campaignId: string;
+  // The party lead may send a halted DM turn back in. Plain booleans and
+  // strings rather than a callback: the memoized rows stay cheap without the
+  // stable-identity dance the callback props above need.
+  canRetryTurn?: boolean;
   rolls: StoredRoll[];
   sheets: CharacterSheet[];
   members?: CampaignMember[];
@@ -434,6 +459,8 @@ export function MessageList({
         <MessageItem
           key={message.id}
           message={message}
+          campaignId={campaignId}
+          canRetryTurn={canRetryTurn}
           rollsById={rollsById}
           sheetsById={sheetsById}
           membersById={membersById}
