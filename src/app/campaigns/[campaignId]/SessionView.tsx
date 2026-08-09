@@ -506,6 +506,27 @@ export function SessionView({
                   }
                 : undefined
             }
+            onEditSave={
+              isLead
+                ? async (message, content) => {
+                    // Returns the server's refusal so the editor can show it
+                    // inline; the roll-marker rule lives server-side.
+                    const response = await fetch(
+                      `/api/campaigns/${campaign.id}/messages/${message.id}/edit`,
+                      {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ content }),
+                      },
+                    );
+                    if (!response.ok) {
+                      const data = await response.json().catch(() => ({}));
+                      return data.error || "Could not save that edit.";
+                    }
+                    return null;
+                  }
+                : undefined
+            }
             onPinMemory={async (message) => {
               // NE-P's isFullMessage distinction: a selection is an excerpt,
               // no selection pins the whole narration. Any member may pin,

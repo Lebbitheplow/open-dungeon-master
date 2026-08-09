@@ -1,8 +1,10 @@
 "use client";
 
 import {
+  Bookmark,
   ChevronLeft,
   FastForward,
+  Pencil,
   ChevronRight,
   Crown,
   ImageOff,
@@ -18,6 +20,7 @@ import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { DM_HALTED_PREFIX, JOIN_NOTE_PREFIX, LEAD_NOTE_PREFIX, type CampaignMember } from "@/lib/campaign-types";
 import { HaltedTurnBanner } from "@/app/campaigns/[campaignId]/HaltedTurnBanner";
+import { InlineMessageEditor } from "@/app/campaigns/[campaignId]/InlineMessageEditor";
 import { stripToolText } from "@/lib/dm/tool-text";
 import { ImageLightbox } from "@/components/ui/ImageLightbox";
 import type { CampaignMessage } from "@/lib/db/messages";
@@ -178,6 +181,7 @@ const MessageItem = memo(function MessageItem({
   onReplayAudio,
   onPinCanon,
   onPinMemory,
+  onEditSave,
   onLoreCheck,
   onRenarrate,
   onContinueScene,
@@ -196,6 +200,9 @@ const MessageItem = memo(function MessageItem({
   onPinCanon?: (message: CampaignMessage) => void;
   // Pin the current selection (or the whole message) into every future prompt.
   onPinMemory?: (message: CampaignMessage) => void;
+  // Lead-only correction of this narration's text. Resolves to an error
+  // string when the server refuses (a dropped roll marker), or null on save.
+  onEditSave?: (message: CampaignMessage, content: string) => Promise<string | null>;
   onLoreCheck?: (message: CampaignMessage) => void;
   // Reroll this narration's prose (lead only, latest DM message only).
   onRenarrate?: (message: CampaignMessage) => void;
@@ -203,6 +210,10 @@ const MessageItem = memo(function MessageItem({
   // Browse the rerolled takes; the picked one is what the table reads.
   onSelectVariant?: (message: CampaignMessage, index: number) => void;
 }) {
+  // Local to the row: only one narration is ever being corrected at a time,
+  // and the draft should not survive the row unmounting.
+  const [editing, setEditing] = useState(false);
+
   if (message.authorType === "system") {
     // A halted turn whose dm_turns row is still retryable. Both halves of the
     // test matter: the link is cleared once a retry is claimed, and the
@@ -303,15 +314,26 @@ const MessageItem = memo(function MessageItem({
               <FastForward className="size-3.5" />
             </button>
           ) : null}
+          {onEditSave ? (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              aria-label="Edit this narration"
+              title="Edit: fix what the DM said. Mechanics are untouched, and every dice marker must survive"
+              className={cn(ui.iconAction, "-my-1.5")}
+            >
+              <Pencil className="size-3.5" />
+            </button>
+          ) : null}
           {onPinMemory ? (
             <button
               type="button"
               onClick={() => onPinMemory(message)}
               aria-label="Pin this to the DM's memory"
-              title="Pin: keep your selected text (or this whole message) in front of the DM every turn"
+              title="Remember: keep your selected text (or this whole message) in front of the DM every turn"
               className={cn(ui.iconAction, "-my-1.5")}
             >
-              <Pin className="size-3.5" />
+              <Bookmark className="size-3.5" />
             </button>
           ) : null}
           {onLoreCheck ? (
@@ -348,7 +370,21 @@ const MessageItem = memo(function MessageItem({
             </button>
           ) : null}
         </p>
-        <DmContent content={message.content} rollsById={rollsById} sheetsById={sheetsById} />
+        {editing && onEditSave ? (
+          <InlineMessageEditor
+            initial={message.content}
+            onCancel={() => setEditing(false)}
+            onSave={async (content) => {
+              const failure = await onEditSave(message, content);
+              if (!failure) {
+                setEditing(false);
+              }
+              return failure;
+            }}
+          />
+        ) : (
+          <DmContent content={message.content} rollsById={rollsById} sheetsById={sheetsById} />
+        )}
         {message.generatedImage ? (
           <ImageLightbox
             src={message.generatedImage.url}
@@ -448,6 +484,7 @@ export function MessageList({
   onReplayAudio,
   onPinCanon,
   onPinMemory,
+  onEditSave,
   onLoreCheck,
   onRenarrate,
   onContinueScene,
@@ -470,6 +507,7 @@ export function MessageList({
   onPinCanon?: (message: CampaignMessage) => void;
   // Pin the current selection (or the whole message) into every future prompt.
   onPinMemory?: (message: CampaignMessage) => void;
+  onEditSave?: (message: CampaignMessage, content: string) => Promise<string | null>;
   onLoreCheck?: (message: CampaignMessage) => void;
   onRenarrate?: (message: CampaignMessage) => void;
   onContinueScene?: (message: CampaignMessage) => void;
@@ -620,6 +658,7 @@ export function MessageList({
           onPinCanon={stablePin}
           onLoreCheck={stableLore}
           onPinMemory={stablePinMemory}
+          onEditSave={onEditSave}
           onRenarrate={
             // No turn link, no reroll: messages narrated before this feature
             // shipped have no stored conversation to replay.
