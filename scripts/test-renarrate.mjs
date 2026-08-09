@@ -2,6 +2,9 @@
 // content assembly, and the variant set's cap and index rules.
 import assert from "node:assert/strict";
 import {
+  DEFAULT_STORY_TEMPERATURE,
+  REROLL_TEMP_OFFSET,
+  computeRerollTemperature,
   appendVariant,
   assembleVariantContent,
   buildRenarrateMessages,
@@ -154,3 +157,21 @@ test("out-of-range selections are rejected rather than clamped", () => {
 });
 
 console.log(`renarrate: ${passed} tests passed`);
+
+// Reroll temperature, ported from NE-P's computeSwipeTemperature.
+{
+  // Relative to the base, never an absolute override.
+  assert.equal(
+    computeRerollTemperature(0.7, REROLL_TEMP_OFFSET),
+    0.7 + REROLL_TEMP_OFFSET,
+  );
+  assert.equal(
+    computeRerollTemperature(undefined, REROLL_TEMP_OFFSET),
+    DEFAULT_STORY_TEMPERATURE + REROLL_TEMP_OFFSET,
+  );
+  // NE-P clamps the sum to [0, 2]; a hot base plus a dragged slider must not
+  // ask a backend for a temperature it will reject.
+  assert.equal(computeRerollTemperature(1.9, 0.6), 2);
+  assert.equal(computeRerollTemperature(0, -5), 0);
+  console.log("renarrate: reroll temperature is a clamped relative offset");
+}

@@ -20,6 +20,8 @@ const rerollSchema = z.object({
   action: z.literal("reroll"),
   // A one-off directive for this take only ("darker", "more dialogue").
   guidance: z.string().max(MAX_GUIDANCE_LENGTH * 4).default(""),
+  // Relative, and clamped again in computeRerollTemperature.
+  tempOffset: z.number().min(0).max(1).optional(),
 });
 
 const selectSchema = z.object({
@@ -78,6 +80,7 @@ export async function POST(
     campaignId,
     messageId,
     guidance: parsed.data.guidance,
+    tempOffset: parsed.data.tempOffset,
   });
   if ("error" in result) {
     return Response.json({ error: result.error }, { status: result.status });

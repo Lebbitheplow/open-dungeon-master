@@ -24,6 +24,26 @@ export const MAX_VARIANTS = 5;
 // competing with the campaign's own system prompt for the model's attention.
 export const MAX_GUIDANCE_LENGTH = 200;
 
+// Ported from NE-P's SWIPE_BASE_TEMP_OFFSET (src/services/turn/swipeGeneration.ts,
+// MIT). A reroll opens slightly hotter than the first pass, because a take
+// that lands on the same sentences is a wasted minute of GPU. It is a
+// RELATIVE offset, not an absolute temperature: an absolute value silently
+// overrides whatever the campaign is tuned to, and drifts further from it
+// every time that tuning changes.
+export const REROLL_TEMP_OFFSET = 0.1;
+
+// The story model's temperature when nothing else specifies one, matching the
+// no-thinking default in src/lib/model-client.ts. Once per-role sampling
+// exists the real configured base should be passed in here instead.
+export const DEFAULT_STORY_TEMPERATURE = 0.9;
+
+// NE-P clamps the sum to [0, 2]; a slider plus a hot base can otherwise ask
+// for a temperature no backend will accept.
+export function computeRerollTemperature(baseTemp: number | undefined, offset: number): number {
+  const base = baseTemp ?? DEFAULT_STORY_TEMPERATURE;
+  return Math.max(0, Math.min(2, base + offset));
+}
+
 // Duplicated from finalize() in src/lib/dm/turn.ts rather than imported: this
 // module stays alias-free. If that fallback line changes, change it here too.
 export const EMPTY_NARRATION_FALLBACK =

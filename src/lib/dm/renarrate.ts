@@ -19,6 +19,8 @@ import {
   seedVariants,
   resolveVariantIndex,
   MAX_VARIANTS,
+  REROLL_TEMP_OFFSET,
+  computeRerollTemperature,
 } from "@/lib/dm/renarrate-logic";
 
 // Narration reroll: the DB/IO rim around renarrate-logic.ts.
@@ -52,6 +54,9 @@ export async function runRenarrate(input: {
   campaignId: string;
   messageId: string;
   guidance: string;
+  // Added to the story model's base temperature for this take only, so a lead
+  // browsing takes can push for more variation without retuning the campaign.
+  tempOffset?: number;
 }): Promise<RenarrateResult> {
   const campaign = getCampaignById(input.campaignId);
   if (!campaign) {
@@ -101,9 +106,10 @@ export async function runRenarrate(input: {
         // No tools at all, on top of toolChoice "none": a variant that called
         // a tool would re-run mechanics that already resolved.
         toolChoice: "none",
-        // A reroll that lands on the same sentences is a wasted minute of
-        // GPU, so it samples slightly hotter than a first pass (0.9).
-        temperature: 1,
+        // Slightly hotter than the first pass, as a relative offset from the
+        // story model's base rather than an absolute value that would
+        // override whatever the campaign is tuned to.
+        temperature: computeRerollTemperature(undefined, input.tempOffset ?? REROLL_TEMP_OFFSET),
       });
       if (error) {
         failure = "The model is unavailable; try again shortly.";

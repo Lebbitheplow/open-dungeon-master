@@ -6,7 +6,11 @@ import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import type { CampaignMessage } from "@/lib/db/messages";
-import { MAX_GUIDANCE_LENGTH, MAX_VARIANTS } from "@/lib/dm/renarrate-logic";
+import {
+  MAX_GUIDANCE_LENGTH,
+  MAX_VARIANTS,
+  REROLL_TEMP_OFFSET,
+} from "@/lib/dm/renarrate-logic";
 
 // Reroll the DM's latest narration. The server replays only the final
 // narration call of that turn, so the dice, the damage and the world state
@@ -25,6 +29,10 @@ export function RenarrateDialog({
   onClose: () => void;
 }) {
   const [guidance, setGuidance] = useState("");
+  // NE-P opens its regenerate sheet at base + 0.1 and remembers a dragged
+  // offset for the rest of the browse session. This dialog is per-reroll, so
+  // the offset simply defaults back each time it opens.
+  const [tempOffset, setTempOffset] = useState(REROLL_TEMP_OFFSET);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
   const taken = message.variants?.length ?? 1;
@@ -39,7 +47,7 @@ export function RenarrateDialog({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "reroll", guidance }),
+          body: JSON.stringify({ action: "reroll", guidance, tempOffset }),
         },
       );
       const data = await response.json().catch(() => ({}));
@@ -80,6 +88,24 @@ export function RenarrateDialog({
             {MAX_VARIANTS}.
             {capped ? " That is every take; browse them and pick one." : ""}
           </p>
+
+          <label className="mb-1 flex items-center justify-between text-[10px] font-medium uppercase tracking-wide text-stone-500">
+            <span>Variation</span>
+            <span className="font-mono normal-case tracking-normal text-stone-400">
+              +{tempOffset.toFixed(2)}
+            </span>
+          </label>
+          <input
+            type="range"
+            min={0}
+            max={0.6}
+            step={0.05}
+            value={tempOffset}
+            disabled={running}
+            onChange={(event) => setTempOffset(Number(event.target.value))}
+            className="mb-3 w-full accent-amber-500"
+            aria-label="How far this take may drift from the last"
+          />
 
           <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-stone-500">
             Guidance for this take (optional)
