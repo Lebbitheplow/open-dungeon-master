@@ -402,7 +402,10 @@ function SidePanelInner({
               onOpenHandled={onChatTargetHandled}
             />
           </div>
-        ) : tab === "context" ? (
+        ) : tab === "context" && isLead ? (
+          // Belt and braces: buildPanelTabs already withholds this tab from
+          // players, but a stale tab selection must not land them on a panel
+          // whose route will only ever answer 403.
           <ContextPanel campaignId={campaignId} />
         ) : tab === "settings" && campaign ? (
           <SessionSettings campaign={campaign} isLead={isLead} />

@@ -226,9 +226,10 @@ export function SessionView({
         hasBattleMap: Boolean(state.battleMap),
         mapsEnabled: campaign?.gameSettings?.mapsEnabled ?? true,
         hasSettings: Boolean(campaign),
+        isLead,
         relationshipsEnabled: campaign?.gameSettings?.relationships !== "off",
       }),
-    [state.battleMap, campaign],
+    [state.battleMap, campaign, isLead],
   );
 
   const campaignId = campaign?.id;

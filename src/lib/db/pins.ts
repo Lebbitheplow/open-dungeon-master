@@ -73,9 +73,27 @@ export function createPin(input: {
   };
 }
 
-export function deletePin(campaignId: string, pinId: string): boolean {
-  const result = getDatabase()
-    .prepare(`DELETE FROM campaign_pins WHERE id = ? AND campaign_id = ?`)
-    .run(pinId, campaignId);
+// Unpinning is restricted to whoever pinned it, or the party lead.
+//
+// Pinning is open to the whole table by design, but a pin rides in EVERY
+// prompt under a shared token cap, so deleting one silently changes what the
+// DM remembers for everybody. Anyone being able to drop anyone's pin makes
+// that a griefing vector and, more mundanely, an easy accident. The lead
+// keeps an override because somebody has to be able to clear the board.
+export function deletePin(
+  campaignId: string,
+  pinId: string,
+  actor: { userId: string; isLead: boolean },
+): boolean {
+  const result = actor.isLead
+    ? getDatabase()
+        .prepare(`DELETE FROM campaign_pins WHERE id = ? AND campaign_id = ?`)
+        .run(pinId, campaignId)
+    : getDatabase()
+        .prepare(
+          `DELETE FROM campaign_pins
+           WHERE id = ? AND campaign_id = ? AND pinned_by_user_id = ?`,
+        )
+        .run(pinId, campaignId, actor.userId);
   return result.changes > 0;
 }

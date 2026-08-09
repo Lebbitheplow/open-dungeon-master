@@ -46,11 +46,16 @@ export function buildPanelTabs({
   hasBattleMap,
   mapsEnabled,
   hasSettings,
+  isLead,
   relationshipsEnabled,
 }: {
   hasBattleMap: boolean;
   mapsEnabled: boolean;
   hasSettings: boolean;
+  // The Context tab shows what the DM was actually sent, which includes the
+  // secret arc and the DM outline. Its route is lead-only, so offering the
+  // tab to a player only ever produces a 403 and a broken panel.
+  isLead: boolean;
   relationshipsEnabled: boolean;
 }): PanelTabDef[] {
   return [
@@ -82,7 +87,7 @@ export function buildPanelTabs({
     ["notes", "Notes", StickyNote, "Suggest story notes; the party lead approves them."],
     ["chat", "Chat", MessagesSquare, "Side chat between players. The DM does not see it."],
     ["log", "Log", ScrollText, "Dice rolls and DM stat changes, audited."],
-    ...(hasSettings
+    ...(hasSettings && isLead
       ? ([
           [
             "context",
@@ -90,8 +95,10 @@ export function buildPanelTabs({
             Gauge,
             "What the DM was actually sent last turn, and anything the budget cut.",
           ],
-          ["settings", "Setup", Settings2, "Campaign settings, invites and game toggles."],
         ] as PanelTabDef[])
+      : []),
+    ...(hasSettings
+      ? ([["settings", "Setup", Settings2, "Campaign settings, invites and game toggles."]] as PanelTabDef[])
       : []),
   ];
 }

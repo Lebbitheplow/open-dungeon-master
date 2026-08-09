@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isErrorResponse, requireMember } from "@/lib/campaign-api";
+import { isErrorResponse, isLead, requireMember } from "@/lib/campaign-api";
 import { createPin, deletePin, listPins } from "@/lib/db/pins";
 import { getCampaignMessage } from "@/lib/db/messages";
 import { publishPersisted } from "@/lib/events";
@@ -87,8 +87,18 @@ export async function DELETE(
   if (!parsed.success) {
     return Response.json({ error: "Invalid unpin." }, { status: 400 });
   }
-  if (!deletePin(campaignId, parsed.data.pinId)) {
-    return Response.json({ error: "Pin not found." }, { status: 404 });
+  // Own pin, or the lead. A pin rides in every prompt, so unpinning someone
+  // else's silently changes what the DM remembers for the whole table.
+  if (
+    !deletePin(campaignId, parsed.data.pinId, {
+      userId: context.user.id,
+      isLead: isLead(context),
+    })
+  ) {
+    return Response.json(
+      { error: "That pin is not yours to remove." },
+      { status: 403 },
+    );
   }
   publishPersisted(campaignId, "pins_updated", { pinId: parsed.data.pinId });
   return Response.json({ ok: true });

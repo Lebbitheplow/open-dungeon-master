@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Loader2, Merge, Pencil, Users, X } from "lucide-react";
+import { Check, Loader2, Merge, Pencil, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
@@ -94,25 +94,23 @@ export function NpcReviewPanel({ campaignId }: { campaignId: string }) {
 
   if (!loaded) {
     return (
-      <p className="flex items-center gap-2 p-3 text-xs text-stone-500">
-        <Loader2 className="size-3.5 animate-spin" /> Loading...
+      <p className="flex items-center gap-1 text-[11px] text-stone-500">
+        <Loader2 className="size-3 animate-spin" /> Loading...
       </p>
     );
   }
 
+  // Unpadded on purpose: this nests inside a card that already pads and
+  // indents its expanded content, the same way ArcCard's body does.
   return (
-    <div className="space-y-3 p-3">
-      <div>
-        <p className="flex items-center gap-1.5 text-xs font-medium text-stone-300">
-          <Users className="size-3.5 text-amber-300" /> NPC roster
-        </p>
-        <p className="mt-1 text-[11px] leading-4 text-stone-500">
-          The DM rarely spells a name the same way twice over fifty turns. Close matches are
-          flagged here rather than merged for you, because two similar names are often two
-          people. Merging keeps the old spelling as an alias, so nothing already written stops
-          resolving.
-        </p>
-      </div>
+    <div className="space-y-3">
+      {/* No heading: the card that owns this panel already titles it. */}
+      <p className="text-[11px] leading-4 text-stone-500">
+        The DM rarely spells a name the same way twice over fifty turns. Close matches are
+        flagged here rather than merged for you, because two similar names are often two
+        people. Merging keeps the old spelling as an alias, so nothing already written stops
+        resolving.
+      </p>
 
       {error ? <p className="text-[11px] text-red-400">{error}</p> : null}
 

@@ -19,9 +19,13 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // Director controls: the party lead arms a one-turn steer (a canned event
-// type, a free-text command, or both) that the next DM turn consumes. Reading
-// the armed state is open to every member so the whole table sees the badge;
-// changing it is lead only, like every other story-steering control.
+// type, a free-text command, or both) that the next DM turn consumes.
+// Changing it is lead only, like every other story-steering control.
+//
+// Reading splits. Every member may learn THAT something is armed, so the
+// table sees the badge and nobody is surprised by a nudged scene. Only the
+// lead may read WHAT it says: the directive is a spoiler for the turn it is
+// about to bend.
 
 const armSchema = z
   .object({
@@ -33,12 +37,28 @@ const armSchema = z
     { message: "Nothing to arm." },
   );
 
+// The full directive, for the lead who wrote it.
 function armPayload(campaignId: string) {
   const arm = getDirectorArm(campaignId);
   return {
     armed: isArmed(arm),
     oneShot: arm?.oneShot ?? null,
     absoluteCommand: arm?.absoluteCommand ?? "",
+  };
+}
+
+// What everyone else may see: THAT a steer is armed, never what it says.
+//
+// The content is a spoiler. "Have the cultist turn on them when they reach
+// the shrine" is exactly the sort of thing a player must not read before it
+// happens, and the one-shot event id ("betrayal", "windfall") gives away
+// nearly as much. The armed light stays visible because the table knowing the
+// lead nudged the DM is honest; the text is not theirs to read.
+function redactedArmPayload(campaignId: string) {
+  return {
+    armed: isArmed(getDirectorArm(campaignId)),
+    oneShot: null,
+    absoluteCommand: "",
   };
 }
 
@@ -51,7 +71,12 @@ export async function GET(
   if (isErrorResponse(context)) {
     return context;
   }
-  return Response.json(armPayload(campaignId));
+  // Members may poll this to light the armed badge; only the lead reads the
+  // directive itself.
+  const lead = await requireLead(campaignId);
+  return Response.json(
+    isErrorResponse(lead) ? redactedArmPayload(campaignId) : armPayload(campaignId),
+  );
 }
 
 export async function POST(
@@ -82,10 +107,13 @@ export async function POST(
     armedByUserId: context.user.id,
   });
 
+  // Contentless on the wire: publishPersisted reaches every connected client,
+  // so the directive's text would land in every player's browser.
+  publishPersisted(campaignId, "director_armed", redactedArmPayload(campaignId));
+  // The response, which only the lead receives, carries the real thing: the
+  // block is returned so the lead sees precisely what the DM will be told
+  // rather than trusting a label.
   const payload = armPayload(campaignId);
-  publishPersisted(campaignId, "director_armed", payload);
-  // The block is returned so the lead can see precisely what the DM will be
-  // told, rather than trusting a label.
   return Response.json({ ...payload, preview: buildDirectorBlock(getDirectorArm(campaignId)) });
 }
 
@@ -100,6 +128,6 @@ export async function DELETE(
   }
   clearDirectorArm(campaignId);
   const payload = armPayload(campaignId);
-  publishPersisted(campaignId, "director_armed", payload);
+  publishPersisted(campaignId, "director_armed", redactedArmPayload(campaignId));
   return Response.json(payload);
 }

@@ -38,17 +38,30 @@ export function DirectorPanel({
   // until the first event, which is why we also fetch once on mount.
   armed?: ArmState | null;
 }) {
-  // Two sources for the same fact: the stream (authoritative once it speaks)
-  // and a one-off fetch that covers the window before the first event. Local
-  // state holds only what this client last learned directly, and the stream
-  // value wins when present, so nothing has to sync one into the other.
+  // Two sources, and they carry different things now. The stream says only
+  // WHETHER something is armed, because that event reaches every player and
+  // the directive's text is a spoiler. The directive itself comes from this
+  // client's own request, which the server answers in full only for the lead.
+  // So: armed from the stream when it has spoken, content from local always.
   const [local, setLocal] = useState<ArmState | null>(null);
   const [oneShotOpen, setOneShotOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [command, setCommand] = useState("");
   const [busy, setBusy] = useState(false);
-  const state = armed ?? local ?? EMPTY;
+  const isArmedNow = armed?.armed ?? local?.armed ?? false;
+  const detail = local ?? EMPTY;
+  const state: ArmState = {
+    armed: isArmedNow,
+    // Cleared the moment nothing is armed, so a spent directive's text cannot
+    // linger in a stale local copy.
+    oneShot: isArmedNow ? detail.oneShot : null,
+    absoluteCommand: isArmedNow ? detail.absoluteCommand : "",
+  };
 
+  // Refetched whenever the armed flag flips, not just on mount: the stream
+  // event is contentless, so this is how a lead's second tab (or a tab open
+  // since before the arm) learns what the directive actually says.
+  const armedFlag = armed?.armed;
   useEffect(() => {
     let cancelled = false;
     void fetch(`/api/campaigns/${campaignId}/director`)
@@ -62,7 +75,7 @@ export function DirectorPanel({
     return () => {
       cancelled = true;
     };
-  }, [campaignId]);
+  }, [campaignId, armedFlag]);
 
   const send = useCallback(
     async (method: "POST" | "DELETE", body?: unknown) => {

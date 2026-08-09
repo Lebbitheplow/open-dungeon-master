@@ -223,7 +223,7 @@ function NpcReviewCard({ campaignId }: { campaignId: string }) {
         </span>
       </button>
       {expanded ? (
-        <div className="-mx-2.5 -mb-2.5 mt-1">
+        <div className="mt-2 pl-5">
           <NpcReviewPanel campaignId={campaignId} />
         </div>
       ) : null}

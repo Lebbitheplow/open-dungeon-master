@@ -59,7 +59,7 @@ a secret story arc it regenerates as the campaign moves.
 <td width="50%" valign="top" align="center">
 <img src="public/sidebar-icons/story.png" width="56"><br>
 <b>Secret story arc &amp; maps</b><br>
-<sub>A hidden spine (premise, stakes, antagonist, ordered beats) regenerated as chapters close, a live quest log, rolling-summary memory, and procedural fog-of-war battle maps.</sub>
+<sub>A hidden spine (premise, stakes, antagonist, ordered beats) refreshed as chapters close and editable a beat at a time, a live quest log, rolling-summary memory, and procedural fog-of-war battle maps.</sub>
 </td>
 </tr>
 <tr>
@@ -168,6 +168,7 @@ and clamped by code.
 - **NPC agency** - once-per-chapter goal advancement for every tracked NPC with no model call, surfacing outcomes as rumors and world facts.
 - **World facts register** - authoritative player-visible and DM-only facts extracted from play and fed to prompts as canon or rumor.
 - **Social and NPC attitude system** - attitudes tracked across sessions and `social_check` rolls against attitude-derived DCs that can shift them.
+- **NPC roster hygiene** - NPCs the party has ignored for chapters archive out of the prompt and restore on a name mention, and close name matches the engine refuses to merge on its own ("Aldric" and "Alaric") queue for the lead to merge, rename, or dismiss. Merging keeps the old spelling as an alias; it never rewrites past narration.
 - **World utility engines** - CR-scaled treasure moved into real purses, object durability, and forced-march exhaustion via real CON saves.
 
 ### Narrative
@@ -176,6 +177,11 @@ and clamped by code.
 - **Chapter engine** - chapters close on completed story beats rather than message volume, triggering XP, fact extraction, NPC agency, memory indexing, and a snapshot.
 - **Recap and compaction** - a rolling campaign summary and history compaction that keep prompts bounded.
 - **Chapter rewind and snapshots** - a full world-state snapshot at each chapter open; a lead-confirmed rewind restores a boundary after taking a safety copy.
+- **Narration reroll** - the lead rerolls a DM paragraph with optional guidance ("darker", "more dialogue") and browses the takes. Only the words change: the dice, the sheets and every resolved outcome stay byte-identical.
+- **Continue scene** - extends a narration that stopped short, in place. Not a turn: no counters, no chapter close, no world tick.
+- **Inline narration edit** - the lead fixes a typo or a wrong name directly, with every dice-roll marker preserved across the edit or the save refused.
+- **Director controls** - a one-turn steer the lead arms before a turn: a canned event type or a free-text command, consumed exactly once. Players see that something is armed, never what it says.
+- **Arc beat editor** - reword, reorder, skip, set `[NOW]`, or add a single main beat instead of regenerating the whole spine. Beats that already played are immutable; they are a record, not a plan.
 - **Story export** - finished campaigns and chapters exported to DOCX, ODT, or HTML.
 
 ### Memory and retrieval (RAG)
@@ -185,12 +191,23 @@ and clamped by code.
 - **House rules and rules manager** - embedded house-rules text plus structured variant toggles, retrieved into the prompt's variant and house-rules blocks.
 - **Per-turn context retrieval** - embeds the current moment once and rides only the most relevant lore and rule chunks into the prompt.
 - **Lore check** - a player-flagged consistency verifier that returns a verdict, citations, and a suggested rewrite.
+- **Pinned memories** - select a passage in any DM message and pin it; pins ride in every prompt under a hard token cap, and a pin that would blow the cap is refused rather than silently evicting an older one.
+- **Token-aware context budget** - per-section allocation with floors against the model's real context window, replacing a flat character count, with stable blocks ordered before volatile ones for prefix-cache hits.
+- **Context inspector** - a lead-only panel showing exactly what the DM was sent last turn, block by block, with token cost and the reason anything was dropped.
+- **Importance-tiered chapter LOD** - sealed chapters render as a full summary or a one-line synopsis by recency and importance, and degrade by tiering down before anything is dropped, so an old but pivotal chapter outlives a recent forgettable one.
+- **House-rule trigger keywords** - a rule reachable only by a word the party rarely uses no longer has to out-score everything else for one of three retrieval slots; a keyword hit admits it outright. Small enough rules documents skip retrieval entirely and ride whole.
 
 ### AI and LLM integration
 
 - **Model client (dual provider)** - streaming against an OpenAI-compatible `/chat/completions` server (llama.cpp, LM Studio, vLLM, OpenRouter) or a local Ollama.
 - **DM turn engine** - a persisted park/resume state machine and tool-calling loop (up to four rounds) that salvages malformed tool calls and streams filtered narration.
 - **DM prompt and tool families** - a rules-as-tools system prompt covering rolls, checks, encounters, casts, resources, rests, conditions, items, hazards, NPCs, notes, maps, and world.
+- **Engine boundary contract** - one explicit block naming the eight classes of fact the engine owns, so the model writes the prose and never the math.
+- **Halted-turn retry** - a crashed turn no longer wedges the table. The lead sends it back in and it resumes from the persisted conversation, so nothing is re-rolled and no context is lost.
+- **Context-window detection** - the real window is read from the server (llama.cpp `/props`, including the `--models-preset` router) rather than assumed, and cached per base URL and model.
+- **Per-role sampling** - separate story and utility sampling with named profiles, and a cloud-safe versus local-only parameter split so a local-only key never reaches a strict endpoint.
+- **Per-stage engine toggles** - every optional pipeline stage (compaction, recall, retrieval, chapter summary) is switchable per campaign with an engine-versus-model cost badge.
+- **Background-work visibility** - compaction, chapter seals, world ticks, lore checks and Asks surface as labelled chips with elapsed time instead of an opaque wait.
 - **TTS narration** - local Kokoro renders each DM message on the serial media queue, autoplayed latest-only with per-user mute.
 - **STT push-to-talk** - proxies audio to a local faster-whisper service, kept off the network.
 - **Portrait generation** - a one-shot ComfyUI character portrait at creation, with an icon fallback.
@@ -200,6 +217,7 @@ and clamped by code.
 - **Event bus (SSE)** - per-campaign publish/subscribe, the real-time multiplayer backbone.
 - **Media queue** - a global serial GPU queue (one ComfyUI or TTS job at a time) since the iGPU shares memory with the DM model.
 - **Whispers and side-chat** - one-way DM-to-player whispers and private player-to-player threads that never enter the DM prompt or the shared stream.
+- **Ask, and the note back** - out-of-character questions answered from the campaign record without moving the story, plus a one-turn note a player can hand the DM. The note is drafted from your own thread, shown in an editable box, and only sent once you confirm the exact text.
 - **Turn, lead, and pending-roll flow** - lead controls, turn coalescing, and parked physical-dice roll requests.
 - **Auth** - session cookies with scrypt hashing, optional Discord OAuth, and reverse-proxy-aware origin resolution.
 - **Login throttle** - a per-username-and-IP lockout with backoff.
@@ -441,6 +459,10 @@ prompt suppresses tool calls (the model paraphrases the tool in prose instead of
 emitting it). The app pins `presence_penalty: 0` in every request so a server-side
 preset penalty cannot break tool calling; if you drive the model from somewhere else,
 set it to 0 there too.
+
+The pin is written after the per-role sampling settings are applied, and no sampling
+profile offers `presence_penalty`, so this cannot be reintroduced from a settings
+screen. Breaking dice rolling should not be one checkbox away.
 
 ### The same model on other LLM software
 
