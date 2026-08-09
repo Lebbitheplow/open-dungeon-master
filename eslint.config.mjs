@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Agent worktrees carry their own checkout and node_modules copy. Without
+    // this, lint walks every one of them and reports thousands of problems
+    // from dependencies rather than from this project's source.
+    ".claude/**",
   ]),
 ]);
 
