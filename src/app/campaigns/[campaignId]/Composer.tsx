@@ -8,6 +8,7 @@ import { D20Spinner } from "@/components/ui/D20Spinner";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { FloorBanners } from "@/app/campaigns/[campaignId]/FloorBanners";
 import { NewAdventurerBanner } from "@/app/campaigns/[campaignId]/NewAdventurerBanner";
+import { DirectorPanel } from "@/app/campaigns/[campaignId]/DirectorPanel";
 import { PendingRollCard } from "@/app/campaigns/[campaignId]/PendingRollCard";
 import { PushToTalk } from "@/app/campaigns/[campaignId]/PushToTalk";
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
@@ -60,6 +61,7 @@ function ComposerInner({
   onReleaseFloor,
   joinBanner,
   composerRef,
+  directorArm,
   onSubmit,
 }: {
   campaignId: string;
@@ -87,6 +89,7 @@ function ComposerInner({
   onReleaseFloor: () => Promise<void>;
   joinBanner: { text: string; onWriteIntro: () => void; onDismiss: () => void } | null;
   composerRef: RefObject<HTMLTextAreaElement | null>;
+  directorArm: CampaignState["directorArm"];
   onSubmit: (event: FormEvent) => void;
 }) {
   return (
@@ -112,6 +115,7 @@ function ComposerInner({
           meUserId={meUserId}
           onRelease={onReleaseFloor}
         />
+        <DirectorPanel campaignId={campaignId} isLead={isLead} armed={directorArm} />
         {joinBanner ? (
           <NewAdventurerBanner
             campaignId={campaignId}

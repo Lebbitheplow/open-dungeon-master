@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useReducer } from "react";
 import type { CampaignMember, SessionUser } from "@/lib/campaign-types";
+import type { OneShotEventId } from "@/lib/dm/director-logic";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { Chapter } from "@/lib/db/chapters";
 import type { CharacterEvent } from "@/lib/db/character-events";
@@ -132,6 +133,13 @@ export type CampaignState = {
   lastSeq: number;
   dmStatus: DmStatus;
   dmDraft: string;
+  // The one-turn director steer the party lead has armed, if any. Null until
+  // the first director_armed event or the panel's own fetch lands.
+  directorArm: {
+    armed: boolean;
+    oneShot: OneShotEventId | null;
+    absoluteCommand: string;
+  } | null;
   // Ephemeral progress per media target (message/location id).
   mediaStatus: Record<string, MediaStatus>;
 };
@@ -170,6 +178,7 @@ const initialState: CampaignState = {
   lastSeq: 0,
   dmStatus: "idle",
   dmDraft: "",
+  directorArm: null,
   mediaStatus: {},
 };
 
@@ -476,6 +485,13 @@ function reducer(state: CampaignState, action: Action): CampaignState {
           return next;
         case "dm_status":
           next.dmStatus = payload.state as DmStatus;
+          return next;
+        case "director_armed":
+          next.directorArm = {
+            armed: Boolean(payload.armed),
+            oneShot: (payload.oneShot as OneShotEventId | null) ?? null,
+            absoluteCommand: String(payload.absoluteCommand ?? ""),
+          };
           return next;
         case "dm_delta":
           next.dmDraft = state.dmDraft + String(payload.text ?? "");

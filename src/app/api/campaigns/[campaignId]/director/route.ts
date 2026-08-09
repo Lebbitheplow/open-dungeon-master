@@ -9,6 +9,7 @@ import {
   buildDirectorBlock,
   clampAbsoluteCommand,
   isArmed,
+  isOneShotEventId,
   MAX_ABSOLUTE_COMMAND_LENGTH,
   ONE_SHOT_EVENT_IDS,
 } from "@/lib/dm/director-logic";
@@ -71,7 +72,9 @@ export async function POST(
   // Clamp before storing, not just before prompting, so what the lead reads
   // back in the armed banner is exactly the text the DM will receive.
   const absoluteCommand = clampAbsoluteCommand(parsed.data.absoluteCommand);
-  const oneShot = parsed.data.oneShot ?? null;
+  // zod's enum widens back to string on the parsed output, so narrow through
+  // the same guard the prompt builder uses rather than casting.
+  const oneShot = isOneShotEventId(parsed.data.oneShot) ? parsed.data.oneShot : null;
   setDirectorArm({
     campaignId,
     oneShot,

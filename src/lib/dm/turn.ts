@@ -328,6 +328,21 @@ export async function startDmTurn(campaignId: string) {
   // Variant rules always ride; house rules and world lore are retrieved
   // against the current moment (one MiniLM embed, keyword fallback).
   const retrieval = await buildTurnRetrieval(campaign, history);
+  // Taken (read and deleted in one statement) rather than read-then-clear, so
+  // two turns racing cannot both fire the same directive. It is consumed here,
+  // before the conversation is persisted below, which is what makes a retry
+  // correct: retry-turn.ts replays that stored conversation, so the directive
+  // is still in the prompt it re-runs, neither lost nor applied twice.
+  const directorArm = takeDirectorArm(campaignId);
+  const directorBlock = buildDirectorBlock(directorArm);
+  if (directorArm) {
+    // Clear the armed badge for every client now that the steer is spent.
+    publishPersisted(campaignId, "director_armed", {
+      armed: false,
+      oneShot: null,
+      absoluteCommand: "",
+    });
+  }
   const conversation = buildDmMessages(
     {
       campaign,
@@ -381,13 +396,7 @@ export async function startDmTurn(campaignId: string) {
         knownBy: fact.knownBy,
       })),
       directorNotes: consumePendingSparks(campaignId).map((spark) => spark.text),
-      // Taken (read and deleted atomically) rather than read-then-clear, so
-      // two turns racing cannot both fire the same directive. It is consumed
-      // here, before the conversation is persisted a few lines below, which
-      // is what makes a retry correct: retry-turn.ts replays that stored
-      // conversation, so the directive is still in the prompt it re-runs and
-      // is neither lost nor applied a second time.
-      directorBlock: buildDirectorBlock(takeDirectorArm(campaignId)),
+      directorBlock,
       npcs: npcRosterForPrompt(campaignId),
       relationships:
         campaign.gameSettings.relationships === "off"

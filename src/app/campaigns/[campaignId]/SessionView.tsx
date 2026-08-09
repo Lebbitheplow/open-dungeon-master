@@ -552,6 +552,7 @@ export function SessionView({
               onReleaseFloor={releaseFloor}
               joinBanner={joinBanner}
               composerRef={composerRef}
+              directorArm={state.directorArm}
               onSubmit={submit}
             />
           )}
