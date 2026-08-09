@@ -10,6 +10,7 @@ import {
   isOneShotEventId,
   isArmed,
   oneShotLabel,
+  oneShotBlurb,
 } from "../src/lib/dm/director-logic.ts";
 
 let passed = 0;
@@ -37,8 +38,48 @@ check("event ids are validated, not trusted", () => {
 check("every one-shot forbids teleporting and cutting away", () => {
   for (const id of ONE_SHOT_EVENT_IDS) {
     const text = buildOneShotDirective(id);
-    assert.match(text, /never cut away/i, `${id} forbids cutting away`);
-    assert.match(text, /right now/i, `${id} anchors to the current scene`);
+    assert.match(text, /do not cut away/i, `${id} forbids cutting away`);
+    assert.match(text, /current scene/i, `${id} anchors to the current scene`);
+    assert.match(text, /genre/i, `${id} keeps the setting's own furniture`);
+    assert.match(text, /invites/i, `${id} invites rather than hijacks`);
+  }
+});
+
+check("mystery and windfall keep something hidden from the table", () => {
+  // The whole point of both: the DM privately commits to an answer, so the
+  // thread stays consistent and can pay off later instead of evaporating.
+  const mystery = buildOneShotDirective("mystery");
+  assert.match(mystery, /decide internally what the true explanation is/i);
+  assert.match(mystery, /stay consistent with your hidden answer/i);
+
+  const windfall = buildOneShotDirective("windfall");
+  assert.match(windfall, /exactly one attached complication/i);
+  assert.match(windfall, /decide internally what the catch is/i);
+});
+
+check("weird is comedy of obligation, not horror", () => {
+  const text = buildOneShotDirective("weird");
+  assert.match(text, /comically mundane obligation/i);
+  assert.match(text, /no real danger/i);
+  assert.match(text, /play it completely straight/i);
+});
+
+check("romance prefers an established NPC and never decides for a PC", () => {
+  const text = buildOneShotDirective("romance");
+  assert.match(text, /prefer an NPC already established/i);
+  assert.match(text, /never instant devotion/i);
+  assert.match(text, /never decide how a player character feels/i);
+});
+
+check("combat scales to the party and states the stakes", () => {
+  const text = buildOneShotDirective("combat");
+  assert.match(text, /scale it to the party/i);
+  assert.match(text, /winning, losing, or fleeing/i);
+});
+
+check("every event type has a blurb for the picker", () => {
+  for (const id of ONE_SHOT_EVENT_IDS) {
+    assert.ok(oneShotBlurb(id).length > 10, `${id} has a real blurb`);
   }
 });
 

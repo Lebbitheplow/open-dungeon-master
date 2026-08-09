@@ -2,7 +2,7 @@
 // opening removal, length capping, and the variant-set invariant.
 import assert from "node:assert/strict";
 import {
-  MAX_CONTINUE_WORDS,
+  CONTINUE_LOWER_RATIO,
   MAX_CONTINUED_LENGTH,
   MIN_CONTINUE_WORDS,
   buildContinueDirective,
@@ -28,29 +28,44 @@ check("word counting handles empty and padded text", () => {
   assert.equal(countWords("one two   three\nfour"), 4);
 });
 
-check("the target follows the last paragraph, within bounds", () => {
+check("a short ending floors at the death-spiral guard", () => {
+  // NE-P's reason for the floor: without it one clipped ending makes every
+  // subsequent continue shorter than the last.
   const short = "First paragraph is long enough to matter here.\n\nTiny tail.";
   assert.equal(lastParagraphWordCount(short), 2);
-  assert.equal(targetContinueWords(short), MIN_CONTINUE_WORDS, "floors a short ending");
+  const target = targetContinueWords(short);
+  assert.equal(target.lower, MIN_CONTINUE_WORDS);
+  assert.equal(target.upper, MIN_CONTINUE_WORDS);
+});
 
+check("a long ending targets a 70 to 100 percent band with no ceiling", () => {
   const long = `intro\n\n${"word ".repeat(500)}`;
-  assert.equal(targetContinueWords(long), MAX_CONTINUE_WORDS, "caps a long ending");
-
-  const mid = `intro\n\n${"word ".repeat(120)}`;
-  assert.equal(targetContinueWords(mid), 120, "matches a mid-length ending");
+  const target = targetContinueWords(long);
+  assert.equal(target.upper, 500, "no cap; it matches what it extends");
+  assert.equal(target.lower, Math.round(500 * CONTINUE_LOWER_RATIO));
+  assert.ok(target.lower < target.upper, "a real band, not a single number");
 });
 
 check("a single-paragraph take still targets sensibly", () => {
   const one = "The door gives way under his shoulder and the cold comes in.";
-  assert.equal(targetContinueWords(one), MIN_CONTINUE_WORDS);
+  assert.equal(targetContinueWords(one).upper, MIN_CONTINUE_WORDS);
 });
 
-check("the directive forbids recapping, resolving, and ending the scene", () => {
+check("the directive carries NE-P's load-bearing instructions", () => {
   const text = buildContinueDirective("A short beat.");
-  assert.match(text, /Do not repeat, restate, or summarise/i);
-  assert.match(text, /Do not call any tool/i);
-  assert.match(text, /Do not end the scene, skip time/i);
-  assert.match(text, /more words/i);
+  // The anti-meta rule: a reply that ended with "what do you do?" would
+  // otherwise get continued as more meta commentary.
+  assert.match(text, /NEVER write meta commentary/i);
+  assert.match(text, /ignore that ending entirely/i);
+  // The framing that keeps a continue from stalling into scenery.
+  assert.match(text, /EXCEPT the player characters may act/i);
+  // PC agency, which ODM needs at least as much as NE-P does.
+  assert.match(text, /Do not act, speak, or decide for any player character/i);
+  assert.match(text, /invites a response, never an explicit prompt for input/i);
+  // Scope and engine boundary.
+  assert.match(text, /Do not open a new scene, skip time/i);
+  assert.match(text, /do not call any tool/i);
+  assert.match(text, /words of new story/i);
 });
 
 check("the prompt replays the current take as the assistant turn", () => {

@@ -32,11 +32,18 @@ export const ONE_SHOT_EVENT_IDS: readonly OneShotEventId[] = [
 // the DM's brief.
 export const MAX_ABSOLUTE_COMMAND_LENGTH = 600;
 
-// Shared preamble for every one-shot. The failure mode this exists to prevent
-// is the model treating "introduce an event" as licence to cut away: a hard
-// scene transition throws away whatever the party was in the middle of, which
-// is exactly what the lead did NOT ask for by pressing a one-turn button.
-const ONE_SHOT_INTRODUCTION_RULES = `How to bring it in: it must grow out of the scene the party is standing in right now, by one of interruption, discovery, summons, or escalation. Never cut away, never skip time, and never move the party somewhere else to make it happen. It arrives as an invitation the party can engage, refuse, or ignore; it does not seize control of anyone's character or decide how they react.`;
+// Shared preamble for every one-shot, adapted from NE-P's
+// SHARED_INTRODUCTION_RULES (src/services/oneshot/oneShotEvents.ts, MIT).
+// The failure mode it prevents is the model treating "introduce an event" as
+// licence to cut away, which throws out whatever the party was in the middle
+// of. The "even cliché is fine" clause is theirs and is load-bearing: without
+// it models reach for novelty and produce a bizarre entrance rather than a
+// natural one. The genre clause stops a fantasy table getting sci-fi
+// furniture because the model liked the idea.
+const ONE_SHOT_INTRODUCTION_RULES = `Introduction rules, binding:
+- The event must emerge from the CURRENT scene. Do not cut away, teleport the party, or restart the scene. Bridge into it with one of: an interruption (something breaks into the current beat), a discovery (something nearby only now noticed), a summons (someone or something pulls the party toward it), or an escalation (a detail already present sharpens into the hook). A familiar, even cliche entrance is fine; flowing naturally beats being original.
+- Express the event entirely in this world's established genre, technology level, and tone. Never import furniture from another setting.
+- The event INVITES; it does not hijack. End the introduction at the hook. The party may pursue, delay, or refuse it. Never narrate a player character's reaction or decision for them.`;
 
 // Applies to both levers. The arc is ODM's spine (src/lib/dm/arc-logic.ts):
 // exactly one beat is [NOW] and only the complete_beat tool may advance it and
@@ -44,43 +51,66 @@ const ONE_SHOT_INTRODUCTION_RULES = `How to bring it in: it must grow out of the
 // desynchronise the story structure from the transcript.
 const DIRECTOR_SCOPE_RULES = `Scope: this applies to this turn only. Do not complete a story beat, do not advance or move the [NOW] marker, and do not rewrite the arc because of it. The engine still owns every number: ask for rolls with tools as usual and never decide or state an outcome yourself.`;
 
-const ONE_SHOT_DIRECTIVES: Record<OneShotEventId, { label: string; directive: string }> = {
+// Directives adapted from NE-P's ONE_SHOT_EVENT_TYPES registry
+// (src/services/oneshot/oneShotEvents.ts, MIT). The instructions that carry
+// the most weight are the ones about what the DM decides PRIVATELY: mystery's
+// hidden true answer and windfall's undisclosed catch are what make those two
+// produce a thread the campaign can pull on later, rather than a one-turn
+// flourish that evaporates.
+//
+// `blurb` is NE-P's one-line dropdown description, kept because a bare label
+// does not tell a lead what "weird" is actually going to do to their scene.
+const ONE_SHOT_DIRECTIVES: Record<
+  OneShotEventId,
+  { label: string; blurb: string; directive: string }
+> = {
   combat: {
     label: "Combat",
+    blurb: "An immediate physical threat, here and now.",
     directive:
-      "Bring a credible physical threat into this scene. Something wants to hurt the party, or is already trying to. Give the party the beat of noticing before blows land, so they can still choose to fight, talk, or run.",
+      "Introduce an immediate physical threat that engages the party within this scene. Scale it to the party's current means: dangerous enough to demand a response, resolvable within one to three scenes. Make the stakes clear up front, so it is obvious what winning, losing, or fleeing would each cost.",
   },
   location: {
     label: "Place",
+    blurb: "A place to delve: layered, guarded, holding a prize.",
     directive:
-      "Open up somewhere new from where the party already stands: a door that was not obvious, a path revealed, a structure that resolves out of the surroundings. Describe what makes it worth crossing into, and let them decide whether to.",
+      "Introduce a bounded site the party can enter now: a contained place with interior layers, a force or hazard that holds it, and something worth taking or learning at its heart. Resolvable within a few scenes of exploration.",
   },
   social: {
     label: "Social",
+    blurb: "A predicament that cannot be solved by force.",
     directive:
-      "Put a person in front of the party who wants something from them. Give them a want, a reason to approach these particular adventurers now, and a manner. They should complicate the scene by existing, not by attacking.",
+      "Introduce a charged social predicament: a negotiation, an accusation, a plea, or a rivalry that pulls the party in and cannot be resolved by force. Someone wants something from them, or they have become entangled in something not of their making.",
   },
   romance: {
     label: "Romance",
+    blurb: "Chemistry with a complication.",
     directive:
-      "Sharpen an existing bond into a moment of genuine charge: a look held too long, a confession half made, a kindness that costs the giver something. Use an NPC the party already knows where you can. Never decide how a player character feels or responds.",
+      "Introduce a charged romantic beat: someone whose interest in a party member carries a complication, whether rank, rivalry, a secret, or bad timing. Strongly prefer an NPC already established in the story over inventing a stranger. Chemistry plus obstacle; never instant devotion, and never decide how a player character feels in return.",
   },
   mystery: {
     label: "Mystery",
+    blurb: "Something inexplicable, with a hidden true answer.",
     directive:
-      "Surface something that does not add up, and make the party notice it. A detail that contradicts what they were told, an absence where there should be presence, evidence of something that happened here first. Give them a thread to pull, not the answer.",
+      "Introduce a small mystery: something inexplicable the party notices or stumbles into, such as an object out of place, a person acting impossibly, or a detail that contradicts what is known. Decide internally what the true explanation is and keep it hidden. Narrate only the surface evidence, and stay consistent with your hidden answer in future scenes.",
   },
   weird: {
     label: "Weird",
+    blurb: "An absurd little obligation. Played straight.",
     directive:
-      "Break the ordinary texture of the scene with something the party cannot immediately file away. It should unsettle rather than threaten, and it should feel like the world is larger and stranger than they assumed.",
+      "Introduce a small absurd incident that saddles the party with an unwanted, comically mundane obligation. No real danger, no lasting stakes: a comedy of responsibility. Play it completely straight; the world does not acknowledge that it is funny.",
   },
   windfall: {
     label: "Windfall",
+    blurb: "A gift with a string attached, not visible yet.",
     directive:
-      "Let something go right for the party in a way they did not engineer: aid arriving, a resource uncovered, a debt repaid, a door opening. Earn it against something they did earlier if you can. Propose any item or coin through the usual tools rather than narrating it into their packs.",
+      "Introduce an unexpected opportunity, gift, or stroke of luck landing in the party's lap, with exactly one attached complication, condition, or string that is not immediately visible. Decide internally what the catch is and let it surface later or upon acceptance. Propose any item or coin through the usual tools rather than narrating it into their packs.",
   },
 };
+
+export function oneShotBlurb(id: OneShotEventId): string {
+  return ONE_SHOT_DIRECTIVES[id].blurb;
+}
 
 export function oneShotLabel(id: OneShotEventId): string {
   return ONE_SHOT_DIRECTIVES[id].label;

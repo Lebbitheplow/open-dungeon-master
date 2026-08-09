@@ -12,11 +12,17 @@ import {
   type RenarrateMessage,
 } from "./renarrate-logic.ts";
 
-// A continue is a nudge to keep going, not licence to write a second scene.
-// The floor keeps a one-line ending from producing a one-line continuation;
-// the cap keeps the model from running away with the story.
-export const MIN_CONTINUE_WORDS = 60;
-export const MAX_CONTINUE_WORDS = 320;
+// NE-P's floor, and its reasoning is worth keeping verbatim: it "guards the
+// death spiral where a short (or meta-junk) segment begets an even shorter
+// target". Without it, one clipped ending makes every subsequent continue
+// shorter than the last.
+export const MIN_CONTINUE_WORDS = 120;
+
+// NE-P targets a 70 to 100 percent band of the segment being extended rather
+// than a single number, so the continuation reads as the same passage
+// carrying on instead of a separate paragraph bolted on. There is
+// deliberately no ceiling: the continuation should match what it extends.
+export const CONTINUE_LOWER_RATIO = 0.7;
 
 // Total length a message may reach through repeated continues. Well clear of
 // any single narration, but bounded so a lead leaning on the button cannot
@@ -41,26 +47,60 @@ export function lastParagraphWordCount(text: string): number {
   return countWords(last);
 }
 
-export function targetContinueWords(text: string): number {
+export type ContinueTarget = { lower: number; upper: number };
+
+export function targetContinueWords(text: string): ContinueTarget {
   const last = lastParagraphWordCount(text);
-  return Math.min(MAX_CONTINUE_WORDS, Math.max(MIN_CONTINUE_WORDS, last));
+  const upper = Math.max(MIN_CONTINUE_WORDS, last);
+  const lower = Math.max(MIN_CONTINUE_WORDS, Math.round(last * CONTINUE_LOWER_RATIO));
+  return { lower, upper };
 }
 
+// Adapted from NE-P's buildSceneContinueDirective
+// (src/services/turn/sceneContinue.ts, MIT). Their comment says "do not
+// rewrite, do not improve", and the instructions that look redundant are the
+// ones earning their place: the anti-meta rule exists because a reply that
+// ended with "what do you do?" otherwise gets continued as more meta, and the
+// everything-except-the-player framing is what keeps a continue from stalling
+// into scenery description.
+//
+// Two deliberate ODM divergences, both narrowing:
+//   - No dice. NE-P allows up to three tool calls during a continue; ODM
+//     treats a continue as prose-only, because a tool call here would resolve
+//     mechanics outside any turn and outside the engine boundary contract.
+//   - Party-wide phrasing. NE-P is single-player, so its PC line names one
+//     character; ODM has a table, and the DM must not speak for any of them.
 export function buildContinueDirective(currentTake: string): string {
-  const target = targetContinueWords(currentTake);
+  const { lower, upper } = targetContinueWords(currentTake);
+  const lengthLine =
+    lower >= upper
+      ? `- Write roughly ${upper} words of new story.`
+      : `- Write between ${lower} and ${upper} words of new story, comparable to the passage you are extending.`;
   return [
-    "[System] Keep writing. Continue the narration you just gave from exactly where it stopped, in the same scene, the same moment, and the same voice.",
-    `Write roughly ${target} more words.`,
-    "Do not repeat, restate, or summarise anything you already wrote; the table has read it. Do not start over and do not open with a recap.",
-    "Every mechanical fact stays as it is: the same dice results, the same damage, the same positions, the same decisions. Do not call any tool, do not ask for a roll, and do not resolve anything new. Do not end the scene, skip time, or move the party somewhere else.",
-    "Write only the continuation itself, with no preamble.",
-  ].join("\n\n");
+    "[SCENE CONTINUE - the party lead pressed Continue: they want MORE of the current scene. This is not a new turn and not a new scene.",
+    "- Write the next passage of the story: new in-fiction narrative prose that moves the current beat forward.",
+    "- Pick up exactly where your previous reply ended, same scene, same moment, mid-beat. Do not restart, re-describe, or summarize anything that already happened.",
+    "- NEVER write meta commentary. Nothing about the story being paused or awaiting input; no \"your move\", \"your call\", or \"what do you do\" prompts. If your previous reply ended in meta text like that, ignore that ending entirely and resume the fiction from the last in-fiction moment.",
+    "- Everyone and everything EXCEPT the player characters may act: NPCs speak and move, the environment shifts, tension builds. The moment keeps unfolding in real time.",
+    "- Do not open a new scene, skip time, change location, or introduce new arrivals, random events, or encounters. Deepen and extend only what is already present in the scene.",
+    "- Do not act, speak, or decide for any player character beyond what their player already committed to. End at the point where the party would next need to choose or respond, a story beat that invites a response, never an explicit prompt for input.",
+    lengthLine,
+    "- Do not initiate or invent dice rolls, and do not call any tool. Narrate only from results already in history: the same dice, the same damage, the same positions, the same decisions.",
+    "- Reply with story prose only. Do not acknowledge, mention, or answer this instruction.]",
+  ].join("\n");
 }
 
 // Same shape as buildRenarrateMessages: replay the prose currently on screen
 // as the assistant turn, then ask for more. The tool loop breaks without
 // echoing its closing narration, so without the replay the model would be
 // told to "keep going" having never seen where it got to.
+//
+// The directive is a USER message, not a system one, and NE-P documents why:
+// provider format converters hoist every system message into the top-level
+// system block, which teleports a trailing system directive to the front of
+// the payload. The model then sees the sequence ending user then assistant
+// and re-answers the wrong message. A user-role directive survives every
+// converter and ends the sequence on the natural "respond to this" turn.
 export function buildContinueMessages<T extends RenarrateMessage>(
   conversation: T[],
   currentTake: string,
