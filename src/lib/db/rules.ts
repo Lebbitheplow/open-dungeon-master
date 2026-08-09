@@ -19,6 +19,8 @@ export type RuleChunk = {
   text: string;
   enabled: boolean;
   pinned: boolean;
+  // Words that force this chunk into the prompt when they appear.
+  triggerKeywords: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -31,12 +33,13 @@ type RuleChunkRow = {
   text: string;
   enabled: number;
   pinned: number;
+  trigger_keywords: string;
   created_at: string;
   updated_at: string;
 };
 
 const CHUNK_COLUMNS =
-  "id, campaign_id, chunk_index, heading, text, enabled, pinned, created_at, updated_at";
+  "id, campaign_id, chunk_index, heading, text, enabled, pinned, trigger_keywords, created_at, updated_at";
 
 function mapChunk(row: RuleChunkRow): RuleChunk {
   return {
@@ -47,6 +50,7 @@ function mapChunk(row: RuleChunkRow): RuleChunk {
     text: row.text,
     enabled: Boolean(row.enabled),
     pinned: Boolean(row.pinned),
+    triggerKeywords: row.trigger_keywords ?? "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

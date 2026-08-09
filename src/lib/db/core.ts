@@ -1103,6 +1103,13 @@ function ensureSchema(db: Database.Database) {
     ["witnesses_json", `TEXT NOT NULL DEFAULT '[]'`],
   ]);
 
+  addColumns("rule_chunks", [
+    // Comma-separated words that admit this chunk outright when they appear
+    // in the turn's query, instead of it competing for a retrieval slot
+    // (src/lib/dm/rules-activation-logic.ts). Empty means ordinary retrieval.
+    ["trigger_keywords", `TEXT NOT NULL DEFAULT ''`],
+  ]);
+
   addColumns("npcs", [
     // Other spellings this NPC has been called, e.g. ["Marla", "Captain
     // Marla"] on the row named "Marla Venn" (src/lib/dm/entity-logic.ts).

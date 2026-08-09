@@ -4,6 +4,8 @@ import { listLoreWithEmbeddings } from "@/lib/db/lore";
 import { listRuleChunksWithEmbeddings } from "@/lib/db/rules";
 import { embed, similarityOf } from "@/lib/embeddings";
 import { renderLoreForPrompt, type WorldLoreEntry } from "@/lib/dm/world-lore-logic";
+import { computeBudgets } from "@/lib/dm/context-budget";
+import { selectRuleChunks } from "@/lib/dm/rules-activation-logic";
 import { renderHouseRules, renderVariantRules } from "@/lib/dm/rules-logic";
 import { computeIdf, fuseRanked, lexicalScore } from "@/lib/dm/fusion-logic";
 
@@ -100,10 +102,22 @@ export async function buildTurnRetrieval(
         }
       }
 
-      const pinnedRules = rules.filter((entry) => entry.chunk.pinned).map((entry) => entry.chunk);
-      const retrievedRules = pickFused(
+      // Pinned chunks and any whose trigger keyword appears in the query are
+      // admitted outright; only what is left competes for the retrieval
+      // slots. A small enough rules document rides whole and skips retrieval
+      // (src/lib/dm/rules-activation-logic.ts).
+      const activation = selectRuleChunks(
+        rules.map((entry) => entry.chunk),
+        query,
+        computeBudgets(undefined).retrieval,
+      );
+      const forcedIds = new Set(activation.forced.map((chunk) => chunk.id));
+      const pinnedRules = activation.forced;
+      const retrievedRules = activation.verbatim
+        ? []
+        : pickFused(
         rules
-          .filter((entry) => !entry.chunk.pinned)
+          .filter((entry) => !forcedIds.has(entry.chunk.id))
           .map((entry) => ({
             id: entry.chunk.id,
             text: `${entry.chunk.heading} ${entry.chunk.text}`,
