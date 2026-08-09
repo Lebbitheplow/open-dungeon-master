@@ -158,6 +158,10 @@ export type DmGameState = {
   variantRulesBlock?: string;
   houseRulesBlock?: string;
   loreBlock?: string;
+  // A one-turn steer the party lead armed (src/lib/dm/director-logic.ts).
+  // Rides last in the payload, after the player's own message, because
+  // recency is the whole point: it has to outweigh the scene it is bending.
+  directorBlock?: string;
 };
 
 // Players who roll physical dice at the table: campaign policy must allow
@@ -1004,5 +1008,10 @@ export function buildDmMessages(
   return [
     { role: "system", content: systemParts.join("\n\n") },
     ...historyMessages,
+    // Last, after the newest player line, so the model reads it closest to
+    // the point of generation. Omitted entirely when nothing is armed.
+    ...(state.directorBlock
+      ? [{ role: "user" as const, content: state.directorBlock }]
+      : []),
   ];
 }

@@ -406,6 +406,20 @@ function ensureSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_dm_whispers_user
       ON dm_whispers(campaign_id, user_id, created_at);
 
+    -- The director directive the party lead has armed for the next turn: a
+    -- one-shot event type, a free-text absolute command, or both (the command
+    -- wins). campaign_id is the primary key because at most one directive is
+    -- armed at a time; arming again replaces it rather than queueing, since
+    -- both levers are "this turn only" steers. The row is deleted the moment
+    -- a turn consumes it.
+    CREATE TABLE IF NOT EXISTS director_arms (
+      campaign_id TEXT PRIMARY KEY REFERENCES campaigns(id) ON DELETE CASCADE,
+      one_shot TEXT,
+      absolute_command TEXT NOT NULL DEFAULT '',
+      armed_by_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      armed_at TEXT NOT NULL
+    );
+
     -- Server-authoritative combat encounters. Enemy stats snapshot into
     -- stat_json at spawn so a missing content pack never breaks a live
     -- fight. order_json stages partial initiative entries while they are

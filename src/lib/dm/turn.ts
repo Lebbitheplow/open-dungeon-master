@@ -73,6 +73,8 @@ import { listChapters } from "@/lib/db/chapters";
 import { listPublicCampaignNotes } from "@/lib/db/notes";
 import { listActiveFacts } from "@/lib/db/facts";
 import { consumePendingSparks, tickWorldState } from "@/lib/dm/world-tick";
+import { buildDirectorBlock } from "@/lib/dm/director-logic";
+import { takeDirectorArm } from "@/lib/db/director-arms";
 import { handleRecallStory } from "@/lib/dm/recall";
 import { handleSearchLore, searchLoreTool } from "@/lib/dm/lore-search";
 import { handleWriteCampaignNote, writeCampaignNoteTool } from "@/lib/dm/note-tools";
@@ -379,6 +381,13 @@ export async function startDmTurn(campaignId: string) {
         knownBy: fact.knownBy,
       })),
       directorNotes: consumePendingSparks(campaignId).map((spark) => spark.text),
+      // Taken (read and deleted atomically) rather than read-then-clear, so
+      // two turns racing cannot both fire the same directive. It is consumed
+      // here, before the conversation is persisted a few lines below, which
+      // is what makes a retry correct: retry-turn.ts replays that stored
+      // conversation, so the directive is still in the prompt it re-runs and
+      // is neither lost nor applied a second time.
+      directorBlock: buildDirectorBlock(takeDirectorArm(campaignId)),
       npcs: npcRosterForPrompt(campaignId),
       relationships:
         campaign.gameSettings.relationships === "off"
