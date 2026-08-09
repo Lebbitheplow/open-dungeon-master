@@ -467,6 +467,23 @@ export function SessionView({
               });
             }}
             onRenarrate={isLead ? (message) => setRenarrate(message) : undefined}
+            onContinueScene={
+              isLead
+                ? async (message) => {
+                    // No dialog: a continue takes no options, so the button is
+                    // the whole interaction. The server publishes
+                    // message_updated with the extended prose.
+                    const response = await fetch(
+                      `/api/campaigns/${campaign.id}/messages/${message.id}/continue`,
+                      { method: "POST" },
+                    );
+                    if (!response.ok) {
+                      const data = await response.json().catch(() => ({}));
+                      setError(data.error || "Could not continue the scene.");
+                    }
+                  }
+                : undefined
+            }
             onSelectVariant={
               isLead
                 ? async (message, index) => {

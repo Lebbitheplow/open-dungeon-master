@@ -2,6 +2,7 @@
 
 import {
   ChevronLeft,
+  FastForward,
   ChevronRight,
   Crown,
   ImageOff,
@@ -178,6 +179,7 @@ const MessageItem = memo(function MessageItem({
   onPinCanon,
   onLoreCheck,
   onRenarrate,
+  onContinueScene,
   onSelectVariant,
 }: {
   message: CampaignMessage;
@@ -194,6 +196,7 @@ const MessageItem = memo(function MessageItem({
   onLoreCheck?: (message: CampaignMessage) => void;
   // Reroll this narration's prose (lead only, latest DM message only).
   onRenarrate?: (message: CampaignMessage) => void;
+  onContinueScene?: (message: CampaignMessage) => void;
   // Browse the rerolled takes; the picked one is what the table reads.
   onSelectVariant?: (message: CampaignMessage, index: number) => void;
 }) {
@@ -284,6 +287,17 @@ const MessageItem = memo(function MessageItem({
               className={cn(ui.iconAction, "-my-1.5")}
             >
               <RefreshCw className="size-3.5" />
+            </button>
+          ) : null}
+          {onContinueScene ? (
+            <button
+              type="button"
+              onClick={() => onContinueScene(message)}
+              aria-label="Continue this scene"
+              title="Continue: have the DM keep writing from where this stopped, without moving the story on"
+              className={cn(ui.iconAction, "-my-1.5")}
+            >
+              <FastForward className="size-3.5" />
             </button>
           ) : null}
           {onLoreCheck ? (
@@ -421,6 +435,7 @@ export function MessageList({
   onPinCanon,
   onLoreCheck,
   onRenarrate,
+  onContinueScene,
   onSelectVariant,
 }: {
   messages: CampaignMessage[];
@@ -440,6 +455,7 @@ export function MessageList({
   onPinCanon?: (message: CampaignMessage) => void;
   onLoreCheck?: (message: CampaignMessage) => void;
   onRenarrate?: (message: CampaignMessage) => void;
+  onContinueScene?: (message: CampaignMessage) => void;
   onSelectVariant?: (message: CampaignMessage, index: number) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -494,6 +510,16 @@ export function MessageList({
   useEffect(() => {
     renarrateRef.current = onRenarrate;
   });
+  const continueRef = useRef(onContinueScene);
+  useEffect(() => {
+    continueRef.current = onContinueScene;
+  });
+  const hasContinue = Boolean(onContinueScene);
+  const stableContinue = useMemo(
+    () =>
+      hasContinue ? (message: CampaignMessage) => continueRef.current?.(message) : undefined,
+    [hasContinue],
+  );
   const hasRenarrate = Boolean(onRenarrate);
   const stableRenarrate = useMemo(
     () =>
@@ -571,6 +597,13 @@ export function MessageList({
             // shipped have no stored conversation to replay.
             message.id === latestDmMessageId && message.dmTurnId
               ? stableRenarrate
+              : undefined
+          }
+          onContinueScene={
+            // Same gate as a reroll: only the newest narration, and only when
+            // a stored turn conversation exists to continue from.
+            message.id === latestDmMessageId && message.dmTurnId
+              ? stableContinue
               : undefined
           }
           onSelectVariant={stableSelectVariant}
