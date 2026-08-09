@@ -925,9 +925,13 @@ function ensureSchema(db: Database.Database) {
     // content always mirrors variants_json[variant_index].
     ["variants_json", `TEXT`],
     ["variant_index", `INTEGER`],
-    // The dm_turns row this message was narrated from, so a reroll can find
-    // the stored conversation to re-run the final narration call against.
-    // Null on messages written before this column existed.
+    // The dm_turns row this message came from, shared by two features. On a
+    // DM narration a reroll uses it to find the stored conversation to re-run
+    // the final narration call against. On the "DM ran into a problem" system
+    // notice the lead uses it to retry that exact turn, and it is set back to
+    // NULL once the retry is claimed. A turn writes one or the other, never
+    // both, so the two uses never collide on a single row. Null on messages
+    // written before this column existed.
     ["dm_turn_id", `TEXT`],
   ]);
 

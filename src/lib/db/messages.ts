@@ -20,8 +20,12 @@ export type CampaignMessage = {
   // Absent until the first reroll; content always mirrors the selected entry.
   variants?: string[];
   variantIndex?: number;
-  // The DM turn this message was narrated from; a reroll replays that turn's
-  // stored conversation. Absent on messages written before rerolls existed.
+  // The dm_turns row this message came from, serving two features. On a DM
+  // narration it is the turn a reroll replays the stored conversation of. On
+  // the "DM ran into a problem" system notice it is the turn the lead can
+  // retry, and it is cleared the moment a retry is claimed, which is what
+  // makes the banner disappear for every client at once. Absent on messages
+  // written before either feature existed.
   dmTurnId?: string;
   createdAt: string;
 };
@@ -183,6 +187,26 @@ export function setMessageGeneratedImage(messageId: string, image: GeneratedImag
     .prepare(`UPDATE campaign_messages SET generated_image_json = ? WHERE id = ?`)
     .run(JSON.stringify(image), messageId);
   return result.changes > 0;
+}
+
+// Retry claim: drops a halted notice's link to its DM turn so the retry
+// banner stops being offered. Conditional on the turn id, so it doubles as a
+// second guard against two leads retrying the same turn (better-sqlite3 is
+// synchronous, so only one caller can see changes > 0). The caller publishes
+// message_updated.
+export function clearMessageDmTurn(messageId: string, dmTurnId: string): CampaignMessage | null {
+  const result = getDatabase()
+    .prepare(`UPDATE campaign_messages SET dm_turn_id = NULL WHERE id = ? AND dm_turn_id = ?`)
+    .run(messageId, dmTurnId);
+  return result.changes > 0 ? getCampaignMessage(messageId) : null;
+}
+
+// The halted notice pointing at a turn, if it is still offering a retry.
+export function findMessageForDmTurn(dmTurnId: string): CampaignMessage | null {
+  const row = getDatabase()
+    .prepare(`SELECT * FROM campaign_messages WHERE dm_turn_id = ? ORDER BY seq DESC LIMIT 1`)
+    .get(dmTurnId) as MessageRow | undefined;
+  return row ? mapMessage(row) : null;
 }
 
 // Lore-check accept: replaces a message's text in place (the lead applying

@@ -55,6 +55,10 @@ export function isFloorExempt(kind: InputKind): boolean {
 // styles them as a lead note.
 export const LEAD_NOTE_PREFIX = "[Party lead direction] ";
 
+// Marks the system message a halted DM turn writes. The client pairs it with
+// the message's dmTurnId to offer the lead a retry of that exact turn.
+export const DM_HALTED_PREFIX = "The DM ran into a problem: ";
+
 // Marks the system message announcing a mid-game joiner's new character.
 // The lead's "new adventurer" banner derives from it: shown until a DM
 // message lands after it (the DM had its "next natural moment").

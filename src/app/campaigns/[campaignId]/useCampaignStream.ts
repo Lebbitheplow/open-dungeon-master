@@ -242,7 +242,13 @@ function reducer(state: CampaignState, action: Action): CampaignState {
           // like rolls/auditLog so render cost stays flat (the snapshot
           // reload window is 100, so 200 keeps scrollback beyond it).
           next.messages = upsertBy(state.messages, message, (entry) => entry.id).slice(-200);
-          if (message.authorType === "dm") {
+          // A halted-turn notice (system, linked to its dm_turns row) ends the
+          // turn just like narration does. Without this the abandoned partial
+          // draft stays on screen and a retry streams on top of it.
+          if (
+            message.authorType === "dm" ||
+            (message.authorType === "system" && message.dmTurnId)
+          ) {
             next.dmDraft = "";
             next.dmStatus = "idle";
           }
