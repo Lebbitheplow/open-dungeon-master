@@ -379,9 +379,13 @@ export async function startDmTurn(campaignId: string) {
       chapters: listChapters(campaignId)
         .filter((chapter) => chapter.status === "closed")
         .map((chapter) => ({
+          id: chapter.id,
           index: chapter.index,
           title: chapter.title,
           oneLiner: chapter.highlights[0] ?? "",
+          // The full sealed summary; the LOD renderer decides per chapter
+          // whether the prompt gets all of it or just its first sentence.
+          summary: chapter.summary || chapter.highlights[0] || "",
         })),
       publicNotes: listPublicCampaignNotes(campaignId, 10).map((note) => ({
         pinned: note.pinned,

@@ -16,6 +16,7 @@ import { renderWorldArcsForPrompt } from "@/lib/dm/world-arc-logic";
 import { renderFactsForPrompt, type FactLike } from "@/lib/dm/fact-logic";
 import { companionMode } from "@/lib/dm/companion-tools";
 import { ENGINE_BOUNDARY_CHECK, ENGINE_BOUNDARY_RULES } from "@/lib/dm/engine-boundary";
+import { renderChapterLod } from "@/lib/dm/chapter-lod";
 import {
   computeBudgets,
   estimateTokens,
@@ -134,7 +135,17 @@ export type DmGameState = {
   // Recent lasting milestones per campaign character id.
   recentEventsByCharacter?: Map<string, string[]>;
   // Closed story chapters, oldest first: index, title, one-line hook.
-  chapters?: Array<{ index: number; title: string; oneLiner: string }>;
+  // Sealed chapters, oldest first. Rendered at level of detail
+  // (src/lib/dm/chapter-lod.ts): summary for the recent and the important,
+  // synopsis for the rest. `importance` is the chapter's peak scene score.
+  chapters?: Array<{
+    id?: string;
+    index: number;
+    title: string;
+    oneLiner?: string;
+    summary?: string;
+    importance?: number;
+  }>;
   // Public party notes (lead-curated canon), pinned first.
   publicNotes?: Array<{ pinned: boolean; title: string; body: string }>;
   // Server-tracked world facts (the divergence register), newest first.
@@ -696,14 +707,27 @@ export function buildGameStateBlock(state: DmGameState): string {
     sections.push(`Recent rolls:\n${rollLines.join("\n")}`);
   }
   if (state.chapters?.length) {
-    sections.push(
-      `Story so far, by chapter:\n${state.chapters
-        .map(
-          (chapter) =>
-            `${chapter.index}. "${chapter.title}"${chapter.oneLiner ? ` - ${chapter.oneLiner}` : ""}`,
-        )
-        .join("\n")}\n(Use the recall_story tool to re-read any past chapter in full when players reference old events.)`,
+    // Level-of-detail rather than a flat list: recent and high-importance
+    // chapters render as their full summary, older ones fall to a one-line
+    // synopsis, and the oldest drop entirely under budget pressure. Before
+    // this every chapter contributed one highlight line regardless of how
+    // much it mattered, so the chapter the campaign turns on read exactly
+    // like the one where they bought rope.
+    const lod = renderChapterLod(
+      state.chapters.map((chapter) => ({
+        id: chapter.id ?? String(chapter.index),
+        index: chapter.index,
+        title: chapter.title,
+        summary: chapter.summary ?? chapter.oneLiner ?? "",
+        importance: chapter.importance,
+      })),
+      computeBudgets(state.contextLimitTokens).chapters,
     );
+    if (lod.text) {
+      sections.push(
+        `Story so far, by chapter:\n${lod.text}\n(Use the recall_story tool to re-read any past chapter in full when players reference old events.)`,
+      );
+    }
     if (storySummary) {
       sections.push(`Current chapter so far:\n${storySummary}`);
     }
