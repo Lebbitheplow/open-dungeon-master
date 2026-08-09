@@ -77,6 +77,7 @@ import { consumePendingSparks, tickWorldState } from "@/lib/dm/world-tick";
 import { buildDirectorBlock } from "@/lib/dm/director-logic";
 import { takeDirectorArm } from "@/lib/db/director-arms";
 import { listPins } from "@/lib/db/pins";
+import { restoreMentionedNpcs } from "@/lib/dm/npc-archive";
 import { handleRecallStory } from "@/lib/dm/recall";
 import { handleSearchLore, searchLoreTool } from "@/lib/dm/lore-search";
 import { handleWriteCampaignNote, writeCampaignNoteTool } from "@/lib/dm/note-tools";
@@ -329,6 +330,11 @@ export async function startDmTurn(campaignId: string) {
   const currentLocation = getCurrentLocation(campaignId);
   // Variant rules always ride; house rules and world lore are retrieved
   // against the current moment (one MiniLM embed, keyword fallback).
+  // Naming an archived NPC brings them back before the prompt is built, so
+  // the DM sees them on the very turn the party asks after them rather than
+  // one turn late.
+  restoreMentionedNpcs(campaignId, history.slice(-4).map((entry) => entry.content).join("\n"));
+
   const retrieval = await buildTurnRetrieval(campaign, history);
   // Taken (read and deleted in one statement) rather than read-then-clear, so
   // two turns racing cannot both fire the same directive. It is consumed here,

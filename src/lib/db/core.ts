@@ -1128,6 +1128,10 @@ function ensureSchema(db: Database.Database) {
     ["pressure_json", `TEXT NOT NULL DEFAULT ''`],
     // Link to the story arc's cast entry (ArcNpc id) when name-matched.
     ["arc_cast_id", `TEXT NOT NULL DEFAULT ''`],
+    // Rostered out of the prompt after enough quiet chapters
+    // (src/lib/dm/npc-archive-logic.ts). Never deleted: naming the NPC
+    // restores them, so this is a visibility flag rather than a lifecycle.
+    ["archived", `INTEGER NOT NULL DEFAULT 0`],
   ]);
 
   // The romance meter was generalized into the relationship meter: one

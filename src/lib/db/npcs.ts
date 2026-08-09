@@ -31,6 +31,8 @@ export type Npc = {
   aliases: string[];
   agency: NpcAgency;
   arcCastId: string;
+  // Kept out of the Active NPCs prompt block; restored on a name mention.
+  archived: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -50,6 +52,7 @@ type NpcRow = {
   bonds_json: string;
   pressure_json: string;
   arc_cast_id: string;
+  archived: number;
   created_at: string;
   updated_at: string;
 };
@@ -72,6 +75,7 @@ function mapNpc(row: NpcRow): Npc {
       pressure: parsePressure(row.pressure_json),
     },
     arcCastId: row.arc_cast_id,
+    archived: row.archived === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -252,4 +256,12 @@ export function patchNpcAgency(
   );
   const updated = db.prepare(`SELECT * FROM npcs WHERE id = ?`).get(id) as NpcRow | undefined;
   return updated ? mapNpc(updated) : null;
+}
+
+// Roster visibility. Archiving never deletes: a name mention restores the NPC
+// with their attitude, agency and history intact (src/lib/dm/npc-archive-logic.ts).
+export function setNpcArchived(npcId: string, archived: boolean) {
+  getDatabase()
+    .prepare(`UPDATE npcs SET archived = ?, updated_at = ? WHERE id = ?`)
+    .run(archived ? 1 : 0, nowIso(), npcId);
 }

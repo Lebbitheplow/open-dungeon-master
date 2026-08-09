@@ -446,7 +446,11 @@ export function npcRosterForPrompt(campaignId: string): Array<{
     fact: fact.fact,
     witnessedBy: fact.witnessedBy,
   }));
-  return listNpcs(campaignId).map((npc) => ({
+  // Archived NPCs stay out of the prompt until someone names them again
+  // (src/lib/dm/npc-archive-logic.ts). They are never deleted.
+  return listNpcs(campaignId)
+    .filter((npc) => !npc.archived)
+    .map((npc) => ({
     name: npc.name,
     attitude: npc.attitude,
     trait: npc.trait,

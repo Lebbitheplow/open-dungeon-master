@@ -1,4 +1,5 @@
-import { listNpcs, patchNpcAgency, type Npc } from "@/lib/db/npcs";
+import { listNpcs, patchNpcAgency, setNpcArchived, type Npc } from "@/lib/db/npcs";
+import { shouldArchive } from "@/lib/dm/npc-archive-logic";
 import { recordExtractedFacts } from "@/lib/db/facts";
 import { publishEphemeral } from "@/lib/events";
 import { rollExpression } from "@/lib/dice";
@@ -57,6 +58,23 @@ export function advanceNpcAgency(
     }
 
     patchNpcAgency(npc.id, { pressure, goals });
+    // Roster hygiene, decided from the counters just ticked. Protections
+    // live in npc-archive-logic.ts; an NPC with standing, a romance or an
+    // unfinished goal is never rostered out mid-thread.
+    const decision = shouldArchive({
+      id: npc.id,
+      name: npc.name,
+      aliases: npc.aliases,
+      ignored: pressure.ignored,
+      engaged: pressure.engaged,
+      archived: npc.archived,
+      hasBond: npc.agency.bonds.length > 0,
+      hasRelationship: npc.agency.relations.length > 0,
+      hasPendingGoal: Boolean(goals.session),
+    });
+    if (decision.archive) {
+      setNpcArchived(npc.id, true);
+    }
     if (goals.session) {
       holders.push({ npc, goalText: goals.session.text });
     }
