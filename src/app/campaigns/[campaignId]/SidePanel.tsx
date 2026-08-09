@@ -22,6 +22,7 @@ import { MapPanel } from "@/app/campaigns/[campaignId]/MapPanel";
 import { NotesPanel } from "@/app/campaigns/[campaignId]/NotesPanel";
 import { OverworldPanel } from "@/app/campaigns/[campaignId]/OverworldPanel";
 import { PartyPanel } from "@/app/campaigns/[campaignId]/PartyPanel";
+import { ContextPanel } from "@/app/campaigns/[campaignId]/ContextPanel";
 import { SessionSettings } from "@/app/campaigns/[campaignId]/SessionSettings";
 import { SideChatPanel } from "@/app/campaigns/[campaignId]/SideChatPanel";
 import { StoryPanel } from "@/app/campaigns/[campaignId]/StoryPanel";
@@ -395,6 +396,8 @@ function SidePanelInner({
               onOpenHandled={onChatTargetHandled}
             />
           </div>
+        ) : tab === "context" ? (
+          <ContextPanel campaignId={campaignId} />
         ) : tab === "settings" && campaign ? (
           <SessionSettings campaign={campaign} isLead={isLead} />
         ) : (

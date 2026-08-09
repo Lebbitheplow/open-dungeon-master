@@ -2,6 +2,7 @@ import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import type { ChatMessage } from "@/lib/model-client";
 import type { Advantage } from "@/lib/dice";
 import type { RollKind } from "@/lib/db/rolls";
+import type { ContextTrace } from "@/lib/dm/context-budget";
 
 // A DM narration turn persisted as a state machine so it can park while a
 // player rolls physical dice and resume later (across restarts).
@@ -33,6 +34,8 @@ export type DmTurn = {
   locationId: string | null;
   mutationCount: number;
   encounterCount: number;
+  // What this turn's prompt cost, block by block (src/lib/dm/context-budget.ts).
+  contextTrace: ContextTrace | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -53,6 +56,7 @@ type TurnRow = {
   location_id: string | null;
   mutation_count: number;
   encounter_count: number;
+  context_trace_json: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -77,6 +81,7 @@ function mapTurn(row: TurnRow): DmTurn {
     locationId: row.location_id ?? null,
     mutationCount: row.mutation_count,
     encounterCount: row.encounter_count ?? 0,
+    contextTrace: parseJson<ContextTrace | null>(row.context_trace_json, null),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -114,7 +119,7 @@ export function saveDmTurn(turn: DmTurn) {
         UPDATE dm_turns SET
           status = ?, call_index = ?, conversation_json = ?,
           narration_parts_json = ?, roll_ids_json = ?, player_whisper_ids_json = ?, answered_whisper_character_ids_json = ?, acted_enemy_ids_json = ?, resolved_character_ids_json = ?, image_args_json = ?,
-          location_id = ?, mutation_count = ?, encounter_count = ?, updated_at = ?
+          location_id = ?, mutation_count = ?, encounter_count = ?, context_trace_json = ?, updated_at = ?
         WHERE id = ?
       `,
     )
@@ -132,6 +137,7 @@ export function saveDmTurn(turn: DmTurn) {
       turn.locationId,
       turn.mutationCount,
       turn.encounterCount,
+      turn.contextTrace ? JSON.stringify(turn.contextTrace) : null,
       nowIso(),
       turn.id,
     );

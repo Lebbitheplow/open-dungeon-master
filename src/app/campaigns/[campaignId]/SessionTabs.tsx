@@ -9,6 +9,7 @@ import {
   MessageSquareText,
   MessagesSquare,
   ScrollText,
+  Gauge,
   Settings2,
   StickyNote,
   Swords,
@@ -30,6 +31,7 @@ export type PanelTab =
   | "notes"
   | "chat"
   | "log"
+  | "context"
   | "settings";
 
 export type PanelTabDef = [PanelTab, string, LucideIcon, string];
@@ -81,7 +83,15 @@ export function buildPanelTabs({
     ["chat", "Chat", MessagesSquare, "Side chat between players. The DM does not see it."],
     ["log", "Log", ScrollText, "Dice rolls and DM stat changes, audited."],
     ...(hasSettings
-      ? ([["settings", "Setup", Settings2, "Campaign settings, invites and game toggles."]] as PanelTabDef[])
+      ? ([
+          [
+            "context",
+            "Context",
+            Gauge,
+            "What the DM was actually sent last turn, and anything the budget cut.",
+          ],
+          ["settings", "Setup", Settings2, "Campaign settings, invites and game toggles."],
+        ] as PanelTabDef[])
       : []),
   ];
 }

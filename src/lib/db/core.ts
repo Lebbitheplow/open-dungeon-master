@@ -950,6 +950,10 @@ function ensureSchema(db: Database.Database) {
   ]);
 
   addColumns("dm_turns", [
+    // What this turn's prompt cost, block by block, and what the budget cut
+    // (src/lib/dm/context-budget.ts). Recorded so the lead can inspect a bad
+    // turn after the fact and see whether the relevant lore was even sent.
+    ["context_trace_json", `TEXT`],
     // Pending location reference for the message finalize() will write;
     // persisted so it survives a turn parked on physical dice.
     ["location_id", `TEXT`],

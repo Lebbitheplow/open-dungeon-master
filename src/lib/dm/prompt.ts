@@ -16,6 +16,14 @@ import { renderWorldArcsForPrompt } from "@/lib/dm/world-arc-logic";
 import { renderFactsForPrompt, type FactLike } from "@/lib/dm/fact-logic";
 import { companionMode } from "@/lib/dm/companion-tools";
 import { ENGINE_BOUNDARY_CHECK, ENGINE_BOUNDARY_RULES } from "@/lib/dm/engine-boundary";
+import {
+  computeBudgets,
+  estimateTokens,
+  fitHistory,
+  usableTokens,
+  type BlockKind,
+  type ContextTrace,
+} from "@/lib/dm/context-budget";
 import type { ChatMessage } from "@/lib/model-client";
 
 export const DM_SYSTEM = `You are the Dungeon Master for a multiplayer Dungeons & Dragons 5th Edition campaign. Several human players each control exactly one character. You control the world, every NPC, and every monster. You never control the player characters. The single exception is AI companions: any Party entry marked "AI companion under your control" is yours to play fully, in dialogue and in combat.
@@ -162,6 +170,13 @@ export type DmGameState = {
   // Rides last in the payload, after the player's own message, because
   // recency is the whole point: it has to outweigh the scene it is bending.
   directorBlock?: string;
+  // The model's context window in tokens, so the budget can scale with it
+  // rather than assuming one. Falls back to a modest default when unset.
+  contextLimitTokens?: number;
+  // Filled in by buildDmMessages: what each block cost and what was dropped.
+  // Mutable on purpose, so the caller can persist it on the dm_turns row
+  // without buildDmMessages changing its return type.
+  contextTrace?: ContextTrace;
 };
 
 // Players who roll physical dice at the table: campaign policy must allow
@@ -945,20 +960,22 @@ export const updateLocationTool = {
   },
 } as const;
 
-const HISTORY_CHAR_BUDGET = 100_000;
-
 // Builds the full message list for one DM turn: system + game state, then
 // recent campaign history with player lines attributed by character name.
+//
+// History used to be trimmed against a flat 100k CHARACTER budget while every
+// other block rode unbounded. It is now trimmed against the history share of
+// a token budget derived from the campaign's context limit
+// (src/lib/dm/context-budget.ts), and the result is recorded on
+// state.contextTrace so the Context panel can show what the DM was actually
+// sent and what got cut.
 export function buildDmMessages(
   state: DmGameState,
   history: CampaignMessage[],
 ): ChatMessage[] {
   const sheetsById = new Map(state.sheets.map((sheet) => [sheet.id, sheet]));
 
-  const historyMessages: ChatMessage[] = [];
-  let budget = HISTORY_CHAR_BUDGET;
-  for (let index = history.length - 1; index >= 0; index -= 1) {
-    const message = history[index];
+  const rendered = history.map((message) => {
     const name = message.characterId
       ? sheetsById.get(message.characterId)?.name ?? "Unknown"
       : "Unknown";
@@ -972,15 +989,18 @@ export function buildDmMessages(
           : message.content.startsWith('"') || message.content.startsWith("(ooc)")
             ? `[${name}] ${message.content}`
             : `[${name} | attempt] ${message.content}`;
-    budget -= content.length;
-    if (budget < 0 && historyMessages.length > 0) {
-      break;
-    }
-    historyMessages.unshift({
-      role: message.authorType === "dm" ? "assistant" : "user",
-      content,
-    });
-  }
+    return { message, id: message.id, text: content };
+  });
+
+  const budgets = computeBudgets(state.contextLimitTokens);
+  const fitted = fitHistory(rendered, budgets.history);
+  const keptIds = new Set(fitted.kept.map((entry) => entry.id));
+  const historyMessages: ChatMessage[] = rendered
+    .filter((entry) => keptIds.has(entry.id))
+    .map((entry) => ({
+      role: entry.message.authorType === "dm" ? ("assistant" as const) : ("user" as const),
+      content: entry.text,
+    }));
 
   const physicalDiceUsers = realDiceUserIds(state.campaign, state.members);
   const anyPhysicalDice = state.sheets.some((sheet) => physicalDiceUsers.has(sheet.userId));
@@ -1003,7 +1023,53 @@ export function buildDmMessages(
   if (state.pendingPlayerWhispers?.length) {
     systemParts.push(PLAYER_WHISPER_RULES);
   }
-  systemParts.push(buildGameStateBlock(state));
+  const gameStateBlock = buildGameStateBlock(state);
+  systemParts.push(gameStateBlock);
+
+  // Record what this prompt cost, block by block. Nothing here is dropped:
+  // the rules and game-state blocks are load-bearing and the engine boundary
+  // must never be evicted, so the trace exists to make the sizes visible
+  // rather than to gate them. History is the one kind actually trimmed, and
+  // its cut is reported above.
+  state.contextTrace = {
+    limitTokens: usableTokens(state.contextLimitTokens),
+    promptTokens:
+      estimateTokens(systemParts.join("\n\n")) +
+      fitted.tokens +
+      estimateTokens(state.directorBlock ?? ""),
+    blocks: [
+      ...systemParts.map((text, index) => ({
+        id: index === systemParts.length - 1 ? "game-state" : `rules-${index}`,
+        kind: (index === systemParts.length - 1 ? "state" : "rules") as BlockKind,
+        tokens: estimateTokens(text),
+        included: true,
+        reason: "always included",
+        position: index + 1,
+      })),
+      {
+        id: "history",
+        kind: "history" as BlockKind,
+        tokens: fitted.tokens,
+        included: true,
+        reason: fitted.dropped
+          ? `kept ${fitted.kept.length} of ${rendered.length} messages; ${fitted.dropped} older dropped over the history budget`
+          : `all ${fitted.kept.length} messages fit`,
+        position: systemParts.length + 1,
+      },
+      ...(state.directorBlock
+        ? [
+            {
+              id: "director",
+              kind: "rules" as BlockKind,
+              tokens: estimateTokens(state.directorBlock),
+              included: true,
+              reason: "one-turn steer armed by the lead",
+              position: systemParts.length + 2,
+            },
+          ]
+        : []),
+    ],
+  };
 
   return [
     { role: "system", content: systemParts.join("\n\n") },

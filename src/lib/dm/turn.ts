@@ -49,6 +49,7 @@ import { handleCompleteBeat } from "@/lib/dm/arc";
 import { enforceEngineBoundary } from "@/lib/dm/narration-guard";
 import {
   buildDmMessages,
+  type DmGameState,
   completeBeatTool,
   movePartyTool,
   recallStoryTool,
@@ -343,8 +344,7 @@ export async function startDmTurn(campaignId: string) {
       absoluteCommand: "",
     });
   }
-  const conversation = buildDmMessages(
-    {
+  const promptState: DmGameState = {
       campaign,
       variantRulesBlock: retrieval.variantRulesBlock,
       houseRulesBlock: retrieval.houseRulesBlock,
@@ -407,11 +407,13 @@ export async function startDmTurn(campaignId: string) {
         from: whisper.characterName,
         content: whisper.content,
       })),
-    },
-    history,
-  );
+  };
+  const conversation = buildDmMessages(promptState, history);
 
   const turn = createDmTurn(campaignId, conversation);
+  // buildDmMessages fills this in on the state object it was handed, so the
+  // trace is carried onto the turn row rather than recomputed.
+  turn.contextTrace = promptState.contextTrace ?? null;
   // Remember which player whispers this turn's prompt carries; finalize()
   // marks them answered only when the turn succeeds.
   turn.playerWhisperIds = pendingWhispers.map((whisper) => whisper.id);
