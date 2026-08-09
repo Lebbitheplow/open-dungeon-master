@@ -11,6 +11,34 @@ export const globalConfigSchema = z.object({
   // Used for OAuth redirect URIs; blank = APP_PUBLIC_URL env, then forwarded
   // proxy headers, then the raw request origin.
   publicUrl: z.string().trim().max(500).default(""),
+  // Per-role sampling (src/lib/dm/sampling-logic.ts). Blank profile plus
+  // empty overrides means "send exactly what the build sends today", so this
+  // is a no-op until an admin changes something. presence_penalty is
+  // deliberately absent: model-client pins it to 0 because a positive value
+  // suppresses tool calls over the long DM prompt.
+  sampling: z
+    .object({
+      profile: z.enum(["", "default", "balanced", "creative", "precise"]).default(""),
+      story: z
+        .object({
+          temperature: z.number().min(0).max(2).optional(),
+          top_p: z.number().min(0).max(1).optional(),
+          top_k: z.number().int().min(0).max(200).optional(),
+          min_p: z.number().min(0).max(1).optional(),
+          repeat_penalty: z.number().min(0).max(2).optional(),
+        })
+        .default({}),
+      utility: z
+        .object({
+          temperature: z.number().min(0).max(2).optional(),
+          top_p: z.number().min(0).max(1).optional(),
+          top_k: z.number().int().min(0).max(200).optional(),
+          min_p: z.number().min(0).max(1).optional(),
+          repeat_penalty: z.number().min(0).max(2).optional(),
+        })
+        .default({}),
+    })
+    .default({ profile: "", story: {}, utility: {} }),
   text: z
     .object({
       provider: z.enum(["", "local", "custom"]).default(""),

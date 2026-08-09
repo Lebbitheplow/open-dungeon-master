@@ -1,4 +1,5 @@
 import { getGlobalConfig } from "@/lib/db/app-settings";
+import { profileById, resolveSampling } from "@/lib/dm/sampling-logic";
 import {
   buildPropsUrl,
   contextCacheKey,
@@ -389,6 +390,7 @@ export async function requestCustomMessage(
   }
 
   const globalText = getGlobalConfig().text;
+  const globalSampling = getGlobalConfig().sampling;
   const isOpenRouter = /(^|\.)openrouter\.ai/i.test(trimmedBase);
   const resolvedModel =
     (model || "").trim() ||
@@ -432,11 +434,29 @@ export async function requestCustomMessage(
     messages,
     // Thinking runs cooler per Qwen guidance; 0.9 there makes the thought
     // ramble past the point of ever emitting the tool call.
-    temperature: temperature ?? (options.thinking ? 0.7 : 0.9),
+    // Per-role sampling, resolved from the admin config
+    // (src/lib/dm/sampling-logic.ts). An explicit per-call temperature still
+    // wins, and an unconfigured install resolves to exactly the previous
+    // built-in defaults.
+    ...resolveSampling({
+      role: isUtilityBackend ? "utility" : "story",
+      configured: {
+        ...(isUtilityBackend ? globalSampling.utility : globalSampling.story),
+        ...(temperature !== undefined ? { temperature } : {}),
+      },
+      profile: profileById(globalSampling.profile || "default"),
+      // Any OpenAI-compatible server this deployment talks to directly is
+      // self-hosted in practice; OpenRouter is the one that rejects the
+      // local-only sampler fields.
+      allowLocalOnly: !isOpenRouter,
+      thinking: options.thinking,
+    }),
     // Explicit 0 so a server-side sampler preset cannot override it: a
     // positive presence penalty over the long DM prompt suppresses the
     // tool-call token sequence (measured 2/5 vs 4/5 request_roll rate on
-    // llama-server with the qwen preset's 1.5).
+    // llama-server with the qwen preset's 1.5). Deliberately NOT exposed as a
+    // sampling option, and written after the spread so nothing can reinstate
+    // it from config.
     presence_penalty: 0,
     max_tokens: configuredMaxOutputTokens(),
     ...(options.thinking ? { chat_template_kwargs: { enable_thinking: true } } : {}),
