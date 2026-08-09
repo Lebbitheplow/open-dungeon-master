@@ -108,6 +108,30 @@ export function localContextTokens(model: string) {
   return Math.max(2_048, Math.min(parsed, native));
 }
 
+// Conservative stand-in for an OpenAI-compatible endpoint whose window we
+// cannot know. llama.cpp, LM Studio, vLLM and OpenRouter all report it
+// differently or not at all, and overshooting means the server silently
+// truncates the prompt, which is far worse than packing less. Operators who
+// know their endpoint can raise it with OPENAI_COMPAT_CONTEXT.
+export const DEFAULT_CUSTOM_CONTEXT_TOKENS = 16_384;
+
+// The context window the DM prompt is being built against, resolved the same
+// way requestDmMessage routes the call (src/lib/dm/model.ts). Local models
+// have a known native window; custom endpoints do not, so they fall back to
+// the documented default unless the operator says otherwise.
+export function storyContextTokens(settings: {
+  textProvider: string;
+  localTextModel: string;
+}): number {
+  if (settings.textProvider === "local") {
+    return localContextTokens(settings.localTextModel);
+  }
+  const raw = Number.parseInt(serverEnv("OPENAI_COMPAT_CONTEXT"), 10);
+  return Number.isFinite(raw) && raw > 0
+    ? Math.max(2_048, raw)
+    : DEFAULT_CUSTOM_CONTEXT_TOKENS;
+}
+
 export function resolveTextTimeoutMs(
   explicit: number | undefined,
   envKey: string,

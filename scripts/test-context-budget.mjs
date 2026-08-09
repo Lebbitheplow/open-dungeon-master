@@ -282,3 +282,18 @@ check("empty blocks cost nothing and still ride", () => {
 });
 
 console.log(`context-budget: ${passed} tests passed`);
+
+// The budget scales with the model's real window, not a fixed default. This
+// is the whole reason storyContextTokens exists: a 128K local model and a
+// 16K custom endpoint should not get the same history allowance.
+{
+  const small = computeBudgets(8_192);
+  const large = computeBudgets(131_072);
+  assert.ok(large.history > small.history * 5, "a bigger window buys much more transcript");
+  assert.ok(large.retrieval > small.retrieval, "and more room for lore");
+  // Shares stay proportional; only the totals move.
+  const smallRatio = small.history / usableTokens(8_192);
+  const largeRatio = large.history / usableTokens(131_072);
+  assert.ok(Math.abs(smallRatio - largeRatio) < 0.01, "same proportions at any size");
+  console.log("context-budget: allocation scales with the configured window");
+}

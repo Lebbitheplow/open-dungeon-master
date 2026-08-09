@@ -79,6 +79,7 @@ import { takeDirectorArm } from "@/lib/db/director-arms";
 import { listPins } from "@/lib/db/pins";
 import { isStageEnabled } from "@/lib/dm/stages";
 import { renderVariantRules } from "@/lib/dm/rules-logic";
+import { storyContextTokens } from "@/lib/model-client";
 import { restoreMentionedNpcs } from "@/lib/dm/npc-archive";
 import { handleRecallStory } from "@/lib/dm/recall";
 import { handleSearchLore, searchLoreTool } from "@/lib/dm/lore-search";
@@ -360,6 +361,10 @@ export async function startDmTurn(campaignId: string) {
   }
   const promptState: DmGameState = {
       campaign,
+      // The window the prompt is actually being built against; without this
+      // every budget silently fell back to the default rather than the
+      // campaign's configured model.
+      contextLimitTokens: storyContextTokens(campaign.settings),
       variantRulesBlock: retrieval.variantRulesBlock,
       houseRulesBlock: retrieval.houseRulesBlock,
       loreBlock: retrieval.loreBlock,

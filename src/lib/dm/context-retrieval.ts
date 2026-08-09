@@ -3,6 +3,7 @@ import type { CampaignMessage } from "@/lib/db/messages";
 import { listLoreWithEmbeddings } from "@/lib/db/lore";
 import { listRuleChunksWithEmbeddings } from "@/lib/db/rules";
 import { embed, similarityOf } from "@/lib/embeddings";
+import { storyContextTokens } from "@/lib/model-client";
 import { renderLoreForPrompt, type WorldLoreEntry } from "@/lib/dm/world-lore-logic";
 import { computeBudgets } from "@/lib/dm/context-budget";
 import { selectRuleChunks } from "@/lib/dm/rules-activation-logic";
@@ -81,6 +82,10 @@ export async function buildTurnRetrieval(
   campaign: Campaign,
   history: CampaignMessage[],
 ): Promise<TurnRetrieval> {
+  // Resolved from the campaign's own provider and model rather than assuming
+  // a default window, so the rules budget matches what the backend will
+  // actually accept.
+  const contextLimitTokens = storyContextTokens(campaign.settings);
   const variantRulesBlock = renderVariantRules(campaign.gameSettings.variantRules);
   let houseRulesBlock = "";
   let loreBlock = "";
@@ -109,7 +114,7 @@ export async function buildTurnRetrieval(
       const activation = selectRuleChunks(
         rules.map((entry) => entry.chunk),
         query,
-        computeBudgets(undefined).retrieval,
+        computeBudgets(contextLimitTokens).retrieval,
       );
       const forcedIds = new Set(activation.forced.map((chunk) => chunk.id));
       const pinnedRules = activation.forced;
