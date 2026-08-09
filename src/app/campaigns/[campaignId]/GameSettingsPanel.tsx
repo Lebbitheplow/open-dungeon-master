@@ -328,6 +328,28 @@ export function GameSettingsPanel({
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <span className="w-16 text-stone-500">Prose</span>
+          <Tooltip content="After each turn the server compares the DM's narration against what the dice and tools actually resolved: a hit written on a miss, a death the hit points deny, a damage number no die rolled. A contradiction is sent back to the DM once for a rewrite. Nothing on any sheet changes either way.">
+            <button
+              type="button"
+              onClick={() => patch({ narrationGuard: !settings.narrationGuard })}
+              className={cn(
+                "rounded-md border px-2 py-1",
+                settings.narrationGuard
+                  ? "border-amber-700 bg-amber-950/50 text-amber-200"
+                  : "border-stone-700 text-stone-400",
+              )}
+            >
+              Outcome check {settings.narrationGuard ? "on" : "off"}
+            </button>
+          </Tooltip>
+          <span className="text-stone-500">
+            {settings.narrationGuard
+              ? "Narration that contradicts the dice goes back for one rewrite."
+              : "The DM's narration is persisted exactly as written."}
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
           <span className="w-16 text-stone-500">Bonds</span>
           <Tooltip content="How each NPC and AI companion feels about each character, tracked by the server on one meter from hostile through neutral to devoted. Deeds move it, and the same deed lands differently on different people: mercy wins over a kind healer and irritates a hard-bitten mercenary. Standing shows in the Bonds tab and colors how the DM plays them.">
             <button

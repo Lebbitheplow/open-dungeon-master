@@ -15,6 +15,7 @@ import { renderArcForPrompt } from "@/lib/dm/arc-logic";
 import { renderWorldArcsForPrompt } from "@/lib/dm/world-arc-logic";
 import { renderFactsForPrompt, type FactLike } from "@/lib/dm/fact-logic";
 import { companionMode } from "@/lib/dm/companion-tools";
+import { ENGINE_BOUNDARY_CHECK, ENGINE_BOUNDARY_RULES } from "@/lib/dm/engine-boundary";
 import type { ChatMessage } from "@/lib/model-client";
 
 export const DM_SYSTEM = `You are the Dungeon Master for a multiplayer Dungeons & Dragons 5th Edition campaign. Several human players each control exactly one character. You control the world, every NPC, and every monster. You never control the player characters. The single exception is AI companions: any Party entry marked "AI companion under your control" is yours to play fully, in dialogue and in combat.
@@ -61,7 +62,15 @@ Core rules you must always follow:
 // custom world text.
 export function buildDmSystem(campaign: Campaign): string {
   const preset = genrePreset(campaign.gameSettings.genre);
-  const parts = [DM_SYSTEM];
+  // The engine-boundary contract leads: one labelled statement of which facts
+  // the runtime owns, which the numbered rules below it then apply tool by
+  // tool (src/lib/dm/engine-boundary.ts).
+  const parts = [
+    campaign.gameSettings.narrationGuard
+      ? `${ENGINE_BOUNDARY_RULES}${ENGINE_BOUNDARY_CHECK}`
+      : ENGINE_BOUNDARY_RULES,
+    DM_SYSTEM,
+  ];
   if (preset.dmFlavor) {
     parts.push(preset.dmFlavor);
   }

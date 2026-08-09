@@ -12,6 +12,16 @@ Legend: **enforced** = the server computes/applies it; **guidance** = the model
 is told the rule and narrates it, no server mechanic; **out of scope** = a
 deliberate omission with a reason.
 
+One row is neither of the first two: the engine boundary. `dm/engine-boundary.ts`
+states in a single prompt block which facts the runtime owns (dice, hit and
+miss, damage, HP and death, slots and resources, conditions, XP, gold), and then
+checks that the finished narration agrees with the outcomes the turn's tools
+actually resolved, sending a contradiction back to the model for one rewrite
+inside the existing call budget. Enforcement makes the numbers right; this makes
+the prose about them right. It changes no mechanical state, is deliberately
+biased toward missing a real contradiction over firing on flavor text, and a
+table can switch it off with the `narrationGuard` game setting.
+
 ## Character build
 
 | Subsystem | State | Where |
@@ -69,6 +79,7 @@ deliberate omission with a reason.
 | Agonizing Blast (+CHA per Eldritch Blast beam) | enforced | `srd/feature-effects.ts` `cantrip_damage_ability` |
 | Haste's extra action / Slow's lost reactions | enforced | `dm/action-budget.ts` `extraActions`, `use_reaction` gate |
 | Shield spell / Protection style reactions (real AC and disadvantage) | enforced | `dm/action-tools.ts use_reaction` -> registry conditions |
+| Narration cross-checked against the turn's real outcomes (a hit written on a miss, a death the hit points deny, a damage figure no die rolled, a spell nothing paid for) | enforced (verification, one rewrite) | `dm/engine-boundary.ts`, `dm/narration-guard.ts`, setting `narrationGuard` |
 | Ammunition tracking | out of scope | assumed supplied (`prompt.ts`) |
 
 ## Spellcasting
