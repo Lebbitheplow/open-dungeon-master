@@ -61,20 +61,50 @@ export type ContextTrace = {
   blocks: BlockTrace[];
 };
 
-// Share of the usable budget each kind may claim. These are floors, not caps:
-// leftover from an under-spent kind flows to whatever is packed after it, so
-// a campaign with no lore does not simply waste lore's share.
+// Allocation ported from NarrativeEngine-P's computeBudgets
+// (src/services/payload/budgets.ts, MIT). Two structural choices there are
+// worth keeping rather than approximating:
 //
-// history gets the largest share because the transcript is what the model is
-// actually continuing; starving it produces a DM that has forgotten the last
-// five minutes, which reads far worse than one missing a lore entry.
-export const KIND_SHARE: Record<Exclude<BlockKind, "contract">, number> = {
-  rules: 0.2,
-  state: 0.25,
-  retrieval: 0.12,
-  chapters: 0.08,
-  history: 0.35,
-};
+// 1. Retrieved rules come OFF THE TOP of the whole limit, and everything else
+//    splits what remains. Retrieval is the one block whose size is driven by
+//    how much the operator wrote rather than by how the campaign is going, so
+//    capping it first stops a long rules document from distorting every other
+//    share.
+// 2. History is the RESIDUAL, not a fixed share. NE-P's percentages
+//    deliberately sum to less than the remainder (25 + 40 + 10 = 75%) and it
+//    fits history into whatever is left. That degrades in the right
+//    direction: a quiet scene with little state spends the slack on
+//    transcript automatically.
+//
+// ODM's block kinds map onto NE-P's like this:
+//   retrieval <- rulesBudget   (house rules and world lore, off the top)
+//   rules     <- stable        (system prompt, genre, encounter/companion rules)
+//   state     <- world         (the game-state block: sheets, NPCs, facts, arc)
+//   chapters  <- volatile      (approximate: NE-P folds sealed chapters into
+//                               its history LOD renderer, which ODM does not
+//                               have yet, so they take the volatile slot)
+//   history   <- residual
+export const RETRIEVAL_SHARE_OF_LIMIT = 0.1;
+
+// Shares of what is left after retrieval is taken off the top. NE-P's
+// shallow-context numbers; it also has a deep-context variant (15/60/10) for
+// when an archive search ran, which ODM has no equivalent of yet.
+export const REMAINDER_SHARE = {
+  rules: 0.25,
+  state: 0.4,
+  chapters: 0.1,
+} as const;
+
+// A guaranteed slice of the state budget for the NPC roster, carved out of
+// the state share the way NE-P carves its NPC floor out of `world`, so lore
+// and fact pressure can never starve the actors actually in the scene. NE-P
+// notes that on an 8K context this is roughly 400 tokens, which is the right
+// order for one or two NPCs in a single scene.
+//
+// ODM assembles the whole game-state block as one string today, so this is
+// not yet enforced as a separate sub-budget; it is recorded here because it
+// is the reason `state` gets the largest single share.
+export const NPC_FLOOR_SHARE_OF_REMAINDER = 0.05;
 
 // Order blocks are admitted in. The contract is first and unconditional; the
 // rest descend by how badly the turn breaks without them. History is packed
@@ -99,17 +129,35 @@ export function usableTokens(contextLimitTokens?: number | null): number {
 
 export function computeBudgets(contextLimitTokens?: number | null): Record<BlockKind, number> {
   const usable = usableTokens(contextLimitTokens);
+  const retrieval = Math.floor(usable * RETRIEVAL_SHARE_OF_LIMIT);
+  const remainder = usable - retrieval;
+
+  const rules = Math.floor(remainder * REMAINDER_SHARE.rules);
+  const state = Math.floor(remainder * REMAINDER_SHARE.state);
+  const chapters = Math.floor(remainder * REMAINDER_SHARE.chapters);
+
   return {
     // The contract is never budgeted against: it is a few hundred tokens and
     // dropping it would let the model start inventing dice results, which is
     // the single failure this whole system exists to prevent.
     contract: Number.POSITIVE_INFINITY,
-    rules: Math.floor(usable * KIND_SHARE.rules),
-    state: Math.floor(usable * KIND_SHARE.state),
-    retrieval: Math.floor(usable * KIND_SHARE.retrieval),
-    chapters: Math.floor(usable * KIND_SHARE.chapters),
-    history: Math.floor(usable * KIND_SHARE.history),
+    retrieval,
+    rules,
+    state,
+    chapters,
+    // The residual, following NE-P: whatever the other kinds did not claim
+    // goes to the transcript. Never negative, however the shares are tuned.
+    history: Math.max(0, remainder - rules - state - chapters),
   };
+}
+
+// The NPC roster's guaranteed slice of the state budget. Exposed so the NPC
+// roster builder can honor it once ODM budgets the game-state block's parts
+// separately rather than assembling it as one string.
+export function npcFloorTokens(contextLimitTokens?: number | null): number {
+  const usable = usableTokens(contextLimitTokens);
+  const remainder = usable - Math.floor(usable * RETRIEVAL_SHARE_OF_LIMIT);
+  return Math.floor(remainder * NPC_FLOOR_SHARE_OF_REMAINDER);
 }
 
 export type PackResult = {

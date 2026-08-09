@@ -6,8 +6,12 @@ import {
   CHARS_PER_TOKEN,
   DEFAULT_CONTEXT_TOKENS,
   RESPONSE_RESERVE_TOKENS,
+  NPC_FLOOR_SHARE_OF_REMAINDER,
+  REMAINDER_SHARE,
+  RETRIEVAL_SHARE_OF_LIMIT,
   computeBudgets,
   estimateTokens,
+  npcFloorTokens,
   fitHistory,
   packBlocks,
   usableTokens,
@@ -45,6 +49,59 @@ check("shares are floored and sum to less than the usable budget", () => {
     assert.ok(Number.isInteger(budgets[kind]), `${kind} share is an integer`);
     assert.ok(budgets[kind] > 0, `${kind} gets a real share`);
   }
+});
+
+check("retrieval is taken off the top of the whole limit", () => {
+  // NE-P's structure: the rules budget is a slice of the limit itself, not of
+  // what is left after anything else.
+  const usable = usableTokens(32_000);
+  const budgets = computeBudgets(32_000);
+  assert.equal(budgets.retrieval, Math.floor(usable * RETRIEVAL_SHARE_OF_LIMIT));
+});
+
+check("the other kinds split the remainder after retrieval", () => {
+  const usable = usableTokens(32_000);
+  const budgets = computeBudgets(32_000);
+  const remainder = usable - budgets.retrieval;
+  assert.equal(budgets.rules, Math.floor(remainder * REMAINDER_SHARE.rules));
+  assert.equal(budgets.state, Math.floor(remainder * REMAINDER_SHARE.state));
+  assert.equal(budgets.chapters, Math.floor(remainder * REMAINDER_SHARE.chapters));
+});
+
+check("history is the residual, not a fixed share", () => {
+  const usable = usableTokens(32_000);
+  const budgets = computeBudgets(32_000);
+  const remainder = usable - budgets.retrieval;
+  assert.equal(
+    budgets.history,
+    remainder - budgets.rules - budgets.state - budgets.chapters,
+    "whatever the others did not claim",
+  );
+  assert.ok(budgets.history > 0, "the shares leave real room for transcript");
+});
+
+check("state is the largest single share of the remainder", () => {
+  // It carries the sheets, the NPC roster and the facts, and the NPC floor is
+  // carved out of it.
+  const budgets = computeBudgets(32_000);
+  assert.ok(budgets.state > budgets.rules);
+  assert.ok(budgets.state > budgets.chapters);
+});
+
+check("the NPC floor is a real slice of the remainder", () => {
+  const usable = usableTokens(32_000);
+  const budgets = computeBudgets(32_000);
+  const remainder = usable - budgets.retrieval;
+  assert.equal(npcFloorTokens(32_000), Math.floor(remainder * NPC_FLOOR_SHARE_OF_REMAINDER));
+  assert.ok(npcFloorTokens(32_000) < budgets.state, "the floor fits inside the state share");
+});
+
+check("a tiny context still leaves every kind something", () => {
+  const budgets = computeBudgets(4_000);
+  for (const kind of ["rules", "state", "retrieval", "chapters", "history"]) {
+    assert.ok(budgets[kind] >= 0, `${kind} is never negative`);
+  }
+  assert.ok(budgets.history > 0, "even a small window keeps room for transcript");
 });
 
 check("everything that fits is kept, in pack order", () => {
