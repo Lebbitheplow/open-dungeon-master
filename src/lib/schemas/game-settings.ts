@@ -78,6 +78,17 @@ export const gameSettingsSchema = z.object({
   narrationGuard: z.boolean().default(true),
   // Optional 5e variant rules the server engines and DM prompt honor.
   // Rendered as one line each in the prompt by src/lib/dm/rules-logic.ts.
+  // Optional turn stages (src/lib/dm/stages.ts). All default on; this exists
+  // so an operator on a small local model can trade quality for speed
+  // deliberately, and the panel labels which ones actually save a model call.
+  stages: z
+    .object({
+      compaction: z.boolean().default(true),
+      recall: z.boolean().default(true),
+      retrieval: z.boolean().default(true),
+      chapterSummary: z.boolean().default(true),
+    })
+    .default({ compaction: true, recall: true, retrieval: true, chapterSummary: true }),
   variantRules: z
     .object({
       flanking: z.boolean().default(false),

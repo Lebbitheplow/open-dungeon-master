@@ -3,6 +3,7 @@
 import { Bot, Dices, Globe, Hand, Heart, Map, PackageCheck, Sparkles, UserPlus, Volume2 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
+import { STAGES, isStageEnabled } from "@/lib/dm/stages";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { InfoButton } from "@/components/ui/InfoDialog";
 import { GENRE_PRESETS, genrePreset } from "@/lib/genres";
@@ -281,6 +282,40 @@ export function GameSettingsPanel({
               Held responses {settings.holdSubmissions ? "on" : "off"}
             </button>
           </Tooltip>
+        </div>
+        <div className="flex flex-wrap items-start gap-2">
+          <span className="w-16 shrink-0 pt-1 text-stone-500">Stages</span>
+          <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+            {STAGES.map((stage) => {
+              const on = isStageEnabled(settings.stages, stage.id);
+              return (
+                <Tooltip
+                  key={stage.id}
+                  content={`${stage.description} ${stage.cost}`}
+                >
+                  <button
+                    type="button"
+                    onClick={() =>
+                      patch({ stages: { ...settings.stages, [stage.id]: !on } })
+                    }
+                    className={cn(
+                      "rounded-md border px-2 py-1",
+                      on
+                        ? "border-amber-700 bg-amber-950/50 text-amber-200"
+                        : "border-stone-700 text-stone-400",
+                    )}
+                  >
+                    {stage.label} {on ? "on" : "off"}
+                    {/* Only a model-call stage buys back GPU time; saying so
+                        stops an operator disabling recall expecting a speedup. */}
+                    <span className="ml-1 text-[10px] text-stone-500">
+                      {stage.callsModel ? "model" : "engine"}
+                    </span>
+                  </button>
+                </Tooltip>
+              );
+            })}
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-16 text-stone-500">World</span>

@@ -24,6 +24,7 @@ import { arcExhausted } from "@/lib/dm/arc-logic";
 import { judgeBeatCompleted, refreshStoryArc } from "@/lib/dm/arc";
 import { arcTextTimeoutMs } from "@/lib/model-client";
 import { requestUtilityMessage } from "@/lib/dm/model";
+import { isStageEnabled } from "@/lib/dm/stages";
 import { setDmStatus } from "@/lib/dm/status";
 import { listSheets } from "@/lib/db/sheets";
 import { milestoneXp } from "@/lib/srd/encounter-math";
@@ -192,7 +193,11 @@ export async function maybeCloseChapter(
     facts: [] as FactCandidate[],
   };
   try {
-    const { message, error } = await requestUtilityMessage(
+    // Skipped when the table turned chapter summaries off; the chapter still
+    // closes, it just carries no summary (src/lib/dm/stages.ts).
+    const { message, error } = !isStageEnabled(campaign.gameSettings.stages, "chapterSummary")
+      ? { message: null, error: "chapter summaries disabled" }
+      : await requestUtilityMessage(
       campaign.settings,
       [
         {

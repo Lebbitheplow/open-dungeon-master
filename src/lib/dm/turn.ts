@@ -77,6 +77,8 @@ import { consumePendingSparks, tickWorldState } from "@/lib/dm/world-tick";
 import { buildDirectorBlock } from "@/lib/dm/director-logic";
 import { takeDirectorArm } from "@/lib/db/director-arms";
 import { listPins } from "@/lib/db/pins";
+import { isStageEnabled } from "@/lib/dm/stages";
+import { renderVariantRules } from "@/lib/dm/rules-logic";
 import { restoreMentionedNpcs } from "@/lib/dm/npc-archive";
 import { handleRecallStory } from "@/lib/dm/recall";
 import { handleSearchLore, searchLoreTool } from "@/lib/dm/lore-search";
@@ -335,7 +337,12 @@ export async function startDmTurn(campaignId: string) {
   // one turn late.
   restoreMentionedNpcs(campaignId, history.slice(-4).map((entry) => entry.content).join("\n"));
 
-  const retrieval = await buildTurnRetrieval(campaign, history);
+  // Optional stages (src/lib/dm/stages.ts): all default on, so this changes
+  // nothing until an operator opts out.
+  const stages = campaign.gameSettings.stages;
+  const retrieval = isStageEnabled(stages, "retrieval")
+    ? await buildTurnRetrieval(campaign, history)
+    : { variantRulesBlock: renderVariantRules(campaign.gameSettings.variantRules), houseRulesBlock: "", loreBlock: "" };
   // Taken (read and deleted in one statement) rather than read-then-clear, so
   // two turns racing cannot both fire the same directive. It is consumed here,
   // before the conversation is persisted below, which is what makes a retry
@@ -551,7 +558,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       movePartyTool,
       updateLocationTool,
       recordEventTool,
-      recallStoryTool,
+      ...(isStageEnabled(campaign.gameSettings.stages, "recall") ? [recallStoryTool] : []),
       searchLoreTool,
       writeCampaignNoteTool,
       sendWhisperTool,
@@ -1380,7 +1387,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
   finalize(context, turn, failed);
   if (!failed) {
     await maybeCloseChapter(campaignId, { beatCompleted });
-    await maybeCompactHistory(campaignId);
+    if (isStageEnabled(context.campaign.gameSettings.stages, "compaction")) {
+      await maybeCompactHistory(campaignId);
+    }
     // The world-simulation heartbeat: pure dice, sparks land in the NEXT
     // turn's prompt, so background clocks never trigger model calls.
     tickWorldState(campaignId);
