@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useReducer } from "react";
 import type { CampaignMember, SessionUser } from "@/lib/campaign-types";
 import type { OneShotEventId } from "@/lib/dm/director-logic";
+import { sortCalls, type UtilityCall } from "@/lib/dm/call-tracker-logic";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { Chapter } from "@/lib/db/chapters";
 import type { CharacterEvent } from "@/lib/db/character-events";
@@ -132,6 +133,10 @@ export type CampaignState = {
   latestRoll: { roll: StoredRoll; source: string; seq: number } | null;
   lastSeq: number;
   dmStatus: DmStatus;
+  // Background utility work in flight (compaction, chapter seal, world tick,
+  // lore check, Ask). Separate from dmStatus, which describes the TURN: these
+  // run outside one, several can overlap, and each carries its own label.
+  utilityCalls: UtilityCall[];
   dmDraft: string;
   // The one-turn director steer the party lead has armed, if any. Null until
   // the first director_armed event or the panel's own fetch lands.
@@ -177,6 +182,7 @@ const initialState: CampaignState = {
   latestRoll: null,
   lastSeq: 0,
   dmStatus: "idle",
+  utilityCalls: [],
   dmDraft: "",
   directorArm: null,
   mediaStatus: {},
@@ -486,6 +492,11 @@ function reducer(state: CampaignState, action: Action): CampaignState {
         case "dm_status":
           next.dmStatus = payload.state as DmStatus;
           return next;
+        case "utility_calls":
+          // The server sends the whole in-flight set each time, so a dropped
+          // event self-heals on the next one rather than leaving a stuck chip.
+          next.utilityCalls = sortCalls((payload.calls as UtilityCall[]) ?? []);
+          return next;
         case "director_armed":
           next.directorArm = {
             armed: Boolean(payload.armed),
@@ -538,6 +549,7 @@ const PERSISTED_EVENTS = [
 ];
 const EPHEMERAL_EVENTS = [
   "dm_status",
+  "utility_calls",
   "dm_delta",
   "media_status",
   "side_activity",
@@ -586,6 +598,7 @@ export function useCampaignStream(campaignId: string) {
           encounter: data.encounter ?? null,
           itemProposals: data.itemProposals ?? [],
           dmStatus: data.dmStatus ?? "idle",
+          utilityCalls: sortCalls(data.utilityCalls ?? []),
           lastSeq,
         },
       });

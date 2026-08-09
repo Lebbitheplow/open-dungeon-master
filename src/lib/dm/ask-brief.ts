@@ -2,6 +2,7 @@ import { getCampaignById } from "@/lib/db/campaigns";
 import { listRecentAsksForThread } from "@/lib/db/asks";
 import { arcTextTimeoutMs } from "@/lib/model-client";
 import { requestUtilityMessage } from "@/lib/dm/model";
+import { trackUtilityCall } from "@/lib/dm/call-tracker";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { buildSummaryPrompt, clampBrief, type AskTurn } from "@/lib/dm/ask-brief-logic";
 
@@ -42,13 +43,15 @@ export async function draftAskBrief(
   // Queued behind live narration for the same reason Ask itself is: one model
   // server, and a brief is never urgent enough to interleave with a turn.
   await enqueueDmJob(campaignId, async () => {
-    const response = await requestUtilityMessage(
-      campaign.settings,
-      [
-        { role: "system", content: BRIEF_SYSTEM },
-        { role: "user", content: buildSummaryPrompt(turns) },
-      ],
-      { timeoutMs: arcTextTimeoutMs() },
+    const response = await trackUtilityCall(campaignId, "ask_brief", () =>
+      requestUtilityMessage(
+        campaign.settings,
+        [
+          { role: "system", content: BRIEF_SYSTEM },
+          { role: "user", content: buildSummaryPrompt(turns) },
+        ],
+        { timeoutMs: arcTextTimeoutMs() },
+      ),
     );
     if (response.error) {
       result = { error: "The model is unavailable; try again shortly." };

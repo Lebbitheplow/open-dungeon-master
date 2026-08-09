@@ -24,6 +24,7 @@ import { arcExhausted } from "@/lib/dm/arc-logic";
 import { judgeBeatCompleted, refreshStoryArc } from "@/lib/dm/arc";
 import { arcTextTimeoutMs } from "@/lib/model-client";
 import { requestUtilityMessage } from "@/lib/dm/model";
+import { trackUtilityCall } from "@/lib/dm/call-tracker";
 import { isStageEnabled } from "@/lib/dm/stages";
 import { setDmStatus } from "@/lib/dm/status";
 import { listSheets } from "@/lib/db/sheets";
@@ -197,26 +198,28 @@ export async function maybeCloseChapter(
     // closes, it just carries no summary (src/lib/dm/stages.ts).
     const { message, error } = !isStageEnabled(campaign.gameSettings.stages, "chapterSummary")
       ? { message: null, error: "chapter summaries disabled" }
-      : await requestUtilityMessage(
-      campaign.settings,
-      [
-        {
-          role: "system",
-          content:
-            'You are closing a chapter of an ongoing D&D 5e campaign. Return STRICT JSON only, no code fences, shaped: {"title": string, "summary": string, "highlights": string[], "facts": [{"category": "location"|"npc"|"promise"|"world"|"party"|"lore", "subject": string, "fact": string}]}. title: evocative, at most 60 characters, no surrounding quotes. summary: past tense, at most 250 words, preserving plot threads, NPCs, promises, loot, and decisions. highlights: 3 to 6 one-sentence standout moments. facts: up to 8 durable world-state facts this chapter established (who is where, who holds what, alliances, deaths, promises, debts); subject names who or what each fact is about; fact is one past-tense sentence under 300 characters; empty array if nothing durable changed.',
-        },
-        {
-          role: "user",
-          content: [
-            previous ? `Previous chapters for continuity:\n${previous}` : "",
-            `Transcript of the closing chapter:\n${transcript || "(quiet chapter with no recorded scenes)"}`,
-          ]
-            .filter(Boolean)
-            .join("\n\n"),
-        },
-      ],
-      { timeoutMs: arcTextTimeoutMs() },
-    );
+      : await trackUtilityCall(campaign.id, "chapter", () =>
+          requestUtilityMessage(
+            campaign.settings,
+            [
+              {
+                role: "system",
+                content:
+                  'You are closing a chapter of an ongoing D&D 5e campaign. Return STRICT JSON only, no code fences, shaped: {"title": string, "summary": string, "highlights": string[], "facts": [{"category": "location"|"npc"|"promise"|"world"|"party"|"lore", "subject": string, "fact": string}]}. title: evocative, at most 60 characters, no surrounding quotes. summary: past tense, at most 250 words, preserving plot threads, NPCs, promises, loot, and decisions. highlights: 3 to 6 one-sentence standout moments. facts: up to 8 durable world-state facts this chapter established (who is where, who holds what, alliances, deaths, promises, debts); subject names who or what each fact is about; fact is one past-tense sentence under 300 characters; empty array if nothing durable changed.',
+              },
+              {
+                role: "user",
+                content: [
+                  previous ? `Previous chapters for continuity:\n${previous}` : "",
+                  `Transcript of the closing chapter:\n${transcript || "(quiet chapter with no recorded scenes)"}`,
+                ]
+                  .filter(Boolean)
+                  .join("\n\n"),
+              },
+            ],
+            { timeoutMs: arcTextTimeoutMs() },
+          ),
+        );
     if (!error) {
       parsed = parseChapterJson(String(message?.content ?? ""), chapter.index);
     }

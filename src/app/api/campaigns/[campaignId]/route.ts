@@ -32,6 +32,7 @@ import { enqueueDmJob } from "@/lib/dm/queue";
 import { runStorySetup } from "@/lib/dm/setup";
 import { generateStoryArc } from "@/lib/dm/arc";
 import { getDmStatus } from "@/lib/dm/status";
+import { listUtilityCalls } from "@/lib/dm/call-tracker";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 
 export const runtime = "nodejs";
@@ -66,6 +67,9 @@ export async function GET(
     latestSeq: latestSeq(campaignId),
     // In-memory status so a reload mid-turn still shows the DM at work.
     dmStatus: getDmStatus(campaignId),
+    // Same reason, for background work: utility_calls is ephemeral, so a
+    // client that reloads mid-compaction would otherwise see an empty strip.
+    utilityCalls: listUtilityCalls(campaignId),
   });
 }
 

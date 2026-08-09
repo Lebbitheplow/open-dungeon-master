@@ -2,6 +2,7 @@ import { getCampaignById } from "@/lib/db/campaigns";
 import { listChapters } from "@/lib/db/chapters";
 import { arcTextTimeoutMs } from "@/lib/model-client";
 import { requestUtilityMessage } from "@/lib/dm/model";
+import { trackUtilityCall } from "@/lib/dm/call-tracker";
 import { renderArcForPrompt, type StoryArc } from "@/lib/dm/arc-logic";
 import { parseWorldArcsJson, type WorldArc } from "@/lib/dm/world-arc-logic";
 
@@ -32,21 +33,23 @@ export async function generateWorldArcs(
     .slice(-4)
     .map((chapter) => `${chapter.index}. "${chapter.title}"`)
     .join("\n");
-  const { message, error } = await requestUtilityMessage(
-    campaign.settings,
-    [
-      { role: "system", content: GENERATE_SYSTEM },
-      {
-        role: "user",
-        content: [
-          `The story arc these world arcs orbit:\n${renderArcForPrompt(arc)}`,
-          chapters ? `Chapters played so far:\n${chapters}` : "",
-        ]
-          .filter(Boolean)
-          .join("\n\n"),
-      },
-    ],
-    { timeoutMs: arcTextTimeoutMs() },
+  const { message, error } = await trackUtilityCall(campaignId, "world", () =>
+    requestUtilityMessage(
+      campaign.settings,
+      [
+        { role: "system", content: GENERATE_SYSTEM },
+        {
+          role: "user",
+          content: [
+            `The story arc these world arcs orbit:\n${renderArcForPrompt(arc)}`,
+            chapters ? `Chapters played so far:\n${chapters}` : "",
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
+        },
+      ],
+      { timeoutMs: arcTextTimeoutMs() },
+    ),
   );
   if (error) {
     if (process.env.DM_DEBUG) {

@@ -9,6 +9,7 @@ import { listRuleChunks } from "@/lib/db/rules";
 import { getSheetForUser } from "@/lib/db/sheets";
 import { arcTextTimeoutMs, type ChatMessage } from "@/lib/model-client";
 import { requestUtilityMessage } from "@/lib/dm/model";
+import { trackUtilityCall } from "@/lib/dm/call-tracker";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { computeIdf, lexicalScore } from "@/lib/dm/fusion-logic";
 import { extractToolCalls } from "@/lib/dm/rolls";
@@ -293,7 +294,12 @@ export async function runAsk(
   };
   // Queued behind any live narration so the model server never interleaves
   // two jobs for this campaign.
-  await enqueueDmJob(request.campaignId, async () => {
+  //
+  // Tracked as ONE call rather than per model request: an Ask may take a
+  // search hop and make two, and a chip that vanishes and reappears mid-answer
+  // reads as a failure rather than as progress.
+  await enqueueDmJob(request.campaignId, () =>
+    trackUtilityCall(request.campaignId, "ask", async () => {
     // The tool is offered only when the up-front pass did NOT already search
     // the archive. Having just retrieved against this question, a second
     // search over the same text would cost a model call to learn nothing.
@@ -361,6 +367,7 @@ export async function runAsk(
       typeof second.message?.content === "string" ? second.message.content : "",
     );
     result = parsed ?? { error: "The answer came back unusable; try again." };
-  });
+    }),
+  );
   return result;
 }

@@ -25,6 +25,7 @@ import { LevelUpDialog } from "@/app/campaigns/[campaignId]/LevelUpDialog";
 import { LoreCheckDialog } from "@/app/campaigns/[campaignId]/LoreCheckDialog";
 import { RenarrateDialog } from "@/app/campaigns/[campaignId]/RenarrateDialog";
 import { MessageList } from "@/app/campaigns/[campaignId]/MessageList";
+import { UtilityCallStrip } from "@/app/campaigns/[campaignId]/UtilityCallStrip";
 import type { CampaignMessage } from "@/lib/db/messages";
 import {
   BottomTabBar,
@@ -70,6 +71,7 @@ export function SessionView({
     levelUps,
     locations,
     dmStatus,
+    utilityCalls,
     dmDraft,
   } = state;
   const [input, setInput] = useState("");
@@ -584,6 +586,10 @@ export function SessionView({
             meUserId={me.id}
             isLead={isLead}
           />
+
+          {/* Directly above the composer, so the answer to "why is nothing
+              happening" sits where the player is already looking. */}
+          <UtilityCallStrip calls={utilityCalls} />
 
           {needsCharacter ? (
             <CharacterGate campaignId={campaign.id} />

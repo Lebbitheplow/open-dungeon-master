@@ -19,6 +19,7 @@ import { publishEphemeral } from "@/lib/events";
 import { extractStoryText, stripReasoningArtifacts } from "@/lib/story-prompt";
 import { normalizeCandidate, type FactCandidate } from "@/lib/dm/fact-logic";
 import { requestUtilityMessage } from "@/lib/dm/model";
+import { trackUtilityCall } from "@/lib/dm/call-tracker";
 
 // Rolling-summary compaction, mirroring the solo narrator: once the log
 // grows past a threshold, fold the oldest passages into the campaign summary.
@@ -109,28 +110,30 @@ export async function maybeCompactHistory(campaignId: string) {
     12,
   ).join("\n");
 
-  const { message } = await requestUtilityMessage(
-    campaign.settings,
-    [
-      {
-        role: "system",
-        content:
-          "You maintain the canonical campaign memory for an ongoing D&D 5e game. Merge the existing summary with the new passages into one updated summary. Preserve plot threads, NPCs met, promises, injuries, loot, locations, and party decisions. Compact past-tense prose, at most 500 words. Output only the summary.",
-      },
-      {
-        role: "user",
-        content: [
-          `Existing summary:\n${stripMilestoneBlock(summary) || "(none yet)"}`,
-          mustKeep
-            ? `These moments are recorded milestones and MUST appear in the updated summary, named explicitly:\n${mustKeep}`
-            : "",
-          `New passages to fold in:\n${transcript}`,
-        ]
-          .filter(Boolean)
-          .join("\n\n"),
-      },
-    ],
-    {},
+  const { message } = await trackUtilityCall(campaign.id, "compaction", () =>
+    requestUtilityMessage(
+      campaign.settings,
+      [
+        {
+          role: "system",
+          content:
+            "You maintain the canonical campaign memory for an ongoing D&D 5e game. Merge the existing summary with the new passages into one updated summary. Preserve plot threads, NPCs met, promises, injuries, loot, locations, and party decisions. Compact past-tense prose, at most 500 words. Output only the summary.",
+        },
+        {
+          role: "user",
+          content: [
+            `Existing summary:\n${stripMilestoneBlock(summary) || "(none yet)"}`,
+            mustKeep
+              ? `These moments are recorded milestones and MUST appear in the updated summary, named explicitly:\n${mustKeep}`
+              : "",
+            `New passages to fold in:\n${transcript}`,
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
+        },
+      ],
+      {},
+    ),
   );
 
   const updated = extractStoryText(message?.content);
@@ -158,20 +161,22 @@ async function extractCharacterEvents(campaign: Campaign, transcript: string) {
   if (!sheets.length) {
     return;
   }
-  const { message, error } = await requestUtilityMessage(
-    campaign.settings,
-    [
-      {
-        role: "system",
-        content:
-          'Extract durable memory from this D&D transcript as JSON only, shaped: {"events": [{"characterName": string, "kind": "achievement"|"item"|"relationship"|"death"|"level_up"|"story", "summary": string}], "facts": [{"category": "location"|"npc"|"promise"|"world"|"party"|"lore", "subject": string, "fact": string}]}. events: lasting per-character milestones worth remembering months later (victories, treasures, bonds, deaths, oaths), one past-tense sentence each. facts: up to 6 world-state facts the passages established (who is where, who holds what, alliances, deaths, promises, debts); subject names who or what each fact is about. Empty arrays if none. No code fences.',
-      },
-      {
-        role: "user",
-        content: `Characters: ${sheets.map((sheet) => sheet.name).join(", ")}\n\nTranscript:\n${transcript}`,
-      },
-    ],
-    {},
+  const { message, error } = await trackUtilityCall(campaign.id, "compaction", () =>
+    requestUtilityMessage(
+      campaign.settings,
+      [
+        {
+          role: "system",
+          content:
+            'Extract durable memory from this D&D transcript as JSON only, shaped: {"events": [{"characterName": string, "kind": "achievement"|"item"|"relationship"|"death"|"level_up"|"story", "summary": string}], "facts": [{"category": "location"|"npc"|"promise"|"world"|"party"|"lore", "subject": string, "fact": string}]}. events: lasting per-character milestones worth remembering months later (victories, treasures, bonds, deaths, oaths), one past-tense sentence each. facts: up to 6 world-state facts the passages established (who is where, who holds what, alliances, deaths, promises, debts); subject names who or what each fact is about. Empty arrays if none. No code fences.',
+        },
+        {
+          role: "user",
+          content: `Characters: ${sheets.map((sheet) => sheet.name).join(", ")}\n\nTranscript:\n${transcript}`,
+        },
+      ],
+      {},
+    ),
   );
   if (error) {
     return;
