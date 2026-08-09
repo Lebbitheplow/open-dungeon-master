@@ -1,12 +1,13 @@
 "use client";
 
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
-import { BookOpen, Check, ChevronDown, ChevronRight, Compass, Loader2, Pencil, RefreshCw, Rewind, Scissors, X } from "lucide-react";
+import { ArrowDown, ArrowUp, BookOpen, Check, ChevronDown, ChevronRight, Compass, Crosshair, Loader2, Pencil, Plus, RefreshCw, Rewind, Scissors, SkipForward, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import type { Chapter } from "@/lib/db/chapters";
 import type { StoryArc } from "@/lib/dm/arc-logic";
+import { MAX_BEAT_TEXT, type BeatEdit } from "@/lib/dm/arc-edit-logic";
 import { ExportMenu } from "./ExportMenu";
 
 // Confirmation for a chapter rewind (the server answered 409 with the
@@ -200,14 +201,69 @@ function ChapterCard({
 }
 
 // Lead-only view of the DM's secret story arc: the main beats the AI is
-// steering by plus the open quest threads. Read-only, with a regenerate
-// escape hatch when the arc no longer fits where the table took the story.
+// steering by plus the open quest threads, editable a beat at a time, with a
+// regenerate escape hatch for when the whole spine no longer fits.
+//
+// Beats that already played are deliberately not editable. They are a record
+// of what happened at the table rather than a plan, and the server refuses
+// those edits regardless; the UI just does not offer them.
 function ArcCard({ campaignId }: { campaignId: string }) {
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [arc, setArc] = useState<StoryArc | null>(null);
   const [outline, setOutline] = useState("");
+  // 1-based beat number being renamed, or an act number being added to.
+  const [editingBeat, setEditingBeat] = useState<number | null>(null);
+  const [addingToAct, setAddingToAct] = useState<number | null>(null);
+  const [draft, setDraft] = useState("");
+  const [beatBusy, setBeatBusy] = useState(false);
+  const [beatError, setBeatError] = useState("");
+
+  async function editBeat(edit: BeatEdit) {
+    setBeatBusy(true);
+    setBeatError("");
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/arc`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(edit),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setBeatError(data.error ?? "That edit did not go through.");
+        return false;
+      }
+      setArc(data.arc);
+      return true;
+    } catch {
+      setBeatError("That edit did not go through.");
+      return false;
+    } finally {
+      setBeatBusy(false);
+    }
+  }
+
+  function closeEditor() {
+    setEditingBeat(null);
+    setAddingToAct(null);
+    setDraft("");
+    setBeatError("");
+  }
+
+  async function submitDraft() {
+    const text = draft.trim();
+    if (!text) {
+      return;
+    }
+    const edit: BeatEdit =
+      addingToAct !== null
+        ? { op: "add", act: addingToAct, text }
+        : { op: "rename", beat: editingBeat ?? 0, text };
+    if (await editBeat(edit)) {
+      closeEditor();
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -305,30 +361,186 @@ function ArcCard({ campaignId }: { campaignId: string }) {
                 <div key={act}>
                   <p className="text-[11px] font-medium text-stone-400">Act {act}</p>
                   <ol className="mt-0.5 space-y-0.5">
-                    {arc.beats.map((beat, index) =>
-                      beat.act === act ? (
+                    {arc.beats.map((beat, index) => {
+                      if (beat.act !== act) {
+                        return null;
+                      }
+                      const number = index + 1;
+                      const settled = beat.status === "done" || beat.status === "skipped";
+                      if (editingBeat === number) {
+                        return (
+                          <li key={index} className="list-none">
+                            <input
+                              value={draft}
+                              autoFocus
+                              maxLength={MAX_BEAT_TEXT}
+                              onChange={(event) => setDraft(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  void submitDraft();
+                                } else if (event.key === "Escape") {
+                                  closeEditor();
+                                }
+                              }}
+                              className={cn(ui.input, "px-2 py-1 text-[11px]")}
+                            />
+                            <div className="mt-1 flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => void submitDraft()}
+                                disabled={beatBusy || !draft.trim()}
+                                className={cn(ui.btnSmall, "px-2 py-0.5 text-[11px]")}
+                              >
+                                <Check className="size-3" /> Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={closeEditor}
+                                className={cn(ui.btnSmall, "px-2 py-0.5 text-[11px]")}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </li>
+                        );
+                      }
+                      return (
                         <li
                           key={index}
-                          className={`text-[11px] leading-4 ${
-                            beat.status === "done" || beat.status === "skipped"
+                          className={`group flex items-start gap-1 text-[11px] leading-4 ${
+                            settled
                               ? "text-stone-600 line-through"
                               : beat.status === "active"
                                 ? "text-amber-200"
                                 : "text-stone-400"
                           }`}
                         >
-                          {index + 1}. {beat.status === "active" ? "(now) " : ""}
-                          {beat.status === "skipped" ? "(skipped) " : ""}
-                          {beat.text}
-                          {beat.detail ? (
-                            <span className="text-stone-500"> [{beat.detail}]</span>
-                          ) : null}
+                          <span className="min-w-0 flex-1">
+                            {number}. {beat.status === "active" ? "(now) " : ""}
+                            {beat.status === "skipped" ? "(skipped) " : ""}
+                            {beat.text}
+                            {beat.detail ? (
+                              <span className="text-stone-500"> [{beat.detail}]</span>
+                            ) : null}
+                          </span>
+                          {settled ? null : (
+                            <span className="flex shrink-0 items-center">
+                              {beat.status === "active" ? null : (
+                                <button
+                                  type="button"
+                                  disabled={beatBusy}
+                                  onClick={() => void editBeat({ op: "setNow", beat: number })}
+                                  className={cn(ui.iconAction, "p-1")}
+                                  title="Make this the beat in play"
+                                  aria-label="Make this the beat in play"
+                                >
+                                  <Crosshair className="size-3" />
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                disabled={beatBusy}
+                                onClick={() =>
+                                  void editBeat({ op: "move", beat: number, direction: "up" })
+                                }
+                                className={cn(ui.iconAction, "p-1")}
+                                title="Move up"
+                                aria-label="Move up"
+                              >
+                                <ArrowUp className="size-3" />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={beatBusy}
+                                onClick={() =>
+                                  void editBeat({ op: "move", beat: number, direction: "down" })
+                                }
+                                className={cn(ui.iconAction, "p-1")}
+                                title="Move down"
+                                aria-label="Move down"
+                              >
+                                <ArrowDown className="size-3" />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={beatBusy}
+                                onClick={() => {
+                                  closeEditor();
+                                  setEditingBeat(number);
+                                  setDraft(beat.text);
+                                }}
+                                className={cn(ui.iconAction, "p-1")}
+                                title="Reword this beat"
+                                aria-label="Reword this beat"
+                              >
+                                <Pencil className="size-3" />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={beatBusy}
+                                onClick={() => void editBeat({ op: "skip", beat: number })}
+                                className={cn(ui.iconAction, "p-1")}
+                                title="Skip this beat"
+                                aria-label="Skip this beat"
+                              >
+                                <SkipForward className="size-3" />
+                              </button>
+                            </span>
+                          )}
                         </li>
-                      ) : null,
-                    )}
+                      );
+                    })}
                   </ol>
+                  {addingToAct === act ? (
+                    <div className="mt-1">
+                      <input
+                        value={draft}
+                        autoFocus
+                        maxLength={MAX_BEAT_TEXT}
+                        placeholder="What happens in this beat"
+                        onChange={(event) => setDraft(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            void submitDraft();
+                          } else if (event.key === "Escape") {
+                            closeEditor();
+                          }
+                        }}
+                        className={cn(ui.input, "px-2 py-1 text-[11px]")}
+                      />
+                      <div className="mt-1 flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => void submitDraft()}
+                          disabled={beatBusy || !draft.trim()}
+                          className={cn(ui.btnSmall, "px-2 py-0.5 text-[11px]")}
+                        >
+                          <Check className="size-3" /> Add
+                        </button>
+                        <button
+                          type="button"
+                          onClick={closeEditor}
+                          className={cn(ui.btnSmall, "px-2 py-0.5 text-[11px]")}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        closeEditor();
+                        setAddingToAct(act);
+                      }}
+                      className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-stone-600 hover:text-amber-200"
+                    >
+                      <Plus className="size-3" /> Add a beat
+                    </button>
+                  )}
                 </div>
               ))}
+              {beatError ? <p className="text-[11px] text-red-400">{beatError}</p> : null}
               {aheadSketches.length ? (
                 <div>
                   <p className="text-[11px] font-medium text-stone-500">Acts ahead (sketches)</p>

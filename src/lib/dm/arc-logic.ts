@@ -1037,7 +1037,10 @@ export function parseSagaUpgradeJson(raw: string): SagaUpgrade | null {
   };
 }
 
-function reseatActiveBeat(beats: ArcBeat[], requestedIndex: number | null) {
+// Exported so the lead's beat editor (arc-edit-logic.ts) seats [NOW] by
+// exactly the same rule the model's delta does, rather than a second copy of
+// it that could drift.
+export function reseatActiveBeat(beats: ArcBeat[], requestedIndex: number | null) {
   for (const beat of beats) {
     if (beat.status === "active") {
       beat.status = "pending";
