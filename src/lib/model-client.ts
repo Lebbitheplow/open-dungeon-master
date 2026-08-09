@@ -122,14 +122,68 @@ export const DEFAULT_CUSTOM_CONTEXT_TOKENS = 16_384;
 export function storyContextTokens(settings: {
   textProvider: string;
   localTextModel: string;
+  customBaseUrl?: string;
 }): number {
   if (settings.textProvider === "local") {
     return localContextTokens(settings.localTextModel);
   }
+  // An explicit setting always wins: the operator knows their deployment
+  // better than a probe does.
   const raw = Number.parseInt(serverEnv("OPENAI_COMPAT_CONTEXT"), 10);
-  return Number.isFinite(raw) && raw > 0
-    ? Math.max(2_048, raw)
-    : DEFAULT_CUSTOM_CONTEXT_TOKENS;
+  if (Number.isFinite(raw) && raw > 0) {
+    return Math.max(2_048, raw);
+  }
+  const base = (settings.customBaseUrl || "").trim().replace(/\/+$/, "").replace(/\/v1$/, "");
+  const probed = base ? probedContextWindows.get(base) : undefined;
+  return probed ? Math.max(2_048, probed) : DEFAULT_CUSTOM_CONTEXT_TOKENS;
+}
+
+// Windows learned from an endpoint's own /props, keyed by base URL. Probed
+// once and cached for the process: llama.cpp cannot change n_ctx without a
+// restart, and a restart restarts ODM's own process in every deployment we
+// ship.
+const probedContextWindows = new Map<string, number>();
+
+// llama.cpp and llama-swap expose the real n_ctx the server was launched with
+// (its -c flag) on /props. Nothing else in the OpenAI-compatible ecosystem
+// reports it, so a miss is completely ordinary and falls through quietly.
+export async function probeCustomContextWindow(
+  baseUrl: string,
+  apiKey: string,
+): Promise<number | null> {
+  const base = (baseUrl || "").trim().replace(/\/+$/, "").replace(/\/v1$/, "");
+  if (!base) {
+    return null;
+  }
+  const cached = probedContextWindows.get(base);
+  if (cached !== undefined) {
+    return cached || null;
+  }
+  try {
+    const response = await fetch(`${base}/props`, {
+      headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
+      signal: AbortSignal.timeout(2_000),
+    });
+    if (!response.ok) {
+      probedContextWindows.set(base, 0);
+      return null;
+    }
+    const data = (await response.json()) as {
+      n_ctx?: number;
+      default_generation_settings?: { n_ctx?: number };
+    };
+    // Newer llama.cpp puts it at the top level, older nests it under the
+    // default generation settings.
+    const found = data.n_ctx ?? data.default_generation_settings?.n_ctx ?? 0;
+    const window = Number.isFinite(found) && found > 0 ? Math.floor(found) : 0;
+    probedContextWindows.set(base, window);
+    return window || null;
+  } catch {
+    // Unreachable, not llama.cpp, or too slow. Cache the miss so a turn does
+    // not pay the timeout again.
+    probedContextWindows.set(base, 0);
+    return null;
+  }
 }
 
 export function resolveTextTimeoutMs(

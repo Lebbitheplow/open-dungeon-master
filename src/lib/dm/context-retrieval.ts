@@ -3,7 +3,7 @@ import type { CampaignMessage } from "@/lib/db/messages";
 import { listLoreWithEmbeddings } from "@/lib/db/lore";
 import { listRuleChunksWithEmbeddings } from "@/lib/db/rules";
 import { embed, similarityOf } from "@/lib/embeddings";
-import { storyContextTokens } from "@/lib/model-client";
+import { probeCustomContextWindow, storyContextTokens } from "@/lib/model-client";
 import { renderLoreForPrompt, type WorldLoreEntry } from "@/lib/dm/world-lore-logic";
 import { computeBudgets } from "@/lib/dm/context-budget";
 import { selectRuleChunks } from "@/lib/dm/rules-activation-logic";
@@ -85,6 +85,16 @@ export async function buildTurnRetrieval(
   // Resolved from the campaign's own provider and model rather than assuming
   // a default window, so the rules budget matches what the backend will
   // actually accept.
+  // Ask the endpoint what window it was launched with before budgeting
+  // against it. llama.cpp and llama-swap report their -c on /props; anything
+  // else misses quietly and the configured or default value stands. Cached
+  // per base URL, so this costs one request per process.
+  if (campaign.settings.textProvider !== "local") {
+    await probeCustomContextWindow(
+      campaign.settings.customBaseUrl,
+      campaign.settings.customApiKey,
+    );
+  }
   const contextLimitTokens = storyContextTokens(campaign.settings);
   const variantRulesBlock = renderVariantRules(campaign.gameSettings.variantRules);
   let houseRulesBlock = "";
