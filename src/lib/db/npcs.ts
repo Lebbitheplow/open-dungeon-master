@@ -265,3 +265,89 @@ export function setNpcArchived(npcId: string, archived: boolean) {
     .prepare(`UPDATE npcs SET archived = ?, updated_at = ? WHERE id = ?`)
     .run(archived ? 1 : 0, nowIso(), npcId);
 }
+
+export function getNpcById(npcId: string): Npc | null {
+  const row = getDatabase().prepare(`SELECT * FROM npcs WHERE id = ?`).get(npcId) as
+    | NpcRow
+    | undefined;
+  return row ? mapNpc(row) : null;
+}
+
+// Party lead: rename an NPC, keeping every spelling they already answered to.
+// Nothing already written is rewritten; see entity-review-logic.ts for why.
+export function renameNpc(npcId: string, name: string, aliases: string[]): Npc | null {
+  const db = getDatabase();
+  const npc = getNpcById(npcId);
+  if (!npc) {
+    return null;
+  }
+  db.prepare(
+    `UPDATE npcs SET name = ?, aliases_json = ?, updated_at = ? WHERE id = ?`,
+  ).run(name, JSON.stringify(aliases), nowIso(), npcId);
+  // Facts are indexed BY subject, so a rename that left them behind would
+  // split one NPC's record in two for retrieval. This is a structured
+  // pointer, not narration, which is why it is safe to update.
+  db.prepare(
+    `UPDATE world_facts SET subject = ?, updated_at = ?
+     WHERE campaign_id = ? AND category = 'npc' AND subject = ?`,
+  ).run(name, nowIso(), npc.campaignId, npc.name);
+  return getNpcById(npcId);
+}
+
+// Party lead: fold one NPC row into another. The keeper's attitude, trait,
+// agency and history all survive untouched; only the absorbed row's spellings
+// carry over, and its own row is deleted.
+//
+// Deliberately does NOT merge attitudes or agency. There is no defensible
+// rule for combining two grudges, and silently averaging them would be worse
+// than the duplicate the lead is fixing. The lead keeps the row they judged
+// to be the real one.
+export function mergeNpcs(
+  campaignId: string,
+  keepId: string,
+  mergeId: string,
+  aliases: string[],
+): Npc | null {
+  const db = getDatabase();
+  const keep = getNpcById(keepId);
+  const merge = getNpcById(mergeId);
+  if (!keep || !merge || keep.campaignId !== campaignId || merge.campaignId !== campaignId) {
+    return null;
+  }
+  if (keep.id === merge.id) {
+    return null;
+  }
+  const now = nowIso();
+  const apply = db.transaction(() => {
+    db.prepare(`UPDATE npcs SET aliases_json = ?, updated_at = ? WHERE id = ?`).run(
+      JSON.stringify(aliases),
+      now,
+      keepId,
+    );
+    db.prepare(
+      `UPDATE world_facts SET subject = ?, updated_at = ?
+       WHERE campaign_id = ? AND category = 'npc' AND subject = ?`,
+    ).run(keep.name, now, campaignId, merge.name);
+    db.prepare(`DELETE FROM npcs WHERE id = ?`).run(mergeId);
+  });
+  apply();
+  return getNpcById(keepId);
+}
+
+// Pairs the lead has already looked at and rejected.
+export function listDismissedMerges(campaignId: string): string[] {
+  const rows = getDatabase()
+    .prepare(`SELECT pair_key FROM npc_merge_dismissals WHERE campaign_id = ?`)
+    .all(campaignId) as Array<{ pair_key: string }>;
+  return rows.map((row) => row.pair_key);
+}
+
+export function dismissMerge(campaignId: string, pairKey: string) {
+  getDatabase()
+    .prepare(
+      `INSERT INTO npc_merge_dismissals (campaign_id, pair_key, dismissed_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT(campaign_id, pair_key) DO NOTHING`,
+    )
+    .run(campaignId, pairKey, nowIso());
+}

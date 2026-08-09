@@ -769,6 +769,18 @@ function ensureSchema(db: Database.Database) {
     -- brief either way; what this controls is whether the table sees the
     -- armed banner, and a private thread must not become public by
     -- travelling through here.
+    -- Fuzzy NPC-name pairs the party lead has looked at and rejected.
+    -- suggestNpcMerges recomputes from the roster on every read, so without
+    -- this a dismissed pair would come back forever. pair_key is the sorted
+    -- normalized pair (src/lib/dm/entity-review-logic.ts), which makes the
+    -- decision independent of which name the scan happened to report first.
+    CREATE TABLE IF NOT EXISTS npc_merge_dismissals (
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      pair_key TEXT NOT NULL,
+      dismissed_at TEXT NOT NULL,
+      PRIMARY KEY (campaign_id, pair_key)
+    );
+
     CREATE TABLE IF NOT EXISTS ask_briefs (
       campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
       user_id TEXT NOT NULL,

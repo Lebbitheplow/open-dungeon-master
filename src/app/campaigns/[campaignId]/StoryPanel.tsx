@@ -1,7 +1,7 @@
 "use client";
 
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
-import { ArrowDown, ArrowUp, BookOpen, Check, ChevronDown, ChevronRight, Compass, Crosshair, Loader2, Pencil, Plus, RefreshCw, Rewind, Scissors, SkipForward, X } from "lucide-react";
+import { ArrowDown, ArrowUp, BookOpen, Check, ChevronDown, ChevronRight, Compass, Crosshair, Loader2, Pencil, Plus, RefreshCw, Rewind, Scissors, SkipForward, Users, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
@@ -9,6 +9,7 @@ import type { Chapter } from "@/lib/db/chapters";
 import type { StoryArc } from "@/lib/dm/arc-logic";
 import { MAX_BEAT_TEXT, type BeatEdit } from "@/lib/dm/arc-edit-logic";
 import { ExportMenu } from "./ExportMenu";
+import { NpcReviewPanel } from "./NpcReviewPanel";
 
 // Confirmation for a chapter rewind (the server answered 409 with the
 // consequences). Rewinds are destructive: everything after the boundary is
@@ -197,6 +198,36 @@ function ChapterCard({
         </div>
       ) : null}
     </li>
+  );
+}
+
+
+// Lead-only NPC roster hygiene, collapsed by default so it costs nothing
+// until asked for: the panel fetches the roster the moment it mounts.
+function NpcReviewCard({ campaignId }: { campaignId: string }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="rounded-lg border border-stone-800 bg-stone-950/40 p-2.5">
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className="flex w-full items-start gap-1.5 text-left"
+      >
+        {expanded ? (
+          <ChevronDown className="mt-0.5 size-3.5 shrink-0 text-stone-500" />
+        ) : (
+          <ChevronRight className="mt-0.5 size-3.5 shrink-0 text-stone-500" />
+        )}
+        <span className="flex items-center gap-1.5 text-xs font-medium text-amber-200">
+          <Users className="size-3.5 text-amber-600" /> NPC roster
+        </span>
+      </button>
+      {expanded ? (
+        <div className="-mx-2.5 -mb-2.5 mt-1">
+          <NpcReviewPanel campaignId={campaignId} />
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -746,6 +777,7 @@ export function StoryPanel({
     return (
       <div className="space-y-2">
         {isLead ? <ArcCard campaignId={campaignId} /> : null}
+        {isLead ? <NpcReviewCard campaignId={campaignId} /> : null}
         <p className="px-1 py-6 text-center text-xs text-stone-600">
           The story has not begun. Chapters appear here as the adventure unfolds.
         </p>
@@ -756,6 +788,7 @@ export function StoryPanel({
   return (
     <div className="space-y-2">
       {isLead ? <ArcCard campaignId={campaignId} /> : null}
+      {isLead ? <NpcReviewCard campaignId={campaignId} /> : null}
       <ExportMenu campaignId={campaignId} />
       <div className="rounded-lg border border-dashed border-stone-800 p-2.5">
         <p className="flex items-center gap-1.5 text-xs text-stone-400">
