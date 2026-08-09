@@ -366,6 +366,7 @@ function SidePanelInner({
           </div>
         ) : tab === "ask" ? (
           <AskPanel
+            campaignId={campaignId}
             asks={asks}
             meUserId={meUserId}
             loaded={asksLoaded}

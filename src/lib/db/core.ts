@@ -759,6 +759,26 @@ function ensureSchema(db: Database.Database) {
     );
     CREATE INDEX IF NOT EXISTS idx_campaign_asks
       ON campaign_asks(campaign_id, created_at);
+
+    -- A brief a player distilled out of their Ask thread and armed for the
+    -- next turn. Keyed per player rather than per campaign because Ask is
+    -- per-player: two players can each be holding a note. The row is deleted
+    -- the moment a turn consumes it, so a brief fires exactly once.
+    --
+    -- visibility rides along from the Ask it came from. The DM reads the
+    -- brief either way; what this controls is whether the table sees the
+    -- armed banner, and a private thread must not become public by
+    -- travelling through here.
+    CREATE TABLE IF NOT EXISTS ask_briefs (
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      text TEXT NOT NULL,
+      visibility TEXT NOT NULL DEFAULT 'private'
+        CHECK (visibility IN ('private','table')),
+      author_name TEXT NOT NULL DEFAULT '',
+      armed_at TEXT NOT NULL,
+      PRIMARY KEY (campaign_id, user_id)
+    );
   `);
 
   // Compaction memory: a rolling "story so far" summary plus a watermark of

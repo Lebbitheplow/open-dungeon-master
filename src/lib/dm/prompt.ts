@@ -182,6 +182,11 @@ export type DmGameState = {
   // Rides last in the payload, after the player's own message, because
   // recency is the whole point: it has to outweigh the scene it is bending.
   directorBlock?: string;
+  // Notes players distilled out of their Ask threads and armed for this turn
+  // (src/lib/dm/ask-brief-logic.ts). Rides with the director block for the
+  // same recency reason, and after it: a lead's steer outranks a player's
+  // note when the two pull different ways.
+  askBriefBlock?: string;
   // The model's context window in tokens, so the budget can scale with it
   // rather than assuming one. Falls back to a modest default when unset.
   contextLimitTokens?: number;
@@ -1069,7 +1074,8 @@ export function buildDmMessages(
     promptTokens:
       estimateTokens(systemParts.join("\n\n")) +
       fitted.tokens +
-      estimateTokens(state.directorBlock ?? ""),
+      estimateTokens(state.directorBlock ?? "") +
+      estimateTokens(state.askBriefBlock ?? ""),
     blocks: [
       ...systemParts.map((text, index) => ({
         id: index === systemParts.length - 1 ? "game-state" : `rules-${index}`,
@@ -1101,6 +1107,18 @@ export function buildDmMessages(
             },
           ]
         : []),
+      ...(state.askBriefBlock
+        ? [
+            {
+              id: "ask-brief",
+              kind: "rules" as BlockKind,
+              tokens: estimateTokens(state.askBriefBlock),
+              included: true,
+              reason: "one-turn note armed from an Ask thread",
+              position: systemParts.length + 3,
+            },
+          ]
+        : []),
     ],
   };
 
@@ -1111,6 +1129,9 @@ export function buildDmMessages(
     // the point of generation. Omitted entirely when nothing is armed.
     ...(state.directorBlock
       ? [{ role: "user" as const, content: state.directorBlock }]
+      : []),
+    ...(state.askBriefBlock
+      ? [{ role: "user" as const, content: state.askBriefBlock }]
       : []),
   ];
 }
