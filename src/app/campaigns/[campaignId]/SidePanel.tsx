@@ -23,6 +23,7 @@ import { NotesPanel } from "@/app/campaigns/[campaignId]/NotesPanel";
 import { OverworldPanel } from "@/app/campaigns/[campaignId]/OverworldPanel";
 import { PartyPanel } from "@/app/campaigns/[campaignId]/PartyPanel";
 import { ContextPanel } from "@/app/campaigns/[campaignId]/ContextPanel";
+import { PinsPanel } from "@/app/campaigns/[campaignId]/PinsPanel";
 import { SessionSettings } from "@/app/campaigns/[campaignId]/SessionSettings";
 import { SideChatPanel } from "@/app/campaigns/[campaignId]/SideChatPanel";
 import { StoryPanel } from "@/app/campaigns/[campaignId]/StoryPanel";
@@ -90,6 +91,7 @@ function SidePanelInner({
   characterEvents,
   refreshNotes,
   refreshFacts,
+  pinsVersion,
   sideThreads,
   refreshSideChat,
   whispers,
@@ -132,6 +134,8 @@ function SidePanelInner({
   characterEvents: CharacterEvent[];
   refreshNotes: () => Promise<void>;
   refreshFacts: () => Promise<void>;
+  // Bumped by SessionView on pin/unpin so the pins list refetches.
+  pinsVersion: number;
   sideThreads: SideThread[];
   refreshSideChat: () => Promise<void>;
   whispers: DmWhisper[];
@@ -351,6 +355,7 @@ function SidePanelInner({
           <StoryPanel campaignId={campaignId} chapters={chapters} isLead={isLead} />
         ) : tab === "facts" ? (
           <div className="space-y-3">
+            <PinsPanel campaignId={campaignId} version={pinsVersion} />
             <FactsPanel
               campaignId={campaignId}
               facts={facts}

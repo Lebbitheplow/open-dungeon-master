@@ -17,6 +17,7 @@ import { renderFactsForPrompt, type FactLike } from "@/lib/dm/fact-logic";
 import { companionMode } from "@/lib/dm/companion-tools";
 import { ENGINE_BOUNDARY_CHECK, ENGINE_BOUNDARY_RULES } from "@/lib/dm/engine-boundary";
 import { renderChapterLod } from "@/lib/dm/chapter-lod";
+import { buildPinnedMemoriesBlock } from "@/lib/dm/pin-logic";
 import {
   computeBudgets,
   estimateTokens,
@@ -184,6 +185,8 @@ export type DmGameState = {
   // The model's context window in tokens, so the budget can scale with it
   // rather than assuming one. Falls back to a modest default when unset.
   contextLimitTokens?: number;
+  // Excerpts the table pinned; injected unconditionally, no relevance filter.
+  pins?: Array<{ text: string }>;
   // Filled in by buildDmMessages: what each block cost and what was dropped.
   // Mutable on purpose, so the caller can persist it on the dm_turns row
   // without buildDmMessages changing its return type.
@@ -705,6 +708,12 @@ export function buildGameStateBlock(state: DmGameState): string {
   );
   if (rollLines.length) {
     sections.push(`Recent rolls:\n${rollLines.join("\n")}`);
+  }
+  if (state.pins?.length) {
+    // Unconditional and unfiltered by design: the table asked for these to be
+    // in front of the DM every turn. The cap that makes that safe is enforced
+    // when a pin is created (src/lib/dm/pin-logic.ts), not here.
+    sections.push(buildPinnedMemoriesBlock(state.pins));
   }
   if (state.chapters?.length) {
     // Level-of-detail rather than a flat list: recent and high-importance

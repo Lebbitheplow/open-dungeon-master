@@ -406,6 +406,23 @@ function ensureSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_dm_whispers_user
       ON dm_whispers(campaign_id, user_id, created_at);
 
+    -- Excerpts the table marked as "the DM must not forget this". Injected
+    -- into every prompt with no relevance filtering and no eviction, which is
+    -- why the token cap is enforced at pin time (src/lib/dm/pin-logic.ts).
+    -- Table-wide rather than per-user: a pin changes what the DM is told.
+    CREATE TABLE IF NOT EXISTS campaign_pins (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      message_id TEXT NOT NULL,
+      text TEXT NOT NULL,
+      is_full_message INTEGER NOT NULL DEFAULT 0,
+      pinned_by_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_campaign_pins_campaign
+      ON campaign_pins(campaign_id, created_at);
+
     -- The director directive the party lead has armed for the next turn: a
     -- one-shot event type, a free-text absolute command, or both (the command
     -- wins). campaign_id is the primary key because at most one directive is

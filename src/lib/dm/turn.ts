@@ -76,6 +76,7 @@ import { listActiveFacts } from "@/lib/db/facts";
 import { consumePendingSparks, tickWorldState } from "@/lib/dm/world-tick";
 import { buildDirectorBlock } from "@/lib/dm/director-logic";
 import { takeDirectorArm } from "@/lib/db/director-arms";
+import { listPins } from "@/lib/db/pins";
 import { handleRecallStory } from "@/lib/dm/recall";
 import { handleSearchLore, searchLoreTool } from "@/lib/dm/lore-search";
 import { handleWriteCampaignNote, writeCampaignNoteTool } from "@/lib/dm/note-tools";
@@ -376,6 +377,7 @@ export async function startDmTurn(campaignId: string) {
           events.map((event) => event.summary),
         ]),
       ),
+      pins: listPins(campaignId).map((pin) => ({ text: pin.text })),
       chapters: listChapters(campaignId)
         .filter((chapter) => chapter.status === "closed")
         .map((chapter) => ({

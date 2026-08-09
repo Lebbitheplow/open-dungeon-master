@@ -92,6 +92,8 @@ export function SessionView({
   } | null>(null);
   // Narration reroll: the DM message whose prose the lead is rerolling.
   const [renarrate, setRenarrate] = useState<CampaignMessage | null>(null);
+  // Bumped on pin/unpin so the pins panel refetches without a stream event.
+  const [pinsVersion, setPinsVersion] = useState(0);
   const [helpOpen, setHelpOpen] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const dice3d = useSyncExternalStore(
@@ -504,6 +506,28 @@ export function SessionView({
                   }
                 : undefined
             }
+            onPinMemory={async (message) => {
+              // NE-P's isFullMessage distinction: a selection is an excerpt,
+              // no selection pins the whole narration. Any member may pin,
+              // unlike onPinCanon (facts), which is lead-only canon.
+              const selection = window.getSelection()?.toString().trim() ?? "";
+              const isFullMessage = selection.length <= 3;
+              const response = await fetch(`/api/campaigns/${campaign.id}/pins`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  messageId: message.id,
+                  text: isFullMessage ? message.content : selection,
+                  isFullMessage,
+                }),
+              });
+              if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                setError(data.error || "Could not pin that.");
+                return;
+              }
+              setPinsVersion((count) => count + 1);
+            }}
             onPinCanon={
               isLead
                 ? async (message) => {
@@ -576,6 +600,7 @@ export function SessionView({
         </div>
 
         <SidePanel
+          pinsVersion={pinsVersion}
           campaignId={campaign.id}
           sheets={sheets}
           members={state.members}

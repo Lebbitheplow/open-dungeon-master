@@ -177,6 +177,7 @@ const MessageItem = memo(function MessageItem({
   mediaStatus,
   onReplayAudio,
   onPinCanon,
+  onPinMemory,
   onLoreCheck,
   onRenarrate,
   onContinueScene,
@@ -193,6 +194,8 @@ const MessageItem = memo(function MessageItem({
   mediaStatus: Record<string, MediaStatus>;
   onReplayAudio?: (messageId: string) => void;
   onPinCanon?: (message: CampaignMessage) => void;
+  // Pin the current selection (or the whole message) into every future prompt.
+  onPinMemory?: (message: CampaignMessage) => void;
   onLoreCheck?: (message: CampaignMessage) => void;
   // Reroll this narration's prose (lead only, latest DM message only).
   onRenarrate?: (message: CampaignMessage) => void;
@@ -298,6 +301,17 @@ const MessageItem = memo(function MessageItem({
               className={cn(ui.iconAction, "-my-1.5")}
             >
               <FastForward className="size-3.5" />
+            </button>
+          ) : null}
+          {onPinMemory ? (
+            <button
+              type="button"
+              onClick={() => onPinMemory(message)}
+              aria-label="Pin this to the DM's memory"
+              title="Pin: keep your selected text (or this whole message) in front of the DM every turn"
+              className={cn(ui.iconAction, "-my-1.5")}
+            >
+              <Pin className="size-3.5" />
             </button>
           ) : null}
           {onLoreCheck ? (
@@ -433,6 +447,7 @@ export function MessageList({
   mediaStatus = {},
   onReplayAudio,
   onPinCanon,
+  onPinMemory,
   onLoreCheck,
   onRenarrate,
   onContinueScene,
@@ -453,6 +468,8 @@ export function MessageList({
   mediaStatus?: Record<string, MediaStatus>;
   onReplayAudio?: (messageId: string) => void;
   onPinCanon?: (message: CampaignMessage) => void;
+  // Pin the current selection (or the whole message) into every future prompt.
+  onPinMemory?: (message: CampaignMessage) => void;
   onLoreCheck?: (message: CampaignMessage) => void;
   onRenarrate?: (message: CampaignMessage) => void;
   onContinueScene?: (message: CampaignMessage) => void;
@@ -519,6 +536,16 @@ export function MessageList({
     () =>
       hasContinue ? (message: CampaignMessage) => continueRef.current?.(message) : undefined,
     [hasContinue],
+  );
+  const pinMemoryRef = useRef(onPinMemory);
+  useEffect(() => {
+    pinMemoryRef.current = onPinMemory;
+  });
+  const hasPinMemory = Boolean(onPinMemory);
+  const stablePinMemory = useMemo(
+    () =>
+      hasPinMemory ? (message: CampaignMessage) => pinMemoryRef.current?.(message) : undefined,
+    [hasPinMemory],
   );
   const hasRenarrate = Boolean(onRenarrate);
   const stableRenarrate = useMemo(
@@ -592,6 +619,7 @@ export function MessageList({
           onReplayAudio={stableReplay}
           onPinCanon={stablePin}
           onLoreCheck={stableLore}
+          onPinMemory={stablePinMemory}
           onRenarrate={
             // No turn link, no reroll: messages narrated before this feature
             // shipped have no stored conversation to replay.
