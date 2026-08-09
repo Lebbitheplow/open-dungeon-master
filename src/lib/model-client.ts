@@ -1,4 +1,9 @@
 import { getGlobalConfig } from "@/lib/db/app-settings";
+import {
+  buildPropsUrl,
+  contextCacheKey,
+  readContextWindow,
+} from "@/lib/dm/context-probe-logic";
 import { serverEnv } from "@/lib/server-env";
 import { localModelContextWindow } from "@/lib/text-models";
 
@@ -123,6 +128,7 @@ export function storyContextTokens(settings: {
   textProvider: string;
   localTextModel: string;
   customBaseUrl?: string;
+  customModel?: string;
 }): number {
   if (settings.textProvider === "local") {
     return localContextTokens(settings.localTextModel);
@@ -133,8 +139,9 @@ export function storyContextTokens(settings: {
   if (Number.isFinite(raw) && raw > 0) {
     return Math.max(2_048, raw);
   }
-  const base = (settings.customBaseUrl || "").trim().replace(/\/+$/, "").replace(/\/v1$/, "");
-  const probed = base ? probedContextWindows.get(base) : undefined;
+  const probed = probedContextWindows.get(
+    contextCacheKey(settings.customBaseUrl ?? "", settings.customModel ?? ""),
+  );
   return probed ? Math.max(2_048, probed) : DEFAULT_CUSTOM_CONTEXT_TOKENS;
 }
 
@@ -150,38 +157,35 @@ const probedContextWindows = new Map<string, number>();
 export async function probeCustomContextWindow(
   baseUrl: string,
   apiKey: string,
+  model: string,
 ): Promise<number | null> {
-  const base = (baseUrl || "").trim().replace(/\/+$/, "").replace(/\/v1$/, "");
-  if (!base) {
+  const url = buildPropsUrl(baseUrl, model);
+  if (!url) {
     return null;
   }
-  const cached = probedContextWindows.get(base);
+  // Keyed by base URL AND model: llama-server's --models-preset router serves
+  // several models from one port, each launched with its own -c.
+  const cacheKey = contextCacheKey(baseUrl, model);
+  const cached = probedContextWindows.get(cacheKey);
   if (cached !== undefined) {
     return cached || null;
   }
   try {
-    const response = await fetch(`${base}/props`, {
+    const response = await fetch(url, {
       headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
       signal: AbortSignal.timeout(2_000),
     });
     if (!response.ok) {
-      probedContextWindows.set(base, 0);
+      probedContextWindows.set(cacheKey, 0);
       return null;
     }
-    const data = (await response.json()) as {
-      n_ctx?: number;
-      default_generation_settings?: { n_ctx?: number };
-    };
-    // Newer llama.cpp puts it at the top level, older nests it under the
-    // default generation settings.
-    const found = data.n_ctx ?? data.default_generation_settings?.n_ctx ?? 0;
-    const window = Number.isFinite(found) && found > 0 ? Math.floor(found) : 0;
-    probedContextWindows.set(base, window);
+    const window = readContextWindow(await response.json()) ?? 0;
+    probedContextWindows.set(cacheKey, window);
     return window || null;
   } catch {
     // Unreachable, not llama.cpp, or too slow. Cache the miss so a turn does
     // not pay the timeout again.
-    probedContextWindows.set(base, 0);
+    probedContextWindows.set(cacheKey, 0);
     return null;
   }
 }

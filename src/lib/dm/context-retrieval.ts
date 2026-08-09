@@ -93,6 +93,7 @@ export async function buildTurnRetrieval(
     await probeCustomContextWindow(
       campaign.settings.customBaseUrl,
       campaign.settings.customApiKey,
+      campaign.settings.customModel,
     );
   }
   const contextLimitTokens = storyContextTokens(campaign.settings);
