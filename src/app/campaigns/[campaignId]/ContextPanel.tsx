@@ -3,6 +3,7 @@
 import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
 import type { BlockKind, ContextTrace } from "@/lib/dm/context-budget";
 
 // "What the DM was actually sent." Lead only, because the underlying prompt
@@ -22,12 +23,15 @@ const KIND_LABEL: Record<BlockKind, string> = {
   history: "Transcript",
 };
 
+// Palette is stone, amber and ember only (src/app/globals.css remaps the
+// Tailwind names); anything outside it renders as raw Tailwind and clashes
+// with the indigo-and-gold theme.
 const KIND_COLOR: Record<BlockKind, string> = {
   contract: "text-amber-300",
   rules: "text-stone-300",
-  state: "text-emerald-300",
-  retrieval: "text-sky-300",
-  chapters: "text-violet-300",
+  state: "text-amber-200",
+  retrieval: "text-ember-300",
+  chapters: "text-ember-400",
   history: "text-stone-200",
 };
 
@@ -85,7 +89,9 @@ export function ContextPanel({ campaignId }: { campaignId: string }) {
     <div className="space-y-3 p-3">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <h3 className="text-sm font-medium text-stone-200">What the DM was sent</h3>
+          <h3 className="text-[10px] font-medium uppercase tracking-wide text-stone-500">
+            What the DM was sent
+          </h3>
           <p className="text-[11px] text-stone-500">
             Last turn{at ? `, ${new Date(at).toLocaleTimeString()}` : ""}. Token counts are
             estimates.
@@ -94,7 +100,7 @@ export function ContextPanel({ campaignId }: { campaignId: string }) {
         <button
           type="button"
           onClick={load}
-          className="rounded p-1 text-stone-500 hover:text-stone-200"
+          className={cn(ui.iconAction, "-my-1")}
           aria-label="Refresh"
         >
           <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
@@ -132,9 +138,9 @@ export function ContextPanel({ campaignId }: { campaignId: string }) {
               <li
                 key={`${block.position}-${block.id}`}
                 className={cn(
-                  "rounded-md border px-2 py-1.5 text-xs",
+                  "rounded-lg border px-2 py-1.5 text-xs shadow-elev-1",
                   block.included
-                    ? "border-stone-800 bg-stone-900/40"
+                    ? "border-stone-700/60 bg-stone-900/50"
                     : "border-red-900/50 bg-red-950/20",
                 )}
               >

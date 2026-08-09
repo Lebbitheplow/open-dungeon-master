@@ -3,6 +3,7 @@
 import { Pin, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
 import { PIN_TOKEN_CAP, pinTokens, totalPinTokens } from "@/lib/dm/pin-logic";
 
 // Pinned memories: excerpts that ride in every prompt, unconditionally.
@@ -28,7 +29,7 @@ function PinItem({ pin, onUnpin }: { pin: PinRow; onUnpin: (id: string) => void 
   const shown = !expanded && long ? `${pin.text.slice(0, COLLAPSE_AT)}...` : pin.text;
 
   return (
-    <li className="rounded-md border border-stone-800 bg-stone-900/40 p-2.5">
+    <li className="rounded-lg border border-stone-700/60 bg-stone-900/50 p-2.5 shadow-elev-1">
       <div className="mb-1 flex items-center gap-2">
         <Pin className="size-3 shrink-0 text-amber-400" />
         <span className="text-[10px] font-medium uppercase tracking-wide text-amber-300/70">
@@ -41,7 +42,7 @@ function PinItem({ pin, onUnpin }: { pin: PinRow; onUnpin: (id: string) => void 
           type="button"
           onClick={() => onUnpin(pin.id)}
           aria-label="Unpin"
-          className="shrink-0 rounded p-0.5 text-stone-500 hover:text-red-400"
+          className={cn(ui.iconAction, "-my-1 shrink-0 hover:text-red-400")}
         >
           <Trash2 className="size-3" />
         </button>
@@ -112,7 +113,7 @@ export function PinsPanel({ campaignId, version }: { campaignId: string; version
   return (
     <div className="space-y-2">
       <div className="flex items-baseline justify-between">
-        <h3 className="text-xs font-medium uppercase tracking-wide text-stone-400">
+        <h3 className="px-1 text-[10px] font-medium uppercase tracking-wide text-amber-400">
           Pinned memories
         </h3>
         <span

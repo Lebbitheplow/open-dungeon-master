@@ -4,6 +4,7 @@ import { Clapperboard, Megaphone, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { Dialog } from "@/components/ui/Dialog";
+import { ui } from "@/lib/ui";
 import { Tooltip } from "@/components/ui/Tooltip";
 import {
   MAX_ABSOLUTE_COMMAND_LENGTH,
@@ -123,10 +124,10 @@ export function DirectorPanel({
               type="button"
               disabled={busy}
               onClick={() => void send("DELETE")}
-              className="shrink-0 rounded p-0.5 text-amber-300/80 hover:text-amber-100 disabled:opacity-50"
+              className={cn(ui.iconAction, "-my-1 shrink-0 disabled:opacity-50")}
               aria-label="Disarm"
             >
-              <X className="h-3.5 w-3.5" />
+              <X className="size-3.5" />
             </button>
           ) : null}
         </div>
@@ -138,18 +139,18 @@ export function DirectorPanel({
             <button
               type="button"
               onClick={() => setOneShotOpen(true)}
-              className="flex items-center gap-1 rounded-md border border-stone-700/60 px-2 py-1 text-[11px] text-stone-400 hover:border-stone-500 hover:text-stone-200"
+              className={cn(ui.btnSmall, "px-2 py-1 text-[11px]")}
             >
-              <Clapperboard className="h-3 w-3" /> Event
+              <Clapperboard className="size-3" /> Event
             </button>
           </Tooltip>
           <Tooltip content="Speak to the DM directly for one turn. No character hears it and it never enters the transcript.">
             <button
               type="button"
               onClick={() => setCommandOpen(true)}
-              className="flex items-center gap-1 rounded-md border border-stone-700/60 px-2 py-1 text-[11px] text-stone-400 hover:border-stone-500 hover:text-stone-200"
+              className={cn(ui.btnSmall, "px-2 py-1 text-[11px]")}
             >
-              <Megaphone className="h-3 w-3" /> Direct
+              <Megaphone className="size-3" /> Direct
             </button>
           </Tooltip>
         </div>
@@ -168,10 +169,10 @@ export function DirectorPanel({
               disabled={busy}
               onClick={() => void armOneShot(id)}
               className={cn(
-                "rounded-lg border px-3 py-2 text-left text-sm transition-colors disabled:opacity-50",
+                "rounded-lg border px-3 py-2 text-left text-sm shadow-elev-1 transition-all duration-150 ease-snap hover:-translate-y-px disabled:opacity-50",
                 state.oneShot === id
-                  ? "border-amber-500/60 bg-amber-500/10 text-amber-200"
-                  : "border-stone-700/60 text-stone-300 hover:border-stone-500 hover:text-stone-100",
+                  ? "border-amber-500/50 bg-amber-500/10 text-amber-100 shadow-glow-gold"
+                  : "border-stone-700/60 bg-stone-900/50 text-stone-300 hover:border-amber-500/40 hover:text-amber-100",
               )}
             >
               <span className="block">{oneShotLabel(id)}</span>
@@ -195,7 +196,7 @@ export function DirectorPanel({
           rows={4}
           autoFocus
           placeholder="Slow down and let the party breathe. No new threats this turn."
-          className="w-full resize-none rounded-lg border border-stone-700/60 bg-stone-900/60 px-3 py-2 text-sm text-stone-200 outline-none focus:border-stone-500"
+          className={cn(ui.input, "resize-none")}
         />
         <div className="mt-2 flex items-center justify-between">
           <span className="text-[11px] text-stone-500">
@@ -205,7 +206,7 @@ export function DirectorPanel({
             type="button"
             disabled={busy || !command.trim()}
             onClick={() => void armCommand()}
-            className="rounded-md bg-amber-600/80 px-3 py-1.5 text-sm text-white hover:bg-amber-600 disabled:opacity-40"
+            className={cn(ui.btnPrimary, "h-8 px-3 text-[11px]")}
           >
             Arm for next turn
           </button>

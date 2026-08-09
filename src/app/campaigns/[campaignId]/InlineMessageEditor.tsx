@@ -2,6 +2,8 @@
 
 import { Check, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
 
 // Inline narration editor, ported from NE-P's InlineMessageEditor
 // (src/components/message/InlineMessageEditor.tsx, MIT, Copyright (c) 2026
@@ -78,7 +80,7 @@ export function InlineMessageEditor({
             onCancel();
           }
         }}
-        className="w-full resize-none rounded-lg border border-stone-700 bg-stone-950/60 p-3 font-serif text-base leading-relaxed text-stone-100 outline-none focus:border-amber-600/60 disabled:opacity-60"
+        className={cn(ui.input, "resize-none p-3 font-serif text-base leading-relaxed disabled:opacity-60")}
       />
       {error ? <p className="text-xs text-red-400">{error}</p> : null}
       <div className="flex items-center gap-2">
@@ -86,7 +88,7 @@ export function InlineMessageEditor({
           type="button"
           onClick={() => void save()}
           disabled={busy}
-          className="flex items-center gap-1 rounded-md bg-amber-600/80 px-2.5 py-1 text-xs text-white hover:bg-amber-600 disabled:opacity-50"
+          className={cn(ui.btnPrimary, "h-8 px-3 text-[11px]")}
         >
           <Check className="size-3" /> Save
         </button>
@@ -94,7 +96,7 @@ export function InlineMessageEditor({
           type="button"
           onClick={onCancel}
           disabled={busy}
-          className="flex items-center gap-1 rounded-md border border-stone-700 px-2.5 py-1 text-xs text-stone-400 hover:text-stone-200 disabled:opacity-50"
+          className={cn(ui.btnSmall, "px-3 py-1.5 text-[11px]")}
         >
           <X className="size-3" /> Cancel
         </button>
