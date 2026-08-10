@@ -457,13 +457,29 @@ export function SessionView({
             mediaStatus={state.mediaStatus}
             onReplayAudio={
               campaign.gameSettings?.ttsEnabled
-                ? (messageId) => {
+                ? async (messageId) => {
+                    // The click doubles as the gesture that gets us past the
+                    // browser's autoplay block.
                     narration.unlock();
-                    narration.play(
-                      messageId,
-                      state.narrationAudio[messageId] ??
-                        `/generated-audio/${campaign!.id}/${messageId}.mp3`,
+                    const known = state.narrationAudio[messageId];
+                    if (known) {
+                      narration.play(messageId, known);
+                      return null;
+                    }
+                    // Never voiced: render it now, then play the same take.
+                    // Passages from before TTS was switched on, and ones whose
+                    // render failed, are otherwise silent forever.
+                    const response = await fetch(
+                      `/api/campaigns/${campaign.id}/messages/${messageId}/narrate`,
+                      { method: "POST" },
                     );
+                    if (!response.ok) {
+                      const data = await response.json().catch(() => ({}));
+                      return data.error || "Could not read that passage aloud.";
+                    }
+                    const data = await response.json();
+                    narration.play(messageId, data.url);
+                    return null;
                   }
                 : undefined
             }

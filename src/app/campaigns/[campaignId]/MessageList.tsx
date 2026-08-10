@@ -196,7 +196,9 @@ const MessageItem = memo(function MessageItem({
   locationsById: Map<string, CampaignLocation>;
   sheets: CharacterSheet[];
   mediaStatus: Record<string, MediaStatus>;
-  onReplayAudio?: (messageId: string) => void;
+  // Plays the stored narration, rendering it first when this passage has
+  // never been voiced. Resolves to an error string on failure, null on success.
+  onReplayAudio?: (messageId: string) => Promise<string | null>;
   onPinCanon?: (message: CampaignMessage) => void;
   // Pin the current selection (or the whole message) into every future prompt.
   onPinMemory?: (message: CampaignMessage) => void;
@@ -213,6 +215,9 @@ const MessageItem = memo(function MessageItem({
   // Local to the row: only one narration is ever being corrected at a time,
   // and the draft should not survive the row unmounting.
   const [editing, setEditing] = useState(false);
+  // Stays true until the audio lands, at which point the replay button takes
+  // this one's place; cleared early only when the render actually failed.
+  const [narrating, setNarrating] = useState(false);
 
   if (message.authorType === "system") {
     // A halted turn whose dm_turns row is still retryable. Both halves of the
@@ -358,15 +363,27 @@ const MessageItem = memo(function MessageItem({
               <Pin className="size-3.5" />
             </button>
           ) : null}
-          {onReplayAudio ? (
+          {onReplayAudio && message.authorType === "dm" ? (
             <button
               type="button"
-              onClick={() => onReplayAudio(message.id)}
-              aria-label="Replay narration"
-              title="Replay narration"
+              disabled={narrating}
+              onClick={async () => {
+                setNarrating(true);
+                const error = await onReplayAudio(message.id);
+                setNarrating(false);
+                if (error) {
+                  window.alert(error);
+                }
+              }}
+              aria-label="Read this passage aloud"
+              title="Read aloud"
               className={cn(ui.iconAction, "-my-1.5")}
             >
-              <Volume2 className="size-3.5" />
+              {narrating ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Volume2 className="size-3.5" />
+              )}
             </button>
           ) : null}
         </p>
@@ -503,7 +520,7 @@ export function MessageList({
   dmStatus: DmStatus;
   dmDraft: string;
   mediaStatus?: Record<string, MediaStatus>;
-  onReplayAudio?: (messageId: string) => void;
+  onReplayAudio?: (messageId: string) => Promise<string | null>;
   onPinCanon?: (message: CampaignMessage) => void;
   // Pin the current selection (or the whole message) into every future prompt.
   onPinMemory?: (message: CampaignMessage) => void;
@@ -540,7 +557,11 @@ export function MessageList({
   });
   const hasReplay = Boolean(onReplayAudio);
   const stableReplay = useMemo(
-    () => (hasReplay ? (messageId: string) => replayRef.current?.(messageId) : undefined),
+    () =>
+      hasReplay
+        ? (messageId: string) =>
+            replayRef.current?.(messageId) ?? Promise.resolve<string | null>(null)
+        : undefined,
     [hasReplay],
   );
   const pinRef = useRef(onPinCanon);

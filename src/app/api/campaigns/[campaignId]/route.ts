@@ -34,6 +34,7 @@ import { generateStoryArc } from "@/lib/dm/arc";
 import { getDmStatus } from "@/lib/dm/status";
 import { listUtilityCalls } from "@/lib/dm/call-tracker";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
+import { listNarrationAudio } from "@/lib/tts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -65,6 +66,9 @@ export async function GET(
     encounter: activePublicEncounter(campaignId),
     itemProposals: listOpenItemProposals(campaignId).map(publicItemProposal),
     latestSeq: latestSeq(campaignId),
+    // Which messages already have narration on disk, so read-aloud plays them
+    // straight from a fresh load instead of rendering a second take.
+    narrationAudio: listNarrationAudio(campaignId),
     // In-memory status so a reload mid-turn still shows the DM at work.
     dmStatus: getDmStatus(campaignId),
     // Same reason, for background work: utility_calls is ephemeral, so a

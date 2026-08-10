@@ -56,6 +56,10 @@ export function useNarrationAudio(): NarrationAudio {
   // Every messageId ever started or queued; guards against replays when the
   // same tts_ready re-enters through re-renders or reducer echoes.
   const handledRef = useRef(new Set<string>());
+  // Narration that landed before the first user gesture. SessionView hands
+  // each message over exactly once, so dropping these would lose them for
+  // good; they wait here and play from unlock().
+  const pendingRef = useRef<Array<{ messageId: string; url: string }>>([]);
 
   const setMuted = useCallback((next: boolean) => {
     window.localStorage.setItem(MUTED_KEY, next ? "1" : "0");
@@ -63,6 +67,7 @@ export function useNarrationAudio(): NarrationAudio {
     if (next) {
       audioRef.current?.pause();
       queueRef.current = [];
+      pendingRef.current = [];
       playingRef.current = null;
       setPlayingMessageId(null);
     }
@@ -124,7 +129,21 @@ export function useNarrationAudio(): NarrationAudio {
   const unlock = useCallback(() => {
     setUnlocked(true);
     unlockedRef.current = true;
-  }, []);
+    // Anything that arrived before this gesture starts now, oldest first,
+    // on the same "never interrupt what is playing" rule as live narration.
+    const held = pendingRef.current;
+    pendingRef.current = [];
+    if (!held.length || readMuted()) {
+      return;
+    }
+    if (playingRef.current) {
+      queueRef.current.push(...held);
+      return;
+    }
+    const [first, ...rest] = held;
+    queueRef.current.push(...rest);
+    startPlayback(first.messageId, first.url);
+  }, [startPlayback]);
 
   // Any first interaction with the page (click, key press) also counts as
   // the unlock gesture, so narration autoplays without hunting for the
@@ -145,10 +164,16 @@ export function useNarrationAudio(): NarrationAudio {
   const onTtsReady = useCallback(
     (messageId: string, url: string, live: boolean) => {
       audioByMessage.set(messageId, url);
-      if (!live || readMuted() || !unlockedRef.current || handledRef.current.has(messageId)) {
+      if (!live || readMuted() || handledRef.current.has(messageId)) {
         return;
       }
       handledRef.current.add(messageId);
+      // The browser refuses to play before a user gesture, so hold rather
+      // than drop: this narration is never offered a second time.
+      if (!unlockedRef.current) {
+        pendingRef.current.push({ messageId, url });
+        return;
+      }
       if (playingRef.current) {
         queueRef.current.push({ messageId, url });
       } else {

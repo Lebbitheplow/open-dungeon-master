@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { publishPersisted } from "@/lib/events";
 import { publishMediaStatus } from "@/lib/dm/images";
@@ -59,6 +59,10 @@ async function kokoroSpeech(input: string, voice: string): Promise<Buffer> {
   return Buffer.from(await response.arrayBuffer());
 }
 
+export function narrationAudioPath(campaignId: string, messageId: string): string {
+  return path.join(process.cwd(), "public", "generated-audio", campaignId, `${messageId}.mp3`);
+}
+
 export function enqueueNarrationAudio(
   campaignId: string,
   messageId: string,
@@ -86,9 +90,9 @@ export function enqueueNarrationAudio(
       }
       // Kokoro-FastAPI emits plain MPEG frames; concatenation plays cleanly.
       const audio = Buffer.concat(buffers);
-      const directory = path.join(process.cwd(), "public", "generated-audio", campaignId);
-      mkdirSync(directory, { recursive: true });
-      writeFileSync(path.join(directory, `${messageId}.mp3`), audio);
+      const file = narrationAudioPath(campaignId, messageId);
+      mkdirSync(path.dirname(file), { recursive: true });
+      writeFileSync(file, audio);
       publishPersisted(campaignId, "tts_ready", {
         messageId,
         url: `/generated-audio/${campaignId}/${messageId}.mp3`,
@@ -96,6 +100,24 @@ export function enqueueNarrationAudio(
     },
     "tts",
   );
+}
+
+// Narration already on disk, keyed by message id. The snapshot carries this
+// so a fresh page load knows which messages can actually be replayed: only
+// DM turns narrated while TTS was on have a file, and a replay button over a
+// message without one fails silently. tts_ready adds to it as takes land.
+export function listNarrationAudio(campaignId: string): Record<string, string> {
+  const directory = path.join(process.cwd(), "public", "generated-audio", campaignId);
+  if (!existsSync(directory)) {
+    return {};
+  }
+  const audio: Record<string, string> = {};
+  for (const file of readdirSync(directory)) {
+    if (file.endsWith(".mp3")) {
+      audio[file.slice(0, -".mp3".length)] = `/generated-audio/${campaignId}/${file}`;
+    }
+  }
+  return audio;
 }
 
 // Voice previews: Kokoro ships no sample clips, but one short line renders in

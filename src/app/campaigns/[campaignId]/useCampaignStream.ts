@@ -599,6 +599,7 @@ export function useCampaignStream(campaignId: string) {
           itemProposals: data.itemProposals ?? [],
           dmStatus: data.dmStatus ?? "idle",
           utilityCalls: sortCalls(data.utilityCalls ?? []),
+          narrationAudio: data.narrationAudio ?? {},
           lastSeq,
         },
       });
