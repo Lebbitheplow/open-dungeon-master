@@ -119,16 +119,17 @@ export function HowToPlayDialog({
 
       <Section icon={RefreshCw} title="If a reply lands badly">
         <p>
-          Nothing the DM writes is final. Hover one of its messages and you can have it{" "}
-          <span className="text-stone-300">reroll</span> that moment, with the same dice and the
-          same outcome and only the wording changed, then page between the takes and keep the one
-          you like. You can also have it{" "}
-          <span className="text-stone-300">continue</span> a reply that stopped short, or check a
-          passage against everything the campaign has already established.
+          Nothing the DM writes is final. Hovering one of its messages shows a row of actions. The
+          party lead can have it <span className="text-stone-300">reroll</span> that moment, with
+          the same dice and the same outcome and only the wording changed, then page between the
+          takes and leave the best one up for the table. The lead can also have it{" "}
+          <span className="text-stone-300">continue</span> a reply that stopped short, or edit the
+          wording by hand.
         </p>
         <p>
-          The DM also remembers on purpose. Select a line in one of its messages and press the
-          bookmark to keep that detail in front of it for the rest of the campaign.
+          Two of those actions are open to everyone. Anyone can check a passage against what the
+          campaign has already established, and anyone can select a line and press the bookmark to
+          keep that detail in front of the DM for the rest of the campaign.
         </p>
       </Section>
 

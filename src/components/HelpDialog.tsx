@@ -155,32 +155,32 @@ export function HelpDialog({
       <Section icon={RefreshCw} title="When the DM gets it wrong">
         <p>
           Hover a DM message and a row of actions appears above it. None of them advance the story
-          or change a single number the rules produced.
+          or change a single number the rules produced. Rewriting the narration belongs to the
+          party lead, since everyone reads the same transcript:
         </p>
         <ul className="list-none space-y-1.5">
           <li>
-            <span className="text-stone-300">Reroll:</span> have the DM write that moment again
-            with the same dice and the same outcome, optionally with a note on what to do
-            differently. Only the prose changes.
+            <span className="text-stone-300">Reroll:</span> lead only. Have the DM write that
+            moment again with the same dice and the same outcome, optionally with a note on what to
+            do differently. Only the prose changes.
           </li>
           <li>
-            <span className="text-stone-300">Takes:</span> once a second version exists, arrows and
-            a counter appear in the message header. Page between takes and leave the one you want
-            in place.
+            <span className="text-stone-300">Takes:</span> lead only. Once a second version exists,
+            arrows and a counter appear in the message header. Paging between takes swaps the
+            message for the whole table.
           </li>
           <li>
-            <span className="text-stone-300">Continue:</span> have the DM keep writing from where a
-            reply stopped short, without moving the story on.
+            <span className="text-stone-300">Continue:</span> lead only. Have the DM keep writing
+            from where a reply stopped short, without moving the story on.
           </li>
           <li>
-            <span className="text-stone-300">Edit:</span> party lead only. Fix what the DM said by
-            hand. Mechanics are untouched and every dice marker in the passage has to survive the
-            edit.
+            <span className="text-stone-300">Edit:</span> lead only. Fix what the DM said by hand.
+            Mechanics are untouched and every dice marker in the passage has to survive the edit.
           </li>
           <li>
-            <span className="text-stone-300">Lore check:</span> flag the passage, or just the text
-            you selected, against the campaign record and see whether it contradicts anything
-            already established.
+            <span className="text-stone-300">Lore check:</span> anyone. Flag the passage, or just
+            the text you selected, against the campaign record and see whether it contradicts
+            anything already established.
           </li>
         </ul>
         <p>
@@ -198,14 +198,16 @@ export function HelpDialog({
         </p>
         <ul className="list-none space-y-1.5">
           <li>
-            <span className="text-stone-300">Remember:</span> select text in a DM message and press
-            the bookmark icon, or press it with nothing selected to keep the whole message. Pinned
-            memories ride in every prompt from then on. There is a size budget, and the Pinned
-            memories list under Story, Facts shows how much of it you have spent.
+            <span className="text-stone-300">Remember:</span> any player can select text in a DM
+            message and press the bookmark icon, or press it with nothing selected to keep the
+            whole message. Pinned memories ride in every prompt from then on. There is a size
+            budget, and the Pinned memories list under Story, Facts shows how much of it the table
+            has spent.
           </li>
           <li>
-            <span className="text-stone-300">Pin as canon:</span> keeps a passage in front of the
-            DM permanently as established fact.
+            <span className="text-stone-300">Pin as canon:</span> party lead only, because it
+            writes to the campaign record. Keeps a passage in front of the DM permanently as
+            established fact.
           </li>
           <li>
             <span className="text-stone-300">Facts and lore:</span> Story, Facts also holds DM
@@ -286,8 +288,8 @@ export function HelpDialog({
           The campaign owner starts as party lead and can pass the role from a party member&apos;s
           menu. The lead steers the table: the Direct message mode with its event presets and
           private directions, approving suggested notes, releasing a stuck spotlight, retrying a
-          halted turn, editing a narration in place, letting new players join mid-game, and editing
-          campaign settings and house rules.
+          halted turn, rerolling or editing a narration, letting new players join mid-game, and
+          editing campaign settings and house rules.
         </p>
         <p>
           The lead also owns the story spine, under Story, Chapters. A single beat can be reworded,
