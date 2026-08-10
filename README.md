@@ -180,7 +180,7 @@ and clamped by code.
 - **Narration reroll** - the lead rerolls a DM paragraph with optional guidance ("darker", "more dialogue") and browses the takes. Only the words change: the dice, the sheets and every resolved outcome stay byte-identical.
 - **Continue scene** - extends a narration that stopped short, in place. Not a turn: no counters, no chapter close, no world tick.
 - **Inline narration edit** - the lead fixes a typo or a wrong name directly, with every dice-roll marker preserved across the edit or the save refused.
-- **Director controls** - a one-turn steer the lead arms before a turn: a canned event type or a free-text command, consumed exactly once. Players see that something is armed, never what it says.
+- **Director controls** - a one-turn steer the lead arms from the Direct composer mode: a canned event type, or a free-text direction sent privately, consumed exactly once. Players see that something is armed, never what it says.
 - **Arc beat editor** - reword, reorder, skip, set `[NOW]`, or add a single main beat instead of regenerating the whole spine. Beats that already played are immutable; they are a record, not a plan.
 - **Story export** - finished campaigns and chapters exported to DOCX, ODT, or HTML.
 
@@ -553,7 +553,34 @@ synchronous and the app assumes **one Next.js process owns the database file**. 
 not run `npm run dev` and a production service against the same `data/` directory;
 point dev at a scratch database with `SQLITE_DB_PATH`.
 
+## Campaign plugins
+
+Campaigns can run in a **world pack**: a single JSON manifest that renames the
+rules into a setting, with its own races, classes, spells, gear, monsters,
+factions and lore, plus a brief telling the DM how that world sounds. It is a
+pure name mapping. Every mechanic stays 5e, character sheets keep storing
+canonical names, and a character built in one world still works in another.
+
+Admins browse, install and remove packs under **Admin, Campaign plugins**, either
+from a registry or by uploading a `.json` by hand. A registry of community packs
+is built in, so a fresh install has something to browse; point a server somewhere
+else with the **World registry URL** setting or `WORLD_REGISTRY_URL`, or set
+either to `off` to browse none. Listing is not endorsing, and nothing installs
+until an admin installs it.
+
+Writing one is documented in [docs/worlds.md](docs/worlds.md), with
+`src/lib/worlds/bundled/saltmarch.json` as the worked example.
+
 ## Credits and licenses
+
+**The application is MIT licensed. Third-party and unofficial campaign content is
+not included with this repository and is not covered by the MIT license.**
+Community world packs are installed at runtime into the gitignored `data/worlds/`
+directory. They are the work of their own authors, distributed by whoever
+publishes them, and are neither shipped nor vetted by this project. A pack that
+references an existing setting is an unofficial fan work with no affiliation with
+or endorsement from that setting's rights holders, and the app labels it as such
+wherever it appears. Only original works are bundled in this repository.
 
 - Forked from [Open Dungeon](https://github.com/newideas99/open-dungeon) by Jacob
   Ferrari, MIT licensed. See [LICENSE](LICENSE).

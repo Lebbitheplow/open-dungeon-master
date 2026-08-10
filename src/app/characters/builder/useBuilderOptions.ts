@@ -11,6 +11,7 @@ import { SRD_BACKGROUNDS, SRD_CLASSES, SRD_RACES } from "@/lib/srd";
 import { CUSTOM_BACKGROUNDS } from "@/lib/backgrounds";
 import { CUSTOM_CLASSES } from "@/lib/classes";
 import type { Genre } from "@/lib/schemas/game-settings";
+import type { WorldPack } from "@/lib/worlds/types";
 import { skillsInText } from "@/lib/content/mechanics";
 
 export type RaceOption = { id: string; name: string; note: string } & RaceMechanics;
@@ -235,6 +236,36 @@ export function useBuilderOptions() {
     () => ({ races, classes, backgrounds, packInstalled }),
     [races, classes, backgrounds, packInstalled],
   );
+}
+
+// The campaign's selected world pack, fetched whole so the builder can reskin
+// display names. Null while loading, when there is no pack, and when the id no
+// longer resolves, which is what keeps every caller's fallback path the same.
+export function useWorldPack(packId?: string): WorldPack | null {
+  const [pack, setPack] = useState<WorldPack | null>(null);
+  const [prevId, setPrevId] = useState(packId);
+  if (prevId !== packId) {
+    setPrevId(packId);
+    setPack(null);
+  }
+  useEffect(() => {
+    let cancelled = false;
+    if (!packId) {
+      return;
+    }
+    fetch(`/api/worlds/${encodeURIComponent(packId)}`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.pack) {
+          setPack(data.pack as WorldPack);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [packId]);
+  return pack;
 }
 
 export function useArchetypes(classId: string) {

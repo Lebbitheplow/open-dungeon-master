@@ -64,12 +64,36 @@ import { RacialChoicesSection } from "./RacialChoicesSection";
 import {
   useArchetypes,
   useBuilderOptions,
+  useWorldPack,
   type BackgroundOption,
   type ClassOption,
 } from "./useBuilderOptions";
+import {
+  applyClassReskins,
+  applyIdReskins,
+  displayName,
+  packRecommends,
+  type Reskinned,
+} from "@/lib/worlds/reskin-logic";
+import type { WorldPack } from "@/lib/worlds/types";
+import { UnofficialPackNotice } from "@/components/UnofficialPackNotice";
 
 const ALIGNMENTS = ["LG", "NG", "CG", "LN", "N", "CN", "LE", "NE", "CE"];
 const GENDERS = ["Female", "Male", "Nonbinary"];
+
+// A pack's own heading for its recommended tier ("Peoples of Middle-earth"),
+// so the group reads like the world rather than like a filter.
+function packGroupLabel(pack: WorldPack | null, prefix: string): string {
+  return pack ? `${prefix} ${pack.name}` : "Recommended for this setting";
+}
+
+// The canonical name behind a reskin, shown in the option's meta column so a
+// player can always see which SRD entry they are really choosing.
+function canonicalRaceName(options: Array<{ id: string; name: string }>, id: string): string {
+  return options.find((entry) => entry.id === id)?.name ?? id;
+}
+
+const canonicalClassName = canonicalRaceName;
 
 // Splits a flat option list into the standard (SRD/content-pack) entries and
 // the other settings' catalog entries, grouped by each entry's primary genre.
@@ -106,6 +130,7 @@ export type BuilderResult = { level: number; sheet: CreateSheetInput };
 export default function CharacterBuilder({
   fixedLevel,
   genre,
+  worldPackId,
   initial,
   submitLabel,
   onSubmit,
@@ -116,6 +141,10 @@ export default function CharacterBuilder({
   // Campaign genre: floats setting-appropriate classes to the top of the
   // class picker. Absent in the library builder (default ordering).
   genre?: Genre;
+  // Campaign world pack: renames races, classes and backgrounds to the
+  // world's own words and floats the ones that belong in it. Display only,
+  // so every id submitted on the sheet stays canonical.
+  worldPackId?: string;
   // Edit mode: prefill every field from an existing stored sheet (the
   // library copy, which owns builder-only fields like ASI picks).
   initial?: CreateSheetInput;
@@ -124,7 +153,22 @@ export default function CharacterBuilder({
   busy: boolean;
   error: string;
 }) {
-  const { races, classes, backgrounds, packInstalled } = useBuilderOptions();
+  const {
+    races: rawRaces,
+    classes: rawClasses,
+    backgrounds: rawBackgrounds,
+    packInstalled,
+  } = useBuilderOptions();
+  const pack = useWorldPack(worldPackId);
+  // Display overlay only. applyIdReskins rewrites `name`, never `id`, so
+  // race.asi, classFeaturesFor(klass.id), spellClassFor(klass.id) and the
+  // submitted sheet all keep seeing canonical values.
+  const races = useMemo(() => applyIdReskins(rawRaces, pack?.races ?? []), [rawRaces, pack]);
+  const classes = useMemo(() => applyClassReskins(rawClasses, pack), [rawClasses, pack]);
+  const backgrounds = useMemo(
+    () => applyIdReskins(rawBackgrounds, pack?.backgrounds ?? []),
+    [rawBackgrounds, pack],
+  );
 
   const [name, setName] = useState(initial?.name ?? "");
   const [alignment, setAlignment] = useState(initial?.alignment ?? "N");
@@ -259,13 +303,16 @@ export default function CharacterBuilder({
   // Genre-recommended classes float to the top; everything stays selectable
   // (a fantasy wizard in a cyberpunk story is a legitimate choice). High
   // fantasy keeps the default order: the SRD twelve are its baseline.
-  const recommendedClasses = useMemo(
-    () =>
-      genre && genre !== "custom" && genre !== "high_fantasy"
-        ? classes.filter((entry) => classGenres(entry.id).includes(genre))
-        : [],
-    [classes, genre],
-  );
+  const recommendedClasses = useMemo(() => {
+    // A world pack names the callings that exist in it, which is both
+    // narrower and truer than the genre tags, so it wins when there is one.
+    if (pack?.classes.length) {
+      return classes.filter((entry) => packRecommends(pack, "classes", entry.id));
+    }
+    return genre && genre !== "custom" && genre !== "high_fantasy"
+      ? classes.filter((entry) => classGenres(entry.id).includes(genre))
+      : [];
+  }, [classes, genre, pack]);
   const otherClasses = useMemo(
     () =>
       recommendedClasses.length
@@ -276,12 +323,37 @@ export default function CharacterBuilder({
     [classes, recommendedClasses],
   );
   // Setting-specific backgrounds float to the top the same way classes do.
-  const recommendedBackgrounds = useMemo(
+  const recommendedBackgrounds = useMemo(() => {
+    if (pack?.backgrounds.length) {
+      return backgrounds.filter((entry) => packRecommends(pack, "backgrounds", entry.id));
+    }
+    return genre && genre !== "custom" && genre !== "high_fantasy"
+      ? backgrounds.filter((entry) => entry.genres?.includes(genre))
+      : [];
+  }, [backgrounds, genre, pack]);
+  // A pack's own alignments lead the list, labelled rather than enforced: the
+  // other nine stay pickable because a heretic is a legitimate character.
+  const alignmentOrder = useMemo(() => {
+    const preferred = (pack?.alignments ?? []).filter((code) => ALIGNMENTS.includes(code));
+    return preferred.length
+      ? [...preferred, ...ALIGNMENTS.filter((code) => !preferred.includes(code))]
+      : ALIGNMENTS;
+  }, [pack]);
+  // Races render as one flat list normally. A pack's peoples float to the top
+  // the same way its classes and backgrounds do.
+  const recommendedRaces = useMemo(
     () =>
-      genre && genre !== "custom" && genre !== "high_fantasy"
-        ? backgrounds.filter((entry) => entry.genres?.includes(genre))
+      pack?.races.length
+        ? races.filter((entry) => packRecommends(pack, "races", entry.id))
         : [],
-    [backgrounds, genre],
+    [races, pack],
+  );
+  const otherRaces = useMemo(
+    () =>
+      recommendedRaces.length
+        ? races.filter((entry) => !recommendedRaces.some((match) => match.id === entry.id))
+        : races,
+    [races, recommendedRaces],
   );
   const otherBackgrounds = useMemo(
     () =>
@@ -507,31 +579,42 @@ export default function CharacterBuilder({
   // Rows for the race/class/subclass/background dropdowns, each carrying the
   // info wiring for its InfoButton so any option can be read before choosing,
   // the same way the spell picker works.
-  const raceGroups = useMemo<PickerGroup[]>(
-    () => [
-      {
-        label: null,
-        options: races.map((entry) => ({
-          id: entry.id,
-          name: entry.name,
-          infoText: describeRace(entry.id) ?? entry.note,
-          reference: { kind: "races", slug: entry.id, name: entry.name },
-        })),
-      },
-    ],
-    [races],
-  );
-  const classPickerGroups = useMemo<PickerGroup[]>(() => {
-    const toOption = (entry: ClassOption): PickerOption => ({
+  const raceGroups = useMemo<PickerGroup[]>(() => {
+    const toOption = (entry: (typeof races)[number]): PickerOption => ({
       id: entry.id,
       name: entry.name,
-      meta: entry.spellAbility ? `d${entry.hitDie} · caster` : `d${entry.hitDie}`,
-      infoText: entry.blurb || entry.desc,
+      // Under a reskin the canonical name goes in the meta column, so a
+      // player always knows which SRD race they are actually taking.
+      meta: entry.packName ? canonicalRaceName(rawRaces, entry.id) : undefined,
+      infoText: entry.packBlurb || describeRace(entry.id) || entry.note,
+      reference: { kind: "races", slug: entry.id, name: entry.name },
+    });
+    if (recommendedRaces.length) {
+      return [
+        { label: packGroupLabel(pack, "Peoples of"), options: recommendedRaces.map(toOption) },
+        { label: "All races", options: otherRaces.map(toOption) },
+      ];
+    }
+    return [{ label: null, options: races.map(toOption) }];
+  }, [races, rawRaces, recommendedRaces, otherRaces, pack]);
+  const classPickerGroups = useMemo<PickerGroup[]>(() => {
+    const toOption = (entry: Reskinned<ClassOption>): PickerOption => ({
+      id: entry.id,
+      name: entry.name,
+      meta: entry.packName
+        ? `d${entry.hitDie} · ${canonicalClassName(rawClasses, entry.id)}`
+        : entry.spellAbility
+          ? `d${entry.hitDie} · caster`
+          : `d${entry.hitDie}`,
+      infoText: entry.packBlurb || entry.blurb || entry.desc,
       reference: { kind: "classes", slug: entry.id, name: entry.name },
     });
     if (recommendedClasses.length) {
       return [
-        { label: "Recommended for this setting", options: recommendedClasses.map(toOption) },
+        {
+          label: pack ? packGroupLabel(pack, "Callings of") : "Recommended for this setting",
+          options: recommendedClasses.map(toOption),
+        },
         { label: "All classes", options: otherClasses.map(toOption) },
       ];
     }
@@ -545,7 +628,7 @@ export default function CharacterBuilder({
       ];
     }
     return [{ label: null, options: otherClasses.map(toOption) }];
-  }, [recommendedClasses, otherClasses, classGroups]);
+  }, [recommendedClasses, otherClasses, classGroups, rawClasses, pack]);
   const subclassGroups = useMemo<PickerGroup[]>(() => {
     const groups: PickerGroup[] = [{ label: null, options: [{ id: "", name: "None yet" }] }];
     if (builtInSubclasses.length) {
@@ -578,18 +661,21 @@ export default function CharacterBuilder({
     return groups;
   }, [builtInSubclasses, packOnlyArchetypes, archetypes]);
   const backgroundPickerGroups = useMemo<PickerGroup[]>(() => {
-    const toOption = (entry: BackgroundOption): PickerOption => ({
+    const toOption = (entry: Reskinned<BackgroundOption>): PickerOption => ({
       id: entry.id,
       name: entry.name,
       meta: entry.skills
         .map((skillId) => SRD_SKILLS.find((skill) => skill.id === skillId)?.name ?? skillId)
         .join(", "),
-      infoText: entry.blurb || entry.desc,
+      infoText: entry.packBlurb || entry.blurb || entry.desc,
       reference: { kind: "backgrounds", slug: entry.id, name: entry.name },
     });
     if (recommendedBackgrounds.length) {
       return [
-        { label: "Recommended for this setting", options: recommendedBackgrounds.map(toOption) },
+        {
+          label: pack ? packGroupLabel(pack, "Lives in") : "Recommended for this setting",
+          options: recommendedBackgrounds.map(toOption),
+        },
         { label: "All backgrounds", options: otherBackgrounds.map(toOption) },
       ];
     }
@@ -606,7 +692,7 @@ export default function CharacterBuilder({
       ];
     }
     return [{ label: null, options: otherBackgrounds.map(toOption) }];
-  }, [recommendedBackgrounds, otherBackgrounds, backgroundGroups]);
+  }, [recommendedBackgrounds, otherBackgrounds, backgroundGroups, pack]);
 
   // What this class and subclass actually hand the character at this level.
   // The builder already computed these for the preview; showing them turns a
@@ -868,10 +954,48 @@ export default function CharacterBuilder({
         </p>
       ) : null}
 
+      {pack ? (
+        <div className="rounded-md border border-amber-200/20 bg-amber-200/5 p-3">
+          <p className="text-xs text-amber-100">
+            <span className="font-medium">{pack.name}</span> · {pack.blurb}
+          </p>
+          <p className="mt-1 text-[11px] text-stone-400">
+            Names only. Every race, class, spell and item below plays by the same 5e rules.
+          </p>
+          <UnofficialPackNotice
+            rightsHolder={pack.rightsHolder}
+            inspiredBy={pack.inspiredBy}
+            variant="inline"
+            className="mt-1"
+          />
+        </div>
+      ) : null}
+
       <section className="panel ornate grid grid-cols-1 gap-3 rounded-xl p-4 sm:grid-cols-2">
         <label className="block">
           <span className="mb-1 block text-stone-400">Name</span>
-          <input value={name} onChange={(event) => setName(event.target.value)} required maxLength={60} className={inputClass} />
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            required
+            maxLength={60}
+            placeholder={pack?.nameHints || undefined}
+            className={inputClass}
+          />
+          {pack?.nameSeeds.people.length ? (
+            <span className="mt-1.5 flex flex-wrap gap-1">
+              {pack.nameSeeds.people.slice(0, 8).map((seed) => (
+                <button
+                  key={seed}
+                  type="button"
+                  onClick={() => setName(seed)}
+                  className="rounded border border-stone-800 px-1.5 py-0.5 text-[11px] text-stone-400 transition-colors hover:border-stone-600 hover:text-stone-200"
+                >
+                  {seed}
+                </button>
+              ))}
+            </span>
+          ) : null}
         </label>
         <label className="block">
           <span className="mb-1 block text-stone-400">Gender</span>
@@ -884,7 +1008,12 @@ export default function CharacterBuilder({
           <label className="block">
             <span className="mb-1 block text-stone-400">Alignment</span>
             <select value={alignment} onChange={(event) => setAlignment(event.target.value)} className={inputClass}>
-              {ALIGNMENTS.map((value) => <option key={value} value={value}>{value}</option>)}
+              {alignmentOrder.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                  {pack?.alignments.includes(value) ? " (fits this world)" : ""}
+                </option>
+              ))}
             </select>
           </label>
           <label className="block">
@@ -1064,7 +1193,7 @@ export default function CharacterBuilder({
                   key={`${feature.name}-${feature.level ?? 0}`}
                   className="flex items-center gap-1 text-xs text-stone-300"
                 >
-                  {feature.name}
+                  {displayName(pack, "features", feature.name)}
                   <InfoButton
                     label={feature.name}
                     meta={feature.level ? `Level ${feature.level}` : undefined}
@@ -1404,7 +1533,13 @@ export default function CharacterBuilder({
             renderMeta={(entry) => (entry.level === 0 ? "cantrip" : `level ${entry.level}`)}
           />
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {spells.map((spell) => chip(spell, () => setSpells((current) => current.filter((entry) => entry !== spell))))}
+            {/* The chip shows the world's name; the value in state stays the
+                canonical one the sheet and the rules engine need. */}
+            {spells.map((spell) =>
+              chip(displayName(pack, "spells", spell), () =>
+                setSpells((current) => current.filter((entry) => entry !== spell)),
+              ),
+            )}
           </div>
         </section>
       ) : null}

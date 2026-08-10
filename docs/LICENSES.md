@@ -60,6 +60,37 @@ still find it. Spell aliases live in `src/lib/srd/manifest/spells.json` as
 `{ n: "<canonical>", a: ["<printed name>"] }` and are applied to the pack by
 `scripts/import-open5e.mjs`; `searchSpells` matches on them.
 
+## Campaign plugins (world packs)
+
+**The application is MIT licensed. Third-party and unofficial campaign content
+is not included with this repository and is not covered by the MIT license.**
+
+World packs are the plugin format described in [worlds.md](worlds.md). They come
+from two places, and the split is a licensing boundary:
+
+- `src/lib/worlds/bundled/` ships with the app and is therefore MIT. **Bundled
+  packs must be original works.** A pack built on somebody else's setting cannot
+  go here. `scripts/test-world-packs.mjs` fails the build if a bundled pack
+  names a `rightsHolder`.
+- `data/worlds/` is gitignored and populated at runtime by an admin, from a
+  registry or an uploaded file. Those packs are not part of this repository, are
+  not distributed by this project, and belong to their authors.
+
+No registry is configured by default. Pointing a server at one is an explicit
+act by its operator, and installing a pack is a decision that operator makes.
+
+A pack carries no rules text. It maps canonical SRD ids and names to display
+names and adds original flavor prose, so the surface where copying could happen
+is small. Two rules for pack authors:
+
+1. **Write every blurb yourself.** Researching an existing fan conversion to
+   decide which canonical class a concept maps onto is fine. Copying its prose,
+   or a publisher's, is not.
+2. **Name the rights holder.** A pack that references an existing universe must
+   set `rightsHolder`. That is what turns every surface showing the pack into an
+   explicit notice that it is a fan work carrying no affiliation or endorsement.
+   The exposure worth avoiding is a player believing the rights holder made it.
+
 Dungeons & Dragons and D&D are trademarks of Wizards of the Coast LLC. This
 project is not affiliated with, endorsed, or sponsored by Wizards of the
 Coast.

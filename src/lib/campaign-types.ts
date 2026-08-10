@@ -36,15 +36,21 @@ export type CampaignSummary = {
 // route re-declared its own narrower enum, so the two could drift, and a
 // mode the server did not recognise fell through to "do" silently.
 //
-// "lead" is labelled "Direct" in the UI and posts to /lead-note; "ask" posts
-// to /ask and never touches the story; everything else posts to /actions.
-export const INPUT_KINDS = ["do", "say", "ooc", "ask", "lead"] as const;
+// "lead" is labelled "Direct" in the UI and posts to /lead-note; everything
+// else posts to /actions.
+//
+// Asking the DM a question is deliberately NOT in here. It is not a composer
+// mode: it lives entirely in the Ask strip above the composer, which posts to
+// /ask itself (src/app/campaigns/[campaignId]/AskPanel.tsx). Adding "ask"
+// back would put a second Ask entry point in the same column as the first.
+export const INPUT_KINDS = ["do", "say", "ooc", "lead"] as const;
 export type InputKind = (typeof INPUT_KINDS)[number];
 
-// The modes that do not consume the floor: table talk and questions work
-// during a hold, a spotlight, another player's initiative turn, and while
-// the DM is narrating.
-export const FLOOR_EXEMPT_KINDS: readonly InputKind[] = ["ooc", "ask", "lead"];
+// The modes that do not consume the floor: table talk and lead directions
+// work during a hold, a spotlight, another player's initiative turn, and
+// while the DM is narrating. Asking is exempt too, but it never routes
+// through here because it is not an InputKind.
+export const FLOOR_EXEMPT_KINDS: readonly InputKind[] = ["ooc", "lead"];
 
 export function isFloorExempt(kind: InputKind): boolean {
   return FLOOR_EXEMPT_KINDS.includes(kind);

@@ -76,8 +76,6 @@ import { listActiveFacts } from "@/lib/db/facts";
 import { consumePendingSparks, tickWorldState } from "@/lib/dm/world-tick";
 import { buildDirectorBlock } from "@/lib/dm/director-logic";
 import { takeDirectorArm } from "@/lib/db/director-arms";
-import { buildBriefBlock } from "@/lib/dm/ask-brief-logic";
-import { takeAskBriefs } from "@/lib/db/ask-briefs";
 import { listPins } from "@/lib/db/pins";
 import { isStageEnabled } from "@/lib/dm/stages";
 import { renderVariantRules } from "@/lib/dm/rules-logic";
@@ -361,19 +359,6 @@ export async function startDmTurn(campaignId: string) {
       absoluteCommand: "",
     });
   }
-  // Taken the same way and for the same reasons as the director arm above:
-  // one statement, so a brief fires exactly once, and consumed before the
-  // conversation is persisted so a retry replays it rather than re-firing it.
-  const askBriefs = takeAskBriefs(campaignId);
-  const askBriefBlock = askBriefs
-    .map((brief) => buildBriefBlock(brief.text, brief.authorName))
-    .filter(Boolean)
-    .join("\n\n");
-  if (askBriefs.length) {
-    // Contentless, like every other Ask event: a private brief must not leak
-    // its text to the table, so clients refetch what they may read.
-    publishEphemeral(campaignId, "ask_activity", {});
-  }
   const promptState: DmGameState = {
       campaign,
       // The window the prompt is actually being built against; without this
@@ -387,7 +372,7 @@ export async function startDmTurn(campaignId: string) {
       sheets: context.sheets,
       encounter: buildEncounterState(campaignId, context.sheets),
       enemySuggestions: suggestEnemies(
-        campaign.gameSettings.genre,
+        campaign.gameSettings,
         context.sheets.map((sheet) => sheet.level),
         10,
       ),
@@ -436,7 +421,6 @@ export async function startDmTurn(campaignId: string) {
       })),
       directorNotes: consumePendingSparks(campaignId).map((spark) => spark.text),
       directorBlock,
-      askBriefBlock,
       npcs: npcRosterForPrompt(campaignId),
       relationships:
         campaign.gameSettings.relationships === "off"

@@ -5,7 +5,7 @@ import {
 } from "@/lib/db/campaigns";
 import { getDatabase, nowIso } from "@/lib/db/core";
 import { listSheets } from "@/lib/db/sheets";
-import { genrePreset } from "@/lib/genres";
+import { presetFor, packWorldHints } from "@/lib/worlds/preset";
 import { publishPersisted } from "@/lib/events";
 import { stripReasoningArtifacts } from "@/lib/story-prompt";
 import { requestDmMessage } from "@/lib/dm/model";
@@ -18,7 +18,7 @@ export async function runStorySetup(campaignId: string) {
   if (!campaign || !campaign.gameSettings.aiStorySetup || campaign.dmOutline) {
     return;
   }
-  const preset = genrePreset(campaign.gameSettings.genre);
+  const preset = presetFor(campaign.gameSettings);
   const sheets = listSheets(campaignId);
   const party = sheets
     .map((sheet) => `- ${sheet.name}: level ${sheet.level} ${sheet.race} ${sheet.class}${sheet.subclass ? ` (${sheet.subclass})` : ""}, background ${sheet.background || "unknown"}`)
@@ -30,6 +30,9 @@ export async function runStorySetup(campaignId: string) {
     campaign.gameSettings.genre === "custom"
       ? campaign.gameSettings.customGenreText
       : `Genre: ${preset.name}. ${preset.dmFlavor} ${preset.nameHints}`,
+    // A selected world pack brings its own factions, places and hooks, which
+    // is exactly the raw material this pass is trying to invent.
+    packWorldHints(campaign.gameSettings),
   ]
     .filter(Boolean)
     .join("\n");

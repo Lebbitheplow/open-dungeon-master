@@ -14,7 +14,7 @@ type RuleChunkView = {
   pinned: boolean;
 };
 
-const VARIANT_TOGGLES: Array<{
+export const VARIANT_TOGGLES: Array<{
   key: keyof GameSettings["variantRules"] & string;
   label: string;
   tip: string;
@@ -41,11 +41,64 @@ const VARIANT_TOGGLES: Array<{
   },
 ];
 
-const REST_LABELS: Record<GameSettings["variantRules"]["restVariant"], string> = {
+export const REST_LABELS: Record<GameSettings["variantRules"]["restVariant"], string> = {
   standard: "Standard rests (1h short, 8h long)",
   gritty: "Gritty realism (8h short, 7-day long)",
   heroic: "Heroic (5min short, 1h long)",
 };
+
+// The variant-rule controls on their own, so the campaign-creation dialog can
+// offer the same choices this panel does without the lead having to open the
+// lobby afterwards to find them.
+export function VariantRulesFields({
+  value,
+  onChange,
+}: {
+  value: GameSettings["variantRules"];
+  onChange: (next: GameSettings["variantRules"]) => void;
+}) {
+  return (
+    <div>
+      <span className="mb-1.5 block text-stone-400">Variant rules</span>
+      <div className="flex flex-wrap gap-1.5">
+        {VARIANT_TOGGLES.map((toggle) => (
+          <Tooltip key={toggle.key} content={toggle.tip}>
+            <button
+              type="button"
+              onClick={() => onChange({ ...value, [toggle.key]: !value[toggle.key] })}
+              className={cn(
+                "rounded-md border px-2 py-1 text-xs transition-colors",
+                value[toggle.key]
+                  ? "border-amber-200/40 bg-amber-200/10 text-amber-100"
+                  : "border-stone-800 text-stone-400 hover:border-stone-600",
+              )}
+            >
+              {toggle.label}
+            </button>
+          </Tooltip>
+        ))}
+      </div>
+      <select
+        value={value.restVariant}
+        onChange={(event) =>
+          onChange({
+            ...value,
+            restVariant: event.target.value as GameSettings["variantRules"]["restVariant"],
+          })
+        }
+        className="mt-2 w-full rounded-lg border border-stone-800 bg-stone-950/60 px-2 py-1.5 text-xs text-stone-300"
+      >
+        {(Object.keys(REST_LABELS) as Array<GameSettings["variantRules"]["restVariant"]>).map(
+          (variant) => (
+            <option key={variant} value={variant}>
+              {REST_LABELS[variant]}
+            </option>
+          ),
+        )}
+      </select>
+    </div>
+  );
+}
 
 // Rules manager: 5e variant toggles plus lead-authored house rules. The
 // house-rules text is chunked server-side; each chunk can be silenced or

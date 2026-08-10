@@ -1,14 +1,10 @@
 "use client";
 
 import {
-  BookMarked,
   BookOpen,
-  Heart,
   Map as MapIcon,
-  MessageCircleQuestion,
   MessageSquareText,
   MessagesSquare,
-  ScrollText,
   Gauge,
   Settings2,
   StickyNote,
@@ -22,19 +18,59 @@ import type { PlayerMapView } from "@/lib/battlemap/view";
 
 export type PanelTab =
   | "party"
-  | "ask"
   | "battle"
   | "map"
   | "story"
-  | "facts"
-  | "bonds"
   | "notes"
   | "chat"
-  | "log"
   | "context"
   | "settings";
 
 export type PanelTabDef = [PanelTab, string, LucideIcon, string];
+
+// Second-level navigation inside a single tab. Facts and the audited log are
+// both records of what the story has already made true, so they live under
+// Story; bonds are grouped per character exactly like the roster, so they
+// live under Party. Keeping them here rather than in the rail is what stops
+// the header overflowing in a 320px panel.
+export type StorySection = "story" | "facts" | "log";
+export type PartySection = "party" | "bonds";
+
+export type SubTabDef<T extends string> = [T, string, LucideIcon];
+
+// The shared secondary row, deliberately quieter than the main rail: pills
+// rather than the rail's icon-over-label cells, so it never reads as a second
+// set of top-level tabs.
+export function SubTabs<T extends string>({
+  tabs,
+  value,
+  onChange,
+}: {
+  tabs: SubTabDef<T>[];
+  value: T;
+  onChange: (next: T) => void;
+}) {
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-1.5">
+      {tabs.map(([option, label, Icon]) => (
+        <button
+          key={option}
+          type="button"
+          onClick={() => onChange(option)}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] transition-colors",
+            value === option
+              ? "border-amber-700 bg-amber-950/40 text-amber-200"
+              : "border-stone-700 text-stone-400 hover:text-stone-200",
+          )}
+        >
+          <Icon className="size-3" />
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 // Which of the two session columns is visible below the lg breakpoint. On
 // desktop both render side by side and this state has no visual effect.
@@ -47,7 +83,6 @@ export function buildPanelTabs({
   mapsEnabled,
   hasSettings,
   isLead,
-  relationshipsEnabled,
 }: {
   hasBattleMap: boolean;
   mapsEnabled: boolean;
@@ -56,37 +91,28 @@ export function buildPanelTabs({
   // secret arc and the DM outline. Its route is lead-only, so offering the
   // tab to a player only ever produces a 403 and a broken panel.
   isLead: boolean;
-  relationshipsEnabled: boolean;
 }): PanelTabDef[] {
   return [
-    ["party", "Party", Users, "Character sheets, HP and conditions for the whole party."],
+    [
+      "party",
+      "Party",
+      Users,
+      "Character sheets, HP and conditions for the whole party, and their bonds with the people they have met.",
+    ],
     ...(hasBattleMap
       ? ([["battle", "Battle", Swords, "The tactical battle map. Move your token on your turn."]] as PanelTabDef[])
       : []),
     ...(mapsEnabled
       ? ([["map", "Map", MapIcon, "The scene map and discovered locations."]] as PanelTabDef[])
       : []),
-    ["story", "Story", BookOpen, "Chapters and the tale so far."],
-    ["facts", "Facts", BookMarked, "The world-state record: facts the DM never contradicts."],
-    ...(relationshipsEnabled
-      ? ([
-          [
-            "bonds",
-            "Bonds",
-            Heart,
-            "Where each character stands with the NPCs and companions they have dealt with.",
-          ],
-        ] as PanelTabDef[])
-      : []),
     [
-      "ask",
-      "Ask",
-      MessageCircleQuestion,
-      "Questions you put to the DM, and the answers. Asking never moves the story.",
+      "story",
+      "Story",
+      BookOpen,
+      "Chapters and the tale so far, the world-state record, and the audited log of rolls and stat changes.",
     ],
     ["notes", "Notes", StickyNote, "Suggest story notes; the party lead approves them."],
     ["chat", "Chat", MessagesSquare, "Side chat between players. The DM does not see it."],
-    ["log", "Log", ScrollText, "Dice rolls and DM stat changes, audited."],
     ...(hasSettings && isLead
       ? ([
           [

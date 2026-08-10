@@ -2,7 +2,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { Loader2, X } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { GENRE_PRESETS } from "@/lib/genres";
@@ -10,8 +10,16 @@ import { TTS_VOICES } from "@/lib/tts-voices";
 import { VoicePreviewButton } from "@/components/VoicePreviewButton";
 import { CAMPAIGN_DIFFICULTIES, type CampaignDifficulty } from "@/lib/campaign-types";
 import { InfoButton } from "@/components/ui/InfoDialog";
-import { LIVING_WORLD_INFO } from "@/app/campaigns/[campaignId]/GameSettingsPanel";
+import {
+  BONDS_INFO,
+  LIVING_WORLD_INFO,
+  NARRATION_GUARD_INFO,
+  ROMANCE_INFO,
+} from "@/app/campaigns/[campaignId]/GameSettingsPanel";
+import { VariantRulesFields } from "@/app/campaigns/[campaignId]/RulesPanel";
 import { submitWorldSetup, WorldSetupFields, type LoreDraft } from "@/app/WorldSetupFields";
+import { groupByFranchise, type WorldPackSummary } from "@/lib/worlds/types";
+import { UnofficialPackNotice } from "@/components/UnofficialPackNotice";
 import {
   CAMPAIGN_LENGTH_LABELS,
   CAMPAIGN_LENGTHS,
@@ -44,6 +52,12 @@ export function CreateCampaignDialog({
   const [campaignLength, setCampaignLength] = useState<CampaignLengthSetting>("standard");
   const [genre, setGenre] = useState<Genre>("high_fantasy");
   const [customGenreText, setCustomGenreText] = useState("");
+  const [worldPack, setWorldPack] = useState("");
+  const [packs, setPacks] = useState<WorldPackSummary[]>([]);
+  // A theme or premise the person typed is never clobbered by a later pack
+  // choice; one the pack filled in is fair game to replace.
+  const themeTouched = useRef(false);
+  const descriptionTouched = useRef(false);
   const [aiStorySetup, setAiStorySetup] = useState(true);
   const [dicePolicy, setDicePolicy] = useState<DicePolicy>("digital_only");
   const [ttsEnabled, setTtsEnabled] = useState(true);
@@ -52,6 +66,18 @@ export function CreateCampaignDialog({
   const [multiclassingEnabled, setMulticlassingEnabled] = useState(true);
   const [worldSimulation, setWorldSimulation] = useState(true);
   const [inventoryApprovals, setInventoryApprovals] = useState(false);
+  const [midGameJoinOpen, setMidGameJoinOpen] = useState(false);
+  const [holdSubmissions, setHoldSubmissions] = useState(false);
+  const [narrationGuard, setNarrationGuard] = useState(true);
+  const [relationships, setRelationships] = useState<GameSettings["relationships"]>("on");
+  const [romance, setRomance] = useState<GameSettings["romance"]>("on");
+  const [variantRules, setVariantRules] = useState<GameSettings["variantRules"]>({
+    flanking: false,
+    criticalFumbles: false,
+    encumbrance: false,
+    lingeringInjuries: false,
+    restVariant: "standard",
+  });
   const [houseRules, setHouseRules] = useState("");
   const [loreDrafts, setLoreDrafts] = useState<LoreDraft[]>([]);
   const [companions, setCompanions] = useState<GameSettings["companions"]>("auto");
@@ -59,6 +85,55 @@ export function CreateCampaignDialog({
   const [maxGuests, setMaxGuests] = useState(2);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // Fetched rather than imported: the pack files are read off disk on the
+  // server, and the summaries are all a picker needs.
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    let cancelled = false;
+    void fetch("/api/worlds")
+      .then((response) => (response.ok ? response.json() : { packs: [] }))
+      .then((data) => {
+        if (!cancelled) {
+          setPacks(Array.isArray(data.packs) ? data.packs : []);
+        }
+      })
+      .catch(() => {
+        // No packs installed is a valid state; the section simply hides.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  const franchises = useMemo(() => groupByFranchise(packs), [packs]);
+  const selectedPack = packs.find((pack) => pack.id === worldPack) ?? null;
+
+  function choosePack(pack: WorldPackSummary) {
+    setWorldPack(pack.id);
+    // A pack always also sets the genre, which is what keeps every existing
+    // genre consumer working. The Setting row visibly follows along, which is
+    // the honest explanation of what a pack actually is.
+    setGenre(pack.baseGenre);
+    if (!themeTouched.current) {
+      setTheme(pack.theme);
+    }
+    if (!descriptionTouched.current) {
+      setDescription(pack.premise);
+    }
+  }
+
+  function clearPack() {
+    setWorldPack("");
+    if (!themeTouched.current && selectedPack && theme === selectedPack.theme) {
+      setTheme("");
+    }
+    if (!descriptionTouched.current && selectedPack && description === selectedPack.premise) {
+      setDescription("");
+    }
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -85,11 +160,24 @@ export function CreateCampaignDialog({
             ttsVoice,
             mapsEnabled,
             multiclassingEnabled,
+            midGameJoinOpen,
+            holdSubmissions,
+            narrationGuard,
+            relationships,
+            // Romance rides on the bond meter, so it cannot be on without it.
+            romance: relationships === "off" ? "off" : romance,
             worldSimulation,
             inventoryApprovals,
+            variantRules,
             companions,
             maxCompanions,
             maxGuests,
+            worldPack,
+            // `stages` is the one gameSettings field deliberately not offered
+            // here. It trades turn quality for speed on a slow local model,
+            // which is an operator decision, not a table decision, so it
+            // stays in the lobby's settings panel where the labels can
+            // explain which stages actually save a model call.
           },
         }),
       });
@@ -145,6 +233,59 @@ export function CreateCampaignDialog({
               />
             </label>
 
+            {franchises.length ? (
+              <div>
+                <span className="mb-1 block text-stone-400">Pre-built world (optional)</span>
+                <select
+                  value={worldPack}
+                  onChange={(event) => {
+                    const next = packs.find((pack) => pack.id === event.target.value);
+                    if (next) {
+                      choosePack(next);
+                    } else {
+                      clearPack();
+                    }
+                  }}
+                  className={inputClass}
+                >
+                  <option value="">No pack (plain setting)</option>
+                  {franchises.map((group) =>
+                    // A franchise with one era is a single row. One with several
+                    // gets an optgroup, so the eras stay grouped under the name
+                    // without the list needing its own expand step.
+                    group.editions.length === 1 ? (
+                      <option key={group.franchise} value={group.editions[0].id}>
+                        {group.editions[0].name}
+                      </option>
+                    ) : (
+                      <optgroup key={group.franchise} label={group.franchise}>
+                        {group.editions.map((edition) => (
+                          <option key={edition.id} value={edition.id}>
+                            {edition.edition || edition.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ),
+                  )}
+                </select>
+                {selectedPack ? (
+                  <>
+                    <p className="mt-1 text-xs text-stone-500">{selectedPack.blurb}</p>
+                    <UnofficialPackNotice
+                      rightsHolder={selectedPack.rightsHolder}
+                      inspiredBy={selectedPack.inspiredBy}
+                      className="mt-1.5"
+                    />
+                  </>
+                ) : (
+                  <p className="mt-1 text-xs text-stone-500">
+                    A pre-built world renames the races, classes, spells and monsters to fit it, and
+                    tells the DM how it sounds. Every rule stays 5e.
+                  </p>
+                )}
+              </div>
+            ) : null}
+
             <div>
               <span className="mb-1.5 block text-stone-400">Setting</span>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -152,7 +293,17 @@ export function CreateCampaignDialog({
                   <button
                     key={preset.id}
                     type="button"
-                    onClick={() => setGenre(preset.id)}
+                    onClick={() => {
+                      // Picking a bare genre by hand leaves the pack. A pack
+                      // is defined as its baseGenre plus overrides, so letting
+                      // the two disagree would blend the pack's flavor over
+                      // the wrong preset and overlay its monsters onto the
+                      // wrong bestiary catalog.
+                      if (worldPack) {
+                        clearPack();
+                      }
+                      setGenre(preset.id);
+                    }}
                     title={preset.blurb}
                     className={cn(
                       "rounded-lg border px-2 py-1.5 text-xs transition-colors",
@@ -186,7 +337,10 @@ export function CreateCampaignDialog({
               </span>
               <textarea
                 value={description}
-                onChange={(event) => setDescription(event.target.value)}
+                onChange={(event) => {
+                  descriptionTouched.current = true;
+                  setDescription(event.target.value);
+                }}
                 rows={2}
                 maxLength={500}
                 className={inputClass}
@@ -196,7 +350,10 @@ export function CreateCampaignDialog({
               <span className="mb-1 block text-stone-400">World or theme notes</span>
               <input
                 value={theme}
-                onChange={(event) => setTheme(event.target.value)}
+                onChange={(event) => {
+                  themeTouched.current = true;
+                  setTheme(event.target.value);
+                }}
                 maxLength={120}
                 placeholder="Low-magic gritty, homebrew fey court, neon-drenched megacity..."
                 className={inputClass}
@@ -349,7 +506,86 @@ export function CreateCampaignDialog({
                   Players confirm DM loot and gold changes
                 </span>
               </button>
+              <div className="relative flex">
+                <button
+                  type="button"
+                  onClick={() => setRelationships(relationships === "off" ? "on" : "off")}
+                  className={toggleClass(relationships !== "off")}
+                >
+                  <span className="block font-medium">Bonds</span>
+                  <span className="block text-xs opacity-80">
+                    NPCs remember how each character treated them
+                  </span>
+                </button>
+                <InfoButton
+                  label="What are Bonds?"
+                  text={BONDS_INFO}
+                  className="absolute right-1.5 top-1.5"
+                />
+              </div>
+              {relationships !== "off" ? (
+                <div className="relative flex">
+                  <button
+                    type="button"
+                    onClick={() => setRomance(romance === "off" ? "on" : "off")}
+                    className={toggleClass(romance !== "off")}
+                  >
+                    <span className="block font-medium">Romance</span>
+                    <span className="block text-xs opacity-80">
+                      Bonds can grow into a relationship
+                    </span>
+                  </button>
+                  <InfoButton
+                    label="How does Romance work?"
+                    text={ROMANCE_INFO}
+                    className="absolute right-1.5 top-1.5"
+                  />
+                </div>
+              ) : null}
+              <div className="relative flex">
+                <button
+                  type="button"
+                  onClick={() => setNarrationGuard(!narrationGuard)}
+                  className={toggleClass(narrationGuard)}
+                >
+                  <span className="block font-medium">Outcome check</span>
+                  <span className="block text-xs opacity-80">
+                    Narration that contradicts the dice is rewritten
+                  </span>
+                </button>
+                <InfoButton
+                  label="What is the outcome check?"
+                  text={NARRATION_GUARD_INFO}
+                  className="absolute right-1.5 top-1.5"
+                />
+              </div>
+              {!solo ? (
+                <button
+                  type="button"
+                  onClick={() => setMidGameJoinOpen(!midGameJoinOpen)}
+                  className={toggleClass(midGameJoinOpen)}
+                >
+                  <span className="block font-medium">Mid-game joining</span>
+                  <span className="block text-xs opacity-80">
+                    New players can use the invite code after the start
+                  </span>
+                </button>
+              ) : null}
+              {!solo ? (
+                <button
+                  type="button"
+                  onClick={() => setHoldSubmissions(!holdSubmissions)}
+                  className={toggleClass(holdSubmissions)}
+                >
+                  <span className="block font-medium">Held responses</span>
+                  <span className="block text-xs opacity-80">
+                    Nobody acts until the party lead opens the floor
+                  </span>
+                </button>
+              ) : null}
             </div>
+
+            <VariantRulesFields value={variantRules} onChange={setVariantRules} />
 
             <WorldSetupFields
               houseRules={houseRules}

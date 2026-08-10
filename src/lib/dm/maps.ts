@@ -1,6 +1,6 @@
 import { generateComfyImage } from "@/lib/comfyui";
 import { getLocation, setLocationMap } from "@/lib/db/locations";
-import { genrePreset } from "@/lib/genres";
+import { presetFor } from "@/lib/worlds/preset";
 import { publishPersisted } from "@/lib/events";
 import { publishMediaStatus } from "@/lib/dm/images";
 import { enqueueMediaJob } from "@/lib/media-queue";
@@ -9,7 +9,7 @@ import type { Campaign } from "@/lib/db/campaigns";
 // Renders a top-down illustrated map of a location on the serial media
 // queue (never blocks narration; one GPU job at a time machine-wide).
 export function enqueueLocationMap(campaign: Campaign, locationId: string) {
-  const preset = genrePreset(campaign.gameSettings.genre);
+  const preset = presetFor(campaign.gameSettings);
   publishMediaStatus(campaign.id, "map", locationId, "queued");
   return enqueueMediaJob(`map ${locationId}`, async () => {
     const location = getLocation(locationId);

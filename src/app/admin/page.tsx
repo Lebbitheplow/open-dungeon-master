@@ -1,12 +1,13 @@
 "use client";
 
-import { Loader2, Settings2, Users } from "lucide-react";
+import { Globe2, Loader2, Settings2, Users } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { PIXEL_ICONS, PixelTile } from "@/lib/ui";
 import { AdminSettingsPanel } from "@/app/admin/AdminSettingsPanel";
 import { AdminUsersPanel } from "@/app/admin/AdminUsersPanel";
+import { AdminWorldsPanel } from "@/app/admin/AdminWorldsPanel";
 
 type Me = {
   id: string;
@@ -14,7 +15,7 @@ type Me = {
   isAdmin: boolean;
 };
 
-type Tab = "settings" | "users";
+type Tab = "settings" | "users" | "worlds";
 
 // Server control panel. The page only decides what to render; every admin
 // API route re-checks the is_admin flag server-side.
@@ -55,6 +56,7 @@ export default function AdminPage() {
 
   const tabs: Array<[Tab, string, typeof Settings2]> = [
     ["settings", "Server settings", Settings2],
+    ["worlds", "Campaign plugins", Globe2],
     ["users", "Users", Users],
   ];
 
@@ -91,7 +93,13 @@ export default function AdminPage() {
         ))}
       </div>
 
-      {tab === "settings" ? <AdminSettingsPanel /> : <AdminUsersPanel meId={me.id} />}
+      {tab === "settings" ? (
+        <AdminSettingsPanel />
+      ) : tab === "worlds" ? (
+        <AdminWorldsPanel />
+      ) : (
+        <AdminUsersPanel meId={me.id} />
+      )}
     </main>
   );
 }

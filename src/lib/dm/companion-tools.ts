@@ -43,8 +43,9 @@ import {
 } from "@/lib/srd";
 import { populateFeatures } from "@/lib/srd/features";
 import { queueCompanionPortrait } from "@/lib/portrait";
-import { genreClassIds } from "@/lib/classes";
-import { genrePreset } from "@/lib/genres";
+import { settingClassIds } from "@/lib/classes";
+import { presetFor, packFor } from "@/lib/worlds/preset";
+import { packIds } from "@/lib/worlds/reskin-logic";
 import { resolveCompanionMode, type CompanionMode } from "@/lib/schemas/game-settings";
 import {
   createSheetSchema,
@@ -85,13 +86,26 @@ type ToolDef = {
 
 export const COMPANION_TOOL_NAMES = new Set(["add_companion", "dismiss_companion"]);
 
+// A pack's class ids, filtered to the ones findClass can actually resolve.
+// This list becomes the add_companion allowlist and the text of the retry
+// error, so an id the catalog does not have would tell the model to call again
+// with a class that can never validate: an unwinnable retry loop. Packs in the
+// repo are checked by scripts/test-world-packs.mjs, but one loaded through
+// WORLD_PACKS_DIR is unvetted.
+function packClassIds(settings: Campaign["gameSettings"]): string[] {
+  return packIds(packFor(settings), "classes").filter((id) => findClass(id));
+}
+
 export function companionTools(campaign: Campaign): ToolDef[] {
   const mode = companionMode(campaign);
   if (mode === "off") {
     return [];
   }
-  const preset = genrePreset(campaign.gameSettings.genre);
-  const classIds = genreClassIds(campaign.gameSettings.genre);
+  const preset = presetFor(campaign.gameSettings);
+  const classIds = settingClassIds(
+    campaign.gameSettings.genre,
+    packClassIds(campaign.gameSettings),
+  );
   const classDescription = classIds.length
     ? `Class id from this world's catalog. Only these belong in this setting: ${classIds.join(", ")}. Anything else is refused.`
     : "Class id from this world's catalog, e.g. 'fighter', 'cleric'.";
@@ -245,7 +259,7 @@ export function handleAddCompanion(
     };
   }
 
-  const preset = genrePreset(campaign.gameSettings.genre);
+  const preset = presetFor(campaign.gameSettings);
   const klass = resolveClass(args.class);
   if (!klass) {
     return {
@@ -254,7 +268,10 @@ export function handleAddCompanion(
   }
   // Off-genre classes are refused outright: a high-fantasy paladin walking
   // into a cyberpunk campaign breaks the world harder than a retry costs.
-  const allowedClasses = genreClassIds(campaign.gameSettings.genre);
+  const allowedClasses = settingClassIds(
+    campaign.gameSettings.genre,
+    packClassIds(campaign.gameSettings),
+  );
   if (allowedClasses.length && !allowedClasses.includes(klass.id)) {
     return {
       error: `${klass.name} does not belong in this world (${preset.name}). Call add_companion again with one of: ${allowedClasses.join(", ")}.`,
@@ -428,6 +445,7 @@ export function finalizeNewCompanion(
       background: sheet.background,
       personality,
       genre: campaign.gameSettings.genre,
+      worldPack: campaign.gameSettings.worldPack,
     });
   }
 

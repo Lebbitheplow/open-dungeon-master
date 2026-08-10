@@ -781,6 +781,12 @@ function ensureSchema(db: Database.Database) {
       PRIMARY KEY (campaign_id, pair_key)
     );
 
+    -- VESTIGIAL. The "pass a note to the DM" feature this backed was removed;
+    -- the private message channel in the chat tab covers the same ground and
+    -- gets a reply. Nothing reads or writes this table any more. It is kept
+    -- only so live databases are left untouched, and can be dropped whenever
+    -- a migration is written. Rows were one-shot and deleted on read, so
+    -- there is no data here worth preserving.
     CREATE TABLE IF NOT EXISTS ask_briefs (
       campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
       user_id TEXT NOT NULL,

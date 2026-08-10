@@ -11,6 +11,12 @@ export const globalConfigSchema = z.object({
   // Used for OAuth redirect URIs; blank = APP_PUBLIC_URL env, then forwarded
   // proxy headers, then the raw request origin.
   publicUrl: z.string().trim().max(500).default(""),
+  // Index of downloadable community world packs, fetched by the plugin
+  // browser. Blank = WORLD_REGISTRY_URL env, then nothing, in which case the
+  // browser offers manual file install only. Deliberately not defaulted to
+  // any host: the packs a registry lists are third-party content this
+  // project neither ships nor vets, so pointing at one is an explicit act.
+  worldRegistryUrl: z.string().trim().max(500).default(""),
   // Per-role sampling (src/lib/dm/sampling-logic.ts). Blank profile plus
   // empty overrides means "send exactly what the build sends today", so this
   // is a no-op until an admin changes something. presence_penalty is

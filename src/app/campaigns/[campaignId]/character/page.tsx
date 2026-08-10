@@ -38,6 +38,7 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
     requested === "edit" || requested === "replace" ? requested : "join";
   const [level, setLevel] = useState<number | null>(null);
   const [genre, setGenre] = useState<Genre | undefined>(undefined);
+  const [worldPackId, setWorldPackId] = useState("");
   const [library, setLibrary] = useState<LibraryCharacter[]>([]);
   const [mode, setMode] = useState<"choose" | "create">(
     flow === "edit" ? "create" : "choose",
@@ -63,6 +64,7 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
         }
         setLevel(campaignData?.campaign?.startingLevel ?? 1);
         setGenre(campaignData?.campaign?.gameSettings?.genre ?? undefined);
+        setWorldPackId(campaignData?.campaign?.gameSettings?.worldPack ?? "");
         const characters = charactersData?.characters ?? [];
         setLibrary(characters);
         setCurrentLibraryId(sheetData?.sheet?.libraryCharacterId ?? null);
@@ -217,6 +219,7 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
           <CharacterBuilder
             fixedLevel={level}
             genre={genre}
+            worldPackId={worldPackId}
             initial={flow === "edit" ? editCharacter?.sheet : undefined}
             submitLabel={
               flow === "edit"

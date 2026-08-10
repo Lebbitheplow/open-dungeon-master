@@ -13,7 +13,6 @@ import {
 } from "react";
 import { cn } from "@/lib/cn";
 import { JOIN_NOTE_PREFIX, isFloorExempt, latestUnintroducedJoin } from "@/lib/campaign-types";
-import type { AskScope, AskVisibility } from "@/lib/dm/ask-logic";
 import { PIXEL_ICONS, PixelTile } from "@/lib/ui";
 import { HelpDialog } from "@/components/HelpDialog";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -26,6 +25,7 @@ import { LoreCheckDialog } from "@/app/campaigns/[campaignId]/LoreCheckDialog";
 import { RenarrateDialog } from "@/app/campaigns/[campaignId]/RenarrateDialog";
 import { MessageList } from "@/app/campaigns/[campaignId]/MessageList";
 import { UtilityCallStrip } from "@/app/campaigns/[campaignId]/UtilityCallStrip";
+import { AskDock } from "@/app/campaigns/[campaignId]/AskPanel";
 import type { CampaignMessage } from "@/lib/db/messages";
 import {
   BottomTabBar,
@@ -76,9 +76,20 @@ export function SessionView({
   } = state;
   const [input, setInput] = useState("");
   const [kind, setKind] = useState<InputKind>("do");
-  const [askScope, setAskScope] = useState<AskScope | "auto">("auto");
-  const [askVisibility, setAskVisibility] = useState<AskVisibility>("private");
-  const [askPending, setAskPending] = useState("");
+  // Whether a lead direction is spoken to the table or only to the DM.
+  // Defaults to off, so Direct keeps behaving as it always has unless the
+  // lead deliberately hides one.
+  const [leadPrivate, setLeadPrivate] = useState(false);
+  // The Ask strip sits in the chat column and starts closed. It owns the rest
+  // of the feature itself, including the question box and the in-flight echo;
+  // all this view keeps is whether the strip is expanded.
+  const [askOpen, setAskOpen] = useState(false);
+  // Ask already reports its own progress inside the strip, naming the question
+  // being answered, so repeating it in the strip is the same news twice.
+  const visibleUtilityCalls = useMemo(
+    () => utilityCalls.filter((call) => call.kind !== "ask"),
+    [utilityCalls],
+  );
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [dismissedLevelUp, setDismissedLevelUp] = useState("");
@@ -162,12 +173,13 @@ export function SessionView({
         : [],
     [floor, sheets],
   );
-  // Table talk, questions, and lead directions never wait on the floor.
+  // Table talk and lead directions never wait on the floor. (Asking does not
+  // either, but it does not come through this composer at all.)
   const exempt = isFloorExempt(kind);
   const floorBlocked =
     floor.mode === "spotlight" && !floor.userIds.includes(me?.id ?? "") && !exempt;
   // Held responses: the lead has not opened the floor after the last DM
-  // narration. OOC, Ask, and lead directions stay available.
+  // narration. OOC and lead directions stay available, as does the Ask strip.
   const holdBlocked = floor.mode === "hold" && !exempt;
   // Combat: only the current-turn player acts; everyone else waits.
   const initiativeBlocked =
@@ -193,9 +205,10 @@ export function SessionView({
     Boolean(firstDmMessageId) &&
     narration.playingMessageId === firstDmMessageId &&
     messages.filter((message) => message.authorType === "dm").length === 1;
-  // The opening narration gets the table's attention, but a question about
-  // it is exactly the kind of thing someone wants to ask while it plays.
-  const narrationBlocked = openingNarrationPlaying && kind !== "ooc" && kind !== "ask";
+  // The opening narration gets the table's attention. A question about it is
+  // exactly the kind of thing someone wants to ask while it plays, and the
+  // Ask strip is never blocked, so this only has to spare OOC.
+  const narrationBlocked = openingNarrationPlaying && kind !== "ooc";
   const inputBlocked = floorBlocked || holdBlocked || initiativeBlocked || narrationBlocked;
   const placeholder = narrationBlocked
     ? "The Dungeon Master is setting the scene... (OOC still open)"
@@ -211,9 +224,9 @@ export function SessionView({
               ? `What does ${mySheet?.name ?? "your character"} say?`
               : kind === "ooc"
                 ? "Out-of-character note to the table"
-                : kind === "ask"
-                  ? "Ask the DM about the story, the world, the rules, or your sheet"
-                  : "Steer the story: an event or direction the DM must weave in";
+                : leadPrivate
+                  ? "Tell the DM privately what to do with the next turn"
+                  : "Steer the story: a direction the DM must weave in";
   // A mid-game joiner without a character is gated to creation first.
   const needsCharacter = !mySheet && campaign?.status === "active";
   // Lead prompt: a newcomer's join note the DM has not narrated past yet.
@@ -227,10 +240,11 @@ export function SessionView({
         mapsEnabled: campaign?.gameSettings?.mapsEnabled ?? true,
         hasSettings: Boolean(campaign),
         isLead,
-        relationshipsEnabled: campaign?.gameSettings?.relationships !== "off",
       }),
     [state.battleMap, campaign, isLead],
   );
+  // Gates the Bonds sub-tab inside the Party panel.
+  const relationshipsEnabled = campaign?.gameSettings?.relationships !== "off";
 
   const campaignId = campaign?.id;
 
@@ -247,53 +261,42 @@ export function SessionView({
       }
       setSending(true);
       setError("");
-      // An ask can take a while on a local model and answers into the side
-      // panel rather than the transcript, so echo the question immediately;
-      // otherwise the composer just empties and nothing visibly happens.
-      if (kind === "ask") {
-        setAskPending(content);
-      }
       try {
+        // A lead direction goes one of two ways. Public is a visible note the
+        // table can read and the DM answers now; private arms the same
+        // one-turn steer the event presets use, so no character hears it and
+        // it never enters the transcript.
         const response =
           kind === "lead"
-            ? await fetch(`/api/campaigns/${campaignId}/lead-note`, {
+            ? leadPrivate
+              ? await fetch(`/api/campaigns/${campaignId}/director`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ oneShot: null, absoluteCommand: content }),
+                })
+              : await fetch(`/api/campaigns/${campaignId}/lead-note`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ content }),
+                })
+            : await fetch(`/api/campaigns/${campaignId}/actions`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ content }),
-              })
-            : kind === "ask"
-              ? await fetch(`/api/campaigns/${campaignId}/ask`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    question: content,
-                    scope: askScope,
-                    visibility: askVisibility,
-                  }),
-                })
-              : await fetch(`/api/campaigns/${campaignId}/actions`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ content, kind }),
-                });
+                body: JSON.stringify({ content, kind }),
+              });
         if (!response.ok) {
           const data = await response.json().catch(() => ({}));
-          setError(data.error || (kind === "ask" ? "The DM could not answer." : "Could not send your action."));
+          setError(data.error || "Could not send your action.");
           return;
-        }
-        if (kind === "ask") {
-          await refreshAsks();
-          setPanelTab("ask");
         }
         setInput("");
       } catch {
         setError("Could not reach the server.");
       } finally {
         setSending(false);
-        setAskPending("");
       }
     },
-    [campaignId, input, sending, inputBlocked, kind, askScope, askVisibility, refreshAsks, setPanelTab],
+    [campaignId, input, sending, inputBlocked, kind, leadPrivate],
   );
 
   const clearChatTarget = useCallback(() => setChatTarget(null), []);
@@ -588,9 +591,21 @@ export function SessionView({
             isLead={isLead}
           />
 
+          <AskDock
+            campaignId={campaign.id}
+            asks={state.asks}
+            meUserId={me.id}
+            loaded={state.asksLoaded}
+            open={askOpen}
+            onOpenChange={setAskOpen}
+            onAsked={refreshAsks}
+          />
+
           {/* Directly above the composer, so the answer to "why is nothing
-              happening" sits where the player is already looking. */}
-          <UtilityCallStrip calls={utilityCalls} />
+              happening" sits where the player is already looking. Ask has its
+              own in-flight row inside the strip, which names the actual
+              question, so it is filtered out here rather than shown twice. */}
+          <UtilityCallStrip calls={visibleUtilityCalls} />
 
           {needsCharacter ? (
             <CharacterGate campaignId={campaign.id} />
@@ -602,10 +617,6 @@ export function SessionView({
               isLead={isLead}
               kind={kind}
               onKindChange={setKind}
-              askScope={askScope}
-              onAskScopeChange={setAskScope}
-              askVisibility={askVisibility}
-              onAskVisibilityChange={setAskVisibility}
               input={input}
               setInput={setInput}
               sending={sending}
@@ -622,6 +633,8 @@ export function SessionView({
               joinBanner={joinBanner}
               composerRef={composerRef}
               directorArm={state.directorArm}
+              leadPrivate={leadPrivate}
+              onLeadPrivateChange={setLeadPrivate}
               onSubmit={submit}
             />
           )}
@@ -650,9 +663,6 @@ export function SessionView({
           whispers={state.whispers}
           whisperUnread={state.whisperUnread}
           refreshWhispers={refreshWhispers}
-          asks={state.asks}
-          asksLoaded={state.asksLoaded}
-          askPending={askPending}
           chatTarget={chatTarget}
           onChatTargetHandled={clearChatTarget}
           onMessageUser={setChatTarget}
@@ -670,6 +680,7 @@ export function SessionView({
           chatUnread={chatUnreadTotal}
           mobileVisible={mobileView === "panel"}
           relationshipsVersion={state.relationshipsVersion}
+          relationshipsEnabled={relationshipsEnabled}
         />
       </div>
 

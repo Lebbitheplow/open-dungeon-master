@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { listDocuments } from "@/lib/content";
 import { contentPackInstalled } from "@/lib/content/db";
+import { listWorldPackSummaries } from "@/lib/worlds";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,7 @@ export const metadata = {
 export default function LicensesPage() {
   const documents = listDocuments();
   const installed = contentPackInstalled();
+  const worldPacks = listWorldPackSummaries();
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
@@ -74,9 +76,27 @@ export default function LicensesPage() {
         </section>
       ) : null}
 
+      {worldPacks.length ? (
+        <section className="mt-8">
+          <h2 className="font-serif text-xl text-stone-100">Campaign plugins</h2>
+          <p className="mt-2 text-sm leading-6 text-stone-400">
+            World packs rename existing SRD races, classes, spells, items and monsters to fit a
+            setting. No rule and no stat block is changed.
+          </p>
+          <p className="mt-2 text-sm leading-6 text-stone-400">
+            Community campaign packs were installed on this server by its operator. They are{" "}
+            <span className="text-stone-200">not distributed with Open Dungeon Master</span>, are
+            not covered by its MIT license, and are the work of their own authors. Where a pack
+            references an existing setting it is an unofficial fan work with no affiliation with
+            or endorsement from that setting&apos;s rights holders. Each pack names its own
+            attribution wherever it appears in the app.
+          </p>
+        </section>
+      ) : null}
+
       <p className="mt-10 text-xs text-stone-500">
-        Open Dungeon Master itself is MIT licensed. Homebrew content belongs to the user
-        who created it.
+        Open Dungeon Master itself is MIT licensed. Homebrew content belongs to the user who
+        created it, and installed campaign plugins belong to their authors.
       </p>
     </main>
   );

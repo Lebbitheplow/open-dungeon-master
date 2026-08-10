@@ -1,20 +1,23 @@
 "use client";
 
-import { Loader2, Send } from "lucide-react";
+import { Eye, EyeOff, Loader2, Send } from "lucide-react";
 import { memo } from "react";
 import type { Dispatch, FormEvent, RefObject, SetStateAction } from "react";
 import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
 import { D20Spinner } from "@/components/ui/D20Spinner";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { FloorBanners } from "@/app/campaigns/[campaignId]/FloorBanners";
 import { NewAdventurerBanner } from "@/app/campaigns/[campaignId]/NewAdventurerBanner";
-import { DirectorPanel } from "@/app/campaigns/[campaignId]/DirectorPanel";
+import {
+  DirectorArmedBanner,
+  DirectorPresets,
+} from "@/app/campaigns/[campaignId]/DirectorPanel";
 import { PendingRollCard } from "@/app/campaigns/[campaignId]/PendingRollCard";
 import { PushToTalk } from "@/app/campaigns/[campaignId]/PushToTalk";
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
 
 import type { InputKind } from "@/lib/campaign-types";
-import type { AskScope, AskVisibility } from "@/lib/dm/ask-logic";
 
 export type { InputKind };
 
@@ -22,19 +25,16 @@ const KIND_TIPS: Record<InputKind, string> = {
   do: "Act in the world. The DM narrates what happens.",
   say: "Speak in character. Sent as dialogue in quotes.",
   ooc: "Table talk. The DM does not respond, and it works even when the floor is locked.",
-  ask: "Ask the DM about the story, the world, the rules, or your sheet. The story does not move.",
   lead: "Party lead only. Send the DM an authoritative story direction.",
-};
-
-const SCOPE_LABELS: Record<AskScope | "auto", string> = {
-  auto: "Auto",
-  story: "Story",
-  rules: "Rules",
-  sheet: "My sheet",
 };
 
 // The action composer at the bottom of the game chat: pending-roll cards,
 // floor banners, the join notice, kind pills and the input row.
+//
+// Asking the DM a question is NOT a mode here. It lives entirely in the Ask
+// strip just above this composer (AskPanel.tsx), which has its own box. An
+// "Ask" pill in this row would be the same feature offered twice, inches
+// apart, which is exactly what it used to be.
 function ComposerInner({
   campaignId,
   sheets,
@@ -42,10 +42,6 @@ function ComposerInner({
   isLead,
   kind,
   onKindChange,
-  askScope,
-  onAskScopeChange,
-  askVisibility,
-  onAskVisibilityChange,
   input,
   setInput,
   sending,
@@ -60,6 +56,8 @@ function ComposerInner({
   encounter,
   onReleaseFloor,
   joinBanner,
+  leadPrivate,
+  onLeadPrivateChange,
   composerRef,
   directorArm,
   onSubmit,
@@ -70,10 +68,6 @@ function ComposerInner({
   isLead: boolean;
   kind: InputKind;
   onKindChange: (kind: InputKind) => void;
-  askScope: AskScope | "auto";
-  onAskScopeChange: (scope: AskScope | "auto") => void;
-  askVisibility: AskVisibility;
-  onAskVisibilityChange: (visibility: AskVisibility) => void;
   input: string;
   setInput: Dispatch<SetStateAction<string>>;
   sending: boolean;
@@ -88,6 +82,8 @@ function ComposerInner({
   encounter: CampaignState["encounter"];
   onReleaseFloor: () => Promise<void>;
   joinBanner: { text: string; onWriteIntro: () => void; onDismiss: () => void } | null;
+  leadPrivate: boolean;
+  onLeadPrivateChange: (leadPrivate: boolean) => void;
   composerRef: RefObject<HTMLTextAreaElement | null>;
   directorArm: CampaignState["directorArm"];
   onSubmit: (event: FormEvent) => void;
@@ -115,7 +111,7 @@ function ComposerInner({
           meUserId={meUserId}
           onRelease={onReleaseFloor}
         />
-        <DirectorPanel campaignId={campaignId} isLead={isLead} armed={directorArm} />
+        <DirectorArmedBanner campaignId={campaignId} isLead={isLead} armed={directorArm} />
         {joinBanner ? (
           <NewAdventurerBanner
             campaignId={campaignId}
@@ -125,7 +121,7 @@ function ComposerInner({
           />
         ) : null}
         <div className="mb-2 flex gap-1.5">
-          {(["do", "say", "ooc", "ask", ...(isLead ? (["lead"] as const) : [])] as const).map(
+          {(["do", "say", "ooc", ...(isLead ? (["lead"] as const) : [])] as const).map(
             (option) => (
               <Tooltip key={option} content={KIND_TIPS[option]}>
                 <button
@@ -146,9 +142,7 @@ function ComposerInner({
                       ? "Say"
                       : option === "ooc"
                         ? "OOC"
-                        : option === "ask"
-                          ? "Ask"
-                          : "Direct"}
+                        : "Direct"}
                 </button>
               </Tooltip>
             ),
@@ -170,49 +164,36 @@ function ComposerInner({
             </span>
           ) : null}
         </div>
-        {kind === "ask" ? (
-          <div className="mb-2 flex flex-wrap items-center gap-1.5 text-[11px] text-stone-500">
-            <span className="text-stone-500">About</span>
-            {(["auto", "story", "rules", "sheet"] as const).map((option) => (
+        {/*
+          Direct's own controls, and the reason there is no second row of
+          director buttons above this composer: a canned event to arm, and the
+          choice of whether the direction is something the table reads.
+        */}
+        {kind === "lead" && isLead ? (
+          <div className="mb-2 flex flex-wrap items-center gap-1.5">
+            <DirectorPresets campaignId={campaignId} />
+            <Tooltip
+              content={
+                leadPrivate
+                  ? "Only the DM sees this. It steers the next turn and never enters the transcript."
+                  : "The table sees this direction, and the DM acts on it now."
+              }
+            >
               <button
-                key={option}
                 type="button"
-                onClick={() => onAskScopeChange(option)}
+                role="switch"
+                aria-checked={leadPrivate}
+                onClick={() => onLeadPrivateChange(!leadPrivate)}
                 className={cn(
-                  "rounded-full border px-2 py-1 transition-colors sm:py-0.5",
-                  askScope === option
-                    ? "border-amber-700 bg-amber-950/40 text-amber-200"
-                    : "border-stone-700 text-stone-400 hover:text-stone-200",
+                  ui.btnSmall,
+                  "ml-auto px-2 py-1 text-[11px]",
+                  leadPrivate && "border-amber-500/50 bg-amber-500/10 text-amber-100",
                 )}
               >
-                {SCOPE_LABELS[option]}
+                {leadPrivate ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
+                Private
               </button>
-            ))}
-            <span className="ml-2 text-stone-500">Seen by</span>
-            {(["private", "table"] as const).map((option) => (
-              <Tooltip
-                key={option}
-                content={
-                  option === "private"
-                    ? "Only you see the question and the answer."
-                    : "The whole table sees the question and the answer."
-                }
-              >
-                <button
-                  type="button"
-                  onClick={() => onAskVisibilityChange(option)}
-                  className={cn(
-                    "rounded-full border px-2 py-1 transition-colors sm:py-0.5",
-                    askVisibility === option
-                      ? "border-amber-700 bg-amber-950/40 text-amber-200"
-                      : "border-stone-700 text-stone-400 hover:text-stone-200",
-                  )}
-                >
-                  {option === "private" ? "Just me" : "The table"}
-                </button>
-              </Tooltip>
-            ))}
-            <span className="ml-auto italic text-stone-600">The story does not move.</span>
+            </Tooltip>
           </div>
         ) : null}
         <div className="texture-noise flex items-end gap-2 rounded-2xl border border-stone-700/70 bg-stone-950/90 p-2 shadow-elev-1 transition-[border-color,box-shadow] duration-200 focus-within:border-amber-400/60 focus-within:shadow-[0_0_0_3px_rgba(212,171,58,0.1),0_2px_12px_rgba(4,2,12,0.5)]">

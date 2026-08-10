@@ -6,7 +6,7 @@ import {
 import { listChapters } from "@/lib/db/chapters";
 import { listRecentMessages } from "@/lib/db/messages";
 import { listSheets } from "@/lib/db/sheets";
-import { genrePreset } from "@/lib/genres";
+import { presetFor, packWorldHints } from "@/lib/worlds/preset";
 import {
   activeBeatNumber,
   activeQuestLines,
@@ -58,7 +58,7 @@ function worldContext(campaignId: string): string {
   if (!campaign) {
     return "";
   }
-  const preset = genrePreset(campaign.gameSettings.genre);
+  const preset = presetFor(campaign.gameSettings);
   const party = listSheets(campaignId)
     .map(
       (sheet) =>
@@ -73,6 +73,9 @@ function worldContext(campaignId: string): string {
     campaign.gameSettings.genre === "custom"
       ? campaign.gameSettings.customGenreText
       : `Genre: ${preset.name}. ${preset.dmFlavor} ${preset.nameHints}`,
+    // The pack's factions and hooks give the saga real named powers to plan
+    // against instead of inventing a pantheon the world does not have.
+    packWorldHints(campaign.gameSettings),
   ]
     .filter(Boolean)
     .join("\n\n");

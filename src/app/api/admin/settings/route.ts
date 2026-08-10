@@ -13,6 +13,7 @@ function maskedConfig(config: GlobalConfig) {
   return {
     signupsEnabled: config.signupsEnabled,
     publicUrl: config.publicUrl,
+    worldRegistryUrl: config.worldRegistryUrl,
     text: {
       provider: config.text.provider,
       localTextModel: config.text.localTextModel,
@@ -46,6 +47,7 @@ function envDefaults() {
     discordClientId: serverEnv("DISCORD_CLIENT_ID"),
     hasDiscordClientSecret: serverEnv("DISCORD_CLIENT_SECRET") !== "",
     publicUrl: serverEnv("APP_PUBLIC_URL"),
+    worldRegistryUrl: serverEnv("WORLD_REGISTRY_URL"),
   };
 }
 
@@ -60,6 +62,7 @@ export async function GET() {
 const patchSchema = z.object({
   signupsEnabled: z.boolean().optional(),
   publicUrl: z.string().trim().max(500).optional(),
+  worldRegistryUrl: z.string().trim().max(500).optional(),
   text: z
     .object({
       provider: z.enum(["", "local", "custom"]).optional(),

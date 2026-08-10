@@ -1,4 +1,5 @@
 import type { Genre } from "@/lib/schemas/game-settings";
+import { packFor, type SettingRef } from "@/lib/worlds/preset";
 import { getEntryDetail, searchMonsters } from "@/lib/content";
 import { parseMonster, type EnemyStats } from "@/lib/bestiary/statblock";
 import { synthesizeStats } from "@/lib/bestiary/synthesize";
@@ -39,22 +40,39 @@ export function bestiaryForGenre(genre: Genre): BestiaryEntry[] {
   return (CATALOGS[genre] ?? CATALOGS.high_fantasy!).entries;
 }
 
-export function reskinFor(genre: Genre, slug: string): BestiaryEntry | null {
-  return bestiaryForGenre(genre).find((entry) => entry.slug === slug) ?? null;
+// The catalog a campaign actually fights with: its genre's list, with the
+// selected world pack's own monsters overlaid by slug (the pack wins) and its
+// pack-only slugs appended. Structurally satisfied by GameSettings, so callers
+// pass campaign.gameSettings straight in.
+export function bestiaryFor(setting: SettingRef): BestiaryEntry[] {
+  const base = bestiaryForGenre(setting.genre as Genre);
+  const pack = packFor(setting);
+  if (!pack?.monsters.length) {
+    return base;
+  }
+  const overrides = new Map(pack.monsters.map((entry) => [entry.slug, entry]));
+  const merged = base.map((entry) => overrides.get(entry.slug) ?? entry);
+  const seen = new Set(base.map((entry) => entry.slug));
+  return [...merged, ...pack.monsters.filter((entry) => !seen.has(entry.slug))];
+}
+
+export function reskinFor(setting: SettingRef, slug: string): BestiaryEntry | null {
+  return bestiaryFor(setting).find((entry) => entry.slug === slug) ?? null;
 }
 
 // A shortlist of genre-fitting enemies the party could plausibly face:
 // everything from the catalog up to the CR a solo monster could carry at the
 // party's deadly budget, keeping a few overspill entries for named threats.
 export function suggestEnemies(
-  genre: Genre,
+  setting: SettingRef,
   partyLevels: number[],
   limit = 10,
 ): BestiaryEntry[] {
   const deadly = thresholdsForParty(partyLevels.length ? partyLevels : [1]).deadly;
-  const usable = bestiaryForGenre(genre).filter((entry) => xpForCr(entry.cr) <= deadly);
+  const catalog = bestiaryFor(setting);
+  const usable = catalog.filter((entry) => xpForCr(entry.cr) <= deadly);
   if (!usable.length) {
-    return bestiaryForGenre(genre).slice(0, limit);
+    return catalog.slice(0, limit);
   }
   // Spread picks across the usable CR range instead of clustering low.
   const sorted = [...usable].sort((a, b) => a.cr - b.cr);
@@ -87,7 +105,7 @@ function fromContent(slug: string): { name: string; stats: EnemyStats } | null {
 // Resolves a model-supplied monster reference: exact Open5e slug, then a
 // catalog reskin name, then an Open5e name search. Degrades to synthesized
 // stats for catalog slugs when the content pack is absent.
-export function resolveMonster(ref: string, genre: Genre): ResolvedMonster | null {
+export function resolveMonster(ref: string, setting: SettingRef): ResolvedMonster | null {
   const trimmed = ref.trim();
   if (!trimmed) {
     return null;
@@ -99,12 +117,12 @@ export function resolveMonster(ref: string, genre: Genre): ResolvedMonster | nul
     return {
       slug: slugified,
       baseName: direct.name,
-      reskinName: reskinFor(genre, slugified)?.name ?? null,
+      reskinName: reskinFor(setting, slugified)?.name ?? null,
       stats: direct.stats,
     };
   }
 
-  const catalogMatch = bestiaryForGenre(genre).find(
+  const catalogMatch = bestiaryFor(setting).find(
     (entry) => entry.name.toLowerCase() === trimmed.toLowerCase(),
   );
   if (catalogMatch) {
@@ -126,7 +144,7 @@ export function resolveMonster(ref: string, genre: Genre): ResolvedMonster | nul
     return {
       slug: best.slug,
       baseName: best.name,
-      reskinName: reskinFor(genre, best.slug)?.name ?? null,
+      reskinName: reskinFor(setting, best.slug)?.name ?? null,
       stats: parseMonster(best.data, cr),
     };
   }

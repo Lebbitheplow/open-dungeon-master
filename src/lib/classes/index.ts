@@ -156,6 +156,16 @@ export function classGenres(classId: string): Genre[] {
 // builder applies to its picker: high fantasy and custom worlds take the
 // whole catalog (empty list = no restriction), every other genre takes only
 // its tagged classes. Used to keep AI companions in setting.
+// The same question as genreClassIds, asked for a campaign that may have a
+// world pack selected. A pack names the callings that exist in its world, and
+// that list is both narrower and truer than the genre tags, so it wins. The
+// pack ids arrive as a PARAMETER rather than by importing the pack loader,
+// which keeps this module free of fs and safe for the character builder to
+// import on the client.
+export function settingClassIds(genre: Genre, packClassIds: string[]): string[] {
+  return packClassIds.length ? packClassIds : genreClassIds(genre);
+}
+
 export function genreClassIds(genre: Genre): string[] {
   if (genre === "high_fantasy" || genre === "custom") {
     return [];

@@ -6,7 +6,7 @@ import { updateCharacterPortrait } from "@/lib/db/characters";
 import { listSheetsForLibraryCharacter, patchSheet } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
 import { enqueueMediaJob } from "@/lib/media-queue";
-import { genrePreset } from "@/lib/genres";
+import { presetFor } from "@/lib/worlds/preset";
 import type { Genre } from "@/lib/schemas/game-settings";
 import { configuredDefaultStorySettings } from "@/lib/runtime-defaults";
 import type { CreateSheetInput, SheetAttachment } from "@/lib/schemas/sheet";
@@ -96,6 +96,9 @@ export function queueCompanionPortrait(sheet: {
   background: string;
   personality: string;
   genre: Genre;
+  // The campaign's selected world pack, so a companion is painted in the
+  // world's own style rather than its base genre's.
+  worldPack?: string;
 }): void {
   const map = statusMap();
   map.set(sheet.id, "queued");
@@ -108,7 +111,7 @@ export function queueCompanionPortrait(sheet: {
       appearance: sheet.personality.slice(0, 160),
       backstory: "",
     } as CreateSheetInput,
-    genrePreset(sheet.genre).portraitStyle,
+    presetFor({ genre: sheet.genre, worldPack: sheet.worldPack }).portraitStyle,
   );
   void enqueueMediaJob(`portrait ${sheet.id}`, async () => {
     map.set(sheet.id, "generating");

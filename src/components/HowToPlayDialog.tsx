@@ -6,43 +6,12 @@ import {
   Dices,
   Hourglass,
   MessageSquareText,
+  RefreshCw,
   ScrollText,
   Sparkles,
-  type LucideIcon,
 } from "lucide-react";
-import type { ReactNode } from "react";
 import { Dialog } from "@/components/ui/Dialog";
-
-function Section({
-  icon: Icon,
-  title,
-  children,
-}: {
-  icon: LucideIcon;
-  title: string;
-  children: ReactNode;
-}) {
-  return (
-    <section className="mb-5 last:mb-0">
-      <h3 className="mb-2 flex items-center gap-2 font-display text-sm tracking-wide text-amber-200/90">
-        <Icon className="size-4 text-amber-500/80" />
-        {title}
-      </h3>
-      <div className="space-y-2 text-sm leading-relaxed text-stone-400">{children}</div>
-    </section>
-  );
-}
-
-function ModeRow({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex items-start gap-3">
-      <span className="mt-0.5 w-14 shrink-0 rounded-full bg-gradient-to-b from-amber-100 to-amber-400 px-2 py-0.5 text-center text-xs font-medium text-amber-950">
-        {label}
-      </span>
-      <span>{children}</span>
-    </div>
-  );
-}
+import { ModeRow, Section } from "@/components/HelpDialog";
 
 // Onboarding read for newcomers: what the app is, how to get a table running,
 // who does the maths, and the table etiquette that follows from coalesced DM
@@ -68,13 +37,19 @@ export function HowToPlayDialog({
           Master&apos;s chair. You and your friends play the adventurers. The app is the rulebook
           and the dice.
         </p>
+        <p>
+          Every table runs on the 5e rules. Where it is set is up to you: a genre of your choosing,
+          or one of the pre-built worlds your server has installed.
+        </p>
       </Section>
 
       <Section icon={Compass} title="Getting started">
         <p>
           <span className="text-stone-300">New campaign</span> creates the world: pick a genre,
           difficulty and starting level, and optionally give the DM a secret story setup only it
-          will know. You get an eight-letter invite code to share with your friends.
+          will know. If the server has campaign plugins installed, you can pick a pre-built world
+          here instead of a bare genre, which brings its own races, classes, monsters and lore
+          without changing a rule. You get an eight-letter invite code to share with your friends.
         </p>
         <p>
           <span className="text-stone-300">Solo adventure</span> is the same thing for one player.
@@ -98,7 +73,7 @@ export function HowToPlayDialog({
         <p>
           The DM narrates what those results mean. It cannot invent a roll or quietly hand you a
           bonus, so play the story rather than arguing the numbers. Every roll and stat change is
-          recorded in the Log tab if you want to check the maths.
+          recorded in the Log, under the Story tab, if you want to check the maths.
         </p>
       </Section>
 
@@ -112,10 +87,13 @@ export function HowToPlayDialog({
         <ModeRow label="OOC">
           Out-of-character table talk. The DM does not read it or respond to it.
         </ModeRow>
-        <ModeRow label="Ask">
-          Ask the DM a question about the story, the world, the rules, or your sheet. You get an
-          answer without the story moving on.
-        </ModeRow>
+        <p>
+          To ask the DM a question about the story, the world, the rules, or your sheet, open the{" "}
+          <span className="text-stone-300">Ask the DM</span> strip just above the message box. The
+          answer quotes what the campaign has on record, and you choose whether it is just for you
+          or for the whole table. Asking never moves the story on, so it works even while the floor
+          is locked.
+        </p>
       </Section>
 
       <Section icon={Hourglass} title="One turn at a time">
@@ -139,12 +117,27 @@ export function HowToPlayDialog({
         </p>
       </Section>
 
+      <Section icon={RefreshCw} title="If a reply lands badly">
+        <p>
+          Nothing the DM writes is final. Hover one of its messages and you can have it{" "}
+          <span className="text-stone-300">reroll</span> that moment, with the same dice and the
+          same outcome and only the wording changed, then page between the takes and keep the one
+          you like. You can also have it{" "}
+          <span className="text-stone-300">continue</span> a reply that stopped short, or check a
+          passage against everything the campaign has already established.
+        </p>
+        <p>
+          The DM also remembers on purpose. Select a line in one of its messages and press the
+          bookmark to keep that detail in front of it for the rest of the campaign.
+        </p>
+      </Section>
+
       <Section icon={CircleHelp} title="If you get stuck">
         <p>
           The Help entry, in the account menu here and in the header during a session, walks through
-          every button and panel: the side panel tabs, dice options, narration voice, notes,
-          whispers and the party lead&apos;s powers. If a spotlight leaves the table stuck, the
-          party lead can release it.
+          every button and panel: the side panel tabs, the Ask strip, the per-message actions, dice
+          options, narration voice, notes, whispers, world packs and the party lead&apos;s powers.
+          If a spotlight leaves the table stuck, the party lead can release it.
         </p>
       </Section>
     </Dialog>

@@ -28,6 +28,11 @@ export type CampaignLengthSetting = (typeof CAMPAIGN_LENGTHS)[number];
 export const gameSettingsSchema = z.object({
   genre: z.enum(GENRES).default("high_fantasy"),
   customGenreText: z.string().trim().max(500).default(""),
+  // Selected pre-configured world (src/lib/worlds/packs), or "" for a plain
+  // genre. Choosing a pack ALSO writes its baseGenre into `genre` above, so
+  // every existing genre consumer keeps working and a pack that is later
+  // removed from disk degrades silently back to its genre.
+  worldPack: z.string().trim().max(50).default(""),
   aiStorySetup: z.boolean().default(true),
   campaignLength: z.enum(CAMPAIGN_LENGTHS).default("standard"),
   dicePolicy: z.enum(DICE_POLICIES).default("digital_only"),

@@ -308,7 +308,7 @@ function parseStartArgs(rawArguments: string): z.infer<typeof startArgsSchema> |
 }
 
 function suggestionLines(campaign: Campaign, sheets: CharacterSheet[]): string {
-  return suggestEnemies(campaign.gameSettings.genre, sheets.map((sheet) => sheet.level), 5)
+  return suggestEnemies(campaign.gameSettings, sheets.map((sheet) => sheet.level), 5)
     .map((entry) => `${entry.slug} as "${entry.name}" (CR ${crLabel(entry.cr)})`)
     .join(", ");
 }
@@ -336,7 +336,7 @@ function handleStartEncounter(
   }
 
   // Resolve every requested enemy before creating anything.
-  const outcome = resolveEnemyRequests(campaign.gameSettings.genre, args.enemies);
+  const outcome = resolveEnemyRequests(campaign.gameSettings, args.enemies);
   if ("unknownMonster" in outcome) {
     return {
       error: `Unknown monster "${outcome.unknownMonster}". Use a real monster slug or name, or pass cr for an invented enemy. Good picks for this world: ${suggestionLines(campaign, sheets)}.`,

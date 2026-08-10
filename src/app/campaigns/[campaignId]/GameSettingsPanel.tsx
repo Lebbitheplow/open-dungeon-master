@@ -1,12 +1,13 @@
 "use client";
 
 import { Bot, Dices, Globe, Hand, Heart, Map, PackageCheck, Sparkles, UserPlus, Volume2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { STAGES, isStageEnabled } from "@/lib/dm/stages";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { InfoButton } from "@/components/ui/InfoDialog";
 import { GENRE_PRESETS, genrePreset } from "@/lib/genres";
+import type { WorldPackSummary } from "@/lib/worlds/types";
 import { TTS_VOICES } from "@/lib/tts-voices";
 import { VoicePreviewButton } from "@/components/VoicePreviewButton";
 import {
@@ -29,6 +30,26 @@ export const LIVING_WORLD_INFO = [
   "You can switch this at any time. Turning it back on resumes from the world as it currently stands.",
 ].join("\n\n");
 
+// The same explainers as this panel's tooltips, shared with the campaign
+// creator's info buttons so the two surfaces never drift apart.
+export const BONDS_INFO = [
+  "How each NPC and AI companion feels about each character, tracked by the server on one meter from hostile through neutral to devoted.",
+  "Deeds move it, and the same deed lands differently on different people: mercy wins over a kind healer and irritates a hard-bitten mercenary.",
+  "Standing shows in the Bonds tab and colors how the DM plays them. Off: the DM tracks no personal standing and NPCs react to the party as a whole.",
+].join("\n\n");
+
+export const ROMANCE_INFO = [
+  "The romance ladder on top of the bond meter: interested, courting, together, betrothed, married.",
+  "Nobody can be romanced who does not already like the character, players always make the first move, and intimate scenes always fade to black.",
+  "Requires Bonds to be on.",
+].join("\n\n");
+
+export const NARRATION_GUARD_INFO = [
+  "After each turn the server compares the DM's narration against what the dice and tools actually resolved: a hit written on a miss, a death the hit points deny, a damage number no die rolled.",
+  "A contradiction is sent back to the DM once for a rewrite. Nothing on any sheet changes either way.",
+  "Off costs nothing but the check, and the narration is persisted exactly as written.",
+].join("\n\n");
+
 // Lobby game-settings section: the party lead edits live (PATCHes propagate to
 // everyone over SSE); other players see a read-only summary.
 export function GameSettingsPanel({
@@ -41,6 +62,24 @@ export function GameSettingsPanel({
   isLead: boolean;
 }) {
   const [busy, setBusy] = useState(false);
+  const [packs, setPacks] = useState<WorldPackSummary[]>([]);
+
+  // Installed world packs, so the lead can switch worlds after creation. An
+  // empty list simply hides the row.
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/worlds")
+      .then((response) => (response.ok ? response.json() : { packs: [] }))
+      .then((data) => {
+        if (!cancelled) {
+          setPacks(Array.isArray(data.packs) ? data.packs : []);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function patch(update: Partial<GameSettings>) {
     setBusy(true);
@@ -56,6 +95,7 @@ export function GameSettingsPanel({
   }
 
   const preset = genrePreset(settings.genre);
+  const selectedPack = packs.find((entry) => entry.id === settings.worldPack) ?? null;
   const selectClass =
     "rounded-md border border-stone-700 bg-stone-900 px-2 py-1 text-xs outline-none focus:border-amber-600";
 
@@ -66,7 +106,7 @@ export function GameSettingsPanel({
         <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-stone-400">
           <span className="flex items-center gap-1.5">
             <Sparkles className="size-3.5 text-amber-200" />
-            {preset.name}
+            {selectedPack?.name ?? preset.name}
             {settings.aiStorySetup ? " · AI story setup" : ""}
             {" · "}
             {CAMPAIGN_LENGTH_LABELS[settings.campaignLength].split(" (")[0]} campaign
@@ -126,11 +166,43 @@ export function GameSettingsPanel({
     <section className="mb-6 rounded-lg border border-stone-800 bg-stone-950/60 p-4">
       <h2 className="mb-3 text-sm font-medium text-stone-300">Game settings</h2>
       <div className={cn("space-y-3 text-xs", busy && "opacity-70")}>
+        {packs.length ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="w-16 text-stone-500">World</span>
+            <select
+              value={settings.worldPack}
+              onChange={(event) => {
+                const next = packs.find((entry) => entry.id === event.target.value);
+                // Genre moves with the pack, so a campaign never ends up in a
+                // world whose base genre contradicts it.
+                patch(next ? { worldPack: next.id, genre: next.baseGenre } : { worldPack: "" });
+              }}
+              className={selectClass}
+            >
+              <option value="">No pack (plain setting)</option>
+              {packs.map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {entry.name}
+                </option>
+              ))}
+            </select>
+            <span className="text-stone-500">
+              {selectedPack
+                ? selectedPack.inspiredBy
+                : "Pick a pre-built universe to rename races, classes, spells and monsters to fit it."}
+            </span>
+          </div>
+        ) : null}
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-16 text-stone-500">Setting</span>
           <select
             value={settings.genre}
-            onChange={(event) => patch({ genre: event.target.value as Genre })}
+            onChange={(event) =>
+              // Changing the genre by hand drops the pack, for the same reason
+              // the creation dialog does: a pack IS its baseGenre plus
+              // overrides, so the two must never disagree.
+              patch({ genre: event.target.value as Genre, ...(settings.worldPack ? { worldPack: "" } : {}) })
+            }
             className={selectClass}
           >
             {GENRE_PRESETS.map((entry) => (

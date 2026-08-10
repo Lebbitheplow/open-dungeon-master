@@ -17,7 +17,7 @@ import { findSpawnTiles } from "@/lib/battlemap/tactics";
 import { occupiedTiles } from "@/lib/battlemap/view";
 import { publishEncounter } from "@/lib/dm/enemy-damage";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
-import type { Genre } from "@/lib/schemas/game-settings";
+import type { SettingRef } from "@/lib/worlds/preset";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // Enemy spawning shared by start_encounter and the mid-combat add_enemies
@@ -42,13 +42,13 @@ export type ResolvedEnemyRequest = {
 // Resolves every requested enemy before anything is created. Returns the
 // flat per-individual list, or the first unresolvable monster reference.
 export function resolveEnemyRequests(
-  genre: Genre,
+  setting: SettingRef,
   requests: EnemyRequest[],
 ): { resolved: ResolvedEnemyRequest[] } | { unknownMonster: string } {
   const resolved: ResolvedEnemyRequest[] = [];
   for (const request of requests) {
     const count = request.count ?? 1;
-    const match = resolveMonster(request.monster, genre);
+    const match = resolveMonster(request.monster, setting);
     if (!match && request.cr === undefined) {
       return { unknownMonster: request.monster };
     }
@@ -154,7 +154,7 @@ export function handleAddEnemies(
       error: 'Invalid add_enemies arguments. Send {"enemies":[{"monster":"goblin","count":2}]}.',
     };
   }
-  const outcome = resolveEnemyRequests(campaign.gameSettings.genre, args.enemies);
+  const outcome = resolveEnemyRequests(campaign.gameSettings, args.enemies);
   if ("unknownMonster" in outcome) {
     return {
       error: `Unknown monster "${outcome.unknownMonster}". Use a real monster slug or name, or pass cr for an invented enemy.`,

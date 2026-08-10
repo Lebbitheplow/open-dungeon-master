@@ -9,7 +9,9 @@ import { resourceDef } from "@/lib/srd/class-resources";
 import { subclassFeatureDescription } from "@/lib/srd/features";
 import { describeExhaustion } from "@/lib/dm/condition-logic";
 import { describeConditionEffects } from "@/lib/srd/condition-effects";
-import { genrePreset } from "@/lib/genres";
+import { presetFor, packFor } from "@/lib/worlds/preset";
+import { renderWorldPrimer } from "@/lib/worlds/primer-logic";
+import { packIds } from "@/lib/worlds/reskin-logic";
 import { genreClassIds } from "@/lib/classes";
 import { renderArcForPrompt } from "@/lib/dm/arc-logic";
 import { renderWorldArcsForPrompt } from "@/lib/dm/world-arc-logic";
@@ -71,7 +73,7 @@ Core rules you must always follow:
 // Full system prompt for a campaign: base rules plus genre flavor plus any
 // custom world text.
 export function buildDmSystem(campaign: Campaign): string {
-  const preset = genrePreset(campaign.gameSettings.genre);
+  const preset = presetFor(campaign.gameSettings);
   // The engine-boundary contract leads: one labelled statement of which facts
   // the runtime owns, which the numbered rules below it then apply tool by
   // tool (src/lib/dm/engine-boundary.ts).
@@ -182,11 +184,6 @@ export type DmGameState = {
   // Rides last in the payload, after the player's own message, because
   // recency is the whole point: it has to outweigh the scene it is bending.
   directorBlock?: string;
-  // Notes players distilled out of their Ask threads and armed for this turn
-  // (src/lib/dm/ask-brief-logic.ts). Rides with the director block for the
-  // same recency reason, and after it: a lead's steer outranks a player's
-  // note when the two pull different ways.
-  askBriefBlock?: string;
   // The model's context window in tokens, so the budget can scale with it
   // rather than assuming one. Falls back to a modest default when unset.
   contextLimitTokens?: number;
@@ -234,8 +231,13 @@ export const ENCOUNTER_RULES = `Combat rules (an encounter is active):
 // Appended to the system prompt when companions are enabled for the
 // campaign; the party-mode sentence adapts to the resolved mode.
 export function companionRules(campaign: Campaign, mode: "full" | "guests"): string {
-  const preset = genrePreset(campaign.gameSettings.genre);
-  const classIds = genreClassIds(campaign.gameSettings.genre);
+  const preset = presetFor(campaign.gameSettings);
+  // A world pack names the callings that exist in it, and that list is
+  // narrower and truer than the genre tags, so it wins when there is one.
+  const packClasses = packIds(packFor(campaign.gameSettings), "classes");
+  const classIds = packClasses.length
+    ? packClasses
+    : genreClassIds(campaign.gameSettings.genre);
   const setting = [
     `- Companions belong to THIS world (${preset.name}), not to generic fantasy.`,
     classIds.length
@@ -513,6 +515,12 @@ export function buildGameStateBlock(state: DmGameState): string {
   ];
   if (campaign.description) {
     sections.push(`Premise: ${campaign.description}`);
+  }
+  // The selected world's own nouns, and the alias table that lets the DM
+  // narrate "Curaga" while still calling use_spell_slot with "Cure Wounds".
+  const worldPrimer = renderWorldPrimer(packFor(campaign.gameSettings));
+  if (worldPrimer) {
+    sections.push(worldPrimer);
   }
   if (campaign.storyArc) {
     sections.push(renderArcForPrompt(campaign.storyArc));
@@ -1074,8 +1082,7 @@ export function buildDmMessages(
     promptTokens:
       estimateTokens(systemParts.join("\n\n")) +
       fitted.tokens +
-      estimateTokens(state.directorBlock ?? "") +
-      estimateTokens(state.askBriefBlock ?? ""),
+      estimateTokens(state.directorBlock ?? ""),
     blocks: [
       ...systemParts.map((text, index) => ({
         id: index === systemParts.length - 1 ? "game-state" : `rules-${index}`,
@@ -1107,18 +1114,6 @@ export function buildDmMessages(
             },
           ]
         : []),
-      ...(state.askBriefBlock
-        ? [
-            {
-              id: "ask-brief",
-              kind: "rules" as BlockKind,
-              tokens: estimateTokens(state.askBriefBlock),
-              included: true,
-              reason: "one-turn note armed from an Ask thread",
-              position: systemParts.length + 3,
-            },
-          ]
-        : []),
     ],
   };
 
@@ -1129,9 +1124,6 @@ export function buildDmMessages(
     // the point of generation. Omitted entirely when nothing is armed.
     ...(state.directorBlock
       ? [{ role: "user" as const, content: state.directorBlock }]
-      : []),
-    ...(state.askBriefBlock
-      ? [{ role: "user" as const, content: state.askBriefBlock }]
       : []),
   ];
 }
