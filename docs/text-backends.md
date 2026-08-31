@@ -48,9 +48,9 @@ these work — pull what fits your RAM:
 ```bash
 ollama pull gemma4:e2b-it-qat       # 4.3 GB
 ollama pull gemma4:e4b-it-qat       # 6.1 GB
-ollama pull gemma4:12b-it-qat       # 7.2 GB (default)
+ollama pull gemma4:12b-it-qat       # 7.2 GB
 ollama pull gemma4:26b-a4b-it-qat   # 16 GB
-ollama pull gemma4:31b-it-qat       # 19 GB
+ollama pull gemma4:31b-it-qat       # 19 GB (default when none is configured)
 ```
 
 Measured on an M2 Max (32 GB), real story prompts, ~300-token turns. RAM is

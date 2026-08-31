@@ -1,7 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { currentUser, startSession } from "@/lib/auth";
+import { consumeAccountInvite } from "@/lib/db/account-invites";
 import { getGlobalConfig } from "@/lib/db/app-settings";
+import { resolveSignupMode } from "@/lib/schemas/global-config";
 import {
   countUsers,
   createDiscordUser,
@@ -64,8 +66,13 @@ export async function GET(request: Request) {
   const stored = cookieStore.get(OAUTH_COOKIE)?.value;
   cookieStore.delete(OAUTH_COOKIE);
   let link = false;
+  let invite = "";
   try {
-    const parsed = JSON.parse(stored || "{}") as { state?: string; link?: boolean };
+    const parsed = JSON.parse(stored || "{}") as {
+      state?: string;
+      link?: boolean;
+      invite?: string;
+    };
     if (!code || !parsed.state || parsed.state !== state) {
       return fail(request.url, "state mismatch or missing code", {
         hasCode: Boolean(code),
@@ -73,6 +80,7 @@ export async function GET(request: Request) {
       });
     }
     link = parsed.link === true;
+    invite = typeof parsed.invite === "string" ? parsed.invite : "";
   } catch {
     return fail(request.url, "unreadable oauth state cookie");
   }
@@ -147,10 +155,20 @@ export async function GET(request: Request) {
   }
 
   // New account via Discord. Mirrors /api/auth/register: blocked when
-  // signups are disabled, and the very first account becomes admin.
+  // signups are disabled, invite-gated when invite-only, and the very first
+  // account becomes admin.
   const isFirstUser = countUsers() === 0;
-  if (!isFirstUser && !getGlobalConfig().signupsEnabled) {
+  const signupMode = resolveSignupMode(getGlobalConfig());
+  if (!isFirstUser && signupMode === "closed") {
     return redirect(request.url, "/?error=signups_disabled");
+  }
+  if (!isFirstUser && signupMode === "invite") {
+    if (!invite) {
+      return redirect(request.url, "/?error=invite_required");
+    }
+    if (!consumeAccountInvite(invite)) {
+      return redirect(request.url, "/?error=invite_invalid");
+    }
   }
   const username = deriveUsername(globalName, discordUsername, discordId);
   const user = createDiscordUser(username, discordId);

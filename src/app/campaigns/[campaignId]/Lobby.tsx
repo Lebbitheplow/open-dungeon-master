@@ -11,12 +11,15 @@ import {
   Loader2,
   Pencil,
   Play,
+  QrCode,
   Trash2,
   UserPlus,
   UserRound,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
+import { copyText } from "@/lib/clipboard";
+import { InviteShareDialog } from "@/components/InviteShareDialog";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
 import { CompanionBuilderDialog } from "@/app/campaigns/[campaignId]/CompanionBuilderDialog";
@@ -40,6 +43,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
   const [copied, setCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [buildingCompanion, setBuildingCompanion] = useState(false);
   const [contentImport, setContentImport] = useState<ImportSelection>(EMPTY_SELECTION);
   const [error, setError] = useState("");
@@ -153,17 +157,17 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
   }
 
   async function copyInvite() {
-    await navigator.clipboard.writeText(campaign!.inviteCode);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    if (await copyText(campaign!.inviteCode)) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }
   }
 
   async function copyLink() {
-    await navigator.clipboard.writeText(
-      `${window.location.origin}/join/${campaign!.inviteCode}`,
-    );
-    setLinkCopied(true);
-    setTimeout(() => setLinkCopied(false), 1500);
+    if (await copyText(`${window.location.origin}/join/${campaign!.inviteCode}`)) {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 1500);
+    }
   }
 
   async function makeLead(userId: string) {
@@ -305,6 +309,9 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
                 <LinkIcon className="size-4" />
               )}
               {linkCopied ? "Copied" : "Link"}
+            </button>
+            <button type="button" onClick={() => setSharing(true)} className={ui.btnSmall}>
+              <QrCode className="size-4" /> Share
             </button>
           </div>
         </div>
@@ -682,6 +689,15 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
       {editing ? (
         <EditCampaignDialog campaign={campaign} onClose={() => setEditing(false)} />
       ) : null}
+
+      <InviteShareDialog
+        open={sharing}
+        onOpenChange={setSharing}
+        campaignId={campaign.id}
+        campaignTitle={campaign.title}
+        inviteCode={campaign.inviteCode}
+        canRegenerate={isLead}
+      />
 
       {buildingCompanion ? (
         <CompanionBuilderDialog

@@ -44,6 +44,32 @@ export async function cookieSecure(): Promise<boolean> {
   return proto === "https";
 }
 
+// Reads the token native client apps send instead of the browser cookie.
+// Cookie and bearer sessions are the same rows in the sessions table; only
+// the transport differs.
+async function bearerToken(): Promise<string | null> {
+  const header = (await headers()).get("authorization") ?? "";
+  if (!header.toLowerCase().startsWith("bearer ")) {
+    return null;
+  }
+  const token = header.slice(7).trim();
+  return token.length > 0 ? token : null;
+}
+
+async function requestToken(): Promise<string | null> {
+  const cookieStore = await cookies();
+  return cookieStore.get(SESSION_COOKIE)?.value ?? (await bearerToken());
+}
+
+// Creates a session row and returns the raw token without touching cookies:
+// the caller (a native app via /api/auth/token) stores it itself.
+export function mintSession(userId: string): { token: string; expiresAt: string } {
+  const token = randomBytes(32).toString("base64url");
+  const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+  insertSession(hashToken(token), userId, expiresAt.toISOString());
+  return { token, expiresAt: expiresAt.toISOString() };
+}
+
 export async function startSession(userId: string) {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
@@ -60,27 +86,25 @@ export async function startSession(userId: string) {
 }
 
 export async function endSession() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE)?.value;
+  const token = await requestToken();
   if (token) {
     deleteSession(hashToken(token));
   }
+  const cookieStore = await cookies();
   cookieStore.delete(SESSION_COOKIE);
 }
 
 // Hash of the caller's session token, so password changes can revoke every
 // other session while keeping this one alive.
 export async function currentSessionTokenHash(): Promise<string | null> {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE)?.value;
+  const token = await requestToken();
   return token ? hashToken(token) : null;
 }
 
 // Returns the logged-in user, or null. Route handlers that require auth
-// should 401 on null.
+// should 401 on null. Accepts the browser cookie or a bearer token.
 export async function currentUser(): Promise<User | null> {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE)?.value;
+  const token = await requestToken();
   if (!token) {
     return null;
   }

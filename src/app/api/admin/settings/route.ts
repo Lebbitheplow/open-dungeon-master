@@ -2,7 +2,7 @@ import { z } from "zod";
 import { isErrorResponse, requireAdmin } from "@/lib/admin-api";
 import { getGlobalConfig, saveGlobalConfig } from "@/lib/db/app-settings";
 import { serverEnv } from "@/lib/server-env";
-import type { GlobalConfig } from "@/lib/schemas/global-config";
+import { resolveSignupMode, type GlobalConfig } from "@/lib/schemas/global-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +12,8 @@ export const dynamic = "force-dynamic";
 function maskedConfig(config: GlobalConfig) {
   return {
     signupsEnabled: config.signupsEnabled,
+    signupMode: resolveSignupMode(config),
+    serverName: config.serverName,
     publicUrl: config.publicUrl,
     worldRegistryUrl: config.worldRegistryUrl,
     text: {
@@ -66,6 +68,8 @@ export async function GET() {
 
 const patchSchema = z.object({
   signupsEnabled: z.boolean().optional(),
+  signupMode: z.enum(["open", "invite", "closed"]).optional(),
+  serverName: z.string().trim().max(100).optional(),
   publicUrl: z.string().trim().max(500).optional(),
   worldRegistryUrl: z.string().trim().max(500).optional(),
   text: z

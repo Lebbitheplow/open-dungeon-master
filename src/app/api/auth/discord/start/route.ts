@@ -15,9 +15,14 @@ export async function GET(request: Request) {
   }
 
   const state = randomBytes(16).toString("base64url");
-  const link = new URL(request.url).searchParams.get("link") === "1";
+  const params = new URL(request.url).searchParams;
+  const link = params.get("link") === "1";
+  // Account invite code (invite-only signup mode), carried through the OAuth
+  // round trip in the state cookie so the callback can spend it when the
+  // sign-in turns out to create a new account.
+  const invite = (params.get("invite") ?? "").trim().toUpperCase().slice(0, 40);
   const cookieStore = await cookies();
-  cookieStore.set(OAUTH_COOKIE, JSON.stringify({ state, link }), {
+  cookieStore.set(OAUTH_COOKIE, JSON.stringify({ state, link, invite }), {
     httpOnly: true,
     sameSite: "lax",
     secure: await cookieSecure(),

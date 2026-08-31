@@ -7,6 +7,14 @@ import { z } from "zod";
 // override by blanking the field.
 export const globalConfigSchema = z.object({
   signupsEnabled: z.boolean().default(true),
+  // Three-state signup policy for client apps and closed servers. Blank means
+  // "not chosen yet": derive open/closed from the legacy signupsEnabled
+  // boolean so existing installs keep their behavior (see resolveSignupMode).
+  // "invite" requires a valid admin-minted code from account_invites.
+  signupMode: z.enum(["", "open", "invite", "closed"]).default(""),
+  // Shown by client apps in their server picker and on the login screen.
+  // Blank = the product name.
+  serverName: z.string().trim().max(100).default(""),
   // The URL players actually reach the app on (e.g. https://dungeon.example.org).
   // Used for OAuth redirect URIs; blank = APP_PUBLIC_URL env, then forwarded
   // proxy headers, then the raw request origin.
@@ -105,3 +113,14 @@ export const globalConfigSchema = z.object({
 export type GlobalConfig = z.infer<typeof globalConfigSchema>;
 
 export const DEFAULT_GLOBAL_CONFIG: GlobalConfig = globalConfigSchema.parse({});
+
+export type SignupMode = "open" | "invite" | "closed";
+
+// Blank signupMode falls back to the legacy boolean, so a server whose admin
+// last touched the old checkbox keeps exactly the policy they chose.
+export function resolveSignupMode(config: GlobalConfig): SignupMode {
+  if (config.signupMode !== "") {
+    return config.signupMode;
+  }
+  return config.signupsEnabled ? "open" : "closed";
+}

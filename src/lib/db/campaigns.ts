@@ -185,6 +185,25 @@ function generateInviteCode() {
   );
 }
 
+// Rotates the invite code, killing every previously shared link for good.
+// The loop covers the UNIQUE constraint; a collision in a 32^8 keyspace is
+// theoretical. Returns the new code, or null for an unknown campaign.
+export function regenerateInviteCode(campaignId: string): string | null {
+  const db = getDatabase();
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const code = generateInviteCode();
+    try {
+      const result = db
+        .prepare(`UPDATE campaigns SET invite_code = ?, updated_at = ? WHERE id = ?`)
+        .run(code, nowIso(), campaignId);
+      return result.changes > 0 ? code : null;
+    } catch {
+      // UNIQUE collision; try another code.
+    }
+  }
+  return null;
+}
+
 function mapCampaign(row: CampaignRow): Campaign {
   return {
     id: row.id,

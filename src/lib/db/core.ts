@@ -72,6 +72,16 @@ function ensureSchema(db: Database.Database) {
       expires_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS account_invites (
+      code TEXT PRIMARY KEY,
+      created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      note TEXT NOT NULL DEFAULT '',
+      max_uses INTEGER NOT NULL DEFAULT 1,
+      used_count INTEGER NOT NULL DEFAULT 0,
+      expires_at TEXT,
+      created_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS campaigns (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,

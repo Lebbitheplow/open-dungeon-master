@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { hashPassword, startSession } from "@/lib/auth";
+import { consumeAccountInvite } from "@/lib/db/account-invites";
 import { getGlobalConfig } from "@/lib/db/app-settings";
 import { countUsers, createUser, getUserByUsername } from "@/lib/db/users";
+import { resolveSignupMode } from "@/lib/schemas/global-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,6 +16,9 @@ const registerSchema = z.object({
     .max(24)
     .regex(/^[a-zA-Z0-9_-]+$/, "Letters, numbers, _ and - only."),
   password: z.string().min(8).max(100),
+  // Account invite code, required while the server's signup mode is
+  // "invite". Not a campaign room code.
+  inviteCode: z.string().trim().max(40).optional(),
 });
 
 export async function POST(request: Request) {
@@ -26,15 +31,32 @@ export async function POST(request: Request) {
     );
   }
 
-  const { username, password } = parsed.data;
+  const { username, password, inviteCode } = parsed.data;
   // The very first account becomes the admin and may always register, even
   // if signups were somehow disabled before any user existed.
   const isFirstUser = countUsers() === 0;
-  if (!isFirstUser && !getGlobalConfig().signupsEnabled) {
+  const signupMode = resolveSignupMode(getGlobalConfig());
+  if (!isFirstUser && signupMode === "closed") {
     return Response.json({ error: "Signups are disabled." }, { status: 403 });
+  }
+  if (!isFirstUser && signupMode === "invite" && !inviteCode) {
+    return Response.json(
+      { error: "This server needs an invite code to create an account." },
+      { status: 403 },
+    );
   }
   if (getUserByUsername(username)) {
     return Response.json({ error: "That username is taken." }, { status: 409 });
+  }
+  // Spend the invite only after the cheap rejections, so a typo'd username
+  // does not burn a single-use code.
+  if (!isFirstUser && signupMode === "invite") {
+    if (!consumeAccountInvite(inviteCode ?? "")) {
+      return Response.json(
+        { error: "That invite code is not valid (or has been used up)." },
+        { status: 403 },
+      );
+    }
   }
 
   const user = createUser(username, hashPassword(password), { isAdmin: isFirstUser });

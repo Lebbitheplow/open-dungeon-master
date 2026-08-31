@@ -12,7 +12,11 @@ type AuthMode = "login" | "register";
 const OAUTH_ERRORS: Record<string, string> = {
   discord: "Discord sign-in failed. Try again.",
   signups_disabled: "Signups are disabled on this server.",
+  invite_required: "This server needs an invite code to create an account.",
+  invite_invalid: "That invite code is not valid (or has been used up).",
 };
+
+type SignupMode = "open" | "invite" | "closed";
 
 // Shared login/register form used by the home screen and invite-link page.
 // After a login that requires a password reset (admin gave the user a temp
@@ -29,6 +33,8 @@ export default function AuthForm({ onAuthed }: { onAuthed: (user: SessionUser) =
   });
   const [busy, setBusy] = useState(false);
   const [discordEnabled, setDiscordEnabled] = useState(false);
+  const [signupMode, setSignupMode] = useState<SignupMode>("open");
+  const [inviteCode, setInviteCode] = useState("");
   const [pendingReset, setPendingReset] = useState<{ user: SessionUser; tempPassword: string } | null>(
     null,
   );
@@ -36,7 +42,12 @@ export default function AuthForm({ onAuthed }: { onAuthed: (user: SessionUser) =
   useEffect(() => {
     fetch("/api/auth/providers")
       .then((response) => (response.ok ? response.json() : null))
-      .then((data) => setDiscordEnabled(data?.discord === true))
+      .then((data) => {
+        setDiscordEnabled(data?.discord === true);
+        if (data?.signupMode === "invite" || data?.signupMode === "closed") {
+          setSignupMode(data.signupMode);
+        }
+      })
       .catch(() => undefined);
     if (new URLSearchParams(window.location.search).get("error")) {
       window.history.replaceState(null, "", window.location.pathname);
@@ -51,7 +62,11 @@ export default function AuthForm({ onAuthed }: { onAuthed: (user: SessionUser) =
       const response = await fetch(`/api/auth/${mode}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify(
+          mode === "register" && inviteCode.trim()
+            ? { username, password, inviteCode: inviteCode.trim().toUpperCase() }
+            : { username, password },
+        ),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -114,6 +129,22 @@ export default function AuthForm({ onAuthed }: { onAuthed: (user: SessionUser) =
             className={ui.input}
           />
         </label>
+        {mode === "register" && signupMode === "invite" ? (
+          <label className="block text-sm">
+            <span className="mb-1 block text-stone-400">Invite code</span>
+            <input
+              value={inviteCode}
+              onChange={(event) => setInviteCode(event.target.value)}
+              required
+              maxLength={40}
+              placeholder="ODM-XXXXXXXXXX"
+              className={ui.input}
+            />
+            <span className="mt-1 block text-xs text-stone-500">
+              This server is invite-only. Ask whoever runs it for a code.
+            </span>
+          </label>
+        ) : null}
         {error ? <p className="text-sm text-red-400">{error}</p> : null}
         <button type="submit" disabled={busy} className={cn(ui.btnPrimary, "w-full")}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : null}
@@ -136,7 +167,13 @@ export default function AuthForm({ onAuthed }: { onAuthed: (user: SessionUser) =
 
       {discordEnabled ? (
         <a
-          href="/api/auth/discord/start"
+          // A filled invite code rides along so a brand-new Discord account
+          // can pass an invite-only server's gate in one round trip.
+          href={
+            inviteCode.trim()
+              ? `/api/auth/discord/start?invite=${encodeURIComponent(inviteCode.trim().toUpperCase())}`
+              : "/api/auth/discord/start"
+          }
           className={cn(ui.btnSecondary, "mt-3 w-full")}
         >
           <svg viewBox="0 0 24 24" className="size-4 fill-current" aria-hidden="true">
@@ -146,16 +183,24 @@ export default function AuthForm({ onAuthed }: { onAuthed: (user: SessionUser) =
         </a>
       ) : null}
 
-      <button
-        type="button"
-        onClick={() => {
-          setMode(mode === "login" ? "register" : "login");
-          setError("");
-        }}
-        className="mt-4 w-full text-center text-sm text-stone-400 hover:text-stone-200"
-      >
-        {mode === "login" ? "New here? Create an account" : "Have an account? Log in"}
-      </button>
+      {signupMode === "closed" ? (
+        mode === "login" ? (
+          <p className="mt-4 text-center text-xs text-stone-500">
+            This server is not accepting new accounts.
+          </p>
+        ) : null
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            setMode(mode === "login" ? "register" : "login");
+            setError("");
+          }}
+          className="mt-4 w-full text-center text-sm text-stone-400 hover:text-stone-200"
+        >
+          {mode === "login" ? "New here? Create an account" : "Have an account? Log in"}
+        </button>
+      )}
     </>
   );
 }

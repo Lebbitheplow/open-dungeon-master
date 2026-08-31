@@ -43,25 +43,45 @@ export function getGlobalConfig(): GlobalConfig {
 
 export type GlobalConfigPatch = {
   signupsEnabled?: boolean;
+  signupMode?: GlobalConfig["signupMode"];
+  serverName?: string;
   publicUrl?: string;
+  worldRegistryUrl?: string;
+  sampling?: Partial<GlobalConfig["sampling"]>;
   text?: Partial<GlobalConfig["text"]>;
   images?: Partial<GlobalConfig["images"]>;
   speech?: Partial<GlobalConfig["speech"]>;
+  voiceChat?: Partial<GlobalConfig["voiceChat"]>;
   discord?: Partial<GlobalConfig["discord"]>;
 };
 
 // Merges a partial update over the stored config. Secret fields follow the
 // same rule as everything else: undefined = keep, "" = clear, value = set.
+// Every schema key must appear here: a key missing from this object is
+// silently reset to its schema default on every save (that bug once ate the
+// voice-chat settings), so the merged literal is typed to force completeness.
 export function saveGlobalConfig(patch: GlobalConfigPatch): GlobalConfig {
   const current = getGlobalConfig();
-  const merged = globalConfigSchema.parse({
-    signupsEnabled: patch.signupsEnabled ?? current.signupsEnabled,
+  const signupMode = patch.signupMode ?? current.signupMode;
+  const input: Record<keyof GlobalConfig, unknown> = {
+    signupsEnabled:
+      // Keep the legacy boolean agreeing with an explicit mode so anything
+      // still reading it sees the policy the admin actually picked.
+      signupMode !== ""
+        ? signupMode !== "closed"
+        : (patch.signupsEnabled ?? current.signupsEnabled),
+    signupMode,
+    serverName: patch.serverName ?? current.serverName,
     publicUrl: patch.publicUrl ?? current.publicUrl,
+    worldRegistryUrl: patch.worldRegistryUrl ?? current.worldRegistryUrl,
+    sampling: { ...current.sampling, ...patch.sampling },
     text: { ...current.text, ...patch.text },
     images: { ...current.images, ...patch.images },
     speech: { ...current.speech, ...patch.speech },
+    voiceChat: { ...current.voiceChat, ...patch.voiceChat },
     discord: { ...current.discord, ...patch.discord },
-  });
+  };
+  const merged = globalConfigSchema.parse(input);
   setAppSetting(GLOBAL_CONFIG_KEY, merged);
   return merged;
 }

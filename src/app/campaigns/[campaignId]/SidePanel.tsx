@@ -10,6 +10,7 @@ import {
   ChevronsRight,
   Heart,
   Link as LinkIcon,
+  QrCode,
   ScrollText,
   UserPlus,
   Users,
@@ -24,6 +25,8 @@ import {
   type ReactNode,
 } from "react";
 import { cn } from "@/lib/cn";
+import { copyText } from "@/lib/clipboard";
+import { InviteShareDialog } from "@/components/InviteShareDialog";
 import { DmConsolePanel } from "@/app/campaigns/[campaignId]/DmConsolePanel";
 import type { CampaignMessage } from "@/lib/db/messages";
 import type { DmBeat } from "@/lib/db/dm-beats";
@@ -290,6 +293,7 @@ function SidePanelInner({
   relationshipsEnabled: boolean;
 }) {
   const [inviteCopied, setInviteCopied] = useState(false);
+  const [inviteSharing, setInviteSharing] = useState(false);
   // Which section of Party and Story is showing. Local state: nothing outside
   // this panel reads or sets them, and memo is unaffected by internal state.
   const [partySection, setPartySection] = useState<PartySection>("party");
@@ -316,9 +320,10 @@ function SidePanelInner({
   }
 
   async function copyInviteLink() {
-    await navigator.clipboard.writeText(`${window.location.origin}/join/${inviteCode}`);
-    setInviteCopied(true);
-    setTimeout(() => setInviteCopied(false), 1500);
+    if (await copyText(`${window.location.origin}/join/${inviteCode}`)) {
+      setInviteCopied(true);
+      setTimeout(() => setInviteCopied(false), 1500);
+    }
   }
 
   return (
@@ -445,21 +450,38 @@ function SidePanelInner({
                   Joining {midGameJoinOpen ? "open" : "closed"}
                 </button>
                 {midGameJoinOpen ? (
-                  <button
-                    type="button"
-                    onClick={copyInviteLink}
-                    title="Copy the invite link"
-                    className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-400 hover:text-stone-200"
-                  >
-                    {inviteCopied ? (
-                      <Check className="size-3.5 text-emerald-400" />
-                    ) : (
-                      <LinkIcon className="size-3.5" />
-                    )}
-                    {inviteCode}
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={copyInviteLink}
+                      title="Copy the invite link"
+                      className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-400 hover:text-stone-200"
+                    >
+                      {inviteCopied ? (
+                        <Check className="size-3.5 text-emerald-400" />
+                      ) : (
+                        <LinkIcon className="size-3.5" />
+                      )}
+                      {inviteCode}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInviteSharing(true)}
+                      title="Show the invite QR code and share options"
+                      className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-400 hover:text-stone-200"
+                    >
+                      <QrCode className="size-3.5" />
+                    </button>
+                  </>
                 ) : null}
               </div>
+              <InviteShareDialog
+                open={inviteSharing}
+                onOpenChange={setInviteSharing}
+                campaignId={campaignId}
+                inviteCode={inviteCode}
+                canRegenerate
+              />
             </div>
           ) : null}
           <PartyPanel
