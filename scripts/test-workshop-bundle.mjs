@@ -5,8 +5,8 @@
 // is a whole content tree arriving from a stranger, so the claims that
 // matter are that a malformed one is refused with a reason, that an
 // oversized one is refused by its SIZE rather than by exhausting memory
-// proving it malformed, that a limit is a limit, and that no image ever
-// appears in the format at all.
+// proving it malformed, that a limit is a limit, and that the only images
+// the format accepts are size-capped PNG/JPEG/WebP data URLs.
 //
 // The round trip through a real database lives in
 // scripts/test-workshop-integration.mjs, which has one.
@@ -180,21 +180,59 @@ test("an unknown beat kind is refused", () => {
   }
 });
 
-test("the format carries no image field anywhere", () => {
-  // The licensing boundary, asserted structurally: if somebody adds a
-  // backdrop or a portrait to the schema later, this fails and they have to
-  // read the header of bundle.ts first.
-  const shape = JSON.stringify(
-    workshopBundleSchema.parse(
-      bundle({
-        npcs: [{ name: "Someone" }],
-        maps: [{ name: "A map", width: 10, height: 10 }],
-      }),
-    ),
-  );
-  for (const forbidden of ["portrait", "backdrop", "image", "data:image"]) {
-    assert.ok(!shape.includes(forbidden), `the bundle carries a ${forbidden} field`);
+// A real 1x1 transparent PNG, so the image tests exercise a data URL that
+// would actually decode.
+const TINY_PNG =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+
+test("a portrait and a backdrop travel as data URLs", () => {
+  const result = read({
+    npcs: [{ name: "Someone", portrait: TINY_PNG }],
+    maps: [
+      {
+        name: "A map",
+        width: 10,
+        height: 10,
+        backdrop: TINY_PNG,
+        backdropTransform: { scale: 2 },
+      },
+    ],
+  });
+  assert.ok(!("error" in result), result.error);
+  assert.equal(result.bundle.npcs[0].portrait, TINY_PNG);
+  assert.equal(result.bundle.maps[0].backdrop, TINY_PNG);
+  assert.deepEqual(result.bundle.maps[0].backdropTransform, { scale: 2 });
+});
+
+test("absent images read back as empty strings", () => {
+  const result = read({
+    npcs: [{ name: "Someone" }],
+    maps: [{ name: "A map", width: 10, height: 10 }],
+  });
+  assert.ok(!("error" in result));
+  assert.equal(result.bundle.npcs[0].portrait, "");
+  assert.equal(result.bundle.maps[0].backdrop, "");
+});
+
+test("an image that is not a PNG/JPEG/WebP data URL is refused", () => {
+  // The mime allowlist and the data-URL shape are the whole boundary: a
+  // path, a URL, or an SVG (scriptable) must never reach the disk writer.
+  for (const bad of [
+    "data:image/gif;base64,R0lGODlhAQABAAAAACw=",
+    "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=",
+    "/uploads/legit-looking.png",
+    "https://example.com/art.png",
+    "data:image/png;base64,not base64!!!",
+  ]) {
+    const result = read({ npcs: [{ name: "Someone", portrait: bad }] });
+    assert.ok("error" in result, `${bad.slice(0, 40)} was accepted`);
   }
+});
+
+test("an image over the per-image cap is refused by the schema", () => {
+  const oversized = `data:image/png;base64,${"A".repeat(11_300_001)}`;
+  const result = read({ npcs: [{ name: "Someone", portrait: oversized }] });
+  assert.ok("error" in result);
 });
 
 test("unknown extra keys do not survive into the parsed bundle", () => {
@@ -225,11 +263,21 @@ test("a bundle built on somebody else's setting warns about it", () => {
   assert.ok(warnings.some((line) => /not affiliated/i.test(line)));
 });
 
-test("a bundle carrying maps says the art did not travel", () => {
+test("a bundle carrying imageless maps says the art did not travel", () => {
   const parsed = workshopBundleSchema.parse(
     bundle({ maps: [{ name: "A map", width: 10, height: 10 }] }),
   );
-  assert.ok(bundleWarnings(parsed).some((line) => /Backdrop images are never bundled/.test(line)));
+  assert.ok(bundleWarnings(parsed).some((line) => /No images came along/.test(line)));
+});
+
+test("a bundle carrying art warns about the right to share it", () => {
+  const parsed = workshopBundleSchema.parse(
+    bundle({ npcs: [{ name: "Someone", portrait: TINY_PNG }] }),
+  );
+  const warnings = bundleWarnings(parsed);
+  assert.ok(warnings.some((line) => /1 image/.test(line)));
+  assert.ok(warnings.some((line) => /right to share/.test(line)));
+  assert.ok(!warnings.some((line) => /No images came along/.test(line)));
 });
 
 test("an original bundle with nothing surprising in it warns about nothing", () => {

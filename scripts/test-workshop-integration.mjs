@@ -13,7 +13,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { register } from "node:module";
 import os from "node:os";
 import path from "node:path";
@@ -919,6 +919,26 @@ const placesIn = (campaignId) =>
     .prepare(`SELECT id, campaign_id, name FROM locations WHERE campaign_id = ? ORDER BY name`)
     .all(campaignId);
 
+// A portrait that really exists on disk, so the export has art to carry. It
+// goes under the app's real public/uploads because that is the only root the
+// export reads from; the bottom of this file removes it, along with every
+// file the imports below write.
+const TINY_PNG_BYTES = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+  "base64",
+);
+const uploadsDir = path.join(process.cwd(), "public", "uploads");
+const fixturePortrait = `test-bundle-${randomUUID()}.png`;
+
+test("fixture: Marla's portrait becomes a file that exists", () => {
+  mkdirSync(uploadsDir, { recursive: true });
+  writeFileSync(path.join(uploadsDir, fixturePortrait), TINY_PNG_BYTES);
+  db.prepare(`UPDATE npcs SET portrait_url = ? WHERE id = ?`).run(
+    `/uploads/${fixturePortrait}`,
+    marla.id,
+  );
+});
+
 test("a workshop exports to a bundle that reads back in", () => {
   const result = exportWorkshopBundle(workshop.id, shareManifest);
   assert.ok(!("error" in result), result.error);
@@ -949,13 +969,13 @@ test("the export carries the workshop's own prep", () => {
   assert.equal(exported.genre, getCampaignById(workshop.id).gameSettings.genre);
 });
 
-test("no image path appears anywhere in an exported bundle", () => {
-  // The portraits and backdrops written earlier in this suite are exactly
-  // what this is checking did NOT come along.
-  const text = JSON.stringify(exported);
-  for (const forbidden of ["portrait", "backdrop", "/uploads/", "data:image"]) {
-    assert.ok(!text.includes(forbidden), `the bundle carried ${forbidden}`);
-  }
+test("art travels as data URLs and never as disk paths", () => {
+  const marlaOut = exported.npcs.find((npc) => npc.name === marla.name);
+  assert.ok(marlaOut, "Marla did not travel");
+  assert.match(marlaOut.portrait, /^data:image\/png;base64,/, "the portrait did not come along");
+  // The file itself travels; the path it lived at is nobody's business and
+  // would be meaningless (or worse, dereferenced) on another machine.
+  assert.ok(!JSON.stringify(exported).includes("/uploads/"), "a disk path leaked into the bundle");
 });
 
 let imported = null;
@@ -979,6 +999,21 @@ test("the imported workshop holds the same content under new ids", () => {
   }
   assert.equal(listLoreEntries(imported.id).length, exported.lore.length);
   assert.equal(listBeats(imported.id).length, exported.storyboard.length);
+});
+
+test("the portrait lands as its own fresh file, not as the source's path", () => {
+  const row = db
+    .prepare(`SELECT portrait_url FROM npcs WHERE campaign_id = ? AND name = ?`)
+    .get(imported.id, marla.name);
+  assert.ok(row, "Marla did not land");
+  assert.match(row.portrait_url, /^\/uploads\/[A-Za-z0-9][A-Za-z0-9_-]*\.png$/);
+  // A fresh uuid name: deleting the source workshop's art can never blank an
+  // import, and vice versa.
+  assert.notEqual(row.portrait_url, `/uploads/${fixturePortrait}`);
+  assert.ok(
+    existsSync(path.join(process.cwd(), "public", row.portrait_url)),
+    "the landed portrait is not on disk",
+  );
 });
 
 test("the board's arrows survive the trip as arrows, not as dead ids", () => {
@@ -1229,6 +1264,31 @@ if (child.status !== 0) {
 }
 process.stdout.write(child.stdout);
 passed += 1;
+
+// Remove every image file this suite caused to exist: the fixture portrait
+// plus whatever the bundle imports wrote under fresh uuid names, found by
+// asking the temp database what it points at. face.png is excluded on
+// purpose; it was only ever a dangling DB string here, and a real deployment
+// running from this checkout could own a file by that name.
+{
+  const artPaths = new Set([`/uploads/${fixturePortrait}`]);
+  for (const row of db
+    .prepare(`SELECT DISTINCT portrait_url AS p FROM npcs WHERE portrait_url LIKE '/uploads/%'`)
+    .all()) {
+    artPaths.add(row.p);
+  }
+  for (const row of db
+    .prepare(
+      `SELECT DISTINCT backdrop_path AS p FROM prepared_maps WHERE backdrop_path LIKE '/uploads/%'`,
+    )
+    .all()) {
+    artPaths.add(row.p);
+  }
+  artPaths.delete("/uploads/face.png");
+  for (const relPath of artPaths) {
+    rmSync(path.join(process.cwd(), "public", relPath), { force: true });
+  }
+}
 
 rmSync(path.dirname(dbPath), { recursive: true, force: true });
 

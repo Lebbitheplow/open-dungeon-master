@@ -1,10 +1,16 @@
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { createCampaign, getCampaignById } from "@/lib/db/campaigns";
 import { getHouseRulesText, setHouseRules } from "@/lib/db/rules";
 import { createHomebrewMonster, listHomebrewMonsters } from "@/lib/bestiary/homebrew-monsters";
 import { draftFromData } from "@/lib/bestiary/monster-draft";
+import { isUploadedImagePath } from "@/lib/uploads";
 import {
   bundleManifestSchema,
+  decodeBundleImage,
+  encodeBundleImage,
+  MAX_BUNDLE_BYTES,
   resolveEdges,
   WORKSHOP_BUNDLE_KIND,
   WORKSHOP_BUNDLE_VERSION,
@@ -40,7 +46,36 @@ function str(value: unknown, fallback = ""): string {
 
 // ---- export ----
 
-export type ExportResult = { bundle: WorkshopBundle } | { error: string };
+// Images share the bundle's byte budget with everything else; the reserve
+// keeps a fully-illustrated workshop from squeezing its own prose out.
+const IMAGE_BUDGET_CHARS = MAX_BUNDLE_BYTES - 8 * 1024 * 1024;
+
+type ImageBudget = { remaining: number; skipped: number };
+
+// A stored path becomes a data URL, or "" plus a skip when it cannot travel:
+// path not one of ours, file gone, single image over cap, or bundle budget
+// spent. The export never fails over art; it just says what stayed behind.
+function loadImage(relPath: unknown, budget: ImageBudget): string {
+  if (!isUploadedImagePath(relPath)) {
+    return "";
+  }
+  let encoded = "";
+  try {
+    encoded = encodeBundleImage(relPath, readFileSync(path.join(process.cwd(), "public", relPath)));
+  } catch {
+    // Dangling path; fall through to the skip below.
+  }
+  if (!encoded || encoded.length > budget.remaining) {
+    budget.skipped += 1;
+    return "";
+  }
+  budget.remaining -= encoded.length;
+  return encoded;
+}
+
+export type ExportResult =
+  | { bundle: WorkshopBundle; skippedImages: number }
+  | { error: string };
 
 export function exportWorkshopBundle(
   workshopId: string,
@@ -61,6 +96,7 @@ export function exportWorkshopBundle(
     return { error: "Fill in a name, a one-line blurb and what this is inspired by." };
   }
   const manifest: BundleManifest = parsed.data;
+  const budget: ImageBudget = { remaining: IMAGE_BUDGET_CHARS, skipped: 0 };
 
   const bundle: WorkshopBundle = {
     kind: WORKSHOP_BUNDLE_KIND,
@@ -90,7 +126,7 @@ export function exportWorkshopBundle(
       connections: parseJson<string[]>(str(row.connections_json, "[]"), []),
     })),
     npcs: allRows(
-      `SELECT name, attitude, trait, location, aliases_json, personality_json, goals_json, relations_json
+      `SELECT name, attitude, trait, location, aliases_json, personality_json, goals_json, relations_json, portrait_url
          FROM npcs WHERE campaign_id = ? AND archived = 0 ORDER BY name COLLATE NOCASE`,
       workshopId,
     ).map((row) => ({
@@ -106,8 +142,7 @@ export function exportWorkshopBundle(
       personality: str(row.personality_json),
       goals: str(row.goals_json),
       relations: str(row.relations_json),
-      // portrait_url is deliberately not read. See the header of
-      // src/lib/workshop/bundle.ts for why no image travels.
+      portrait: loadImage(row.portrait_url, budget),
     })),
     encounters: allRows(
       `SELECT name, enemies_json, battlefield, notes FROM encounter_templates WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`,
@@ -126,22 +161,31 @@ export function exportWorkshopBundle(
       entries: parseJson<unknown[]>(str(row.entries_json, "[]"), []),
     })),
     maps: allRows(
-      `SELECT name, notes, tags_json, width, height, terrain, ambient, theme, lights_json, seed
+      `SELECT name, notes, tags_json, width, height, terrain, ambient, theme, lights_json, seed,
+              backdrop_path, backdrop_transform_json
          FROM prepared_maps WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`,
       workshopId,
-    ).map((row) => ({
-      name: str(row.name),
-      notes: str(row.notes),
-      tags: parseJson<string[]>(str(row.tags_json, "[]"), []),
-      width: Number(row.width) || 1,
-      height: Number(row.height) || 1,
-      terrain: str(row.terrain),
-      ambient: str(row.ambient, "day"),
-      theme: str(row.theme, "field"),
-      lights: parseJson<unknown[]>(str(row.lights_json, "[]"), []),
-      seed: Number(row.seed) || 0,
-      // backdrop_path and its transform are deliberately not read.
-    })),
+    ).map((row) => {
+      const backdrop = loadImage(row.backdrop_path, budget);
+      return {
+        name: str(row.name),
+        notes: str(row.notes),
+        tags: parseJson<string[]>(str(row.tags_json, "[]"), []),
+        width: Number(row.width) || 1,
+        height: Number(row.height) || 1,
+        terrain: str(row.terrain),
+        ambient: str(row.ambient, "day"),
+        theme: str(row.theme, "field"),
+        lights: parseJson<unknown[]>(str(row.lights_json, "[]"), []),
+        seed: Number(row.seed) || 0,
+        backdrop,
+        // The transform is meaningless without its art, so it only travels
+        // alongside it.
+        backdropTransform: backdrop
+          ? parseJson<Record<string, unknown>>(str(row.backdrop_transform_json, "{}"), {})
+          : {},
+      };
+    }),
     storyboard: [],
     monsters: listHomebrewMonsters(campaign.ownerUserId).map((entry) => ({
       name: entry.draft.name,
@@ -169,7 +213,7 @@ export function exportWorkshopBundle(
     y: Number(row.y) || 0,
   }));
 
-  return { bundle };
+  return { bundle, skippedImages: budget.skipped };
 }
 
 // ---- import ----
@@ -178,10 +222,34 @@ export type BundleImportResult =
   | { workshopId: string; copied: number }
   | { error: string };
 
+// Writes an arriving image to /uploads under a fresh uuid name, exactly the
+// shape /api/upload produces, so isUploadedImagePath accepts it everywhere
+// else. Returns "" when the data URL does not survive decoding.
+function saveBundleImage(dataUrl: string, uploadDir: string): string {
+  if (!dataUrl) {
+    return "";
+  }
+  const image = decodeBundleImage(dataUrl);
+  if (!image) {
+    return "";
+  }
+  const filename = `${crypto.randomUUID()}.${image.ext}`;
+  writeFileSync(path.join(uploadDir, filename), image.bytes);
+  return `/uploads/${filename}`;
+}
+
 export function importWorkshopBundle(
   userId: string,
   bundle: WorkshopBundle,
 ): BundleImportResult {
+  // Art lands on disk before the transaction opens: a failed import can
+  // orphan a few image files (harmless), while the reverse order would
+  // commit rows pointing at images that were never written.
+  const uploadDir = path.join(process.cwd(), "public", "uploads");
+  mkdirSync(uploadDir, { recursive: true });
+  const npcPortraits = bundle.npcs.map((npc) => saveBundleImage(npc.portrait, uploadDir));
+  const mapBackdrops = bundle.maps.map((map) => saveBundleImage(map.backdrop, uploadDir));
+
   const workshop = createCampaign(userId, {
     title: bundle.manifest.name,
     description: bundle.premise || bundle.manifest.blurb,
@@ -248,13 +316,13 @@ export function importWorkshopBundle(
       copied += 1;
     }
 
-    for (const npc of bundle.npcs) {
+    for (const [index, npc] of bundle.npcs.entries()) {
       db.prepare(
         `INSERT INTO npcs
            (id, campaign_id, name, attitude, trait, location, last_shift_turn,
             aliases_json, personality_json, goals_json, relations_json, bonds_json,
             pressure_json, arc_cast_id, portrait_url, archived, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, '[]', '', '', '', 0, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, '[]', '', '', ?, 0, ?, ?)`,
       ).run(
         crypto.randomUUID(),
         workshop.id,
@@ -270,6 +338,7 @@ export function importWorkshopBundle(
         // characters: an imported bond would point at somebody who has never
         // existed on this machine.
         npc.relations || "[]",
+        npcPortraits[index],
         now,
         now,
       );
@@ -312,12 +381,13 @@ export function importWorkshopBundle(
       copied += 1;
     }
 
-    for (const map of bundle.maps) {
+    for (const [index, map] of bundle.maps.entries()) {
+      const backdropPath = mapBackdrops[index];
       db.prepare(
         `INSERT INTO prepared_maps
            (id, campaign_id, name, notes, tags_json, width, height, terrain, ambient,
             theme, lights_json, seed, backdrop_path, backdrop_transform_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', '{}', ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         crypto.randomUUID(),
         workshop.id,
@@ -331,8 +401,9 @@ export function importWorkshopBundle(
         map.theme,
         JSON.stringify(map.lights),
         map.seed,
-        // The empty backdrop, spelled out rather than left to the column
-        // default: these two are NOT NULL, and a bundle never carries art.
+        backdropPath,
+        // The transform only means something over its art.
+        backdropPath ? JSON.stringify(map.backdropTransform) : "{}",
         now,
         now,
       );

@@ -28,10 +28,16 @@ export async function POST(
   if ("error" in result) {
     return Response.json({ error: result.error }, { status: 400 });
   }
+  const warnings = bundleWarnings(result.bundle);
+  if (result.skippedImages > 0) {
+    warnings.push(
+      `${result.skippedImages} image${result.skippedImages === 1 ? "" : "s"} stayed behind (missing on disk, over the per-image cap, or over the bundle's size budget).`,
+    );
+  }
   return Response.json({
     bundle: result.bundle,
     counts: bundleCounts(result.bundle),
     total: bundleTotal(result.bundle),
-    warnings: bundleWarnings(result.bundle),
+    warnings,
   });
 }

@@ -17,15 +17,17 @@ import { BEAT_KINDS } from "@/lib/workshop/board";
 //   - IDs. Everything is written fresh on import. A bundle is content, not a
 //     database dump, so it cannot collide with what the importer already has
 //     and cannot smuggle a reference to a row on somebody else's machine.
-//   - IMAGES. Battle map backdrops and NPC portraits are files on disk. A
-//     bundle carries a map's geometry, its lights and its terrain, and drops
-//     the art with a warning. This is the licensing boundary doing real work:
-//     the one thing a person is most likely to have taken from somewhere
-//     else is the picture, and a format that cannot carry a picture cannot
-//     launder one. It is also the "import formats, not editors" rule from
-//     the plan's risk 4, applied to what leaves rather than what arrives.
 //   - Anything from play. A workshop has no transcript, no party and no
 //     characters, which is exactly why it is the thing worth sharing.
+//
+// Images DO travel (since format v1 grew the optional fields): a map's
+// backdrop and an NPC's portrait ride along as size-capped data URLs, because
+// a map without its art is half a map. The licensing weight that the old
+// no-images rule carried now rests on the manifest declaration plus an
+// explicit warning whenever art is aboard: the person exporting vouches for
+// what they share, the person importing is told what they received. An older
+// build importing a newer bundle strips the image fields and lands geometry
+// only, which is why the version number did not move.
 //
 // Pure: no "@/" imports with I/O, so scripts/test-workshop-bundle.mjs drives
 // the whole format without a database. The rim is src/lib/db/workshop-bundle.ts.
@@ -33,10 +35,72 @@ import { BEAT_KINDS } from "@/lib/workshop/board";
 export const WORKSHOP_BUNDLE_KIND = "odm.workshop";
 export const WORKSHOP_BUNDLE_VERSION = 1;
 
-// Four megabytes of JSON is an enormous amount of prose (roughly a novel) and
-// still small enough to hold in memory while parsing. World pack manifests
-// cap at two; a workshop carries map geometry, so it gets more room.
-export const MAX_BUNDLE_BYTES = 4 * 1024 * 1024;
+// Sixty-four megabytes: still one in-memory JSON parse, but with room for a
+// workshop's art. Prose alone never gets near this (four megabytes is
+// roughly a novel); the budget exists for base64-encoded backdrops and
+// portraits, each individually capped below at the same 8 MB the upload
+// route enforces.
+export const MAX_BUNDLE_BYTES = 64 * 1024 * 1024;
+
+// Per-image binary cap, matching /api/upload's MAX_FILE_SIZE so nothing can
+// arrive by bundle that could not have been uploaded by hand.
+export const MAX_BUNDLE_IMAGE_BYTES = 8 * 1024 * 1024;
+
+// A little over MAX_BUNDLE_IMAGE_BYTES * 4/3: base64 overhead plus header.
+const MAX_IMAGE_DATA_URL_CHARS = 11_300_000;
+
+const IMAGE_DATA_URL = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
+
+// "" means "no image": absent art is an empty string rather than a missing
+// key so a bundle diff shows the field either way.
+const bundleImageSchema = z
+  .string()
+  .max(MAX_IMAGE_DATA_URL_CHARS)
+  .refine((value) => value === "" || IMAGE_DATA_URL.test(value), {
+    message: "Images must be PNG, JPEG or WebP data URLs.",
+  })
+  .default("");
+
+export type BundleImage = { mime: string; ext: "png" | "jpg" | "webp"; bytes: Buffer };
+
+// Decodes a schema-accepted image field back to bytes, re-checking the
+// binary size: base64 length was capped by the schema, but this is the
+// number the disk actually pays.
+export function decodeBundleImage(dataUrl: string): BundleImage | null {
+  const match = dataUrl.match(IMAGE_DATA_URL);
+  if (!match) {
+    return null;
+  }
+  const mime = `image/${match[1]}`;
+  const bytes = Buffer.from(dataUrl.slice(dataUrl.indexOf(",") + 1), "base64");
+  if (!bytes.length || bytes.length > MAX_BUNDLE_IMAGE_BYTES) {
+    return null;
+  }
+  const ext = match[1] === "png" ? "png" : match[1] === "webp" ? "webp" : "jpg";
+  return { mime, ext, bytes };
+}
+
+// The other direction, for export. Returns "" for anything that cannot
+// travel (unknown extension, oversized file), so the caller can count what
+// it had to leave behind.
+export function encodeBundleImage(filePath: string, bytes: Buffer): string {
+  if (!bytes.length || bytes.length > MAX_BUNDLE_IMAGE_BYTES) {
+    return "";
+  }
+  const extension = filePath.toLowerCase().split(".").pop() ?? "";
+  const mime =
+    extension === "png"
+      ? "image/png"
+      : extension === "webp"
+        ? "image/webp"
+        : extension === "jpg" || extension === "jpeg"
+          ? "image/jpeg"
+          : "";
+  if (!mime) {
+    return "";
+  }
+  return `data:${mime};base64,${bytes.toString("base64")}`;
+}
 
 // Per-kind ceilings. These are not really about memory, they are about a
 // bundle staying something a person can read before they trust it.
@@ -94,6 +158,7 @@ const npcSchema = z.object({
   // together arrives with its feuds intact. Same property the workshop
   // import relies on (src/lib/db/content-import.ts).
   relations: z.string().max(8_000).default(""),
+  portrait: bundleImageSchema,
 });
 
 const encounterSchema = z.object({
@@ -119,6 +184,10 @@ const mapSchema = z.object({
   theme: z.string().max(40).default("field"),
   lights: z.array(z.unknown()).max(200).default([]),
   seed: z.number().int().default(0),
+  backdrop: bundleImageSchema,
+  // How the backdrop sits on the grid (scale and offset). Meaningless
+  // without the art, so it travels and lands only alongside it.
+  backdropTransform: z.record(z.string(), z.unknown()).default({}),
 });
 
 const beatSchema = z.object({
@@ -197,6 +266,13 @@ export function bundleTotal(bundle: WorkshopBundle): number {
   return Object.values(bundleCounts(bundle)).reduce((sum, count) => sum + count, 0);
 }
 
+export function bundleImageCount(bundle: WorkshopBundle): number {
+  return (
+    bundle.maps.filter((map) => map.backdrop !== "").length +
+    bundle.npcs.filter((npc) => npc.portrait !== "").length
+  );
+}
+
 // What to say about a bundle before somebody trusts it. These are not
 // validation errors; the bundle is already valid. They are the things a
 // reasonable person would want said out loud.
@@ -207,13 +283,15 @@ export function bundleWarnings(bundle: WorkshopBundle): string[] {
       `Built on ${bundle.manifest.rightsHolder.trim()}'s setting. It is a fan work and is not affiliated with them.`,
     );
   }
-  if (bundle.maps.length) {
+  const images = bundleImageCount(bundle);
+  if (images > 0) {
     warnings.push(
-      `${bundle.maps.length} map${bundle.maps.length === 1 ? "" : "s"} arrive as geometry only. Backdrop images are never bundled, so any painted-over art has to be added again by hand.`,
+      `Carries ${images} image${images === 1 ? "" : "s"} (map backdrops and portraits). Only pass on art you made or have the right to share.`,
     );
-  }
-  if (bundle.npcs.length) {
-    warnings.push("NPC portraits are not bundled either, for the same reason.");
+  } else if (bundle.maps.length || bundle.npcs.length) {
+    warnings.push(
+      "No images came along: any map backdrops or NPC portraits have to be added again by hand.",
+    );
   }
   if (bundle.houseRulesText.trim()) {
     warnings.push(
