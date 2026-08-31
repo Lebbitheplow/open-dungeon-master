@@ -1,0 +1,16 @@
+# The /j invite redirector: a Cloudflare Worker on the free tier, no server.
+#
+# Deploy (one time setup, then one command):
+#   npx wrangler login
+#   cd workers/j-redirector && npx wrangler deploy
+#
+# The route below binds it to opendungeonmaster.com/j* once the zone's DNS
+# is proxied through Cloudflare. Nothing else in the zone is touched.
+
+name = "odm-j-redirector"
+main = "src/index.js"
+compatibility_date = "2026-08-01"
+
+routes = [
+  { pattern = "opendungeonmaster.com/j*", zone_name = "opendungeonmaster.com" },
+]
