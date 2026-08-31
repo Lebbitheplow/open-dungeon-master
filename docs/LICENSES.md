@@ -22,6 +22,36 @@ This work includes material taken from the System Reference Document 5.1
 ("SRD 5.1") by Wizards of the Coast LLC. The SRD 5.1 is licensed under the
 Creative Commons Attribution 4.0 International License.
 
+## Ambience and music
+
+**No audio ships with this project.** `src/lib/ambience/catalog.ts` names the
+cues the app can play; the files live in `public/ambience/`, are not in git,
+and arrive only when an operator runs `scripts/fetch-ambience.mjs`.
+
+That script reads the licence each archive records for a file and refuses
+anything it cannot positively identify, including a blank licence field. By
+default it accepts only public-domain dedications: CC0 and the Public Domain
+Mark, both of which impose no further obligation on a downstream user.
+
+`--allow-attribution` widens it to CC BY and CC BY-SA. Those are usable but
+oblige you to keep the credit visible, which the app does for you: every
+accepted file's title, author, source URL and licence are written into
+`public/ambience/manifest.json` and listed on the in-app `/licenses` page,
+under "Sound library". NonCommercial and NoDerivatives licences are refused
+under every setting, because whether a given install is a commercial or a
+derivative use is a question about the operator, not about this project, and
+the script must not answer it on their behalf.
+
+Files an operator supplies by hand (dropped into `public/ambience/`, or pinned
+in `data/ambience-sources.json`) are credited as locally supplied. The licence
+for those is the operator's to establish and to stand behind; this project
+makes no claim about them.
+
+**The rule for contributors:** do not add audio files to this repository, and
+do not add a source to the fetch script that cannot report a machine-readable
+licence per file. A cue with no file is silent, which is a visible and
+harmless failure. A cue playing something nobody can account for is not.
+
 ## Expanded options (original content)
 
 Many class options, spells, feats and lineages that players expect at a 5e
@@ -59,6 +89,24 @@ generic title, and the printed name is kept as a search alias so players can
 still find it. Spell aliases live in `src/lib/srd/manifest/spells.json` as
 `{ n: "<canonical>", a: ["<printed name>"] }` and are applied to the pack by
 `scripts/import-open5e.mjs`; `searchSpells` matches on them.
+
+## Ideas borrowed from other MIT projects
+
+No code from these is in this repository. Each is named because its SHAPE
+informed a module here, and saying so is cheaper than leaving a reader to
+wonder.
+
+- **foundryvtt/dnd5e** (MIT). Its `data/calendar/` shape (a generic calendar
+  model plus optional setting presets rather than a hard-coded year) informed
+  `src/lib/dm/calendar.ts`. Its `data/actor/group.mjs` (a party as a container
+  with its own currency and inventory, not a sixth character) informed
+  `src/lib/dm/party-logic.ts`. Its ActiveEffect model informed the shape of
+  `src/lib/dm/effects-logic.ts`.
+- **Simple Worldbuilding** (MIT). Its idea of typed key/value attributes with
+  groups, including rollable formula attributes, is reimplemented in
+  `src/lib/dm/attributes-logic.ts`.
+- **NE-P** (MIT). Its swipe generation informed the reroll temperature offset
+  in `src/lib/dm/renarrate-logic.ts`, which carries the reference in place.
 
 ## Campaign plugins (world packs)
 

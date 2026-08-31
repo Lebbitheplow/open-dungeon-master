@@ -1,5 +1,5 @@
-import { isErrorResponse, requireLead } from "@/lib/campaign-api";
-import { updateGameSettings } from "@/lib/db/campaigns";
+import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
+import { setDmMode, updateGameSettings } from "@/lib/db/campaigns";
 import { gameSettingsSchema } from "@/lib/schemas/game-settings";
 import { publishPersisted } from "@/lib/events";
 
@@ -12,7 +12,7 @@ export async function PATCH(
   { params }: { params: Promise<{ campaignId: string }> },
 ) {
   const { campaignId } = await params;
-  const context = await requireLead(campaignId);
+  const context = await requireStoryAuthority(campaignId);
   if (isErrorResponse(context)) {
     return context;
   }
@@ -23,7 +23,22 @@ export async function PATCH(
     return Response.json({ error: "Invalid game settings." }, { status: 400 });
   }
 
-  const gameSettings = updateGameSettings(campaignId, parsed.data);
+  // dmMode does not go through the generic merge: the DM seat is an invariant
+  // of the mode (setDmMode keeps them in step), and a seat change is news the
+  // table is owed, same as the seat route publishes it.
+  const { dmMode, ...rest } = parsed.data;
+  let gameSettings = null;
+  if (dmMode !== undefined && dmMode !== context.campaign.gameSettings.dmMode) {
+    const changed = setDmMode(campaignId, dmMode, context.user.id);
+    if (!changed) {
+      return Response.json({ error: "Campaign not found." }, { status: 404 });
+    }
+    gameSettings = changed.gameSettings;
+    publishPersisted(campaignId, "dm_seat_changed", { seat: "dm", userId: changed.dmUserId });
+  }
+  if (Object.keys(rest).length > 0 || !gameSettings) {
+    gameSettings = updateGameSettings(campaignId, rest);
+  }
   if (!gameSettings) {
     return Response.json({ error: "Campaign not found." }, { status: 404 });
   }

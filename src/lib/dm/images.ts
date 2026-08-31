@@ -1,5 +1,12 @@
 import { generateComfyImage } from "@/lib/comfyui";
-import { setMessageGeneratedImage } from "@/lib/db/messages";
+import {
+  getCampaignMessage,
+  getLatestDmMessage,
+  setMessageGeneratedImage,
+  setMessageImageRequest,
+} from "@/lib/db/messages";
+import type { Campaign } from "@/lib/db/campaigns";
+import { imageToolArgsSchema, type ImageToolArgs } from "@/lib/image-tool";
 import { publishEphemeral, publishPersisted } from "@/lib/events";
 import { enqueueMediaJob } from "@/lib/media-queue";
 import type { ImageRequest, StorySettings } from "@/lib/types";
@@ -55,4 +62,52 @@ export function fulfillMessageImage(
       throw error;
     }
   });
+}
+
+// generate_image, as an adjudication a person can invoke.
+//
+// The AI attaches its picture to the narration it wrote in the same turn. A
+// human DM narrates first and decides to illustrate after, so this hangs the
+// request on their latest passage: the picture belongs under the words it
+// illustrates, and inventing a caption-only message to carry it would put a
+// second DM passage in the transcript that nobody wrote.
+export function handleGenerateImage(
+  campaign: Campaign,
+  rawArguments: string,
+): Record<string, unknown> {
+  if (!campaign.settings.imageGenerationEnabled) {
+    return { error: "Image generation is off for this campaign." };
+  }
+  let args: ImageToolArgs;
+  try {
+    args = imageToolArgsSchema.parse(JSON.parse(rawArguments || "{}"));
+  } catch {
+    return { error: "Invalid arguments: illustrating needs a prompt." };
+  }
+  const message = getLatestDmMessage(campaign.id);
+  if (!message) {
+    return { error: "Narrate something first; the picture hangs under the passage it draws." };
+  }
+  const request: ImageRequest = {
+    needed: true,
+    prompt: args.prompt,
+    mode: campaign.settings.imageMode,
+    backend: campaign.settings.imageBackend,
+    aspect: campaign.settings.aspect,
+    reason: args.reason,
+    characterIds: [],
+  };
+  if (!setMessageImageRequest(message.id, request)) {
+    return { error: "That passage is no longer there." };
+  }
+  const updated = getCampaignMessage(message.id);
+  if (updated) {
+    publishPersisted(campaign.id, "message_updated", { message: updated });
+  }
+  // Only ComfyUI has a producer side; other backends record the request and
+  // the existing placeholder tells the table a picture is coming.
+  if (campaign.settings.imageBackend === "comfyui") {
+    void fulfillMessageImage(campaign.id, message.id, request, campaign.settings);
+  }
+  return { ok: true, illustrating: message.id };
 }

@@ -2,7 +2,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { Bot, X } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import CharacterBuilder, {
@@ -28,15 +28,37 @@ export function CompanionBuilderDialog({
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // Companions filed in this user's own library. An ally worth writing once
+  // is worth using twice, and the level adaptation that makes that safe is
+  // the same one player characters go through (src/lib/characters/adapt.ts).
+  const [library, setLibrary] = useState<Array<{ id: string; name: string; level: number; class: string }>>([]);
 
-  async function submit(result: BuilderResult) {
+  // The state lands in a .then callback rather than after an await, so the
+  // fetch reads as "subscribe to an external system" to React and to the
+  // effect linter, which is what it is.
+  const loadLibrary = useCallback(
+    () =>
+      fetch("/api/characters?role=companion")
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data) => setLibrary(data?.characters ?? []))
+        .catch(() => {
+          // An empty library is a valid state; the section explains itself.
+        }),
+    [],
+  );
+
+  useEffect(() => {
+    void loadLibrary();
+  }, [loadLibrary]);
+
+  async function post(body: Record<string, unknown>) {
     setBusy(true);
     setError("");
     try {
       const response = await fetch(`/api/campaigns/${campaignId}/companions/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sheet: result.sheet }),
+        body: JSON.stringify(body),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -50,6 +72,10 @@ export function CompanionBuilderDialog({
     } finally {
       setBusy(false);
     }
+  }
+
+  async function submit(result: BuilderResult) {
+    await post({ sheet: result.sheet });
   }
 
   return (
@@ -74,6 +100,31 @@ export function CompanionBuilderDialog({
             This ally joins the party as an AI companion the DM plays. They start at the party&apos;s
             level.
           </p>
+
+          {library.length ? (
+            <div className="mb-4 space-y-1.5 rounded-lg border border-stone-800 bg-stone-950/40 px-2.5 py-2">
+              <p className="text-[11px] uppercase tracking-wide text-stone-500">
+                From your library
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {library.map((companion) => (
+                  <button
+                    key={companion.id}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void post({ libraryCharacterId: companion.id })}
+                    className="rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-50"
+                  >
+                    {companion.name}
+                    <span className="ml-1 text-stone-600">level {companion.level}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-stone-600">
+                They arrive at level {level}, adapted the same way a player character is.
+              </p>
+            </div>
+          ) : null}
           <CharacterBuilder
             fixedLevel={level}
             genre={genre}

@@ -16,6 +16,9 @@ import {
 import { objectProfile, type ObjectMaterial, type ObjectSize } from "@/lib/srd/objects";
 import { forcedMarchHours, forcedMarchSaveDc, paceEffect, type TravelPace } from "@/lib/srd/travel";
 import { tickWorldTimeskip } from "@/lib/dm/world-tick";
+import { advanceClock } from "@/lib/db/clock";
+import { ADVANCE_UNITS, describeDuration, describeInstant } from "@/lib/dm/calendar";
+import { insertCampaignMessage } from "@/lib/db/messages";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // The remaining DM-utility engines: CR-scaled treasure the server actually
@@ -30,7 +33,12 @@ type ToolDef = {
   function: { name: string; description: string; parameters: Record<string, unknown> };
 };
 
-export const WORLD_TOOL_NAMES = ["roll_treasure", "damage_object", "travel"] as const;
+export const WORLD_TOOL_NAMES = [
+  "roll_treasure",
+  "damage_object",
+  "travel",
+  "pass_time",
+] as const;
 
 const MATERIALS: ObjectMaterial[] = [
   "cloth",
@@ -123,6 +131,28 @@ export const worldTools: ToolDef[] = [
           reason: { type: "string", description: "Short note on the journey." },
         },
         required: ["hours"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "pass_time",
+      description:
+        "Move the in-world clock forward when time passes and nothing else accounts for it: waiting out a storm, a night at an inn, a week of downtime, a long conversation. Travel and rests already advance the clock themselves, so do not call this alongside them. Time only moves forward.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          amount: { type: "integer", minimum: 1, description: "How much time passes." },
+          unit: {
+            type: "string",
+            enum: ["minutes", "hours", "days", "weeks"],
+            description: "Unit of the amount. Defaults to hours.",
+          },
+          reason: { type: "string", description: "Short note on what filled the time." },
+        },
+        required: ["amount"],
       },
     },
   },
@@ -274,6 +304,63 @@ const travelSchema = z.object({
   reason: z.string().optional(),
 });
 
+// A system line in the transcript, the same shape every other engine uses to
+// tell the table something happened without the model having to say it.
+function tableNote(campaign: Campaign, content: string) {
+  const seq = allocateSeq(campaign.id);
+  const message = insertCampaignMessage({
+    campaignId: campaign.id,
+    seq,
+    authorType: "system",
+    content,
+  });
+  publishWithSeq(campaign.id, seq, "message_added", { message });
+}
+
+const passTimeSchema = z.object({
+  amount: z.coerce.number().int().min(1).max(10000),
+  unit: z.enum(ADVANCE_UNITS).default("hours"),
+  reason: z.string().max(200).optional(),
+});
+
+// Moving the in-world clock without travelling anywhere: waiting out a
+// storm, a night in an inn, a week of downtime. Travel and rests move it
+// themselves, so this is for the time nothing else accounts for.
+//
+// Time only ever moves forward here. Undoing a passage of time is the audit
+// trail's job (audit/revert-turn), not arithmetic's, because a clock that
+// could run backwards would silently un-expire conditions and rests.
+export function handlePassTime(
+  campaign: Campaign,
+  rawArguments: string,
+): Record<string, unknown> {
+  let args: z.infer<typeof passTimeSchema>;
+  try {
+    args = passTimeSchema.parse(JSON.parse(rawArguments || "{}"));
+  } catch {
+    return { error: "Invalid arguments: pass_time needs an amount and a unit." };
+  }
+  const moved = advanceClock(campaign.id, args.amount, args.unit);
+  if ("error" in moved) {
+    return moved;
+  }
+  // A stretch of time is a timeskip: the off-screen world moves once per
+  // four hours, the same rate travel uses.
+  const ticks = Math.min(24, Math.floor(moved.minutes / (4 * 60)));
+  if (ticks > 0) {
+    tickWorldTimeskip(campaign.id, ticks);
+  }
+  tableNote(
+    campaign,
+    `${describeDuration(moved.minutes)} passes${args.reason ? `: ${args.reason}` : ""}. It is now ${describeInstant(moved.clock.calendar, moved.clock.instant)}.`,
+  );
+  return {
+    ok: true,
+    passed: describeDuration(moved.minutes),
+    now: describeInstant(moved.clock.calendar, moved.clock.instant),
+  };
+}
+
 export function handleTravel(
   campaign: Campaign,
   turn: DmTurn,
@@ -295,6 +382,12 @@ export function handleTravel(
   // four hours on the road (world arcs, NPC goals; zero model calls).
   tickWorldTimeskip(campaign.id, Math.max(1, Math.round(args.hours / 4)));
 
+  // The hours the party spent on the road are hours the world spent too, so
+  // the clock moves with them. Before this the in-world date never changed
+  // no matter how far anyone walked.
+  const moved = advanceClock(campaign.id, args.hours, "hours");
+  const now = "error" in moved ? "" : describeInstant(moved.clock.calendar, moved.clock.instant);
+
   const paceNote =
     pace === "fast"
       ? "A fast pace means -5 to passive Perception: the party is likelier to be surprised. Reflect that in later check_notice calls."
@@ -309,6 +402,7 @@ export function handleTravel(
       hours: args.hours,
       forcedMarch: false,
       passivePerceptionMod: effect.passivePerceptionMod,
+      ...(now ? { now } : {}),
       note: `A day within 8 hours of marching; no exhaustion. ${paceNote}`,
     };
   }
@@ -327,6 +421,7 @@ export function handleTravel(
     const resolved = resolveRollExpression(
       { kind: "saving_throw", ability: "con", dc } as unknown as RollArgs,
       sheet,
+      { encumbrance: campaign.gameSettings.variantRules.encumbrance },
     );
     let failed: boolean;
     let saveTotal: number | null = null;

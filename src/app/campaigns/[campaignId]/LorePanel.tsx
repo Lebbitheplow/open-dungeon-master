@@ -1,6 +1,6 @@
 "use client";
 
-import { BookMarked, Loader2, Pencil, Pin, Plus, Trash2, X } from "lucide-react";
+import { BookMarked, Copy, Loader2, Pencil, Pin, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import {
@@ -32,10 +32,10 @@ const CATEGORY_LABELS: Record<WorldLoreCategory, string> = {
 // tool. Party-visible, lead-edited, usable before and during the campaign.
 export function LorePanel({
   campaignId,
-  isLead,
+  steersStory,
 }: {
   campaignId: string;
-  isLead: boolean;
+  steersStory: boolean;
 }) {
   const [loading, setLoading] = useState(true);
   const [entries, setEntries] = useState<LoreEntryView[]>([]);
@@ -152,6 +152,32 @@ export function LorePanel({
     }
   }
 
+  // Same create route as submitDraft, with the copy landing in the list the
+  // same way a new entry does.
+  async function duplicate(entry: LoreEntryView) {
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/lore`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category: entry.category,
+          title: `${entry.title} (copy)`,
+          body: entry.body,
+          tags: entry.tags,
+        }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.entry) {
+          setEntries((current) => [...current, data.entry]);
+        }
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const categories = WORLD_LORE_CATEGORIES.filter((category) =>
     entries.some((entry) => entry.category === category),
   );
@@ -164,7 +190,7 @@ export function LorePanel({
         <p className="flex items-center gap-1.5 text-xs font-medium text-stone-300">
           <BookMarked className="size-3.5 text-amber-600" /> World lore
         </p>
-        {isLead && !editorOpen ? (
+        {steersStory && !editorOpen ? (
           <button
             type="button"
             onClick={startAdd}
@@ -181,7 +207,7 @@ export function LorePanel({
       ) : null}
       {!loading && !entries.length && !editorOpen ? (
         <p className="text-[11px] italic text-stone-600">
-          {isLead
+          {steersStory
             ? "No lore yet. Write your world's places, factions, and history; the DM treats it as canon."
             : "The party lead has not written any world lore yet."}
         </p>
@@ -264,9 +290,10 @@ export function LorePanel({
                 <LoreEntryRow
                   key={entry.id}
                   entry={entry}
-                  isLead={isLead}
+                  steersStory={steersStory}
                   onEdit={() => startEdit(entry)}
                   onPin={() => void togglePin(entry)}
+                  onDuplicate={() => void duplicate(entry)}
                   onDelete={() => void remove(entry.id)}
                 />
               ))}
@@ -279,15 +306,17 @@ export function LorePanel({
 
 function LoreEntryRow({
   entry,
-  isLead,
+  steersStory,
   onEdit,
   onPin,
+  onDuplicate,
   onDelete,
 }: {
   entry: LoreEntryView;
-  isLead: boolean;
+  steersStory: boolean;
   onEdit: () => void;
   onPin: () => void;
+  onDuplicate: () => void;
   onDelete: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -309,7 +338,7 @@ function LoreEntryRow({
           {entry.tags.length ? (
             <p className="text-[10px] text-stone-600">{entry.tags.join(" · ")}</p>
           ) : null}
-          {isLead ? (
+          {steersStory ? (
             <div className="flex items-center gap-2.5">
               <button
                 type="button"
@@ -332,6 +361,14 @@ function LoreEntryRow({
                 )}
               >
                 <Pin className="size-3" /> {entry.pinned ? "Pinned" : "Pin"}
+              </button>
+              <button
+                type="button"
+                onClick={onDuplicate}
+                aria-label={`Duplicate ${entry.title}`}
+                className="flex items-center gap-1 text-[11px] text-stone-500 hover:text-stone-300"
+              >
+                <Copy className="size-3" /> Duplicate
               </button>
               <button
                 type="button"

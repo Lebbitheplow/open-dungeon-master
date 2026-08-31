@@ -24,7 +24,27 @@ const creationSurface = `${dialog}\n${worldSetup}\n${rulesPanel}`;
 // `stages` is deliberately absent: it tunes the turn pipeline for a slow local
 // model, which is an operator decision made in the lobby, not a table decision
 // made at creation. GameSettingsPanel owns it.
-const DELIBERATELY_OMITTED = new Set(["stages"]);
+//
+// `beatReminder` is absent for a related reason: it is how often a human DM is
+// nudged to write down what they narrated aloud, and nobody has an opinion
+// about that until the nudge has fired at them once. GameSettingsPanel owns it
+// too, and shows it only when a person holds the DM seat.
+//
+// `dmAssist` is absent for the same reason once removed: choosing the assisted
+// mode IS the answer to "do you want help", and which help is a question a DM
+// answers at the table. All three start on and GameSettingsPanel shows them
+// only in assisted mode.
+//
+// `targetParty` is absent because it is not a campaign setting at all. It is
+// the stand-in party a WORKSHOP budgets prep against, and a campaign has real
+// character sheets to read instead (docs/workshop-plan.md section 1.1). It
+// lives in gameSettingsSchema because a workshop is a campaigns row.
+const DELIBERATELY_OMITTED = new Set([
+  "stages",
+  "beatReminder",
+  "dmAssist",
+  "targetParty",
+]);
 
 let passed = 0;
 function test(name, fn) {
@@ -46,10 +66,16 @@ test("every game setting except the omitted ones is offered at creation", () => 
   }
 });
 
-test("the omission of stages is documented in the dialog itself", () => {
-  // A silent omission is the bug this suite exists to catch, so the one
+test("every intentional omission is documented in the dialog itself", () => {
+  // A silent omission is the bug this suite exists to catch, so each
   // intentional gap has to be explained where a reader will find it.
-  assert.match(dialog, /stages/i, "the dialog does not mention why stages is left out");
+  for (const key of DELIBERATELY_OMITTED) {
+    assert.match(
+      dialog,
+      new RegExp(key, "i"),
+      `the dialog does not mention why ${key} is left out`,
+    );
+  }
 });
 
 test("the dialog sends the settings it collects", () => {

@@ -20,7 +20,11 @@ export type UtilityCallKind =
   | "chapter"
   | "world"
   | "lore"
-  | "ask";
+  | "ask"
+  | "beat"
+  | "map"
+  // Assisted mode: one decision call for one monster's turn.
+  | "monster";
 
 // Phrased for a player at the table, not an operator reading a log. Each says
 // what the engine is doing, not which function is running.
@@ -30,6 +34,9 @@ export const UTILITY_CALL_LABELS: Record<UtilityCallKind, string> = {
   world: "Turning the world",
   lore: "Checking the lore",
   ask: "Answering a question",
+  beat: "Writing up what just happened",
+  map: "Reading the lay of the land",
+  monster: "Taking the monsters' turn",
 };
 
 export type UtilityCall = {

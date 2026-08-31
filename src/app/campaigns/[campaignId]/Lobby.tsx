@@ -24,7 +24,14 @@ import { EditCampaignDialog } from "@/app/campaigns/[campaignId]/EditCampaignDia
 import { GameSettingsPanel } from "@/app/campaigns/[campaignId]/GameSettingsPanel";
 import { LorePanel } from "@/app/campaigns/[campaignId]/LorePanel";
 import { RulesPanel } from "@/app/campaigns/[campaignId]/RulesPanel";
+import { VoicePanel } from "@/app/campaigns/[campaignId]/VoicePanel";
 import { resolveCompanionMode } from "@/lib/schemas/game-settings";
+import { viewerCaps } from "@/lib/dm/viewer";
+import {
+  ContentImportPicker,
+  EMPTY_SELECTION,
+  type ImportSelection,
+} from "@/app/workshop/ContentImportPicker";
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
 
 export function Lobby({ state, refresh }: { state: CampaignState; refresh: () => void }) {
@@ -34,6 +41,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
   const [linkCopied, setLinkCopied] = useState(false);
   const [editing, setEditing] = useState(false);
   const [buildingCompanion, setBuildingCompanion] = useState(false);
+  const [contentImport, setContentImport] = useState<ImportSelection>(EMPTY_SELECTION);
   const [error, setError] = useState("");
 
   if (!campaign || !me) {
@@ -42,8 +50,28 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
 
   const myMember = members.find((member) => member.userId === me.id);
   const mySheet = sheets.find((sheet) => sheet.userId === me.id);
+  // The DM runs no character, so every "create your character" prompt below
+  // has to know that. The seat is on the campaign row; the mode alone is not
+  // enough, because an assisted campaign can still be AI-narrated.
+  const isDm = campaign
+    ? me.id === campaign.dmUserId || me.id === campaign.assistantDmUserId
+    : false;
   const isOwner = campaign.ownerUserId === me.id;
   const isLead = campaign.leadUserId === me.id;
+  // Who holds the story's secrets and steers it: the lead in an AI-run
+  // campaign, the DM once a person runs it. Decided by src/lib/dm/viewer.ts
+  // rather than by comparing ids here, which is the rule that module exists
+  // to enforce.
+  const { steersStory } = viewerCaps(
+    {
+      ownerUserId: campaign.ownerUserId,
+      leadUserId: campaign.leadUserId,
+      humanDmUserId: campaign.dmUserId,
+      assistantDmUserId: campaign.assistantDmUserId,
+      dmMode: campaign.gameSettings.dmMode,
+    },
+    me.id,
+  );
   // One-player campaigns skip the invite/party ceremony entirely.
   const isSolo = campaign.maxPlayers === 1;
 
@@ -289,12 +317,29 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
       <GameSettingsPanel
         campaignId={campaign.id}
         settings={campaign.gameSettings}
-        isLead={isLead}
+        steersStory={isLead}
       />
 
       <section className="mb-6 space-y-3">
-        <RulesPanel campaignId={campaign.id} settings={campaign.gameSettings} isLead={isLead} />
-        <LorePanel campaignId={campaign.id} isLead={isLead} />
+        <RulesPanel campaignId={campaign.id} settings={campaign.gameSettings} steersStory={isLead} />
+        <LorePanel campaignId={campaign.id} steersStory={isLead} />
+        {/* Prep keeps happening after session one, so the import is not only
+            a creation-time step. Gated on story authority rather than on the
+            lead, because in a human-DM campaign the lead is a player and the
+            lore, places and prepared fights are the DM's to bring in. */}
+        {steersStory ? (
+          <div className={`${ui.card} p-3`}>
+            <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-stone-500">
+              Bring in prep
+            </h2>
+            <ContentImportPicker
+              campaignId={campaign.id}
+              selection={contentImport}
+              onChange={setContentImport}
+              onImported={refresh}
+            />
+          </div>
+        ) : null}
       </section>
 
       {campaign.gameSettings.dicePolicy === "real_allowed" && mySheet ? (
@@ -318,6 +363,24 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
             <Dices className="mr-1.5 inline size-4" />
             {myMember?.useRealDice ? "Real dice" : "Digital"}
           </button>
+        </section>
+      ) : null}
+
+      {/* The call is open in the lobby, so the table can talk while people
+          are still building characters. Pointless in a solo campaign, which
+          is the same reason the party list is hidden there. */}
+      {!isSolo ? (
+        <section className="mb-6">
+          {/* No floor to show in the lobby: the game has not started, so
+              everyone can talk. */}
+          <VoicePanel
+            campaignId={campaign.id}
+            meUserId={me.id}
+            roster={state.voiceRoster}
+            speaking={state.voiceSpeaking}
+            audibilityVersion={state.voiceAudibilityVersion}
+            adjudicates={steersStory}
+          />
         </section>
       ) : null}
 
@@ -465,7 +528,24 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
       ) : null}
 
       <section className="space-y-3">
-        {isSolo ? (
+        {isDm ? (
+          <div className="panel ornate flex flex-col items-center gap-2 rounded-xl px-6 py-6 text-center">
+            <p className="font-display text-lg tracking-wide text-amber-50">
+              You are running this game.
+            </p>
+            <p className="max-w-sm text-balance text-sm text-stone-400">
+              No character, no party slot. Ready up when the table is set and the
+              adventure is yours to open.
+            </p>
+            <button
+              type="button"
+              onClick={toggleReady}
+              className={cn(ui.btnPrimary, "mt-1 px-6")}
+            >
+              {myMember?.ready ? "Not ready" : "Ready"}
+            </button>
+          </div>
+        ) : isSolo ? (
           !mySheet ? (
             <div className="panel ornate flex flex-col items-center gap-3 rounded-xl px-6 py-8 text-center">
               <p className="max-w-sm text-balance font-display text-xl tracking-wide text-amber-50">

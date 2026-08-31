@@ -1,9 +1,19 @@
 import { z } from "zod";
 import { isErrorResponse, requireMember } from "@/lib/campaign-api";
-import { allocateSeq, canAct, claimRecap, getFloor, setFloor, type Floor } from "@/lib/db/campaigns";
+import {
+  allocateSeq,
+  campaignSeats,
+  canAct,
+  claimRecap,
+  getFloor,
+  setFloor,
+  type Floor,
+} from "@/lib/db/campaigns";
 import { countMessages, insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
 import { getSheetForUser, listSheets } from "@/lib/db/sheets";
 import { requestDmTurn } from "@/lib/dm/loop";
+import { coverInEffect } from "@/lib/dm/delegation";
+import { hasHumanDm } from "@/lib/dm/viewer";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { runResumeRecap } from "@/lib/dm/recap";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
@@ -120,7 +130,17 @@ export async function POST(
   const lastMessages = listRecentMessages(campaignId, 1);
   const lastMessage = lastMessages[lastMessages.length - 1];
   const RECAP_IDLE_MS = 6 * 60 * 60 * 1000;
+  // Assisted mode, DM stepped away: the AI answers for the counted stretch
+  // they handed over, so the branch below is the one that already exists for
+  // an AI-run table rather than a third path.
+  const covering = coverInEffect(
+    campaign.gameSettings.dmMode,
+    campaign.gameSettings.dmAssist,
+    campaign.dmCover,
+  );
+  const humanDm = hasHumanDm(campaignSeats(campaign)) && !covering;
   if (
+    !humanDm &&
     lastMessage &&
     Date.now() - new Date(lastMessage.createdAt).getTime() > RECAP_IDLE_MS &&
     claimRecap(campaignId, lastMessage.seq)
@@ -144,8 +164,25 @@ export async function POST(
   // the single coalesced turn fires with the last answer and reads all the
   // queued messages. Requests coalesce: rapid actions share one turn (plus
   // at most one follow-up for actions landing mid-turn) instead of stacking.
+  //
+  // With a person in the DM seat there is no turn to wake. The action is an
+  // intent: it sits in the DM's queue until they adjudicate it, and all the
+  // table sees is that it landed. The message row and the floor bookkeeping
+  // above are identical either way, which is what keeps one transcript.
   if ((kind !== "ooc" && !spotlightStillWaiting) || isFirstAction) {
-    requestDmTurn(campaignId);
+    if (humanDm) {
+      publishPersisted(campaignId, "dm_intent_queued", {
+        messageId: message.id,
+        userId: user.id,
+        characterId: sheet.id,
+        seq,
+      });
+    } else {
+      // Under a running cover, requestDmTurn itself spends one of the DM's
+      // handed-over answers per enqueued turn (and none on a coalesced one),
+      // so a burst of actions costs the DM one answer and not five.
+      requestDmTurn(campaignId);
+    }
   }
 
   return Response.json({ messageId: message.id }, { status: 202 });

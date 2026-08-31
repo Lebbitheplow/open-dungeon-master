@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { allocateSeq, getCampaignById, type Campaign } from "@/lib/db/campaigns";
-import { getActiveEncounter } from "@/lib/db/encounters";
+import { getActiveEncounter, saveEncounter } from "@/lib/db/encounters";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
+import { encumbranceFor } from "@/lib/srd/encumbrance";
+import { spendAmmo, withAmmoCount } from "@/lib/srd/ammunition";
 import { insertRoll, markRollApplied, type StoredRoll } from "@/lib/db/rolls";
 import {
   createPendingRoll,
@@ -24,7 +26,7 @@ import {
   weaponAttackProfile,
   type AttackProfile,
 } from "@/lib/dm/attack-logic";
-import { combatRiders } from "@/lib/srd/feature-effects";
+import { combatRiders, hasElvenAccuracy, hasHalflingLuck } from "@/lib/srd/feature-effects";
 import {
   conditionExtraActions,
   conditionOnHitDice,
@@ -362,6 +364,29 @@ export function handlePcAttack(
     });
   }
 
+  // Ammunition, when the table asked for it. This sits before every roll on
+  // purpose: an empty quiver is a refused attack, not a missed one, and the
+  // engine boundary says a tool that errors means the attempt never happened.
+  // The spend is tallied on the encounter so end_encounter can hand half of
+  // it back (src/lib/srd/ammunition.ts).
+  if (campaign.gameSettings.variantRules.ammunition && profile.weapon) {
+    const spend = spendAmmo(sheet.equipment, profile.weapon, sheet.name);
+    if (spend && !spend.ok) {
+      return { error: spend.error };
+    }
+    if (spend && spend.ok) {
+      patchSheet(sheet.id, {
+        equipment: withAmmoCount(sheet.equipment, spend.index, spend.remaining),
+      });
+      const key = `${sheet.id}|${spend.name}`;
+      encounter.ammoSpent = {
+        ...encounter.ammoSpent,
+        [key]: (encounter.ammoSpent[key] ?? 0) + 1,
+      };
+      saveEncounter(encounter);
+    }
+  }
+
   // Rage adds its bonus to melee Strength weapon attacks for as long as the
   // condition lasts; the server folds it into the damage dice so both the
   // digital and physical-dice paths carry it.
@@ -549,9 +574,23 @@ export function handlePcAttack(
       `${profile.weapon} is a heavy weapon and ${sheet.name} is Small: disadvantage`,
     );
   }
+  // Variant: Encumbrance. A heavily loaded character swings at disadvantage
+  // like any other physical roll; the pack was already weighed for the
+  // ammunition check above.
+  const load = campaign.gameSettings.variantRules.encumbrance
+    ? encumbranceFor({
+        strength: sheet.abilities.str,
+        equipment: sheet.equipment ?? [],
+        coins: sheet.gold ?? 0,
+      })
+    : null;
+  if (load?.disadvantage && load.note) {
+    conditionContext.notes.push(load.note);
+  }
   const advantage: Advantage = mergeAdvantage([
     conditionContext.advantage,
     exhaustion.advantage,
+    ...(load?.disadvantage ? ["disadvantage" as const] : []),
     ...attackRiders.advantageSources,
     ...(spatials.longRange ? ["disadvantage" as const] : []),
     ...(smallWithHeavy ? ["disadvantage" as const] : []),
@@ -698,7 +737,24 @@ export function handlePcAttack(
     maneuverInfo?.precision ? `+1${maneuverInfo.die}` : ""
   }`;
 
-  const toHitExpression = `${d20Expression(profile.toHit, advantage)}${toHitRiderSuffix}`;
+  // Elven Accuracy: advantage on a DEX/INT/WIS/CHA attack rolls a third d20
+  // and keeps the highest. Spell attacks report their ability as "dex", so
+  // excluding only Strength matches the feat's DEX/INT/WIS/CHA scope.
+  const elvenAccuracy =
+    advantage === "advantage" && profile.ability !== "str" && hasElvenAccuracy(sheet);
+  if (elvenAccuracy) {
+    conditionContext.notes.push("Elven Accuracy: rolls a third d20 and keeps the highest");
+  }
+  // Halfling Lucky rerolls a natural 1 on the attack roll once, so it rides
+  // the leading d20 term as the grammar's "r1" suffix, before any rider dice.
+  const lucky = hasHalflingLuck(sheet);
+  if (lucky) {
+    conditionContext.notes.push("Lucky: a natural 1 on the attack roll is rerolled once");
+  }
+  const toHitD20 = d20Expression(profile.toHit, advantage)
+    .replace(/^2d20kh1/, elvenAccuracy ? "3d20kh1" : "2d20kh1")
+    .replace(/^(\d+d20(?:k[hl]\d+)?)/, lucky ? "$1r1" : "$1");
+  const toHitExpression = `${toHitD20}${toHitRiderSuffix}`;
   const detail = `${sheet.name}: ${profile.weapon} vs ${enemy.displayName}`;
 
   // Great Weapon Fighting rerolls 1s and 2s, but only on the two-handed
@@ -710,7 +766,10 @@ export function handlePcAttack(
   if (rerollBelow) {
     conditionContext.notes.push(`Great Weapon Fighting: rerolling damage dice of ${rerollBelow} or less`);
   }
-  const critExpression = critDamageExpression(profile.damageExpression, riders.critExtraDice);
+  const critExpression = critDamageExpression(profile.damageExpression, riders.critExtraDice, {
+    powerfulCritical: campaign.gameSettings.variantRules.powerfulCritical,
+    multiplyNumeric: campaign.gameSettings.variantRules.criticalDamageMods,
+  });
 
   // Physical dice: park the to-hit roll for the player; the submit route
   // adjudicates it and, on a hit, parks the damage roll too.

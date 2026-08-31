@@ -22,6 +22,13 @@ services:
     restart: unless-stopped
     ports:
       - "${ODM_PORT:-3005}:3005"
+      # Live voice chat. One port, both protocols. This carries the audio
+      # itself, which is not HTTP, so it does NOT go through a reverse proxy:
+      # open it on the firewall pointing at this host. Set VOICE_ANNOUNCED_IP
+      # below or the container advertises its own 172.x address and calls
+      # connect to silence.
+      - "${VOICE_RTC_PORT:-44444}:${VOICE_RTC_PORT:-44444}/udp"
+      - "${VOICE_RTC_PORT:-44444}:${VOICE_RTC_PORT:-44444}/tcp"
     extra_hosts:
       # Lets the container reach services bound to the host's loopback.
       - "host.docker.internal:host-gateway"
@@ -50,6 +57,20 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-}
       DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-}
       DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:-}
+
+      # Live voice chat. Off unless VOICE_ENABLED=1, because it needs the port
+      # above opened AND the app served over https (browsers block microphone
+      # access on plain http), so it cannot just work by default.
+      #
+      # VOICE_ANNOUNCED_IP is required once enabled: the address a player's
+      # browser can reach this host on, normally your public IP. Without it the
+      # container announces its own 172.x address and calls stay silent.
+      # VOICE_DOMAIN optionally announces a hostname instead; it must resolve
+      # straight here, so a Cloudflare-proxied name will not do.
+      VOICE_ENABLED: ${VOICE_ENABLED:-0}
+      VOICE_RTC_PORT: ${VOICE_RTC_PORT:-44444}
+      VOICE_ANNOUNCED_IP: ${VOICE_ANNOUNCED_IP:-}
+      VOICE_DOMAIN: ${VOICE_DOMAIN:-}
 
       # Verbose DM turn logging.
       DM_DEBUG: ${DM_DEBUG:-}

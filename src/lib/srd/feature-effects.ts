@@ -893,3 +893,48 @@ export function halfProficiencyCovers(
   }
   return scope === "physical" && (ability === "str" || ability === "dex" || ability === "con");
 }
+
+// Halfling Lucky: a natural 1 on an attack roll, ability check, or saving
+// throw is rerolled once and the new face must be used. Detected from the
+// racial trait ("Lucky (reroll nat 1 on d20)") the builder grants, kept
+// distinct from the "Lucky" feat (luck points, different mechanic) by
+// requiring the reroll wording or a race-sourced trait on a halfling.
+export function hasHalflingLuck(sheet: {
+  race?: string;
+  features?: Array<{ name: string; source?: string }>;
+}): boolean {
+  const isHalfling = (sheet.race ?? "").toLowerCase().includes("halfling");
+  return (sheet.features ?? []).some((feature) => {
+    const name = feature.name.toLowerCase();
+    if (name.includes("reroll nat 1")) {
+      return true;
+    }
+    return isHalfling && feature.source === "race" && name.includes("lucky");
+  });
+}
+
+// Brave (Halfling racial trait): advantage on saving throws against being
+// frightened. Detected from the trait ("Brave (adv. vs frightened)") the
+// builder grants, keyed off the fear wording or a race-sourced "Brave".
+export function hasBrave(sheet: {
+  features?: Array<{ name: string; source?: string }>;
+}): boolean {
+  return (sheet.features ?? []).some((feature) => {
+    const name = feature.name.toLowerCase();
+    if (!name.includes("brave")) {
+      return false;
+    }
+    return feature.source === "race" || name.includes("frighten");
+  });
+}
+
+// Elven Accuracy (feat): with advantage on an attack roll using Dexterity,
+// Intelligence, Wisdom, or Charisma, reroll one of the dice, i.e. roll a
+// third d20 and keep the highest. The caller gates it on the attack ability.
+export function hasElvenAccuracy(sheet: {
+  features?: Array<{ name: string }>;
+}): boolean {
+  return (sheet.features ?? []).some((feature) =>
+    feature.name.toLowerCase().includes("elven accuracy"),
+  );
+}

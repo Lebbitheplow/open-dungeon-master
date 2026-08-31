@@ -4,6 +4,8 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   BookOpen,
   CircleHelp,
+  Copy,
+  Hammer,
   Loader2,
   LogOut,
   Plus,
@@ -27,6 +29,7 @@ import { Tooltip } from "@/components/ui/Tooltip";
 import AuthForm from "@/app/AuthForm";
 import { ChangePasswordForm } from "@/app/ChangePasswordForm";
 import { ExportMenu } from "@/app/campaigns/[campaignId]/ExportMenu";
+import type { WorkshopSummary } from "@/app/workshop/types";
 
 export default function Home() {
   const [checking, setChecking] = useState(true);
@@ -135,9 +138,21 @@ function AuthScreen({ onAuthed }: { onAuthed: (user: SessionUser) => void }) {
   );
 }
 
+// Copying prep out of a campaign follows story authority, exactly as
+// /api/campaigns/[id]/clone demands: the seated DM if there is one, the party
+// lead otherwise. Mirrored here only to decide whether to draw the button;
+// the server decides whether it works.
+function steersStory(campaign: CampaignSummary, userId: string): boolean {
+  return campaign.dmUserId
+    ? campaign.dmUserId === userId || campaign.assistantDmUserId === userId
+    : campaign.leadUserId === userId;
+}
+
 function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void }) {
   const [campaigns, setCampaigns] = useState<CampaignSummary[]>([]);
+  const [workshops, setWorkshops] = useState<WorkshopSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [cloningId, setCloningId] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [soloOpen, setSoloOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -162,6 +177,31 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
     refresh();
   }, [refresh]);
 
+  // The bench, alongside the tables. A workshop is not a game, so it gets its
+  // own section rather than a row in the campaign list, but it is a first
+  // thought rather than something buried in an account menu.
+  // The state lands in a .then callback rather than after an await, so the
+  // refetch reads as "subscribe to an external system" to React and to the
+  // effect linter, which is what it is. Same shape as ContentImportPicker.
+  const refreshWorkshops = useCallback(
+    () =>
+      fetch("/api/workshops")
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data) => {
+          if (data) {
+            setWorkshops(data.workshops ?? []);
+          }
+        })
+        .catch(() => {
+          // transient; the workshop page itself is one click away
+        }),
+    [],
+  );
+
+  useEffect(() => {
+    void refreshWorkshops();
+  }, [refreshWorkshops]);
+
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
     onLogout();
@@ -178,6 +218,26 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
     const response = await fetch(`/api/campaigns/${campaign.id}`, { method: "DELETE" });
     if (response.ok) {
       setCampaigns((current) => current.filter((entry) => entry.id !== campaign.id));
+    }
+  }
+
+  // A copy of the world without the play: prep travels, the transcript does
+  // not (src/lib/db/campaign-clone.ts). Same call for a workshop, which is
+  // why both tiles use it.
+  async function clone(id: string) {
+    setCloningId(id);
+    try {
+      const response = await fetch(`/api/campaigns/${id}/clone`, { method: "POST" });
+      if (!response.ok) {
+        return;
+      }
+      const data = await response.json().catch(() => ({}));
+      // Refetched rather than pushed onto the list: the list endpoints add
+      // the per-row counts a tile renders, and the clone response is just the
+      // new row.
+      await (data.campaign?.kind === "workshop" ? refreshWorkshops() : refresh());
+    } finally {
+      setCloningId("");
     }
   }
 
@@ -365,6 +425,27 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
                     </span>
                     <span className="flex items-center gap-1">
                       <ExportMenu campaignId={campaign.id} variant="tile-icon" />
+                      {steersStory(campaign, user.id) ? (
+                        <Tooltip content="Copy the world into a new campaign, without the transcript">
+                          <button
+                            type="button"
+                            aria-label="Duplicate this campaign"
+                            disabled={cloningId === campaign.id}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              clone(campaign.id);
+                            }}
+                            className={cn(ui.iconAction, "hover:text-amber-300")}
+                          >
+                            {cloningId === campaign.id ? (
+                              <Loader2 className="size-4 animate-spin" />
+                            ) : (
+                              <Copy className="size-4" />
+                            )}
+                          </button>
+                        </Tooltip>
+                      ) : null}
                       {campaign.role === "owner" ? (
                         <Tooltip content="Delete this campaign">
                           <button
@@ -387,6 +468,61 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
               </li>
             ))}
           </ul>
+        )}
+      </section>
+
+      <section className="mb-8">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <IconChip icon={Hammer} size="size-9" iconSize="size-4" />
+            <div>
+              <h2 className="eyebrow text-sm text-amber-200/90">Workshop</h2>
+              <p className="text-xs text-stone-500">
+                Build maps, NPCs, monsters, story and rules before a table exists.
+              </p>
+            </div>
+          </div>
+          <Link href="/workshop" className={ui.btnSecondary}>
+            <Hammer className="size-4" /> Open workshop
+          </Link>
+        </div>
+
+        {workshops.length ? (
+          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {workshops.map((workshop) => (
+              <li key={workshop.id} className={cn(ui.cardHover, "group relative px-5 py-4")}>
+                <Link href={`/workshop/${workshop.id}`} className="block">
+                  <p className="min-w-0 truncate pr-8 font-display text-lg tracking-wide text-amber-50">
+                    {workshop.title}
+                  </p>
+                  <p className="text-sm text-stone-400">
+                    Party of {workshop.gameSettings.targetParty.size} at level{" "}
+                    {workshop.gameSettings.targetParty.level}
+                  </p>
+                </Link>
+                <Tooltip content="Copy this workshop and everything in it">
+                  <button
+                    type="button"
+                    aria-label={`Duplicate ${workshop.title}`}
+                    disabled={cloningId === workshop.id}
+                    onClick={() => clone(workshop.id)}
+                    className={cn("absolute right-2 top-2", ui.iconAction, "hover:text-amber-300")}
+                  >
+                    {cloningId === workshop.id ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Copy className="size-4" />
+                    )}
+                  </button>
+                </Tooltip>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="rounded-xl border border-stone-800 bg-stone-950/40 px-5 py-4 text-sm text-stone-500">
+            Nothing on the bench yet. A workshop is yours alone, and nothing in it reaches a table
+            until you bring it in.
+          </p>
         )}
       </section>
 
@@ -414,6 +550,14 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
       <footer className="mt-12 flex items-center justify-center gap-4 border-t border-stone-900 pt-4">
         <a href="/licenses" className="text-xs text-stone-600 hover:text-stone-400">
           Licenses and attribution
+        </a>
+        <span className="text-xs text-stone-700">&middot;</span>
+        <a href="/privacy" className="text-xs text-stone-600 hover:text-stone-400">
+          Privacy policy
+        </a>
+        <span className="text-xs text-stone-700">&middot;</span>
+        <a href="/terms" className="text-xs text-stone-600 hover:text-stone-400">
+          Terms of service
         </a>
         <span className="text-xs text-stone-700">&middot;</span>
         <a

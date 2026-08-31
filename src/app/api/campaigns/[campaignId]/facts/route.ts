@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isErrorResponse, isLead, requireMember } from "@/lib/campaign-api";
+import { isErrorResponse, steersStory, requireMember } from "@/lib/campaign-api";
 import {
   getFactById,
   insertFact,
@@ -36,14 +36,14 @@ export async function GET(
     return context;
   }
   const secrets =
-    new URL(request.url).searchParams.get("secrets") === "1" && isLead(context);
+    new URL(request.url).searchParams.get("secrets") === "1" && steersStory(context);
   return Response.json({
     facts: listFactsVisibleTo(
       campaignId,
       ownedCharacterIds(campaignId, context.user.id),
       secrets,
     ),
-    lead: isLead(context),
+    lead: steersStory(context),
   });
 }
 
@@ -66,7 +66,7 @@ export async function POST(
   if (isErrorResponse(context)) {
     return context;
   }
-  if (!isLead(context)) {
+  if (!steersStory(context)) {
     return Response.json({ error: "Only the party lead can add facts." }, { status: 403 });
   }
   const parsed = createSchema.safeParse(await request.json().catch(() => ({})));
@@ -113,7 +113,7 @@ export async function PATCH(
     return Response.json({ error: "Fact not found." }, { status: 404 });
   }
   const editing = status !== undefined || Object.keys(text).length > 0;
-  if (editing && !isLead(context)) {
+  if (editing && !steersStory(context)) {
     return Response.json(
       { error: "Only the party lead can edit or retire facts." },
       { status: 403 },
@@ -123,7 +123,7 @@ export async function PATCH(
   const visible = listFactsVisibleTo(
     campaignId,
     ownedCharacterIds(campaignId, context.user.id),
-    isLead(context),
+    steersStory(context),
   ).some((fact) => fact.id === factId);
   if (!visible) {
     return Response.json({ error: "Fact not found." }, { status: 404 });

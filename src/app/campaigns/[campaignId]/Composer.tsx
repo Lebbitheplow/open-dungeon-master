@@ -15,6 +15,8 @@ import {
 } from "@/app/campaigns/[campaignId]/DirectorPanel";
 import { PendingRollCard } from "@/app/campaigns/[campaignId]/PendingRollCard";
 import { PushToTalk } from "@/app/campaigns/[campaignId]/PushToTalk";
+import { StoryNudge } from "@/app/campaigns/[campaignId]/StoryNudge";
+import type { BeatCadence } from "@/lib/dm/beat-cadence";
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
 
 import type { InputKind } from "@/lib/campaign-types";
@@ -26,6 +28,7 @@ const KIND_TIPS: Record<InputKind, string> = {
   say: "Speak in character. Sent as dialogue in quotes.",
   ooc: "Table talk. The DM does not respond, and it works even when the floor is locked.",
   lead: "Party lead only. Send the DM an authoritative story direction.",
+  narrate: "Dungeon Master only. Write the passage the table reads.",
 };
 
 // The action composer at the bottom of the game chat: pending-roll cards,
@@ -39,7 +42,8 @@ function ComposerInner({
   campaignId,
   sheets,
   meUserId,
-  isLead,
+  steersStory,
+  isDm,
   kind,
   onKindChange,
   input,
@@ -60,12 +64,17 @@ function ComposerInner({
   onLeadPrivateChange,
   composerRef,
   directorArm,
+  storyCadence,
+  onCaptureStory,
+  onSnoozeStory,
   onSubmit,
 }: {
   campaignId: string;
   sheets: CampaignState["sheets"];
   meUserId: string;
-  isLead: boolean;
+  steersStory: boolean;
+  // The DM seat: narrates instead of acting, and never runs a character.
+  isDm: boolean;
   kind: InputKind;
   onKindChange: (kind: InputKind) => void;
   input: string;
@@ -86,6 +95,11 @@ function ComposerInner({
   onLeadPrivateChange: (leadPrivate: boolean) => void;
   composerRef: RefObject<HTMLTextAreaElement | null>;
   directorArm: CampaignState["directorArm"];
+  // How overdue the DM's story capture is. Always "quiet" for anyone but the
+  // DM, so this renders nothing at a player's table.
+  storyCadence: BeatCadence;
+  onCaptureStory: () => void;
+  onSnoozeStory: () => void;
   onSubmit: (event: FormEvent) => void;
 }) {
   return (
@@ -98,7 +112,7 @@ function ComposerInner({
             pending={pending}
             sheets={sheets}
             meUserId={meUserId}
-            isLead={isLead}
+            steersStory={steersStory}
           />
         ))}
         <FloorBanners
@@ -107,11 +121,16 @@ function ComposerInner({
           spotlighted={spotlighted}
           heldSpotlightNames={heldSpotlightNames}
           encounter={encounter}
-          isLead={isLead}
+          steersStory={steersStory}
           meUserId={meUserId}
           onRelease={onReleaseFloor}
         />
-        <DirectorArmedBanner campaignId={campaignId} isLead={isLead} armed={directorArm} />
+        <DirectorArmedBanner campaignId={campaignId} steersStory={steersStory} armed={directorArm} />
+        <StoryNudge
+          cadence={storyCadence}
+          onCapture={onCaptureStory}
+          onSnooze={onSnoozeStory}
+        />
         {joinBanner ? (
           <NewAdventurerBanner
             campaignId={campaignId}
@@ -121,7 +140,18 @@ function ComposerInner({
           />
         ) : null}
         <div className="mb-2 flex gap-1.5">
-          {(["do", "say", "ooc", ...(isLead ? (["lead"] as const) : [])] as const).map(
+          {/* The DM authors and talks out of character; they have no
+              character to act or speak as, and the story directions exist to
+              steer an AI narrator they have replaced. */}
+          {(isDm
+            ? (["narrate", "ooc"] as const)
+            : ([
+                "do",
+                "say",
+                "ooc",
+                ...(steersStory ? (["lead"] as const) : []),
+              ] as const)
+          ).map(
             (option) => (
               <Tooltip key={option} content={KIND_TIPS[option]}>
                 <button
@@ -169,7 +199,7 @@ function ComposerInner({
           director buttons above this composer: a canned event to arm, and the
           choice of whether the direction is something the table reads.
         */}
-        {kind === "lead" && isLead ? (
+        {kind === "lead" && steersStory ? (
           <div className="mb-2 flex flex-wrap items-center gap-1.5">
             <DirectorPresets campaignId={campaignId} />
             <Tooltip

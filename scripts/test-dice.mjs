@@ -147,4 +147,41 @@ test("a bless rider die keeps the lead d20's natural face", () => {
   assert.equal(fumble.crit, "nat1");
 });
 
+test("the reroll suffix rerolls a low face once (Halfling Lucky)", () => {
+  const result = rollExpression("1d20r1+3", queueRng([1, 15]));
+  assert.equal(result.total, 18);
+  assert.equal(result.natural, 15);
+  assert.equal(result.terms[0].dice[0].rerolledFrom, 1);
+  assert.equal(result.terms[0].dice[0].value, 15);
+});
+
+test("the reroll keeps the new face even when it is another 1", () => {
+  const result = rollExpression("1d20r1", queueRng([1, 1]));
+  assert.equal(result.total, 1);
+  assert.equal(result.natural, 1);
+  assert.equal(result.crit, "nat1");
+});
+
+test("a rerolled 1 can become a natural 20", () => {
+  const result = rollExpression("1d20r1", queueRng([1, 20]));
+  assert.equal(result.natural, 20);
+  assert.equal(result.crit, "nat20");
+});
+
+test("the reroll happens before advantage keeps", () => {
+  // 2d20kh1r1: both dice roll a 1, each rerolls once, then keep highest.
+  const result = rollExpression("2d20kh1r1", queueRng([1, 18, 1, 4]));
+  assert.equal(result.total, 18);
+  assert.equal(result.natural, 18);
+});
+
+test("reroll then floor stack (Lucky halfling with Reliable Talent)", () => {
+  const result = rollExpression("1d20r1f10", queueRng([1, 3]));
+  assert.equal(result.total, 10);
+});
+
+test("a reroll threshold at or above the die size is rejected", () => {
+  assert.throws(() => rollExpression("1d20r20", queueRng([1])));
+});
+
 console.log(`\n${passed} dice tests passed`);

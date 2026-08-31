@@ -1,9 +1,20 @@
 "use client";
 
 import { Dices, Loader2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { cn } from "@/lib/cn";
 import { expressionDice } from "@/lib/dice";
+import {
+  resolveFaceSource,
+  useDiceSources,
+  type FaceSource,
+} from "@/lib/dice/dice-sources";
+import {
+  getConnectedPixels,
+  getConnectedPixelsServer,
+  onPixelRoll,
+  onPixelsChanged,
+} from "@/lib/dice/pixels-dice";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { PendingRoll } from "@/app/campaigns/[campaignId]/useCampaignStream";
 
@@ -17,13 +28,13 @@ export function PendingRollCard({
   pending,
   sheets,
   meUserId,
-  isLead,
+  steersStory,
 }: {
   campaignId: string;
   pending: PendingRoll;
   sheets: CharacterSheet[];
   meUserId: string;
-  isLead: boolean;
+  steersStory: boolean;
 }) {
   const [values, setValues] = useState<Record<number, string>>({});
   const [busy, setBusy] = useState(false);
@@ -41,6 +52,55 @@ export function PendingRollCard({
   }, [pending.expression]);
 
   const mine = pending.userId === meUserId;
+
+  const [diceSources] = useDiceSources();
+  const pixels = useSyncExternalStore(
+    onPixelsChanged,
+    getConnectedPixels,
+    getConnectedPixelsServer,
+  );
+
+  // Resolve every face to its source: the chosen preference, degraded to
+  // typing when the assigned Pixels die isn't currently connected.
+  const faceSources = useMemo<FaceSource[]>(
+    () => faces.map((sides) => resolveFaceSource(diceSources[sides], sides, pixels)),
+    [faces, diceSources, pixels],
+  );
+
+  // What a face has so far: the typed or Pixels-landed entry, else empty. A
+  // digital face never has a client value; the server rolls it on submit, so
+  // the browser has nothing a player could read ahead of time.
+  const faceValue = (index: number): string => values[index]?.trim() ?? "";
+
+  // The wire payload: numbers for typed and Pixels faces, the literal
+  // "digital" for server-rolled ones.
+  const submissionDice = (): Array<number | "digital"> =>
+    faces.map((_, index) =>
+      faceSources[index]?.kind === "digital" ? "digital" : Number(faceValue(index)),
+    );
+
+  // A physical Pixels die landing fills the next empty face assigned to it.
+  useEffect(() => {
+    if (!mine) {
+      return;
+    }
+    return onPixelRoll(({ systemId, faceCount, value }) => {
+      setValues((current) => {
+        const index = faceSources.findIndex(
+          (source, position) =>
+            source.kind === "pixel" &&
+            source.systemId === systemId &&
+            faces[position] === faceCount &&
+            !current[position]?.trim(),
+        );
+        if (index < 0) {
+          return current;
+        }
+        return { ...current, [index]: String(value) };
+      });
+    });
+  }, [mine, faceSources, faces]);
+
   const character = sheets.find((sheet) => sheet.id === pending.characterId);
   // Attack-engine pendings already carry a full sentence in detail
   // ("Kara: Longsword vs Goblin"); avoid stacking the name twice.
@@ -78,7 +138,17 @@ export function PendingRollCard({
         ? "disadvantage: roll both, lowest counts"
         : "";
   const stale = mountedAt - new Date(pending.createdAt).getTime() > OWNER_FALLBACK_AFTER_MS;
-  const complete = faces.length > 0 && faces.every((_, index) => values[index]?.trim());
+  // A digital face is always ready (the server fills it); everything else
+  // needs its number in hand before the roll can go.
+  const complete =
+    faces.length > 0 &&
+    faces.every(
+      (_, index) => faceSources[index]?.kind === "digital" || faceValue(index),
+    );
+  // Every face comes from a die that fills itself (digital or a Pixels die):
+  // no typing is needed, so the card submits on its own once all have landed.
+  const fullyAutomatic =
+    faceSources.length > 0 && faceSources.every((source) => source.kind !== "manual");
 
   async function submit(body: unknown) {
     setBusy(true);
@@ -103,6 +173,18 @@ export function PendingRollCard({
     }
   }
 
+  const autoSubmittedRef = useRef(false);
+  useEffect(() => {
+    if (!mine || !fullyAutomatic || autoSubmittedRef.current || busy || !complete) {
+      return;
+    }
+    autoSubmittedRef.current = true;
+    void submit({ dice: submissionDice() });
+    // submit is stable enough for this one-shot guarded call; re-running only
+    // matters to catch the transition to complete, which the deps below cover.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mine, fullyAutomatic, busy, complete, faces, values]);
+
   if (!mine) {
     return (
       <div className="mb-2 flex items-center justify-between rounded-md border border-amber-900/60 bg-amber-950/20 px-3 py-2 text-xs text-amber-200/90">
@@ -110,7 +192,7 @@ export function PendingRollCard({
           <Dices className="size-4 animate-pulse text-amber-200" />
           Waiting for {character?.name ?? "a player"} to roll {pending.expression} with real dice
         </span>
-        {isLead && stale ? (
+        {steersStory && stale ? (
           <button
             type="button"
             disabled={busy}
@@ -138,8 +220,11 @@ export function PendingRollCard({
       ) : null}
       {diceSummary ? (
         <p className="mt-1 text-xs text-amber-100">
-          Roll {diceSummary} at your table and enter each die below.
-          {modifierNote ? ` ${modifierNote}` : ""} The game waits for your result.
+          {fullyAutomatic
+            ? `Roll ${diceSummary}. Your assigned dice fill in on their own.`
+            : `Roll ${diceSummary} at your table and enter each die below.${
+                modifierNote ? ` ${modifierNote}` : ""
+              } The game waits for your result.`}
         </p>
       ) : null}
       {advantageNote ? (
@@ -147,30 +232,68 @@ export function PendingRollCard({
       ) : null}
 
       <div className="mt-2 flex flex-wrap items-end gap-2">
-        {faces.map((sides, index) => (
-          <label key={index} className="block">
-            <span className="mb-0.5 block text-center text-[10px] text-amber-400/80">
-              d{sides}
-            </span>
-            <input
-              type="number"
-              min={1}
-              max={sides}
-              inputMode="numeric"
-              value={values[index] ?? ""}
-              onChange={(event) =>
-                setValues((current) => ({ ...current, [index]: event.target.value }))
-              }
-              className="w-14 rounded-md border border-amber-800 bg-stone-900 px-2 py-1.5 text-center text-sm outline-none focus:border-amber-500"
-            />
-          </label>
-        ))}
+        {faces.map((sides, index) => {
+          const source = faceSources[index] ?? { kind: "manual" };
+          const filled = faceValue(index);
+          // Digital faces are rolled by the server on submit: marked, not
+          // typed, and showing no number the player could act on early.
+          if (source.kind === "digital") {
+            return (
+              <div key={index} className="block">
+                <span className="mb-0.5 block text-center text-[10px] text-sky-300/80">
+                  d{sides} · auto
+                </span>
+                <div
+                  aria-label={`d${sides} rolled for you`}
+                  className="flex h-[34px] w-14 items-center justify-center rounded-md border border-sky-800/70 bg-sky-950/30 text-sm text-sky-100"
+                >
+                  <Dices className="size-4 text-sky-300/80" />
+                </div>
+              </div>
+            );
+          }
+          // Pixels faces auto-fill when the die lands, but stay editable so a
+          // stubborn die never blocks the roll.
+          const isPixel = source.kind === "pixel";
+          return (
+            <label key={index} className="block">
+              <span
+                title={isPixel ? source.name : undefined}
+                className={cn(
+                  "mb-0.5 block max-w-14 truncate text-center text-[10px]",
+                  isPixel ? "text-sky-300/90" : "text-amber-400/80",
+                )}
+              >
+                {isPixel ? source.name : `d${sides}`}
+              </span>
+              <div className="relative">
+                <input
+                  type="number"
+                  min={1}
+                  max={sides}
+                  inputMode="numeric"
+                  value={values[index] ?? ""}
+                  onChange={(event) =>
+                    setValues((current) => ({ ...current, [index]: event.target.value }))
+                  }
+                  className={cn(
+                    "w-14 rounded-md border bg-stone-900 px-2 py-1.5 text-center text-sm outline-none",
+                    isPixel
+                      ? "border-sky-800 focus:border-sky-500"
+                      : "border-amber-800 focus:border-amber-500",
+                  )}
+                />
+                {isPixel && !filled ? (
+                  <Dices className="pointer-events-none absolute right-1 top-1/2 size-3 -translate-y-1/2 animate-pulse text-sky-400/70" />
+                ) : null}
+              </div>
+            </label>
+          );
+        })}
         <button
           type="button"
           disabled={busy || !complete}
-          onClick={() =>
-            submit({ dice: faces.map((_, index) => Number(values[index])) })
-          }
+          onClick={() => submit({ dice: submissionDice() })}
           className={cn(
             "rounded-lg bg-gradient-to-b from-amber-100 via-amber-200 to-amber-400 px-3 py-1.5 text-sm font-semibold text-amber-950",
             "shadow-[0_1px_0_rgba(253,247,231,0.6)_inset] transition-all duration-150 ease-snap",

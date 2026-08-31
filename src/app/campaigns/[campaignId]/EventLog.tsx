@@ -135,13 +135,13 @@ export function EventLog({
   auditLog,
   sheets,
   characterEvents = [],
-  isLead = false,
+  steersStory = false,
 }: {
   campaignId: string;
   auditLog: AuditEntry[];
   sheets: CharacterSheet[];
   characterEvents?: CharacterEvent[];
-  isLead?: boolean;
+  steersStory?: boolean;
 }) {
   const [busyId, setBusyId] = useState("");
   const [confirming, setConfirming] = useState<{
@@ -226,10 +226,10 @@ export function EventLog({
           }
           const entry = item.entry;
           const reverted = Boolean(entry.revertedAt);
-          const canUndo = isLead && entry.undoable && !reverted;
+          const canUndo = steersStory && entry.undoable && !reverted;
           const turnId = entry.turnId ?? "";
           const showRevertTurn =
-            isLead &&
+            steersStory &&
             turnId &&
             (liveByTurn.get(turnId) ?? 0) >= 2 &&
             !revertShownForTurn.has(turnId);

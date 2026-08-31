@@ -83,7 +83,19 @@ a secret story arc it regenerates as the campaign moves.
 <td width="50%" valign="top" align="center">
 <img src="public/sidebar-icons/chats.png" width="56"><br>
 <b>Session tools</b><br>
-<sub>Private DM-to-player whispers, player-to-player side chats the DM never sees, a 3D dice tray, DM voice narration (TTS), push-to-talk, and an installable PWA layout.</sub>
+<sub>Live voice chat with proximity rules and side rooms, dynamic ambience and music, private whispers and side chats, a 3D dice tray plus physical and Pixels Bluetooth dice, TTS narration, push-to-talk, and an installable PWA layout.</sub>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top" align="center">
+<img src="public/sidebar-icons/support.png" width="56"><br>
+<b>Run the table yourself</b><br>
+<sub>A human-DM mode where a person narrates (usually over the voice chat) and the app keeps sheets, dice, maps and the record straight, with a DM console, story-beat capture, and an assisted mode that delegates monsters, read-alouds or a covered absence to the AI.</sub>
+</td>
+<td width="50%" valign="top" align="center">
+<img src="public/sidebar-icons/story.png" width="56"><br>
+<b>Workshop prep space</b><br>
+<sub>Author maps in a graphical terrain editor, bosses with derived CR, NPCs, encounters, roll tables, lore and storyboards outside any campaign, then import them into new campaigns; workshops, campaigns, characters and individual assets all clone.</sub>
 </td>
 </tr>
 </table>
@@ -211,6 +223,24 @@ and clamped by code.
 - **TTS narration** - local Kokoro renders each DM message on the serial media queue, autoplayed latest-only with per-user mute.
 - **STT push-to-talk** - proxies audio to a local faster-whisper service, kept off the network.
 - **Portrait generation** - a one-shot ComfyUI character portrait at creation, with an icon fallback.
+
+### Human DM and the workshop
+
+- **Viewer roles and caps** - one pure decision for who sees the secret arc, real enemy numbers, and the unfogged map: the lead at an AI table, the DM seat at a human one.
+- **Adjudication facade** - a catalog of 64 engine adjudications the human DM invokes from the console, the same handlers the AI reaches through tools.
+- **Assisted-mode delegation** - the DM hands the AI the monsters' turns, beat read-alouds, or a counted cover stretch while they step away; the AI spends one answer per turn it takes.
+- **Story-beat capture** - a cadence nudge reminds the DM to jot beats between voice narration, and beats feed the same chapter summaries, recaps and exports an AI table gets.
+- **DM console panels** - initiative editing, bestiary and NPC forges, a map studio and map library, roll tables, encounter prep with live difficulty, odds, effects and scene tracking.
+- **Roll visibility** - public, DM-only, blind and self rolls, redacted rather than hidden so a secret roll still visibly happened.
+- **Workshop kind** - a campaign row that never plays: same content tables, same editors, no AI turns, measured against a stand-in target party.
+- **Content import** - a transactional planner/executor pair copies lore, locations, maps, NPCs, encounters, tables, storyboards and house rules from a workshop or campaign into a new campaign, renumbering collisions.
+- **Cloning** - whole workshops and campaigns clone (prep travels, transcript does not), library characters duplicate, and individual assets copy in place.
+
+### Live table audio and dice
+
+- **Voice SFU** - in-process mediasoup with floor-aware turn taking, side rooms, hand raising, and optional proximity, whisper/shout range, wall attenuation and downed-deafness rules.
+- **Ambience engine** - a 65-cue catalog in three layers (bed, music, sting) driven by the AI's tools, the DM's hand, or scene inference, with per-listener volume and TTS ducking.
+- **Dice sources** - per die shape, each player picks typed physical entry, a server roll, or a paired Pixels Bluetooth die; rolls auto-submit when no die needs typing.
 
 ### Platform and multiplayer
 
@@ -502,6 +532,12 @@ Details in [docs/image-generation.md](docs/image-generation.md).
 - **Push-to-talk**: a faster-whisper server at `STT_URL` (default
   `http://127.0.0.1:8870`, model `STT_MODEL`) transcribes your voice with a
   confirm-then-send step.
+- **Ambience and music**: a library of public-domain cues (dungeons, forests,
+  deserts, rivers, towns, crowds, taverns, wind, plus music and one-shot
+  stings) that the AI DM, a human DM, or the engine following the scene can
+  trigger. Volume and mute are per listener. No audio ships with the project;
+  `npm run fetch-ambience` pulls it from public archives. See
+  [docs/configuration.md](docs/configuration.md#ambience-and-music).
 
 ## Configuration and settings precedence
 
@@ -543,6 +579,79 @@ Log in as an admin and open `/admin` (linked from the account menu):
 The "Sign in with Discord" button appears automatically once both are set. Existing
 users can link Discord to their account from Settings.
 
+## Voice chat (optional)
+
+The table can talk over live voice, in the lobby while everyone is still
+building characters and at any point during play. The server runs its own SFU
+(mediasoup) in-process, so there is no third-party service, no account and no
+audio leaving your machine.
+
+Voice is **off by default**: set `VOICE_ENABLED=1` to turn it on. It needs two
+more things, and both are easy to miss:
+
+1. **HTTPS.** Browsers block microphone access on plain http, so voice needs a
+   reverse proxy with a certificate. `localhost` is exempt, so a single-machine
+   install works as-is. (The push-to-talk speech-to-text button has always had
+   this requirement too.)
+2. **One extra open port, UDP and TCP.** Default `44444`. The audio is not HTTP
+   and cannot go through your reverse proxy: open the port on the firewall
+   pointing straight at the host. It is a single port, not a range, however
+   many tables are running.
+
+```bash
+VOICE_ENABLED=1
+VOICE_RTC_PORT=44444
+# The address a player's BROWSER can reach this host on. Required for Docker
+# or any NAT; leave empty only for a localhost-only install.
+VOICE_ANNOUNCED_IP=203.0.113.10
+# Optional: announce a hostname instead of the raw IP. Wins when set.
+VOICE_DOMAIN=voice.example.com
+```
+
+Whatever is announced must resolve directly to the host. If your site sits
+behind a Cloudflare proxy, point voice at the origin IP, or give `VOICE_DOMAIN`
+a DNS-only "grey cloud" record: a proxied hostname resolves to Cloudflare, which
+does not carry UDP, and the call will connect and then stay silent. Full
+details, including the trade this makes with origin-IP privacy, are in
+[docs/configuration.md](docs/configuration.md).
+
+Because the server already knows where every token stands and whose turn it is,
+voice can do things a separate call cannot:
+
+- **Turn-taking** rides the floor the table already has (open, hold, spotlight,
+  initiative). By default the panel just shows whose turn it is; a table that
+  wants it can have players off the floor muted server-side. The DM is never
+  muted, and anyone who cannot speak gets a Raise hand button.
+- **Proximity**, off by default: distance on the battle map decides who hears
+  whom, with whisper (5 ft) / normal / shout (120 ft), walls that muffle rather
+  than block, and an option for downed characters to stop hearing the table.
+  The DM always hears everyone.
+- **Side rooms** the DM can open and move people between, for a private word or
+  a split party. Moving somebody is instant, with no gap in their audio.
+
+Each campaign turns voice and each rule on or off in its settings, and a server
+owner can disable it entirely with `VOICE_ENABLED=0`. Full details in
+[docs/configuration.md](docs/configuration.md).
+
+## Physical and Bluetooth dice
+
+With the campaign's dice policy set to allow real dice, each player can opt in and
+then choose, per die shape, where that die's numbers come from:
+
+- **Type it in**: roll your physical die and enter the result; the DM turn parks
+  until the table's dice are in.
+- **Server roll**: the server rolls that die for you with a cryptographic RNG, so
+  a mixed handful (your d20, its damage dice) still submits in one go.
+- **Pixels Bluetooth dice**: pair a [Pixels](https://gamewithpixels.com/) die and
+  its rolls fill in as they land, with a blink-to-identify button and automatic
+  fallback to typing if it disconnects. Web Bluetooth requires a Chromium-based
+  browser and HTTPS (localhost is exempt), the same requirement voice has.
+
+When every die in a request is covered by a Pixel or the server, the roll submits
+itself as the last die settles. Dice-source choices are stored in the browser they
+were made in, per device, and the d100 pairs no single Pixel, so it stays typed or
+server-rolled.
+
 ## Storage and the single-writer rule
 
 All state lives in a local SQLite database at `data/local-roleplay.sqlite` (override
@@ -552,6 +661,12 @@ pack (`data/content/open5e.sqlite`) stays unencrypted. The database driver is
 synchronous and the app assumes **one Next.js process owns the database file**. Do
 not run `npm run dev` and a production service against the same `data/` directory;
 point dev at a scratch database with `SQLITE_DB_PATH`.
+
+The single-process assumption goes beyond the database: the live event bus, the
+DM turn queue, and the voice-chat rooms are all in-process state. Running two
+instances behind a load balancer would split the table across processes, and a
+restart ends any voice call in progress (players simply rejoin). One instance is
+the supported shape.
 
 ## Campaign plugins
 
@@ -584,6 +699,11 @@ wherever it appears. Only original works are bundled in this repository.
 
 - Forked from [Open Dungeon](https://github.com/newideas99/open-dungeon) by Jacob
   Ferrari, MIT licensed. See [LICENSE](LICENSE).
+- Design ideas were borrowed from [Foundry VTT](https://github.com/foundryvtt)
+  (its MIT `dnd5e` and Simple Worldbuilding systems) and from
+  [NarrativeEngine-P](https://github.com/Sagesheep/NarrativeEngine-P). No code
+  from either is in this repository; what each one shaped is listed in
+  [docs/LICENSES.md](docs/LICENSES.md).
 - Game rules data derives from the System Reference Document 5.1 by Wizards of the
   Coast LLC, licensed under CC-BY-4.0. See [docs/LICENSES.md](docs/LICENSES.md).
 - Expanded options (the widely played subclasses, spells, feats and lineages that no

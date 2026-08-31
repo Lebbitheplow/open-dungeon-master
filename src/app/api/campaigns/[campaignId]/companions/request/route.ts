@@ -1,4 +1,4 @@
-import { isErrorResponse, requireLead } from "@/lib/campaign-api";
+import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { allocateSeq, listMembers } from "@/lib/db/campaigns";
 import { companionSlotsFree } from "@/lib/schemas/game-settings";
 import { insertCampaignMessage } from "@/lib/db/messages";
@@ -18,7 +18,7 @@ export async function POST(
   { params }: { params: Promise<{ campaignId: string }> },
 ) {
   const { campaignId } = await params;
-  const context = await requireLead(campaignId);
+  const context = await requireStoryAuthority(campaignId);
   if (isErrorResponse(context)) {
     return context;
   }

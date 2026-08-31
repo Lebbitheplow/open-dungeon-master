@@ -182,6 +182,17 @@ export function countMessages(campaignId: string): number {
   return row.count;
 }
 
+// Attaches an image request to a message already in the transcript. The AI
+// path sets this at insert time, because its picture and its narration land
+// together; a human DM narrates first and illustrates after, so the request
+// has to be able to arrive later. The caller publishes message_updated.
+export function setMessageImageRequest(messageId: string, request: ImageRequest) {
+  const result = getDatabase()
+    .prepare(`UPDATE campaign_messages SET image_request_json = ? WHERE id = ?`)
+    .run(JSON.stringify(request), messageId);
+  return result.changes > 0;
+}
+
 export function setMessageGeneratedImage(messageId: string, image: GeneratedImage) {
   const result = getDatabase()
     .prepare(`UPDATE campaign_messages SET generated_image_json = ? WHERE id = ?`)

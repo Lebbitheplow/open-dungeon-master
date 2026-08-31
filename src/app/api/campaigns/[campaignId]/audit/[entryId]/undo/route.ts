@@ -1,4 +1,4 @@
-import { isErrorResponse, requireLead } from "@/lib/campaign-api";
+import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { getAuditEntry } from "@/lib/db/sheet-audit";
 import { revertAuditEntry, undoConflictWarnings } from "@/lib/sheet-undo";
 
@@ -13,7 +13,7 @@ export async function POST(
   { params }: { params: Promise<{ campaignId: string; entryId: string }> },
 ) {
   const { campaignId, entryId } = await params;
-  const context = await requireLead(campaignId);
+  const context = await requireStoryAuthority(campaignId);
   if (isErrorResponse(context)) {
     return context;
   }

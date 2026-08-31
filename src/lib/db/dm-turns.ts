@@ -9,10 +9,16 @@ import type { ContextTrace } from "@/lib/dm/context-budget";
 
 export type DmTurnStatus = "running" | "awaiting_rolls" | "done" | "failed";
 
+// Who is driving the turn. A human turn exists only so the engine has
+// somewhere to hang rolls and per-turn bookkeeping; it holds no
+// conversation and is never handed to the model.
+export type DmTurnActor = "ai" | "human_dm";
+
 export type DmTurn = {
   id: string;
   campaignId: string;
   status: DmTurnStatus;
+  actor: DmTurnActor;
   callIndex: number;
   conversation: ChatMessage[];
   narrationParts: string[];
@@ -44,6 +50,7 @@ type TurnRow = {
   id: string;
   campaign_id: string;
   status: DmTurnStatus;
+  actor: DmTurnActor | null;
   call_index: number;
   conversation_json: string;
   narration_parts_json: string;
@@ -66,6 +73,7 @@ function mapTurn(row: TurnRow): DmTurn {
     id: row.id,
     campaignId: row.campaign_id,
     status: row.status,
+    actor: row.actor === "human_dm" ? "human_dm" : "ai",
     callIndex: row.call_index,
     conversation: parseJson<ChatMessage[]>(row.conversation_json, []),
     narrationParts: parseJson<string[]>(row.narration_parts_json, []),
@@ -87,17 +95,21 @@ function mapTurn(row: TurnRow): DmTurn {
   };
 }
 
-export function createDmTurn(campaignId: string, conversation: ChatMessage[]): DmTurn {
+export function createDmTurn(
+  campaignId: string,
+  conversation: ChatMessage[],
+  actor: DmTurnActor = "ai",
+): DmTurn {
   const id = crypto.randomUUID();
   const now = nowIso();
   getDatabase()
     .prepare(
       `
-        INSERT INTO dm_turns (id, campaign_id, status, call_index, conversation_json, created_at, updated_at)
-        VALUES (?, ?, 'running', 0, ?, ?, ?)
+        INSERT INTO dm_turns (id, campaign_id, status, actor, call_index, conversation_json, created_at, updated_at)
+        VALUES (?, ?, 'running', ?, 0, ?, ?, ?)
       `,
     )
-    .run(id, campaignId, JSON.stringify(conversation), now, now);
+    .run(id, campaignId, actor, JSON.stringify(conversation), now, now);
   const turn = getDmTurn(id);
   if (!turn) {
     throw new Error("Failed to create DM turn.");

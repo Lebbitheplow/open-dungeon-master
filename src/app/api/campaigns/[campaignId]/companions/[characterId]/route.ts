@@ -1,4 +1,4 @@
-import { isErrorResponse, requireLead } from "@/lib/campaign-api";
+import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { allocateSeq } from "@/lib/db/campaigns";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { listSheets } from "@/lib/db/sheets";
@@ -17,7 +17,7 @@ export async function DELETE(
   { params }: { params: Promise<{ campaignId: string; characterId: string }> },
 ) {
   const { campaignId, characterId } = await params;
-  const context = await requireLead(campaignId);
+  const context = await requireStoryAuthority(campaignId);
   if (isErrorResponse(context)) {
     return context;
   }

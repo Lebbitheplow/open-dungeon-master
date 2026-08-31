@@ -45,6 +45,7 @@ import {
   type RollArgs,
 } from "@/lib/dm/rolls";
 import { fakeRollMarkerRegex } from "@/lib/dm/tool-text";
+import { announcesEncounterStart, FAKE_ENCOUNTER_PROMPT } from "@/lib/dm/engine-boundary";
 import { handleCompleteBeat } from "@/lib/dm/arc";
 import { enforceEngineBoundary } from "@/lib/dm/narration-guard";
 import {
@@ -129,6 +130,11 @@ import {
   handleGroupCheck,
 } from "@/lib/dm/check-tools";
 import { hazardTools, HAZARD_TOOL_NAMES, handleApplyHazard } from "@/lib/dm/hazard-tools";
+import {
+  handleSplitDamage,
+  splitDamageTool,
+  SPLIT_DAMAGE_TOOL_NAMES,
+} from "@/lib/dm/split-damage";
 import { allySaveAura } from "@/lib/dm/aura";
 import {
   petTools,
@@ -154,7 +160,36 @@ import {
   handleRelationshipEnd,
   relationshipRosterForPrompt,
 } from "@/lib/dm/relationship-tools";
+import { handlePartyStash, PARTY_TOOL_NAMES, partyTools } from "@/lib/dm/party-tools";
 import {
+  handleEndScene,
+  handleSceneCheck,
+  handleStartScene,
+  SCENE_TOOL_NAMES,
+  sceneTools,
+} from "@/lib/dm/scene-tools";
+import {
+  AMBIENCE_TOOL_NAMES,
+  ambienceTools,
+  followSceneAmbience,
+  handlePlaySting,
+  handleSetAmbience,
+} from "@/lib/dm/ambience-tools";
+import {
+  handleDismount,
+  handleMountUp,
+  MOUNT_TOOL_NAMES,
+  mountTools,
+} from "@/lib/dm/mount-tools";
+import {
+  effectTools,
+  EFFECT_TOOL_NAMES,
+  handleClearEffect,
+  handleSetEffect,
+  rollEffectExtras,
+} from "@/lib/dm/effect-tools";
+import {
+  handlePassTime,
   worldTools,
   WORLD_TOOL_NAMES,
   handleRollTreasure,
@@ -549,6 +584,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
   // One suggested note per advance() run keeps the DM from papering the
   // lead's approval queue in a single reply.
   let noteCount = 0;
+  // One shot at fixing a fight announced in prose without start_encounter; a
+  // model that ignores the correction keeps its text rather than looping.
+  let encounterNudged = false;
 
   while (turn.callIndex < MAX_MODEL_CALLS) {
     const finalCall = turn.callIndex === MAX_MODEL_CALLS - 1;
@@ -570,10 +608,28 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       ...(campaign.storyArc ? [completeBeatTool] : []),
       ...checkTools,
       ...hazardTools,
+      ...(inEncounter ? [splitDamageTool] : []),
       ...petTools,
       ...socialTools,
       ...(inEncounter ? [] : relationshipTools(campaign)),
       ...(inEncounter ? [] : worldTools),
+      // The party's shared pack and common purse. Out of combat only, like
+      // the rest of the world tools: nobody rummages in the group kit while
+      // initiative is running.
+      ...(inEncounter ? [] : partyTools),
+      // Effects are offered in and out of combat: a blessing lands mid-fight
+      // as often as a curse lands in a throne room.
+      ...effectTools,
+      // Structured non-combat scenes and mounts are both out-of-combat
+      // business: a chase clock and an initiative order are two answers to
+      // the same question, and nobody saddles up mid-round.
+      ...(inEncounter ? [] : sceneTools),
+      // Sound is offered in and out of a fight: a sting lands mid-round as
+      // often as a bed changes between them. Silent for a table that has
+      // the library switched off, which is why it is gated here rather
+      // than left to the handler to refuse.
+      ...(campaign.gameSettings.ambienceEnabled ? ambienceTools : []),
+      ...(inEncounter ? [] : mountTools),
       ...encounterTools(inEncounter),
       castBuffTool,
       ...(inEncounter ? [] : restTools),
@@ -696,6 +752,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     const hazardCalls = toolCalls.filter((toolCall) =>
       (HAZARD_TOOL_NAMES as readonly string[]).includes(toolCall.name),
     );
+    const splitCalls = toolCalls.filter((toolCall) =>
+      (SPLIT_DAMAGE_TOOL_NAMES as readonly string[]).includes(toolCall.name),
+    );
     const petCalls = toolCalls.filter((toolCall) =>
       (PET_TOOL_NAMES as readonly string[]).includes(toolCall.name),
     );
@@ -709,8 +768,14 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     const relationshipCalls = toolCalls.filter((toolCall) =>
       (RELATIONSHIP_TOOL_NAMES as readonly string[]).includes(toolCall.name),
     );
-    const worldCalls = toolCalls.filter((toolCall) =>
-      (WORLD_TOOL_NAMES as readonly string[]).includes(toolCall.name),
+    const worldCalls = toolCalls.filter(
+      (toolCall) =>
+        (WORLD_TOOL_NAMES as readonly string[]).includes(toolCall.name) ||
+        (PARTY_TOOL_NAMES as readonly string[]).includes(toolCall.name) ||
+        (EFFECT_TOOL_NAMES as readonly string[]).includes(toolCall.name) ||
+        (SCENE_TOOL_NAMES as readonly string[]).includes(toolCall.name) ||
+        (MOUNT_TOOL_NAMES as readonly string[]).includes(toolCall.name) ||
+        (AMBIENCE_TOOL_NAMES as readonly string[]).includes(toolCall.name),
     );
 
     // Location bookkeeping is synchronous and cheap; maps render async on
@@ -847,6 +912,29 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
 
     if (!needsFollowUp) {
       saveDmTurn(turn);
+      // A fight announced in prose alone does not exist: no enemies, no
+      // initiative, no HP. Hold the announcement back and send the model to
+      // start_encounter for real; the follow-up narrates from tool results.
+      if (
+        !finalCall &&
+        !encounterNudged &&
+        !inEncounter &&
+        narration &&
+        turn.narrationParts[turn.narrationParts.length - 1] === narration &&
+        announcesEncounterStart(narration)
+      ) {
+        encounterNudged = true;
+        turn.narrationParts.pop();
+        turn.conversation.push({
+          role: "assistant",
+          content: visibleText || "",
+          tool_calls: echoedToolCalls,
+        });
+        turn.conversation.push({ role: "user", content: FAKE_ENCOUNTER_PROMPT });
+        // Saved again: the save above still carried the withheld announcement.
+        saveDmTurn(turn);
+        continue;
+      }
       // A spotlight with no narration yet gets one forced-narration call so
       // the turn never lands empty.
       if (spotlightSet && !turn.narrationParts.length && !finalCall) {
@@ -1115,6 +1203,18 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       });
     }
 
+    // One rolled total, several targets, a share each: the halving and
+    // doubling are the server's, and every share then lands through the
+    // ordinary damage rules.
+    for (const splitCall of splitCalls) {
+      const result = handleSplitDamage(campaign, turn, splitCall.rawArguments, sheets, sheetsById);
+      turn.conversation.push({
+        role: "tool",
+        ...(splitCall.id ? { tool_call_id: splitCall.id } : {}),
+        content: JSON.stringify(result),
+      });
+    }
+
     // Familiars, companions, and drakes: summons validate the granting
     // feature, attacks roll real dice, damage lands on the pet's own pool.
     for (const petCall of petCalls) {
@@ -1194,6 +1294,28 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         result = handleRollTreasure(campaign, turn, worldCall.rawArguments, sheets, sheetsById);
       } else if (worldCall.name === "travel") {
         result = handleTravel(campaign, turn, worldCall.rawArguments, sheets, sheetsById);
+      } else if (worldCall.name === "pass_time") {
+        result = handlePassTime(campaign, worldCall.rawArguments);
+      } else if (worldCall.name === "party_stash") {
+        result = handlePartyStash(campaign, worldCall.rawArguments, sheets, sheetsById);
+      } else if (worldCall.name === "set_effect") {
+        result = handleSetEffect(campaign, worldCall.rawArguments, sheets, sheetsById);
+      } else if (worldCall.name === "clear_effect") {
+        result = handleClearEffect(campaign, worldCall.rawArguments, sheets, sheetsById);
+      } else if (worldCall.name === "start_scene") {
+        result = handleStartScene(campaign, worldCall.rawArguments);
+      } else if (worldCall.name === "scene_check") {
+        result = handleSceneCheck(campaign, worldCall.rawArguments, sheets, sheetsById);
+      } else if (worldCall.name === "end_scene") {
+        result = handleEndScene(campaign, worldCall.rawArguments);
+      } else if (worldCall.name === "mount_up") {
+        result = handleMountUp(campaign, worldCall.rawArguments, sheets, sheetsById);
+      } else if (worldCall.name === "dismount") {
+        result = handleDismount(campaign, worldCall.rawArguments, sheets, sheetsById);
+      } else if (worldCall.name === "set_ambience") {
+        result = handleSetAmbience(campaign, worldCall.rawArguments);
+      } else if (worldCall.name === "play_sting") {
+        result = handlePlaySting(campaign, worldCall.rawArguments);
       } else {
         result = handleDamageObject(worldCall.rawArguments);
       }
@@ -1243,7 +1365,11 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       const resolved = resolveRollExpression(
         parsedArgs,
         sheet,
-        aura ? { saveBonus: aura.bonus, saveNote: aura.note } : undefined,
+        {
+          ...(aura ? { saveBonus: aura.bonus, saveNote: aura.note } : {}),
+          ...(sheet ? rollEffectExtras(campaignId, sheet.id, parsedArgs.kind) : {}),
+          encumbrance: campaign.gameSettings.variantRules.encumbrance,
+        },
       );
       if ("error" in resolved) {
         turn.conversation.push({
@@ -1487,9 +1613,42 @@ async function ensureWhisperReplies(context: TurnContext, turn: DmTurn) {
   saveDmTurn(turn);
 }
 
+// request_player_input: hands the floor to named players and waits for them.
+// Exported for the adjudication façade, which is why the parsing lives in
+// parseSpotlightUserIds rather than inline in the turn loop: the AI sets this
+// spotlight from a tool call and a person sets the same one from the console,
+// and they must land on the identical floor state.
+export function handleRequestPlayerInput(
+  campaign: Campaign,
+  rawArguments: string,
+  sheets: CharacterSheet[],
+  sheetsById: Map<string, CharacterSheet>,
+): Record<string, unknown> {
+  // Initiative owns the floor while a fight runs, exactly as the floor route
+  // refuses there. Handing it to someone out of turn would break the order.
+  if (getFloor(campaign.id).mode === "initiative") {
+    return { error: "The initiative order has the floor while the fight runs." };
+  }
+  const parsed = parseSpotlightUserIds(rawArguments, sheets, sheetsById);
+  if (!parsed) {
+    return { error: "Name at least one player character to give the floor to." };
+  }
+  const floor = {
+    mode: "spotlight" as const,
+    userIds: parsed.userIds,
+    prompt: parsed.prompt,
+    respondedUserIds: [],
+  };
+  setFloor(campaign.id, floor);
+  publishPersisted(campaign.id, "floor_changed", { floor });
+  return { ok: true, waitingOn: parsed.userIds.length };
+}
+
 // record_event: a lasting milestone on the character's permanent record
 // (feeds the profile "story so far" and future GAME STATE blocks).
-function handleRecordEvent(
+// Exported for the adjudication façade (src/lib/dm/invoke.ts): a human DM
+// records the same milestones through the same path the model uses.
+export function handleRecordEvent(
   campaign: Campaign,
   rawArguments: string,
   sheets: CharacterSheet[],
@@ -1533,7 +1692,8 @@ function handleRecordEvent(
 
 // move_party / update_location: record the structured area state, keep the
 // campaign scene in sync, and kick off a map render when vision allows.
-function handleLocationCall(
+// Exported for the adjudication façade (src/lib/dm/invoke.ts).
+export function handleLocationCall(
   campaign: Campaign,
   toolName: string,
   rawArguments: string,
@@ -1590,6 +1750,12 @@ function handleLocationCall(
   }
 
   publishPersisted(campaign.id, "location_updated", { location });
+
+  // The place is what the room should be hearing. Inferred rather than
+  // asked for, so a DM who never touches the sound controls still gets a
+  // cave that sounds like one; a held layer and a table with scene
+  // following switched off are both left alone inside the helper.
+  followSceneAmbience(campaign, `${location.name} ${location.layoutDescription}`);
 
   // Render when the area has no map yet, or when an update materially
   // changed the recorded layout.

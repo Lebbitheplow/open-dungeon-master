@@ -141,8 +141,11 @@ async function assembleEvidence(
   if (scope === "sheet") {
     const sheet = getSheetForUser(campaignId, request.userId);
     if (sheet) {
+      const campaign = getCampaignById(campaignId);
       evidence.push(
-        `[sheet] Your character, exactly as the server has them:\n${describeSheet(sheet, "you", false)}`,
+        `[sheet] Your character, exactly as the server has them:\n${describeSheet(sheet, "you", false, {
+          encumbrance: campaign?.gameSettings.variantRules.encumbrance,
+        })}`,
       );
     }
   }

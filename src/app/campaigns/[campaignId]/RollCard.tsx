@@ -16,11 +16,29 @@ const KIND_LABELS: Record<string, string> = {
 };
 
 export function RollCard({ roll, characterName }: { roll: StoredRoll; characterName?: string }) {
+  const label = KIND_LABELS[roll.kind] ?? "Roll";
+  const detail = roll.detail ? roll.detail.replaceAll("_", " ") : "";
+
+  // A blind roll: the table sees that the dice went, and what for, and not
+  // how they landed. The server stripped the number before it ever reached
+  // this browser (src/lib/dm/viewer.ts).
+  if ((roll as { hidden?: boolean }).hidden) {
+    return (
+      <div className="inline-flex animate-fade-up items-center gap-2 rounded-lg border border-stone-700/70 bg-stone-900/70 px-3 py-2 text-sm text-stone-400 shadow-elev-1">
+        <Dices className="size-4 text-stone-500" />
+        <span>
+          {characterName ? `${characterName} · ` : ""}
+          {label}
+          {detail ? ` (${detail})` : ""}
+        </span>
+        <span className="text-xs text-stone-600">rolled behind the screen</span>
+      </div>
+    );
+  }
+
   const diceTerms = roll.breakdown.terms.filter(
     (term): term is DiceTerm => term.kind === "dice",
   );
-  const label = KIND_LABELS[roll.kind] ?? "Roll";
-  const detail = roll.detail ? roll.detail.replaceAll("_", " ") : "";
 
   return (
     <div

@@ -42,7 +42,8 @@ table can switch it off with the `narrationGuard` game setting.
 | Creature size (Small races vs heavy weapons, grapple/shove size cap) | enforced | `srd/index.ts sizeForRace`, `dm/pc-attack.ts`, `dm/action-tools.ts` |
 | Aura of Protection (+CHA to saves) | enforced | feature-effects `save_bonus` → derived saves |
 | Alert (+5 initiative), Observant (+5 passive) | enforced | feature-effects → derived stats |
-| Encumbrance | out of scope | item weights not modelled; parallels the ammunition call |
+| Party spoils (XP each, a purse split evenly, an item to the finder) | enforced | `dm/mutations.ts party_award`, composing the single-target mutations so the audit trail is unchanged |
+| Encumbrance (carrying capacity, the two variant thresholds) | enforced when the `encumbrance` variant rule is on | `srd/encumbrance.ts`; item weights from the content pack, armor from `srd/armor.ts` |
 
 ## Combat
 
@@ -80,7 +81,9 @@ table can switch it off with the `narrationGuard` game setting.
 | Haste's extra action / Slow's lost reactions | enforced | `dm/action-budget.ts` `extraActions`, `use_reaction` gate |
 | Shield spell / Protection style reactions (real AC and disadvantage) | enforced | `dm/action-tools.ts use_reaction` -> registry conditions |
 | Narration cross-checked against the turn's real outcomes (a hit written on a miss, a death the hit points deny, a damage figure no die rolled, a spell nothing paid for) | enforced (verification, one rewrite) | `dm/engine-boundary.ts`, `dm/narration-guard.ts`, setting `narrationGuard` |
-| Ammunition tracking | out of scope | assumed supplied (`prompt.ts`) |
+| Ammunition tracking (optional) | enforced when the `ammunition` variant rule is on | `srd/ammunition.ts`, spent in `dm/pc-attack.ts`, half recovered in `dm/enemy-damage.ts finishEncounter` |
+| One damage total split across targets at full/half/double/none | enforced | `dm/split-damage.ts split_damage`; each share then goes through the ordinary enemy and character damage paths, so resistances and temp HP still apply |
+| Hidden and blind rolls (a DM screen) | enforced | `rolls.visibility`, `dm/viewer.ts rollAccessFor`; the shared stream carries the redacted roll and the allowed seat re-fetches |
 
 ## Spellcasting
 
@@ -136,7 +139,7 @@ DM-rules roadmap (`.claude/plans`) flips to enforced; it is guidance until then.
 | Travel pace effects (fast/normal/slow) | enforced | `srd/travel.ts`, `dm/world-tools.ts travel` |
 | Forced-march exhaustion (CON save) | enforced | `dm/world-tools.ts travel` via the exhaustion track |
 | Chases | out of scope | niche subsystem; not modelled |
-| Encumbrance | out of scope | item weights not on the schema (see below) |
+| Encumbrance | enforced when the `encumbrance` variant rule is on | speed via `srd/index.ts speedFor`, disadvantage via `dm/rolls.ts` and `dm/pc-attack.ts` |
 
 ## Social interaction
 
@@ -194,8 +197,8 @@ also proves it does not rot (every acknowledged name is a real granted name).
 
 | Rule | Why |
 |---|---|
-| Ammunition | Assumed supplied; tracking it is tedious with no upside at this table. |
-| Encumbrance | Item weights are not on the schema; adding a weight to every item is a poor trade. |
+| Ammunition (default off) | Assumed supplied unless a table asks for it. The `ammunition` variant rule turns on real tracking: a shot spends a round, an empty quiver refuses the attack, and half the spend comes back after the fight. |
+| Item weights the source never printed | The content pack carries a weight for every row Open5e gives one (all 68 weapons, 258 of 338 gear entries); armor comes from the SRD table in `srd/armor.ts` because Open5e ships it blank, and magic items have no weight anywhere. An item nothing can weigh is reported as UNWEIGHED rather than counted as zero, so a carried total with unknowns in it reads as a floor. |
 | Non-parseable magic items | Items whose effect is prose the generator cannot parse (roughly 1500 of 1618) stay narrative, exactly like the feature long tail. |
 | PC opportunity attack ending an encounter | It applies damage directly (no DM turn to award XP); a killing blow is reported and the model ends the fight next turn. |
 | Metamagic effects (Twinned targeting, Careful exclusions) | The sorcery-point spend is a real counter; the shaping is targeting logic the model narrates. |
@@ -223,3 +226,22 @@ pre-existing simplification); the lead edits multiclass sheets through the
 scalar class/subclass/level fields, which fold into the primary class entry;
 characters are always created single-class (multiclassing happens at level-up).
 
+## Cross-cutting engines (Phase 8)
+
+| Subsystem | State | Where |
+|---|---|---|
+| Active effects: lasting modifiers with duration, source and save-to-end | enforced | `dm/effects-logic.ts`, `db/active-effects.ts` |
+| Effect stacking: adds sum, largest override wins, advantage never stacks | enforced | `dm/effects-logic.ts resolveField` |
+| Effects applied to AC | enforced | `dm/encounter-tools.ts acWithEffects` |
+| Effects applied to saves, checks and initiative | enforced | `dm/rolls.ts` extras, `dm/effect-tools.ts rollEffectExtras` |
+| In-world calendar, date and time of day | enforced | `dm/calendar.ts`, `db/clock.ts` |
+| Rest length by variant (standard, gritty realism, heroic) | enforced | `dm/calendar.ts restMinutes`, `dm/rest-tools.ts` |
+| Time advancing on travel, rests and `pass_time` | enforced | `db/clock.ts advanceClock` |
+| Party entity: common purse, shared pack, banked XP, marching order | enforced | `dm/party-logic.ts`, `dm/party-tools.ts` |
+| Multi-denomination currency (cp/sp/ep/gp/pp), parsing and formatting | enforced | `srd/currency.ts` |
+| Unidentified items and the DM reveal | enforced | `schemas/sheet.ts`, `dm/mutation-math.ts revealItemMath` |
+| Mounted combat: size rule, mount speed, mounting cost, thrown-rider save | enforced | `srd/mounts.ts`, `dm/mount-tools.ts` |
+| Vehicles: speed, capacity, crew, undercrewed penalty | guidance | `srd/mounts.ts` (the undercrewed halving is ODM's own, not SRD) |
+| Structured non-combat scenes: successes before failures, per-round checks | enforced | `dm/scene-tracker-logic.ts`, `dm/scene-tools.ts` |
+| Freeform typed attributes on NPCs, items, locations, factions and props | enforced | `dm/attributes-logic.ts`, `db/entity-attributes.ts` |
+| Assistant DM seat: full in-game powers, cannot re-seat the DM | enforced | `dm/viewer.ts isPrimaryDm`, `/dm/seat` |

@@ -20,30 +20,35 @@ export type SrdArmor = {
   // Minimum Strength score; below it the wearer's speed drops by 10.
   strengthRequirement?: number;
   stealthDisadvantage?: boolean;
+  // Pounds. Open5e ships every armor row with a blank weight, so the SRD
+  // table is the only source we have for it; the encumbrance rule
+  // (src/lib/srd/encumbrance.ts) falls back here when the content pack has
+  // nothing to say.
+  weightLb: number;
 };
 
 export const SRD_ARMOR: SrdArmor[] = [
-  { name: "Padded", category: "light", baseAc: 11, stealthDisadvantage: true },
-  { name: "Leather", category: "light", baseAc: 11 },
-  { name: "Studded Leather", category: "light", baseAc: 12 },
-  { name: "Hide", category: "medium", baseAc: 12, dexCap: 2 },
-  { name: "Chain Shirt", category: "medium", baseAc: 13, dexCap: 2 },
-  { name: "Scale Mail", category: "medium", baseAc: 14, dexCap: 2, stealthDisadvantage: true },
-  { name: "Breastplate", category: "medium", baseAc: 14, dexCap: 2 },
-  { name: "Half Plate", category: "medium", baseAc: 15, dexCap: 2, stealthDisadvantage: true },
-  { name: "Ring Mail", category: "heavy", baseAc: 14, dexCap: 0, stealthDisadvantage: true },
-  { name: "Chain Mail", category: "heavy", baseAc: 16, dexCap: 0, strengthRequirement: 13, stealthDisadvantage: true },
-  { name: "Splint", category: "heavy", baseAc: 17, dexCap: 0, strengthRequirement: 15, stealthDisadvantage: true },
-  { name: "Plate", category: "heavy", baseAc: 18, dexCap: 0, strengthRequirement: 15, stealthDisadvantage: true },
-  { name: "Shield", category: "shield", baseAc: 2 },
+  { name: "Padded", category: "light", baseAc: 11, stealthDisadvantage: true, weightLb: 8 },
+  { name: "Leather", category: "light", baseAc: 11, weightLb: 10 },
+  { name: "Studded Leather", category: "light", baseAc: 12, weightLb: 13 },
+  { name: "Hide", category: "medium", baseAc: 12, dexCap: 2, weightLb: 12 },
+  { name: "Chain Shirt", category: "medium", baseAc: 13, dexCap: 2, weightLb: 20 },
+  { name: "Scale Mail", category: "medium", baseAc: 14, dexCap: 2, stealthDisadvantage: true, weightLb: 45 },
+  { name: "Breastplate", category: "medium", baseAc: 14, dexCap: 2, weightLb: 20 },
+  { name: "Half Plate", category: "medium", baseAc: 15, dexCap: 2, stealthDisadvantage: true, weightLb: 40 },
+  { name: "Ring Mail", category: "heavy", baseAc: 14, dexCap: 0, stealthDisadvantage: true, weightLb: 40 },
+  { name: "Chain Mail", category: "heavy", baseAc: 16, dexCap: 0, strengthRequirement: 13, stealthDisadvantage: true, weightLb: 55 },
+  { name: "Splint", category: "heavy", baseAc: 17, dexCap: 0, strengthRequirement: 15, stealthDisadvantage: true, weightLb: 60 },
+  { name: "Plate", category: "heavy", baseAc: 18, dexCap: 0, strengthRequirement: 15, stealthDisadvantage: true, weightLb: 65 },
+  { name: "Shield", category: "shield", baseAc: 2, weightLb: 6 },
   // Setting-specific equivalents for the custom genre classes, so a
   // cyberpunk runner in a armorweave vest gets real AC instead of nothing.
-  { name: "Armorweave Vest", category: "light", baseAc: 12 },
-  { name: "Kevlar Vest", category: "medium", baseAc: 13, dexCap: 2 },
-  { name: "Riot Plating", category: "heavy", baseAc: 17, dexCap: 0, strengthRequirement: 13, stealthDisadvantage: true },
-  { name: "Brass Carapace", category: "medium", baseAc: 14, dexCap: 2 },
-  { name: "Scrap Plate", category: "heavy", baseAc: 16, dexCap: 0, strengthRequirement: 13, stealthDisadvantage: true },
-  { name: "Ballistic Shield", category: "shield", baseAc: 2 },
+  { name: "Armorweave Vest", category: "light", baseAc: 12, weightLb: 6 },
+  { name: "Kevlar Vest", category: "medium", baseAc: 13, dexCap: 2, weightLb: 15 },
+  { name: "Riot Plating", category: "heavy", baseAc: 17, dexCap: 0, strengthRequirement: 13, stealthDisadvantage: true, weightLb: 50 },
+  { name: "Brass Carapace", category: "medium", baseAc: 14, dexCap: 2, weightLb: 25 },
+  { name: "Scrap Plate", category: "heavy", baseAc: 16, dexCap: 0, strengthRequirement: 13, stealthDisadvantage: true, weightLb: 50 },
+  { name: "Ballistic Shield", category: "shield", baseAc: 2, weightLb: 8 },
 ];
 
 const byName = new Map(SRD_ARMOR.map((armor) => [normalize(armor.name), armor]));

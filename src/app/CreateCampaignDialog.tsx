@@ -18,20 +18,36 @@ import {
 } from "@/app/campaigns/[campaignId]/GameSettingsPanel";
 import { VariantRulesFields } from "@/app/campaigns/[campaignId]/RulesPanel";
 import { submitWorldSetup, WorldSetupFields, type LoreDraft } from "@/app/WorldSetupFields";
+import {
+  ContentImportPicker,
+  EMPTY_SELECTION,
+  submitContentImport,
+  type ImportSelection,
+} from "@/app/workshop/ContentImportPicker";
 import { groupByFranchise, type WorldPackSummary } from "@/lib/worlds/types";
 import { UnofficialPackNotice } from "@/components/UnofficialPackNotice";
 import {
   CAMPAIGN_LENGTH_LABELS,
   CAMPAIGN_LENGTHS,
   COMPANION_LABELS,
+  DM_MODES,
+  DM_MODE_HINTS,
+  DM_MODE_LABELS,
   type CampaignLengthSetting,
   type DicePolicy,
+  type DmModeSetting,
   type GameSettings,
   type Genre,
 } from "@/lib/schemas/game-settings";
 
 // solo: creates a one-player campaign (maxPlayers 1); the player count is
 // hidden and the lobby streamlines itself for a party of one.
+//
+// Some game settings are deliberately not offered here; scripts/test-create-
+// campaign-options.mjs holds the list and fails if one goes missing without a
+// reason. `targetParty` is one of them: it is the stand-in party a workshop
+// budgets prep against, and a campaign reads its real character sheets
+// instead (docs/workshop-plan.md section 1.1).
 export function CreateCampaignDialog({
   open,
   onOpenChange,
@@ -43,6 +59,12 @@ export function CreateCampaignDialog({
   onCreated: (campaignId: string) => void;
   solo?: boolean;
 }) {
+  const [dmMode, setDmMode] = useState<DmModeSetting>("ai");
+  // Everything the AI narrator brings with it. A table running its own game
+  // still gets the rules engine, the maps and the dice; what it does not get
+  // is a second author, so those settings are hidden rather than shown
+  // switched off with no explanation.
+  const aiNarrates = dmMode !== "human";
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [theme, setTheme] = useState("");
@@ -63,6 +85,10 @@ export function CreateCampaignDialog({
   const [ttsEnabled, setTtsEnabled] = useState(true);
   const [ttsVoice, setTtsVoice] = useState<string>("af_heart");
   const [mapsEnabled, setMapsEnabled] = useState(true);
+  const [ambienceEnabled, setAmbienceEnabled] = useState(true);
+  // Scene-following is only meaningful once ambience is on, and is shown as
+  // a second toggle beside it rather than buried.
+  const [ambienceAuto, setAmbienceAuto] = useState(true);
   const [multiclassingEnabled, setMulticlassingEnabled] = useState(true);
   const [worldSimulation, setWorldSimulation] = useState(true);
   const [inventoryApprovals, setInventoryApprovals] = useState(false);
@@ -76,10 +102,15 @@ export function CreateCampaignDialog({
     criticalFumbles: false,
     encumbrance: false,
     lingeringInjuries: false,
+    powerfulCritical: false,
+    criticalDamageMods: false,
+    ammunition: false,
     restVariant: "standard",
   });
   const [houseRules, setHouseRules] = useState("");
   const [loreDrafts, setLoreDrafts] = useState<LoreDraft[]>([]);
+  // Prep built in a workshop, brought in right after the row exists.
+  const [contentImport, setContentImport] = useState<ImportSelection>(EMPTY_SELECTION);
   const [companions, setCompanions] = useState<GameSettings["companions"]>("auto");
   const [maxCompanions, setMaxCompanions] = useState(2);
   const [maxGuests, setMaxGuests] = useState(2);
@@ -151,33 +182,50 @@ export function CreateCampaignDialog({
           startingLevel,
           difficulty,
           gameSettings: {
+            dmMode,
             genre,
             customGenreText: customGenreText.trim(),
-            aiStorySetup,
+            aiStorySetup: aiNarrates && aiStorySetup,
             campaignLength,
             dicePolicy,
             ttsEnabled,
             ttsVoice,
             mapsEnabled,
+            ambienceEnabled,
+            ambienceAuto: ambienceEnabled && ambienceAuto,
             multiclassingEnabled,
             midGameJoinOpen,
             holdSubmissions,
-            narrationGuard,
+            narrationGuard: aiNarrates && narrationGuard,
             relationships,
             // Romance rides on the bond meter, so it cannot be on without it.
             romance: relationships === "off" ? "off" : romance,
-            worldSimulation,
+            worldSimulation: aiNarrates && worldSimulation,
             inventoryApprovals,
             variantRules,
-            companions,
+            companions: aiNarrates ? companions : "off",
             maxCompanions,
             maxGuests,
             worldPack,
-            // `stages` is the one gameSettings field deliberately not offered
-            // here. It trades turn quality for speed on a slow local model,
+            // Three gameSettings fields are deliberately not offered here.
+            //
+            // `stages` trades turn quality for speed on a slow local model,
             // which is an operator decision, not a table decision, so it
             // stays in the lobby's settings panel where the labels can
             // explain which stages actually save a model call.
+            //
+            // `beatReminder` is how often a human DM is nudged to write down
+            // the story they told out loud. Nobody knows their answer before
+            // they have run a session, and the nudge is the thing that
+            // teaches them they want one, so it lives in the settings panel
+            // they are already looking at when it fires.
+            //
+            // `dmAssist` is which parts of the game an assisted-mode DM hands
+            // to the AI. Picking "I run the game, with AI help" above is
+            // already the answer to "do you want help"; which help, and when,
+            // is a question a person answers at the table with the console in
+            // front of them, so all three start on and the settings panel
+            // shows them only once the mode is assisted.
           },
         }),
       });
@@ -189,6 +237,10 @@ export function CreateCampaignDialog({
       // House rules and starting lore land right after the campaign row
       // exists; anything that fails to post can be re-entered in the lobby.
       await submitWorldSetup(data.campaign.id, houseRules, loreDrafts);
+      // The workshop import goes last so its house rules win over the ones
+      // typed in this dialog: choosing a prepared workshop is the more
+      // deliberate of the two, and the picker says which it will do.
+      await submitContentImport(data.campaign.id, contentImport);
       onCreated(data.campaign.id);
     } catch {
       setError("Could not reach the server.");
@@ -232,6 +284,30 @@ export function CreateCampaignDialog({
                 className={inputClass}
               />
             </label>
+
+            <div>
+              <span className="mb-1.5 block text-stone-400">Who runs this game?</span>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                {DM_MODES.map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setDmMode(mode)}
+                    className={toggleClass(dmMode === mode)}
+                  >
+                    <span className="block font-medium">{DM_MODE_LABELS[mode]}</span>
+                    <span className="block text-xs opacity-80">{DM_MODE_HINTS[mode]}</span>
+                  </button>
+                ))}
+              </div>
+              {dmMode !== "ai" ? (
+                <p className="mt-1.5 text-xs text-stone-500">
+                  You take the Dungeon Master seat: no character, no party slot, and you
+                  see the sheets, the stat blocks and the whole map. The server still rolls
+                  every die and holds every number.
+                </p>
+              ) : null}
+            </div>
 
             {franchises.length ? (
               <div>
@@ -401,7 +477,7 @@ export function CreateCampaignDialog({
               </label>
             </div>
 
-            <label className="block">
+            <label className={cn("block", !aiNarrates && "hidden")}>
               <span className="mb-1 block text-stone-400">Campaign length</span>
               <select
                 value={campaignLength}
@@ -447,14 +523,16 @@ export function CreateCampaignDialog({
             </div>
 
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <button
-                type="button"
-                onClick={() => setAiStorySetup(!aiStorySetup)}
-                className={toggleClass(aiStorySetup)}
-              >
-                <span className="block font-medium">AI story setup</span>
-                <span className="block text-xs opacity-80">The DM invents the plot</span>
-              </button>
+              {aiNarrates ? (
+                <button
+                  type="button"
+                  onClick={() => setAiStorySetup(!aiStorySetup)}
+                  className={toggleClass(aiStorySetup)}
+                >
+                  <span className="block font-medium">AI story setup</span>
+                  <span className="block text-xs opacity-80">The DM invents the plot</span>
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => setTtsEnabled(!ttsEnabled)}
@@ -473,13 +551,31 @@ export function CreateCampaignDialog({
               </button>
               <button
                 type="button"
+                onClick={() => setAmbienceEnabled(!ambienceEnabled)}
+                className={toggleClass(ambienceEnabled)}
+              >
+                <span className="block font-medium">Ambience</span>
+                <span className="block text-xs opacity-80">Room tone, music and stings</span>
+              </button>
+              {ambienceEnabled ? (
+                <button
+                  type="button"
+                  onClick={() => setAmbienceAuto(!ambienceAuto)}
+                  className={toggleClass(ambienceAuto)}
+                >
+                  <span className="block font-medium">Sound follows the scene</span>
+                  <span className="block text-xs opacity-80">Off leaves it to the DM</span>
+                </button>
+              ) : null}
+              <button
+                type="button"
                 onClick={() => setMulticlassingEnabled(!multiclassingEnabled)}
                 className={toggleClass(multiclassingEnabled)}
               >
                 <span className="block font-medium">Multiclassing</span>
                 <span className="block text-xs opacity-80">Second classes at level-up</span>
               </button>
-              <div className="relative flex">
+              <div className={cn("relative flex", !aiNarrates && "hidden")}>
                 <button
                   type="button"
                   onClick={() => setWorldSimulation(!worldSimulation)}
@@ -542,7 +638,7 @@ export function CreateCampaignDialog({
                   />
                 </div>
               ) : null}
-              <div className="relative flex">
+              <div className={cn("relative flex", !aiNarrates && "hidden")}>
                 <button
                   type="button"
                   onClick={() => setNarrationGuard(!narrationGuard)}
@@ -594,7 +690,15 @@ export function CreateCampaignDialog({
               setLoreDrafts={setLoreDrafts}
             />
 
-            <div>
+            <div className="rounded-lg border border-stone-800 bg-stone-950/40 p-3">
+              <span className="mb-1.5 block text-stone-400">Bring in prep</span>
+              <ContentImportPicker
+                selection={contentImport}
+                onChange={setContentImport}
+              />
+            </div>
+
+            <div className={cn(!aiNarrates && "hidden")}>
               <span className="mb-1.5 block text-stone-400">AI allies</span>
               <select
                 value={companions}

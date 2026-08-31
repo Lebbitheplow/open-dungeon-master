@@ -66,20 +66,145 @@ function noiseField(
   };
 }
 
+// The dials a person gets over the classifier. Each is 0 to 1 with 0.5
+// meaning "leave it alone": at the defaults every threshold below evaluates
+// to the constant it was before this layer existed, so an existing campaign
+// rerolling its map gets the same kind of world it always did.
+//
+// This is the parameter layer the plan asks for, and it is also why free
+// text can steer the overworld at all: the terrain is value noise, so a
+// description cannot become tiles directly, but it can become five numbers
+// (src/lib/overworld/describe.ts).
+export type OverworldParams = {
+  // Higher drowns more of the map.
+  seaLevel: number;
+  // Higher raises more peaks, and with them the hills that skirt them.
+  mountains: number;
+  // Higher turns more damp ground to woodland.
+  forests: number;
+  // Higher dries the world out: fewer forests, fewer swamps, more plains.
+  aridity: number;
+  // Higher pulls the shoreline further in from the edge.
+  coastline: number;
+};
+
+export const DEFAULT_OVERWORLD_PARAMS: OverworldParams = {
+  seaLevel: 0.5,
+  mountains: 0.5,
+  forests: 0.5,
+  aridity: 0.5,
+  coastline: 0.5,
+};
+
+export const OVERWORLD_PARAM_LABELS: Record<keyof OverworldParams, string> = {
+  seaLevel: "Sea level",
+  mountains: "Mountains",
+  forests: "Forests",
+  aridity: "Aridity",
+  coastline: "Coastline",
+};
+
+function dial(value: unknown, fallback: number): number {
+  const number = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(number)) {
+    return fallback;
+  }
+  return Math.min(1, Math.max(0, number));
+}
+
+// Anything at all in, a usable parameter set out. Called at both boundaries
+// (the PATCH body and the model's answer), because neither can be trusted to
+// send five numbers in range.
+export function normalizeOverworldParams(raw: unknown): OverworldParams {
+  const source = (raw ?? {}) as Partial<Record<keyof OverworldParams, unknown>>;
+  return {
+    seaLevel: dial(source.seaLevel, DEFAULT_OVERWORLD_PARAMS.seaLevel),
+    mountains: dial(source.mountains, DEFAULT_OVERWORLD_PARAMS.mountains),
+    forests: dial(source.forests, DEFAULT_OVERWORLD_PARAMS.forests),
+    aridity: dial(source.aridity, DEFAULT_OVERWORLD_PARAMS.aridity),
+    coastline: dial(source.coastline, DEFAULT_OVERWORLD_PARAMS.coastline),
+  };
+}
+
+// A described region, once a model has turned the sentence into dials. The
+// places are names only: the terrain decides where they land, because the
+// anchor placer already knows what ground a settlement can sit on.
+export type OverworldPlan = {
+  params: OverworldParams;
+  places: Array<{ name: string; blurb: string }>;
+  note: string;
+};
+
+// Reads the model's answer. Tolerant of code fences and of prose either
+// side of the object, and strict about the shape: anything missing falls
+// back to the default dial rather than to a guess.
+export function parseOverworldPlan(text: string): OverworldPlan | null {
+  const cleaned = String(text ?? "")
+    .replace(/```[a-z]*\n?/gi, "")
+    .replace(/```/g, "");
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if (start < 0 || end <= start) {
+    return null;
+  }
+  let raw: unknown;
+  try {
+    raw = JSON.parse(cleaned.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const source = raw as { params?: unknown; places?: unknown; note?: unknown };
+  const places = Array.isArray(source.places)
+    ? source.places
+        .map((entry) => {
+          if (typeof entry === "string") {
+            return { name: entry.trim().slice(0, 80), blurb: "" };
+          }
+          const row = entry as { name?: unknown; blurb?: unknown };
+          return {
+            name: String(row?.name ?? "").trim().slice(0, 80),
+            blurb: String(row?.blurb ?? "").trim().slice(0, 300),
+          };
+        })
+        .filter((place) => place.name)
+        .slice(0, 8)
+    : [];
+  return {
+    params: normalizeOverworldParams(source.params ?? raw),
+    places,
+    note: String(source.note ?? "").trim().slice(0, 200),
+  };
+}
+
 // Height + moisture, two octaves each, classified into tiles. Deterministic
-// under the seed. Edges shade toward water so the region reads as bounded.
+// under the seed and the parameters. Edges shade toward water so the region
+// reads as bounded.
 export function generateOverworldTerrain(
   seed: number,
   width = OVERWORLD_WIDTH,
   height = OVERWORLD_HEIGHT,
+  params: OverworldParams = DEFAULT_OVERWORLD_PARAMS,
 ): string {
   const elevation1 = noiseField(seed, width, height, 12);
   const elevation2 = noiseField(seed ^ 0x9e3779b9, width, height, 5);
   const moisture1 = noiseField(seed ^ 0x51ed270b, width, height, 10);
   const moisture2 = noiseField(seed ^ 0x2545f491, width, height, 4);
+  // Every threshold is written so the default 0.5 reproduces the constant it
+  // replaced: 0.34 water, 0.8 mountain, 0.66 hill, 0.66 swamp, 0.52 forest.
+  const water = 0.14 + params.seaLevel * 0.4;
+  const mountain = 0.9 - params.mountains * 0.2;
+  const hill = mountain - 0.14;
+  const swampMoisture = 0.66 + (params.aridity - 0.5) * 0.3;
+  const forestMoisture = 0.52 + (0.5 - params.forests) * 0.3 + (params.aridity - 0.5) * 0.3;
   // Coastal rim scales with the map so bigger worlds keep proportional
   // shorelines instead of a thin border strip.
-  const rim = Math.max(4, Math.floor(Math.min(width, height) / 9));
+  const rim = Math.max(
+    2,
+    Math.round((Math.min(width, height) / 9) * (0.5 + params.coastline)),
+  );
   const tiles: string[] = [];
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
@@ -91,15 +216,15 @@ export function generateOverworldTerrain(
         e *= 0.55 + (0.45 / rim) * edge;
       }
       let tile: OverworldTile;
-      if (e < 0.34) {
+      if (e < water) {
         tile = "w";
-      } else if (e > 0.8) {
+      } else if (e > mountain) {
         tile = "m";
-      } else if (e > 0.66) {
+      } else if (e > hill) {
         tile = "h";
-      } else if (m > 0.66 && e < 0.46) {
+      } else if (m > swampMoisture && e < water + 0.12) {
         tile = "s";
-      } else if (m > 0.52) {
+      } else if (m > forestMoisture) {
         tile = "f";
       } else {
         tile = "p";

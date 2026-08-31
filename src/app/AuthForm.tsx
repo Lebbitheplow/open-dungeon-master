@@ -119,6 +119,19 @@ export default function AuthForm({ onAuthed }: { onAuthed: (user: SessionUser) =
           {busy ? <Loader2 className="size-4 animate-spin" /> : null}
           {mode === "login" ? "Log in" : "Create account"}
         </button>
+        {mode === "register" ? (
+          <p className="text-xs leading-5 text-stone-500">
+            Creating an account means you accept this server&apos;s{" "}
+            <a href="/terms" className="text-stone-400 underline hover:text-stone-200">
+              terms of service
+            </a>{" "}
+            and{" "}
+            <a href="/privacy" className="text-stone-400 underline hover:text-stone-200">
+              privacy policy
+            </a>
+            .
+          </p>
+        ) : null}
       </form>
 
       {discordEnabled ? (

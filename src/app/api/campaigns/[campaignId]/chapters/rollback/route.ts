@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isErrorResponse, requireLead } from "@/lib/campaign-api";
+import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { computeRollbackScope, performRollback, warningsForRollback } from "@/lib/dm/rollback";
 
 export const runtime = "nodejs";
@@ -18,7 +18,7 @@ export async function POST(
   { params }: { params: Promise<{ campaignId: string }> },
 ) {
   const { campaignId } = await params;
-  const context = await requireLead(campaignId);
+  const context = await requireStoryAuthority(campaignId);
   if (isErrorResponse(context)) {
     return context;
   }

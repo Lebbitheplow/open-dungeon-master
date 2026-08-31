@@ -35,11 +35,11 @@ const EMPTY: ArmState = { armed: false, oneShot: null, absoluteCommand: "" };
 // only sends the wording to the lead and everyone else gets the light alone.
 export function DirectorArmedBanner({
   campaignId,
-  isLead,
+  steersStory,
   armed,
 }: {
   campaignId: string;
-  isLead: boolean;
+  steersStory: boolean;
   // Pushed by the campaign stream so every client stays in sync; undefined
   // until the first event, which is why we also fetch once on mount.
   armed?: ArmState | null;
@@ -95,7 +95,7 @@ export function DirectorArmedBanner({
           ? `Direction armed: "${state.absoluteCommand}"`
           : `${state.oneShot ? oneShotLabel(state.oneShot) : "Event"} armed for the next turn`}
       </span>
-      {isLead ? (
+      {steersStory ? (
         <button
           type="button"
           disabled={busy}

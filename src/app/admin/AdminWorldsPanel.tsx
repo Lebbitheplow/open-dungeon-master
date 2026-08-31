@@ -168,6 +168,11 @@ export function AdminWorldsPanel() {
   }
 
   const installedIds = new Map(state.installed.map((pack) => [pack.id, pack]));
+  const registryById = new Map(state.packs.map((entry) => [entry.id, entry]));
+  // An installed pack lives in the "Installed" section below (with its own
+  // update control), so keep it out of the download list rather than showing a
+  // second, redundant tile for it here.
+  const available = state.packs.filter((entry) => !installedIds.has(entry.id));
 
   return (
     <div className="space-y-6 text-sm">
@@ -278,50 +283,45 @@ export function AdminWorldsPanel() {
           <p className="rounded-md border border-stone-800 p-3 text-xs text-stone-500">
             That registry lists no campaigns.
           </p>
+        ) : !available.length ? (
+          <p className="rounded-md border border-stone-800 p-3 text-xs text-stone-500">
+            Everything this registry offers is already installed.
+          </p>
         ) : (
           <ul className="space-y-2">
-            {state.packs.map((entry) => {
-              const installed = installedIds.get(entry.id);
-              const outdated = installed && installed.version !== entry.version;
-              return (
-                <li key={entry.id} className="rounded-lg border border-stone-800 p-3">
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <span className="text-stone-100">{entry.name}</span>
-                    <span className="text-[11px] text-stone-500">
-                      v{entry.version}
-                      {entry.author ? ` · ${entry.author}` : ""}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-stone-400">{entry.blurb}</p>
-                  <UnofficialPackNotice
-                    rightsHolder={entry.rightsHolder}
-                    inspiredBy={entry.inspiredBy}
-                    variant="inline"
-                    className="mt-1"
-                  />
-                  <div className="mt-2 flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => install({ packId: entry.id }, entry.id)}
-                      disabled={busyId === entry.id || (Boolean(installed) && !outdated)}
-                      className={cn(ui.btnSmall, "text-xs")}
-                    >
-                      {busyId === entry.id ? (
-                        <Loader2 className="size-3.5 animate-spin" />
-                      ) : (
-                        <Download className="size-3.5" />
-                      )}
-                      {!installed ? "Install" : outdated ? `Update to v${entry.version}` : "Installed"}
-                    </button>
-                    {outdated ? (
-                      <span className="text-[11px] text-stone-500">
-                        v{installed?.version} is installed
-                      </span>
-                    ) : null}
-                  </div>
-                </li>
-              );
-            })}
+            {available.map((entry) => (
+              <li key={entry.id} className="rounded-lg border border-stone-800 p-3">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="text-stone-100">{entry.name}</span>
+                  <span className="text-[11px] text-stone-500">
+                    v{entry.version}
+                    {entry.author ? ` · ${entry.author}` : ""}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-stone-400">{entry.blurb}</p>
+                <UnofficialPackNotice
+                  rightsHolder={entry.rightsHolder}
+                  inspiredBy={entry.inspiredBy}
+                  variant="inline"
+                  className="mt-1"
+                />
+                <div className="mt-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => install({ packId: entry.id }, entry.id)}
+                    disabled={busyId === entry.id}
+                    className={cn(ui.btnSmall, "text-xs")}
+                  >
+                    {busyId === entry.id ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Download className="size-3.5" />
+                    )}
+                    Install
+                  </button>
+                </div>
+              </li>
+            ))}
           </ul>
         )}
       </section>
@@ -336,44 +336,65 @@ export function AdminWorldsPanel() {
           </p>
         ) : (
           <ul className="space-y-2">
-            {state.installed.map((pack) => (
-              <li key={pack.id} className="rounded-lg border border-stone-800 p-3">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <span className="text-stone-100">{pack.name}</span>
-                  <span className="text-[11px] text-stone-500">
-                    v{pack.version}
-                    {pack.author ? ` · ${pack.author}` : ""}
-                    {pack.source === "bundled" ? " · bundled" : ""}
-                  </span>
-                </div>
-                <p className="mt-1 text-xs text-stone-400">{pack.blurb}</p>
-                <UnofficialPackNotice
-                  rightsHolder={pack.rightsHolder}
-                  inspiredBy={pack.inspiredBy}
-                  variant="inline"
-                  className="mt-1"
-                />
-                {pack.source === "installed" ? (
-                  <button
-                    type="button"
-                    onClick={() => remove(pack)}
-                    disabled={busyId === pack.id}
-                    className={cn(ui.btnSmall, "mt-2 text-xs")}
-                  >
-                    {busyId === pack.id ? (
-                      <Loader2 className="size-3.5 animate-spin" />
-                    ) : (
-                      <Trash2 className="size-3.5" />
+            {state.installed.map((pack) => {
+              const update = registryById.get(pack.id);
+              const outdated = Boolean(update && update.version !== pack.version);
+              return (
+                <li key={pack.id} className="rounded-lg border border-stone-800 p-3">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <span className="text-stone-100">{pack.name}</span>
+                    <span className="text-[11px] text-stone-500">
+                      v{pack.version}
+                      {pack.author ? ` · ${pack.author}` : ""}
+                      {pack.source === "bundled" ? " · bundled" : ""}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-stone-400">{pack.blurb}</p>
+                  <UnofficialPackNotice
+                    rightsHolder={pack.rightsHolder}
+                    inspiredBy={pack.inspiredBy}
+                    variant="inline"
+                    className="mt-1"
+                  />
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    {outdated ? (
+                      <button
+                        type="button"
+                        onClick={() => install({ packId: pack.id }, pack.id)}
+                        disabled={busyId === pack.id}
+                        className={cn(ui.btnSmall, "text-xs")}
+                      >
+                        {busyId === pack.id ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <Download className="size-3.5" />
+                        )}
+                        Update to v{update?.version}
+                      </button>
+                    ) : null}
+                    {pack.source === "installed" ? (
+                      <button
+                        type="button"
+                        onClick={() => remove(pack)}
+                        disabled={busyId === pack.id}
+                        className={cn(ui.btnSmall, "text-xs")}
+                      >
+                        {busyId === pack.id ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="size-3.5" />
+                        )}
+                        Remove
+                      </button>
+                    ) : outdated ? null : (
+                      <p className="text-[11px] text-stone-600">
+                        Ships with the app and cannot be removed.
+                      </p>
                     )}
-                    Remove
-                  </button>
-                ) : (
-                  <p className="mt-2 text-[11px] text-stone-600">
-                    Ships with the app and cannot be removed.
-                  </p>
-                )}
-              </li>
-            ))}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

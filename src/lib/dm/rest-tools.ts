@@ -21,6 +21,8 @@ import {
 import { resolveSheetRef } from "@/lib/dm/rolls";
 import { normalizeRestKind } from "@/lib/dm/arg-coerce";
 import { tickWorldTimeskip } from "@/lib/dm/world-tick";
+import { advanceClock } from "@/lib/db/clock";
+import { describeDuration, describeInstant, restMinutes } from "@/lib/dm/calendar";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
 
 // The rest engine: short rests spend hit dice with real server rolls, long
@@ -162,6 +164,22 @@ export function handleTakeRest(
   }
   const reason = (args.reason ?? `${args.kind} rest`).slice(0, 200);
 
+  // A rest takes in-world time, and how much depends on the variant: eight
+  // hours and one under the standard rules, a night and a week under gritty
+  // realism, five minutes and an hour under the heroic option. Those two
+  // settings existed only as a line in the prompt until there was a clock to
+  // count against (src/lib/dm/calendar.ts).
+  const restedMinutes = restMinutes(
+    args.kind,
+    campaign.gameSettings.variantRules.restVariant,
+  );
+  const clockAfter = advanceClock(campaign.id, restedMinutes, "minutes");
+  const restedFor = describeDuration(restedMinutes);
+  const nowReads =
+    "error" in clockAfter
+      ? ""
+      : describeInstant(clockAfter.clock.calendar, clockAfter.clock.instant);
+
   if (args.kind === "long") {
     const rested: string[] = [];
     const skipped: string[] = [];
@@ -177,7 +195,10 @@ export function handleTakeRest(
       auditRest(campaign, turnId, sheet, "rest_long", longRestPatch(sheet), reason);
       rested.push(sheet.name);
     }
-    tableNote(campaign, "The party takes a long rest.");
+    tableNote(
+      campaign,
+      `The party takes a long rest (${restedFor})${nowReads ? `. It is now ${nowReads}` : ""}.`,
+    );
     // A night passing is a timeskip: the off-screen world moves too (world
     // arcs, NPC goals), with results landing as DM-only facts and sparks.
     tickWorldTimeskip(campaign.id, 3);
@@ -186,7 +207,9 @@ export function handleTakeRest(
       kind: "long",
       rested,
       ...(skipped.length ? { unaffected: `${skipped.join(", ")} (dead)` } : {}),
-      note: "HP and spell slots are fully restored and half the hit dice returned. Narrate the night passing.",
+      restedFor,
+      ...(nowReads ? { now: nowReads } : {}),
+      note: `HP and spell slots are fully restored and half the hit dice returned. ${restedFor} passed. Narrate it.`,
     };
   }
 
@@ -292,10 +315,15 @@ export function handleTakeRest(
   // a short rest, once per day, spending the tracked use.
   const recovered = applySlotRecovery(campaign, turnId, sheets, reason);
 
-  tableNote(campaign, "The party takes a short rest.");
+  tableNote(
+    campaign,
+    `The party takes a short rest (${restedFor})${nowReads ? `. It is now ${nowReads}` : ""}.`,
+  );
   return {
     ok: true,
     kind: "short",
+    restedFor,
+    ...(nowReads ? { now: nowReads } : {}),
     results: results.length ? results : "Nobody needed to spend hit dice.",
     ...(refilled.length ? { resourcesRefilled: refilled } : {}),
     ...(songDie

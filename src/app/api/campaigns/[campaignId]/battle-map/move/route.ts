@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { isErrorResponse, requireMember } from "@/lib/campaign-api";
 import { getFloor } from "@/lib/db/campaigns";
-import { getActiveEncounter } from "@/lib/db/encounters";
+import { getActiveBoard } from "@/lib/db/encounters";
 import { getSheetForUser } from "@/lib/db/sheets";
 import {
   getBattleMapForEncounter,
@@ -42,11 +42,14 @@ export async function POST(
   }
   const { user } = context;
 
-  const encounter = getActiveEncounter(campaignId);
+  // The board, which is a fight or an exploration scene. Every combat rule
+  // below is written against a fight and is skipped on a scene.
+  const encounter = getActiveBoard(campaignId);
   const map = encounter ? getBattleMapForEncounter(encounter.id) : null;
   if (!encounter || !map) {
     return Response.json({ error: "No active battle map." }, { status: 404 });
   }
+  const campaign = getCampaignById(campaignId);
   const sheet = getSheetForUser(campaignId, user.id);
   const token = sheet ? getTokenByRef(map.id, sheet.id) : null;
   if (!sheet || !token) {
@@ -80,7 +83,9 @@ export async function POST(
   // and 5+ zeroes it. speedFor applies the class bonuses with their armor
   // gates and the heavy-armor Strength penalty, and the Dash action doubles
   // whatever is left. The server refuses impossible moves.
-  const base = speedFor(sheet);
+  const base = speedFor(sheet, {
+    encumbrance: campaign?.gameSettings.variantRules.encumbrance ?? false,
+  });
   const speed = exhaustionSpeed(sheet.exhaustion ?? 0, effectiveSpeed(sheet.conditions, base));
   if (speed <= 0) {
     const cause =
@@ -91,11 +96,17 @@ export async function POST(
       { status: 409 },
     );
   }
-  const turnState = budgetApplies(encounter.turnBudget, sheet.id, encounter.round)
-    ? encounter.turnBudget
-    : null;
+  const scene = encounter.kind === "scene";
+  const turnState =
+    !scene && budgetApplies(encounter.turnBudget, sheet.id, encounter.round)
+      ? encounter.turnBudget
+      : null;
   const dashed = turnState?.dashed ?? false;
-  const budget = Math.max(0, speedToTiles(speed) * (dashed ? 2 : 1) - token.movedThisRound);
+  // A scene has no rounds, so there is no per-round budget to spend: the
+  // party walks the board while the DM describes it.
+  const budget = scene
+    ? map.width * map.height
+    : Math.max(0, speedToTiles(speed) * (dashed ? 2 : 1) - token.movedThisRound);
   const occupied = occupiedTiles(map, listTokens(map.id), token);
   const reach = reachableTiles(map.terrain, map.width, map.height, occupied, token, budget);
   const cost = reach.get(tileIndex(map.width, x, y));
@@ -104,15 +115,15 @@ export async function POST(
   }
 
   const from = { x: token.x, y: token.y };
-  moveToken(token.id, x, y, token.movedThisRound + cost);
+  moveToken(token.id, x, y, scene ? 0 : token.movedThisRound + cost);
   publishBattleMapUpdate(campaignId);
 
   // Walking out of an enemy's reach is not free. Disengage suppresses it;
   // the budget carries that decision from the take_action tool.
-  const campaign = getCampaignById(campaignId);
-  const opportunity = campaign
-    ? resolveOpportunityAttacks(campaign, sheet.id, from, { x, y }, turnState?.disengaged ?? false)
-    : { notes: [], downed: false };
+  const opportunity =
+    campaign && !scene
+      ? resolveOpportunityAttacks(campaign, sheet.id, from, { x, y }, turnState?.disengaged ?? false)
+      : { notes: [], downed: false };
 
   // Fresh self view in the response saves the mover a follow-up fetch.
   return Response.json({

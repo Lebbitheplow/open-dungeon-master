@@ -193,7 +193,9 @@ export function handleGroupCheck(
       skill: args.skill,
       ability: args.ability,
     } as unknown as RollArgs;
-    const resolved = resolveRollExpression(rollArgs, sheet);
+    const resolved = resolveRollExpression(rollArgs, sheet, {
+      encumbrance: campaign.gameSettings.variantRules.encumbrance,
+    });
     if ("error" in resolved || "autoFail" in resolved) {
       // An auto-fail (paralysis) or an unresolvable skill counts as a failed
       // participant rather than aborting the whole group's attempt.

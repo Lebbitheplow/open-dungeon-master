@@ -16,6 +16,7 @@ import {
   saveEncounter,
   type Encounter,
   type EncounterEnemy,
+  orderEntryId,
   type OrderEntry,
 } from "@/lib/db/encounters";
 import { getSheetById, listSheets } from "@/lib/db/sheets";
@@ -40,6 +41,7 @@ import {
   pickEnemyTarget,
 } from "@/lib/dm/encounter-logic";
 import { applyDmMutation } from "@/lib/dm/mutations";
+import { followCombatAmbience } from "@/lib/dm/ambience-tools";
 import {
   approachForAttack,
   createBattleMapForEncounter,
@@ -62,6 +64,8 @@ import {
 import { handlePcAttack, pcAttackTool } from "@/lib/dm/pc-attack";
 import { isCompanionUserId } from "@/lib/db/users";
 import { wakeDm } from "@/lib/dm/wake";
+import { effectOutcome } from "@/lib/dm/effect-tools";
+import { applyField } from "@/lib/dm/effects-logic";
 import { resolveSheetRef } from "@/lib/dm/rolls";
 import { normalizeAdvantage } from "@/lib/dm/arg-coerce";
 import {
@@ -336,7 +340,7 @@ function handleStartEncounter(
   }
 
   // Resolve every requested enemy before creating anything.
-  const outcome = resolveEnemyRequests(campaign.gameSettings, args.enemies);
+  const outcome = resolveEnemyRequests(campaign.gameSettings, args.enemies, campaign.ownerUserId);
   if ("unknownMonster" in outcome) {
     return {
       error: `Unknown monster "${outcome.unknownMonster}". Use a real monster slug or name, or pass cr for an invented enemy. Good picks for this world: ${suggestionLines(campaign, sheets)}.`,
@@ -387,6 +391,15 @@ function handleStartEncounter(
   createBattleMapForEncounter(campaign, encounter, enemies, sheets, args.battlefield);
   publishEncounter(campaign.id);
 
+  // Initiative is starting: the room's music changes, and the harder the
+  // fight reads the bigger the music. The bed is left alone, because the
+  // cave they are fighting in is still a cave.
+  followCombatAmbience(
+    campaign,
+    true,
+    evaluation.verdict === "deadly" || evaluation.verdict === "beyond_deadly",
+  );
+
   const rollList = sheets
     .map((sheet) => `${sheet.name} (characterId=${sheet.id})`)
     .join(", ");
@@ -424,10 +437,15 @@ function entryAlive(entry: OrderEntry, enemiesById: Map<string, EncounterEnemy>)
     const sheet = getSheetById(entry.characterId);
     return (sheet?.currentHp ?? 0) > 0 && !isIncapacitated(sheet?.conditions ?? []);
   }
-  return enemiesById.get(entry.enemyId)?.status === "alive";
+  if (entry.kind === "enemy") {
+    return enemiesById.get(entry.enemyId)?.status === "alive";
+  }
+  // A DM's own NPC slot has no stat block to be dead in. It stays in the
+  // order until the DM takes it out (src/lib/dm/initiative-edit.ts).
+  return true;
 }
 
-const entryId = (entry: OrderEntry) => (entry.kind === "pc" ? entry.characterId : entry.enemyId);
+const entryId = orderEntryId;
 
 // A combatant the pointer should stop on: alive, and not surprised. Surprise
 // costs exactly the first turn, and surprisedIds is emptied when round 1
@@ -440,7 +458,29 @@ function entryActs(
   return entryAlive(entry, enemiesById) && !surprisedIds.includes(entryId(entry));
 }
 
-function setInitiativeFloor(campaign: Campaign | null, encounter: Encounter) {
+// A character's Armor Class with every active effect folded in
+// (src/lib/dm/effects-logic.ts). Every attack resolution asks this rather
+// than effectiveAcFor directly, so a Shield of Faith and a curse both land on
+// the same number instead of on whichever call site remembered them.
+export function acWithEffects(campaignId: string, sheet: CharacterSheet): number {
+  return applyField(
+    effectiveAcFor(sheet),
+    effectOutcome(campaignId, { kind: "character", id: sheet.id }, "ac"),
+  );
+}
+
+// The same for an enemy, whose base AC is a column rather than a derivation.
+export function enemyAcWithEffects(campaignId: string, enemy: EncounterEnemy): number {
+  return applyField(
+    enemy.ac,
+    effectOutcome(campaignId, { kind: "enemy", id: enemy.id }, "ac"),
+  );
+}
+
+// Exported for src/lib/dm/initiative.ts: a DM editing the order moves the
+// pointer without going through advancePointer, and the floor has to follow
+// it or the banner and the permission check disagree about whose turn it is.
+export function setInitiativeFloor(campaign: Campaign | null, encounter: Encounter) {
   if (!campaign) {
     return;
   }
@@ -767,7 +807,9 @@ function handleEnemyAttack(
     turn.rollIds.push(hitRoll.id);
 
     const natCrit = hitOutcome.crit === "nat20";
-    const hit = hitOutcome.crit !== "nat1" && (natCrit || hitOutcome.total >= effectiveAcFor(target));
+    const hit =
+      hitOutcome.crit !== "nat1" &&
+      (natCrit || hitOutcome.total >= acWithEffects(campaign.id, target));
     const crit = natCrit || (hit && conditionContext.autoCrit);
     if (!hit) {
       swings.push({
@@ -778,7 +820,12 @@ function handleEnemyAttack(
       continue;
     }
 
-    const damageExpression = crit ? critDamageExpression(attack.damage) : attack.damage;
+    const damageExpression = crit
+      ? critDamageExpression(attack.damage, 0, {
+          powerfulCritical: campaign.gameSettings.variantRules.powerfulCritical,
+          multiplyNumeric: campaign.gameSettings.variantRules.criticalDamageMods,
+        })
+      : attack.damage;
     const damageOutcome = rollExpression(damageExpression);
     const damageRoll = insertRoll({
       campaignId: campaign.id,
@@ -834,7 +881,7 @@ function handleEnemyAttack(
 
   return {
     attack: attack.name,
-    vsAc: effectiveAcFor(target),
+    vsAc: acWithEffects(campaign.id, target),
     target: target.name,
     ...(totalSwings > 1 ? { multiattack: `${totalSwings} attacks` } : {}),
     swings,
@@ -1120,7 +1167,7 @@ function autoActSkippedEnemies(
         const token = map ? getTokenByRef(map.id, sheet.id) : null;
         return {
           characterId: sheet.id,
-          ac: effectiveAcFor(sheet),
+          ac: acWithEffects(campaign.id, sheet),
           position: token ? { x: token.x, y: token.y } : null,
         };
       }),

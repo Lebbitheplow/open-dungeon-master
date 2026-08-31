@@ -1,6 +1,11 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import type { AmbientLight, BattleToken, MapLight, TokenKind, XY } from "@/lib/battlemap/types";
 import type { MapTheme } from "@/lib/battlemap/generate";
+import {
+  normalizeBackdrop,
+  type Backdrop,
+  type BackdropTransform,
+} from "@/lib/battlemap/backdrop";
 
 // Persistence for tactical battle maps. One map per encounter; the active
 // map is always found through the active encounter, so ended encounters
@@ -19,6 +24,9 @@ export type BattleMap = {
   lights: MapLight[];
   seed: number;
   roundMarker: number;
+  // Cosmetic art under the grid, or null. Nothing that decides a rule reads
+  // it (src/lib/battlemap/backdrop.ts).
+  backdrop: Backdrop | null;
 };
 
 type MapRow = {
@@ -33,6 +41,8 @@ type MapRow = {
   lights_json: string;
   seed: number;
   round_marker: number;
+  backdrop_path: string | null;
+  backdrop_transform_json: string | null;
 };
 
 type TokenRow = {
@@ -44,7 +54,12 @@ type TokenRow = {
   y: number;
   moved_this_round: number;
   light_radius: number;
+  hidden: number;
 };
+
+// Every token read selects the same columns, in one place, so adding one
+// cannot leave a projection quietly missing it.
+const TOKEN_COLUMNS = `id, kind, ref_id, name, x, y, moved_this_round, light_radius, hidden`;
 
 function mapRow(row: MapRow): BattleMap {
   return {
@@ -59,6 +74,12 @@ function mapRow(row: MapRow): BattleMap {
     lights: parseJson<MapLight[]>(row.lights_json, []),
     seed: row.seed,
     roundMarker: row.round_marker,
+    // Refused rather than trusted: a path that is not one this app wrote is
+    // read back as no backdrop at all.
+    backdrop: normalizeBackdrop(
+      row.backdrop_path ?? "",
+      parseJson<unknown>(row.backdrop_transform_json ?? "{}", {}),
+    ),
   };
 }
 
@@ -72,6 +93,7 @@ function mapToken(row: TokenRow): BattleToken {
     y: row.y,
     movedThisRound: row.moved_this_round,
     lightRadius: row.light_radius,
+    hidden: row.hidden === 1,
   };
 }
 
@@ -85,13 +107,17 @@ export function createBattleMap(input: {
   theme: MapTheme;
   lights: MapLight[];
   seed: number;
+  // Carried over when a prepared map is deployed, so the art that was drawn
+  // with the walls arrives with them (src/lib/db/prepared-maps.ts).
+  backdrop?: Backdrop | null;
 }): BattleMap {
   const id = crypto.randomUUID();
   const now = nowIso();
+  const backdrop = normalizeBackdrop(input.backdrop?.path ?? "", input.backdrop?.transform);
   getDatabase()
     .prepare(
-      `INSERT INTO battle_maps (id, encounter_id, campaign_id, width, height, terrain, ambient, theme, lights_json, seed, round_marker, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+      `INSERT INTO battle_maps (id, encounter_id, campaign_id, width, height, terrain, ambient, theme, lights_json, seed, round_marker, backdrop_path, backdrop_transform_json, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -104,6 +130,8 @@ export function createBattleMap(input: {
       input.theme,
       JSON.stringify(input.lights),
       input.seed,
+      backdrop?.path ?? "",
+      JSON.stringify(backdrop?.transform ?? {}),
       now,
       now,
     );
@@ -124,6 +152,74 @@ export function getBattleMapForEncounter(encounterId: string): BattleMap | null 
   return row ? mapRow(row) : null;
 }
 
+// Replaces the ground under an existing map, keeping its id so tokens, fog
+// rows and the encounter link all survive. The caller is responsible for
+// standing anyone who was on a tile that is now a wall somewhere legal
+// (src/lib/dm/map-studio.ts) before anybody reads the board again.
+export function replaceBattleMapTerrain(
+  mapId: string,
+  input: {
+    width: number;
+    height: number;
+    terrain: string;
+    ambient: AmbientLight;
+    theme: MapTheme;
+    lights: MapLight[];
+    seed: number;
+  },
+) {
+  getDatabase()
+    .prepare(
+      `UPDATE battle_maps SET width = ?, height = ?, terrain = ?, ambient = ?, theme = ?,
+         lights_json = ?, seed = ?, updated_at = ? WHERE id = ?`,
+    )
+    .run(
+      input.width,
+      input.height,
+      input.terrain,
+      input.ambient,
+      input.theme,
+      JSON.stringify(input.lights),
+      input.seed,
+      nowIso(),
+      mapId,
+    );
+}
+
+// The picture under the grid. Passing an empty path takes it away, which is
+// the only way to clear one: a backdrop nobody can see is worse than none.
+export function setBattleMapBackdrop(
+  mapId: string,
+  path: string,
+  transform: BackdropTransform | null,
+) {
+  const backdrop = normalizeBackdrop(path, transform);
+  getDatabase()
+    .prepare(
+      `UPDATE battle_maps SET backdrop_path = ?, backdrop_transform_json = ?, updated_at = ? WHERE id = ?`,
+    )
+    .run(
+      backdrop?.path ?? "",
+      JSON.stringify(backdrop?.transform ?? {}),
+      nowIso(),
+      mapId,
+    );
+}
+
+// Terrain only: a painted stroke changes the ground and nothing else.
+export function setBattleMapTerrain(mapId: string, terrain: string) {
+  getDatabase()
+    .prepare(`UPDATE battle_maps SET terrain = ?, updated_at = ? WHERE id = ?`)
+    .run(terrain, nowIso(), mapId);
+}
+
+// Fog memory is a memory of a map that no longer exists once the ground is
+// replaced, so it goes with it rather than leaving characters remembering
+// walls that were never there.
+export function clearExplored(mapId: string) {
+  getDatabase().prepare(`DELETE FROM battle_explored WHERE map_id = ?`).run(mapId);
+}
+
 export function insertToken(input: {
   mapId: string;
   campaignId: string;
@@ -133,23 +229,35 @@ export function insertToken(input: {
   x: number;
   y: number;
   lightRadius?: number;
+  hidden?: boolean;
 }): BattleToken {
   const id = crypto.randomUUID();
   getDatabase()
     .prepare(
-      `INSERT INTO battle_tokens (id, map_id, campaign_id, kind, ref_id, name, x, y, moved_this_round, light_radius, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+      `INSERT INTO battle_tokens (id, map_id, campaign_id, kind, ref_id, name, x, y, moved_this_round, light_radius, hidden, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
        ON CONFLICT (map_id, ref_id) DO UPDATE SET x = excluded.x, y = excluded.y, updated_at = excluded.updated_at`,
     )
-    .run(id, input.mapId, input.campaignId, input.kind, input.refId, input.name, input.x, input.y, input.lightRadius ?? 0, nowIso());
+    .run(
+      id,
+      input.mapId,
+      input.campaignId,
+      input.kind,
+      input.refId,
+      input.name,
+      input.x,
+      input.y,
+      input.lightRadius ?? 0,
+      input.hidden ? 1 : 0,
+      nowIso(),
+    );
   return getTokenByRef(input.mapId, input.refId) as BattleToken;
 }
 
 export function listTokens(mapId: string): BattleToken[] {
   const rows = getDatabase()
     .prepare(
-      `SELECT id, kind, ref_id, name, x, y, moved_this_round, light_radius
-       FROM battle_tokens WHERE map_id = ? ORDER BY kind DESC, name ASC`,
+      `SELECT ${TOKEN_COLUMNS} FROM battle_tokens WHERE map_id = ? ORDER BY kind DESC, name ASC`,
     )
     .all(mapId) as TokenRow[];
   return rows.map(mapToken);
@@ -158,8 +266,7 @@ export function listTokens(mapId: string): BattleToken[] {
 export function getTokenByRef(mapId: string, refId: string): BattleToken | null {
   const row = getDatabase()
     .prepare(
-      `SELECT id, kind, ref_id, name, x, y, moved_this_round, light_radius
-       FROM battle_tokens WHERE map_id = ? AND ref_id = ?`,
+      `SELECT ${TOKEN_COLUMNS} FROM battle_tokens WHERE map_id = ? AND ref_id = ?`,
     )
     .get(mapId, refId) as TokenRow | undefined;
   return row ? mapToken(row) : null;
@@ -169,6 +276,44 @@ export function moveToken(tokenId: string, x: number, y: number, movedThisRound:
   getDatabase()
     .prepare(`UPDATE battle_tokens SET x = ?, y = ?, moved_this_round = ?, updated_at = ? WHERE id = ?`)
     .run(x, y, movedThisRound, nowIso(), tokenId);
+}
+
+export function getToken(tokenId: string): BattleToken | null {
+  const row = getDatabase()
+    .prepare(`SELECT ${TOKEN_COLUMNS} FROM battle_tokens WHERE id = ?`)
+    .get(tokenId) as TokenRow | undefined;
+  return row ? mapToken(row) : null;
+}
+
+// The DM picking a token up and putting it down. Deliberately not moveToken:
+// free placement never touches moved_this_round, because the round's budget
+// belongs to the combatant's own movement and a DM repositioning the board
+// is not the combatant walking. It also skips terrain and reach entirely;
+// the caller checks what it wants to check (src/lib/dm/board.ts).
+export function placeToken(tokenId: string, x: number, y: number) {
+  getDatabase()
+    .prepare(`UPDATE battle_tokens SET x = ?, y = ?, updated_at = ? WHERE id = ?`)
+    .run(x, y, nowIso(), tokenId);
+}
+
+export function setTokenHidden(tokenId: string, hidden: boolean) {
+  getDatabase()
+    .prepare(`UPDATE battle_tokens SET hidden = ?, updated_at = ? WHERE id = ?`)
+    .run(hidden ? 1 : 0, nowIso(), tokenId);
+}
+
+// Ref ids of every token the DM is keeping off the table. The initiative
+// tracker asks for these too, so one flag hides a combatant in both places
+// (src/lib/db/encounters.ts).
+export function listHiddenRefIds(mapId: string): string[] {
+  const rows = getDatabase()
+    .prepare(`SELECT ref_id FROM battle_tokens WHERE map_id = ? AND hidden = 1`)
+    .all(mapId) as Array<{ ref_id: string }>;
+  return rows.map((row) => row.ref_id);
+}
+
+export function deleteToken(tokenId: string) {
+  getDatabase().prepare(`DELETE FROM battle_tokens WHERE id = ?`).run(tokenId);
 }
 
 export function removeTokenByRef(mapId: string, refId: string) {

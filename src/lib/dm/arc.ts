@@ -4,6 +4,7 @@ import {
   setStoryArc,
 } from "@/lib/db/campaigns";
 import { listChapters } from "@/lib/db/chapters";
+import { narratorIsAi } from "@/lib/dm/viewer";
 import { listRecentMessages } from "@/lib/db/messages";
 import { listSheets } from "@/lib/db/sheets";
 import { presetFor, packWorldHints } from "@/lib/worlds/preset";
@@ -204,6 +205,13 @@ export async function generateStoryArc(
   try {
     const campaign = getCampaignById(campaignId);
     if (!campaign || (campaign.storyArc && !opts?.force)) {
+      return;
+    }
+    // A person is telling this story, so the secret spine is theirs to write.
+    // The arc table stays (the DM authors and edits it from the arc panel);
+    // what goes is the planner running by itself. `force` is the DM standing
+    // at the panel asking for a plan, which is a different thing entirely.
+    if (!narratorIsAi(campaign.gameSettings.dmMode) && !opts?.force) {
       return;
     }
     setDmStatus(campaignId, "plotting_arc");
@@ -689,6 +697,13 @@ export async function refreshStoryArc(
   try {
     const campaign = getCampaignById(campaignId);
     if (!campaign) {
+      return;
+    }
+    // Human-DM chapters close too (a beat or a typed narration gets them
+    // there), and this is the cascade that would otherwise quietly plan,
+    // enrich and rewrite an arc the DM never asked for. Their notes are not
+    // the model's to edit.
+    if (!narratorIsAi(campaign.gameSettings.dmMode)) {
       return;
     }
     if (!campaign.storyArc) {

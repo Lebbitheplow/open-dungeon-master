@@ -1,4 +1,4 @@
-import { isErrorResponse, requireLead } from "@/lib/campaign-api";
+import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { allocateSeq } from "@/lib/db/campaigns";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
@@ -16,7 +16,7 @@ export async function PATCH(
   { params }: { params: Promise<{ campaignId: string; sheetId: string }> },
 ) {
   const { campaignId, sheetId } = await params;
-  const context = await requireLead(campaignId);
+  const context = await requireStoryAuthority(campaignId);
   if (isErrorResponse(context)) {
     return context;
   }

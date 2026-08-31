@@ -9,6 +9,8 @@ import assert from "node:assert/strict";
 const {
   ENGINE_BOUNDARY_RULES,
   ENGINE_BOUNDARY_CHECK,
+  FAKE_ENCOUNTER_PROMPT,
+  announcesEncounterStart,
   buildCorrectionPrompt,
   checkNarration,
   collectExchanges,
@@ -546,6 +548,61 @@ test("a name too short or too common to attribute is skipped", () => {
   // Single and double letter enemy labels would match half the prose.
   const tiny = { name: "damage_enemy", args: {}, result: { ok: true, name: "It", hp: "4/9" } };
   assert.deepEqual(check("It dies quietly.", [tiny]), []);
+});
+
+test("a stat-block encounter announcement in prose is detected", () => {
+  assert.equal(
+    announcesEncounterStart(
+      "**Start Encounter: Corrupted Ward Construct (CR 1/4)** * **Enemies:** 1x Corrupted Ward Construct (Reskinned Zombie/Construct) * **Location:** The Lower Levels - Ward Chamber * **Surprise:** None",
+    ),
+    true,
+  );
+});
+
+test("an enemy roster with stat-block fields is detected without the header", () => {
+  assert.equal(
+    announcesEncounterStart("Enemies: 2x Gnoll (CR 1/2)\nSurprise: none\nThe pack circles in."),
+    true,
+  );
+});
+
+test("a bare call for initiative is detected", () => {
+  assert.equal(announcesEncounterStart("Steel clears leather. Roll initiative!"), true);
+  assert.equal(announcesEncounterStart("Everyone, roll for initiative."), true);
+});
+
+test("ordinary talk of enemies and fighting does not fire", () => {
+  assert.equal(
+    announcesEncounterStart("The enemies you seek are camped beyond the ridge, two days out."),
+    false,
+  );
+  assert.equal(
+    announcesEncounterStart("Kara readies her blade, watching the construct grind closer."),
+    false,
+  );
+  // Hedged: a fight that might happen has not been announced.
+  assert.equal(
+    announcesEncounterStart("If it comes to blows, you will roll initiative in the dark."),
+    false,
+  );
+  // Quoted speech: a character can shout it without the engine caring.
+  assert.equal(
+    announcesEncounterStart('"Roll initiative, dogs!" the pit boss screams to the crowd.'),
+    false,
+  );
+});
+
+test("a scouting report naming enemies without stat-block fields does not fire", () => {
+  assert.equal(
+    announcesEncounterStart("Enemies: the Baron, his seneschal, and whoever pays them."),
+    false,
+  );
+});
+
+test("the fake-encounter correction says what to call and what not to restate", () => {
+  assert.match(FAKE_ENCOUNTER_PROMPT, /start_encounter/);
+  assert.match(FAKE_ENCOUNTER_PROMPT, /no encounter exists/);
+  assert.match(FAKE_ENCOUNTER_PROMPT, /encounter panel/);
 });
 
 console.log(`engine boundary: ${passed} tests passed`);

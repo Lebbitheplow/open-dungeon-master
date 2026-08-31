@@ -103,7 +103,7 @@ export function AdminUsersPanel({ meId }: { meId: string }) {
             Temporary password for <span className="text-amber-200">{tempPassword.username}</span>.
             It is shown only once; they must change it at next login.
           </p>
-          <div className="mt-2 flex items-center gap-2">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             <code className="rounded-lg border border-stone-700 bg-stone-950/80 px-3 py-1.5 font-mono text-sm text-amber-100">
               {tempPassword.password}
             </code>
@@ -147,7 +147,7 @@ export function AdminUsersPanel({ meId }: { meId: string }) {
                 </div>
               )}
               <div className="min-w-0 flex-1">
-                <p className="flex items-center gap-2 text-sm text-stone-100">
+                <p className="flex flex-wrap items-center gap-2 text-sm text-stone-100">
                   {user.username}
                   {user.id === meId ? <span className="text-xs text-stone-500">(you)</span> : null}
                   {user.isAdmin ? (
@@ -171,7 +171,7 @@ export function AdminUsersPanel({ meId }: { meId: string }) {
                   {new Date(user.createdAt).toLocaleDateString()}
                 </p>
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex w-full flex-wrap items-center justify-end gap-1.5 sm:w-auto">
                 <button
                   type="button"
                   title={user.isAdmin ? "Remove admin" : "Make admin"}

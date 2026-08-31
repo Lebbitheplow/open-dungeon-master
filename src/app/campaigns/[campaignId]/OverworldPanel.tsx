@@ -1,62 +1,56 @@
 "use client";
 
-import { Loader2, MapPin, RefreshCw, X } from "lucide-react";
+import { Brush, Loader2, MapPin, Move, RefreshCw, Users, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
+import { skinForGenre, type OverworldTile } from "@/lib/overworld/logic";
 import {
-  skinForGenre,
-  tileJitter,
-  type OverworldTile,
-} from "@/lib/overworld/logic";
-
-type OverworldData = {
-  map: {
-    seed: number;
-    width: number;
-    height: number;
-    terrain: string;
-    pins: Array<{ id: string; x: number; y: number; label: string }>;
-  };
-  locations: Array<{
-    id: string;
-    name: string;
-    visited: boolean;
-    isCurrent: boolean;
-    connections: string[];
-    anchor: { x: number; y: number } | null;
-  }>;
-};
-
-const TILE = 16;
-
-// Shades a hex fill by a small factor (deterministic per tile).
-function shade(hex: string, factor: number): string {
-  const value = parseInt(hex.slice(1), 16);
-  const channel = (offset: number) => {
-    const raw = (value >> offset) & 0xff;
-    return Math.min(255, Math.max(0, Math.round(raw * (1 + factor))));
-  };
-  return `rgb(${channel(16)}, ${channel(8)}, ${channel(0)})`;
-}
+  MAX_BRUSH_RADIUS,
+  OVERWORLD_BRUSHES,
+  OVERWORLD_BRUSH_LABELS,
+  OVERWORLD_BRUSH_TILES,
+  type OverworldBrush,
+} from "@/lib/overworld/paint";
+import { OverworldAuthoring } from "@/app/campaigns/[campaignId]/OverworldAuthoring";
+import {
+  drawOverworld,
+  OVERWORLD_TILE as TILE,
+  type OverworldData,
+} from "@/app/campaigns/[campaignId]/overworldDraw";
 
 // The overworld region map: seeded terrain canvas, known locations as
 // anchors with routes from the connections graph, a pulsing party marker,
 // and lead-placed pins. Pan with drag, zoom with the wheel.
+//
+// Whoever steers the story also authors it: pins, the party marker, dragging
+// a place to where it belongs, renaming it, and the dials the terrain is
+// rolled under (OverworldAuthoring). Everything else is read-only.
+
+// What a click on the canvas means right now.
+type Mode = "look" | "pin" | "party" | "place" | "paint";
+
 export function OverworldPanel({
   campaignId,
   genre,
-  isLead,
+  steersStory,
 }: {
   campaignId: string;
   genre: string;
-  isLead: boolean;
+  steersStory: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState<OverworldData | null>(null);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState({ x: 0, y: 0, zoom: 1 });
-  const [pinMode, setPinMode] = useState(false);
+  const [mode, setMode] = useState<Mode>("look");
+  const [brush, setBrush] = useState<OverworldBrush>("plains");
+  const [brushRadius, setBrushRadius] = useState(1);
+  // Named after the paint, not after the failure: these are places the DM
+  // just put under water or under a peak. The server reports them and moves
+  // nothing, because a lighthouse on a reef is a decision.
+  const [stranded, setStranded] = useState<Array<{ id: string; name: string }>>([]);
+  const [held, setHeld] = useState<string | null>(null);
   const [regenBusy, setRegenBusy] = useState(false);
   const dragRef = useRef<{ x: number; y: number; startX: number; startY: number } | null>(null);
   // Active pointers by id, for two-finger pinch zoom on touch screens.
@@ -97,114 +91,17 @@ export function OverworldPanel({
     if (!context) {
       return;
     }
-    const skin = skinForGenre(genre);
-    const { width, height, terrain } = data.map;
     context.save();
     context.clearRect(0, 0, canvas.width, canvas.height);
     context.translate(view.x, view.y);
     context.scale(view.zoom, view.zoom);
-
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const tile = (terrain[y * width + x] ?? "w") as OverworldTile;
-        context.fillStyle = shade(skin[tile].fill, tileJitter(x, y));
-        context.fillRect(x * TILE, y * TILE, TILE, TILE);
-      }
-    }
-
-    // Routes: curves between anchors of connected locations, drawn once per
-    // pair.
-    const anchorById = new Map(
-      data.locations
-        .filter((location) => location.anchor)
-        .map((location) => [location.id, location.anchor!] as const),
-    );
-    const idByName = new Map(
-      data.locations.map((location) => [location.name.toLowerCase(), location.id] as const),
-    );
-    context.strokeStyle = "rgba(240, 220, 170, 0.45)";
-    context.lineWidth = 1.5;
-    context.setLineDash([5, 4]);
-    const drawn = new Set<string>();
-    for (const location of data.locations) {
-      const from = anchorById.get(location.id);
-      if (!from) {
-        continue;
-      }
-      for (const connectionName of location.connections) {
-        const targetId = idByName.get(connectionName.toLowerCase());
-        const to = targetId ? anchorById.get(targetId) : null;
-        if (!to || !targetId) {
-          continue;
-        }
-        const key = [location.id, targetId].sort().join("|");
-        if (drawn.has(key)) {
-          continue;
-        }
-        drawn.add(key);
-        const fromX = from.x * TILE + TILE / 2;
-        const fromY = from.y * TILE + TILE / 2;
-        const toX = to.x * TILE + TILE / 2;
-        const toY = to.y * TILE + TILE / 2;
-        const midX = (fromX + toX) / 2 + (fromY - toY) * 0.15;
-        const midY = (fromY + toY) / 2 + (toX - fromX) * 0.15;
-        context.beginPath();
-        context.moveTo(fromX, fromY);
-        context.quadraticCurveTo(midX, midY, toX, toY);
-        context.stroke();
-      }
-    }
-    context.setLineDash([]);
-
-    // Lead pins under the location markers.
-    for (const pin of data.map.pins) {
-      const pinX = pin.x * TILE + TILE / 2;
-      const pinY = pin.y * TILE + TILE / 2;
-      context.fillStyle = "rgba(190, 120, 240, 0.9)";
-      context.beginPath();
-      context.arc(pinX, pinY, 4, 0, Math.PI * 2);
-      context.fill();
-      if (pin.label) {
-        context.font = "10px sans-serif";
-        context.fillStyle = "rgba(220, 190, 250, 0.95)";
-        context.fillText(pin.label, pinX + 7, pinY + 3);
-      }
-    }
-
-    // Locations: solid dots for visited, ghost dots for known-unvisited,
-    // pulse ring on the party's current position.
-    for (const location of data.locations) {
-      const anchor = location.anchor;
-      if (!anchor) {
-        continue;
-      }
-      const markerX = anchor.x * TILE + TILE / 2;
-      const markerY = anchor.y * TILE + TILE / 2;
-      if (location.isCurrent) {
-        const pulse = 6 + Math.sin(pulseRef.current / 12) * 2.5;
-        context.strokeStyle = "rgba(250, 200, 90, 0.85)";
-        context.lineWidth = 2;
-        context.beginPath();
-        context.arc(markerX, markerY, pulse, 0, Math.PI * 2);
-        context.stroke();
-      }
-      context.fillStyle = location.visited
-        ? "rgba(250, 225, 160, 0.95)"
-        : "rgba(250, 225, 160, 0.4)";
-      context.beginPath();
-      context.arc(markerX, markerY, 4.5, 0, Math.PI * 2);
-      context.fill();
-      context.strokeStyle = "rgba(30, 25, 15, 0.8)";
-      context.lineWidth = 1;
-      context.stroke();
-      context.font = "600 10px sans-serif";
-      context.fillStyle = location.visited
-        ? "rgba(250, 240, 220, 0.95)"
-        : "rgba(250, 240, 220, 0.5)";
-      context.fillText(location.name, markerX + 8, markerY - 6);
-    }
+    drawOverworld(context, data, {
+      genre,
+      pulse: pulseRef.current,
+      selectedLocationId: held,
+    });
     context.restore();
-  }, [data, genre, view]);
+  }, [data, genre, held, view]);
 
   useEffect(() => {
     draw();
@@ -273,59 +170,109 @@ export function OverworldPanel({
     return () => canvas.removeEventListener("wheel", handleWheel);
   }, [loading]);
 
-  async function addPin(clientX: number, clientY: number) {
+  // Returns the payload as well as storing it, because a paint answers with
+  // more than the new map: it names the places it left in the sea.
+  async function patch(body: Record<string, unknown>) {
+    const response = await fetch(`/api/campaigns/${campaignId}/overworld`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      return null;
+    }
+    const payload = await response.json();
+    setData(payload);
+    return payload;
+  }
+
+  // Canvas pixels to map tiles, or null outside the grid.
+  function tileAt(clientX: number, clientY: number) {
     const canvas = canvasRef.current;
     if (!canvas || !data) {
-      return;
+      return null;
     }
     const rect = canvas.getBoundingClientRect();
     const x = Math.floor((clientX - rect.left - view.x) / view.zoom / TILE);
     const y = Math.floor((clientY - rect.top - view.y) / view.zoom / TILE);
-    if (x < 0 || y < 0 || x >= data.map.width || y >= data.map.height) {
-      return;
-    }
-    const label = window.prompt("Pin label (empty for a plain marker):") ?? "";
-    const response = await fetch(`/api/campaigns/${campaignId}/overworld`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        pins: [...data.map.pins, { id: "", x, y, label: label.slice(0, 60) }],
-      }),
-    });
-    if (response.ok) {
-      setData(await response.json());
-    }
-    setPinMode(false);
+    return x >= 0 && y >= 0 && x < data.map.width && y < data.map.height ? { x, y } : null;
   }
 
-  async function clearPins() {
-    const response = await fetch(`/api/campaigns/${campaignId}/overworld`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pins: [] }),
-    });
-    if (response.ok) {
-      setData(await response.json());
+  // The place whose marker sits under this tile, if any.
+  function locationAt(at: { x: number; y: number }) {
+    return (
+      data?.locations.find(
+        (location) =>
+          location.anchor &&
+          Math.abs(location.anchor.x - at.x) <= 1 &&
+          Math.abs(location.anchor.y - at.y) <= 1,
+      ) ?? null
+    );
+  }
+
+  async function handleClick(clientX: number, clientY: number) {
+    const at = tileAt(clientX, clientY);
+    if (!at || !data) {
+      return;
     }
+    if (mode === "pin") {
+      const label = window.prompt("Pin label (empty for a plain marker):") ?? "";
+      await patch({ pins: [...data.map.pins, { id: "", x: at.x, y: at.y, label: label.slice(0, 60) }] });
+      setMode("look");
+      return;
+    }
+    if (mode === "party") {
+      await patch({ partyXy: at });
+      setMode("look");
+      return;
+    }
+    if (mode === "paint") {
+      // One tile per click. Dragging a brush across a canvas is a bigger
+      // interaction than this panel has, and a click already reaches every
+      // tile; the radius is what makes it practical on a 96x72 grid.
+      const payload = await patch({
+        strokes: [{ x: at.x, y: at.y, brush, radius: brushRadius }],
+      });
+      setStranded(
+        (payload as { stranded?: Array<{ id: string; name: string }> } | null)?.stranded ?? [],
+      );
+      return;
+    }
+    if (mode === "place") {
+      // First click picks a marker up, second puts it down.
+      if (held) {
+        await patch({ anchor: { locationId: held, x: at.x, y: at.y } });
+        setHeld(null);
+        return;
+      }
+      setHeld(locationAt(at)?.id ?? null);
+    }
+  }
+
+  async function renameHeld() {
+    const location = data?.locations.find((entry) => entry.id === held);
+    if (!location) {
+      return;
+    }
+    const name = window.prompt("What is this place called?", location.name);
+    if (!name?.trim()) {
+      return;
+    }
+    await patch({ rename: { locationId: location.id, name: name.trim() } });
+    setHeld(null);
   }
 
   async function regenerate() {
     setRegenBusy(true);
     try {
-      const response = await fetch(`/api/campaigns/${campaignId}/overworld`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ regenerate: true }),
-      });
-      if (response.ok) {
-        setData(await response.json());
-      }
+      await patch({ regenerate: true });
     } finally {
       setRegenBusy(false);
     }
   }
 
   const skin = data ? skinForGenre(genre) : null;
+  const heldName = data?.locations.find((entry) => entry.id === held)?.name ?? "";
 
   return (
     <div className="space-y-2">
@@ -337,10 +284,13 @@ export function OverworldPanel({
         ) : (
           <canvas
             ref={canvasRef}
-            className={cn("block w-full touch-none", pinMode ? "cursor-crosshair" : "cursor-grab")}
+            className={cn(
+              "block w-full touch-none",
+              mode === "look" ? "cursor-grab" : "cursor-crosshair",
+            )}
             onPointerDown={(event) => {
-              if (pinMode) {
-                void addPin(event.clientX, event.clientY);
+              if (mode !== "look") {
+                void handleClick(event.clientX, event.clientY);
                 return;
               }
               pointersRef.current.set(event.pointerId, {
@@ -438,44 +388,127 @@ export function OverworldPanel({
           ))}
         </div>
       ) : null}
-      {isLead && data ? (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setPinMode((current) => !current)}
-            className={cn(
-              "flex items-center gap-1 rounded border px-2 py-0.5 text-[11px]",
-              pinMode
-                ? "border-amber-700 bg-amber-950/50 text-amber-200"
-                : "border-stone-700 text-stone-400 hover:bg-stone-900",
-            )}
-          >
-            <MapPin className="size-3" /> {pinMode ? "Click the map..." : "Add pin"}
-          </button>
-          {data.map.pins.length ? (
+      {steersStory && data ? (
+        <>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {([
+              ["pin", "Add pin", MapPin],
+              ["party", "Place the party", Users],
+              ["place", "Move a place", Move],
+              ["paint", "Paint terrain", Brush],
+            ] as const).map(([value, label, Icon]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => {
+                  setMode((current) => (current === value ? "look" : value));
+                  setHeld(null);
+                  setStranded([]);
+                }}
+                className={cn(
+                  "flex items-center gap-1 rounded border px-2 py-0.5 text-[11px]",
+                  mode === value
+                    ? "border-amber-700 bg-amber-950/50 text-amber-200"
+                    : "border-stone-700 text-stone-400 hover:bg-stone-900",
+                )}
+              >
+                <Icon className="size-3" /> {mode === value ? "Click the map..." : label}
+              </button>
+            ))}
+            {data.map.partyXy ? (
+              <button
+                type="button"
+                onClick={() => void patch({ partyXy: null })}
+                className="rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-400 hover:bg-stone-900"
+              >
+                Party is in transit
+              </button>
+            ) : null}
+            {data.map.pins.length ? (
+              <button
+                type="button"
+                onClick={() => void patch({ pins: [] })}
+                className="flex items-center gap-1 rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-400 hover:bg-stone-900"
+              >
+                <X className="size-3" /> Clear pins
+              </button>
+            ) : null}
             <button
               type="button"
-              onClick={() => void clearPins()}
-              className="flex items-center gap-1 rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-400 hover:bg-stone-900"
+              onClick={() => void regenerate()}
+              disabled={regenBusy}
+              title="Reroll the terrain. Locations keep their spots where the new ground allows."
+              className="flex items-center gap-1 rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-400 hover:bg-stone-900 disabled:opacity-50"
             >
-              <X className="size-3" /> Clear pins
+              {regenBusy ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <RefreshCw className="size-3" />
+              )}
+              Regenerate
             </button>
+          </div>
+          {held ? (
+            <p className="flex items-center gap-2 text-[11px] text-amber-200">
+              Holding {heldName}. Click where it belongs.
+              <button
+                type="button"
+                onClick={() => void renameHeld()}
+                className="rounded border border-stone-700 px-1.5 py-0.5 text-stone-400 hover:bg-stone-900"
+              >
+                Rename it
+              </button>
+            </p>
           ) : null}
-          <button
-            type="button"
-            onClick={() => void regenerate()}
-            disabled={regenBusy}
-            title="Reroll the terrain. Locations keep their spots where the new ground allows."
-            className="flex items-center gap-1 rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-400 hover:bg-stone-900 disabled:opacity-50"
-          >
-            {regenBusy ? (
-              <Loader2 className="size-3 animate-spin" />
-            ) : (
-              <RefreshCw className="size-3" />
-            )}
-            Regenerate
-          </button>
-        </div>
+          {mode === "paint" && skin ? (
+            <div className="space-y-1.5 rounded border border-stone-800 bg-stone-950/50 p-2">
+              <div className="flex flex-wrap items-center gap-1">
+                {OVERWORLD_BRUSHES.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setBrush(value)}
+                    className={cn(
+                      "flex items-center gap-1 rounded border px-2 py-0.5 text-[11px]",
+                      brush === value
+                        ? "border-amber-700 bg-amber-950/50 text-amber-200"
+                        : "border-stone-700 text-stone-400 hover:bg-stone-900",
+                    )}
+                  >
+                    <span
+                      className="size-2.5 rounded-sm"
+                      style={{ backgroundColor: skin[OVERWORLD_BRUSH_TILES[value]].fill }}
+                    />
+                    {OVERWORLD_BRUSH_LABELS[value]}
+                  </button>
+                ))}
+              </div>
+              <label className="flex items-center gap-2 text-[11px] text-stone-400">
+                Brush size
+                <input
+                  type="range"
+                  min={0}
+                  max={MAX_BRUSH_RADIUS}
+                  value={brushRadius}
+                  onChange={(event) => setBrushRadius(Number(event.target.value))}
+                  className="w-28 accent-amber-400"
+                />
+                <span className="text-stone-500">
+                  {brushRadius === 0 ? "one tile" : `${brushRadius * 2 + 1} across`}
+                </span>
+              </label>
+              {stranded.length ? (
+                <p className="text-[11px] text-amber-300/90">
+                  {stranded.map((place) => place.name).filter(Boolean).join(", ")}{" "}
+                  {stranded.length === 1 ? "is" : "are"} now standing in sea or on a peak. The
+                  marker stays where you put it; move it with Move a place if that was not the
+                  idea.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          <OverworldAuthoring campaignId={campaignId} data={data} onData={setData} />
+        </>
       ) : null}
       <p className="text-[10px] text-stone-600">
         Drag to pan, scroll or pinch to zoom. Locations appear as the party discovers them.

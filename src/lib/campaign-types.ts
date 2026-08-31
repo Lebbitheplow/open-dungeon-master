@@ -1,3 +1,5 @@
+import type { CampaignKind } from "@/lib/workshop/kind";
+
 export type SessionUser = {
   id: string;
   username: string;
@@ -15,6 +17,10 @@ export type CampaignSummary = {
   id: string;
   title: string;
   description: string;
+  // 'campaign' plays; 'workshop' is a DM's prep space that reuses the same
+  // row and the same content tables but never runs a turn. The rules live in
+  // src/lib/workshop/kind.ts.
+  kind: CampaignKind;
   status: CampaignStatus;
   inviteCode: string;
   maxPlayers: number;
@@ -25,6 +31,11 @@ export type CampaignSummary = {
   // The player who steers the story and fixes stats when the AI DM errs.
   // Defaults to the owner; transferable.
   leadUserId: string;
+  // Human-DM mode: the member running the game, and an optional co-DM.
+  // Null on both means the AI runs it. What each seat may see and do is
+  // decided in src/lib/dm/viewer.ts, never by comparing ids at a call site.
+  dmUserId: string | null;
+  assistantDmUserId: string | null;
   playerCount: number;
   role: "owner" | "player";
   createdAt: string;
@@ -43,14 +54,19 @@ export type CampaignSummary = {
 // mode: it lives entirely in the Ask strip above the composer, which posts to
 // /ask itself (src/app/campaigns/[campaignId]/AskPanel.tsx). Adding "ask"
 // back would put a second Ask entry point in the same column as the first.
-export const INPUT_KINDS = ["do", "say", "ooc", "lead"] as const;
+// "narrate" is the DM seat's only authoring mode and posts to /dm/narrate.
+// It is in this union so the composer stays one component, and it can never
+// reach /actions because that route validates against its own narrower enum.
+export const INPUT_KINDS = ["do", "say", "ooc", "lead", "narrate"] as const;
 export type InputKind = (typeof INPUT_KINDS)[number];
 
 // The modes that do not consume the floor: table talk and lead directions
 // work during a hold, a spotlight, another player's initiative turn, and
 // while the DM is narrating. Asking is exempt too, but it never routes
 // through here because it is not an InputKind.
-export const FLOOR_EXEMPT_KINDS: readonly InputKind[] = ["ooc", "lead"];
+// The DM is never subject to the floor they control, so "narrate" joins the
+// exempt set alongside table talk and lead directions.
+export const FLOOR_EXEMPT_KINDS: readonly InputKind[] = ["ooc", "lead", "narrate"];
 
 export function isFloorExempt(kind: InputKind): boolean {
   return FLOOR_EXEMPT_KINDS.includes(kind);

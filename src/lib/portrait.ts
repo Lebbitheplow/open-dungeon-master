@@ -4,6 +4,7 @@ import { generateComfyImage } from "@/lib/comfyui";
 import type { LibraryCharacter } from "@/lib/db/characters";
 import { updateCharacterPortrait } from "@/lib/db/characters";
 import { listSheetsForLibraryCharacter, patchSheet } from "@/lib/db/sheets";
+import { setNpcPortrait } from "@/lib/db/npcs";
 import { publishPersisted } from "@/lib/events";
 import { enqueueMediaJob } from "@/lib/media-queue";
 import { presetFor } from "@/lib/worlds/preset";
@@ -139,6 +140,54 @@ export function queueCompanionPortrait(sheet: {
     } catch (error) {
       map.set(sheet.id, "failed");
       console.error(`[portrait] companion generation failed for ${sheet.id}:`, error);
+    }
+  });
+}
+
+// A face for an NPC the DM wrote. Same serial media queue as every other
+// render (one iGPU, shared with the DM model), and the same copy into
+// public/uploads so the stored path is one /api/upload could have written.
+//
+// Status is not tracked here the way a character portrait's is: an NPC has
+// no creation flow waiting on it, so the panel simply shows the face when
+// the row next reports one.
+export function queueNpcPortrait(npc: {
+  id: string;
+  campaignId: string;
+  // Their distinguishing trait and their personality in words, which is all
+  // a face needs. The name is deliberately absent: a render prompt is not
+  // improved by a proper noun the model has never seen.
+  trait: string;
+  personality: string;
+  genre: Genre;
+  worldPack?: string;
+}): void {
+  const style = presetFor({ genre: npc.genre, worldPack: npc.worldPack }).portraitStyle;
+  const prompt = [
+    "Tabletop RPG character portrait, head and shoulders, centered, looking at viewer",
+    style,
+    npc.trait,
+    npc.personality,
+    "Detailed digital painting, dramatic lighting, plain dark background",
+  ]
+    .filter(Boolean)
+    .join(". ");
+  void enqueueMediaJob(`npc portrait ${npc.id}`, async () => {
+    try {
+      const settings = configuredDefaultStorySettings();
+      const image = await generateComfyImage({
+        url: settings.comfyUrl || undefined,
+        checkpoint: settings.comfyCheckpoint || undefined,
+        prompt,
+        mode: "fast",
+        aspect: "square",
+      });
+      const copied = copyIntoUploads(image.url);
+      if (setNpcPortrait(npc.id, copied.url)) {
+        publishPersisted(npc.campaignId, "npc_updated", { npcId: npc.id, portraitUrl: copied.url });
+      }
+    } catch (error) {
+      console.error(`[portrait] npc generation failed for ${npc.id}:`, error);
     }
   });
 }

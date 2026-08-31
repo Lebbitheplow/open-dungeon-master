@@ -3,6 +3,7 @@ import { currentUser, unauthorized } from "@/lib/auth";
 import {
   deleteCharacter,
   getCharacterForUser,
+  listAssignmentsForCharacter,
   updateCharacter,
   updateCharacterPortrait,
 } from "@/lib/db/characters";
@@ -36,7 +37,11 @@ export async function GET(
     return Response.json({ error: "Character not found." }, { status: 404 });
   }
   return Response.json({
-    character: { ...character, portraitStatus: portraitStatus(character.id) },
+    character: {
+      ...character,
+      portraitStatus: portraitStatus(character.id),
+      campaigns: listAssignmentsForCharacter(user.id, characterId),
+    },
     events: listEventsForLibraryCharacter(characterId),
   });
 }

@@ -45,9 +45,12 @@ const MAX_SIDES = 100;
 const MIN_SIDES = 2;
 const MAX_TERMS = 20;
 
-// XdY, optional khN/klN keep, optional fN floor (Reliable Talent: "1d20f10"
-// treats a kept face below N as N), or a flat integer.
-const TERM_PATTERN = /^(?:(\d{1,3})d(\d{1,3})(?:k([hl])(\d{1,3}))?(?:f(\d{1,3}))?|(\d{1,7}))$/i;
+// XdY, optional khN/klN keep, optional rN reroll (Halfling Lucky: "1d20r1"
+// rerolls any die at or below N once and keeps the new face, before the keep
+// picks a survivor), optional fN floor (Reliable Talent: "1d20f10" treats a
+// kept face below N as N), or a flat integer.
+const TERM_PATTERN =
+  /^(?:(\d{1,3})d(\d{1,3})(?:k([hl])(\d{1,3}))?(?:r(\d{1,3}))?(?:f(\d{1,3}))?|(\d{1,7}))$/i;
 
 export function defaultRng(sides: number) {
   return randomInt(1, sides + 1);
@@ -91,8 +94,8 @@ export function rollExpression(
       throw new Error(`Invalid dice term: ${rawTerm}`);
     }
 
-    if (match[6] !== undefined) {
-      terms.push({ kind: "modifier", sign, value: Number(match[6]) });
+    if (match[7] !== undefined) {
+      terms.push({ kind: "modifier", sign, value: Number(match[7]) });
       continue;
     }
 
@@ -121,10 +124,18 @@ export function rollExpression(
       }
       return value;
     };
-    const rerollBelow = sides === 20 ? 0 : (options.rerollBelow ?? 0);
+    // The grammar reroll (Halfling Lucky "r1") and the Great Weapon Fighting
+    // option (d20-exempt) both reroll a low die once and keep the new face.
+    // They act on disjoint die types in practice, so the larger threshold
+    // wins when a term somehow carries both.
+    const grammarReroll = match[5] ? Number(match[5]) : 0;
+    if (grammarReroll < 0 || grammarReroll >= sides) {
+      throw new Error(`Reroll threshold out of range in: ${rawTerm}`);
+    }
+    const rerollAt = Math.max(grammarReroll, sides === 20 ? 0 : (options.rerollBelow ?? 0));
     const dice: DieResult[] = Array.from({ length: count }, () => {
       const value = roll();
-      if (rerollBelow > 0 && value <= rerollBelow) {
+      if (rerollAt > 0 && value <= rerollAt) {
         return { sides, value: roll(), kept: true, rerolledFrom: value };
       }
       return { sides, value, kept: true };
@@ -144,7 +155,7 @@ export function rollExpression(
 
     // The floor raises kept faces below it (Reliable Talent's 10), keeping
     // the original face visible on the card.
-    const floorAt = match[5] ? Number(match[5]) : 0;
+    const floorAt = match[6] ? Number(match[6]) : 0;
     if (floorAt > 0) {
       for (const die of dice) {
         if (die.kept && die.value < floorAt) {

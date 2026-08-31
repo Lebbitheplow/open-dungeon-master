@@ -7,6 +7,10 @@ type Subscriber = (chunk: string) => void;
 // and a module-scoped map would silently drop subscribers.
 declare global {
   var __odmEventBus: Map<string, Set<Subscriber>> | undefined;
+  // Set by src/lib/voice/peers.ts the first time anything voice-related is
+  // loaded. Undefined on a server where voice has never been used, in which
+  // case the calls below are no-ops.
+  var __odmVoiceEventHook: ((campaignId: string, type: string) => void) | undefined;
 }
 
 function bus() {
@@ -57,6 +61,7 @@ export function publishWithSeq(campaignId: string, seq: number, type: string, pa
     )
     .run(campaignId, seq, type, JSON.stringify(payload), nowIso());
   fanOut(campaignId, sseChunk(type, payload, seq));
+  globalThis.__odmVoiceEventHook?.(campaignId, type);
   return seq;
 }
 
@@ -71,7 +76,19 @@ export function publishPersisted(campaignId: string, type: string, payload: unkn
 // stream hook must ignore lastEventId for ephemeral event types.
 export function publishEphemeral(campaignId: string, type: string, payload: unknown) {
   fanOut(campaignId, sseChunk(type, payload));
+  globalThis.__odmVoiceEventHook?.(campaignId, type);
 }
+
+// Voice reacts to things the rest of the app already announces: the floor
+// changing decides who may speak, and a token moving or a fight starting
+// decides who can hear whom. Those events are published from more than a dozen
+// call sites between them, and these two functions are the only points they
+// all pass through, so the hook lives here rather than at every site where the
+// next one added would forget it.
+//
+// Registered through globalThis, and dispatched through a dynamic import on
+// the voice side, so this low-level module imports nothing from the voice
+// layer and there is no cycle.
 
 export type StoredEvent = { seq: number; type: string; payload: unknown };
 

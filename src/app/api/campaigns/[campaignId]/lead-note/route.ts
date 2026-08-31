@@ -1,4 +1,4 @@
-import { isErrorResponse, requireLead } from "@/lib/campaign-api";
+import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { LEAD_NOTE_PREFIX } from "@/lib/campaign-types";
 import { allocateSeq } from "@/lib/db/campaigns";
 import { insertCampaignMessage } from "@/lib/db/messages";
@@ -15,7 +15,7 @@ export async function POST(
   { params }: { params: Promise<{ campaignId: string }> },
 ) {
   const { campaignId } = await params;
-  const context = await requireLead(campaignId);
+  const context = await requireStoryAuthority(campaignId);
   if (isErrorResponse(context)) {
     return context;
   }

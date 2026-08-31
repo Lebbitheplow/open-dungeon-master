@@ -2,6 +2,7 @@
 
 import {
   BookOpen,
+  Gavel,
   Map as MapIcon,
   MessageSquareText,
   MessagesSquare,
@@ -17,6 +18,7 @@ import { cn } from "@/lib/cn";
 import type { PlayerMapView } from "@/lib/battlemap/view";
 
 export type PanelTab =
+  | "dm"
   | "party"
   | "battle"
   | "map"
@@ -82,17 +84,34 @@ export function buildPanelTabs({
   hasBattleMap,
   mapsEnabled,
   hasSettings,
-  isLead,
+  secretStory,
+  adjudicates,
 }: {
   hasBattleMap: boolean;
   mapsEnabled: boolean;
   hasSettings: boolean;
+  // Holds the DM seat: the console is the whole of running the table by
+  // hand, so it leads the rail for whoever is doing it and does not exist
+  // for anyone else (src/lib/dm/viewer.ts).
+  adjudicates: boolean;
   // The Context tab shows what the DM was actually sent, which includes the
-  // secret arc and the DM outline. Its route is lead-only, so offering the
-  // tab to a player only ever produces a 403 and a broken panel.
-  isLead: boolean;
+  // secret arc and the DM outline. Its route is gated on story authority, so
+  // offering the tab to anyone else only ever produces a 403 and a broken
+  // panel. That authority is the party lead in an AI campaign and the DM in a
+  // human-run one (src/lib/dm/viewer.ts).
+  secretStory: boolean;
 }): PanelTabDef[] {
   return [
+    ...(adjudicates
+      ? ([
+          [
+            "dm",
+            "DM",
+            Gavel,
+            "Everything waiting on you, and every ruling the engine can make on your say-so.",
+          ],
+        ] as PanelTabDef[])
+      : []),
     [
       "party",
       "Party",
@@ -113,7 +132,7 @@ export function buildPanelTabs({
     ],
     ["notes", "Notes", StickyNote, "Suggest story notes; the party lead approves them."],
     ["chat", "Chat", MessagesSquare, "Side chat between players. The DM does not see it."],
-    ...(hasSettings && isLead
+    ...(hasSettings && secretStory
       ? ([
           [
             "context",
@@ -178,6 +197,7 @@ function BottomTabBarInner({
   onSelectPanel,
   chatUnread,
   pendingCount,
+  storyDue,
 }: {
   tabs: PanelTabDef[];
   mobileView: MobileView;
@@ -186,6 +206,8 @@ function BottomTabBarInner({
   onSelectPanel: (tab: PanelTab) => void;
   chatUnread: number;
   pendingCount: number;
+  // The DM has story to write down (src/lib/dm/beat-cadence.ts).
+  storyDue: boolean;
 }) {
   return (
     <nav className="glass flex items-stretch gap-1 overflow-x-auto border-t border-stone-700/40 px-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-1 lg:hidden">
@@ -222,6 +244,9 @@ function BottomTabBarInner({
             <span className="eyebrow text-[9px] leading-none">{label}</span>
             {value === "chat" && chatUnread > 0 ? (
               <span className="absolute left-1.5 top-1 size-1.5 rounded-full bg-red-500" />
+            ) : null}
+            {value === "dm" && storyDue ? (
+              <span className="absolute right-1.5 top-1 size-1.5 rounded-full bg-amber-400" />
             ) : null}
             {value === "notes" && pendingCount ? (
               <span className="absolute right-1.5 top-1 rounded-full bg-gradient-to-b from-amber-300 to-amber-500 px-1 text-[9px] font-semibold text-amber-950 shadow-glow-gold">

@@ -81,6 +81,21 @@ export const equipmentItemSchema = z.object({
   equipped: z.boolean().optional(),
   // Magic item currently attuned. Capped at 3 per character by patchSheet.
   attuned: z.boolean().optional(),
+  // Pounds per unit, for the optional encumbrance rule. Filled in from the
+  // content pack when a sheet is read (src/lib/db/sheets.ts), so rows
+  // written before the field still get weighed; a value a player typed
+  // themselves is left alone.
+  weight: z.number().min(0).max(10000).optional(),
+  // False while the party does not yet know what this is. Optional and read
+  // as TRUE when absent, so every item ever written stays identified and
+  // nothing has to be backfilled.
+  //
+  // There is no second "true name" field on purpose. While an item is
+  // unidentified its `name` IS the mystery description the party sees ("an
+  // ornate silver ring"), which is why no projection has to strip anything:
+  // the secret was never written to the sheet. The DM's reveal action renames
+  // the row and flips this flag in one step.
+  identified: z.boolean().optional(),
 });
 export type EquipmentItem = z.infer<typeof equipmentItemSchema>;
 
@@ -197,6 +212,10 @@ export const createSheetSchema = z.object({
   proficiencies: proficienciesSchema,
   equipment: z.array(equipmentItemSchema).max(60).default([]),
   gold: z.number().int().min(0).max(1000000).default(0),
+  // Coin under a whole gold piece, 0 to 99. `gold` keeps meaning whole gold
+  // pieces so every module that already reads it is untouched; the true purse
+  // is gold * 100 + copper (src/lib/srd/currency.ts).
+  copper: z.number().int().min(0).max(99).default(0),
   feats: z.array(z.string().trim().min(1).max(60)).max(20).default([]),
   features: z.array(sheetFeatureSchema).max(80).default([]),
   // The ASI choices baked into `abilities`, in threshold order. Stored so
@@ -235,6 +254,7 @@ export const patchSheetSchema = z.object({
   xp: z.number().int().min(0).max(1000000).optional(),
   level: z.number().int().min(1).max(20).optional(),
   gold: z.number().int().min(0).max(1000000).optional(),
+  copper: z.number().int().min(0).max(99).optional(),
   conditions: z.array(z.string().trim().min(1).max(40)).max(15).optional(),
   equipment: z.array(equipmentItemSchema).max(60).optional(),
   hitDice: hitDiceSchema.optional(),
@@ -436,6 +456,7 @@ export type CharacterSheet = {
   proficiencies: Proficiencies;
   equipment: EquipmentItem[];
   gold: number;
+  copper: number;
   feats: string[];
   features: SheetFeature[];
   spellcasting: Spellcasting;

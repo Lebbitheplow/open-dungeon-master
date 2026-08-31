@@ -43,6 +43,11 @@
       "desc": "Increase your Constitution by 1, to a maximum of 20. When you roll a Hit Die to regain hit points, the minimum you regain is twice your Constitution modifier."
     },
     {
+      "name": "Elven Accuracy",
+      "prerequisite": "Elf or half-elf",
+      "desc": "Increase your Dexterity, Intelligence, Wisdom, or Charisma by 1, to a maximum of 20. Whenever you have advantage on an attack roll using Dexterity, Intelligence, Wisdom, or Charisma, you can reroll one of the dice once. The server rolls a third d20 and keeps the highest."
+    },
+    {
       "name": "Elemental Adept",
       "prerequisite": "The ability to cast at least one spell",
       "desc": "Choose acid, cold, fire, lightning or thunder. Your spells of that damage type ignore resistance, and any 1 rolled on their damage dice counts as a 2. You can take this feat more than once, choosing a different type each time."

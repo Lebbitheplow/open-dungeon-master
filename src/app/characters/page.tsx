@@ -1,11 +1,21 @@
 "use client";
 
-import { Camera, Loader2, Plus, Trash2, UserRound } from "lucide-react";
+import { Camera, Copy, Hammer, Loader2, Plus, Swords, Trash2, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
 import { cn } from "@/lib/cn";
 import { IconChip, PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
+
+// Where a character is playing. A library character is a template and each
+// campaign holds its own copy, so one entry can be at several tables at once
+// (src/lib/db/characters.ts).
+type CharacterAssignment = {
+  campaignId: string;
+  title: string;
+  kind: "campaign" | "workshop";
+  status: string;
+};
 
 type LibraryCharacter = {
   id: string;
@@ -17,6 +27,7 @@ type LibraryCharacter = {
   level: number;
   updatedAt: string;
   portraitStatus?: "queued" | "generating" | "failed" | null;
+  campaigns?: CharacterAssignment[];
   sheet?: { portrait?: { url: string } | null };
 };
 
@@ -37,6 +48,7 @@ export default function CharactersPage() {
   const [loading, setLoading] = useState(true);
   const [authed, setAuthed] = useState(true);
   const [croppingId, setCroppingId] = useState("");
+  const [cloningId, setCloningId] = useState("");
   const cropping = characters.find((character) => character.id === croppingId);
   const pollCount = useRef(0);
 
@@ -90,6 +102,24 @@ export default function CharactersPage() {
             : character,
         ),
       );
+    }
+  }
+
+  // A second copy under a numbered name, sheet and portrait verbatim. The
+  // copy belongs to no campaign, which is why it starts with no assignments.
+  async function duplicate(id: string) {
+    setCloningId(id);
+    try {
+      const response = await fetch(`/api/characters/${id}/clone`, { method: "POST" });
+      if (!response.ok) {
+        return;
+      }
+      const data = await response.json().catch(() => ({}));
+      if (data.character) {
+        setCharacters((current) => [data.character, ...current]);
+      }
+    } finally {
+      setCloningId("");
     }
   }
 
@@ -203,6 +233,32 @@ export default function CharactersPage() {
                   <p className="text-xs text-stone-500">{titleCase(character.background)}</p>
                 ) : null}
               </a>
+              {character.campaigns?.length ? (
+                <div className="mt-2 flex flex-wrap gap-1.5 border-t border-stone-700/40 pt-2">
+                  {character.campaigns.map((assignment) => (
+                    <Link
+                      key={assignment.campaignId}
+                      href={
+                        assignment.kind === "workshop"
+                          ? `/workshop/${assignment.campaignId}`
+                          : `/campaigns/${assignment.campaignId}`
+                      }
+                      className="inline-flex max-w-full items-center gap-1 rounded-full border border-stone-600/60 bg-stone-900/60 px-2 py-0.5 text-[11px] text-stone-300 transition-colors hover:border-amber-500/40 hover:text-amber-100"
+                    >
+                      {assignment.kind === "workshop" ? (
+                        <Hammer className="size-3 shrink-0 text-amber-300/70" />
+                      ) : (
+                        <Swords className="size-3 shrink-0 text-amber-300/70" />
+                      )}
+                      <span className="truncate">{assignment.title}</span>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 border-t border-stone-700/40 pt-2 text-xs text-stone-600">
+                  Not in a campaign yet.
+                </p>
+              )}
               <button
                 type="button"
                 onClick={() => remove(character.id, character.name)}
@@ -220,6 +276,20 @@ export default function CharactersPage() {
                 title="Upload portrait"
               >
                 <Camera className="size-4" />
+              </button>
+              <button
+                type="button"
+                disabled={cloningId === character.id}
+                onClick={() => duplicate(character.id)}
+                className={cn("absolute right-2 top-[4.5rem]", ui.iconAction, "hover:text-amber-300")}
+                aria-label={`Duplicate ${character.name}`}
+                title="Duplicate"
+              >
+                {cloningId === character.id ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Copy className="size-4" />
+                )}
               </button>
             </li>
           ))}

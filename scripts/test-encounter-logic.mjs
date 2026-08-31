@@ -182,4 +182,20 @@ test("critical extra dice add one more of the first damage die", () => {
   assert.equal(critDamageExpression("1d8+2"), "1d8+1d8+2");
 });
 
+test("Powerful Critical maximizes the extra dice instead of rolling them", () => {
+  // The critical copy of 2d6 becomes a flat 12; the base 2d6 still rolls.
+  assert.equal(critDamageExpression("2d6+3", 0, { powerfulCritical: true }), "2d6+12+3");
+  // Brutal Critical extra dice are maximized too (a d6 -> 6).
+  assert.equal(critDamageExpression("2d6+3", 1, { powerfulCritical: true }), "2d6+12+3+6");
+});
+
+test("Critical Damage Modifiers double the flat modifier", () => {
+  assert.equal(critDamageExpression("1d8+2", 0, { multiplyNumeric: true }), "1d8+1d8+2+2");
+  // Both toggles at once: dice maximized, modifier doubled.
+  assert.equal(
+    critDamageExpression("1d8+2", 0, { powerfulCritical: true, multiplyNumeric: true }),
+    "1d8+8+2+2",
+  );
+});
+
 console.log(`test-encounter-logic: ${passed} passed`);

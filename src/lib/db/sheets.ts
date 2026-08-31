@@ -4,6 +4,7 @@ import { populateFeaturesForClasses } from "@/lib/srd/features";
 import { populateResources } from "@/lib/srd/class-resources";
 import { deriveAc } from "@/lib/srd";
 import { ATTUNEMENT_SLOTS } from "@/lib/srd/armor";
+import { itemWeightByName } from "@/lib/content";
 import { backgroundFeatureFor } from "@/lib/backgrounds";
 import type {
   CharacterSheet,
@@ -37,6 +38,7 @@ type SheetRow = {
   proficiencies_json: string;
   equipment_json: string;
   gold: number;
+  copper: number;
   feats_json: string;
   features_json: string | null;
   spellcasting_json: string;
@@ -105,8 +107,9 @@ function mapSheet(row: SheetRow): CharacterSheet {
       );
       return { ...parsed, expertise: parsed.expertise ?? [] };
     })(),
-    equipment: parseJson(row.equipment_json, []),
+    equipment: withItemWeights(parseJson(row.equipment_json, [])),
     gold: row.gold,
+    copper: row.copper ?? 0,
     feats: parseJson(row.feats_json, []),
     features: parseJson(row.features_json, []),
     spellcasting,
@@ -137,7 +140,7 @@ const SHEET_COLUMNS = `
   background, alignment, level, xp,
   abilities_json, max_hp, current_hp, temp_hp, ac, ac_override, speed, hit_dice_json,
   classes_json, hit_dice_pools_json,
-  proficiencies_json, equipment_json, gold, feats_json, features_json,
+  proficiencies_json, equipment_json, gold, copper, feats_json, features_json,
   spellcasting_json, conditions_json, condition_meta_json, resources_json, wild_shape_json, pets_json, exhaustion, death_saves_json, concentrating_on,
   portrait_json, notes, backstory, is_companion, companion_kind, personality, created_at, updated_at
 `;
@@ -179,6 +182,22 @@ function withBackgroundFeature(
 // The attunement cap is enforced here rather than in the UI so no path
 // (player toggle, DM update_sheet, undo) can slip a fourth item through;
 // extras past the third are simply un-attuned, keeping the earlier picks.
+// Fills a pack's missing per-unit weights from the content pack. Done on
+// read rather than on write so sheets written before the field existed are
+// weighed too, and only for rows that have no weight yet, so a number a
+// player typed by hand survives. The lookup is an in-memory map; the
+// optional encumbrance rule (src/lib/srd/encumbrance.ts) is the only
+// consumer and falls back to the SRD armor table for what is still missing.
+function withItemWeights(equipment: CharacterSheet["equipment"]): CharacterSheet["equipment"] {
+  return equipment.map((item) => {
+    if (typeof item.weight === "number") {
+      return item;
+    }
+    const weight = itemWeightByName(item.name);
+    return weight === null ? item : { ...item, weight };
+  });
+}
+
 function capAttunement(equipment: CharacterSheet["equipment"]): CharacterSheet["equipment"] {
   let attuned = 0;
   return equipment.map((item) => {
@@ -250,11 +269,11 @@ export function createSheet(
         id, campaign_id, user_id, library_character_id, name, race, class,
         subclass, background, alignment,
         level, xp, abilities_json, max_hp, current_hp, temp_hp, ac, ac_override, speed,
-        hit_dice_json, classes_json, hit_dice_pools_json, proficiencies_json, equipment_json, gold, feats_json,
+        hit_dice_json, classes_json, hit_dice_pools_json, proficiencies_json, equipment_json, gold, copper, feats_json,
         features_json, resources_json, spellcasting_json, conditions_json, portrait_json,
         notes, backstory, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?, ?)
     `,
   ).run(
     id,
@@ -282,6 +301,7 @@ export function createSheet(
     JSON.stringify(input.proficiencies),
     JSON.stringify(input.equipment),
     input.gold,
+    input.copper,
     JSON.stringify(input.feats),
     JSON.stringify(features),
     JSON.stringify(resources),
@@ -472,6 +492,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
     xp: patch.xp ?? existing.xp,
     level: usingClasses ? summedLevel : (patch.level ?? existing.level),
     gold: patch.gold ?? existing.gold,
+    copper: patch.copper ?? existing.copper,
     conditions: patch.conditions ?? existing.conditions,
     conditionMeta: patch.conditionMeta ?? existing.conditionMeta,
     // Resources track features and level: any patch touching them re-sizes
@@ -540,7 +561,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
           name = ?, race = ?, class = ?, background = ?, alignment = ?,
           speed = ?, abilities_json = ?, proficiencies_json = ?,
           current_hp = ?, temp_hp = ?, max_hp = ?, ac = ?, ac_override = ?, xp = ?, level = ?,
-          gold = ?, conditions_json = ?, condition_meta_json = ?, resources_json = ?, equipment_json = ?, hit_dice_json = ?,
+          gold = ?, copper = ?, conditions_json = ?, condition_meta_json = ?, resources_json = ?, equipment_json = ?, hit_dice_json = ?,
           spellcasting_json = ?, wild_shape_json = ?, pets_json = ?, exhaustion = ?, death_saves_json = ?, concentrating_on = ?,
           feats_json = ?, features_json = ?, subclass = ?,
           classes_json = ?, hit_dice_pools_json = ?,
@@ -565,6 +586,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
       next.xp,
       next.level,
       next.gold,
+      next.copper,
       JSON.stringify(next.conditions),
       JSON.stringify(next.conditionMeta),
       JSON.stringify(next.resources),

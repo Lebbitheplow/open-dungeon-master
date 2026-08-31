@@ -1,8 +1,14 @@
 import { z } from "zod";
 import { d20Expression, type Advantage } from "@/lib/dice";
 import { exhaustionRollState, mergeAdvantage, rollDerivation } from "@/lib/dm/condition-logic";
+import { encumbranceCovers, encumbranceFor } from "@/lib/srd/encumbrance";
 import { conditionRollRiders } from "@/lib/srd/condition-effects";
-import { defenseRiders, halfProficiencyCovers } from "@/lib/srd/feature-effects";
+import {
+  defenseRiders,
+  halfProficiencyCovers,
+  hasBrave,
+  hasHalflingLuck,
+} from "@/lib/srd/feature-effects";
 import { normalizeAbility, normalizeAdvantage, normalizeRollKind } from "@/lib/dm/arg-coerce";
 import { dcForDifficulty, normalizeDifficulty } from "@/lib/srd/dc";
 import { DM_TOOL_NAME_PATTERN, toolTextRegex, xmlToolCallRegex } from "@/lib/dm/tool-text";
@@ -11,6 +17,9 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { StreamedToolCall } from "@/lib/model-client";
 
 export const rollArgsSchema = z.object({
+  // Who may read the result. Only a human DM sets anything but "public";
+  // the AI DM is never offered it (src/lib/dm/viewer.ts).
+  visibility: z.enum(["public", "dm", "blind", "self"]).optional(),
   characterId: z.string().optional(),
   kind: z.preprocess(
     normalizeRollKind,
@@ -49,6 +58,9 @@ export const rollArgsSchema = z.object({
   // kind=damage only: damage type, so resistances and immunities apply.
   damageType: z.string().optional(),
   reason: z.string().optional(),
+  // kind=saving_throw only: what the save resists (a condition or effect), so
+  // defensive traits like Brave (advantage vs frightened) apply server-side.
+  against: z.string().max(60).optional(),
 }).transform((args) => {
   // Fold a difficulty tier down into a concrete dc so every downstream
   // consumer (success computation, result text) sees one number. An explicit
@@ -401,9 +413,23 @@ export function resolveRollExpression(
   args: RollArgs,
   sheet: CharacterSheet | null,
   // Context this pure module cannot read itself: an ally's aura covering
-  // the roller (dm/aura.ts, saving throws only). Callers with campaign
-  // access pass it; test doubles and modifier-only callers omit it.
-  extras?: { saveBonus?: number; saveNote?: string },
+  // the roller (dm/aura.ts, saving throws only) and the table's optional
+  // encumbrance rule. Callers with campaign access pass them; test doubles
+  // and modifier-only callers omit them.
+  extras?: {
+    saveBonus?: number;
+    saveNote?: string;
+    encumbrance?: boolean;
+    // Active effects riding on the roller for THIS kind of roll
+    // (src/lib/dm/effects-logic.ts). Passed in for the same reason the aura
+    // is: this module is pure and cannot read the effect table itself. The
+    // caller has already resolved the stack, so the advantage flags here are
+    // post-cancellation and simply join the merge below.
+    effectBonus?: number;
+    effectNote?: string;
+    effectAdvantage?: boolean;
+    effectDisadvantage?: boolean;
+  },
 ):
   | {
       expression: string;
@@ -456,6 +482,17 @@ export function resolveRollExpression(
     derivationKind === "saving_throw" &&
     derivationAbility !== undefined &&
     defense.saveAdvantage.has(derivationAbility);
+  // Halfling Lucky: attacks, checks, and saves reroll a natural 1 once. It
+  // rides the leading d20 term as the grammar's "r1" reroll suffix (placed
+  // before any Reliable Talent floor, which raises the surviving face).
+  const lucky = sheet && derivationKind ? hasHalflingLuck(sheet) : false;
+  // Brave: advantage on a saving throw against being frightened. The initial
+  // save the DM rolls says what it resists through `against`; the recurring
+  // save-ends re-roll is handled server-side in condition-tick.ts.
+  const braveSave =
+    derivationKind === "saving_throw" &&
+    /frighten|fear/i.test(args.against ?? "") &&
+    Boolean(sheet && hasBrave(sheet));
   // What the character is wearing, for the armor rules below. Test doubles
   // and partial sheets without equipment skip these.
   const wornBreakdown =
@@ -467,6 +504,19 @@ export function resolveRollExpression(
   const armorUntrained =
     Boolean(wornBreakdown?.unproficient) &&
     (derivationAbility === "str" || derivationAbility === "dex");
+  // Variant: Encumbrance. Past 10x Strength in pounds every physical roll
+  // is at disadvantage; the pack is weighed from the sheet, and the table's
+  // rule switch is the one thing the caller has to supply.
+  const load =
+    extras?.encumbrance && sheet && derivationKind
+      ? encumbranceFor({
+          strength: sheet.abilities.str,
+          equipment: sheet.equipment ?? [],
+          coins: sheet.gold ?? 0,
+        })
+      : null;
+  const overloaded =
+    Boolean(load?.disadvantage) && encumbranceCovers(derivationAbility ?? null);
   // Effect conditions (bless, bane, guidance, haste...) add their dice and
   // advantage to the holder's own rolls; one-shot riders land in `spent`.
   const effectKind =
@@ -483,12 +533,16 @@ export function resolveRollExpression(
       : { diceSuffix: "", advantageSources: [], notes: [], spent: [] };
   const advantage: Advantage = mergeAdvantage([
     args.advantage ?? "none",
+    ...(extras?.effectAdvantage ? ["advantage" as const] : []),
+    ...(extras?.effectDisadvantage ? ["disadvantage" as const] : []),
     derivation.advantage,
     exhaustion.advantage,
     ...effects.advantageSources,
     ...(helped ? ["advantage" as const] : []),
     ...(dangerSense ? ["advantage" as const] : []),
+    ...(braveSave ? ["advantage" as const] : []),
     ...(armorUntrained ? ["disadvantage" as const] : []),
+    ...(overloaded ? ["disadvantage" as const] : []),
   ]);
   // A held Bardic Inspiration die rides along on the next d20 the character
   // rolls and is spent by doing so; the caller clears the condition.
@@ -507,9 +561,12 @@ export function resolveRollExpression(
     ...effects.notes,
     ...(helped ? ["spends the Help their ally gave them: advantage"] : []),
     ...(dangerSense ? [`Danger Sense: advantage on ${derivationAbility?.toUpperCase()} saves`] : []),
+    ...(braveSave ? ["Brave: advantage on saves against being frightened"] : []),
     ...(armorUntrained
       ? ["wearing armor they are not trained in: disadvantage on STR and DEX rolls"]
       : []),
+    ...(overloaded && load?.note ? [load.note] : []),
+    ...(lucky ? ["Lucky: a natural 1 on the d20 is rerolled once"] : []),
   ];
   const conditionNotes = allNotes.length ? allNotes : undefined;
 
@@ -540,9 +597,12 @@ export function resolveRollExpression(
     const finalAdvantage = armorStealth
       ? mergeAdvantage([advantage, "disadvantage"])
       : advantage;
+    // Reroll (Lucky) comes before floor (Reliable Talent): the 1 is rerolled,
+    // then the surviving face is raised to 10 if still low.
+    const d20Mods = `${lucky ? "r1" : ""}${reliable ? "f10" : ""}`;
     const base = d20Expression(derived.skills[skill.id] ?? 0, finalAdvantage).replace(
       /^(\d+d20(?:k[hl]\d+)?)/,
-      reliable ? "$1f10" : "$1",
+      `$1${d20Mods}`,
     );
     const skillNotes = [
       ...(conditionNotes ?? []),
@@ -574,19 +634,26 @@ export function resolveRollExpression(
         ? Math.floor(derived.proficiencyBonus / 2)
         : 0;
     const auraBonus = args.kind === "saving_throw" ? (extras?.saveBonus ?? 0) : 0;
+    const effectBonus = extras?.effectBonus ?? 0;
     const modifier =
       (args.kind === "saving_throw"
         ? derived.saves[args.ability]
         : derived.abilityMods[args.ability]) +
       halfBonus +
-      auraBonus;
+      auraBonus +
+      effectBonus;
     const abilityNotes = [
       ...(conditionNotes ?? []),
       ...(halfBonus ? [`half proficiency on ability checks: +${halfBonus}`] : []),
       ...(auraBonus && extras?.saveNote ? [extras.saveNote] : []),
+      ...(extras?.effectNote ? [extras.effectNote] : []),
     ];
+    const luckyBase = d20Expression(modifier, advantage).replace(
+      /^(\d+d20(?:k[hl]\d+)?)/,
+      lucky ? "$1r1" : "$1",
+    );
     return {
-      expression: `${d20Expression(modifier, advantage)}${bonusDie}`,
+      expression: `${luckyBase}${bonusDie}`,
       detail: args.ability,
       ...(abilityNotes.length ? { conditionNotes: abilityNotes } : {}),
       ...inspirationFields,
@@ -598,8 +665,12 @@ export function resolveRollExpression(
       return { error: "initiative needs a valid characterId from GAME STATE." };
     }
     const derived = computeSheetDerived(sheet);
+    const luckyBase = d20Expression(derived.initiative, advantage).replace(
+      /^(\d+d20(?:k[hl]\d+)?)/,
+      lucky ? "$1r1" : "$1",
+    );
     return {
-      expression: `${d20Expression(derived.initiative, advantage)}${effects.diceSuffix}`,
+      expression: `${luckyBase}${effects.diceSuffix}`,
       detail: "initiative",
       ...(conditionNotes ? { conditionNotes } : {}),
     };

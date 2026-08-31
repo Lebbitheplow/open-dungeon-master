@@ -131,7 +131,7 @@ export function CharacterNotesDialog({
   notes,
   members,
   meUserId,
-  isLead,
+  steersStory,
   refreshNotes,
   onClose,
 }: {
@@ -140,7 +140,7 @@ export function CharacterNotesDialog({
   notes: Note[];
   members: CampaignMember[];
   meUserId: string;
-  isLead: boolean;
+  steersStory: boolean;
   refreshNotes: () => Promise<void>;
   onClose: () => void;
 }) {
@@ -183,7 +183,7 @@ export function CharacterNotesDialog({
             <NoteComposer
               campaignId={campaignId}
               characterId={sheet.id}
-              isLead={isLead}
+              steersStory={steersStory}
               refreshNotes={refreshNotes}
             />
 
@@ -198,7 +198,7 @@ export function CharacterNotesDialog({
                       note={note}
                       authorName={nameFor(note.authorUserId)}
                       canEdit={note.authorUserId === meUserId}
-                      canDelete={note.authorUserId === meUserId || isLead || ownsCharacter}
+                      canDelete={note.authorUserId === meUserId || steersStory || ownsCharacter}
                       refreshNotes={refreshNotes}
                     />
                   ))}

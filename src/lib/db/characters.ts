@@ -1,9 +1,10 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { createSheet, getSheetById, getSheetForUser } from "@/lib/db/sheets";
-import { spellSlotsFor, suggestedStartingHp } from "@/lib/srd";
-import { slotTableFor } from "@/lib/srd/multiclass";
-import { earnedAsiCount, removeAsiChoices } from "@/lib/srd/asi";
+import { adaptSheetToLevel } from "@/lib/characters/adapt";
 import { populateFeatures } from "@/lib/srd/features";
+import { dedupeName } from "@/lib/workshop/import";
+import { normalizeCampaignKind, type CampaignKind } from "@/lib/workshop/kind";
+import type { CampaignStatus } from "@/lib/campaign-types";
 import type { CharacterSheet, CreateSheetInput, SheetAttachment } from "@/lib/schemas/sheet";
 
 // The per-user character library (table library_characters). Campaign play
@@ -12,10 +13,23 @@ import type { CharacterSheet, CreateSheetInput, SheetAttachment } from "@/lib/sc
 // corrupts the library version. Durable progression flows back via
 // syncProgressToLibrary (manual button + automatic on campaign end).
 
+// A character somebody plays, or an ally the DM plays. The same sheet and
+// the same adaptation either way; what differs is the door they come through
+// into a campaign (src/lib/dm/companion-tools.ts).
+export const CHARACTER_ROLES = ["pc", "companion"] as const;
+export type CharacterRole = (typeof CHARACTER_ROLES)[number];
+
+// Anything that is not literally 'companion' is a player character, which is
+// what makes every row written before the column existed read correctly.
+export function normalizeCharacterRole(value: unknown): CharacterRole {
+  return value === "companion" ? "companion" : "pc";
+}
+
 export type LibraryCharacter = {
   id: string;
   userId: string;
   name: string;
+  role: CharacterRole;
   race: string;
   class: string;
   subclass: string;
@@ -31,6 +45,7 @@ type LibraryRow = {
   id: string;
   user_id: string;
   name: string;
+  role: string | null;
   race: string;
   class: string;
   subclass: string;
@@ -47,6 +62,7 @@ function mapCharacter(row: LibraryRow): LibraryCharacter {
     id: row.id,
     userId: row.user_id,
     name: row.name,
+    role: normalizeCharacterRole(row.role),
     race: row.race,
     class: row.class,
     subclass: row.subclass,
@@ -63,6 +79,7 @@ export function createCharacter(
   userId: string,
   level: number,
   input: CreateSheetInput,
+  role: CharacterRole = "pc",
 ): LibraryCharacter {
   const db = getDatabase();
   const id = crypto.randomUUID();
@@ -74,15 +91,16 @@ export function createCharacter(
   db.prepare(
     `
       INSERT INTO library_characters (
-        id, user_id, name, race, class, subclass, background, level, xp,
+        id, user_id, name, role, race, class, subclass, background, level, xp,
         sheet_json, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
     `,
   ).run(
     id,
     userId,
     input.name,
+    role,
     input.race,
     input.class,
     input.subclass,
@@ -111,11 +129,17 @@ export function getCharacterForUser(userId: string, id: string): LibraryCharacte
   return character && character.userId === userId ? character : null;
 }
 
-export function listCharactersForUser(userId: string): LibraryCharacter[] {
+// Every entry, or only the ones playing one part. Unfiltered by default so
+// no existing caller changes meaning.
+export function listCharactersForUser(
+  userId: string,
+  role?: CharacterRole,
+): LibraryCharacter[] {
   const rows = getDatabase()
     .prepare(`SELECT * FROM library_characters WHERE user_id = ? ORDER BY updated_at DESC`)
     .all(userId) as LibraryRow[];
-  return rows.map(mapCharacter);
+  const all = rows.map(mapCharacter);
+  return role ? all.filter((character) => character.role === role) : all;
 }
 
 export function updateCharacter(
@@ -196,88 +220,11 @@ export function instantiateIntoCampaign(
   if (getSheetForUser(campaignId, userId)) {
     return { error: "You already have a character in this campaign." };
   }
-  const sheet = structuredClone(character.sheet);
   const level = Math.max(1, Math.min(20, targetLevel));
-
-  // Strip ASI choices earned above the campaign's starting level: reverse
-  // their ability bonuses (slightly lossy for scores that hit the 20 cap)
-  // and drop their feats. Up-scaling grants no automatic extra ASIs; the
-  // player edits the sheet in-game instead. Level-up ASIs taken mid-campaign
-  // sync back as raw abilities without a recorded choice, so those cannot
-  // be reversed here either.
-  const storedChoices = sheet.asiChoices ?? [];
-  const keptChoiceCount = earnedAsiCount(level);
-  if (storedChoices.length > keptChoiceCount) {
-    const dropped = storedChoices.slice(keptChoiceCount);
-    sheet.abilities = removeAsiChoices(sheet.abilities, dropped);
-    const droppedFeats = new Set(
-      dropped.flatMap((choice) => (choice.mode === "feat" ? [choice.feat] : [])),
-    );
-    sheet.feats = (sheet.feats ?? []).filter((feat) => !droppedFeats.has(feat));
-    sheet.asiChoices = storedChoices.slice(0, keptChoiceCount);
-  }
-
-  // A multiclassed library character adapting to a lower level sheds levels
-  // from the LAST class first (acquisition order = array order); classes
-  // stripped to zero drop entirely, along with their hit-die pool and
-  // caster entry. Up-scaling adds levels to the primary class.
-  if ((sheet.classes ?? []).length > 1) {
-    let excess = (sheet.classes ?? []).reduce((sum, entry) => sum + entry.level, 0) - level;
-    const classes = (sheet.classes ?? []).map((entry) => ({ ...entry }));
-    for (let index = classes.length - 1; index > 0 && excess > 0; index -= 1) {
-      const take = Math.min(classes[index].level, excess);
-      classes[index].level -= take;
-      excess -= take;
-    }
-    if (excess !== 0) {
-      classes[0].level = Math.max(1, Math.min(20, classes[0].level - excess));
-    }
-    sheet.classes = classes.filter((entry) => entry.level > 0);
-    const keptIds = new Set(sheet.classes.map((entry) => entry.id.toLowerCase()));
-    sheet.hitDicePools =
-      sheet.hitDicePools
-        ?.filter((pool) => keptIds.has(pool.classId.toLowerCase()))
-        .map((pool) => ({
-          ...pool,
-          total:
-            sheet.classes!.find((entry) => entry.id.toLowerCase() === pool.classId.toLowerCase())
-              ?.level ?? pool.total,
-          spent: 0,
-        })) ?? null;
-    if (sheet.classes.length < 2) {
-      sheet.hitDicePools = null;
-    }
-    if (sheet.spellcasting?.casters?.length) {
-      sheet.spellcasting.casters = sheet.spellcasting.casters.filter((caster) =>
-        keptIds.has(caster.classId.toLowerCase()),
-      );
-      if (!keptIds.has("warlock")) {
-        delete sheet.spellcasting.pact;
-      }
-    }
-  }
-
-  sheet.hitDice = { ...sheet.hitDice, total: level, spent: 0 };
-  if (level !== character.level) {
-    const suggested = suggestedStartingHp(sheet.class, sheet.race, sheet.abilities.con, level);
-    // Only classes the SRD tables know produce a real suggestion; otherwise
-    // scale the stored HP roughly by level.
-    sheet.maxHp =
-      suggested !== 8 || sheet.class === "wizard"
-        ? suggested
-        : Math.max(1, Math.round((sheet.maxHp / Math.max(1, character.level)) * level));
-  }
-  if (sheet.spellcasting) {
-    const slots =
-      (sheet.classes ?? []).length > 1
-        ? slotTableFor({ class: sheet.class, classes: sheet.classes })
-        : spellSlotsFor(sheet.class, level);
-    if (Object.keys(slots).length) {
-      sheet.spellcasting.slots = Object.fromEntries(
-        Object.entries(slots).map(([slotLevel, max]) => [slotLevel, { max, used: 0 }]),
-      );
-    }
-  }
+  // The adaptation itself lives in src/lib/characters/adapt.ts, pure, so a
+  // companion coming out of this same library gets exactly the work done to
+  // it and a test can drive every branch without a database.
+  const sheet = adaptSheetToLevel(character.sheet, character.level, level);
 
   return createSheet(campaignId, userId, level, sheet, characterId);
 }
@@ -341,4 +288,107 @@ export function syncProgressToLibrary(sheetId: string): LibraryCharacter | null 
       character.id,
     );
   return getCharacter(character.id);
+}
+
+// ---- where a character is playing ----
+
+// A library character is a template; each campaign holds its own copy
+// (character_sheets.library_character_id). Reading the link backwards is what
+// lets the roster say "this one is at two tables", which is the difference
+// between a shelf of sheets and a shelf you can navigate.
+export type CharacterAssignment = {
+  campaignId: string;
+  title: string;
+  kind: CampaignKind;
+  status: CampaignStatus;
+};
+
+type AssignmentRow = {
+  character_id: string;
+  campaign_id: string;
+  title: string;
+  kind: string | null;
+  status: CampaignStatus;
+};
+
+// Every assignment for every character this user owns, keyed by character id.
+// One query rather than one per tile: the roster renders all of them at once.
+export function listAssignmentsForUser(userId: string): Map<string, CharacterAssignment[]> {
+  const rows = getDatabase()
+    .prepare(
+      `SELECT cs.library_character_id AS character_id, c.id AS campaign_id,
+              c.title AS title, c.kind AS kind, c.status AS status
+       FROM character_sheets cs
+       JOIN campaigns c ON c.id = cs.campaign_id
+       JOIN library_characters lc ON lc.id = cs.library_character_id
+       WHERE lc.user_id = ?
+       ORDER BY c.updated_at DESC`,
+    )
+    .all(userId) as AssignmentRow[];
+  const byCharacter = new Map<string, CharacterAssignment[]>();
+  for (const row of rows) {
+    const list = byCharacter.get(row.character_id) ?? [];
+    list.push({
+      campaignId: row.campaign_id,
+      title: row.title,
+      kind: normalizeCampaignKind(row.kind),
+      status: row.status,
+    });
+    byCharacter.set(row.character_id, list);
+  }
+  return byCharacter;
+}
+
+export function listAssignmentsForCharacter(
+  userId: string,
+  characterId: string,
+): CharacterAssignment[] {
+  return listAssignmentsForUser(userId).get(characterId) ?? [];
+}
+
+// ---- copying ----
+
+// A duplicate of a library character, under a numbered name. Copied verbatim
+// rather than rebuilt: the stored sheet already has its features populated,
+// and re-deriving them would quietly change a sheet somebody had hand-edited.
+//
+// The portrait travels as a path, like a prepared map's backdrop: it points
+// at a file in public/uploads that both copies can read, and duplicating the
+// image would cost megabytes to show the same face.
+export function duplicateCharacter(userId: string, id: string): LibraryCharacter | null {
+  const source = getCharacterForUser(userId, id);
+  if (!source) {
+    return null;
+  }
+  const taken = new Set(
+    listCharactersForUser(userId).map((character) => character.name.trim().toLowerCase()),
+  );
+  // Trimmed before the numbering so a long name cannot lose the "(2)".
+  const name = dedupeName(`${source.name} (copy)`.slice(0, 72), taken);
+  const copyId = crypto.randomUUID();
+  const now = nowIso();
+  getDatabase()
+    .prepare(
+      `INSERT INTO library_characters (
+         id, user_id, name, role, race, class, subclass, background, level, xp,
+         sheet_json, created_at, updated_at
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      copyId,
+      userId,
+      name,
+      source.role,
+      source.race,
+      source.class,
+      source.subclass,
+      source.background,
+      source.level,
+      source.xp,
+      JSON.stringify({ ...source.sheet, name }),
+      now,
+      now,
+    );
+  return getCharacter(copyId);
 }

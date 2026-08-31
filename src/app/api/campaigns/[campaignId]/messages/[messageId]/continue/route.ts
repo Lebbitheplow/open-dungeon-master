@@ -1,4 +1,4 @@
-import { isErrorResponse, requireLead } from "@/lib/campaign-api";
+import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { getLatestDmMessage } from "@/lib/db/messages";
 import { publishPersisted } from "@/lib/events";
 import { getDmStatus } from "@/lib/dm/status";
@@ -16,7 +16,7 @@ export async function POST(
   { params }: { params: Promise<{ campaignId: string; messageId: string }> },
 ) {
   const { campaignId, messageId } = await params;
-  const context = await requireLead(campaignId);
+  const context = await requireStoryAuthority(campaignId);
   if (isErrorResponse(context)) {
     return context;
   }

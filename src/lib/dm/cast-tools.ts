@@ -749,7 +749,10 @@ export function handleCastAtPlayer(
   const resolved = resolveRollExpression(
     { kind: "saving_throw", ability: args.saveAbility, dc: args.dc },
     sheet,
-    aura ? { saveBonus: aura.bonus, saveNote: aura.note } : undefined,
+    {
+      ...(aura ? { saveBonus: aura.bonus, saveNote: aura.note } : {}),
+      encumbrance: campaign.gameSettings.variantRules.encumbrance,
+    },
   );
   if ("error" in resolved) {
     return { error: resolved.error };

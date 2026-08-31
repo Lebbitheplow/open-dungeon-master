@@ -37,6 +37,10 @@ export type ItemEntry = ContentEntry & {
   rarity: string;
   cost: string;
   category: string;
+  // Pounds. 0 means the source did not say, not that the item is weightless;
+  // itemWeightLb in src/lib/srd/encumbrance.ts fills the gaps it can and
+  // reports the rest as unweighed.
+  weight: number;
 };
 
 type SearchOptions = {
@@ -192,6 +196,7 @@ export function searchItems(
       rarity: string;
       cost: string;
       category: string;
+      weight: number;
       data_json: string;
     }>;
     rows.push(
@@ -204,6 +209,7 @@ export function searchItems(
         rarity: row.rarity,
         cost: row.cost,
         category: row.category,
+        weight: row.weight ?? 0,
         data: parseData(row.data_json),
       })),
     );
@@ -214,6 +220,7 @@ export function searchItems(
     rarity: String(entry.data.rarity ?? ""),
     cost: String(entry.data.cost ?? ""),
     category: "homebrew",
+    weight: Number(entry.data.weight ?? 0) || 0,
   }));
   const merged = [...rows, ...brews];
   return options.kind ? merged.filter((item) => item.kind === options.kind) : merged;
@@ -438,4 +445,61 @@ export function spellMechanicsFor(input: {
     spellLevel: authored?.level ?? 1,
     concentration: authored?.concentration ?? false,
   };
+}
+
+// ---- item weights ----
+
+// Name -> pounds, built once from the whole items table (about 2,000 rows,
+// a few hundred kilobytes) because the optional encumbrance rule asks for a
+// weight on every line of every pack on every sheet read. Rows the source
+// left blank carry 0 and are skipped, so an unknown weight stays unknown
+// rather than becoming a confident zero.
+let weightIndex: Map<string, number> | null = null;
+
+function itemWeightIndex(): Map<string, number> {
+  if (weightIndex) {
+    return weightIndex;
+  }
+  const index = new Map<string, number>();
+  const db = getContentDb();
+  if (db) {
+    const rows = db.prepare(`SELECT name, weight FROM items WHERE weight > 0`).all() as Array<{
+      name: string;
+      weight: number;
+    }>;
+    for (const row of rows) {
+      const key = itemWeightKey(row.name);
+      // First writer wins: the v1 weapon and armor tables are imported
+      // before the v2 gear list, and their rows are the SRD ones.
+      if (key && !index.has(key)) {
+        index.set(key, row.weight);
+      }
+    }
+  }
+  weightIndex = index;
+  return index;
+}
+
+// The lookup key for an item name: lowercased, punctuation flattened, and a
+// trailing count dropped so "Arrows (20)" finds "Arrows". A magic bonus goes
+// too, so "+1 Longsword" weighs what a longsword weighs.
+function itemWeightKey(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/\(\s*\d+\s*\)\s*$/, " ")
+    .replace(/[+-]\d+/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+// Pounds per unit for a free-text item name, or null when the content pack
+// has nothing. Callers fall back to the SRD armor table
+// (src/lib/srd/encumbrance.ts) before giving up.
+export function itemWeightByName(name: string): number | null {
+  const key = itemWeightKey(name ?? "");
+  if (!key) {
+    return null;
+  }
+  const index = itemWeightIndex();
+  return index.get(key) ?? index.get(key.replace(/s$/, "")) ?? null;
 }

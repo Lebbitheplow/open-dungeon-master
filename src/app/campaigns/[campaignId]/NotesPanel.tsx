@@ -188,12 +188,12 @@ function NoteCard({
 export function NoteComposer({
   campaignId,
   characterId = null,
-  isLead,
+  steersStory,
   refreshNotes,
 }: {
   campaignId: string;
   characterId?: string | null;
-  isLead: boolean;
+  steersStory: boolean;
   refreshNotes: () => Promise<void>;
 }) {
   const [visibility, setVisibility] = useState<"public" | "private">("private");
@@ -204,7 +204,7 @@ export function NoteComposer({
 
   const publicLabel = characterId
     ? "Party note"
-    : isLead
+    : steersStory
       ? "Party note"
       : "Suggest party note";
 
@@ -281,7 +281,7 @@ export function NoteComposer({
         placeholder={
           visibility === "private"
             ? "Only you will see this"
-            : isLead || characterId
+            : steersStory || characterId
               ? "Visible to the whole party"
               : "Sent to the party lead for approval"
         }
@@ -306,14 +306,14 @@ export function NotesPanel({
   notes,
   members,
   meUserId,
-  isLead,
+  steersStory,
   refreshNotes,
 }: {
   campaignId: string;
   notes: Note[];
   members: CampaignMember[];
   meUserId: string;
-  isLead: boolean;
+  steersStory: boolean;
   refreshNotes: () => Promise<void>;
 }) {
   const nameFor = (userId: string) =>
@@ -326,10 +326,10 @@ export function NotesPanel({
   const pending = campaignNotes
     .filter((note) => note.status === "pending")
     .sort((a, b) => b.seq - a.seq);
-  const leadQueue = isLead ? pending : [];
+  const leadQueue = steersStory ? pending : [];
   // DM suggestions carry the owner's user id for the FK; keep them out of a
   // non-lead owner's "my suggestions" list.
-  const mySuggestions = isLead
+  const mySuggestions = steersStory
     ? []
     : pending.filter((note) => note.authorUserId === meUserId && note.authorKind !== "dm");
   const myPrivate = campaignNotes
@@ -340,7 +340,7 @@ export function NotesPanel({
 
   return (
     <div className="space-y-3">
-      <NoteComposer campaignId={campaignId} isLead={isLead} refreshNotes={refreshNotes} />
+      <NoteComposer campaignId={campaignId} steersStory={steersStory} refreshNotes={refreshNotes} />
 
       {leadQueue.length ? (
         <div className="space-y-1.5">
@@ -396,9 +396,9 @@ export function NotesPanel({
                 campaignId={campaignId}
                 note={note}
                 authorName={nameFor(note.authorUserId)}
-                canEdit={isLead || note.authorUserId === meUserId}
-                canDelete={isLead || note.authorUserId === meUserId}
-                canPin={isLead}
+                canEdit={steersStory || note.authorUserId === meUserId}
+                canDelete={steersStory || note.authorUserId === meUserId}
+                canPin={steersStory}
                 canApprove={false}
                 deleteLabel="Delete note"
                 refreshNotes={refreshNotes}
@@ -407,7 +407,7 @@ export function NotesPanel({
           </ul>
         ) : (
           <p className="px-1 text-[11px] text-stone-600">
-            {isLead
+            {steersStory
               ? "Pin key events and facts here; the DM treats them as canon."
               : "Nothing recorded yet. Suggest a note and the party lead can publish it."}
           </p>

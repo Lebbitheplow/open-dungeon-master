@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isErrorResponse, isLead, requireMember } from "@/lib/campaign-api";
+import { isErrorResponse, steersStory, requireMember } from "@/lib/campaign-api";
 import { getCampaignMessage, updateMessageContent } from "@/lib/db/messages";
 import { publishPersisted } from "@/lib/events";
 import { runLoreCheck } from "@/lib/dm/lore-check";
@@ -42,7 +42,7 @@ export async function POST(
     if (!parsed.success) {
       return Response.json({ error: "Invalid accept request." }, { status: 400 });
     }
-    if (!isLead(context)) {
+    if (!steersStory(context)) {
       return Response.json(
         { error: "Only the party lead can accept a rewrite." },
         { status: 403 },

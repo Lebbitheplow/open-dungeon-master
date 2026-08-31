@@ -101,6 +101,10 @@ function createSchema(db) {
       slug TEXT PRIMARY KEY, name TEXT NOT NULL, document_slug TEXT NOT NULL,
       kind TEXT NOT NULL CHECK (kind IN ('weapon','armor','gear','magic_item')),
       rarity TEXT NOT NULL, cost TEXT NOT NULL, category TEXT NOT NULL,
+      -- Pounds. 0 means "the source did not say", not "weightless"; the
+      -- encumbrance rule reports how many carried items are unweighed rather
+      -- than pretending the total is exact.
+      weight REAL NOT NULL DEFAULT 0,
       data_json TEXT NOT NULL
     );
     CREATE TABLE monsters (
@@ -408,7 +412,7 @@ async function main() {
   );
 
   console.log("items (weapons, armor, magic items, gear)...");
-  const itemColumns = ["slug", "name", "document_slug", "kind", "rarity", "cost", "category"];
+  const itemColumns = ["slug", "name", "document_slug", "kind", "rarity", "cost", "category", "weight"];
   insertRows(db, "items", itemColumns, (await fetchAllPages("/v1/weapons/")).map(normalizeWeapon));
   insertRows(db, "items", itemColumns, (await fetchAllPages("/v1/armor/")).map(normalizeArmor));
   insertRows(

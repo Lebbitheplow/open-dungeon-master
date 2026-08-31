@@ -9,6 +9,8 @@ import { computeSheetDerived } from "@/lib/srd";
 import { saveModFor } from "@/lib/bestiary/statblock";
 import { allySaveAura } from "@/lib/dm/aura";
 import { removeConditions, tickConditions } from "@/lib/dm/condition-logic";
+import { hasBrave } from "@/lib/srd/feature-effects";
+import { tickEffectRound } from "@/lib/db/active-effects";
 import { publishEncounter } from "@/lib/dm/enemy-damage";
 
 // Round-wrap condition upkeep: timed conditions count down and expire,
@@ -20,6 +22,13 @@ import { publishEncounter } from "@/lib/dm/enemy-damage";
 
 export function tickEncounterConditions(campaign: Campaign, encounter: Encounter) {
   const lines: string[] = [];
+
+  // Active effects count down with conditions, so an effect and a condition
+  // applied in the same breath end in the same breath
+  // (src/lib/dm/effects-logic.ts).
+  for (const expired of tickEffectRound(campaign.id)) {
+    lines.push(`${expired.name} wears off.`);
+  }
 
   for (const enemy of listEnemies(encounter.id)) {
     if (enemy.status !== "alive" || !enemy.conditions.length) {
@@ -75,14 +84,20 @@ export function tickEncounterConditions(campaign: Campaign, encounter: Encounter
       // A nearby paladin's aura rides re-saves too (map-scoped).
       const aura = allySaveAura(campaign.id, sheet);
       const saveMod = computeSheetDerived(sheet).saves[due.ability] + (aura?.bonus ?? 0);
-      const outcome = rollExpression(d20Expression(saveMod));
+      // Brave: advantage on the save to shake off being frightened.
+      const brave = due.name.toLowerCase().includes("frighten") && hasBrave(sheet);
+      const advantage = brave ? "advantage" : "none";
+      const outcome = rollExpression(d20Expression(saveMod, advantage));
       const roll = insertRoll({
         campaignId: campaign.id,
         characterId: sheet.id,
         requestedBy: "dm",
         kind: "saving_throw",
-        detail: `${due.ability.toUpperCase()} save to end ${due.name}`,
+        detail: `${due.ability.toUpperCase()} save to end ${due.name}${
+          brave ? " (Brave: advantage)" : ""
+        }`,
         dc: due.dc,
+        ...(brave ? { advantage: "advantage" as const } : {}),
         result: outcome,
       });
       publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", {

@@ -20,6 +20,7 @@ import { CharacterMenu } from "@/app/campaigns/[campaignId]/CharacterMenu";
 import { CharacterNotesDialog } from "@/app/campaigns/[campaignId]/CharacterNotesDialog";
 import { CharacterSheetDialog } from "@/app/campaigns/[campaignId]/CharacterSheetDialog";
 import { CompanionBuilderDialog } from "@/app/campaigns/[campaignId]/CompanionBuilderDialog";
+import { DiceSourcesButton } from "@/app/campaigns/[campaignId]/DiceSourcesDialog";
 import { LeadEditDialog } from "@/app/campaigns/[campaignId]/LeadEditDialog";
 import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
 import type { CampaignMember } from "@/lib/campaign-types";
@@ -148,7 +149,7 @@ export function PartyPanel({
   meUserId,
   spotlightUserIds = [],
   embedded = false,
-  isLead = false,
+  steersStory = false,
   leadUserId = "",
   canTransferLead = false,
   notes = [],
@@ -156,6 +157,7 @@ export function PartyPanel({
   refreshNotes,
   onMessageUser,
   realDiceAllowed = false,
+  encumbranceRule = false,
   inCombat = false,
   campaignId = "",
   companionsAvailable = false,
@@ -165,9 +167,12 @@ export function PartyPanel({
 }: {
   sheets: CharacterSheet[];
   meUserId: string;
+  // The table's optional encumbrance rule; the sheet only warns about a
+  // heavy pack when the rule that penalizes it is actually on.
+  encumbranceRule?: boolean;
   spotlightUserIds?: string[];
   embedded?: boolean;
-  isLead?: boolean;
+  steersStory?: boolean;
   leadUserId?: string;
   canTransferLead?: boolean;
   notes?: Note[];
@@ -306,7 +311,7 @@ export function PartyPanel({
               ) : null}
               <CharacterMenu
                 sheet={sheet}
-                isLead={isLead}
+                steersStory={steersStory}
                 leadUserId={leadUserId}
                 canTransferLead={canTransferLead}
                 onViewSheet={() => setViewingSheetId(sheet.id)}
@@ -524,7 +529,10 @@ export function PartyPanel({
                   {sheet.portrait ? "Change portrait" : "Add portrait"}
                 </button>
                 {realDiceAllowed && myMember ? (
-                  <RealDiceToggle campaignId={sheet.campaignId} member={myMember} />
+                  <>
+                    <RealDiceToggle campaignId={sheet.campaignId} member={myMember} />
+                    <DiceSourcesButton />
+                  </>
                 ) : null}
                 {sheet.libraryCharacterId ? (
                   <SaveToLibraryButton campaignId={sheet.campaignId} />
@@ -536,7 +544,7 @@ export function PartyPanel({
         );
       })}
 
-      {campaignId && companionsAvailable && isLead ? (
+      {campaignId && companionsAvailable && steersStory ? (
         <div className="space-y-1.5">
           <RequestCompanionButton campaignId={campaignId} />
           {companionBuildAvailable ? (
@@ -574,7 +582,8 @@ export function PartyPanel({
         <CharacterSheetDialog
           sheet={viewingSheet}
           mine={viewingSheet.userId === meUserId}
-          isLead={isLead}
+          steersStory={steersStory}
+          encumbranceRule={encumbranceRule}
           inCombat={inCombat}
           onAdjust={() => {
             // Close the sheet dialog fully before mounting the edit dialog;
@@ -603,7 +612,7 @@ export function PartyPanel({
           notes={notes}
           members={members}
           meUserId={meUserId}
-          isLead={isLead}
+          steersStory={steersStory}
           refreshNotes={refreshNotes}
           onClose={() => setNotesSheetId("")}
         />

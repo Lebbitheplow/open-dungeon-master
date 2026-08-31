@@ -823,3 +823,33 @@ export function buildCorrectionPrompt(contradictions: readonly Contradiction[]):
 ${lines}
 Rewrite the whole narration so it matches the real results exactly. Keep everything else: the same scene, the same length, the same voice, the same closing beat. Change only what contradicts the results. Do not call any tool, do not mention this correction, and reply with the corrected narration only.`;
 }
+
+// ---------------------------------------------------------------------------
+// Part 5: fights announced in prose alone
+// ---------------------------------------------------------------------------
+
+// The model sometimes writes the encounter it was supposed to start:
+// "**Start Encounter: Ward Construct (CR 1/4)** **Enemies:** 1x ..." with no
+// start_encounter call behind it. Nothing exists behind that text: no
+// enemies, no initiative order, no HP, and the next player action has nothing
+// to swing at. The matchers are deliberately narrow, in the spirit of the
+// rest of this file: an announcement header, a call for initiative, or a
+// stat-block style enemy roster; never mere talk of fighting.
+export function announcesEncounterStart(narration: string): boolean {
+  const clauses = narrationClauses(narration);
+  const phrase =
+    /\bstart(?:s|ing|ed)?\s+(?:the\s+|an?\s+)?encounter\b|\bencounter\s+(?:start(?:s|ed)?|begins|began)\b|\broll\s+(?:for\s+)?initiative\b/i;
+  if (clauses.some((clause) => !hedged(clause) && phrase.test(clause))) {
+    return true;
+  }
+  // A roster line ("**Enemies:** 1x ...") only counts alongside another
+  // stat-block field, so a shopping list or a scouting report never fires.
+  const text = stripQuotedSpeech(narration);
+  const roster = /(?:^|[\n*#>-])\s*\**enemies\**\s*:/i.test(text);
+  return roster && /\bCR\s*\d|\(\s*CR\b|\**surprise\**\s*:|\binitiative\b/i.test(text);
+}
+
+// What the turn loop sends back when a fight was announced with no
+// start_encounter behind it. Kept beside the other correction text so the
+// wording is testable without a model call.
+export const FAKE_ENCOUNTER_PROMPT = `[System] Your narration announced a fight starting, but you never called start_encounter, so no encounter exists: no enemies, no initiative, no hit points. Combat runs only on server-tracked enemies. Call start_encounter now with the enemies you announced, then narrate the fight breaking out from the tool results. Do not restate enemy counts, CR, or stat-block details in prose; the encounter panel shows the table those.`;

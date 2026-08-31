@@ -2,117 +2,39 @@
 
 import { memo, useEffect, useMemo, useRef } from "react";
 import { cn } from "@/lib/cn";
-import type { MapTheme } from "@/lib/battlemap/generate";
+import {
+  buildCells,
+  PALETTES,
+  shade,
+  TILE,
+} from "@/app/campaigns/[campaignId]/battleMapCells";
+import { backdropRect } from "@/lib/battlemap/backdrop";
 import type { PlayerMapView } from "@/lib/battlemap/view";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // Pure SVG renderer for a player's fogged battle-map view, themed by the
 // environment the generator picked. All game rules live server-side; this
 // only draws what the projection says and reports tile clicks upward.
+//
+// Terrain is drawn in layers so richer detail (beveled walls, cast shadows,
+// layered water, a fractal-noise grain pass) never leaks past the fog: the
+// projection blanks unexplored tiles to " ", so neighbour lookups below stop
+// cleanly at explored edges.
+//
+// Everything above the terrain is an overlay the parent hands down: a
+// measured template, a drag ruler, live pings, the token the DM has picked
+// up. The grid draws them and reports clicks; it decides nothing.
 
-const TILE = 32;
-
-// Per-theme tile palette: floor, wall, water, difficult ground, and the
-// wall decoration drawn on top (trees for wilds, blocks for stonework).
-type Palette = {
-  floor: string;
-  floorAlt: string;
-  wall: string;
-  wallDeco: "tree" | "stone" | "rock";
-  water: string;
-  difficult: string;
+export type MapOverlay = {
+  // Tile indexes covered by a measured area (src/lib/battlemap/template.ts).
+  template?: number[];
+  // The drag ruler: the path a move would take and what it would cost.
+  ruler?: { path: Array<{ x: number; y: number }>; label: string; overBudget: boolean } | null;
+  // Somebody pointing at a tile. Ephemeral, so these arrive and expire.
+  pings?: Array<{ x: number; y: number; by: string; at: number }>;
+  // The token the DM is holding, waiting for a tile to put it on.
+  selectedTokenId?: string | null;
 };
-
-const PALETTES: Record<MapTheme, Palette> = {
-  cave: {
-    floor: "#26232b",
-    floorAlt: "#2a2731",
-    wall: "#0b0a10",
-    wallDeco: "rock",
-    water: "#173a4f",
-    difficult: "#37323b",
-  },
-  forest: {
-    floor: "#25301f",
-    floorAlt: "#293524",
-    wall: "#101a0d",
-    wallDeco: "tree",
-    water: "#1e3a5f",
-    difficult: "#3a3d24",
-  },
-  swamp: {
-    floor: "#2a2f22",
-    floorAlt: "#2e3326",
-    wall: "#151c11",
-    wallDeco: "tree",
-    water: "#2b3d33",
-    difficult: "#3d3b26",
-  },
-  riverside: {
-    floor: "#33302a",
-    floorAlt: "#37342d",
-    wall: "#191713",
-    wallDeco: "rock",
-    water: "#1d4b73",
-    difficult: "#42402f",
-  },
-  interior: {
-    floor: "#322a22",
-    floorAlt: "#362e25",
-    wall: "#14100c",
-    wallDeco: "stone",
-    water: "#1e3a5f",
-    difficult: "#3f3a2d",
-  },
-  field: {
-    floor: "#2c3324",
-    floorAlt: "#303728",
-    wall: "#1a1d14",
-    wallDeco: "rock",
-    water: "#1e3a5f",
-    difficult: "#403d28",
-  },
-};
-
-// Deterministic per-tile jitter so floors get a subtle hand-laid texture
-// without re-rendering differently each time.
-function tileNoise(x: number, y: number): number {
-  const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
-  return n - Math.floor(n);
-}
-
-function WallDecoration({ kind, x, y }: { kind: Palette["wallDeco"]; x: number; y: number }) {
-  const px = x * TILE;
-  const py = y * TILE;
-  if (kind === "tree") {
-    return (
-      <g pointerEvents="none" opacity={0.85}>
-        <circle cx={px + TILE / 2} cy={py + TILE / 2 - 2} r={TILE / 3} fill="#1d2b17" />
-        <circle cx={px + TILE / 2 - 5} cy={py + TILE / 2 + 3} r={TILE / 4.5} fill="#233620" />
-        <circle cx={px + TILE / 2 + 5} cy={py + TILE / 2 + 2} r={TILE / 5} fill="#1a2814" />
-      </g>
-    );
-  }
-  if (kind === "stone") {
-    return (
-      <g pointerEvents="none" stroke="#2b241c" strokeWidth={1} opacity={0.8}>
-        <line x1={px} y1={py + TILE / 2} x2={px + TILE} y2={py + TILE / 2} />
-        <line x1={px + TILE / 3} y1={py} x2={px + TILE / 3} y2={py + TILE / 2} />
-        <line x1={px + (2 * TILE) / 3} y1={py + TILE / 2} x2={px + (2 * TILE) / 3} y2={py + TILE} />
-      </g>
-    );
-  }
-  return (
-    <g pointerEvents="none" opacity={0.7}>
-      <polygon
-        points={`${px + 6},${py + TILE - 7} ${px + TILE / 2},${py + 6} ${px + TILE - 6},${py + TILE - 7}`}
-        fill="#221f26"
-        stroke="#141218"
-        strokeWidth={1}
-      />
-    </g>
-  );
-}
 
 // Memoized: the session view re-renders on every SSE event (including each
 // streamed narration token), and rebuilding width*height SVG cells each
@@ -123,15 +45,44 @@ export const BattleMapGrid = memo(
     view,
     sheets,
     onTileClick,
+    onTileHover,
+    onTokenClick,
+    everyTileClickable = false,
+    overlay,
   }: {
     view: PlayerMapView;
     sheets: CharacterSheet[];
     onTileClick?: (x: number, y: number) => void;
+    onTileHover?: (x: number, y: number | null) => void;
+    onTokenClick?: (tokenId: string) => void;
+    // Players may only click where they can walk, so the reachable overlay
+    // is the whole clickable surface. A DM placing a token needs the rest of
+    // the board too, which is what this turns on.
+    everyTileClickable?: boolean;
+    overlay?: MapOverlay;
   }) {
     const clickRef = useRef(onTileClick);
+    const hoverRef = useRef(onTileHover);
+    const tokenRef = useRef(onTokenClick);
     useEffect(() => {
       clickRef.current = onTileClick;
+      hoverRef.current = onTileHover;
+      tokenRef.current = onTokenClick;
     });
+    // Touch has no hover, so the ruler and range previews the mouse gets for
+    // free would never appear on a phone. Instead the first tap on a tile IS
+    // the preview: it feeds the hover handler (the walk, its cost in feet, a
+    // held piece's route) and commits nothing, and the second tap on the
+    // same tile is the one that goes through. Only taps take this route, and
+    // only when a hover handler is wired at all, so mouse and pen clicks and
+    // every preview-less mode (pointing, placing, measuring) keep their
+    // one-step feel.
+    const pointerTypeRef = useRef("");
+    const touchPreviewRef = useRef<{ x: number; y: number } | null>(null);
+    // A new board must not inherit the old one's pending confirm tap.
+    useEffect(() => {
+      touchPreviewRef.current = null;
+    }, [view.mapId]);
     const { width, height } = view;
     const palette = PALETTES[view.theme] ?? PALETTES.field;
     const portraitsByRef = new Map(
@@ -143,15 +94,79 @@ export const BattleMapGrid = memo(
     // projection itself changes; token/light layers below stay cheap.
     const cells = useMemo(() => buildCells(view, palette), [view, palette]);
 
+    // A transparent grid that makes every tile a click and hover target.
+    // It sits UNDER the tokens so that clicking a figure still reaches the
+    // figure, which is the whole point of picking one up.
+    const catcher = useMemo(() => {
+      if (!everyTileClickable) {
+        return null;
+      }
+      const rects: React.ReactNode[] = [];
+      for (let idx = 0; idx < width * height; idx += 1) {
+        const x = idx % width;
+        const y = Math.floor(idx / width);
+        rects.push(
+          <rect
+            key={`hit-${idx}`}
+            x={x * TILE}
+            y={y * TILE}
+            width={TILE}
+            height={TILE}
+            fill="transparent"
+            className="cursor-crosshair"
+            data-tile-x={x}
+            data-tile-y={y}
+          />,
+        );
+      }
+      return <g>{rects}</g>;
+    }, [everyTileClickable, width, height]);
+
     // Delegated tile clicks: the memoized cell layer carries data attributes
     // instead of per-rect closures, so cells never rebuild for a new handler.
-    function handleSvgClick(event: React.MouseEvent<SVGSVGElement>) {
+    function readTile(event: React.MouseEvent<SVGSVGElement>) {
       const target = event.target as SVGElement;
       const x = target.dataset?.tileX;
       const y = target.dataset?.tileY;
-      if (x !== undefined && y !== undefined) {
-        clickRef.current?.(Number(x), Number(y));
+      return x !== undefined && y !== undefined
+        ? { x: Number(x), y: Number(y), tokenId: target.dataset?.tokenId }
+        : { x: null, y: null, tokenId: target.dataset?.tokenId };
+    }
+
+    function handleSvgClick(event: React.MouseEvent<SVGSVGElement>) {
+      const { x, y, tokenId } = readTile(event);
+      if (tokenId) {
+        tokenRef.current?.(tokenId);
+        return;
       }
+      if (x === null || y === null) {
+        return;
+      }
+      // First tap previews, second commits; see the refs above. Browsers
+      // fire compatibility mouse events on a tap, but not reliably, so the
+      // hover handler is called here rather than trusted to have run.
+      if (pointerTypeRef.current === "touch" && hoverRef.current) {
+        const previewed = touchPreviewRef.current;
+        if (!previewed || previewed.x !== x || previewed.y !== y) {
+          touchPreviewRef.current = { x, y };
+          hoverRef.current(x, y);
+          return;
+        }
+        touchPreviewRef.current = null;
+      }
+      clickRef.current?.(x, y);
+    }
+
+    function handleSvgMove(event: React.MouseEvent<SVGSVGElement>) {
+      if (!hoverRef.current) {
+        return;
+      }
+      const { x, y } = readTile(event);
+      if (x === null || y === null) {
+        hoverRef.current(0, null);
+        return;
+      }
+      hoverRef.current(x, y);
     }
 
     return (
@@ -161,6 +176,11 @@ export const BattleMapGrid = memo(
         role="img"
         aria-label="Battle map"
         onClick={handleSvgClick}
+        onPointerDown={(event) => {
+          pointerTypeRef.current = event.pointerType;
+        }}
+        onMouseMove={onTileHover ? handleSvgMove : undefined}
+        onMouseLeave={onTileHover ? () => hoverRef.current?.(0, null) : undefined}
       >
         <defs>
           <radialGradient id="torchglow">
@@ -169,9 +189,33 @@ export const BattleMapGrid = memo(
             <stop offset="100%" stopColor="#f59e0b" stopOpacity={0} />
           </radialGradient>
           <radialGradient id="mapvignette">
-            <stop offset="60%" stopColor="#000" stopOpacity={0} />
-            <stop offset="100%" stopColor="#000" stopOpacity={0.4} />
+            <stop offset="55%" stopColor="#000" stopOpacity={0} />
+            <stop offset="100%" stopColor="#000" stopOpacity={0.45} />
           </radialGradient>
+          {/* Fractal grain overlaid on terrain for a hand-laid surface. */}
+          <filter id={`grain-${view.theme}`} x="0" y="0" width="100%" height="100%">
+            <feTurbulence
+              type="fractalNoise"
+              baseFrequency="0.9"
+              numOctaves={2}
+              seed={7}
+              stitchTiles="stitch"
+              result="n"
+            />
+            <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.5 0" />
+          </filter>
+          <linearGradient id={`water-${view.theme}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={shade(palette.water, 26)} />
+            <stop offset="100%" stopColor={shade(palette.water, -18)} />
+          </linearGradient>
+          <linearGradient id="castN" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#000" stopOpacity={0.5} />
+            <stop offset="100%" stopColor="#000" stopOpacity={0} />
+          </linearGradient>
+          <linearGradient id="castW" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#000" stopOpacity={0.42} />
+            <stop offset="100%" stopColor="#000" stopOpacity={0} />
+          </linearGradient>
           {view.tokens.map((token) =>
             portraitsByRef.has(token.refId) ? (
               <clipPath key={`clip-${token.id}`} id={`token-clip-${token.id}`}>
@@ -184,7 +228,21 @@ export const BattleMapGrid = memo(
             ) : null,
           )}
         </defs>
+        {/* The picture under the grid, drawn first so every terrain cell,
+            every fog square and every token lands on top of it. Unexplored
+            tiles are opaque, so the art is covered exactly where the fog
+            covers the terrain (src/lib/battlemap/backdrop.ts). */}
+        {view.backdrop ? (
+          <image
+            href={view.backdrop.path}
+            {...backdropRect(view.backdrop.transform, width, height, TILE)}
+            opacity={view.backdrop.transform.opacity}
+            preserveAspectRatio="none"
+            pointerEvents="none"
+          />
+        ) : null}
         {cells}
+        {catcher}
         {view.lights.map((light, index) => (
           <circle
             key={`light-${index}`}
@@ -201,15 +259,27 @@ export const BattleMapGrid = memo(
           const portrait = portraitsByRef.get(token.refId);
           const isCurrent =
             !token.down && currentName !== "" && token.name.toLowerCase() === currentName;
+          const held = overlay?.selectedTokenId === token.id;
           const ring = token.down
             ? "#57534e"
-            : token.mine
+            : held
               ? "#fbbf24"
-              : token.kind === "enemy"
-                ? "#dc2626"
-                : "#78716c";
+              : token.mine
+                ? "#fbbf24"
+                : RING_BY_KIND[token.kind];
+          const hp = view.tokenHp?.[token.id];
           return (
-            <g key={token.id} pointerEvents="none" opacity={token.down ? 0.75 : 1}>
+            <g
+              key={token.id}
+              // Tokens only take clicks where somebody upstream wants them:
+              // for a player the map is a floor to walk on, not a set of
+              // pieces to pick up.
+              pointerEvents={onTokenClick ? "auto" : "none"}
+              data-token-id={onTokenClick ? token.id : undefined}
+              className={cn(onTokenClick && "cursor-pointer")}
+              opacity={token.down ? 0.75 : token.hidden ? 0.55 : 1}
+            >
+              <title>{token.name}</title>
               <ellipse
                 cx={cx}
                 cy={cy + TILE / 2 - 5}
@@ -217,16 +287,33 @@ export const BattleMapGrid = memo(
                 ry={3.5}
                 fill="#000"
                 opacity={0.35}
+                pointerEvents="none"
               />
-              <circle
-                cx={cx}
-                cy={cy}
-                r={TILE / 2 - 3}
-                fill={token.kind === "enemy" ? "#450a0a" : "#1c1917"}
-                stroke={ring}
-                strokeWidth={token.mine || isCurrent ? 2.5 : 1.5}
-                className={cn(isCurrent && "animate-pulse")}
-              />
+              {token.kind === "prop" ? (
+                // A prop is a thing, not a person, so it is not a circle.
+                <rect
+                  x={cx - TILE / 2 + 4}
+                  y={cy - TILE / 2 + 4}
+                  width={TILE - 8}
+                  height={TILE - 8}
+                  rx={3}
+                  fill="#221d18"
+                  stroke={ring}
+                  strokeWidth={1.5}
+                  strokeDasharray={token.hidden ? "3 2" : undefined}
+                />
+              ) : (
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r={TILE / 2 - 3}
+                  fill={FILL_BY_KIND[token.kind]}
+                  stroke={ring}
+                  strokeWidth={token.mine || isCurrent || held ? 2.5 : 1.5}
+                  strokeDasharray={token.hidden ? "3 2" : undefined}
+                  className={cn((isCurrent || held) && "animate-pulse")}
+                />
+              )}
               {portrait ? (
                 <image
                   href={portrait}
@@ -258,13 +345,135 @@ export const BattleMapGrid = memo(
                   fontSize={15}
                   fontWeight={700}
                   fill="#ef4444"
+                  pointerEvents="none"
                 >
                   ✕
+                </text>
+              ) : null}
+              {/* Real hit points, DM projection only: the server sends
+                  tokenHp to nobody else (src/lib/battlemap/view.ts). */}
+              {hp && hp.max > 0 ? (
+                <g pointerEvents="none">
+                  <rect
+                    x={cx - TILE / 2 + 4}
+                    y={cy + TILE / 2 - 6}
+                    width={TILE - 8}
+                    height={3}
+                    rx={1.5}
+                    fill="#0c0a09"
+                    opacity={0.85}
+                  />
+                  <rect
+                    x={cx - TILE / 2 + 4}
+                    y={cy + TILE / 2 - 6}
+                    width={Math.max(0, Math.min(1, hp.current / hp.max)) * (TILE - 8)}
+                    height={3}
+                    rx={1.5}
+                    fill={hp.current / hp.max > 0.5 ? "#4ade80" : hp.current / hp.max > 0.25 ? "#facc15" : "#ef4444"}
+                  />
+                </g>
+              ) : null}
+              {token.hidden ? (
+                <text
+                  x={cx + TILE / 2 - 5}
+                  y={cy - TILE / 2 + 9}
+                  textAnchor="middle"
+                  fontSize={9}
+                  fill="#fbbf24"
+                  pointerEvents="none"
+                >
+                  ●
                 </text>
               ) : null}
             </g>
           );
         })}
+        {/* Measured area. Drawn above the tokens so the DM can see who is
+            standing in it without hunting for the outline. */}
+        {overlay?.template?.length ? (
+          <g pointerEvents="none">
+            {overlay.template.map((idx) => (
+              <rect
+                key={`tpl-${idx}`}
+                x={(idx % width) * TILE}
+                y={Math.floor(idx / width) * TILE}
+                width={TILE}
+                height={TILE}
+                fill="#f97316"
+                opacity={0.26}
+                stroke="#fb923c"
+                strokeOpacity={0.5}
+              />
+            ))}
+          </g>
+        ) : null}
+        {/* The drag ruler: the path a move would actually take, and its cost
+            in feet, measured with the same pathfinder the server enforces. */}
+        {overlay?.ruler && overlay.ruler.path.length ? (
+          <g pointerEvents="none">
+            <polyline
+              points={overlay.ruler.path
+                .map((step) => `${step.x * TILE + TILE / 2},${step.y * TILE + TILE / 2}`)
+                .join(" ")}
+              fill="none"
+              stroke={overlay.ruler.overBudget ? "#ef4444" : "#fbbf24"}
+              strokeWidth={2}
+              strokeDasharray="5 3"
+              strokeLinejoin="round"
+            />
+            {(() => {
+              const last = overlay.ruler.path[overlay.ruler.path.length - 1];
+              return (
+                <>
+                  <rect
+                    x={last.x * TILE - 6}
+                    y={last.y * TILE - 14}
+                    width={44}
+                    height={14}
+                    rx={3}
+                    fill="#0c0a09"
+                    opacity={0.85}
+                  />
+                  <text
+                    x={last.x * TILE + 16}
+                    y={last.y * TILE - 4}
+                    textAnchor="middle"
+                    fontSize={10}
+                    fontWeight={600}
+                    fill={overlay.ruler.overBudget ? "#fca5a5" : "#fcd34d"}
+                  >
+                    {overlay.ruler.label}
+                  </text>
+                </>
+              );
+            })()}
+          </g>
+        ) : null}
+        {/* Somebody pointing. The ring expands and fades on its own, so a
+            ping needs no state beyond the moment it arrived. */}
+        {overlay?.pings?.map((ping) => (
+          <g key={`ping-${ping.at}-${ping.x}-${ping.y}`} pointerEvents="none">
+            <circle
+              cx={ping.x * TILE + TILE / 2}
+              cy={ping.y * TILE + TILE / 2}
+              r={TILE * 0.9}
+              fill="none"
+              stroke="#fbbf24"
+              strokeWidth={2.5}
+              className="animate-ping"
+            />
+            <text
+              x={ping.x * TILE + TILE / 2}
+              y={ping.y * TILE - 4}
+              textAnchor="middle"
+              fontSize={10}
+              fontWeight={600}
+              fill="#fcd34d"
+            >
+              {ping.by}
+            </text>
+          </g>
+        ))}
         <rect
           x={0}
           y={0}
@@ -279,82 +488,30 @@ export const BattleMapGrid = memo(
   (prev, next) =>
     prev.view === next.view &&
     prev.sheets === next.sheets &&
-    // Only presence matters; the handler itself is read through a ref.
-    (prev.onTileClick === undefined) === (next.onTileClick === undefined),
+    // The overlay is compared by reference, so a parent that rebuilds it
+    // every render would defeat the memo. BattleMapPanel memoizes it.
+    prev.overlay === next.overlay &&
+    prev.everyTileClickable === next.everyTileClickable &&
+    // Only presence matters; the handlers themselves are read through refs.
+    (prev.onTileClick === undefined) === (next.onTileClick === undefined) &&
+    (prev.onTileHover === undefined) === (next.onTileHover === undefined) &&
+    (prev.onTokenClick === undefined) === (next.onTokenClick === undefined),
 );
 
-function buildCells(view: PlayerMapView, palette: Palette) {
-  const { width, height } = view;
-  const visible = new Set(view.visible);
-  const explored = new Set(view.explored);
-  const reachable = new Set(view.reachable);
+// Token colours by what the piece is. Props and NPCs are visibly not
+// combatants, because the fastest way to misread a board is to think the
+// barrel is a monster.
+const RING_BY_KIND: Record<string, string> = {
+  pc: "#78716c",
+  enemy: "#dc2626",
+  npc: "#38bdf8",
+  prop: "#a8a29e",
+};
 
-  return Array.from({ length: width * height }, (_, idx) => {
-    const x = idx % width;
-    const y = Math.floor(idx / width);
-    const ch = view.terrain[idx];
-    const isExplored = explored.has(idx);
-    const isVisible = visible.has(idx);
-    const isReachable = reachable.has(idx);
-    const fill = !isExplored
-      ? "#050505"
-      : ch === "#"
-        ? palette.wall
-        : ch === "~"
-          ? palette.water
-          : ch === ","
-            ? palette.difficult
-            : tileNoise(x, y) > 0.5
-              ? palette.floor
-              : palette.floorAlt;
-    return (
-      <g key={idx}>
-        <rect
-          x={x * TILE}
-          y={y * TILE}
-          width={TILE}
-          height={TILE}
-          fill={fill}
-          stroke="#00000055"
-          strokeWidth={1}
-        />
-        {isExplored && ch === "#" ? <WallDecoration kind={palette.wallDeco} x={x} y={y} /> : null}
-        {isExplored && ch === "~" ? (
-          <path
-            d={`M ${x * TILE + 6} ${y * TILE + TILE / 2} q 5 -4 10 0 t 10 0`}
-            stroke="#ffffff33"
-            strokeWidth={1.5}
-            fill="none"
-            pointerEvents="none"
-          />
-        ) : null}
-        {isExplored && ch === "," ? (
-          <g pointerEvents="none" fill="#00000040">
-            <circle cx={x * TILE + 10} cy={y * TILE + 12} r={2} />
-            <circle cx={x * TILE + 22} cy={y * TILE + 20} r={2.5} />
-            <circle cx={x * TILE + 15} cy={y * TILE + 25} r={1.5} />
-          </g>
-        ) : null}
-        {isExplored && !isVisible ? (
-          <rect x={x * TILE} y={y * TILE} width={TILE} height={TILE} fill="#000" opacity={0.55} />
-        ) : null}
-        {isReachable ? (
-          <rect
-            x={x * TILE + 2}
-            y={y * TILE + 2}
-            width={TILE - 4}
-            height={TILE - 4}
-            rx={4}
-            fill="#f59e0b"
-            opacity={0.18}
-            stroke="#f59e0b"
-            strokeOpacity={0.45}
-            className="cursor-pointer"
-            data-tile-x={x}
-            data-tile-y={y}
-          />
-        ) : null}
-      </g>
-    );
-  });
-}
+const FILL_BY_KIND: Record<string, string> = {
+  pc: "#1c1917",
+  enemy: "#450a0a",
+  npc: "#0c1a24",
+  prop: "#221d18",
+};
+

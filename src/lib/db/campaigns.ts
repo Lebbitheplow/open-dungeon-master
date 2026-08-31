@@ -3,6 +3,7 @@ import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { normalizeSettings } from "@/lib/db/settings";
 import { configuredDefaultStorySettings } from "@/lib/runtime-defaults";
 import { normalizeGameSettings, type GameSettings } from "@/lib/schemas/game-settings";
+import { normalizeCampaignKind, type CampaignKind } from "@/lib/workshop/kind";
 import type {
   CampaignDifficulty,
   CampaignMember,
@@ -11,6 +12,16 @@ import type {
 } from "@/lib/campaign-types";
 import type { StorySettings } from "@/lib/types";
 import { normalizeStoryArc, type StoryArc } from "@/lib/dm/arc-logic";
+import { normalizeCover, type DmCover } from "@/lib/dm/delegation";
+import { normalizeClock, type CampaignClock } from "@/lib/dm/calendar";
+import { normalizeParty, type PartyState } from "@/lib/dm/party-logic";
+import {
+  partySlotCount,
+  viewerCaps,
+  type CampaignSeats,
+  type DmMode,
+  type ViewerCaps,
+} from "@/lib/dm/viewer";
 
 // Who may act right now; always branch on mode.
 export type SpotlightFloor = {
@@ -46,12 +57,26 @@ export type Campaign = CampaignSummary & {
   dmOutline: string;
   storyArc: StoryArc | null;
   floor: Floor;
+  // Assisted mode: the stretch of answers handed to the AI, or null. Kept on
+  // the campaign rather than fetched separately because the DM prompt, the
+  // action route and every client that renders the banner all want it, and a
+  // separate read on each would be three chances to disagree.
+  dmCover: DmCover | null;
+  // The in-world date and time (src/lib/dm/calendar.ts). Hydrated here rather
+  // than fetched where it is needed because the DM prompt, the status bar and
+  // the rest and travel engines all want it, and three separate reads would be
+  // three chances to disagree about what day it is.
+  clock: CampaignClock;
+  // The party as a thing in its own right: common purse, shared pack, banked
+  // XP, marching order (src/lib/dm/party-logic.ts).
+  party: PartyState;
 };
 
 type CampaignRow = {
   id: string;
   title: string;
   description: string;
+  kind: string | null;
   invite_code: string;
   owner_user_id: string;
   status: CampaignStatus;
@@ -62,9 +87,14 @@ type CampaignRow = {
   settings_json: string;
   game_settings_json: string;
   party_lead_user_id: string | null;
+  human_dm_user_id: string | null;
+  assistant_dm_user_id: string | null;
   dm_outline: string;
   story_arc_json: string;
   floor_json: string;
+  dm_cover_json: string;
+  clock_json: string;
+  party_json: string;
   scene: string;
   quest_log_json: string;
   created_at: string;
@@ -160,6 +190,7 @@ function mapCampaign(row: CampaignRow): Campaign {
     id: row.id,
     title: row.title,
     description: row.description,
+    kind: normalizeCampaignKind(row.kind),
     status: row.status,
     inviteCode: row.invite_code,
     maxPlayers: row.max_players,
@@ -168,6 +199,8 @@ function mapCampaign(row: CampaignRow): Campaign {
     theme: row.theme,
     ownerUserId: row.owner_user_id,
     leadUserId: row.party_lead_user_id ?? row.owner_user_id,
+    dmUserId: row.human_dm_user_id ?? null,
+    assistantDmUserId: row.assistant_dm_user_id ?? null,
     playerCount: Number(row.player_count ?? 0),
     role: row.member_role ?? (row.owner_user_id ? "player" : "player"),
     createdAt: row.created_at,
@@ -179,6 +212,9 @@ function mapCampaign(row: CampaignRow): Campaign {
     dmOutline: row.dm_outline ?? "",
     storyArc: normalizeStoryArc(parseJson(row.story_arc_json ?? "", null)),
     floor: normalizeFloor(parseJson(row.floor_json, null)),
+    dmCover: normalizeCover(parseJson(row.dm_cover_json ?? "", null)),
+    clock: normalizeClock(parseJson(row.clock_json ?? "", null)),
+    party: normalizeParty(parseJson(row.party_json ?? "", null)),
   };
 }
 
@@ -199,26 +235,35 @@ export function createCampaign(
     startingLevel: number;
     difficulty: CampaignDifficulty;
     gameSettings?: Partial<GameSettings>;
+    // 'workshop' makes this a prep space rather than a table that plays.
+    // Defaults to a campaign so every existing caller is unchanged.
+    kind?: CampaignKind;
   },
 ): Campaign {
   const db = getDatabase();
   const id = crypto.randomUUID();
   const now = nowIso();
+  const gameSettings = normalizeGameSettings(input.gameSettings ?? {});
+  // Creating a human-DM campaign seats the creator as the DM. Nothing else
+  // would make sense: they chose to run it, and an empty seat would leave the
+  // table with neither a narrator nor a way to appoint one.
+  const dmUserId = gameSettings.dmMode === "ai" ? null : ownerUserId;
 
   db.transaction(() => {
     db.prepare(
       `
         INSERT INTO campaigns (
-          id, title, description, invite_code, owner_user_id, status,
+          id, title, description, kind, invite_code, owner_user_id, status,
           max_players, starting_level, difficulty, theme, settings_json,
-          game_settings_json, created_at, updated_at
+          game_settings_json, human_dm_user_id, created_at, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, 'lobby', ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, 'lobby', ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
     ).run(
       id,
       input.title,
       input.description,
+      input.kind ?? "campaign",
       generateInviteCode(),
       ownerUserId,
       input.maxPlayers,
@@ -226,7 +271,8 @@ export function createCampaign(
       input.difficulty,
       input.theme,
       JSON.stringify(configuredDefaultStorySettings()),
-      JSON.stringify(normalizeGameSettings(input.gameSettings ?? {})),
+      JSON.stringify(gameSettings),
+      dmUserId,
       now,
       now,
     );
@@ -298,6 +344,7 @@ export function listCampaignsForUser(userId: string): CampaignSummary[] {
       `
         ${CAMPAIGN_SELECT}
         JOIN campaign_members me ON me.campaign_id = c.id AND me.user_id = ?
+        WHERE c.kind = 'campaign'
         ORDER BY c.updated_at DESC
       `,
     )
@@ -397,7 +444,9 @@ export function joinByInviteCode(
       return { error: "That campaign has already started." };
     }
   }
-  if (Number(row.player_count ?? 0) >= row.max_players) {
+  // The DM seats hold no party slot, so a human-DM table with a cap of five
+  // still admits five players.
+  if (countPartySlots(row.id) >= row.max_players) {
     return { error: "That campaign is full." };
   }
 
@@ -445,6 +494,36 @@ export function updateGameSettings(
     .prepare(`UPDATE campaigns SET game_settings_json = ?, updated_at = ? WHERE id = ?`)
     .run(JSON.stringify(merged), nowIso(), campaignId);
   return merged;
+}
+
+// Changing who runs the game keeps the seats in step with the mode: a mode
+// other than "ai" has a person in the DM seat and "ai" has nobody, which is
+// the same invariant createCampaign applies (dmUserId above). Without this, a
+// settings PATCH could leave a "human" table with no DM (nobody may narrate)
+// or an "ai" table with a stale seat (hasHumanDm degrades it safely, but the
+// seat routes would still show a phantom DM). Returns the seated DM's id (or
+// null for "ai") so the caller can announce the seat change.
+export function setDmMode(
+  campaignId: string,
+  mode: DmMode,
+  // Who flipped the switch; they take the seat when leaving "ai" and the seat
+  // is empty, matching creation where the person who chose to run it runs it.
+  actorUserId: string,
+): { gameSettings: GameSettings; dmUserId: string | null } | null {
+  const campaign = getCampaignById(campaignId);
+  if (!campaign) {
+    return null;
+  }
+  let dmUserId = campaign.dmUserId;
+  if (mode === "ai") {
+    setHumanDm(campaignId, null);
+    setAssistantDm(campaignId, null);
+    dmUserId = null;
+  } else if (!campaign.dmUserId && setHumanDm(campaignId, actorUserId)) {
+    dmUserId = actorUserId;
+  }
+  const gameSettings = updateGameSettings(campaignId, { dmMode: mode });
+  return gameSettings ? { gameSettings, dmUserId } : null;
 }
 
 export function setDmOutline(campaignId: string, outline: string) {
@@ -548,6 +627,75 @@ export function setFloor(campaignId: string, floor: Floor) {
   getDatabase()
     .prepare(`UPDATE campaigns SET floor_json = ? WHERE id = ?`)
     .run(JSON.stringify(floor), campaignId);
+}
+
+// The seats, in the shape src/lib/dm/viewer.ts wants. Every visibility and
+// authority decision goes through this pair rather than comparing ids at the
+// call site, so there is exactly one place to get it wrong.
+export function campaignSeats(campaign: Campaign): CampaignSeats {
+  return {
+    ownerUserId: campaign.ownerUserId,
+    leadUserId: campaign.leadUserId,
+    humanDmUserId: campaign.dmUserId,
+    assistantDmUserId: campaign.assistantDmUserId,
+    dmMode: campaign.gameSettings.dmMode,
+  };
+}
+
+export function capsFor(campaign: Campaign, userId: string): ViewerCaps {
+  return viewerCaps(campaignSeats(campaign), userId);
+}
+
+// Seats or clears the DM. A member who takes the seat gives up their party
+// slot, so their character sheet (if any) is the caller's problem to settle
+// before calling this.
+export function setHumanDm(campaignId: string, userId: string | null): boolean {
+  const db = getDatabase();
+  if (userId) {
+    const member = db
+      .prepare(`SELECT 1 FROM campaign_members WHERE campaign_id = ? AND user_id = ?`)
+      .get(campaignId, userId);
+    if (!member) {
+      return false;
+    }
+  }
+  db.prepare(`UPDATE campaigns SET human_dm_user_id = ?, updated_at = ? WHERE id = ?`).run(
+    userId,
+    nowIso(),
+    campaignId,
+  );
+  return true;
+}
+
+export function setAssistantDm(campaignId: string, userId: string | null): boolean {
+  const db = getDatabase();
+  if (userId) {
+    const member = db
+      .prepare(`SELECT 1 FROM campaign_members WHERE campaign_id = ? AND user_id = ?`)
+      .get(campaignId, userId);
+    if (!member) {
+      return false;
+    }
+  }
+  db.prepare(`UPDATE campaigns SET assistant_dm_user_id = ?, updated_at = ? WHERE id = ?`).run(
+    userId,
+    nowIso(),
+    campaignId,
+  );
+  return true;
+}
+
+// Members who occupy a party slot: the DM seats do not, so a five-player cap
+// still means five players even at a human-DM table.
+export function countPartySlots(campaignId: string): number {
+  const campaign = getCampaignById(campaignId);
+  if (!campaign) {
+    return 0;
+  }
+  return partySlotCount(
+    campaignSeats(campaign),
+    listMembers(campaignId).map((member) => member.userId),
+  );
 }
 
 // Transfers the party lead to another member. Returns false when the

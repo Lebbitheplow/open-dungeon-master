@@ -28,7 +28,19 @@ export type MapLight = {
   dimRadius: number;
 };
 
-export type TokenKind = "pc" | "enemy";
+// "pc" and "enemy" are combatants the engine owns: their ref_id points at a
+// character sheet or an encounter enemy, and encounter math, targeting and
+// initiative all read them. "npc" and "prop" are the DM's own furniture: a
+// shopkeeper standing in the doorway, a barrel, a brazier. They carry no
+// stat block, so nothing in the rules engine can target them by accident,
+// which is exactly why they are their own kinds rather than enemies with
+// zero hit points.
+export const TOKEN_KINDS = ["pc", "enemy", "npc", "prop"] as const;
+export type TokenKind = (typeof TOKEN_KINDS)[number];
+
+// The kinds a DM may place and remove by hand.
+export const ADHOC_TOKEN_KINDS = ["npc", "prop"] as const;
+export type AdhocTokenKind = (typeof ADHOC_TOKEN_KINDS)[number];
 
 export type BattleToken = {
   id: string;
@@ -43,6 +55,11 @@ export type BattleToken = {
   // Carried light (torch/lantern): bright radius in tiles, 0 = none. The
   // dim radius is always double the bright radius.
   lightRadius: number;
+  // Kept off the players' board by the DM: an ambusher in the rafters, a
+  // trap that has not sprung. One flag covers the map and the initiative
+  // tracker, because a creature the party has not met should not be visible
+  // in either (src/lib/db/encounters.ts).
+  hidden: boolean;
 };
 
 export function tileIndex(width: number, x: number, y: number): number {

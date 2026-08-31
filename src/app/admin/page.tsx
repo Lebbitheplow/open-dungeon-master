@@ -75,7 +75,7 @@ export default function AdminPage() {
         </div>
       </header>
 
-      <div className="mb-4 flex gap-2">
+      <div className="mb-4 flex flex-wrap gap-2">
         {tabs.map(([value, label, Icon]) => (
           <button
             key={value}

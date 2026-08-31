@@ -2,6 +2,8 @@ import Link from "next/link";
 import { listDocuments } from "@/lib/content";
 import { contentPackInstalled } from "@/lib/content/db";
 import { listWorldPackSummaries } from "@/lib/worlds";
+import { installedTracks } from "@/lib/ambience/library";
+import { cueById } from "@/lib/ambience/catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +17,7 @@ export default function LicensesPage() {
   const documents = listDocuments();
   const installed = contentPackInstalled();
   const worldPacks = listWorldPackSummaries();
+  const ambience = installedTracks();
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
@@ -91,6 +94,45 @@ export default function LicensesPage() {
             or endorsement from that setting&apos;s rights holders. Each pack names its own
             attribution wherever it appears in the app.
           </p>
+        </section>
+      ) : null}
+
+      {ambience.length ? (
+        <section className="mt-8">
+          <h2 className="font-serif text-xl text-stone-100">Sound library</h2>
+          <p className="mt-2 text-sm leading-6 text-stone-400">
+            Ambience and music files were fetched from public archives by this server&apos;s
+            operator and are{" "}
+            <span className="text-stone-200">not distributed with Open Dungeon Master</span>.
+            Each one is credited below as its archive recorded it.
+          </p>
+          <ul className="mt-4 space-y-2">
+            {ambience.map((track) => (
+              <li
+                key={track.cueId}
+                className="rounded-lg border border-stone-800 bg-stone-900/60 p-3 text-sm"
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="text-stone-100">
+                    {cueById(track.cueId)?.label ?? track.cueId}
+                    <span className="ml-2 text-xs text-stone-500">{track.title}</span>
+                  </span>
+                  <span className="text-xs text-amber-200">{track.license}</span>
+                </div>
+                <p className="mt-1 text-xs text-stone-400">by {track.author}</p>
+                {track.source ? (
+                  <a
+                    href={track.source}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1 inline-block break-all text-xs text-stone-500 hover:text-stone-300"
+                  >
+                    {track.source}
+                  </a>
+                ) : null}
+              </li>
+            ))}
+          </ul>
         </section>
       ) : null}
 

@@ -2,6 +2,7 @@ import type { Genre } from "@/lib/schemas/game-settings";
 import { packFor, type SettingRef } from "@/lib/worlds/preset";
 import { getEntryDetail, searchMonsters } from "@/lib/content";
 import { parseMonster, type EnemyStats } from "@/lib/bestiary/statblock";
+import { findHomebrewMonster } from "@/lib/bestiary/homebrew-monsters";
 import { synthesizeStats } from "@/lib/bestiary/synthesize";
 import { thresholdsForParty, xpForCr } from "@/lib/srd/encounter-math";
 import highFantasyJson from "@/lib/bestiary/high-fantasy.json";
@@ -102,13 +103,35 @@ function fromContent(slug: string): { name: string; stats: EnemyStats } | null {
   return { name: entry.name, stats: parseMonster(entry.data, cr) };
 }
 
-// Resolves a model-supplied monster reference: exact Open5e slug, then a
-// catalog reskin name, then an Open5e name search. Degrades to synthesized
-// stats for catalog slugs when the content pack is absent.
-export function resolveMonster(ref: string, setting: SettingRef): ResolvedMonster | null {
+// Resolves a monster reference: a hand-built monster by its unambiguous
+// slug, then an exact Open5e slug, then a catalog reskin name, then an
+// Open5e name search, and finally a hand-built monster by name. Degrades to
+// synthesized stats for catalog slugs when the content pack is absent.
+//
+// The two homebrew lookups sit at opposite ends on purpose. "homebrew:<id>"
+// names one row and nothing else, so it wins outright. A NAME is ambiguous,
+// and a DM who happens to have built something called "Goblin" must not
+// thereby change what every existing campaign means by a goblin, so the
+// published monsters answer first and the hand-built one is the fallback.
+//
+// `userId` is whose homebrew to consider: the campaign owner, threaded from
+// the rim. Without it this behaves exactly as it did before homebrew
+// monsters existed.
+export function resolveMonster(
+  ref: string,
+  setting: SettingRef,
+  options: { userId?: string } = {},
+): ResolvedMonster | null {
   const trimmed = ref.trim();
   if (!trimmed) {
     return null;
+  }
+
+  if (options.userId && trimmed.startsWith("homebrew:")) {
+    const own = findHomebrewMonster(options.userId, trimmed);
+    return own
+      ? { slug: own.slug, baseName: own.draft.name, reskinName: null, stats: own.draft.stats }
+      : null;
   }
 
   const slugified = trimmed.toLowerCase().replace(/['.]/g, "").replace(/[\s_]+/g, "-");
@@ -147,6 +170,11 @@ export function resolveMonster(ref: string, setting: SettingRef): ResolvedMonste
       reskinName: reskinFor(setting, best.slug)?.name ?? null,
       stats: parseMonster(best.data, cr),
     };
+  }
+
+  const own = options.userId ? findHomebrewMonster(options.userId, trimmed) : null;
+  if (own) {
+    return { slug: own.slug, baseName: own.draft.name, reskinName: null, stats: own.draft.stats };
   }
   return null;
 }

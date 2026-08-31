@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isErrorResponse, isLead, requireMember } from "@/lib/campaign-api";
+import { isErrorResponse, steersStory, requireMember } from "@/lib/campaign-api";
 import { getItemProposal, resolveItemProposal } from "@/lib/db/item-proposals";
 import { listSheets } from "@/lib/db/sheets";
 import { applyDmMutation } from "@/lib/dm/mutations";
@@ -38,7 +38,7 @@ export async function POST(
     return Response.json({ error: "The offer was already resolved." }, { status: 400 });
   }
   const actorIsOwner = proposal.userId === context.user.id;
-  if (!canResolveProposal(action, actorIsOwner, isLead(context))) {
+  if (!canResolveProposal(action, actorIsOwner, steersStory(context))) {
     return Response.json({ error: "Only the offer's player or the lead can do that." }, {
       status: 403,
     });

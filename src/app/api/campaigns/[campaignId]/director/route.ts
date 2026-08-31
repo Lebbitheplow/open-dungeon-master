@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isErrorResponse, requireLead, requireMember } from "@/lib/campaign-api";
+import { isErrorResponse, requireStoryAuthority, requireMember } from "@/lib/campaign-api";
 import {
   clearDirectorArm,
   getDirectorArm,
@@ -73,7 +73,7 @@ export async function GET(
   }
   // Members may poll this to light the armed badge; only the lead reads the
   // directive itself.
-  const lead = await requireLead(campaignId);
+  const lead = await requireStoryAuthority(campaignId);
   return Response.json(
     isErrorResponse(lead) ? redactedArmPayload(campaignId) : armPayload(campaignId),
   );
@@ -84,7 +84,7 @@ export async function POST(
   { params }: { params: Promise<{ campaignId: string }> },
 ) {
   const { campaignId } = await params;
-  const context = await requireLead(campaignId);
+  const context = await requireStoryAuthority(campaignId);
   if (isErrorResponse(context)) {
     return context;
   }
@@ -122,7 +122,7 @@ export async function DELETE(
   { params }: { params: Promise<{ campaignId: string }> },
 ) {
   const { campaignId } = await params;
-  const context = await requireLead(campaignId);
+  const context = await requireStoryAuthority(campaignId);
   if (isErrorResponse(context)) {
     return context;
   }

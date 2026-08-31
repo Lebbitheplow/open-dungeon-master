@@ -1,5 +1,6 @@
 import {
   TERRAIN,
+  blocksMove,
   tileIndex,
   type AmbientLight,
   type MapLight,
@@ -33,7 +34,25 @@ export type GenerateInput = {
   hint?: string;
   pcCount: number;
   enemyCount: number;
+  // Overrides for a person building a map on purpose. The keyword reader
+  // below is a guess made from a sentence; when the DM says "cave, dark"
+  // outright there is nothing left to guess, so their answer wins.
+  theme?: MapTheme;
+  ambient?: AmbientLight;
 };
+
+export const MAP_THEMES: MapTheme[] = [
+  "cave",
+  "forest",
+  "swamp",
+  "riverside",
+  "interior",
+  "field",
+];
+
+// The size band generateBattleMap clamps to, published so a size control can
+// offer exactly the range the generator will honour.
+export const MAP_SIZE = { minWidth: 12, maxWidth: 24, minHeight: 10, maxHeight: 18 } as const;
 
 export function fnv1a(text: string): number {
   let hash = 0x811c9dc5;
@@ -242,14 +261,16 @@ function pickSpawns(
 }
 
 export function generateBattleMap(input: GenerateInput): GeneratedMap {
-  const width = Math.min(24, Math.max(12, input.width ?? 20));
-  const height = Math.min(18, Math.max(10, input.height ?? 15));
+  const width = Math.min(MAP_SIZE.maxWidth, Math.max(MAP_SIZE.minWidth, input.width ?? 20));
+  const height = Math.min(MAP_SIZE.maxHeight, Math.max(MAP_SIZE.minHeight, input.height ?? 15));
   const rng = mulberry32(input.seed);
   const text = [input.hint, input.layoutDescription, input.locationName, input.genre]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
-  const { theme, ambient } = pickTheme(text, rng);
+  const read = pickTheme(text, rng);
+  const theme = input.theme ?? read.theme;
+  const ambient = input.ambient ?? read.ambient;
 
   const tiles: string[] = new Array(width * height).fill(TERRAIN.floor);
   for (let x = 0; x < width; x += 1) {
@@ -333,4 +354,62 @@ export function generateBattleMap(input: GenerateInput): GeneratedMap {
   }
 
   return { width, height, terrain: tiles.join(""), ambient, theme, lights, pcSpawns, enemySpawns };
+}
+
+// Where a party stands on a map this file did not generate: an imported
+// dungeon or one the DM drew by hand carries no spawn list, but a scene
+// still has to open with everybody somewhere sensible.
+//
+// Deterministic rather than random, so deploying the same prepared map twice
+// puts the party in the same room twice, and grouped rather than scattered,
+// because a party that arrives already split up is a fight the DM did not
+// choose. The seed tile is the first open ground scanning from the west,
+// which on a drawn dungeon is reliably the entrance side.
+export function partySpawnTiles(
+  terrain: string,
+  width: number,
+  height: number,
+  count: number,
+): XY[] {
+  if (count <= 0) {
+    return [];
+  }
+  const open = (x: number, y: number) =>
+    x >= 0 &&
+    y >= 0 &&
+    x < width &&
+    y < height &&
+    !blocksMove(terrain[tileIndex(width, x, y)] ?? TERRAIN.wall);
+
+  let seed: XY | null = null;
+  for (let x = 0; x < width && !seed; x += 1) {
+    for (let y = 0; y < height; y += 1) {
+      if (open(x, y)) {
+        seed = { x, y };
+        break;
+      }
+    }
+  }
+  if (!seed) {
+    return [];
+  }
+
+  // Breadth-first from the seed, so the group fills the room it starts in
+  // before spilling down a corridor.
+  const picked: XY[] = [];
+  const seen = new Set<number>([tileIndex(width, seed.x, seed.y)]);
+  const queue: XY[] = [seed];
+  while (queue.length && picked.length < count) {
+    const spot = queue.shift() as XY;
+    picked.push(spot);
+    for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]] as const) {
+      const next = { x: spot.x + dx, y: spot.y + dy };
+      const index = tileIndex(width, next.x, next.y);
+      if (open(next.x, next.y) && !seen.has(index)) {
+        seen.add(index);
+        queue.push(next);
+      }
+    }
+  }
+  return picked;
 }

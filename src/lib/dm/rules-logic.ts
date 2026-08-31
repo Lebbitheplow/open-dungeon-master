@@ -19,6 +19,9 @@ export type VariantRules = {
   criticalFumbles: boolean;
   encumbrance: boolean;
   lingeringInjuries: boolean;
+  powerfulCritical: boolean;
+  criticalDamageMods: boolean;
+  ammunition: boolean;
   restVariant: "standard" | "gritty" | "heroic";
 };
 
@@ -159,9 +162,15 @@ export const VARIANT_RULE_LINES: Record<
   criticalFumbles:
     "Critical fumbles: a natural 1 on an attack roll causes a minor mishap the DM narrates (never damage to the fumbler).",
   encumbrance:
-    "Encumbrance: carrying more than 5 times Strength in pounds slows a character by 10 feet; track heavy hauls.",
+    "Encumbrance: carrying more than 5 times Strength in pounds costs 10 feet of speed, and more than 10 times Strength costs 20 feet plus disadvantage on STR, DEX and CON rolls. The server weighs every pack and applies it; never adjust a speed or a roll for weight yourself.",
   lingeringInjuries:
     "Lingering injuries: a critical hit or dropping to 0 HP can leave a lasting injury the DM narrates and tracks.",
+  powerfulCritical:
+    "Powerful critical: on a critical hit the extra weapon dice are dealt as their maximum instead of being rolled. The server applies it.",
+  criticalDamageMods:
+    "Critical damage modifiers: on a critical hit the flat damage modifiers double along with the dice. The server applies it.",
+  ammunition:
+    "Ammunition: arrows, bolts and bullets are spent when a character fires and half are recovered after the fight. The server applies it; an empty quiver makes pc_attack refuse the shot, and that refusal is what you narrate.",
 };
 
 export const REST_VARIANT_LINES: Record<VariantRules["restVariant"], string> = {

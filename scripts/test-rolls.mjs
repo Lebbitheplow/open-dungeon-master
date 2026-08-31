@@ -217,4 +217,42 @@ test("armor worn without training = disadvantage on STR and DEX rolls", () => {
   );
 });
 
+test("Halfling Lucky rides a saving throw as an r1 reroll", () => {
+  const halfling = sheet({
+    race: "Halfling (Lightfoot)",
+    features: [{ name: "Lucky (reroll nat 1 on d20)", source: "race" }],
+  });
+  const resolved = resolveRollExpression({ kind: "saving_throw", ability: "str" }, halfling);
+  assert.equal(resolved.expression, "1d20r1+7");
+  assert.ok(resolved.conditionNotes.some((note) => /Lucky/.test(note)));
+  // A non-halfling without the trait never gets the reroll.
+  assert.equal(
+    resolveRollExpression({ kind: "saving_throw", ability: "str" }, sheet()).expression,
+    "1d20+7",
+  );
+});
+
+test("Brave grants advantage on the initial save against being frightened", () => {
+  const brave = sheet({
+    race: "Halfling (Stout)",
+    features: [{ name: "Brave (adv. vs frightened)", source: "race" }],
+  });
+  const scared = resolveRollExpression(
+    { kind: "saving_throw", ability: "wis", against: "frightened" },
+    brave,
+  );
+  assert.equal(scared.expression, "2d20kh1");
+  assert.ok(scared.conditionNotes.some((note) => /Brave/.test(note)));
+  // No fear context, or a different effect, leaves the save straight.
+  assert.equal(
+    resolveRollExpression({ kind: "saving_throw", ability: "wis" }, brave).expression,
+    "1d20",
+  );
+  assert.equal(
+    resolveRollExpression({ kind: "saving_throw", ability: "wis", against: "poison" }, brave)
+      .expression,
+    "1d20",
+  );
+});
+
 console.log(`test-rolls: ${passed} tests passed`);

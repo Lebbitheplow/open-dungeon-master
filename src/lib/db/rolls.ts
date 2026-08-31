@@ -1,4 +1,5 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
+import { redactRoll, rollAccessFor, type ViewerCaps } from "@/lib/dm/viewer";
 import type { Advantage, RollResult } from "@/lib/dice";
 
 export type RollKind =
@@ -9,6 +10,12 @@ export type RollKind =
   | "damage"
   | "initiative"
   | "custom";
+
+// Who may see a roll's result. 'public' is every roll the app has ever
+// made and stays the default; the rest exist for a human DM who wants a
+// screen (src/lib/dm/viewer.ts decides who sees what).
+export const ROLL_VISIBILITIES = ["public", "dm", "blind", "self"] as const;
+export type RollVisibility = (typeof ROLL_VISIBILITIES)[number];
 
 export type StoredRoll = {
   id: string;
@@ -23,6 +30,7 @@ export type StoredRoll = {
   total: number;
   success: boolean | null;
   breakdown: RollResult;
+  visibility: RollVisibility;
   messageId: string | null;
   // Damage rolls only: the enemy the server applied this roll's total to,
   // set together with `applied` (the damage_enemy double-apply guard).
@@ -44,6 +52,7 @@ type RollRow = {
   total: number;
   success: number | null;
   breakdown_json: string;
+  visibility: RollVisibility | null;
   message_id: string | null;
   target_enemy_id: string | null;
   applied: number;
@@ -68,6 +77,7 @@ function mapRoll(row: RollRow): StoredRoll {
       total: row.total,
       terms: [],
     } as RollResult),
+    visibility: row.visibility ?? "public",
     messageId: row.message_id,
     targetEnemyId: row.target_enemy_id ?? null,
     applied: Boolean(row.applied),
@@ -92,6 +102,7 @@ export function insertRoll(input: {
   advantage?: Advantage;
   dc?: number | null;
   result: RollResult;
+  visibility?: RollVisibility;
   messageId?: string | null;
 }): StoredRoll {
   const id = crypto.randomUUID();
@@ -104,9 +115,9 @@ export function insertRoll(input: {
         INSERT INTO rolls (
           id, campaign_id, character_id, requested_by, roll_kind, detail,
           expression, advantage, dc, total, success, breakdown_json,
-          message_id, created_at
+          visibility, message_id, created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
     )
     .run(
@@ -122,6 +133,7 @@ export function insertRoll(input: {
       input.result.total,
       success,
       JSON.stringify(input.result),
+      input.visibility ?? "public",
       input.messageId ?? null,
       nowIso(),
     );
@@ -152,4 +164,24 @@ export function listRecentRolls(campaignId: string, limit = 20): StoredRoll[] {
     )
     .all(campaignId, limit) as RollRow[];
   return rows.map(mapRoll);
+}
+
+// The recent rolls one seat may see. A hidden roll is dropped outright and a
+// blind one keeps its label and loses its number, so the table still knows
+// the dice were thrown (src/lib/dm/viewer.ts explains why).
+export function listRollsVisibleTo(
+  campaignId: string,
+  caps: Pick<ViewerCaps, "adjudicates" | "steersStory">,
+  ownedCharacterIds: string[],
+  limit = 20,
+): Array<StoredRoll | ReturnType<typeof redactRoll<StoredRoll>>> {
+  const out: Array<StoredRoll | ReturnType<typeof redactRoll<StoredRoll>>> = [];
+  for (const roll of listRecentRolls(campaignId, limit)) {
+    const access = rollAccessFor(roll, caps, ownedCharacterIds);
+    if (access === "hidden") {
+      continue;
+    }
+    out.push(access === "full" ? roll : redactRoll(roll));
+  }
+  return out;
 }

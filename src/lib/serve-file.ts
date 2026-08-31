@@ -4,6 +4,12 @@ import { Readable } from "node:stream";
 
 const CONTENT_TYPES: Record<string, string> = {
   ".mp3": "audio/mpeg",
+  // The sound library takes whatever the archives hand it rather than
+  // re-encoding: every browser this app targets plays all four.
+  ".ogg": "audio/ogg",
+  ".opus": "audio/ogg",
+  ".m4a": "audio/mp4",
+  ".wav": "audio/wav",
   ".png": "image/png",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",

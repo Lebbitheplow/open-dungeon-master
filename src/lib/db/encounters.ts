@@ -1,25 +1,49 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
-import { healthState, type HealthState } from "@/lib/bestiary/health";
 import type { EnemyStats } from "@/lib/bestiary/statblock";
 import type { ConditionMetaMap } from "@/lib/schemas/sheet";
 import type { TurnBudget } from "@/lib/dm/action-budget";
 
 // Server-authoritative combat state. Enemy HP lives here and changes ONLY
 // through the encounter tools; the AI DM narrates from tool results, never
-// from imagination. Clients receive publicEncounter() projections that
-// carry vague health states and no numbers.
+// from imagination. Nothing in this file is client-safe: what a player is
+// allowed to know is src/lib/db/encounter-view.ts, which carries vague
+// health states and no numbers.
 
 export type OrderEntry =
   | { kind: "pc"; characterId: string; userId: string; name: string; initiative: number }
-  | { kind: "enemy"; enemyId: string; name: string; initiative: number };
+  | { kind: "enemy"; enemyId: string; name: string; initiative: number }
+  // A slot a human DM added by hand: an allied captain, a neutral bystander,
+  // a swarm counted as one thing. It has no stat block and no hit points
+  // because the DM is running it out of their own notes; the engine treats
+  // it exactly as it treats an enemy slot, which is to say it walks past it
+  // and lets the DM narrate. Only src/lib/dm/initiative-edit.ts creates one.
+  | { kind: "npc"; npcId: string; name: string; initiative: number };
+
+// The id that identifies an order entry, whichever kind it is. Every caller
+// that used to write `entry.kind === "pc" ? entry.characterId : entry.enemyId`
+// asks this instead, so a fourth kind would not need finding them again.
+export function orderEntryId(entry: OrderEntry): string {
+  if (entry.kind === "pc") {
+    return entry.characterId;
+  }
+  return entry.kind === "enemy" ? entry.enemyId : entry.npcId;
+}
 
 export type EncounterStatus = "active" | "ended";
 export type EnemyStatus = "alive" | "dead" | "fled";
+
+// A fight, or a tactical board with nobody to fight on it. Scenes exist so a
+// DM can put the party's tokens on a map outside combat; they share this
+// table because battle_maps hang off an encounter id, and they are marked
+// rather than inferred from "no enemies" so that getActiveEncounter keeps
+// meaning "a fight is running" everywhere it is already asked.
+export type EncounterKind = "fight" | "scene";
 
 export type Encounter = {
   id: string;
   campaignId: string;
   status: EncounterStatus;
+  kind: EncounterKind;
   round: number;
   turnIndex: number;
   // False while initiative entries are still being collected in `order`.
@@ -36,6 +60,9 @@ export type Encounter = {
   surprisedIds: string[];
   // Enemies that have spent their reaction this round (src/lib/dm/opportunity.ts).
   reactionsUsed: string[];
+  // Ammunition spent in this fight, keyed "<characterId>|<inventory line>".
+  // Empty unless the `ammunition` variant rule is on (src/lib/srd/ammunition.ts).
+  ammoSpent: Record<string, number>;
   outcome: string;
   summary: string;
   createdAt: string;
@@ -69,6 +96,7 @@ type EncounterRow = {
   id: string;
   campaign_id: string;
   status: EncounterStatus;
+  kind: EncounterKind;
   round: number;
   turn_index: number;
   order_ready: number;
@@ -77,6 +105,7 @@ type EncounterRow = {
   turn_budget_json: string | null;
   surprised_ids_json: string | null;
   reactions_used_json: string | null;
+  ammo_spent_json: string | null;
   outcome: string;
   summary: string;
   created_at: string;
@@ -109,6 +138,7 @@ function mapEncounter(row: EncounterRow): Encounter {
     id: row.id,
     campaignId: row.campaign_id,
     status: row.status,
+    kind: row.kind === "scene" ? "scene" : "fight",
     round: row.round,
     turnIndex: row.turn_index,
     orderReady: Boolean(row.order_ready),
@@ -117,6 +147,7 @@ function mapEncounter(row: EncounterRow): Encounter {
     turnBudget: parseJson<TurnBudget | null>(row.turn_budget_json, null),
     surprisedIds: parseJson<string[]>(row.surprised_ids_json, []),
     reactionsUsed: parseJson<string[]>(row.reactions_used_json, []),
+    ammoSpent: parseJson<Record<string, number>>(row.ammo_spent_json, {}),
     outcome: row.outcome,
     summary: row.summary,
     createdAt: row.created_at,
@@ -160,19 +191,34 @@ function mapEnemy(row: EnemyRow): EncounterEnemy {
   };
 }
 
-export function createEncounter(campaignId: string, summary: string): Encounter | null {
-  const existing = getActiveEncounter(campaignId);
-  if (existing) {
+export function createEncounter(
+  campaignId: string,
+  summary: string,
+  kind: EncounterKind = "fight",
+): Encounter | null {
+  // One board at a time, and the fight always wins it. A fight breaking out
+  // on an exploration map closes the scene here rather than in each caller,
+  // so two active rows can never both claim to own the battle map; a scene
+  // asked for while a fight is running is refused instead, because a fight
+  // is not something to quietly clear off the table.
+  if (getActiveEncounter(campaignId)) {
     return null;
+  }
+  const scene = getActiveScene(campaignId);
+  if (scene) {
+    if (kind === "scene") {
+      return null;
+    }
+    endEncounter(scene.id, "the fight began");
   }
   const id = crypto.randomUUID();
   const now = nowIso();
   getDatabase()
     .prepare(
-      `INSERT INTO encounters (id, campaign_id, status, summary, created_at, updated_at)
-       VALUES (?, ?, 'active', ?, ?, ?)`,
+      `INSERT INTO encounters (id, campaign_id, status, kind, summary, created_at, updated_at)
+       VALUES (?, ?, 'active', ?, ?, ?, ?)`,
     )
-    .run(id, campaignId, summary.slice(0, 300), now, now);
+    .run(id, campaignId, kind, summary.slice(0, 300), now, now);
   return getEncounter(id);
 }
 
@@ -183,13 +229,34 @@ export function getEncounter(id: string): Encounter | null {
   return row ? mapEncounter(row) : null;
 }
 
+// "Is a fight running?" Scenes are deliberately invisible here: every combat
+// rule in the engine asks this question, and none of them should fire because
+// the party is standing on an exploration map.
 export function getActiveEncounter(campaignId: string): Encounter | null {
   const row = getDatabase()
     .prepare(
-      `SELECT * FROM encounters WHERE campaign_id = ? AND status = 'active' ORDER BY created_at DESC LIMIT 1`,
+      `SELECT * FROM encounters WHERE campaign_id = ? AND status = 'active' AND kind = 'fight'
+       ORDER BY created_at DESC LIMIT 1`,
     )
     .get(campaignId) as EncounterRow | undefined;
   return row ? mapEncounter(row) : null;
+}
+
+export function getActiveScene(campaignId: string): Encounter | null {
+  const row = getDatabase()
+    .prepare(
+      `SELECT * FROM encounters WHERE campaign_id = ? AND status = 'active' AND kind = 'scene'
+       ORDER BY created_at DESC LIMIT 1`,
+    )
+    .get(campaignId) as EncounterRow | undefined;
+  return row ? mapEncounter(row) : null;
+}
+
+// Whatever owns the tactical board right now. Only the map layer asks this:
+// the fight comes first, because createEncounter closes any scene the moment
+// one starts, so the two can never both be open.
+export function getActiveBoard(campaignId: string): Encounter | null {
+  return getActiveEncounter(campaignId) ?? getActiveScene(campaignId);
 }
 
 export function saveEncounter(encounter: Encounter) {
@@ -197,7 +264,7 @@ export function saveEncounter(encounter: Encounter) {
     .prepare(
       `UPDATE encounters SET status = ?, round = ?, turn_index = ?, order_ready = ?,
        order_json = ?, waiting_seq = ?, turn_budget_json = ?, surprised_ids_json = ?,
-       reactions_used_json = ?, outcome = ?, updated_at = ? WHERE id = ?`,
+       reactions_used_json = ?, ammo_spent_json = ?, outcome = ?, updated_at = ? WHERE id = ?`,
     )
     .run(
       encounter.status,
@@ -209,6 +276,7 @@ export function saveEncounter(encounter: Encounter) {
       encounter.turnBudget ? JSON.stringify(encounter.turnBudget) : null,
       JSON.stringify(encounter.surprisedIds),
       JSON.stringify(encounter.reactionsUsed),
+      JSON.stringify(encounter.ammoSpent),
       encounter.outcome,
       nowIso(),
       encounter.id,
@@ -315,64 +383,4 @@ export function setEnemyConcentration(
     .prepare(`UPDATE encounter_enemies SET concentration = ?, updated_at = ? WHERE id = ?`)
     .run(spell, nowIso(), enemyId);
   return getEnemy(enemyId);
-}
-
-// Client-safe projection: vague health states only, no HP numbers, no stats.
-export type PublicEncounter = {
-  id: string;
-  status: EncounterStatus;
-  round: number;
-  turnIndex: number;
-  orderReady: boolean;
-  order: Array<{ kind: "pc" | "enemy"; id: string; name: string }>;
-  enemies: Array<{
-    id: string;
-    name: string;
-    health: HealthState;
-    status: EnemyStatus;
-    cr: number;
-    conditions: string[];
-    conditionRounds: Record<string, number>;
-  }>;
-};
-
-export function publicEncounter(
-  encounter: Encounter,
-  enemies: EncounterEnemy[],
-): PublicEncounter {
-  return {
-    id: encounter.id,
-    status: encounter.status,
-    round: encounter.round,
-    turnIndex: encounter.turnIndex,
-    orderReady: encounter.orderReady,
-    order: encounter.orderReady
-      ? encounter.order.map((entry) => ({
-          kind: entry.kind,
-          id: entry.kind === "pc" ? entry.characterId : entry.enemyId,
-          name: entry.name,
-        }))
-      : [],
-    enemies: enemies.map((enemy) => ({
-      id: enemy.id,
-      name: enemy.displayName,
-      health: enemy.status === "fled" ? "healthy" : healthState(enemy.currentHp, enemy.maxHp),
-      status: enemy.status,
-      cr: enemy.cr,
-      conditions: enemy.status === "alive" ? enemy.conditions : [],
-      conditionRounds:
-        enemy.status === "alive"
-          ? Object.fromEntries(
-              Object.entries(enemy.conditionMeta)
-                .filter(([, meta]) => typeof meta.rounds === "number")
-                .map(([name, meta]) => [name, meta.rounds as number]),
-            )
-          : {},
-    })),
-  };
-}
-
-export function activePublicEncounter(campaignId: string): PublicEncounter | null {
-  const encounter = getActiveEncounter(campaignId);
-  return encounter ? publicEncounter(encounter, listEnemies(encounter.id)) : null;
 }

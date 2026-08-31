@@ -27,6 +27,7 @@ function maskedConfig(config: GlobalConfig) {
     },
     images: config.images,
     speech: config.speech,
+    voiceChat: config.voiceChat,
     discord: {
       clientId: config.discord.clientId,
       hasClientSecret: config.discord.clientSecret !== "",
@@ -47,6 +48,10 @@ function envDefaults() {
     discordClientId: serverEnv("DISCORD_CLIENT_ID"),
     hasDiscordClientSecret: serverEnv("DISCORD_CLIENT_SECRET") !== "",
     publicUrl: serverEnv("APP_PUBLIC_URL"),
+    voiceEnabled: serverEnv("VOICE_ENABLED", "0") === "1",
+    voiceAnnouncedIp: serverEnv("VOICE_ANNOUNCED_IP"),
+    voiceDomain: serverEnv("VOICE_DOMAIN"),
+    voiceRtcPort: serverEnv("VOICE_RTC_PORT", "44444"),
     worldRegistryUrl: serverEnv("WORLD_REGISTRY_URL"),
   };
 }
@@ -87,6 +92,14 @@ const patchSchema = z.object({
     .object({
       kokoroUrl: z.string().trim().max(500).optional(),
       sttUrl: z.string().trim().max(500).optional(),
+    })
+    .optional(),
+  voiceChat: z
+    .object({
+      enabled: z.enum(["", "on", "off"]).optional(),
+      announcedIp: z.string().trim().max(200).optional(),
+      domain: z.string().trim().max(300).optional(),
+      rtcPort: z.string().trim().max(10).optional(),
     })
     .optional(),
   discord: z

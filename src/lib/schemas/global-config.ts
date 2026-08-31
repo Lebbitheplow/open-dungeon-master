@@ -74,6 +74,26 @@ export const globalConfigSchema = z.object({
       sttUrl: z.string().trim().max(500).default(""),
     })
     .prefault({}),
+  // Live voice chat (src/lib/voice/). Separate from `speech` above, which is
+  // Kokoro TTS and Whisper STT: different feature, similar-sounding name.
+  //
+  // `enabled` is tri-state rather than a boolean so it follows the same
+  // "blank = fall through to the env var" rule as every string field here.
+  // Voice stays off unless something says on, because it cannot work until
+  // the owner also opens the media port and serves the app over https.
+  voiceChat: z
+    .object({
+      enabled: z.enum(["", "on", "off"]).default(""),
+      // The address a player's browser can reach this host on.
+      announcedIp: z.string().trim().max(200).default(""),
+      // Optional hostname announced instead of the IP. Must resolve straight
+      // to this host: a proxied (Cloudflare orange cloud) name will not do.
+      domain: z.string().trim().max(300).default(""),
+      // Kept as a string so blank means "no override", like every other
+      // field. Parsed where it is used.
+      rtcPort: z.string().trim().max(10).default(""),
+    })
+    .prefault({}),
   discord: z
     .object({
       clientId: z.string().trim().max(100).default(""),

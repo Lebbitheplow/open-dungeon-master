@@ -212,6 +212,30 @@ function ensureSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_library_characters_user
       ON library_characters(user_id, updated_at);
 
+    -- The per-user ruleset library (docs/workshop-plan.md section 2). Before
+    -- this, "the rules at our table" was three unrelated things: the variant
+    -- flags in game_settings_json, the prose in campaigns.house_rules_text,
+    -- and homebrew_entries. None of them was reusable across campaigns, so a
+    -- DM re-entered their table's rulings every time they started a game.
+    --
+    -- A row here is the source; applying it COPIES into a campaign, the same
+    -- way library_characters copies into character_sheets. The copy is what
+    -- plays, so editing a ruleset never reaches back into a running table.
+    CREATE TABLE IF NOT EXISTS library_rulesets (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      variant_rules_json TEXT NOT NULL DEFAULT '{}',
+      house_rules_text TEXT NOT NULL DEFAULT '',
+      homebrew_ids_json TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_library_rulesets_user
+      ON library_rulesets(user_id, updated_at);
+
     -- A DM narration turn as a persisted state machine, so a turn can park
     -- while waiting on a physical dice roll and resume later (surviving
     -- restarts). conversation_json holds the full model conversation.
@@ -506,18 +530,97 @@ function ensureSchema(db: Database.Database) {
 
     CREATE INDEX IF NOT EXISTS idx_battle_maps_encounter ON battle_maps(encounter_id);
 
+    -- Maps the DM built before anybody needed them. A battle_maps row always
+    -- belongs to an encounter, which is right for a board on the table and
+    -- wrong for a dungeon drawn on a Tuesday for a session three weeks off.
+    --
+    -- Rather than make battle_maps.encounter_id nullable, which would put a
+    -- second lifecycle through every token, fog and movement path that
+    -- currently assumes the link, prep gets its own table holding only the
+    -- ground. Deploying one copies its terrain into a fresh encounter's
+    -- battle map (src/lib/db/prepared-maps.ts), so nothing on the table ever
+    -- points at a prepared map and no combat code learns a new shape.
+    --
+    -- Prepared maps carry no tokens and no fog on purpose: they are prep,
+    -- and a map with combatants standing on it before the fight exists is a
+    -- virtual tabletop, which this app has deliberately not become.
+    CREATE TABLE IF NOT EXISTS prepared_maps (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      -- The DM's own notes: what lives here, what the party will not notice.
+      notes TEXT NOT NULL DEFAULT '',
+      tags_json TEXT NOT NULL DEFAULT '[]',
+      width INTEGER NOT NULL,
+      height INTEGER NOT NULL,
+      terrain TEXT NOT NULL,
+      ambient TEXT NOT NULL DEFAULT 'bright' CHECK (ambient IN ('bright','dim','dark')),
+      theme TEXT NOT NULL DEFAULT 'field',
+      lights_json TEXT NOT NULL DEFAULT '[]',
+      -- The reproducible identity of a generated map, 0 for one drawn or
+      -- imported by hand.
+      seed INTEGER NOT NULL DEFAULT 0,
+      -- Cosmetic art under the grid; '' for a map that is only terrain.
+      backdrop_path TEXT NOT NULL DEFAULT '',
+      backdrop_transform_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE (campaign_id, name COLLATE NOCASE)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_prepared_maps_campaign
+      ON prepared_maps(campaign_id, updated_at);
+
+    -- The storyboard (docs/workshop-plan.md phase 7). Campaign-scoped like
+    -- everything else a workshop holds, because a workshop IS a campaigns
+    -- row; in a playing campaign the table simply stays empty, since the
+    -- board is prep and prep happens before the session.
+    CREATE TABLE IF NOT EXISTS workshop_beats (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      -- Each kind has somewhere to land at the campaign end
+      -- (src/lib/workshop/board-compile.ts). A kind that compiles into
+      -- nothing does not belong in this list.
+      kind TEXT NOT NULL CHECK (kind IN
+        ('setting','backstory','event','encounter','hook','secret','npc_moment')),
+      title TEXT NOT NULL,
+      body TEXT NOT NULL DEFAULT '',
+      -- Optional ids of other things in this same workshop: an NPC, a
+      -- prepared map, a prepared encounter, a place.
+      links_json TEXT NOT NULL DEFAULT '{}',
+      -- Ids of the beats this one leads to. Direction matters: it is what
+      -- makes a hook with no payoff detectable.
+      edges_json TEXT NOT NULL DEFAULT '[]',
+      -- Where the card sits on the board, so an arrangement survives a
+      -- reload. No meaning beyond that.
+      x INTEGER NOT NULL DEFAULT 0,
+      y INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_workshop_beats_campaign
+      ON workshop_beats(campaign_id, created_at);
+
     CREATE TABLE IF NOT EXISTS battle_tokens (
       id TEXT PRIMARY KEY,
       map_id TEXT NOT NULL REFERENCES battle_maps(id) ON DELETE CASCADE,
       campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-      kind TEXT NOT NULL CHECK (kind IN ('pc','enemy')),
-      -- character_sheets.id for PCs, encounter_enemies.id for enemies.
+      -- 'npc' and 'prop' are the DM's own board furniture and carry no stat
+      -- block; see src/lib/battlemap/types.ts for why they are their own
+      -- kinds rather than enemies nothing may attack.
+      kind TEXT NOT NULL CHECK (kind IN ('pc','enemy','npc','prop')),
+      -- character_sheets.id for PCs, encounter_enemies.id for enemies, and
+      -- a generated "npc:"/"prop:" id for anything the DM placed by hand.
       ref_id TEXT NOT NULL,
       name TEXT NOT NULL,
       x INTEGER NOT NULL,
       y INTEGER NOT NULL,
       moved_this_round INTEGER NOT NULL DEFAULT 0,
       light_radius INTEGER NOT NULL DEFAULT 0,
+      -- Kept off the players' projection entirely, on the map and on the
+      -- initiative tracker both.
+      hidden INTEGER NOT NULL DEFAULT 0,
       updated_at TEXT NOT NULL,
       UNIQUE (map_id, ref_id)
     );
@@ -797,6 +900,123 @@ function ensureSchema(db: Database.Database) {
       armed_at TEXT NOT NULL,
       PRIMARY KEY (campaign_id, user_id)
     );
+
+    -- Story a human DM told out loud and then wrote down: the summary that
+    -- keeps the memory engines fed when the table never typed the scene.
+    --
+    -- The body is ALSO inserted as a campaign_messages row (author_type 'dm',
+    -- message_id below), and that message is what chapters, compaction,
+    -- scene-chunk embedding, retrieval, recap and the export all read. This
+    -- table is the provenance the transcript cannot carry: which DM passages
+    -- were summaries rather than live narration, what kind of story each one
+    -- recorded, and whether the DM typed it, spoke it, or accepted a draft.
+    --
+    -- kind and source are validated at the API boundary rather than by a
+    -- CHECK constraint, because SQLite cannot widen a CHECK in place and this
+    -- is a list that will grow.
+    CREATE TABLE IF NOT EXISTS dm_beats (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      seq INTEGER NOT NULL,
+      message_id TEXT NOT NULL,
+      author_user_id TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'scene',
+      source TEXT NOT NULL DEFAULT 'typed',
+      body TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_dm_beats_campaign
+      ON dm_beats(campaign_id, seq);
+
+    -- Freeform typed attributes on anything: an NPC, an item, a location, a
+    -- faction, a prop, or the campaign itself (src/lib/dm/attributes-logic.ts).
+    -- Keyed by kind and id rather than by a foreign key, because half the
+    -- targets have no row of their own: a faction can exist only in the DM's
+    -- notes, and "the campaign" is a target too. Deleting a campaign takes its
+    -- attributes with it; nothing else here cascades, so an NPC renamed simply
+    -- starts a fresh set rather than losing one.
+    -- Active effects: every modifier currently riding on a combatant, with
+    -- its source, its duration and its save (src/lib/dm/effects-logic.ts).
+    -- The INSTANCE layer; the 5e condition and feature catalogs in src/lib/srd
+    -- stay where they are and keep resolving as they do. This is what lets a
+    -- DM say "-2 to their saves until dawn" without inventing a condition,
+    -- and gives the stacking rules one place to live.
+    --
+    -- No foreign key to a target: the target is a character sheet or an
+    -- encounter enemy depending on target_kind, and a column cannot reference
+    -- two tables. Effects are cleaned up by the tick, by the fight ending, and
+    -- by the campaign cascade below.
+    CREATE TABLE IF NOT EXISTS active_effects (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      target_kind TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT '',
+      modifiers_json TEXT NOT NULL DEFAULT '[]',
+      duration TEXT NOT NULL DEFAULT 'manual',
+      remaining INTEGER NOT NULL DEFAULT 0,
+      save_ability TEXT NOT NULL DEFAULT '',
+      save_dc INTEGER NOT NULL DEFAULT 0,
+      visible INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_active_effects_target
+      ON active_effects(campaign_id, target_kind, target_id);
+
+    CREATE TABLE IF NOT EXISTS entity_attributes (
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      target_kind TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      attributes_json TEXT NOT NULL DEFAULT '[]',
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (campaign_id, target_kind, target_id)
+    );
+
+    -- DM-authored random tables: rumours, wandering monsters, what is in the
+    -- drawer. Rows are ranges over a die (src/lib/dm/roll-table-logic.ts).
+    -- The table itself is the DM's and is never sent to a player; rolling it
+    -- writes an ordinary rolls row, whose own visibility decides who sees the
+    -- result.
+    CREATE TABLE IF NOT EXISTS roll_tables (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      entries_json TEXT NOT NULL DEFAULT '[]',
+      created_by_user_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_roll_tables_campaign
+      ON roll_tables(campaign_id, name);
+
+    -- Prepared encounters: a roster a DM writes down before the session and
+    -- deploys in one action. Deliberately NOT a live encounter: this table
+    -- holds text, and deploying it calls the same start_encounter path a
+    -- typed roster does (src/lib/dm/encounter-templates.ts), so a prepared
+    -- fight and an improvised one are the same fight.
+    CREATE TABLE IF NOT EXISTS encounter_templates (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      -- [{monster, count}], the parsed form of the DM's shorthand.
+      enemies_json TEXT NOT NULL DEFAULT '[]',
+      -- The battlefield hint start_encounter takes, plus the map studio's
+      -- saved seed/theme/ambient/size, or nulls to let the generator read
+      -- the scene as it always has.
+      battlefield TEXT NOT NULL DEFAULT '',
+      map_json TEXT NOT NULL DEFAULT '{}',
+      notes TEXT NOT NULL DEFAULT '',
+      created_by_user_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_encounter_templates_campaign
+      ON encounter_templates(campaign_id, name);
   `);
 
   // Compaction memory: a rolling "story so far" summary plus a watermark of
@@ -851,6 +1071,54 @@ function ensureSchema(db: Database.Database) {
     // Lead-authored house rules; chunked into rule_chunks on save for
     // per-turn retrieval (src/lib/dm/rules-logic.ts).
     ["house_rules_text", `TEXT NOT NULL DEFAULT ''`],
+    // Human-DM mode: the member running the game, and an optional co-DM with
+    // the same in-game powers. NULL on both means the AI runs it, which is
+    // why every existing campaign keeps behaving exactly as before. The seat
+    // lives on the row rather than in game_settings_json because auth checks
+    // and party-slot counting read it on nearly every request.
+    // Powers and visibility derive from these in src/lib/dm/viewer.ts.
+    ["human_dm_user_id", `TEXT`],
+    ["assistant_dm_user_id", `TEXT`],
+    // Assisted mode: the stretch of answers the DM handed to the AI when they
+    // stepped away (src/lib/dm/delegation.ts). '' means nobody has ever
+    // handed it over; a record with turnsLeft 0 is a spent one, kept so the
+    // console can say the DM has the table back rather than going blank.
+    ["dm_cover_json", `TEXT NOT NULL DEFAULT ''`],
+    // The in-world calendar and clock (src/lib/dm/calendar.ts). '' means the
+    // campaign has never set one and reads as the default: the turning year,
+    // first day of Greening, eight in the morning. Every existing campaign
+    // therefore acquires a clock without anything being backfilled.
+    ["clock_json", `TEXT NOT NULL DEFAULT ''`],
+    // The party as one record: the common purse, the shared pack, banked XP,
+    // where they are and the marching order (src/lib/dm/party-logic.ts). ''
+    // reads as an empty party, which is exactly what every existing campaign
+    // has: those facts were smeared across character sheets and stay there.
+    ["party_json", `TEXT NOT NULL DEFAULT ''`],
+    // The running structured non-combat scene, or the last one that finished
+    // (src/lib/dm/scene-tracker-logic.ts). One at a time, like the active
+    // encounter, so a column rather than a table.
+    ["scene_tracker_json", `TEXT NOT NULL DEFAULT ''`],
+    // What is playing: the ambience bed and music cue the table last set
+    // (src/lib/ambience/logic.ts). '' reads as silence, which is what every
+    // campaign that predates the sound library has.
+    ["ambience_json", `TEXT NOT NULL DEFAULT ''`],
+    // The rider's mount, keyed by character id (src/lib/srd/mounts.ts). A
+    // campaign-level map rather than a sheet column because a mount is a fact
+    // about a scene, not about a character: it is left at the stable, and a
+    // sheet carried between campaigns should not bring a horse.
+    ["mounts_json", `TEXT NOT NULL DEFAULT '{}'`],
+    // What this row is for. 'campaign' is a table that plays; 'workshop' is
+    // a DM's prep space (docs/workshop-plan.md). A workshop reuses every
+    // campaign-scoped table, route and projection unchanged, which is the
+    // whole reason it is a campaign row rather than a parallel schema; what
+    // separates it is that it never plays. The guards live in
+    // src/lib/workshop/kind.ts and are asserted by
+    // scripts/test-workshop-isolation.mjs.
+    //
+    // No CHECK constraint: SQLite cannot add one by ALTER, and every reader
+    // goes through normalizeCampaignKind, which is the enforcement that
+    // actually runs.
+    ["kind", `TEXT NOT NULL DEFAULT 'campaign'`],
   ]);
 
   const userColumns = db.prepare(`PRAGMA table_info(users)`).all() as Array<{ name: string }>;
@@ -939,6 +1207,12 @@ function ensureSchema(db: Database.Database) {
     // Per-class hit-die pools [{classId, die, total, spent}]; NULL until
     // the first multiclass level-up. hit_dice_json stays the summed mirror.
     ["hit_dice_pools_json", `TEXT`],
+    // Coin under a whole gold piece, 0 to 99. `gold` keeps meaning whole gold
+    // pieces so every module that reads it is untouched; the true purse is
+    // gold * 100 + copper (src/lib/srd/currency.ts). Defaulting to 0 is
+    // exactly right for every existing character: they had no small change
+    // because there was nowhere to put it.
+    ["copper", `INTEGER NOT NULL DEFAULT 0`],
   ]);
 
   if (sheetsNeedAcOverride) {
@@ -1028,6 +1302,11 @@ function ensureSchema(db: Database.Database) {
     // marks a player's pending whisper answered only if its sender is here, so
     // a turn that never replied cannot silently consume the message.
     ["answered_whisper_character_ids_json", `TEXT NOT NULL DEFAULT '[]'`],
+    // Who is driving this turn: the model, or a person running the table
+    // through the DM console (src/lib/dm/invoke.ts). A human turn carries no
+    // conversation and is never handed back to the model, which is what the
+    // pending-roll resume path branches on.
+    ["actor", `TEXT NOT NULL DEFAULT 'ai'`],
   ]);
 
   addColumns("encounters", [
@@ -1042,6 +1321,20 @@ function ensureSchema(db: Database.Database) {
     // Enemy ids that have spent their reaction this round (opportunity
     // attacks); emptied when the round wraps.
     ["reactions_used_json", `TEXT NOT NULL DEFAULT '[]'`],
+    // Rounds of ammunition each character has spent in this fight, keyed
+    // "<characterId>|<inventory line>". Only written when the `ammunition`
+    // variant rule is on, and read once at end_encounter to hand half of it
+    // back (PHB). Per encounter rather than per turn because that is the
+    // span the recovery rule is written against.
+    ["ammo_spent_json", `TEXT NOT NULL DEFAULT '{}'`],
+    // 'fight' or 'scene'. A scene is a tactical map with nobody to fight:
+    // the party's tokens on a board so the table can point at where everyone
+    // is standing. It is an encounters row because that is what battle_maps
+    // hang off, and it is marked here rather than inferred from "no enemies"
+    // because getActiveEncounter must keep meaning "a fight is running" for
+    // the seventy-odd places that ask it. Scenes are fetched by name instead
+    // (getActiveScene), so no combat rule ever sees one.
+    ["kind", `TEXT NOT NULL DEFAULT 'fight'`],
   ]);
 
   addColumns("encounter_enemies", [
@@ -1079,6 +1372,11 @@ function ensureSchema(db: Database.Database) {
     // Campaign seq at insert time, stamped going forward so chapter rewind
     // can delete by position; NULL rows fall back to created_at.
     ["seq", `INTEGER`],
+    // Who may see the result: everyone ('public'), the DM alone ('dm'), the
+    // table knowing a roll happened but not what it came up ('blind'), or
+    // the roller and the DM ('self'). A human DM's answer to the screen they
+    // would otherwise be hiding dice behind (src/lib/dm/viewer.ts).
+    ["visibility", `TEXT NOT NULL DEFAULT 'public'`],
   ]);
 
   addColumns("campaign_notes", [
@@ -1148,6 +1446,32 @@ function ensureSchema(db: Database.Database) {
     ["trigger_keywords", `TEXT NOT NULL DEFAULT ''`],
   ]);
 
+  addColumns("battle_maps", [
+    // Cosmetic art drawn under the grid (src/lib/battlemap/backdrop.ts).
+    // Nothing mechanical reads it: the terrain string is still the only
+    // thing pathfinding, sight and cover consult, and the studio says so.
+    // Empty means the map is drawn from its terrain alone, which is what
+    // every map made before this column does.
+    ["backdrop_path", `TEXT NOT NULL DEFAULT ''`],
+    // {offsetX, offsetY, scale, opacity}: how the picture sits over the
+    // grid, so an imported image can be pulled into register with the walls.
+    ["backdrop_transform_json", `TEXT NOT NULL DEFAULT '{}'`],
+  ]);
+
+  addColumns("overworld_maps", [
+    // Where the party is standing on the region map, as {"x":n,"y":n}. Empty
+    // until a DM places them: locations.is_current has always been the proxy,
+    // and it still is, because a party between two places has no location.
+    ["party_xy_json", `TEXT NOT NULL DEFAULT ''`],
+    // The five dials the terrain was generated under
+    // (src/lib/overworld/logic.ts). Empty means the defaults, which is why
+    // every map made before this column keeps rerolling the way it did.
+    ["params_json", `TEXT NOT NULL DEFAULT ''`],
+    // The DM's own notes on the region: what lies beyond the edge, which
+    // roads are watched. Never sent to a player.
+    ["notes", `TEXT NOT NULL DEFAULT ''`],
+  ]);
+
   addColumns("npcs", [
     // Other spellings this NPC has been called, e.g. ["Marla", "Captain
     // Marla"] on the row named "Marla Venn" (src/lib/dm/entity-logic.ts).
@@ -1177,6 +1501,25 @@ function ensureSchema(db: Database.Database) {
     // (src/lib/dm/npc-archive-logic.ts). Never deleted: naming the NPC
     // restores them, so this is a visibility flag rather than a lifecycle.
     ["archived", `INTEGER NOT NULL DEFAULT 0`],
+    // A face, as a /uploads/ path written by /api/upload or rendered by the
+    // media queue (src/lib/portrait.ts). A bare path rather than the
+    // attachment JSON character sheets use, because an NPC portrait has no
+    // filename or type worth keeping: it is only ever shown.
+    ["portrait_url", `TEXT NOT NULL DEFAULT ''`],
+  ]);
+
+  addColumns("library_characters", [
+    // What this library entry is FOR: a character somebody plays, or an ally
+    // the DM plays. Both are the same sheet and the same adaptation on the
+    // way into a campaign (src/lib/characters/adapt.ts); what differs is
+    // which door they come through, so this is a column rather than a table.
+    //
+    // No CHECK constraint: SQLite cannot add one by ALTER, and every reader
+    // goes through normalizeCharacterRole, which treats anything that is not
+    // literally 'companion' as a player character. That is also what makes
+    // the upgrade safe, since every row written before this column existed
+    // is one.
+    ["role", `TEXT NOT NULL DEFAULT 'pc'`],
   ]);
 
   // The romance meter was generalized into the relationship meter: one
@@ -1231,6 +1574,17 @@ function ensureSchema(db: Database.Database) {
     ).run("portrait_backfill_done", "true", new Date().toISOString());
   }
 
+  // The one place this schema rebuilds a table instead of adding to it.
+  //
+  // battle_tokens.kind carried CHECK (kind IN ('pc','enemy')), and a CHECK
+  // cannot be widened by ALTER TABLE. The alternative was to file the DM's
+  // neutral NPCs and props as enemies, which would have put a barrel into
+  // encounter difficulty maths and made it a legal target for every attack
+  // the engine can resolve. So: rebuild, once, detected from the stored DDL
+  // rather than from a marker row, so it is idempotent even if it is
+  // interrupted halfway.
+  rebuildBattleTokens(db);
+
   // Reverse catch-up: library uploads used to skip campaign clones, so
   // sheets copied before their photo existed still have none. Fill-only.
   const sheetPortraitMarker = db
@@ -1241,6 +1595,55 @@ function ensureSchema(db: Database.Database) {
     db.prepare(
       `INSERT INTO app_settings (key, value_json, updated_at) VALUES (?, ?, ?)`,
     ).run("sheet_portrait_backfill_done", "true", new Date().toISOString());
+  }
+}
+
+// Widens battle_tokens.kind to accept the DM's own board furniture.
+//
+// Foreign keys are off across the swap because DROP TABLE with them on
+// enforces the table's own references while it goes, and the table is being
+// replaced by an identical one a statement later. Nothing points AT
+// battle_tokens, so no cascade is being suppressed here. The pragma is a
+// no-op inside a transaction, which is why the copy is not wrapped in one;
+// the guard above makes a half-finished run safe to repeat instead.
+function rebuildBattleTokens(db: Database.Database) {
+  const ddl = db
+    .prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'battle_tokens'`)
+    .get() as { sql: string } | undefined;
+  if (!ddl || ddl.sql.includes("'prop'")) {
+    return;
+  }
+  db.pragma("foreign_keys = OFF");
+  try {
+    db.exec(`
+      DROP TABLE IF EXISTS battle_tokens_rebuilt;
+
+      CREATE TABLE battle_tokens_rebuilt (
+        id TEXT PRIMARY KEY,
+        map_id TEXT NOT NULL REFERENCES battle_maps(id) ON DELETE CASCADE,
+        campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL CHECK (kind IN ('pc','enemy','npc','prop')),
+        ref_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        x INTEGER NOT NULL,
+        y INTEGER NOT NULL,
+        moved_this_round INTEGER NOT NULL DEFAULT 0,
+        light_radius INTEGER NOT NULL DEFAULT 0,
+        hidden INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL,
+        UNIQUE (map_id, ref_id)
+      );
+
+      INSERT INTO battle_tokens_rebuilt
+        (id, map_id, campaign_id, kind, ref_id, name, x, y, moved_this_round, light_radius, hidden, updated_at)
+      SELECT id, map_id, campaign_id, kind, ref_id, name, x, y, moved_this_round, light_radius, 0, updated_at
+      FROM battle_tokens;
+
+      DROP TABLE battle_tokens;
+      ALTER TABLE battle_tokens_rebuilt RENAME TO battle_tokens;
+    `);
+  } finally {
+    db.pragma("foreign_keys = ON");
   }
 }
 

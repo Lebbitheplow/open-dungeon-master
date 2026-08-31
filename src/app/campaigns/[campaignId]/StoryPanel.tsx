@@ -69,12 +69,12 @@ function ConfirmRewindDialog({
 function ChapterCard({
   campaignId,
   chapter,
-  isLead,
+  steersStory,
   onRewind,
 }: {
   campaignId: string;
   chapter: Chapter;
-  isLead: boolean;
+  steersStory: boolean;
   onRewind?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -135,7 +135,7 @@ function ChapterCard({
           ) : (
             <p className="text-[11px] italic text-stone-600">No summary recorded.</p>
           )}
-          {isLead ? (
+          {steersStory ? (
             <div className="flex items-center gap-3">
               <button
                 type="button"
@@ -703,11 +703,11 @@ function ArcCard({ campaignId }: { campaignId: string }) {
 export function StoryPanel({
   campaignId,
   chapters,
-  isLead,
+  steersStory,
 }: {
   campaignId: string;
   chapters: Chapter[];
-  isLead: boolean;
+  steersStory: boolean;
 }) {
   const [closing, setClosing] = useState(false);
   const [rewindable, setRewindable] = useState<number[]>([]);
@@ -721,7 +721,7 @@ export function StoryPanel({
 
   // Which chapters have a boundary snapshot to rewind to; lead-only UI.
   useEffect(() => {
-    if (!isLead) {
+    if (!steersStory) {
       return;
     }
     let cancelled = false;
@@ -736,7 +736,7 @@ export function StoryPanel({
     return () => {
       cancelled = true;
     };
-  }, [campaignId, isLead, chapters.length]);
+  }, [campaignId, steersStory, chapters.length]);
 
   async function postRewind(chapterIndex: number, confirm: boolean) {
     setRewindBusy(true);
@@ -776,8 +776,8 @@ export function StoryPanel({
   if (!closed.length && !open) {
     return (
       <div className="space-y-2">
-        {isLead ? <ArcCard campaignId={campaignId} /> : null}
-        {isLead ? <NpcReviewCard campaignId={campaignId} /> : null}
+        {steersStory ? <ArcCard campaignId={campaignId} /> : null}
+        {steersStory ? <NpcReviewCard campaignId={campaignId} /> : null}
         <p className="px-1 py-6 text-center text-xs text-stone-600">
           The story has not begun. Chapters appear here as the adventure unfolds.
         </p>
@@ -787,15 +787,15 @@ export function StoryPanel({
 
   return (
     <div className="space-y-2">
-      {isLead ? <ArcCard campaignId={campaignId} /> : null}
-      {isLead ? <NpcReviewCard campaignId={campaignId} /> : null}
+      {steersStory ? <ArcCard campaignId={campaignId} /> : null}
+      {steersStory ? <NpcReviewCard campaignId={campaignId} /> : null}
       <ExportMenu campaignId={campaignId} />
       <div className="rounded-lg border border-dashed border-stone-800 p-2.5">
         <p className="flex items-center gap-1.5 text-xs text-stone-400">
           <BookOpen className="size-3.5 text-amber-600" />
           Chapter {open?.index ?? closed.length + 1} in progress
         </p>
-        {isLead ? (
+        {steersStory ? (
           <button
             type="button"
             onClick={closeChapter}
@@ -814,7 +814,7 @@ export function StoryPanel({
             )}
           </button>
         ) : null}
-        {isLead && open && rewindable.includes(open.index) ? (
+        {steersStory && open && rewindable.includes(open.index) ? (
           <button
             type="button"
             onClick={() => void postRewind(open.index, false)}
@@ -832,9 +832,9 @@ export function StoryPanel({
             key={chapter.id}
             campaignId={campaignId}
             chapter={chapter}
-            isLead={isLead}
+            steersStory={steersStory}
             onRewind={
-              isLead && rewindable.includes(chapter.index)
+              steersStory && rewindable.includes(chapter.index)
                 ? () => void postRewind(chapter.index, false)
                 : undefined
             }

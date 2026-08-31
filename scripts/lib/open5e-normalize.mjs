@@ -245,6 +245,24 @@ export function normalizeDocumentV2(raw) {
   };
 }
 
+// Item weight in pounds, from whichever shape the source used: v2 gear
+// carries a decimal string plus a unit ("1.000", "lb"), v1 weapons carry a
+// human string ("8 lb."), and v1 armor and magic items carry nothing at all
+// (the SRD armor table in src/lib/srd/armor.ts fills armor in). Encumbrance
+// is the only consumer, and it is off by default, so an unknown weight is 0
+// rather than a guess.
+export function parseWeightLb(raw, unit) {
+  if (raw === null || raw === undefined || raw === "") {
+    return 0;
+  }
+  const value = Number.parseFloat(String(raw).replace(/[^\d.]/g, ""));
+  if (!Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+  const kilograms = String(unit ?? raw).toLowerCase().includes("kg");
+  return Math.round((kilograms ? value * 2.20462 : value) * 100) / 100;
+}
+
 export function normalizeWeapon(raw) {
   return {
     slug: raw.slug,
@@ -254,6 +272,7 @@ export function normalizeWeapon(raw) {
     rarity: "",
     cost: String(raw.cost || ""),
     category: String(raw.category || "").toLowerCase(),
+    weight: parseWeightLb(raw.weight),
     data: raw,
   };
 }
@@ -267,6 +286,9 @@ export function normalizeArmor(raw) {
     rarity: "",
     cost: String(raw.cost || ""),
     category: String(raw.category || "").toLowerCase(),
+    // Open5e ships every armor row with a blank weight; SRD_ARMOR_WEIGHTS in
+    // src/lib/srd/armor.ts is the source for these.
+    weight: parseWeightLb(raw.weight),
     data: raw,
   };
 }
@@ -280,6 +302,7 @@ export function normalizeMagicItem(raw) {
     rarity: String(raw.rarity || "").toLowerCase(),
     cost: "",
     category: String(raw.type || "").toLowerCase(),
+    weight: 0,
     data: raw,
   };
 }
@@ -303,6 +326,7 @@ export function normalizeGearItem(raw) {
     rarity: "",
     cost: Number.isFinite(cost) ? `${cost} gp` : "",
     category: String(raw.category?.name || raw.category || "").toLowerCase(),
+    weight: parseWeightLb(raw.weight, raw.weight_unit),
     data: raw,
   };
 }

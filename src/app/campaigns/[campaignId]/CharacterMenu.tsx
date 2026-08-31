@@ -17,7 +17,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 // message, and the lead-only corrections and lead transfer.
 export function CharacterMenu({
   sheet,
-  isLead,
+  steersStory,
   leadUserId,
   canTransferLead,
   onViewSheet,
@@ -26,7 +26,7 @@ export function CharacterMenu({
   onMessage,
 }: {
   sheet: CharacterSheet;
-  isLead: boolean;
+  steersStory: boolean;
   leadUserId: string;
   canTransferLead: boolean;
   onViewSheet: () => void;
@@ -90,7 +90,7 @@ export function CharacterMenu({
               <MessageSquare className="size-3.5 text-stone-500" /> Message
             </DropdownMenu.Item>
           ) : null}
-          {isLead ? (
+          {steersStory ? (
             <DropdownMenu.Item className={item} onSelect={defer(onAdjust)}>
               <Wrench className="size-3.5 text-stone-500" /> Adjust stats
             </DropdownMenu.Item>
@@ -100,7 +100,7 @@ export function CharacterMenu({
               <Crown className="size-3.5 text-amber-400" /> Make party lead
             </DropdownMenu.Item>
           ) : null}
-          {isLead && sheet.isCompanion ? (
+          {steersStory && sheet.isCompanion ? (
             <DropdownMenu.Item className={item} onSelect={dismissCompanion}>
               <UserMinus className="size-3.5 text-red-400" /> Dismiss companion
             </DropdownMenu.Item>

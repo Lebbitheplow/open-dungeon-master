@@ -39,6 +39,21 @@ export const VARIANT_TOGGLES: Array<{
     label: "Lingering injuries",
     tip: "A critical hit or dropping to 0 HP can leave a lasting injury the DM tracks.",
   },
+  {
+    key: "powerfulCritical",
+    label: "Powerful critical",
+    tip: "On a critical hit the extra weapon dice are dealt as their maximum instead of being rolled.",
+  },
+  {
+    key: "criticalDamageMods",
+    label: "Crit damage mods",
+    tip: "On a critical hit the flat damage modifiers double along with the dice.",
+  },
+  {
+    key: "ammunition",
+    label: "Ammunition",
+    tip: "Arrows, bolts and bullets are spent when they are fired and half are recovered after the fight.",
+  },
 ];
 
 export const REST_LABELS: Record<GameSettings["variantRules"]["restVariant"], string> = {
@@ -107,11 +122,11 @@ export function VariantRulesFields({
 export function RulesPanel({
   campaignId,
   settings,
-  isLead,
+  steersStory,
 }: {
   campaignId: string;
   settings: GameSettings;
-  isLead: boolean;
+  steersStory: boolean;
 }) {
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
@@ -195,7 +210,7 @@ export function RulesPanel({
         <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-stone-300">
           <Scale className="size-3.5 text-amber-600" /> Variant rules
         </p>
-        {isLead ? (
+        {steersStory ? (
           <div className={cn("flex flex-wrap items-center gap-1.5", settingsBusy && "opacity-70")}>
             {VARIANT_TOGGLES.map((toggle) => (
               <Tooltip key={toggle.key} content={toggle.tip}>
@@ -249,7 +264,7 @@ export function RulesPanel({
           <p className="flex items-center gap-1 text-[11px] text-stone-500">
             <Loader2 className="size-3 animate-spin" /> Loading...
           </p>
-        ) : isLead ? (
+        ) : steersStory ? (
           <>
             <textarea
               value={text}
@@ -283,7 +298,7 @@ export function RulesPanel({
         )}
       </div>
 
-      {isLead && chunks.length ? (
+      {steersStory && chunks.length ? (
         <div className="rounded-lg border border-stone-800 bg-stone-950/40 p-2.5">
           <p className="mb-1 text-xs font-medium text-stone-300">Rule sections</p>
           <p className="mb-2 text-[11px] leading-4 text-stone-500">

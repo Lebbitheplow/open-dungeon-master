@@ -123,6 +123,18 @@ export function listLoreWithEmbeddings(
   return rows.map((row) => ({ entry: mapEntry(row), embedding: row.embedding }));
 }
 
+// Background pass over every entry in a campaign that still has no vector.
+// Rows written in bulk (a workshop import) skip the per-insert embed so the
+// copy stays one transaction; this is how they catch up afterwards.
+export async function embedPendingLore(campaignId: string) {
+  const pending = getDatabase()
+    .prepare(`SELECT id FROM lore_entries WHERE campaign_id = ? AND embedding IS NULL`)
+    .all(campaignId) as Array<{ id: string }>;
+  for (const row of pending) {
+    await embedLoreEntry(row.id);
+  }
+}
+
 // Fire-and-forget MiniLM embedding of title+body; failures leave the
 // embedding NULL, which retrieval treats as keyword-only.
 async function embedLoreEntry(entryId: string) {

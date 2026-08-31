@@ -4,6 +4,7 @@ import type { StoredRoll } from "@/lib/db/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { LEAD_NOTE_PREFIX, type CampaignMember } from "@/lib/campaign-types";
 import { computeSheetDerived, findSkill, formatModifier, sizeForRace, speedFor, SRD_SKILLS } from "@/lib/srd";
+import { encumbranceFor } from "@/lib/srd/encumbrance";
 import { classFeatureDescription, findCustomClass } from "@/lib/classes";
 import { resourceDef } from "@/lib/srd/class-resources";
 import { subclassFeatureDescription } from "@/lib/srd/features";
@@ -17,6 +18,18 @@ import { renderArcForPrompt } from "@/lib/dm/arc-logic";
 import { renderWorldArcsForPrompt } from "@/lib/dm/world-arc-logic";
 import { renderFactsForPrompt, type FactLike } from "@/lib/dm/fact-logic";
 import { companionMode } from "@/lib/dm/companion-tools";
+import { breakDown, describeInstant, isDark, normalizeClock } from "@/lib/dm/calendar";
+import { describeParty, normalizeParty } from "@/lib/dm/party-logic";
+import { getSceneTracker } from "@/lib/db/scene-tracker";
+import { trackerPromptBlock } from "@/lib/dm/scene-tracker-logic";
+import { getAmbience } from "@/lib/db/ambience";
+import { describeAmbience } from "@/lib/ambience/logic";
+import { listEffects } from "@/lib/db/active-effects";
+import { describeEffect } from "@/lib/dm/effects-logic";
+import { getMounts } from "@/lib/db/mounts";
+import { describeMount } from "@/lib/srd/mounts";
+import { formatCopper } from "@/lib/srd/currency";
+import { coverPromptBlock } from "@/lib/dm/delegation";
 import { ENGINE_BOUNDARY_CHECK, ENGINE_BOUNDARY_RULES } from "@/lib/dm/engine-boundary";
 import { renderChapterLod } from "@/lib/dm/chapter-lod";
 import { buildPinnedMemoriesBlock } from "@/lib/dm/pin-logic";
@@ -88,6 +101,13 @@ export function buildDmSystem(campaign: Campaign): string {
   }
   if (campaign.gameSettings.genre === "custom" && campaign.gameSettings.customGenreText) {
     parts.push(`Tone and world, set by the table: ${campaign.gameSettings.customGenreText}`);
+  }
+  // Assisted mode, DM stepped away: the model is standing in for a person for
+  // a counted stretch, and is told so plainly rather than being left to run
+  // someone else's campaign as if it were its own.
+  const cover = coverPromptBlock(campaign.dmCover);
+  if (cover) {
+    parts.push(cover);
   }
   return parts.join("\n\n");
 }
@@ -305,6 +325,10 @@ export function describeSheet(
   sheet: CharacterSheet,
   playedBy: string,
   realDice: boolean,
+  // The table's optional encumbrance rule. On, the speed shown already has
+  // the load penalty in it and a carried-weight line is added, so the model
+  // never has to work the pounds out itself.
+  options: { encumbrance?: boolean } = {},
 ): string {
   const derived = computeSheetDerived(sheet);
   const abilities = (Object.entries(sheet.abilities) as Array<[string, number]>)
@@ -366,14 +390,28 @@ export function describeSheet(
         .map((pool) => `${Math.max(0, pool.total - pool.spent)}/${pool.total} ${pool.die}`)
         .join(" + ")
     : `${Math.max(0, sheet.hitDice.total - sheet.hitDice.spent)}/${sheet.hitDice.total} ${sheet.hitDice.die}`;
+  const load = options.encumbrance
+    ? encumbranceFor({
+        strength: sheet.abilities.str,
+        equipment: sheet.equipment ?? [],
+        coins: sheet.gold ?? 0,
+        size: sizeForRace(sheet.race),
+      })
+    : null;
+  const loadLine = load
+    ? `  Carrying ${load.carriedLb} lb of a ${load.capacityLb} lb capacity${load.unweighed ? ` (${load.unweighed} item${load.unweighed === 1 ? "" : "s"} of unknown weight, so the total is a floor)` : ""}${load.note ? `: ${load.note}` : ""}${load.overCapacity ? ". OVER CAPACITY: they cannot pick up anything more." : ""}`
+    : null;
   const lines = [
     `- ${sheet.name} (${sizeForRace(sheet.race)} ${sheet.race.replaceAll("_", " ")} ${classLabel}) characterId=${sheet.id} played by ${playedBy}${realDice ? " (rolls PHYSICAL dice)" : ""}`,
-    `  HP ${sheet.currentHp}/${sheet.maxHp}${sheet.tempHp ? ` (+${sheet.tempHp} temp)` : ""}${deathNote} | AC ${sheet.ac} | Speed ${speedFor(sheet)} | Passive Perception ${derived.passivePerception} | Initiative ${formatModifier(derived.initiative)} | Hit Dice ${hitDiceLabel}`,
+    `  HP ${sheet.currentHp}/${sheet.maxHp}${sheet.tempHp ? ` (+${sheet.tempHp} temp)` : ""}${deathNote} | AC ${sheet.ac} | Speed ${speedFor(sheet, { encumbrance: options.encumbrance })} | Passive Perception ${derived.passivePerception} | Initiative ${formatModifier(derived.initiative)} | Hit Dice ${hitDiceLabel}`,
     `  ${abilities} | Save proficiencies: ${sheet.proficiencies.saves.map((save) => save.toUpperCase()).join(", ") || "none"}`,
     `  Skill proficiencies: ${proficientSkills || "none"}`,
     `  Languages (complete list; they cannot speak, read, or understand any other language): ${sheet.proficiencies.languages.join(", ") || "Common only"} | Tool proficiencies: ${sheet.proficiencies.tools.join(", ") || "none"} | Armor training: ${sheet.proficiencies.armor.join(", ") || "none"} | Weapon training: ${sheet.proficiencies.weapons.join(", ") || "none"}`,
     `  Features & traits (complete list; an ability not listed here does not exist for them): ${featureList}${sheet.feats.length ? ` | Feats: ${sheet.feats.join(", ")}` : ""}`,
   ];
+  if (loadLine) {
+    lines.push(loadLine);
+  }
   const customClass = findCustomClass(sheet.class);
   if (customClass) {
     const casting = customClass.spellListFrom
@@ -516,6 +554,21 @@ export function buildGameStateBlock(state: DmGameState): string {
   if (campaign.description) {
     sections.push(`Premise: ${campaign.description}`);
   }
+  // The in-world date, time of day and season. Authoritative like everything
+  // else in this block: the model narrates from it rather than inventing
+  // "as evening fell" over a scene the clock says is mid-morning. Moved by
+  // travel, rests and pass_time (src/lib/dm/calendar.ts).
+  // Normalized rather than read straight off the campaign: this block is
+  // built from fixtures in several tests as well as from a real row, and a
+  // missing clock should cost the prompt a line, not throw.
+  const clock = normalizeClock(campaign.clock);
+  sections.push(
+    `Date and time: ${describeInstant(clock.calendar, clock.instant)}. ${
+      isDark(breakDown(clock.calendar, clock.instant).hour)
+        ? "It is dark; light sources, darkvision and stealth apply."
+        : "It is daylight."
+    }`,
+  );
   // The selected world's own nouns, and the alias table that lets the DM
   // narrate "Curaga" while still calling use_spell_slot with "Cure Wounds".
   const worldPrimer = renderWorldPrimer(packFor(campaign.gameSettings));
@@ -534,6 +587,57 @@ export function buildGameStateBlock(state: DmGameState): string {
     sections.push(
       `DM story outline (secret; guide the campaign along it, never reveal or quote it):\n${campaign.dmOutline}`,
     );
+  }
+  // The party as a whole: where they are, what they are doing, the common
+  // purse and the shared pack (src/lib/dm/party-logic.ts). Empty on a
+  // campaign that has never used them, so an untouched table's prompt does
+  // not carry a paragraph of zeroes.
+  const partyBlock = describeParty(
+    normalizeParty(campaign.party),
+    formatCopper,
+    (characterId) => sheets.find((sheet) => sheet.id === characterId)?.name ?? "someone",
+  );
+  if (partyBlock) {
+    sections.push(partyBlock);
+  }
+  // A structured non-combat scene, if one is running: the clock, the stakes
+  // and what has been tried (src/lib/dm/scene-tracker-logic.ts). Empty when
+  // there is no scene, so an ordinary turn's prompt is unchanged.
+  const sceneBlock = trackerPromptBlock(getSceneTracker(campaign.id));
+  if (sceneBlock) {
+    sections.push(sceneBlock);
+  }
+  // What the table is hearing, so set_ambience is called when the sound
+  // should CHANGE rather than every turn. Omitted entirely when the sound
+  // library is off, which keeps an ordinary table's prompt unchanged.
+  if (campaign.gameSettings.ambienceEnabled) {
+    const ambience = getAmbience(campaign.id);
+    sections.push(
+      `Sound now playing: ${describeAmbience(ambience)}${
+        ambience.held.length ? " The table is holding this; leave it unless they ask." : ""
+      }`,
+    );
+  }
+  // Lasting effects riding on anyone, and who is mounted. Both are state the
+  // model would otherwise narrate around: a blessed character rolling +2 and
+  // a rider moving at 60 feet are facts it has to be able to see.
+  const effectLines = listEffects(campaign.id).map((effect) => {
+    const who =
+      sheets.find((sheet) => sheet.id === effect.targetId)?.name ??
+      state.encounter?.enemies.find((enemy) => enemy.enemyId === effect.targetId)?.name ??
+      "someone";
+    return `- ${who}: ${describeEffect(effect)}`;
+  });
+  if (effectLines.length) {
+    sections.push(`Active effects (the server applies these to the rolls they name):\n${effectLines.join("\n")}`);
+  }
+  const mounts = getMounts(campaign.id);
+  const mountLines = Object.entries(mounts).map(([characterId, mount]) => {
+    const who = sheets.find((sheet) => sheet.id === characterId)?.name ?? "someone";
+    return `- ${who} is riding ${describeMount(mount)}`;
+  });
+  if (mountLines.length) {
+    sections.push(`Mounted:\n${mountLines.join("\n")}`);
   }
   if (state.directorNotes?.length) {
     sections.push(
@@ -711,6 +815,8 @@ export function buildGameStateBlock(state: DmGameState): string {
             ? `nobody: AI companion under your control (${sheet.companionKind === "guest" ? "scene-scoped guest ally" : "party member"}; personality: ${sheet.personality || "plain and steady"})`
             : usernamesById.get(sheet.userId) ?? "unknown",
           !sheet.isCompanion && physicalDiceUsers.has(sheet.userId),
+          // Optional all the way down: test doubles build partial campaigns.
+          { encumbrance: state.campaign.gameSettings?.variantRules?.encumbrance ?? false },
         );
         const events = state.recentEventsByCharacter?.get(sheet.id);
         return events?.length
@@ -827,6 +933,11 @@ export const requestRollTool = {
         reason: {
           type: "string",
           description: "Short private note on what this roll resolves.",
+        },
+        against: {
+          type: "string",
+          description:
+            "For saving_throw: the effect or condition the save resists, e.g. \"frightened\", \"poison\", \"a fireball\". The server uses it to apply defensive traits automatically (a Brave halfling gets advantage on a save against being frightened).",
         },
       },
       required: ["kind"],

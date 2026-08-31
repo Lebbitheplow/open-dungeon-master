@@ -3,6 +3,7 @@
 import { Loader2, Mic } from "lucide-react";
 import { useRef, useState } from "react";
 import { cn } from "@/lib/cn";
+import { micBlockMessage, micBlockReason } from "@/lib/secure-context";
 
 type PttState = "idle" | "recording" | "transcribing" | "error";
 
@@ -24,6 +25,16 @@ export function PushToTalk({
 
   async function start() {
     if (disabled || activeRef.current) {
+      return;
+    }
+    // On a plain http LAN address navigator.mediaDevices is undefined, so the
+    // getUserMedia call below would throw and land in the catch, which used to
+    // blame browser permissions for what is really a missing secure context.
+    // Check first and say the true reason.
+    const blocked = micBlockReason();
+    if (blocked) {
+      setHint(micBlockMessage(blocked));
+      setState("error");
       return;
     }
     activeRef.current = true;
@@ -117,7 +128,7 @@ export function PushToTalk({
         )}
       </button>
       {state === "error" && hint ? (
-        <p className="absolute bottom-full right-0 mb-1 w-52 rounded bg-stone-900 px-2 py-1 text-xs text-red-400 shadow">
+        <p className="absolute bottom-full right-0 mb-1 w-64 rounded bg-stone-900 px-2 py-1 text-xs text-red-400 shadow">
           {hint}
         </p>
       ) : null}

@@ -33,12 +33,12 @@ const CATEGORY_LABELS: Record<FactCategory, string> = {
 function FactCard({
   campaignId,
   fact,
-  isLead,
+  steersStory,
   refresh,
 }: {
   campaignId: string;
   fact: WorldFact;
-  isLead: boolean;
+  steersStory: boolean;
   refresh: () => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
@@ -108,7 +108,7 @@ function FactCard({
             <span>
               {fact.knownBy === "dm" ? "DM secret" : CATEGORY_LABELS[fact.category]}
             </span>
-            {isLead ? (
+            {steersStory ? (
               <span className="ml-auto flex shrink-0 items-center gap-1.5">
                 <button
                   type="button"
@@ -240,12 +240,12 @@ function FactComposer({
 export function FactsPanel({
   campaignId,
   facts,
-  isLead,
+  steersStory,
   refreshFacts,
 }: {
   campaignId: string;
   facts: WorldFact[];
-  isLead: boolean;
+  steersStory: boolean;
   refreshFacts: () => Promise<void>;
 }) {
   // Lead-only peek at DM secrets: fetched separately so the spoilers never
@@ -283,7 +283,7 @@ export function FactsPanel({
 
   return (
     <div className="space-y-3">
-      {isLead ? <FactComposer campaignId={campaignId} refresh={refresh} /> : null}
+      {steersStory ? <FactComposer campaignId={campaignId} refresh={refresh} /> : null}
 
       {pinned.length ? (
         <div className="space-y-1.5">
@@ -294,7 +294,7 @@ export function FactsPanel({
                 key={fact.id}
                 campaignId={campaignId}
                 fact={fact}
-                isLead={isLead}
+                steersStory={steersStory}
                 refresh={refresh}
               />
             ))}
@@ -316,7 +316,7 @@ export function FactsPanel({
                   key={fact.id}
                   campaignId={campaignId}
                   fact={fact}
-                  isLead={isLead}
+                  steersStory={steersStory}
                   refresh={refresh}
                 />
               ))}
@@ -328,11 +328,11 @@ export function FactsPanel({
       {!facts.length ? (
         <p className="px-1 text-[11px] text-stone-600">
           Nothing recorded yet. The DM writes durable facts here as chapters close
-          {isLead ? ", or pin one yourself above" : ""}.
+          {steersStory ? ", or pin one yourself above" : ""}.
         </p>
       ) : null}
 
-      {isLead ? (
+      {steersStory ? (
         <div className="space-y-1.5">
           <button
             type="button"
@@ -350,7 +350,7 @@ export function FactsPanel({
                     key={fact.id}
                     campaignId={campaignId}
                     fact={fact}
-                    isLead={isLead}
+                    steersStory={steersStory}
                     refresh={refresh}
                   />
                 ))}

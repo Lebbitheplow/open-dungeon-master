@@ -1,5 +1,7 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { matchEntity, mergeAliases, normalizeName } from "@/lib/dm/entity-logic";
+import type { NpcDraft } from "@/lib/npcs/forge";
+import { isUploadedImagePath } from "@/lib/uploads";
 import {
   parseBonds,
   parseGoals,
@@ -31,6 +33,8 @@ export type Npc = {
   aliases: string[];
   agency: NpcAgency;
   arcCastId: string;
+  // A face, as a /uploads/ path, or "". Shown, never read by any rule.
+  portraitUrl: string;
   // Kept out of the Active NPCs prompt block; restored on a name mention.
   archived: boolean;
   createdAt: string;
@@ -52,6 +56,7 @@ type NpcRow = {
   bonds_json: string;
   pressure_json: string;
   arc_cast_id: string;
+  portrait_url: string | null;
   archived: number;
   created_at: string;
   updated_at: string;
@@ -75,6 +80,9 @@ function mapNpc(row: NpcRow): Npc {
       pressure: parsePressure(row.pressure_json),
     },
     arcCastId: row.arc_cast_id,
+    // Refused rather than trusted, the same belt and braces a map backdrop
+    // gets: a path that is not one this app wrote reads back as no face.
+    portraitUrl: isUploadedImagePath(row.portrait_url) ? row.portrait_url : "",
     archived: row.archived === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -205,6 +213,86 @@ export function upsertNpc(input: {
   return mapNpc(
     db.prepare(`SELECT * FROM npcs WHERE id = ?`).get(id) as NpcRow,
   );
+}
+
+// ---- the NPC forge (src/lib/npcs/forge.ts) ----
+//
+// upsertNpc above is the AI DM's door: it registers a name mentioned in
+// narration and deliberately touches only the descriptive fields, so
+// re-registering a known NPC never resets a grudge. These two are the
+// person's door, and they write the whole record including the agency the
+// tools could only ever reach one piece at a time.
+
+export function createNpcFromDraft(campaignId: string, draft: NpcDraft): Npc {
+  const db = getDatabase();
+  const now = nowIso();
+  const id = crypto.randomUUID();
+  db.prepare(
+    `INSERT INTO npcs
+       (id, campaign_id, name, attitude, trait, location, last_shift_turn,
+        aliases_json, personality_json, goals_json, relations_json,
+        bonds_json, pressure_json, arc_cast_id, portrait_url, archived, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, '[]', '', '', '', 0, ?, ?)`,
+  ).run(
+    id,
+    campaignId,
+    draft.name,
+    draft.attitude,
+    draft.trait,
+    draft.location,
+    JSON.stringify(draft.aliases),
+    draft.personality ? JSON.stringify(draft.personality) : "",
+    JSON.stringify(draft.goals),
+    JSON.stringify(draft.relations),
+    now,
+    now,
+  );
+  return mapNpc(db.prepare(`SELECT * FROM npcs WHERE id = ?`).get(id) as NpcRow);
+}
+
+// The whole record at once. The pressure meter and the arc cast link are
+// deliberately absent: pressure is a counter the chapter engine owns, and
+// the cast link is name-matched, so a form that wrote either would be
+// overwriting something the engine is in the middle of maintaining.
+export function updateNpcFromDraft(campaignId: string, npcId: string, draft: NpcDraft): Npc | null {
+  const db = getDatabase();
+  const row = db
+    .prepare(`SELECT * FROM npcs WHERE id = ? AND campaign_id = ?`)
+    .get(npcId, campaignId) as NpcRow | undefined;
+  if (!row) {
+    return null;
+  }
+  db.prepare(
+    `UPDATE npcs
+     SET name = ?, attitude = ?, trait = ?, location = ?, aliases_json = ?,
+         personality_json = ?, goals_json = ?, relations_json = ?, updated_at = ?
+     WHERE id = ?`,
+  ).run(
+    draft.name,
+    draft.attitude,
+    draft.trait,
+    draft.location,
+    JSON.stringify(draft.aliases),
+    draft.personality ? JSON.stringify(draft.personality) : "",
+    JSON.stringify(draft.goals),
+    JSON.stringify(draft.relations),
+    nowIso(),
+    npcId,
+  );
+  return mapNpc(db.prepare(`SELECT * FROM npcs WHERE id = ?`).get(npcId) as NpcRow);
+}
+
+// "" takes the face away. Nothing validates the path here: the routes accept
+// only what /api/upload wrote, and the renderer only ever puts it in a src.
+export function setNpcPortrait(npcId: string, url: string): Npc | null {
+  const db = getDatabase();
+  db.prepare(`UPDATE npcs SET portrait_url = ?, updated_at = ? WHERE id = ?`).run(
+    url,
+    nowIso(),
+    npcId,
+  );
+  const row = db.prepare(`SELECT * FROM npcs WHERE id = ?`).get(npcId) as NpcRow | undefined;
+  return row ? mapNpc(row) : null;
 }
 
 // Records an attitude change and the turn it happened on (the one-shift-per-

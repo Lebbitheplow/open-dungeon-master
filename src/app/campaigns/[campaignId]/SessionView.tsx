@@ -1,7 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { CircleHelp, Dices, DoorOpen, Volume2, VolumeX } from "lucide-react";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import {
+  CircleHelp,
+  Dices,
+  DoorOpen,
+  Music,
+  Music2,
+  Volume2,
+  VolumeX,
+  type LucideIcon,
+} from "lucide-react";
 import {
   type FormEvent,
   useCallback,
@@ -28,19 +38,130 @@ import { UtilityCallStrip } from "@/app/campaigns/[campaignId]/UtilityCallStrip"
 import { AskDock } from "@/app/campaigns/[campaignId]/AskPanel";
 import type { CampaignMessage } from "@/lib/db/messages";
 import {
+  beatCadence,
+  DEFAULT_BEAT_CADENCE,
+  QUIET_BEAT_CADENCE,
+  snoozeUntil,
+} from "@/lib/dm/beat-cadence";
+import {
   BottomTabBar,
   buildPanelTabs,
   useSessionTabs,
   type PanelTab,
 } from "@/app/campaigns/[campaignId]/SessionTabs";
+import { DmCoverNotice } from "@/app/campaigns/[campaignId]/DmDelegationPanel";
 import { SidePanel } from "@/app/campaigns/[campaignId]/SidePanel";
+import { VoiceDock } from "@/app/campaigns/[campaignId]/VoiceDock";
 import { useChatChime } from "@/app/campaigns/[campaignId]/useChatChime";
 import { useNarrationAudio } from "@/app/campaigns/[campaignId]/useNarrationAudio";
+import { useAmbienceAudio } from "@/app/campaigns/[campaignId]/useAmbienceAudio";
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
 
 function subscribeDicePref(callback: () => void) {
   window.addEventListener("odm-dice3d-pref", callback);
   return () => window.removeEventListener("odm-dice3d-pref", callback);
+}
+
+// One audio group in the header: narration or ambience. On sm+ it is the
+// familiar icon button with an inline slider. Below sm the header has no
+// spare width at all (the 320px budget in SessionTabs.tsx is already spent),
+// so the same icon becomes a menu holding the mute toggle and the slider:
+// the phone gets a reachable volume control without the header growing a
+// pixel, in the menu surface the rest of the app already uses.
+function HeaderAudioControl({
+  onLabel,
+  offLabel,
+  enableLabel,
+  volumeLabel,
+  unlocked,
+  muted,
+  volume,
+  onToggle,
+  onVolume,
+  OnIcon,
+  OffIcon,
+}: {
+  onLabel: string;
+  offLabel: string;
+  enableLabel: string;
+  volumeLabel: string;
+  unlocked: boolean;
+  muted: boolean;
+  volume: number;
+  onToggle: () => void;
+  onVolume: (value: number) => void;
+  OnIcon: LucideIcon;
+  OffIcon: LucideIcon;
+}) {
+  const quiet = muted || !unlocked;
+  const toggleLabel = !unlocked ? enableLabel : muted ? offLabel : onLabel;
+  const buttonClass = cn(
+    "rounded-md border p-2.5 sm:p-1.5",
+    quiet
+      ? "border-stone-700 text-stone-500 hover:text-stone-300"
+      : "border-amber-800 bg-amber-950/40 text-amber-400",
+  );
+  const icon = quiet ? <OffIcon className="size-4" /> : <OnIcon className="size-4" />;
+  return (
+    <>
+      <div className="hidden items-center gap-1.5 sm:flex">
+        <Tooltip content={toggleLabel} side="bottom">
+          <button type="button" onClick={onToggle} aria-label={toggleLabel} className={buttonClass}>
+            {icon}
+          </button>
+        </Tooltip>
+        {unlocked && !muted ? (
+          <Tooltip content={volumeLabel} side="bottom">
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={volume}
+              onChange={(event) => onVolume(Number(event.target.value))}
+              className="w-16 accent-amber-600"
+              aria-label={volumeLabel}
+            />
+          </Tooltip>
+        ) : null}
+      </div>
+      <div className="sm:hidden">
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <button type="button" aria-label={volumeLabel} className={buttonClass}>
+              {icon}
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content align="end" sideOffset={4} className="panel z-50 min-w-44 rounded-lg p-1">
+              <DropdownMenu.Item
+                className="cursor-pointer rounded-md px-2 py-1.5 text-sm text-stone-300 outline-none data-[highlighted]:bg-stone-800"
+                onSelect={onToggle}
+              >
+                {toggleLabel}
+              </DropdownMenu.Item>
+              {unlocked && !muted ? (
+                // A plain row rather than an Item so dragging the slider does
+                // not close the menu.
+                <div className="px-2 py-1.5">
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={volume}
+                    onChange={(event) => onVolume(Number(event.target.value))}
+                    className="w-full accent-amber-600"
+                    aria-label={volumeLabel}
+                  />
+                </div>
+              ) : null}
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
+      </div>
+    </>
+  );
 }
 
 export function SessionView({
@@ -73,9 +194,12 @@ export function SessionView({
     dmStatus,
     utilityCalls,
     dmDraft,
+    caps,
   } = state;
   const [input, setInput] = useState("");
   const [kind, setKind] = useState<InputKind>("do");
+  // The DM has no character, so "do" would be a mode they can never use.
+  const [seenDmSeat, setSeenDmSeat] = useState(false);
   // Whether a lead direction is spoken to the table or only to the DM.
   // Defaults to off, so Direct keeps behaving as it always has unless the
   // lead deliberately hides one.
@@ -121,6 +245,18 @@ export function SessionView({
   }, [dice3d]);
 
   const narration = useNarrationAudio();
+  const ambience = useAmbienceAudio(
+    state.ambience,
+    state.ambienceSting,
+    Boolean(campaign?.gameSettings?.ambienceEnabled),
+  );
+  // The room drops behind the DM's voice while a passage is being read, and
+  // comes back when it stops. Nothing else in the app knows how to do this,
+  // which is why the two hooks meet here rather than inside either one.
+  const duckAmbience = ambience.setDucked;
+  useEffect(() => {
+    duckAmbience(Boolean(narration.playingMessageId));
+  }, [duckAmbience, narration.playingMessageId]);
   // Chime on new private messages (side chats + DM whispers). The loaded
   // flags keep the page-load backlog silent.
   const chatUnreadTotal =
@@ -165,7 +301,13 @@ export function SessionView({
   // Memoized so the open-floor fallback object keeps a stable identity and
   // does not invalidate the memos below on every render.
   const floor = useMemo(() => campaign?.floor ?? { mode: "open" as const }, [campaign?.floor]);
+  // Two different authorities, deliberately separate. `isLead` owns the
+  // table (campaign info, invites, who holds which seat). `caps` says who
+  // owns the story, which is the lead in an AI campaign and the DM in a
+  // human-run one; the server decided it, this only reads it.
   const isLead = Boolean(campaign && me && campaign.leadUserId === me.id);
+  const isDm = caps.role === "dm";
+  const steersStory = caps.steersStory;
   const spotlighted = useMemo(
     () =>
       floor.mode === "spotlight"
@@ -173,6 +315,10 @@ export function SessionView({
         : [],
     [floor, sheets],
   );
+  if (isDm && !seenDmSeat) {
+    setSeenDmSeat(true);
+    setKind("narrate");
+  }
   // Table talk and lead directions never wait on the floor. (Asking does not
   // either, but it does not come through this composer at all.)
   const exempt = isFloorExempt(kind);
@@ -222,26 +368,30 @@ export function SessionView({
             ? `What does ${mySheet?.name ?? "your character"} do?`
             : kind === "say"
               ? `What does ${mySheet?.name ?? "your character"} say?`
+              : kind === "narrate"
+              ? "Narrate the scene. The server still rolls every die."
               : kind === "ooc"
                 ? "Out-of-character note to the table"
                 : leadPrivate
                   ? "Tell the DM privately what to do with the next turn"
                   : "Steer the story: a direction the DM must weave in";
-  // A mid-game joiner without a character is gated to creation first.
-  const needsCharacter = !mySheet && campaign?.status === "active";
+  // A mid-game joiner without a character is gated to creation first. The DM
+  // runs no character, so the gate must never catch them.
+  const needsCharacter = caps.needsCharacter && !mySheet && campaign?.status === "active";
   // Lead prompt: a newcomer's join note the DM has not narrated past yet.
   const joinNotice = latestUnintroducedJoin(messages);
   const showJoinBanner =
-    isLead && joinNotice !== null && dismissedJoinNotice !== joinNotice.id;
+    steersStory && joinNotice !== null && dismissedJoinNotice !== joinNotice.id;
   const panelTabs = useMemo(
     () =>
       buildPanelTabs({
         hasBattleMap: Boolean(state.battleMap),
         mapsEnabled: campaign?.gameSettings?.mapsEnabled ?? true,
         hasSettings: Boolean(campaign),
-        isLead,
+        secretStory: caps.secretStory,
+        adjudicates: caps.adjudicates,
       }),
-    [state.battleMap, campaign, isLead],
+    [state.battleMap, campaign, caps.secretStory, caps.adjudicates],
   );
   // Gates the Bonds sub-tab inside the Party panel.
   const relationshipsEnabled = campaign?.gameSettings?.relationships !== "off";
@@ -267,7 +417,13 @@ export function SessionView({
         // one-turn steer the event presets use, so no character hears it and
         // it never enters the transcript.
         const response =
-          kind === "lead"
+          kind === "narrate"
+            ? await fetch(`/api/campaigns/${campaignId}/dm/narrate`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ content }),
+              })
+            : kind === "lead"
             ? leadPrivate
               ? await fetch(`/api/campaigns/${campaignId}/director`, {
                   method: "POST",
@@ -309,6 +465,32 @@ export function SessionView({
     [setPanelTab, setMobileView],
   );
 
+  // Story capture: how long the DM has been running the table without any of
+  // it reaching the log. Recomputed from state the client already holds, so
+  // it follows every message and every roll with no extra request
+  // (src/lib/dm/beat-cadence.ts).
+  const [beatSnoozedUntil, setBeatSnoozedUntil] = useState<string | null>(null);
+  const beatThreshold = campaign?.gameSettings?.beatReminder ?? DEFAULT_BEAT_CADENCE;
+  const storyCadence = useMemo(
+    () =>
+      caps.adjudicates
+        ? beatCadence({
+            messages: state.messages,
+            rolls: state.rolls,
+            threshold: beatThreshold,
+            snoozedUntil: beatSnoozedUntil,
+            now: new Date().toISOString(),
+          })
+        : QUIET_BEAT_CADENCE,
+    [caps.adjudicates, state.messages, state.rolls, beatThreshold, beatSnoozedUntil],
+  );
+  const openStoryCapture = useCallback(() => {
+    selectPanelView("dm");
+  }, [selectPanelView]);
+  const snoozeStory = useCallback(() => {
+    setBeatSnoozedUntil(snoozeUntil(Date.now()));
+  }, []);
+
   const joinNoticeId = joinNotice?.id;
   const joinNoticeText = joinNotice?.content.slice(JOIN_NOTE_PREFIX.length);
   const joinBanner = useMemo(
@@ -343,6 +525,20 @@ export function SessionView({
           </div>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
+          <VoiceDock
+            campaignId={campaign.id}
+            meUserId={me.id}
+            roster={state.voiceRoster}
+            speaking={state.voiceSpeaking}
+            floorMode={floor.mode}
+            floorUserIds={
+              floor.mode === "spotlight" || floor.mode === "initiative" ? floor.userIds : []
+            }
+            turnEnforcement={campaign.gameSettings?.voice?.turnEnforcement ?? "soft"}
+            adjudicates={caps.adjudicates}
+            sayRangeRule={Boolean(campaign.gameSettings?.voice?.rules?.sayRange)}
+            audibilityVersion={state.voiceAudibilityVersion}
+          />
           <Tooltip
             content={dice3d ? "Turn off 3D dice animation" : "Turn on 3D dice animation"}
             side="bottom"
@@ -362,59 +558,40 @@ export function SessionView({
             </button>
           </Tooltip>
           {campaign.gameSettings?.ttsEnabled ? (
-            <div className="flex items-center gap-1.5">
-              <Tooltip
-                content={
-                  !narration.unlocked
-                    ? "Enable narration audio"
-                    : narration.muted
-                      ? "Unmute narration"
-                      : "Mute narration"
-                }
-                side="bottom"
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    narration.unlock();
-                    narration.setMuted(!narration.muted);
-                  }}
-                  aria-label={
-                    !narration.unlocked
-                      ? "Enable narration audio"
-                      : narration.muted
-                        ? "Unmute narration"
-                        : "Mute narration"
-                  }
-                  className={cn(
-                    "rounded-md border p-2.5 sm:p-1.5",
-                    narration.muted || !narration.unlocked
-                      ? "border-stone-700 text-stone-500 hover:text-stone-300"
-                      : "border-amber-800 bg-amber-950/40 text-amber-400",
-                  )}
-                >
-                  {narration.muted || !narration.unlocked ? (
-                    <VolumeX className="size-4" />
-                  ) : (
-                    <Volume2 className="size-4" />
-                  )}
-                </button>
-              </Tooltip>
-              {narration.unlocked && !narration.muted ? (
-                <Tooltip content="Narration volume" side="bottom">
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    value={narration.volume}
-                    onChange={(event) => narration.setVolume(Number(event.target.value))}
-                    className="hidden w-16 accent-amber-600 sm:block"
-                    aria-label="Narration volume"
-                  />
-                </Tooltip>
-              ) : null}
-            </div>
+            <HeaderAudioControl
+              onLabel="Mute narration"
+              offLabel="Unmute narration"
+              enableLabel="Enable narration audio"
+              volumeLabel="Narration volume"
+              unlocked={narration.unlocked}
+              muted={narration.muted}
+              volume={narration.volume}
+              onToggle={() => {
+                narration.unlock();
+                narration.setMuted(!narration.muted);
+              }}
+              onVolume={(value) => narration.setVolume(value)}
+              OnIcon={Volume2}
+              OffIcon={VolumeX}
+            />
+          ) : null}
+          {campaign.gameSettings?.ambienceEnabled && ambience.installed ? (
+            <HeaderAudioControl
+              onLabel="Mute ambience and music"
+              offLabel="Unmute ambience and music"
+              enableLabel="Enable ambience"
+              volumeLabel="Ambience and music volume"
+              unlocked={ambience.unlocked}
+              muted={ambience.muted}
+              volume={ambience.volume}
+              onToggle={() => {
+                ambience.unlock();
+                ambience.setMuted(!ambience.muted);
+              }}
+              onVolume={(value) => ambience.setVolume(value)}
+              OnIcon={Music}
+              OffIcon={Music2}
+            />
           ) : null}
           <Tooltip content="How everything works" side="bottom">
             <button
@@ -447,7 +624,7 @@ export function SessionView({
           <MessageList
             messages={messages}
             campaignId={campaign.id}
-            canRetryTurn={isLead}
+            canRetryTurn={steersStory}
             rolls={rolls}
             sheets={sheets}
             members={state.members}
@@ -490,9 +667,9 @@ export function SessionView({
                 selection: selection.length > 3 ? selection : "",
               });
             }}
-            onRenarrate={isLead ? (message) => setRenarrate(message) : undefined}
+            onRenarrate={steersStory ? (message) => setRenarrate(message) : undefined}
             onContinueScene={
-              isLead
+              steersStory
                 ? async (message) => {
                     // No dialog: a continue takes no options, so the button is
                     // the whole interaction. The server publishes
@@ -509,7 +686,7 @@ export function SessionView({
                 : undefined
             }
             onSelectVariant={
-              isLead
+              steersStory
                 ? async (message, index) => {
                     // The server publishes message_updated, so every player's
                     // chat swaps to the picked take.
@@ -529,7 +706,7 @@ export function SessionView({
                 : undefined
             }
             onEditSave={
-              isLead
+              steersStory
                 ? async (message, content) => {
                     // Returns the server's refusal so the editor can show it
                     // inline; the roll-marker rule lives server-side.
@@ -572,7 +749,7 @@ export function SessionView({
               setPinsVersion((count) => count + 1);
             }}
             onPinCanon={
-              isLead
+              steersStory
                 ? async (message) => {
                     // The lead's selected text inside the message wins;
                     // otherwise the passage's opening is pinned.
@@ -604,7 +781,7 @@ export function SessionView({
             proposals={state.itemProposals}
             sheets={sheets}
             meUserId={me.id}
-            isLead={isLead}
+            steersStory={steersStory}
           />
 
           <AskDock
@@ -623,6 +800,11 @@ export function SessionView({
               question, so it is filtered out here rather than shown twice. */}
           <UtilityCallStrip calls={visibleUtilityCalls} />
 
+          {/* Assisted mode: the DM stepped away and the AI is answering for
+              them. Shown to every seat, because a player owed an answer is
+              owed the knowledge of who is giving it. */}
+          <DmCoverNotice cover={campaign.dmCover} />
+
           {needsCharacter ? (
             <CharacterGate campaignId={campaign.id} />
           ) : (
@@ -630,7 +812,8 @@ export function SessionView({
               campaignId={campaign.id}
               sheets={sheets}
               meUserId={me.id}
-              isLead={isLead}
+              steersStory={steersStory}
+              isDm={isDm}
               kind={kind}
               onKindChange={setKind}
               input={input}
@@ -651,6 +834,9 @@ export function SessionView({
               directorArm={state.directorArm}
               leadPrivate={leadPrivate}
               onLeadPrivateChange={setLeadPrivate}
+              storyCadence={storyCadence}
+              onCaptureStory={openStoryCapture}
+              onSnoozeStory={snoozeStory}
               onSubmit={submit}
             />
           )}
@@ -662,6 +848,12 @@ export function SessionView({
           sheets={sheets}
           members={state.members}
           meUserId={me.id}
+          steersStory={steersStory}
+          adjudicates={caps.adjudicates}
+          dmCover={campaign.dmCover}
+          messages={state.messages}
+          dmIntents={state.dmIntents}
+          floorMode={floor.mode}
           isLead={isLead}
           leadUserId={campaign.leadUserId}
           canTransferLead={isLead || campaign.ownerUserId === me.id}
@@ -688,6 +880,7 @@ export function SessionView({
           campaign={campaign}
           encounter={state.encounter}
           battleMap={state.battleMap}
+          mapPing={state.mapPing}
           refreshBattleMap={refreshBattleMap}
           tabs={panelTabs}
           tab={panelTab}
@@ -697,6 +890,8 @@ export function SessionView({
           mobileVisible={mobileView === "panel"}
           relationshipsVersion={state.relationshipsVersion}
           relationshipsEnabled={relationshipsEnabled}
+          beats={state.beats}
+          storyDue={storyCadence.level !== "quiet"}
         />
       </div>
 
@@ -708,6 +903,7 @@ export function SessionView({
         onSelectPanel={selectPanelView}
         chatUnread={chatUnreadTotal}
         pendingCount={pendingNoteCount}
+        storyDue={storyCadence.level !== "quiet"}
       />
 
       {dice3d ? <DiceOverlay latestRoll={state.latestRoll} enabled /> : null}
@@ -719,7 +915,7 @@ export function SessionView({
           campaignId={campaign.id}
           message={loreCheck.message}
           selection={loreCheck.selection}
-          isLead={isLead}
+          steersStory={steersStory}
           onClose={() => setLoreCheck(null)}
         />
       ) : null}

@@ -14,13 +14,13 @@ export function ItemProposalBar({
   proposals,
   sheets,
   meUserId,
-  isLead,
+  steersStory,
 }: {
   campaignId: string;
   proposals: ItemProposal[];
   sheets: CharacterSheet[];
   meUserId: string;
-  isLead: boolean;
+  steersStory: boolean;
 }) {
   const [busyId, setBusyId] = useState("");
   const [error, setError] = useState("");
@@ -75,7 +75,7 @@ export function ItemProposalBar({
                 <span className="text-stone-500"> ({proposal.reason})</span>
               ) : null}
             </span>
-            {mine || isLead ? (
+            {mine || steersStory ? (
               <span className="flex shrink-0 items-center gap-1.5">
                 <button
                   type="button"

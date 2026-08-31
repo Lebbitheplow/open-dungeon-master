@@ -56,8 +56,13 @@ export function advanceOrder(
       }
       continue;
     }
-    if (entry.kind === "enemy") {
-      enemiesPassed.push(entry.enemyId);
+    // The pointer rests only on player characters. Enemies act inside the DM
+    // turn, and an NPC slot a human DM added is theirs to narrate whenever
+    // they like, so both are walked past.
+    if (entry.kind !== "pc") {
+      if (entry.kind === "enemy") {
+        enemiesPassed.push(entry.enemyId);
+      }
       continue;
     }
     return { turnIndex: index, enemiesPassed, pcsPassed, wrapped };
@@ -184,12 +189,25 @@ export function enemyDamageMath(
 // leaving flat modifiers alone.
 // `extraDice` adds that many more copies of the FIRST damage die on top of
 // the doubling, for Brutal Critical and the half-orc's Savage Attacks.
-export function critDamageExpression(expression: string, extraDice = 0): string {
+export function critDamageExpression(
+  expression: string,
+  extraDice = 0,
+  // Optional 5e variant rules. powerfulCritical: the extra critical dice are
+  // dealt as their maximum instead of rolled. multiplyNumeric: the flat
+  // modifiers double along with the dice.
+  options: { powerfulCritical?: boolean; multiplyNumeric?: boolean } = {},
+): string {
   const compact = expression.replace(/\s+/g, "");
   const terms = compact.match(/[+-]?[^+-]+/g);
   if (!terms) {
     return compact;
   }
+  const { powerfulCritical = false, multiplyNumeric = false } = options;
+  // Maximum a "NdM" body can roll; anything else passes through unchanged.
+  const maxOfDice = (body: string): string => {
+    const match = /^(\d+)d(\d+)$/i.exec(body);
+    return match ? String(Number(match[1]) * Number(match[2])) : body;
+  };
   const doubled: string[] = [];
   let firstDie: string | null = null;
   for (const term of terms) {
@@ -197,15 +215,20 @@ export function critDamageExpression(expression: string, extraDice = 0): string 
     const body = term.replace(/^[+-]/, "");
     doubled.push(sign + body);
     if (/\d+d\d+/i.test(body)) {
-      doubled.push(sign + body);
+      // The critical copy of this die: rolled, or maximized as a flat total
+      // under Powerful Critical.
+      doubled.push(sign + (powerfulCritical ? maxOfDice(body) : body));
       if (firstDie === null && sign === "+") {
         // One die of that size, however many the weapon rolls.
         firstDie = body.replace(/^\d+/, "1");
       }
+    } else if (multiplyNumeric && /^\d+$/.test(body)) {
+      // Critical Damage Modifiers: the flat modifier doubles with the dice.
+      doubled.push(sign + body);
     }
   }
   for (let index = 0; index < extraDice && firstDie; index += 1) {
-    doubled.push(`+${firstDie}`);
+    doubled.push(`+${powerfulCritical ? maxOfDice(firstDie) : firstDie}`);
   }
   return doubled.join("").replace(/^\+/, "");
 }

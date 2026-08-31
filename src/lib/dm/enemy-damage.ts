@@ -1,21 +1,13 @@
 import { getCampaignById, getFloor, setFloor, type Campaign } from "@/lib/db/campaigns";
-import {
-  activePublicEncounter,
-  endEncounter,
-  getActiveEncounter,
-  getEnemy,
-  listEnemies,
-  patchEnemyHp,
-  setEnemyConcentration,
-  type Encounter,
-  type EncounterEnemy,
-} from "@/lib/db/encounters";
-import { listSheets } from "@/lib/db/sheets";
+import { endEncounter, getActiveEncounter, getEnemy, listEnemies, patchEnemyHp, setEnemyConcentration, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
+import { activePublicEncounter } from "@/lib/db/encounter-view";
+import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
 import { getDmTurn, type DmTurn, type PendingRoll } from "@/lib/db/dm-turns";
 import { markRollApplied, type StoredRoll } from "@/lib/db/rolls";
 import { getBattleMapForEncounter, removeTokenByRef } from "@/lib/db/battle-maps";
 import { publishPersisted } from "@/lib/events";
 import { healthState } from "@/lib/bestiary/health";
+import { ammoCount, recoveredAmmo, withAmmoCount } from "@/lib/srd/ammunition";
 import { saveModFor } from "@/lib/bestiary/statblock";
 import { d20Expression, rollExpression } from "@/lib/dice";
 import { clearSpellConditionsByName } from "@/lib/dm/concentration";
@@ -24,6 +16,7 @@ import { damageAdjust } from "@/lib/dm/condition-logic";
 import { applyDmMutation } from "@/lib/dm/mutations";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import { dismissGuestCompanions } from "@/lib/dm/companion-tools";
+import { followCombatAmbience } from "@/lib/dm/ambience-tools";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // The single server-side path for damage landing on an enemy. Used by the
@@ -74,6 +67,31 @@ export function finishEncounter(
   }
   endEncounter(encounter.id, outcome);
 
+  // Half the ammunition spent in the fight is recovered from the field
+  // (PHB). Only ever non-empty when the `ammunition` variant rule is on, so
+  // a table that never asked for it pays nothing here.
+  const ammoRecovered: Record<string, number> = {};
+  for (const [key, spent] of Object.entries(encounter.ammoSpent)) {
+    const back = recoveredAmmo(spent);
+    if (back <= 0) {
+      continue;
+    }
+    const separator = key.indexOf("|");
+    const sheetId = key.slice(0, separator);
+    const itemName = key.slice(separator + 1);
+    const owner = getSheetById(sheetId);
+    if (!owner) {
+      continue;
+    }
+    const index = owner.equipment.findIndex((item) => item.name === itemName);
+    const equipment =
+      index >= 0
+        ? withAmmoCount(owner.equipment, index, ammoCount(owner.equipment[index]) + back)
+        : [...owner.equipment, { name: itemName, qty: back }];
+    patchSheet(sheetId, { equipment });
+    ammoRecovered[`${owner.name}: ${itemName}`] = back;
+  }
+
   const totalXp = enemies.reduce((sum, enemy) => sum + enemy.xp, 0);
   const share =
     outcome === "victory" ? 1 : outcome === "enemies_fled" || outcome === "truce" ? 0.5 : 0;
@@ -100,6 +118,11 @@ export function finishEncounter(
     publishPersisted(campaign.id, "floor_changed", { floor: { mode: "open" } });
   }
   publishPersisted(campaign.id, "encounter_updated", { encounter: null });
+  // The fight is over, so the fight music is. Every way an encounter can
+  // end comes through here, which is why the hook is here and not in the
+  // end_encounter tool: a party wipe and a last enemy dropping are not
+  // end_encounter calls.
+  followCombatAmbience(campaign, false);
   // Clients drop their fogged map view; the archived rows stay for history.
   publishBattleMapUpdate(campaign.id);
   // Guest allies joined for this fight, so the fight ending writes them out;
@@ -108,6 +131,7 @@ export function finishEncounter(
 
   return {
     encounterOver: true,
+    ...(Object.keys(ammoRecovered).length ? { ammoRecovered } : {}),
     outcome,
     ...(guestsGone.length
       ? {

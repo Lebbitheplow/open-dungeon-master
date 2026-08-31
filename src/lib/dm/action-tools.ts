@@ -3,6 +3,7 @@ import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import {
   getActiveEncounter,
   listEnemies,
+  orderEntryId,
   patchEnemyConditions,
   saveEncounter,
   type Encounter,
@@ -153,7 +154,7 @@ export function currentCombatantId(encounter: Encounter | null): string | null {
   if (!entry) {
     return null;
   }
-  return entry.kind === "pc" ? entry.characterId : entry.enemyId;
+  return orderEntryId(entry);
 }
 
 // The live budget for a combatant, created on first use of their turn.

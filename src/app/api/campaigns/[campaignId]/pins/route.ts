@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isErrorResponse, isLead, requireMember } from "@/lib/campaign-api";
+import { isErrorResponse, steersStory, requireMember } from "@/lib/campaign-api";
 import { createPin, deletePin, listPins } from "@/lib/db/pins";
 import { getCampaignMessage } from "@/lib/db/messages";
 import { publishPersisted } from "@/lib/events";
@@ -92,7 +92,7 @@ export async function DELETE(
   if (
     !deletePin(campaignId, parsed.data.pinId, {
       userId: context.user.id,
-      isLead: isLead(context),
+      isLead: steersStory(context),
     })
   ) {
     return Response.json(

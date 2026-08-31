@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isErrorResponse, isLead, requireMember } from "@/lib/campaign-api";
+import { isErrorResponse, steersStory, requireMember } from "@/lib/campaign-api";
 import { allocateSeq } from "@/lib/db/campaigns";
 import { insertNote, listNotesVisibleTo } from "@/lib/db/notes";
 import { getSheetById } from "@/lib/db/sheets";
@@ -25,7 +25,7 @@ export async function GET(
     return context;
   }
   return Response.json({
-    notes: listNotesVisibleTo(campaignId, context.user.id, isLead(context)),
+    notes: listNotesVisibleTo(campaignId, context.user.id, steersStory(context)),
   });
 }
 
@@ -58,7 +58,7 @@ export async function POST(
   }
 
   const suggestion =
-    !characterId && input.visibility === "public" && !isLead(context);
+    !characterId && input.visibility === "public" && !steersStory(context);
   const note = insertNote({
     campaignId,
     characterId,

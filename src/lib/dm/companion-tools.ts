@@ -13,12 +13,8 @@ import {
   rejoinRelationshipsWithSubject,
 } from "@/lib/db/relationships";
 import { insertCharacterEvent } from "@/lib/db/character-events";
-import {
-  activePublicEncounter,
-  getActiveEncounter,
-  saveEncounter,
-  type OrderEntry,
-} from "@/lib/db/encounters";
+import { getActiveEncounter, saveEncounter, type OrderEntry } from "@/lib/db/encounters";
+import { activePublicEncounter } from "@/lib/db/encounter-view";
 import {
   getBattleMapForEncounter,
   insertToken,

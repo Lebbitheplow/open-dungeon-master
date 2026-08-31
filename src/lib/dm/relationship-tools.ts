@@ -341,6 +341,7 @@ export function handleRelationshipBeat(
     const resolved = resolveRollExpression(
       { kind: "skill_check", skill: spec.skill } as unknown as RollArgs,
       sheet,
+      { encumbrance: campaign.gameSettings.variantRules.encumbrance },
     );
     if ("error" in resolved || "autoFail" in resolved) {
       return {

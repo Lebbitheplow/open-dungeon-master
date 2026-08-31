@@ -20,6 +20,9 @@ const {
   songOfRestDieFor,
   defenseRiders,
   halfProficiencyCovers,
+  hasHalflingLuck,
+  hasBrave,
+  hasElvenAccuracy,
 } = await import("../src/lib/srd/feature-effects.ts");
 
 let passed = 0;
@@ -282,6 +285,38 @@ test("Dread Ambusher adds WIS to initiative through defenseRiders", () => {
     { str: 0, dex: 2, con: 1, int: 0, wis: 3, cha: 0 },
   );
   assert.equal(riders.initiativeBonus, 3);
+});
+
+test("hasHalflingLuck detects the racial trait, not the Lucky feat", () => {
+  assert.equal(
+    hasHalflingLuck({
+      race: "Halfling (Lightfoot)",
+      features: [{ name: "Lucky (reroll nat 1 on d20)", source: "race" }],
+    }),
+    true,
+  );
+  // The Lucky feat is a different mechanic and must not trigger the reroll.
+  assert.equal(
+    hasHalflingLuck({ race: "Human", features: [{ name: "Lucky", source: "feat" }] }),
+    false,
+  );
+  assert.equal(hasHalflingLuck({ race: "Elf", features: [] }), false);
+});
+
+test("hasBrave detects the Halfling fear-save trait", () => {
+  assert.equal(
+    hasBrave({ features: [{ name: "Brave (adv. vs frightened)", source: "race" }] }),
+    true,
+  );
+  assert.equal(hasBrave({ features: [{ name: "Second Wind", source: "class" }] }), false);
+});
+
+test("hasElvenAccuracy detects the feat", () => {
+  assert.equal(
+    hasElvenAccuracy({ features: [{ name: "Elven Accuracy", source: "feat" }] }),
+    true,
+  );
+  assert.equal(hasElvenAccuracy({ features: [{ name: "Sharpshooter", source: "feat" }] }), false);
 });
 
 console.log(`test-feature-effects: ${passed} passed`);

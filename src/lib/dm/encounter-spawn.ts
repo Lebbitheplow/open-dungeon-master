@@ -41,14 +41,20 @@ export type ResolvedEnemyRequest = {
 
 // Resolves every requested enemy before anything is created. Returns the
 // flat per-individual list, or the first unresolvable monster reference.
+//
+// `ownerUserId` is whose hand-built monsters count as resolvable
+// (src/lib/bestiary/homebrew-monsters.ts). It is the campaign's owner rather
+// than whoever pressed the button, because a monster prepared for this table
+// should answer to its name no matter which seat starts the fight.
 export function resolveEnemyRequests(
   setting: SettingRef,
   requests: EnemyRequest[],
+  ownerUserId?: string,
 ): { resolved: ResolvedEnemyRequest[] } | { unknownMonster: string } {
   const resolved: ResolvedEnemyRequest[] = [];
   for (const request of requests) {
     const count = request.count ?? 1;
-    const match = resolveMonster(request.monster, setting);
+    const match = resolveMonster(request.monster, setting, { userId: ownerUserId });
     if (!match && request.cr === undefined) {
       return { unknownMonster: request.monster };
     }
@@ -154,7 +160,7 @@ export function handleAddEnemies(
       error: 'Invalid add_enemies arguments. Send {"enemies":[{"monster":"goblin","count":2}]}.',
     };
   }
-  const outcome = resolveEnemyRequests(campaign.gameSettings, args.enemies);
+  const outcome = resolveEnemyRequests(campaign.gameSettings, args.enemies, campaign.ownerUserId);
   if ("unknownMonster" in outcome) {
     return {
       error: `Unknown monster "${outcome.unknownMonster}". Use a real monster slug or name, or pass cr for an invented enemy.`,

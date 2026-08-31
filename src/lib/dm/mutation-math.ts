@@ -2,7 +2,20 @@
 // test runner (scripts/test-mutations.mjs) can import it directly as TS.
 
 export type SlotState = { max: number; used: number };
-export type EquipmentRow = { name: string; qty: number; slug?: string };
+export type EquipmentRow = {
+  name: string;
+  qty: number;
+  slug?: string;
+  // False while the party does not know what this is. Absent reads as true,
+  // so every row written before the flag existed stays identified.
+  identified?: boolean;
+};
+
+// Absent means known: an unidentified item is the exception, and the default
+// has to be the ordinary case or every old sheet turns mysterious at once.
+export function isIdentified(item: { identified?: boolean }): boolean {
+  return item.identified !== false;
+}
 
 // Server-side ceiling on DM sheet edits so no amount of prompting (public, or
 // on the private whisper line) can talk the DM into a cheat: an extra level, a
@@ -116,15 +129,60 @@ export function removeItemMath(equipment: EquipmentRow[], name: string, qty: num
 }
 
 // Add qty of an item, merging with an existing row by name.
-export function grantItemMath(equipment: EquipmentRow[], name: string, qty: number) {
+//
+// An unidentified item never merges with an identified one, even under the
+// same name. They are not the same thing to the table: merging would let a
+// second "plain iron ring" quietly join the one they already know is plain,
+// and revealing one would reveal both.
+export function grantItemMath(
+  equipment: EquipmentRow[],
+  name: string,
+  qty: number,
+  options: { identified?: boolean } = {},
+) {
   const amount = Math.max(1, Math.floor(qty));
+  const known = options.identified !== false;
   const index = equipment.findIndex(
-    (item) => item.name.toLowerCase() === name.toLowerCase(),
+    (item) => item.name.toLowerCase() === name.toLowerCase() && isIdentified(item) === known,
   );
   if (index < 0) {
-    return { equipment: [...equipment, { name, qty: amount }] };
+    return {
+      equipment: [
+        ...equipment,
+        known ? { name, qty: amount } : { name, qty: amount, identified: false },
+      ],
+    };
   }
   const next = [...equipment];
   next[index] = { ...next[index], qty: next[index].qty + amount };
   return { equipment: next };
+}
+
+// The DM naming a mystery. Finds the unidentified row, flips the flag, and
+// renames it to what it actually is in the same step, because the mystery
+// name IS the stored name until now and leaving it would keep the secret in
+// the one place the party can read.
+//
+// Returns null when nothing on the sheet matches, so the caller can say so
+// rather than silently doing nothing.
+export function revealItemMath(
+  equipment: EquipmentRow[],
+  name: string,
+  revealedName?: string,
+): { equipment: EquipmentRow[]; from: string; to: string } | null {
+  const index = equipment.findIndex(
+    (item) => item.name.toLowerCase() === name.toLowerCase() && !isIdentified(item),
+  );
+  if (index < 0) {
+    return null;
+  }
+  const from = equipment[index].name;
+  const to = (revealedName ?? "").trim().slice(0, 80) || from;
+  const next = [...equipment];
+  // The flag is dropped rather than set to true: absent already means known,
+  // and one representation for "identified" is one fewer thing to disagree.
+  const rest = { ...next[index] };
+  delete rest.identified;
+  next[index] = { ...rest, name: to };
+  return { equipment: next, from, to };
 }

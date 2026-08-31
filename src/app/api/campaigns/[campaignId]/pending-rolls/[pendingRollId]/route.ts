@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isErrorResponse, requireMember } from "@/lib/campaign-api";
+import { isErrorResponse, requireMember, steersStory } from "@/lib/campaign-api";
 import { allocateSeq } from "@/lib/db/campaigns";
 import {
   getPendingRoll,
@@ -8,11 +8,12 @@ import {
   setPendingCombatNote,
 } from "@/lib/db/dm-turns";
 import { insertRoll } from "@/lib/db/rolls";
-import { rollExpression, rollExpressionWithDice } from "@/lib/dice";
+import { defaultRng, expressionDice, rollExpression, rollExpressionWithDice } from "@/lib/dice";
 import { recordInitiativeRoll } from "@/lib/dm/encounter-tools";
 import { applyPendingDamageRoll } from "@/lib/dm/enemy-damage";
 import { resolvePendingPcAttack } from "@/lib/dm/pc-attack";
 import { resumeDmTurn } from "@/lib/dm/turn";
+import { resumeHumanTurn } from "@/lib/dm/invoke";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { publishWithSeq } from "@/lib/events";
 
@@ -20,7 +21,14 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const submitSchema = z.union([
-  z.object({ dice: z.array(z.number().int().min(1).max(100)).min(1).max(120) }),
+  // Each entry is a die face, or the literal "digital" for a face whose
+  // source preference asked the server to roll that one die.
+  z.object({
+    dice: z
+      .array(z.union([z.number().int().min(1).max(100), z.literal("digital")]))
+      .min(1)
+      .max(120),
+  }),
   z.object({ fallback: z.literal("digital") }),
 ]);
 
@@ -55,16 +63,44 @@ export async function POST(
 
   const isFallback = "fallback" in parsed.data;
   const isRoller = pending.userId === context.user.id;
-  const isPartyLead = context.campaign.leadUserId === context.user.id;
-  if (isFallback ? !isRoller && !isPartyLead : !isRoller) {
+  // Whoever runs the story can force the digital fallback when a player is
+  // away from their physical dice: the lead in an AI campaign, the DM in a
+  // human-run one.
+  const canForceFallback = steersStory(context);
+  if (isFallback ? !isRoller && !canForceFallback : !isRoller) {
     return Response.json({ error: "This is not your roll." }, { status: 403 });
   }
 
+  // The faces the player typed or their Pixels dice reported. A "digital"
+  // entry stands in for a face rolled by the server: drawn crypto-random
+  // here, never fabricated in the browser where it would be predictable
+  // and forgeable.
+  const submitted = isFallback
+    ? []
+    : (parsed.data as { dice: Array<number | "digital"> }).dice;
+  const anyDigital = submitted.includes("digital");
+  const allDigital = submitted.length > 0 && submitted.every((entry) => entry === "digital");
+
   let outcome;
   try {
-    outcome = isFallback
-      ? rollExpression(pending.expression)
-      : rollExpressionWithDice(pending.expression, (parsed.data as { dice: number[] }).dice);
+    if (isFallback) {
+      outcome = rollExpression(pending.expression);
+    } else {
+      // Per-index sides come from the expression itself, so each server-drawn
+      // face matches the die it stands in for ("2d20kh1+1d4" -> [20, 20, 4]).
+      const faces = expressionDice(pending.expression);
+      const dice = submitted.map((entry, index) => {
+        if (entry !== "digital") {
+          return entry;
+        }
+        if (index >= faces.length) {
+          // Same wording rollExpressionWithDice uses for an oversized payload.
+          throw new Error("Too many die values for this roll.");
+        }
+        return defaultRng(faces[index]);
+      });
+      outcome = rollExpressionWithDice(pending.expression, dice);
+    }
   } catch (error) {
     return Response.json(
       { error: error instanceof Error ? error.message : "Invalid dice values." },
@@ -77,7 +113,13 @@ export async function POST(
     characterId: pending.characterId,
     requestedBy: "player",
     kind: pending.kind,
-    detail: isFallback ? pending.detail : `${pending.detail || pending.kind} (physical)`.trim(),
+    // "(physical)" marks a roll made entirely with real dice; once any face
+    // was drawn by the server the label would overclaim, so a mixed or fully
+    // digital submission keeps the plain detail.
+    detail:
+      isFallback || anyDigital
+        ? pending.detail
+        : `${pending.detail || pending.kind} (physical)`.trim(),
     advantage: pending.advantage,
     dc: pending.dc,
     result: outcome,
@@ -96,8 +138,9 @@ export async function POST(
     roll,
     pendingRollId,
     // Real dice already rolled on a real table; the overlay animates only
-    // digital results.
-    source: isFallback ? "digital" : "physical",
+    // rolls where every face was drawn digitally (a mixed submission still
+    // happened at the table).
+    source: isFallback || allDigital ? "digital" : "physical",
   });
 
   // Combat initiative submitted from a physical table: record it; the last
@@ -129,7 +172,12 @@ export async function POST(
     (entry) => entry.status === "pending",
   );
   if (!remaining.length) {
-    enqueueDmJob(campaignId, () => resumeDmTurn(campaignId, pending.turnId));
+    // A turn a person opened has no model waiting on the answer: the roll
+    // already published itself and applied what it applies, so closing the
+    // turn is the whole of "resuming" it.
+    if (!resumeHumanTurn(pending.turnId)) {
+      enqueueDmJob(campaignId, () => resumeDmTurn(campaignId, pending.turnId));
+    }
   }
 
   return Response.json({ roll });

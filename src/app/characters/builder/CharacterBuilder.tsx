@@ -884,6 +884,9 @@ export default function CharacterBuilder({
         proficiencies: preview.proficiencies,
         equipment: fullEquipment,
         gold,
+        // Starting wealth is quoted in whole gold pieces everywhere in the
+        // PHB, so a new character starts with no small change.
+        copper: 0,
         feats: [...new Set([...asiFeats, ...feats])],
         // Server-side creation populates SRD class features, racial traits
         // and the background feature; the builder contributes only what has

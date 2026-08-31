@@ -16,6 +16,19 @@ export function paceEffect(pace: TravelPace) {
   return PACE_EFFECT[pace];
 }
 
+// How far a pace covers, from the PHB "Travel Pace" table. Miles per day is
+// the miles-per-hour rate over a normal 8-hour day, so a longer day is
+// hours * milesPerHour rather than a second number that could disagree.
+const PACE_SPEED: Record<TravelPace, { feetPerMinute: number; milesPerHour: number }> = {
+  fast: { feetPerMinute: 400, milesPerHour: 4 },
+  normal: { feetPerMinute: 300, milesPerHour: 3 },
+  slow: { feetPerMinute: 200, milesPerHour: 2 },
+};
+
+export function paceSpeed(pace: TravelPace) {
+  return PACE_SPEED[pace];
+}
+
 // A normal day of travel is 8 hours; every hour beyond that is a forced march.
 export const NORMAL_TRAVEL_HOURS = 8;
 

@@ -34,14 +34,14 @@ export function LoreCheckDialog({
   campaignId,
   message,
   selection,
-  isLead,
+  steersStory,
   onClose,
 }: {
   campaignId: string;
   message: CampaignMessage;
   // The text the user had selected when opening the dialog ("" = whole message).
   selection: string;
-  isLead: boolean;
+  steersStory: boolean;
   onClose: () => void;
 }) {
   const [category, setCategory] = useState<LoreCheckCategory | null>(null);
@@ -212,7 +212,7 @@ export function LoreCheckDialog({
                     <p className="flex items-center gap-1.5 text-xs text-emerald-400">
                       <Check className="size-3.5" /> Applied; the message has been updated.
                     </p>
-                  ) : isLead && message.authorType === "dm" ? (
+                  ) : steersStory && message.authorType === "dm" ? (
                     <button
                       type="button"
                       disabled={accepting}

@@ -4,6 +4,8 @@ import {
   BookMarked,
   BookOpen,
   Check,
+  ChevronLeft,
+  ChevronRight,
   ChevronsLeft,
   ChevronsRight,
   Heart,
@@ -12,8 +14,19 @@ import {
   UserPlus,
   Users,
 } from "lucide-react";
-import { memo, useState, useSyncExternalStore } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import { cn } from "@/lib/cn";
+import { DmConsolePanel } from "@/app/campaigns/[campaignId]/DmConsolePanel";
+import type { CampaignMessage } from "@/lib/db/messages";
+import type { DmBeat } from "@/lib/db/dm-beats";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { BattleMapPanel } from "@/app/campaigns/[campaignId]/BattleMapPanel";
 import { DmWhisperPanel } from "@/app/campaigns/[campaignId]/DmWhisperPanel";
@@ -45,14 +58,16 @@ import type {
   MediaStatus,
 } from "@/app/campaigns/[campaignId]/useCampaignStream";
 import type { CampaignMember } from "@/lib/campaign-types";
+import { allDelegations, type DmCover } from "@/lib/dm/delegation";
 import type { Chapter } from "@/lib/db/chapters";
-import type { PublicEncounter } from "@/lib/db/encounters";
+import type { PublicEncounter } from "@/lib/db/encounter-view";
 import type { CharacterEvent } from "@/lib/db/character-events";
 import type { Note } from "@/lib/db/notes";
 import type { WorldFact } from "@/lib/db/facts";
 import type { DmWhisper } from "@/lib/db/dm-whispers";
 import type { SideThread } from "@/lib/db/side-chat";
 import type { PlayerMapView } from "@/lib/battlemap/view";
+import type { MapPing } from "@/lib/dm/board-logic";
 import { companionSlotsFree, resolveCompanionMode } from "@/lib/schemas/game-settings";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -76,6 +91,80 @@ function setWide(wide: boolean) {
   window.dispatchEvent(new Event(WIDE_EVENT));
 }
 
+// The tab rail scrolls sideways. There are up to eleven tabs and the panel is
+// 320px wide, and the buttons cannot shrink below their label (a flex item's
+// min-width is auto), so without a scroll container the row simply overflowed
+// and the trailing tabs, Context and Setup, were clipped with no way to reach
+// them. A trackpad or a tilt wheel scrolls it, but a plain two-button mouse
+// cannot, so each overflowing edge also gets a click target. The arrows are
+// only rendered when there is somewhere to go in that direction, which is why
+// they double as the "there is more" hint the old static fade used to give.
+function TabRail({ children }: { children: ReactNode }) {
+  const scroller = useRef<HTMLDivElement>(null);
+  const [reach, setReach] = useState({ left: false, right: false });
+
+  const measure = useCallback(() => {
+    const el = scroller.current;
+    if (!el) return;
+    // A pixel of slack: fractional layout widths mean scrollLeft rarely lands
+    // exactly on the maximum, and without it the right arrow never clears.
+    const left = el.scrollLeft > 1;
+    const right = el.scrollLeft < el.scrollWidth - el.clientWidth - 1;
+    setReach((prev) => (prev.left === left && prev.right === right ? prev : { left, right }));
+  }, []);
+
+  // scrollWidth changes when the tab list changes (the DM and Context tabs are
+  // conditional) and clientWidth changes when the panel is widened. Neither is
+  // a scroll event, so re-measure after every render as well.
+  useEffect(measure);
+
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    el.addEventListener("scroll", measure, { passive: true });
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => {
+      el.removeEventListener("scroll", measure);
+      observer.disconnect();
+    };
+  }, [measure]);
+
+  function nudge(direction: -1 | 1) {
+    const el = scroller.current;
+    if (!el) return;
+    el.scrollBy({ left: direction * Math.max(el.clientWidth * 0.7, 80), behavior: "smooth" });
+  }
+
+  return (
+    <div className="relative hidden border-b border-stone-700/50 lg:block">
+      <div ref={scroller} className="flex items-stretch gap-1 overflow-x-auto px-2 py-2">
+        {children}
+      </div>
+      {reach.left ? (
+        <button
+          type="button"
+          onClick={() => nudge(-1)}
+          aria-label="Scroll tabs left"
+          className="absolute inset-y-0 left-0 flex w-7 items-center justify-start bg-gradient-to-r from-stone-950 via-stone-950/90 to-transparent text-stone-500 transition-colors hover:text-amber-300"
+        >
+          <ChevronLeft className="size-4" />
+        </button>
+      ) : null}
+      {reach.right ? (
+        <button
+          type="button"
+          onClick={() => nudge(1)}
+          aria-label="Scroll tabs right"
+          className="absolute inset-y-0 right-0 flex w-7 items-center justify-end bg-gradient-to-l from-stone-950 via-stone-950/90 to-transparent text-stone-500 transition-colors hover:text-amber-300"
+        >
+          <ChevronRight className="size-4" />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 // The session's panel column: party sheets, the current area map, story
 // chapters, table notes, and the stat-change log. On desktop it is the tabbed
 // right rail; below lg it fills the screen when the bottom tab bar selects a
@@ -86,6 +175,7 @@ function SidePanelInner({
   sheets,
   members,
   meUserId,
+  steersStory,
   isLead,
   leadUserId,
   canTransferLead,
@@ -111,8 +201,10 @@ function SidePanelInner({
   inviteCode,
   midGameJoinOpen,
   campaign,
+  dmCover,
   encounter,
   battleMap,
+  mapPing,
   refreshBattleMap,
   tabs,
   tab,
@@ -122,12 +214,35 @@ function SidePanelInner({
   mobileVisible,
   relationshipsVersion,
   relationshipsEnabled,
+  adjudicates,
+  messages,
+  dmIntents,
+  floorMode,
+  beats,
+  storyDue,
 }: {
   campaignId: string;
   sheets: CharacterSheet[];
   members: CampaignMember[];
   meUserId: string;
+  // Runs the story: the party lead in an AI campaign, the DM in a human-run
+  // one. Gates every panel that curates the world or fixes its numbers.
+  steersStory: boolean;
+  // Owns the table: invites and campaign info. Stays with the lead even when
+  // a DM has taken the story, which is why these are two props and not one.
   isLead: boolean;
+  // Holds the DM seat, so the console tab exists at all.
+  adjudicates: boolean;
+  // The chat, for the console's queue of unanswered player actions.
+  messages: CampaignMessage[];
+  dmIntents: Array<{ messageId: string; userId: string; characterId: string; seq: number }>;
+  // Who may speak right now, for the console's floor control.
+  floorMode: "open" | "hold" | "spotlight" | "initiative";
+  // Story the DM has already written down, newest first.
+  beats: DmBeat[];
+  // The quiet half of the story-capture nudge: a dot on the DM tab. The loud
+  // half is the banner above the composer (src/lib/dm/beat-cadence.ts).
+  storyDue: boolean;
   leadUserId: string;
   canTransferLead: boolean;
   spotlightUserIds: string[];
@@ -153,8 +268,12 @@ function SidePanelInner({
   inviteCode?: string;
   midGameJoinOpen?: boolean;
   campaign?: Parameters<typeof SessionSettings>[0]["campaign"];
+  // Assisted mode: the stretch of answers the DM handed to the AI. Separate
+  // from `campaign` because that shape carries only what the settings panel edits.
+  dmCover?: DmCover | null;
   encounter?: PublicEncounter | null;
   battleMap?: PlayerMapView | null;
+  mapPing?: MapPing | null;
   refreshBattleMap: () => Promise<void>;
   tabs: PanelTabDef[];
   tab: PanelTab;
@@ -210,13 +329,7 @@ function SidePanelInner({
         wide ? "lg:w-[26rem]" : "lg:w-80",
       )}
     >
-      {/* The rail scrolls sideways. There are up to eleven tabs and the panel
-          is 320px wide, and the buttons cannot shrink below their label (a
-          flex item's min-width is auto), so without a scroll container the
-          row simply overflowed and the trailing tabs, Context and Setup, were
-          clipped with no way to reach them. Same pattern as BottomTabBar. */}
-      <div className="relative hidden border-b border-stone-700/50 lg:block">
-        <div className="flex items-stretch gap-1 overflow-x-auto px-2 py-2">
+      <TabRail>
         <Tooltip content={wide ? "Narrow the panel" : "Widen the panel"} side="bottom">
           <button
             type="button"
@@ -245,6 +358,9 @@ function SidePanelInner({
             {value === "chat" && chatUnread > 0 ? (
               <span className="absolute left-1.5 top-1 size-1.5 rounded-full bg-red-500" />
             ) : null}
+            {value === "dm" && storyDue ? (
+              <span className="absolute right-1.5 top-1 size-1.5 rounded-full bg-amber-400" />
+            ) : null}
             {value === "notes" && pendingCount ? (
               <span className="absolute right-1.5 top-1 rounded-full bg-gradient-to-b from-amber-300 to-amber-500 px-1 text-[9px] font-semibold text-amber-950 shadow-glow-gold">
                 {pendingCount}
@@ -261,14 +377,35 @@ function SidePanelInner({
           </button>
           </Tooltip>
         ))}
-        </div>
-        {/* Hints that the row keeps going. Purely decorative, so it must not
-            eat clicks on the tab sitting underneath it. */}
-        <span className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-stone-950 to-transparent" />
-      </div>
+      </TabRail>
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         <div className="mx-auto w-full max-w-2xl lg:max-w-none">
-        {tab === "party" ? (
+        {tab === "dm" && adjudicates ? (
+          // Belt and braces, like the context tab below: buildPanelTabs
+          // already withholds this from anyone without the DM seat, and a
+          // stale selection must not land a player on a console whose route
+          // will only ever answer 403.
+          <DmConsolePanel
+            campaignId={campaignId}
+            sheets={sheets}
+            encounter={encounter ?? null}
+            messages={messages}
+            intents={dmIntents}
+            floorMode={floorMode}
+            beats={beats}
+            delegations={allDelegations(
+              campaign?.gameSettings?.dmMode,
+              campaign?.gameSettings?.dmAssist,
+            )}
+            cover={dmCover ?? null}
+            variantRules={{
+              powerfulCritical:
+                campaign?.gameSettings?.variantRules?.powerfulCritical ?? false,
+              criticalDamageMods:
+                campaign?.gameSettings?.variantRules?.criticalDamageMods ?? false,
+            }}
+          />
+        ) : tab === "party" ? (
           <>
           {partySubTabs.length > 1 ? (
             <SubTabs tabs={partySubTabs} value={partySection} onChange={setPartySection} />
@@ -282,7 +419,8 @@ function SidePanelInner({
               <EncounterPanel
                 campaignId={campaignId}
                 encounter={encounter}
-                isLead={isLead}
+                steersStory={steersStory}
+                canEditOrder={adjudicates}
                 embedded
               />
             </div>
@@ -328,7 +466,7 @@ function SidePanelInner({
             sheets={sheets}
             meUserId={meUserId}
             spotlightUserIds={spotlightUserIds}
-            isLead={isLead}
+            steersStory={steersStory}
             leadUserId={leadUserId}
             canTransferLead={canTransferLead}
             notes={notes}
@@ -336,6 +474,7 @@ function SidePanelInner({
             refreshNotes={refreshNotes}
             onMessageUser={onMessageUser}
             realDiceAllowed={campaign?.gameSettings?.dicePolicy === "real_allowed"}
+            encumbranceRule={Boolean(campaign?.gameSettings?.variantRules?.encumbrance)}
             inCombat={Boolean(encounter)}
             campaignId={campaignId}
             companionsAvailable={
@@ -372,6 +511,8 @@ function SidePanelInner({
           <BattleMapPanel
             campaignId={campaignId}
             view={battleMap}
+            canDirect={adjudicates}
+            ping={mapPing ?? null}
             encounter={encounter ?? null}
             sheets={sheets}
             refreshBattleMap={refreshBattleMap}
@@ -381,12 +522,12 @@ function SidePanelInner({
             <OverworldPanel
               campaignId={campaignId}
               genre={campaign?.gameSettings?.genre ?? "high_fantasy"}
-              isLead={isLead}
+              steersStory={steersStory}
             />
             <MapPanel
               campaignId={campaignId}
               locations={locations}
-              isLead={isLead}
+              steersStory={steersStory}
               mediaStatus={mediaStatus}
             />
           </div>
@@ -399,10 +540,10 @@ function SidePanelInner({
                 <FactsPanel
                   campaignId={campaignId}
                   facts={facts}
-                  isLead={isLead}
+                  steersStory={steersStory}
                   refreshFacts={refreshFacts}
                 />
-                <LorePanel campaignId={campaignId} isLead={isLead} />
+                <LorePanel campaignId={campaignId} steersStory={steersStory} />
               </div>
             ) : storySection === "log" ? (
               <EventLog
@@ -410,10 +551,10 @@ function SidePanelInner({
                 auditLog={auditLog}
                 sheets={sheets}
                 characterEvents={characterEvents}
-                isLead={isLead}
+                steersStory={steersStory}
               />
             ) : (
-              <StoryPanel campaignId={campaignId} chapters={chapters} isLead={isLead} />
+              <StoryPanel campaignId={campaignId} chapters={chapters} steersStory={steersStory} />
             )}
           </>
         ) : tab === "notes" ? (
@@ -422,7 +563,7 @@ function SidePanelInner({
             notes={notes}
             members={members}
             meUserId={meUserId}
-            isLead={isLead}
+            steersStory={steersStory}
             refreshNotes={refreshNotes}
           />
         ) : tab === "chat" ? (
@@ -444,7 +585,7 @@ function SidePanelInner({
               onOpenHandled={onChatTargetHandled}
             />
           </div>
-        ) : tab === "context" && isLead ? (
+        ) : tab === "context" && steersStory ? (
           // Belt and braces: buildPanelTabs already withholds this tab from
           // players, but a stale tab selection must not land them on a panel
           // whose route will only ever answer 403.

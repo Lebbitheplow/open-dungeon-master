@@ -39,7 +39,7 @@ export function publishBattleMapUpdate(campaignId: string) {
 }
 
 // A carried light matters only in dim/dark maps; inferred from equipment.
-function carriedLightRadius(sheet: CharacterSheet): number {
+export function carriedLightRadius(sheet: CharacterSheet): number {
   const hasLight = sheet.equipment.some((item) => /torch|lantern|candle/i.test(item.name));
   return hasLight ? 4 : 0;
 }

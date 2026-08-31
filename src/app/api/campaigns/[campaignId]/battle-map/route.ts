@@ -1,4 +1,4 @@
-import { isErrorResponse, requireMember } from "@/lib/campaign-api";
+import { capsFor, isErrorResponse, requireMember } from "@/lib/campaign-api";
 import { buildPlayerMapView } from "@/lib/battlemap/view";
 
 export const runtime = "nodejs";
@@ -16,5 +16,9 @@ export async function GET(
   if (isErrorResponse(context)) {
     return context;
   }
-  return Response.json({ view: buildPlayerMapView(campaignId, context.user.id) });
+  return Response.json({
+    view: buildPlayerMapView(campaignId, context.user.id, {
+      fullVision: capsFor(context).fullMap,
+    }),
+  });
 }

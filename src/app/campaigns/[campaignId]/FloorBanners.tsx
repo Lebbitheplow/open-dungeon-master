@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Check, Hand, Swords } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { Floor } from "@/lib/db/campaigns";
-import type { PublicEncounter } from "@/lib/db/encounters";
+import type { PublicEncounter } from "@/lib/db/encounter-view";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // Spotlight, held-responses, and initiative banners above the composer;
@@ -15,7 +15,7 @@ export function FloorBanners({
   spotlighted,
   heldSpotlightNames,
   encounter,
-  isLead,
+  steersStory,
   meUserId = "",
   onRelease,
 }: {
@@ -24,7 +24,7 @@ export function FloorBanners({
   spotlighted: CharacterSheet[];
   heldSpotlightNames: string[];
   encounter?: PublicEncounter | null;
-  isLead: boolean;
+  steersStory: boolean;
   meUserId?: string;
   onRelease: () => void;
 }) {
@@ -86,7 +86,7 @@ export function FloorBanners({
                 End turn
               </button>
             ) : null}
-            {isLead ? (
+            {steersStory ? (
               <button
                 type="button"
                 onClick={onRelease}
@@ -138,7 +138,7 @@ export function FloorBanners({
               ) : null}
             </span>
           </span>
-          {isLead ? (
+          {steersStory ? (
             <button
               type="button"
               onClick={onRelease}
@@ -163,7 +163,7 @@ export function FloorBanners({
               ) : null}
             </span>
           </span>
-          {isLead ? (
+          {steersStory ? (
             <button
               type="button"
               onClick={onRelease}

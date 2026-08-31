@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, FileDown, Loader2 } from "lucide-react";
+import { BookOpen, Copy, FileDown, Hammer, Loader2, Swords } from "lucide-react";
 import Link from "next/link";
 import { use, useEffect, useRef, useState } from "react";
 import { PIXEL_ICONS, PixelTile } from "@/lib/ui";
@@ -13,6 +13,14 @@ import { abilityMod, formatModifier } from "@/lib/srd";
 import { downloadCharacterSheetPdf } from "@/lib/pdf/download";
 import { libraryToPdfCharacter } from "@/lib/pdf/character-sheet-pdf";
 
+// Where this character is playing; see src/lib/db/characters.ts.
+type CharacterAssignment = {
+  campaignId: string;
+  title: string;
+  kind: "campaign" | "workshop";
+  status: string;
+};
+
 type LibraryCharacter = {
   id: string;
   name: string;
@@ -23,6 +31,7 @@ type LibraryCharacter = {
   level: number;
   xp: number;
   portraitStatus?: "queued" | "generating" | "failed" | null;
+  campaigns?: CharacterAssignment[];
   sheet: CreateSheetInput;
   updatedAt: string;
 };
@@ -62,6 +71,7 @@ export default function CharacterDetailPage({
   const [events, setEvents] = useState<CharacterEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [cloning, setCloning] = useState(false);
   const pollCount = useRef(0);
 
   async function handleDownloadPdf() {
@@ -73,6 +83,20 @@ export default function CharacterDetailPage({
       await downloadCharacterSheetPdf(libraryToPdfCharacter(character));
     } finally {
       setPdfBusy(false);
+    }
+  }
+
+  // A second copy under a numbered name, sheet and portrait verbatim. The
+  // roster is where copies live, so that is where this lands.
+  async function handleDuplicate() {
+    setCloning(true);
+    try {
+      const response = await fetch(`/api/characters/${characterId}/clone`, { method: "POST" });
+      if (response.ok) {
+        window.location.href = "/characters";
+      }
+    } finally {
+      setCloning(false);
     }
   }
 
@@ -143,9 +167,18 @@ export default function CharacterDetailPage({
         <div className="mt-2 flex items-center gap-3">
           <button
             type="button"
+            onClick={handleDuplicate}
+            disabled={cloning}
+            className="ml-auto order-last inline-flex items-center gap-1.5 rounded-lg border border-stone-600/60 px-3 py-1.5 text-sm text-stone-300 hover:border-amber-500/40 hover:text-amber-100 disabled:opacity-50"
+            title="Save a second copy of this character to your library"
+          >
+            <Copy className="size-4" /> {cloning ? "Copying..." : "Duplicate"}
+          </button>
+          <button
+            type="button"
             onClick={handleDownloadPdf}
             disabled={pdfBusy}
-            className="ml-auto order-last inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 px-3 py-1.5 text-sm text-amber-100 hover:bg-amber-500/10 disabled:opacity-50"
+            className="order-last inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 px-3 py-1.5 text-sm text-amber-100 hover:bg-amber-500/10 disabled:opacity-50"
             title="Download this character sheet as a fillable PDF"
           >
             <FileDown className="size-4" /> {pdfBusy ? "Preparing..." : "Download PDF"}
@@ -178,6 +211,34 @@ export default function CharacterDetailPage({
               <p className="text-xs text-stone-500">Portrait couldn&apos;t be generated.</p>
             ) : null}
           </div>
+        </div>
+
+        {/* Each campaign holds its own copy of this sheet, so one library
+            entry can be at several tables at once. Naming them is what makes
+            "which game is this one in?" answerable without opening each. */}
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          {character.campaigns?.length ? (
+            character.campaigns.map((assignment) => (
+              <Link
+                key={assignment.campaignId}
+                href={
+                  assignment.kind === "workshop"
+                    ? `/workshop/${assignment.campaignId}`
+                    : `/campaigns/${assignment.campaignId}`
+                }
+                className="inline-flex max-w-full items-center gap-1 rounded-full border border-stone-600/60 bg-stone-900/60 px-2.5 py-1 text-xs text-stone-300 transition-colors hover:border-amber-500/40 hover:text-amber-100"
+              >
+                {assignment.kind === "workshop" ? (
+                  <Hammer className="size-3.5 shrink-0 text-amber-300/70" />
+                ) : (
+                  <Swords className="size-3.5 shrink-0 text-amber-300/70" />
+                )}
+                <span className="truncate">{assignment.title}</span>
+              </Link>
+            ))
+          ) : (
+            <span className="text-xs text-stone-600">Not in a campaign yet.</span>
+          )}
         </div>
       </header>
 

@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { isErrorResponse, requireMember } from "@/lib/campaign-api";
-import { getSheetForUser } from "@/lib/db/sheets";
-import { insertRoll } from "@/lib/db/rolls";
+import { capsFor, isErrorResponse, requireMember } from "@/lib/campaign-api";
+import { getSheetForUser, listSheets } from "@/lib/db/sheets";
+import { insertRoll, listRollsVisibleTo } from "@/lib/db/rolls";
 import { d20Expression, rollExpression, type Advantage } from "@/lib/dice";
 import { computeSheetDerived, findSkill } from "@/lib/srd";
 import { allySaveAura } from "@/lib/dm/aura";
@@ -24,6 +24,27 @@ const rollRequestSchema = z.union([
     advantage: z.enum(["none", "advantage", "disadvantage"]).default("none"),
   }),
 ]);
+
+// The roll log as this seat may read it. The shared event stream carries
+// the redacted version of a blind or DM-only roll, so whoever is allowed the
+// number re-fetches it here, the same ping-and-self-fetch the fogged battle
+// map and the DM's enemy numbers already use.
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ campaignId: string }> },
+) {
+  const { campaignId } = await params;
+  const context = await requireMember(campaignId);
+  if (isErrorResponse(context)) {
+    return context;
+  }
+  const ownedCharacterIds = listSheets(campaignId)
+    .filter((sheet) => sheet.userId === context.user.id)
+    .map((sheet) => sheet.id);
+  return Response.json({
+    rolls: listRollsVisibleTo(campaignId, capsFor(context), ownedCharacterIds, 20),
+  });
+}
 
 export async function POST(
   request: Request,

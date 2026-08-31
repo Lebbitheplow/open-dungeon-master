@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isErrorResponse, requireLead } from "@/lib/campaign-api";
+import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { getChapter, updateChapter } from "@/lib/db/chapters";
 import { publishPersisted } from "@/lib/events";
 
@@ -18,7 +18,7 @@ export async function PATCH(
   { params }: { params: Promise<{ campaignId: string; chapterId: string }> },
 ) {
   const { campaignId, chapterId } = await params;
-  const context = await requireLead(campaignId);
+  const context = await requireStoryAuthority(campaignId);
   if (isErrorResponse(context)) {
     return context;
   }

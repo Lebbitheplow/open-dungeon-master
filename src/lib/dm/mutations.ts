@@ -14,14 +14,21 @@ import {
 } from "@/lib/schemas/sheet";
 import {
   applyDamageMath,
-  goldMath,
   grantItemMath,
   healMath,
   removeItemMath,
+  revealItemMath,
   sheetBuffViolation,
   spendSlotMath,
   wildShapeDamageMath,
 } from "@/lib/dm/mutation-math";
+import {
+  addCopper,
+  COPPER_PER_GOLD,
+  formatCopper,
+  formatPurse,
+  parseCoins,
+} from "@/lib/srd/currency";
 import { applyDamageDeathHook, healDeathHook } from "@/lib/dm/death";
 import { autoLevelCompanion } from "@/lib/dm/companion-tools";
 import {
@@ -61,9 +68,11 @@ export const MUTATION_TOOL_NAMES = [
   "heal",
   "stabilize",
   "award_xp",
+  "party_award",
   "modify_gold",
   "grant_item",
   "remove_item",
+  "reveal_item",
   "use_item",
   "purchase",
   "use_resource",
@@ -150,16 +159,48 @@ export const mutationTools: ToolDef[] = [
       },
     },
   },
-  tool("modify_gold", "Add or remove gold (negative delta = spend/lose). Floors at 0.", {
+  {
+    type: "function",
+    function: {
+      name: "party_award",
+      description:
+        "Hand the whole party the spoils of one moment in a single call: XP each, a purse split evenly between them, and optionally one item to the character who found it. Use this instead of a run of award_xp and modify_gold calls after a fight or a hoard; the server does the arithmetic and the split.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          characterIds: { type: "array", items: { type: "string" }, minItems: 1 },
+          amount: { type: "integer", minimum: 1, maximum: 20000, description: "XP for EACH character." },
+          delta: {
+            type: "integer",
+            minimum: -100000,
+            maximum: 100000,
+            description: "Total gold, split evenly; the remainder goes to the first share.",
+          },
+          name: { type: "string", description: "One item, to the first character listed." },
+          qty: { type: "integer", minimum: 1, maximum: 99 },
+          reason: { type: "string" },
+        },
+        required: ["characterIds"],
+      },
+    },
+  },
+  tool("modify_gold", "Add or remove money (negative delta = spend/lose). Floors at 0. For anything under a gold piece, or a price quoted in another coin, send `coins` like \"340 silver\" or \"2 pp 5 sp\" and set delta to -1 to spend it or 1 to gain it.", {
     delta: { type: "integer", minimum: -100000, maximum: 100000 },
+    coins: { type: "string", description: "Amount in denominations, e.g. '340 silver'. Overrides delta's size; delta's sign still says gain or spend." },
   }, ["delta"]),
-  tool("grant_item", "Give a character an item (loot, purchase, gift). Only for items the fiction actually put in their hands.", {
+  tool("grant_item", "Give a character an item (loot, purchase, gift). Only for items the fiction actually put in their hands. Set unidentified when the party cannot tell what it is yet: then `name` is the description they would use ('an ornate silver ring'), never the true name, and reveal_item names it later.", {
+    unidentified: { type: "boolean", description: "True when the party does not yet know what this is." },
     name: { type: "string" },
     qty: { type: "integer", minimum: 1, maximum: 99 },
   }, ["name"]),
   tool("remove_item", "Take an item from a character (lost, stolen, destroyed). For consumables being USED, call use_item instead; for sales, call purchase.", {
     name: { type: "string" },
     qty: { type: "integer", minimum: 1, maximum: 99 },
+  }, ["name"]),
+  tool("reveal_item", "Name an item the party has been carrying without knowing what it is. Give the description they have been calling it by as `name`, and what it actually is as `revealedName`. Only for items granted unidentified; an ordinary item needs no revealing.", {
+    name: { type: "string", description: "The description on the sheet now, e.g. 'an ornate silver ring'." },
+    revealedName: { type: "string", description: "What it truly is, e.g. 'Ring of Protection'." },
   }, ["name"]),
   ...resourceTools,
   tool("set_condition", "Apply a condition. Use the exact 5e name when one fits: blinded, charmed, deafened, frightened, grappled, incapacitated, invisible, paralyzed, petrified, poisoned, prone, restrained, stunned, unconscious, exhaustion. Custom names are allowed for story effects. Timed effects expire automatically: pass rounds, or saveAbility + saveDc for save-ends effects the server re-rolls each round.", {
@@ -289,7 +330,15 @@ const argsSchema = z.object({
   // heal: temporary hit points instead of healing.
   temp: z.coerce.boolean().optional(),
   delta: z.coerce.number().int().optional(),
+  // modify_gold / purchase in denominations: "340 silver", "2 pp 5 sp".
+  // Parsed to copper by src/lib/srd/currency.ts, and it wins over `delta`
+  // when both are sent, because it is the more specific of the two.
+  coins: z.string().max(60).optional(),
   name: z.string().optional(),
+  // grant_item: the party cannot tell what this is yet.
+  unidentified: z.coerce.boolean().optional(),
+  // reveal_item: what it actually turns out to be.
+  revealedName: z.string().optional(),
   qty: z.coerce.number().int().optional(),
   // use_item / purchase / use_resource.
   item: z.string().optional(),
@@ -409,6 +458,75 @@ export function applyDmMutation(
       null;
     return stale ? getSheetById(stale.id) : null;
   };
+
+  // The spoils of one moment, split in one call. Every part of it goes
+  // through the ordinary single-target mutations below, so the audit trail,
+  // the level-up hooks and the character events are the same ones a run of
+  // separate calls would have written.
+  if (toolName === "party_award") {
+    const targets = (args.characterIds ?? [])
+      .map(resolve)
+      .filter((entry): entry is CharacterSheet => entry !== null);
+    if (!targets.length) {
+      return { result: { error: "No valid characterIds from GAME STATE." } };
+    }
+    const awarded: string[] = [];
+    const xp = args.amount ?? 0;
+    if (xp > 0) {
+      const outcome = applyDmMutation(
+        campaign,
+        turnId,
+        "award_xp",
+        JSON.stringify({ characterIds: targets.map((entry) => entry.id), amount: xp, reason }),
+        sheets,
+        sheetsById,
+      );
+      if ("error" in outcome.result) {
+        return outcome;
+      }
+      awarded.push(`${xp} XP each`);
+    }
+    const gold = args.delta ?? 0;
+    if (gold) {
+      // The remainder rides on the first share so the party ends up with
+      // exactly what the hoard held, not one coin less.
+      const share = Math.trunc(gold / targets.length);
+      const remainder = gold - share * targets.length;
+      targets.forEach((entry, index) => {
+        const delta = share + (index === 0 ? remainder : 0);
+        if (!delta) {
+          return;
+        }
+        applyDmMutation(
+          campaign,
+          turnId,
+          "modify_gold",
+          JSON.stringify({ characterId: entry.id, delta, reason }),
+          sheets,
+          sheetsById,
+        );
+      });
+      awarded.push(`${gold} gold split ${targets.length} ways`);
+    }
+    const item = (args.name ?? "").trim();
+    if (item) {
+      // An item cannot be split; it goes to the first character listed,
+      // which is the one who found it.
+      applyDmMutation(
+        campaign,
+        turnId,
+        "grant_item",
+        JSON.stringify({ characterId: targets[0].id, name: item, qty: args.qty ?? 1, reason }),
+        sheets,
+        sheetsById,
+      );
+      awarded.push(`${item} to ${targets[0].name}`);
+    }
+    if (!awarded.length) {
+      return { result: { error: "party_award needs XP, gold or an item to hand out." } };
+    }
+    return { result: { ok: true, awarded: awarded.join("; ") } };
+  }
 
   if (toolName === "award_xp") {
     const amount = args.amount ?? 0;
@@ -745,23 +863,48 @@ export function applyDmMutation(
     }
     case "modify_gold": {
       const delta = args.delta ?? 0;
-      if (!delta) {
-        return { result: { error: "modify_gold needs a nonzero delta." } };
+      // A coin string is signed by the delta's sign when one is given, so
+      // "delta: -1, coins: 5 sp" spends five silver rather than earning it.
+      const parsedCoins = args.coins ? parseCoins(args.coins) : null;
+      const coinDelta =
+        parsedCoins === null ? null : (delta < 0 ? -parsedCoins : parsedCoins);
+      if (!delta && coinDelta === null) {
+        return { result: { error: "modify_gold needs a nonzero delta, or coins like \"340 silver\"." } };
       }
-      const math = goldMath(sheet.gold, delta);
-      patchSheet(sheet.id, { gold: math.gold });
-      audit(campaign, turnId, sheet, "modify_gold", { delta: math.applied, gold: math.gold }, reason, {
-        gold: math.gold,
-      });
+      // Denominations win over the plain gold delta when both are sent: a
+      // model that says "coins: 340 silver, delta: 34" meant the coins, and
+      // the two are the same number only by accident.
+      const change = addCopper(
+        { gold: sheet.gold, copper: sheet.copper },
+        coinDelta ?? delta * COPPER_PER_GOLD,
+      );
+      patchSheet(sheet.id, { gold: change.purse.gold, copper: change.purse.copper });
+      audit(
+        campaign,
+        turnId,
+        sheet,
+        "modify_gold",
+        { delta: Math.trunc(change.applied / COPPER_PER_GOLD), copper: change.applied, gold: change.purse.gold },
+        reason,
+        { gold: change.purse.gold, copper: change.purse.copper },
+      );
       publishSheet(campaign, sheet.id);
-      return { result: { ok: true, gold: math.gold } };
+      return {
+        result: {
+          ok: true,
+          gold: change.purse.gold,
+          purse: formatPurse(change.purse),
+          ...(change.short ? { short: formatCopper(change.short) } : {}),
+        },
+      };
     }
     case "grant_item": {
       const name = (args.name ?? "").trim().slice(0, 80);
       if (!name) {
         return { result: { error: "grant_item needs an item name." } };
       }
-      const math = grantItemMath(sheet.equipment, name, args.qty ?? 1);
+      const known = args.unidentified !== true;
+      const math = grantItemMath(sheet.equipment, name, args.qty ?? 1, { identified: known });
       patchSheet(sheet.id, { equipment: math.equipment });
       audit(campaign, turnId, sheet, "grant_item", { name, qty: args.qty ?? 1 }, reason, {
         equipment: math.equipment,
@@ -776,6 +919,37 @@ export function applyDmMutation(
         summary: `Acquired ${name}${(args.qty ?? 1) > 1 ? ` x${args.qty}` : ""}.`,
       });
       return { result: { ok: true, granted: name } };
+    }
+    case "reveal_item": {
+      const name = (args.name ?? "").trim();
+      if (!name) {
+        return { result: { error: "reveal_item needs the description the sheet carries now." } };
+      }
+      const math = revealItemMath(sheet.equipment, name, args.revealedName);
+      if (!math) {
+        return {
+          result: {
+            error: `${sheet.name} is not carrying an unidentified "${name}". Only an item granted unidentified can be revealed.`,
+          },
+        };
+      }
+      patchSheet(sheet.id, { equipment: math.equipment });
+      audit(campaign, turnId, sheet, "reveal_item", { from: math.from, to: math.to }, reason, {
+        equipment: math.equipment,
+      });
+      publishSheet(campaign, sheet.id);
+      insertCharacterEvent({
+        libraryCharacterId: sheet.libraryCharacterId,
+        campaignCharacterId: sheet.id,
+        campaignId: campaign.id,
+        seq: allocateSeq(campaign.id),
+        kind: "item",
+        summary:
+          math.from === math.to
+            ? `Identified ${math.to}.`
+            : `${math.from} turned out to be ${math.to}.`,
+      });
+      return { result: { ok: true, was: math.from, is: math.to } };
     }
     case "remove_item": {
       const name = (args.name ?? "").trim();

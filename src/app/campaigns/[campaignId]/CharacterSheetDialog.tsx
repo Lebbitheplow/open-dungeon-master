@@ -9,8 +9,16 @@ import { downloadCharacterSheetPdf } from "@/lib/pdf/download";
 import { ImageLightbox } from "@/components/ui/ImageLightbox";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { ABILITIES } from "@/lib/schemas/sheet";
-import { acBreakdownFor, computeSheetDerived, formatModifier, SRD_SKILLS } from "@/lib/srd";
+import {
+  acBreakdownFor,
+  computeSheetDerived,
+  formatModifier,
+  speedFor,
+  SRD_SKILLS,
+  type DerivedPart,
+} from "@/lib/srd";
 import { ATTUNEMENT_SLOTS, matchArmor } from "@/lib/srd/armor";
+import { encumbranceFor } from "@/lib/srd/encumbrance";
 import { matchMagicItem, magicItemRiders } from "@/lib/srd/magic-items";
 import { RESOURCE_DEFS } from "@/lib/srd/class-resources";
 import { GameTerm } from "@/components/ui/GameTerm";
@@ -34,17 +42,27 @@ const stepButton =
 // actually has (spell slots, hit dice, resource pools) and which gear they
 // wear or are attuned to, via /sheet/usage. Notes stay private to the
 // sheet's owner.
+// Every derived number's working, the way AC has always shown its own.
+// computeSheetDerived returns the parts it summed, so a hover can say where a
+// +7 came from without this file knowing a single rule.
+function explainParts(parts: DerivedPart[]): string {
+  return parts.map((part) => `${formatModifier(part.value)} ${part.label}`).join(", ");
+}
+
 export function CharacterSheetDialog({
   sheet,
   mine,
-  isLead,
+  steersStory,
+  encumbranceRule = false,
   inCombat = false,
   onAdjust,
   onClose,
 }: {
   sheet: CharacterSheet;
   mine: boolean;
-  isLead: boolean;
+  steersStory: boolean;
+  // The table's optional encumbrance rule.
+  encumbranceRule?: boolean;
   // 5e timing: resources only come back at rests, so during an active
   // encounter the recover steppers lock (the server refuses too); spending
   // stays available for bookkeeping.
@@ -64,7 +82,23 @@ export function CharacterSheetDialog({
       matchMagicItem(item.name) !== null,
   );
   const magic = magicItemRiders(sheet.equipment);
+  // Carried weight is always worth showing once the pack has weights on it;
+  // the thresholds and their penalties only mean something when the table
+  // turned the variant rule on.
+  // The speed the server will actually let them move: armor gates the class
+  // bonuses, heavy armor below its Strength minimum costs 10 feet, and a
+  // heavy pack costs more when the table plays with encumbrance.
+  const speed = speedFor(sheet, { encumbrance: encumbranceRule });
+  const load = encumbranceFor({
+    strength: sheet.abilities.str,
+    equipment: sheet.equipment,
+    coins: sheet.gold,
+  });
   const anyEquipped = sheet.equipment.some((item) => item.equipped);
+  const speedNote =
+    speed === sheet.speed
+      ? "Their walking speed."
+      : `Base ${sheet.speed} ft, reduced by what they wear${encumbranceRule && load.speedPenalty ? " and carry" : ""}.`;
   const [busy, setBusy] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
 
@@ -154,11 +188,24 @@ export function CharacterSheetDialog({
               <Shield className="size-4 text-stone-400" />{" "}
               <GameTerm id="armor_class">AC</GameTerm> {sheet.ac}
             </span>
-            <span>Speed {sheet.speed} ft</span>
-            <span>
+            <span title={speedNote}>Speed {speed} ft</span>
+            <span
+              className={cn(
+                encumbranceRule && load.tier !== "unencumbered" && "text-amber-300",
+              )}
+              title={
+                encumbranceRule
+                  ? `${load.note ?? "Not encumbered"}. Capacity ${load.capacityLb} lb.${load.unweighed ? ` ${load.unweighed} item${load.unweighed === 1 ? "" : "s"} of unknown weight are not counted.` : ""}`
+                  : `Carrying capacity ${load.capacityLb} lb. Encumbrance is off for this table, so the weight costs nothing.${load.unweighed ? ` ${load.unweighed} item${load.unweighed === 1 ? "" : "s"} of unknown weight are not counted.` : ""}`
+              }
+            >
+              {load.carriedLb}
+              {load.unweighed ? "+" : ""}/{load.capacityLb} lb
+            </span>
+            <span title={explainParts(derived.parts.initiative)}>
               <GameTerm id="initiative">Init</GameTerm> {formatModifier(derived.initiative)}
             </span>
-            <span>
+            <span title={explainParts(derived.parts.passivePerception)}>
               <GameTerm id="passive_perception">PP</GameTerm> {derived.passivePerception}
             </span>
             <span>PB {formatModifier(derived.proficiencyBonus)}</span>
@@ -223,6 +270,7 @@ export function CharacterSheetDialog({
                 {ABILITIES.map((ability) => (
                   <span
                     key={ability}
+                    title={explainParts(derived.parts.saves[ability])}
                     className={cn(
                       sheet.proficiencies.saves.includes(ability) && "text-amber-200",
                     )}
@@ -240,6 +288,7 @@ export function CharacterSheetDialog({
                 {SRD_SKILLS.map((skill) => (
                   <span
                     key={skill.id}
+                    title={explainParts(derived.parts.skills[skill.id])}
                     className={cn(
                       sheet.proficiencies.skills.includes(skill.id) && "text-amber-200",
                     )}
@@ -253,7 +302,14 @@ export function CharacterSheetDialog({
 
           {sheet.spellcasting ? (
             <section className="mt-4">
-              <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
+              <h3
+                className="mb-1.5 text-xs font-medium uppercase tracking-wide text-stone-500"
+                title={
+                  derived.parts.spellSaveDc.length
+                    ? `Save DC: ${explainParts(derived.parts.spellSaveDc)}. To hit: ${explainParts(derived.parts.spellAttack)}`
+                    : undefined
+                }
+              >
                 Spellcasting ({sheet.spellcasting.ability.toUpperCase()}
                 {derived.spellSaveDc ? ` · DC ${derived.spellSaveDc}` : ""}
                 {derived.spellAttack !== null
@@ -538,7 +594,7 @@ export function CharacterSheetDialog({
             >
               <FileDown className="size-3.5" /> {pdfBusy ? "Preparing..." : "Download PDF"}
             </button>
-            {isLead && onAdjust ? (
+            {steersStory && onAdjust ? (
               <button
                 type="button"
                 onClick={onAdjust}

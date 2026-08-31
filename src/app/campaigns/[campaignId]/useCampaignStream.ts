@@ -1,22 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useReducer } from "react";
+import { useCallback, useEffect, useReducer, useRef } from "react";
 import type { CampaignMember, SessionUser } from "@/lib/campaign-types";
 import type { OneShotEventId } from "@/lib/dm/director-logic";
 import { sortCalls, type UtilityCall } from "@/lib/dm/call-tracker-logic";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { Chapter } from "@/lib/db/chapters";
 import type { CharacterEvent } from "@/lib/db/character-events";
-import type { PublicEncounter } from "@/lib/db/encounters";
+import type { PublicEncounter } from "@/lib/db/encounter-view";
 import type { CampaignMessage } from "@/lib/db/messages";
+import type { DmBeat } from "@/lib/db/dm-beats";
 import type { Note } from "@/lib/db/notes";
 import type { StoredRoll } from "@/lib/db/rolls";
 import type { DmWhisper } from "@/lib/db/dm-whispers";
 import type { CampaignAsk } from "@/lib/db/asks";
 import type { WorldFact } from "@/lib/db/facts";
 import type { SideThread } from "@/lib/db/side-chat";
+import { EMPTY_AMBIENCE, type AmbienceState } from "@/lib/ambience/logic";
 import type { PlayerMapView } from "@/lib/battlemap/view";
+import type { MapPing } from "@/lib/dm/board-logic";
+import { capsForRole, type ViewerCaps } from "@/lib/dm/viewer";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import type { VoiceRosterEntry } from "@/lib/voice/types";
 
 export type DmStatus =
   | "idle"
@@ -95,6 +100,10 @@ export type CampaignState = {
   loading: boolean;
   error: string;
   campaign: Campaign | null;
+  // What this seat may see and do, decided by the server
+  // (src/lib/dm/viewer.ts). The client never re-derives it from ids, so a
+  // control the server would refuse is never rendered in the first place.
+  caps: ViewerCaps;
   me: SessionUser | null;
   members: CampaignMember[];
   sheets: CharacterSheet[];
@@ -128,6 +137,19 @@ export type CampaignState = {
   itemProposals: ItemProposal[];
   // The caller's fogged battle-map projection; null outside combat.
   battleMap: PlayerMapView | null;
+  // The last person to point at the board. Ephemeral by nature: a ping is
+  // only true while somebody is making it, so it is never replayed and the
+  // panel drops it after its animation (src/lib/dm/board.ts).
+  mapPing: MapPing | null;
+  // What the table is hearing: the ambience bed and music cue the DM, the
+  // model or the engine last set (src/lib/ambience/logic.ts). Persisted, so
+  // a player who reloads mid-scene lands back in the same room rather than
+  // in silence until something changes.
+  ambience: AmbienceState;
+  // The last one-shot sting. Ephemeral by nature, like a map ping: a sting
+  // is only true while it is happening, so it is never replayed and the
+  // player hook drops it once it has sounded.
+  ambienceSting: { cue: string; at: number } | null;
   narrationAudio: Record<string, string>;
   latestTts: { messageId: string; url: string; seq: number } | null;
   latestRoll: { roll: StoredRoll; source: string; seq: number } | null;
@@ -147,12 +169,37 @@ export type CampaignState = {
   } | null;
   // Ephemeral progress per media target (message/location id).
   mediaStatus: Record<string, MediaStatus>;
+  // Human-DM mode: story the DM has written down, newest first. Only the DM
+  // seat is served these; every other seat gets an empty list, because the
+  // beats panel is a DM tool (the text itself is public, in the transcript).
+  beats: DmBeat[];
+  // Human-DM mode: player actions the DM has not answered yet, oldest first.
+  // Cleared when the DM narrates, which is what "answered" means until the
+  // console can resolve them one at a time.
+  dmIntents: Array<{ messageId: string; userId: string; characterId: string; seq: number }>;
+  // Who is on the voice call. Null until the first roster event, so the voice
+  // hook can tell "nobody has joined" from "we have not heard yet" and only
+  // re-subscribes once it has real data. Unlike most per-seat state this rides
+  // the stream directly: the roster is small, identical for every seat, and
+  // contains nothing private.
+  voiceRoster: VoiceRosterEntry[] | null;
+  // Who mediasoup's dominant-speaker detection last named, and when. The
+  // timestamp is what lets the indicator fade: the event says who started
+  // talking, never who stopped.
+  voiceSpeaking: { userId: string; at: number } | null;
+  // Bumped by the contentless voice_audibility_changed ephemeral. Gains are
+  // per-listener, so like the fogged battle map each client fetches its own
+  // row rather than the stream carrying everyone's.
+  voiceAudibilityVersion: number;
 };
 
 const initialState: CampaignState = {
   loading: true,
   error: "",
   campaign: null,
+  // A plain player until the snapshot says otherwise: the safe default is
+  // the one that shows the fewest controls and no secrets.
+  caps: capsForRole("player", "ai"),
   me: null,
   members: [],
   sheets: [],
@@ -177,6 +224,9 @@ const initialState: CampaignState = {
   encounter: null,
   itemProposals: [],
   battleMap: null,
+  mapPing: null,
+  ambience: EMPTY_AMBIENCE,
+  ambienceSting: null,
   narrationAudio: {},
   latestTts: null,
   latestRoll: null,
@@ -186,6 +236,11 @@ const initialState: CampaignState = {
   dmDraft: "",
   directorArm: null,
   mediaStatus: {},
+  beats: [],
+  dmIntents: [],
+  voiceRoster: null,
+  voiceSpeaking: null,
+  voiceAudibilityVersion: 0,
 };
 
 type Action =
@@ -196,6 +251,9 @@ type Action =
   | { type: "asks"; asks: CampaignAsk[] }
   | { type: "facts"; facts: WorldFact[] }
   | { type: "battleMap"; view: PlayerMapView | null }
+  | { type: "mapPing"; ping: MapPing }
+  | { type: "encounter"; encounter: PublicEncounter | null }
+  | { type: "rolls"; rolls: StoredRoll[] }
   | { type: "error"; error: string }
   | { type: "event"; eventType: string; seq: number | null; payload: Record<string, unknown> };
 
@@ -226,6 +284,8 @@ function reducer(state: CampaignState, action: Action): CampaignState {
       return { ...state, notes: action.notes };
     case "sideThreads":
       return { ...state, sideThreads: action.sideThreads, sideChatLoaded: true };
+    case "encounter":
+      return { ...state, encounter: action.encounter };
     case "asks":
       return { ...state, asks: action.asks, asksLoaded: true };
     case "whispers":
@@ -239,6 +299,8 @@ function reducer(state: CampaignState, action: Action): CampaignState {
       return { ...state, facts: action.facts };
     case "battleMap":
       return { ...state, battleMap: action.view };
+    case "mapPing":
+      return { ...state, mapPing: action.ping };
     case "error":
       return { ...state, loading: false, error: action.error };
     case "event": {
@@ -266,6 +328,18 @@ function reducer(state: CampaignState, action: Action): CampaignState {
           ) {
             next.dmDraft = "";
             next.dmStatus = "idle";
+            // A narration answers everything the party had said up to it, so
+            // the queue clears with the same event that clears the draft.
+            // Actions that land mid-narration keep their own later seq and
+            // are re-queued by their own event.
+            //
+            // A beat is the exception. It arrives as a DM passage too, but it
+            // records play that already happened rather than answering the
+            // party, so it must not tick off actions still waiting on a
+            // ruling (src/lib/dm/beats.ts).
+            if (!payload.beat) {
+              next.dmIntents = state.dmIntents.filter((intent) => intent.seq > message.seq);
+            }
           }
           return next;
         }
@@ -282,6 +356,16 @@ function reducer(state: CampaignState, action: Action): CampaignState {
             );
           }
           return next;
+        case "beat_recorded": {
+          const beat = payload.beat as DmBeat | undefined;
+          // Only the DM seat is given a beat list to append to; for everyone
+          // else this stays empty and the beat is simply the DM passage they
+          // already saw arrive.
+          if (beat && state.caps.adjudicates) {
+            next.beats = [beat, ...state.beats].slice(0, 20);
+          }
+          return next;
+        }
         case "roll_pending": {
           const pending = payload.pendingRoll as PendingRoll | undefined;
           if (pending) {
@@ -329,6 +413,15 @@ function reducer(state: CampaignState, action: Action): CampaignState {
           }
           return next;
         }
+        case "ambience_changed":
+          next.ambience = payload.ambience as AmbienceState;
+          return next;
+        case "ambience_sting":
+          next.ambienceSting = {
+            cue: String(payload.cue ?? ""),
+            at: Number(payload.at ?? Date.now()),
+          };
+          return next;
         case "location_map_ready":
           next.locations = state.locations.map((location) =>
             location.id === payload.locationId
@@ -464,12 +557,38 @@ function reducer(state: CampaignState, action: Action): CampaignState {
           }
           return next;
         }
-        case "encounter_updated":
-          next.encounter = (payload.encounter as PublicEncounter | null) ?? null;
+        case "encounter_updated": {
+          const shared = (payload.encounter as PublicEncounter | null) ?? null;
+          // The stream carries the player-safe projection. A DM sees real hit
+          // points, so taking this payload would silently downgrade their view
+          // mid-fight; they keep what they have until their own fetch lands.
+          // The fight ending is not a downgrade, so null always applies.
+          next.encounter = state.caps.enemyNumbers && shared ? state.encounter : shared;
+          return next;
+        }
+        case "dm_intent_queued":
+          next.dmIntents = [
+            ...state.dmIntents,
+            {
+              messageId: String(payload.messageId ?? ""),
+              userId: String(payload.userId ?? ""),
+              characterId: String(payload.characterId ?? ""),
+              seq: Number(payload.seq ?? 0),
+            },
+          ];
           return next;
         case "floor_changed":
           next.campaign = state.campaign
             ? { ...state.campaign, floor: payload.floor as Campaign["floor"] }
+            : state.campaign;
+          return next;
+        // Assisted mode: the DM stepped away, came back, or the AI spent one
+        // of the answers they handed over. Rides on the campaign for the same
+        // reason the floor does: every seat renders it and none should be
+        // reading a second copy.
+        case "dm_cover_changed":
+          next.campaign = state.campaign
+            ? { ...state.campaign, dmCover: (payload.cover as Campaign["dmCover"]) ?? null }
             : state.campaign;
           return next;
         case "message_updated": {
@@ -508,6 +627,17 @@ function reducer(state: CampaignState, action: Action): CampaignState {
           next.dmDraft = state.dmDraft + String(payload.text ?? "");
           next.dmStatus = "narrating";
           return next;
+        // The whole roster each time, so a dropped event self-heals on the
+        // next one rather than leaving a ghost on the call.
+        case "voice_roster":
+          next.voiceRoster = (payload.peers as VoiceRosterEntry[]) ?? [];
+          return next;
+        case "voice_speaking":
+          next.voiceSpeaking = { userId: String(payload.userId ?? ""), at: Date.now() };
+          return next;
+        case "voice_audibility_changed":
+          next.voiceAudibilityVersion = state.voiceAudibilityVersion + 1;
+          return next;
         default:
           return next;
       }
@@ -543,9 +673,18 @@ const PERSISTED_EVENTS = [
   "location_updated",
   "location_map_ready",
   "tts_ready",
+  "ambience_changed",
   "campaign_rewound",
   "item_proposal_added",
   "item_proposal_resolved",
+  // A player acted at a human-DM table: the message already arrived through
+  // message_added, so this only tells the DM's console there is something
+  // waiting. Persisted so a DM who reconnects still sees the backlog.
+  "dm_intent_queued",
+  // The AI is standing in for the human DM, or has stopped. Persisted so a
+  // player joining mid-stretch is told, rather than quietly talking to a
+  // stand-in they cannot see.
+  "dm_cover_changed",
 ];
 const EPHEMERAL_EVENTS = [
   "dm_status",
@@ -558,11 +697,28 @@ const EPHEMERAL_EVENTS = [
   "facts_updated",
   "relationships_updated",
   "battle_map_updated",
+  "map_ping",
+  // One sound, once. Worthless after the fact, so never replayed.
+  "ambience_sting",
+  // Who is on the call right now. Worthless after the fact, so it is never
+  // replayed to a reconnecting client.
+  "voice_roster",
+  // Who is talking. Even more so.
+  "voice_speaking",
+  // Contentless: each listener pulls their own gains.
+  "voice_audibility_changed",
 ];
 const EPHEMERAL_EVENT_SET = new Set(EPHEMERAL_EVENTS);
 
 export function useCampaignStream(campaignId: string) {
   const [state, dispatch] = useReducer(reducer, initialState);
+  // The SSE handlers are registered once, so they cannot close over `state`.
+  // Caps are set by the snapshot and never change for a mounted session, but
+  // the handlers still need to read them after that first load.
+  const capsRef = useRef(state.caps);
+  useEffect(() => {
+    capsRef.current = state.caps;
+  }, [state.caps]);
 
   // Loads the snapshot and returns its latestSeq so the event stream can
   // start exactly where the snapshot left off.
@@ -584,6 +740,7 @@ export function useCampaignStream(campaignId: string) {
         type: "snapshot",
         payload: {
           campaign: data.campaign,
+          caps: data.caps ?? capsForRole("player", "ai"),
           me: data.me,
           members: data.members,
           sheets: data.sheets,
@@ -597,9 +754,11 @@ export function useCampaignStream(campaignId: string) {
           characterEvents: data.characterEvents ?? [],
           encounter: data.encounter ?? null,
           itemProposals: data.itemProposals ?? [],
+          beats: data.beats ?? [],
           dmStatus: data.dmStatus ?? "idle",
           utilityCalls: sortCalls(data.utilityCalls ?? []),
           narrationAudio: data.narrationAudio ?? {},
+          ambience: data.ambience ?? EMPTY_AMBIENCE,
           lastSeq,
         },
       });
@@ -653,6 +812,38 @@ export function useCampaignStream(campaignId: string) {
       dispatch({ type: "battleMap", view: data.view ?? null });
     } catch {
       // transient; the next battle_map_updated event retries
+    }
+  }, [campaignId]);
+
+  // Same pattern for the DM's encounter view: the shared stream is
+  // player-safe, so the seat allowed real numbers pulls its own projection.
+  const refreshEncounter = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/encounter`);
+      if (!response.ok) {
+        return;
+      }
+      const data = await response.json();
+      dispatch({ type: "encounter", encounter: data.encounter ?? null });
+    } catch {
+      // transient; the next encounter_updated event retries
+    }
+  }, [campaignId]);
+
+  // A blind or DM-only roll reaches the shared stream with its number
+  // stripped, because the stream is one payload for every seat. Whoever is
+  // allowed to read it pulls their own copy, the same way the DM pulls their
+  // own enemy numbers.
+  const refreshRolls = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/rolls`);
+      if (!response.ok) {
+        return;
+      }
+      const data = await response.json();
+      dispatch({ type: "rolls", rolls: data.rolls ?? [] });
+    } catch {
+      // transient; the next roll retries
     }
   }, [campaignId]);
 
@@ -758,6 +949,24 @@ export function useCampaignStream(campaignId: string) {
           if (eventType === "battle_map_updated" || eventType === "encounter_updated") {
             void refreshBattleMap();
           }
+          if (eventType === "map_ping") {
+            const ping = payload as unknown as MapPing;
+            if (typeof ping?.x === "number" && typeof ping?.y === "number") {
+              dispatch({ type: "mapPing", ping });
+            }
+          }
+          // Only the seats allowed real numbers need their own projection;
+          // for everyone else the stream payload already applied above.
+          if (eventType === "encounter_updated" && capsRef.current.enemyNumbers) {
+            void refreshEncounter();
+          }
+          if (
+            eventType === "roll_result" &&
+            (payload.roll as { hidden?: boolean } | undefined)?.hidden &&
+            (capsRef.current.adjudicates || capsRef.current.steersStory)
+          ) {
+            void refreshRolls();
+          }
         } catch {
           // malformed event; ignore
         }
@@ -771,7 +980,18 @@ export function useCampaignStream(campaignId: string) {
       cancelled = true;
       source?.close();
     };
-  }, [campaignId, refresh, refreshNotes, refreshSideChat, refreshWhispers, refreshAsks, refreshFacts, refreshBattleMap]);
+  }, [
+    campaignId,
+    refresh,
+    refreshNotes,
+    refreshSideChat,
+    refreshWhispers,
+    refreshAsks,
+    refreshFacts,
+    refreshBattleMap,
+    refreshEncounter,
+    refreshRolls,
+  ]);
 
   return {
     state,
@@ -782,5 +1002,6 @@ export function useCampaignStream(campaignId: string) {
     refreshAsks,
     refreshFacts,
     refreshBattleMap,
+    refreshEncounter,
   };
 }

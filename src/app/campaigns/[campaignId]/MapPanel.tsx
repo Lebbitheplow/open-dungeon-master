@@ -14,12 +14,12 @@ import type {
 export function MapPanel({
   campaignId,
   locations,
-  isLead,
+  steersStory,
   mediaStatus = {},
 }: {
   campaignId: string;
   locations: CampaignLocation[];
-  isLead: boolean;
+  steersStory: boolean;
   mediaStatus?: Record<string, MediaStatus>;
 }) {
   const current = locations.find((location) => location.isCurrent) ?? null;
@@ -65,7 +65,7 @@ export function MapPanel({
                 </span>
               ) : null}
             </h3>
-            {isLead ? (
+            {steersStory ? (
               <button
                 type="button"
                 onClick={regenerate}

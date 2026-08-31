@@ -9,7 +9,10 @@ import {
   Crown,
   Dices,
   DoorOpen,
+  Gavel,
   MessageSquareText,
+  Mic,
+  Music,
   PanelRight,
   Puzzle,
   RefreshCw,
@@ -272,6 +275,16 @@ export function HelpDialog({
           settings, the DM waits for you to enter your physical roll, with a digital fallback
           button if you would rather let the server roll.
         </p>
+        <p>
+          Once you have opted in, the <span className="text-stone-300">Dice sources</span> button in
+          the Party tab lets you decide per die which happens: type the physical roll yourself, let
+          the server roll that die for you, or read it straight from a connected{" "}
+          <span className="text-stone-300">Pixels Bluetooth die</span>. Pairing a Pixel needs a
+          Chromium-based browser and a secure (https) connection, because that is what Web
+          Bluetooth requires. When every die in a request is covered by a Pixel or the server, the
+          roll submits itself the moment the last die lands. These choices are saved in the
+          browser you set them in, so set them again if you switch devices.
+        </p>
       </Section>
 
       <Section icon={Volume2} title="Voice and narration">
@@ -280,6 +293,71 @@ export function HelpDialog({
           header to unmute (browsers require one click before audio can play) and the slider to set
           the volume. Hover a DM message to replay its narration. Push-to-talk, when configured,
           lets you hold the microphone button to dictate your message.
+        </p>
+      </Section>
+
+      <Section icon={Mic} title="Live voice chat">
+        <p>
+          When the server and the campaign both have voice chat switched on, a{" "}
+          <span className="text-stone-300">Voice</span> card appears in the lobby, and during play a{" "}
+          <span className="text-stone-300">headphones button</span> sits in the top bar with the
+          full voice menu under it. Join and you are talking to the table; no other app needed, and
+          the call stays up whatever panel you switch to. The microphone needs a secure (https)
+          connection, and your browser will ask permission the first time.
+        </p>
+        <p>
+          Whoever runs the story can open <span className="text-stone-300">side rooms</span> for a
+          split party or a private word, and can hold the floor: soft enforcement marks who should
+          be talking, strict actually mutes everyone else, and a raised-hand queue keeps it civil.
+          A table can also opt into rules that make the call behave like the world: proximity
+          hearing (you only hear players whose characters are near yours on the map, while the DM
+          hears everyone), whisper and shout ranges, walls muffling speech, and downed characters
+          going deaf. All of that lives under voice settings in Setup, and all of it is off by
+          default, so a plain group call is what you get until the table asks for more.
+        </p>
+      </Section>
+
+      <Section icon={Music} title="Ambience and music">
+        <p>
+          With ambience enabled in the game settings, the table shares a soundtrack: a background
+          bed for where the party is (a tavern, a forest, a crypt), a music layer for what the
+          scene is doing, and one-shot stings for dramatic moments. The DM changes it as the story
+          moves, and combat brings its own sound. Whoever runs the story can also hold a layer on a
+          chosen cue so the auto-picker leaves it alone. Your speaker button and volume slider in
+          the header control it for you alone, and it ducks automatically while narration speaks.
+        </p>
+        <p>
+          The sounds themselves are public-domain and Creative Commons recordings the server admin
+          installs; see the licenses page for who made what. If ambience is on but silent, the
+          server simply has no audio installed yet.
+        </p>
+      </Section>
+
+      <Section icon={Gavel} title="Playing with a human DM">
+        <p>
+          A campaign does not have to be run by the AI. Created with{" "}
+          <span className="text-stone-300">a person in the DM seat</span>, the table works the way
+          a kitchen-table game does: the DM narrates in their own words (most tables do it over
+          voice chat), and the app keeps the sheets, the dice, the maps and the record straight
+          underneath them. Your Do and Say messages still land in the transcript, but instead of
+          waking the AI they queue as intents for the DM to answer. The DM runs no character,
+          holds the story secrets the party lead would hold at an AI table, and gets a console of
+          tools: initiative, monsters, maps, NPCs, roll tables and rulings, with an AI assistant
+          one click away for stat blocks and suggestions if they want it.
+        </p>
+        <p>
+          The in-between setting, <span className="text-stone-300">assisted mode</span>, lets the
+          DM keep the story and hand the bookkeeping to the AI a piece at a time: it can run the
+          monsters&apos; turns, read the DM&apos;s notes aloud as full prose, or{" "}
+          <span className="text-stone-300">cover the table</span> for a counted stretch of answers
+          while the DM steps away, following the outline they left behind.
+        </p>
+        <p>
+          Because the narration happens out loud, the app nudges the DM every so often to jot down
+          a <span className="text-stone-300">story beat</span>, a line or two about what just
+          happened. Beats are what chapter summaries, recaps and the exported story are built
+          from, so a table that never writes any ends up with a transcript of intents and no tale.
+          Players can help by keeping their actions in the composer rather than only in the call.
         </p>
       </Section>
 
@@ -301,6 +379,12 @@ export function HelpDialog({
         <p>
           Where the engine spots two NPC names that might be the same person but refuses to merge
           them on a guess, the lead is the one who settles it.
+        </p>
+        <p>
+          At a table with a human DM the split is different: the lead still owns the table
+          (settings, invites, who holds which seat) but is otherwise a player, because the story
+          powers listed above exist to steer the AI and there is no AI to steer. Story secrets,
+          floor control and narration fixes belong to the person in the DM seat instead.
         </p>
       </Section>
 

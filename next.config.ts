@@ -16,21 +16,26 @@ const dockerBuild = process.env.DOCKER_BUILD === "1";
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["localhost", "127.0.0.1", ...extraDevOrigins],
   devIndicators: false,
-  serverExternalPackages: ["better-sqlite3-multiple-ciphers"],
+  // mediasoup spawns a native worker binary and resolves it by path, so
+  // bundling it breaks the lookup exactly the way it does for better-sqlite3.
+  serverExternalPackages: ["better-sqlite3-multiple-ciphers", "mediasoup"],
   turbopack: {
     root: process.cwd(),
   },
   ...(dockerBuild
     ? {
         output: "standalone" as const,
-        // File tracing misses both native modules: better-sqlite3 is kept out
-        // of the bundle by serverExternalPackages, and onnxruntime-node (the
-        // embedding runtime) resolves its .node binding by a computed path.
+        // File tracing misses all three native modules: better-sqlite3 is kept
+        // out of the bundle by serverExternalPackages, onnxruntime-node (the
+        // embedding runtime) resolves its .node binding by a computed path,
+        // and mediasoup spawns a standalone worker executable that nothing
+        // ever imports, so tracing has no reference to follow.
         // Only the linux/x64 binding is shipped; embeddings are CPU-only.
         outputFileTracingIncludes: {
           "/*": [
             "node_modules/better-sqlite3-multiple-ciphers/**/*",
             "node_modules/onnxruntime-node/bin/napi-v6/linux/x64/**/*",
+            "node_modules/mediasoup/worker/out/Release/**/*",
           ],
         },
       }

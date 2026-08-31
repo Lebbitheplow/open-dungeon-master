@@ -1,4 +1,4 @@
-import { isErrorResponse, isLead, requireMember } from "@/lib/campaign-api";
+import { isErrorResponse, steersStory, requireMember } from "@/lib/campaign-api";
 import { listRelationships } from "@/lib/db/relationships";
 import { friendshipTier, TIER_LABEL } from "@/lib/dm/relationship-logic";
 
@@ -21,7 +21,7 @@ export async function GET(
   if (isErrorResponse(context)) {
     return context;
   }
-  const lead = isLead(context);
+  const lead = steersStory(context);
   if (context.campaign.gameSettings.relationships === "off") {
     return Response.json({ enabled: false, relationships: [] });
   }

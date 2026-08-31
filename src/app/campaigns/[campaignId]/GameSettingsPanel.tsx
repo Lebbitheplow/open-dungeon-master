@@ -1,9 +1,14 @@
 "use client";
 
-import { Bot, Dices, Globe, Hand, Heart, Map, PackageCheck, Sparkles, UserPlus, Volume2 } from "lucide-react";
+import { Bot, Dices, Globe, Hand, Heart, Map, Music, PackageCheck, Sparkles, UserPlus, Volume2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { STAGES, isStageEnabled } from "@/lib/dm/stages";
+import {
+  DELEGATIONS,
+  DELEGATION_HINTS,
+  DELEGATION_LABELS,
+} from "@/lib/dm/delegation";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { InfoButton } from "@/components/ui/InfoDialog";
 import { GENRE_PRESETS, genrePreset } from "@/lib/genres";
@@ -55,14 +60,20 @@ export const NARRATION_GUARD_INFO = [
 export function GameSettingsPanel({
   campaignId,
   settings,
-  isLead,
+  steersStory,
 }: {
   campaignId: string;
   settings: GameSettings;
-  isLead: boolean;
+  steersStory: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [packs, setPacks] = useState<WorldPackSummary[]>([]);
+  // Whether any ambience audio is actually on disk. The library ships empty
+  // (public/ambience is gitignored and filled by npm run fetch-ambience), so
+  // a lead can switch ambience on and hear nothing with no clue why; this
+  // powers the hint on the Ambience row. Defaults to true so the hint never
+  // flashes on installs that are fine while the answer is in flight.
+  const [ambienceInstalled, setAmbienceInstalled] = useState(true);
 
   // Installed world packs, so the lead can switch worlds after creation. An
   // empty list simply hides the row.
@@ -81,6 +92,27 @@ export function GameSettingsPanel({
     };
   }, []);
 
+  // Asked lazily like the world packs above, and only when the answer could
+  // matter: the hint renders for the lead with ambience switched on, so
+  // nobody else pays for the request.
+  useEffect(() => {
+    if (!steersStory || !settings.ambienceEnabled) {
+      return;
+    }
+    let cancelled = false;
+    void fetch("/api/ambience")
+      .then((response) => (response.ok ? response.json() : { tracks: {} }))
+      .then((data) => {
+        if (!cancelled) {
+          setAmbienceInstalled(Object.keys(data.tracks ?? {}).length > 0);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [steersStory, settings.ambienceEnabled]);
+
   async function patch(update: Partial<GameSettings>) {
     setBusy(true);
     try {
@@ -96,10 +128,15 @@ export function GameSettingsPanel({
 
   const preset = genrePreset(settings.genre);
   const selectedPack = packs.find((entry) => entry.id === settings.worldPack) ?? null;
+  // A table running its own game keeps the rules engine, the dice, the maps
+  // and the bonds. What it does not keep is a second author, so the settings
+  // that exist only to steer one are hidden rather than shown switched off
+  // with no explanation.
+  const aiNarrates = settings.dmMode !== "human";
   const selectClass =
     "rounded-md border border-stone-700 bg-stone-900 px-2 py-1 text-xs outline-none focus:border-amber-600";
 
-  if (!isLead) {
+  if (!steersStory) {
     return (
       <section className="mb-6 rounded-lg border border-stone-800 bg-stone-950/60 p-4">
         <h2 className="mb-2 text-sm font-medium text-stone-300">Game settings</h2>
@@ -107,9 +144,11 @@ export function GameSettingsPanel({
           <span className="flex items-center gap-1.5">
             <Sparkles className="size-3.5 text-amber-200" />
             {selectedPack?.name ?? preset.name}
-            {settings.aiStorySetup ? " · AI story setup" : ""}
-            {" · "}
-            {CAMPAIGN_LENGTH_LABELS[settings.campaignLength].split(" (")[0]} campaign
+            {settings.dmMode === "human" ? " · human DM" : ""}
+            {settings.dmMode !== "human" && settings.aiStorySetup ? " · AI story setup" : ""}
+            {settings.dmMode !== "human"
+              ? ` · ${CAMPAIGN_LENGTH_LABELS[settings.campaignLength].split(" (")[0]} campaign`
+              : ""}
           </span>
           <span className="flex items-center gap-1.5">
             <Dices className="size-3.5 text-amber-200" />
@@ -120,6 +159,12 @@ export function GameSettingsPanel({
             {settings.ttsEnabled
               ? `Narration on (${TTS_VOICES.find((voice) => voice.id === settings.ttsVoice)?.label ?? settings.ttsVoice})`
               : "Narration off"}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Music className="size-3.5 text-amber-200" />
+            {settings.ambienceEnabled
+              ? `Ambience on${settings.ambienceAuto ? " (follows the scene)" : ""}`
+              : "Ambience off"}
           </span>
           <span className="flex items-center gap-1.5">
             <Map className="size-3.5 text-amber-200" />
@@ -166,6 +211,34 @@ export function GameSettingsPanel({
     <section className="mb-6 rounded-lg border border-stone-800 bg-stone-950/60 p-4">
       <h2 className="mb-3 text-sm font-medium text-stone-300">Game settings</h2>
       <div className={cn("space-y-3 text-xs", busy && "opacity-70")}>
+        {settings.dmMode === "assisted" ? (
+          // Only in the middle setting. A table the AI runs has nothing to
+          // delegate and a table running itself has chosen not to, so showing
+          // three switched-off switches in either would be noise.
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="w-16 shrink-0 text-stone-500">AI helps</span>
+            {DELEGATIONS.map((which) => (
+              <Tooltip key={which} content={DELEGATION_HINTS[which]}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    patch({
+                      dmAssist: { ...settings.dmAssist, [which]: !settings.dmAssist[which] },
+                    })
+                  }
+                  className={cn(
+                    "rounded-md border px-2 py-1",
+                    settings.dmAssist[which]
+                      ? "border-amber-700 bg-amber-950/50 text-amber-200"
+                      : "border-stone-700 text-stone-400",
+                  )}
+                >
+                  {DELEGATION_LABELS[which]}
+                </button>
+              </Tooltip>
+            ))}
+          </div>
+        ) : null}
         {packs.length ? (
           <div className="flex flex-wrap items-center gap-2">
             <span className="w-16 text-stone-500">World</span>
@@ -226,6 +299,7 @@ export function GameSettingsPanel({
             />
           </div>
         ) : null}
+        {aiNarrates ? (
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-16 text-stone-500">Length</span>
           <Tooltip content="How far the DM plans the story ahead (acts, bosses, side quests). Changing it mid-campaign applies when the next saga is planned; any length continues with a sequel saga if you play past the finale.">
@@ -244,16 +318,20 @@ export function GameSettingsPanel({
             </select>
           </Tooltip>
         </div>
+        ) : null}
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-16 text-stone-500">Dice</span>
-          <select
-            value={settings.dicePolicy}
-            onChange={(event) => patch({ dicePolicy: event.target.value as DicePolicy })}
-            className={selectClass}
-          >
-            <option value="digital_only">Digital only</option>
-            <option value="real_allowed">Real dice allowed</option>
-          </select>
+          <Tooltip content="Real dice lets each player opt in to rolling at their table: the game parks until they type the result, read it from a paired Pixels Bluetooth die, or let the server roll per die (Dice sources, in the Party tab).">
+            <select
+              value={settings.dicePolicy}
+              onChange={(event) => patch({ dicePolicy: event.target.value as DicePolicy })}
+              className={selectClass}
+              aria-label="Dice policy"
+            >
+              <option value="digital_only">Digital only</option>
+              <option value="real_allowed">Real dice allowed</option>
+            </select>
+          </Tooltip>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-16 text-stone-500">Narration</span>
@@ -287,10 +365,51 @@ export function GameSettingsPanel({
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="w-16 text-stone-500">Extras</span>
+          <span className="w-16 text-stone-500">Ambience</span>
           <button
             type="button"
-            onClick={() => patch({ aiStorySetup: !settings.aiStorySetup })}
+            onClick={() => patch({ ambienceEnabled: !settings.ambienceEnabled })}
+            className={cn(
+              "rounded-md border px-2 py-1",
+              settings.ambienceEnabled
+                ? "border-amber-700 bg-amber-950/50 text-amber-200"
+                : "border-stone-700 text-stone-400",
+            )}
+          >
+            {settings.ambienceEnabled ? "On" : "Off"}
+          </button>
+          {settings.ambienceEnabled ? (
+            <Tooltip content="Pick a bed from each new place and switch to combat music when a fight starts. Off leaves every change to the DM.">
+              <button
+                type="button"
+                onClick={() => patch({ ambienceAuto: !settings.ambienceAuto })}
+                className={cn(
+                  "rounded-md border px-2 py-1",
+                  settings.ambienceAuto
+                    ? "border-amber-700 bg-amber-950/50 text-amber-200"
+                    : "border-stone-700 text-stone-400",
+                )}
+              >
+                {settings.ambienceAuto ? "Follows the scene" : "DM sets it"}
+              </button>
+            </Tooltip>
+          ) : null}
+          {settings.ambienceEnabled && !ambienceInstalled ? (
+            // The catalog knows the cues but no audio is on disk, so the
+            // toggle above is currently a promise of silence. Say so where
+            // it is being switched on rather than letting the table wonder.
+            <span className="text-stone-500">
+              No ambience audio is installed yet, so this plays silence. Run npm run fetch-ambience
+              on the server; setting a FREESOUND_API_KEY first widens the sources.
+            </span>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="w-16 text-stone-500">Extras</span>
+          {aiNarrates ? (
+            <button
+              type="button"
+              onClick={() => patch({ aiStorySetup: !settings.aiStorySetup })}
             className={cn(
               "rounded-md border px-2 py-1",
               settings.aiStorySetup
@@ -298,8 +417,9 @@ export function GameSettingsPanel({
                 : "border-stone-700 text-stone-400",
             )}
           >
-            AI story setup {settings.aiStorySetup ? "on" : "off"}
-          </button>
+              AI story setup {settings.aiStorySetup ? "on" : "off"}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => patch({ mapsEnabled: !settings.mapsEnabled })}
@@ -355,6 +475,53 @@ export function GameSettingsPanel({
             </button>
           </Tooltip>
         </div>
+        {settings.dmMode !== "ai" ? (
+          // Only the DM seat is ever nudged, so this row does not exist for a
+          // table the AI narrates: there, the story is typed by definition.
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="w-16 text-stone-500">Remind</span>
+            <Tooltip content="How much play may pass with nothing written down before the console nudges you to record what happened. Your own typed narration counts, so a DM who writes their scenes is never nudged.">
+              <select
+                value={settings.beatReminder.messages}
+                onChange={(event) =>
+                  patch({
+                    beatReminder: {
+                      ...settings.beatReminder,
+                      messages: Number(event.target.value),
+                    },
+                  })
+                }
+                className={selectClass}
+              >
+                {[0, 5, 10, 20, 40].map((count) => (
+                  <option key={count} value={count}>
+                    {count === 0 ? "never by actions" : `after ${count} actions`}
+                  </option>
+                ))}
+              </select>
+            </Tooltip>
+            <select
+              value={settings.beatReminder.rolls}
+              onChange={(event) =>
+                patch({
+                  beatReminder: {
+                    ...settings.beatReminder,
+                    rolls: Number(event.target.value),
+                  },
+                })
+              }
+              className={selectClass}
+              title="The combat tempo: twelve rolls is roughly two rounds of a four-person fight."
+            >
+              {[0, 6, 12, 24, 48].map((count) => (
+                <option key={count} value={count}>
+                  {count === 0 ? "never by rolls" : `after ${count} rolls`}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+        {aiNarrates ? (
         <div className="flex flex-wrap items-start gap-2">
           <span className="w-16 shrink-0 pt-1 text-stone-500">Stages</span>
           <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
@@ -389,6 +556,8 @@ export function GameSettingsPanel({
             })}
           </div>
         </div>
+        ) : null}
+        {aiNarrates ? (
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-16 text-stone-500">World</span>
           <Tooltip content="The world moves on its own: off-screen storylines advance on background dice, surprises and encounters build up over quiet stretches, and NPC schemes progress between chapters and during rests and travel. The story arc itself is unaffected either way.">
@@ -412,6 +581,7 @@ export function GameSettingsPanel({
               : "Nothing happens unless the party or the story arc makes it happen."}
           </span>
         </div>
+        ) : null}
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-16 text-stone-500">Items</span>
           <Tooltip content="When on, DM-granted loot, item removals, and gold changes become offers the owning player accepts or declines before they land on the sheet. Damage, healing, XP, and conditions still apply normally.">
@@ -437,9 +607,10 @@ export function GameSettingsPanel({
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-16 text-stone-500">Prose</span>
           <Tooltip content="After each turn the server compares the DM's narration against what the dice and tools actually resolved: a hit written on a miss, a death the hit points deny, a damage number no die rolled. A contradiction is sent back to the DM once for a rewrite. Nothing on any sheet changes either way.">
-            <button
-              type="button"
-              onClick={() => patch({ narrationGuard: !settings.narrationGuard })}
+            {aiNarrates ? (
+              <button
+                type="button"
+                onClick={() => patch({ narrationGuard: !settings.narrationGuard })}
               className={cn(
                 "rounded-md border px-2 py-1",
                 settings.narrationGuard
@@ -447,14 +618,178 @@ export function GameSettingsPanel({
                   : "border-stone-700 text-stone-400",
               )}
             >
-              Outcome check {settings.narrationGuard ? "on" : "off"}
-            </button>
+                Outcome check {settings.narrationGuard ? "on" : "off"}
+              </button>
+            ) : null}
           </Tooltip>
           <span className="text-stone-500">
             {settings.narrationGuard
               ? "Narration that contradicts the dice goes back for one rewrite."
               : "The DM's narration is persisted exactly as written."}
           </span>
+        </div>
+        {/* Live voice chat. The rules below are a list rather than a single
+            proximity checkbox on purpose: "players only hear people within 30
+            feet" is one table's house rule, and the next table will want a
+            different one. They are all inputs to one function
+            (src/lib/voice/audibility.ts). */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="w-16 text-stone-500">Voice</span>
+          <Tooltip content="Live voice chat for this table, in the lobby and during play. The server also has its own switch, and needs a media port open; if voice is off server-wide this has no effect.">
+            <button
+              type="button"
+              onClick={() =>
+                patch({ voice: { ...settings.voice, enabled: !settings.voice.enabled } })
+              }
+              className={cn(
+                "rounded-md border px-2 py-1",
+                settings.voice.enabled
+                  ? "border-amber-700 bg-amber-950/50 text-amber-200"
+                  : "border-stone-700 text-stone-400",
+              )}
+            >
+              Voice chat {settings.voice.enabled ? "on" : "off"}
+            </button>
+          </Tooltip>
+          {settings.voice.enabled ? (
+            <>
+              <Tooltip content="How hard the floor is enforced on microphones. Soft shows whose turn it is without muting anyone. Strict pauses a player's microphone on the server, so the mute is real rather than a greyed-out button. Off ignores the floor entirely. The DM is never muted by any of these.">
+                <select
+                  value={settings.voice.turnEnforcement}
+                  onChange={(event) =>
+                    patch({
+                      voice: {
+                        ...settings.voice,
+                        turnEnforcement: event.target.value as "off" | "soft" | "strict",
+                      },
+                    })
+                  }
+                  className={selectClass}
+                >
+                  <option value="off">Turns: ignored</option>
+                  <option value="soft">Turns: shown</option>
+                  <option value="strict">Turns: enforced</option>
+                </select>
+              </Tooltip>
+              <Tooltip content="Distance decides who hears whom, using the battle map. Outside combat, or with no map, everyone hears everyone as usual. The DM always hears everyone and is always heard.">
+                <button
+                  type="button"
+                  onClick={() =>
+                    patch({
+                      voice: {
+                        ...settings.voice,
+                        rules: { ...settings.voice.rules, proximity: !settings.voice.rules.proximity },
+                      },
+                    })
+                  }
+                  className={cn(
+                    "rounded-md border px-2 py-1",
+                    settings.voice.rules.proximity
+                      ? "border-amber-700 bg-amber-950/50 text-amber-200"
+                      : "border-stone-700 text-stone-400",
+                  )}
+                >
+                  Proximity {settings.voice.rules.proximity ? "on" : "off"}
+                </button>
+              </Tooltip>
+              {settings.voice.rules.proximity ? (
+                <>
+                  <select
+                    value={settings.voice.rules.hearingRangeFeet}
+                    onChange={(event) =>
+                      patch({
+                        voice: {
+                          ...settings.voice,
+                          rules: {
+                            ...settings.voice.rules,
+                            hearingRangeFeet: Number(event.target.value),
+                          },
+                        },
+                      })
+                    }
+                    className={selectClass}
+                    aria-label="How far a normal speaking voice carries"
+                    title="How far a normal speaking voice carries"
+                  >
+                    {[15, 30, 60, 120].map((feet) => (
+                      <option key={feet} value={feet}>
+                        {feet} ft
+                      </option>
+                    ))}
+                  </select>
+                  <Tooltip content="Lets each player pick whisper (5 ft), normal, or shout (120 ft). The range is the speaker's, because shouting is something you do rather than something done to you.">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        patch({
+                          voice: {
+                            ...settings.voice,
+                            rules: { ...settings.voice.rules, sayRange: !settings.voice.rules.sayRange },
+                          },
+                        })
+                      }
+                      className={cn(
+                        "rounded-md border px-2 py-1",
+                        settings.voice.rules.sayRange
+                          ? "border-amber-700 bg-amber-950/50 text-amber-200"
+                          : "border-stone-700 text-stone-400",
+                      )}
+                    >
+                      Whisper/shout {settings.voice.rules.sayRange ? "on" : "off"}
+                    </button>
+                  </Tooltip>
+                  <Tooltip content="A wall between two characters muffles the voice rather than silencing it. Hearing through a door is a real thing, and audio that vanished at a doorway would read as a bug. Fog of war never gates audio: not seeing someone has nothing to do with hearing them.">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        patch({
+                          voice: {
+                            ...settings.voice,
+                            rules: {
+                              ...settings.voice.rules,
+                              wallsAttenuate: !settings.voice.rules.wallsAttenuate,
+                            },
+                          },
+                        })
+                      }
+                      className={cn(
+                        "rounded-md border px-2 py-1",
+                        settings.voice.rules.wallsAttenuate
+                          ? "border-amber-700 bg-amber-950/50 text-amber-200"
+                          : "border-stone-700 text-stone-400",
+                      )}
+                    >
+                      Walls muffle {settings.voice.rules.wallsAttenuate ? "on" : "off"}
+                    </button>
+                  </Tooltip>
+                </>
+              ) : null}
+              <Tooltip content="A character at 0 hit points stops hearing the table. They still hear the DM, and they are still heard.">
+                <button
+                  type="button"
+                  onClick={() =>
+                    patch({
+                      voice: {
+                        ...settings.voice,
+                        rules: {
+                          ...settings.voice.rules,
+                          downedGoDeaf: !settings.voice.rules.downedGoDeaf,
+                        },
+                      },
+                    })
+                  }
+                  className={cn(
+                    "rounded-md border px-2 py-1",
+                    settings.voice.rules.downedGoDeaf
+                      ? "border-amber-700 bg-amber-950/50 text-amber-200"
+                      : "border-stone-700 text-stone-400",
+                  )}
+                >
+                  Downed go deaf {settings.voice.rules.downedGoDeaf ? "on" : "off"}
+                </button>
+              </Tooltip>
+            </>
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-16 text-stone-500">Bonds</span>
@@ -498,6 +833,7 @@ export function GameSettingsPanel({
                 : "Standing is tracked per character; romance is off."}
           </span>
         </div>
+        {aiNarrates ? (
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-16 text-stone-500">Allies</span>
           <Tooltip content="AI companions the DM plays: 'party members' travel with the party until dismissed; 'guests' are temporary allies for one scene or battle (a town soldier helping defend) and leave automatically when the fight ends. Auto picks full for solo play, guests only for multiplayer.">
@@ -546,6 +882,7 @@ export function GameSettingsPanel({
             </>
           ) : null}
         </div>
+        ) : null}
       </div>
     </section>
   );

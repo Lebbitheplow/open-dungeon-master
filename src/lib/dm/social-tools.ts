@@ -321,6 +321,7 @@ export function handleSocialCheck(
   const resolved = resolveRollExpression(
     { kind: "skill_check", skill } as unknown as RollArgs,
     sheet,
+    { encumbrance: campaign.gameSettings.variantRules.encumbrance },
   );
   if ("error" in resolved || "autoFail" in resolved) {
     return { error: "error" in resolved ? resolved.error : `${sheet.name} cannot make that check.` };

@@ -58,7 +58,7 @@ export function SessionSettings({
         <GameSettingsPanel
           campaignId={campaign.id}
           settings={campaign.gameSettings}
-          isLead={isLead}
+          steersStory={isLead}
         />
       ) : null}
 
@@ -67,7 +67,7 @@ export function SessionSettings({
           <RulesPanel
             campaignId={campaign.id}
             settings={campaign.gameSettings}
-            isLead={isLead}
+            steersStory={isLead}
           />
         </div>
       ) : null}

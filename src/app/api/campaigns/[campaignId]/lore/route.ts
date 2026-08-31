@@ -1,4 +1,4 @@
-import { isErrorResponse, requireLead, requireMember } from "@/lib/campaign-api";
+import { isErrorResponse, requireStoryAuthority, requireMember } from "@/lib/campaign-api";
 import { insertLoreEntry, listLoreEntries } from "@/lib/db/lore";
 import { normalizeLoreInput } from "@/lib/dm/world-lore-logic";
 
@@ -23,7 +23,7 @@ export async function POST(
   { params }: { params: Promise<{ campaignId: string }> },
 ) {
   const { campaignId } = await params;
-  const context = await requireLead(campaignId);
+  const context = await requireStoryAuthority(campaignId);
   if (isErrorResponse(context)) {
     return context;
   }

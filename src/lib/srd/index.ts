@@ -8,6 +8,7 @@ import { computeArmorClass, matchArmor, unarmoredFormulaFor, type AcBreakdown } 
 import { conditionAcRiders } from "@/lib/srd/condition-effects";
 import { combatRiders, defenseRiders, halfProficiencyCovers } from "@/lib/srd/feature-effects";
 import { effectiveAbilities, magicItemRiders } from "@/lib/srd/magic-items";
+import { encumbranceFor } from "@/lib/srd/encumbrance";
 import type {
   Ability,
   AbilityScores,
@@ -249,8 +250,18 @@ export function effectiveAcFor(
 // armor or shield) and heavy armor below its Strength requirement costs
 // 10 feet. Conditions and exhaustion apply downstream (condition-logic.ts).
 // An active transformation replaces it with the form's own speed.
+//
+// `encumbrance` is the table's variant rule, which this module cannot read
+// itself; callers with campaign access pass it and an overloaded pack costs
+// a further 10 or 20 feet.
 export function speedFor(
-  source: AcSource & { speed: number; wildShape?: CharacterSheet["wildShape"] },
+  source: AcSource & {
+    speed: number;
+    wildShape?: CharacterSheet["wildShape"];
+    gold?: number;
+    race?: string;
+  },
+  options: { encumbrance?: boolean } = {},
 ): number {
   if (source.wildShape?.speed !== undefined) {
     return source.wildShape.speed;
@@ -276,8 +287,34 @@ export function speedFor(
     }
     bonus = Math.max(bonus, entry.amount);
   }
-  return Math.max(0, source.speed + bonus - breakdown.speedPenalty);
+  const load =
+    options.encumbrance
+      ? encumbranceFor({
+          strength: source.abilities.str,
+          equipment,
+          coins: source.gold ?? 0,
+          size: source.race ? sizeForRace(source.race) : undefined,
+        }).speedPenalty
+      : 0;
+  return Math.max(0, source.speed + bonus - breakdown.speedPenalty - load);
 }
+
+// One named contribution to a derived number. The pattern is AC's: the sheet
+// has always been able to say "16 = 14 leather + 2 DEX", and every other
+// number computed the same way and then threw the reasoning away. A human DM
+// will not trust an engine they cannot audit, so now they all keep it.
+export type DerivedPart = { label: string; value: number };
+
+// Every derived number's working. Sums are guaranteed to match the totals
+// beside them because the totals are computed BY summing these.
+export type DerivedParts = {
+  saves: Record<Ability, DerivedPart[]>;
+  skills: Record<string, DerivedPart[]>;
+  initiative: DerivedPart[];
+  passivePerception: DerivedPart[];
+  spellSaveDc: DerivedPart[];
+  spellAttack: DerivedPart[];
+};
 
 export type SheetDerived = {
   proficiencyBonus: number;
@@ -288,7 +325,18 @@ export type SheetDerived = {
   passivePerception: number;
   spellSaveDc: number | null;
   spellAttack: number | null;
+  parts: DerivedParts;
 };
+
+// Drops the zero rows, which are noise, but always keeps the first one so a
+// +0 modifier still shows where the number started.
+function keepMeaningful(parts: DerivedPart[]): DerivedPart[] {
+  return parts.filter((part, index) => index === 0 || part.value !== 0);
+}
+
+function sumParts(parts: DerivedPart[]): number {
+  return parts.reduce((total, part) => total + part.value, 0);
+}
 
 // All derived numbers come from the sheet + SRD data; the model never
 // invents a modifier.
@@ -332,13 +380,24 @@ export function computeSheetDerived(
       ? defenseRiders({ class: sheet.class, level: sheet.level, features: riderFeatures }, abilityMods)
       : { saveBonus: 0, initiativeBonus: 0, passiveBonus: 0, halfProficiency: null };
 
+  const saveParts = Object.fromEntries(
+    (Object.keys(abilities) as Ability[]).map((ability) => [
+      ability,
+      keepMeaningful([
+        { label: `${ability.toUpperCase()} modifier`, value: abilityMods[ability] },
+        {
+          label: "proficiency",
+          value: sheet.proficiencies.saves.includes(ability) ? pb : 0,
+        },
+        { label: "features", value: defense.saveBonus },
+        { label: "magic items", value: magicSaveBonus },
+      ]),
+    ]),
+  ) as Record<Ability, DerivedPart[]>;
   const saves = Object.fromEntries(
     (Object.keys(abilities) as Ability[]).map((ability) => [
       ability,
-      abilityMods[ability] +
-        (sheet.proficiencies.saves.includes(ability) ? pb : 0) +
-        defense.saveBonus +
-        magicSaveBonus,
+      sumParts(saveParts[ability]),
     ]),
   ) as Record<Ability, number>;
 
@@ -347,32 +406,71 @@ export function computeSheetDerived(
   const halfScope = defense.halfProficiency ?? null;
   const halfPb = Math.floor(pb / 2);
   const expertise = sheet.proficiencies.expertise ?? [];
+  const skillParts = Object.fromEntries(
+    SRD_SKILLS.map((skill) => {
+      const trained = expertise.includes(skill.id)
+        ? { label: "expertise", value: pb * 2 }
+        : sheet.proficiencies.skills.includes(skill.id)
+          ? { label: "proficiency", value: pb }
+          : halfProficiencyCovers(halfScope, skill.ability)
+            ? { label: "half proficiency", value: halfPb }
+            : { label: "untrained", value: 0 };
+      return [
+        skill.id,
+        keepMeaningful([
+          { label: `${skill.ability.toUpperCase()} modifier`, value: abilityMods[skill.ability] },
+          trained,
+        ]),
+      ];
+    }),
+  ) as Record<string, DerivedPart[]>;
   const skills = Object.fromEntries(
-    SRD_SKILLS.map((skill) => [
-      skill.id,
-      abilityMods[skill.ability] +
-        (expertise.includes(skill.id)
-          ? pb * 2
-          : sheet.proficiencies.skills.includes(skill.id)
-            ? pb
-            : halfProficiencyCovers(halfScope, skill.ability)
-              ? halfPb
-              : 0),
-    ]),
+    SRD_SKILLS.map((skill) => [skill.id, sumParts(skillParts[skill.id])]),
   );
 
   const spellAbility = sheet.spellcasting?.ability ?? null;
+  // Initiative is a Dexterity check nobody is proficient in, so both
+  // half-proficiency scopes cover it.
+  const initiativeParts = keepMeaningful([
+    { label: "DEX modifier", value: abilityMods.dex },
+    { label: "features", value: defense.initiativeBonus },
+    { label: "half proficiency", value: halfScope ? halfPb : 0 },
+  ]);
+  const passiveParts = keepMeaningful([
+    { label: "base", value: 10 },
+    { label: "Perception", value: skills.perception },
+    { label: "features", value: defense.passiveBonus },
+  ]);
+  const spellSaveParts = spellAbility
+    ? [
+        { label: "base", value: 8 },
+        { label: "proficiency", value: pb },
+        { label: `${spellAbility.toUpperCase()} modifier`, value: abilityMods[spellAbility] },
+      ]
+    : [];
+  const spellAttackParts = spellAbility
+    ? [
+        { label: "proficiency", value: pb },
+        { label: `${spellAbility.toUpperCase()} modifier`, value: abilityMods[spellAbility] },
+      ]
+    : [];
   return {
     proficiencyBonus: pb,
     abilityMods,
     saves,
     skills,
-    // Initiative is a Dexterity check nobody is proficient in, so both
-    // half-proficiency scopes cover it.
-    initiative: abilityMods.dex + defense.initiativeBonus + (halfScope ? halfPb : 0),
-    passivePerception: 10 + skills.perception + defense.passiveBonus,
-    spellSaveDc: spellAbility ? 8 + pb + abilityMods[spellAbility] : null,
-    spellAttack: spellAbility ? pb + abilityMods[spellAbility] : null,
+    initiative: sumParts(initiativeParts),
+    passivePerception: sumParts(passiveParts),
+    spellSaveDc: spellAbility ? sumParts(spellSaveParts) : null,
+    spellAttack: spellAbility ? sumParts(spellAttackParts) : null,
+    parts: {
+      saves: saveParts,
+      skills: skillParts,
+      initiative: initiativeParts,
+      passivePerception: passiveParts,
+      spellSaveDc: spellSaveParts,
+      spellAttack: spellAttackParts,
+    },
   };
 }
 

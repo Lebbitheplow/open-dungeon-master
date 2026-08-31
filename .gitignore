@@ -59,6 +59,8 @@ next-env.d.ts
 # packaging
 /dist
 public/generated-audio
+# fetched by scripts/fetch-ambience.mjs; never committed
+/public/ambience
 
 # agent worktrees
 .claude/
