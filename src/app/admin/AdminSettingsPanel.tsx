@@ -34,6 +34,7 @@ type MaskedConfig = {
   speech: { kokoroUrl: string; sttUrl: string };
   voiceChat: {
     enabled: "" | "on" | "off";
+    mode: "" | "sfu" | "mesh";
     announcedIp: string;
     domain: string;
     rtcPort: string;
@@ -582,6 +583,27 @@ export function AdminSettingsPanel() {
               <option value="">Use server config ({env.voiceEnabled ? "on" : "off"})</option>
               <option value="on">On</option>
               <option value="off">Off</option>
+            </select>
+          </Field>
+          <Field
+            label="Transport"
+            hint="The voice server needs the media port below open. Peer-to-peer needs no port and works through tunnels, but suits small tables: every player sends audio to every other player."
+          >
+            <select
+              className={ui.input}
+              value={config.voiceChat.mode}
+              onChange={(event) =>
+                setConfig({
+                  ...config,
+                  voiceChat: {
+                    ...config.voiceChat,
+                    mode: event.target.value as "" | "sfu" | "mesh",
+                  },
+                })
+              }
+            >
+              <option value="">Voice server (default)</option>
+              <option value="mesh">Peer-to-peer (mesh)</option>
             </select>
           </Field>
           <Field

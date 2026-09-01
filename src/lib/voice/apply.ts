@@ -22,14 +22,25 @@ import { getRoom } from "@/lib/voice/room";
 // slider between them and it. Gain is applied client-side because gain is
 // only comfort; audibility is the part that has to be enforced here.
 
-// Builds the snapshot the pure rules run on.
-function seatsFor(campaignId: string): {
+// The slice of a peer the seat builder needs; both the SFU room and the mesh
+// registry can produce it.
+export type SeatPeer = {
+  userId: string;
+  channelId: string;
+  sayRange: "whisper" | "normal" | "shout";
+};
+
+// Builds the snapshot the pure rules run on, for whichever transport's peer
+// list is handed in.
+export function buildSeats(
+  campaignId: string,
+  peers: SeatPeer[],
+): {
   seats: AudibilitySeat[];
   blocked?: (ax: number, ay: number, bx: number, by: number) => boolean;
 } {
-  const room = getRoom(campaignId);
   const campaign = getCampaignById(campaignId);
-  if (!room || !campaign) {
+  if (!campaign) {
     return { seats: [] };
   }
 
@@ -37,7 +48,7 @@ function seatsFor(campaignId: string): {
   const map = getActiveBattleMap(campaignId);
   const tokens = map ? listTokens(map.id) : [];
 
-  const seats: AudibilitySeat[] = [...room.peers.values()].map((peer) => {
+  const seats: AudibilitySeat[] = peers.map((peer) => {
     // A peer's position is their character's token, if they have one on the
     // active map. Outside combat there is no map and every position is null,
     // which the rules read as "no geometry to apply".
@@ -75,7 +86,7 @@ export async function applyAudibility(campaignId: string): Promise<void> {
     return;
   }
 
-  const { seats, blocked } = seatsFor(campaignId);
+  const { seats, blocked } = buildSeats(campaignId, [...room.peers.values()]);
   const next = computeAudibility(seats, campaign.gameSettings.voice.rules, { blocked });
   const diff = diffAudibility(room.audibility, next);
   room.audibility = next;

@@ -25,6 +25,7 @@ export function VoiceDock({
   adjudicates,
   sayRangeRule,
   audibilityVersion,
+  meshSignal,
 }: {
   campaignId: string;
   meUserId: string;
@@ -36,6 +37,7 @@ export function VoiceDock({
   adjudicates: boolean;
   sayRangeRule: boolean;
   audibilityVersion: number;
+  meshSignal: { to: string; version: number } | null;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -114,6 +116,7 @@ export function VoiceDock({
           adjudicates={adjudicates}
           sayRangeRule={sayRangeRule}
           audibilityVersion={audibilityVersion}
+          meshSignal={meshSignal}
           compact
         />
       </div>

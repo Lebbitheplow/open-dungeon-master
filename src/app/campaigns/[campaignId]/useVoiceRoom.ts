@@ -61,6 +61,8 @@ export function useVoiceRoom(
   mePeerId = "",
   // Bumped by the contentless voice_audibility_changed event.
   audibilityVersion = 0,
+  // Mesh signaling nudge from the stream: someone left mail in a mailbox.
+  meshSignal: { to: string; version: number } | null = null,
 ) {
   const [status, setStatus] = useState<VoiceStatus>("idle");
   const [error, setError] = useState("");
@@ -99,6 +101,22 @@ export function useVoiceRoom(
   // Kept so the microphone can be swapped without rebuilding the transport:
   // replaceTrack keeps the same producer, so nobody else renegotiates.
   const producerRef = useRef<Awaited<ReturnType<Transport["produce"]>> | null>(null);
+
+  // Which transport this server runs, learned from the availability probe.
+  // "mesh" is browser-to-browser WebRTC: one RTCPeerConnection per other
+  // player, signaled through the server's mailbox relay. A ref rather than
+  // state because only callbacks read it, and the probe resolves before the
+  // Join button can exist.
+  const modeRef = useRef<"sfu" | "mesh">("sfu");
+  type MeshConn = {
+    pc: RTCPeerConnection;
+    polite: boolean;
+    makingOffer: boolean;
+    ignoreOffer: boolean;
+  };
+  const meshConnsRef = useRef<Map<string, MeshConn>>(new Map());
+  const meshIceRef = useRef<RTCIceServer[]>([]);
+  const meshHeartbeatMsRef = useRef(10_000);
 
   const post = useCallback(
     async (path: string, body?: unknown) => {
@@ -194,12 +212,196 @@ export function useVoiceRoom(
     sendTransportRef.current = null;
     recvTransportRef.current = null;
     deviceRef.current = null;
+    for (const conn of meshConnsRef.current.values()) {
+      conn.pc.close();
+    }
+    meshConnsRef.current.clear();
     for (const element of audioElementsRef.current.values()) {
       element.pause();
       element.srcObject = null;
     }
     audioElementsRef.current.clear();
   }, []);
+
+  // ---- mesh transport ----
+
+  // A remote voice arriving over a peer connection plays exactly like one
+  // arriving from the SFU: a detached element in the same map, so gains,
+  // sliders and deafen need no second code path.
+  const attachRemoteTrack = useCallback((userId: string, track: MediaStreamTrack) => {
+    const element = new Audio();
+    element.autoplay = true;
+    const prefs = readVolumePrefs();
+    const peer = prefs.peers[userId] ?? DEFAULT_PEER_VOLUME;
+    element.volume = effectiveVolume(gainsRef.current[userId] ?? 1, peer, prefs);
+    element.muted = silenced(peer, prefs.deafened);
+    element.srcObject = new MediaStream([track]);
+    void element.play().catch(() => {});
+    audioElementsRef.current.get(userId)?.pause();
+    audioElementsRef.current.set(userId, element);
+  }, []);
+
+  const meshSend = useCallback(
+    (to: string, data: unknown) => {
+      void post("mesh/signal", { to, data }).catch(() => {
+        // The peer left between our offer and its delivery; the roster event
+        // that announced the departure also closes our side.
+      });
+    },
+    [post],
+  );
+
+  // One connection per other player, run by the perfect negotiation pattern:
+  // both sides may offer whenever their state changes, and the polite one
+  // yields when offers cross. Politeness is decided by user id order, so the
+  // two ends always disagree about who yields, which is the whole trick.
+  const ensureMeshConn = useCallback(
+    (userId: string): MeshConn => {
+      const existing = meshConnsRef.current.get(userId);
+      if (existing) {
+        return existing;
+      }
+      const pc = new RTCPeerConnection({ iceServers: meshIceRef.current });
+      const conn: MeshConn = {
+        pc,
+        polite: mePeerId > userId,
+        makingOffer: false,
+        ignoreOffer: false,
+      };
+      meshConnsRef.current.set(userId, conn);
+      for (const track of micStreamRef.current?.getAudioTracks() ?? []) {
+        pc.addTrack(track, micStreamRef.current as MediaStream);
+      }
+      pc.ontrack = (event) => {
+        attachRemoteTrack(userId, event.track);
+      };
+      pc.onnegotiationneeded = async () => {
+        try {
+          conn.makingOffer = true;
+          await pc.setLocalDescription();
+          if (pc.localDescription) {
+            meshSend(userId, { description: pc.localDescription });
+          }
+        } catch {
+          // A torn-down connection mid-negotiation; nothing to recover.
+        } finally {
+          conn.makingOffer = false;
+        }
+      };
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          meshSend(userId, { candidate: event.candidate.toJSON() });
+        }
+      };
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === "failed" && joinedRef.current) {
+          setStatus("reconnecting");
+          pc.restartIce();
+        } else if (pc.connectionState === "connected" && joinedRef.current) {
+          setStatus("connected");
+        }
+      };
+      return conn;
+    },
+    [attachRemoteTrack, mePeerId, meshSend],
+  );
+
+  const handleMeshSignal = useCallback(
+    async (from: string, data: unknown) => {
+      const note = data as {
+        description?: RTCSessionDescriptionInit;
+        candidate?: RTCIceCandidateInit;
+      };
+      const conn = ensureMeshConn(from);
+      const { pc } = conn;
+      try {
+        if (note?.description) {
+          const offerCollision =
+            note.description.type === "offer" &&
+            (conn.makingOffer || pc.signalingState !== "stable");
+          conn.ignoreOffer = !conn.polite && offerCollision;
+          if (conn.ignoreOffer) {
+            return;
+          }
+          await pc.setRemoteDescription(note.description);
+          if (note.description.type === "offer") {
+            await pc.setLocalDescription();
+            if (pc.localDescription) {
+              meshSend(from, { description: pc.localDescription });
+            }
+          }
+        } else if (note?.candidate) {
+          try {
+            await pc.addIceCandidate(note.candidate);
+          } catch (cause) {
+            if (!conn.ignoreOffer) {
+              throw cause;
+            }
+          }
+        }
+      } catch {
+        // A malformed or out-of-order note; the next negotiation heals it.
+      }
+    },
+    [ensureMeshConn, meshSend],
+  );
+
+  // Heartbeat and mailbox drain in one round trip. A 410 means the server
+  // reaped this seat (a laptop that slept through the timeout), which is not
+  // recoverable in place: say so and let the player rejoin.
+  const drainMeshSignals = useCallback(async () => {
+    if (!joinedRef.current || modeRef.current !== "mesh") {
+      return;
+    }
+    try {
+      const data = await post("mesh/heartbeat");
+      for (const signal of data.signals ?? []) {
+        await handleMeshSignal(String(signal.from ?? ""), signal.data);
+      }
+    } catch (cause) {
+      if (cause instanceof Error && cause.message.includes("Not on the call")) {
+        teardown();
+        setError("The connection idled too long and the call let you go. Join again.");
+        setStatus("error");
+      }
+    }
+  }, [handleMeshSignal, post, teardown]);
+
+  const joinMesh = useCallback(async () => {
+    setStatus("connecting");
+    setError("");
+    try {
+      const savedMic = readMicId();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          ...(savedMic ? { deviceId: { ideal: savedMic } } : {}),
+        },
+      });
+      micStreamRef.current = stream;
+      const data = await post("mesh/join");
+      meshIceRef.current = (data.iceServers ?? []) as RTCIceServer[];
+      meshHeartbeatMsRef.current = Number(data.heartbeatMs) || 10_000;
+      joinedRef.current = true;
+      await refreshGains();
+      // The newcomer rings everyone already seated; adding the mic track
+      // fires negotiationneeded, which sends the offers.
+      for (const peer of data.peers ?? []) {
+        if (peer.userId !== mePeerId) {
+          ensureMeshConn(peer.userId);
+        }
+      }
+      setStatus("connected");
+      setMuted(false);
+      setHandRaised(false);
+    } catch (cause) {
+      teardown();
+      setError(cause instanceof Error ? cause.message : "Could not join voice chat.");
+      setStatus("error");
+    }
+  }, [ensureMeshConn, mePeerId, post, refreshGains, teardown]);
 
   const join = useCallback(async () => {
     if (joinedRef.current || status === "connecting") {
@@ -209,6 +411,10 @@ export function useVoiceRoom(
     if (blocked) {
       setError(micBlockMessage(blocked));
       setStatus("error");
+      return;
+    }
+    if (modeRef.current === "mesh") {
+      await joinMesh();
       return;
     }
     setStatus("connecting");
@@ -290,20 +496,28 @@ export function useVoiceRoom(
       setError(cause instanceof Error ? cause.message : "Could not join voice chat.");
       setStatus("error");
     }
-  }, [post, refreshGains, status, syncConsumers, teardown]);
+  }, [joinMesh, post, refreshGains, status, syncConsumers, teardown]);
 
   const leave = useCallback(async () => {
+    const leavePath = modeRef.current === "mesh" ? "mesh/leave" : "leave";
     teardown();
     setStatus("idle");
     // The roster is not cleared here: the server publishes the departure and
     // the stream carries it back, which is also what every other client sees.
     try {
-      await post("leave");
+      await post(leavePath);
     } catch {
       // Already gone, or the server reaped the peer first. Either way the
       // local side is down, which is what the button promised.
     }
   }, [post, teardown]);
+
+  // The mute/say-range route differs by transport; the body does not.
+  const postState = useCallback(
+    (body: { muted?: boolean; sayRange?: "whisper" | "normal" | "shout" }) =>
+      post(modeRef.current === "mesh" ? "mesh/state" : "state", body),
+    [post],
+  );
 
   const toggleMute = useCallback(async () => {
     const next = !muted;
@@ -315,22 +529,22 @@ export function useVoiceRoom(
       track.enabled = !next;
     }
     try {
-      await post("state", { muted: next });
+      await postState({ muted: next });
     } catch {
       setMuted(!next);
     }
-  }, [muted, post]);
+  }, [muted, postState]);
 
   // How far this player's voice carries, when the say-range rule is on.
   const setSayRange = useCallback(
     async (sayRange: "whisper" | "normal" | "shout") => {
       try {
-        await post("state", { sayRange });
+        await postState({ sayRange });
       } catch {
         // the roster keeps the previous value
       }
     },
-    [post],
+    [postState],
   );
 
   // Swaps the microphone without touching the transport: replaceTrack keeps
@@ -338,8 +552,12 @@ export function useVoiceRoom(
   const selectMic = useCallback(
     async (deviceId: string) => {
       writeMicId(deviceId);
+      if (!joinedRef.current) {
+        return;
+      }
       const producer = producerRef.current;
-      if (!producer || !joinedRef.current) {
+      const meshConns = [...meshConnsRef.current.values()];
+      if (!producer && meshConns.length === 0) {
         return;
       }
       try {
@@ -352,7 +570,17 @@ export function useVoiceRoom(
           },
         });
         const track = stream.getAudioTracks()[0];
-        await producer.replaceTrack({ track });
+        if (producer) {
+          await producer.replaceTrack({ track });
+        }
+        // Mesh side of the same move: replaceTrack on each connection's audio
+        // sender, which renegotiates nothing and leaves no gap.
+        for (const conn of meshConns) {
+          const sender = conn.pc.getSenders().find((entry) => entry.track?.kind === "audio");
+          if (sender) {
+            await sender.replaceTrack(track);
+          }
+        }
         // Only stop the old capture once the new one is live, so there is no
         // moment where this player is transmitting nothing.
         micStreamRef.current?.getTracks().forEach((old) => old.stop());
@@ -373,9 +601,9 @@ export function useVoiceRoom(
       for (const track of micStreamRef.current?.getAudioTracks() ?? []) {
         track.enabled = held;
       }
-      void post("state", { muted: !held }).catch(() => {});
+      void postState({ muted: !held }).catch(() => {});
     },
-    [post],
+    [postState],
   );
 
   const selectMicMode = useCallback(
@@ -389,10 +617,10 @@ export function useVoiceRoom(
         track.enabled = open;
       }
       if (joinedRef.current) {
-        void post("state", { muted: !open }).catch(() => {});
+        void postState({ muted: !open }).catch(() => {});
       }
     },
-    [post],
+    [postState],
   );
 
   // Asking for the floor. Never moves the floor by itself: the DM grants it
@@ -484,6 +712,7 @@ export function useVoiceRoom(
         setAvailable(Boolean(data.available));
         setUnavailableReason(String(data.unavailableReason ?? ""));
         setProbedPeers(data.peers ?? []);
+        modeRef.current = data.mode === "mesh" ? "mesh" : "sfu";
       })
       .catch(() => {});
     return () => {
@@ -502,11 +731,53 @@ export function useVoiceRoom(
   // is someone new to hear, so this is also what drives subscription.
   // Only the subscribe is an effect: the list itself is derived above rather
   // than copied into state, so there is nothing to keep in sync.
+  // In mesh mode the roster's job is the reverse: newcomers ring us, so all
+  // this side does is hang up connections to people who left.
   useEffect(() => {
-    if (rosterFromStream && joinedRef.current) {
+    if (!rosterFromStream || !joinedRef.current) {
+      return;
+    }
+    if (modeRef.current !== "mesh") {
       void syncConsumers();
+      return;
+    }
+    const present = new Set(rosterFromStream.map((peer) => peer.userId));
+    for (const [userId, conn] of meshConnsRef.current) {
+      if (!present.has(userId)) {
+        conn.pc.close();
+        meshConnsRef.current.delete(userId);
+        const element = audioElementsRef.current.get(userId);
+        if (element) {
+          element.pause();
+          element.srcObject = null;
+          audioElementsRef.current.delete(userId);
+        }
+      }
     }
   }, [rosterFromStream, syncConsumers]);
+
+  // Mesh mailbox: drained on the stream's nudge when it names this user, and
+  // on the heartbeat that also keeps the seat alive. Deferred a tick because
+  // a failed drain flips status, and state changes must not launch
+  // synchronously from an effect body.
+  useEffect(() => {
+    if (!(meshSignal && meshSignal.to === mePeerId && meshSignal.version > 0)) {
+      return;
+    }
+    const timer = setTimeout(() => void drainMeshSignals(), 0);
+    return () => clearTimeout(timer);
+  }, [drainMeshSignals, mePeerId, meshSignal]);
+
+  useEffect(() => {
+    if (status !== "connected" && status !== "reconnecting") {
+      return;
+    }
+    if (modeRef.current !== "mesh") {
+      return;
+    }
+    const timer = setInterval(() => void drainMeshSignals(), meshHeartbeatMsRef.current);
+    return () => clearInterval(timer);
+  }, [drainMeshSignals, status]);
 
   // Fast-path cleanup. The reliable path is the server's ICE timeout, because
   // a crashed tab sends nothing; this just spares everyone the ~30s wait in
@@ -517,7 +788,8 @@ export function useVoiceRoom(
       if (!joinedRef.current) {
         return;
       }
-      void fetch(`/api/campaigns/${campaignId}/voice/leave`, {
+      const leavePath = modeRef.current === "mesh" ? "mesh/leave" : "leave";
+      void fetch(`/api/campaigns/${campaignId}/voice/${leavePath}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: "{}",

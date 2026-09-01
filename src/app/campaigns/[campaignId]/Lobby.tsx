@@ -386,6 +386,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
             roster={state.voiceRoster}
             speaking={state.voiceSpeaking}
             audibilityVersion={state.voiceAudibilityVersion}
+            meshSignal={state.voiceMeshSignal}
             adjudicates={steersStory}
           />
         </section>

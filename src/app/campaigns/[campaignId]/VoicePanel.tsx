@@ -43,6 +43,7 @@ export function VoicePanel({
   adjudicates = false,
   sayRangeRule = false,
   audibilityVersion = 0,
+  meshSignal = null,
   compact = false,
 }: {
   campaignId: string;
@@ -58,9 +59,11 @@ export function VoicePanel({
   // whisper/shout selector meaningful.
   sayRangeRule?: boolean;
   audibilityVersion?: number;
+  // Mesh signaling nudge from the stream, threaded to the hook.
+  meshSignal?: { to: string; version: number } | null;
   compact?: boolean;
 }) {
-  const voice = useVoiceRoom(campaignId, roster, meUserId, audibilityVersion);
+  const voice = useVoiceRoom(campaignId, roster, meUserId, audibilityVersion, meshSignal);
   const [channels, setChannels] = useState<VoiceChannelView[]>([]);
   const [newRoom, setNewRoom] = useState("");
   const [showSettings, setShowSettings] = useState(false);

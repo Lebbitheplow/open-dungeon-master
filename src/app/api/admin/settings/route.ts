@@ -116,6 +116,7 @@ const patchSchema = z.object({
   voiceChat: z
     .object({
       enabled: z.enum(["", "on", "off"]).optional(),
+      mode: z.enum(["", "sfu", "mesh"]).optional(),
       announcedIp: z.string().trim().max(200).optional(),
       domain: z.string().trim().max(300).optional(),
       rtcPort: z.string().trim().max(10).optional(),

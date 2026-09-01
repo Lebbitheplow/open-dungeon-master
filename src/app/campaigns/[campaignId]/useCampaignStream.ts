@@ -191,6 +191,9 @@ export type CampaignState = {
   // per-listener, so like the fogged battle map each client fetches its own
   // row rather than the stream carrying everyone's.
   voiceAudibilityVersion: number;
+  // Mesh voice signaling nudge: `to` names whose mailbox has mail; the
+  // payload itself waits server-side for that user's authenticated drain.
+  voiceMeshSignal: { to: string; version: number };
 };
 
 const initialState: CampaignState = {
@@ -241,6 +244,7 @@ const initialState: CampaignState = {
   voiceRoster: null,
   voiceSpeaking: null,
   voiceAudibilityVersion: 0,
+  voiceMeshSignal: { to: "", version: 0 },
 };
 
 type Action =
@@ -638,6 +642,12 @@ function reducer(state: CampaignState, action: Action): CampaignState {
         case "voice_audibility_changed":
           next.voiceAudibilityVersion = state.voiceAudibilityVersion + 1;
           return next;
+        case "voice_mesh_signal":
+          next.voiceMeshSignal = {
+            to: String(payload.to ?? ""),
+            version: state.voiceMeshSignal.version + 1,
+          };
+          return next;
         default:
           return next;
       }
@@ -707,6 +717,8 @@ const EPHEMERAL_EVENTS = [
   "voice_speaking",
   // Contentless: each listener pulls their own gains.
   "voice_audibility_changed",
+  // Mesh signaling nudge; the payload stays in a per-user server mailbox.
+  "voice_mesh_signal",
 ];
 const EPHEMERAL_EVENT_SET = new Set(EPHEMERAL_EVENTS);
 

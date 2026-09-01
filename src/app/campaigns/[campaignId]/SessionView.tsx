@@ -538,6 +538,7 @@ export function SessionView({
             adjudicates={caps.adjudicates}
             sayRangeRule={Boolean(campaign.gameSettings?.voice?.rules?.sayRange)}
             audibilityVersion={state.voiceAudibilityVersion}
+            meshSignal={state.voiceMeshSignal}
           />
           <Tooltip
             content={dice3d ? "Turn off 3D dice animation" : "Turn on 3D dice animation"}

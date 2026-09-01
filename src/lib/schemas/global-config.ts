@@ -104,6 +104,10 @@ export const globalConfigSchema = z.object({
   voiceChat: z
     .object({
       enabled: z.enum(["", "on", "off"]).default(""),
+      // "" or "sfu" = the mediasoup SFU (needs the open media port).
+      // "mesh" = browser-to-browser WebRTC: no port, works through an HTTP
+      // tunnel, meant for small tables hosted by the desktop app.
+      mode: z.enum(["", "sfu", "mesh"]).default(""),
       // The address a player's browser can reach this host on.
       announcedIp: z.string().trim().max(200).default(""),
       // Optional hostname announced instead of the IP. Must resolve straight

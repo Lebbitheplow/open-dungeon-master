@@ -11,7 +11,13 @@ import { serverEnv } from "@/lib/server-env";
 // is the fallback for networks that block outbound UDP.
 export const DEFAULT_RTC_PORT = 44444;
 
+// Which transport carries the audio. "sfu" is the mediasoup server on the
+// open media port; "mesh" is browser-to-browser WebRTC, which needs no port
+// at all and survives an HTTP-only tunnel.
+export type VoiceMode = "sfu" | "mesh";
+
 export type VoiceConfig = {
+  mode: VoiceMode;
   enabled: boolean;
   listenIp: string;
   // The owner's public IP, and an optional hostname that overrides it. Two
@@ -32,14 +38,20 @@ function parsePort(raw: string): number {
 // the admin panel wins over the env var, which wins over the code default.
 export function voiceConfig(): VoiceConfig {
   const admin = getGlobalConfig().voiceChat;
+  const mode: VoiceMode = admin.mode === "mesh" ? "mesh" : "sfu";
   return {
-    // Opt-in. Voice cannot work until the owner opens a port and serves the
-    // app over https, so defaulting it on would give every existing install a
-    // Join button that fails. Turning it on is the same deliberate act as
-    // opening the port. Blank in the admin panel falls through to the env var.
+    mode,
+    // Opt-in. SFU voice cannot work until the owner opens a port and serves
+    // the app over https, so defaulting it on would give every existing
+    // install a Join button that fails. Turning it on is the same deliberate
+    // act as opening the port. Blank in the admin panel falls through to the
+    // env var. Mesh has no port prerequisite: picking the mode IS the
+    // deliberate act, so only an explicit "off" disables it.
     enabled:
-      admin.enabled === "on" ||
-      (admin.enabled === "" && serverEnv("VOICE_ENABLED", "0") === "1"),
+      mode === "mesh"
+        ? admin.enabled !== "off"
+        : admin.enabled === "on" ||
+          (admin.enabled === "" && serverEnv("VOICE_ENABLED", "0") === "1"),
     listenIp: serverEnv("VOICE_LISTEN_IP", "0.0.0.0"),
     announcedIp: configValue(admin.announcedIp, "VOICE_ANNOUNCED_IP"),
     domain: configValue(admin.domain, "VOICE_DOMAIN"),

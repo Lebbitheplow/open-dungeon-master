@@ -1,6 +1,8 @@
 import { isErrorResponse } from "@/lib/campaign-api";
 import { gainsFor } from "@/lib/voice/apply";
+import { voiceConfig } from "@/lib/voice/config";
 import { requireVoiceMember } from "@/lib/voice/gate";
+import { meshGainsFor } from "@/lib/voice/mesh";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,5 +21,10 @@ export async function GET(
   if (isErrorResponse(context)) {
     return context;
   }
-  return Response.json({ gains: gainsFor(campaignId, context.user.id) });
+  return Response.json({
+    gains:
+      voiceConfig().mode === "mesh"
+        ? meshGainsFor(campaignId, context.user.id)
+        : gainsFor(campaignId, context.user.id),
+  });
 }
