@@ -100,6 +100,7 @@ export async function GET(request: Request) {
         code,
         redirect_uri: discordRedirectUri(request),
       }),
+      signal: AbortSignal.timeout(15_000),
     });
     if (!tokenResponse.ok) {
       return fail(
@@ -114,6 +115,7 @@ export async function GET(request: Request) {
     }
     const profileResponse = await fetch("https://discord.com/api/users/@me", {
       headers: { Authorization: `Bearer ${token.access_token}` },
+      signal: AbortSignal.timeout(15_000),
     });
     if (!profileResponse.ok) {
       return fail(request.url, `profile fetch failed (${profileResponse.status})`);

@@ -131,7 +131,7 @@ export async function generateOpenAiImage(options: {
   const entry = payload.data?.[0];
   let bytes: Buffer | null = entry?.b64_json ? Buffer.from(entry.b64_json, "base64") : null;
   if (!bytes && entry?.url) {
-    const download = await fetch(entry.url);
+    const download = await fetch(entry.url, { signal: AbortSignal.timeout(60_000) });
     if (download.ok) {
       bytes = Buffer.from(await download.arrayBuffer());
     }

@@ -67,7 +67,12 @@ async function waitForHealth(seconds: number) {
 
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(`${workerUrl}/health`, { cache: "no-store" });
+      // The per-request timeout keeps a black-holing worker address from
+      // blowing straight past the outer deadline on one hung connection.
+      const response = await fetch(`${workerUrl}/health`, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(4000),
+      });
       if (response.ok) {
         return await response.json();
       }

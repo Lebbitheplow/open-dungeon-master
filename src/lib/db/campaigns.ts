@@ -665,6 +665,13 @@ export function capsFor(campaign: Campaign, userId: string): ViewerCaps {
   return viewerCaps(campaignSeats(campaign), userId);
 }
 
+export function isCampaignMember(campaignId: string, userId: string): boolean {
+  const row = getDatabase()
+    .prepare(`SELECT 1 FROM campaign_members WHERE campaign_id = ? AND user_id = ?`)
+    .get(campaignId, userId);
+  return row !== undefined;
+}
+
 // Seats or clears the DM. A member who takes the seat gives up their party
 // slot, so their character sheet (if any) is the caller's problem to settle
 // before calling this.

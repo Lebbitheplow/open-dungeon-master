@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { currentUser, unauthorized } from "@/lib/auth";
+import { isErrorResponse, requireAdmin } from "@/lib/admin-api";
 import { comfyStatus, resolveComfyUrl } from "@/lib/comfyui";
 
 export const runtime = "nodejs";
@@ -10,10 +10,12 @@ const requestSchema = z.object({
 });
 
 // Reachability + checkpoint list for the Images panel's ComfyUI backend.
+// Admin only: the caller supplies the URL the server will fetch, which in a
+// player's hands is a free port scanner against the host's network.
 export async function POST(request: Request) {
-  const user = await currentUser();
-  if (!user) {
-    return unauthorized();
+  const admin = await requireAdmin();
+  if (isErrorResponse(admin)) {
+    return admin;
   }
 
   const parsed = requestSchema.safeParse(await request.json().catch(() => ({})));

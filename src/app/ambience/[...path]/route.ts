@@ -1,3 +1,4 @@
+import { currentUser, unauthorized } from "@/lib/auth";
 import { serveGeneratedFile } from "@/lib/serve-file";
 
 export const runtime = "nodejs";
@@ -10,6 +11,9 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ path: string[] }> },
 ) {
+  if (!(await currentUser())) {
+    return unauthorized();
+  }
   const { path: segments } = await params;
   return serveGeneratedFile("ambience", segments);
 }

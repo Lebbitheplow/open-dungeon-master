@@ -3,6 +3,7 @@ import { hashPassword, startSession } from "@/lib/auth";
 import { consumeAccountInvite } from "@/lib/db/account-invites";
 import { getGlobalConfig } from "@/lib/db/app-settings";
 import { countUsers, createUser, getUserByUsername } from "@/lib/db/users";
+import { checkLogin, recordLoginFailure } from "@/lib/login-throttle";
 import { resolveSignupMode } from "@/lib/schemas/global-config";
 
 export const runtime = "nodejs";
@@ -32,6 +33,20 @@ export async function POST(request: Request) {
   }
 
   const { username, password, inviteCode } = parsed.data;
+
+  // Wrong invite codes and username probes share the login throttle's
+  // escalating lockout, keyed by IP: registration is the one auth surface
+  // an anonymous caller can hammer.
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
+  const throttle = `register:${ip}`;
+  const gate = checkLogin(throttle);
+  if (gate.blocked) {
+    return Response.json(
+      { error: `Too many attempts. Try again in ${gate.retryAfterSec}s.` },
+      { status: 429, headers: { "Retry-After": String(gate.retryAfterSec) } },
+    );
+  }
+
   // The very first account becomes the admin and may always register, even
   // if signups were somehow disabled before any user existed.
   const isFirstUser = countUsers() === 0;
@@ -46,12 +61,14 @@ export async function POST(request: Request) {
     );
   }
   if (getUserByUsername(username)) {
+    recordLoginFailure(throttle);
     return Response.json({ error: "That username is taken." }, { status: 409 });
   }
   // Spend the invite only after the cheap rejections, so a typo'd username
   // does not burn a single-use code.
   if (!isFirstUser && signupMode === "invite") {
     if (!consumeAccountInvite(inviteCode ?? "")) {
+      recordLoginFailure(throttle);
       return Response.json(
         { error: "That invite code is not valid (or has been used up)." },
         { status: 403 },
