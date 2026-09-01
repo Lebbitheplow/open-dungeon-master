@@ -194,6 +194,9 @@ export type CampaignState = {
   // Mesh voice signaling nudge: `to` names whose mailbox has mail; the
   // payload itself waits server-side for that user's authenticated drain.
   voiceMeshSignal: { to: string; version: number };
+  // Bumped by the contentless schedule_updated ephemeral; the schedule
+  // section refetches its list.
+  scheduleVersion: number;
 };
 
 const initialState: CampaignState = {
@@ -245,6 +248,7 @@ const initialState: CampaignState = {
   voiceSpeaking: null,
   voiceAudibilityVersion: 0,
   voiceMeshSignal: { to: "", version: 0 },
+  scheduleVersion: 0,
 };
 
 type Action =
@@ -648,6 +652,9 @@ function reducer(state: CampaignState, action: Action): CampaignState {
             version: state.voiceMeshSignal.version + 1,
           };
           return next;
+        case "schedule_updated":
+          next.scheduleVersion = state.scheduleVersion + 1;
+          return next;
         default:
           return next;
       }
@@ -719,6 +726,8 @@ const EPHEMERAL_EVENTS = [
   "voice_audibility_changed",
   // Mesh signaling nudge; the payload stays in a per-user server mailbox.
   "voice_mesh_signal",
+  // Contentless: the schedule section refetches.
+  "schedule_updated",
 ];
 const EPHEMERAL_EVENT_SET = new Set(EPHEMERAL_EVENTS);
 

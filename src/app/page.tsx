@@ -23,6 +23,7 @@ import { cn } from "@/lib/cn";
 import { IconChip, PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
 import type { CampaignSummary, SessionUser } from "@/lib/campaign-types";
 import { CreateCampaignDialog } from "@/app/CreateCampaignDialog";
+import { NotificationBell } from "@/components/NotificationBell";
 import { HelpDialog } from "@/components/HelpDialog";
 import { HowToPlayDialog } from "@/components/HowToPlayDialog";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -275,6 +276,7 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <NotificationBell />
           <Tooltip content="What this app is and how a table works" side="bottom">
             <button type="button" onClick={() => setHowToOpen(true)} className={ui.btnSmall}>
               <ScrollText className="size-4" />

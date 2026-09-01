@@ -20,6 +20,7 @@ import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { copyText } from "@/lib/clipboard";
 import { InviteShareDialog } from "@/components/InviteShareDialog";
+import { ScheduleSection } from "@/components/ScheduleSection";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
 import { CompanionBuilderDialog } from "@/app/campaigns/[campaignId]/CompanionBuilderDialog";
@@ -390,6 +391,17 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
             adjudicates={steersStory}
           />
         </section>
+      ) : null}
+
+      {/* When the humans actually meet. Solo campaigns schedule nothing. */}
+      {!isSolo ? (
+        <ScheduleSection
+          campaignId={campaign.id}
+          meUserId={me.id}
+          isLead={isLead}
+          usernames={Object.fromEntries(members.map((member) => [member.userId, member.username]))}
+          version={state.scheduleVersion}
+        />
       ) : null}
 
       {!isSolo ? (

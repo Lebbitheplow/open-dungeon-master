@@ -1027,6 +1027,47 @@ function ensureSchema(db: Database.Database) {
 
     CREATE INDEX IF NOT EXISTS idx_encounter_templates_campaign
       ON encounter_templates(campaign_id, name);
+
+    -- Real-world scheduling: when the HUMANS meet. Distinct from the
+    -- in-world calendar (src/lib/dm/calendar.ts), which tracks story time.
+    -- Cancelling keeps the row, so "Friday is off" can still be said.
+    CREATE TABLE IF NOT EXISTS scheduled_sessions (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      title TEXT NOT NULL DEFAULT '',
+      starts_at TEXT NOT NULL,
+      duration_min INTEGER NOT NULL DEFAULT 180,
+      note TEXT NOT NULL DEFAULT '',
+      created_by_user_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      cancelled_at TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_scheduled_sessions_campaign
+      ON scheduled_sessions(campaign_id, starts_at);
+
+    CREATE TABLE IF NOT EXISTS session_rsvps (
+      session_id TEXT NOT NULL REFERENCES scheduled_sessions(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      response TEXT NOT NULL,
+      responded_at TEXT NOT NULL,
+      PRIMARY KEY (session_id, user_id)
+    );
+
+    -- The per-user inbox behind the notification bell. campaign_id is a
+    -- click-through hint only; the row is the user's, not the campaign's.
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      campaign_id TEXT NOT NULL DEFAULT '',
+      kind TEXT NOT NULL,
+      body TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      read_at TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_notifications_user
+      ON notifications(user_id, created_at);
   `);
 
   // Compaction memory: a rolling "story so far" summary plus a watermark of
