@@ -31,6 +31,7 @@ import { generateImageTool, parseGenerateImageToolCall } from "@/lib/image-tool"
 import { createStreamingArtifactFilter, extractStoryText } from "@/lib/story-prompt";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { fulfillMessageImage } from "@/lib/dm/images";
+import { imageProducerReady } from "@/lib/image-generate";
 import { enqueueNarrationAudio } from "@/lib/tts";
 import { requestDmMessage } from "@/lib/dm/model";
 import { setDmStatus } from "@/lib/dm/status";
@@ -1764,7 +1765,7 @@ export function handleLocationCall(
   const mapEnqueued =
     visionClear &&
     campaign.gameSettings.mapsEnabled &&
-    campaign.settings.imageBackend === "comfyui" &&
+    imageProducerReady(campaign.settings.imageBackend) &&
     (!location.mapImage || layoutRevised);
   if (mapEnqueued) {
     void enqueueLocationMap(campaign, location.id);
@@ -1924,7 +1925,7 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string) {
     }
   }
 
-  if (message.imageRequest && context.campaign.settings.imageBackend === "comfyui") {
+  if (message.imageRequest && imageProducerReady(context.campaign.settings.imageBackend)) {
     void fulfillMessageImage(campaignId, message.id, message.imageRequest, context.campaign.settings);
   }
   if (context.campaign.gameSettings.ttsEnabled) {

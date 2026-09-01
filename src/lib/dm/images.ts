@@ -1,4 +1,4 @@
-import { generateComfyImage } from "@/lib/comfyui";
+import { generateStoryImage, imageProducerReady } from "@/lib/image-generate";
 import {
   getCampaignMessage,
   getLatestDmMessage,
@@ -46,9 +46,7 @@ export function fulfillMessageImage(
   return enqueueMediaJob(`image ${messageId}`, async () => {
     publishMediaStatus(campaignId, "image", messageId, "generating");
     try {
-      const image = await generateComfyImage({
-        url: settings.comfyUrl || undefined,
-        checkpoint: settings.comfyCheckpoint || undefined,
+      const image = await generateStoryImage(settings, {
         prompt,
         mode: request.mode ?? settings.imageMode,
         aspect: request.aspect ?? settings.aspect,
@@ -104,9 +102,9 @@ export function handleGenerateImage(
   if (updated) {
     publishPersisted(campaign.id, "message_updated", { message: updated });
   }
-  // Only ComfyUI has a producer side; other backends record the request and
-  // the existing placeholder tells the table a picture is coming.
-  if (campaign.settings.imageBackend === "comfyui") {
+  // Backends without a producer side record the request and the existing
+  // placeholder tells the table a picture is coming.
+  if (imageProducerReady(campaign.settings.imageBackend)) {
     void fulfillMessageImage(campaign.id, message.id, request, campaign.settings);
   }
   return { ok: true, illustrating: message.id };

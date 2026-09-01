@@ -71,9 +71,21 @@ export const globalConfigSchema = z.object({
     .prefault({}),
   images: z
     .object({
+      // Server-wide default backend for new campaigns. Blank = the
+      // DEFAULT_IMAGE_BACKEND env var, then the built-in default (ComfyUI).
+      defaultBackend: z
+        .enum(["", "comfyui", "openai", "mflux-hs", "sdnq-hs"])
+        .default(""),
       comfyUrl: z.string().trim().max(500).default(""),
       comfyCheckpoint: z.string().trim().max(300).default(""),
       fluxWorkerUrl: z.string().trim().max(500).default(""),
+      // The "openai" backend: any OpenAI-compatible images API. The key is
+      // the server owner's, applied at request time only, and never leaves
+      // the server (masked like the Discord secret on the way to the admin
+      // UI). Blank model = gpt-image-1.
+      openaiBaseUrl: z.string().trim().max(500).default(""),
+      openaiModel: z.string().trim().max(200).default(""),
+      openaiApiKey: z.string().trim().max(400).default(""),
     })
     .prefault({}),
   speech: z

@@ -1,6 +1,6 @@
 import { copyFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
-import { generateComfyImage } from "@/lib/comfyui";
+import { generateStoryImage } from "@/lib/image-generate";
 import type { LibraryCharacter } from "@/lib/db/characters";
 import { updateCharacterPortrait } from "@/lib/db/characters";
 import { listSheetsForLibraryCharacter, patchSheet } from "@/lib/db/sheets";
@@ -118,9 +118,7 @@ export function queueCompanionPortrait(sheet: {
     map.set(sheet.id, "generating");
     try {
       const settings = configuredDefaultStorySettings();
-      const image = await generateComfyImage({
-        url: settings.comfyUrl || undefined,
-        checkpoint: settings.comfyCheckpoint || undefined,
+      const image = await generateStoryImage(settings, {
         prompt,
         mode: "fast",
         aspect: "square",
@@ -175,9 +173,7 @@ export function queueNpcPortrait(npc: {
   void enqueueMediaJob(`npc portrait ${npc.id}`, async () => {
     try {
       const settings = configuredDefaultStorySettings();
-      const image = await generateComfyImage({
-        url: settings.comfyUrl || undefined,
-        checkpoint: settings.comfyCheckpoint || undefined,
+      const image = await generateStoryImage(settings, {
         prompt,
         mode: "fast",
         aspect: "square",
@@ -206,9 +202,7 @@ export function queueLibraryPortrait(character: LibraryCharacter): void {
     map.set(character.id, "generating");
     try {
       const settings = configuredDefaultStorySettings();
-      const image = await generateComfyImage({
-        url: settings.comfyUrl || undefined,
-        checkpoint: settings.comfyCheckpoint || undefined,
+      const image = await generateStoryImage(settings, {
         prompt,
         mode: "fast",
         aspect: "square",

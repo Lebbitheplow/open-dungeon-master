@@ -6,9 +6,9 @@ export type AspectPreset = "square" | "portrait" | "landscape";
 
 export type ImageMode = "fast" | "slow";
 
-export type ImageBackend = "mflux-hs" | "sdnq-hs" | "comfyui";
+export type ImageBackend = "mflux-hs" | "sdnq-hs" | "comfyui" | "openai";
 
-export const IMAGE_BACKENDS = ["mflux-hs", "sdnq-hs", "comfyui"] as const;
+export const IMAGE_BACKENDS = ["mflux-hs", "sdnq-hs", "comfyui", "openai"] as const;
 
 export function isImageBackend(value: unknown): value is ImageBackend {
   return typeof value === "string" && (IMAGE_BACKENDS as readonly string[]).includes(value);

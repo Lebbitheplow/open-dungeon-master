@@ -27,7 +27,15 @@ function maskedConfig(config: GlobalConfig) {
       utilityBaseUrl: config.text.utilityBaseUrl,
       hasUtilityApiKey: config.text.utilityApiKey !== "",
     },
-    images: config.images,
+    images: {
+      defaultBackend: config.images.defaultBackend,
+      comfyUrl: config.images.comfyUrl,
+      comfyCheckpoint: config.images.comfyCheckpoint,
+      fluxWorkerUrl: config.images.fluxWorkerUrl,
+      openaiBaseUrl: config.images.openaiBaseUrl,
+      openaiModel: config.images.openaiModel,
+      hasOpenaiApiKey: config.images.openaiApiKey !== "",
+    },
     speech: config.speech,
     voiceChat: config.voiceChat,
     discord: {
@@ -45,6 +53,9 @@ function envDefaults() {
     hasCustomApiKey: serverEnv("OPENAI_COMPAT_API_KEY") !== "" || serverEnv("OPENROUTER_API_KEY") !== "",
     comfyUrl: serverEnv("COMFYUI_URL", "http://127.0.0.1:8188"),
     fluxWorkerUrl: serverEnv("FLUX_WORKER_URL", "http://127.0.0.1:7869"),
+    imageBackend: serverEnv("DEFAULT_IMAGE_BACKEND"),
+    hasOpenaiImageApiKey:
+      serverEnv("OPENAI_IMAGE_API_KEY") !== "" || serverEnv("OPENAI_API_KEY") !== "",
     kokoroUrl: serverEnv("KOKORO_URL", "http://127.0.0.1:8880"),
     sttUrl: serverEnv("STT_URL", "http://127.0.0.1:8870"),
     discordClientId: serverEnv("DISCORD_CLIENT_ID"),
@@ -87,9 +98,13 @@ const patchSchema = z.object({
     .optional(),
   images: z
     .object({
+      defaultBackend: z.enum(["", "comfyui", "openai", "mflux-hs", "sdnq-hs"]).optional(),
       comfyUrl: z.string().trim().max(500).optional(),
       comfyCheckpoint: z.string().trim().max(300).optional(),
       fluxWorkerUrl: z.string().trim().max(500).optional(),
+      openaiBaseUrl: z.string().trim().max(500).optional(),
+      openaiModel: z.string().trim().max(200).optional(),
+      openaiApiKey: z.string().trim().max(400).optional(),
     })
     .optional(),
   speech: z

@@ -1,4 +1,4 @@
-import { generateComfyImage } from "@/lib/comfyui";
+import { generateStoryImage } from "@/lib/image-generate";
 import { getLocation, setLocationMap } from "@/lib/db/locations";
 import { presetFor } from "@/lib/worlds/preset";
 import { publishPersisted } from "@/lib/events";
@@ -27,9 +27,7 @@ export function enqueueLocationMap(campaign: Campaign, locationId: string) {
       .filter(Boolean)
       .join(", ");
     try {
-      const image = await generateComfyImage({
-        url: campaign.settings.comfyUrl || undefined,
-        checkpoint: campaign.settings.comfyCheckpoint || undefined,
+      const image = await generateStoryImage(campaign.settings, {
         prompt,
         mode: campaign.settings.imageMode,
         aspect: "landscape",

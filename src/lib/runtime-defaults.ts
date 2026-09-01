@@ -5,6 +5,7 @@ import {
   isLocalTextModelId,
   isTextProvider,
 } from "@/lib/text-models";
+import { isImageBackend } from "@/lib/types";
 import type { StorySettings } from "@/lib/types";
 
 function clean(value: string) {
@@ -41,10 +42,18 @@ export function configuredDefaultStorySettings(): StorySettings {
     ? requestedUtilityProvider
     : DEFAULT_STORY_SETTINGS.utilityProvider;
 
+  // Image backend for new campaigns: admin panel > env > ComfyUI.
+  const requestedImageBackend =
+    cfg.images.defaultBackend || clean(serverEnv("DEFAULT_IMAGE_BACKEND"));
+  const imageBackend = isImageBackend(requestedImageBackend)
+    ? requestedImageBackend
+    : DEFAULT_STORY_SETTINGS.imageBackend;
+
   return {
     ...DEFAULT_STORY_SETTINGS,
     textProvider,
     localTextModel,
+    imageBackend,
     utilityProvider,
     utilityModel: cfg.text.utilityModel || clean(serverEnv("UTILITY_TEXT_MODEL")),
     utilityBaseUrl: cfg.text.utilityBaseUrl || clean(serverEnv("UTILITY_TEXT_BASE_URL")),

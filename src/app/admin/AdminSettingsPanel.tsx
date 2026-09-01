@@ -22,7 +22,15 @@ type MaskedConfig = {
     utilityBaseUrl: string;
     hasUtilityApiKey: boolean;
   };
-  images: { comfyUrl: string; comfyCheckpoint: string; fluxWorkerUrl: string };
+  images: {
+    defaultBackend: "" | "comfyui" | "openai" | "mflux-hs" | "sdnq-hs";
+    comfyUrl: string;
+    comfyCheckpoint: string;
+    fluxWorkerUrl: string;
+    openaiBaseUrl: string;
+    openaiModel: string;
+    hasOpenaiApiKey: boolean;
+  };
   speech: { kokoroUrl: string; sttUrl: string };
   voiceChat: {
     enabled: "" | "on" | "off";
@@ -39,6 +47,8 @@ type EnvDefaults = {
   hasCustomApiKey: boolean;
   comfyUrl: string;
   fluxWorkerUrl: string;
+  imageBackend: string;
+  hasOpenaiImageApiKey: boolean;
   kokoroUrl: string;
   sttUrl: string;
   discordClientId: string;
@@ -117,6 +127,7 @@ export function AdminSettingsPanel() {
   const [env, setEnv] = useState<EnvDefaults | null>(null);
   const [apiKey, setApiKey] = useState(SECRET_KEPT);
   const [utilityApiKey, setUtilityApiKey] = useState(SECRET_KEPT);
+  const [openaiImageKey, setOpenaiImageKey] = useState(SECRET_KEPT);
   const [discordSecret, setDiscordSecret] = useState(SECRET_KEPT);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -165,7 +176,15 @@ export function AdminSettingsPanel() {
             utilityBaseUrl: config.text.utilityBaseUrl,
             ...(utilityApiKey === SECRET_KEPT ? {} : { utilityApiKey }),
           },
-          images: config.images,
+          images: {
+            defaultBackend: config.images.defaultBackend,
+            comfyUrl: config.images.comfyUrl,
+            comfyCheckpoint: config.images.comfyCheckpoint,
+            fluxWorkerUrl: config.images.fluxWorkerUrl,
+            openaiBaseUrl: config.images.openaiBaseUrl,
+            openaiModel: config.images.openaiModel,
+            ...(openaiImageKey === SECRET_KEPT ? {} : { openaiApiKey: openaiImageKey }),
+          },
           speech: config.speech,
           voiceChat: config.voiceChat,
           discord: {
@@ -182,6 +201,7 @@ export function AdminSettingsPanel() {
       setConfig(data.config);
       setApiKey(SECRET_KEPT);
       setUtilityApiKey(SECRET_KEPT);
+      setOpenaiImageKey(SECRET_KEPT);
       setDiscordSecret(SECRET_KEPT);
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
@@ -392,6 +412,32 @@ export function AdminSettingsPanel() {
 
       <section className={section}>
         <h2 className="mb-3 text-sm font-medium text-stone-300">Image generation</h2>
+        <div className="mb-3">
+          <Field
+            label="Default backend"
+            hint="For new campaigns. ComfyUI and the FLUX workers run on this machine; the OpenAI API renders in the cloud with the key below and needs no GPU."
+          >
+            <select
+              className={ui.input}
+              value={config.images.defaultBackend}
+              onChange={(event) =>
+                setConfig({
+                  ...config,
+                  images: {
+                    ...config.images,
+                    defaultBackend: event.target.value as MaskedConfig["images"]["defaultBackend"],
+                  },
+                })
+              }
+            >
+              <option value="">Auto ({env.imageBackend || "ComfyUI"})</option>
+              <option value="comfyui">ComfyUI (local)</option>
+              <option value="openai">OpenAI API (cloud, needs key)</option>
+              <option value="mflux-hs">FLUX worker: mflux (Apple Silicon)</option>
+              <option value="sdnq-hs">FLUX worker: sdnq (CUDA/ROCm)</option>
+            </select>
+          </Field>
+        </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="ComfyUI URL" hint={`Env: ${env.comfyUrl}`}>
             <input
@@ -429,6 +475,46 @@ export function AdminSettingsPanel() {
               placeholder={env.fluxWorkerUrl}
             />
           </Field>
+          <Field label="OpenAI image model" hint="Blank = gpt-image-1.">
+            <input
+              className={ui.input}
+              value={config.images.openaiModel}
+              onChange={(event) =>
+                setConfig({
+                  ...config,
+                  images: { ...config.images, openaiModel: event.target.value },
+                })
+              }
+              placeholder="gpt-image-1"
+            />
+          </Field>
+          <Field
+            label="OpenAI base URL"
+            hint="Only for OpenAI-compatible image proxies. Blank = api.openai.com."
+          >
+            <input
+              className={ui.input}
+              value={config.images.openaiBaseUrl}
+              onChange={(event) =>
+                setConfig({
+                  ...config,
+                  images: { ...config.images, openaiBaseUrl: event.target.value },
+                })
+              }
+              placeholder="https://api.openai.com/v1"
+            />
+          </Field>
+          <SecretField
+            label="OpenAI image API key"
+            isSet={config.images.hasOpenaiApiKey}
+            value={openaiImageKey}
+            onChange={setOpenaiImageKey}
+            hint={
+              env.hasOpenaiImageApiKey
+                ? "An env-var key is also set; this one wins when filled."
+                : "Billed to whoever owns the key. Used only when a campaign's backend is the OpenAI API."
+            }
+          />
         </div>
       </section>
 

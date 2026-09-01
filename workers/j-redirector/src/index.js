@@ -93,7 +93,7 @@ function page(title, body) {
   );
 }
 
-export default {
+const worker = {
   fetch(request) {
     const url = new URL(request.url);
     if (!url.pathname.startsWith("/j")) {
@@ -132,3 +132,5 @@ export default {
     );
   },
 };
+
+export default worker;
