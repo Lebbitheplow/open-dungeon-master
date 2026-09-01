@@ -88,18 +88,42 @@ async function rateLimited(env, ip, kind = "ip", cap = CREATES_PER_DAY) {
   return false;
 }
 
+function monthKey() {
+  return new Date().toISOString().slice(0, 7);
+}
+
+// Global monthly budget on TURN credential mints: a backstop that works
+// even when the API token cannot read analytics. Soft (KV is eventually
+// consistent) but a runaway client or abuse wave hits it fast.
+async function turnMintBudgetExceeded(env) {
+  const cap = Number(env.TURN_MONTHLY_MINT_CAP || "5000");
+  const key = `turn-month:${monthKey()}`;
+  const used = Number((await env.SESSIONS.get(key)) || "0");
+  if (used >= cap) return true;
+  await env.SESSIONS.put(key, String(used + 1), { expirationTtl: 35 * 86_400 });
+  return false;
+}
+
 // ICE servers for mesh voice. Every response carries Cloudflare's free STUN;
 // when a Realtime TURN key is configured (secrets TURN_KEY_ID and
 // TURN_API_TOKEN), short-lived TURN credentials ride along so peers behind
 // hostile NATs still connect. Relay traffic bills against the Realtime free
-// tier, hence the tighter per-IP cap.
+// tier, hence the tighter per-IP cap, the global monthly mint budget, and
+// the egress kill switch set by the hourly usage check. All degrade to
+// STUN-only: most pairs connect directly and never notice.
 async function iceServers(env, request) {
   const stun = { urls: ["stun:stun.cloudflare.com:3478"] };
   if (!env.TURN_KEY_ID || !env.TURN_API_TOKEN) {
     return json({ iceServers: [stun] });
   }
+  if (await env.SESSIONS.get(`turn-paused:${monthKey()}`)) {
+    return json({ iceServers: [stun] });
+  }
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
   if (await rateLimited(env, ip, "turn", 50)) {
+    return json({ iceServers: [stun] });
+  }
+  if (await turnMintBudgetExceeded(env)) {
     return json({ iceServers: [stun] });
   }
   const response = await fetch(
@@ -220,6 +244,54 @@ async function purgeExpired(env) {
   }
 }
 
+// Hourly egress check against the Realtime free tier (1000 GB/month across
+// SFU and TURN). When this month's TURN egress passes the budget, /turn
+// stops minting relay credentials until the month rolls over; direct and
+// STUN-assisted connections keep working. Best effort: reading analytics
+// needs Account > Account Analytics > Read on the API token, and a token
+// without it just skips the check (the mint budget still applies).
+async function checkTurnUsage(env) {
+  if (!env.TURN_KEY_ID || !env.TURN_API_TOKEN) return;
+  const budgetGb = Number(env.TURN_MONTHLY_GB_BUDGET || "900");
+  const month = monthKey();
+  try {
+    const response = await fetch(`${API}/graphql`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${env.CF_API_TOKEN}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        query: `query($account: String!, $start: Time!) {
+          viewer { accounts(filter: { accountTag: $account }) {
+            callsTurnUsageAdaptiveGroups(filter: { datetime_geq: $start }, limit: 100) {
+              sum { egressBytes }
+            }
+          } }
+        }`,
+        variables: { account: env.ACCOUNT_ID, start: `${month}-01T00:00:00Z` },
+      }),
+    });
+    const body = await response.json().catch(() => null);
+    const groups = body?.data?.viewer?.accounts?.[0]?.callsTurnUsageAdaptiveGroups;
+    if (!Array.isArray(groups)) return;
+    const egressGb =
+      groups.reduce((total, group) => total + (group?.sum?.egressBytes || 0), 0) / 1e9;
+    await env.SESSIONS.put(`turn-usage-gb:${month}`, egressGb.toFixed(2), {
+      expirationTtl: 35 * 86_400,
+    });
+    if (egressGb >= budgetGb) {
+      await env.SESSIONS.put(`turn-paused:${month}`, "over-budget", {
+        expirationTtl: 35 * 86_400,
+      });
+    } else {
+      await env.SESSIONS.delete(`turn-paused:${month}`);
+    }
+  } catch {
+    // Analytics being unreadable must never break session cleanup.
+  }
+}
+
 const worker = {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -243,6 +315,7 @@ const worker = {
 
   async scheduled(_event, env) {
     await purgeExpired(env);
+    await checkTurnUsage(env);
   },
 };
 

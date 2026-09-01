@@ -135,6 +135,88 @@ await test("GET /turn appends minted TURN credentials when configured", async ()
   assert.equal(body.iceServers[1].username, "u");
 });
 
+await test("GET /turn is STUN-only while the monthly pause flag is set", async () => {
+  const turnEnv = { ...env, SESSIONS: new FakeKv(), TURN_KEY_ID: "key", TURN_API_TOKEN: "tok" };
+  const month = new Date().toISOString().slice(0, 7);
+  await turnEnv.SESSIONS.put(`turn-paused:${month}`, "over-budget");
+  const response = await worker.fetch(request("GET", "/turn"), turnEnv);
+  const body = await response.json();
+  assert.deepEqual(body.iceServers, [{ urls: ["stun:stun.cloudflare.com:3478"] }]);
+});
+
+await test("GET /turn is STUN-only after the monthly mint budget is spent", async () => {
+  const turnEnv = {
+    ...env,
+    SESSIONS: new FakeKv(),
+    TURN_KEY_ID: "key",
+    TURN_API_TOKEN: "tok",
+    TURN_MONTHLY_MINT_CAP: "1",
+  };
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    if (String(url).includes("rtc.live.cloudflare.com")) {
+      return new Response(
+        JSON.stringify({ iceServers: [{ urls: ["turn:turn.cloudflare.com:3478"] }] }),
+        { status: 200 },
+      );
+    }
+    return realFetch(url, init);
+  };
+  const first = await (await worker.fetch(request("GET", "/turn"), turnEnv)).json();
+  const second = await (await worker.fetch(request("GET", "/turn"), turnEnv)).json();
+  globalThis.fetch = realFetch;
+  assert.equal(first.iceServers.length, 2);
+  assert.deepEqual(second.iceServers, [{ urls: ["stun:stun.cloudflare.com:3478"] }]);
+});
+
+await test("the usage cron pauses minting when egress passes the budget", async () => {
+  const turnEnv = {
+    ...env,
+    SESSIONS: new FakeKv(),
+    TURN_KEY_ID: "key",
+    TURN_API_TOKEN: "tok",
+    TURN_MONTHLY_GB_BUDGET: "1",
+  };
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    if (String(url).endsWith("/graphql")) {
+      return new Response(
+        JSON.stringify({
+          data: {
+            viewer: {
+              accounts: [
+                { callsTurnUsageAdaptiveGroups: [{ sum: { egressBytes: 2e9 } }] },
+              ],
+            },
+          },
+        }),
+        { status: 200 },
+      );
+    }
+    return realFetch(url, init);
+  };
+  await worker.scheduled({}, turnEnv);
+  globalThis.fetch = realFetch;
+  const month = new Date().toISOString().slice(0, 7);
+  assert.equal(await turnEnv.SESSIONS.get(`turn-paused:${month}`), "over-budget");
+  assert.equal(await turnEnv.SESSIONS.get(`turn-usage-gb:${month}`), "2.00");
+});
+
+await test("an analytics-blind token skips the usage check without breaking cleanup", async () => {
+  const turnEnv = { ...env, SESSIONS: new FakeKv(), TURN_KEY_ID: "key", TURN_API_TOKEN: "tok" };
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    if (String(url).endsWith("/graphql")) {
+      return new Response(JSON.stringify({ errors: [{ message: "auth" }] }), { status: 403 });
+    }
+    return realFetch(url, init);
+  };
+  await worker.scheduled({}, turnEnv);
+  globalThis.fetch = realFetch;
+  const month = new Date().toISOString().slice(0, 7);
+  assert.equal(await turnEnv.SESSIONS.get(`turn-paused:${month}`), null);
+});
+
 await test("rate limit trips after the daily allowance", async () => {
   let last;
   for (let i = 0; i < 25; i += 1) {

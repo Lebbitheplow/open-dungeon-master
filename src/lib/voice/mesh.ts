@@ -249,11 +249,13 @@ export async function meshIceServers(): Promise<unknown[]> {
   if (iceCache && Date.now() - iceCache.at < ICE_CACHE_MS) {
     return iceCache.servers;
   }
+  // "off" opts a self-hosted server out of the phone-home entirely: mesh
+  // then runs on public STUN alone, which still connects most tables.
   const broker = serverEnv(
     "ODM_ICE_BROKER_URL",
     "https://odm-tunnel-broker.tunnel-broker.workers.dev",
   );
-  if (!broker) {
+  if (!broker || broker === "off") {
     return FALLBACK_ICE;
   }
   try {

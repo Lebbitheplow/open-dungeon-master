@@ -4,11 +4,21 @@ compatibility_date = "2026-08-01"
 
 # Runs on the free workers.dev subdomain:
 #   https://odm-tunnel-broker.<your-subdomain>.workers.dev
-# No route on the zone is needed. The one secret is set with:
-#   wrangler secret put CF_API_TOKEN
-# using a token scoped to exactly: Account > Cloudflare Tunnel > Edit,
-# Zone > DNS > Edit (this zone only). NEVER the Global API Key.
+# No route on the zone is needed. Secrets, set with `wrangler secret put`:
+#   CF_API_TOKEN     required. Scoped to exactly: Account > Cloudflare
+#                    Tunnel > Edit, Zone > DNS > Edit (this zone only).
+#                    NEVER the Global API Key. Optionally add Account >
+#                    Account Analytics > Read so the hourly cron can meter
+#                    TURN egress and pause minting near the free tier.
+#   TURN_KEY_ID      optional. A Cloudflare Realtime TURN key id; without
+#   TURN_API_TOKEN   it (and its token) /turn serves STUN-only forever.
 # The zone id is resolved from ZONE_NAME at runtime and cached in KV.
+#
+# Optional [vars] guarding the Realtime free tier (1000 GB/month):
+#   TURN_MONTHLY_MINT_CAP   max credential mints per month (default 5000)
+#   TURN_MONTHLY_GB_BUDGET  TURN egress GB before /turn goes STUN-only for
+#                           the rest of the month (default 900; needs the
+#                           analytics scope above to take effect)
 
 [[kv_namespaces]]
 binding = "SESSIONS"
