@@ -32,9 +32,33 @@ export function InviteShareDialog({
   const [copied, setCopied] = useState<"link" | "code" | null>(null);
   const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState("");
+  const [publicOrigin, setPublicOrigin] = useState("");
 
-  const link =
-    typeof window !== "undefined" ? `${window.location.origin}/join/${inviteCode}` : "";
+  // A host sharing their world through a tunnel plays on 127.0.0.1, an
+  // address guests cannot reach. The server's publicUrl (set by the desktop
+  // app while a tunnel runs, or by an admin behind a reverse proxy) is the
+  // one that belongs in links and QR codes.
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    let cancelled = false;
+    fetch("/api/auth/providers")
+      .then((response) => response.json())
+      .then((data: { publicUrl?: string }) => {
+        if (!cancelled && typeof data.publicUrl === "string") {
+          setPublicOrigin(data.publicUrl);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  const origin =
+    publicOrigin || (typeof window !== "undefined" ? window.location.origin : "");
+  const link = origin ? `${origin}/join/${inviteCode}` : "";
 
   useEffect(() => {
     if (!open || !link) {

@@ -17,5 +17,9 @@ export async function GET() {
     signupMode: resolveSignupMode(config),
     serverName: config.serverName || "Open Dungeon Master",
     version: packageJson.version,
+    // The address OTHER people reach this server on, when it differs from
+    // the one the current visitor used (e.g. a host playing on 127.0.0.1
+    // while a tunnel shares the world). Share dialogs prefer it.
+    publicUrl: (config.publicUrl || "").replace(/\/+$/, ""),
   });
 }

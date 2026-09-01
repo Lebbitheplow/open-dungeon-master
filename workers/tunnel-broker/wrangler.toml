@@ -1,0 +1,23 @@
+name = "odm-tunnel-broker"
+main = "src/index.js"
+compatibility_date = "2026-08-01"
+
+# Runs on the free workers.dev subdomain:
+#   https://odm-tunnel-broker.<your-subdomain>.workers.dev
+# No route on the zone is needed. Before deploying:
+#   1. wrangler kv namespace create SESSIONS   (paste the id below)
+#   2. Fill ACCOUNT_ID and ZONE_ID (Cloudflare dashboard, Overview sidebar).
+#   3. wrangler secret put CF_API_TOKEN
+#      Use a token scoped to exactly: Account > Cloudflare Tunnel > Edit,
+#      Zone > DNS > Edit (this zone only). NEVER the Global API Key.
+
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "TODO-paste-kv-namespace-id"
+
+[triggers]
+crons = ["17 * * * *"]
+
+[vars]
+ACCOUNT_ID = "TODO"
+ZONE_ID = "TODO"
