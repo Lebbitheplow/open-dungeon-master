@@ -17,7 +17,6 @@
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH = 8;
-const PLAY_SUFFIX = "play.opendungeonmaster.com";
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const CREATES_PER_DAY = 20;
 const API = "https://api.cloudflare.com/client/v4";
@@ -69,12 +68,56 @@ async function cfApi(env, method, path, body) {
   return data.result;
 }
 
-async function rateLimited(env, ip) {
-  const key = `ip:${ip}:${new Date().toISOString().slice(0, 10)}`;
+// The zone id is looked up once from the zone's name (the scoped token can
+// list the zone it edits) and cached in KV forever.
+async function zoneId(env) {
+  const cached = await env.SESSIONS.get("zone-id");
+  if (cached) return cached;
+  const zones = await cfApi(env, "GET", `/zones?name=${env.ZONE_NAME}`);
+  const id = Array.isArray(zones) ? zones[0]?.id : undefined;
+  if (!id) throw new Error(`Zone ${env.ZONE_NAME} is not visible to the API token.`);
+  await env.SESSIONS.put("zone-id", id);
+  return id;
+}
+
+async function rateLimited(env, ip, kind = "ip", cap = CREATES_PER_DAY) {
+  const key = `${kind}:${ip}:${new Date().toISOString().slice(0, 10)}`;
   const used = Number((await env.SESSIONS.get(key)) || "0");
-  if (used >= CREATES_PER_DAY) return true;
+  if (used >= cap) return true;
   await env.SESSIONS.put(key, String(used + 1), { expirationTtl: 86_400 });
   return false;
+}
+
+// ICE servers for mesh voice. Every response carries Cloudflare's free STUN;
+// when a Realtime TURN key is configured (secrets TURN_KEY_ID and
+// TURN_API_TOKEN), short-lived TURN credentials ride along so peers behind
+// hostile NATs still connect. Relay traffic bills against the Realtime free
+// tier, hence the tighter per-IP cap.
+async function iceServers(env, request) {
+  const stun = { urls: ["stun:stun.cloudflare.com:3478"] };
+  if (!env.TURN_KEY_ID || !env.TURN_API_TOKEN) {
+    return json({ iceServers: [stun] });
+  }
+  const ip = request.headers.get("cf-connecting-ip") || "unknown";
+  if (await rateLimited(env, ip, "turn", 50)) {
+    return json({ iceServers: [stun] });
+  }
+  const response = await fetch(
+    `https://rtc.live.cloudflare.com/v1/turn/keys/${env.TURN_KEY_ID}/credentials/generate-ice-servers`,
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${env.TURN_API_TOKEN}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ ttl: 4 * 60 * 60 }),
+    },
+  );
+  const body = await response.json().catch(() => null);
+  if (!response.ok || !Array.isArray(body?.iceServers)) {
+    return json({ iceServers: [stun] });
+  }
+  return json({ iceServers: [stun, ...body.iceServers] });
 }
 
 async function createSession(env, request) {
@@ -89,7 +132,7 @@ async function createSession(env, request) {
   }
 
   const code = randomCode();
-  const hostname = `${code.toLowerCase()}.${PLAY_SUFFIX}`;
+  const hostname = `${code.toLowerCase()}.play.${env.ZONE_NAME}`;
   const secret = [...crypto.getRandomValues(new Uint8Array(24))]
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
@@ -111,7 +154,7 @@ async function createSession(env, request) {
       ],
     },
   });
-  const record = await cfApi(env, "POST", `/zones/${env.ZONE_ID}/dns_records`, {
+  const record = await cfApi(env, "POST", `/zones/${await zoneId(env)}/dns_records`, {
     type: "CNAME",
     name: hostname,
     content: `${tunnel.id}.cfargotunnel.com`,
@@ -134,9 +177,12 @@ async function createSession(env, request) {
 
 async function destroySession(env, code, session) {
   // Order matters: DNS first so the name dies even if tunnel cleanup fails.
-  await cfApi(env, "DELETE", `/zones/${env.ZONE_ID}/dns_records/${session.dnsRecordId}`).catch(
-    () => undefined,
-  );
+  const zone = await zoneId(env).catch(() => null);
+  if (zone) {
+    await cfApi(env, "DELETE", `/zones/${zone}/dns_records/${session.dnsRecordId}`).catch(
+      () => undefined,
+    );
+  }
   await cfApi(
     env,
     "DELETE",
@@ -178,6 +224,9 @@ const worker = {
   async fetch(request, env) {
     const url = new URL(request.url);
     try {
+      if (request.method === "GET" && url.pathname === "/turn") {
+        return await iceServers(env, request);
+      }
       if (request.method === "POST" && url.pathname === "/session") {
         return await createSession(env, request);
       }

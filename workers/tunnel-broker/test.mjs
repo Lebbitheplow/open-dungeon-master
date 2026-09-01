@@ -28,6 +28,7 @@ globalThis.fetch = async (url, init = {}) => {
   let result = { id: "fake-id" };
   if (path.endsWith("/token")) result = "fake-tunnel-token";
   if (path.includes("dns_records")) result = { id: "fake-dns-id" };
+  if (path === "/client/v4/zones") result = [{ id: "zone" }];
   return new Response(JSON.stringify({ success: true, result }), { status: 200 });
 };
 
@@ -35,7 +36,7 @@ const env = {
   SESSIONS: new FakeKv(),
   CF_API_TOKEN: "test-token",
   ACCOUNT_ID: "acct",
-  ZONE_ID: "zone",
+  ZONE_NAME: "opendungeonmaster.com",
 };
 
 function request(method, path, { body, headers } = {}) {
@@ -104,6 +105,34 @@ await test("DELETE with the right secret tears the session down", async () => {
   );
   assert.equal(response.status, 200);
   assert.equal(await env.SESSIONS.get(`session:${created.code}`), null);
+});
+
+await test("GET /turn degrades to STUN-only without a TURN key", async () => {
+  const response = await worker.fetch(request("GET", "/turn"), env);
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.deepEqual(body.iceServers, [{ urls: ["stun:stun.cloudflare.com:3478"] }]);
+});
+
+await test("GET /turn appends minted TURN credentials when configured", async () => {
+  const turnEnv = { ...env, TURN_KEY_ID: "key", TURN_API_TOKEN: "tok" };
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    if (String(url).includes("rtc.live.cloudflare.com")) {
+      return new Response(
+        JSON.stringify({
+          iceServers: [{ urls: ["turn:turn.cloudflare.com:3478"], username: "u", credential: "c" }],
+        }),
+        { status: 200 },
+      );
+    }
+    return realFetch(url, init);
+  };
+  const response = await worker.fetch(request("GET", "/turn"), turnEnv);
+  globalThis.fetch = realFetch;
+  const body = await response.json();
+  assert.equal(body.iceServers.length, 2);
+  assert.equal(body.iceServers[1].username, "u");
 });
 
 await test("rate limit trips after the daily allowance", async () => {

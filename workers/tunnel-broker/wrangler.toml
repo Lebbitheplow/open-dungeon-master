@@ -4,20 +4,19 @@ compatibility_date = "2026-08-01"
 
 # Runs on the free workers.dev subdomain:
 #   https://odm-tunnel-broker.<your-subdomain>.workers.dev
-# No route on the zone is needed. Before deploying:
-#   1. wrangler kv namespace create SESSIONS   (paste the id below)
-#   2. Fill ACCOUNT_ID and ZONE_ID (Cloudflare dashboard, Overview sidebar).
-#   3. wrangler secret put CF_API_TOKEN
-#      Use a token scoped to exactly: Account > Cloudflare Tunnel > Edit,
-#      Zone > DNS > Edit (this zone only). NEVER the Global API Key.
+# No route on the zone is needed. The one secret is set with:
+#   wrangler secret put CF_API_TOKEN
+# using a token scoped to exactly: Account > Cloudflare Tunnel > Edit,
+# Zone > DNS > Edit (this zone only). NEVER the Global API Key.
+# The zone id is resolved from ZONE_NAME at runtime and cached in KV.
 
 [[kv_namespaces]]
 binding = "SESSIONS"
-id = "TODO-paste-kv-namespace-id"
+id = "47fe1069128549d199527670da4b7dd5"
 
 [triggers]
 crons = ["17 * * * *"]
 
 [vars]
-ACCOUNT_ID = "TODO"
-ZONE_ID = "TODO"
+ACCOUNT_ID = "b6946c131ffbb87f321b1f9c963da32e"
+ZONE_NAME = "opendungeonmaster.com"
