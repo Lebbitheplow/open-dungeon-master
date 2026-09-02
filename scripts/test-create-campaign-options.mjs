@@ -52,6 +52,14 @@ function test(name, fn) {
   passed += 1;
 }
 
+// A key counts as offered only where it stands as its own identifier or
+// property token (`voice:`, `voice,`, `voice}`). A bare substring test let
+// "voice" pass for as long as the dialog had a `(voice) =>` TTS loop, while
+// the actual voice settings were never offered at creation.
+function offeredAtCreation(key) {
+  return new RegExp(`(?<![.\\w$])${key}(?=\\s*[:,}])`).test(creationSurface);
+}
+
 test("every game setting except the omitted ones is offered at creation", () => {
   const keys = Object.keys(gameSettingsSchema.shape);
   assert.ok(keys.length > 20, "the settings schema looks wrong; the shape is nearly empty");
@@ -60,7 +68,7 @@ test("every game setting except the omitted ones is offered at creation", () => 
       continue;
     }
     assert.ok(
-      creationSurface.includes(key),
+      offeredAtCreation(key),
       `${key} is in gameSettingsSchema but the creation dialog never offers it`,
     );
   }

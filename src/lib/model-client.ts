@@ -378,6 +378,20 @@ export async function requestCustomMessage(
   const trimmedBase = (baseUrl || "").trim();
 
   if (!trimmedBase) {
+    // A blank base URL under a server-wide "none" provider is not a
+    // misconfiguration to debug; it is the admin's recorded answer, so the
+    // table gets a plain statement instead of a hint about backend URLs.
+    const configuredProvider =
+      getGlobalConfig().text.provider || serverEnv("DEFAULT_TEXT_PROVIDER");
+    if (configuredProvider === "none") {
+      return {
+        error: Response.json(
+          { error: "This world has no AI storyteller configured." },
+          { status: 400 },
+        ),
+      };
+    }
+
     return {
       error: Response.json(
         {

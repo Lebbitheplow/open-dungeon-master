@@ -55,7 +55,10 @@ export const globalConfigSchema = z.object({
     .default({ profile: "", story: {}, utility: {} }),
   text: z
     .object({
-      provider: z.enum(["", "local", "custom"]).default(""),
+      // "none" is an explicit "this server has no AI DM": campaigns default
+      // to a human DM and the story path fails fast with a plain message
+      // instead of dialing the shipped 127.0.0.1:8001 default.
+      provider: z.enum(["", "local", "custom", "none"]).default(""),
       localTextModel: z.string().trim().max(200).default(""),
       customBaseUrl: z.string().trim().max(500).default(""),
       customModel: z.string().trim().max(200).default(""),

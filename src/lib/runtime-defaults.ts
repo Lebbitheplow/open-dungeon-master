@@ -60,8 +60,12 @@ export function configuredDefaultStorySettings(): StorySettings {
     // Like customApiKey, the global utility key is applied at request time in
     // model-client and never copied into per-campaign settings.
     utilityApiKey: "",
-    customBaseUrl: customBaseUrl || DEFAULT_STORY_SETTINGS.customBaseUrl,
-    customModel: customModel || DEFAULT_STORY_SETTINGS.customModel,
+    // Under "none" the built-in llama-server preset must NOT reappear as a
+    // fallback: it would make "no AI" look exactly like a configured backend
+    // that happens to be down, which is the ambiguity "none" exists to end.
+    customBaseUrl:
+      textProvider === "none" ? "" : customBaseUrl || DEFAULT_STORY_SETTINGS.customBaseUrl,
+    customModel: textProvider === "none" ? "" : customModel || DEFAULT_STORY_SETTINGS.customModel,
     // The global API key never lands in per-campaign settings; it is applied
     // at request time in model-client so it can't leak to campaign members.
     customApiKey: "",

@@ -1,9 +1,14 @@
 // "custom" = any OpenAI-compatible server (llama.cpp, LM Studio, vLLM,
 // OpenRouter, a remote Ollama). OpenRouter is no longer its own provider; it
 // is reached through "custom" with the OpenRouter preset URL.
-export type TextProvider = "local" | "custom";
+//
+// "none" is a positive record that this server has no AI DM at all. Without
+// it, "no AI" and "the shipped 127.0.0.1:8001 default with nothing listening"
+// are indistinguishable, and the UI cannot warn anyone before a campaign
+// fails its first turn.
+export type TextProvider = "local" | "custom" | "none";
 
-export const TEXT_PROVIDERS: TextProvider[] = ["local", "custom"];
+export const TEXT_PROVIDERS: TextProvider[] = ["local", "custom", "none"];
 
 // Gemma 4 QAT (quantization-aware trained, Q4_0) builds served by Ollama.
 // context = native context window in tokens. ram = resident memory measured
@@ -34,5 +39,5 @@ export function isLocalTextModelId(value: unknown): value is LocalTextModelId {
 }
 
 export function isTextProvider(value: unknown): value is TextProvider {
-  return value === "local" || value === "custom";
+  return value === "local" || value === "custom" || value === "none";
 }

@@ -85,7 +85,9 @@ const patchSchema = z.object({
   worldRegistryUrl: z.string().trim().max(500).optional(),
   text: z
     .object({
-      provider: z.enum(["", "local", "custom"]).optional(),
+      // "none" lets an admin (or the desktop shell) record that this server
+      // has no AI DM, so the UI can say so instead of failing a first turn.
+      provider: z.enum(["", "local", "custom", "none"]).optional(),
       localTextModel: z.string().trim().max(200).optional(),
       customBaseUrl: z.string().trim().max(500).optional(),
       customModel: z.string().trim().max(200).optional(),

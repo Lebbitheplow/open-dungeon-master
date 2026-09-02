@@ -40,6 +40,15 @@ import {
   type Genre,
 } from "@/lib/schemas/game-settings";
 
+// The slice of /api/capabilities this dialog gates on. null means the
+// endpoint never answered, and the dialog assumes everything is available:
+// a flaky capability check must never block creating a campaign.
+type ServerCapabilities = {
+  story: { configured: boolean; reachable: boolean };
+  images: { configured: boolean };
+  tts: { configured: boolean };
+};
+
 // solo: creates a one-player campaign (maxPlayers 1); the player count is
 // hidden and the lobby streamlines itself for a party of one.
 //
@@ -114,8 +123,30 @@ export function CreateCampaignDialog({
   const [companions, setCompanions] = useState<GameSettings["companions"]>("auto");
   const [maxCompanions, setMaxCompanions] = useState(2);
   const [maxGuests, setMaxGuests] = useState(2);
+  const [voiceChat, setVoiceChat] = useState<GameSettings["voice"]>({
+    enabled: true,
+    turnEnforcement: "soft",
+    rules: {
+      proximity: false,
+      hearingRangeFeet: 30,
+      sayRange: false,
+      wallsAttenuate: false,
+      downedGoDeaf: false,
+    },
+  });
+  const [capabilities, setCapabilities] = useState<ServerCapabilities | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // "Known missing" is an admin's positive statement (provider "none" or no
+  // backend at all), which hides the AI seat. "Unreachable" is a configured
+  // backend that is not answering, which keeps the seat but warns.
+  const storyKnownMissing = capabilities ? !capabilities.story.configured : false;
+  const storyUnreachable = capabilities
+    ? capabilities.story.configured && !capabilities.story.reachable
+    : false;
+  const ttsAvailable = capabilities ? capabilities.tts.configured : true;
+  const mapsAvailable = capabilities ? capabilities.images.configured : true;
 
   // Fetched rather than imported: the pack files are read off disk on the
   // server, and the summaries are all a picker needs.
@@ -133,6 +164,29 @@ export function CreateCampaignDialog({
       })
       .catch(() => {
         // No packs installed is a valid state; the section simply hides.
+      });
+    void fetch("/api/capabilities")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: ServerCapabilities | null) => {
+        if (cancelled || !data?.story) {
+          return;
+        }
+        setCapabilities(data);
+        // Defaults follow reality: a table should not discover on turn one
+        // that the AI seat was never fillable.
+        if (!data.story.configured || !data.story.reachable) {
+          setDmMode("human");
+        }
+        if (!data.tts?.configured) {
+          setTtsEnabled(false);
+        }
+        if (!data.images?.configured) {
+          setMapsEnabled(false);
+        }
+      })
+      .catch(() => {
+        // No answer is not "no AI": without capabilities the dialog offers
+        // everything, exactly as it did before the endpoint existed.
       });
     return () => {
       cancelled = true;
@@ -207,6 +261,7 @@ export function CreateCampaignDialog({
             maxCompanions,
             maxGuests,
             worldPack,
+            voice: voiceChat,
             // Three gameSettings fields are deliberately not offered here.
             //
             // `stages` trades turn quality for speed on a slow local model,
@@ -288,7 +343,12 @@ export function CreateCampaignDialog({
             <div>
               <span className="mb-1.5 block text-stone-400">Who runs this game?</span>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                {DM_MODES.map((mode) => (
+                {DM_MODES.filter(
+                  // A server that positively has no AI DM (provider "none")
+                  // offers only the human seat; "assisted" leans on the same
+                  // missing backend, so it goes too.
+                  (mode) => mode === "human" || !storyKnownMissing,
+                ).map((mode) => (
                   <button
                     key={mode}
                     type="button"
@@ -300,6 +360,17 @@ export function CreateCampaignDialog({
                   </button>
                 ))}
               </div>
+              {storyKnownMissing ? (
+                <p className="mt-1.5 text-xs text-stone-500">
+                  This server has no AI storyteller, so a human runs the table.
+                </p>
+              ) : null}
+              {storyUnreachable && aiNarrates ? (
+                <p className="mt-1.5 text-xs text-amber-300">
+                  The AI backend is not answering right now. You can still create this
+                  campaign, but AI turns will fail until it is back.
+                </p>
+              ) : null}
               {dmMode !== "ai" ? (
                 <p className="mt-1.5 text-xs text-stone-500">
                   You take the Dungeon Master seat: no character, no party slot, and you
@@ -535,19 +606,25 @@ export function CreateCampaignDialog({
               ) : null}
               <button
                 type="button"
+                disabled={!ttsAvailable}
                 onClick={() => setTtsEnabled(!ttsEnabled)}
-                className={toggleClass(ttsEnabled)}
+                className={cn(toggleClass(ttsEnabled), !ttsAvailable && "cursor-not-allowed opacity-50")}
               >
                 <span className="block font-medium">Voice narration</span>
-                <span className="block text-xs opacity-80">Spoken DM narration</span>
+                <span className="block text-xs opacity-80">
+                  {ttsAvailable ? "Spoken DM narration" : "No speech service on this server"}
+                </span>
               </button>
               <button
                 type="button"
+                disabled={!mapsAvailable}
                 onClick={() => setMapsEnabled(!mapsEnabled)}
-                className={toggleClass(mapsEnabled)}
+                className={cn(toggleClass(mapsEnabled), !mapsAvailable && "cursor-not-allowed opacity-50")}
               >
                 <span className="block font-medium">Maps</span>
-                <span className="block text-xs opacity-80">AI-drawn area maps</span>
+                <span className="block text-xs opacity-80">
+                  {mapsAvailable ? "AI-drawn area maps" : "No image service on this server"}
+                </span>
               </button>
               <button
                 type="button"
@@ -756,6 +833,142 @@ export function CreateCampaignDialog({
               ) : null}
             </div>
 
+            {!solo ? (
+              <div>
+                <span className="mb-1.5 block text-stone-400">Voice chat</span>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <button
+                    type="button"
+                    onClick={() => setVoiceChat({ ...voiceChat, enabled: !voiceChat.enabled })}
+                    className={toggleClass(voiceChat.enabled)}
+                  >
+                    <span className="block font-medium">Voice chat</span>
+                    <span className="block text-xs opacity-80">
+                      Talk live in the lobby and at the table
+                    </span>
+                  </button>
+                  {voiceChat.enabled ? (
+                    <>
+                      <label className="block">
+                        <span className="mb-1 block text-xs text-stone-500">Turn floor</span>
+                        <select
+                          value={voiceChat.turnEnforcement}
+                          onChange={(event) =>
+                            setVoiceChat({
+                              ...voiceChat,
+                              turnEnforcement: event.target
+                                .value as GameSettings["voice"]["turnEnforcement"],
+                            })
+                          }
+                          className={inputClass}
+                        >
+                          <option value="off">Turns: ignored</option>
+                          <option value="soft">Turns: shown</option>
+                          <option value="strict">Turns: enforced</option>
+                        </select>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setVoiceChat({
+                            ...voiceChat,
+                            rules: { ...voiceChat.rules, proximity: !voiceChat.rules.proximity },
+                          })
+                        }
+                        className={toggleClass(voiceChat.rules.proximity)}
+                      >
+                        <span className="block font-medium">Proximity</span>
+                        <span className="block text-xs opacity-80">
+                          The battle map decides who hears whom
+                        </span>
+                      </button>
+                      {voiceChat.rules.proximity ? (
+                        <>
+                          <label className="block">
+                            <span className="mb-1 block text-xs text-stone-500">Hearing range</span>
+                            <select
+                              value={voiceChat.rules.hearingRangeFeet}
+                              onChange={(event) =>
+                                setVoiceChat({
+                                  ...voiceChat,
+                                  rules: {
+                                    ...voiceChat.rules,
+                                    hearingRangeFeet: Number(event.target.value),
+                                  },
+                                })
+                              }
+                              className={inputClass}
+                            >
+                              {[15, 30, 60, 120].map((feet) => (
+                                <option key={feet} value={feet}>
+                                  {feet} ft
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setVoiceChat({
+                                ...voiceChat,
+                                rules: { ...voiceChat.rules, sayRange: !voiceChat.rules.sayRange },
+                              })
+                            }
+                            className={toggleClass(voiceChat.rules.sayRange)}
+                          >
+                            <span className="block font-medium">Whisper and shout</span>
+                            <span className="block text-xs opacity-80">
+                              Speakers pick how far their words carry
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setVoiceChat({
+                                ...voiceChat,
+                                rules: {
+                                  ...voiceChat.rules,
+                                  wallsAttenuate: !voiceChat.rules.wallsAttenuate,
+                                },
+                              })
+                            }
+                            className={toggleClass(voiceChat.rules.wallsAttenuate)}
+                          >
+                            <span className="block font-medium">Walls muffle</span>
+                            <span className="block text-xs opacity-80">
+                              A wall muffles a voice instead of cutting it
+                            </span>
+                          </button>
+                        </>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setVoiceChat({
+                            ...voiceChat,
+                            rules: {
+                              ...voiceChat.rules,
+                              downedGoDeaf: !voiceChat.rules.downedGoDeaf,
+                            },
+                          })
+                        }
+                        className={toggleClass(voiceChat.rules.downedGoDeaf)}
+                      >
+                        <span className="block font-medium">Downed go deaf</span>
+                        <span className="block text-xs opacity-80">
+                          At 0 hit points a character stops hearing the table
+                        </span>
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+                <p className="mt-1 text-xs text-stone-500">
+                  The server has its own switch for live audio too; if the owner keeps it off,
+                  these settings wait until it is on.
+                </p>
+              </div>
+            ) : null}
+
             {ttsEnabled ? (
               <div className="block">
                 <span className="mb-1 block text-stone-400">Narrator voice</span>
@@ -776,8 +989,18 @@ export function CreateCampaignDialog({
               </div>
             ) : null}
 
+            {solo && storyKnownMissing ? (
+              <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 p-3 text-amber-200">
+                A solo adventure needs the AI storyteller, and this server does not have
+                one. Ask the server owner to set up an AI backend first.
+              </p>
+            ) : null}
             {error ? <p className="text-red-400">{error}</p> : null}
-            <button type="submit" disabled={busy} className={cn(ui.btnPrimary, "w-full")}>
+            <button
+              type="submit"
+              disabled={busy || (solo && storyKnownMissing)}
+              className={cn(ui.btnPrimary, "w-full")}
+            >
               {busy ? <Loader2 className="size-4 animate-spin" /> : null}
               {solo ? "Create adventure" : "Create campaign"}
             </button>
