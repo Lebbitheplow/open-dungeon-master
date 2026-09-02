@@ -17,7 +17,23 @@ import { createRequire } from "node:module";
 // Both engines load lazily and synchronously (the database opens inside
 // synchronous accessors), and the native one must be allowed to fail, so a
 // real require does the work in both the ESM test runner and Next's bundle.
+// The built-in engine goes through process.getBuiltinModule instead: the
+// bundler rewrites createRequire and its rewrite cannot resolve node: ids.
 const localRequire = createRequire(import.meta.url);
+
+type NodeSqlite = typeof import("node:sqlite");
+
+function loadNodeSqlite(): NodeSqlite | null {
+  const getBuiltinModule = (
+    process as { getBuiltinModule?: (id: string) => unknown }
+  ).getBuiltinModule;
+  if (typeof getBuiltinModule !== "function") return null;
+  try {
+    return (getBuiltinModule.call(process, "node:sqlite") as NodeSqlite | undefined) ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export interface RunResult {
   changes: number;
@@ -113,7 +129,13 @@ function wrapNative(db: import("better-sqlite3-multiple-ciphers").Database): Sql
 }
 
 function openNode(file: string, options: OpenOptions): SqliteDatabase {
-  const { DatabaseSync } = localRequire("node:sqlite") as typeof import("node:sqlite");
+  const sqlite = loadNodeSqlite();
+  if (!sqlite) {
+    throw new Error(
+      "No SQLite engine: the native module did not load and this Node has no built-in node:sqlite (needs Node 22.13 or newer).",
+    );
+  }
+  const { DatabaseSync } = sqlite;
   if (options.fileMustExist && !existsSync(file)) {
     throw new Error(`Database file not found: ${file}`);
   }
