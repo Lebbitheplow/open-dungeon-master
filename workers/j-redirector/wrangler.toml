@@ -13,4 +13,12 @@ compatibility_date = "2026-08-01"
 
 routes = [
   { pattern = "opendungeonmaster.com/j*", zone_name = "opendungeonmaster.com" },
+  # Android App Link verification for the client's https /j intent-filter.
+  { pattern = "opendungeonmaster.com/.well-known/assetlinks.json", zone_name = "opendungeonmaster.com" },
 ]
+
+[vars]
+# SHA-256 fingerprints of APK signing certificates allowed to handle /j App
+# Links, comma-separated. The one below is the debug keystore on the dev
+# machine; append the Play release certificate once that keystore exists.
+ANDROID_CERT_SHA256 = "01:3E:49:6C:EF:07:9D:E4:22:44:A2:55:60:03:DF:20:42:FD:76:AF:BD:27:04:BB:22:25:59:2D:FF:77:92:73"

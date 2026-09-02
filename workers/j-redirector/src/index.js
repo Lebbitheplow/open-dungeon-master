@@ -64,6 +64,36 @@ export function parseCode(raw) {
   return CODE_SHAPE.test(code) ? code : null;
 }
 
+// Digital Asset Links: Android verifies the client app's https /j
+// intent-filter against this file, so scanned QR invites open the app
+// directly instead of a browser. Fingerprints are the SHA-256 of the APK
+// signing certificates, comma-separated in the ANDROID_CERT_SHA256 var
+// (wrangler.toml). No valid fingerprint means 404: verification simply
+// fails and links keep opening the interstitial in a browser.
+export function assetLinks(env) {
+  const raw = typeof env?.ANDROID_CERT_SHA256 === "string" ? env.ANDROID_CERT_SHA256 : "";
+  const prints = raw
+    .split(",")
+    .map((entry) => entry.trim().toUpperCase())
+    .filter((entry) => /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/.test(entry));
+  if (prints.length === 0) {
+    return new Response("Not found", { status: 404 });
+  }
+  const statements = [
+    {
+      relation: ["delegate_permission/common.handle_all_urls"],
+      target: {
+        namespace: "android_app",
+        package_name: "com.opendungeonmaster.app",
+        sha256_cert_fingerprints: prints,
+      },
+    },
+  ];
+  return new Response(JSON.stringify(statements), {
+    headers: { "content-type": "application/json" },
+  });
+}
+
 function page(title, body) {
   return new Response(
     `<!doctype html>
@@ -94,8 +124,11 @@ function page(title, body) {
 }
 
 const worker = {
-  fetch(request) {
+  fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === "/.well-known/assetlinks.json") {
+      return assetLinks(env);
+    }
     if (!url.pathname.startsWith("/j")) {
       return Response.redirect(DOWNLOAD_URL, 302);
     }

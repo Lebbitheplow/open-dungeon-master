@@ -1,7 +1,7 @@
 // Drives the Worker's fetch handler directly under Node, which shares the
 // WHATWG Request/Response the Workers runtime uses. Run: node test.mjs
 import assert from "node:assert/strict";
-import worker, { parseCode, parseServer } from "./src/index.js";
+import worker, { assetLinks, parseCode, parseServer } from "./src/index.js";
 
 let passed = 0;
 async function test(name, fn) {
@@ -61,6 +61,27 @@ await test("anything off /j goes to the downloads", () => {
   const response = worker.fetch(new Request("https://opendungeonmaster.com/other"));
   assert.equal(response.status, 302);
   assert.equal(response.headers.get("location"), "https://opendungeonmaster.com/");
+});
+
+await test("assetlinks serves the configured fingerprints for the app package", async () => {
+  const fp = "AA:" + Array(31).fill("BB").join(":");
+  const response = worker.fetch(
+    new Request("https://opendungeonmaster.com/.well-known/assetlinks.json"),
+    { ANDROID_CERT_SHA256: ` ${fp.toLowerCase()} ` },
+  );
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("content-type"), "application/json");
+  const [statement] = await response.json();
+  assert.deepEqual(statement.relation, ["delegate_permission/common.handle_all_urls"]);
+  assert.equal(statement.target.package_name, "com.opendungeonmaster.app");
+  assert.deepEqual(statement.target.sha256_cert_fingerprints, [fp]);
+});
+
+await test("assetlinks without a valid fingerprint is a 404, never an empty grant", () => {
+  assert.equal(assetLinks({}).status, 404);
+  assert.equal(assetLinks({ ANDROID_CERT_SHA256: "" }).status, 404);
+  assert.equal(assetLinks({ ANDROID_CERT_SHA256: "junk,also:junk" }).status, 404);
+  assert.equal(assetLinks(undefined).status, 404);
 });
 
 console.log(`j-redirector: ${passed} checks passed`);
