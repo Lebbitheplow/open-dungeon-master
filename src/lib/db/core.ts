@@ -1,4 +1,4 @@
-import Database from "better-sqlite3-multiple-ciphers";
+import { openDatabase, type SqliteDatabase } from "./driver.ts";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { serverEnv } from "../server-env.ts";
@@ -9,10 +9,10 @@ const dbPath =
   process.env.SQLITE_DB_PATH || path.join(process.cwd(), "data", "local-roleplay.sqlite");
 
 declare global {
-  var __localRoleplayDb: Database.Database | undefined;
+  var __localRoleplayDb: SqliteDatabase | undefined;
 }
 
-function ensureSchema(db: Database.Database) {
+function ensureSchema(db: SqliteDatabase) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS chats (
       id TEXT PRIMARY KEY,
@@ -1693,7 +1693,7 @@ function ensureSchema(db: Database.Database) {
 // battle_tokens, so no cascade is being suppressed here. The pragma is a
 // no-op inside a transaction, which is why the copy is not wrapped in one;
 // the guard above makes a half-finished run safe to repeat instead.
-function rebuildBattleTokens(db: Database.Database) {
+function rebuildBattleTokens(db: SqliteDatabase) {
   const ddl = db
     .prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'battle_tokens'`)
     .get() as { sql: string } | undefined;
@@ -1736,7 +1736,7 @@ function rebuildBattleTokens(db: Database.Database) {
 
 // Copy each library character's portrait onto linked campaign sheets that
 // have none; sheets with their own portrait are left alone.
-function backfillSheetPortraits(db: Database.Database) {
+function backfillSheetPortraits(db: SqliteDatabase) {
   const rows = db
     .prepare(
       `SELECT cs.id AS id, lc.sheet_json AS sheet_json
@@ -1762,7 +1762,7 @@ function backfillSheetPortraits(db: Database.Database) {
 // value the coarse -3..+3 score always stood for. Skips bonds whose
 // character sheet is gone and never overwrites a relationship the new
 // system already opened.
-function backfillNpcBonds(db: Database.Database) {
+function backfillNpcBonds(db: SqliteDatabase) {
   const npcs = db
     .prepare(`SELECT id, campaign_id, name, bonds_json FROM npcs WHERE bonds_json != '[]'`)
     .all() as Array<{ id: string; campaign_id: string; name: string; bonds_json: string }>;
@@ -1814,7 +1814,7 @@ function backfillNpcBonds(db: Database.Database) {
 
 // Copy each linked campaign sheet's portrait into its library character when
 // the library copy has none; the newest campaign sheet wins.
-function backfillLibraryPortraits(db: Database.Database) {
+function backfillLibraryPortraits(db: SqliteDatabase) {
   const rows = db
     .prepare(
       `SELECT lc.id AS id, lc.sheet_json AS sheet_json, cs.portrait_json AS portrait_json
@@ -1846,7 +1846,7 @@ function backfillLibraryPortraits(db: Database.Database) {
 // One-time backfill when the features_json column first lands: existing
 // sheets and library blobs get their SRD class features and racial traits so
 // the DM prompt can honestly call the list complete from the first turn.
-function backfillSheetFeatures(db: Database.Database) {
+function backfillSheetFeatures(db: SqliteDatabase) {
   const sheets = db
     .prepare(
       `SELECT id, class, subclass, race, level FROM character_sheets WHERE features_json IS NULL`,
@@ -1895,7 +1895,7 @@ function backfillSheetFeatures(db: Database.Database) {
 // the half-elf "Skill Versatility" trait once substring-matched "ki" and
 // stamped monk Ki onto any half-elf, and paladins predate Channel Divinity
 // landing in the base class table. Writes only rows that actually changed.
-function backfillSheetResources(db: Database.Database) {
+function backfillSheetResources(db: SqliteDatabase) {
   const sheets = db
     .prepare(
       `SELECT id, class, subclass, race, level, abilities_json, features_json, resources_json
@@ -1951,6 +1951,8 @@ function backfillSheetResources(db: Database.Database) {
   }
 }
 
+let plaintextWarned = false;
+
 function requireDbKey() {
   const key = serverEnv("DB_ENCRYPTION_KEY");
   if (!key) {
@@ -1980,16 +1982,28 @@ export function getDatabase() {
 
   const key = requireDbKey();
   mkdirSync(path.dirname(dbPath), { recursive: true });
-  const db = new Database(dbPath);
-  db.pragma("cipher='chacha20'");
-  db.pragma(`key='${key.replaceAll("'", "''")}'`);
+  const db = openDatabase(dbPath);
+  if (db.encrypted) {
+    db.pragma("cipher='chacha20'");
+    db.pragma(`key='${key.replaceAll("'", "''")}'`);
+  } else if (!plaintextWarned) {
+    // Node's built-in SQLite (the engine on hosts without the native
+    // module, such as the Android app) has no cipher: the file is plain.
+    plaintextWarned = true;
+    console.warn(
+      `[db] ${db.engine} SQLite engine cannot encrypt; ${dbPath} is stored unencrypted.`,
+    );
+  }
   try {
     db.prepare("SELECT count(*) FROM sqlite_master").get();
   } catch {
     db.close();
     throw new Error(
-      `Could not decrypt ${dbPath}: wrong or missing DB_ENCRYPTION_KEY. ` +
-        "If this database predates encryption, run: node scripts/migrate-encrypt-db.mjs",
+      db.encrypted
+        ? `Could not decrypt ${dbPath}: wrong or missing DB_ENCRYPTION_KEY. ` +
+            "If this database predates encryption, run: node scripts/migrate-encrypt-db.mjs"
+        : `Could not open ${dbPath}: it is encrypted and the ${db.engine} SQLite engine has no cipher. ` +
+            "Set ODM_SQLITE_DRIVER=native on a host with the native module.",
     );
   }
   db.pragma("journal_mode = WAL");

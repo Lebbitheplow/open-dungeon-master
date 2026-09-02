@@ -1,4 +1,4 @@
-import Database from "better-sqlite3-multiple-ciphers";
+import { openDatabase, type SqliteDatabase } from "@/lib/db/driver";
 import { existsSync } from "node:fs";
 import path from "node:path";
 
@@ -9,13 +9,13 @@ import path from "node:path";
 // results and the UI falls back to the bundled SRD data.
 
 declare global {
-  var __odmContentDb: Database.Database | null | undefined;
+  var __odmContentDb: SqliteDatabase | null | undefined;
 }
 
 const contentDbPath =
   process.env.CONTENT_DB_PATH || path.join(process.cwd(), "data", "content", "open5e.sqlite");
 
-export function getContentDb(): Database.Database | null {
+export function getContentDb(): SqliteDatabase | null {
   if (globalThis.__odmContentDb !== undefined) {
     return globalThis.__odmContentDb;
   }
@@ -23,7 +23,7 @@ export function getContentDb(): Database.Database | null {
     globalThis.__odmContentDb = null;
     return null;
   }
-  const db = new Database(contentDbPath, { readonly: true, fileMustExist: true });
+  const db = openDatabase(contentDbPath, { readonly: true, fileMustExist: true });
   globalThis.__odmContentDb = db;
   return db;
 }
