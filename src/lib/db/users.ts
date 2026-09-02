@@ -115,6 +115,32 @@ export function setUserAvatar(userId: string, avatar: UserAvatar | null) {
     .run(avatar ? JSON.stringify(avatar) : null, userId);
 }
 
+// Account preferences that follow the person between browsers. Absent keys
+// mean "use the default", so a patch merges rather than replaces: a browser
+// syncing its chime toggle must not erase the volumes another one saved.
+export type UserSettings = {
+  narrationVolume?: number;
+  narrationMuted?: boolean;
+  ambienceVolume?: number;
+  ambienceMuted?: boolean;
+  chimeMuted?: boolean;
+};
+
+export function getUserSettings(userId: string): UserSettings {
+  const row = getDatabase()
+    .prepare(`SELECT settings_json FROM users WHERE id = ?`)
+    .get(userId) as { settings_json: string | null } | undefined;
+  return parseJson<UserSettings>(row?.settings_json, {});
+}
+
+export function updateUserSettings(userId: string, patch: UserSettings): UserSettings {
+  const merged = { ...getUserSettings(userId), ...patch };
+  getDatabase()
+    .prepare(`UPDATE users SET settings_json = ? WHERE id = ?`)
+    .run(JSON.stringify(merged), userId);
+  return merged;
+}
+
 export function countUsers(): number {
   const row = getDatabase().prepare(`SELECT COUNT(*) AS n FROM users`).get() as { n: number };
   return row.n;

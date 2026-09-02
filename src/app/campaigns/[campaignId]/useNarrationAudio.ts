@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { AUDIO_PREF_FIELDS, hydrateAudioPrefs, writeAudioPref } from "@/lib/audio-prefs";
 
 // Plays DM narration audio (tts_ready events). Only events that arrive
 // AFTER mount autoplay; reconnect backlog never replays old narration.
@@ -8,11 +9,12 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 // its turn (manual replay is explicit intent and may interrupt). Mute and
 // volume are per-user (localStorage), exposed through useSyncExternalStore
 // so server render stays muted and the client snapshot takes over at
-// hydration without a setState cascade.
+// hydration without a setState cascade. The account keeps a copy so another
+// browser starts the same way; audio-prefs.ts owns that sync.
 
-const MUTED_KEY = "odm_tts_muted";
-const VOLUME_KEY = "odm_tts_volume";
-const PREFS_EVENT = "odm-tts-prefs";
+const MUTED_KEY = AUDIO_PREF_FIELDS.narrationMuted.key;
+const VOLUME_KEY = AUDIO_PREF_FIELDS.narrationVolume.key;
+const PREFS_EVENT = AUDIO_PREF_FIELDS.narrationMuted.event;
 
 function subscribePrefs(callback: () => void) {
   window.addEventListener(PREFS_EVENT, callback);
@@ -61,9 +63,14 @@ export function useNarrationAudio(): NarrationAudio {
   // good; they wait here and play from unlock().
   const pendingRef = useRef<Array<{ messageId: string; url: string }>>([]);
 
+  // The account copy of the prefs, applied over localStorage unless the
+  // user touched a control first.
+  useEffect(() => {
+    hydrateAudioPrefs();
+  }, []);
+
   const setMuted = useCallback((next: boolean) => {
-    window.localStorage.setItem(MUTED_KEY, next ? "1" : "0");
-    window.dispatchEvent(new Event(PREFS_EVENT));
+    writeAudioPref("narrationMuted", next);
     if (next) {
       audioRef.current?.pause();
       queueRef.current = [];
@@ -75,8 +82,7 @@ export function useNarrationAudio(): NarrationAudio {
 
   const setVolume = useCallback((next: number) => {
     const clamped = Math.max(0, Math.min(1, next));
-    window.localStorage.setItem(VOLUME_KEY, String(clamped));
-    window.dispatchEvent(new Event(PREFS_EVENT));
+    writeAudioPref("narrationVolume", clamped);
     if (audioRef.current) {
       audioRef.current.volume = clamped;
     }

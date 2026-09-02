@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useSyncExternalStore } from "react";
+import { AUDIO_PREF_FIELDS, hydrateAudioPrefs, writeAudioPref } from "@/lib/audio-prefs";
 
 // Chimes when the private-chat unread total (player side chats plus DM
 // whispers) grows. The mute preference is per-user localStorage exposed via
 // useSyncExternalStore, same pattern as useNarrationAudio: server render is
-// muted and the client snapshot takes over at hydration.
+// muted and the client snapshot takes over at hydration. The account keeps
+// a copy so another browser starts the same way (src/lib/audio-prefs.ts).
 
-const MUTED_KEY = "odm_chat_chime_muted";
-const PREFS_EVENT = "odm-chime-prefs";
+const MUTED_KEY = AUDIO_PREF_FIELDS.chimeMuted.key;
+const PREFS_EVENT = AUDIO_PREF_FIELDS.chimeMuted.event;
 
 function subscribePrefs(callback: () => void) {
   window.addEventListener(PREFS_EVENT, callback);
@@ -20,8 +22,7 @@ function readMuted() {
 }
 
 export function setChimeMuted(muted: boolean) {
-  window.localStorage.setItem(MUTED_KEY, muted ? "1" : "0");
-  window.dispatchEvent(new Event(PREFS_EVENT));
+  writeAudioPref("chimeMuted", muted);
 }
 
 export function useChimeMuted(): boolean {
@@ -66,6 +67,12 @@ export function useChatChime(totalUnread: number, loaded: boolean) {
   const muted = useChimeMuted();
   const previousRef = useRef<number | null>(null);
   const unlockedRef = useRef(false);
+
+  // The account copy of the prefs, applied over localStorage unless the
+  // user touched a control first (src/lib/audio-prefs.ts).
+  useEffect(() => {
+    hydrateAudioPrefs();
+  }, []);
 
   // Browsers block audio before a user gesture; the first interaction with
   // the page unlocks the chime, matching useNarrationAudio.

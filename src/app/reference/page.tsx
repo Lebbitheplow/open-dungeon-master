@@ -1,10 +1,9 @@
 "use client";
 
 import { BookOpen, Calculator, Columns3, Loader2, MessageCircleQuestion, Search } from "lucide-react";
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
-import { ui } from "@/lib/ui";
+import { AppHeader } from "@/components/AppHeader";
 import { InfoDialog } from "@/components/ui/InfoDialog";
 import {
   describeContentEntry,
@@ -188,13 +187,11 @@ export default function ReferencePage() {
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-8">
+      <AppHeader />
       <div className="mb-5 flex items-center justify-between gap-3">
         <h1 className="flex items-center gap-2 font-display text-2xl tracking-wide text-amber-100">
           <BookOpen className="size-5 text-amber-500/80" /> Rules reference
         </h1>
-        <Link href="/" className={ui.btnSmall}>
-          Back
-        </Link>
       </div>
 
       <div className="mb-4 flex flex-wrap gap-1.5">

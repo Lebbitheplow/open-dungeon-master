@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
 import { cn } from "@/lib/cn";
 import { IconChip, PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
+import { AppHeader } from "@/components/AppHeader";
 
 // Where a character is playing. A library character is a template and each
 // campaign holds its own copy, so one entry can be at several tables at once
@@ -146,6 +147,7 @@ export default function CharactersPage() {
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
+      <AppHeader />
       <header className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <PixelTile src={PIXEL_ICONS.characters} />
@@ -156,14 +158,9 @@ export default function CharactersPage() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Link href="/" className={ui.btnSmall}>
-            Campaigns
-          </Link>
-          <Link href="/characters/new" className={ui.btnPrimary}>
-            <Plus className="size-4" /> New character
-          </Link>
-        </div>
+        <Link href="/characters/new" className={ui.btnPrimary}>
+          <Plus className="size-4" /> New character
+        </Link>
       </header>
 
       {loading ? (

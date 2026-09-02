@@ -1,20 +1,14 @@
 "use client";
 
-import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   BookOpen,
-  CircleHelp,
   Copy,
   Hammer,
   Loader2,
-  LogOut,
   Plus,
   ScrollText,
-  Settings,
-  ShieldCheck,
   Swords,
   Trash2,
-  UserRound,
   Users,
 } from "lucide-react";
 import Link from "next/link";
@@ -23,8 +17,8 @@ import { cn } from "@/lib/cn";
 import { IconChip, PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
 import type { CampaignSummary, SessionUser } from "@/lib/campaign-types";
 import { CreateCampaignDialog } from "@/app/CreateCampaignDialog";
+import { AccountMenu } from "@/components/AccountMenu";
 import { NotificationBell } from "@/components/NotificationBell";
-import { HelpDialog } from "@/components/HelpDialog";
 import { HowToPlayDialog } from "@/components/HowToPlayDialog";
 import { Tooltip } from "@/components/ui/Tooltip";
 import AuthForm from "@/app/AuthForm";
@@ -132,6 +126,20 @@ function AuthScreen({ onAuthed }: { onAuthed: (user: SessionUser) => void }) {
             <ScrollText className="size-3.5" /> How to play
           </button>
         </div>
+
+        <footer className="mt-6 flex items-center justify-center gap-4 border-t border-stone-900 pt-4">
+          <a href="/licenses" className="text-xs text-stone-600 hover:text-stone-400">
+            Licenses
+          </a>
+          <span className="text-xs text-stone-700">&middot;</span>
+          <a href="/privacy" className="text-xs text-stone-600 hover:text-stone-400">
+            Privacy
+          </a>
+          <span className="text-xs text-stone-700">&middot;</span>
+          <a href="/terms" className="text-xs text-stone-600 hover:text-stone-400">
+            Terms
+          </a>
+        </footer>
       </div>
 
       <HowToPlayDialog open={howToOpen} onOpenChange={setHowToOpen} />
@@ -161,7 +169,6 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
   const [cloningId, setCloningId] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [soloOpen, setSoloOpen] = useState(false);
-  const [helpOpen, setHelpOpen] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [joinError, setJoinError] = useState("");
@@ -219,11 +226,6 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
   useEffect(() => {
     void refreshWorkshops();
   }, [refreshWorkshops]);
-
-  async function logout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    onLogout();
-  }
 
   async function deleteCampaign(campaign: CampaignSummary) {
     if (
@@ -311,77 +313,7 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
               <span className="hidden sm:inline">How to play</span>
             </button>
           </Tooltip>
-          <DropdownMenu.Root>
-          <Tooltip content="Account and app menu" side="bottom">
-          <DropdownMenu.Trigger asChild>
-            <button
-              type="button"
-              aria-label="Account"
-              className="rounded-full outline-none transition-shadow duration-150 hover:shadow-glow-gold focus-visible:shadow-glow-gold"
-            >
-              {user.avatar ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={user.avatar.url}
-                  alt=""
-                  className="size-9 rounded-full border border-amber-500/40 object-cover"
-                />
-              ) : (
-                <span className="flex size-9 items-center justify-center rounded-full border border-stone-600/70 bg-stone-900">
-                  <UserRound className="size-4 text-stone-400" />
-                </span>
-              )}
-            </button>
-          </DropdownMenu.Trigger>
-          </Tooltip>
-          <DropdownMenu.Portal>
-            <DropdownMenu.Content
-              align="end"
-              sideOffset={6}
-              className="min-w-44 rounded-lg border border-stone-600/60 bg-stone-950 p-1 shadow-elev-2"
-            >
-              <DropdownMenu.Item asChild>
-                <Link
-                  href="/characters"
-                  className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-stone-300 outline-none data-[highlighted]:bg-stone-800 data-[highlighted]:text-amber-100"
-                >
-                  <Users className="size-4" /> Characters
-                </Link>
-              </DropdownMenu.Item>
-              <DropdownMenu.Item asChild>
-                <Link
-                  href="/settings"
-                  className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-stone-300 outline-none data-[highlighted]:bg-stone-800 data-[highlighted]:text-amber-100"
-                >
-                  <Settings className="size-4" /> Settings
-                </Link>
-              </DropdownMenu.Item>
-              {user.isAdmin ? (
-                <DropdownMenu.Item asChild>
-                  <Link
-                    href="/admin"
-                    className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-stone-300 outline-none data-[highlighted]:bg-stone-800 data-[highlighted]:text-amber-100"
-                  >
-                    <ShieldCheck className="size-4" /> Admin panel
-                  </Link>
-                </DropdownMenu.Item>
-              ) : null}
-              <DropdownMenu.Item
-                onSelect={() => setHelpOpen(true)}
-                className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-stone-300 outline-none data-[highlighted]:bg-stone-800 data-[highlighted]:text-amber-100"
-              >
-                <CircleHelp className="size-4" /> Help
-              </DropdownMenu.Item>
-              <DropdownMenu.Separator className="my-1 h-px bg-stone-800" />
-              <DropdownMenu.Item
-                onSelect={logout}
-                className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-stone-300 outline-none data-[highlighted]:bg-stone-800 data-[highlighted]:text-amber-100"
-              >
-                <LogOut className="size-4" /> Log out
-              </DropdownMenu.Item>
-            </DropdownMenu.Content>
-          </DropdownMenu.Portal>
-          </DropdownMenu.Root>
+          <AccountMenu user={user} onLogout={onLogout} />
         </div>
       </header>
 
@@ -641,7 +573,6 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
           window.location.href = `/campaigns/${campaignId}`;
         }}
       />
-      <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
       <HowToPlayDialog open={howToOpen} onOpenChange={setHowToOpen} />
     </main>
   );

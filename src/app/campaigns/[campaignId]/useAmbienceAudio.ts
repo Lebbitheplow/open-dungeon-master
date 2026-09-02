@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { cueById } from "@/lib/ambience/catalog";
 import type { AmbienceState } from "@/lib/ambience/logic";
+import { AUDIO_PREF_FIELDS, hydrateAudioPrefs, writeAudioPref } from "@/lib/audio-prefs";
 
 // Plays what the table is hearing, in this browser, at this listener's own
 // volume.
@@ -18,9 +19,9 @@ import type { AmbienceState } from "@/lib/ambience/logic";
 // than cutting, because a hard cut is the thing that makes people reach for
 // the mute button.
 
-const MUTED_KEY = "odm_ambience_muted";
-const VOLUME_KEY = "odm_ambience_volume";
-const PREFS_EVENT = "odm-ambience-prefs";
+const MUTED_KEY = AUDIO_PREF_FIELDS.ambienceMuted.key;
+const VOLUME_KEY = AUDIO_PREF_FIELDS.ambienceVolume.key;
+const PREFS_EVENT = AUDIO_PREF_FIELDS.ambienceMuted.event;
 
 const CROSSFADE_MS = 1200;
 const FADE_TICK_MS = 50;
@@ -142,15 +143,18 @@ export function useAmbienceAudio(
     };
   }, [enabled]);
 
+  // The account copy of the prefs, applied over localStorage unless the
+  // user touched a control first (src/lib/audio-prefs.ts).
+  useEffect(() => {
+    hydrateAudioPrefs();
+  }, []);
+
   const setMuted = useCallback((next: boolean) => {
-    window.localStorage.setItem(MUTED_KEY, next ? "1" : "0");
-    window.dispatchEvent(new Event(PREFS_EVENT));
+    writeAudioPref("ambienceMuted", next);
   }, []);
 
   const setVolume = useCallback((next: number) => {
-    const clamped = Math.max(0, Math.min(1, next));
-    window.localStorage.setItem(VOLUME_KEY, String(clamped));
-    window.dispatchEvent(new Event(PREFS_EVENT));
+    writeAudioPref("ambienceVolume", Math.max(0, Math.min(1, next)));
   }, []);
 
   const unlock = useCallback(() => setUnlocked(true), []);

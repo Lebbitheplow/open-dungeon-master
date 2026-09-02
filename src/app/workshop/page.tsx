@@ -1,9 +1,10 @@
 "use client";
 
-import { ArrowLeft, CircleHelp, Copy, Hammer, Loader2, Plus, Trash2 } from "lucide-react";
+import { CircleHelp, Copy, Hammer, Loader2, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { type FormEvent, useEffect, useState } from "react";
 import { IconChip, ui } from "@/lib/ui";
+import { AppHeader } from "@/components/AppHeader";
 import { DEFAULT_TARGET_PARTY } from "@/lib/workshop/kind";
 import { ImportBundleButton } from "@/app/workshop/ImportBundleButton";
 import { WorkshopHelpDialog } from "@/components/WorkshopHelpDialog";
@@ -108,13 +109,8 @@ export default function WorkshopListPage() {
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
+      <AppHeader />
       <header className="mb-8">
-        <Link
-          href="/"
-          className="mb-4 inline-flex items-center gap-1.5 text-sm text-stone-500 hover:text-amber-200"
-        >
-          <ArrowLeft className="size-4" /> Back
-        </Link>
         <div className="flex items-center gap-3">
           <IconChip icon={Hammer} size="size-10" iconSize="size-5" />
           <div>

@@ -16,7 +16,9 @@ import {
 // Everything the voice call remembers about the machine somebody is sitting
 // at: which microphone, whether to hold a key, and how loud everyone else is.
 // Deliberately localStorage rather than the account, because all of it is a
-// property of the device and not of the person. A player on their laptop and
+// property of the device and not of the person: a mic device id from one
+// machine is meaningless on another, so unlike the narration and ambience
+// prefs (src/lib/audio-prefs.ts) none of this syncs to the server. A player on their laptop and
 // on their phone wants different answers, and "that player's mic is hot" is
 // about their mic, not about which campaign you happen to be in, so the
 // volumes are shared across campaigns rather than stored per campaign.

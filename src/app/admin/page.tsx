@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { PIXEL_ICONS, PixelTile } from "@/lib/ui";
+import { AppHeader } from "@/components/AppHeader";
 import { AdminSettingsPanel } from "@/app/admin/AdminSettingsPanel";
 import { AdminUsersPanel } from "@/app/admin/AdminUsersPanel";
 import { AdminWorldsPanel } from "@/app/admin/AdminWorldsPanel";
@@ -12,6 +13,7 @@ import { AdminWorldsPanel } from "@/app/admin/AdminWorldsPanel";
 type Me = {
   id: string;
   username: string;
+  avatar?: { url: string } | null;
   isAdmin: boolean;
 };
 
@@ -62,11 +64,9 @@ export default function AdminPage() {
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
+      <AppHeader user={me} />
       <header className="mb-6">
-        <Link href="/" className="text-sm text-stone-500 hover:text-stone-300">
-          &larr; All campaigns
-        </Link>
-        <div className="mt-2 flex items-center gap-3">
+        <div className="flex items-center gap-3">
           <PixelTile src={PIXEL_ICONS.localData} />
           <div>
             <h1 className="font-display text-2xl tracking-wide text-amber-50">Admin panel</h1>

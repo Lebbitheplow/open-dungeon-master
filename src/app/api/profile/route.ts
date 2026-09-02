@@ -4,23 +4,50 @@ import {
   NO_PASSWORD_SENTINEL,
   deleteUserCascade,
   getUserByUsername,
+  getUserSettings,
   setUserAvatar,
+  updateUserSettings,
 } from "@/lib/db/users";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const volumeSchema = z.number().min(0).max(1);
+
+// Audio preferences synced across browsers (src/lib/audio-prefs.ts). Voice
+// device prefs stay client-side on purpose; see useVoicePrefs.ts.
+const settingsSchema = z.object({
+  narrationVolume: volumeSchema.optional(),
+  narrationMuted: z.boolean().optional(),
+  ambienceVolume: volumeSchema.optional(),
+  ambienceMuted: z.boolean().optional(),
+  chimeMuted: z.boolean().optional(),
+});
+
 const patchSchema = z.object({
   avatar: z
     .object({ url: z.string().max(300).startsWith("/uploads/") })
-    .nullable(),
+    .nullable()
+    .optional(),
+  settings: settingsSchema.optional(),
 });
 
 const deleteSchema = z.object({
   password: z.string().max(100).optional(),
 });
 
-// Account profile updates; today just the avatar.
+// The profile as the account holds it. The audio hooks hydrate their
+// localStorage cache from here once per page load.
+export async function GET() {
+  const user = await currentUser();
+  if (!user) {
+    return unauthorized();
+  }
+  return Response.json({ avatar: user.avatar, settings: getUserSettings(user.id) });
+}
+
+// Account profile updates: the avatar, and/or a partial settings patch.
+// Both keys are optional so a caller only touches what it sent.
 export async function PATCH(request: Request) {
   const user = await currentUser();
   if (!user) {
@@ -33,8 +60,15 @@ export async function PATCH(request: Request) {
     return Response.json({ error: "Invalid profile update." }, { status: 400 });
   }
 
-  setUserAvatar(user.id, parsed.data.avatar);
-  return Response.json({ avatar: parsed.data.avatar });
+  let avatar = user.avatar;
+  if (parsed.data.avatar !== undefined) {
+    setUserAvatar(user.id, parsed.data.avatar);
+    avatar = parsed.data.avatar;
+  }
+  const settings = parsed.data.settings
+    ? updateUserSettings(user.id, parsed.data.settings)
+    : getUserSettings(user.id);
+  return Response.json({ avatar, settings });
 }
 
 // Self-service account deletion. Removes the caller's owned campaigns and

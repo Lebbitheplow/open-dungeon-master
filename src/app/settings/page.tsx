@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
+import { AppHeader } from "@/components/AppHeader";
 import { ImageLightbox } from "@/components/ui/ImageLightbox";
 import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
 import { ChangePasswordForm } from "@/app/ChangePasswordForm";
@@ -31,6 +32,9 @@ export default function SettingsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleteError, setDeleteError] = useState("");
   const [deleting, setDeleting] = useState(false);
+  // Server identity for the About section, from the same public endpoint
+  // the login form and client apps read.
+  const [about, setAbout] = useState<{ serverName: string; version: string } | null>(null);
   // Seeded from the Discord link redirect (?linked=1 / ?error=...).
   const [discordNotice] = useState(() => {
     if (typeof window === "undefined") return "";
@@ -47,6 +51,14 @@ export default function SettingsPage() {
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => setMe(data?.user ?? null))
       .finally(() => setLoading(false));
+    fetch("/api/auth/providers")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (data?.serverName && data?.version) {
+          setAbout({ serverName: data.serverName, version: data.version });
+        }
+      })
+      .catch(() => undefined);
     const query = new URLSearchParams(window.location.search);
     if (query.get("linked") || query.get("error")) {
       window.history.replaceState(null, "", window.location.pathname);
@@ -121,11 +133,9 @@ export default function SettingsPage() {
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 p-4 sm:p-6">
+      <AppHeader user={me} />
       <header className="mb-6">
-        <Link href="/" className="text-sm text-stone-500 hover:text-stone-300">
-          &larr; All campaigns
-        </Link>
-        <div className="mt-2 flex items-center gap-3">
+        <div className="flex items-center gap-3">
           <PixelTile src={PIXEL_ICONS.characters} />
           <div>
             <h1 className="font-display text-2xl tracking-wide text-amber-50">Account settings</h1>
@@ -256,6 +266,39 @@ export default function SettingsPage() {
         >
           <Trash2 className="size-3.5" /> Delete account
         </button>
+      </section>
+
+      <section className="texture-noise mt-4 rounded-xl border border-stone-700/50 bg-stone-950/60 p-5 shadow-elev-1">
+        <h2 className="mb-3 text-sm font-medium text-stone-300">About</h2>
+        {about ? (
+          <p className="text-sm text-stone-400">
+            {about.serverName} <span className="text-stone-500">v{about.version}</span>
+          </p>
+        ) : (
+          <p className="text-sm text-stone-500">Open Dungeon Master</p>
+        )}
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
+          <Link href="/reference" className="text-xs text-stone-500 hover:text-amber-200">
+            Rules reference
+          </Link>
+          <Link href="/terms" className="text-xs text-stone-500 hover:text-amber-200">
+            Terms of service
+          </Link>
+          <Link href="/privacy" className="text-xs text-stone-500 hover:text-amber-200">
+            Privacy policy
+          </Link>
+          <Link href="/licenses" className="text-xs text-stone-500 hover:text-amber-200">
+            Licenses and attribution
+          </Link>
+          <a
+            href="https://github.com/Lebbitheplow/open-dungeon-master"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-stone-500 hover:text-amber-200"
+          >
+            GitHub
+          </a>
+        </div>
       </section>
 
       {cropping ? (
