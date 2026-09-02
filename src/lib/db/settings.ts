@@ -90,3 +90,28 @@ export function normalizeSettings(settings?: Partial<StorySettings>): StorySetti
 
   return merged;
 }
+
+// The campaign snapshot and the SSE stream deliver StorySettings to every
+// member, but the two backend keys were entered by the story authority alone
+// and belong to nobody else. Blanked at this boundary rather than in the UI,
+// so no future payload can carry them by forgetting to.
+export function scrubStorySettings(settings: StorySettings): StorySettings {
+  return { ...settings, customApiKey: "", utilityApiKey: "" };
+}
+
+export type MaskedStorySettings = Omit<StorySettings, "customApiKey" | "utilityApiKey"> & {
+  hasCustomApiKey: boolean;
+  hasUtilityApiKey: boolean;
+};
+
+// What the story authority's settings panel receives: every editable field,
+// with the keys reduced to "is one set" booleans. Same contract as the admin
+// route's maskedConfig, so a key can be kept or cleared but never re-read.
+export function maskStorySettings(settings: StorySettings): MaskedStorySettings {
+  const { customApiKey, utilityApiKey, ...rest } = settings;
+  return {
+    ...rest,
+    hasCustomApiKey: customApiKey !== "",
+    hasUtilityApiKey: utilityApiKey !== "",
+  };
+}

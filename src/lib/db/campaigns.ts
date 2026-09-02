@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
-import { normalizeSettings } from "@/lib/db/settings";
+import { normalizeSettings, scrubStorySettings } from "@/lib/db/settings";
 import { configuredDefaultStorySettings } from "@/lib/runtime-defaults";
 import { normalizeGameSettings, type GameSettings } from "@/lib/schemas/game-settings";
 import { normalizeCampaignKind, type CampaignKind } from "@/lib/workshop/kind";
@@ -524,6 +524,25 @@ export function updateGameSettings(
   return merged;
 }
 
+// The story authority's per-campaign AI settings edit. Merged through
+// normalizeSettings so a stale or hand-rolled client cannot persist an
+// invalid enum, while an empty string survives as the recorded way to clear
+// a key or URL back to the server fallback.
+export function updateStorySettings(
+  campaignId: string,
+  patch: Partial<StorySettings>,
+): StorySettings | null {
+  const campaign = getCampaignById(campaignId);
+  if (!campaign) {
+    return null;
+  }
+  const merged = normalizeSettings({ ...campaign.settings, ...patch });
+  getDatabase()
+    .prepare(`UPDATE campaigns SET settings_json = ?, updated_at = ? WHERE id = ?`)
+    .run(JSON.stringify(merged), nowIso(), campaignId);
+  return merged;
+}
+
 // Changing who runs the game keeps the seats in step with the mode: a mode
 // other than "ai" has a person in the DM seat and "ai" has nobody, which is
 // the same invariant createCampaign applies (dmUserId above). Without this, a
@@ -796,6 +815,10 @@ export function publicCampaign(campaign: Campaign): Omit<Campaign, "dmOutline" |
   const rest = { ...campaign } as Partial<Campaign>;
   delete rest.dmOutline;
   delete rest.storyArc;
+  // The per-campaign backend keys ride settings_json, but only the server may
+  // ever read them back; clients get an existence boolean from the
+  // story-settings route instead.
+  rest.settings = scrubStorySettings(campaign.settings);
   return rest as Omit<Campaign, "dmOutline" | "storyArc">;
 }
 

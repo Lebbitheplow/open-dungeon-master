@@ -4,9 +4,11 @@ import { Pencil } from "lucide-react";
 import { useState } from "react";
 import type { CampaignDifficulty } from "@/lib/campaign-types";
 import type { GameSettings } from "@/lib/schemas/game-settings";
+import type { StorySettings } from "@/lib/types";
 import { EditCampaignDialog } from "@/app/campaigns/[campaignId]/EditCampaignDialog";
 import { GameSettingsPanel } from "@/app/campaigns/[campaignId]/GameSettingsPanel";
 import { RulesPanel } from "@/app/campaigns/[campaignId]/RulesPanel";
+import { StoryAiPanel } from "@/app/campaigns/[campaignId]/StoryAiPanel";
 
 // Setup tab of the session side panel. Two authorities meet here: campaign
 // details belong to the lead (the PATCH /api/campaigns/[id] gate), while game
@@ -26,6 +28,9 @@ export function SessionSettings({
     startingLevel: number;
     difficulty: CampaignDifficulty;
     gameSettings?: GameSettings;
+    // Scrubbed of API keys before it ever reaches a browser (publicCampaign);
+    // the panel learns key existence from the story-settings route.
+    settings?: StorySettings;
   };
   isLead: boolean;
   steersStory: boolean;
@@ -62,6 +67,14 @@ export function SessionSettings({
         <GameSettingsPanel
           campaignId={campaign.id}
           settings={campaign.gameSettings}
+          steersStory={steersStory}
+        />
+      ) : null}
+
+      {campaign.settings ? (
+        <StoryAiPanel
+          campaignId={campaign.id}
+          settings={campaign.settings}
           steersStory={steersStory}
         />
       ) : null}
