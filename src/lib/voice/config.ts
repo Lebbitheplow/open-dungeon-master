@@ -88,8 +88,10 @@ export function announcedAddressFor(config: VoiceConfig): string {
 
 // True for addresses a browser outside this host cannot route to. Binding
 // 0.0.0.0 is right; ANNOUNCING it is not, and neither is announcing a Docker
-// bridge address. Callers use this to warn rather than to refuse, because a
-// single-machine install on localhost is perfectly valid.
+// bridge address. Called by the campaign voice GET
+// (src/app/api/campaigns/[campaignId]/voice/route.ts) and the admin settings
+// GET (src/app/api/admin/settings/route.ts), both of which warn rather than
+// refuse, because a single-machine install on localhost is perfectly valid.
 export function isUnroutableAddress(address: string): boolean {
   if (!address || address === "0.0.0.0" || address === "::") {
     return true;

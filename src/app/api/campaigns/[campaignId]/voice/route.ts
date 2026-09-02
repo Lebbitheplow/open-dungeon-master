@@ -1,5 +1,5 @@
 import { isErrorResponse, requireMember } from "@/lib/campaign-api";
-import { voiceConfig } from "@/lib/voice/config";
+import { announcedAddressFor, isUnroutableAddress, voiceConfig } from "@/lib/voice/config";
 import { voiceAvailability } from "@/lib/voice/gate";
 import { meshJoined, meshRosterFor } from "@/lib/voice/mesh";
 import { roster } from "@/lib/voice/peers";
@@ -22,13 +22,23 @@ export async function GET(
     return context;
   }
   const availability = voiceAvailability(context.campaign);
-  const mode = voiceConfig().mode;
+  const config = voiceConfig();
+  const mode = config.mode;
   const room = mode === "sfu" ? getRoom(campaignId) : null;
   return Response.json({
     available: availability.available,
     unavailableReason: availability.reason,
     // The transport this server runs, so the client builds the right one.
     mode,
+    // The silent-call trap: an SFU announcing an address remote browsers
+    // cannot dial still negotiates, so the call looks connected and carries
+    // no audio. A warning rather than an unavailableReason, because a
+    // localhost-only table hears itself fine. Mesh never announces, so it
+    // has nothing to warn about.
+    warning:
+      mode === "sfu" && isUnroutableAddress(announcedAddressFor(config))
+        ? "Voice will connect but stay silent for remote players: set an announced address or domain."
+        : null,
     // Whether this caller already holds a peer, so a remount (or a second tab)
     // can tell "nobody is on the call" from "you are on the call".
     joined:

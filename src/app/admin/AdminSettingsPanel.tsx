@@ -133,6 +133,9 @@ export function AdminSettingsPanel() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  // Server-computed, because the announced-address fallback chain ends at the
+  // bind address, which never reaches this panel. Reflects the SAVED config.
+  const [voiceUnroutable, setVoiceUnroutable] = useState(false);
 
   useEffect(() => {
     fetch("/api/admin/settings")
@@ -141,6 +144,7 @@ export function AdminSettingsPanel() {
         if (data) {
           setConfig(data.config);
           setEnv(data.envDefaults);
+          setVoiceUnroutable(Boolean(data.voiceAnnounceUnroutable));
         }
       });
   }, []);
@@ -200,6 +204,7 @@ export function AdminSettingsPanel() {
         return;
       }
       setConfig(data.config);
+      setVoiceUnroutable(Boolean(data.voiceAnnounceUnroutable));
       setApiKey(SECRET_KEPT);
       setUtilityApiKey(SECRET_KEPT);
       setOpenaiImageKey(SECRET_KEPT);
@@ -655,6 +660,15 @@ export function AdminSettingsPanel() {
             />
           </Field>
         </div>
+        {/* Hidden as soon as mesh is picked, even before saving: the warning
+            is about what the voice server announces, and mesh announces
+            nothing. */}
+        {voiceUnroutable && config.voiceChat.mode !== "mesh" ? (
+          <p className="mt-3 text-xs text-amber-400">
+            Voice will connect but stay silent for remote players: set an announced
+            address or domain.
+          </p>
+        ) : null}
         <p className="mt-3 text-[11px] text-stone-600">
           Port and address changes apply the next time somebody joins a call, once
           nobody is connected. No server restart needed.

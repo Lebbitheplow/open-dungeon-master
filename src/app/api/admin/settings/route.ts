@@ -3,6 +3,7 @@ import { isErrorResponse, requireAdmin } from "@/lib/admin-api";
 import { getGlobalConfig, saveGlobalConfig } from "@/lib/db/app-settings";
 import { serverEnv } from "@/lib/server-env";
 import { resolveSignupMode, type GlobalConfig } from "@/lib/schemas/global-config";
+import { announcedAddressFor, isUnroutableAddress, voiceConfig } from "@/lib/voice/config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -69,12 +70,25 @@ function envDefaults() {
   };
 }
 
+// SFU voice announcing an address remote browsers cannot dial is the silent
+// call failure (src/lib/voice/config.ts). Decided server side because the
+// announced-address fallback chain ends at the bind address, which the
+// masked config never carries.
+function voiceAnnounceUnroutable(): boolean {
+  const voice = voiceConfig();
+  return voice.mode === "sfu" && isUnroutableAddress(announcedAddressFor(voice));
+}
+
 export async function GET() {
   const admin = await requireAdmin();
   if (isErrorResponse(admin)) {
     return admin;
   }
-  return Response.json({ config: maskedConfig(getGlobalConfig()), envDefaults: envDefaults() });
+  return Response.json({
+    config: maskedConfig(getGlobalConfig()),
+    envDefaults: envDefaults(),
+    voiceAnnounceUnroutable: voiceAnnounceUnroutable(),
+  });
 }
 
 const patchSchema = z.object({
@@ -146,5 +160,9 @@ export async function PATCH(request: Request) {
     );
   }
   const saved = saveGlobalConfig(parsed.data);
-  return Response.json({ config: maskedConfig(saved), envDefaults: envDefaults() });
+  return Response.json({
+    config: maskedConfig(saved),
+    envDefaults: envDefaults(),
+    voiceAnnounceUnroutable: voiceAnnounceUnroutable(),
+  });
 }

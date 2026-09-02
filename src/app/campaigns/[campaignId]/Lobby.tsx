@@ -50,6 +50,11 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
   const [contentImport, setContentImport] = useState<ImportSelection>(EMPTY_SELECTION);
   const [error, setError] = useState("");
   const [publicOrigin, setPublicOrigin] = useState("");
+  const [canAssignSeats, setCanAssignSeats] = useState(false);
+  // Bumped after a seat move so the canAssign answer is re-asked: handing the
+  // DM seat away can revoke the mover's own right to move it again.
+  const [seatVersion, setSeatVersion] = useState(0);
+  const [seatError, setSeatError] = useState("");
 
   // Same reason as InviteShareDialog: a host sharing their world through a
   // tunnel plays on 127.0.0.1, an address guests cannot reach, so links
@@ -69,6 +74,31 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
     };
   }, []);
 
+  // Whether this viewer may move the DM seats is the seat route's call
+  // (primary DM or owner), asked of the server rather than re-derived from
+  // ids here, so a button it would refuse is never rendered.
+  const seatCampaignId =
+    campaign && campaign.gameSettings.dmMode !== "ai" ? campaign.id : "";
+  useEffect(() => {
+    // No reset on the way out: the buttons are also gated on the campaign
+    // being human-run, so a stale yes renders nothing.
+    if (!seatCampaignId) {
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/campaigns/${seatCampaignId}/dm/seat`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { canAssign?: boolean } | null) => {
+        if (!cancelled && data) {
+          setCanAssignSeats(Boolean(data.canAssign));
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [seatCampaignId, seatVersion]);
+
   if (!campaign || !me) {
     return null;
   }
@@ -83,6 +113,9 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
     : false;
   const isOwner = campaign.ownerUserId === me.id;
   const isLead = campaign.leadUserId === me.id;
+  // A human sits in the DM seat ("human" and "assisted" alike), so the party
+  // list shows who holds it and, for whoever may reassign it, the controls.
+  const humanDmTable = campaign.gameSettings.dmMode !== "ai";
   // Who holds the story's secrets and steers it: the lead in an AI-run
   // campaign, the DM once a person runs it. Decided by src/lib/dm/viewer.ts
   // rather than by comparing ids here, which is the rule that module exists
@@ -201,6 +234,30 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId }),
     });
+  }
+
+  // Moves a DM seat; userId null empties it (the server allows that only for
+  // the co-DM seat, since a human-run game always needs a DM). The seat
+  // change event is not one the stream applies, so the mover reloads the
+  // snapshot to see the new seats.
+  async function assignSeat(seat: "dm" | "assistant", userId: string | null) {
+    setSeatError("");
+    try {
+      const response = await fetch(`/api/campaigns/${campaign!.id}/dm/seat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ seat, userId }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        setSeatError(data.error || "Could not move that seat.");
+        return;
+      }
+      setSeatVersion((version) => version + 1);
+      refresh();
+    } catch {
+      setSeatError("Could not reach the server.");
+    }
   }
 
   async function toggleRealDice() {
@@ -457,6 +514,16 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
                   <div>
                     <p className="font-medium">
                       {member.username}
+                      {humanDmTable && member.userId === campaign.dmUserId ? (
+                        <span className="ml-2 rounded-full bg-amber-950 px-2 py-0.5 text-xs text-amber-300">
+                          DM
+                        </span>
+                      ) : null}
+                      {humanDmTable && member.userId === campaign.assistantDmUserId ? (
+                        <span className="ml-2 rounded-full bg-amber-950 px-2 py-0.5 text-xs text-amber-300">
+                          co-DM
+                        </span>
+                      ) : null}
                       {member.userId === campaign.leadUserId ? (
                         <span className="ml-2 rounded-full bg-amber-950 px-2 py-0.5 text-xs text-amber-300">
                           <Crown className="mr-0.5 inline size-3" /> party lead
@@ -486,6 +553,40 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
                       </button>
                     </Tooltip>
                   ) : null}
+                  {humanDmTable && canAssignSeats && member.userId !== campaign.dmUserId ? (
+                    <>
+                      <Tooltip content="Hand this player the DM seat and the game">
+                        <button
+                          type="button"
+                          onClick={() => assignSeat("dm", member.userId)}
+                          className="rounded-full border border-stone-700 px-2 py-0.5 text-xs text-stone-400 hover:bg-stone-900"
+                        >
+                          make DM
+                        </button>
+                      </Tooltip>
+                      {member.userId === campaign.assistantDmUserId ? (
+                        <Tooltip content="Take back the co-DM seat">
+                          <button
+                            type="button"
+                            onClick={() => assignSeat("assistant", null)}
+                            className="rounded-full border border-stone-700 px-2 py-0.5 text-xs text-stone-400 hover:bg-stone-900"
+                          >
+                            remove co-DM
+                          </button>
+                        </Tooltip>
+                      ) : (
+                        <Tooltip content="Seat this player as co-DM: every DM power except handing out seats">
+                          <button
+                            type="button"
+                            onClick={() => assignSeat("assistant", member.userId)}
+                            className="rounded-full border border-stone-700 px-2 py-0.5 text-xs text-stone-400 hover:bg-stone-900"
+                          >
+                            make co-DM
+                          </button>
+                        </Tooltip>
+                      )}
+                    </>
+                  ) : null}
                   {member.useRealDice ? (
                     <Tooltip content="Rolls physical dice: the DM waits for this player to enter real rolls">
                       <span className="rounded-full bg-amber-950 px-2 py-0.5 text-xs text-amber-300">
@@ -506,6 +607,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
             );
           })}
         </ul>
+        {seatError ? <p className="mt-2 text-sm text-red-400">{seatError}</p> : null}
       </section>
       ) : null}
 
