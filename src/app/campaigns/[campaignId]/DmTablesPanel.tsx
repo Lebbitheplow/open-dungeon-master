@@ -11,6 +11,7 @@ import {
   TABLE_NAME_MAX,
 } from "@/lib/dm/roll-table-logic";
 import type { RollTable } from "@/lib/db/roll-tables";
+import { offersStoryModel, useCapabilities } from "@/lib/use-capabilities";
 
 // The DM's random tables, and the monster lookup beside them. Both are the
 // DM's own reference: rolling a table writes an ordinary roll everyone can
@@ -28,6 +29,9 @@ export function DmTablesPanel({ campaignId }: { campaignId: string }) {
   const [text, setText] = useState("");
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState("");
+  // Drafting rows is the story model's job; a server without one offers the
+  // paste box alone.
+  const canDraft = offersStoryModel(useCapabilities());
   const [error, setError] = useState("");
   const [result, setResult] = useState<{ tableId: string; total: number; text: string } | null>(
     null,
@@ -260,28 +264,30 @@ export function DmTablesPanel({ campaignId }: { campaignId: string }) {
           placeholder="Rumours in the Salt Wharf"
           className={inputClass}
         />
-        <div className="mt-1.5 flex gap-1.5">
-          <input
-            value={prompt}
-            onChange={(event) => setPrompt(event.target.value.slice(0, 300))}
-            placeholder="what the dockhands are whispering about"
-            className={inputClass}
-          />
-          <button
-            type="button"
-            onClick={draft}
-            disabled={busy === "draft" || !prompt.trim()}
-            title="Drafts rows for you to edit. Nothing is saved until you save it."
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-40"
-          >
-            {busy === "draft" ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <Sparkles className="size-3.5" />
-            )}
-            Draft
-          </button>
-        </div>
+        {canDraft ? (
+          <div className="mt-1.5 flex gap-1.5">
+            <input
+              value={prompt}
+              onChange={(event) => setPrompt(event.target.value.slice(0, 300))}
+              placeholder="what the dockhands are whispering about"
+              className={inputClass}
+            />
+            <button
+              type="button"
+              onClick={draft}
+              disabled={busy === "draft" || !prompt.trim()}
+              title="Drafts rows for you to edit. Nothing is saved until you save it."
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-40"
+            >
+              {busy === "draft" ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="size-3.5" />
+              )}
+              Draft
+            </button>
+          </div>
+        ) : null}
         <textarea
           value={text}
           onChange={(event) => setText(event.target.value)}

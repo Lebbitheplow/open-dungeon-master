@@ -1,5 +1,6 @@
 import { copyFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
+import { imagesAvailable } from "@/lib/capabilities";
 import { generateStoryImage } from "@/lib/image-generate";
 import type { LibraryCharacter } from "@/lib/db/characters";
 import { updateCharacterPortrait } from "@/lib/db/characters";
@@ -102,7 +103,6 @@ export function queueCompanionPortrait(sheet: {
   worldPack?: string;
 }): void {
   const map = statusMap();
-  map.set(sheet.id, "queued");
   const prompt = buildPortraitPrompt(
     {
       gender: "",
@@ -114,7 +114,9 @@ export function queueCompanionPortrait(sheet: {
     } as CreateSheetInput,
     presetFor({ genre: sheet.genre, worldPack: sheet.worldPack }).portraitStyle,
   );
-  void enqueueMediaJob(`portrait ${sheet.id}`, async () => {
+  void whenImagesAvailable(() => {
+    map.set(sheet.id, "queued");
+    return enqueueMediaJob(`portrait ${sheet.id}`, async () => {
     map.set(sheet.id, "generating");
     try {
       const settings = configuredDefaultStorySettings();
@@ -139,6 +141,7 @@ export function queueCompanionPortrait(sheet: {
       map.set(sheet.id, "failed");
       console.error(`[portrait] companion generation failed for ${sheet.id}:`, error);
     }
+    });
   });
 }
 
@@ -170,22 +173,24 @@ export function queueNpcPortrait(npc: {
   ]
     .filter(Boolean)
     .join(". ");
-  void enqueueMediaJob(`npc portrait ${npc.id}`, async () => {
-    try {
-      const settings = configuredDefaultStorySettings();
-      const image = await generateStoryImage(settings, {
-        prompt,
-        mode: "fast",
-        aspect: "square",
-      });
-      const copied = copyIntoUploads(image.url);
-      if (setNpcPortrait(npc.id, copied.url)) {
-        publishPersisted(npc.campaignId, "npc_updated", { npcId: npc.id, portraitUrl: copied.url });
+  void whenImagesAvailable(() =>
+    enqueueMediaJob(`npc portrait ${npc.id}`, async () => {
+      try {
+        const settings = configuredDefaultStorySettings();
+        const image = await generateStoryImage(settings, {
+          prompt,
+          mode: "fast",
+          aspect: "square",
+        });
+        const copied = copyIntoUploads(image.url);
+        if (setNpcPortrait(npc.id, copied.url)) {
+          publishPersisted(npc.campaignId, "npc_updated", { npcId: npc.id, portraitUrl: copied.url });
+        }
+      } catch (error) {
+        console.error(`[portrait] npc generation failed for ${npc.id}:`, error);
       }
-    } catch (error) {
-      console.error(`[portrait] npc generation failed for ${npc.id}:`, error);
-    }
-  });
+    }),
+  );
 }
 
 // Fire-and-forget from the creation routes: renders on the serial media
@@ -196,33 +201,47 @@ export function queueLibraryPortrait(character: LibraryCharacter): void {
     return;
   }
   const map = statusMap();
-  map.set(character.id, "queued");
   const prompt = buildPortraitPrompt(character.sheet);
-  void enqueueMediaJob(`portrait ${character.id}`, async () => {
-    map.set(character.id, "generating");
-    try {
-      const settings = configuredDefaultStorySettings();
-      const image = await generateStoryImage(settings, {
-        prompt,
-        mode: "fast",
-        aspect: "square",
-      });
-      const copied = copyIntoUploads(image.url);
-      const portrait: SheetAttachment = {
-        id: copied.id,
-        name: `${character.name} portrait`,
-        type: "image/png",
-        url: copied.url,
-      };
-      if (!updateCharacterPortrait(character.userId, character.id, portrait)) {
+  void whenImagesAvailable(() => {
+    map.set(character.id, "queued");
+    return enqueueMediaJob(`portrait ${character.id}`, async () => {
+      map.set(character.id, "generating");
+      try {
+        const settings = configuredDefaultStorySettings();
+        const image = await generateStoryImage(settings, {
+          prompt,
+          mode: "fast",
+          aspect: "square",
+        });
+        const copied = copyIntoUploads(image.url);
+        const portrait: SheetAttachment = {
+          id: copied.id,
+          name: `${character.name} portrait`,
+          type: "image/png",
+          url: copied.url,
+        };
+        if (!updateCharacterPortrait(character.userId, character.id, portrait)) {
+          map.delete(character.id);
+          return;
+        }
+        mirrorToCampaignSheets(character.id, portrait);
         map.delete(character.id);
-        return;
+      } catch (error) {
+        map.set(character.id, "failed");
+        console.error(`[portrait] generation failed for ${character.id}:`, error);
       }
-      mirrorToCampaignSheets(character.id, portrait);
-      map.delete(character.id);
-    } catch (error) {
-      map.set(character.id, "failed");
-      console.error(`[portrait] generation failed for ${character.id}:`, error);
-    }
+    });
   });
+}
+
+// Every render above is a promise the UI makes on the creator's behalf ("a
+// portrait is painted after you save"). On a host with no image backend the
+// promise is never made: nothing is queued, no status is recorded, and the
+// sheet simply keeps its icon until the owner uploads a picture. This is what
+// keeps a no-AI server from showing "portrait failed" on every new character.
+async function whenImagesAvailable(start: () => Promise<unknown> | void): Promise<void> {
+  if (!(await imagesAvailable())) {
+    return;
+  }
+  await start();
 }

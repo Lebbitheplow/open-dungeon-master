@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Crown,
   ImageOff,
+  ImagePlus,
   Loader2,
   Pin,
   RefreshCw,
@@ -172,6 +173,7 @@ const MessageItem = memo(function MessageItem({
   message,
   campaignId,
   canRetryTurn,
+  canIllustrate,
   rollsById,
   sheetsById,
   membersById,
@@ -190,6 +192,8 @@ const MessageItem = memo(function MessageItem({
   message: CampaignMessage;
   campaignId: string;
   canRetryTurn: boolean;
+  // Whoever runs the story may put a picture of their own under a passage.
+  canIllustrate: boolean;
   rollsById: Map<string, StoredRoll>;
   sheetsById: Map<string, CharacterSheet>;
   membersById: Map<string, CampaignMember>;
@@ -218,6 +222,48 @@ const MessageItem = memo(function MessageItem({
   // Stays true until the audio lands, at which point the replay button takes
   // this one's place; cleared early only when the render actually failed.
   const [narrating, setNarrating] = useState(false);
+  // An uploaded picture on its way to this passage. The image itself arrives
+  // through image_ready like a rendered one, so this only drives the spinner.
+  const [attaching, setAttaching] = useState(false);
+  const pictureRef = useRef<HTMLInputElement>(null);
+
+  async function attachPicture(file: File) {
+    setAttaching(true);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error("read failed"));
+        reader.readAsDataURL(file);
+      });
+      const upload = await fetch("/api/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dataUrl, name: file.name, type: file.type }),
+      });
+      const uploaded = await upload.json().catch(() => ({}));
+      if (!upload.ok) {
+        window.alert(uploaded.error || "That image would not upload.");
+        return;
+      }
+      const response = await fetch(
+        `/api/campaigns/${campaignId}/dm/messages/${message.id}/image`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: uploaded.url }),
+        },
+      );
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        window.alert(data.error || "Could not put that picture under the passage.");
+      }
+    } catch {
+      window.alert("That image would not upload.");
+    } finally {
+      setAttaching(false);
+    }
+  }
 
   if (message.authorType === "system") {
     // A halted turn whose dm_turns row is still retryable. Both halves of the
@@ -363,6 +409,41 @@ const MessageItem = memo(function MessageItem({
               <Pin className="size-3.5" />
             </button>
           ) : null}
+          {canIllustrate ? (
+            <>
+              <input
+                ref={pictureRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) {
+                    void attachPicture(file);
+                  }
+                  event.target.value = "";
+                }}
+              />
+              <button
+                type="button"
+                disabled={attaching}
+                onClick={() => pictureRef.current?.click()}
+                aria-label={message.generatedImage ? "Replace the picture" : "Add a picture"}
+                title={
+                  message.generatedImage
+                    ? "Replace picture: put an image of your own under this passage"
+                    : "Add a picture: put an image of your own under this passage"
+                }
+                className={cn(ui.iconAction, "-my-1.5")}
+              >
+                {attaching ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <ImagePlus className="size-3.5" />
+                )}
+              </button>
+            </>
+          ) : null}
           {onReplayAudio && message.authorType === "dm" ? (
             <button
               type="button"
@@ -491,6 +572,7 @@ export function MessageList({
   messages,
   campaignId,
   canRetryTurn = false,
+  canIllustrate = false,
   rolls,
   sheets,
   members = [],
@@ -513,6 +595,9 @@ export function MessageList({
   // strings rather than a callback: the memoized rows stay cheap without the
   // stable-identity dance the callback props above need.
   canRetryTurn?: boolean;
+  // Same shape and same reason: whoever runs the story may upload a picture
+  // under any DM passage.
+  canIllustrate?: boolean;
   rolls: StoredRoll[];
   sheets: CharacterSheet[];
   members?: CampaignMember[];
@@ -669,6 +754,7 @@ export function MessageList({
           message={message}
           campaignId={campaignId}
           canRetryTurn={canRetryTurn}
+          canIllustrate={canIllustrate}
           rollsById={rollsById}
           sheetsById={sheetsById}
           membersById={membersById}

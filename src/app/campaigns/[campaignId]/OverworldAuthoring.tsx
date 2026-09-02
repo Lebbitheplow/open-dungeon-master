@@ -9,6 +9,7 @@ import {
   type OverworldParams,
 } from "@/lib/overworld/logic";
 import type { OverworldData } from "@/app/campaigns/[campaignId]/overworldDraw";
+import { offersStoryModel, useCapabilities } from "@/lib/use-capabilities";
 
 // Authoring the region: describe it, roll seeds against it, name what you
 // see, and write down what only you know.
@@ -17,6 +18,10 @@ import type { OverworldData } from "@/app/campaigns/[campaignId]/overworldDraw";
 // description cannot become tiles; it becomes the five dials below, and then
 // the DM rerolls seeds until the coastline falls somewhere they like. That
 // is why "Roll another" sits next to the description rather than under it.
+//
+// The description box is the one step that needs a text model. Without one
+// the dials, the reroll, the places and the notes all remain; only the
+// reading of prose into dials is gone.
 
 type Plan = {
   params: OverworldParams;
@@ -44,6 +49,7 @@ export function OverworldAuthoring({
   const [placeBlurb, setPlaceBlurb] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const canDescribe = offersStoryModel(useCapabilities());
 
   // Returns whether the change landed, so the add-a-place form below can
   // clear itself only on success. Existing callers ignore the result.
@@ -119,26 +125,30 @@ export function OverworldAuthoring({
 
       {open ? (
         <div className="mt-2 space-y-2">
-          <textarea
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            rows={2}
-            placeholder="A chain of islands off a storm coast, pine forest inland."
-            className="w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-sm text-stone-200"
-          />
-          <button
-            type="button"
-            disabled={busy || description.trim().length < 3}
-            onClick={() => void describe()}
-            className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-40"
-          >
-            {busy ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
-            Read it into the dials
-          </button>
-          {plan ? (
-            <p className="text-[11px] text-stone-500">
-              {plan.note || "Dials set."} Reroll below until the coastline falls where you want it.
-            </p>
+          {canDescribe ? (
+            <>
+              <textarea
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                rows={2}
+                placeholder="A chain of islands off a storm coast, pine forest inland."
+                className="w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-sm text-stone-200"
+              />
+              <button
+                type="button"
+                disabled={busy || description.trim().length < 3}
+                onClick={() => void describe()}
+                className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-40"
+              >
+                {busy ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
+                Read it into the dials
+              </button>
+              {plan ? (
+                <p className="text-[11px] text-stone-500">
+                  {plan.note || "Dials set."} Reroll below until the coastline falls where you want it.
+                </p>
+              ) : null}
+            </>
           ) : null}
 
           {(Object.keys(OVERWORLD_PARAM_LABELS) as Array<keyof OverworldParams>).map((key) => (

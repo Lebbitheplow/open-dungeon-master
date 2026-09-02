@@ -219,11 +219,17 @@ export function PartyPanel({
     }
   }, [anyDialogOpen]);
 
+  // A companion's sheet is owned by its bot, so the route needs to be told
+  // which sheet is meant; a player's own sheet is found from the session.
   async function setPortrait(sheet: CharacterSheet, url: string) {
     await fetch(`/api/campaigns/${sheet.campaignId}/sheet`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ portrait: { url } }),
+      body: JSON.stringify(
+        sheet.userId === meUserId
+          ? { portrait: { url } }
+          : { sheetId: sheet.id, portrait: { url } },
+      ),
     });
   }
   return (
@@ -240,6 +246,10 @@ export function PartyPanel({
       {sheets.map((sheet) => {
         const derived = computeSheetDerived(sheet);
         const mine = sheet.userId === meUserId;
+        // Companions belong to nobody at the table, so their portrait is
+        // whoever runs the story's to set (uploaded, since the render that
+        // would have painted one needs an image backend the server may lack).
+        const setsPortrait = mine || (sheet.isCompanion && steersStory);
         // Wild Shape: the beast's pool is what damage actually hits, so the
         // bar tracks it and the druid's own hit points wait in the label.
         const shape = sheet.wildShape;
@@ -525,7 +535,7 @@ export function PartyPanel({
               </div>
             ) : null}
 
-            {mine ? (
+            {setsPortrait ? (
               <div className="mt-2 space-y-1.5">
                 {/* Hit points are driven by the server rules engines now, so
                     there is no manual HP stepper here; the lead's Adjust
@@ -538,13 +548,13 @@ export function PartyPanel({
                   <ImagePlus className="size-3" />
                   {sheet.portrait ? "Change portrait" : "Add portrait"}
                 </button>
-                {realDiceAllowed && myMember ? (
+                {mine && realDiceAllowed && myMember ? (
                   <>
                     <RealDiceToggle campaignId={sheet.campaignId} member={myMember} />
                     <DiceSourcesButton />
                   </>
                 ) : null}
-                {sheet.libraryCharacterId ? (
+                {mine && sheet.libraryCharacterId ? (
                   <SaveToLibraryButton campaignId={sheet.campaignId} />
                 ) : null}
               </div>

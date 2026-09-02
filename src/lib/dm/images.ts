@@ -9,7 +9,7 @@ import type { Campaign } from "@/lib/db/campaigns";
 import { imageToolArgsSchema, type ImageToolArgs } from "@/lib/image-tool";
 import { publishEphemeral, publishPersisted } from "@/lib/events";
 import { enqueueMediaJob } from "@/lib/media-queue";
-import type { ImageRequest, StorySettings } from "@/lib/types";
+import type { AspectPreset, GeneratedImage, ImageRequest, StorySettings } from "@/lib/types";
 
 // Ephemeral progress refinements for the pending-media placeholders. The
 // durable truth stays derivable (a message with imageRequest and no
@@ -108,4 +108,22 @@ export function handleGenerateImage(
     void fulfillMessageImage(campaign.id, message.id, request, campaign.settings);
   }
   return { ok: true, illustrating: message.id };
+}
+
+// A picture the DM uploaded, in the record shape the AI path writes. Maps
+// and scene illustrations are stored as GeneratedImage whether a model or a
+// person made them, so the consumers (the map panel, the transcript, the
+// export) keep one code path. Nothing downstream reads width or height for
+// these two kinds, and the upload route does not measure the file, so they
+// are recorded as unknown (0) rather than guessed.
+export function uploadedImageRecord(url: string, aspect: AspectPreset): GeneratedImage {
+  return {
+    id: crypto.randomUUID(),
+    url,
+    prompt: "",
+    mode: "fast",
+    aspect,
+    width: 0,
+    height: 0,
+  };
 }

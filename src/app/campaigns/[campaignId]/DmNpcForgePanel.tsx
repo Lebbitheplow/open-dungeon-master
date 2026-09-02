@@ -13,6 +13,7 @@ import {
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { offersImages, offersStoryModel, useCapabilities } from "@/lib/use-capabilities";
 import {
   ATTITUDES,
   FIELD_LABELS,
@@ -43,6 +44,10 @@ import {
 // Generation is per field. A DM should be able to take the model's sense of
 // what somebody wants and throw away its sense of who they are, so there is
 // no button that fills the whole form.
+//
+// Every AI control here is optional equipment. A server with no text model
+// shows no Suggest buttons and one with no image backend shows no Paint
+// button; the form and the upload work the same either way.
 
 type Npc = {
   id: string;
@@ -69,6 +74,9 @@ export function DmNpcForgePanel({ campaignId }: { campaignId: string }) {
   const [generating, setGenerating] = useState<GeneratableField | "">("");
   const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const capabilities = useCapabilities();
+  const canSuggest = offersStoryModel(capabilities);
+  const canPaint = offersImages(capabilities);
 
   // The state lands in a .then callback rather than after an await, so the
   // refetch reads as "subscribe to an external system" to React and to the
@@ -254,22 +262,23 @@ export function DmNpcForgePanel({ campaignId }: { campaignId: string }) {
   }
 
   const others = npcs.filter((npc) => npc.id !== selectedId).map((npc) => npc.name);
-  const generateButton = (field: GeneratableField) => (
-    <button
-      type="button"
-      disabled={generating !== "" || busy}
-      title={`Ask the model for ${FIELD_LABELS[field].toLowerCase()}`}
-      onClick={() => void suggest(field)}
-      className="flex shrink-0 items-center gap-1 rounded-md border border-stone-700 px-1.5 py-0.5 text-[10px] text-stone-400 hover:text-amber-200 disabled:opacity-40"
-    >
-      {generating === field ? (
-        <Loader2 className="size-3 animate-spin" />
-      ) : (
-        <Sparkles className="size-3" />
-      )}
-      Suggest
-    </button>
-  );
+  const generateButton = (field: GeneratableField) =>
+    canSuggest ? (
+      <button
+        type="button"
+        disabled={generating !== "" || busy}
+        title={`Ask the model for ${FIELD_LABELS[field].toLowerCase()}`}
+        onClick={() => void suggest(field)}
+        className="flex shrink-0 items-center gap-1 rounded-md border border-stone-700 px-1.5 py-0.5 text-[10px] text-stone-400 hover:text-amber-200 disabled:opacity-40"
+      >
+        {generating === field ? (
+          <Loader2 className="size-3 animate-spin" />
+        ) : (
+          <Sparkles className="size-3" />
+        )}
+        Suggest
+      </button>
+    ) : null;
 
   return (
     <div className="space-y-3">
@@ -449,15 +458,17 @@ export function DmNpcForgePanel({ campaignId }: { campaignId: string }) {
             >
               <ImageIcon className="size-3" /> {selected.portraitUrl ? "Replace face" : "Add a face"}
             </button>
-            <button
-              type="button"
-              disabled={busy}
-              title="Render one on the shared media queue"
-              onClick={() => void patch({ draft, generatePortrait: true })}
-              className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-50"
-            >
-              <Sparkles className="size-3" /> Paint one
-            </button>
+            {canPaint ? (
+              <button
+                type="button"
+                disabled={busy}
+                title="Render one on the shared media queue"
+                onClick={() => void patch({ draft, generatePortrait: true })}
+                className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-50"
+              >
+                <Sparkles className="size-3" /> Paint one
+              </button>
+            ) : null}
             <button
               type="button"
               disabled={busy}

@@ -17,7 +17,7 @@ import type { StorySettings } from "@/lib/types";
 export type Capabilities = {
   story: { configured: boolean; reachable: boolean };
   utility: { configured: boolean };
-  images: { configured: boolean; backend: string };
+  images: { configured: boolean; reachable: boolean; backend: string };
   tts: { configured: boolean; reachable: boolean };
   stt: { configured: boolean };
   voice: { enabled: boolean; mode: VoiceMode };
@@ -52,10 +52,35 @@ export function utilityConfigured(settings: Pick<StorySettings, "utilityModel">)
   return Boolean(settings.utilityModel.trim());
 }
 
-// The self-hosted backends resolve to a default URL even when unconfigured,
-// so only the key-gated OpenAI-compatible backend can be positively absent.
-export function imagesConfigured(backend: string, hasOpenaiKey: boolean): boolean {
-  return backend === "openai" ? hasOpenaiKey : true;
+// Images follow the same rule as speech: the key-gated OpenAI backend needs
+// its key, and a self-hosted backend counts when the admin or env named a
+// URL for it or when something answers at the shipped default. A bare
+// default with nothing listening is the "no image AI on this server" case
+// that every upload-or-paint control needs to know about, so that it can
+// offer the upload alone instead of a paint button that fails.
+export function imagesConfigured(
+  backend: string,
+  hasOpenaiKey: boolean,
+  explicitUrl: string,
+  defaultReachable: boolean,
+): boolean {
+  if (backend === "openai") {
+    return hasOpenaiKey;
+  }
+  return Boolean(explicitUrl.trim()) || defaultReachable;
+}
+
+// Where a cheap liveness GET goes for the image backend. ComfyUI exposes
+// /system_stats; the bundled FLUX workers share one /health. OpenAI is
+// key-gated and never probed.
+export function imagesProbeUrl(backend: string, comfyBaseUrl: string, fluxWorkerUrl: string): string {
+  if (backend === "comfyui") {
+    return `${comfyBaseUrl.replace(/\/+$/, "")}/system_stats`;
+  }
+  if (backend === "mflux-hs" || backend === "sdnq-hs") {
+    return `${fluxWorkerUrl.replace(/\/+$/, "")}/health`;
+  }
+  return "";
 }
 
 // TTS counts as configured when the admin or env named a Kokoro URL, or when
@@ -127,26 +152,53 @@ export async function probeReachable(url: string, now = Date.now()): Promise<boo
   return reachable;
 }
 
+// The producer-side question every portrait and map enqueue asks before it
+// promises a picture: is there an image backend on this server at all? Cached
+// through the same probe window as the endpoint, so a burst of character
+// creations costs one probe, not one per character.
+export async function imagesAvailable(): Promise<boolean> {
+  try {
+    return (await capabilitiesSnapshot()).images.configured;
+  } catch {
+    // A failed snapshot must not turn into a lost render on a host that has
+    // an image backend; the old unconditional behavior is the fallback.
+    return true;
+  }
+}
+
 export async function capabilitiesSnapshot(): Promise<Capabilities> {
   const settings = configuredDefaultStorySettings();
   const cfg = getGlobalConfig();
   const configured = storyConfigured(settings);
   const ollamaBase = serverEnv("OLLAMA_BASE_URL", "http://127.0.0.1:11434");
   const kokoroBase = configValue(cfg.speech.kokoroUrl, "KOKORO_URL", "http://127.0.0.1:8880");
-  const [storyReachable, ttsReachable] = await Promise.all([
+  const comfyBase = configValue(cfg.images.comfyUrl, "COMFYUI_URL", "http://127.0.0.1:8188");
+  const fluxBase = serverEnv("FLUX_WORKER_URL", "http://127.0.0.1:7869");
+  const [storyReachable, ttsReachable, imagesReachable] = await Promise.all([
     configured ? probeReachable(storyProbeUrl(settings, ollamaBase)) : Promise.resolve(false),
     probeReachable(ttsProbeUrl(kokoroBase)),
+    probeReachable(imagesProbeUrl(settings.imageBackend, comfyBase, fluxBase)),
   ]);
   const voice = voiceConfig();
   const hasOpenaiImageKey = Boolean(
     cfg.images.openaiApiKey || serverEnv("OPENAI_IMAGE_API_KEY") || serverEnv("OPENAI_API_KEY"),
   );
+  const explicitImageUrl =
+    settings.imageBackend === "comfyui"
+      ? configValue(cfg.images.comfyUrl, "COMFYUI_URL")
+      : serverEnv("FLUX_WORKER_URL");
 
   return {
     story: { configured, reachable: storyReachable },
     utility: { configured: utilityConfigured(settings) },
     images: {
-      configured: imagesConfigured(settings.imageBackend, hasOpenaiImageKey),
+      configured: imagesConfigured(
+        settings.imageBackend,
+        hasOpenaiImageKey,
+        explicitImageUrl,
+        imagesReachable,
+      ),
+      reachable: settings.imageBackend === "openai" ? hasOpenaiImageKey : imagesReachable,
       backend: settings.imageBackend,
     },
     tts: {

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
+import { offersImages, useCapabilities } from "@/lib/use-capabilities";
 import {
   STANDARD_LANGUAGES,
   suggestedCantripCount,
@@ -250,6 +251,10 @@ export default function CharacterBuilder({
   // Edit mode keeps the existing portrait unless the player clears it.
   const [portrait, setPortrait] = useState<SheetAttachment | null>(initial?.portrait ?? null);
   const [cropping, setCropping] = useState(false);
+  // Whether this server can paint a portrait at all. Without an image
+  // backend the section offers the upload alone and stops promising a
+  // painting that would never arrive.
+  const paintsPortraits = offersImages(useCapabilities());
   const [gold, setGold] = useState(initial?.gold ?? 15);
   const [hpOverride, setHpOverride] = useState<number | null>(initial?.maxHp ?? null);
   const [acOverride, setAcOverride] = useState<number | null>(initial?.ac ?? null);
@@ -1585,7 +1590,10 @@ export default function CharacterBuilder({
                 <Camera className="size-3.5" />
                 {portrait ? "Replace photo" : "Upload a photo"}
               </button>
-              {portrait ? (
+              {/* Clearing the saved portrait means "paint me a new one", which
+                  only makes sense where a painter exists. A freshly uploaded
+                  photo can always be taken back. */}
+              {portrait && (paintsPortraits || portrait.url !== initial?.portrait?.url) ? (
                 <button type="button" onClick={() => setPortrait(null)} className={ui.btnSmall}>
                   {initial?.portrait && portrait.url === initial.portrait.url
                     ? "Regenerate portrait"
@@ -1595,14 +1603,20 @@ export default function CharacterBuilder({
             </div>
             <p className="mt-1.5 text-xs text-stone-500">
               {portrait
-                ? "This photo is used as-is; no portrait is painted for you."
-                : "A portrait is painted for you after you save."}
+                ? paintsPortraits
+                  ? "This photo is used as-is; no portrait is painted for you."
+                  : "This photo is used as-is."
+                : paintsPortraits
+                  ? "A portrait is painted for you after you save."
+                  : "Upload a photo to give your character a face."}
             </p>
           </div>
         </div>
         <h3 className="mb-1 text-xs text-stone-400">Appearance</h3>
         <p className="mb-2 text-xs text-stone-500">
-          Used to paint your character&apos;s portrait if you don&apos;t upload a photo.
+          {paintsPortraits
+            ? "Used to paint your character's portrait if you don't upload a photo."
+            : "How your character looks, for the party and the DM to picture."}
         </p>
         <textarea
           value={appearance}

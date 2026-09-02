@@ -221,14 +221,24 @@ function stat(
   caption(ctx, x + w / 2 - label.length * 1.7, y + 3, label);
 }
 
-async function drawPortrait(ctx: Ctx, x: number, y: number, w: number, h: number, url?: string) {
+// Prefers bytes the caller already fetched (the browser half transcodes
+// WebP to PNG first, since pdf-lib only embeds PNG and JPEG); falls back to
+// fetching the url itself so a Node caller with a PNG portrait still works.
+async function drawPortrait(
+  ctx: Ctx,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  source: { url?: string; bytes?: Uint8Array },
+) {
   box(ctx, x, y, w, h, true);
   caption(ctx, x + 3, y + 3, "Appearance");
-  if (!url) {
+  if (!source.bytes && !source.url) {
     return;
   }
   try {
-    const bytes = await (await fetch(url)).arrayBuffer();
+    const bytes = source.bytes ?? (await (await fetch(source.url as string)).arrayBuffer());
     let image;
     try {
       image = await ctx.doc.embedPng(bytes);
@@ -424,13 +434,13 @@ function drawCombat(ctx: Ctx, c: PdfCharacter, derived: ReturnType<typeof comput
   field(ctx, x + 30, MARGIN + 2, w - 34, 12, String(c.gold), { size: 9 });
 }
 
-async function drawTraits(ctx: Ctx, c: PdfCharacter) {
+async function drawTraits(ctx: Ctx, c: PdfCharacter, portraitBytes?: Uint8Array) {
   const x = 398;
   const w = PAGE_W - MARGIN - x;
   let y = PAGE_H - MARGIN - 60;
 
   // Portrait at the top of the right column.
-  await drawPortrait(ctx, x, y - 104, w, 104, c.portrait?.url);
+  await drawPortrait(ctx, x, y - 104, w, 104, { url: c.portrait?.url, bytes: portraitBytes });
   y -= 112;
 
   // Features & traits (features + feats).
@@ -562,7 +572,16 @@ function drawSpellPage(ctx: Ctx, c: PdfCharacter, derived: ReturnType<typeof com
   });
 }
 
-export async function buildCharacterSheetPdf(character: PdfCharacter): Promise<Uint8Array> {
+export type BuildPdfOptions = {
+  // Pre-fetched PNG or JPEG portrait bytes. When given, the builder never
+  // fetches the portrait url itself.
+  portraitBytes?: Uint8Array;
+};
+
+export async function buildCharacterSheetPdf(
+  character: PdfCharacter,
+  options: BuildPdfOptions = {},
+): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
@@ -575,7 +594,7 @@ export async function buildCharacterSheetPdf(character: PdfCharacter): Promise<U
   drawAbilities(ctx, character, derived);
   drawSavesAndSkills(ctx, character, derived);
   drawCombat(ctx, character, derived);
-  await drawTraits(ctx, character);
+  await drawTraits(ctx, character, options.portraitBytes);
 
   if (character.spellcasting) {
     ctx.page = doc.addPage([PAGE_W, PAGE_H]);

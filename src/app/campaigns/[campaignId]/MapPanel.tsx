@@ -1,9 +1,10 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { Compass, Loader2, Map as MapIcon, RefreshCw, X } from "lucide-react";
-import { useState } from "react";
+import { Compass, ImagePlus, Loader2, Map as MapIcon, RefreshCw, X } from "lucide-react";
+import { useRef, useState } from "react";
 import { cn } from "@/lib/cn";
+import { offersImages, useCapabilities } from "@/lib/use-capabilities";
 import type {
   CampaignLocation,
   MediaStatus,
@@ -11,6 +12,10 @@ import type {
 
 // The area map: current location's rendered map (click to enlarge), its
 // exits, and a history of visited places with their maps.
+//
+// Whoever runs the story can always put a map of their own on an area; the
+// redraw button beside it is only offered when the server has an image
+// backend to draw with, so a table without one sees the upload alone.
 export function MapPanel({
   campaignId,
   locations,
@@ -29,8 +34,52 @@ export function MapPanel({
   // A redraw the server refused, as distinct from a render the queue failed
   // (that one arrives through mediaStatus and shows in the placeholder).
   const [regenerateError, setRegenerateError] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const canPaint = offersImages(useCapabilities());
 
   const shown = (selectedId ? locations.find((l) => l.id === selectedId) : null) ?? current;
+
+  // The uploaded file goes to /api/upload first, then its path to the same
+  // route a redraw uses; the panel updates through location_map_ready.
+  async function upload(file: File) {
+    if (!shown) {
+      return;
+    }
+    setUploading(true);
+    setRegenerateError("");
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error("read failed"));
+        reader.readAsDataURL(file);
+      });
+      const uploaded = await fetch("/api/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dataUrl, name: file.name, type: file.type }),
+      });
+      const payload = await uploaded.json().catch(() => ({}));
+      if (!uploaded.ok) {
+        setRegenerateError(payload.error || "That image would not upload.");
+        return;
+      }
+      const response = await fetch(`/api/campaigns/${campaignId}/locations/${shown.id}/map`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUrl: payload.url }),
+      });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string };
+        setRegenerateError(data.error ?? "Could not set the map.");
+      }
+    } catch {
+      setRegenerateError("That image would not upload.");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   async function regenerate() {
     if (!shown) {
@@ -56,7 +105,9 @@ export function MapPanel({
   if (!locations.length) {
     return (
       <p className="px-1 py-6 text-center text-xs text-stone-600">
-        No areas charted yet. Maps appear as the party explores.
+        {canPaint
+          ? "No areas charted yet. Maps appear as the party explores."
+          : "No areas charted yet. Areas appear as the party explores, and the DM can upload a map for each."}
       </p>
     );
   }
@@ -76,19 +127,51 @@ export function MapPanel({
               ) : null}
             </h3>
             {steersStory ? (
-              <button
-                type="button"
-                onClick={regenerate}
-                disabled={regenerating}
-                title="Redraw this map"
-                className="text-stone-500 hover:text-amber-400 disabled:opacity-50"
-              >
-                {regenerating ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <RefreshCw className="size-3.5" />
-                )}
-              </button>
+              <span className="flex items-center gap-2">
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) {
+                      void upload(file);
+                    }
+                    event.target.value = "";
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={uploading || regenerating}
+                  title={shown.mapImage ? "Replace map with your own picture" : "Upload a map"}
+                  aria-label={shown.mapImage ? "Replace map" : "Upload a map"}
+                  className="text-stone-500 hover:text-amber-400 disabled:opacity-50"
+                >
+                  {uploading ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <ImagePlus className="size-3.5" />
+                  )}
+                </button>
+                {canPaint ? (
+                  <button
+                    type="button"
+                    onClick={regenerate}
+                    disabled={regenerating || uploading}
+                    title="Redraw this map"
+                    aria-label="Redraw this map"
+                    className="text-stone-500 hover:text-amber-400 disabled:opacity-50"
+                  >
+                    {regenerating ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="size-3.5" />
+                    )}
+                  </button>
+                ) : null}
+              </span>
             ) : null}
           </div>
           {regenerateError ? (
@@ -114,7 +197,11 @@ export function MapPanel({
           ) : (
             <div className="flex aspect-[4/3] items-center justify-center rounded-md border border-dashed border-stone-800 text-xs text-stone-600">
               <MapIcon className="mr-1.5 size-4" />
-              {mediaStatus[shown.id]?.state === "failed" ? "Map render failed" : "Not yet mapped"}
+              {mediaStatus[shown.id]?.state === "failed"
+                ? "Map render failed"
+                : !canPaint && steersStory
+                  ? "Not yet mapped. Upload one above."
+                  : "Not yet mapped"}
             </div>
           )}
 

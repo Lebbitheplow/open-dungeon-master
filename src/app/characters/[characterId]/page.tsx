@@ -1,9 +1,11 @@
 "use client";
 
-import { BookOpen, Copy, FileDown, Hammer, Loader2, Swords } from "lucide-react";
+import { BookOpen, Camera, Copy, FileDown, FileJson, Hammer, Loader2, Swords } from "lucide-react";
 import Link from "next/link";
 import { use, useEffect, useRef, useState } from "react";
 import { PIXEL_ICONS, PixelTile } from "@/lib/ui";
+import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
+import { downloadBlob, filenameSlug } from "@/lib/download";
 import { ImageLightbox } from "@/components/ui/ImageLightbox";
 import { GameTerm } from "@/components/ui/GameTerm";
 import { InfoChipList } from "@/components/ui/InfoDialog";
@@ -72,6 +74,9 @@ export default function CharacterDetailPage({
   const [loading, setLoading] = useState(true);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [cloning, setCloning] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
+  const [cropping, setCropping] = useState(false);
   const pollCount = useRef(0);
 
   async function handleDownloadPdf() {
@@ -83,6 +88,51 @@ export default function CharacterDetailPage({
       await downloadCharacterSheetPdf(libraryToPdfCharacter(character));
     } finally {
       setPdfBusy(false);
+    }
+  }
+
+  // The whole character as one JSON file, portrait inlined, for carrying to
+  // another device or server (see src/lib/character-bundle.ts).
+  async function handleExport() {
+    if (!character) {
+      return;
+    }
+    setExporting(true);
+    setExportError("");
+    try {
+      const response = await fetch(`/api/characters/${characterId}/export`);
+      if (!response.ok) {
+        setExportError("Export failed.");
+        return;
+      }
+      downloadBlob(`${filenameSlug(character.name)}.odm-character.json`, await response.blob());
+    } catch {
+      setExportError("Export failed.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  // Same portrait-only PATCH the library list uses; a manual upload is
+  // authoritative and replaces whatever was painted.
+  async function handlePortraitUploaded(portrait: {
+    id: string;
+    name: string;
+    type: string;
+    url: string;
+  }) {
+    setCropping(false);
+    const response = await fetch(`/api/characters/${characterId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ portrait }),
+    });
+    if (response.ok) {
+      setCharacter((current) =>
+        current
+          ? { ...current, portraitStatus: null, sheet: { ...current.sheet, portrait } }
+          : current,
+      );
     }
   }
 
@@ -183,6 +233,23 @@ export default function CharacterDetailPage({
           >
             <FileDown className="size-4" /> {pdfBusy ? "Preparing..." : "Download PDF"}
           </button>
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={exporting}
+            className="order-last inline-flex items-center gap-1.5 rounded-lg border border-stone-600/60 px-3 py-1.5 text-sm text-stone-300 hover:border-amber-500/40 hover:text-amber-100 disabled:opacity-50"
+            title="Save this character as a file you can import on another device or server"
+          >
+            <FileJson className="size-4" /> {exporting ? "Exporting..." : "Export"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setCropping(true)}
+            className="order-last inline-flex items-center gap-1.5 rounded-lg border border-stone-600/60 px-3 py-1.5 text-sm text-stone-300 hover:border-amber-500/40 hover:text-amber-100"
+            title={sheet.portrait ? "Replace the portrait with a photo" : "Upload a portrait"}
+          >
+            <Camera className="size-4" /> {sheet.portrait ? "Replace portrait" : "Upload portrait"}
+          </button>
           {sheet.portrait?.url ? (
             <ImageLightbox
               src={sheet.portrait.url}
@@ -212,6 +279,7 @@ export default function CharacterDetailPage({
             ) : null}
           </div>
         </div>
+        {exportError ? <p className="mt-2 text-sm text-red-400">{exportError}</p> : null}
 
         {/* Each campaign holds its own copy of this sheet, so one library
             entry can be at several tables at once. Naming them is what makes
@@ -345,6 +413,14 @@ export default function CharacterDetailPage({
           </ol>
         )}
       </section>
+
+      {cropping ? (
+        <AvatarCropDialog
+          title={`Portrait for ${character.name}`}
+          onUploaded={(image) => void handlePortraitUploaded(image)}
+          onClose={() => setCropping(false)}
+        />
+      ) : null}
     </main>
   );
 }

@@ -1,6 +1,16 @@
 "use client";
 
-import { Camera, Copy, Hammer, Loader2, Plus, Swords, Trash2, UserRound } from "lucide-react";
+import {
+  Camera,
+  Copy,
+  FileUp,
+  Hammer,
+  Loader2,
+  Plus,
+  Swords,
+  Trash2,
+  UserRound,
+} from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
@@ -50,8 +60,11 @@ export default function CharactersPage() {
   const [authed, setAuthed] = useState(true);
   const [croppingId, setCroppingId] = useState("");
   const [cloningId, setCloningId] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState("");
   const cropping = characters.find((character) => character.id === croppingId);
   const pollCount = useRef(0);
+  const importInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetch("/api/characters")
@@ -124,6 +137,44 @@ export default function CharactersPage() {
     }
   }
 
+  // A character file from this or another server (see
+  // src/lib/character-bundle.ts) becomes a new roster entry. The file is
+  // parsed here only to fail fast on something that is not JSON; the server
+  // does the real validation and reports the first problem it finds.
+  async function importFile(file: File) {
+    setImporting(true);
+    setImportError("");
+    try {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(await file.text());
+      } catch {
+        setImportError(`${file.name} is not a JSON file.`);
+        return;
+      }
+      const response = await fetch("/api/characters/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(parsed),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setImportError(data.error || "Import failed.");
+        return;
+      }
+      if (data.character) {
+        setCharacters((current) => [data.character, ...current]);
+      }
+    } catch {
+      setImportError("Import failed.");
+    } finally {
+      setImporting(false);
+      if (importInput.current) {
+        importInput.current.value = "";
+      }
+    }
+  }
+
   async function remove(id: string, name: string) {
     if (!window.confirm(`Delete ${name} from your library? This cannot be undone.`)) {
       return;
@@ -158,10 +209,39 @@ export default function CharactersPage() {
             </p>
           </div>
         </div>
-        <Link href="/characters/new" className={ui.btnPrimary}>
-          <Plus className="size-4" /> New character
-        </Link>
+        <div className="flex items-center gap-2">
+          <input
+            ref={importInput}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) {
+                void importFile(file);
+              }
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => importInput.current?.click()}
+            disabled={importing}
+            className={ui.btnSecondary}
+            title="Import a character file exported from this or another server"
+          >
+            {importing ? <Loader2 className="size-4 animate-spin" /> : <FileUp className="size-4" />}
+            Import character
+          </button>
+          <Link href="/characters/new" className={ui.btnPrimary}>
+            <Plus className="size-4" /> New character
+          </Link>
+        </div>
       </header>
+      {importError ? (
+        <p className="mb-4 rounded-lg border border-red-500/30 bg-red-950/30 px-3 py-2 text-sm text-red-300">
+          {importError}
+        </p>
+      ) : null}
 
       {loading ? (
         <div className="flex justify-center py-10">

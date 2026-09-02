@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Inbox, Megaphone } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { consoleAdjudications, type AdjudicationCategory } from "@/lib/dm/invoke-catalog";
+import { offersImages, useCapabilities } from "@/lib/use-capabilities";
 import { DmActionForm } from "@/app/campaigns/[campaignId]/DmActionForm";
 import { DmBeatComposer } from "@/app/campaigns/[campaignId]/DmBeatComposer";
 import { DmDelegationPanel } from "@/app/campaigns/[campaignId]/DmDelegationPanel";
@@ -137,7 +138,23 @@ export function DmConsolePanel({
   // The stretch of answers currently handed over, or null.
   cover: DmCover | null;
 }) {
-  const groups = useMemo(() => consoleAdjudications(), []);
+  // Illustrate stays in the catalog (the AI DM and the dispatcher still know
+  // it) but leaves the console on a server with no image backend, where the
+  // form could only ever queue a render that fails. The upload alternative
+  // lives on each passage in the transcript.
+  const capabilities = useCapabilities();
+  const groups = useMemo(() => {
+    const all = consoleAdjudications();
+    if (offersImages(capabilities)) {
+      return all;
+    }
+    return all
+      .map((group) => ({
+        ...group,
+        entries: group.entries.filter((entry) => entry.name !== "generate_image"),
+      }))
+      .filter((group) => group.entries.length > 0);
+  }, [capabilities]);
   // The rail carries the catalog's own categories plus two that are not
   // adjudications at all: the assist tools, which apply nothing, and the DM's
   // tables and monster lookup, which are reference.

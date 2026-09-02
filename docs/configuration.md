@@ -359,3 +359,31 @@ stored under `public/generated/`, with temporary generation refs under
 `public/generated/refs/`. The sidebar's Local Data clear button deletes all
 local stories, messages, characters, uploaded photos, generated images, and
 temporary refs, then vacuums the SQLite database.
+
+### Backing up and moving to another server
+
+Everything a table has made lives in two places, and a backup needs both:
+
+- `data/local-roleplay.sqlite` (or `SQLITE_DB_PATH`): campaigns, messages,
+  characters, NPCs, maps, workshops, accounts. It is encrypted, so keep the
+  `DB_ENCRYPTION_KEY` from `.env.server` (or `data/.db-key` in Docker) with
+  it; the file is unreadable without the key.
+- `public/uploads/`: every picture the database points at, uploaded or
+  painted. Rows store paths like `/uploads/<id>.png`, so a database restored
+  without this folder shows empty portraits and blank map backdrops.
+
+Stop the server, copy both (and `data/worlds` if world packs were installed),
+start the new server with the same key, and the tables come back exactly as
+they were. `public/generated*` holds scene art and narration caches that can
+be copied too but are not required.
+
+Players and DMs who do not run the server have per-item exports instead:
+
+- A character exports as a `.odm-character.json` from its library page and
+  imports on any server through the library's Import button; the portrait
+  travels inside the file.
+- A workshop exports as a `.odm-workshop.json` bundle from its Share panel
+  and imports through the Workshop page's Import button, pictures included.
+- A campaign's story exports as HTML, ODT or DOCX from the Story tab. That is
+  a reading copy; play state (messages, sheets, floor, clock) has no file
+  export and moves only with the database.

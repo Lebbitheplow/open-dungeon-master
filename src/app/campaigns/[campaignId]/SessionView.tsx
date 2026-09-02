@@ -627,6 +627,7 @@ export function SessionView({
             messages={messages}
             campaignId={campaign.id}
             canRetryTurn={steersStory}
+            canIllustrate={steersStory}
             rolls={rolls}
             sheets={sheets}
             members={state.members}

@@ -120,8 +120,8 @@ export function DmSharePanel({ campaignId }: { campaignId: string }) {
       </h2>
       <p className="mb-4 text-sm text-stone-400">
         A bundle is everything you prepared here as one file: lore, places, NPCs, fights, tables,
-        map geometry, the board and your hand-built monsters. No images travel, and nothing from
-        any campaign does.
+        map geometry, the board and your hand-built monsters. Pictures travel with it too, NPC
+        faces and map backdrops alike, within the size caps. Nothing from any campaign does.
       </p>
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2">

@@ -76,7 +76,17 @@ export async function GET() {
     custom: {
       configured: settings.textProvider === "custom" && storyConfigured(settings),
       story: storyConfigured(settings),
-      images: imagesConfigured(settings.imageBackend, hasOpenaiImageKey),
+      // Config-only, like the rest of this block: a self-hosted backend
+      // counts here only when its URL was named. /api/capabilities adds the
+      // default-URL probe.
+      images: imagesConfigured(
+        settings.imageBackend,
+        hasOpenaiImageKey,
+        settings.imageBackend === "comfyui"
+          ? configValue(cfg.images.comfyUrl, "COMFYUI_URL")
+          : serverEnv("FLUX_WORKER_URL"),
+        false,
+      ),
       tts: Boolean(configValue(cfg.speech.kokoroUrl, "KOKORO_URL")),
     },
   });

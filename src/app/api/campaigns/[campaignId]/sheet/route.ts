@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { isErrorResponse, requireMember, type MemberContext } from "@/lib/campaign-api";
+import {
+  isErrorResponse,
+  requireMember,
+  steersStory,
+  type MemberContext,
+} from "@/lib/campaign-api";
 import { JOIN_NOTE_PREFIX } from "@/lib/campaign-types";
 import { allocateSeq, setMemberReady } from "@/lib/db/campaigns";
 import {
@@ -10,7 +15,13 @@ import {
   updateCharacterPortrait,
 } from "@/lib/db/characters";
 import { insertCampaignMessage } from "@/lib/db/messages";
-import { createSheet, deleteSheetForUser, getSheetForUser, patchSheet } from "@/lib/db/sheets";
+import {
+  createSheet,
+  deleteSheetForUser,
+  getSheetById,
+  getSheetForUser,
+  patchSheet,
+} from "@/lib/db/sheets";
 import { queueLibraryPortrait } from "@/lib/portrait";
 import { createSheetSchema, patchSheetSchema } from "@/lib/schemas/sheet";
 import { suggestedSpellCount } from "@/lib/content/mechanics";
@@ -558,13 +569,44 @@ export async function PATCH(
     return context;
   }
 
-  const sheet = getSheetForUser(campaignId, context.user.id);
+  const raw: unknown = await request.json().catch(() => ({}));
+  const body = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+
+  // A companion's sheet belongs to its bot, so nobody at the table can reach
+  // it through getSheetForUser. Whoever runs the story may name one and set
+  // its portrait, and nothing else: the sheetId path accepts exactly one
+  // key, so it widens no other edit right. Stats still go through the lead's
+  // adjust route as before.
+  let sheet: CharacterSheet | null;
+  let companionPortrait = false;
+  if (typeof body.sheetId === "string" && body.sheetId) {
+    const target = getSheetById(body.sheetId);
+    if (!target || target.campaignId !== campaignId || !target.isCompanion) {
+      return Response.json({ error: "That companion is not in this campaign." }, { status: 404 });
+    }
+    if (!steersStory(context)) {
+      return Response.json(
+        { error: "Only whoever runs the story can change a companion's portrait." },
+        { status: 403 },
+      );
+    }
+    const keys = Object.keys(body).filter((key) => key !== "sheetId" && body[key] !== undefined);
+    if (keys.length !== 1 || keys[0] !== "portrait") {
+      return Response.json(
+        { error: "Only a companion's portrait can be changed from here." },
+        { status: 403 },
+      );
+    }
+    sheet = target;
+    companionPortrait = true;
+  } else {
+    sheet = getSheetForUser(campaignId, context.user.id);
+  }
   if (!sheet) {
     return Response.json({ error: "You have no character in this campaign." }, { status: 404 });
   }
 
-  const raw = await request.json().catch(() => ({}));
-  const parsed = patchSheetSchema.safeParse(raw);
+  const parsed = patchSheetSchema.safeParse(body);
   if (!parsed.success) {
     return Response.json(
       { error: parsed.error.issues[0]?.message || "Invalid sheet update." },
@@ -645,7 +687,10 @@ export async function PATCH(
   // Portraits are cosmetic, so unlike stats they mirror to the library
   // immediately instead of waiting for a campaign-end sync; /characters
   // shows the photo right after an in-game upload.
-  if (parsed.data.portrait !== undefined && sheet.libraryCharacterId) {
+  // A companion's library row, if it has one, is the bot's, not the
+  // uploader's, so the mirror is skipped rather than written under the
+  // wrong owner.
+  if (parsed.data.portrait !== undefined && sheet.libraryCharacterId && !companionPortrait) {
     updateCharacterPortrait(context.user.id, sheet.libraryCharacterId, parsed.data.portrait);
   }
   publishPersisted(campaignId, "sheet_updated", { sheet: updated });

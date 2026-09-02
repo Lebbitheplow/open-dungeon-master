@@ -8,6 +8,7 @@ import { ui } from "@/lib/ui";
 import type { Chapter } from "@/lib/db/chapters";
 import type { StoryArc } from "@/lib/dm/arc-logic";
 import { MAX_BEAT_TEXT, type BeatEdit } from "@/lib/dm/arc-edit-logic";
+import { offersStoryModel, useCapabilities } from "@/lib/use-capabilities";
 import { ExportMenu } from "./ExportMenu";
 import { NpcReviewPanel } from "./NpcReviewPanel";
 
@@ -250,6 +251,9 @@ function ArcCard({ campaignId }: { campaignId: string }) {
   const [draft, setDraft] = useState("");
   const [beatBusy, setBeatBusy] = useState(false);
   const [beatError, setBeatError] = useState("");
+  // Plotting an arc is the story model's work; with none configured the
+  // button and the promise that one gets written both go.
+  const canPlot = offersStoryModel(useCapabilities());
 
   async function editBeat(edit: BeatEdit) {
     setBeatBusy(true);
@@ -672,10 +676,12 @@ function ArcCard({ campaignId }: { campaignId: string }) {
             <p className="whitespace-pre-wrap text-[11px] leading-4 text-stone-400">{outline}</p>
           ) : (
             <p className="text-[11px] italic text-stone-600">
-              No story arc yet. It is written when the adventure begins, or generate one now.
+              {canPlot
+                ? "No story arc yet. It is written when the adventure begins, or generate one now."
+                : "No story arc yet."}
             </p>
           )}
-          {!loading ? (
+          {!loading && canPlot ? (
             <button
               type="button"
               onClick={regenerate}
