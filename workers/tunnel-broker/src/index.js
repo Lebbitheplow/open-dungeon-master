@@ -1,5 +1,5 @@
 // The tunnel broker: gives a desktop app hosting a session a pretty, stable
-// address (CODE.play.opendungeonmaster.com) instead of a random
+// address (play-CODE.opendungeonmaster.com) instead of a random
 // trycloudflare.com name.
 //
 // Flow: the app POSTs /session with the local port its bundled server
@@ -156,7 +156,11 @@ async function createSession(env, request) {
   }
 
   const code = randomCode();
-  const hostname = `${code.toLowerCase()}.play.${env.ZONE_NAME}`;
+  // One label deep on purpose: the zone's free Universal SSL wildcard covers
+  // *.opendungeonmaster.com but not *.play.opendungeonmaster.com, so the
+  // prettier CODE.play form would fail every TLS handshake without a paid
+  // Advanced Certificate Manager wildcard.
+  const hostname = `play-${code.toLowerCase()}.${env.ZONE_NAME}`;
   const secret = [...crypto.getRandomValues(new Uint8Array(24))]
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");

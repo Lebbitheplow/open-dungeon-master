@@ -74,7 +74,7 @@ await test("POST /session creates tunnel, config, DNS and returns the goods", as
   assert.equal(response.status, 200);
   created = await response.json();
   assert.equal(parseCode(created.code), created.code);
-  assert.equal(created.hostname, `${created.code.toLowerCase()}.play.opendungeonmaster.com`);
+  assert.equal(created.hostname, `play-${created.code.toLowerCase()}.opendungeonmaster.com`);
   assert.equal(created.tunnelToken, "fake-tunnel-token");
   assert.ok(created.secret.length >= 32);
   const methods = calls.map((call) => `${call.method} ${new URL(call.url).pathname}`);
