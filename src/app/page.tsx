@@ -295,17 +295,20 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
-      <header className="mb-8 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      {/* The title block may shrink and wrap; the action cluster never does,
+          so on a narrow phone (or a large system font) the account menu
+          stays on screen instead of being pushed past the right edge. */}
+      <header className="mb-8 flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <PixelTile src={PIXEL_ICONS.story} />
-          <div>
-            <h1 className="font-display text-xl tracking-wide text-amber-50">
+          <div className="min-w-0">
+            <h1 className="text-balance font-display text-lg leading-tight tracking-wide text-amber-50 sm:text-xl">
               Open Dungeon Master
             </h1>
-            <p className="text-sm text-stone-500">Signed in as {user.username}</p>
+            <p className="truncate text-sm text-stone-500">Signed in as {user.username}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <NotificationBell />
           <Tooltip content="What this app is and how a table works" side="bottom">
             <button type="button" onClick={() => setHowToOpen(true)} className={ui.btnSmall}>

@@ -44,18 +44,18 @@ export function AppHeader({
   const resolved = selfFetch ? fetched : user;
 
   return (
-    <header className={cn("mb-6 flex items-center justify-between gap-2", className)}>
+    <header className={cn("mb-6 flex items-center justify-between gap-3", className)}>
       <Link
         href="/"
-        className="flex items-center gap-2.5 rounded-md outline-none transition-colors hover:text-amber-200 focus-visible:text-amber-200"
+        className="flex min-w-0 items-center gap-2.5 rounded-md outline-none transition-colors hover:text-amber-200 focus-visible:text-amber-200"
       >
         <PixelTile src={PIXEL_ICONS.story} size="size-8" />
-        <span className="font-display text-lg tracking-wide text-amber-50">
+        <span className="text-balance font-display text-base leading-tight tracking-wide text-amber-50 sm:text-lg">
           Open Dungeon Master
         </span>
       </Link>
       {resolved ? (
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <NotificationBell />
           <AccountMenu user={resolved} />
         </div>

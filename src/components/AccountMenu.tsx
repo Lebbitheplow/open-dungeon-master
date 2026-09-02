@@ -88,6 +88,7 @@ export function AccountMenu({
           <DropdownMenu.Content
             align="end"
             sideOffset={6}
+            collisionPadding={12}
             className="min-w-44 rounded-lg border border-stone-600/60 bg-stone-950 p-1 shadow-elev-2"
           >
             <DropdownMenu.Item asChild>
