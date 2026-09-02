@@ -33,6 +33,18 @@ export function subscribeUser(userId: string, subscriber: Subscriber): () => voi
   };
 }
 
+// Presence, account-wide: a user with the bell's stream open is on the
+// server somewhere. Coarser than the per-campaign registry in
+// src/lib/events.ts on purpose; the friends list asks "are they around",
+// not "are they at this table".
+export function isUserOnline(userId: string): boolean {
+  return bus().has(userId);
+}
+
+export function onlineUsers(userIds: string[]): string[] {
+  return userIds.filter((userId) => bus().has(userId));
+}
+
 // Contentless on purpose: nothing private rides the long-lived connection.
 // The bell pulls its own inbox over the authenticated fetch it already has.
 export function pingUsers(userIds: string[]) {

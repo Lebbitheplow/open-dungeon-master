@@ -1068,6 +1068,23 @@ function ensureSchema(db: Database.Database) {
 
     CREATE INDEX IF NOT EXISTS idx_notifications_user
       ON notifications(user_id, created_at);
+
+    -- Per-server friendships. Accounts are per-server, so the social graph
+    -- lives here with them; nothing crosses servers. ONE row per pair: a
+    -- 'pending' row points from requester (user_id) to target
+    -- (friend_user_id), and accepting flips the status in place, so after
+    -- acceptance the direction is history, not meaning. Every accepted-side
+    -- query in src/lib/db/friends.ts therefore matches either column.
+    CREATE TABLE IF NOT EXISTS friends (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      friend_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (user_id, friend_user_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_friends_target
+      ON friends(friend_user_id, status);
   `);
 
   // Compaction memory: a rolling "story so far" summary plus a watermark of

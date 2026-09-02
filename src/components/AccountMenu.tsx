@@ -1,7 +1,15 @@
 "use client";
 
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { CircleHelp, LogOut, Settings, ShieldCheck, UserRound, Users } from "lucide-react";
+import {
+  CircleHelp,
+  HeartHandshake,
+  LogOut,
+  Settings,
+  ShieldCheck,
+  UserRound,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -75,6 +83,11 @@ export function AccountMenu({
             <DropdownMenu.Item asChild>
               <Link href="/characters" className={itemClass}>
                 <Users className="size-4" /> Characters
+              </Link>
+            </DropdownMenu.Item>
+            <DropdownMenu.Item asChild>
+              <Link href="/friends" className={itemClass}>
+                <HeartHandshake className="size-4" /> Friends
               </Link>
             </DropdownMenu.Item>
             <DropdownMenu.Item asChild>
