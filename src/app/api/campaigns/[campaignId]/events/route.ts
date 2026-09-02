@@ -42,7 +42,9 @@ export async function GET(
         send(sseChunk(event.type, event.payload, event.seq));
       }
 
-      const unsubscribe = subscribe(campaignId, send);
+      // The member's id rides along so the bus can keep the campaign's
+      // online set and announce joins and leaves (presence ephemeral).
+      const unsubscribe = subscribe(campaignId, send, context.user.id);
       const heartbeat = setInterval(() => send(": ping\n\n"), HEARTBEAT_MS);
 
       const cleanup = () => {

@@ -148,6 +148,7 @@ export function PartyPanel({
   sheets,
   meUserId,
   spotlightUserIds = [],
+  onlineUserIds = [],
   embedded = false,
   steersStory = false,
   leadUserId = "",
@@ -171,6 +172,9 @@ export function PartyPanel({
   // heavy pack when the rule that penalizes it is actually on.
   encumbranceRule?: boolean;
   spotlightUserIds?: string[];
+  // Who has the campaign open in a live tab (presence). Shown to every seat:
+  // who is at the table is not a secret from anyone.
+  onlineUserIds?: string[];
   embedded?: boolean;
   steersStory?: boolean;
   leadUserId?: string;
@@ -281,6 +285,12 @@ export function PartyPanel({
               <span className="min-w-0">
                 <span className="flex items-center gap-1.5 font-medium">
                   <span className="truncate">{sheet.name}</span>
+                  {!sheet.isCompanion && onlineUserIds.includes(sheet.userId) ? (
+                    <span
+                      title="Online now"
+                      className="size-2 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.7)]"
+                    />
+                  ) : null}
                   {sheet.userId === leadUserId ? (
                     <Crown className="size-3.5 shrink-0 text-amber-300" aria-label="Party lead" />
                   ) : null}

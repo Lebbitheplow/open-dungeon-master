@@ -860,6 +860,7 @@ export function SessionView({
           leadUserId={campaign.leadUserId}
           canTransferLead={isLead || campaign.ownerUserId === me.id}
           spotlightUserIds={floor.mode === "spotlight" ? floor.userIds : []}
+          onlineUserIds={state.online}
           auditLog={auditLog}
           locations={locations}
           chapters={state.chapters}

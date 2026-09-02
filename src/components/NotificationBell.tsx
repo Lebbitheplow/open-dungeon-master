@@ -5,10 +5,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 
 // The bell: out-of-game news (sessions planned, moved, called off; someone
-// can't make it). Polled rather than streamed because notifications are
-// account-wide and the only live streams are per-campaign; a minute of
-// latency on "Friday moved" is fine. Opening the panel marks everything
-// read; the dots in the open panel still show what was new.
+// can't make it; reminders and the idle-table nudge). Live over the
+// account-wide SSE stream (/api/notifications/stream), with the 60s poll
+// kept as the fallback so a dead stream costs a minute of latency, not
+// news. Opening the panel marks everything read; the dots in the open panel
+// still show what was new.
 
 type BellNotification = {
   id: string;
@@ -33,6 +34,52 @@ export function NotificationBell() {
   const [items, setItems] = useState<BellNotification[]>([]);
   const [unread, setUnread] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
+  // Newest createdAt already seen; null until the first fetch lands so the
+  // backlog on page load is never announced as news.
+  const newestSeenRef = useRef<string | null>(null);
+  // Permission is requested once per mount, on the first real notification
+  // rather than on page load, so the browser prompt arrives when the user
+  // can see why it is asking.
+  const askedRef = useRef(false);
+  const openRef = useRef(false);
+  useEffect(() => {
+    openRef.current = open;
+  }, [open]);
+
+  // System notifications for what arrived since the last look. Quiet by
+  // design: nothing on the first load, nothing while the panel is open, and
+  // nothing while the tab is visible (the badge is already in view).
+  const announce = useCallback((list: BellNotification[]) => {
+    const baseline = newestSeenRef.current;
+    newestSeenRef.current = list[0]?.createdAt ?? "";
+    if (baseline === null) {
+      return;
+    }
+    const fresh = list.filter((item) => !item.readAt && item.createdAt > baseline);
+    if (fresh.length === 0 || typeof Notification === "undefined") {
+      return;
+    }
+    if (Notification.permission === "default") {
+      if (!askedRef.current) {
+        askedRef.current = true;
+        void Notification.requestPermission().catch(() => undefined);
+      }
+      return;
+    }
+    if (Notification.permission !== "granted") {
+      return;
+    }
+    if (openRef.current || document.visibilityState !== "hidden") {
+      return;
+    }
+    for (const item of fresh.slice(0, 3)) {
+      try {
+        new Notification("Open Dungeon Master", { body: item.body, tag: item.id });
+      } catch {
+        // No notification daemon on this platform; the badge still shows.
+      }
+    }
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -41,12 +88,14 @@ export function NotificationBell() {
         return;
       }
       const data = await response.json();
-      setItems(data.notifications ?? []);
+      const list: BellNotification[] = data.notifications ?? [];
+      setItems(list);
       setUnread(Number(data.unread) || 0);
+      announce(list);
     } catch {
       // Offline; the next poll retries.
     }
-  }, []);
+  }, [announce]);
 
   useEffect(() => {
     // Deferred a tick: load sets state, and state changes must not launch
@@ -59,6 +108,33 @@ export function NotificationBell() {
       clearTimeout(first);
       clearInterval(timer);
       window.removeEventListener("focus", onFocus);
+    };
+  }, [load]);
+
+  // The live channel: a contentless ping whenever the inbox changes; the
+  // fetch above stays the source of truth. Reconnection is manual (close,
+  // wait, redial) so a signed-out or dead stream never burns retries in the
+  // browser's tight built-in loop.
+  useEffect(() => {
+    let source: EventSource | null = null;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    let stopped = false;
+    const connect = () => {
+      if (stopped) {
+        return;
+      }
+      source = new EventSource("/api/notifications/stream");
+      source.addEventListener("notice", () => void load());
+      source.onerror = () => {
+        source?.close();
+        retry = setTimeout(connect, 15_000);
+      };
+    };
+    connect();
+    return () => {
+      stopped = true;
+      source?.close();
+      clearTimeout(retry);
     };
   }, [load]);
 

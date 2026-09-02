@@ -805,6 +805,41 @@ export function touchCampaign(campaignId: string) {
     .run(nowIso(), campaignId);
 }
 
+// The idle-nudge job's worklist: playing tables (never workshops) that have
+// not moved since the cutoff. Whether a nudge is actually owed is the pure
+// helper's call (src/lib/jobs.ts idleNudgeDue); this only narrows the scan.
+export function listIdleActiveCampaigns(
+  cutoffIso: string,
+): Array<{ id: string; title: string; status: string; updatedAt: string; idleNudgedAt: string | null }> {
+  const rows = getDatabase()
+    .prepare(
+      `SELECT id, title, status, updated_at, idle_nudged_at FROM campaigns
+       WHERE status = 'active' AND kind = 'campaign' AND updated_at <= ?`,
+    )
+    .all(cutoffIso) as Array<{
+    id: string;
+    title: string;
+    status: string;
+    updated_at: string;
+    idle_nudged_at: string | null;
+  }>;
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    status: row.status,
+    updatedAt: row.updated_at,
+    idleNudgedAt: row.idle_nudged_at,
+  }));
+}
+
+// Deliberately leaves updated_at alone: the nudge is about the table being
+// quiet, and must not itself count as activity.
+export function markCampaignNudged(campaignId: string) {
+  getDatabase()
+    .prepare(`UPDATE campaigns SET idle_nudged_at = ? WHERE id = ?`)
+    .run(nowIso(), campaignId);
+}
+
 // Allocates the next per-campaign sequence number (shared by messages and
 // persisted events so every replayable thing has one global order).
 export function allocateSeq(campaignId: string): number {

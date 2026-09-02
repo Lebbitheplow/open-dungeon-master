@@ -1170,6 +1170,11 @@ function ensureSchema(db: Database.Database) {
     // goes through normalizeCampaignKind, which is the enforcement that
     // actually runs.
     ["kind", `TEXT NOT NULL DEFAULT 'campaign'`],
+    // When the idle-nudge job last told this table it has gone quiet
+    // (src/lib/jobs.ts). NULL until the first nudge. A nudge older than
+    // updated_at no longer counts, which is what lets a table that came back
+    // and went quiet again be nudged once more.
+    ["idle_nudged_at", `TEXT`],
   ]);
 
   const userColumns = db.prepare(`PRAGMA table_info(users)`).all() as Array<{ name: string }>;
@@ -1185,6 +1190,12 @@ function ensureSchema(db: Database.Database) {
     ["must_change_password", `INTEGER NOT NULL DEFAULT 0`],
     // Discord account id for "Sign in with Discord"; NULL when unlinked.
     ["discord_id", `TEXT`],
+    // Per-account preferences (audio volumes and mutes) that should follow
+    // the person between browsers. One JSON blob rather than columns because
+    // every reader wants all of it at once and absent keys mean "use the
+    // default", exactly like the client's localStorage cache of the same
+    // values (src/lib/audio-prefs.ts).
+    ["settings_json", `TEXT NOT NULL DEFAULT '{}'`],
   ]);
   db.exec(
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_discord
@@ -1194,6 +1205,14 @@ function ensureSchema(db: Database.Database) {
   addColumns("campaign_members", [
     // Player opted in to rolling physical dice (when the campaign allows it).
     ["use_real_dice", `INTEGER NOT NULL DEFAULT 0`],
+  ]);
+
+  // How far the reminder job has walked this session's ladder: 0 = nothing
+  // sent, 1 = the hour-before note, 2 = the "starting now" note. A column
+  // rather than a sent-log table because the ladder only moves forward, and
+  // rescheduling resets it (src/lib/db/scheduling.ts).
+  addColumns("scheduled_sessions", [
+    ["reminded_stage", `INTEGER NOT NULL DEFAULT 0`],
   ]);
 
   // NULL features_json marks a sheet from before features existed; the

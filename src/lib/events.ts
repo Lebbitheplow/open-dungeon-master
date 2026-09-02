@@ -7,6 +7,11 @@ type Subscriber = (chunk: string) => void;
 // and a module-scoped map would silently drop subscribers.
 declare global {
   var __odmEventBus: Map<string, Set<Subscriber>> | undefined;
+  // Presence: who has the campaign open in a live tab, as connection counts
+  // per user so a second tab does not read as a second person and closing
+  // one of two tabs does not read as leaving. Distinct from the voice
+  // roster, which is who is on the call.
+  var __odmPresenceCounts: Map<string, Map<string, number>> | undefined;
   // Set by src/lib/voice/peers.ts the first time anything voice-related is
   // loaded. Undefined on a server where voice has never been used, in which
   // case the calls below are no-ops.
@@ -17,17 +22,77 @@ function bus() {
   return (globalThis.__odmEventBus ??= new Map<string, Set<Subscriber>>());
 }
 
-export function subscribe(campaignId: string, subscriber: Subscriber): () => void {
+function presenceCounts() {
+  return (globalThis.__odmPresenceCounts ??= new Map<string, Map<string, number>>());
+}
+
+export function onlineUserIds(campaignId: string): string[] {
+  return Array.from(presenceCounts().get(campaignId)?.keys() ?? []);
+}
+
+// The whole online set each time, voice_roster style, so a dropped event
+// self-heals on the next join or leave. Fanned out directly rather than via
+// publishEphemeral because presence is not a game event and the voice layer
+// keeps its own roster.
+function announcePresence(campaignId: string) {
+  fanOut(campaignId, sseChunk("presence", { online: onlineUserIds(campaignId) }));
+}
+
+// userId ties the connection to presence. It is passed by the events route,
+// which has already authenticated the member; a subscriber without one does
+// not count as anybody being online.
+export function subscribe(
+  campaignId: string,
+  subscriber: Subscriber,
+  userId?: string,
+): () => void {
   let subscribers = bus().get(campaignId);
   if (!subscribers) {
     subscribers = new Set();
     bus().set(campaignId, subscribers);
   }
   subscribers.add(subscriber);
+  if (userId) {
+    let counts = presenceCounts().get(campaignId);
+    if (!counts) {
+      counts = new Map();
+      presenceCounts().set(campaignId, counts);
+    }
+    const next = (counts.get(userId) ?? 0) + 1;
+    counts.set(userId, next);
+    // Announced after the subscriber is registered, so the joining tab hears
+    // about its own arrival and needs no separate snapshot of the set.
+    if (next === 1) {
+      announcePresence(campaignId);
+    }
+  }
+  // Guarded so a double-unsubscribe cannot drive a presence count negative.
+  let released = false;
   return () => {
+    if (released) {
+      return;
+    }
+    released = true;
     subscribers.delete(subscriber);
     if (subscribers.size === 0) {
       bus().delete(campaignId);
+    }
+    if (userId) {
+      const counts = presenceCounts().get(campaignId);
+      if (counts) {
+        const left = (counts.get(userId) ?? 0) - 1;
+        if (left <= 0) {
+          counts.delete(userId);
+        } else {
+          counts.set(userId, left);
+        }
+        if (counts.size === 0) {
+          presenceCounts().delete(campaignId);
+        }
+        if (left <= 0) {
+          announcePresence(campaignId);
+        }
+      }
     }
   };
 }

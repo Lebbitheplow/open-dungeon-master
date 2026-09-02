@@ -184,6 +184,7 @@ function SidePanelInner({
   leadUserId,
   canTransferLead,
   spotlightUserIds,
+  onlineUserIds,
   auditLog,
   locations,
   chapters,
@@ -250,6 +251,9 @@ function SidePanelInner({
   leadUserId: string;
   canTransferLead: boolean;
   spotlightUserIds: string[];
+  // Who has the campaign open in a live tab (presence ephemeral), for the
+  // party cards' online dots.
+  onlineUserIds?: string[];
   auditLog: AuditEntry[];
   locations: CampaignLocation[];
   chapters: Chapter[];
@@ -535,6 +539,7 @@ function SidePanelInner({
             sheets={sheets}
             meUserId={meUserId}
             spotlightUserIds={spotlightUserIds}
+            onlineUserIds={onlineUserIds}
             steersStory={steersStory}
             leadUserId={leadUserId}
             canTransferLead={canTransferLead}

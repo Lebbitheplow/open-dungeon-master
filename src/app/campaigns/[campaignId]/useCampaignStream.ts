@@ -197,6 +197,10 @@ export type CampaignState = {
   // Bumped by the contentless schedule_updated ephemeral; the schedule
   // section refetches its list.
   scheduleVersion: number;
+  // Who has the campaign open in a live tab right now. Rides the stream
+  // directly for the same reason the voice roster does: small, identical
+  // for every seat, and nothing private.
+  online: string[];
 };
 
 const initialState: CampaignState = {
@@ -248,6 +252,7 @@ const initialState: CampaignState = {
   voiceSpeaking: null,
   voiceAudibilityVersion: 0,
   voiceMeshSignal: { to: "", version: 0 },
+  online: [],
   scheduleVersion: 0,
 };
 
@@ -640,6 +645,11 @@ function reducer(state: CampaignState, action: Action): CampaignState {
         case "voice_roster":
           next.voiceRoster = (payload.peers as VoiceRosterEntry[]) ?? [];
           return next;
+        // The whole online set each time, like the voice roster, so a
+        // dropped event self-heals on the next join or leave.
+        case "presence":
+          next.online = (payload.online as string[]) ?? [];
+          return next;
         case "voice_speaking":
           next.voiceSpeaking = { userId: String(payload.userId ?? ""), at: Date.now() };
           return next;
@@ -728,6 +738,9 @@ const EPHEMERAL_EVENTS = [
   "voice_mesh_signal",
   // Contentless: the schedule section refetches.
   "schedule_updated",
+  // Who has the campaign open right now. Worthless after the fact, like the
+  // voice roster, so it is never replayed.
+  "presence",
 ];
 const EPHEMERAL_EVENT_SET = new Set(EPHEMERAL_EVENTS);
 

@@ -114,9 +114,13 @@ export function updateScheduledSession(
   if (!existing || existing.cancelledAt) {
     return null;
   }
+  // Rescheduling re-arms the reminder job: the notes already sent were about
+  // the old time (src/lib/jobs.ts walks reminded_stage forward only).
+  const moved = (patch.startsAt ?? existing.startsAt) !== existing.startsAt;
   getDatabase()
     .prepare(
-      `UPDATE scheduled_sessions SET title = ?, starts_at = ?, duration_min = ?, note = ?
+      `UPDATE scheduled_sessions SET title = ?, starts_at = ?, duration_min = ?, note = ?,
+         reminded_stage = CASE WHEN ? THEN 0 ELSE reminded_stage END
        WHERE id = ? AND campaign_id = ?`,
     )
     .run(
@@ -124,6 +128,7 @@ export function updateScheduledSession(
       patch.startsAt ?? existing.startsAt,
       patch.durationMin ?? existing.durationMin,
       patch.note ?? existing.note,
+      moved ? 1 : 0,
       sessionId,
       campaignId,
     );
@@ -141,6 +146,52 @@ export function cancelScheduledSession(
     )
     .run(nowIso(), sessionId, campaignId);
   return result.changes > 0 ? getScheduledSession(campaignId, sessionId) : null;
+}
+
+// The reminder job's worklist: live sessions still owed a note, starting
+// inside the window the job cares about. Which note (if any) is due is the
+// pure helper's call (src/lib/jobs.ts dueReminderStage); this only narrows
+// the scan. ISO strings compare lexicographically, so BETWEEN is sound.
+export function listSessionsAwaitingReminder(
+  notBeforeIso: string,
+  notAfterIso: string,
+): Array<{
+  id: string;
+  campaignId: string;
+  title: string;
+  startsAt: string;
+  remindedStage: number;
+  cancelledAt: string | null;
+}> {
+  const rows = getDatabase()
+    .prepare(
+      `SELECT id, campaign_id, title, starts_at, reminded_stage, cancelled_at
+       FROM scheduled_sessions
+       WHERE cancelled_at IS NULL AND reminded_stage < 2
+         AND starts_at >= ? AND starts_at <= ?`,
+    )
+    .all(notBeforeIso, notAfterIso) as Array<{
+    id: string;
+    campaign_id: string;
+    title: string;
+    starts_at: string;
+    reminded_stage: number;
+    cancelled_at: string | null;
+  }>;
+  return rows.map((row) => ({
+    id: row.id,
+    campaignId: row.campaign_id,
+    title: row.title,
+    startsAt: row.starts_at,
+    remindedStage: row.reminded_stage,
+    cancelledAt: row.cancelled_at,
+  }));
+}
+
+export function setSessionReminderStage(sessionId: string, stage: number): void {
+  getDatabase()
+    .prepare(`UPDATE scheduled_sessions SET reminded_stage = ? WHERE id = ?`)
+    .run(stage, sessionId);
 }
 
 export function setRsvp(
