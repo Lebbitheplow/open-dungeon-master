@@ -1,12 +1,22 @@
 "use client";
 
-import { Check, Copy, Link as LinkIcon, QrCode, RefreshCw, Share2 } from "lucide-react";
+import {
+  Check,
+  Copy,
+  Globe,
+  Link as LinkIcon,
+  Loader2,
+  QrCode,
+  RefreshCw,
+  Share2,
+} from "lucide-react";
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { copyText } from "@/lib/clipboard";
 import { buildShareLinks } from "@/lib/share-link";
 import { ui } from "@/lib/ui";
+import { useShellShare } from "@/lib/use-shell-share";
 import { Dialog } from "@/components/ui/Dialog";
 
 // One place to hand an invite to someone: QR for a phone camera, the link
@@ -36,11 +46,18 @@ export function InviteShareDialog({
   const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState("");
   const [publicOrigin, setPublicOrigin] = useState("");
+  // Inside the desktop or Android app, on the app's own world: the tunnel
+  // that lets friends anywhere join. The lobby starts it on open; this
+  // dialog shows where it landed and offers the off switch.
+  const hosting = useShellShare(open);
+  const shareState = hosting.status?.state ?? "stopped";
+  const shareUrl = hosting.status?.url ?? "";
 
   // A host sharing their world through a tunnel plays on 127.0.0.1, an
-  // address guests cannot reach. The server's publicUrl (set by the desktop
-  // app while a tunnel runs, or by an admin behind a reverse proxy) is the
-  // one that belongs in links and QR codes.
+  // address guests cannot reach. The server's publicUrl (set by the apps
+  // while a tunnel runs, or by an admin behind a reverse proxy) is the one
+  // that belongs in links and QR codes; it is re-read whenever the tunnel
+  // comes or goes.
   useEffect(() => {
     if (!open) {
       return;
@@ -57,7 +74,7 @@ export function InviteShareDialog({
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, shareState, shareUrl]);
 
   const { joinUrl, appUrl } = buildShareLinks({ publicOrigin, inviteCode });
 
@@ -132,6 +149,9 @@ export function InviteShareDialog({
       width="w-[min(92vw,26rem)]"
     >
       <div className="flex flex-col items-center gap-4">
+        {hosting.supported && hosting.status ? (
+          <ShareOnlineRow status={hosting.status} onStart={hosting.start} onStop={hosting.stop} />
+        ) : null}
         {qrDataUrl ? (
           <div className="rounded-xl border border-stone-700/60 bg-white p-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -183,5 +203,65 @@ export function InviteShareDialog({
         ) : null}
       </div>
     </Dialog>
+  );
+}
+
+// The app's tunnel, as seen from the invite dialog: opening, open at an
+// address, failed, or off. Links and the QR above follow the address.
+function ShareOnlineRow({
+  status,
+  onStart,
+  onStop,
+}: {
+  status: { state: "stopped" | "starting" | "running" | "error"; url: string; error: string; lanUrl: string };
+  onStart: () => Promise<void>;
+  onStop: () => Promise<void>;
+}) {
+  if (status.state === "starting") {
+    return (
+      <div className="flex w-full items-center gap-2 rounded-lg border border-stone-700/60 bg-stone-900/60 px-3 py-2 text-sm text-stone-300">
+        <Loader2 className="size-4 shrink-0 animate-spin text-amber-300" />
+        <span>Opening a public address so friends anywhere can join...</span>
+      </div>
+    );
+  }
+  if (status.state === "running") {
+    return (
+      <div className="flex w-full flex-col gap-1.5 rounded-lg border border-emerald-700/50 bg-emerald-950/30 px-3 py-2 text-sm">
+        <div className="flex items-center gap-2 text-emerald-200">
+          <Globe className="size-4 shrink-0" />
+          <span className="font-medium">Shared online</span>
+          <button
+            type="button"
+            onClick={() => void onStop()}
+            className="ml-auto text-xs text-stone-400 transition-colors hover:text-red-400"
+          >
+            Stop sharing
+          </button>
+        </div>
+        <p className="break-all font-mono text-xs text-stone-300">{status.url}</p>
+        <p className="text-xs text-stone-500">
+          Friends anywhere can join with the link below while the app runs.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="flex w-full flex-col gap-1.5 rounded-lg border border-stone-700/60 bg-stone-900/60 px-3 py-2 text-sm">
+      <div className="flex items-center gap-2 text-stone-300">
+        <Globe className="size-4 shrink-0 text-stone-500" />
+        <span>{status.state === "error" ? "Sharing online failed" : "Not shared online"}</span>
+        <button type="button" onClick={() => void onStart()} className={cn(ui.btnSmall, "ml-auto")}>
+          {status.state === "error" ? "Try again" : "Share online"}
+        </button>
+      </div>
+      <p className="text-xs text-stone-500">
+        {status.state === "error"
+          ? status.error
+          : status.lanUrl
+            ? `Only friends on your Wi-Fi can reach ${status.lanUrl} until you share online.`
+            : "Share online and friends anywhere can join with the link below."}
+      </p>
+    </div>
   );
 }

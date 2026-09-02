@@ -20,6 +20,7 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { copyText } from "@/lib/clipboard";
 import { buildShareLinks } from "@/lib/share-link";
+import { useShellShare } from "@/lib/use-shell-share";
 import { InviteShareDialog } from "@/components/InviteShareDialog";
 import { ScheduleSection } from "@/components/ScheduleSection";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -56,9 +57,15 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
   const [seatVersion, setSeatVersion] = useState(0);
   const [seatError, setSeatError] = useState("");
 
+  // Inside the desktop or Android app, on the app's own world, opening a
+  // lobby is what puts the world on the internet: a campaign with a lobby
+  // is one other people are meant to join. Elsewhere this is inert.
+  const share = useShellShare(true);
+  const shareUrl = share.status?.url ?? "";
+
   // Same reason as InviteShareDialog: a host sharing their world through a
   // tunnel plays on 127.0.0.1, an address guests cannot reach, so links
-  // prefer the server's publicUrl.
+  // prefer the server's publicUrl, re-read whenever the tunnel comes or goes.
   useEffect(() => {
     let cancelled = false;
     fetch("/api/auth/providers")
@@ -72,7 +79,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [shareUrl]);
 
   // Whether this viewer may move the DM seats is the seat route's call
   // (primary DM or owner), asked of the server rather than re-derived from
