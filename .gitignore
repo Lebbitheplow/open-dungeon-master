@@ -64,3 +64,8 @@ public/generated-audio
 
 # agent worktrees
 .claude/
+
+# Cloudflare Worker local state: wrangler caches account details here, and
+# .dev.vars files hold local secrets. Neither belongs in history.
+.wrangler/
+.dev.vars*

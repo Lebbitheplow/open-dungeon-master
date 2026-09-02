@@ -5,6 +5,9 @@ compatibility_date = "2026-08-01"
 # Runs on the free workers.dev subdomain:
 #   https://odm-tunnel-broker.<your-subdomain>.workers.dev
 # No route on the zone is needed. Secrets, set with `wrangler secret put`:
+#   ACCOUNT_ID       required. The Cloudflare account id (kept out of the
+#                    committed file; it is not abusable alone, but there is
+#                    no reason to publish it either).
 #   CF_API_TOKEN     required. Scoped to exactly: Account > Cloudflare
 #                    Tunnel > Edit, Zone > DNS > Edit (this zone only).
 #                    NEVER the Global API Key. Optionally add Account >
@@ -13,6 +16,8 @@ compatibility_date = "2026-08-01"
 #   TURN_KEY_ID      optional. A Cloudflare Realtime TURN key id; without
 #   TURN_API_TOKEN   it (and its token) /turn serves STUN-only forever.
 # The zone id is resolved from ZONE_NAME at runtime and cached in KV.
+# Without CF_API_TOKEN the broker still answers, but every /session request
+# fails and hosts silently fall back to quick tunnels.
 #
 # Optional [vars] guarding the Realtime free tier (1000 GB/month):
 #   TURN_MONTHLY_MINT_CAP   max credential mints per month (default 5000)
@@ -28,5 +33,4 @@ id = "47fe1069128549d199527670da4b7dd5"
 crons = ["17 * * * *"]
 
 [vars]
-ACCOUNT_ID = "b6946c131ffbb87f321b1f9c963da32e"
 ZONE_NAME = "opendungeonmaster.com"
