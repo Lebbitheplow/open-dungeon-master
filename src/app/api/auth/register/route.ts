@@ -2,6 +2,7 @@ import { z } from "zod";
 import { hashPassword, startSession } from "@/lib/auth";
 import { consumeAccountInvite } from "@/lib/db/account-invites";
 import { getGlobalConfig } from "@/lib/db/app-settings";
+import { findCampaignByInviteCode } from "@/lib/db/campaigns";
 import { countUsers, createUser, getUserByUsername } from "@/lib/db/users";
 import { checkLogin, recordLoginFailure } from "@/lib/login-throttle";
 import { resolveSignupMode } from "@/lib/schemas/global-config";
@@ -20,6 +21,10 @@ const registerSchema = z.object({
   // Account invite code, required while the server's signup mode is
   // "invite". Not a campaign room code.
   inviteCode: z.string().trim().max(40).optional(),
+  // Campaign room code from a /join/CODE signup (same shape the join route
+  // takes). On an invite-only server a live room code vouches for the
+  // signup; it is looked up, never spent.
+  joinCode: z.string().trim().toUpperCase().min(4).max(12).optional(),
 });
 
 export async function POST(request: Request) {
@@ -32,7 +37,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { username, password, inviteCode } = parsed.data;
+  const { username, password, inviteCode, joinCode } = parsed.data;
 
   // Wrong invite codes and username probes share the login throttle's
   // escalating lockout, keyed by IP: registration is the one auth surface
@@ -55,10 +60,22 @@ export async function POST(request: Request) {
     return Response.json({ error: "Signups are disabled." }, { status: 403 });
   }
   if (!isFirstUser && signupMode === "invite" && !inviteCode) {
-    return Response.json(
-      { error: "This server needs an invite code to create an account." },
-      { status: 403 },
-    );
+    // A live campaign room code also vouches for a signup: room codes only
+    // reach people a member chose to invite. Looked up, never consumed, so
+    // the same code still joins the campaign right after.
+    if (!joinCode) {
+      return Response.json(
+        { error: "This server needs an invite code to create an account." },
+        { status: 403 },
+      );
+    }
+    if (!findCampaignByInviteCode(joinCode)) {
+      recordLoginFailure(throttle);
+      return Response.json(
+        { error: "That room code does not match a campaign on this server." },
+        { status: 403 },
+      );
+    }
   }
   if (getUserByUsername(username)) {
     recordLoginFailure(throttle);
@@ -66,8 +83,8 @@ export async function POST(request: Request) {
   }
   // Spend the invite only after the cheap rejections, so a typo'd username
   // does not burn a single-use code.
-  if (!isFirstUser && signupMode === "invite") {
-    if (!consumeAccountInvite(inviteCode ?? "")) {
+  if (!isFirstUser && signupMode === "invite" && inviteCode) {
+    if (!consumeAccountInvite(inviteCode)) {
       recordLoginFailure(throttle);
       return Response.json(
         { error: "That invite code is not valid (or has been used up)." },

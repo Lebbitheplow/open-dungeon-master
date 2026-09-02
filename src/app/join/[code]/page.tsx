@@ -76,7 +76,7 @@ export default function JoinPage({ params }: { params: Promise<{ code: string }>
             <p className="mb-4 text-sm text-stone-400">
               Log in or create an account to join this campaign.
             </p>
-            <AuthForm onAuthed={() => join()} />
+            <AuthForm joinCode={code.toUpperCase()} onAuthed={() => join()} />
           </>
         )}
       </div>

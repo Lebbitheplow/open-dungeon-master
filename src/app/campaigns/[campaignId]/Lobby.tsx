@@ -16,9 +16,10 @@ import {
   UserPlus,
   UserRound,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { copyText } from "@/lib/clipboard";
+import { buildShareLinks } from "@/lib/share-link";
 import { InviteShareDialog } from "@/components/InviteShareDialog";
 import { ScheduleSection } from "@/components/ScheduleSection";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -48,6 +49,25 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
   const [buildingCompanion, setBuildingCompanion] = useState(false);
   const [contentImport, setContentImport] = useState<ImportSelection>(EMPTY_SELECTION);
   const [error, setError] = useState("");
+  const [publicOrigin, setPublicOrigin] = useState("");
+
+  // Same reason as InviteShareDialog: a host sharing their world through a
+  // tunnel plays on 127.0.0.1, an address guests cannot reach, so links
+  // prefer the server's publicUrl.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/auth/providers")
+      .then((response) => response.json())
+      .then((data: { publicUrl?: string }) => {
+        if (!cancelled && typeof data.publicUrl === "string") {
+          setPublicOrigin(data.publicUrl);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   if (!campaign || !me) {
     return null;
@@ -164,8 +184,12 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
     }
   }
 
+  // The copied link is the /j interstitial: it works whether the recipient
+  // has the app or only a browser. The readable /join form stays on screen.
+  const shareLinks = buildShareLinks({ publicOrigin, inviteCode: campaign.inviteCode });
+
   async function copyLink() {
-    if (await copyText(`${window.location.origin}/join/${campaign!.inviteCode}`)) {
+    if (await copyText(shareLinks.appUrl)) {
       setLinkCopied(true);
       setTimeout(() => setLinkCopied(false), 1500);
     }
@@ -317,7 +341,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
           </div>
         </div>
         <p className="mt-1.5 break-all font-mono text-xs text-stone-500">
-          {typeof window !== "undefined" ? `${window.location.origin}/join/${campaign.inviteCode}` : ""}
+          {shareLinks.joinUrl}
         </p>
       </section>
       ) : null}

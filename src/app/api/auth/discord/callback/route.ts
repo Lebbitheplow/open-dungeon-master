@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { currentUser, startSession } from "@/lib/auth";
 import { consumeAccountInvite } from "@/lib/db/account-invites";
 import { getGlobalConfig } from "@/lib/db/app-settings";
+import { findCampaignByInviteCode } from "@/lib/db/campaigns";
 import { resolveSignupMode } from "@/lib/schemas/global-config";
 import {
   countUsers,
@@ -67,11 +68,13 @@ export async function GET(request: Request) {
   cookieStore.delete(OAUTH_COOKIE);
   let link = false;
   let invite = "";
+  let next = "/";
   try {
     const parsed = JSON.parse(stored || "{}") as {
       state?: string;
       link?: boolean;
       invite?: string;
+      next?: string;
     };
     if (!code || !parsed.state || parsed.state !== state) {
       return fail(request.url, "state mismatch or missing code", {
@@ -81,6 +84,12 @@ export async function GET(request: Request) {
     }
     link = parsed.link === true;
     invite = typeof parsed.invite === "string" ? parsed.invite : "";
+    // Re-validated even though the start route already did: the cookie is
+    // the trust boundary, not the code that usually writes it.
+    const storedNext = typeof parsed.next === "string" ? parsed.next : "";
+    if (storedNext.startsWith("/") && !storedNext.startsWith("//") && storedNext.length <= 200) {
+      next = storedNext;
+    }
   } catch {
     return fail(request.url, "unreadable oauth state cookie");
   }
@@ -153,7 +162,7 @@ export async function GET(request: Request) {
   const existing = getUserByDiscordId(discordId);
   if (existing) {
     await startSession(existing.id);
-    return redirect(request.url, "/");
+    return redirect(request.url, next);
   }
 
   // New account via Discord. Mirrors /api/auth/register: blocked when
@@ -165,11 +174,18 @@ export async function GET(request: Request) {
     return redirect(request.url, "/?error=signups_disabled");
   }
   if (!isFirstUser && signupMode === "invite") {
-    if (!invite) {
+    // Same two tickets /api/auth/register accepts: an account invite code,
+    // or the live campaign room code carried in the return path (room codes
+    // only reach people a member chose to invite; looked up, never spent).
+    const roomCode = next.startsWith("/join/")
+      ? next.slice("/join/".length).trim().toUpperCase()
+      : "";
+    if (invite) {
+      if (!consumeAccountInvite(invite)) {
+        return redirect(request.url, "/?error=invite_invalid");
+      }
+    } else if (!roomCode || !findCampaignByInviteCode(roomCode)) {
       return redirect(request.url, "/?error=invite_required");
-    }
-    if (!consumeAccountInvite(invite)) {
-      return redirect(request.url, "/?error=invite_invalid");
     }
   }
   const username = deriveUsername(globalName, discordUsername, discordId);
@@ -178,5 +194,5 @@ export async function GET(request: Request) {
     setUserAdmin(user.id, true);
   }
   await startSession(user.id);
-  return redirect(request.url, "/");
+  return redirect(request.url, next);
 }

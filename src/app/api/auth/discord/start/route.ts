@@ -21,8 +21,14 @@ export async function GET(request: Request) {
   // round trip in the state cookie so the callback can spend it when the
   // sign-in turns out to create a new account.
   const invite = (params.get("invite") ?? "").trim().toUpperCase().slice(0, 40);
+  // Where to land after sign-in (e.g. back to /join/CODE). Only a local
+  // path is accepted so the cookie can never turn the callback into an
+  // open redirect.
+  const rawNext = params.get("next") ?? "";
+  const next =
+    rawNext.startsWith("/") && !rawNext.startsWith("//") && rawNext.length <= 200 ? rawNext : "";
   const cookieStore = await cookies();
-  cookieStore.set(OAUTH_COOKIE, JSON.stringify({ state, link, invite }), {
+  cookieStore.set(OAUTH_COOKIE, JSON.stringify({ state, link, invite, next }), {
     httpOnly: true,
     sameSite: "lax",
     secure: await cookieSecure(),

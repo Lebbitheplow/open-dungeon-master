@@ -18,13 +18,43 @@ const OAUTH_ERRORS: Record<string, string> = {
 
 type SignupMode = "open" | "invite" | "closed";
 
+function discordStartHref(inviteCode: string, joinCode?: string): string {
+  const query = new URLSearchParams();
+  if (inviteCode.trim()) {
+    query.set("invite", inviteCode.trim().toUpperCase());
+  }
+  if (joinCode) {
+    query.set("next", `/join/${joinCode.trim().toUpperCase()}`);
+  }
+  const qs = query.toString();
+  return qs ? `/api/auth/discord/start?${qs}` : "/api/auth/discord/start";
+}
+
 // Shared login/register form used by the home screen and invite-link page.
 // After a login that requires a password reset (admin gave the user a temp
 // password), a "set a new password" step runs before onAuthed fires.
-export default function AuthForm({ onAuthed }: { onAuthed: (user: SessionUser) => void }) {
+export default function AuthForm({
+  onAuthed,
+  joinCode,
+}: {
+  onAuthed: (user: SessionUser) => void;
+  // Campaign room code when this form sits on a /join/CODE page. It rides
+  // along on register so an invite-only server can accept the signup, and
+  // on the Discord link so the OAuth round trip returns to the join page.
+  joinCode?: string;
+}) {
   const [mode, setMode] = useState<AuthMode>("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  // An ?invite= in the URL (a shared signup link) prefills the account
+  // invite code and locks the field so it cannot be mistyped away.
+  const [urlInvite] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return (new URLSearchParams(window.location.search).get("invite") || "")
+      .trim()
+      .toUpperCase()
+      .slice(0, 40);
+  });
   // Seed the error from an OAuth redirect (?error=...) so it shows on load.
   const [error, setError] = useState(() => {
     if (typeof window === "undefined") return "";
@@ -34,7 +64,7 @@ export default function AuthForm({ onAuthed }: { onAuthed: (user: SessionUser) =
   const [busy, setBusy] = useState(false);
   const [discordEnabled, setDiscordEnabled] = useState(false);
   const [signupMode, setSignupMode] = useState<SignupMode>("open");
-  const [inviteCode, setInviteCode] = useState("");
+  const [inviteCode, setInviteCode] = useState(urlInvite);
   const [pendingReset, setPendingReset] = useState<{ user: SessionUser; tempPassword: string } | null>(
     null,
   );
@@ -59,14 +89,19 @@ export default function AuthForm({ onAuthed }: { onAuthed: (user: SessionUser) =
     setBusy(true);
     setError("");
     try {
+      const payload: Record<string, string> = { username, password };
+      if (mode === "register" && inviteCode.trim()) {
+        payload.inviteCode = inviteCode.trim().toUpperCase();
+      }
+      // The room code from a /join page vouches for the signup on an
+      // invite-only server (only a member could have shared it).
+      if (mode === "register" && joinCode) {
+        payload.joinCode = joinCode.trim().toUpperCase();
+      }
       const response = await fetch(`/api/auth/${mode}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          mode === "register" && inviteCode.trim()
-            ? { username, password, inviteCode: inviteCode.trim().toUpperCase() }
-            : { username, password },
-        ),
+        body: JSON.stringify(payload),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -136,12 +171,15 @@ export default function AuthForm({ onAuthed }: { onAuthed: (user: SessionUser) =
               value={inviteCode}
               onChange={(event) => setInviteCode(event.target.value)}
               required
+              readOnly={Boolean(urlInvite)}
               maxLength={40}
               placeholder="ODM-XXXXXXXXXX"
               className={ui.input}
             />
             <span className="mt-1 block text-xs text-stone-500">
-              This server is invite-only. Ask whoever runs it for a code.
+              {urlInvite
+                ? "This code came with your invite link."
+                : "This server is invite-only. Ask whoever runs it for a code."}
             </span>
           </label>
         ) : null}
@@ -168,12 +206,10 @@ export default function AuthForm({ onAuthed }: { onAuthed: (user: SessionUser) =
       {discordEnabled ? (
         <a
           // A filled invite code rides along so a brand-new Discord account
-          // can pass an invite-only server's gate in one round trip.
-          href={
-            inviteCode.trim()
-              ? `/api/auth/discord/start?invite=${encodeURIComponent(inviteCode.trim().toUpperCase())}`
-              : "/api/auth/discord/start"
-          }
+          // can pass an invite-only server's gate in one round trip, and on
+          // a join page the return path rides along so the callback lands
+          // back on the campaign instead of the dashboard.
+          href={discordStartHref(inviteCode, joinCode)}
           className={cn(ui.btnSecondary, "mt-3 w-full")}
         >
           <svg viewBox="0 0 24 24" className="size-4 fill-current" aria-hidden="true">

@@ -177,16 +177,39 @@ export default function SettingsPage() {
       </section>
 
       <section className="texture-noise mt-4 rounded-xl border border-stone-700/50 bg-stone-950/60 p-5 shadow-elev-1">
-        <h2 className="mb-3 text-sm font-medium text-stone-300">Password</h2>
-        <ChangePasswordForm
-          onChanged={() => {
-            setPasswordChanged(true);
-            setTimeout(() => setPasswordChanged(false), 2500);
-          }}
-        />
+        <h2 className="mb-3 text-sm font-medium text-stone-300">
+          {me.hasPassword === false ? "Set a password" : "Password"}
+        </h2>
+        {me.hasPassword === false ? (
+          <>
+            <p className="mb-3 text-sm text-stone-400">
+              You sign in with Discord. Set a password to also log in with your username, for
+              example in the desktop and mobile apps.
+            </p>
+            {/* lockCurrent hides the current-password field; the server
+                skips verification for accounts that have none. */}
+            <ChangePasswordForm
+              currentPassword=""
+              lockCurrent
+              submitLabel="Set password"
+              onChanged={() => {
+                setMe((current) => (current ? { ...current, hasPassword: true } : current));
+                setPasswordChanged(true);
+                setTimeout(() => setPasswordChanged(false), 2500);
+              }}
+            />
+          </>
+        ) : (
+          <ChangePasswordForm
+            onChanged={() => {
+              setPasswordChanged(true);
+              setTimeout(() => setPasswordChanged(false), 2500);
+            }}
+          />
+        )}
         {passwordChanged ? (
           <p className="mt-2 inline-flex items-center gap-1 text-sm text-emerald-400">
-            <Check className="size-4" /> Password changed. Other devices were signed out.
+            <Check className="size-4" /> Password saved. Other devices were signed out.
           </p>
         ) : null}
       </section>

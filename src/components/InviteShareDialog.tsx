@@ -5,14 +5,17 @@ import QRCode from "qrcode";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { copyText } from "@/lib/clipboard";
+import { buildShareLinks } from "@/lib/share-link";
 import { ui } from "@/lib/ui";
 import { Dialog } from "@/components/ui/Dialog";
 
 // One place to hand an invite to someone: QR for a phone camera, the link
 // for chat apps, the bare code for typing, and the OS share sheet where the
 // browser has one (that covers "share to social media" on every phone).
-// The QR and the link encode the full origin, so a client app can tell both
-// which server and which campaign it was invited to.
+// The QR, the copy button, and the share sheet all carry the /j
+// interstitial link (buildShareLinks), which knows both the server and the
+// campaign and works whether or not the recipient has the app. The direct
+// /join link stays visible as text so people can read where it leads.
 export function InviteShareDialog({
   open,
   onOpenChange,
@@ -56,23 +59,23 @@ export function InviteShareDialog({
     };
   }, [open]);
 
-  const origin =
-    publicOrigin || (typeof window !== "undefined" ? window.location.origin : "");
-  const link = origin ? `${origin}/join/${inviteCode}` : "";
+  const { joinUrl, appUrl } = buildShareLinks({ publicOrigin, inviteCode });
 
   useEffect(() => {
-    if (!open || !link) {
+    if (!open || !appUrl) {
       return;
     }
     // Dark-on-light keeps the code scannable; a stone border comes from the
-    // wrapper, not the image.
-    QRCode.toDataURL(link, { width: 480, margin: 2 })
+    // wrapper, not the image. The QR carries the /j interstitial so a phone
+    // camera lands on a page that can open the app or fall back to the
+    // browser.
+    QRCode.toDataURL(appUrl, { width: 480, margin: 2 })
       .then(setQrDataUrl)
       .catch(() => setQrDataUrl(""));
-  }, [open, link]);
+  }, [open, appUrl]);
 
   async function copy(kind: "link" | "code") {
-    const worked = await copyText(kind === "link" ? link : inviteCode);
+    const worked = await copyText(kind === "link" ? appUrl : inviteCode);
     setError(worked ? "" : "Copying failed. Select the text and copy it by hand.");
     if (worked) {
       setCopied(kind);
@@ -86,7 +89,7 @@ export function InviteShareDialog({
       await navigator.share({
         title: `Join ${title}`,
         text: `Join ${campaignTitle ? `"${campaignTitle}"` : "my campaign"} on Open Dungeon Master`,
-        url: link,
+        url: appUrl,
       });
     } catch {
       // Dismissed the sheet; nothing to do.
@@ -132,13 +135,13 @@ export function InviteShareDialog({
         {qrDataUrl ? (
           <div className="rounded-xl border border-stone-700/60 bg-white p-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={qrDataUrl} alt={`QR code for invite link ${link}`} className="size-48" />
+            <img src={qrDataUrl} alt={`QR code for invite link ${appUrl}`} className="size-48" />
           </div>
         ) : null}
         <div className="w-full text-center">
           <p className="eyebrow text-[10px] text-amber-200/70">Room code</p>
           <p className="font-mono text-2xl tracking-[0.3em] text-amber-100">{inviteCode}</p>
-          <p className="mt-1 break-all font-mono text-xs text-stone-500">{link}</p>
+          <p className="mt-1 break-all font-mono text-xs text-stone-500">{joinUrl}</p>
         </div>
         <div className="flex w-full flex-wrap justify-center gap-2">
           <button type="button" onClick={() => copy("link")} className={ui.btnSmall}>

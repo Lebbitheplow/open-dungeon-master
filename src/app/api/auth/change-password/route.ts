@@ -17,7 +17,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const changeSchema = z.object({
-  currentPassword: z.string().min(1).max(100),
+  // Empty for a Discord-only account setting its first password; there is
+  // nothing to verify against yet.
+  currentPassword: z.string().max(100).optional(),
   newPassword: z.string().min(8).max(100),
 });
 
@@ -42,14 +44,13 @@ export async function POST(request: Request) {
   if (!account) {
     return unauthorized();
   }
-  if (account.passwordHash === NO_PASSWORD_SENTINEL) {
-    return Response.json(
-      { error: "This account signs in with Discord and has no password." },
-      { status: 400 },
-    );
-  }
-  if (!verifyPassword(parsed.data.currentPassword, account.passwordHash)) {
-    return Response.json({ error: "Current password is wrong." }, { status: 403 });
+  // A Discord-only account has no current password to verify: the
+  // authenticated session is the proof, and setting one enables username
+  // login here and in the apps.
+  if (account.passwordHash !== NO_PASSWORD_SENTINEL) {
+    if (!verifyPassword(parsed.data.currentPassword ?? "", account.passwordHash)) {
+      return Response.json({ error: "Current password is wrong." }, { status: 403 });
+    }
   }
 
   setUserPassword(user.id, hashPassword(parsed.data.newPassword), false);

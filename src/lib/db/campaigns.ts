@@ -435,6 +435,15 @@ export function listMembers(campaignId: string): CampaignMember[] {
   }));
 }
 
+// Non-consuming lookup: registration treats a live room code as proof of
+// invitation without joining anything or spending the code.
+export function findCampaignByInviteCode(inviteCode: string): Campaign | null {
+  const row = getDatabase()
+    .prepare(`${CAMPAIGN_SELECT} WHERE c.invite_code = ?`)
+    .get(inviteCode) as CampaignRow | undefined;
+  return row ? mapCampaign(row) : null;
+}
+
 export function joinByInviteCode(
   userId: string,
   inviteCode: string,
