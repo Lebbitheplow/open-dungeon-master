@@ -2,6 +2,7 @@
 
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
+  ArrowLeftRight,
   CircleHelp,
   HeartHandshake,
   LogOut,
@@ -12,9 +13,13 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { HelpDialog } from "@/components/HelpDialog";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { shellHost, type ShellHost } from "@/lib/shell-host";
+
+// window.odmShell is set once before any page script runs and never changes.
+const subscribeNever = () => () => {};
 
 // The one account menu, extracted from the home page so every top-level page
 // offers the same doors. Only the fields the menu draws from, so any page's
@@ -38,6 +43,11 @@ export function AccountMenu({
   onLogout?: () => void;
 }) {
   const [helpOpen, setHelpOpen] = useState(false);
+  // Inside the desktop or Android app the menu grows a door back to the
+  // app's server list. The host object is a client-only global, so it is
+  // read as an external store with a null server snapshot: server and
+  // client markup agree, and the entry appears right after hydration.
+  const shell = useSyncExternalStore<ShellHost | null>(subscribeNever, shellHost, () => null);
   const router = useRouter();
 
   async function logout() {
@@ -106,6 +116,11 @@ export function AccountMenu({
               <CircleHelp className="size-4" /> Help
             </DropdownMenu.Item>
             <DropdownMenu.Separator className="my-1 h-px bg-stone-800" />
+            {shell ? (
+              <DropdownMenu.Item onSelect={() => shell.showServers()} className={itemClass}>
+                <ArrowLeftRight className="size-4" /> Switch server
+              </DropdownMenu.Item>
+            ) : null}
             <DropdownMenu.Item onSelect={logout} className={itemClass}>
               <LogOut className="size-4" /> Log out
             </DropdownMenu.Item>
