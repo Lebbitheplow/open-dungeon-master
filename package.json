@@ -1,6 +1,6 @@
 {
   "name": "open-dungeon-master",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "private": true,
   "description": "Multiplayer D&D 5e campaigns with an AI Dungeon Master, fully on-device",
   "license": "MIT",
