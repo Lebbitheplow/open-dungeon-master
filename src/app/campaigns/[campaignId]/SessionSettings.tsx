@@ -8,11 +8,14 @@ import { EditCampaignDialog } from "@/app/campaigns/[campaignId]/EditCampaignDia
 import { GameSettingsPanel } from "@/app/campaigns/[campaignId]/GameSettingsPanel";
 import { RulesPanel } from "@/app/campaigns/[campaignId]/RulesPanel";
 
-// Setup tab of the session side panel: the lead edits campaign details and
-// game settings mid-adventure; everyone else sees a read-only summary.
+// Setup tab of the session side panel. Two authorities meet here: campaign
+// details belong to the lead (the PATCH /api/campaigns/[id] gate), while game
+// settings and house rules follow story authority, which a human DM takes
+// over from the lead. Everyone else sees a read-only summary.
 export function SessionSettings({
   campaign,
   isLead,
+  steersStory,
 }: {
   campaign: {
     id: string;
@@ -25,6 +28,7 @@ export function SessionSettings({
     gameSettings?: GameSettings;
   };
   isLead: boolean;
+  steersStory: boolean;
 }) {
   const [editing, setEditing] = useState(false);
 
@@ -58,7 +62,7 @@ export function SessionSettings({
         <GameSettingsPanel
           campaignId={campaign.id}
           settings={campaign.gameSettings}
-          steersStory={isLead}
+          steersStory={steersStory}
         />
       ) : null}
 
@@ -67,7 +71,7 @@ export function SessionSettings({
           <RulesPanel
             campaignId={campaign.id}
             settings={campaign.gameSettings}
-            steersStory={isLead}
+            steersStory={steersStory}
           />
         </div>
       ) : null}

@@ -41,6 +41,7 @@ export function VoicePanel({
   floorUserIds = [],
   turnEnforcement = "soft",
   adjudicates = false,
+  steersStory = false,
   sayRangeRule = false,
   audibilityVersion = 0,
   meshSignal = null,
@@ -55,6 +56,10 @@ export function VoicePanel({
   floorUserIds?: string[];
   turnEnforcement?: TurnEnforcement;
   adjudicates?: boolean;
+  // Gates the breakout-room controls. Separate from adjudicates because the
+  // channels route asks for story authority, which an AI campaign's lead
+  // holds without ever holding the DM seat.
+  steersStory?: boolean;
   // Whether the say-range rule is on, which is the only thing that makes the
   // whisper/shout selector meaningful.
   sayRangeRule?: boolean;
@@ -382,7 +387,7 @@ export function VoicePanel({
       {/* Breakout rooms. Everyone can see the list and who is in each: a side
           room nobody can see reads as a bug rather than a secret. Only story
           authority can open one or move anybody. */}
-      {channels.length > 1 || adjudicates ? (
+      {channels.length > 1 || steersStory ? (
         <div className="mt-3 space-y-1.5 border-t border-stone-800 pt-2">
           {channels.map((channel) => {
             const occupants = voice.peers.filter((peer) => peer.channelId === channel.id);
@@ -391,7 +396,7 @@ export function VoicePanel({
                 <Users className="size-3.5 shrink-0 text-stone-600" />
                 <span className="truncate text-stone-400">{channel.name}</span>
                 <span className="text-stone-600">{occupants.length}</span>
-                {adjudicates && channel.id !== "table" ? (
+                {steersStory && channel.id !== "table" ? (
                   <button
                     type="button"
                     onClick={() => void channelAction({ action: "close", channelId: channel.id })}
@@ -405,7 +410,7 @@ export function VoicePanel({
               </div>
             );
           })}
-          {adjudicates ? (
+          {steersStory ? (
             <div className="flex gap-1.5 pt-1">
               <input
                 value={newRoom}
@@ -450,7 +455,10 @@ export function VoicePanel({
               volume={voice.peerVolume(peer.userId)}
               expanded={volumeFor === peer.userId}
               channels={channels}
-              adjudicates={adjudicates}
+              // The row's flag only gates its move-to-room select, and moving
+              // somebody POSTs to the channels route, which asks for story
+              // authority rather than the DM seat.
+              adjudicates={steersStory}
               onToggleVolume={() =>
                 setVolumeFor((open) => (open === peer.userId ? null : peer.userId))
               }

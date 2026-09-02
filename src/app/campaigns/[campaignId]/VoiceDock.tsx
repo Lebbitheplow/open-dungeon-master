@@ -23,6 +23,7 @@ export function VoiceDock({
   floorUserIds,
   turnEnforcement,
   adjudicates,
+  steersStory,
   sayRangeRule,
   audibilityVersion,
   meshSignal,
@@ -35,6 +36,9 @@ export function VoiceDock({
   floorUserIds: string[];
   turnEnforcement: TurnEnforcement;
   adjudicates: boolean;
+  // For the panel's breakout-room controls, whose route asks for story
+  // authority rather than the DM seat.
+  steersStory: boolean;
   sayRangeRule: boolean;
   audibilityVersion: number;
   meshSignal: { to: string; version: number } | null;
@@ -114,6 +118,7 @@ export function VoiceDock({
           floorUserIds={floorUserIds}
           turnEnforcement={turnEnforcement}
           adjudicates={adjudicates}
+          steersStory={steersStory}
           sayRangeRule={sayRangeRule}
           audibilityVersion={audibilityVersion}
           meshSignal={meshSignal}

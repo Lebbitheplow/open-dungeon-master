@@ -67,6 +67,9 @@ export function GameSettingsPanel({
   steersStory: boolean;
 }) {
   const [busy, setBusy] = useState(false);
+  // Every control here renders the server's settings, so a refused PATCH
+  // changes nothing on screen; without this line it changes nothing silently.
+  const [error, setError] = useState("");
   const [packs, setPacks] = useState<WorldPackSummary[]>([]);
   // Whether any ambience audio is actually on disk. The library ships empty
   // (public/ambience is gitignored and filled by npm run fetch-ambience), so
@@ -115,12 +118,19 @@ export function GameSettingsPanel({
 
   async function patch(update: Partial<GameSettings>) {
     setBusy(true);
+    setError("");
     try {
-      await fetch(`/api/campaigns/${campaignId}/settings`, {
+      const response = await fetch(`/api/campaigns/${campaignId}/settings`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(update),
       });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string };
+        setError(data.error ?? "That change was not saved.");
+      }
+    } catch {
+      setError("Could not reach the server.");
     } finally {
       setBusy(false);
     }
@@ -210,6 +220,7 @@ export function GameSettingsPanel({
   return (
     <section className="mb-6 rounded-lg border border-stone-800 bg-stone-950/60 p-4">
       <h2 className="mb-3 text-sm font-medium text-stone-300">Game settings</h2>
+      {error ? <p className="mb-2 text-xs text-red-400">{error}</p> : null}
       <div className={cn("space-y-3 text-xs", busy && "opacity-70")}>
         {settings.dmMode === "assisted" ? (
           // Only in the middle setting. A table the AI runs has nothing to

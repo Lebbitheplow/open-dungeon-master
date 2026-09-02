@@ -44,6 +44,7 @@ export function BattleMapPanel({
   sheets,
   refreshBattleMap,
   canDirect = false,
+  canFocusPing = false,
   ping = null,
 }: {
   campaignId: string;
@@ -54,6 +55,9 @@ export function BattleMapPanel({
   // The DM seat. Deliberately not derived from view.fullVision: that flag
   // says what the projection withheld, not what this person may do.
   canDirect?: boolean;
+  // Story authority, which is what the ping route accepts the focus flag
+  // for; the DM seat alone is not what makes a ping open everyone's board.
+  canFocusPing?: boolean;
   ping?: MapPing | null;
 }) {
   const [enlarged, setEnlarged] = useState(false);
@@ -145,7 +149,7 @@ export function BattleMapPanel({
 
   async function sendPing(x: number, y: number) {
     setPointing(false);
-    await post("/battle-map/ping", { x, y, focus: canDirect });
+    await post("/battle-map/ping", { x, y, focus: canFocusPing });
   }
 
   async function board(body: unknown) {

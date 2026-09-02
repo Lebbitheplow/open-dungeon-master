@@ -153,6 +153,11 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
   const [campaigns, setCampaigns] = useState<CampaignSummary[]>([]);
   const [workshops, setWorkshops] = useState<WorkshopSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  // A failed list fetch must not read as "no campaigns": the empty-table
+  // hero is a statement about the account, not about the network.
+  const [loadFailed, setLoadFailed] = useState(false);
+  // Clone and delete failures, shown beside the campaign grid.
+  const [actionError, setActionError] = useState("");
   const [cloningId, setCloningId] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [soloOpen, setSoloOpen] = useState(false);
@@ -162,20 +167,32 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
   const [joinError, setJoinError] = useState("");
   const [joining, setJoining] = useState(false);
 
-  const refresh = useCallback(async () => {
-    try {
-      const response = await fetch("/api/campaigns");
-      if (response.ok) {
-        const data = await response.json();
-        setCampaigns(data.campaigns ?? []);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // Promise-chain shape for the same reason as refreshWorkshops below: the
+  // state lands in callbacks, so the refetch reads as "subscribe to an
+  // external system" to React and to the effect linter.
+  const refresh = useCallback(
+    () =>
+      fetch("/api/campaigns")
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data) => {
+          if (data) {
+            setCampaigns(data.campaigns ?? []);
+            setLoadFailed(false);
+          } else {
+            setLoadFailed(true);
+          }
+        })
+        .catch(() => {
+          setLoadFailed(true);
+        })
+        .finally(() => {
+          setLoading(false);
+        }),
+    [],
+  );
 
   useEffect(() => {
-    refresh();
+    void refresh();
   }, [refresh]);
 
   // The bench, alongside the tables. A workshop is not a game, so it gets its
@@ -216,9 +233,15 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
     ) {
       return;
     }
-    const response = await fetch(`/api/campaigns/${campaign.id}`, { method: "DELETE" });
-    if (response.ok) {
+    setActionError("");
+    const response = await fetch(`/api/campaigns/${campaign.id}`, { method: "DELETE" }).catch(
+      () => null,
+    );
+    if (response?.ok) {
       setCampaigns((current) => current.filter((entry) => entry.id !== campaign.id));
+    } else {
+      const data = await response?.json().catch(() => ({}));
+      setActionError(data?.error || `Could not delete "${campaign.title}".`);
     }
   }
 
@@ -227,9 +250,14 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
   // why both tiles use it.
   async function clone(id: string) {
     setCloningId(id);
+    setActionError("");
     try {
-      const response = await fetch(`/api/campaigns/${id}/clone`, { method: "POST" });
-      if (!response.ok) {
+      const response = await fetch(`/api/campaigns/${id}/clone`, { method: "POST" }).catch(
+        () => null,
+      );
+      if (!response?.ok) {
+        const data = await response?.json().catch(() => ({}));
+        setActionError(data?.error || "Could not make the copy.");
         return;
       }
       const data = await response.json().catch(() => ({}));
@@ -373,9 +401,27 @@ function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void
           </div>
         </div>
 
+        {actionError ? <p className="mb-3 text-sm text-red-400">{actionError}</p> : null}
+
         {loading ? (
           <div className="flex justify-center py-10">
             <Loader2 className="size-5 animate-spin text-stone-500" />
+          </div>
+        ) : loadFailed && campaigns.length === 0 ? (
+          // The list never arrived; a table full of campaigns may still
+          // exist, so the empty-table hero would be a lie here.
+          <div className="flex flex-col items-center gap-3 rounded-xl border border-stone-800 bg-stone-950/40 px-6 py-10 text-center">
+            <p className="text-sm text-stone-400">Could not load your campaigns.</p>
+            <button
+              type="button"
+              onClick={() => {
+                setLoading(true);
+                void refresh();
+              }}
+              className={ui.btnSecondary}
+            >
+              Try again
+            </button>
           </div>
         ) : campaigns.length === 0 ? (
           <div className="flex flex-col items-center gap-4 rounded-xl border border-stone-800 bg-stone-950/40 px-6 py-10 text-center">

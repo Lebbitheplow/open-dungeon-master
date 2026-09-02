@@ -26,6 +26,9 @@ export function MapPanel({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [enlarged, setEnlarged] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  // A redraw the server refused, as distinct from a render the queue failed
+  // (that one arrives through mediaStatus and shows in the placeholder).
+  const [regenerateError, setRegenerateError] = useState("");
 
   const shown = (selectedId ? locations.find((l) => l.id === selectedId) : null) ?? current;
 
@@ -34,10 +37,17 @@ export function MapPanel({
       return;
     }
     setRegenerating(true);
+    setRegenerateError("");
     try {
-      await fetch(`/api/campaigns/${campaignId}/locations/${shown.id}/map`, {
+      const response = await fetch(`/api/campaigns/${campaignId}/locations/${shown.id}/map`, {
         method: "POST",
       });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string };
+        setRegenerateError(data.error ?? "Could not queue the redraw.");
+      }
+    } catch {
+      setRegenerateError("Could not reach the server.");
     } finally {
       setRegenerating(false);
     }
@@ -81,6 +91,9 @@ export function MapPanel({
               </button>
             ) : null}
           </div>
+          {regenerateError ? (
+            <p className="mb-1.5 text-xs text-red-400">{regenerateError}</p>
+          ) : null}
 
           {shown.mapImage ? (
             <button type="button" onClick={() => setEnlarged(true)} className="block w-full">

@@ -26,6 +26,7 @@ import {
 } from "react";
 import { cn } from "@/lib/cn";
 import { copyText } from "@/lib/clipboard";
+import { buildShareLinks } from "@/lib/share-link";
 import { InviteShareDialog } from "@/components/InviteShareDialog";
 import { DmConsolePanel } from "@/app/campaigns/[campaignId]/DmConsolePanel";
 import type { CampaignMessage } from "@/lib/db/messages";
@@ -293,7 +294,28 @@ function SidePanelInner({
   relationshipsEnabled: boolean;
 }) {
   const [inviteCopied, setInviteCopied] = useState(false);
+  // For the copied invite link: a tunnel host plays on 127.0.0.1, an address
+  // guests cannot reach, so prefer the server's publicUrl.
+  const [publicOrigin, setPublicOrigin] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/auth/providers")
+      .then((response) => (response.ok ? response.json() : {}))
+      .then((data: { publicUrl?: string }) => {
+        if (!cancelled && typeof data.publicUrl === "string") {
+          setPublicOrigin(data.publicUrl);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [inviteSharing, setInviteSharing] = useState(false);
+  // The joining toggle has no optimistic state (midGameJoinOpen rides the
+  // stream), so a refused PATCH changes nothing on screen; this is the only
+  // trace it leaves.
+  const [joinToggleError, setJoinToggleError] = useState("");
   // Which section of Party and Story is showing. Local state: nothing outside
   // this panel reads or sets them, and memo is unaffected by internal state.
   const [partySection, setPartySection] = useState<PartySection>("party");
@@ -310,17 +332,30 @@ function SidePanelInner({
     ["log", "Log", ScrollText],
   ];
 
-  // Lead-only mid-game invite controls, shown on the Party tab.
+  // Mid-game invite controls, shown on the Party tab. The toggle PATCHes
+  // game settings, so it follows story authority; the invite link itself
+  // stays with the lead, who owns who sits at the table.
   async function toggleMidGameJoin() {
-    await fetch(`/api/campaigns/${campaignId}/settings`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ midGameJoinOpen: !midGameJoinOpen }),
-    });
+    setJoinToggleError("");
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/settings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ midGameJoinOpen: !midGameJoinOpen }),
+      });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string };
+        setJoinToggleError(data.error ?? "That change was not saved.");
+      }
+    } catch {
+      setJoinToggleError("Could not reach the table.");
+    }
   }
 
   async function copyInviteLink() {
-    if (await copyText(`${window.location.origin}/join/${inviteCode}`)) {
+    // The /j interstitial link works for both app and browser recipients.
+    const links = buildShareLinks({ publicOrigin, inviteCode: inviteCode ?? "" });
+    if (await copyText(links.appUrl || links.joinUrl)) {
       setInviteCopied(true);
       setTimeout(() => setInviteCopied(false), 1500);
     }
@@ -436,19 +471,28 @@ function SidePanelInner({
                 <UserPlus className="size-3.5" /> New players
               </p>
               <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={toggleMidGameJoin}
-                  title="Allow new players to join with the invite code mid-game"
-                  className={cn(
-                    "rounded-md border px-2 py-1 text-xs",
-                    midGameJoinOpen
-                      ? "border-amber-700 bg-amber-950/50 text-amber-200"
-                      : "border-stone-700 text-stone-400",
-                  )}
-                >
-                  Joining {midGameJoinOpen ? "open" : "closed"}
-                </button>
+                {steersStory ? (
+                  <button
+                    type="button"
+                    onClick={toggleMidGameJoin}
+                    title="Allow new players to join with the invite code mid-game"
+                    className={cn(
+                      "rounded-md border px-2 py-1 text-xs",
+                      midGameJoinOpen
+                        ? "border-amber-700 bg-amber-950/50 text-amber-200"
+                        : "border-stone-700 text-stone-400",
+                    )}
+                  >
+                    Joining {midGameJoinOpen ? "open" : "closed"}
+                  </button>
+                ) : (
+                  // A lead at a human-DM table shares the code but the
+                  // setting is the DM's, so the state shows without a
+                  // control the server would refuse.
+                  <span className="rounded-md border border-stone-800 px-2 py-1 text-xs text-stone-500">
+                    Joining {midGameJoinOpen ? "open" : "closed"}
+                  </span>
+                )}
                 {midGameJoinOpen ? (
                   <>
                     <button
@@ -475,6 +519,9 @@ function SidePanelInner({
                   </>
                 ) : null}
               </div>
+              {joinToggleError ? (
+                <p className="mt-1.5 text-xs text-red-400">{joinToggleError}</p>
+              ) : null}
               <InviteShareDialog
                 open={inviteSharing}
                 onOpenChange={setInviteSharing}
@@ -534,6 +581,7 @@ function SidePanelInner({
             campaignId={campaignId}
             view={battleMap}
             canDirect={adjudicates}
+            canFocusPing={steersStory}
             ping={mapPing ?? null}
             encounter={encounter ?? null}
             sheets={sheets}
@@ -613,7 +661,7 @@ function SidePanelInner({
           // whose route will only ever answer 403.
           <ContextPanel campaignId={campaignId} />
         ) : tab === "settings" && campaign ? (
-          <SessionSettings campaign={campaign} isLead={isLead} />
+          <SessionSettings campaign={campaign} isLead={isLead} steersStory={steersStory} />
         ) : (
           // Every PanelTab above has an explicit branch, so this is only
           // reached when a tab's guard fails: battle with no map, or context

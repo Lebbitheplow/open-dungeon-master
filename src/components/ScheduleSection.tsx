@@ -20,6 +20,18 @@ function whenLabel(startsAt: string): string {
   });
 }
 
+// datetime-local wants local wall-clock time; toISOString would shift it by
+// the timezone offset, so the parts are assembled by hand.
+function toLocalInput(startsAt: string): string {
+  const date = new Date(startsAt);
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+    date.getHours(),
+  )}:${pad(date.getMinutes())}`;
+}
+
+const DURATION_CHOICES = [60, 120, 180, 240];
+
 const RSVP_CHOICES: Array<{ value: RsvpResponse; label: string; icon: typeof Check }> = [
   { value: "yes", label: "Going", icon: Check },
   { value: "maybe", label: "Maybe", icon: CircleHelp },
@@ -43,9 +55,16 @@ export function ScheduleSection({
   const [planning, setPlanning] = useState(false);
   const [title, setTitle] = useState("");
   const [when, setWhen] = useState("");
+  const [duration, setDuration] = useState(180);
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // The session being rescheduled, with its own form state so moving one
+  // never disturbs the plan form above.
+  const [movingId, setMovingId] = useState<string | null>(null);
+  const [moveWhen, setMoveWhen] = useState("");
+  const [moveError, setMoveError] = useState("");
+  const [moveBusy, setMoveBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -81,6 +100,7 @@ export function ScheduleSection({
         body: JSON.stringify({
           title: title.trim(),
           startsAt: new Date(when).toISOString(),
+          durationMin: duration,
           note: note.trim(),
         }),
       });
@@ -92,12 +112,42 @@ export function ScheduleSection({
       setPlanning(false);
       setTitle("");
       setWhen("");
+      setDuration(180);
       setNote("");
       await load();
     } catch {
       setError("Could not reach the server.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function move(event: React.FormEvent) {
+    event.preventDefault();
+    if (!movingId || !moveWhen) {
+      setMoveError("Pick a new date and time.");
+      return;
+    }
+    setMoveBusy(true);
+    setMoveError("");
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/schedule/${movingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ startsAt: new Date(moveWhen).toISOString() }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMoveError(data.error || "Could not move the session.");
+        return;
+      }
+      setMovingId(null);
+      setMoveWhen("");
+      await load();
+    } catch {
+      setMoveError("Could not reach the server.");
+    } finally {
+      setMoveBusy(false);
     }
   }
 
@@ -151,6 +201,19 @@ export function ScheduleSection({
               className={cn(ui.input, "w-auto")}
               required
             />
+            <select
+              value={duration}
+              onChange={(event) => setDuration(Number(event.target.value))}
+              aria-label="How long the session runs"
+              title="How long the session runs"
+              className={cn(ui.input, "w-auto")}
+            >
+              {DURATION_CHOICES.map((minutes) => (
+                <option key={minutes} value={minutes}>
+                  {minutes / 60} hour{minutes === 60 ? "" : "s"}
+                </option>
+              ))}
+            </select>
             <input
               value={title}
               onChange={(event) => setTitle(event.target.value)}
@@ -243,17 +306,45 @@ export function ScheduleSection({
                         </button>
                       ))}
                       {isLead ? (
-                        <button
-                          type="button"
-                          onClick={() => void cancel(session.id)}
-                          className="ml-1 text-xs text-stone-500 transition-colors hover:text-red-400"
-                        >
-                          Call off
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMovingId(movingId === session.id ? null : session.id);
+                              setMoveWhen(toLocalInput(session.startsAt));
+                              setMoveError("");
+                            }}
+                            className="ml-1 text-xs text-stone-500 transition-colors hover:text-amber-300"
+                          >
+                            Move
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void cancel(session.id)}
+                            className="ml-1 text-xs text-stone-500 transition-colors hover:text-red-400"
+                          >
+                            Call off
+                          </button>
+                        </>
                       ) : null}
                     </div>
                   ) : null}
                 </div>
+                {movingId === session.id && !session.cancelledAt ? (
+                  <form onSubmit={move} className="mt-2 flex flex-wrap items-center gap-2">
+                    <input
+                      type="datetime-local"
+                      value={moveWhen}
+                      onChange={(event) => setMoveWhen(event.target.value)}
+                      className={cn(ui.input, "w-auto")}
+                      required
+                    />
+                    <button type="submit" disabled={moveBusy} className={ui.btnSmall}>
+                      Move it
+                    </button>
+                    {moveError ? <p className="text-sm text-red-400">{moveError}</p> : null}
+                  </form>
+                ) : null}
               </li>
             );
           })}

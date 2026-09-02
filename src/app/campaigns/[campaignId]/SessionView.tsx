@@ -536,6 +536,7 @@ export function SessionView({
             }
             turnEnforcement={campaign.gameSettings?.voice?.turnEnforcement ?? "soft"}
             adjudicates={caps.adjudicates}
+            steersStory={steersStory}
             sayRangeRule={Boolean(campaign.gameSettings?.voice?.rules?.sayRange)}
             audibilityVersion={state.voiceAudibilityVersion}
             meshSignal={state.voiceMeshSignal}
