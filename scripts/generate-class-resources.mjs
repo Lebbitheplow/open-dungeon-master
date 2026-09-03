@@ -210,7 +210,9 @@ const generated = {
 const serialized = `${JSON.stringify(generated, null, 2)}\n`;
 
 if (process.argv.includes("--check")) {
-  const current = readFileSync(outPath, "utf8");
+  // Compare on content, not line endings: git hands Windows checkouts a CRLF
+  // copy of the committed file, which a byte-for-byte compare reads as stale.
+  const current = readFileSync(outPath, "utf8").replace(/\r\n/g, "\n");
   if (current !== serialized) {
     console.error("resources.json is stale; re-run node scripts/generate-class-resources.mjs");
     process.exit(1);
