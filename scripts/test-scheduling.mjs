@@ -6,6 +6,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { register } from "node:module";
+import { removeTempDir } from "./lib/remove-temp-dir.mjs";
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "odm-schedule-"));
 process.env.SQLITE_DB_PATH = path.join(dir, "test.sqlite");
@@ -120,5 +121,5 @@ test("an empty recipient list is a no-op", () => {
   assert.equal(unreadCount(player.id), 0);
 });
 
-fs.rmSync(dir, { recursive: true, force: true });
+removeTempDir(dir);
 console.log(`\ntest-scheduling: ${passed} passed`);

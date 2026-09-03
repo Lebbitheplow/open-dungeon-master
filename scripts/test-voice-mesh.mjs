@@ -8,6 +8,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { register } from "node:module";
+import { removeTempDir } from "./lib/remove-temp-dir.mjs";
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "odm-mesh-"));
 process.env.SQLITE_DB_PATH = path.join(dir, "test.sqlite");
@@ -143,5 +144,5 @@ test("stale peers are reaped on the next touch", () => {
   meshLeave(CAMPAIGN, "alice");
 });
 
-fs.rmSync(dir, { recursive: true, force: true });
+removeTempDir(dir);
 console.log(`\ntest-voice-mesh: ${passed} passed`);

@@ -9,6 +9,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { register } from "node:module";
+import { removeTempDir } from "./lib/remove-temp-dir.mjs";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
@@ -307,5 +308,5 @@ await test("a published index.json in the installed directory is not read as a p
   }
 });
 
-fs.rmSync(scratch, { recursive: true, force: true });
+removeTempDir(scratch);
 console.log(`test-world-install: ${passed} passed`);

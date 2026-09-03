@@ -18,6 +18,7 @@ import { register } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { removeTempDir } from "./lib/remove-temp-dir.mjs";
 
 const selfPath = fileURLToPath(import.meta.url);
 
@@ -1290,6 +1291,6 @@ passed += 1;
   }
 }
 
-rmSync(path.dirname(dbPath), { recursive: true, force: true });
+removeTempDir(path.dirname(dbPath));
 
 console.log(`workshop integration: ${passed} checks passed.`);

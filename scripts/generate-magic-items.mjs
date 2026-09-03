@@ -119,7 +119,11 @@ const generated = {
 const serialized = `${JSON.stringify(generated, null, 2)}\n`;
 
 if (process.argv.includes("--check")) {
-  const current = existsSync(outPath) ? readFileSync(outPath, "utf8") : "";
+  // Compare on content, not line endings: git hands Windows checkouts a CRLF
+  // copy of the committed file, which a byte-for-byte compare reads as stale.
+  const current = existsSync(outPath)
+    ? readFileSync(outPath, "utf8").replace(/\r\n/g, "\n")
+    : "";
   if (current !== serialized) {
     console.error("magic-items.json is stale; re-run node scripts/generate-magic-items.mjs");
     process.exit(1);
