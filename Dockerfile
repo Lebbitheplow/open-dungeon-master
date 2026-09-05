@@ -6,14 +6,18 @@
 #
 # Built on glibc rather than Alpine: better-sqlite3-multiple-ciphers and
 # onnxruntime-node both publish glibc prebuilds, and musl would force a slow
-# source compile of both.
+# source compile of the first and has no build of the second at all. A
+# scanner that proposes an Alpine tag is proposing an image that cannot run
+# this app; OS-level fixes are taken with apt-get upgrade in both stages
+# instead, which pulls the patched Debian packages at build time.
 
 # --------------------------------------------------------------- dependencies
-FROM node:22.23.2-alpine3.24 AS deps
+FROM node:22.23.2-trixie-slim AS deps
 WORKDIR /app
 
 # Toolchain for the two native modules, in case no prebuild matches the platform.
 RUN apt-get update \
+  && apt-get upgrade -y \
   && apt-get install -y --no-install-recommends python3 make g++ ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
@@ -62,8 +66,14 @@ RUN cd .next/standalone \
             README.md CLAUDE.md AGENTS.md eslint.config.mjs postcss.config.mjs
 
 # -------------------------------------------------------------------- runner
-FROM node:22.23.2-alpine3.24 AS runner
+FROM node:22.23.2-trixie-slim AS runner
 WORKDIR /app
+
+# The patched Debian packages, as in the deps stage; nothing else is
+# installed here, so the runner stays the base image plus the app.
+RUN apt-get update \
+  && apt-get upgrade -y \
+  && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
