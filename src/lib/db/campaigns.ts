@@ -5,11 +5,13 @@ import { configuredDefaultStorySettings } from "@/lib/runtime-defaults";
 import { normalizeGameSettings, type GameSettings } from "@/lib/schemas/game-settings";
 import { normalizeCampaignKind, type CampaignKind } from "@/lib/workshop/kind";
 import type {
+  CampaignCover,
   CampaignDifficulty,
   CampaignMember,
   CampaignStatus,
   CampaignSummary,
 } from "@/lib/campaign-types";
+import { isUploadedImagePath } from "@/lib/uploads";
 import type { StorySettings } from "@/lib/types";
 import { normalizeStoryArc, type StoryArc } from "@/lib/dm/arc-logic";
 import { normalizeCover, type DmCover } from "@/lib/dm/delegation";
@@ -97,11 +99,28 @@ type CampaignRow = {
   party_json: string;
   scene: string;
   quest_log_json: string;
+  cover_json: string | null;
   created_at: string;
   updated_at: string;
   player_count?: number;
   member_role?: "owner" | "player";
 };
+
+// A stored cover is trusted only if its url is a file this app wrote: the
+// column is written through setCampaignCover, which refuses anything else,
+// but a row edited by hand must not become a way to point every member's
+// browser at an outside host. Rows before the column read as no cover.
+export function normalizeCampaignCover(raw: unknown): CampaignCover | null {
+  const cover = raw as Partial<CampaignCover> | null;
+  if (!cover || !isUploadedImagePath(cover.url)) {
+    return null;
+  }
+  const id =
+    typeof cover.id === "string" && cover.id
+      ? cover.id
+      : cover.url.slice("/uploads/".length).replace(/\.[a-z]+$/, "");
+  return { id, url: cover.url };
+}
 
 // OOC talk is always allowed; otherwise the floor decides.
 export function canAct(floor: Floor, userId: string, kind: string): boolean {
@@ -222,6 +241,7 @@ function mapCampaign(row: CampaignRow): Campaign {
     assistantDmUserId: row.assistant_dm_user_id ?? null,
     playerCount: Number(row.player_count ?? 0),
     role: row.member_role ?? (row.owner_user_id ? "player" : "player"),
+    cover: normalizeCampaignCover(parseJson(row.cover_json ?? "", null)),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     scene: row.scene,
@@ -343,6 +363,20 @@ export function updateCampaignInfo(
   getDatabase()
     .prepare(`UPDATE campaigns SET ${sets.join(", ")}, updated_at = ? WHERE id = ?`)
     .run(...values, nowIso(), campaignId);
+}
+
+// Sets or clears the cover art. Refuses (false) a url that is not one of our
+// own uploads, so no caller can store a path the reader would then throw
+// away, and touches updated_at because a new cover is something the home
+// screen should re-sort by. Null clears.
+export function setCampaignCover(campaignId: string, cover: CampaignCover | null): boolean {
+  if (cover && !isUploadedImagePath(cover.url)) {
+    return false;
+  }
+  const result = getDatabase()
+    .prepare(`UPDATE campaigns SET cover_json = ?, updated_at = ? WHERE id = ?`)
+    .run(cover ? JSON.stringify({ id: cover.id, url: cover.url }) : null, nowIso(), campaignId);
+  return result.changes > 0;
 }
 
 export function deleteCampaign(campaignId: string) {

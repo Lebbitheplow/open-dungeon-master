@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Calculator, Loader2 } from "lucide-react";
+import { Calculator, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
 import type { WorkbenchPart, WorkbenchReadout } from "@/lib/dm/encounter-workbench";
 
 // The encounter workbench: what a roster costs, and what it is likely to do.
@@ -15,6 +16,10 @@ import type { WorkbenchPart, WorkbenchReadout } from "@/lib/dm/encounter-workben
 // Every number shows its parts. That is the feature: a DM will not trust a
 // difficulty rating they cannot audit, and the ratings worth auditing are
 // exactly the ones that disagree with their instinct.
+//
+// In the workshop the panel folds into a "How hard is this?" card so the
+// prepared encounters get the room. The fields inside are the same; only the
+// frame and the heading change.
 
 type Response = {
   readout: WorkbenchReadout;
@@ -49,7 +54,16 @@ function Parts({ parts }: { parts: WorkbenchPart[] }) {
   );
 }
 
-export function DmWorkbenchPanel({ campaignId }: { campaignId: string }) {
+export function DmWorkbenchPanel({
+  campaignId,
+  collapsible = false,
+}: {
+  campaignId: string;
+  // Opt-in: wrap the panel in a card that opens on tap. Off by default so
+  // the DM console renders as it always has.
+  collapsible?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
   const [enemies, setEnemies] = useState("");
   const [partyLevel, setPartyLevel] = useState<number | "">("");
   const [partySize, setPartySize] = useState<number | "">("");
@@ -87,12 +101,14 @@ export function DmWorkbenchPanel({ campaignId }: { campaignId: string }) {
   const budget = result?.readout.budget;
   const attrition = result?.readout.attrition;
 
-  return (
+  const body = (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2 rounded-lg border border-stone-800 bg-stone-900/40 p-3">
-        <h3 className="flex items-center gap-1.5 text-sm text-amber-100">
-          <Calculator className="size-4" /> Weigh a fight
-        </h3>
+        {collapsible ? null : (
+          <h3 className="flex items-center gap-1.5 text-sm text-amber-100">
+            <Calculator className="size-4" /> Weigh a fight
+          </h3>
+        )}
         <textarea
           value={enemies}
           onChange={(event) => setEnemies(event.target.value)}
@@ -197,5 +213,28 @@ export function DmWorkbenchPanel({ campaignId }: { campaignId: string }) {
         </>
       ) : null}
     </div>
+  );
+
+  if (!collapsible) {
+    return body;
+  }
+  return (
+    <section className={`${ui.card} p-3`}>
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 text-left font-display text-sm tracking-wide text-amber-100"
+      >
+        <Calculator className="size-4 text-amber-300" />
+        How hard is this?
+        {open ? (
+          <ChevronDown className="ml-auto size-4 text-stone-500" />
+        ) : (
+          <ChevronRight className="ml-auto size-4 text-stone-500" />
+        )}
+      </button>
+      {open ? <div className="mt-3">{body}</div> : null}
+    </section>
   );
 }

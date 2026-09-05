@@ -1,3 +1,4 @@
+import { purgeDueAccounts } from "@/lib/account-deletion";
 import {
   getCampaignById,
   listIdleActiveCampaigns,
@@ -123,9 +124,15 @@ function idleCampaignJob(now: number) {
   }
 }
 
+// Accounts whose deletion grace period has run out (src/lib/account-deletion.ts).
+function accountPurgeJob(now: number) {
+  purgeDueAccounts(now);
+}
+
 const jobs: Array<[name: string, run: (now: number) => void]> = [
   ["session-reminders", sessionReminderJob],
   ["idle-campaigns", idleCampaignJob],
+  ["account-purge", accountPurgeJob],
 ];
 
 // One pass over every job. Exported so the test harness can drive ticks with

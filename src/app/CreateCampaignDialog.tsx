@@ -2,43 +2,25 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { Loader2, X } from "lucide-react";
-import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { cn } from "@/lib/cn";
-import { ui } from "@/lib/ui";
-import { GENRE_PRESETS } from "@/lib/genres";
-import { TTS_VOICES } from "@/lib/tts-voices";
-import { VoicePreviewButton } from "@/components/VoicePreviewButton";
-import { CAMPAIGN_DIFFICULTIES, type CampaignDifficulty } from "@/lib/campaign-types";
-import { InfoButton } from "@/components/ui/InfoDialog";
-import {
-  BONDS_INFO,
-  LIVING_WORLD_INFO,
-  NARRATION_GUARD_INFO,
-  ROMANCE_INFO,
-} from "@/app/campaigns/[campaignId]/GameSettingsPanel";
-import { VariantRulesFields } from "@/app/campaigns/[campaignId]/RulesPanel";
-import { submitWorldSetup, WorldSetupFields, type LoreDraft } from "@/app/WorldSetupFields";
-import {
-  ContentImportPicker,
-  EMPTY_SELECTION,
-  submitContentImport,
-  type ImportSelection,
-} from "@/app/workshop/ContentImportPicker";
+import { useEffect, useMemo, useState } from "react";
+import { Wizard, type WizardStep } from "@/components/ui/Wizard";
+import { submitWorldSetup } from "@/app/WorldSetupFields";
+import { submitContentImport } from "@/app/workshop/ContentImportPicker";
 import { groupByFranchise, type WorldPackSummary } from "@/lib/worlds/types";
-import { UnofficialPackNotice } from "@/components/UnofficialPackNotice";
+import type { Genre } from "@/lib/schemas/game-settings";
 import {
-  CAMPAIGN_LENGTH_LABELS,
-  CAMPAIGN_LENGTHS,
-  COMPANION_LABELS,
-  DM_MODES,
-  DM_MODE_HINTS,
-  DM_MODE_LABELS,
-  type CampaignLengthSetting,
-  type DicePolicy,
-  type DmModeSetting,
-  type GameSettings,
-  type Genre,
-} from "@/lib/schemas/game-settings";
+  applyPack,
+  clearPack,
+  DEFAULT_DRAFT,
+  type CampaignDraft,
+  type WizardGates,
+} from "@/app/create-campaign/draft";
+import { PremiseStep } from "@/app/create-campaign/PremiseStep";
+import { WorldStep } from "@/app/create-campaign/WorldStep";
+import { PartyStep } from "@/app/create-campaign/PartyStep";
+import { FeelStep } from "@/app/create-campaign/FeelStep";
+import { AdvancedStep } from "@/app/create-campaign/AdvancedStep";
+import { ReviewStep } from "@/app/create-campaign/ReviewStep";
 
 // The slice of /api/capabilities this dialog gates on. null means the
 // endpoint never answered, and the dialog assumes everything is available:
@@ -49,6 +31,11 @@ type ServerCapabilities = {
   tts: { configured: boolean };
 };
 
+// The new-campaign wizard: six screens over one draft (src/app/create-
+// campaign/draft.ts), paced one decision at a time instead of one long form.
+// The steps only draw fields; every default, every gate and the payload that
+// leaves for the server are decided here.
+//
 // solo: creates a one-player campaign (maxPlayers 1); the player count is
 // hidden and the lobby streamlines itself for a party of one.
 //
@@ -68,75 +55,20 @@ export function CreateCampaignDialog({
   onCreated: (campaignId: string) => void;
   solo?: boolean;
 }) {
-  const [dmMode, setDmMode] = useState<DmModeSetting>("ai");
+  const [draft, setDraft] = useState<CampaignDraft>(DEFAULT_DRAFT);
+  const [packs, setPacks] = useState<WorldPackSummary[]>([]);
+  const [capabilities, setCapabilities] = useState<ServerCapabilities | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const patch = (changes: Partial<CampaignDraft>) =>
+    setDraft((current) => ({ ...current, ...changes }));
+
   // Everything the AI narrator brings with it. A table running its own game
   // still gets the rules engine, the maps and the dice; what it does not get
   // is a second author, so those settings are hidden rather than shown
   // switched off with no explanation.
-  const aiNarrates = dmMode !== "human";
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [theme, setTheme] = useState("");
-  const [maxPlayers, setMaxPlayers] = useState(5);
-  const [startingLevel, setStartingLevel] = useState(1);
-  const [difficulty, setDifficulty] = useState<CampaignDifficulty>("normal");
-  const [campaignLength, setCampaignLength] = useState<CampaignLengthSetting>("standard");
-  const [genre, setGenre] = useState<Genre>("high_fantasy");
-  const [customGenreText, setCustomGenreText] = useState("");
-  const [worldPack, setWorldPack] = useState("");
-  const [packs, setPacks] = useState<WorldPackSummary[]>([]);
-  // A theme or premise the person typed is never clobbered by a later pack
-  // choice; one the pack filled in is fair game to replace.
-  const themeTouched = useRef(false);
-  const descriptionTouched = useRef(false);
-  const [aiStorySetup, setAiStorySetup] = useState(true);
-  const [dicePolicy, setDicePolicy] = useState<DicePolicy>("digital_only");
-  const [ttsEnabled, setTtsEnabled] = useState(true);
-  const [ttsVoice, setTtsVoice] = useState<string>("af_heart");
-  const [mapsEnabled, setMapsEnabled] = useState(true);
-  const [ambienceEnabled, setAmbienceEnabled] = useState(true);
-  // Scene-following is only meaningful once ambience is on, and is shown as
-  // a second toggle beside it rather than buried.
-  const [ambienceAuto, setAmbienceAuto] = useState(true);
-  const [multiclassingEnabled, setMulticlassingEnabled] = useState(true);
-  const [worldSimulation, setWorldSimulation] = useState(true);
-  const [inventoryApprovals, setInventoryApprovals] = useState(false);
-  const [midGameJoinOpen, setMidGameJoinOpen] = useState(false);
-  const [holdSubmissions, setHoldSubmissions] = useState(false);
-  const [narrationGuard, setNarrationGuard] = useState(true);
-  const [relationships, setRelationships] = useState<GameSettings["relationships"]>("on");
-  const [romance, setRomance] = useState<GameSettings["romance"]>("on");
-  const [variantRules, setVariantRules] = useState<GameSettings["variantRules"]>({
-    flanking: false,
-    criticalFumbles: false,
-    encumbrance: false,
-    lingeringInjuries: false,
-    powerfulCritical: false,
-    criticalDamageMods: false,
-    ammunition: false,
-    restVariant: "standard",
-  });
-  const [houseRules, setHouseRules] = useState("");
-  const [loreDrafts, setLoreDrafts] = useState<LoreDraft[]>([]);
-  // Prep built in a workshop, brought in right after the row exists.
-  const [contentImport, setContentImport] = useState<ImportSelection>(EMPTY_SELECTION);
-  const [companions, setCompanions] = useState<GameSettings["companions"]>("auto");
-  const [maxCompanions, setMaxCompanions] = useState(2);
-  const [maxGuests, setMaxGuests] = useState(2);
-  const [voiceChat, setVoiceChat] = useState<GameSettings["voice"]>({
-    enabled: true,
-    turnEnforcement: "soft",
-    rules: {
-      proximity: false,
-      hearingRangeFeet: 30,
-      sayRange: false,
-      wallsAttenuate: false,
-      downedGoDeaf: false,
-    },
-  });
-  const [capabilities, setCapabilities] = useState<ServerCapabilities | null>(null);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const aiNarrates = draft.dmMode !== "human";
 
   // "Known missing" is an admin's positive statement (provider "none" or no
   // backend at all), which hides the AI seat. "Unreachable" is a configured
@@ -145,8 +77,14 @@ export function CreateCampaignDialog({
   const storyUnreachable = capabilities
     ? capabilities.story.configured && !capabilities.story.reachable
     : false;
-  const ttsAvailable = capabilities ? capabilities.tts.configured : true;
-  const mapsAvailable = capabilities ? capabilities.images.configured : true;
+  const gates: WizardGates = {
+    solo,
+    aiNarrates,
+    storyKnownMissing,
+    storyUnreachable,
+    ttsAvailable: capabilities ? capabilities.tts.configured : true,
+    mapsAvailable: capabilities ? capabilities.images.configured : true,
+  };
 
   // Fetched rather than imported: the pack files are read off disk on the
   // server, and the summaries are all a picker needs.
@@ -174,15 +112,12 @@ export function CreateCampaignDialog({
         setCapabilities(data);
         // Defaults follow reality: a table should not discover on turn one
         // that the AI seat was never fillable.
-        if (!data.story.configured || !data.story.reachable) {
-          setDmMode("human");
-        }
-        if (!data.tts?.configured) {
-          setTtsEnabled(false);
-        }
-        if (!data.images?.configured) {
-          setMapsEnabled(false);
-        }
+        setDraft((current) => ({
+          ...current,
+          dmMode: !data.story.configured || !data.story.reachable ? "human" : current.dmMode,
+          ttsEnabled: data.tts?.configured ? current.ttsEnabled : false,
+          mapsEnabled: data.images?.configured ? current.mapsEnabled : false,
+        }));
       })
       .catch(() => {
         // No answer is not "no AI": without capabilities the dialog offers
@@ -194,34 +129,60 @@ export function CreateCampaignDialog({
   }, [open]);
 
   const franchises = useMemo(() => groupByFranchise(packs), [packs]);
-  const selectedPack = packs.find((pack) => pack.id === worldPack) ?? null;
+  const selectedPack = packs.find((pack) => pack.id === draft.worldPack) ?? null;
 
-  function choosePack(pack: WorldPackSummary) {
-    setWorldPack(pack.id);
-    // A pack always also sets the genre, which is what keeps every existing
-    // genre consumer working. The Setting row visibly follows along, which is
-    // the honest explanation of what a pack actually is.
-    setGenre(pack.baseGenre);
-    if (!themeTouched.current) {
-      setTheme(pack.theme);
-    }
-    if (!descriptionTouched.current) {
-      setDescription(pack.premise);
-    }
-  }
+  const choosePack = (pack: WorldPackSummary) => setDraft((current) => applyPack(current, pack));
+  const dropPack = () => setDraft((current) => clearPack(current, selectedPack));
+  // Picking a bare genre by hand leaves the pack. A pack is defined as its
+  // baseGenre plus overrides, so letting the two disagree would blend the
+  // pack's flavor over the wrong preset and overlay its monsters onto the
+  // wrong bestiary catalog.
+  const pickGenre = (genre: Genre) =>
+    setDraft((current) => ({
+      ...(current.worldPack ? clearPack(current, selectedPack) : current),
+      genre,
+    }));
 
-  function clearPack() {
-    setWorldPack("");
-    if (!themeTouched.current && selectedPack && theme === selectedPack.theme) {
-      setTheme("");
+  async function submit() {
+    if (busy || (solo && storyKnownMissing)) {
+      return;
     }
-    if (!descriptionTouched.current && selectedPack && description === selectedPack.premise) {
-      setDescription("");
-    }
-  }
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
+    const {
+      title,
+      description,
+      theme,
+      maxPlayers,
+      startingLevel,
+      difficulty,
+      dmMode,
+      genre,
+      customGenreText,
+      aiStorySetup,
+      campaignLength,
+      dicePolicy,
+      ttsEnabled,
+      ttsVoice,
+      mapsEnabled,
+      ambienceEnabled,
+      ambienceAuto,
+      multiclassingEnabled,
+      midGameJoinOpen,
+      holdSubmissions,
+      narrationGuard,
+      relationships,
+      romance,
+      worldSimulation,
+      inventoryApprovals,
+      variantRules,
+      companions,
+      maxCompanions,
+      maxGuests,
+      worldPack,
+      voiceChat,
+      houseRules,
+      loreDrafts,
+      contentImport,
+    } = draft;
     setBusy(true);
     setError("");
     try {
@@ -276,11 +237,11 @@ export function CreateCampaignDialog({
             // they are already looking at when it fires.
             //
             // `dmAssist` is which parts of the game an assisted-mode DM hands
-            // to the AI. Picking "I run the game, with AI help" above is
-            // already the answer to "do you want help"; which help, and when,
-            // is a question a person answers at the table with the console in
-            // front of them, so all three start on and the settings panel
-            // shows them only once the mode is assisted.
+            // to the AI. Picking "I run the game, with AI help" on the first
+            // step is already the answer to "do you want help"; which help,
+            // and when, is a question a person answers at the table with the
+            // console in front of them, so all three start on and the
+            // settings panel shows them only once the mode is assisted.
           },
         }),
       });
@@ -304,707 +265,97 @@ export function CreateCampaignDialog({
     }
   }
 
-  const inputClass = ui.input;
-  const toggleClass = (active: boolean) =>
-    cn(
-      "flex-1 rounded-lg border px-3 py-2 text-left transition-colors",
-      active
-        ? "border-amber-200/40 bg-amber-200/10 text-amber-100"
-        : "border-stone-800 text-stone-400 hover:border-stone-600",
-    );
+  const stepProps = { draft, patch, gates };
+  const title = solo ? "New solo adventure" : "New campaign";
+
+  // A step is dropped when nothing on it applies. Today every step keeps at
+  // least one field in every mode (voice chat leaves the Advanced step on a
+  // solo table, but the variant rules and prep stay), so the filter is there
+  // for the mode that changes that, not for one that exists now.
+  const steps = (
+    [
+      {
+        key: "premise",
+        title: "The premise",
+        blurb: solo ? "Name the adventure and decide who narrates." : "Name it and decide who runs the table.",
+        content: (
+          <PremiseStep
+            {...stepProps}
+            packs={packs}
+            franchises={franchises}
+            selectedPack={selectedPack}
+            onChoosePack={choosePack}
+            onClearPack={dropPack}
+          />
+        ),
+        canContinue: draft.title.trim().length > 0,
+        applies: true,
+      },
+      {
+        key: "world",
+        title: "The world",
+        blurb: "Pick a setting and say what the story is about.",
+        content: <WorldStep {...stepProps} onPickGenre={pickGenre} />,
+        applies: true,
+      },
+      {
+        key: "party",
+        title: "The party",
+        blurb: solo ? "Where your hero begins." : "Who is adventuring, and how hard the road is.",
+        content: <PartyStep {...stepProps} />,
+        applies: true,
+      },
+      {
+        key: "feel",
+        title: "The feel",
+        blurb: "What is on at the table. Flip any of these later in the lobby too.",
+        content: <FeelStep {...stepProps} />,
+        applies: true,
+      },
+      {
+        key: "advanced",
+        title: "Advanced",
+        blurb: "Variant rules, house rules, prep and live voice. All optional.",
+        content: <AdvancedStep {...stepProps} />,
+        applies: true,
+      },
+      {
+        key: "review",
+        title: "Review",
+        blurb: "Ready the table.",
+        content: <ReviewStep {...stepProps} selectedPack={selectedPack} error={error} />,
+        canContinue: !busy && !(solo && storyKnownMissing),
+        applies: true,
+      },
+    ] satisfies Array<WizardStep & { applies: boolean }>
+  ).filter((step) => step.applies);
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/60" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 max-h-[90vh] w-[min(92vw,34rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto panel rounded-xl p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <Dialog.Title className="font-display text-lg tracking-wide text-amber-50">
-              {solo ? "New solo adventure" : "New campaign"}
-            </Dialog.Title>
-            <Dialog.Close className="rounded p-1 text-stone-400 hover:bg-stone-900">
-              <X className="size-4" />
-            </Dialog.Close>
-          </div>
-
-          <form onSubmit={submit} className="space-y-4 text-sm">
-            <label className="block">
-              <span className="mb-1 block text-stone-400">Title</span>
-              <input
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                required
-                maxLength={80}
-                placeholder="Curse of the Ash Kingdom"
-                className={inputClass}
-              />
-            </label>
-
-            <div>
-              <span className="mb-1.5 block text-stone-400">Who runs this game?</span>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                {DM_MODES.filter(
-                  // A server that positively has no AI DM (provider "none")
-                  // offers only the human seat; "assisted" leans on the same
-                  // missing backend, so it goes too.
-                  (mode) => mode === "human" || !storyKnownMissing,
-                ).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => setDmMode(mode)}
-                    className={toggleClass(dmMode === mode)}
-                  >
-                    <span className="block font-medium">{DM_MODE_LABELS[mode]}</span>
-                    <span className="block text-xs opacity-80">{DM_MODE_HINTS[mode]}</span>
-                  </button>
-                ))}
-              </div>
-              {storyKnownMissing ? (
-                <p className="mt-1.5 text-xs text-stone-500">
-                  This server has no AI storyteller, so a human runs the table.
-                </p>
-              ) : null}
-              {storyUnreachable && aiNarrates ? (
-                <p className="mt-1.5 text-xs text-amber-300">
-                  The AI backend is not answering right now. You can still create this
-                  campaign, but AI turns will fail until it is back.
-                </p>
-              ) : null}
-              {dmMode !== "ai" ? (
-                <p className="mt-1.5 text-xs text-stone-500">
-                  You take the Dungeon Master seat: no character, no party slot, and you
-                  see the sheets, the stat blocks and the whole map. The server still rolls
-                  every die and holds every number.
-                </p>
-              ) : null}
-            </div>
-
-            {franchises.length ? (
-              <div>
-                <span className="mb-1 block text-stone-400">Pre-built world (optional)</span>
-                <select
-                  value={worldPack}
-                  onChange={(event) => {
-                    const next = packs.find((pack) => pack.id === event.target.value);
-                    if (next) {
-                      choosePack(next);
-                    } else {
-                      clearPack();
-                    }
-                  }}
-                  className={inputClass}
-                >
-                  <option value="">No pack (plain setting)</option>
-                  {franchises.map((group) =>
-                    // A franchise with one era is a single row. One with several
-                    // gets an optgroup, so the eras stay grouped under the name
-                    // without the list needing its own expand step.
-                    group.editions.length === 1 ? (
-                      <option key={group.franchise} value={group.editions[0].id}>
-                        {group.editions[0].name}
-                      </option>
-                    ) : (
-                      <optgroup key={group.franchise} label={group.franchise}>
-                        {group.editions.map((edition) => (
-                          <option key={edition.id} value={edition.id}>
-                            {edition.edition || edition.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ),
-                  )}
-                </select>
-                {selectedPack ? (
-                  <>
-                    <p className="mt-1 text-xs text-stone-500">{selectedPack.blurb}</p>
-                    <UnofficialPackNotice
-                      rightsHolder={selectedPack.rightsHolder}
-                      inspiredBy={selectedPack.inspiredBy}
-                      className="mt-1.5"
-                    />
-                  </>
-                ) : (
-                  <p className="mt-1 text-xs text-stone-500">
-                    A pre-built world renames the races, classes, spells and monsters to fit it, and
-                    tells the DM how it sounds. Every rule stays 5e.
-                  </p>
-                )}
-              </div>
-            ) : null}
-
-            <div>
-              <span className="mb-1.5 block text-stone-400">Setting</span>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {GENRE_PRESETS.map((preset) => (
-                  <button
-                    key={preset.id}
-                    type="button"
-                    onClick={() => {
-                      // Picking a bare genre by hand leaves the pack. A pack
-                      // is defined as its baseGenre plus overrides, so letting
-                      // the two disagree would blend the pack's flavor over
-                      // the wrong preset and overlay its monsters onto the
-                      // wrong bestiary catalog.
-                      if (worldPack) {
-                        clearPack();
-                      }
-                      setGenre(preset.id);
-                    }}
-                    title={preset.blurb}
-                    className={cn(
-                      "rounded-lg border px-2 py-1.5 text-xs transition-colors",
-                      genre === preset.id
-                        ? "border-amber-200/40 bg-amber-200/10 text-amber-100"
-                        : "border-stone-800 text-stone-400 hover:border-stone-600",
-                    )}
-                  >
-                    {preset.name}
-                  </button>
-                ))}
-              </div>
-              <p className="mt-1 text-xs text-stone-500">
-                {GENRE_PRESETS.find((preset) => preset.id === genre)?.blurb}
-              </p>
-              {genre === "custom" ? (
-                <textarea
-                  value={customGenreText}
-                  onChange={(event) => setCustomGenreText(event.target.value)}
-                  rows={2}
-                  maxLength={500}
-                  placeholder="Describe the world and tone in your own words..."
-                  className={cn(inputClass, "mt-2")}
-                />
-              ) : null}
-            </div>
-
-            <label className="block">
-              <span className="mb-1 block text-stone-400">
-                Premise (optional{aiStorySetup ? "; the AI fills this in if left blank" : ""})
-              </span>
-              <textarea
-                value={description}
-                onChange={(event) => {
-                  descriptionTouched.current = true;
-                  setDescription(event.target.value);
-                }}
-                rows={2}
-                maxLength={500}
-                className={inputClass}
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-stone-400">World or theme notes</span>
-              <input
-                value={theme}
-                onChange={(event) => {
-                  themeTouched.current = true;
-                  setTheme(event.target.value);
-                }}
-                maxLength={120}
-                placeholder="Low-magic gritty, homebrew fey court, neon-drenched megacity..."
-                className={inputClass}
-              />
-            </label>
-
-            <div className={cn("grid gap-3", solo ? "grid-cols-2" : "grid-cols-3")}>
-              {!solo ? (
-                <label className="block">
-                  <span className="mb-1 block text-stone-400">Players</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={8}
-                    value={maxPlayers}
-                    onChange={(event) => setMaxPlayers(Number(event.target.value))}
-                    className={inputClass}
-                  />
-                </label>
-              ) : null}
-              <label className="block">
-                <span className="mb-1 block text-stone-400">Start level</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={20}
-                  value={startingLevel}
-                  onChange={(event) => setStartingLevel(Number(event.target.value))}
-                  className={inputClass}
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-stone-400">Difficulty</span>
-                <select
-                  value={difficulty}
-                  onChange={(event) => setDifficulty(event.target.value as CampaignDifficulty)}
-                  className={inputClass}
-                >
-                  {CAMPAIGN_DIFFICULTIES.map((value) => (
-                    <option key={value} value={value}>
-                      {value}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <label className={cn("block", !aiNarrates && "hidden")}>
-              <span className="mb-1 block text-stone-400">Campaign length</span>
-              <select
-                value={campaignLength}
-                onChange={(event) => setCampaignLength(event.target.value as CampaignLengthSetting)}
-                className={inputClass}
-              >
-                {CAMPAIGN_LENGTHS.map((value) => (
-                  <option key={value} value={value}>
-                    {CAMPAIGN_LENGTH_LABELS[value]}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1 text-xs text-stone-500">
-                How far the DM plans the story ahead. Any length keeps going if you play past the
-                finale: a sequel saga picks up where the last one ended.
-              </p>
-            </label>
-
-            <div>
-              <span className="mb-1.5 block text-stone-400">Dice</span>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setDicePolicy("digital_only")}
-                  className={toggleClass(dicePolicy === "digital_only")}
-                >
-                  <span className="block font-medium">Digital only</span>
-                  <span className="block text-xs opacity-80">The server rolls everything</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDicePolicy("real_allowed")}
-                  className={toggleClass(dicePolicy === "real_allowed")}
-                >
-                  <span className="block font-medium">Real dice allowed</span>
-                  <span className="block text-xs opacity-80">
-                    {solo
-                      ? "Roll at your desk and enter the numbers"
-                      : "Players may opt in to rolling at the table"}
-                  </span>
-                </button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              {aiNarrates ? (
-                <button
-                  type="button"
-                  onClick={() => setAiStorySetup(!aiStorySetup)}
-                  className={toggleClass(aiStorySetup)}
-                >
-                  <span className="block font-medium">AI story setup</span>
-                  <span className="block text-xs opacity-80">The DM invents the plot</span>
-                </button>
-              ) : null}
-              <button
-                type="button"
-                disabled={!ttsAvailable}
-                onClick={() => setTtsEnabled(!ttsEnabled)}
-                className={cn(toggleClass(ttsEnabled), !ttsAvailable && "cursor-not-allowed opacity-50")}
-              >
-                <span className="block font-medium">Voice narration</span>
-                <span className="block text-xs opacity-80">
-                  {ttsAvailable ? "Spoken DM narration" : "No speech service on this server"}
-                </span>
-              </button>
-              <button
-                type="button"
-                disabled={!mapsAvailable}
-                onClick={() => setMapsEnabled(!mapsEnabled)}
-                className={cn(toggleClass(mapsEnabled), !mapsAvailable && "cursor-not-allowed opacity-50")}
-              >
-                <span className="block font-medium">Maps</span>
-                <span className="block text-xs opacity-80">
-                  {mapsAvailable ? "AI-drawn area maps" : "No image service on this server"}
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setAmbienceEnabled(!ambienceEnabled)}
-                className={toggleClass(ambienceEnabled)}
-              >
-                <span className="block font-medium">Ambience</span>
-                <span className="block text-xs opacity-80">Room tone, music and stings</span>
-              </button>
-              {ambienceEnabled ? (
-                <button
-                  type="button"
-                  onClick={() => setAmbienceAuto(!ambienceAuto)}
-                  className={toggleClass(ambienceAuto)}
-                >
-                  <span className="block font-medium">Sound follows the scene</span>
-                  <span className="block text-xs opacity-80">Off leaves it to the DM</span>
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => setMulticlassingEnabled(!multiclassingEnabled)}
-                className={toggleClass(multiclassingEnabled)}
-              >
-                <span className="block font-medium">Multiclassing</span>
-                <span className="block text-xs opacity-80">Second classes at level-up</span>
-              </button>
-              <div className={cn("relative flex", !aiNarrates && "hidden")}>
-                <button
-                  type="button"
-                  onClick={() => setWorldSimulation(!worldSimulation)}
-                  className={toggleClass(worldSimulation)}
-                >
-                  <span className="block font-medium">Living world</span>
-                  <span className="block text-xs opacity-80">
-                    Off-screen schemes and rumors advance on their own
-                  </span>
-                </button>
-                <InfoButton
-                  label="What does Living World do?"
-                  text={LIVING_WORLD_INFO}
-                  className="absolute right-1.5 top-1.5"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => setInventoryApprovals(!inventoryApprovals)}
-                className={toggleClass(inventoryApprovals)}
-              >
-                <span className="block font-medium">Item offers</span>
-                <span className="block text-xs opacity-80">
-                  Players confirm DM loot and gold changes
-                </span>
-              </button>
-              <div className="relative flex">
-                <button
-                  type="button"
-                  onClick={() => setRelationships(relationships === "off" ? "on" : "off")}
-                  className={toggleClass(relationships !== "off")}
-                >
-                  <span className="block font-medium">Bonds</span>
-                  <span className="block text-xs opacity-80">
-                    NPCs remember how each character treated them
-                  </span>
-                </button>
-                <InfoButton
-                  label="What are Bonds?"
-                  text={BONDS_INFO}
-                  className="absolute right-1.5 top-1.5"
-                />
-              </div>
-              {relationships !== "off" ? (
-                <div className="relative flex">
-                  <button
-                    type="button"
-                    onClick={() => setRomance(romance === "off" ? "on" : "off")}
-                    className={toggleClass(romance !== "off")}
-                  >
-                    <span className="block font-medium">Romance</span>
-                    <span className="block text-xs opacity-80">
-                      Bonds can grow into a relationship
-                    </span>
-                  </button>
-                  <InfoButton
-                    label="How does Romance work?"
-                    text={ROMANCE_INFO}
-                    className="absolute right-1.5 top-1.5"
-                  />
-                </div>
-              ) : null}
-              <div className={cn("relative flex", !aiNarrates && "hidden")}>
-                <button
-                  type="button"
-                  onClick={() => setNarrationGuard(!narrationGuard)}
-                  className={toggleClass(narrationGuard)}
-                >
-                  <span className="block font-medium">Outcome check</span>
-                  <span className="block text-xs opacity-80">
-                    Narration that contradicts the dice is rewritten
-                  </span>
-                </button>
-                <InfoButton
-                  label="What is the outcome check?"
-                  text={NARRATION_GUARD_INFO}
-                  className="absolute right-1.5 top-1.5"
-                />
-              </div>
-              {!solo ? (
-                <button
-                  type="button"
-                  onClick={() => setMidGameJoinOpen(!midGameJoinOpen)}
-                  className={toggleClass(midGameJoinOpen)}
-                >
-                  <span className="block font-medium">Mid-game joining</span>
-                  <span className="block text-xs opacity-80">
-                    New players can use the invite code after the start
-                  </span>
-                </button>
-              ) : null}
-              {!solo ? (
-                <button
-                  type="button"
-                  onClick={() => setHoldSubmissions(!holdSubmissions)}
-                  className={toggleClass(holdSubmissions)}
-                >
-                  <span className="block font-medium">Held responses</span>
-                  <span className="block text-xs opacity-80">
-                    Nobody acts until the party lead opens the floor
-                  </span>
-                </button>
-              ) : null}
-            </div>
-
-            <VariantRulesFields value={variantRules} onChange={setVariantRules} />
-
-            <WorldSetupFields
-              houseRules={houseRules}
-              setHouseRules={setHouseRules}
-              loreDrafts={loreDrafts}
-              setLoreDrafts={setLoreDrafts}
-            />
-
-            <div className="rounded-lg border border-stone-800 bg-stone-950/40 p-3">
-              <span className="mb-1.5 block text-stone-400">Bring in prep</span>
-              <ContentImportPicker
-                selection={contentImport}
-                onChange={setContentImport}
-              />
-            </div>
-
-            <div className={cn(!aiNarrates && "hidden")}>
-              <span className="mb-1.5 block text-stone-400">AI allies</span>
-              <select
-                value={companions}
-                onChange={(event) =>
-                  setCompanions(event.target.value as GameSettings["companions"])
-                }
-                className={inputClass}
-              >
-                {(Object.keys(COMPANION_LABELS) as Array<GameSettings["companions"]>).map(
-                  (mode) => (
-                    <option key={mode} value={mode}>
-                      {COMPANION_LABELS[mode]}
-                    </option>
-                  ),
-                )}
-              </select>
-              <p className="mt-1 text-xs text-stone-500">
-                {solo
-                  ? "Party members travel with you until dismissed; guests are allies who show up for a scene or a battle and then leave."
-                  : "Guests are friendly NPCs the DM brings in for a scene or a battle; they fight with real stats and leave when the fight ends. Party members stay until dismissed."}
-              </p>
-              {companions !== "off" ? (
-                <div className="mt-2 grid grid-cols-2 gap-3">
-                  {companions !== "guests" ? (
-                    <label className="block">
-                      <span className="mb-1 block text-xs text-stone-500">Party members at once</span>
-                      <select
-                        value={maxCompanions}
-                        onChange={(event) => setMaxCompanions(Number(event.target.value))}
-                        className={inputClass}
-                      >
-                        {[1, 2, 3, 4].map((count) => (
-                          <option key={count} value={count}>
-                            {count}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ) : null}
-                  <label className="block">
-                    <span className="mb-1 block text-xs text-stone-500">Guests at once</span>
-                    <select
-                      value={maxGuests}
-                      onChange={(event) => setMaxGuests(Number(event.target.value))}
-                      className={inputClass}
-                    >
-                      {[1, 2, 3, 4].map((count) => (
-                        <option key={count} value={count}>
-                          {count}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-              ) : null}
-            </div>
-
-            {!solo ? (
-              <div>
-                <span className="mb-1.5 block text-stone-400">Voice chat</span>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                  <button
-                    type="button"
-                    onClick={() => setVoiceChat({ ...voiceChat, enabled: !voiceChat.enabled })}
-                    className={toggleClass(voiceChat.enabled)}
-                  >
-                    <span className="block font-medium">Voice chat</span>
-                    <span className="block text-xs opacity-80">
-                      Talk live in the lobby and at the table
-                    </span>
-                  </button>
-                  {voiceChat.enabled ? (
-                    <>
-                      <label className="block">
-                        <span className="mb-1 block text-xs text-stone-500">Turn floor</span>
-                        <select
-                          value={voiceChat.turnEnforcement}
-                          onChange={(event) =>
-                            setVoiceChat({
-                              ...voiceChat,
-                              turnEnforcement: event.target
-                                .value as GameSettings["voice"]["turnEnforcement"],
-                            })
-                          }
-                          className={inputClass}
-                        >
-                          <option value="off">Turns: ignored</option>
-                          <option value="soft">Turns: shown</option>
-                          <option value="strict">Turns: enforced</option>
-                        </select>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setVoiceChat({
-                            ...voiceChat,
-                            rules: { ...voiceChat.rules, proximity: !voiceChat.rules.proximity },
-                          })
-                        }
-                        className={toggleClass(voiceChat.rules.proximity)}
-                      >
-                        <span className="block font-medium">Proximity</span>
-                        <span className="block text-xs opacity-80">
-                          The battle map decides who hears whom
-                        </span>
-                      </button>
-                      {voiceChat.rules.proximity ? (
-                        <>
-                          <label className="block">
-                            <span className="mb-1 block text-xs text-stone-500">Hearing range</span>
-                            <select
-                              value={voiceChat.rules.hearingRangeFeet}
-                              onChange={(event) =>
-                                setVoiceChat({
-                                  ...voiceChat,
-                                  rules: {
-                                    ...voiceChat.rules,
-                                    hearingRangeFeet: Number(event.target.value),
-                                  },
-                                })
-                              }
-                              className={inputClass}
-                            >
-                              {[15, 30, 60, 120].map((feet) => (
-                                <option key={feet} value={feet}>
-                                  {feet} ft
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setVoiceChat({
-                                ...voiceChat,
-                                rules: { ...voiceChat.rules, sayRange: !voiceChat.rules.sayRange },
-                              })
-                            }
-                            className={toggleClass(voiceChat.rules.sayRange)}
-                          >
-                            <span className="block font-medium">Whisper and shout</span>
-                            <span className="block text-xs opacity-80">
-                              Speakers pick how far their words carry
-                            </span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setVoiceChat({
-                                ...voiceChat,
-                                rules: {
-                                  ...voiceChat.rules,
-                                  wallsAttenuate: !voiceChat.rules.wallsAttenuate,
-                                },
-                              })
-                            }
-                            className={toggleClass(voiceChat.rules.wallsAttenuate)}
-                          >
-                            <span className="block font-medium">Walls muffle</span>
-                            <span className="block text-xs opacity-80">
-                              A wall muffles a voice instead of cutting it
-                            </span>
-                          </button>
-                        </>
-                      ) : null}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setVoiceChat({
-                            ...voiceChat,
-                            rules: {
-                              ...voiceChat.rules,
-                              downedGoDeaf: !voiceChat.rules.downedGoDeaf,
-                            },
-                          })
-                        }
-                        className={toggleClass(voiceChat.rules.downedGoDeaf)}
-                      >
-                        <span className="block font-medium">Downed go deaf</span>
-                        <span className="block text-xs opacity-80">
-                          At 0 hit points a character stops hearing the table
-                        </span>
-                      </button>
-                    </>
-                  ) : null}
-                </div>
-                <p className="mt-1 text-xs text-stone-500">
-                  The server has its own switch for live audio too; if the owner keeps it off,
-                  these settings wait until it is on.
-                </p>
-              </div>
-            ) : null}
-
-            {ttsEnabled ? (
-              <div className="block">
-                <span className="mb-1 block text-stone-400">Narrator voice</span>
-                <div className="flex items-center gap-2">
-                  <select
-                    value={ttsVoice}
-                    onChange={(event) => setTtsVoice(event.target.value)}
-                    className={inputClass}
-                  >
-                    {TTS_VOICES.map((voice) => (
-                      <option key={voice.id} value={voice.id}>
-                        {voice.label}
-                      </option>
-                    ))}
-                  </select>
-                  <VoicePreviewButton voice={ttsVoice} />
-                </div>
-              </div>
-            ) : null}
-
-            {solo && storyKnownMissing ? (
-              <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 p-3 text-amber-200">
-                A solo adventure needs the AI storyteller, and this server does not have
-                one. Ask the server owner to set up an AI backend first.
-              </p>
-            ) : null}
-            {error ? <p className="text-red-400">{error}</p> : null}
-            <button
-              type="submit"
-              disabled={busy || (solo && storyKnownMissing)}
-              className={cn(ui.btnPrimary, "w-full")}
-            >
-              {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-              {solo ? "Create adventure" : "Create campaign"}
-            </button>
-          </form>
+        {/* A fixed height rather than a cap: the wizard's steps sit side by
+            side and each scrolls on its own, so the panel has to be the
+            thing that decides how tall a step may be. 90vh reads as a full
+            sheet on a phone; the rem cap keeps it a dialog on a monitor. */}
+        <Dialog.Content className="panel fixed left-1/2 top-1/2 flex h-[min(90vh,46rem)] w-[min(92vw,34rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl p-6">
+          <Dialog.Title className="sr-only">{title}</Dialog.Title>
+          <Dialog.Close className="absolute right-5 top-5 z-10 rounded p-1 text-stone-400 hover:bg-stone-900">
+            <X className="size-4" />
+          </Dialog.Close>
+          <Wizard
+            title={title}
+            steps={steps}
+            onDone={() => void submit()}
+            onCancel={() => onOpenChange(false)}
+            doneLabel={
+              <>
+                {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+                {solo ? "Create adventure" : "Create campaign"}
+              </>
+            }
+            className="[&>header]:pr-9"
+          />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

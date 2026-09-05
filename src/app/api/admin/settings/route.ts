@@ -15,6 +15,7 @@ function maskedConfig(config: GlobalConfig) {
     signupsEnabled: config.signupsEnabled,
     signupMode: resolveSignupMode(config),
     serverName: config.serverName,
+    accountDeletionGraceDays: config.accountDeletionGraceDays,
     publicUrl: config.publicUrl,
     worldRegistryUrl: config.worldRegistryUrl,
     text: {
@@ -79,6 +80,13 @@ function voiceAnnounceUnroutable(): boolean {
   return voice.mode === "sfu" && isUnroutableAddress(announcedAddressFor(voice));
 }
 
+// Set by the client shells for the world they host on the device. The panel
+// hides what the shell owns (address, sign-ups, voice transport, Discord)
+// and keeps only the AI settings the player can meaningfully change.
+function deviceWorld(): boolean {
+  return serverEnv("ODM_DEVICE_WORLD") === "1";
+}
+
 export async function GET() {
   const admin = await requireAdmin();
   if (isErrorResponse(admin)) {
@@ -88,6 +96,7 @@ export async function GET() {
     config: maskedConfig(getGlobalConfig()),
     envDefaults: envDefaults(),
     voiceAnnounceUnroutable: voiceAnnounceUnroutable(),
+    deviceWorld: deviceWorld(),
   });
 }
 
@@ -95,6 +104,7 @@ const patchSchema = z.object({
   signupsEnabled: z.boolean().optional(),
   signupMode: z.enum(["open", "invite", "closed"]).optional(),
   serverName: z.string().trim().max(100).optional(),
+  accountDeletionGraceDays: z.number().int().min(0).max(90).optional(),
   publicUrl: z.string().trim().max(500).optional(),
   worldRegistryUrl: z.string().trim().max(500).optional(),
   text: z
@@ -164,5 +174,6 @@ export async function PATCH(request: Request) {
     config: maskedConfig(saved),
     envDefaults: envDefaults(),
     voiceAnnounceUnroutable: voiceAnnounceUnroutable(),
+    deviceWorld: deviceWorld(),
   });
 }

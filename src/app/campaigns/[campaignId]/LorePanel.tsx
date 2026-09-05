@@ -1,46 +1,40 @@
 "use client";
 
-import { BookMarked, Copy, Loader2, Pencil, Pin, Plus, Trash2, X } from "lucide-react";
+import { BookMarked, Loader2, Pin, Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { cn } from "@/lib/cn";
 import {
   WORLD_LORE_CATEGORIES,
   type WorldLoreCategory,
 } from "@/lib/dm/world-lore-logic";
-
-type LoreEntryView = {
-  id: string;
-  category: WorldLoreCategory;
-  title: string;
-  body: string;
-  tags: string[];
-  pinned: boolean;
-};
-
-const CATEGORY_LABELS: Record<WorldLoreCategory, string> = {
-  geography: "Geography",
-  factions: "Factions",
-  history: "History",
-  magic: "Magic",
-  culture: "Culture",
-  religion: "Religion",
-  other: "Other",
-};
+import { Sheet } from "@/components/ui/Sheet";
+import { LoreEntryActions } from "@/app/workshop/lore/LoreEntryActions";
+import { LoreRows } from "@/app/workshop/lore/LoreRows";
+import { CATEGORY_LABELS, type LoreEntryView } from "@/app/workshop/lore/types";
 
 // World lore builder: the lead's world bible. Entries feed the DM prompt
 // (pinned always, the rest retrieved by relevance) and the search_lore
 // tool. Party-visible, lead-edited, usable before and during the campaign.
+//
+// Two layouts over one set of requests. "list" is the campaign's: entries
+// grouped by category, each expanding in place, the author form inline at
+// the top. "rows" is the workshop's: a search box over full-width rows, and
+// the same form with the same buttons in a sheet.
 export function LorePanel({
   campaignId,
   steersStory,
+  layout = "list",
 }: {
   campaignId: string;
   steersStory: boolean;
+  layout?: "list" | "rows";
 }) {
   const [loading, setLoading] = useState(true);
   const [entries, setEntries] = useState<LoreEntryView[]>([]);
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Rows only: an entry opened by somebody who cannot edit it, so they can
+  // still read the whole of it.
+  const [readingId, setReadingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<{
     category: WorldLoreCategory;
     title: string;
@@ -48,6 +42,7 @@ export function LorePanel({
     tags: string;
   }>({ category: "geography", title: "", body: "", tags: "" });
   const [busy, setBusy] = useState(false);
+  const rows = layout === "rows";
 
   useEffect(() => {
     let cancelled = false;
@@ -84,6 +79,12 @@ export function LorePanel({
     });
     setAdding(false);
     setEditingId(entry.id);
+  }
+
+  function closeEditor() {
+    setAdding(false);
+    setEditingId(null);
+    setReadingId(null);
   }
 
   async function submitDraft() {
@@ -184,6 +185,127 @@ export function LorePanel({
 
   const editorOpen = adding || editingId !== null;
 
+  // The author form is the same fields in both layouts; only what wraps it
+  // differs.
+  const editorForm = (
+    <>
+      <div className="flex gap-1.5">
+        <select
+          value={draft.category}
+          onChange={(event) =>
+            setDraft((current) => ({
+              ...current,
+              category: event.target.value as WorldLoreCategory,
+            }))
+          }
+          className="rounded border border-stone-700 bg-stone-900 px-1.5 py-1 text-[11px] outline-none focus:border-amber-600"
+        >
+          {WORLD_LORE_CATEGORIES.map((category) => (
+            <option key={category} value={category}>
+              {CATEGORY_LABELS[category]}
+            </option>
+          ))}
+        </select>
+        <input
+          value={draft.title}
+          onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
+          maxLength={120}
+          placeholder="Title (The Ashen League, The Sundering...)"
+          className="flex-1 rounded border border-stone-700 bg-stone-900 px-2 py-1 text-[11px] outline-none focus:border-amber-600"
+        />
+      </div>
+      <textarea
+        value={draft.body}
+        onChange={(event) => setDraft((current) => ({ ...current, body: event.target.value }))}
+        rows={4}
+        maxLength={4000}
+        placeholder="What is established about it..."
+        className="w-full rounded border border-stone-700 bg-stone-900 px-2 py-1 text-[11px] leading-4 outline-none focus:border-amber-600"
+      />
+      <input
+        value={draft.tags}
+        onChange={(event) => setDraft((current) => ({ ...current, tags: event.target.value }))}
+        placeholder="Tags, comma separated (optional)"
+        className="w-full rounded border border-stone-700 bg-stone-900 px-2 py-1 text-[11px] outline-none focus:border-amber-600"
+      />
+      <div className="flex gap-1.5">
+        <button
+          type="button"
+          onClick={submitDraft}
+          disabled={busy || !draft.title.trim() || !draft.body.trim()}
+          className="flex items-center gap-1 rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-300 hover:bg-stone-900 disabled:opacity-50"
+        >
+          {busy ? <Loader2 className="size-3 animate-spin" /> : null}
+          {editingId ? "Save" : "Add"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setAdding(false);
+            setEditingId(null);
+          }}
+          className="flex items-center gap-1 rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-500 hover:bg-stone-900"
+        >
+          <X className="size-3" /> Cancel
+        </button>
+      </div>
+    </>
+  );
+
+  if (rows) {
+    const editing = editingId ? entries.find((entry) => entry.id === editingId) ?? null : null;
+    const reading = readingId ? entries.find((entry) => entry.id === readingId) ?? null : null;
+    return (
+      <div className="space-y-3">
+        {loading ? (
+          <p className="flex items-center gap-1 text-[11px] text-stone-500">
+            <Loader2 className="size-3 animate-spin" /> Loading...
+          </p>
+        ) : (
+          <LoreRows
+            entries={entries}
+            steersStory={steersStory}
+            onOpen={(entry) => (steersStory ? startEdit(entry) : setReadingId(entry.id))}
+            onNew={startAdd}
+          />
+        )}
+        <Sheet
+          open={editorOpen || reading !== null}
+          onOpenChange={(next) => {
+            if (!next) {
+              closeEditor();
+            }
+          }}
+          title={editing?.title || reading?.title || "New entry"}
+          className="lg:w-[min(92vw,40rem)]"
+        >
+          {editorOpen ? (
+            <div className="space-y-1.5">
+              {editorForm}
+              {editing ? (
+                <LoreEntryActions
+                  entry={editing}
+                  onPin={() => void togglePin(editing)}
+                  onDuplicate={() => void duplicate(editing)}
+                  onDelete={() => void remove(editing.id).then(closeEditor)}
+                />
+              ) : null}
+            </div>
+          ) : reading ? (
+            <div className="space-y-1">
+              <p className="whitespace-pre-wrap text-[11px] leading-4 text-stone-400">
+                {reading.body}
+              </p>
+              {reading.tags.length ? (
+                <p className="text-[10px] text-stone-600">{reading.tags.join(" · ")}</p>
+              ) : null}
+            </div>
+          ) : null}
+        </Sheet>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-lg border border-stone-800 bg-stone-950/40 p-2.5">
       <div className="mb-2 flex items-center justify-between">
@@ -214,68 +336,7 @@ export function LorePanel({
       ) : null}
       {editorOpen ? (
         <div className="mb-2 space-y-1.5 rounded border border-stone-800 bg-stone-950/60 p-2">
-          <div className="flex gap-1.5">
-            <select
-              value={draft.category}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  category: event.target.value as WorldLoreCategory,
-                }))
-              }
-              className="rounded border border-stone-700 bg-stone-900 px-1.5 py-1 text-[11px] outline-none focus:border-amber-600"
-            >
-              {WORLD_LORE_CATEGORIES.map((category) => (
-                <option key={category} value={category}>
-                  {CATEGORY_LABELS[category]}
-                </option>
-              ))}
-            </select>
-            <input
-              value={draft.title}
-              onChange={(event) =>
-                setDraft((current) => ({ ...current, title: event.target.value }))
-              }
-              maxLength={120}
-              placeholder="Title (The Ashen League, The Sundering...)"
-              className="flex-1 rounded border border-stone-700 bg-stone-900 px-2 py-1 text-[11px] outline-none focus:border-amber-600"
-            />
-          </div>
-          <textarea
-            value={draft.body}
-            onChange={(event) => setDraft((current) => ({ ...current, body: event.target.value }))}
-            rows={4}
-            maxLength={4000}
-            placeholder="What is established about it..."
-            className="w-full rounded border border-stone-700 bg-stone-900 px-2 py-1 text-[11px] leading-4 outline-none focus:border-amber-600"
-          />
-          <input
-            value={draft.tags}
-            onChange={(event) => setDraft((current) => ({ ...current, tags: event.target.value }))}
-            placeholder="Tags, comma separated (optional)"
-            className="w-full rounded border border-stone-700 bg-stone-900 px-2 py-1 text-[11px] outline-none focus:border-amber-600"
-          />
-          <div className="flex gap-1.5">
-            <button
-              type="button"
-              onClick={submitDraft}
-              disabled={busy || !draft.title.trim() || !draft.body.trim()}
-              className="flex items-center gap-1 rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-300 hover:bg-stone-900 disabled:opacity-50"
-            >
-              {busy ? <Loader2 className="size-3 animate-spin" /> : null}
-              {editingId ? "Save" : "Add"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setAdding(false);
-                setEditingId(null);
-              }}
-              className="flex items-center gap-1 rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-500 hover:bg-stone-900"
-            >
-              <X className="size-3" /> Cancel
-            </button>
-          </div>
+          {editorForm}
         </div>
       ) : null}
       {categories.map((category) => (
@@ -339,45 +400,13 @@ function LoreEntryRow({
             <p className="text-[10px] text-stone-600">{entry.tags.join(" · ")}</p>
           ) : null}
           {steersStory ? (
-            <div className="flex items-center gap-2.5">
-              <button
-                type="button"
-                onClick={onEdit}
-                className="flex items-center gap-1 text-[11px] text-stone-500 hover:text-stone-300"
-              >
-                <Pencil className="size-3" /> Edit
-              </button>
-              <button
-                type="button"
-                onClick={onPin}
-                title={
-                  entry.pinned
-                    ? "Unpin: retrieved only when relevant"
-                    : "Pin: included in every DM turn"
-                }
-                className={cn(
-                  "flex items-center gap-1 text-[11px]",
-                  entry.pinned ? "text-amber-300" : "text-stone-500 hover:text-stone-300",
-                )}
-              >
-                <Pin className="size-3" /> {entry.pinned ? "Pinned" : "Pin"}
-              </button>
-              <button
-                type="button"
-                onClick={onDuplicate}
-                aria-label={`Duplicate ${entry.title}`}
-                className="flex items-center gap-1 text-[11px] text-stone-500 hover:text-stone-300"
-              >
-                <Copy className="size-3" /> Duplicate
-              </button>
-              <button
-                type="button"
-                onClick={onDelete}
-                className="flex items-center gap-1 text-[11px] text-stone-500 hover:text-red-400"
-              >
-                <Trash2 className="size-3" /> Delete
-              </button>
-            </div>
+            <LoreEntryActions
+              entry={entry}
+              onEdit={onEdit}
+              onPin={onPin}
+              onDuplicate={onDuplicate}
+              onDelete={onDelete}
+            />
           ) : null}
         </div>
       ) : null}

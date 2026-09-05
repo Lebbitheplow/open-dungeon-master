@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Lightbulb, Loader2, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
 import {
   BEAT_HINTS,
   BEAT_KINDS,
@@ -10,12 +11,16 @@ import {
   TITLE_MAX,
   type Beat,
   type BeatKind,
-  type BeatLinks,
   type Board,
   type BoardInventory,
   type Suggestion,
 } from "@/lib/workshop/board";
 import type { CompiledBoard, CompileSummary } from "@/lib/workshop/board-compile";
+import { Sheet } from "@/components/ui/Sheet";
+import { KIND_TONE, beatInput as input } from "@/app/workshop/storyboard/beat-fields";
+import { BeatBoard } from "@/app/workshop/storyboard/BeatBoard";
+import { BeatEditor } from "@/app/workshop/storyboard/BeatEditor";
+import { CompileCard, SuggestionsCard } from "@/app/workshop/storyboard/BoardAsides";
 
 // The storyboard: cards for the things that are going to happen, and arrows
 // between them.
@@ -25,9 +30,11 @@ import type { CompiledBoard, CompileSummary } from "@/lib/workshop/board-compile
 // runs. And the suggestions, which are arithmetic over what is on the board
 // rather than a model call, so a DM can check them and disagree.
 //
-// The board renders as a list rather than a canvas. Cards keep their x and y
-// so a canvas can be added later without a migration, but a list is what
-// reads on a phone, and prep gets done on a phone.
+// Two layouts over one set of requests. "list" is the DM console's: cards
+// keep their x and y so a canvas can be added later without a migration, but
+// a list is what reads on a phone, and prep gets done on a phone. "board" is
+// the workshop's: the same cards as a card grid, the editor in a sheet, and
+// the suggestions and the compile folded into cards beside the board.
 
 type Payload = {
   board: Board;
@@ -36,27 +43,13 @@ type Payload = {
   compiled: CompiledBoard & { summary: CompileSummary };
 };
 
-const KIND_TONE: Record<BeatKind, string> = {
-  setting: "border-emerald-800/60",
-  backstory: "border-stone-600",
-  event: "border-amber-700/60",
-  encounter: "border-red-800/60",
-  hook: "border-sky-800/60",
-  secret: "border-violet-800/60",
-  npc_moment: "border-orange-800/60",
-};
-
-const input =
-  "rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:border-amber-500/50 focus:outline-none";
-
-const LINK_FIELDS: Array<[keyof BeatLinks, keyof BoardInventory, string]> = [
-  ["npcId", "npcs", "Who"],
-  ["mapId", "maps", "On which map"],
-  ["encounterId", "encounters", "Which prepared fight"],
-  ["locationId", "locations", "Where"],
-];
-
-export function DmStoryboardPanel({ campaignId }: { campaignId: string }) {
+export function DmStoryboardPanel({
+  campaignId,
+  layout = "list",
+}: {
+  campaignId: string;
+  layout?: "list" | "board";
+}) {
   const [data, setData] = useState<Payload | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [edit, setEdit] = useState<Beat | null>(null);
@@ -64,6 +57,7 @@ export function DmStoryboardPanel({ campaignId }: { campaignId: string }) {
   const [newTitle, setNewTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const board = layout === "board";
 
   const load = useCallback(
     () =>
@@ -137,6 +131,11 @@ export function DmStoryboardPanel({ campaignId }: { campaignId: string }) {
     await load();
   }
 
+  function close() {
+    setOpenId(null);
+    setEdit(null);
+  }
+
   if (!data) {
     return <Loader2 className="size-5 animate-spin text-stone-500" />;
   }
@@ -144,49 +143,114 @@ export function DmStoryboardPanel({ campaignId }: { campaignId: string }) {
   const nodes = data.board.nodes;
   const nameOf = (id: string) => nodes.find((node) => node.id === id)?.title ?? "";
 
+  // The add row is the same controls in both layouts; only the card around
+  // it differs.
+  const addRow = (
+    <>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="flex flex-col gap-0.5">
+          <span className="text-[10px] uppercase tracking-wide text-stone-500">Card</span>
+          <select
+            value={newKind}
+            onChange={(event) => setNewKind(event.target.value as BeatKind)}
+            className={cn(input, "w-48")}
+          >
+            {BEAT_KINDS.map((kind) => (
+              <option key={kind} value={kind}>
+                {BEAT_LABELS[kind]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-1 flex-col gap-0.5">
+          <span className="text-[10px] uppercase tracking-wide text-stone-500">In a few words</span>
+          <input
+            value={newTitle}
+            onChange={(event) => setNewTitle(event.target.value.slice(0, TITLE_MAX))}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                void add(newKind, newTitle);
+              }
+            }}
+            placeholder="The miller's daughter has not come home"
+            className={cn(input, "w-full")}
+          />
+        </label>
+        <button
+          type="button"
+          disabled={busy || !newTitle.trim()}
+          onClick={() => void add(newKind, newTitle)}
+          className="inline-flex items-center gap-1 rounded-md border border-amber-500/40 px-3 py-1 text-xs text-amber-100 hover:bg-stone-800 disabled:opacity-40"
+        >
+          <Plus className="size-3.5" /> Add
+        </button>
+      </div>
+      <p className="text-[10px] text-stone-600">{BEAT_HINTS[newKind]}</p>
+      {error ? <p className="text-[11px] text-red-400">{error}</p> : null}
+    </>
+  );
+
+  const editorFor = (beat: Beat, onDelete?: () => void) => (
+    <BeatEditor
+      edit={beat}
+      onChange={setEdit}
+      inventory={data.inventory}
+      others={nodes.filter((other) => other.id !== beat.id)}
+      busy={busy}
+      onSave={() => void save(beat)}
+      onDelete={onDelete}
+    />
+  );
+
+  if (board) {
+    const open = openId ? nodes.find((node) => node.id === openId) ?? null : null;
+    return (
+      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+        <div className="flex flex-col gap-4">
+          <section className={cn(ui.card, "flex flex-col gap-2 p-3")}>{addRow}</section>
+          <BeatBoard
+            board={data.board}
+            inventory={data.inventory}
+            onOpen={(node) => {
+              setOpenId(node.id);
+              setEdit(node);
+            }}
+          />
+        </div>
+        <div className="flex flex-col gap-3">
+          <SuggestionsCard
+            suggestions={data.suggestions}
+            busy={busy}
+            onAdd={(kind, title) => void add(kind, title)}
+          />
+          {nodes.length ? <CompileCard summary={data.compiled.summary} /> : null}
+        </div>
+
+        <Sheet
+          open={open !== null && edit !== null}
+          onOpenChange={(next) => {
+            if (!next) {
+              close();
+            }
+          }}
+          title={open?.title || "Card"}
+          className="lg:w-[min(92vw,40rem)]"
+        >
+          {open && edit ? (
+            <div className="flex flex-col gap-2">
+              {editorFor(edit, () => void remove(open.id))}
+              {error ? <p className="text-[11px] text-red-400">{error}</p> : null}
+            </div>
+          ) : null}
+        </Sheet>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2 rounded-lg border border-stone-800 bg-stone-900/40 p-3">
-        <div className="flex flex-wrap items-end gap-2">
-          <label className="flex flex-col gap-0.5">
-            <span className="text-[10px] uppercase tracking-wide text-stone-500">Card</span>
-            <select
-              value={newKind}
-              onChange={(event) => setNewKind(event.target.value as BeatKind)}
-              className={cn(input, "w-48")}
-            >
-              {BEAT_KINDS.map((kind) => (
-                <option key={kind} value={kind}>
-                  {BEAT_LABELS[kind]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-1 flex-col gap-0.5">
-            <span className="text-[10px] uppercase tracking-wide text-stone-500">In a few words</span>
-            <input
-              value={newTitle}
-              onChange={(event) => setNewTitle(event.target.value.slice(0, TITLE_MAX))}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  void add(newKind, newTitle);
-                }
-              }}
-              placeholder="The miller's daughter has not come home"
-              className={cn(input, "w-full")}
-            />
-          </label>
-          <button
-            type="button"
-            disabled={busy || !newTitle.trim()}
-            onClick={() => void add(newKind, newTitle)}
-            className="inline-flex items-center gap-1 rounded-md border border-amber-500/40 px-3 py-1 text-xs text-amber-100 hover:bg-stone-800 disabled:opacity-40"
-          >
-            <Plus className="size-3.5" /> Add
-          </button>
-        </div>
-        <p className="text-[10px] text-stone-600">{BEAT_HINTS[newKind]}</p>
-        {error ? <p className="text-[11px] text-red-400">{error}</p> : null}
+        {addRow}
       </div>
 
       {data.suggestions.length ? (
@@ -234,8 +298,7 @@ export function DmStoryboardPanel({ campaignId }: { campaignId: string }) {
                   type="button"
                   onClick={() => {
                     if (openId === node.id) {
-                      setOpenId(null);
-                      setEdit(null);
+                      close();
                     } else {
                       setOpenId(node.id);
                       setEdit(node);
@@ -265,107 +328,7 @@ export function DmStoryboardPanel({ campaignId }: { campaignId: string }) {
 
               {openId === node.id && edit ? (
                 <div className="flex flex-col gap-2 border-t border-stone-800 p-3">
-                  <div className="flex flex-wrap gap-2">
-                    <select
-                      value={edit.kind}
-                      onChange={(event) =>
-                        setEdit({ ...edit, kind: event.target.value as BeatKind })
-                      }
-                      className={cn(input, "w-44")}
-                    >
-                      {BEAT_KINDS.map((kind) => (
-                        <option key={kind} value={kind}>
-                          {BEAT_LABELS[kind]}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      value={edit.title}
-                      onChange={(event) =>
-                        setEdit({ ...edit, title: event.target.value.slice(0, TITLE_MAX) })
-                      }
-                      className={cn(input, "flex-1")}
-                    />
-                  </div>
-                  <textarea
-                    value={edit.body}
-                    onChange={(event) => setEdit({ ...edit, body: event.target.value })}
-                    rows={3}
-                    placeholder="What actually happens, and what it means if the party is not there."
-                    className={cn(input, "w-full resize-y")}
-                  />
-
-                  <div className="grid gap-1.5 sm:grid-cols-2">
-                    {LINK_FIELDS.map(([field, bucket, label]) => (
-                      <label key={field} className="flex flex-col gap-0.5">
-                        <span className="text-[10px] uppercase tracking-wide text-stone-500">
-                          {label}
-                        </span>
-                        <select
-                          value={edit.links[field] ?? ""}
-                          onChange={(event) =>
-                            setEdit({
-                              ...edit,
-                              links: { ...edit.links, [field]: event.target.value || undefined },
-                            })
-                          }
-                          className={cn(input, "w-full")}
-                        >
-                          <option value="">nobody in particular</option>
-                          {data.inventory[bucket].map((entry) => (
-                            <option key={entry.id} value={entry.id}>
-                              {entry.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    ))}
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[10px] uppercase tracking-wide text-stone-500">
-                      Leads to
-                    </span>
-                    <div className="flex flex-wrap gap-1">
-                      {nodes
-                        .filter((other) => other.id !== node.id)
-                        .map((other) => {
-                          const on = edit.edges.includes(other.id);
-                          return (
-                            <button
-                              key={other.id}
-                              type="button"
-                              onClick={() =>
-                                setEdit({
-                                  ...edit,
-                                  edges: on
-                                    ? edit.edges.filter((edge) => edge !== other.id)
-                                    : [...edit.edges, other.id],
-                                })
-                              }
-                              className={cn(
-                                "rounded-md border px-1.5 py-0.5 text-[10px]",
-                                on
-                                  ? "border-amber-500/50 text-amber-100"
-                                  : "border-stone-700 text-stone-500 hover:text-stone-300",
-                              )}
-                            >
-                              {other.title}
-                            </button>
-                          );
-                        })}
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void save(edit)}
-                    className="inline-flex w-fit items-center gap-1.5 rounded-md border border-amber-500/40 px-3 py-1 text-xs text-amber-100 hover:bg-stone-800 disabled:opacity-40"
-                  >
-                    {busy ? <Loader2 className="size-3.5 animate-spin" /> : null}
-                    Save the card
-                  </button>
+                  {editorFor(edit)}
                 </div>
               ) : null}
             </div>

@@ -61,6 +61,7 @@ export async function POST(request: Request) {
       avatar: user.avatar,
       isAdmin: user.isAdmin,
       mustChangePassword: user.mustChangePassword,
+      deletionDueAt: user.deletionDueAt,
     },
   });
 }

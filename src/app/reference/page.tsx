@@ -1,10 +1,12 @@
 "use client";
 
-import { BookOpen, Calculator, Columns3, Loader2, MessageCircleQuestion, Search } from "lucide-react";
+import { Calculator, Columns3, Loader2, MessageCircleQuestion, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
-import { AppHeader } from "@/components/AppHeader";
+import { PIXEL_ICONS, ui } from "@/lib/ui";
+import { PageSection, PageShell } from "@/components/PageShell";
 import { InfoDialog } from "@/components/ui/InfoDialog";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import {
   describeContentEntry,
   glossaryTerms,
@@ -55,14 +57,16 @@ const TABS = [
 
 type Kind = (typeof TABS)[number]["kind"];
 
-const MODES = [
-  { id: "browse", label: "Browse", icon: Search },
-  { id: "compare", label: "Compare", icon: Columns3 },
-  { id: "calculators", label: "Calculators", icon: Calculator },
-  { id: "ask", label: "Ask", icon: MessageCircleQuestion },
-] as const;
+type Mode = "browse" | "compare" | "calculators" | "ask";
 
-type Mode = (typeof MODES)[number]["id"];
+// Result rows: a quiet bordered row that warms on hover, the same for
+// glossary terms, house rules and content entries.
+const ROW =
+  "w-full rounded-lg border border-stone-700/50 bg-stone-950/50 px-3 py-2 text-left transition-colors hover:border-amber-500/40";
+const CHIP =
+  "rounded-full border px-3 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40";
+const CHIP_ACTIVE = "border-amber-400/50 bg-amber-400/10 text-amber-100";
+const CHIP_IDLE = "border-stone-700/70 text-stone-400 hover:border-amber-500/40 hover:text-stone-200";
 
 // The two kinds compare.ts knows how to put side by side.
 function comparableKind(kind: Kind): CompareKind | null {
@@ -185,36 +189,32 @@ export default function ReferencePage() {
       : [],
   );
 
-  return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-8">
-      <AppHeader />
-      <div className="mb-5 flex items-center justify-between gap-3">
-        <h1 className="flex items-center gap-2 font-display text-2xl tracking-wide text-amber-100">
-          <BookOpen className="size-5 text-amber-500/80" /> Rules reference
-        </h1>
-      </div>
+  const compareCount = selection?.entries.length ?? 0;
+  const modes = [
+    { value: "browse" as const, label: "Browse", icon: Search },
+    {
+      value: "compare" as const,
+      label: compareCount ? `Compare (${compareCount})` : "Compare",
+      icon: Columns3,
+    },
+    { value: "calculators" as const, label: "Calculators", icon: Calculator },
+    { value: "ask" as const, label: "Ask", icon: MessageCircleQuestion },
+  ];
 
-      <div className="mb-4 flex flex-wrap gap-1.5">
-        {MODES.map((entry) => (
-          <button
-            key={entry.id}
-            type="button"
-            onClick={() => setMode(entry.id)}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-colors",
-              mode === entry.id
-                ? "border-amber-600 bg-stone-900 text-amber-100"
-                : "border-stone-800 text-stone-400 hover:border-amber-800 hover:text-stone-200",
-            )}
-          >
-            <entry.icon className="size-3.5" />
-            {entry.label}
-            {entry.id === "compare" && selection?.entries.length
-              ? ` (${selection.entries.length})`
-              : ""}
-          </button>
-        ))}
-      </div>
+  return (
+    <PageShell
+      icon={PIXEL_ICONS.support}
+      title="Rules reference"
+      blurb="Look something up, line things up side by side, run the numbers, or ask."
+    >
+      <SegmentedControl
+        options={modes}
+        value={mode}
+        onChange={setMode}
+        label="Reference mode"
+        size="sm"
+        className="w-full sm:w-auto"
+      />
 
       {mode === "calculators" ? <CalculatorsPanel /> : null}
       {mode === "ask" ? <DeskPanel /> : null}
@@ -233,25 +233,19 @@ export default function ReferencePage() {
       ) : null}
 
       {mode === "browse" ? (
-        <>
-          <p className="mb-4 text-sm text-stone-400">
-            New to this? Start with Basics, which explains the terms the game leans on constantly.
-            The other tabs search everything the app knows about, including your own homebrew and
-            the house rules on your rulesets.
-          </p>
-
-          <div className="mb-3 flex flex-wrap gap-1.5">
+        <PageSection
+          heading="Browse"
+          intro="New to this? Start with Basics, which explains the terms the game leans on constantly. The other tabs search everything the app knows about, including your own homebrew and the house rules on your rulesets."
+        >
+          <div className="mb-3 flex flex-wrap gap-1.5" role="tablist" aria-label="Category">
             {TABS.map((tab) => (
               <button
                 key={tab.kind}
                 type="button"
+                role="tab"
+                aria-selected={kind === tab.kind}
                 onClick={() => setKind(tab.kind)}
-                className={cn(
-                  "rounded-full border px-3 py-1 text-xs transition-colors",
-                  kind === tab.kind
-                    ? "border-amber-600 bg-stone-900 text-amber-100"
-                    : "border-stone-700 text-stone-400 hover:border-amber-800 hover:text-stone-200",
-                )}
+                className={cn(CHIP, kind === tab.kind ? CHIP_ACTIVE : CHIP_IDLE)}
               >
                 {tab.label}
               </button>
@@ -259,7 +253,7 @@ export default function ReferencePage() {
           </div>
 
           <div className="relative mb-4">
-            <Search className="absolute left-3 top-2.5 size-4 text-stone-600" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-600" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -270,10 +264,11 @@ export default function ReferencePage() {
                     ? "Search your house rules"
                     : `Search ${kind}`
               }
-              className="w-full rounded-lg border border-stone-800 bg-stone-950 py-2 pl-9 pr-3 text-sm text-stone-200 outline-none focus:border-amber-300"
+              aria-label="Search"
+              className={cn(ui.input, "pl-9 pr-9")}
             />
             {loading ? (
-              <Loader2 className="absolute right-3 top-2.5 size-4 animate-spin text-stone-500" />
+              <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-stone-500" />
             ) : null}
           </div>
 
@@ -287,11 +282,7 @@ export default function ReferencePage() {
             <ul className="space-y-1.5">
               {filteredTerms.map((term) => (
                 <li key={term.id}>
-                  <button
-                    type="button"
-                    onClick={() => openTerm(term)}
-                    className="w-full rounded-lg border border-stone-800 bg-stone-950/60 px-3 py-2 text-left hover:border-amber-800"
-                  >
+                  <button type="button" onClick={() => openTerm(term)} className={ROW}>
                     <span className="block text-sm text-stone-200">{term.term}</span>
                     <span className="block text-xs text-stone-500">{term.short}</span>
                   </button>
@@ -304,10 +295,7 @@ export default function ReferencePage() {
           ) : kind === "rulings" ? (
             <ul className="space-y-1.5">
               {rulings.map((ruling) => (
-                <li
-                  key={ruling.ref}
-                  className="rounded-lg border border-stone-800 bg-stone-950/60 px-3 py-2"
-                >
+                <li key={ruling.ref} className={cn(ROW, "hover:border-stone-700/50")}>
                   <span className="flex items-center justify-between gap-2">
                     <span className="text-sm text-amber-200">{ruling.name}</span>
                     <span className="shrink-0 text-xs text-stone-600">{ruling.origin}</span>
@@ -338,18 +326,14 @@ export default function ReferencePage() {
                       className={cn(
                         "shrink-0 rounded-lg border px-2 text-xs transition-colors",
                         picked.has(row.slug)
-                          ? "border-amber-600 bg-stone-900 text-amber-200"
-                          : "border-stone-800 text-stone-600 hover:border-amber-800 hover:text-stone-300",
+                          ? "border-amber-400/50 bg-amber-400/10 text-amber-200"
+                          : "border-stone-700/50 text-stone-600 hover:border-amber-500/40 hover:text-stone-300",
                       )}
                     >
                       <Columns3 className="size-3.5" />
                     </button>
                   ) : null}
-                  <button
-                    type="button"
-                    onClick={() => openRow(row)}
-                    className="flex-1 rounded-lg border border-stone-800 bg-stone-950/60 px-3 py-2 text-left hover:border-amber-800"
-                  >
+                  <button type="button" onClick={() => openRow(row)} className={cn(ROW, "flex-1")}>
                     <span className="flex items-center justify-between gap-2">
                       <span
                         className={cn(
@@ -377,7 +361,7 @@ export default function ReferencePage() {
               ) : null}
             </ul>
           )}
-        </>
+        </PageSection>
       ) : null}
 
       <InfoDialog
@@ -387,6 +371,6 @@ export default function ReferencePage() {
         meta={open?.meta}
         text={open?.text}
       />
-    </main>
+    </PageShell>
   );
 }

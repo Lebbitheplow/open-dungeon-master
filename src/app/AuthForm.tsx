@@ -6,6 +6,7 @@ import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import type { SessionUser } from "@/lib/campaign-types";
 import { ChangePasswordForm } from "@/app/ChangePasswordForm";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 
 type AuthMode = "login" | "register";
 
@@ -18,6 +19,18 @@ const OAUTH_ERRORS: Record<string, string> = {
 
 type SignupMode = "open" | "invite" | "closed";
 
+const MODE_OPTIONS: Array<{ value: AuthMode; label: string }> = [
+  { value: "login", label: "Log in" },
+  { value: "register", label: "Create account" },
+];
+
+// The prototype draws the fields a touch taller than the app's default input
+// and the Discord button in Discord's own blurple, so it reads as a third
+// party door rather than one of ours.
+const FIELD = cn(ui.input, "h-11");
+const DISCORD_BTN =
+  "inline-flex h-11 w-full items-center justify-center gap-2.5 rounded-lg border border-indigo-400/30 bg-[#5865f2]/15 px-4 text-sm text-indigo-100 transition-all duration-150 ease-snap hover:bg-[#5865f2]/25 hover:text-white active:scale-[0.98]";
+
 function discordStartHref(inviteCode: string, joinCode?: string): string {
   const query = new URLSearchParams();
   if (inviteCode.trim()) {
@@ -28,6 +41,14 @@ function discordStartHref(inviteCode: string, joinCode?: string): string {
   }
   const qs = query.toString();
   return qs ? `/api/auth/discord/start?${qs}` : "/api/auth/discord/start";
+}
+
+function DiscordMark() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-4 fill-[#8b9bf5]" aria-hidden="true">
+      <path d="M20.32 4.37a19.8 19.8 0 0 0-4.89-1.52.07.07 0 0 0-.08.04c-.21.38-.44.87-.6 1.25a18.3 18.3 0 0 0-5.5 0 12.6 12.6 0 0 0-.61-1.25.08.08 0 0 0-.08-.04 19.7 19.7 0 0 0-4.88 1.52.07.07 0 0 0-.04.03C.53 9.05-.32 13.58.1 18.06a.08.08 0 0 0 .03.05 19.9 19.9 0 0 0 6 3.03.08.08 0 0 0 .08-.03c.46-.63.87-1.3 1.22-2a.08.08 0 0 0-.04-.1 13 13 0 0 1-1.87-.9.08.08 0 0 1-.01-.12c.13-.1.25-.2.37-.3a.07.07 0 0 1 .08 0c3.93 1.79 8.18 1.79 12.06 0a.07.07 0 0 1 .08 0c.12.1.25.21.38.3a.08.08 0 0 1-.01.13c-.6.35-1.22.64-1.87.89a.08.08 0 0 0-.04.11c.36.7.77 1.36 1.22 1.99a.08.08 0 0 0 .08.03 19.8 19.8 0 0 0 6.02-3.03.08.08 0 0 0 .03-.05c.5-5.18-.84-9.67-3.55-13.66a.06.06 0 0 0-.03-.03zM8.02 15.33c-1.18 0-2.16-1.08-2.16-2.42 0-1.33.96-2.42 2.16-2.42 1.21 0 2.18 1.1 2.16 2.42 0 1.34-.96 2.42-2.16 2.42zm7.97 0c-1.18 0-2.15-1.08-2.15-2.42 0-1.33.95-2.42 2.15-2.42 1.21 0 2.18 1.1 2.16 2.42 0 1.34-.95 2.42-2.16 2.42z" />
+    </svg>
+  );
 }
 
 // Shared login/register form used by the home screen and invite-link page.
@@ -84,6 +105,11 @@ export default function AuthForm({
     }
   }, []);
 
+  function switchMode(next: AuthMode) {
+    setMode(next);
+    setError("");
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
@@ -136,11 +162,27 @@ export default function AuthForm({
     );
   }
 
+  // A closed server has one mode only, so the switch is hidden rather than
+  // shown with a dead option.
+  const canRegister = signupMode !== "closed";
+  // On a join page both modes end at the same seat, so the button says so.
+  const submitLabel = joinCode ? "Join the table" : mode === "login" ? "Log in" : "Create account";
+
   return (
     <>
-      <form onSubmit={submit} className="space-y-3">
-        <label className="block text-sm">
-          <span className="mb-1 block text-stone-400">Username</span>
+      {canRegister ? (
+        <SegmentedControl
+          options={MODE_OPTIONS}
+          value={mode}
+          onChange={switchMode}
+          label="Log in or create an account"
+          className="mb-5 w-full"
+        />
+      ) : null}
+
+      <form onSubmit={submit} className="space-y-3.5">
+        <label className="block">
+          <span className="mb-1.5 block text-xs text-stone-400">Username</span>
           <input
             value={username}
             onChange={(event) => setUsername(event.target.value)}
@@ -148,11 +190,12 @@ export default function AuthForm({
             required
             minLength={3}
             maxLength={24}
-            className={ui.input}
+            placeholder={mode === "register" ? "Choose a name" : undefined}
+            className={FIELD}
           />
         </label>
-        <label className="block text-sm">
-          <span className="mb-1 block text-stone-400">Password</span>
+        <label className="block">
+          <span className="mb-1.5 block text-xs text-stone-400">Password</span>
           <input
             type="password"
             value={password}
@@ -161,12 +204,12 @@ export default function AuthForm({
             required
             minLength={mode === "register" ? 8 : 1}
             maxLength={100}
-            className={ui.input}
+            className={FIELD}
           />
         </label>
         {mode === "register" && signupMode === "invite" ? (
-          <label className="block text-sm">
-            <span className="mb-1 block text-stone-400">Invite code</span>
+          <label className="block">
+            <span className="mb-1.5 block text-xs text-stone-400">Invite code</span>
             <input
               value={inviteCode}
               onChange={(event) => setInviteCode(event.target.value)}
@@ -174,28 +217,35 @@ export default function AuthForm({
               readOnly={Boolean(urlInvite)}
               maxLength={40}
               placeholder="ODM-XXXXXXXXXX"
-              className={ui.input}
+              className={cn(FIELD, "font-mono uppercase tracking-wider", urlInvite && "text-amber-200")}
             />
-            <span className="mt-1 block text-xs text-stone-500">
+            <span className="mt-1.5 block text-xs text-stone-500">
               {urlInvite
                 ? "This code came with your invite link."
                 : "This server is invite-only. Ask whoever runs it for a code."}
             </span>
           </label>
         ) : null}
-        {error ? <p className="text-sm text-red-400">{error}</p> : null}
-        <button type="submit" disabled={busy} className={cn(ui.btnPrimary, "w-full")}>
+        {error ? (
+          <p
+            role="alert"
+            className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300"
+          >
+            {error}
+          </p>
+        ) : null}
+        <button type="submit" disabled={busy} className={cn(ui.btnPrimary, "h-12 w-full")}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-          {mode === "login" ? "Log in" : "Create account"}
+          {submitLabel}
         </button>
         {mode === "register" ? (
-          <p className="text-xs leading-5 text-stone-500">
+          <p className="text-center text-xs leading-5 text-stone-500">
             Creating an account means you accept this server&apos;s{" "}
-            <a href="/terms" className="text-stone-400 underline hover:text-stone-200">
+            <a href="/terms" className="text-stone-400 underline hover:text-amber-200">
               terms of service
             </a>{" "}
             and{" "}
-            <a href="/privacy" className="text-stone-400 underline hover:text-stone-200">
+            <a href="/privacy" className="text-stone-400 underline hover:text-amber-200">
               privacy policy
             </a>
             .
@@ -204,39 +254,42 @@ export default function AuthForm({
       </form>
 
       {discordEnabled ? (
-        <a
-          // A filled invite code rides along so a brand-new Discord account
-          // can pass an invite-only server's gate in one round trip, and on
-          // a join page the return path rides along so the callback lands
-          // back on the campaign instead of the dashboard.
-          href={discordStartHref(inviteCode, joinCode)}
-          className={cn(ui.btnSecondary, "mt-3 w-full")}
-        >
-          <svg viewBox="0 0 24 24" className="size-4 fill-current" aria-hidden="true">
-            <path d="M20.32 4.37a19.8 19.8 0 0 0-4.89-1.52.07.07 0 0 0-.08.04c-.21.38-.44.87-.6 1.25a18.3 18.3 0 0 0-5.5 0 12.6 12.6 0 0 0-.61-1.25.08.08 0 0 0-.08-.04 19.7 19.7 0 0 0-4.88 1.52.07.07 0 0 0-.04.03C.53 9.05-.32 13.58.1 18.06a.08.08 0 0 0 .03.05 19.9 19.9 0 0 0 6 3.03.08.08 0 0 0 .08-.03c.46-.63.87-1.3 1.22-2a.08.08 0 0 0-.04-.1 13 13 0 0 1-1.87-.9.08.08 0 0 1-.01-.12c.13-.1.25-.2.37-.3a.07.07 0 0 1 .08 0c3.93 1.79 8.18 1.79 12.06 0a.07.07 0 0 1 .08 0c.12.1.25.21.38.3a.08.08 0 0 1-.01.13c-.6.35-1.22.64-1.87.89a.08.08 0 0 0-.04.11c.36.7.77 1.36 1.22 1.99a.08.08 0 0 0 .08.03 19.8 19.8 0 0 0 6.02-3.03.08.08 0 0 0 .03-.05c.5-5.18-.84-9.67-3.55-13.66a.06.06 0 0 0-.03-.03zM8.02 15.33c-1.18 0-2.16-1.08-2.16-2.42 0-1.33.96-2.42 2.16-2.42 1.21 0 2.18 1.1 2.16 2.42 0 1.34-.96 2.42-2.16 2.42zm7.97 0c-1.18 0-2.15-1.08-2.15-2.42 0-1.33.95-2.42 2.15-2.42 1.21 0 2.18 1.1 2.16 2.42 0 1.34-.95 2.42-2.16 2.42z" />
-          </svg>
-          Sign in with Discord
-        </a>
+        <>
+          <div className="my-4 flex items-center gap-3" aria-hidden="true">
+            <span className="h-px flex-1 bg-stone-700/60" />
+            <span className="text-[11px] uppercase tracking-[0.2em] text-stone-600">or</span>
+            <span className="h-px flex-1 bg-stone-700/60" />
+          </div>
+          <a
+            // A filled invite code rides along so a brand-new Discord account
+            // can pass an invite-only server's gate in one round trip, and on
+            // a join page the return path rides along so the callback lands
+            // back on the campaign instead of the dashboard.
+            href={discordStartHref(inviteCode, joinCode)}
+            className={DISCORD_BTN}
+          >
+            <DiscordMark />
+            {joinCode ? "Continue with Discord" : "Sign in with Discord"}
+          </a>
+        </>
       ) : null}
 
-      {signupMode === "closed" ? (
-        mode === "login" ? (
-          <p className="mt-4 text-center text-xs text-stone-500">
-            This server is not accepting new accounts.
-          </p>
-        ) : null
-      ) : (
-        <button
-          type="button"
-          onClick={() => {
-            setMode(mode === "login" ? "register" : "login");
-            setError("");
-          }}
-          className="mt-4 w-full text-center text-sm text-stone-400 hover:text-stone-200"
-        >
-          {mode === "login" ? "New here? Create an account" : "Have an account? Log in"}
-        </button>
-      )}
+      {canRegister ? (
+        <p className="mt-5 text-center text-[13px] text-stone-400">
+          {mode === "login" ? "New here? " : "Have an account? "}
+          <button
+            type="button"
+            onClick={() => switchMode(mode === "login" ? "register" : "login")}
+            className="text-amber-200 underline-offset-2 hover:text-amber-100 hover:underline"
+          >
+            {mode === "login" ? "Create an account" : "Log in"}
+          </button>
+        </p>
+      ) : mode === "login" ? (
+        <p className="mt-5 text-center text-xs text-stone-500">
+          This server is not accepting new accounts.
+        </p>
+      ) : null}
     </>
   );
 }

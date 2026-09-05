@@ -1,21 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Copy, Dices, FileUp, Library, Loader2, Play, Save, Trash2, Upload } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { ChevronDown, ChevronRight, Plus } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { MAP_SIZE, MAP_THEMES, type MapTheme } from "@/lib/battlemap/generate";
+import { ui } from "@/lib/ui";
 import { MAX_STROKES, type Brush as BrushName } from "@/lib/battlemap/paint";
 import { TERRAIN } from "@/lib/battlemap/types";
-import type { StampKind } from "@/lib/battlemap/stamp";
-import type { AmbientLight } from "@/lib/battlemap/types";
-import type { Backdrop } from "@/lib/battlemap/backdrop";
 import { backdropDataUrl, nameFromFilename } from "@/lib/battlemap/uvtt";
-import { TerrainCanvas } from "@/app/campaigns/[campaignId]/TerrainCanvas";
-import {
-  BackdropControls,
-  BrushPalette,
-  StampPalette,
-} from "@/app/campaigns/[campaignId]/MapTools";
+import { Sheet } from "@/components/ui/Sheet";
+import { MapCreateControls } from "@/app/workshop/maps/MapCreateControls";
+import { MapEditor, type MapTools } from "@/app/workshop/maps/MapEditor";
+import { MapGallery } from "@/app/workshop/maps/MapGallery";
+import type { LibraryState, PreparedMap } from "@/app/workshop/maps/types";
 
 // The map library: maps built before anybody needed them.
 //
@@ -26,38 +22,12 @@ import {
 //
 // Every edit is a request the server validates through the same painter the
 // live board uses, so a map in this drawer is a map that can be played on.
-
-const THEME_LABELS: Record<MapTheme, string> = {
-  cave: "Cave",
-  forest: "Forest",
-  swamp: "Swamp",
-  riverside: "Water",
-  interior: "Indoors",
-  field: "Open ground",
-};
-
-type PreparedMap = {
-  id: string;
-  name: string;
-  notes: string;
-  tags: string[];
-  width: number;
-  height: number;
-  terrain: string;
-  ambient: AmbientLight;
-  theme: MapTheme;
-  seed: number;
-  backdrop: Backdrop | null;
-};
-
-type LibraryState = {
-  maps: PreparedMap[];
-  board: "fight" | "scene" | null;
-  hasParty: boolean;
-  // True in a workshop, where a scene can never open (there is no party and
-  // never will be), so the control is hidden rather than forever disabled.
-  workshop: boolean;
-};
+//
+// Two layouts over one set of requests. "drawer" is the DM console's: the
+// creation controls, a chip per map, and the editor inline below. "gallery"
+// is the workshop's: the controls fold into a New map card, every map is a
+// thumbnail tile, and the editor opens in a sheet (full screen on a phone, a
+// wide dialog on a desk) so the canvas gets the room it deserves.
 
 // The characters a terrain string is written in, back to the brush that
 // paints them, for replaying one map's drawing onto another.
@@ -65,7 +35,13 @@ const CHAR_TO_BRUSH = Object.fromEntries(
   Object.entries(TERRAIN).map(([brush, char]) => [char, brush]),
 ) as Record<string, BrushName>;
 
-export function DmMapLibraryPanel({ campaignId }: { campaignId: string }) {
+export function DmMapLibraryPanel({
+  campaignId,
+  layout = "drawer",
+}: {
+  campaignId: string;
+  layout?: "drawer" | "gallery";
+}) {
   const [state, setState] = useState<LibraryState>({
     maps: [],
     board: null,
@@ -73,16 +49,16 @@ export function DmMapLibraryPanel({ campaignId }: { campaignId: string }) {
     workshop: false,
   });
   const [selectedId, setSelectedId] = useState("");
-  const [newName, setNewName] = useState("");
-  const [size, setSize] = useState({ width: 20, height: 15 });
-  const [hint, setHint] = useState("");
-  const [brush, setBrush] = useState<BrushName | "">("");
-  const [stamp, setStamp] = useState<StampKind | "">("");
-  const [stampSize, setStampSize] = useState({ width: 5, height: 4 });
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [tools, setTools] = useState<MapTools>({
+    brush: "",
+    stamp: "",
+    stampSize: { width: 5, height: 4 },
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
-  const fileRef = useRef<HTMLInputElement>(null);
 
   // The state lands in a .then callback rather than after an await, so the
   // refetch reads as "subscribe to an external system" to React and to the
@@ -107,6 +83,16 @@ export function DmMapLibraryPanel({ campaignId }: { campaignId: string }) {
   }, [load]);
 
   const selected = state.maps.find((map) => map.id === selectedId) ?? null;
+  const gallery = layout === "gallery";
+
+  // Selecting a map is the same act in both layouts; in the gallery it also
+  // raises the editor sheet, which the drawer has no need of.
+  function select(id: string) {
+    setSelectedId(id);
+    if (gallery && id) {
+      setEditorOpen(true);
+    }
+  }
 
   async function post(body: Record<string, unknown>) {
     setBusy(true);
@@ -127,6 +113,14 @@ export function DmMapLibraryPanel({ campaignId }: { campaignId: string }) {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function create(body: Record<string, unknown>) {
+    const result = await post(body);
+    if (result?.map) {
+      select(result.map.id);
+    }
+    return result;
   }
 
   async function patch(body: Record<string, unknown>) {
@@ -256,6 +250,7 @@ export function DmMapLibraryPanel({ campaignId }: { campaignId: string }) {
     try {
       await fetch(`/api/campaigns/${campaignId}/dm/maps/${selected.id}`, { method: "DELETE" });
       setSelectedId("");
+      setEditorOpen(false);
       await load();
     } finally {
       setBusy(false);
@@ -297,7 +292,7 @@ export function DmMapLibraryPanel({ campaignId }: { campaignId: string }) {
         file: geometry,
       });
       if (result?.map) {
-        setSelectedId(result.map.id);
+        select(result.map.id);
         setNote(result.notes?.[0] ?? "Imported.");
       }
     } catch {
@@ -307,145 +302,82 @@ export function DmMapLibraryPanel({ campaignId }: { campaignId: string }) {
     }
   }
 
-  const canDeploy = state.board !== null;
+  const editor = selected ? (
+    <MapEditor
+      selected={selected}
+      state={state}
+      busy={busy}
+      tools={tools}
+      onTools={setTools}
+      patch={patch}
+      act={act}
+      duplicate={duplicate}
+      remove={remove}
+    />
+  ) : null;
+
+  const feedback = (
+    <>
+      {note ? <p className="text-[11px] text-emerald-400">{note}</p> : null}
+      {error ? <p className="text-[11px] text-red-400">{error}</p> : null}
+    </>
+  );
+
+  if (gallery) {
+    return (
+      <div className="space-y-3">
+        <section className={`${ui.card} p-3`}>
+          <button
+            type="button"
+            onClick={() => setCreating((open) => !open)}
+            aria-expanded={creating}
+            className="flex w-full items-center gap-2 text-left font-display text-sm tracking-wide text-amber-100"
+          >
+            <Plus className="size-4 text-amber-300" />
+            New map
+            {creating ? (
+              <ChevronDown className="ml-auto size-4 text-stone-500" />
+            ) : (
+              <ChevronRight className="ml-auto size-4 text-stone-500" />
+            )}
+          </button>
+          {creating ? (
+            <div className="mt-3">
+              <MapCreateControls
+                busy={busy}
+                board={state.board}
+                showHeading={false}
+                onCreate={create}
+                onImport={(file) => void importUvtt(file)}
+              />
+            </div>
+          ) : null}
+        </section>
+
+        <MapGallery maps={state.maps} selectedId={selectedId} onOpen={(map) => select(map.id)} />
+        {feedback}
+
+        <Sheet
+          open={editorOpen && selected !== null}
+          onOpenChange={setEditorOpen}
+          title={selected?.name ?? "Map"}
+          className="top-0 h-dvh max-h-none rounded-none lg:top-1/2 lg:h-auto lg:max-h-[92vh] lg:w-[min(96vw,64rem)] lg:rounded-xl"
+        >
+          {editor}
+          <div className="mt-2">{feedback}</div>
+        </Sheet>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
-      <section className="space-y-2 rounded-lg border border-stone-800 bg-stone-950/40 px-2.5 py-2">
-        <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
-          <Library className="size-3.5" />
-          The map drawer
-        </p>
-        <div className="flex flex-wrap gap-1.5">
-          <input
-            value={newName}
-            onChange={(event) => setNewName(event.target.value)}
-            placeholder="Name it: the flooded crypt"
-            className="min-w-40 flex-1 rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-sm text-stone-200"
-          />
-        </div>
-        <input
-          value={hint}
-          onChange={(event) => setHint(event.target.value)}
-          placeholder="what the place is like, for the generator"
-          className="w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-300"
-        />
-        <div className="flex flex-wrap items-center gap-1.5">
-          <label className="flex items-center gap-1 text-[11px] text-stone-500">
-            Size
-            <input
-              type="number"
-              min={MAP_SIZE.minWidth}
-              max={MAP_SIZE.maxWidth}
-              value={size.width}
-              onChange={(event) =>
-                setSize({ ...size, width: Number(event.target.value) || size.width })
-              }
-              className="w-12 rounded-md border border-stone-700 bg-stone-950 px-1 py-1 text-xs text-stone-300"
-            />
-            x
-            <input
-              type="number"
-              min={MAP_SIZE.minHeight}
-              max={MAP_SIZE.maxHeight}
-              value={size.height}
-              onChange={(event) =>
-                setSize({ ...size, height: Number(event.target.value) || size.height })
-              }
-              className="w-12 rounded-md border border-stone-700 bg-stone-950 px-1 py-1 text-xs text-stone-300"
-            />
-          </label>
-          <button
-            type="button"
-            disabled={busy || !newName.trim()}
-            onClick={async () => {
-              const result = await post({
-                do: "create",
-                name: newName.trim(),
-                ...size,
-                ...(hint.trim() ? { hint: hint.trim() } : {}),
-              });
-              if (result?.map) {
-                setSelectedId(result.map.id);
-                setNewName("");
-              }
-            }}
-            className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-50"
-          >
-            {busy ? <Loader2 className="size-3 animate-spin" /> : <Dices className="size-3" />}
-            Roll one
-          </button>
-          {(["rock", "ground"] as const).map((blank) => (
-            <button
-              key={blank}
-              type="button"
-              disabled={busy || !newName.trim()}
-              title={
-                blank === "rock"
-                  ? "Solid rock to carve rooms out of"
-                  : "Open ground to put things on"
-              }
-              onClick={async () => {
-                const result = await post({
-                  do: "create",
-                  name: newName.trim(),
-                  ...size,
-                  blank,
-                });
-                if (result?.map) {
-                  setSelectedId(result.map.id);
-                  setNewName("");
-                }
-              }}
-              className="rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-50"
-            >
-              {blank === "rock" ? "Blank rock" : "Blank ground"}
-            </button>
-          ))}
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".dd2vtt,.uvtt,.df2vtt,application/json"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) {
-                void importUvtt(file);
-              }
-              event.target.value = "";
-            }}
-          />
-          <button
-            type="button"
-            disabled={busy}
-            title="A Universal VTT export from Dungeondraft and its neighbours"
-            onClick={() => fileRef.current?.click()}
-            className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-50"
-          >
-            <FileUp className="size-3" /> Import .dd2vtt
-          </button>
-          {state.board ? (
-            <button
-              type="button"
-              disabled={busy || !newName.trim()}
-              title="Save the map that is on the table right now"
-              onClick={async () => {
-                const result = await post({ do: "capture", name: newName.trim() });
-                if (result?.map) {
-                  setSelectedId(result.map.id);
-                  setNewName("");
-                }
-              }}
-              className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-50"
-            >
-              <Save className="size-3" /> Keep the board
-            </button>
-          ) : null}
-        </div>
-        <p className="text-[10px] text-stone-600">
-          Name it first. Nothing here touches the table until you put it there.
-        </p>
-      </section>
+      <MapCreateControls
+        busy={busy}
+        board={state.board}
+        onCreate={create}
+        onImport={(file) => void importUvtt(file)}
+      />
 
       {state.maps.length ? (
         <div className="flex flex-wrap gap-1">
@@ -474,153 +406,8 @@ export function DmMapLibraryPanel({ campaignId }: { campaignId: string }) {
         </p>
       )}
 
-      {selected ? (
-        <section className="space-y-2.5">
-          <TerrainCanvas
-            terrain={selected.terrain}
-            width={selected.width}
-            height={selected.height}
-            backdrop={selected.backdrop}
-            onPaint={
-              brush && !stamp ? (x, y) => void patch({ strokes: [{ x, y, brush }] }) : undefined
-            }
-            onStamp={
-              stamp ? (x, y) => void patch({ stamp: { kind: stamp, x, y, ...stampSize } }) : undefined
-            }
-            stamp={stamp ? { kind: stamp, ...stampSize } : null}
-          />
-
-          <div className="flex flex-wrap items-center gap-1.5">
-            <input
-              defaultValue={selected.name}
-              key={`name-${selected.id}`}
-              onBlur={(event) =>
-                event.target.value.trim() && event.target.value !== selected.name
-                  ? void patch({ name: event.target.value.trim() })
-                  : undefined
-              }
-              className="min-w-32 flex-1 rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-sm text-stone-200"
-            />
-            <select
-              value={selected.theme}
-              onChange={(event) => void patch({ theme: event.target.value })}
-              className="rounded-md border border-stone-700 bg-stone-950 px-1.5 py-1 text-xs text-stone-300"
-            >
-              {MAP_THEMES.map((theme) => (
-                <option key={theme} value={theme}>
-                  {THEME_LABELS[theme]}
-                </option>
-              ))}
-            </select>
-            <select
-              value={selected.ambient}
-              onChange={(event) => void patch({ ambient: event.target.value })}
-              className="rounded-md border border-stone-700 bg-stone-950 px-1.5 py-1 text-xs text-stone-300"
-            >
-              <option value="bright">Daylight</option>
-              <option value="dim">Dim</option>
-              <option value="dark">Dark</option>
-            </select>
-          </div>
-
-          <textarea
-            defaultValue={selected.notes}
-            key={`notes-${selected.id}`}
-            onBlur={(event) =>
-              event.target.value !== selected.notes
-                ? void patch({ notes: event.target.value })
-                : undefined
-            }
-            rows={2}
-            placeholder="What lives here. Nobody but you reads this."
-            className="w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-300"
-          />
-
-          <BrushPalette
-            brush={brush}
-            onPick={(next) => {
-              setBrush(next);
-              if (next) {
-                setStamp("");
-              }
-            }}
-          />
-          <StampPalette
-            stamp={stamp}
-            size={stampSize}
-            onPick={(next) => {
-              setStamp(next);
-              if (next) {
-                setBrush("");
-              }
-            }}
-            onResize={setStampSize}
-          />
-          <BackdropControls
-            backdrop={selected.backdrop}
-            busy={busy}
-            onChange={(next) =>
-              void patch({ backdropPath: next.path, backdropTransform: next.transform })
-            }
-          />
-
-          <div className="flex flex-wrap items-center gap-1.5">
-            <button
-              type="button"
-              disabled={busy || !canDeploy}
-              title={
-                canDeploy
-                  ? "Replace the board's ground with this map"
-                  : "Nothing is on the table to replace"
-              }
-              onClick={() => void act("deploy")}
-              className="flex items-center gap-1 rounded-md border border-amber-700 bg-amber-950/50 px-2 py-1 text-xs text-amber-100 disabled:opacity-40"
-            >
-              <Upload className="size-3" /> Put it on the table
-            </button>
-            {state.workshop ? null : (
-              <button
-                type="button"
-                disabled={busy || !state.hasParty || state.board !== null}
-                title={
-                  !state.hasParty
-                    ? "There is nobody to put on it yet"
-                    : state.board
-                      ? "Something is already on the table"
-                      : "Put the party on this map with nobody to fight"
-                }
-                onClick={() => void act("open-scene")}
-                className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-40"
-              >
-                <Play className="size-3" /> Open it as a scene
-              </button>
-            )}
-            <button
-              type="button"
-              disabled={busy}
-              aria-label={`Duplicate ${selected.name}`}
-              onClick={() => void duplicate()}
-              className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-50"
-            >
-              <Copy className="size-3" /> Duplicate
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void remove()}
-              className="ml-auto flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-500 hover:text-red-300 disabled:opacity-50"
-            >
-              <Trash2 className="size-3" /> Forget it
-            </button>
-          </div>
-          {selected.seed ? (
-            <p className="text-[10px] text-stone-600">Seed {selected.seed}.</p>
-          ) : null}
-        </section>
-      ) : null}
-
-      {note ? <p className="text-[11px] text-emerald-400">{note}</p> : null}
-      {error ? <p className="text-[11px] text-red-400">{error}</p> : null}
+      {editor}
+      {feedback}
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { CircleHelp, Copy, Hammer, Loader2, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { type FormEvent, useEffect, useState } from "react";
+import { cn } from "@/lib/cn";
 import { IconChip, ui } from "@/lib/ui";
 import { AppHeader } from "@/components/AppHeader";
 import { DEFAULT_TARGET_PARTY } from "@/lib/workshop/kind";
@@ -14,6 +15,9 @@ import type { WorkshopSummary } from "@/app/workshop/types";
 // rules before any table exists, and to import them into a campaign later
 // (docs/workshop-plan.md). Each one stands alone: nothing here requires
 // finishing anything else first.
+//
+// Every workshop is a tile. The tile is a link; Duplicate and Delete sit on
+// top of it as their own buttons, since a button cannot live inside a link.
 
 export default function WorkshopListPage() {
   const [workshops, setWorkshops] = useState<WorkshopSummary[]>([]);
@@ -108,9 +112,9 @@ export default function WorkshopListPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
+    <main className="mx-auto w-full max-w-4xl flex-1 p-4 sm:p-6">
       <AppHeader />
-      <header className="mb-8">
+      <header className="mb-6">
         <div className="flex items-center gap-3">
           <IconChip icon={Hammer} size="size-10" iconSize="size-5" />
           <div>
@@ -134,7 +138,8 @@ export default function WorkshopListPage() {
 
       <section className="mb-6">
         {creating ? (
-          <form onSubmit={create} className={`${ui.card} space-y-3 p-4`}>
+          <form onSubmit={create} className={`${ui.card} ornate space-y-3 p-4`}>
+            <p className="font-display tracking-wide text-amber-50">New workshop</p>
             <label className="block">
               <span className="mb-1 block text-xs text-stone-400">Name</span>
               <input
@@ -157,7 +162,7 @@ export default function WorkshopListPage() {
                   onChange={(event) => setSize(Number(event.target.value))}
                   className={`${ui.input} w-20`}
                 />
-                <span className="text-sm text-stone-400">characters at level</span>
+                <span className="text-sm text-stone-400">heroes at level</span>
                 <input
                   type="number"
                   min={1}
@@ -204,47 +209,57 @@ export default function WorkshopListPage() {
           <Loader2 className="size-5 animate-spin text-stone-500" />
         </div>
       ) : workshops.length ? (
-        <ul className="space-y-3">
+        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {workshops.map((workshop) => (
-            <li key={workshop.id} className={`${ui.cardHover} group flex items-center gap-3 p-4`}>
-              <Link href={`/workshop/${workshop.id}`} className="min-w-0 flex-1">
-                <p className="truncate font-display tracking-wide text-amber-50">
+            <li key={workshop.id} className="group relative">
+              <Link
+                href={`/workshop/${workshop.id}`}
+                className={cn(
+                  ui.tile,
+                  ui.tileHover,
+                  "aspect-[5/4] w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40",
+                )}
+              >
+                <IconChip icon={Hammer} size="size-10" iconSize="size-5" />
+                <span className="line-clamp-2 font-display text-[13px] font-semibold uppercase tracking-[0.12em] text-stone-200">
                   {workshop.title}
-                </p>
-                <p className="text-sm text-stone-500">
+                </span>
+                <span className="text-xs text-stone-500">
                   Party of {workshop.gameSettings.targetParty.size} at level{" "}
                   {workshop.gameSettings.targetParty.level}
-                </p>
+                </span>
               </Link>
-              <button
-                type="button"
-                disabled={cloningId === workshop.id}
-                onClick={() => clone(workshop)}
-                aria-label={`Duplicate ${workshop.title}`}
-                title="Duplicate this workshop and everything in it"
-                className={ui.iconAction}
-              >
-                {cloningId === workshop.id ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Copy className="size-4" />
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => remove(workshop)}
-                aria-label={`Delete ${workshop.title}`}
-                className={ui.iconAction}
-              >
-                <Trash2 className="size-4" />
-              </button>
+              <div className="absolute right-2 top-2 flex gap-0.5">
+                <button
+                  type="button"
+                  disabled={cloningId === workshop.id}
+                  onClick={() => void clone(workshop)}
+                  aria-label={`Duplicate ${workshop.title}`}
+                  title="Duplicate this workshop and everything in it"
+                  className={ui.iconAction}
+                >
+                  {cloningId === workshop.id ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Copy className="size-4" />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void remove(workshop)}
+                  aria-label={`Delete ${workshop.title}`}
+                  className={ui.iconAction}
+                >
+                  <Trash2 className="size-4" />
+                </button>
+              </div>
             </li>
           ))}
         </ul>
       ) : (
-        <div className={`${ui.card} p-8 text-center`}>
+        <div className={`${ui.card} ornate p-8 text-center`}>
           <IconChip icon={Hammer} className="mx-auto mb-3" />
-          <p className="text-stone-400">No workshops yet.</p>
+          <p className="font-display tracking-wide text-amber-50">No workshops yet.</p>
           <p className="mt-1 text-sm text-stone-500">
             A workshop is yours alone. Nothing in it reaches a table until you import it.
           </p>

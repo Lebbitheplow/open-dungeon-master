@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { PIXEL_ICONS } from "@/lib/ui";
+import { PageSection, PageShell } from "@/components/PageShell";
 
 export const metadata = {
   title: "Terms of Service | Open Dungeon Master",
@@ -6,13 +8,17 @@ export const metadata = {
 
 export default function TermsPage() {
   return (
-    <main className="mx-auto max-w-3xl px-4 py-10">
-      <Link href="/" className="text-sm text-amber-200 hover:text-amber-400">
-        Back to Open Dungeon Master
-      </Link>
-      <h1 className="mt-4 font-serif text-3xl text-stone-100">Terms of service</h1>
-
-      <section className="mt-6 space-y-4">
+    <PageShell
+      icon={PIXEL_ICONS.story}
+      title="Terms of service"
+      blurb="What the software is, what it is not, and who is responsible for what."
+      actions={
+        <Link href="/" className="text-sm text-amber-200 hover:text-amber-100">
+          Back to Open Dungeon Master
+        </Link>
+      }
+    >
+      <PageSection bodyClassName="space-y-4">
         <p className="text-sm leading-6 text-stone-400">
           Open Dungeon Master is open source (MIT licensed), self-hosted software. There is no
           hosted service to sign up for, no company behind it, and no account with the project
@@ -23,11 +29,10 @@ export default function TermsPage() {
           By installing, running, or playing on an install of Open Dungeon Master, you accept
           these terms. If you do not accept them, do not use the software.
         </p>
-      </section>
+      </PageSection>
 
-      <section className="mt-8">
-        <h2 className="font-serif text-xl text-stone-100">Who these terms are between</h2>
-        <ul className="mt-3 list-disc space-y-2 pl-6 text-sm leading-6 text-stone-400">
+      <PageSection heading="Who these terms are between">
+        <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-stone-400">
           <li>
             <span className="text-stone-200">If you run the server.</span> Your relationship with
             this project is the{" "}
@@ -50,25 +55,23 @@ export default function TermsPage() {
             access to that server, and cannot moderate, recover, or delete anything on it.
           </li>
         </ul>
-      </section>
+      </PageSection>
 
-      <section className="mt-8">
-        <h2 className="font-serif text-xl text-stone-100">No service, no support, no uptime</h2>
-        <p className="mt-2 text-sm leading-6 text-stone-400">
+      <PageSection heading="No service, no support, no uptime">
+        <p className="text-sm leading-6 text-stone-400">
           Nothing here is a subscription or a hosted product. There is no service level, no
           guaranteed availability, no support desk, and no promise that future versions will keep
           any particular feature, remain compatible with your data, or be released at all. The
           project may change or stop at any time.
         </p>
-      </section>
+      </PageSection>
 
-      <section className="mt-8">
-        <h2 className="font-serif text-xl text-stone-100">If you run a server</h2>
-        <p className="mt-2 text-sm leading-6 text-stone-400">
+      <PageSection heading="If you run a server">
+        <p className="text-sm leading-6 text-stone-400">
           Running an install makes you the operator, and the obligations that would normally fall
           on a service provider fall on you:
         </p>
-        <ul className="mt-3 list-disc space-y-2 pl-6 text-sm leading-6 text-stone-400">
+        <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-stone-400">
           <li>
             Comply with the laws that apply where you and your players are. That includes data
             protection law, which generally treats you, not this project, as the controller of
@@ -100,14 +103,13 @@ export default function TermsPage() {
             notice. This page describes the software; it cannot speak for how you run it.
           </li>
         </ul>
-      </section>
+      </PageSection>
 
-      <section className="mt-8">
-        <h2 className="font-serif text-xl text-stone-100">Acceptable use</h2>
-        <p className="mt-2 text-sm leading-6 text-stone-400">
+      <PageSection heading="Acceptable use">
+        <p className="text-sm leading-6 text-stone-400">
           Whether you are the operator or a player, do not use Open Dungeon Master to:
         </p>
-        <ul className="mt-3 list-disc space-y-2 pl-6 text-sm leading-6 text-stone-400">
+        <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-stone-400">
           <li>break the law, or to create, store, or share material that is illegal where you are;</li>
           <li>
             produce sexual content involving minors, or sexual or abusive depictions of real
@@ -127,16 +129,15 @@ export default function TermsPage() {
           Your operator may add rules of their own, and those apply too. An operator may suspend or
           remove any account on their server at their discretion.
         </p>
-      </section>
+      </PageSection>
 
-      <section className="mt-8">
-        <h2 className="font-serif text-xl text-stone-100">AI generated content</h2>
-        <p className="mt-2 text-sm leading-6 text-stone-400">
+      <PageSection heading="AI generated content">
+        <p className="text-sm leading-6 text-stone-400">
           The Dungeon Master is a language model. Its narration is fiction produced by software,
           and it can be wrong, inconsistent, unfair, or upsetting. It is not advice of any kind,
           and nothing it says should be relied on outside the game.
         </p>
-        <ul className="mt-3 list-disc space-y-2 pl-6 text-sm leading-6 text-stone-400">
+        <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-stone-400">
           <li>
             What the model produces depends on the model your operator chose, its settings, and
             what players type. This project applies no content filter that could guarantee any
@@ -152,22 +153,20 @@ export default function TermsPage() {
             table steers rather than an authority.
           </li>
         </ul>
-      </section>
+      </PageSection>
 
-      <section className="mt-8">
-        <h2 className="font-serif text-xl text-stone-100">Optional third-party services</h2>
-        <p className="mt-2 text-sm leading-6 text-stone-400">
+      <PageSection heading="Optional third-party services">
+        <p className="text-sm leading-6 text-stone-400">
           By default everything runs on your own hardware. An operator can enable integrations that
           reach outside it, for example Discord sign-in, a hosted OpenAI-compatible model provider,
           or content and audio downloaded from public archives. When one of those is enabled, that
           provider&apos;s own terms and privacy policy govern the data it receives, and the
           operator is responsible for their own accounts, API keys, and the costs those run up.
         </p>
-      </section>
+      </PageSection>
 
-      <section className="mt-8">
-        <h2 className="font-serif text-xl text-stone-100">Game content and trademarks</h2>
-        <p className="mt-2 text-sm leading-6 text-stone-400">
+      <PageSection heading="Game content and trademarks">
+        <p className="text-sm leading-6 text-stone-400">
           The code is MIT licensed. The bundled rules data derives from the System Reference
           Document 5.1 by Wizards of the Coast LLC, licensed under Creative Commons Attribution
           4.0. Content packs an operator imports carry their own licenses. Full attribution is on
@@ -183,21 +182,19 @@ export default function TermsPage() {
           official published material ships with the software, and you should not upload material
           you do not have the right to use.
         </p>
-      </section>
+      </PageSection>
 
-      <section className="mt-8">
-        <h2 className="font-serif text-xl text-stone-100">Your content</h2>
-        <p className="mt-2 text-sm leading-6 text-stone-400">
+      <PageSection heading="Your content">
+        <p className="text-sm leading-6 text-stone-400">
           You keep whatever rights you already have in what you write and upload. It is stored in
           your operator&apos;s database and nowhere else. This project takes no license in it,
           never receives a copy, and cannot retrieve or erase it for you. Requests to delete or
           export your data go to your operator.
         </p>
-      </section>
+      </PageSection>
 
-      <section className="mt-8">
-        <h2 className="font-serif text-xl text-stone-100">No warranty and no liability</h2>
-        <p className="mt-2 text-sm leading-6 text-stone-400">
+      <PageSection heading="No warranty and no liability">
+        <p className="text-sm leading-6 text-stone-400">
           As stated in the MIT license, the software is provided &quot;as is&quot;, without
           warranty of any kind, express or implied, including the warranties of merchantability,
           fitness for a particular purpose, and noninfringement. To the fullest extent the law
@@ -209,20 +206,18 @@ export default function TermsPage() {
           Some jurisdictions do not allow certain disclaimers to be excluded. Where that is the
           case, the exclusions above apply only as far as that law permits.
         </p>
-      </section>
+      </PageSection>
 
-      <section className="mt-8">
-        <h2 className="font-serif text-xl text-stone-100">Stopping</h2>
-        <p className="mt-2 text-sm leading-6 text-stone-400">
+      <PageSection heading="Stopping">
+        <p className="text-sm leading-6 text-stone-400">
           You can stop using the software at any time, delete your account and content from within
           the app, or delete the whole database from your server. An operator can shut a server
           down at any time, with or without notice, and the campaigns on it go with it.
         </p>
-      </section>
+      </PageSection>
 
-      <section className="mt-8">
-        <h2 className="font-serif text-xl text-stone-100">Changes to these terms</h2>
-        <p className="mt-2 text-sm leading-6 text-stone-400">
+      <PageSection heading="Changes to these terms">
+        <p className="text-sm leading-6 text-stone-400">
           These terms are part of the open source project and change only when the code changes.
           Each release carries the version of these terms that shipped with it, and you can review
           the current text and its full history in the project repository. If a part of these terms
@@ -232,11 +227,10 @@ export default function TermsPage() {
           This page is written in plain language and is not legal advice. If you run a public or
           commercial server, get advice that fits your situation.
         </p>
-      </section>
+      </PageSection>
 
-      <section className="mt-8">
-        <h2 className="font-serif text-xl text-stone-100">Contact</h2>
-        <p className="mt-2 text-sm leading-6 text-stone-400">
+      <PageSection heading="Contact">
+        <p className="text-sm leading-6 text-stone-400">
           There is no company, support address, or email behind this project. Questions about the
           software, including license and security reports, belong in the project repository.
           Questions about a specific server belong to whoever runs it.
@@ -251,7 +245,7 @@ export default function TermsPage() {
             github.com/Lebbitheplow/open-dungeon-master
           </a>
         </p>
-      </section>
-    </main>
+      </PageSection>
+    </PageShell>
   );
 }

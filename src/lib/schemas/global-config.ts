@@ -15,6 +15,10 @@ export const globalConfigSchema = z.object({
   // Shown by client apps in their server picker and on the login screen.
   // Blank = the product name.
   serverName: z.string().trim().max(100).default(""),
+  // Days between a player asking to delete their account and the purge job
+  // erasing it (src/lib/account-deletion.ts). Signing in before the due
+  // date lets them keep the account. 0 erases at the moment of the request.
+  accountDeletionGraceDays: z.number().int().min(0).max(90).default(14),
   // The URL players actually reach the app on (e.g. https://dungeon.example.org).
   // Used for OAuth redirect URIs; blank = APP_PUBLIC_URL env, then forwarded
   // proxy headers, then the raw request origin.

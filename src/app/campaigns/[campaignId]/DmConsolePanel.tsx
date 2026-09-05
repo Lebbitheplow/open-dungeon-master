@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Inbox, Megaphone } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { Ribbon } from "@/components/ui/Ribbon";
 import { consoleAdjudications, type AdjudicationCategory } from "@/lib/dm/invoke-catalog";
 import { offersImages, useCapabilities } from "@/lib/use-capabilities";
 import { DmActionForm } from "@/app/campaigns/[campaignId]/DmActionForm";
@@ -189,6 +190,10 @@ export function DmConsolePanel({
 
   return (
     <div className="space-y-4">
+      {/* Gold, the DM's colour: nobody else at the table has this tab, and
+          the lead's desk wears ember so the two seats never blur. */}
+      <Ribbon tone="gold">Only you</Ribbon>
+
       <FloorControl campaignId={campaignId} mode={floorMode} />
 
       {/* Directly under the floor, because this is where the nudge sends

@@ -1,8 +1,8 @@
 import { z } from "zod";
+import { cancelAccountDeletion, requestAccountDeletion } from "@/lib/account-deletion";
 import { currentUser, endSession, unauthorized, verifyPassword } from "@/lib/auth";
 import {
   NO_PASSWORD_SENTINEL,
-  deleteUserCascade,
   getUserByUsername,
   getUserSettings,
   setUserAvatar,
@@ -30,6 +30,8 @@ const patchSchema = z.object({
     .nullable()
     .optional(),
   settings: settingsSchema.optional(),
+  // "Keep my account": calls off a pending deletion before its due date.
+  keepAccount: z.literal(true).optional(),
 });
 
 const deleteSchema = z.object({
@@ -43,11 +45,16 @@ export async function GET() {
   if (!user) {
     return unauthorized();
   }
-  return Response.json({ avatar: user.avatar, settings: getUserSettings(user.id) });
+  return Response.json({
+    avatar: user.avatar,
+    settings: getUserSettings(user.id),
+    deletionDueAt: user.deletionDueAt,
+  });
 }
 
-// Account profile updates: the avatar, and/or a partial settings patch.
-// Both keys are optional so a caller only touches what it sent.
+// Account profile updates: the avatar, a partial settings patch, and/or
+// keeping an account that was scheduled for deletion. Every key is optional
+// so a caller only touches what it sent.
 export async function PATCH(request: Request) {
   const user = await currentUser();
   if (!user) {
@@ -68,13 +75,20 @@ export async function PATCH(request: Request) {
   const settings = parsed.data.settings
     ? updateUserSettings(user.id, parsed.data.settings)
     : getUserSettings(user.id);
-  return Response.json({ avatar, settings });
+  let deletionDueAt = user.deletionDueAt;
+  if (parsed.data.keepAccount) {
+    cancelAccountDeletion(user.id);
+    deletionDueAt = null;
+  }
+  return Response.json({ avatar, settings, deletionDueAt });
 }
 
-// Self-service account deletion. Removes the caller's owned campaigns and
-// character sheets via deleteUserCascade. Password accounts must re-enter their
-// password; Discord-only accounts (no password) are guarded by the typed
-// confirmation in the settings dialog instead.
+// Self-service account deletion. Schedules the purge for the end of the
+// server's grace period (immediate when that is zero) and signs the account
+// out everywhere; see src/lib/account-deletion.ts for what goes and what
+// stays. Password accounts must re-enter their password; Discord-only
+// accounts (no password) are guarded by the typed confirmation in the
+// settings dialog instead.
 export async function DELETE(request: Request) {
   const user = await currentUser();
   if (!user) {
@@ -101,7 +115,13 @@ export async function DELETE(request: Request) {
     }
   }
 
-  deleteUserCascade(user.id);
+  const schedule = requestAccountDeletion(user.id);
+  // The sessions are already gone; this only drops the browser cookie.
   await endSession();
-  return Response.json({ ok: true });
+  return Response.json({
+    ok: true,
+    dueAt: schedule.dueAt,
+    graceDays: schedule.graceDays,
+    purged: schedule.purged,
+  });
 }

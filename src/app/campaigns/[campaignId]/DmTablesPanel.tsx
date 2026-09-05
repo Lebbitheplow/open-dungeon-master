@@ -12,30 +12,44 @@ import {
 } from "@/lib/dm/roll-table-logic";
 import type { RollTable } from "@/lib/db/roll-tables";
 import { offersStoryModel, useCapabilities } from "@/lib/use-capabilities";
+import { Sheet } from "@/components/ui/Sheet";
+import { inputClass, StatblockFinder } from "@/app/workshop/tables/StatblockFinder";
+import { TableRows, type RollResult } from "@/app/workshop/tables/TableRows";
 
 // The DM's random tables, and the monster lookup beside them. Both are the
 // DM's own reference: rolling a table writes an ordinary roll everyone can
 // see, but what the row SAYS comes back here alone.
+//
+// Two layouts over one set of requests. "list" is the DM console's: the
+// tables, the new-table form and the lookup stacked in three sections.
+// "rows" is the workshop's: a searchable row per table with its coverage at
+// a glance, the editor in a sheet (which is also how a saved table gets
+// edited), and the lookup folded into a card of its own.
 
-const inputClass =
-  "w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1.5 text-sm text-stone-100 placeholder:text-stone-600 focus:border-amber-700 focus:outline-none";
-
-type StatblockMatch = { slug: string; name: string; cr: number; blurb: string };
-
-export function DmTablesPanel({ campaignId }: { campaignId: string }) {
+export function DmTablesPanel({
+  campaignId,
+  layout = "list",
+}: {
+  campaignId: string;
+  layout?: "list" | "rows";
+}) {
   const [tables, setTables] = useState<RollTable[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [name, setName] = useState("");
   const [text, setText] = useState("");
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState("");
+  // The saved table the editor has open, or "" for a new one. Only the rows
+  // layout ever sets it, so the console's form keeps creating as it always
+  // has.
+  const [editingId, setEditingId] = useState("");
+  const [editorOpen, setEditorOpen] = useState(false);
   // Drafting rows is the story model's job; a server without one offers the
   // paste box alone.
   const canDraft = offersStoryModel(useCapabilities());
   const [error, setError] = useState("");
-  const [result, setResult] = useState<{ tableId: string; total: number; text: string } | null>(
-    null,
-  );
+  const [result, setResult] = useState<RollResult | null>(null);
+  const rows = layout === "rows";
 
   const load = useCallback(async () => {
     try {
@@ -85,6 +99,8 @@ export function DmTablesPanel({ campaignId }: { campaignId: string }) {
     }
   }
 
+  // Creates a table, or rewrites the one the editor has open. The PATCH
+  // takes the same name-and-text shape the POST does.
   async function save() {
     if (!name.trim() || !text.trim()) {
       return;
@@ -92,11 +108,16 @@ export function DmTablesPanel({ campaignId }: { campaignId: string }) {
     setBusy("save");
     setError("");
     try {
-      const response = await fetch(`/api/campaigns/${campaignId}/dm/roll-tables`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), text }),
-      });
+      const response = await fetch(
+        editingId
+          ? `/api/campaigns/${campaignId}/dm/roll-tables/${editingId}`
+          : `/api/campaigns/${campaignId}/dm/roll-tables`,
+        {
+          method: editingId ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: name.trim(), text }),
+        },
+      );
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
         setError(data.error || "Could not save that.");
@@ -105,6 +126,8 @@ export function DmTablesPanel({ campaignId }: { campaignId: string }) {
       setName("");
       setText("");
       setPrompt("");
+      setEditingId("");
+      setEditorOpen(false);
       await load();
     } catch {
       setError("Could not reach the server.");
@@ -148,6 +171,10 @@ export function DmTablesPanel({ campaignId }: { campaignId: string }) {
       await fetch(`/api/campaigns/${campaignId}/dm/roll-tables/${table.id}`, {
         method: "DELETE",
       });
+      // A save after this would otherwise PATCH a table that is gone.
+      if (editingId === table.id) {
+        open(null);
+      }
       await load();
     } finally {
       setBusy("");
@@ -181,8 +208,121 @@ export function DmTablesPanel({ campaignId }: { campaignId: string }) {
     }
   }
 
+  // Puts a saved table in the editor, or clears it for a new one. A half
+  // typed new table survives closing and reopening the sheet; it is only
+  // thrown away when a saved table had taken its place.
+  function open(table: RollTable | null) {
+    setError("");
+    if (table) {
+      setEditingId(table.id);
+      setName(table.name);
+      setText(formatRollTable(table.entries));
+      setPrompt("");
+    } else if (editingId) {
+      setEditingId("");
+      setName("");
+      setText("");
+      setPrompt("");
+    }
+    setEditorOpen(true);
+  }
+
   const draftEntries = parseRollTable(text);
   const gaps = draftEntries.length ? tableGaps(draftEntries) : null;
+  const editing = tables.find((table) => table.id === editingId) ?? null;
+
+  const editor = (
+    <>
+      <input
+        value={name}
+        onChange={(event) => setName(event.target.value.slice(0, TABLE_NAME_MAX))}
+        placeholder="Rumours in the Salt Wharf"
+        className={inputClass}
+      />
+      {canDraft ? (
+        <div className="mt-1.5 flex gap-1.5">
+          <input
+            value={prompt}
+            onChange={(event) => setPrompt(event.target.value.slice(0, 300))}
+            placeholder="what the dockhands are whispering about"
+            className={inputClass}
+          />
+          <button
+            type="button"
+            onClick={draft}
+            disabled={busy === "draft" || !prompt.trim()}
+            title="Drafts rows for you to edit. Nothing is saved until you save it."
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-40"
+          >
+            {busy === "draft" ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="size-3.5" />
+            )}
+            Draft
+          </button>
+        </div>
+      ) : null}
+      <textarea
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        rows={rows ? 10 : 5}
+        placeholder={"1-3 A press gang is working the taproom.\n4. The harbourmaster has not been seen in a week.\nOr just paste a table straight out of a book."}
+        className={cn(inputClass, "mt-1.5 resize-y font-mono text-xs")}
+      />
+      {draftEntries.length ? (
+        <p className="mt-1 text-[11px] text-stone-500">
+          {draftEntries.length} rows, rolled on a d{dieForTable(draftEntries)}.
+          {gaps?.uncovered.length
+            ? ` Nothing on ${gaps.uncovered.join(", ")}.`
+            : ""}
+          {gaps?.overlapping.length
+            ? ` Two rows both cover ${gaps.overlapping.join(", ")}.`
+            : ""}
+        </p>
+      ) : null}
+      {error ? <p className="mt-1 text-xs text-red-400">{error}</p> : null}
+      <button
+        type="button"
+        onClick={save}
+        disabled={busy === "save" || !name.trim() || !text.trim()}
+        className="mt-1.5 rounded-md border border-amber-700 bg-amber-950/50 px-2.5 py-1 text-xs text-amber-100 hover:bg-amber-900/50 disabled:opacity-40"
+      >
+        {busy === "save" ? "Saving..." : "Save table"}
+      </button>
+    </>
+  );
+
+  if (rows) {
+    return (
+      <div className="space-y-3 lg:grid lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-4 lg:space-y-0">
+        <TableRows
+          tables={tables}
+          loaded={loaded}
+          busy={busy}
+          result={result}
+          onOpen={open}
+          onRoll={roll}
+          onDuplicate={duplicate}
+          onDelete={remove}
+        />
+        <StatblockFinder campaignId={campaignId} collapsible />
+        {/* A roll or a copy that fails happens in the rows, not the sheet,
+            so its message has to show out here as well. */}
+        {error && !editorOpen ? (
+          <p className="text-xs text-red-400 lg:col-span-2">{error}</p>
+        ) : null}
+        <Sheet
+          open={editorOpen}
+          onOpenChange={setEditorOpen}
+          title={editing ? editing.name : "New table"}
+          className="lg:w-[min(92vw,40rem)]"
+        >
+          {editor}
+        </Sheet>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -258,174 +398,10 @@ export function DmTablesPanel({ campaignId }: { campaignId: string }) {
           <Plus className="size-3.5" />
           New table
         </p>
-        <input
-          value={name}
-          onChange={(event) => setName(event.target.value.slice(0, TABLE_NAME_MAX))}
-          placeholder="Rumours in the Salt Wharf"
-          className={inputClass}
-        />
-        {canDraft ? (
-          <div className="mt-1.5 flex gap-1.5">
-            <input
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value.slice(0, 300))}
-              placeholder="what the dockhands are whispering about"
-              className={inputClass}
-            />
-            <button
-              type="button"
-              onClick={draft}
-              disabled={busy === "draft" || !prompt.trim()}
-              title="Drafts rows for you to edit. Nothing is saved until you save it."
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-40"
-            >
-              {busy === "draft" ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <Sparkles className="size-3.5" />
-              )}
-              Draft
-            </button>
-          </div>
-        ) : null}
-        <textarea
-          value={text}
-          onChange={(event) => setText(event.target.value)}
-          rows={5}
-          placeholder={"1-3 A press gang is working the taproom.\n4. The harbourmaster has not been seen in a week.\nOr just paste a table straight out of a book."}
-          className={cn(inputClass, "mt-1.5 resize-y font-mono text-xs")}
-        />
-        {draftEntries.length ? (
-          <p className="mt-1 text-[11px] text-stone-500">
-            {draftEntries.length} rows, rolled on a d{dieForTable(draftEntries)}.
-            {gaps?.uncovered.length
-              ? ` Nothing on ${gaps.uncovered.join(", ")}.`
-              : ""}
-            {gaps?.overlapping.length
-              ? ` Two rows both cover ${gaps.overlapping.join(", ")}.`
-              : ""}
-          </p>
-        ) : null}
-        {error ? <p className="mt-1 text-xs text-red-400">{error}</p> : null}
-        <button
-          type="button"
-          onClick={save}
-          disabled={busy === "save" || !name.trim() || !text.trim()}
-          className="mt-1.5 rounded-md border border-amber-700 bg-amber-950/50 px-2.5 py-1 text-xs text-amber-100 hover:bg-amber-900/50 disabled:opacity-40"
-        >
-          {busy === "save" ? "Saving..." : "Save table"}
-        </button>
+        {editor}
       </section>
 
       <StatblockFinder campaignId={campaignId} />
     </div>
-  );
-}
-
-// Monster lookup: the campaign's own genre catalog, then the exact numbers
-// start_encounter would spawn. A CR with no match falls back to the DMG's
-// by-CR baseline, which is arithmetic rather than invention.
-function StatblockFinder({ campaignId }: { campaignId: string }) {
-  const [query, setQuery] = useState("");
-  const [matches, setMatches] = useState<StatblockMatch[]>([]);
-  const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function search() {
-    setBusy(true);
-    setDetail(null);
-    try {
-      const response = await fetch(`/api/campaigns/${campaignId}/dm/assist/statblock`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query }),
-      });
-      const data = await response.json().catch(() => ({}));
-      setMatches(data.matches ?? []);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function open(slug: string) {
-    setBusy(true);
-    try {
-      const response = await fetch(`/api/campaigns/${campaignId}/dm/assist/statblock`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ref: slug }),
-      });
-      const data = await response.json().catch(() => ({}));
-      setDetail(data.statblock ?? null);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const stats = detail?.stats as
-    | { ac: number; maxHp: number; cr: number; speed: string; attacks: Array<{ name: string; toHit: number; damage: string }> }
-    | undefined;
-
-  return (
-    <section className="rounded-lg border border-stone-800 bg-stone-950/60 px-2.5 py-2">
-      <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
-        <Dices className="size-3.5" />
-        Look up a monster
-      </p>
-      <div className="flex gap-1.5">
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value.slice(0, 80))}
-          placeholder="wolf, or leave empty for what fits the party"
-          className={inputClass}
-        />
-        <button
-          type="button"
-          onClick={search}
-          disabled={busy}
-          className="shrink-0 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-40"
-        >
-          Search
-        </button>
-      </div>
-      {matches.length ? (
-        <ul className="mt-1.5 space-y-1">
-          {matches.map((match) => (
-            <li key={match.slug}>
-              <button
-                type="button"
-                onClick={() => open(match.slug)}
-                className="w-full rounded-md border border-stone-800 px-2 py-1 text-left hover:border-stone-700"
-              >
-                <span className="text-xs text-stone-200">
-                  {match.name}
-                  <span className="ml-1.5 text-stone-500">CR {match.cr}</span>
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {stats ? (
-        <div className="mt-1.5 rounded-md border border-stone-800 bg-stone-950/40 px-2 py-1.5 text-xs text-stone-300">
-          <p className="text-stone-200">
-            {String(detail?.name ?? "")}
-            {detail?.synthesized ? (
-              <span className="ml-1.5 text-[10px] uppercase tracking-wide text-amber-300/80">
-                DMG baseline
-              </span>
-            ) : null}
-          </p>
-          <p className="text-stone-500">
-            AC {stats.ac} · {stats.maxHp} hp · CR {stats.cr} · speed {stats.speed}
-          </p>
-          {stats.attacks.map((attack) => (
-            <p key={attack.name} className="text-stone-400">
-              {attack.name}: +{attack.toHit} to hit, {attack.damage}
-            </p>
-          ))}
-        </div>
-      ) : null}
-    </section>
   );
 }

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { currentUser, unauthorized } from "@/lib/auth";
 import { createCampaign, listCampaignsForUser, publicCampaign, type Campaign } from "@/lib/db/campaigns";
+import { playingAsByCampaign } from "@/lib/db/sheets";
 import { gameSettingsSchema } from "@/lib/schemas/game-settings";
 import { CAMPAIGN_DIFFICULTIES } from "@/lib/campaign-types";
 
@@ -22,10 +23,16 @@ export async function GET() {
   if (!user) {
     return unauthorized();
   }
+  // The desktop and Android shells draw a home screen from this list alone:
+  // each tile wants the cover (on the summary) and the name of the character
+  // the caller plays there, so both ride here rather than costing a snapshot
+  // fetch per campaign. One query covers every campaign's playingAs.
+  const playingAs = playingAsByCampaign(user.id);
   return Response.json({
-    campaigns: listCampaignsForUser(user.id).map((campaign) =>
-      publicCampaign(campaign as Campaign),
-    ),
+    campaigns: listCampaignsForUser(user.id).map((campaign) => ({
+      ...publicCampaign(campaign as Campaign),
+      playingAs: playingAs.get(campaign.id) ?? null,
+    })),
   });
 }
 

@@ -1192,6 +1192,11 @@ function ensureSchema(db: SqliteDatabase) {
     // updated_at no longer counts, which is what lets a table that came back
     // and went quiet again be nudged once more.
     ["idle_nudged_at", `TEXT`],
+    // Cover art for the campaign tile and hero: {id, url} pointing at a file
+    // /api/upload wrote, or NULL for the themed placeholder. JSON rather than
+    // a bare url column so it can grow (crop, credit) without another ALTER.
+    // Readers validate the url through isUploadedImagePath, same as portraits.
+    ["cover_json", `TEXT`],
   ]);
 
   const userColumns = db.prepare(`PRAGMA table_info(users)`).all() as Array<{ name: string }>;
@@ -1231,6 +1236,19 @@ function ensureSchema(db: SqliteDatabase) {
   addColumns("scheduled_sessions", [
     ["reminded_stage", `INTEGER NOT NULL DEFAULT 0`],
   ]);
+
+  // Self-service account deletion runs on a timer: the request stamps both
+  // columns, sign-ins during the grace period can clear them again, and the
+  // purge job (src/lib/account-deletion.ts) removes every row of any user
+  // whose due date has passed. NULL = nothing pending.
+  addColumns("users", [
+    ["deletion_requested_at", `TEXT`],
+    ["deletion_due_at", `TEXT`],
+  ]);
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_users_deletion_due
+       ON users(deletion_due_at) WHERE deletion_due_at IS NOT NULL`,
+  );
 
   // NULL features_json marks a sheet from before features existed; the
   // backfill below fills it exactly once, so check before the column lands.

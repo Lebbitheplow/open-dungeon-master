@@ -3,7 +3,9 @@
 import { Loader2, Plus, UserRound } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, use, useEffect, useState } from "react";
-import { IconChip, PIXEL_ICONS, PixelTile } from "@/lib/ui";
+import { Ribbon } from "@/components/ui/Ribbon";
+import { cn } from "@/lib/cn";
+import { IconChip, PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
 import CharacterBuilder, {
   type BuilderResult,
 } from "@/app/characters/builder/CharacterBuilder";
@@ -129,32 +131,33 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
-      <header className="mb-6">
+      <header className="mb-5">
         <a href={`/campaigns/${campaignId}`} className="text-sm text-stone-500 hover:text-stone-300">
           &larr; Back to the lobby
         </a>
         <div className="mt-2 flex items-center gap-3">
           <PixelTile src={PIXEL_ICONS.characters} />
-          <h1 className="font-display text-2xl tracking-wide text-amber-50">
-            {flow === "edit"
-              ? "Edit your character"
-              : flow === "replace"
-                ? "Switch your character"
-                : mode === "choose"
-                  ? "Choose your character"
-                  : "Create your character"}
-          </h1>
+          <div>
+            <h1 className="font-display text-2xl tracking-wide text-amber-50">
+              {flow === "edit"
+                ? "Edit your character"
+                : flow === "replace"
+                  ? "Switch your character"
+                  : mode === "choose"
+                    ? "Choose your character"
+                    : "Create your character"}
+            </h1>
+            <p className="text-sm text-stone-400">
+              This campaign starts at level {level}.
+              {flow !== "join" ? " Changing your character clears your ready status." : ""}
+            </p>
+          </div>
         </div>
-        <p className="mt-1 text-sm text-stone-400">
-          This campaign starts at level {level}.
-          {flow !== "join"
-            ? " Changing your character clears your ready status."
-            : ""}
-        </p>
       </header>
 
       {mode === "choose" ? (
         <section className="space-y-4">
+          <Ribbon>From your library</Ribbon>
           <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {library.map((character) => (
               <li key={character.id}>
@@ -162,7 +165,7 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
                   type="button"
                   disabled={busy}
                   onClick={() => pickFromLibrary(character.id)}
-                  className="w-full rounded-lg border border-stone-800 bg-stone-950/70 p-4 text-left transition hover:border-amber-800/60 hover:bg-stone-900/70 disabled:opacity-50"
+                  className={cn(ui.cardHover, "w-full p-4 text-left disabled:opacity-50")}
                 >
                   <div className="flex items-center gap-2">
                     {character.sheet?.portrait?.url ? (
@@ -177,7 +180,7 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
                     )}
                     <span className="font-medium text-stone-100">{character.name}</span>
                     {character.id === currentLibraryId ? (
-                      <span className="rounded-full bg-amber-950 px-2 py-0.5 text-xs text-amber-300">
+                      <span className="rounded-full border border-amber-500/30 bg-amber-400/10 px-2 py-0.5 text-[11px] text-amber-200">
                         current
                       </span>
                     ) : null}
@@ -199,7 +202,7 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
           <button
             type="button"
             onClick={() => setMode("create")}
-            className="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-stone-700 px-3 py-3 text-sm text-stone-300 hover:border-stone-500 hover:bg-stone-900"
+            className={cn(ui.btnSecondary, "w-full border-dashed")}
           >
             <Plus className="size-4" /> Create a new character instead
           </button>

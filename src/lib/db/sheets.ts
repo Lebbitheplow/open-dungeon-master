@@ -359,6 +359,28 @@ export function listSheetsForLibraryCharacter(libraryCharacterId: string): Chara
   return rows.map(mapSheet);
 }
 
+// The name of the character this user plays in each of their campaigns,
+// keyed by campaign id. One query for the whole roster, because the home
+// screen lists every campaign at once and a per-campaign lookup would cost
+// one round trip per tile. Companions are a bot user's sheets, never the
+// player's own, and are left out.
+export function playingAsByCampaign(userId: string): Map<string, string> {
+  const rows = getDatabase()
+    .prepare(
+      `SELECT campaign_id, name FROM character_sheets
+       WHERE user_id = ? AND (is_companion IS NULL OR is_companion = 0)
+       ORDER BY created_at ASC`,
+    )
+    .all(userId) as Array<{ campaign_id: string; name: string }>;
+  const names = new Map<string, string>();
+  for (const row of rows) {
+    if (!names.has(row.campaign_id)) {
+      names.set(row.campaign_id, row.name);
+    }
+  }
+  return names;
+}
+
 export function listSheets(campaignId: string): CharacterSheet[] {
   const rows = getDatabase()
     .prepare(

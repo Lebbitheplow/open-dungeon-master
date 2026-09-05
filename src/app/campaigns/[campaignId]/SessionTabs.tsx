@@ -2,6 +2,7 @@
 
 import {
   BookOpen,
+  Crown,
   Gavel,
   Map as MapIcon,
   MessageSquareText,
@@ -15,18 +16,18 @@ import {
 } from "lucide-react";
 import { memo, useState } from "react";
 import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
 import type { PlayerMapView } from "@/lib/battlemap/view";
+import {
+  visiblePanelTabs,
+  type TableTabId,
+  type TableTabInput,
+} from "@/lib/dm/table-tabs";
 
-export type PanelTab =
-  | "dm"
-  | "party"
-  | "battle"
-  | "map"
-  | "story"
-  | "notes"
-  | "chat"
-  | "context"
-  | "settings";
+// The id list is owned by src/lib/dm/table-tabs.ts, where the visibility
+// rules are testable without React; this alias keeps the name the rest of
+// the session code has always used.
+export type PanelTab = TableTabId;
 
 export type PanelTabDef = [PanelTab, string, LucideIcon, string];
 
@@ -78,74 +79,69 @@ export function SubTabs<T extends string>({
 // desktop both render side by side and this state has no visual effect.
 export type MobileView = "chat" | "panel";
 
+// Label, icon and rail tooltip per tab. Presentation only: which of these
+// a given viewer sees, and in what order, is visiblePanelTabs's decision.
+const TAB_PRESENTATION: Record<PanelTab, [string, LucideIcon, string]> = {
+  dm: [
+    "DM",
+    Gavel,
+    "Everything waiting on you, and every ruling the engine can make on your say-so.",
+  ],
+  lead: [
+    "Lead",
+    Crown,
+    "Steer the table: the floor, notes waiting on you, invites and the lead seat.",
+  ],
+  party: [
+    "Party",
+    Users,
+    "Character sheets, HP and conditions for the whole party, and their bonds with the people they have met.",
+  ],
+  battle: ["Battle", Swords, "The tactical battle map. Move your token on your turn."],
+  map: ["Map", MapIcon, "The scene map and discovered locations."],
+  story: [
+    "Story",
+    BookOpen,
+    "Chapters and the tale so far, the world-state record, and the audited log of rolls and stat changes.",
+  ],
+  notes: ["Notes", StickyNote, "Suggest story notes; the party lead approves them."],
+  chat: ["Chat", MessagesSquare, "Side chat between players. The DM does not see it."],
+  context: [
+    "Context",
+    Gauge,
+    "What the DM was actually sent last turn, and anything the budget cut.",
+  ],
+  settings: ["Setup", Settings2, "Campaign settings, invites and game toggles."],
+};
+
 // Single source of truth for the panel tab list, shared by the desktop rail
-// strip and the mobile bottom bar.
-export function buildPanelTabs({
-  hasBattleMap,
-  mapsEnabled,
-  hasSettings,
-  secretStory,
-  adjudicates,
-}: {
-  hasBattleMap: boolean;
-  mapsEnabled: boolean;
-  hasSettings: boolean;
-  // Holds the DM seat: the console is the whole of running the table by
-  // hand, so it leads the rail for whoever is doing it and does not exist
-  // for anyone else (src/lib/dm/viewer.ts).
-  adjudicates: boolean;
-  // The Context tab shows what the DM was actually sent, which includes the
-  // secret arc and the DM outline. Its route is gated on story authority, so
-  // offering the tab to anyone else only ever produces a 403 and a broken
-  // panel. That authority is the party lead in an AI campaign and the DM in a
-  // human-run one (src/lib/dm/viewer.ts).
-  secretStory: boolean;
-}): PanelTabDef[] {
-  return [
-    ...(adjudicates
-      ? ([
-          [
-            "dm",
-            "DM",
-            Gavel,
-            "Everything waiting on you, and every ruling the engine can make on your say-so.",
-          ],
-        ] as PanelTabDef[])
-      : []),
-    [
-      "party",
-      "Party",
-      Users,
-      "Character sheets, HP and conditions for the whole party, and their bonds with the people they have met.",
-    ],
-    ...(hasBattleMap
-      ? ([["battle", "Battle", Swords, "The tactical battle map. Move your token on your turn."]] as PanelTabDef[])
-      : []),
-    ...(mapsEnabled
-      ? ([["map", "Map", MapIcon, "The scene map and discovered locations."]] as PanelTabDef[])
-      : []),
-    [
-      "story",
-      "Story",
-      BookOpen,
-      "Chapters and the tale so far, the world-state record, and the audited log of rolls and stat changes.",
-    ],
-    ["notes", "Notes", StickyNote, "Suggest story notes; the party lead approves them."],
-    ["chat", "Chat", MessagesSquare, "Side chat between players. The DM does not see it."],
-    ...(hasSettings && secretStory
-      ? ([
-          [
-            "context",
-            "Context",
-            Gauge,
-            "What the DM was actually sent last turn, and anything the budget cut.",
-          ],
-        ] as PanelTabDef[])
-      : []),
-    ...(hasSettings
-      ? ([["settings", "Setup", Settings2, "Campaign settings, invites and game toggles."]] as PanelTabDef[])
-      : []),
-  ];
+// strip and the mobile bottom bar. The gating flags are documented on
+// TableTabInput (src/lib/dm/table-tabs.ts).
+export function buildPanelTabs(input: TableTabInput): PanelTabDef[] {
+  return visiblePanelTabs(input).map((id) => [id, ...TAB_PRESENTATION[id]]);
+}
+
+// The lead tab is the one place in the rail that is not the DM's gold: the
+// same ember the composer's Direct pill wears, so the two halves of "the lead
+// steering the table" read as one thing. The classes are the icon-rail
+// recipes from src/lib/ui.tsx, so the bottom bar and the docked IconRail
+// look like the same control.
+export function tabAccentClass(tab: PanelTab, active: boolean): string {
+  if (!active) {
+    return "";
+  }
+  return tab === "lead" ? ui.railCellActiveEmber : ui.railCellActive;
+}
+
+// The count pill on a tab. Gold everywhere except the lead tab, where it
+// matches the ember accent above.
+export function tabBadgeClass(tab: PanelTab): string {
+  return cn(
+    "absolute right-1.5 top-1 rounded-full bg-gradient-to-b px-1 text-[9px] font-semibold",
+    tab === "lead"
+      ? "from-ember-300 to-ember-500 text-stone-950 shadow-glow-ember"
+      : "from-amber-300 to-amber-500 text-amber-950 shadow-glow-gold",
+  );
 }
 
 // Owns which panel tab is active (shared by rail and mobile) and which column
@@ -155,9 +151,13 @@ export function buildPanelTabs({
 export function useSessionTabs({
   chatTarget,
   battleMap,
+  isLead,
 }: {
   chatTarget: string | null;
   battleMap?: PlayerMapView | null;
+  // The lead tab disappears when the seat is handed to someone else, so a
+  // stale selection falls back exactly as battle does when the map goes.
+  isLead: boolean;
 }) {
   const [panelTab, setPanelTab] = useState<PanelTab>("party");
   const [mobileView, setMobileView] = useState<MobileView>("chat");
@@ -183,6 +183,9 @@ export function useSessionTabs({
   if (!battleMap && panelTab === "battle") {
     setPanelTab("party");
   }
+  if (!isLead && panelTab === "lead") {
+    setPanelTab("party");
+  }
 
   return { panelTab, setPanelTab, mobileView, setMobileView };
 }
@@ -198,6 +201,7 @@ function BottomTabBarInner({
   chatUnread,
   pendingCount,
   storyDue,
+  steersStory,
 }: {
   tabs: PanelTabDef[];
   mobileView: MobileView;
@@ -208,18 +212,17 @@ function BottomTabBarInner({
   pendingCount: number;
   // The DM has story to write down (src/lib/dm/beat-cadence.ts).
   storyDue: boolean;
+  // Pending notes are the lead's to approve only while they steer the
+  // story; at a human-DM table the count is the DM's and the lead tab stays
+  // quiet.
+  steersStory: boolean;
 }) {
   return (
     <nav className="glass flex items-stretch gap-1 overflow-x-auto border-t border-stone-700/40 px-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-1 lg:hidden">
       <button
         type="button"
         onClick={onSelectChat}
-        className={cn(
-          "relative flex min-w-[3.25rem] flex-1 flex-col items-center gap-1 rounded-lg py-2 transition-all duration-150 ease-snap",
-          mobileView === "chat"
-            ? "bg-amber-400/10 text-amber-300 shadow-[0_1px_0_rgba(244,224,166,0.15)_inset,0_0_16px_rgba(212,171,58,0.12)]"
-            : "text-stone-500 hover:bg-stone-900/60 hover:text-stone-300",
-        )}
+        className={cn(ui.railCell, "flex-1", mobileView === "chat" && ui.railCellActive)}
       >
         <MessageSquareText className="size-5" />
         <span className="eyebrow text-[9px] leading-none">Table</span>
@@ -231,12 +234,7 @@ function BottomTabBarInner({
             key={value}
             type="button"
             onClick={() => onSelectPanel(value)}
-            className={cn(
-              "relative flex min-w-[3.25rem] flex-1 flex-col items-center gap-1 rounded-lg py-2 transition-all duration-150 ease-snap",
-              active
-                ? "bg-amber-400/10 text-amber-300 shadow-[0_1px_0_rgba(244,224,166,0.15)_inset,0_0_16px_rgba(212,171,58,0.12)]"
-                : "text-stone-500 hover:bg-stone-900/60 hover:text-stone-300",
-            )}
+            className={cn(ui.railCell, "flex-1", tabAccentClass(value, active))}
           >
             <Icon
               className={cn("size-5", value === "chat" && chatUnread > 0 && "animate-wiggle")}
@@ -248,15 +246,11 @@ function BottomTabBarInner({
             {value === "dm" && storyDue ? (
               <span className="absolute right-1.5 top-1 size-1.5 rounded-full bg-amber-400" />
             ) : null}
-            {value === "notes" && pendingCount ? (
-              <span className="absolute right-1.5 top-1 rounded-full bg-gradient-to-b from-amber-300 to-amber-500 px-1 text-[9px] font-semibold text-amber-950 shadow-glow-gold">
-                {pendingCount}
-              </span>
+            {(value === "notes" || (value === "lead" && steersStory)) && pendingCount ? (
+              <span className={tabBadgeClass(value)}>{pendingCount}</span>
             ) : null}
             {value === "chat" && chatUnread ? (
-              <span className="absolute right-1.5 top-1 rounded-full bg-gradient-to-b from-amber-300 to-amber-500 px-1 text-[9px] font-semibold text-amber-950 shadow-glow-gold">
-                {chatUnread}
-              </span>
+              <span className={tabBadgeClass(value)}>{chatUnread}</span>
             ) : null}
           </button>
         );

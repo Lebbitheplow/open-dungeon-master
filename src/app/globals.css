@@ -139,6 +139,33 @@
       background-position: -50% 0;
     }
   }
+  /* Phone bottom sheet rising from below the fold (Sheet.tsx). Played in
+     reverse on close so one keyframe covers both directions. */
+  @keyframes sheet-up {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+  /* Side drawers slide in from their own edge (Drawer.tsx). */
+  @keyframes drawer-in-left {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+  @keyframes drawer-in-right {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
   /* Die tumble: hold on six landed orientations, snapping quickly between so
      it reads as a d20 rolling and settling rather than a flat spin. */
   @keyframes d20-roll {
@@ -411,6 +438,38 @@ body::before {
 }
 .dialog-overlay[data-state="open"] {
   animation: overlay-in 200ms ease-out;
+}
+
+/* Sheets and drawers are Radix dialogs too, so they would inherit the
+   scale-in above. They slide instead: a bottom sheet rises from the fold,
+   a drawer enters from its edge. Closing plays the same keyframe backwards.
+   From lg up the sheet becomes a regular dialog or popover and takes the
+   scale animation back. */
+[role="dialog"].sheet[data-state="open"] {
+  animation: sheet-up 320ms var(--ease-snap);
+}
+[role="dialog"].sheet[data-state="closed"] {
+  animation: sheet-up 200ms var(--ease-snap) reverse forwards;
+}
+@media (min-width: 64rem) {
+  [role="dialog"].sheet[data-state="open"] {
+    animation: scale-in 180ms var(--ease-snap);
+  }
+  [role="dialog"].sheet[data-state="closed"] {
+    animation: scale-out 140ms var(--ease-snap) forwards;
+  }
+}
+[role="dialog"].drawer-left[data-state="open"] {
+  animation: drawer-in-left 260ms var(--ease-snap);
+}
+[role="dialog"].drawer-left[data-state="closed"] {
+  animation: drawer-in-left 200ms var(--ease-snap) reverse forwards;
+}
+[role="dialog"].drawer-right[data-state="open"] {
+  animation: drawer-in-right 260ms var(--ease-snap);
+}
+[role="dialog"].drawer-right[data-state="closed"] {
+  animation: drawer-in-right 200ms var(--ease-snap) reverse forwards;
 }
 
 @media (prefers-reduced-motion: reduce) {

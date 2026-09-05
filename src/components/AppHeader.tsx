@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { PIXEL_ICONS, PixelTile } from "@/lib/ui";
 import { AccountMenu, type AccountMenuUser } from "@/components/AccountMenu";
+import { DeletionBanner } from "@/components/DeletionBanner";
 import { NotificationBell } from "@/components/NotificationBell";
 
 // Shared top bar for the flat pages (characters, workshop, reference,
@@ -44,7 +45,10 @@ export function AppHeader({
   const resolved = selfFetch ? fetched : user;
 
   return (
-    <header className={cn("mb-6 flex items-center justify-between gap-3", className)}>
+    // min-h keeps the row the height of the avatar button even before the
+    // user resolves, so the page header below never jumps.
+    <header className={cn("mb-6", className)}>
+      <div className="flex min-h-9 items-center justify-between gap-3">
       <Link
         href="/"
         className="flex min-w-0 items-center gap-2.5 rounded-md outline-none transition-colors hover:text-amber-200 focus-visible:text-amber-200"
@@ -60,6 +64,8 @@ export function AppHeader({
           <AccountMenu user={resolved} />
         </div>
       ) : null}
+      </div>
+      {resolved?.deletionDueAt ? <DeletionBanner dueAt={resolved.deletionDueAt} /> : null}
     </header>
   );
 }

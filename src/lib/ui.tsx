@@ -37,6 +37,20 @@ export const ui = {
   cardHover:
     "panel ornate rounded-xl transition-all duration-200 ease-snap hover:-translate-y-0.5 hover:border-amber-500/40 hover:shadow-[0_1px_0_rgba(233,230,244,0.08)_inset,0_8px_28px_rgba(4,2,12,0.55),0_0_24px_rgba(212,171,58,0.12)]",
   dialog: "panel rounded-xl p-5",
+  // Quick-action tile: a square-ish panel that lifts on hover (QuickTile).
+  tile: "panel ornate flex flex-col items-center justify-center gap-2 rounded-xl p-4 text-center",
+  tileHover:
+    "transition-all duration-200 ease-snap hover:-translate-y-0.5 hover:border-amber-500/40 hover:shadow-[0_1px_0_rgba(233,230,244,0.08)_inset,0_8px_28px_rgba(4,2,12,0.55),0_0_24px_rgba(212,171,58,0.12)] active:translate-y-0 active:scale-[0.98]",
+  // Small caps label that heads a section or sits in a Ribbon.
+  sectionEyebrow: "eyebrow text-[10px] text-amber-400/80",
+  // Icon rail cells: icon over a tiny eyebrow label. Active gets the gold
+  // glow the session tab rail uses; the ember variant marks the party lead.
+  railCell:
+    "relative flex min-w-[3.25rem] flex-col items-center gap-1 rounded-lg px-2 py-2 text-stone-500 transition-all duration-150 ease-snap hover:bg-stone-900/60 hover:text-stone-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40",
+  railCellActive:
+    "bg-amber-400/10 text-amber-300 shadow-[0_1px_0_rgba(244,224,166,0.15)_inset,0_0_16px_rgba(212,171,58,0.12)] hover:bg-amber-400/10 hover:text-amber-300",
+  railCellActiveEmber:
+    "bg-ember-500/10 text-ember-300 shadow-[0_1px_0_rgba(255,190,143,0.15)_inset,0_0_16px_rgba(224,112,58,0.18)] hover:bg-ember-500/10 hover:text-ember-300",
 } as const;
 
 // 48px pixel-art tile with the gold glow, framed on indigo night.

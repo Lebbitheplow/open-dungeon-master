@@ -1,7 +1,7 @@
 "use client";
 
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
-import { Copy, KeyRound, Loader2, Shield, ShieldOff, Trash2, UserRound } from "lucide-react";
+import { Copy, KeyRound, Loader2, Shield, ShieldOff, Trash2, Undo2, UserRound } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
@@ -16,6 +16,8 @@ type AdminUser = {
   hasPassword: boolean;
   campaignCount: number;
   createdAt: string;
+  // Set while the user has a self-service deletion pending.
+  deletionDueAt: string | null;
 };
 
 // User management: promote/demote admins, reset passwords (temp password
@@ -79,6 +81,17 @@ export function AdminUsersPanel({ meId }: { meId: string }) {
     }
   }
 
+  async function keepAccount(user: AdminUser) {
+    const response = await act(user.id, () =>
+      fetch(`/api/admin/users/${user.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keepAccount: true }),
+      }),
+    );
+    if (response) refresh();
+  }
+
   async function deleteUser(user: AdminUser) {
     const response = await act(user.id, () =>
       fetch(`/api/admin/users/${user.id}`, { method: "DELETE" }),
@@ -130,7 +143,7 @@ export function AdminUsersPanel({ meId }: { meId: string }) {
 
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
 
-      <section className="texture-noise rounded-xl border border-stone-700/50 bg-stone-950/60 shadow-elev-1">
+      <section className={cn(ui.card, "texture-noise")}>
         <ul className="divide-y divide-stone-800/70">
           {users.map((user) => (
             <li key={user.id} className="flex flex-wrap items-center gap-3 p-4">
@@ -165,6 +178,14 @@ export function AdminUsersPanel({ meId }: { meId: string }) {
                       Reset pending
                     </span>
                   ) : null}
+                  {user.deletionDueAt ? (
+                    <span
+                      title={`Asked to delete their account; erased on ${new Date(user.deletionDueAt).toLocaleString()}`}
+                      className="rounded border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-red-300"
+                    >
+                      Deletion {new Date(user.deletionDueAt).toLocaleDateString()}
+                    </span>
+                  ) : null}
                 </p>
                 <p className="text-xs text-stone-500">
                   {user.campaignCount} campaign{user.campaignCount === 1 ? "" : "s"} · joined{" "}
@@ -191,9 +212,20 @@ export function AdminUsersPanel({ meId }: { meId: string }) {
                 >
                   <KeyRound className="size-3.5" /> Reset
                 </button>
+                {user.deletionDueAt ? (
+                  <button
+                    type="button"
+                    title="Call off the scheduled deletion"
+                    disabled={busyId === user.id}
+                    onClick={() => keepAccount(user)}
+                    className={ui.btnSmall}
+                  >
+                    <Undo2 className="size-3.5" /> Keep
+                  </button>
+                ) : null}
                 <button
                   type="button"
-                  title="Delete user"
+                  title={user.deletionDueAt ? "Erase now instead of waiting" : "Delete user"}
                   disabled={busyId === user.id || user.id === meId}
                   onClick={() => setDeleting(user)}
                   className={cn(ui.btnSmall, "hover:border-red-500/50 hover:text-red-400")}
@@ -220,9 +252,9 @@ export function AdminUsersPanel({ meId }: { meId: string }) {
                 Delete {deleting.username}?
               </AlertDialog.Title>
               <AlertDialog.Description className="mt-2 text-xs text-stone-400">
-                Their account, campaigns they own, characters, and private chats are permanently
-                deleted. Messages they wrote in other people&apos;s campaigns stay in those
-                transcripts.
+                Their account, campaigns they own, characters, pictures and private chats are
+                erased right now, with no grace period. Messages they wrote in other people&apos;s
+                campaigns stay in those transcripts without their name.
               </AlertDialog.Description>
               <div className="mt-4 flex justify-end gap-2">
                 <AlertDialog.Cancel className={ui.btnSmall}>Cancel</AlertDialog.Cancel>

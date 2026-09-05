@@ -28,6 +28,8 @@ export type AccountMenuUser = {
   username: string;
   avatar?: { url: string } | null;
   isAdmin?: boolean;
+  // Present while the account is scheduled for deletion (AppHeader's banner).
+  deletionDueAt?: string | null;
 };
 
 const itemClass =

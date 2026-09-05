@@ -57,8 +57,9 @@ function buildPortraitPrompt(sheet: CreateSheetInput, style = ""): string {
 }
 
 // Copy the render into public/uploads/: attachmentSchema pins portrait urls
-// to /uploads/ so full-sheet edits keep validating.
-function copyIntoUploads(generatedUrl: string): { id: string; url: string } {
+// to /uploads/ so full-sheet edits keep validating. Exported for the campaign
+// cover (src/lib/campaign-cover.ts), which stores its url under the same rule.
+export function copyIntoUploads(generatedUrl: string): { id: string; url: string } {
   const source = path.join(process.cwd(), "public", ...generatedUrl.replace(/^\//, "").split("/"));
   const id = crypto.randomUUID();
   const uploadsDir = path.join(process.cwd(), "public", "uploads");
@@ -239,7 +240,8 @@ export function queueLibraryPortrait(character: LibraryCharacter): void {
 // promise is never made: nothing is queued, no status is recorded, and the
 // sheet simply keeps its icon until the owner uploads a picture. This is what
 // keeps a no-AI server from showing "portrait failed" on every new character.
-async function whenImagesAvailable(start: () => Promise<unknown> | void): Promise<void> {
+// Exported so the campaign cover render makes the same promise the same way.
+export async function whenImagesAvailable(start: () => Promise<unknown> | void): Promise<void> {
   if (!(await imagesAvailable())) {
     return;
   }

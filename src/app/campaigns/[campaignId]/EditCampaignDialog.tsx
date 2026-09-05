@@ -2,11 +2,23 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { Loader2, X } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
-import { CAMPAIGN_DIFFICULTIES, type CampaignDifficulty } from "@/lib/campaign-types";
+import {
+  CAMPAIGN_DIFFICULTIES,
+  type CampaignCover as CampaignCoverRef,
+  type CampaignDifficulty,
+} from "@/lib/campaign-types";
 import type { Campaign } from "@/lib/db/campaigns";
+import { offersImages, useCapabilities } from "@/lib/use-capabilities";
+import { CampaignCover, type CoverStatus } from "@/components/CampaignCover";
+
+// Matches the characters page: polls every 2.5 s while a render is queued
+// or generating, and gives up after the image backend's own timeout so a
+// job the server never resolves cannot poll forever.
+const COVER_POLL_MS = 2500;
+const COVER_POLL_LIMIT = 240;
 
 // Party-lead edit of the campaign's core settings, available in the lobby
 // and mid-game (the DM prompt reads them fresh each turn); game settings
@@ -18,7 +30,11 @@ export function EditCampaignDialog({
   campaign: Pick<
     Campaign,
     "id" | "title" | "description" | "theme" | "maxPlayers" | "startingLevel" | "difficulty"
-  >;
+  > & {
+    // Optional because the in-game settings panel hands over a narrower
+    // shape than the lobby; the dialog fetches the live cover on open anyway.
+    cover?: CampaignCoverRef | null;
+  };
   onClose: () => void;
 }) {
   const [title, setTitle] = useState(campaign.title);
@@ -29,6 +45,106 @@ export function EditCampaignDialog({
   const [difficulty, setDifficulty] = useState<CampaignDifficulty>(campaign.difficulty);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // Cover art. The dialog owns its own copy so a change shows here at once;
+  // the table's snapshot catches up through campaign_updated.
+  const [cover, setCover] = useState<CampaignCoverRef | null>(campaign.cover ?? null);
+  const [coverStatus, setCoverStatus] = useState<CoverStatus>(null);
+  const [coverBusy, setCoverBusy] = useState(false);
+  const [coverError, setCoverError] = useState("");
+  const pollCount = useRef(0);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const capabilities = useCapabilities();
+  const coverPending = coverStatus === "queued" || coverStatus === "generating";
+
+  // Opening the dialog mid-render (say, after a reload) should still show
+  // the spinner, so the first thing it does is ask.
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/campaigns/${campaign.id}/cover`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!cancelled && data) {
+          setCover(data.cover ?? null);
+          setCoverStatus(data.status ?? null);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [campaign.id]);
+
+  useEffect(() => {
+    if (!coverPending || pollCount.current >= COVER_POLL_LIMIT) {
+      return;
+    }
+    const id = setTimeout(() => {
+      pollCount.current += 1;
+      fetch(`/api/campaigns/${campaign.id}/cover`)
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data) => {
+          if (data) {
+            setCover(data.cover ?? null);
+            setCoverStatus(data.status ?? null);
+          }
+        })
+        .catch(() => {});
+    }, COVER_POLL_MS);
+    return () => clearTimeout(id);
+  }, [campaign.id, coverPending, coverStatus, cover]);
+
+  async function coverRequest(method: "PATCH" | "POST" | "DELETE", body?: unknown) {
+    setCoverBusy(true);
+    setCoverError("");
+    try {
+      const response = await fetch(`/api/campaigns/${campaign.id}/cover`, {
+        method,
+        headers: body ? { "Content-Type": "application/json" } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setCoverError(data.error || "Could not change the cover.");
+        return;
+      }
+      pollCount.current = 0;
+      setCover(data.cover ?? null);
+      setCoverStatus(data.status ?? null);
+    } catch {
+      setCoverError("Could not reach the server.");
+    } finally {
+      setCoverBusy(false);
+    }
+  }
+
+  async function uploadCover(file: File) {
+    setCoverBusy(true);
+    setCoverError("");
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error("read failed"));
+        reader.readAsDataURL(file);
+      });
+      const upload = await fetch("/api/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dataUrl, name: file.name, type: file.type }),
+      });
+      const payload = await upload.json().catch(() => ({}));
+      if (!upload.ok) {
+        setCoverError(payload.error || "That image would not upload.");
+        return;
+      }
+      await coverRequest("PATCH", { imageUrl: payload.url });
+    } catch {
+      setCoverError("That image would not upload.");
+    } finally {
+      setCoverBusy(false);
+    }
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -144,6 +260,62 @@ export function EditCampaignDialog({
                 </select>
               </label>
             </div>
+
+            <div>
+              <span className="mb-1 block text-stone-400">Cover art</span>
+              <CampaignCover cover={cover} title={title || campaign.title} status={coverStatus} />
+              <input
+                ref={fileInput}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (file) {
+                    void uploadCover(file);
+                  }
+                }}
+              />
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={coverBusy || coverPending}
+                  onClick={() => fileInput.current?.click()}
+                  className={ui.btnSmall}
+                >
+                  Upload
+                </button>
+                {offersImages(capabilities) ? (
+                  <button
+                    type="button"
+                    disabled={coverBusy || coverPending}
+                    onClick={() => void coverRequest("POST")}
+                    className={ui.btnSmall}
+                  >
+                    {coverPending ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                    {coverPending ? "Painting" : "Paint one"}
+                  </button>
+                ) : null}
+                {cover ? (
+                  <button
+                    type="button"
+                    disabled={coverBusy || coverPending}
+                    onClick={() => void coverRequest("DELETE")}
+                    className={ui.btnSmall}
+                  >
+                    Remove
+                  </button>
+                ) : null}
+              </div>
+              {coverStatus === "failed" ? (
+                <p className="mt-1 text-xs text-red-400">
+                  The cover did not paint. Try again, or upload one.
+                </p>
+              ) : null}
+              {coverError ? <p className="mt-1 text-xs text-red-400">{coverError}</p> : null}
+            </div>
+
             {error ? <p className="text-red-400">{error}</p> : null}
             <button type="submit" disabled={busy} className={cn(ui.btnPrimary, "w-full")}>
               {busy ? <Loader2 className="size-4 animate-spin" /> : null}

@@ -1,14 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Copy, Loader2, Swords, Trash2 } from "lucide-react";
+import { Copy, Swords, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { formatRoster, TEMPLATE_NAME_MAX } from "@/lib/dm/encounter-template-logic";
+import { thresholdsForParty } from "@/lib/srd/encounter-math";
+import { targetPartyLevels, type TargetParty } from "@/lib/workshop/kind";
+import { Sheet } from "@/components/ui/Sheet";
+import { DmWorkbenchPanel } from "@/app/campaigns/[campaignId]/DmWorkbenchPanel";
+import { EncounterForm } from "@/app/workshop/encounters/EncounterForm";
+import { EncounterRows } from "@/app/workshop/encounters/EncounterRows";
 import {
-  formatRoster,
-  TEMPLATE_NAME_MAX,
-  type TemplateEnemy,
-} from "@/lib/dm/encounter-template-logic";
-import { MonsterRosterPicker } from "@/app/campaigns/[campaignId]/MonsterRosterPicker";
+  EMPTY_ENCOUNTER_DRAFT,
+  type EncounterDraft,
+  type MapOption,
+  type PreparedEncounter,
+  type TemplateReadout,
+} from "@/app/workshop/encounters/types";
 
 // Prepared encounters: the roster a DM writes down before the session and
 // deploys in one action.
@@ -16,27 +24,16 @@ import { MonsterRosterPicker } from "@/app/campaigns/[campaignId]/MonsterRosterP
 // The difficulty line under each one is not stored. It is recomputed on
 // every read from the party as it stands today, because the party levels up
 // between the prep and the table and a saved verdict would quietly go stale.
+//
+// Two layouts over one set of requests. "list" is the DM console's: the
+// prepared fights as compact entries with the create form underneath. "rows"
+// is the workshop's: the what-if workbench folded into a card at the top,
+// one full-width row per fight with a CR budget bar, and the editor in a
+// sheet. The bar's thresholds come from the target party the caller passes,
+// through the same thresholdsForParty the workbench route and the target
+// party bar read, so the three never disagree about what "deadly" is.
 
-type Readout = {
-  verdict: string;
-  adjustedXp: number;
-  ceiling: number;
-  tooDeadly: boolean;
-  unknownMonster: string | null;
-  count: number;
-};
-
-type Template = {
-  id: string;
-  name: string;
-  enemies: TemplateEnemy[];
-  battlefield: string;
-  notes: string;
-  map: { mapId: string | null };
-  readout: Readout;
-};
-
-function DifficultyLine({ readout }: { readout: Readout }) {
+function DifficultyLine({ readout }: { readout: TemplateReadout }) {
   if (readout.unknownMonster) {
     return (
       <p className="text-[11px] text-red-400">
@@ -53,17 +50,27 @@ function DifficultyLine({ readout }: { readout: Readout }) {
   );
 }
 
-export function DmEncounterPrepPanel({ campaignId }: { campaignId: string }) {
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [name, setName] = useState("");
-  const [enemies, setEnemies] = useState("");
-  const [battlefield, setBattlefield] = useState("");
-  const [notes, setNotes] = useState("");
-  const [maps, setMaps] = useState<Array<{ id: string; name: string }>>([]);
-  const [mapId, setMapId] = useState("");
+export function DmEncounterPrepPanel({
+  campaignId,
+  layout = "list",
+  targetParty,
+}: {
+  campaignId: string;
+  layout?: "list" | "rows";
+  // Read only in rows mode: the party the CR budget bar is drawn against. A
+  // workshop declares one; a real campaign has no need of it because the
+  // console never shows the bar.
+  targetParty?: TargetParty;
+}) {
+  const [templates, setTemplates] = useState<PreparedEncounter[]>([]);
+  const [draft, setDraft] = useState<EncounterDraft>(EMPTY_ENCOUNTER_DRAFT);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [maps, setMaps] = useState<MapOption[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
+  const rows = layout === "rows";
 
   // The state lands in a .then callback rather than after an await, so the
   // refetch reads as "subscribe to an external system" to React and to the
@@ -72,7 +79,7 @@ export function DmEncounterPrepPanel({ campaignId }: { campaignId: string }) {
     () =>
       fetch(`/api/campaigns/${campaignId}/dm/encounter-templates`)
         .then((response) => (response.ok ? response.json() : null))
-        .then((payload: { templates: Template[] } | null) => {
+        .then((payload: { templates: PreparedEncounter[] } | null) => {
           if (payload) {
             setTemplates(payload.templates);
           }
@@ -89,7 +96,7 @@ export function DmEncounterPrepPanel({ campaignId }: { campaignId: string }) {
     () =>
       fetch(`/api/campaigns/${campaignId}/dm/maps`)
         .then((response) => (response.ok ? response.json() : null))
-        .then((payload: { maps: Array<{ id: string; name: string }> } | null) => {
+        .then((payload: { maps: MapOption[] } | null) => {
           if (payload) {
             setMaps(payload.maps);
           }
@@ -100,25 +107,50 @@ export function DmEncounterPrepPanel({ campaignId }: { campaignId: string }) {
     [campaignId],
   );
 
+  // The server costs every roster against the party it knows about, so when
+  // the workshop's target party changes the readouts are stale until refetched.
+  const partyKey = targetParty ? `${targetParty.size}:${targetParty.level}` : "";
   useEffect(() => {
     void load();
     void loadMaps();
-  }, [load, loadMaps]);
+  }, [load, loadMaps, partyKey]);
 
+  function openEditor(template: PreparedEncounter | null) {
+    setError("");
+    setNote("");
+    setEditingId(template?.id ?? null);
+    setDraft(
+      template
+        ? {
+            name: template.name,
+            enemies: formatRoster(template.enemies),
+            battlefield: template.battlefield,
+            notes: template.notes,
+            mapId: template.map.mapId ?? "",
+          }
+        : EMPTY_ENCOUNTER_DRAFT,
+    );
+    setEditorOpen(true);
+  }
+
+  // One request for both a new fight and an edit to an old one: the create
+  // and update routes take the same body, so the only difference is where it
+  // goes. The list layout never sets editingId and so always creates.
   async function save() {
     setBusy(true);
     setError("");
     setNote("");
     try {
-      const response = await fetch(`/api/campaigns/${campaignId}/dm/encounter-templates`, {
-        method: "POST",
+      const base = `/api/campaigns/${campaignId}/dm/encounter-templates`;
+      const response = await fetch(editingId ? `${base}/${editingId}` : base, {
+        method: editingId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name,
-          enemies,
-          battlefield,
-          notes,
-          map: { mapId: mapId || null },
+          name: draft.name,
+          enemies: draft.enemies,
+          battlefield: draft.battlefield,
+          notes: draft.notes,
+          map: { mapId: draft.mapId || null },
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -126,11 +158,9 @@ export function DmEncounterPrepPanel({ campaignId }: { campaignId: string }) {
         setError((payload as { error?: string }).error ?? "That could not be saved.");
         return;
       }
-      setName("");
-      setEnemies("");
-      setBattlefield("");
-      setNotes("");
-      setMapId("");
+      setDraft(EMPTY_ENCOUNTER_DRAFT);
+      setEditingId(null);
+      setEditorOpen(false);
       await load();
     } finally {
       setBusy(false);
@@ -139,7 +169,7 @@ export function DmEncounterPrepPanel({ campaignId }: { campaignId: string }) {
 
   // A second copy of the fight, for the version-two-of-this-ambush workflow:
   // same create route, name suffixed, linked map carried along.
-  async function duplicate(template: Template) {
+  async function duplicate(template: PreparedEncounter) {
     setBusy(true);
     setError("");
     setNote("");
@@ -168,6 +198,10 @@ export function DmEncounterPrepPanel({ campaignId }: { campaignId: string }) {
 
   async function remove(id: string) {
     await fetch(`/api/campaigns/${campaignId}/dm/encounter-templates/${id}`, { method: "DELETE" });
+    if (editingId === id) {
+      setEditingId(null);
+      setEditorOpen(false);
+    }
     await load();
   }
 
@@ -196,6 +230,52 @@ export function DmEncounterPrepPanel({ campaignId }: { campaignId: string }) {
     } finally {
       setBusy(false);
     }
+  }
+
+  const feedback = (
+    <>
+      {error ? <p className="text-[11px] text-red-400">{error}</p> : null}
+      {note ? <p className="text-[11px] text-emerald-400">{note}</p> : null}
+    </>
+  );
+
+  if (rows) {
+    const thresholds = targetParty ? thresholdsForParty(targetPartyLevels(targetParty)) : null;
+    const editing = templates.find((template) => template.id === editingId) ?? null;
+    return (
+      <div className="space-y-3">
+        <DmWorkbenchPanel campaignId={campaignId} collapsible />
+        <EncounterRows
+          encounters={templates}
+          maps={maps}
+          thresholds={thresholds}
+          busy={busy}
+          onOpen={openEditor}
+          onDeploy={(template) => void deploy(template.id)}
+          onDuplicate={(template) => void duplicate(template)}
+          onDelete={(template) => void remove(template.id)}
+        />
+        {feedback}
+        <Sheet
+          open={editorOpen}
+          onOpenChange={setEditorOpen}
+          title={editing ? editing.name : "New encounter"}
+          className="lg:w-[min(92vw,40rem)]"
+        >
+          <EncounterForm
+            campaignId={campaignId}
+            value={draft}
+            onChange={setDraft}
+            maps={maps}
+            busy={busy}
+            submitLabel={editing ? "Save" : "Prepare it"}
+            onSubmit={() => void save()}
+            variant="sheet"
+          />
+          <div className="mt-2">{feedback}</div>
+        </Sheet>
+      </div>
+    );
   }
 
   return (
@@ -263,67 +343,17 @@ export function DmEncounterPrepPanel({ campaignId }: { campaignId: string }) {
         )}
       </section>
 
-      <section className="space-y-1.5 rounded-lg border border-stone-800 bg-stone-950/40 px-2.5 py-2">
-        <input
-          value={name}
-          maxLength={TEMPLATE_NAME_MAX}
-          onChange={(event) => setName(event.target.value)}
-          placeholder="Ambush at the ford"
-          className="w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-sm text-stone-200"
-        />
-        <MonsterRosterPicker campaignId={campaignId} roster={enemies} onChange={setEnemies} />
-        <textarea
-          value={enemies}
-          onChange={(event) => setEnemies(event.target.value)}
-          rows={3}
-          placeholder={"goblin x4\nhobgoblin"}
-          className="w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-sm text-stone-200"
-        />
-        <p className="text-[10px] text-stone-600">
-          One per line, name or slug, optional xN. The same shorthand Start a fight takes, so
-          picking above and typing here are the same thing.
-        </p>
-        <input
-          value={battlefield}
-          onChange={(event) => setBattlefield(event.target.value)}
-          placeholder="a rope bridge over a gorge"
-          className="w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-sm text-stone-200"
-        />
-        <label className="block">
-          <span className="text-[10px] uppercase tracking-wide text-stone-500">On which map</span>
-          <select
-            value={mapId}
-            onChange={(event) => setMapId(event.target.value)}
-            className="mt-0.5 w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-sm text-stone-200"
-          >
-            <option value="">Generator&apos;s choice</option>
-            {maps.map((map) => (
-              <option key={map.id} value={map.id}>
-                {map.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <textarea
-          value={notes}
-          onChange={(event) => setNotes(event.target.value)}
-          rows={2}
-          placeholder="Tactics, what they want, when they run."
-          className="w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-sm text-stone-200"
-        />
-        <button
-          type="button"
-          disabled={busy || !name.trim() || !enemies.trim()}
-          onClick={() => void save()}
-          className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-40"
-        >
-          {busy ? <Loader2 className="size-3 animate-spin" /> : null}
-          Prepare it
-        </button>
-      </section>
+      <EncounterForm
+        campaignId={campaignId}
+        value={draft}
+        onChange={setDraft}
+        maps={maps}
+        busy={busy}
+        submitLabel="Prepare it"
+        onSubmit={() => void save()}
+      />
 
-      {error ? <p className="text-[11px] text-red-400">{error}</p> : null}
-      {note ? <p className="text-[11px] text-emerald-400">{note}</p> : null}
+      {feedback}
     </div>
   );
 }

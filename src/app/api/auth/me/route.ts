@@ -15,6 +15,7 @@ export async function GET() {
           avatar: user.avatar,
           isAdmin: user.isAdmin,
           mustChangePassword: user.mustChangePassword,
+      deletionDueAt: user.deletionDueAt,
           discordLinked: getUserDiscordId(user.id) !== null,
           discordAvailable: discordCredentials() !== null,
           hasPassword: getUserByUsername(user.username)?.passwordHash !== NO_PASSWORD_SENTINEL,

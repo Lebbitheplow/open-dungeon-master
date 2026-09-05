@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { PIXEL_ICONS } from "@/lib/ui";
+import { PageSection, PageShell } from "@/components/PageShell";
 import { listDocuments } from "@/lib/content";
 import { contentPackInstalled } from "@/lib/content/db";
 import { listWorldPackSummaries } from "@/lib/worlds";
@@ -20,13 +22,17 @@ export default function LicensesPage() {
   const ambience = installedTracks();
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-10">
-      <Link href="/" className="text-sm text-amber-200 hover:text-amber-400">
-        Back to Open Dungeon Master
-      </Link>
-      <h1 className="mt-4 font-serif text-3xl text-stone-100">Licenses and attribution</h1>
-
-      <section className="mt-6 space-y-3 text-sm leading-6 text-stone-300">
+    <PageShell
+      icon={PIXEL_ICONS.support}
+      title="Licenses and attribution"
+      blurb="Where the bundled rules, imported content and sounds come from."
+      actions={
+        <Link href="/" className="text-sm text-amber-200 hover:text-amber-100">
+          Back to Open Dungeon Master
+        </Link>
+      }
+    >
+      <PageSection bodyClassName="space-y-3 text-sm leading-6 text-stone-300">
         <p>
           Open Dungeon Master bundles game content from the System Reference Document 5.1
           (SRD 5.1) by Wizards of the Coast LLC, available under the Creative Commons
@@ -45,11 +51,10 @@ export default function LicensesPage() {
             it; until then the app uses only the bundled SRD 5.1 data.
           </p>
         ) : null}
-      </section>
+      </PageSection>
 
       {documents.length ? (
-        <section className="mt-8">
-          <h2 className="font-serif text-xl text-stone-100">Imported source documents</h2>
+        <PageSection heading="Imported source documents">
           <ul className="mt-4 space-y-3">
             {documents.map((document) => (
               <li
@@ -76,17 +81,16 @@ export default function LicensesPage() {
               </li>
             ))}
           </ul>
-        </section>
+        </PageSection>
       ) : null}
 
       {worldPacks.length ? (
-        <section className="mt-8">
-          <h2 className="font-serif text-xl text-stone-100">Campaign plugins</h2>
-          <p className="mt-2 text-sm leading-6 text-stone-400">
+        <PageSection heading="Campaign plugins">
+          <p className="text-sm leading-6 text-stone-400">
             World packs rename existing SRD races, classes, spells, items and monsters to fit a
             setting. No rule and no stat block is changed.
           </p>
-          <p className="mt-2 text-sm leading-6 text-stone-400">
+          <p className="text-sm leading-6 text-stone-400">
             Community campaign packs were installed on this server by its operator. They are{" "}
             <span className="text-stone-200">not distributed with Open Dungeon Master</span>, are
             not covered by its MIT license, and are the work of their own authors. Where a pack
@@ -94,13 +98,12 @@ export default function LicensesPage() {
             or endorsement from that setting&apos;s rights holders. Each pack names its own
             attribution wherever it appears in the app.
           </p>
-        </section>
+        </PageSection>
       ) : null}
 
       {ambience.length ? (
-        <section className="mt-8">
-          <h2 className="font-serif text-xl text-stone-100">Sound library</h2>
-          <p className="mt-2 text-sm leading-6 text-stone-400">
+        <PageSection heading="Sound library">
+          <p className="text-sm leading-6 text-stone-400">
             Ambience and music files were fetched from public archives by this server&apos;s
             operator and are{" "}
             <span className="text-stone-200">not distributed with Open Dungeon Master</span>.
@@ -133,13 +136,13 @@ export default function LicensesPage() {
               </li>
             ))}
           </ul>
-        </section>
+        </PageSection>
       ) : null}
 
-      <p className="mt-10 text-xs text-stone-500">
+      <p className="px-1 text-xs text-stone-500">
         Open Dungeon Master itself is MIT licensed. Homebrew content belongs to the user who
         created it, and installed campaign plugins belong to their authors.
       </p>
-    </main>
+    </PageShell>
   );
 }

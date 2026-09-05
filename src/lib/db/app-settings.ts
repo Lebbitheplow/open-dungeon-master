@@ -31,6 +31,19 @@ export function setAppSetting(key: string, value: unknown) {
     .run(key, JSON.stringify(value), nowIso());
 }
 
+const INSTANCE_ID_KEY = "instance_id";
+
+// A world's identity across addresses. A device world gets a fresh tunnel
+// hostname every share session; clients compare this id to recognize a known
+// world at a new address instead of saving a duplicate server entry.
+// INSERT OR IGNORE makes first-mint atomic under concurrent requests.
+export function getInstanceId(): string {
+  getDatabase()
+    .prepare(`INSERT OR IGNORE INTO app_settings (key, value_json, updated_at) VALUES (?, ?, ?)`)
+    .run(INSTANCE_ID_KEY, JSON.stringify(crypto.randomUUID()), nowIso());
+  return getAppSetting<string>(INSTANCE_ID_KEY, "");
+}
+
 // Deliberately uncached: a single-row synchronous SQLite read per call keeps
 // admin edits live without any invalidation logic. If a cache is ever added,
 // saveGlobalConfig must bust it (single-process assumption).
@@ -45,6 +58,7 @@ export type GlobalConfigPatch = {
   signupsEnabled?: boolean;
   signupMode?: GlobalConfig["signupMode"];
   serverName?: string;
+  accountDeletionGraceDays?: number;
   publicUrl?: string;
   worldRegistryUrl?: string;
   sampling?: Partial<GlobalConfig["sampling"]>;
@@ -72,6 +86,8 @@ export function saveGlobalConfig(patch: GlobalConfigPatch): GlobalConfig {
         : (patch.signupsEnabled ?? current.signupsEnabled),
     signupMode,
     serverName: patch.serverName ?? current.serverName,
+    accountDeletionGraceDays:
+      patch.accountDeletionGraceDays ?? current.accountDeletionGraceDays,
     publicUrl: patch.publicUrl ?? current.publicUrl,
     worldRegistryUrl: patch.worldRegistryUrl ?? current.worldRegistryUrl,
     sampling: { ...current.sampling, ...patch.sampling },

@@ -1,18 +1,16 @@
 import { z } from "zod";
+import { cancelAccountDeletion, purgeAccount } from "@/lib/account-deletion";
 import { isErrorResponse, requireAdmin } from "@/lib/admin-api";
-import {
-  countAdmins,
-  deleteUserCascade,
-  getUserById,
-  setUserAdmin,
-} from "@/lib/db/users";
+import { countAdmins, getUserById, setUserAdmin } from "@/lib/db/users";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const patchSchema = z.object({
-  isAdmin: z.boolean(),
-});
+const patchSchema = z.union([
+  z.object({ isAdmin: z.boolean() }),
+  // Calls off a deletion the user scheduled themselves.
+  z.object({ keepAccount: z.literal(true) }),
+]);
 
 export async function PATCH(
   request: Request,
@@ -31,6 +29,10 @@ export async function PATCH(
   const target = getUserById(userId);
   if (!target) {
     return Response.json({ error: "User not found." }, { status: 404 });
+  }
+  if ("keepAccount" in parsed.data) {
+    cancelAccountDeletion(target.id);
+    return Response.json({ ok: true });
   }
   if (!parsed.data.isAdmin) {
     if (target.id === admin.id) {
@@ -60,6 +62,6 @@ export async function DELETE(
   if (target.id === admin.id) {
     return Response.json({ error: "You can't delete your own account." }, { status: 400 });
   }
-  deleteUserCascade(target.id);
+  purgeAccount(target.id);
   return Response.json({ ok: true });
 }

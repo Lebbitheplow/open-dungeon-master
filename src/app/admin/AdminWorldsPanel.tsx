@@ -176,8 +176,8 @@ export function AdminWorldsPanel() {
 
   return (
     <div className="space-y-6 text-sm">
-      <section className="rounded-lg border border-stone-800 bg-stone-950/60 p-4">
-        <h2 className="text-sm font-medium text-stone-200">Campaign plugins</h2>
+      <section className={cn(ui.card, "texture-noise p-5")}>
+        <h2 className={ui.sectionEyebrow}>Campaign plugins</h2>
         <p className="mt-2 text-xs leading-5 text-stone-400">
           A world pack renames the rules into a setting: its own races, classes, spells, gear,
           monsters, factions and lore, plus a brief telling the DM how that world sounds. Every

@@ -360,6 +360,26 @@ stored under `public/generated/`, with temporary generation refs under
 local stories, messages, characters, uploaded photos, generated images, and
 temporary refs, then vacuums the SQLite database.
 
+### Deleting an account
+
+Anyone can delete their own account from account settings (and from the
+desktop and Android apps, per server). The request signs the account out on
+every device and stamps a due date; a background job erases the account once
+the server's grace period has passed. The period is set in the admin panel
+under Accounts (0 to 90 days, default 14; 0 erases immediately). Signing in
+before the due date and choosing "Keep my account" calls the deletion off.
+An admin can also call it off, or erase the account at once, from the Users
+tab.
+
+The purge removes the account row and everything that hangs off it: owned
+campaigns and workshops, campaign seats and character sheets, library
+characters and rulesets, homebrew, notes, private threads and whispers,
+friendships, notifications, and the avatar and portrait files under
+`public/uploads/` that nothing else points at. Messages the person wrote in
+other people's campaigns stay in those transcripts with the author link cut,
+and campaign tools they made in other people's campaigns (roll tables,
+prepared encounters, scheduled sessions) pass to that campaign's owner.
+
 ### Backing up and moving to another server
 
 Everything a table has made lives in two places, and a backup needs both:

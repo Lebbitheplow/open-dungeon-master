@@ -20,6 +20,7 @@ export async function GET() {
       hasPassword: user.hasPassword,
       campaignCount: user.campaignCount,
       createdAt: user.createdAt,
+      deletionDueAt: user.deletionDueAt,
     })),
   });
 }

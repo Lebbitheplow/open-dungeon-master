@@ -6,6 +6,9 @@ export type SessionUser = {
   avatar?: { url: string } | null;
   isAdmin?: boolean;
   mustChangePassword?: boolean;
+  // Set while the account is scheduled for deletion; the header banner
+  // offers to keep it until then.
+  deletionDueAt?: string | null;
 };
 
 export type CampaignStatus = "lobby" | "active" | "ended";
@@ -38,9 +41,17 @@ export type CampaignSummary = {
   assistantDmUserId: string | null;
   playerCount: number;
   role: "owner" | "player";
+  // Cover art for the campaign tile and hero: an uploaded or painted image
+  // under /uploads/, or null for the themed placeholder
+  // (src/components/CampaignCover.tsx). On the summary rather than the full
+  // campaign because the home screen and the shells list it without opening
+  // the table.
+  cover: CampaignCover | null;
   createdAt: string;
   updatedAt: string;
 };
+
+export type CampaignCover = { id: string; url: string };
 
 // What a player is doing when they hit send. Shared by the composer and the
 // routes on purpose: this used to live in Composer.tsx while the actions

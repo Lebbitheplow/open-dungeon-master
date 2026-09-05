@@ -9,29 +9,20 @@ import {
   Loader2,
   Sparkles,
   Trash2,
-  UserPlus,
-  Users,
 } from "lucide-react";
-import { cn } from "@/lib/cn";
 import { offersImages, offersStoryModel, useCapabilities } from "@/lib/use-capabilities";
 import {
-  ATTITUDES,
   FIELD_LABELS,
   applyGeneratedField,
   blankDraft,
-  describeNpc,
   draftFrom,
   type GeneratableField,
   type NpcDraft,
   type RelationGraph,
 } from "@/lib/npcs/forge";
-import {
-  GOAL_FIELDS,
-  PersonalitySliders,
-  RelationEditor,
-  goalText,
-  setGoal,
-} from "@/app/campaigns/[campaignId]/NpcFields";
+import { Sheet } from "@/components/ui/Sheet";
+import { CastChips, CastRows, type Npc } from "@/app/workshop/cast/CastList";
+import { NpcEditorFields } from "@/app/workshop/cast/NpcEditorFields";
 
 // The NPC forge.
 //
@@ -48,28 +39,23 @@ import {
 // Every AI control here is optional equipment. A server with no text model
 // shows no Suggest buttons and one with no image backend shows no Paint
 // button; the form and the upload work the same either way.
+//
+// Two layouts over one set of requests. "chips" is the DM console's: a row
+// of names with the editor inline underneath. "rows" is the workshop's:
+// full-width rows with a search box, and the editor in a sheet.
 
-type Npc = {
-  id: string;
-  name: string;
-  attitude: string;
-  trait: string;
-  location: string;
-  aliases: string[];
-  portraitUrl: string;
-  archived: boolean;
-  agency: {
-    personality: Record<string, number> | null;
-    goals: { scene?: string; session?: { text: string; progress: number; target: number }; ambition?: string };
-    relations: Array<{ npcName: string; score: number; note?: string }>;
-  };
-};
-
-export function DmNpcForgePanel({ campaignId }: { campaignId: string }) {
+export function DmNpcForgePanel({
+  campaignId,
+  layout = "chips",
+}: {
+  campaignId: string;
+  layout?: "chips" | "rows";
+}) {
   const [npcs, setNpcs] = useState<Npc[]>([]);
   const [graph, setGraph] = useState<RelationGraph>({ nodes: [], edges: [] });
   const [selectedId, setSelectedId] = useState("");
   const [draft, setDraft] = useState<NpcDraft>(blankDraft());
+  const [editorOpen, setEditorOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [generating, setGenerating] = useState<GeneratableField | "">("");
   const [error, setError] = useState("");
@@ -77,6 +63,7 @@ export function DmNpcForgePanel({ campaignId }: { campaignId: string }) {
   const capabilities = useCapabilities();
   const canSuggest = offersStoryModel(capabilities);
   const canPaint = offersImages(capabilities);
+  const rows = layout === "rows";
 
   // The state lands in a .then callback rather than after an await, so the
   // refetch reads as "subscribe to an external system" to React and to the
@@ -108,10 +95,14 @@ export function DmNpcForgePanel({ campaignId }: { campaignId: string }) {
     if (!npc) {
       setSelectedId("");
       setDraft(blankDraft());
-      return;
+    } else {
+      setSelectedId(npc.id);
+      setDraft(draftFrom(npc as Parameters<typeof draftFrom>[0]));
     }
-    setSelectedId(npc.id);
-    setDraft(draftFrom(npc as Parameters<typeof draftFrom>[0]));
+    // In rows the editor lives in a sheet, so a tap on a row raises it.
+    if (rows) {
+      setEditorOpen(true);
+    }
   }
 
   async function save() {
@@ -164,7 +155,10 @@ export function DmNpcForgePanel({ campaignId }: { campaignId: string }) {
     setBusy(true);
     try {
       await fetch(`/api/campaigns/${campaignId}/dm/npcs/${selected.id}`, { method: "DELETE" });
-      open(null);
+      setError("");
+      setSelectedId("");
+      setDraft(blankDraft());
+      setEditorOpen(false);
       await load();
     } finally {
       setBusy(false);
@@ -280,151 +274,15 @@ export function DmNpcForgePanel({ campaignId }: { campaignId: string }) {
       </button>
     ) : null;
 
-  return (
+  const editor = (
     <div className="space-y-3">
-      <section className="space-y-2 rounded-lg border border-stone-800 bg-stone-950/40 px-2.5 py-2">
-        <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
-          <Users className="size-3.5" />
-          The cast
-        </p>
-        <div className="flex flex-wrap gap-1">
-          <button
-            type="button"
-            onClick={() => open(null)}
-            className={cn(
-              "flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px]",
-              selectedId === ""
-                ? "border-amber-700 bg-amber-950/50 text-amber-100"
-                : "border-stone-700 text-stone-400 hover:text-stone-200",
-            )}
-          >
-            <UserPlus className="size-3" /> Someone new
-          </button>
-          {npcs.map((npc) => (
-            <button
-              key={npc.id}
-              type="button"
-              title={describeNpc(draftFrom(npc as Parameters<typeof draftFrom>[0]))}
-              onClick={() => open(npc)}
-              className={cn(
-                "flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px]",
-                npc.id === selectedId
-                  ? "border-amber-700 bg-amber-950/50 text-amber-100"
-                  : "border-stone-700 text-stone-400 hover:text-stone-200",
-                npc.archived && "opacity-50",
-              )}
-            >
-              {npc.portraitUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={npc.portraitUrl} alt="" className="size-4 rounded-full object-cover" />
-              ) : null}
-              {npc.name}
-            </button>
-          ))}
-        </div>
-        {npcs.length === 0 ? (
-          <p className="text-[11px] text-stone-500">
-            Nobody written yet. Everything here also fills itself in as the party meets people.
-          </p>
-        ) : null}
-      </section>
-
-      <section className="space-y-2 rounded-lg border border-stone-800 bg-stone-950/60 px-2.5 py-2">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <input
-            value={draft.name}
-            onChange={(event) => setDraft({ ...draft, name: event.target.value })}
-            placeholder="Their name"
-            className="min-w-32 flex-1 rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-sm text-stone-200"
-          />
-          <select
-            value={draft.attitude}
-            onChange={(event) =>
-              setDraft({ ...draft, attitude: event.target.value as NpcDraft["attitude"] })
-            }
-            className="rounded-md border border-stone-700 bg-stone-950 px-1.5 py-1 text-xs text-stone-300"
-          >
-            {ATTITUDES.map((attitude) => (
-              <option key={attitude} value={attitude}>
-                {attitude === "hostile"
-                  ? "Hostile to the party"
-                  : attitude === "friendly"
-                    ? "Friendly to the party"
-                    : "Indifferent"}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <input
-          value={draft.location}
-          onChange={(event) => setDraft({ ...draft, location: event.target.value })}
-          placeholder="Where they are usually found"
-          className="w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-300"
-        />
-
-        <input
-          value={draft.aliases.join(", ")}
-          onChange={(event) =>
-            setDraft({
-              ...draft,
-              aliases: event.target.value.split(",").map((alias) => alias.trim()).filter(Boolean),
-            })
-          }
-          placeholder="Other names they answer to, separated by commas"
-          className="w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-300"
-        />
-
-        <div className="flex items-start gap-1.5">
-          <textarea
-            value={draft.trait}
-            onChange={(event) => setDraft({ ...draft, trait: event.target.value })}
-            rows={2}
-            placeholder="What a player notices about them first"
-            className="flex-1 rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-300"
-          />
-          {generateButton("trait")}
-        </div>
-      </section>
-
-      <section className="space-y-1.5 rounded-lg border border-stone-800 bg-stone-950/60 px-2.5 py-2">
-        <div className="flex items-center justify-between">
-          <p className="text-[11px] uppercase tracking-wide text-stone-500">Who they are</p>
-          {generateButton("personality")}
-        </div>
-        <PersonalitySliders draft={draft} onChange={setDraft} />
-      </section>
-
-      <section className="space-y-1.5 rounded-lg border border-stone-800 bg-stone-950/60 px-2.5 py-2">
-        <p className="text-[11px] uppercase tracking-wide text-stone-500">What they want</p>
-        {GOAL_FIELDS.map(([field, placeholder]) => (
-          <div key={field} className="flex items-center gap-1.5">
-            <input
-              value={goalText(draft, field)}
-              onChange={(event) => setDraft(setGoal(draft, field, event.target.value))}
-              placeholder={placeholder}
-              className="flex-1 rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-300"
-            />
-            {field === "session" && draft.goals.session ? (
-              <span className="shrink-0 text-[10px] text-stone-600">
-                {draft.goals.session.progress}/{draft.goals.session.target}
-              </span>
-            ) : null}
-            {generateButton(field)}
-          </div>
-        ))}
-        <p className="text-[10px] text-stone-600">
-          The middle one advances on background dice at the end of a chapter, so its progress is
-          the engine&apos;s to move, not yours.
-        </p>
-      </section>
-
-      <section className="space-y-1.5 rounded-lg border border-stone-800 bg-stone-950/60 px-2.5 py-2">
-        <p className="text-[11px] uppercase tracking-wide text-stone-500">
-          How they feel about other people
-        </p>
-        <RelationEditor draft={draft} graph={graph} others={others} onChange={setDraft} />
-      </section>
+      <NpcEditorFields
+        draft={draft}
+        onChange={setDraft}
+        graph={graph}
+        others={others}
+        suggest={generateButton}
+      />
 
       <div className="flex flex-wrap items-center gap-1.5">
         <button
@@ -512,6 +370,29 @@ export function DmNpcForgePanel({ campaignId }: { campaignId: string }) {
       </div>
 
       {error ? <p className="text-[11px] text-red-400">{error}</p> : null}
+    </div>
+  );
+
+  if (rows) {
+    return (
+      <div className="space-y-3">
+        <CastRows npcs={npcs} onOpen={open} />
+        <Sheet
+          open={editorOpen}
+          onOpenChange={setEditorOpen}
+          title={selected ? selected.name : "Someone new"}
+          className="lg:w-[min(92vw,40rem)]"
+        >
+          {editor}
+        </Sheet>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <CastChips npcs={npcs} selectedId={selectedId} onOpen={open} />
+      {editor}
     </div>
   );
 }

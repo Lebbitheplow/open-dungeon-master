@@ -301,6 +301,53 @@ export function NoteComposer({
   );
 }
 
+// The campaign-scope suggestions waiting on whoever steers the story,
+// newest first. One filter shared by this panel and the Lead tab, so the
+// count on the rail and the list under it can never disagree.
+export function pendingCampaignNotes(notes: Note[]): Note[] {
+  return notes
+    .filter((note) => note.characterId === null && note.status === "pending")
+    .sort((a, b) => b.seq - a.seq);
+}
+
+// The approval queue itself, without a heading: NoteCard with Approve and
+// Reject. Rendered here under "Suggestions awaiting you" and again on the
+// Lead tab, which is why it is a component and not a copy of the card.
+export function PendingNotesList({
+  campaignId,
+  notes,
+  members,
+  meUserId,
+  refreshNotes,
+}: {
+  campaignId: string;
+  notes: Note[];
+  members: CampaignMember[];
+  meUserId: string;
+  refreshNotes: () => Promise<void>;
+}) {
+  const nameFor = (userId: string) =>
+    members.find((member) => member.userId === userId)?.username ?? "Unknown";
+  return (
+    <ul className="space-y-1.5">
+      {notes.map((note) => (
+        <NoteCard
+          key={note.id}
+          campaignId={campaignId}
+          note={note}
+          authorName={note.authorKind === "dm" ? "The DM" : nameFor(note.authorUserId)}
+          canEdit={note.authorUserId === meUserId}
+          canDelete
+          canPin={false}
+          canApprove
+          deleteLabel="Reject suggestion"
+          refreshNotes={refreshNotes}
+        />
+      ))}
+    </ul>
+  );
+}
+
 export function NotesPanel({
   campaignId,
   notes,
@@ -323,9 +370,7 @@ export function NotesPanel({
   const partyNotes = campaignNotes
     .filter((note) => note.visibility === "public" && note.status === "active")
     .sort(byPinnedThenNewest);
-  const pending = campaignNotes
-    .filter((note) => note.status === "pending")
-    .sort((a, b) => b.seq - a.seq);
+  const pending = pendingCampaignNotes(notes);
   const leadQueue = steersStory ? pending : [];
   // DM suggestions carry the owner's user id for the FK; keep them out of a
   // non-lead owner's "my suggestions" list.
@@ -345,22 +390,13 @@ export function NotesPanel({
       {leadQueue.length ? (
         <div className="space-y-1.5">
           <h3 className={cn(section, "text-amber-400")}>Suggestions awaiting you</h3>
-          <ul className="space-y-1.5">
-            {leadQueue.map((note) => (
-              <NoteCard
-                key={note.id}
-                campaignId={campaignId}
-                note={note}
-                authorName={note.authorKind === "dm" ? "The DM" : nameFor(note.authorUserId)}
-                canEdit={note.authorUserId === meUserId}
-                canDelete
-                canPin={false}
-                canApprove
-                deleteLabel="Reject suggestion"
-                refreshNotes={refreshNotes}
-              />
-            ))}
-          </ul>
+          <PendingNotesList
+            campaignId={campaignId}
+            notes={leadQueue}
+            members={members}
+            meUserId={meUserId}
+            refreshNotes={refreshNotes}
+          />
         </div>
       ) : null}
 

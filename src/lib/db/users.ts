@@ -11,6 +11,10 @@ export type User = {
   createdAt: string;
   isAdmin: boolean;
   mustChangePassword: boolean;
+  // Set while a self-service deletion is pending (src/lib/account-deletion.ts):
+  // when it was asked for, and when the purge job may erase the account.
+  deletionRequestedAt: string | null;
+  deletionDueAt: string | null;
 };
 
 // Password hash sentinel for accounts created through Discord sign-in. It can
@@ -26,10 +30,13 @@ type UserRow = {
   created_at: string;
   is_admin: number;
   must_change_password: number;
+  deletion_requested_at: string | null;
+  deletion_due_at: string | null;
 };
 
 const USER_COLUMNS =
-  "id, username, password_hash, avatar_json, created_at, is_admin, must_change_password";
+  "id, username, password_hash, avatar_json, created_at, is_admin, must_change_password, " +
+  "deletion_requested_at, deletion_due_at";
 
 function mapUser(row: UserRow): User {
   return {
@@ -39,6 +46,8 @@ function mapUser(row: UserRow): User {
     createdAt: row.created_at,
     isAdmin: row.is_admin === 1,
     mustChangePassword: row.must_change_password === 1,
+    deletionRequestedAt: row.deletion_requested_at,
+    deletionDueAt: row.deletion_due_at,
   };
 }
 
@@ -60,6 +69,8 @@ export function createUser(
     createdAt: nowIso(),
     isAdmin,
     mustChangePassword: false,
+    deletionRequestedAt: null,
+    deletionDueAt: null,
   };
 }
 
@@ -81,6 +92,8 @@ export function createCompanionUser(companionName: string): User {
     createdAt: nowIso(),
     isAdmin: false,
     mustChangePassword: false,
+    deletionRequestedAt: null,
+    deletionDueAt: null,
   };
 }
 
@@ -159,6 +172,8 @@ export type AdminUserSummary = User & {
   campaignCount: number;
 };
 
+// listUsers exposes deletionDueAt through the User fields it spreads.
+
 export function listUsers(): AdminUserSummary[] {
   const rows = getDatabase()
     .prepare(
@@ -222,6 +237,8 @@ export function createDiscordUser(username: string, discordId: string): User {
     createdAt: nowIso(),
     isAdmin: false,
     mustChangePassword: false,
+    deletionRequestedAt: null,
+    deletionDueAt: null,
   };
 }
 
@@ -240,7 +257,7 @@ export function getSessionUser(tokenHash: string): User | null {
     .prepare(
       `
         SELECT u.id, u.username, u.password_hash, u.avatar_json, u.created_at,
-          u.is_admin, u.must_change_password
+          u.is_admin, u.must_change_password, u.deletion_requested_at, u.deletion_due_at
         FROM sessions s
         JOIN users u ON u.id = s.user_id
         WHERE s.token_hash = ? AND s.expires_at >= ?
@@ -264,18 +281,23 @@ export function deleteSessionsForUser(userId: string, exceptTokenHash?: string) 
   }
 }
 
-// Deletes a user and everything they own. campaigns.owner_user_id has an FK
-// with no cascade, so owned campaigns must go first or the user delete
-// throws. Transcript references (campaign_messages.user_id, rolls,
-// sheet_audit) are plain TEXT columns and stay behind as history.
-export function deleteUserCascade(userId: string) {
-  const db = getDatabase();
-  db.transaction(() => {
-    db.prepare(`DELETE FROM campaigns WHERE owner_user_id = ?`).run(userId);
-    db.prepare(`UPDATE campaigns SET party_lead_user_id = NULL WHERE party_lead_user_id = ?`).run(
-      userId,
-    );
-    db.prepare(`DELETE FROM pending_rolls WHERE user_id = ?`).run(userId);
-    db.prepare(`DELETE FROM users WHERE id = ?`).run(userId);
-  })();
+// The deletion clock. Both stamps are set together and cleared together;
+// listUsersDueForPurge is what the purge job polls (src/lib/jobs.ts).
+export function markDeletionRequested(userId: string, requestedAt: string, dueAt: string) {
+  getDatabase()
+    .prepare(`UPDATE users SET deletion_requested_at = ?, deletion_due_at = ? WHERE id = ?`)
+    .run(requestedAt, dueAt, userId);
+}
+
+export function clearDeletionRequest(userId: string) {
+  getDatabase()
+    .prepare(`UPDATE users SET deletion_requested_at = NULL, deletion_due_at = NULL WHERE id = ?`)
+    .run(userId);
+}
+
+export function listUsersDueForPurge(nowIso: string): string[] {
+  const rows = getDatabase()
+    .prepare(`SELECT id FROM users WHERE deletion_due_at IS NOT NULL AND deletion_due_at <= ?`)
+    .all(nowIso) as Array<{ id: string }>;
+  return rows.map((row) => row.id);
 }

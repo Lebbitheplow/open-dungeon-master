@@ -19,7 +19,15 @@ type Preview = {
   warnings: string[];
 };
 
-export function ImportBundleButton() {
+// `label` and `className` let the hub header show the same control as a
+// small "Import a bundle" action; the shelf keeps the defaults.
+export function ImportBundleButton({
+  label = "Open a bundle",
+  className = ui.btnSecondary,
+}: {
+  label?: string;
+  className?: string;
+} = {}) {
   const input = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -89,14 +97,14 @@ export function ImportBundleButton() {
         type="button"
         onClick={() => input.current?.click()}
         disabled={busy}
-        className={ui.btnSecondary}
+        className={className}
       >
         {busy && !preview ? (
           <Loader2 className="size-4 animate-spin" />
         ) : (
           <FileUp className="size-4" />
         )}
-        Open a bundle
+        {label}
       </button>
 
       {error ? <p className="mt-2 text-sm text-red-300">{error}</p> : null}

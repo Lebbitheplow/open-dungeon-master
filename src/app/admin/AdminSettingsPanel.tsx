@@ -3,13 +3,16 @@
 import { Check, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
+import { shellHost } from "@/lib/shell-host";
 import { ui } from "@/lib/ui";
+import { PageSection } from "@/components/PageShell";
 import { AdminInvitesSection } from "@/app/admin/AdminInvitesSection";
 
 type MaskedConfig = {
   signupsEnabled: boolean;
   signupMode: "open" | "invite" | "closed";
   serverName: string;
+  accountDeletionGraceDays: number;
   publicUrl: string;
   text: {
     provider: "" | "local" | "custom";
@@ -136,6 +139,13 @@ export function AdminSettingsPanel() {
   // Server-computed, because the announced-address fallback chain ends at the
   // bind address, which never reaches this panel. Reflects the SAVED config.
   const [voiceUnroutable, setVoiceUnroutable] = useState(false);
+  // A world hosted by the client app on this device. The shell owns the
+  // public address, sign-up mode, voice transport and there is no usable
+  // Discord redirect, so those sections disappear and only AI settings stay.
+  const [deviceWorld, setDeviceWorld] = useState(false);
+  // A phone cannot run Ollama or a local ComfyUI install; the desktop shell
+  // can, so the PC keeps the local-AI fields.
+  const phoneWorld = deviceWorld && shellHost()?.platform === "android";
 
   useEffect(() => {
     fetch("/api/admin/settings")
@@ -145,6 +155,7 @@ export function AdminSettingsPanel() {
           setConfig(data.config);
           setEnv(data.envDefaults);
           setVoiceUnroutable(Boolean(data.voiceAnnounceUnroutable));
+          setDeviceWorld(Boolean(data.deviceWorld));
         }
       });
   }, []);
@@ -166,10 +177,24 @@ export function AdminSettingsPanel() {
       const response = await fetch("/api/admin/settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
+        // On a device world the shell writes the address, sign-up mode,
+        // voice and Discord settings itself; sending this panel's (possibly
+        // stale) copy back would fight it, so those keys stay out entirely
+        // and the PATCH route keeps the stored values.
         body: JSON.stringify({
-          signupMode: config.signupMode,
-          serverName: config.serverName,
-          publicUrl: config.publicUrl,
+          ...(deviceWorld
+            ? {}
+            : {
+                signupMode: config.signupMode,
+                serverName: config.serverName,
+                accountDeletionGraceDays: config.accountDeletionGraceDays,
+                publicUrl: config.publicUrl,
+                voiceChat: config.voiceChat,
+                discord: {
+                  clientId: config.discord.clientId,
+                  ...(discordSecret === SECRET_KEPT ? {} : { clientSecret: discordSecret }),
+                },
+              }),
           text: {
             provider: config.text.provider,
             localTextModel: config.text.localTextModel,
@@ -191,11 +216,6 @@ export function AdminSettingsPanel() {
             ...(openaiImageKey === SECRET_KEPT ? {} : { openaiApiKey: openaiImageKey }),
           },
           speech: config.speech,
-          voiceChat: config.voiceChat,
-          discord: {
-            clientId: config.discord.clientId,
-            ...(discordSecret === SECRET_KEPT ? {} : { clientSecret: discordSecret }),
-          },
         }),
       });
       const data = await response.json().catch(() => null);
@@ -216,70 +236,100 @@ export function AdminSettingsPanel() {
     }
   }
 
-  const section = "texture-noise rounded-xl border border-stone-700/50 bg-stone-950/60 p-5 shadow-elev-1";
-
   return (
     <div className="space-y-4">
-      <section className={section}>
-        <h2 className="mb-3 text-sm font-medium text-stone-300">Server</h2>
-        <div className="mb-3">
+      {deviceWorld ? (
+        <p className="text-xs text-stone-500">
+          This world runs inside the app, which manages its address, sign-ups,
+          sharing and voice chat for you. The settings here tune the AI it
+          plays with.
+        </p>
+      ) : null}
+      {deviceWorld ? null : (
+        <PageSection heading="Server">
+          <div className="mb-3">
+            <Field
+              label="Server name"
+              hint="Shown on the login screen and in client apps' server pickers. Blank = Open Dungeon Master."
+            >
+              <input
+                className={ui.input}
+                value={config.serverName}
+                maxLength={100}
+                onChange={(event) => setConfig({ ...config, serverName: event.target.value })}
+                placeholder="Open Dungeon Master"
+              />
+            </Field>
+          </div>
           <Field
-            label="Server name"
-            hint="Shown on the login screen and in client apps' server pickers. Blank = Open Dungeon Master."
+            label="Public URL"
+            hint={
+              env.publicUrl
+                ? `Env: ${env.publicUrl}`
+                : "The address players actually use (needed for Discord sign-in behind a reverse proxy). Blank = auto-detect."
+            }
           >
             <input
               className={ui.input}
-              value={config.serverName}
-              maxLength={100}
-              onChange={(event) => setConfig({ ...config, serverName: event.target.value })}
-              placeholder="Open Dungeon Master"
+              value={config.publicUrl}
+              onChange={(event) => setConfig({ ...config, publicUrl: event.target.value })}
+              placeholder={env.publicUrl || "https://dungeon.example.org"}
             />
           </Field>
-        </div>
-        <Field
-          label="Public URL"
-          hint={
-            env.publicUrl
-              ? `Env: ${env.publicUrl}`
-              : "The address players actually use (needed for Discord sign-in behind a reverse proxy). Blank = auto-detect."
-          }
-        >
-          <input
-            className={ui.input}
-            value={config.publicUrl}
-            onChange={(event) => setConfig({ ...config, publicUrl: event.target.value })}
-            placeholder={env.publicUrl || "https://dungeon.example.org"}
-          />
-        </Field>
-      </section>
+        </PageSection>
+      )}
 
-      <section className={section}>
-        <h2 className="mb-3 text-sm font-medium text-stone-300">Accounts</h2>
-        <Field label="New account sign-ups">
-          <select
-            className={ui.input}
-            value={config.signupMode}
-            onChange={(event) =>
-              setConfig({
-                ...config,
-                signupMode: event.target.value as MaskedConfig["signupMode"],
-              })
-            }
-          >
-            <option value="open">Open: anyone with the address can register</option>
-            <option value="invite">Invite-only: registering needs a code from below</option>
-            <option value="closed">Closed: no new accounts</option>
-          </select>
-        </Field>
-        <p className="mt-2 text-xs text-stone-500">
-          Applies to registration and to first-time Discord sign-ins alike. Existing users always
-          keep their access.
-        </p>
-        {config.signupMode === "invite" ? <AdminInvitesSection /> : null}
-      </section>
+      {deviceWorld ? null : (
+        <PageSection heading="Accounts">
+          <Field label="New account sign-ups">
+            <select
+              className={ui.input}
+              value={config.signupMode}
+              onChange={(event) =>
+                setConfig({
+                  ...config,
+                  signupMode: event.target.value as MaskedConfig["signupMode"],
+                })
+              }
+            >
+              <option value="open">Open: anyone with the address can register</option>
+              <option value="invite">Invite-only: registering needs a code from below</option>
+              <option value="closed">Closed: no new accounts</option>
+            </select>
+          </Field>
+          <p className="mt-2 text-xs text-stone-500">
+            Applies to registration and to first-time Discord sign-ins alike. Existing users always
+            keep their access.
+          </p>
+          {config.signupMode === "invite" ? <AdminInvitesSection /> : null}
+          <div className="mt-4">
+            <Field
+              label="Account deletion grace period (days)"
+              hint="When someone deletes their account it is signed out at once and erased after this many days; signing in before then keeps it. 0 erases immediately. Deleting a user from the Users tab always erases at once."
+            >
+              <input
+                type="number"
+                min={0}
+                max={90}
+                step={1}
+                className={cn(ui.input, "max-w-32")}
+                value={config.accountDeletionGraceDays}
+                onChange={(event) => {
+                  const days = Math.round(Number(event.target.value));
+                  setConfig({
+                    ...config,
+                    accountDeletionGraceDays: Number.isFinite(days)
+                      ? Math.min(90, Math.max(0, days))
+                      : 0,
+                  });
+                }}
+              />
+            </Field>
+          </div>
+        </PageSection>
+      )}
 
-      <section className={section}>
-        <h2 className="mb-3 text-sm font-medium text-stone-300">Text model defaults</h2>
+      <PageSection heading="Text model defaults">
         <p className="mb-3 text-xs text-stone-500">
           Defaults for new campaigns and fallbacks when a campaign leaves a field empty. Each
           campaign&apos;s own Text Model settings still win.
@@ -298,19 +348,24 @@ export function AdminSettingsPanel() {
             >
               <option value="">Auto (env or built-in)</option>
               <option value="custom">OpenAI-compatible server</option>
-              <option value="local">Ollama (native)</option>
+              {phoneWorld ? null : <option value="local">Ollama (native)</option>}
             </select>
           </Field>
-          <Field label="Local model (Ollama native)">
-            <input
-              className={ui.input}
-              value={config.text.localTextModel}
-              onChange={(event) =>
-                setConfig({ ...config, text: { ...config.text, localTextModel: event.target.value } })
-              }
-              placeholder="gemma4:31b-it-qat"
-            />
-          </Field>
+          {phoneWorld ? null : (
+            <Field label="Local model (Ollama native)">
+              <input
+                className={ui.input}
+                value={config.text.localTextModel}
+                onChange={(event) =>
+                  setConfig({
+                    ...config,
+                    text: { ...config.text, localTextModel: event.target.value },
+                  })
+                }
+                placeholder="gemma4:31b-it-qat"
+              />
+            </Field>
+          )}
           <Field label="Backend base URL" hint={env.customBaseUrl ? `Env: ${env.customBaseUrl}` : undefined}>
             <input
               className={ui.input}
@@ -345,10 +400,9 @@ export function AdminSettingsPanel() {
             }
           />
         </div>
-      </section>
+      </PageSection>
 
-      <section className={section}>
-        <h2 className="mb-3 text-sm font-medium text-stone-300">Utility model (optional)</h2>
+      <PageSection heading="Utility model (optional)">
         <p className="mb-3 text-xs text-stone-500">
           A second, smaller model for the mechanical work: history compaction, chapter summaries
           and fact extraction, world-arc ticks, lore checks, and Ask answers. None of it is
@@ -373,7 +427,7 @@ export function AdminSettingsPanel() {
               }
             >
               <option value="">Auto (Ollama)</option>
-              <option value="local">Ollama (native)</option>
+              {phoneWorld ? null : <option value="local">Ollama (native)</option>}
               <option value="custom">OpenAI-compatible server</option>
             </select>
           </Field>
@@ -414,14 +468,17 @@ export function AdminSettingsPanel() {
             hint="Most local servers need none."
           />
         </div>
-      </section>
+      </PageSection>
 
-      <section className={section}>
-        <h2 className="mb-3 text-sm font-medium text-stone-300">Image generation</h2>
+      <PageSection heading="Image generation">
         <div className="mb-3">
           <Field
             label="Default backend"
-            hint="For new campaigns. ComfyUI and the FLUX workers run on this machine; the OpenAI API renders in the cloud with the key below and needs no GPU."
+            hint={
+              phoneWorld
+                ? "For new campaigns. The OpenAI API renders in the cloud with the key below and needs no GPU."
+                : "For new campaigns. ComfyUI and the FLUX workers run on this machine; the OpenAI API renders in the cloud with the key below and needs no GPU."
+            }
           >
             <select
               className={ui.input}
@@ -437,50 +494,60 @@ export function AdminSettingsPanel() {
               }
             >
               <option value="">Auto ({env.imageBackend || "ComfyUI"})</option>
-              <option value="comfyui">ComfyUI (local)</option>
+              {phoneWorld ? null : <option value="comfyui">ComfyUI (local)</option>}
               <option value="openai">OpenAI API (cloud, needs key)</option>
-              <option value="mflux-hs">FLUX worker: mflux (Apple Silicon)</option>
-              <option value="sdnq-hs">FLUX worker: sdnq (CUDA/ROCm)</option>
+              {phoneWorld ? null : (
+                <option value="mflux-hs">FLUX worker: mflux (Apple Silicon)</option>
+              )}
+              {phoneWorld ? null : (
+                <option value="sdnq-hs">FLUX worker: sdnq (CUDA/ROCm)</option>
+              )}
             </select>
           </Field>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="ComfyUI URL" hint={`Env: ${env.comfyUrl}`}>
-            <input
-              className={ui.input}
-              value={config.images.comfyUrl}
-              onChange={(event) =>
-                setConfig({ ...config, images: { ...config.images, comfyUrl: event.target.value } })
-              }
-              placeholder={env.comfyUrl}
-            />
-          </Field>
-          <Field label="ComfyUI checkpoint">
-            <input
-              className={ui.input}
-              value={config.images.comfyCheckpoint}
-              onChange={(event) =>
-                setConfig({
-                  ...config,
-                  images: { ...config.images, comfyCheckpoint: event.target.value },
-                })
-              }
-              placeholder="CyberRealisticXLPlay_V6.0.safetensors"
-            />
-          </Field>
-          <Field label="FLUX worker URL" hint={`Env: ${env.fluxWorkerUrl}`}>
-            <input
-              className={ui.input}
-              value={config.images.fluxWorkerUrl}
-              onChange={(event) =>
-                setConfig({
-                  ...config,
-                  images: { ...config.images, fluxWorkerUrl: event.target.value },
-                })
-              }
-              placeholder={env.fluxWorkerUrl}
-            />
-          </Field>
+          {phoneWorld ? null : (
+            <Field label="ComfyUI URL" hint={`Env: ${env.comfyUrl}`}>
+              <input
+                className={ui.input}
+                value={config.images.comfyUrl}
+                onChange={(event) =>
+                  setConfig({ ...config, images: { ...config.images, comfyUrl: event.target.value } })
+                }
+                placeholder={env.comfyUrl}
+              />
+            </Field>
+          )}
+          {phoneWorld ? null : (
+            <Field label="ComfyUI checkpoint">
+              <input
+                className={ui.input}
+                value={config.images.comfyCheckpoint}
+                onChange={(event) =>
+                  setConfig({
+                    ...config,
+                    images: { ...config.images, comfyCheckpoint: event.target.value },
+                  })
+                }
+                placeholder="CyberRealisticXLPlay_V6.0.safetensors"
+              />
+            </Field>
+          )}
+          {phoneWorld ? null : (
+            <Field label="FLUX worker URL" hint={`Env: ${env.fluxWorkerUrl}`}>
+              <input
+                className={ui.input}
+                value={config.images.fluxWorkerUrl}
+                onChange={(event) =>
+                  setConfig({
+                    ...config,
+                    images: { ...config.images, fluxWorkerUrl: event.target.value },
+                  })
+                }
+                placeholder={env.fluxWorkerUrl}
+              />
+            </Field>
+          )}
           <Field label="OpenAI image model" hint="Blank = gpt-image-1.">
             <input
               className={ui.input}
@@ -522,12 +589,11 @@ export function AdminSettingsPanel() {
             }
           />
         </div>
-      </section>
+      </PageSection>
 
-      <section className={section}>
-        {/* Narration and speech-to-text. Named "Speech" so it is not confused
-            with the Voice chat section below, which is a different feature. */}
-        <h2 className="mb-3 text-sm font-medium text-stone-300">Speech</h2>
+      {/* Narration and speech-to-text. Named "Speech" so it is not confused
+          with the Voice chat section below, which is a different feature. */}
+      <PageSection heading="Speech">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Kokoro TTS URL" hint={`Env: ${env.kokoroUrl}`}>
             <input
@@ -550,163 +616,165 @@ export function AdminSettingsPanel() {
             />
           </Field>
         </div>
-      </section>
+      </PageSection>
 
 
-      <section className={section}>
-        <h2 className="mb-3 text-sm font-medium text-stone-300">Voice chat</h2>
-        <p className="mb-3 text-xs text-stone-500">
-          Lets a table talk over live audio. Needs two things beyond this switch:
-          the app reached over <strong>https</strong> (browsers block microphone
-          access on plain http, except on localhost), and{" "}
-          <strong>one open port</strong> for both UDP and TCP. That port carries the
-          audio itself, which is not HTTP and cannot go through a reverse proxy, so
-          open it on your firewall pointing straight at this host.
-        </p>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field
-            label="Voice chat"
-            hint={
-              config.voiceChat.enabled === ""
-                ? `Following the server config: ${env.voiceEnabled ? "on" : "off"}`
-                : "Overrides the server config."
-            }
-          >
-            <select
-              className={ui.input}
-              value={config.voiceChat.enabled}
-              onChange={(event) =>
-                setConfig({
-                  ...config,
-                  voiceChat: {
-                    ...config.voiceChat,
-                    enabled: event.target.value as "" | "on" | "off",
-                  },
-                })
-              }
-            >
-              <option value="">Use server config ({env.voiceEnabled ? "on" : "off"})</option>
-              <option value="on">On</option>
-              <option value="off">Off</option>
-            </select>
-          </Field>
-          <Field
-            label="Transport"
-            hint="The voice server needs the media port below open. Peer-to-peer needs no port and works through tunnels, but suits small tables: every player sends audio to every other player."
-          >
-            <select
-              className={ui.input}
-              value={config.voiceChat.mode}
-              onChange={(event) =>
-                setConfig({
-                  ...config,
-                  voiceChat: {
-                    ...config.voiceChat,
-                    mode: event.target.value as "" | "sfu" | "mesh",
-                  },
-                })
-              }
-            >
-              <option value="">Voice server (default)</option>
-              <option value="mesh">Peer-to-peer (mesh)</option>
-            </select>
-          </Field>
-          <Field
-            label="Media port"
-            hint={`Open for UDP and TCP. Env: ${env.voiceRtcPort}`}
-          >
-            <input
-              className={ui.input}
-              value={config.voiceChat.rtcPort}
-              onChange={(event) =>
-                setConfig({
-                  ...config,
-                  voiceChat: { ...config.voiceChat, rtcPort: event.target.value },
-                })
-              }
-              placeholder={env.voiceRtcPort}
-            />
-          </Field>
-          <Field
-            label="Announced address"
-            hint="The address a player's BROWSER can reach this host on, normally your public IP. Leave blank only for a localhost-only install."
-          >
-            <input
-              className={ui.input}
-              value={config.voiceChat.announcedIp}
-              onChange={(event) =>
-                setConfig({
-                  ...config,
-                  voiceChat: { ...config.voiceChat, announcedIp: event.target.value },
-                })
-              }
-              placeholder={env.voiceAnnouncedIp || "203.0.113.10"}
-            />
-          </Field>
-          <Field
-            label="Voice domain (optional)"
-            hint="Announce a hostname instead of the IP. It must resolve straight here: a Cloudflare-proxied name does not carry UDP, so calls would connect and stay silent."
-          >
-            <input
-              className={ui.input}
-              value={config.voiceChat.domain}
-              onChange={(event) =>
-                setConfig({
-                  ...config,
-                  voiceChat: { ...config.voiceChat, domain: event.target.value },
-                })
-              }
-              placeholder={env.voiceDomain || "voice.example.com"}
-            />
-          </Field>
-        </div>
-        {/* Hidden as soon as mesh is picked, even before saving: the warning
-            is about what the voice server announces, and mesh announces
-            nothing. */}
-        {voiceUnroutable && config.voiceChat.mode !== "mesh" ? (
-          <p className="mt-3 text-xs text-amber-400">
-            Voice will connect but stay silent for remote players: set an announced
-            address or domain.
+      {deviceWorld ? null : (
+        <PageSection heading="Voice chat">
+          <p className="mb-3 text-xs text-stone-500">
+            Lets a table talk over live audio. Needs two things beyond this switch:
+            the app reached over <strong>https</strong> (browsers block microphone
+            access on plain http, except on localhost), and{" "}
+            <strong>one open port</strong> for both UDP and TCP. That port carries the
+            audio itself, which is not HTTP and cannot go through a reverse proxy, so
+            open it on your firewall pointing straight at this host.
           </p>
-        ) : null}
-        <p className="mt-3 text-[11px] text-stone-600">
-          Port and address changes apply the next time somebody joins a call, once
-          nobody is connected. No server restart needed.
-        </p>
-      </section>
-
-      <section className={section}>
-        <h2 className="mb-3 text-sm font-medium text-stone-300">Discord sign-in</h2>
-        <p className="mb-3 text-xs text-stone-500">
-          Optional. Create an application at discord.com/developers, add the redirect URI
-          {" "}<code className="text-stone-400">&lt;public URL&gt;/api/auth/discord/callback</code>{" "}
-          (the exact address players use, e.g. https://your.domain or http://lan-host:3005),
-          then paste the client ID and secret. The login button appears once both are set.
-          Behind a reverse proxy, also set the Public URL in the Server section above.
-        </p>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field
-            label="Client ID"
-            hint={env.discordClientId ? `Env: ${env.discordClientId}` : undefined}
-          >
-            <input
-              className={ui.input}
-              value={config.discord.clientId}
-              onChange={(event) =>
-                setConfig({ ...config, discord: { ...config.discord, clientId: event.target.value } })
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field
+              label="Voice chat"
+              hint={
+                config.voiceChat.enabled === ""
+                  ? `Following the server config: ${env.voiceEnabled ? "on" : "off"}`
+                  : "Overrides the server config."
               }
-              placeholder={env.discordClientId || "Not set"}
+            >
+              <select
+                className={ui.input}
+                value={config.voiceChat.enabled}
+                onChange={(event) =>
+                  setConfig({
+                    ...config,
+                    voiceChat: {
+                      ...config.voiceChat,
+                      enabled: event.target.value as "" | "on" | "off",
+                    },
+                  })
+                }
+              >
+                <option value="">Use server config ({env.voiceEnabled ? "on" : "off"})</option>
+                <option value="on">On</option>
+                <option value="off">Off</option>
+              </select>
+            </Field>
+            <Field
+              label="Transport"
+              hint="The voice server needs the media port below open. Peer-to-peer needs no port and works through tunnels, but suits small tables: every player sends audio to every other player."
+            >
+              <select
+                className={ui.input}
+                value={config.voiceChat.mode}
+                onChange={(event) =>
+                  setConfig({
+                    ...config,
+                    voiceChat: {
+                      ...config.voiceChat,
+                      mode: event.target.value as "" | "sfu" | "mesh",
+                    },
+                  })
+                }
+              >
+                <option value="">Voice server (default)</option>
+                <option value="mesh">Peer-to-peer (mesh)</option>
+              </select>
+            </Field>
+            <Field
+              label="Media port"
+              hint={`Open for UDP and TCP. Env: ${env.voiceRtcPort}`}
+            >
+              <input
+                className={ui.input}
+                value={config.voiceChat.rtcPort}
+                onChange={(event) =>
+                  setConfig({
+                    ...config,
+                    voiceChat: { ...config.voiceChat, rtcPort: event.target.value },
+                  })
+                }
+                placeholder={env.voiceRtcPort}
+              />
+            </Field>
+            <Field
+              label="Announced address"
+              hint="The address a player's BROWSER can reach this host on, normally your public IP. Leave blank only for a localhost-only install."
+            >
+              <input
+                className={ui.input}
+                value={config.voiceChat.announcedIp}
+                onChange={(event) =>
+                  setConfig({
+                    ...config,
+                    voiceChat: { ...config.voiceChat, announcedIp: event.target.value },
+                  })
+                }
+                placeholder={env.voiceAnnouncedIp || "203.0.113.10"}
+              />
+            </Field>
+            <Field
+              label="Voice domain (optional)"
+              hint="Announce a hostname instead of the IP. It must resolve straight here: a Cloudflare-proxied name does not carry UDP, so calls would connect and stay silent."
+            >
+              <input
+                className={ui.input}
+                value={config.voiceChat.domain}
+                onChange={(event) =>
+                  setConfig({
+                    ...config,
+                    voiceChat: { ...config.voiceChat, domain: event.target.value },
+                  })
+                }
+                placeholder={env.voiceDomain || "voice.example.com"}
+              />
+            </Field>
+          </div>
+          {/* Hidden as soon as mesh is picked, even before saving: the warning
+              is about what the voice server announces, and mesh announces
+              nothing. */}
+          {voiceUnroutable && config.voiceChat.mode !== "mesh" ? (
+            <p className="mt-3 text-xs text-amber-400">
+              Voice will connect but stay silent for remote players: set an announced
+              address or domain.
+            </p>
+          ) : null}
+          <p className="mt-3 text-[11px] text-stone-600">
+            Port and address changes apply the next time somebody joins a call, once
+            nobody is connected. No server restart needed.
+          </p>
+        </PageSection>
+      )}
+
+      {deviceWorld ? null : (
+        <PageSection heading="Discord sign-in">
+          <p className="mb-3 text-xs text-stone-500">
+            Optional. Create an application at discord.com/developers, add the redirect URI
+            {" "}<code className="text-stone-400">&lt;public URL&gt;/api/auth/discord/callback</code>{" "}
+            (the exact address players use, e.g. https://your.domain or http://lan-host:3005),
+            then paste the client ID and secret. The login button appears once both are set.
+            Behind a reverse proxy, also set the Public URL in the Server section above.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field
+              label="Client ID"
+              hint={env.discordClientId ? `Env: ${env.discordClientId}` : undefined}
+            >
+              <input
+                className={ui.input}
+                value={config.discord.clientId}
+                onChange={(event) =>
+                  setConfig({ ...config, discord: { ...config.discord, clientId: event.target.value } })
+                }
+                placeholder={env.discordClientId || "Not set"}
+              />
+            </Field>
+            <SecretField
+              label="Client secret"
+              isSet={config.discord.hasClientSecret}
+              value={discordSecret}
+              onChange={setDiscordSecret}
+              hint={env.hasDiscordClientSecret ? "An env-var secret is also set." : undefined}
             />
-          </Field>
-          <SecretField
-            label="Client secret"
-            isSet={config.discord.hasClientSecret}
-            value={discordSecret}
-            onChange={setDiscordSecret}
-            hint={env.hasDiscordClientSecret ? "An env-var secret is also set." : undefined}
-          />
-        </div>
-      </section>
+          </div>
+        </PageSection>
+      )}
 
       <div className="flex flex-wrap items-center gap-3">
         <button type="button" onClick={save} disabled={saving} className={ui.btnPrimary}>

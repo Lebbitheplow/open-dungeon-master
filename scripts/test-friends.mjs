@@ -15,9 +15,10 @@ process.env.DB_ENCRYPTION_KEY = randomBytes(32).toString("hex");
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { createCompanionUser, createUser, deleteUserCascade, setUserAvatar } = await import(
+const { createCompanionUser, createUser, setUserAvatar } = await import(
   "../src/lib/db/users.ts"
 );
+const { purgeAccount } = await import("../src/lib/account-deletion.ts");
 const { createCampaign, getCampaignForUser, isCampaignMember } = await import(
   "../src/lib/db/campaigns.ts"
 );
@@ -143,7 +144,7 @@ test("an invite notification carries the campaign pointer and the code", () => {
 test("deleting a user cascades their friendship rows away", () => {
   sendRequest(alice.id, "bob");
   assert.equal(listFriends(alice.id).some((friend) => friend.userId === bob.id), true);
-  deleteUserCascade(bob.id);
+  purgeAccount(bob.id);
   assert.equal(listFriends(alice.id).length, 0);
   assert.equal(listPendingIncoming(alice.id).length, 0);
 });
