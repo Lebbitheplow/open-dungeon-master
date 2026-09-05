@@ -6,6 +6,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { register } from "node:module";
+import { removeTempDir } from "./lib/remove-temp-dir.mjs";
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "odm-join-preview-"));
 process.env.SQLITE_DB_PATH = path.join(dir, "test.sqlite");
@@ -78,4 +79,4 @@ test("an active table only has a seat when mid-game joining is open", () => {
 });
 
 console.log(`\n${passed} join-preview tests passed`);
-fs.rmSync(dir, { recursive: true, force: true });
+removeTempDir(dir);
