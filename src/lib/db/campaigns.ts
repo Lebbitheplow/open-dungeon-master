@@ -441,7 +441,7 @@ export function listMembers(campaignId: string): CampaignMember[] {
   const rows = getDatabase()
     .prepare(
       `
-        SELECT m.user_id, u.username, u.avatar_json, m.role, m.ready, m.use_real_dice, m.joined_at
+        SELECT m.user_id, u.username, u.avatar_json, m.role, m.ready, m.use_real_dice, m.muted, m.joined_at
         FROM campaign_members m
         JOIN users u ON u.id = m.user_id
         WHERE m.campaign_id = ?
@@ -455,6 +455,7 @@ export function listMembers(campaignId: string): CampaignMember[] {
     role: "owner" | "player";
     ready: number;
     use_real_dice: number;
+    muted: number;
     joined_at: string;
   }>;
 
@@ -465,8 +466,13 @@ export function listMembers(campaignId: string): CampaignMember[] {
     role: row.role,
     ready: Boolean(row.ready),
     useRealDice: Boolean(row.use_real_dice),
+    muted: Boolean(row.muted),
     joinedAt: row.joined_at,
   }));
+}
+
+export function getMember(campaignId: string, userId: string): CampaignMember | null {
+  return listMembers(campaignId).find((member) => member.userId === userId) ?? null;
 }
 
 // Non-consuming lookup: registration treats a live room code as proof of

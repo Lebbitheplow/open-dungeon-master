@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isErrorResponse, requireMember } from "@/lib/campaign-api";
+import { isErrorResponse, requireMember, requireVoice } from "@/lib/campaign-api";
 import { insertAsk, listAsksForUser } from "@/lib/db/asks";
 import { getSheetForUser } from "@/lib/db/sheets";
 import { publishEphemeral } from "@/lib/events";
@@ -33,7 +33,7 @@ export async function POST(
   { params }: { params: Promise<{ campaignId: string }> },
 ) {
   const { campaignId } = await params;
-  const context = await requireMember(campaignId);
+  const context = await requireVoice(campaignId);
   if (isErrorResponse(context)) {
     return context;
   }

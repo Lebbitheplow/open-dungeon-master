@@ -1,4 +1,5 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
+import { contactBlocked } from "@/lib/db/moderation";
 import { getUserByUsername, isCompanionUserId, type UserAvatar } from "@/lib/db/users";
 
 // Per-server friendships over the friends table (schema note in core.ts):
@@ -27,6 +28,10 @@ export type SendRequestResult = {
 export function sendRequest(userId: string, username: string): SendRequestResult {
   const target = getUserByUsername(username.trim());
   if (!target || target.id === userId || isCompanionUserId(target.id)) {
+    return { outcome: "noop", targetUserId: null };
+  }
+  // Same silent answer as an unknown name: a block must not be probeable.
+  if (contactBlocked(userId, target.id)) {
     return { outcome: "noop", targetUserId: null };
   }
   const db = getDatabase();

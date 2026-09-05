@@ -342,6 +342,11 @@ export function PartyPanel({
                     ? () => onMessageUser(sheet.userId)
                     : undefined
                 }
+                canModerate={!mine && !sheet.isCompanion}
+                canMute={canTransferLead && !mine && !sheet.isCompanion}
+                muted={Boolean(
+                  members.find((member) => member.userId === sheet.userId)?.muted,
+                )}
               />
             </div>
 

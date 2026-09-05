@@ -80,8 +80,13 @@ async function zoneId(env) {
   return id;
 }
 
+// The per-address counters are keyed by a salted SHA-256 of the address, so
+// the KV store never holds a caller's IP. RATE_LIMIT_SALT is a Worker secret
+// (wrangler secret put RATE_LIMIT_SALT); the counters still work without it,
+// unsalted, which is the only fallback that keeps abuse limits on.
 async function rateLimited(env, ip, kind = "ip", cap = CREATES_PER_DAY) {
-  const key = `${kind}:${ip}:${new Date().toISOString().slice(0, 10)}`;
+  const subject = await sha256Hex(`${env.RATE_LIMIT_SALT || ""}:${ip}`);
+  const key = `${kind}:${subject.slice(0, 32)}:${new Date().toISOString().slice(0, 10)}`;
   const used = Number((await env.SESSIONS.get(key)) || "0");
   if (used >= cap) return true;
   await env.SESSIONS.put(key, String(used + 1), { expirationTtl: 86_400 });

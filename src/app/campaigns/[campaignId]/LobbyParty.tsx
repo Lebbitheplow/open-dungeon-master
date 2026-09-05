@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, Crown, Trash2, UserPlus, UserRound } from "lucide-react";
+import { Bot, Crown, Trash2, UserPlus, UserRound, Volume2, VolumeX } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -54,6 +54,8 @@ export function LobbyParty({
   seatError,
   onMakeLead,
   onAssignSeat,
+  canMute,
+  onMute,
   showParty,
   showCompanions,
   partyCompanions,
@@ -80,6 +82,9 @@ export function LobbyParty({
   seatError: string;
   onMakeLead: (userId: string) => void;
   onAssignSeat: (seat: "dm" | "assistant", userId: string | null) => void;
+  // The lead or the owner may silence a player at this table.
+  canMute: boolean;
+  onMute: (userId: string, muted: boolean) => void;
   // A solo campaign has no party list, but its lead may still keep
   // companions, so the two sections are switched separately.
   showParty: boolean;
@@ -174,6 +179,31 @@ export function LobbyParty({
                         </SeatAction>
                       )}
                     </>
+                  ) : null}
+                  {canMute && member.userId !== campaign.leadUserId && member.role !== "owner" ? (
+                    <SeatAction
+                      tip={
+                        member.muted
+                          ? "Let this player speak at the table again"
+                          : "Mute: this player reads along but cannot act, ask or side-chat"
+                      }
+                      onClick={() => onMute(member.userId, !member.muted)}
+                    >
+                      {member.muted ? (
+                        <>
+                          <Volume2 className="size-3" /> unmute
+                        </>
+                      ) : (
+                        <>
+                          <VolumeX className="size-3" /> mute
+                        </>
+                      )}
+                    </SeatAction>
+                  ) : null}
+                  {member.muted ? (
+                    <SeatBadge tip="Muted by the party lead">
+                      <VolumeX className="size-3" /> muted
+                    </SeatBadge>
                   ) : null}
                   {member.useRealDice ? (
                     <SeatBadge tip="Rolls physical dice: the DM waits for this player to enter real rolls">

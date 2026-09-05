@@ -38,6 +38,7 @@ import { runStorySetup } from "@/lib/dm/setup";
 import { generateStoryArc } from "@/lib/dm/arc";
 import { getDmStatus } from "@/lib/dm/status";
 import { listUtilityCalls } from "@/lib/dm/call-tracker";
+import { listBlockedUserIds } from "@/lib/db/moderation";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { listNarrationAudio } from "@/lib/tts";
 
@@ -65,6 +66,8 @@ export async function GET(
     campaign: publicCampaign(campaign),
     me: { id: user.id, username: user.username, avatar: user.avatar },
     members: listMembers(campaignId),
+    // Players this user has blocked; their table messages fold away.
+    blockedUserIds: listBlockedUserIds(user.id),
     sheets,
     messages: listRecentMessages(campaignId, 100),
     // Blind and DM-only rolls are redacted or dropped here, not in the UI;

@@ -186,6 +186,14 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
     });
   }
 
+  async function muteMember(userId: string, muted: boolean) {
+    await fetch(`/api/campaigns/${campaign!.id}/mute`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, muted }),
+    });
+  }
+
   // Moves a DM seat; userId null empties it (the server allows that only for
   // the co-DM seat, since a human-run game always needs a DM). The seat
   // change event is not one the stream applies, so the mover reloads the
@@ -426,6 +434,8 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
           seatError={seatError}
           onMakeLead={makeLead}
           onAssignSeat={assignSeat}
+          canMute={isLead || isOwner}
+          onMute={muteMember}
           showParty={!isSolo}
           showCompanions={isLead && (canBuildCompanion || partyCompanions.length > 0)}
           partyCompanions={partyCompanions}

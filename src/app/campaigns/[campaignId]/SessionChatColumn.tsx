@@ -1,8 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { MessageList } from "@/app/campaigns/[campaignId]/MessageList";
+import { ReportDialog, type ReportTarget } from "@/app/campaigns/[campaignId]/ReportDialog";
 import { ItemProposalBar } from "@/app/campaigns/[campaignId]/ItemProposalBar";
 import { UtilityCallStrip } from "@/app/campaigns/[campaignId]/UtilityCallStrip";
 import { AskDock } from "@/app/campaigns/[campaignId]/AskPanel";
@@ -54,6 +55,14 @@ export function SessionChatColumn({
   children: ReactNode;
 }) {
   const { campaign, messages, rolls, sheets, locations, dmStatus, dmDraft, utilityCalls } = state;
+  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
+  // Blocks made from this table, hidden at once; the snapshot carries them
+  // on the next load.
+  const [justBlocked, setJustBlocked] = useState<string[]>([]);
+  const blockedUserIds = useMemo(
+    () => [...new Set([...state.blockedUserIds, ...justBlocked])],
+    [state.blockedUserIds, justBlocked],
+  );
   const ttsEnabled = Boolean(campaign?.gameSettings?.ttsEnabled);
   // Ask already reports its own progress inside the strip, naming the
   // question being answered, so repeating it in the strip is the same news
@@ -62,6 +71,12 @@ export function SessionChatColumn({
 
   return (
     <div className={cn("min-w-0 flex-1 flex-col", visible ? "flex" : "hidden lg:flex")}>
+      <ReportDialog
+        campaignId={campaignId}
+        target={reportTarget}
+        onClose={() => setReportTarget(null)}
+        onBlocked={(userId) => setJustBlocked((current) => [...current, userId])}
+      />
       <MessageList
         messages={messages}
         campaignId={campaignId}
@@ -70,6 +85,24 @@ export function SessionChatColumn({
         rolls={rolls}
         sheets={sheets}
         members={state.members}
+        meUserId={meUserId}
+        blockedUserIds={blockedUserIds}
+        onReport={(message) => {
+          if (message.authorType === "dm") {
+            setReportTarget({ messageId: message.id, authorType: "dm", label: "the Dungeon Master" });
+            return;
+          }
+          const sheet =
+            sheets.find((entry) => entry.id === message.characterId) ??
+            sheets.find((entry) => entry.userId === message.userId);
+          const member = state.members.find((entry) => entry.userId === message.userId);
+          setReportTarget({
+            messageId: message.id,
+            userId: message.userId ?? undefined,
+            authorType: "player",
+            label: sheet?.name ?? member?.username ?? "this player",
+          });
+        }}
         locations={locations}
         dmStatus={dmStatus}
         dmDraft={dmDraft}

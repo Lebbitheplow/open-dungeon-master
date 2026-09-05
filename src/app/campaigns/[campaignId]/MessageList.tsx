@@ -7,6 +7,8 @@ import {
   Pencil,
   ChevronRight,
   Crown,
+  EyeOff,
+  Flag,
   ImageOff,
   ImagePlus,
   Loader2,
@@ -188,10 +190,19 @@ const MessageItem = memo(function MessageItem({
   onRenarrate,
   onContinueScene,
   onSelectVariant,
+  mine,
+  blocked,
+  onReport,
 }: {
   message: CampaignMessage;
   campaignId: string;
   canRetryTurn: boolean;
+  // This row is the viewer's own message: nothing to report.
+  mine: boolean;
+  // The viewer blocked this message's author: the row folds away.
+  blocked: boolean;
+  // Flag a DM passage or another player's message to this server's admins.
+  onReport?: (message: CampaignMessage) => void;
   // Whoever runs the story may put a picture of their own under a passage.
   canIllustrate: boolean;
   rollsById: Map<string, StoredRoll>;
@@ -467,6 +478,17 @@ const MessageItem = memo(function MessageItem({
               )}
             </button>
           ) : null}
+          {onReport ? (
+            <button
+              type="button"
+              onClick={() => onReport(message)}
+              aria-label="Report this passage"
+              title="Report: flag this passage to the admins of this server"
+              className={cn(ui.iconAction, "-my-1.5")}
+            >
+              <Flag className="size-3.5" />
+            </button>
+          ) : null}
         </p>
         {editing && onEditSave ? (
           <InlineMessageEditor
@@ -532,6 +554,14 @@ const MessageItem = memo(function MessageItem({
       </div>
     );
   }
+  if (blocked) {
+    return (
+      <p className="ml-auto flex max-w-[92%] items-center justify-end gap-1.5 text-right text-xs italic text-stone-600 sm:max-w-2xl">
+        <EyeOff className="size-3.5 shrink-0" />
+        A message from a player you blocked
+      </p>
+    );
+  }
   // Older messages predate characterId, so fall back to the author's
   // sheet in this campaign before giving up on a character identity.
   const sheet =
@@ -544,7 +574,7 @@ const MessageItem = memo(function MessageItem({
     sheet?.portrait?.url ??
     (message.userId ? membersById.get(message.userId)?.avatar?.url : undefined);
   return (
-    <div className="ml-auto max-w-[92%] animate-fade-up sm:max-w-2xl">
+    <div className="group ml-auto max-w-[92%] animate-fade-up sm:max-w-2xl">
       <p className="mb-1 flex items-center justify-end gap-1.5 text-right text-xs font-medium text-amber-200/80">
         {portraitUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -555,6 +585,17 @@ const MessageItem = memo(function MessageItem({
           />
         ) : null}
         {sheet?.name ?? "Player"}
+        {onReport && !mine && message.userId ? (
+          <button
+            type="button"
+            onClick={() => onReport(message)}
+            aria-label="Report this message"
+            title="Report: flag this message to the admins of this server, or block the player"
+            className={cn(ui.iconAction, "-my-1.5 opacity-0 transition-opacity focus:opacity-100 group-hover:opacity-100")}
+          >
+            <Flag className="size-3.5" />
+          </button>
+        ) : null}
       </p>
       <div
         className={cn(
@@ -588,9 +629,16 @@ export function MessageList({
   onRenarrate,
   onContinueScene,
   onSelectVariant,
+  meUserId = "",
+  blockedUserIds = [],
+  onReport,
 }: {
   messages: CampaignMessage[];
   campaignId: string;
+  meUserId?: string;
+  // Players the viewer has blocked; their rows fold away.
+  blockedUserIds?: string[];
+  onReport?: (message: CampaignMessage) => void;
   // The party lead may send a halted DM turn back in. Plain booleans and
   // strings rather than a callback: the memoized rows stay cheap without the
   // stable-identity dance the callback props above need.
@@ -633,6 +681,7 @@ export function MessageList({
     () => new Map(locations.map((location) => [location.id, location])),
     [locations],
   );
+  const blockedSet = useMemo(() => new Set(blockedUserIds), [blockedUserIds]);
 
   // The parent passes an inline closure; route it through a ref so the
   // memoized rows keep a stable identity and skip re-renders per token.
@@ -751,6 +800,9 @@ export function MessageList({
       {messages.map((message) => (
         <MessageItem
           key={message.id}
+          mine={Boolean(message.userId) && message.userId === meUserId}
+          blocked={Boolean(message.userId && blockedSet.has(message.userId))}
+          onReport={onReport}
           message={message}
           campaignId={campaignId}
           canRetryTurn={canRetryTurn}

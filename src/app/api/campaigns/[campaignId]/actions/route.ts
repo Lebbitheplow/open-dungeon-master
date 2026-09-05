@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isErrorResponse, requireMember } from "@/lib/campaign-api";
+import { isErrorResponse, requireVoice } from "@/lib/campaign-api";
 import {
   allocateSeq,
   campaignSeats,
@@ -31,7 +31,7 @@ export async function POST(
   { params }: { params: Promise<{ campaignId: string }> },
 ) {
   const { campaignId } = await params;
-  const context = await requireMember(campaignId);
+  const context = await requireVoice(campaignId);
   if (isErrorResponse(context)) {
     return context;
   }

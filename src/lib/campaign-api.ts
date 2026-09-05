@@ -2,6 +2,7 @@ import { currentUser, unauthorized } from "@/lib/auth";
 import { capsFor as capsForCampaign, getCampaignForUser, type Campaign } from "@/lib/db/campaigns";
 import type { ViewerCaps } from "@/lib/dm/viewer";
 import type { User } from "@/lib/db/users";
+import { isMemberMuted } from "@/lib/db/moderation";
 
 export type MemberContext = { user: User; campaign: Campaign };
 
@@ -48,6 +49,23 @@ export function isDm(context: MemberContext): boolean {
 // facts, note approval, pin curation, the digital dice fallback.
 export function steersStory(context: MemberContext): boolean {
   return capsFor(context).steersStory;
+}
+
+// Membership plus the right to speak. A member the party lead has muted
+// keeps reading the table but every route that puts words in front of other
+// players (actions, asks, side chats) goes through here and is refused.
+export async function requireVoice(campaignId: string): Promise<MemberContext | Response> {
+  const context = await requireMember(campaignId);
+  if (isErrorResponse(context)) {
+    return context;
+  }
+  if (isMemberMuted(campaignId, context.user.id)) {
+    return Response.json(
+      { error: "The party lead has muted you at this table." },
+      { status: 403 },
+    );
+  }
+  return context;
 }
 
 // Membership plus party-lead check. The lead owns the table: campaign info,

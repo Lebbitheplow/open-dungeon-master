@@ -1,11 +1,12 @@
 import { z } from "zod";
-import { isErrorResponse, requireMember } from "@/lib/campaign-api";
+import { isErrorResponse, requireMember, requireVoice } from "@/lib/campaign-api";
 import { listMembers } from "@/lib/db/campaigns";
 import {
   createGroupThread,
   getOrCreateDmThread,
   listThreadsForUser,
 } from "@/lib/db/side-chat";
+import { contactBlocked } from "@/lib/db/moderation";
 import { publishEphemeral } from "@/lib/events";
 
 export const runtime = "nodejs";
@@ -36,7 +37,7 @@ export async function POST(
   { params }: { params: Promise<{ campaignId: string }> },
 ) {
   const { campaignId } = await params;
-  const context = await requireMember(campaignId);
+  const context = await requireVoice(campaignId);
   if (isErrorResponse(context)) {
     return context;
   }
@@ -55,6 +56,12 @@ export async function POST(
   const roster = new Set(listMembers(campaignId).map((member) => member.userId));
   if (memberIds.some((id) => !roster.has(id))) {
     return Response.json({ error: "Everyone in a chat must be in the campaign." }, { status: 400 });
+  }
+  if (memberIds.some((id) => contactBlocked(context.user.id, id))) {
+    return Response.json(
+      { error: "You cannot open a chat with a player one of you has blocked." },
+      { status: 403 },
+    );
   }
 
   if (parsed.data.kind === "dm") {

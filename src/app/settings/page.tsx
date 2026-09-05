@@ -9,6 +9,7 @@ import { PIXEL_ICONS, ui } from "@/lib/ui";
 import { PageLoading, PageNotice, PageSection, PageShell } from "@/components/PageShell";
 import { ImageLightbox } from "@/components/ui/ImageLightbox";
 import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
+import { BlockedPlayersSection } from "@/app/settings/BlockedPlayersSection";
 import { ChangePasswordForm } from "@/app/ChangePasswordForm";
 
 type Me = {
@@ -286,6 +287,8 @@ export default function SettingsPage() {
           {discordNotice ? <p className="mt-2 text-sm text-amber-300">{discordNotice}</p> : null}
         </PageSection>
       ) : null}
+
+      <BlockedPlayersSection />
 
       {me.deletionDueAt ? (
         <PageSection

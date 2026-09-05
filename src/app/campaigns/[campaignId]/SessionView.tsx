@@ -147,6 +147,9 @@ export function SessionView({
     messages.filter((message) => message.authorType === "dm").length === 1;
   const myName = mySheet?.name ?? "your character";
   const meId = me?.id ?? "";
+  // Muted by the party lead: the server refuses the send, so the box says
+  // so instead of letting the player type into a wall.
+  const muted = Boolean(state.members.find((member) => member.userId === meId)?.muted);
   const gate = useMemo(
     () =>
       composerGate({ floor, sheets, meUserId: meId, kind, myName, leadPrivate, openingNarrationPlaying }),
@@ -183,7 +186,7 @@ export function SessionView({
     async (event: FormEvent) => {
       event.preventDefault();
       const content = input.trim();
-      if (!content || sending || gate.inputBlocked) {
+      if (!content || sending || gate.inputBlocked || muted) {
         return;
       }
       setSending(true);
@@ -218,7 +221,7 @@ export function SessionView({
         setSending(false);
       }
     },
-    [campaignId, input, sending, gate.inputBlocked, kind, leadPrivate],
+    [campaignId, input, sending, gate.inputBlocked, muted, kind, leadPrivate],
   );
 
   const clearChatTarget = useCallback(() => setChatTarget(null), []);
@@ -342,8 +345,8 @@ export function SessionView({
               setInput={setInput}
               sending={sending}
               error={error}
-              inputBlocked={gate.inputBlocked}
-              placeholder={gate.placeholder}
+              inputBlocked={gate.inputBlocked || muted}
+              placeholder={muted ? "The party lead has muted you at this table." : gate.placeholder}
               dmStatus={dmStatus}
               pendingRolls={pendingRolls}
               floor={floor}

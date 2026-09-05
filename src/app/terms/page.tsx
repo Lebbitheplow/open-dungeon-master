@@ -126,6 +126,13 @@ export default function TermsPage() {
           </li>
         </ul>
         <p className="mt-3 text-sm leading-6 text-stone-400">
+          If something at the table breaks these rules, whether a player wrote it or the AI
+          Dungeon Master generated it, report it from the message or the party list. Reports go
+          to the admins of the server you are on, who can mute, remove, or delete accounts, and
+          you can block a player yourself at any time. Because the app has no central service,
+          there is no one else to report to.
+        </p>
+        <p className="mt-3 text-sm leading-6 text-stone-400">
           Your operator may add rules of their own, and those apply too. An operator may suspend or
           remove any account on their server at their discretion.
         </p>

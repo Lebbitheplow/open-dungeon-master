@@ -1,11 +1,12 @@
 "use client";
 
-import { Globe2, Settings2, Users } from "lucide-react";
+import { Flag, Globe2, Settings2, Users } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PIXEL_ICONS } from "@/lib/ui";
 import { PageLoading, PageNotice, PageShell } from "@/components/PageShell";
 import { SegmentedControl, type SegmentedOption } from "@/components/ui/SegmentedControl";
+import { AdminReportsPanel } from "@/app/admin/AdminReportsPanel";
 import { AdminSettingsPanel } from "@/app/admin/AdminSettingsPanel";
 import { AdminUsersPanel } from "@/app/admin/AdminUsersPanel";
 import { AdminWorldsPanel } from "@/app/admin/AdminWorldsPanel";
@@ -17,12 +18,13 @@ type Me = {
   isAdmin: boolean;
 };
 
-type Tab = "settings" | "worlds" | "users";
+type Tab = "settings" | "worlds" | "users" | "reports";
 
 const TABS: SegmentedOption<Tab>[] = [
   { value: "settings", label: "Server settings", icon: Settings2 },
   { value: "worlds", label: "Campaign plugins", icon: Globe2 },
   { value: "users", label: "Users", icon: Users },
+  { value: "reports", label: "Reports", icon: Flag },
 ];
 
 // Server control panel. The page only decides what to render; every admin
@@ -73,6 +75,8 @@ export default function AdminPage() {
         <AdminSettingsPanel />
       ) : tab === "worlds" ? (
         <AdminWorldsPanel />
+      ) : tab === "reports" ? (
+        <AdminReportsPanel />
       ) : (
         <AdminUsersPanel meId={me.id} />
       )}

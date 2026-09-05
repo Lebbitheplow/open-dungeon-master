@@ -106,6 +106,8 @@ export type CampaignState = {
   caps: ViewerCaps;
   me: SessionUser | null;
   members: CampaignMember[];
+  // Players this user has blocked (server-wide); see /api/profile/blocks.
+  blockedUserIds: string[];
   sheets: CharacterSheet[];
   messages: CampaignMessage[];
   rolls: StoredRoll[];
@@ -212,6 +214,7 @@ const initialState: CampaignState = {
   caps: capsForRole("player", "ai"),
   me: null,
   members: [],
+  blockedUserIds: [],
   sheets: [],
   messages: [],
   rolls: [],
@@ -469,6 +472,7 @@ function reducer(state: CampaignState, action: Action): CampaignState {
             role: "player",
             ready: false,
             useRealDice: false,
+            muted: false,
             joinedAt: new Date().toISOString(),
           };
           next.members = upsertBy(state.members, member, (entry) => entry.userId);
@@ -777,6 +781,7 @@ export function useCampaignStream(campaignId: string) {
           caps: data.caps ?? capsForRole("player", "ai"),
           me: data.me,
           members: data.members,
+          blockedUserIds: data.blockedUserIds ?? [],
           sheets: data.sheets,
           messages: data.messages,
           rolls: data.rolls,

@@ -1,10 +1,11 @@
 import { z } from "zod";
-import { isErrorResponse, requireMember } from "@/lib/campaign-api";
+import { isErrorResponse, requireMember, requireVoice } from "@/lib/campaign-api";
 import {
   getThreadForUser,
   insertSideMessage,
   listThreadMessages,
 } from "@/lib/db/side-chat";
+import { contactBlocked } from "@/lib/db/moderation";
 import { publishEphemeral } from "@/lib/events";
 
 export const runtime = "nodejs";
@@ -41,13 +42,22 @@ export async function POST(
   { params }: { params: Promise<{ campaignId: string; threadId: string }> },
 ) {
   const { campaignId, threadId } = await params;
-  const context = await requireMember(campaignId);
+  const context = await requireVoice(campaignId);
   if (isErrorResponse(context)) {
     return context;
   }
   const thread = getThreadForUser(threadId, context.user.id);
   if (!thread || thread.campaignId !== campaignId) {
     return Response.json({ error: "Not found." }, { status: 404 });
+  }
+  // A 1:1 thread that predates a block goes quiet in both directions.
+  if (
+    thread.kind === "dm" &&
+    thread.memberUserIds.some(
+      (id) => id !== context.user.id && contactBlocked(context.user.id, id),
+    )
+  ) {
+    return Response.json({ error: "One of you has blocked the other." }, { status: 403 });
   }
   const raw = await request.json().catch(() => ({}));
   const parsed = sendSchema.safeParse(raw);

@@ -1085,6 +1085,44 @@ function ensureSchema(db: SqliteDatabase) {
 
     CREATE INDEX IF NOT EXISTS idx_friends_target
       ON friends(friend_user_id, status);
+
+    -- Moderation. A report is a player's flag on a DM passage, another
+    -- player's message, or a player, addressed to this server's admins:
+    -- there is no central service, so the operator of the server the
+    -- player chose is the moderator. The excerpt is a copy taken at report
+    -- time, so an edit or a reroll after the fact cannot hide what was
+    -- reported. message_id and reported_user_id are plain text on purpose:
+    -- the report outlives the message and the account.
+    CREATE TABLE IF NOT EXISTS content_reports (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL,
+      reporter_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      message_id TEXT,
+      reported_user_id TEXT,
+      author_type TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      details TEXT NOT NULL DEFAULT '',
+      excerpt TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','resolved')),
+      created_at TEXT NOT NULL,
+      resolved_at TEXT,
+      resolved_by TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_content_reports_status
+      ON content_reports(status, created_at);
+
+    -- One player keeping another out of their way, server-wide: hidden in
+    -- transcripts, no private chats, no friend requests, either direction.
+    CREATE TABLE IF NOT EXISTS user_blocks (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      blocked_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (user_id, blocked_user_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_user_blocks_target
+      ON user_blocks(blocked_user_id);
   `);
 
   // Compaction memory: a rolling "story so far" summary plus a watermark of
@@ -1117,6 +1155,12 @@ function ensureSchema(db: SqliteDatabase) {
       }
     }
   };
+
+  addColumns("campaign_members", [
+    // Party-lead mute: the member stays at the table and can read, but the
+    // server refuses their actions, asks and side chats until it is lifted.
+    ["muted", `INTEGER NOT NULL DEFAULT 0`],
+  ]);
 
   addColumns("campaigns", [
     // Game-facing settings (genre, dice policy, TTS, maps); settings_json
