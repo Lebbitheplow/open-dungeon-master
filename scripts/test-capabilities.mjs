@@ -233,6 +233,55 @@ check("nothing is probed when there is nothing to probe", () => {
   assert.equal(storyProbeUrl({ textProvider: "custom", customBaseUrl: "" }, ""), "");
 });
 
+function probeHost(baseUrl) {
+  try {
+    return new URL(baseUrl.trim()).hostname;
+  } catch {
+    return baseUrl.trim();
+  }
+}
+
+// Mirrors storyProbeHeaders in src/lib/capabilities.ts.
+function storyProbeHeaders({ textProvider, customBaseUrl = "" }, keys) {
+  if (textProvider === "none" || textProvider === "local") {
+    return {};
+  }
+  const isOpenRouter = /(^|\.)openrouter\.ai$/i.test(probeHost(customBaseUrl));
+  const key = (keys.configured || (isOpenRouter ? keys.openRouter : keys.openaiCompat) || "").trim();
+  return key ? { Authorization: `Bearer ${key}` } : {};
+}
+
+// A key-gated backend answers an anonymous /models with 401, which used to
+// read as "backend down" in the creator while every turn worked. The probe
+// carries the same key a turn would, and only for the server's own backend.
+check("the story probe sends the backend's key, admin key first", () => {
+  const custom = { textProvider: "custom", customBaseUrl: "http://127.0.0.1:8001/v1" };
+  assert.deepEqual(
+    storyProbeHeaders(custom, { configured: "admin-key", openaiCompat: "env-key", openRouter: "" }),
+    { Authorization: "Bearer admin-key" },
+  );
+  assert.deepEqual(
+    storyProbeHeaders(custom, { configured: "", openaiCompat: "env-key", openRouter: "or-key" }),
+    { Authorization: "Bearer env-key" },
+  );
+  assert.deepEqual(
+    storyProbeHeaders(
+      { textProvider: "custom", customBaseUrl: "https://openrouter.ai/api/v1" },
+      { configured: "", openaiCompat: "env-key", openRouter: "or-key" },
+    ),
+    { Authorization: "Bearer or-key" },
+  );
+  assert.deepEqual(storyProbeHeaders(custom, { configured: "", openaiCompat: "", openRouter: "" }), {});
+  assert.deepEqual(
+    storyProbeHeaders({ textProvider: "local" }, { configured: "k", openaiCompat: "k", openRouter: "k" }),
+    {},
+  );
+  assert.deepEqual(
+    storyProbeHeaders({ textProvider: "none", customBaseUrl: "" }, { configured: "k", openaiCompat: "k", openRouter: "k" }),
+    {},
+  );
+});
+
 check("the tts probe hits Kokoro's health endpoint", () => {
   assert.equal(ttsProbeUrl("http://127.0.0.1:8880"), "http://127.0.0.1:8880/health");
   assert.equal(ttsProbeUrl("http://127.0.0.1:8880/"), "http://127.0.0.1:8880/health");
@@ -254,6 +303,9 @@ check("capabilities.ts still matches the mirrored constants", () => {
   assert.match(source, /PROBE_CACHE_MS = 30_000/);
   assert.match(source, /PROBE_TIMEOUT_MS = 2_500/);
   assert.match(source, /AbortSignal\.timeout\(PROBE_TIMEOUT_MS\)/);
+  // The story probe is the one that carries a bearer; the fetch must forward it.
+  assert.match(source, /storyProbeHeaders\(settings, \{/);
+  assert.match(source, /headers,\s*\n\s*signal: AbortSignal\.timeout/);
   // Probe state lives on globalThis so dev HMR reloads keep the cache.
   assert.match(source, /globalThis\.__odmCapabilityProbes/);
 });

@@ -111,6 +111,31 @@ export function storyProbeUrl(
   return /\/v\d+$/.test(base) ? `${base}/models` : `${base}/v1/models`;
 }
 
+// The bearer the story probe sends. Key-gated servers (llama.cpp with --api-key,
+// OpenRouter, any proxy) answer /models with 401 to an anonymous GET, which
+// used to read as "backend down" in the creator while turns worked fine. Same
+// precedence as the request-time fallback in model-client.ts, and only ever
+// for the server's own configured backend, so the key goes nowhere else.
+function probeHost(baseUrl: string): string {
+  try {
+    return new URL(baseUrl.trim()).hostname;
+  } catch {
+    return baseUrl.trim();
+  }
+}
+
+export function storyProbeHeaders(
+  settings: Pick<StorySettings, "textProvider" | "customBaseUrl">,
+  keys: { configured: string; openaiCompat: string; openRouter: string },
+): Record<string, string> {
+  if (settings.textProvider === "none" || settings.textProvider === "local") {
+    return {};
+  }
+  const isOpenRouter = /(^|\.)openrouter\.ai$/i.test(probeHost(settings.customBaseUrl));
+  const key = (keys.configured || (isOpenRouter ? keys.openRouter : keys.openaiCompat) || "").trim();
+  return key ? { Authorization: `Bearer ${key}` } : {};
+}
+
 export function ttsProbeUrl(kokoroBaseUrl: string): string {
   return `${kokoroBaseUrl.replace(/\/+$/, "")}/health`;
 }
@@ -130,7 +155,11 @@ function probeStore(): Map<string, ProbeEntry> {
 
 // A failed probe is an answer, never an error: the UI polls this, and a dead
 // backend must cost one timeout per cache window, not one per poll.
-export async function probeReachable(url: string, now = Date.now()): Promise<boolean> {
+export async function probeReachable(
+  url: string,
+  now = Date.now(),
+  headers: Record<string, string> = {},
+): Promise<boolean> {
   if (!url) {
     return false;
   }
@@ -142,6 +171,7 @@ export async function probeReachable(url: string, now = Date.now()): Promise<boo
   try {
     const response = await fetch(url, {
       cache: "no-store",
+      headers,
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
     reachable = response.ok;
@@ -175,7 +205,17 @@ export async function capabilitiesSnapshot(): Promise<Capabilities> {
   const comfyBase = configValue(cfg.images.comfyUrl, "COMFYUI_URL", "http://127.0.0.1:8188");
   const fluxBase = serverEnv("FLUX_WORKER_URL", "http://127.0.0.1:7869");
   const [storyReachable, ttsReachable, imagesReachable] = await Promise.all([
-    configured ? probeReachable(storyProbeUrl(settings, ollamaBase)) : Promise.resolve(false),
+    configured
+      ? probeReachable(
+          storyProbeUrl(settings, ollamaBase),
+          Date.now(),
+          storyProbeHeaders(settings, {
+            configured: cfg.text.customApiKey,
+            openaiCompat: serverEnv("OPENAI_COMPAT_API_KEY"),
+            openRouter: serverEnv("OPENROUTER_API_KEY"),
+          }),
+        )
+      : Promise.resolve(false),
     probeReachable(ttsProbeUrl(kokoroBase)),
     probeReachable(imagesProbeUrl(settings.imageBackend, comfyBase, fluxBase)),
   ]);
