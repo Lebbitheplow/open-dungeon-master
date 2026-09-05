@@ -21,4 +21,6 @@ routes = [
 # SHA-256 fingerprints of APK signing certificates allowed to handle /j App
 # Links, comma-separated. The one below is the debug keystore on the dev
 # machine; append the Play release certificate once that keystore exists.
-ANDROID_CERT_SHA256 = "01:3E:49:6C:EF:07:9D:E4:22:44:A2:55:60:03:DF:20:42:FD:76:AF:BD:27:04:BB:22:25:59:2D:FF:77:92:73"
+# Debug key first, then the GitHub release keystore (~/.local/share/odm). Add
+# the Play-managed app signing certificate here once App Signing is enrolled.
+ANDROID_CERT_SHA256 = "01:3E:49:6C:EF:07:9D:E4:22:44:A2:55:60:03:DF:20:42:FD:76:AF:BD:27:04:BB:22:25:59:2D:FF:77:92:73,94:39:9C:B4:28:E3:CF:6B:11:D0:60:16:24:11:02:FF:8C:24:A2:1E:13:03:58:E2:29:48:52:B9:EC:F0:99:15"
