@@ -3,7 +3,13 @@
 import { useRef, useState } from "react";
 import { Brush, Image as ImageIcon, Loader2, Shapes, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { BRUSHES, BRUSH_EFFECTS, BRUSH_LABELS, type Brush as BrushName } from "@/lib/battlemap/paint";
+import {
+  BRUSHES,
+  BRUSH_EFFECTS,
+  BRUSH_LABELS,
+  MAX_BRUSH_RADIUS,
+  type Brush as BrushName,
+} from "@/lib/battlemap/paint";
 import { STAMPS, STAMP_EFFECTS, STAMP_LABELS, STAMP_SIZE, type StampKind } from "@/lib/battlemap/stamp";
 import {
   BACKDROP_LIMITS,
@@ -20,21 +26,27 @@ import {
 export function BrushPalette({
   brush,
   onPick,
+  radius,
+  onRadius,
 }: {
   brush: BrushName | "";
   onPick: (brush: BrushName | "") => void;
+  // The square brush's reach in tiles either side of the centre, shown when
+  // the caller can use one (a freehand brush can; a line cannot).
+  radius?: number;
+  onRadius?: (radius: number) => void;
 }) {
   return (
     <div className="space-y-1">
       <p className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-stone-500">
         <Brush className="size-3.5" /> Paint the ground
       </p>
-      <div className="flex flex-wrap gap-1">
-        {BRUSHES.map((option) => (
+      <div className="flex flex-wrap items-center gap-1">
+        {BRUSHES.map((option, index) => (
           <button
             key={option}
             type="button"
-            title={BRUSH_EFFECTS[option]}
+            title={`${BRUSH_EFFECTS[option]} (${index + 1})`}
             onClick={() => onPick(brush === option ? "" : option)}
             className={cn(
               "rounded-md border px-2 py-0.5 text-[11px]",
@@ -46,6 +58,22 @@ export function BrushPalette({
             {BRUSH_LABELS[option]}
           </button>
         ))}
+        {radius !== undefined && onRadius ? (
+          <label className="ml-1 flex items-center gap-1 text-[11px] text-stone-500">
+            Size
+            <input
+              type="range"
+              min={0}
+              max={MAX_BRUSH_RADIUS}
+              value={radius}
+              onChange={(event) => onRadius(Number(event.target.value))}
+              className="w-16 accent-amber-500"
+            />
+            <span className="w-8 tabular-nums text-stone-400">
+              {radius * 2 + 1}x{radius * 2 + 1}
+            </span>
+          </label>
+        ) : null}
       </div>
       <p className="text-[10px] text-stone-600">
         {brush

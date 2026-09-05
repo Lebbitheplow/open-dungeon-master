@@ -21,6 +21,7 @@ import {
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
+import { avatarPlaceholder, characterPlaceholder } from "@/lib/placeholders";
 import { DM_HALTED_PREFIX, JOIN_NOTE_PREFIX, LEAD_NOTE_PREFIX, type CampaignMember } from "@/lib/campaign-types";
 import { HaltedTurnBanner } from "@/app/campaigns/[campaignId]/HaltedTurnBanner";
 import { InlineMessageEditor } from "@/app/campaigns/[campaignId]/InlineMessageEditor";
@@ -569,10 +570,17 @@ const MessageItem = memo(function MessageItem({
     (message.userId
       ? sheets.find((candidate) => candidate.userId === message.userId)
       : undefined);
-  // Character portrait first; the player's own avatar as a fallback.
+  // Character portrait first, then the player's own avatar, then a stand-in:
+  // the plate for the character's class or race, or the sigil the player's
+  // id hashes to when there is no sheet to draw from.
   const portraitUrl =
     sheet?.portrait?.url ??
-    (message.userId ? membersById.get(message.userId)?.avatar?.url : undefined);
+    (message.userId ? membersById.get(message.userId)?.avatar?.url : undefined) ??
+    (sheet
+      ? characterPlaceholder({ race: sheet.race, class: sheet.class, gender: sheet.gender })
+      : message.userId
+        ? avatarPlaceholder(message.userId)
+        : undefined);
   return (
     <div className="group ml-auto max-w-[92%] animate-fade-up sm:max-w-2xl">
       <p className="mb-1 flex items-center justify-end gap-1.5 text-right text-xs font-medium text-amber-200/80">

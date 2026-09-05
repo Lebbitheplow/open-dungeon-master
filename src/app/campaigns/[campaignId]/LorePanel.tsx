@@ -1,13 +1,16 @@
 "use client";
 
-import { BookMarked, Loader2, Pin, Plus, X } from "lucide-react";
+import { BookMarked, EyeOff, Loader2, Pin, Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   WORLD_LORE_CATEGORIES,
+  type LoreLinkTarget,
+  type LoreVisibility,
   type WorldLoreCategory,
 } from "@/lib/dm/world-lore-logic";
 import { Sheet } from "@/components/ui/Sheet";
 import { LoreEntryActions } from "@/app/workshop/lore/LoreEntryActions";
+import { LoreBody, LoreImageField, VisibilitySelect } from "@/app/workshop/lore/LoreFields";
 import { LoreRows } from "@/app/workshop/lore/LoreRows";
 import { CATEGORY_LABELS, type LoreEntryView } from "@/app/workshop/lore/types";
 
@@ -40,7 +43,9 @@ export function LorePanel({
     title: string;
     body: string;
     tags: string;
-  }>({ category: "geography", title: "", body: "", tags: "" });
+    visibility: LoreVisibility;
+    imagePath: string;
+  }>({ category: "geography", title: "", body: "", tags: "", visibility: "party", imagePath: "" });
   const [busy, setBusy] = useState(false);
   const rows = layout === "rows";
 
@@ -64,8 +69,23 @@ export function LorePanel({
     };
   }, [campaignId]);
 
+  // What [[links]] in a body may point at: the other entries. An NPC or a
+  // place by that name is the workshop's to resolve later; here a link to
+  // an entry opens it.
+  const targets: LoreLinkTarget[] = entries.map((entry) => ({ kind: "lore", id: entry.id, name: entry.title }));
+  function followLink(target: LoreLinkTarget) {
+    const entry = entries.find((candidate) => candidate.id === target.id);
+    if (entry) {
+      if (steersStory) {
+        startEdit(entry);
+      } else {
+        setReadingId(entry.id);
+      }
+    }
+  }
+
   function startAdd() {
-    setDraft({ category: "geography", title: "", body: "", tags: "" });
+    setDraft({ category: "geography", title: "", body: "", tags: "", visibility: "party", imagePath: "" });
     setEditingId(null);
     setAdding(true);
   }
@@ -76,6 +96,8 @@ export function LorePanel({
       title: entry.title,
       body: entry.body,
       tags: entry.tags.join(", "),
+      visibility: entry.visibility,
+      imagePath: entry.imagePath,
     });
     setAdding(false);
     setEditingId(entry.id);
@@ -101,6 +123,8 @@ export function LorePanel({
           .split(",")
           .map((tag) => tag.trim())
           .filter(Boolean),
+        visibility: draft.visibility,
+        imagePath: draft.imagePath,
       };
       const response = editingId
         ? await fetch(`/api/campaigns/${campaignId}/lore/${editingId}`, {
@@ -166,6 +190,8 @@ export function LorePanel({
           title: `${entry.title} (copy)`,
           body: entry.body,
           tags: entry.tags,
+          visibility: entry.visibility,
+          imagePath: entry.imagePath,
         }),
       });
       if (response.ok) {
@@ -217,10 +243,18 @@ export function LorePanel({
       <textarea
         value={draft.body}
         onChange={(event) => setDraft((current) => ({ ...current, body: event.target.value }))}
-        rows={4}
+        rows={rows ? 8 : 4}
         maxLength={4000}
-        placeholder="What is established about it..."
+        placeholder={"What is established about it...\n\n# Headings, **bold**, - lists, and [[The Mill]] to link another entry."}
         className="w-full rounded border border-stone-700 bg-stone-900 px-2 py-1 text-[11px] leading-4 outline-none focus:border-amber-600"
+      />
+      <VisibilitySelect
+        value={draft.visibility}
+        onChange={(visibility) => setDraft((current) => ({ ...current, visibility }))}
+      />
+      <LoreImageField
+        imagePath={draft.imagePath}
+        onChange={(imagePath) => setDraft((current) => ({ ...current, imagePath }))}
       />
       <input
         value={draft.tags}
@@ -293,9 +327,7 @@ export function LorePanel({
             </div>
           ) : reading ? (
             <div className="space-y-1">
-              <p className="whitespace-pre-wrap text-[11px] leading-4 text-stone-400">
-                {reading.body}
-              </p>
+              <LoreBody entry={reading} targets={targets} onLink={followLink} />
               {reading.tags.length ? (
                 <p className="text-[10px] text-stone-600">{reading.tags.join(" · ")}</p>
               ) : null}
@@ -352,6 +384,8 @@ export function LorePanel({
                   key={entry.id}
                   entry={entry}
                   steersStory={steersStory}
+                  targets={targets}
+                  onLink={followLink}
                   onEdit={() => startEdit(entry)}
                   onPin={() => void togglePin(entry)}
                   onDuplicate={() => void duplicate(entry)}
@@ -368,6 +402,8 @@ export function LorePanel({
 function LoreEntryRow({
   entry,
   steersStory,
+  targets,
+  onLink,
   onEdit,
   onPin,
   onDuplicate,
@@ -375,6 +411,8 @@ function LoreEntryRow({
 }: {
   entry: LoreEntryView;
   steersStory: boolean;
+  targets: LoreLinkTarget[];
+  onLink: (target: LoreLinkTarget) => void;
   onEdit: () => void;
   onPin: () => void;
   onDuplicate: () => void;
@@ -389,13 +427,14 @@ function LoreEntryRow({
         className="flex w-full items-center gap-1.5 text-left"
       >
         {entry.pinned ? <Pin className="size-3 shrink-0 text-amber-400" /> : null}
+        {entry.visibility === "dm" ? <EyeOff className="size-3 shrink-0 text-violet-300" /> : null}
         <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-stone-300">
           {entry.title}
         </span>
       </button>
       {expanded ? (
         <div className="mt-1 space-y-1">
-          <p className="whitespace-pre-wrap text-[11px] leading-4 text-stone-400">{entry.body}</p>
+          <LoreBody entry={entry} targets={targets} onLink={onLink} />
           {entry.tags.length ? (
             <p className="text-[10px] text-stone-600">{entry.tags.join(" · ")}</p>
           ) : null}

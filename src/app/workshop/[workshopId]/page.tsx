@@ -27,6 +27,8 @@ function WorkshopPageInner({ workshopId }: { workshopId: string }) {
 
   const [workshop, setWorkshop] = useState<WorkshopSummary | null>(null);
   const [bestiary, setBestiary] = useState<number | null>(null);
+  const [homebrew, setHomebrew] = useState<number | null>(null);
+  const [pregens, setPregens] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [helpOpen, setHelpOpen] = useState(false);
 
@@ -63,12 +65,48 @@ function WorkshopPageInner({ workshopId }: { workshopId: string }) {
     [workshopId],
   );
 
+  // Items, spells and character options are user-scoped like monsters, so
+  // their count comes from their own list route too.
+  const loadHomebrew = useCallback(
+    () =>
+      fetch("/api/homebrew")
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data: { entries?: Array<{ kind: string }> } | null) => {
+          if (data?.entries) {
+            setHomebrew(data.entries.filter((entry) => entry.kind !== "monster").length);
+          }
+        })
+        .catch(() => {
+          // the card simply shows no figure until the next reload
+        }),
+    [],
+  );
+
+  // Pregens are library characters filed under the workshop, counted by
+  // the Party system's own route.
+  const loadPregens = useCallback(
+    () =>
+      fetch(`/api/workshops/${workshopId}/pregens`)
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data: { pregens?: unknown[] } | null) => {
+          if (data?.pregens) {
+            setPregens(data.pregens.length);
+          }
+        })
+        .catch(() => {
+          // the card simply shows no figure until the next reload
+        }),
+    [workshopId],
+  );
+
   // Refetched whenever the view changes, so a person added inside Cast is
   // counted on the card the moment the DM steps back to the hub.
   useEffect(() => {
     void load();
     void loadBestiary();
-  }, [load, loadBestiary, system]);
+    void loadHomebrew();
+    void loadPregens();
+  }, [load, loadBestiary, loadHomebrew, loadPregens, system]);
 
   function openSystem(next: SystemId) {
     router.push(`${pathname}?system=${next}`);
@@ -130,12 +168,22 @@ function WorkshopPageInner({ workshopId }: { workshopId: string }) {
           workshop={workshop}
           system={system}
           bestiary={bestiary}
+          homebrew={homebrew}
+          pregens={pregens}
           onChange={openSystem}
           onBack={() => router.push(pathname)}
           onRulesApplied={() => void load()}
+          onHomebrewChanged={() => void loadHomebrew()}
+          onPregensChanged={() => void loadPregens()}
         />
       ) : (
-        <SystemCards workshop={workshop} bestiary={bestiary} onOpen={openSystem} />
+        <SystemCards
+          workshop={workshop}
+          bestiary={bestiary}
+          homebrew={homebrew}
+          pregens={pregens}
+          onOpen={openSystem}
+        />
       )}
     </main>
   );

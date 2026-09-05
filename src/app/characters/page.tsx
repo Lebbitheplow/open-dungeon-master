@@ -17,7 +17,7 @@ import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
 import { AppHeader } from "@/components/AppHeader";
 import { Ribbon } from "@/components/ui/Ribbon";
 import { cn } from "@/lib/cn";
-import { IconChip, PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
+import { CharacterPortrait, IconChip, PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
 
 // Where a character is playing. A library character is a template and each
 // campaign holds its own copy, so one entry can be at several tables at once
@@ -40,7 +40,7 @@ type LibraryCharacter = {
   updatedAt: string;
   portraitStatus?: "queued" | "generating" | "failed" | null;
   campaigns?: CharacterAssignment[];
-  sheet?: { portrait?: { url: string } | null };
+  sheet?: { portrait?: { url: string } | null; gender?: string };
 };
 
 function portraitPending(character: LibraryCharacter) {
@@ -333,7 +333,16 @@ function CharacterCard({
                 character.portraitStatus === "failed" ? "Portrait generation failed" : undefined
               }
             >
-              <IconChip icon={UserRound} size="size-12" iconSize="size-5" />
+              <CharacterPortrait
+                look={{
+                  race: character.race,
+                  class: character.class,
+                  gender: character.sheet?.gender,
+                }}
+                alt={character.name}
+                size="size-12"
+                className="border-amber-500/30 shadow-glow-gold"
+              />
             </span>
           )}
           <div className="min-w-0 pr-8">

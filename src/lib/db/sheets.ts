@@ -5,6 +5,7 @@ import { populateResources } from "@/lib/srd/class-resources";
 import { deriveAc } from "@/lib/srd";
 import { ATTUNEMENT_SLOTS } from "@/lib/srd/armor";
 import { itemWeightByName } from "@/lib/content";
+import { hydrateHomebrewGear } from "@/lib/db/homebrew";
 import { backgroundFeatureFor } from "@/lib/backgrounds";
 import type {
   CharacterSheet,
@@ -23,6 +24,7 @@ type SheetRow = {
   subclass: string;
   background: string;
   alignment: string;
+  gender: string | null;
   level: number;
   xp: number;
   abilities_json: string;
@@ -87,6 +89,7 @@ function mapSheet(row: SheetRow): CharacterSheet {
     subclass: row.subclass ?? "",
     background: row.background,
     alignment: row.alignment,
+    gender: row.gender ?? "",
     level: row.level,
     xp: row.xp,
     abilities: parseJson(row.abilities_json, { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }),
@@ -107,7 +110,7 @@ function mapSheet(row: SheetRow): CharacterSheet {
       );
       return { ...parsed, expertise: parsed.expertise ?? [] };
     })(),
-    equipment: withItemWeights(parseJson(row.equipment_json, [])),
+    equipment: withItemWeights(hydrateHomebrewGear(row.user_id, parseJson(row.equipment_json, []))),
     gold: row.gold,
     copper: row.copper ?? 0,
     feats: parseJson(row.feats_json, []),
@@ -137,7 +140,7 @@ function mapSheet(row: SheetRow): CharacterSheet {
 
 const SHEET_COLUMNS = `
   id, campaign_id, user_id, library_character_id, name, race, class, subclass,
-  background, alignment, level, xp,
+  background, alignment, gender, level, xp,
   abilities_json, max_hp, current_hp, temp_hp, ac, ac_override, speed, hit_dice_json,
   classes_json, hit_dice_pools_json,
   proficiencies_json, equipment_json, gold, copper, feats_json, features_json,
@@ -267,13 +270,13 @@ export function createSheet(
     `
       INSERT INTO character_sheets (
         id, campaign_id, user_id, library_character_id, name, race, class,
-        subclass, background, alignment,
+        subclass, background, alignment, gender,
         level, xp, abilities_json, max_hp, current_hp, temp_hp, ac, ac_override, speed,
         hit_dice_json, classes_json, hit_dice_pools_json, proficiencies_json, equipment_json, gold, copper, feats_json,
         features_json, resources_json, spellcasting_json, conditions_json, portrait_json,
         notes, backstory, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?, ?)
     `,
   ).run(
     id,
@@ -286,6 +289,8 @@ export function createSheet(
     input.subclass,
     input.background,
     input.alignment,
+    // Older library sheet_json blobs and companion drafts predate the field.
+    input.gender ?? "",
     level,
     JSON.stringify(input.abilities),
     input.maxHp,

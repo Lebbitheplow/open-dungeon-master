@@ -1,4 +1,9 @@
-import type { TemplateEnemy } from "@/lib/dm/encounter-template-logic";
+import {
+  EMPTY_TEMPLATE_EXTRAS,
+  type TemplateEnemy,
+  type TemplateExtras,
+} from "@/lib/dm/encounter-template-logic";
+import type { MapLabel, MapProp } from "@/lib/battlemap/scene";
 
 // What /api/campaigns/:id/dm/encounter-templates hands the client. Shared by
 // the prep panel and the workshop's rows so a row and the editor behind it
@@ -24,10 +29,22 @@ export type PreparedEncounter = {
   battlefield: string;
   notes: string;
   map: { mapId: string | null };
+  extras: TemplateExtras;
   readout: TemplateReadout;
 };
 
-export type MapOption = { id: string; name: string };
+// A prepared map as the picker sees it. The drawer route hands back whole
+// maps, so the placement canvas can draw the real ground when one is
+// linked; the fields are optional because a bare option list is still one.
+export type MapOption = {
+  id: string;
+  name: string;
+  width?: number;
+  height?: number;
+  terrain?: string;
+  labels?: MapLabel[];
+  props?: MapProp[];
+};
 
 // The form's fields as typed. The roster is kept as the text the DM wrote,
 // not as parsed rows, because the server parses it (checkRoster) and an
@@ -38,6 +55,7 @@ export type EncounterDraft = {
   battlefield: string;
   notes: string;
   mapId: string;
+  extras: TemplateExtras;
 };
 
 export const EMPTY_ENCOUNTER_DRAFT: EncounterDraft = {
@@ -46,4 +64,5 @@ export const EMPTY_ENCOUNTER_DRAFT: EncounterDraft = {
   battlefield: "",
   notes: "",
   mapId: "",
+  extras: EMPTY_TEMPLATE_EXTRAS,
 };

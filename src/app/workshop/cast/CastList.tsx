@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Search, UserPlus, Users } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
+import { npcPlaceholder, npcRoleLabel } from "@/lib/placeholders";
 import { describeNpc, draftFrom } from "@/lib/npcs/forge";
 
 // The cast, two ways. CastChips is the DM console's compact row of names,
@@ -18,6 +19,9 @@ export type Npc = {
   attitude: string;
   trait: string;
   location: string;
+  // Optional so a roster fetched from a server that predates the column
+  // still renders; the placeholder falls back to a hash of the name.
+  role?: string;
   aliases: string[];
   portraitUrl: string;
   archived: boolean;
@@ -68,10 +72,12 @@ export function CastChips({ npcs, selectedId, onOpen }: ListProps) {
               npc.archived && "opacity-50",
             )}
           >
-            {npc.portraitUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={npc.portraitUrl} alt="" className="size-4 rounded-full object-cover" />
-            ) : null}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={npc.portraitUrl || npcPlaceholder(npc.role, npc.name)}
+              alt=""
+              className="size-4 rounded-full object-cover"
+            />
             {npc.name}
           </button>
         ))}
@@ -138,24 +144,18 @@ export function CastRows({ npcs, onOpen }: Omit<ListProps, "selectedId">) {
                   npc.archived && "opacity-60",
                 )}
               >
-                {npc.portraitUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={npc.portraitUrl}
-                    alt=""
-                    className="size-11 shrink-0 rounded-full border border-amber-400/25 object-cover"
-                  />
-                ) : (
-                  <span
-                    aria-hidden="true"
-                    className="flex size-11 shrink-0 items-center justify-center rounded-full border border-amber-300/25 bg-amber-300/10 font-display text-lg text-amber-200"
-                  >
-                    {npc.name.trim().charAt(0).toUpperCase() || "?"}
-                  </span>
-                )}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={npc.portraitUrl || npcPlaceholder(npc.role, npc.name)}
+                  alt=""
+                  className="size-11 shrink-0 rounded-full border border-amber-400/25 bg-stone-950 object-cover"
+                />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <span className="font-display tracking-wide text-amber-50">{npc.name}</span>
+                    {npc.role ? (
+                      <span className="text-xs text-stone-400">{npcRoleLabel(npc.role)}</span>
+                    ) : null}
                     <span
                       className={cn(
                         "rounded-sm border px-1.5 py-0.5 text-[10px] uppercase tracking-wider",

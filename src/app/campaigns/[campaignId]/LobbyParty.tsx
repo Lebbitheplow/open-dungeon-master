@@ -1,10 +1,10 @@
 "use client";
 
-import { Bot, Crown, Trash2, UserPlus, UserRound, Volume2, VolumeX } from "lucide-react";
+import { Bot, Crown, Trash2, UserPlus, Volume2, VolumeX } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { Tooltip } from "@/components/ui/Tooltip";
-import { ui } from "@/lib/ui";
+import { UserAvatar, ui } from "@/lib/ui";
 import type { CampaignMember } from "@/lib/campaign-types";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -110,18 +110,7 @@ export function LobbyParty({
                 className={cn(ui.card, "flex flex-wrap items-center justify-between gap-3 px-4 py-3")}
               >
                 <div className="flex min-w-0 items-center gap-3">
-                  {member.avatar ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={member.avatar.url}
-                      alt=""
-                      className="size-12 shrink-0 rounded-full border border-amber-500/30 object-cover"
-                    />
-                  ) : (
-                    <span className="flex size-12 shrink-0 items-center justify-center rounded-full border border-stone-700/60 bg-stone-900">
-                      <UserRound className="size-5 text-stone-500" />
-                    </span>
-                  )}
+                  <UserAvatar url={member.avatar?.url} userId={member.userId} size="size-12" />
                   <div className="min-w-0">
                     <p className="flex flex-wrap items-center gap-1.5 font-medium text-stone-100">
                       <span className="truncate">{member.username}</span>

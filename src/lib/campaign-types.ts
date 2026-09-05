@@ -47,6 +47,11 @@ export type CampaignSummary = {
   // campaign because the home screen and the shells list it without opening
   // the table.
   cover: CampaignCover | null;
+  // The setting this table plays in, denormalized off gameSettings for the
+  // same reason cover is here: a campaign with no painted cover draws the
+  // plate for its genre, and the home screen picks that without opening the
+  // table. Read through src/lib/placeholders.ts, never compared by hand.
+  genre: string;
   createdAt: string;
   updatedAt: string;
 };

@@ -8,6 +8,7 @@ import {
   OVERWORLD_PARAM_LABELS,
   type OverworldParams,
 } from "@/lib/overworld/logic";
+import { OVERWORLD_SIZES, sizeLabel, type OverworldSize } from "@/lib/overworld/features";
 import type { OverworldData } from "@/app/campaigns/[campaignId]/overworldDraw";
 import { offersStoryModel, useCapabilities } from "@/lib/use-capabilities";
 
@@ -45,6 +46,13 @@ export function OverworldAuthoring({
     (data.map.params as OverworldParams) ?? DEFAULT_OVERWORLD_PARAMS,
   );
   const [notes, setNotes] = useState(data.map.notes ?? "");
+  // The size the next roll is made at. Resizing IS a reroll: the noise
+  // field has no edges to extend, so the ground is rolled again and the
+  // places keep their spots where the new ground allows.
+  const [size, setSize] = useState<OverworldSize>({ width: data.map.width, height: data.map.height });
+  const sizeId =
+    OVERWORLD_SIZES.find((entry) => entry.width === size.width && entry.height === size.height)?.id ??
+    "custom";
   const [placeName, setPlaceName] = useState("");
   const [placeBlurb, setPlaceBlurb] = useState("");
   const [busy, setBusy] = useState(false);
@@ -167,16 +175,34 @@ export function OverworldAuthoring({
             </label>
           ))}
 
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             <button
               type="button"
               disabled={busy}
-              onClick={() => void patch({ regenerate: true, params })}
-              title="Reroll the terrain under these dials. Places, pins and notes stay."
+              onClick={() => void patch({ regenerate: true, params, ...size })}
+              title="Reroll the terrain under these dials, at this size. Places, pins, lines and notes stay."
               className="rounded-md border border-amber-700 bg-amber-950/50 px-2 py-1 text-xs text-amber-100 disabled:opacity-40"
             >
               Roll a world
             </button>
+            <select
+              value={sizeId}
+              aria-label="Size of the next roll"
+              onChange={(event) => {
+                const preset = OVERWORLD_SIZES.find((entry) => entry.id === event.target.value);
+                if (preset) {
+                  setSize({ width: preset.width, height: preset.height });
+                }
+              }}
+              className="rounded-md border border-stone-700 bg-stone-950 px-1.5 py-1 text-xs text-stone-300"
+            >
+              {sizeId === "custom" ? <option value="custom">{sizeLabel(size)}</option> : null}
+              {OVERWORLD_SIZES.map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {entry.label} ({entry.width} by {entry.height})
+                </option>
+              ))}
+            </select>
             {plan?.places.length ? (
               <button
                 type="button"

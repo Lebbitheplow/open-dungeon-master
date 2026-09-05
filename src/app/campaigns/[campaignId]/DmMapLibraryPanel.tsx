@@ -1,15 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Plus } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
-import { MAX_STROKES, type Brush as BrushName } from "@/lib/battlemap/paint";
-import { TERRAIN } from "@/lib/battlemap/types";
 import { backdropDataUrl, nameFromFilename } from "@/lib/battlemap/uvtt";
 import { Sheet } from "@/components/ui/Sheet";
+import { DEFAULT_MAP_TOOLS, type MapTools } from "@/app/campaigns/[campaignId]/MapToolbox";
 import { MapCreateControls } from "@/app/workshop/maps/MapCreateControls";
-import { MapEditor, type MapTools } from "@/app/workshop/maps/MapEditor";
+import { MapEditor } from "@/app/workshop/maps/MapEditor";
 import { MapGallery } from "@/app/workshop/maps/MapGallery";
 import type { LibraryState, PreparedMap } from "@/app/workshop/maps/types";
 
@@ -29,12 +28,6 @@ import type { LibraryState, PreparedMap } from "@/app/workshop/maps/types";
 // thumbnail tile, and the editor opens in a sheet (full screen on a phone, a
 // wide dialog on a desk) so the canvas gets the room it deserves.
 
-// The characters a terrain string is written in, back to the brush that
-// paints them, for replaying one map's drawing onto another.
-const CHAR_TO_BRUSH = Object.fromEntries(
-  Object.entries(TERRAIN).map(([brush, char]) => [char, brush]),
-) as Record<string, BrushName>;
-
 export function DmMapLibraryPanel({
   campaignId,
   layout = "drawer",
@@ -51,11 +44,7 @@ export function DmMapLibraryPanel({
   const [selectedId, setSelectedId] = useState("");
   const [editorOpen, setEditorOpen] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [tools, setTools] = useState<MapTools>({
-    brush: "",
-    stamp: "",
-    stampSize: { width: 5, height: 4 },
-  });
+  const [tools, setTools] = useState<MapTools>(DEFAULT_MAP_TOOLS);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
@@ -123,23 +112,35 @@ export function DmMapLibraryPanel({
     return result;
   }
 
-  async function patch(body: Record<string, unknown>) {
-    if (!selected) {
-      return;
-    }
-    setError("");
-    const response = await fetch(`/api/campaigns/${campaignId}/dm/maps/${selected.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!response.ok) {
-      const payload = await response.json().catch(() => ({}));
-      setError((payload as { error?: string }).error ?? "That was refused.");
-      return;
-    }
-    await load();
-  }
+  // Stable across renders so the painter hook's debounced flush always
+  // sends to the map that is open, not the one that was open when the
+  // callback was made.
+  const selectedIdRef = useRef(selectedId);
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
+  const patch = useCallback(
+    async (body: Record<string, unknown>) => {
+      const mapId = selectedIdRef.current;
+      if (!mapId) {
+        return false;
+      }
+      setError("");
+      const response = await fetch(`/api/campaigns/${campaignId}/dm/maps/${mapId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        setError((payload as { error?: string }).error ?? "That was refused.");
+        return false;
+      }
+      await load();
+      return true;
+    },
+    [campaignId, load],
+  );
 
   async function act(action: "deploy" | "open-scene") {
     if (!selected) {
@@ -168,10 +169,9 @@ export function DmMapLibraryPanel({
 
   // An exact copy of the selected map. The create route speaks generator
   // inputs and the painter is the only legal terrain writer, so a duplicate
-  // is composed: create with the same seed and dials (which replays any
-  // generated lights), then repaint every tile where the original's hand
-  // edits or imported geometry diverge from the reroll, in MAX_STROKES
-  // chunks, then carry the notes, tags and backdrop across.
+  // is composed: create with the same size, then one edit that returns the
+  // copy to the original's terrain (the same request undo sends), carries
+  // its lights, notes, tags and backdrop across.
   async function duplicate() {
     if (!selected) {
       return;
@@ -182,7 +182,7 @@ export function DmMapLibraryPanel({
       name: `${original.name} (copy)`.slice(0, 80),
       width: original.width,
       height: original.height,
-      seed: original.seed,
+      blank: "rock",
       theme: original.theme,
       ambient: original.ambient,
     });
@@ -193,47 +193,30 @@ export function DmMapLibraryPanel({
     setBusy(true);
     setError("");
     try {
-      const strokes: Array<{ x: number; y: number; brush: BrushName }> = [];
-      // Interior tiles only: the border is painter-protected and stays wall
-      // on both sides of the diff.
-      for (let y = 1; y < original.height - 1; y += 1) {
-        for (let x = 1; x < original.width - 1; x += 1) {
-          const index = y * original.width + x;
-          const wanted = original.terrain[index];
-          if (wanted !== copy.terrain[index] && CHAR_TO_BRUSH[wanted]) {
-            strokes.push({ x, y, brush: CHAR_TO_BRUSH[wanted] });
-          }
-        }
-      }
-      for (let at = 0; at < strokes.length; at += MAX_STROKES) {
-        const response = await fetch(`/api/campaigns/${campaignId}/dm/maps/${copy.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ strokes: strokes.slice(at, at + MAX_STROKES) }),
-        });
-        if (!response.ok) {
-          const payload = await response.json().catch(() => ({}));
-          setError((payload as { error?: string }).error ?? "The copy could not be painted.");
-          return;
-        }
-      }
-      const carry: Record<string, unknown> = {};
-      if (original.notes) {
-        carry.notes = original.notes;
-      }
-      if (original.tags.length) {
-        carry.tags = original.tags;
-      }
+      const carry: Record<string, unknown> = {
+        replaceTerrain: original.terrain,
+        lights: original.lights,
+        notes: original.notes,
+        tags: original.tags,
+        labels: original.labels,
+        props: original.props,
+        zones: original.zones,
+        overlayPath: original.overlayPath,
+        ambience: original.ambience,
+      };
       if (original.backdrop) {
         carry.backdropPath = original.backdrop.path;
         carry.backdropTransform = original.backdrop.transform;
       }
-      if (Object.keys(carry).length) {
-        await fetch(`/api/campaigns/${campaignId}/dm/maps/${copy.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(carry),
-        });
+      const response = await fetch(`/api/campaigns/${campaignId}/dm/maps/${copy.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(carry),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        setError((payload as { error?: string }).error ?? "The copy could not be painted.");
+        return;
       }
       setSelectedId(copy.id);
       await load();

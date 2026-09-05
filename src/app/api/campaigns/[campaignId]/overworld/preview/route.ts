@@ -1,11 +1,8 @@
 import { z } from "zod";
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
-import {
-  OVERWORLD_HEIGHT,
-  OVERWORLD_WIDTH,
-  generateOverworldTerrain,
-  normalizeOverworldParams,
-} from "@/lib/overworld/logic";
+import { getOverworld } from "@/lib/db/overworld";
+import { normalizeSize } from "@/lib/overworld/features";
+import { generateOverworldTerrain, normalizeOverworldParams } from "@/lib/overworld/logic";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,6 +14,9 @@ export const dynamic = "force-dynamic";
 const previewSchema = z.object({
   seed: z.number().int().min(0).max(0xffffffff).optional(),
   params: z.unknown().optional(),
+  // The size to preview at; the map's own size when absent.
+  width: z.number().int().optional(),
+  height: z.number().int().optional(),
 });
 
 export async function POST(
@@ -34,11 +34,13 @@ export async function POST(
   }
   const seed = parsed.data.seed ?? (Math.random() * 0xffffffff) >>> 0;
   const dials = normalizeOverworldParams(parsed.data.params);
+  const current = getOverworld(campaignId);
+  const size = normalizeSize(parsed.data, { width: current.width, height: current.height });
   return Response.json({
     seed,
     params: dials,
-    width: OVERWORLD_WIDTH,
-    height: OVERWORLD_HEIGHT,
-    terrain: generateOverworldTerrain(seed, OVERWORLD_WIDTH, OVERWORLD_HEIGHT, dials),
+    width: size.width,
+    height: size.height,
+    terrain: generateOverworldTerrain(seed, size.width, size.height, dials),
   });
 }

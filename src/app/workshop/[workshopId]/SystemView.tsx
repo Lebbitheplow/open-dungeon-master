@@ -13,6 +13,8 @@ import { LorePanel } from "@/app/campaigns/[campaignId]/LorePanel";
 import { OverworldPanel } from "@/app/campaigns/[campaignId]/OverworldPanel";
 import { RulesPanel } from "@/app/campaigns/[campaignId]/RulesPanel";
 import { RulesetLibrary } from "@/app/workshop/RulesetLibrary";
+import { HomebrewPanel } from "@/app/workshop/homebrew/HomebrewPanel";
+import { PartyPanel } from "@/app/workshop/party/PartyPanel";
 import {
   WORKSHOP_SYSTEMS,
   systemCount,
@@ -33,21 +35,29 @@ export function SystemView({
   workshop,
   system,
   bestiary,
+  homebrew,
+  pregens,
   onChange,
   onBack,
   onRulesApplied,
+  onHomebrewChanged,
+  onPregensChanged,
 }: {
   workshop: WorkshopSummary;
   system: SystemId;
   bestiary: number | null;
+  homebrew: number | null;
+  pregens: number | null;
   onChange: (system: SystemId) => void;
   onBack: () => void;
   onRulesApplied: () => void;
+  onHomebrewChanged: () => void;
+  onPregensChanged: () => void;
 }) {
   const current = WORKSHOP_SYSTEMS.find((entry) => entry.id === system) ?? WORKSHOP_SYSTEMS[0];
-  const count = systemCount(current.id, workshop, bestiary);
+  const count = systemCount(current.id, workshop, bestiary, homebrew, pregens);
   const items: IconRailItem<SystemId>[] = WORKSHOP_SYSTEMS.map((entry) => {
-    const entryCount = systemCount(entry.id, workshop, bestiary);
+    const entryCount = systemCount(entry.id, workshop, bestiary, homebrew, pregens);
     return {
       value: entry.id,
       label: entry.label,
@@ -80,6 +90,13 @@ export function SystemView({
       {system === "storyboard" ? (
         <DmStoryboardPanel campaignId={workshop.id} layout="board" />
       ) : null}
+      {system === "party" ? (
+        <PartyPanel
+          workshopId={workshop.id}
+          targetParty={workshop.gameSettings.targetParty}
+          onChanged={onPregensChanged}
+        />
+      ) : null}
       {system === "maps" ? <DmMapLibraryPanel campaignId={workshop.id} layout="gallery" /> : null}
       {system === "region" ? (
         <OverworldPanel campaignId={workshop.id} genre={workshop.gameSettings.genre} steersStory />
@@ -95,6 +112,12 @@ export function SystemView({
         />
       ) : null}
       {system === "bestiary" ? <DmBestiaryPanel campaignId={workshop.id} layout="rows" /> : null}
+      {system === "homebrew" ? (
+        <HomebrewPanel
+          variantRules={workshop.gameSettings.variantRules}
+          onChanged={onHomebrewChanged}
+        />
+      ) : null}
       {system === "lore" ? <LorePanel campaignId={workshop.id} steersStory layout="rows" /> : null}
       {system === "tables" ? <DmTablesPanel campaignId={workshop.id} layout="rows" /> : null}
       {system === "share" ? <DmSharePanel campaignId={workshop.id} /> : null}

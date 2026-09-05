@@ -127,6 +127,7 @@ export function DmEncounterPrepPanel({
             battlefield: template.battlefield,
             notes: template.notes,
             mapId: template.map.mapId ?? "",
+            extras: template.extras,
           }
         : EMPTY_ENCOUNTER_DRAFT,
     );
@@ -151,6 +152,7 @@ export function DmEncounterPrepPanel({
           battlefield: draft.battlefield,
           notes: draft.notes,
           map: { mapId: draft.mapId || null },
+          extras: draft.extras,
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -183,6 +185,7 @@ export function DmEncounterPrepPanel({
           battlefield: template.battlefield,
           notes: template.notes,
           map: template.map,
+          extras: template.extras,
         }),
       });
       const payload = await response.json().catch(() => ({}));

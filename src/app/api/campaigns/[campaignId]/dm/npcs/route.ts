@@ -39,6 +39,8 @@ export async function GET(
   const npcs = listNpcs(campaignId);
   return Response.json({
     npcs,
+    // For the role picker: the setting's own roles are offered first.
+    genre: context.campaign.gameSettings.genre,
     // Resolved server-side so the panel draws the same graph the roster
     // means, including the links that point at somebody nobody has written.
     graph: relationGraph(

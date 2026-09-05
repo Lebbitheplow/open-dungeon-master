@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { spellClassFor } from "@/lib/classes";
 import { suggestedCantripCount, suggestedSpellCount } from "@/lib/content/mechanics";
 import { starterSpellsFor } from "@/lib/help";
-import type { Ability, AbilityScores } from "@/lib/schemas/sheet";
+import type { Ability, AbilityScores, EquipmentItem } from "@/lib/schemas/sheet";
 import {
   abilityMod,
   acBreakdownFor,
@@ -283,7 +283,13 @@ export type BuilderDerived = ReturnType<typeof useBuilderDerived>;
 // than hooks so the steps can call them from any handler.
 export function builderActions(state: BuilderState, klass: ClassOption | undefined) {
   return {
-    addEquipmentItem(entry: { name: string; qty?: number; slug?: string }) {
+    addEquipmentItem(entry: {
+      name: string;
+      qty?: number;
+      slug?: string;
+      gear?: EquipmentItem["gear"];
+      weight?: number;
+    }) {
       state.setEquipment((current) => {
         const existing = current.find((item) => item.name === entry.name);
         if (existing) {
@@ -291,7 +297,18 @@ export function builderActions(state: BuilderState, klass: ClassOption | undefin
             item.name === entry.name ? { ...item, qty: item.qty + 1 } : item,
           );
         }
-        return [...current, { name: entry.name, qty: entry.qty ?? 1, slug: entry.slug }];
+        // A homebrew item arrives with its mechanics snapshotted, so the
+        // builder's live AC and attack lines read it before it is saved.
+        return [
+          ...current,
+          {
+            name: entry.name,
+            qty: entry.qty ?? 1,
+            slug: entry.slug,
+            ...(entry.gear ? { gear: entry.gear } : {}),
+            ...(entry.weight !== undefined ? { weight: entry.weight } : {}),
+          },
+        ];
       });
     },
     addEquipmentItems(entries: Array<{ name: string; qty: number }>) {

@@ -254,6 +254,7 @@ export function SidePanelRouter({
                   steersStory={steersStory}
                   canEditOrder={adjudicates}
                   embedded
+                  genre={campaign?.gameSettings?.genre}
                 />
               </div>
             ) : null}
@@ -334,6 +335,7 @@ export function SidePanelRouter({
           locations={locations}
           steersStory={steersStory}
           mediaStatus={mediaStatus}
+          genre={campaign?.gameSettings?.genre}
         />
       </div>
     );

@@ -5,17 +5,22 @@ import {
   requireStoryAuthority,
   requireMember,
 } from "@/lib/campaign-api";
-import { insertKnownLocation, listLocations, renameLocation } from "@/lib/db/locations";
+import { insertKnownLocation, renameLocation } from "@/lib/db/locations";
 import {
-  getOverworld,
+  overworldView,
   regenerateOverworld,
   setOverworldAnchor,
+  setOverworldBackdrop,
+  setOverworldLabels,
   setOverworldNotes,
   setOverworldParty,
+  setOverworldPaths,
   setOverworldPins,
   paintOverworldTerrain,
 } from "@/lib/db/overworld";
+import { OVERWORLD_SIZE_LIMITS } from "@/lib/overworld/features";
 import { normalizeOverworldParams } from "@/lib/overworld/logic";
+import { isUploadedImagePath } from "@/lib/uploads";
 import {
   MAX_BRUSH_RADIUS,
   MAX_STROKES,
@@ -25,36 +30,8 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// The overworld view: terrain grid, anchors joined with location state
-// (visited/current names), lead pins, and the party marker. Lazily created on
-// first read. The DM's own notes ride along only for whoever holds the
-// story's secrets, which is the lead in an AI campaign and the DM once a
-// person is running the game (src/lib/dm/viewer.ts).
-function overworldPayload(campaignId: string, secrets: boolean) {
-  const map = getOverworld(campaignId);
-  const locations = listLocations(campaignId).map((location) => ({
-    id: location.id,
-    name: location.name,
-    visited: location.visited,
-    isCurrent: location.isCurrent,
-    connections: location.connections,
-    anchor: map.anchors[location.id] ?? null,
-  }));
-  return {
-    map: {
-      seed: map.seed,
-      width: map.width,
-      height: map.height,
-      terrain: map.terrain,
-      pins: map.pins,
-      partyXy: map.partyXy,
-      params: map.params,
-      ...(secrets ? { notes: map.notes } : {}),
-    },
-    locations,
-  };
-}
-
+// The overworld view lives in the rim (overworldView) so the Azgaar import
+// route can answer with the same shape.
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ campaignId: string }> },
@@ -64,7 +41,7 @@ export async function GET(
   if (isErrorResponse(context)) {
     return context;
   }
-  return Response.json(overworldPayload(campaignId, capsFor(context).steersStory));
+  return Response.json(overworldView(campaignId, capsFor(context).steersStory));
 }
 
 const xySchema = z.object({ x: z.number(), y: z.number() });
@@ -75,6 +52,17 @@ const patchSchema = z.object({
   // same map; without one a reroll is a fresh roll, as it always was.
   seed: z.number().int().min(0).max(0xffffffff).optional(),
   params: z.unknown().optional(),
+  // The size the next roll is made at. Read only with `regenerate`, because
+  // resizing IS a reroll: the noise field has no edges to extend.
+  width: z.number().int().min(OVERWORLD_SIZE_LIMITS.minWidth).max(OVERWORLD_SIZE_LIMITS.maxWidth).optional(),
+  height: z.number().int().min(OVERWORLD_SIZE_LIMITS.minHeight).max(OVERWORLD_SIZE_LIMITS.maxHeight).optional(),
+  // Roads, rivers, borders and labels, each sent whole like pins. Shapes are
+  // checked by the feature normalizer, which is also what a bundle and an
+  // Azgaar file go through.
+  paths: z.array(z.unknown()).max(200).optional(),
+  labels: z.array(z.unknown()).max(200).optional(),
+  // An /api/upload path, or "" to take the picture away.
+  backdropPath: z.string().max(300).optional(),
   pins: z
     .array(
       z.object({
@@ -143,7 +131,21 @@ export async function PATCH(
     regenerateOverworld(campaignId, {
       seed: patch.seed,
       params: patch.params === undefined ? undefined : normalizeOverworldParams(patch.params),
+      width: patch.width,
+      height: patch.height,
     });
+  }
+  if (patch.backdropPath !== undefined) {
+    if (patch.backdropPath !== "" && !isUploadedImagePath(patch.backdropPath)) {
+      return Response.json({ error: "That is not an uploaded image." }, { status: 400 });
+    }
+    setOverworldBackdrop(campaignId, patch.backdropPath);
+  }
+  if (patch.paths) {
+    setOverworldPaths(campaignId, patch.paths);
+  }
+  if (patch.labels) {
+    setOverworldLabels(campaignId, patch.labels);
   }
   if (patch.places) {
     for (const place of patch.places) {
@@ -178,5 +180,5 @@ export async function PATCH(
   // `stranded` names the places the paint left standing in sea or on a peak.
   // Reported, never moved: setOverworldAnchor accepts both on the grounds
   // that a DM who puts a lighthouse on a reef means it.
-  return Response.json({ ...overworldPayload(campaignId, true), stranded });
+  return Response.json({ ...overworldView(campaignId, true), stranded });
 }

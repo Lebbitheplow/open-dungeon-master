@@ -1,5 +1,11 @@
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
+import {
+  avatarPlaceholder,
+  characterPlaceholder,
+  monsterPlaceholder,
+  type CharacterLook,
+} from "@/lib/placeholders";
 
 // The arcane-night visual vocabulary, shared by every surface: gold-foil
 // primary buttons with press states, glassy panels over indigo night,
@@ -74,6 +80,108 @@ export function PixelTile({
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={src} alt="" className="size-full object-cover" />
     </span>
+  );
+}
+
+// A monster's picture when nobody has painted one: the placeholder plate for
+// its SRD creature type (scripts/placeholder-set.mjs renders one per type),
+// or the genre's boss plate when its challenge rating says it is the
+// centrepiece of a fight. Anything unrecognised draws the monstrosity plate,
+// which promises least. The rules live in src/lib/placeholders.ts.
+export function monsterThumbnail(
+  type: string | null | undefined,
+  options: { cr?: number | null; genre?: string | null; seed?: string | null } = {},
+): string {
+  return monsterPlaceholder(type, options);
+}
+
+// The thumbnail at list-row size, framed like every other tile. `type` is
+// the creature type off the stat block or the bestiary entry; `cr` and
+// `genre` only matter for the boss and genre plates, and `seed` (a slug or
+// a name) keeps a monster on the same plate where a genre offers two.
+export function MonsterTile({
+  type,
+  cr,
+  genre,
+  seed,
+  size = "size-9",
+  className,
+}: {
+  type: string | null | undefined;
+  cr?: number | null;
+  genre?: string | null;
+  seed?: string | null;
+  size?: string;
+  className?: string;
+}) {
+  return (
+    <PixelTile src={monsterThumbnail(type, { cr, genre, seed })} size={size} className={className} />
+  );
+}
+
+// A player's face: their uploaded avatar, or the sigil their user id hashes
+// to, so somebody who never chose one still looks like themselves everywhere.
+export function UserAvatar({
+  url,
+  userId,
+  size = "size-12",
+  className,
+}: {
+  url?: string | null;
+  userId: string | null | undefined;
+  size?: string;
+  className?: string;
+}) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={url || avatarPlaceholder(userId)}
+      alt=""
+      loading="lazy"
+      className={cn(
+        "shrink-0 rounded-full border border-amber-500/30 bg-stone-950 object-cover",
+        size,
+        className,
+      )}
+    />
+  );
+}
+
+// A character's picture: their own portrait when somebody has painted one,
+// and otherwise the plate their class, race or setting resolves to. Square
+// by default because that is how a sheet shows a face; pass rounded-full for
+// the party rail and the cast list.
+//
+// `look` is whatever the caller knows - a sheet has all four fields, a lobby
+// row may have only a name - and src/lib/placeholders.ts narrows from there.
+export function CharacterPortrait({
+  url,
+  look,
+  alt = "",
+  size = "size-12",
+  rounded = "rounded-lg",
+  className,
+}: {
+  url?: string | null;
+  look?: CharacterLook;
+  alt?: string;
+  size?: string;
+  rounded?: string;
+  className?: string;
+}) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={url || characterPlaceholder(look ?? {})}
+      alt={alt}
+      loading="lazy"
+      className={cn(
+        "shrink-0 border border-amber-400/25 bg-stone-950 object-cover",
+        size,
+        rounded,
+        className,
+      )}
+    />
   );
 }
 

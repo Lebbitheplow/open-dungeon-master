@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/cn";
 import { IconChip, ui } from "@/lib/ui";
+import { miscPlaceholder, workshopPlaceholder } from "@/lib/placeholders";
 import { Ribbon } from "@/components/ui/Ribbon";
 import {
   WORKSHOP_SYSTEMS,
@@ -15,16 +16,35 @@ import type { WorkshopSummary } from "@/app/workshop/types";
 // sees at a glance what is built and what is still empty. Tapping one opens
 // that system.
 
+// Each card's picture. Nine systems have a workshop plate of their own; the
+// region is a journey and the share room is a chest of everything packed.
+function systemPlate(id: SystemId): string {
+  if (id === "region") {
+    return miscPlaceholder("journey");
+  }
+  if (id === "share") {
+    return miscPlaceholder("treasure");
+  }
+  if (id === "party") {
+    return miscPlaceholder("party");
+  }
+  return workshopPlaceholder(id === "rules" ? "rulesets" : id);
+}
+
 export function SystemCards({
   workshop,
   bestiary,
+  homebrew,
+  pregens = null,
   onOpen,
 }: {
   workshop: WorkshopSummary;
   bestiary: number | null;
+  homebrew: number | null;
+  pregens?: number | null;
   onOpen: (system: SystemId) => void;
 }) {
-  const total = totalPieces(workshop, bestiary);
+  const total = totalPieces(workshop, bestiary, homebrew, pregens);
   return (
     <section className="mt-5">
       <div className="mb-3 flex items-center gap-3">
@@ -35,7 +55,7 @@ export function SystemCards({
       </div>
       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {WORKSHOP_SYSTEMS.map((system) => {
-          const count = systemCount(system.id, workshop, bestiary);
+          const count = systemCount(system.id, workshop, bestiary, homebrew, pregens);
           const empty = count.figure === "0" || count.figure === "none";
           return (
             <li key={system.id}>
@@ -61,6 +81,16 @@ export function SystemCards({
                     </span>
                   ) : null}
                 </div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={systemPlate(system.id)}
+                  alt=""
+                  loading="lazy"
+                  className={cn(
+                    "aspect-[16/7] w-full rounded-lg border border-amber-400/20 object-cover",
+                    empty && "opacity-60",
+                  )}
+                />
                 <div className="mt-auto">
                   <p className="font-display text-[13px] font-semibold uppercase tracking-[0.12em] text-stone-200">
                     {system.label}

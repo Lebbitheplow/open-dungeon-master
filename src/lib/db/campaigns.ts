@@ -224,6 +224,7 @@ export function regenerateInviteCode(campaignId: string): string | null {
 }
 
 function mapCampaign(row: CampaignRow): Campaign {
+  const gameSettings = normalizeGameSettings(parseJson(row.game_settings_json, {}));
   return {
     id: row.id,
     title: row.title,
@@ -242,12 +243,13 @@ function mapCampaign(row: CampaignRow): Campaign {
     playerCount: Number(row.player_count ?? 0),
     role: row.member_role ?? (row.owner_user_id ? "player" : "player"),
     cover: normalizeCampaignCover(parseJson(row.cover_json ?? "", null)),
+    genre: gameSettings.genre,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     scene: row.scene,
     questLog: parseJson<string[]>(row.quest_log_json, []),
     settings: normalizeSettings(parseJson(row.settings_json, {})),
-    gameSettings: normalizeGameSettings(parseJson(row.game_settings_json, {})),
+    gameSettings,
     dmOutline: row.dm_outline ?? "",
     storyArc: normalizeStoryArc(parseJson(row.story_arc_json ?? "", null)),
     floor: normalizeFloor(parseJson(row.floor_json, null)),

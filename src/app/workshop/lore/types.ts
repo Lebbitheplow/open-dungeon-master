@@ -1,4 +1,4 @@
-import type { WorldLoreCategory } from "@/lib/dm/world-lore-logic";
+import type { LoreVisibility, WorldLoreCategory } from "@/lib/dm/world-lore-logic";
 
 // What the lore panel shows of an entry, and the words it uses for the
 // categories. Shared by the campaign's list and the workshop's rows so both
@@ -11,6 +11,8 @@ export type LoreEntryView = {
   body: string;
   tags: string[];
   pinned: boolean;
+  visibility: LoreVisibility;
+  imagePath: string;
 };
 
 export const CATEGORY_LABELS: Record<WorldLoreCategory, string> = {

@@ -206,6 +206,7 @@ import { getActiveEncounter, listEnemies } from "@/lib/db/encounters";
 import { getBattleMapForEncounter, listTokens } from "@/lib/db/battle-maps";
 import { serializeMapForPrompt } from "@/lib/battlemap/serialize";
 import { suggestEnemies } from "@/lib/bestiary";
+import { extraBlockLines } from "@/lib/bestiary/block-sections";
 
 const MUTATION_NAMES = new Set<string>(MUTATION_TOOL_NAMES);
 const ENCOUNTER_NAMES = new Set<string>(ENCOUNTER_TOOL_NAMES);
@@ -284,7 +285,9 @@ function buildEncounterState(campaignId: string, sheets: CharacterSheet[]) {
         return condition;
       }),
       attacks: enemy.stats.attacks,
-      traits: enemy.stats.traits,
+      // The trait lines, then the printed half of the block (scores,
+      // skills, senses, languages, spells) for blocks that carry one.
+      traits: [...enemy.stats.traits, ...extraBlockLines(enemy.stats)],
       resist: enemy.stats.resist,
       immune: enemy.stats.immune,
       vulnerable: enemy.stats.vulnerable,
@@ -316,7 +319,8 @@ function buildMapText(encounterId: string, sheets: CharacterSheet[]): string | n
       statuses.set(enemy.id, enemy.conditions.join(", "));
     }
   }
-  return serializeMapForPrompt(map, listTokens(map.id), statuses);
+  // The drawn board, so the model sees the doors, with the shut ones named.
+  return serializeMapForPrompt({ ...map, terrain: map.drawnTerrain }, listTokens(map.id), statuses);
 }
 
 function loadContext(campaign: Campaign): TurnContext {

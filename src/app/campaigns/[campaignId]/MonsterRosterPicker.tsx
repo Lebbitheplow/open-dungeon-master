@@ -3,6 +3,7 @@
 import { Loader2, Plus, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
+import { MonsterTile } from "@/lib/ui";
 import { crLabel } from "@/lib/bestiary/derive-cr";
 import { addToRoster, formatRoster, parseRoster } from "@/lib/dm/encounter-template-logic";
 
@@ -29,7 +30,11 @@ export function MonsterRosterPicker({
   onChange: (roster: string) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Array<{ slug: string; name: string; cr: number }>>([]);
+  const [results, setResults] = useState<
+    Array<{ slug: string; name: string; cr: number; type: string }>
+  >([]);
+  // The table's setting, for the boss plate on high-rating results.
+  const [genre, setGenre] = useState("");
   const [loading, setLoading] = useState(false);
 
   // Debounced so a search fires on the pause, not the keystroke. Everything
@@ -50,13 +55,18 @@ export function MonsterRosterPicker({
         .then(
           (
             payload: {
-              found: Array<{ slug: string; name: string; cr: number }>;
-              monsters: Array<{ draft: { name: string; stats: { cr: number } }; slug: string }>;
+              found: Array<{ slug: string; name: string; cr: number; type: string }>;
+              monsters: Array<{
+                draft: { name: string; stats: { cr: number; type?: string } };
+                slug: string;
+              }>;
+              genre?: string;
             } | null,
           ) => {
             if (cancelled || !payload) {
               return;
             }
+            setGenre(payload.genre ?? "");
             // The DM's own monsters first: a boss built in this workshop is
             // the one they came looking for.
             const mine = payload.monsters
@@ -67,6 +77,7 @@ export function MonsterRosterPicker({
                 slug: monster.slug,
                 name: monster.draft.name,
                 cr: monster.draft.stats.cr,
+                type: monster.draft.stats.type ?? "",
               }));
             setResults([...mine, ...payload.found].slice(0, 24));
           },
@@ -110,6 +121,14 @@ export function MonsterRosterPicker({
               className={cn(chip, "border-stone-700 text-stone-400 hover:text-amber-100")}
             >
               <Plus className="mr-0.5 inline size-2.5" />
+              <MonsterTile
+                type={entry.type}
+                cr={entry.cr}
+                genre={genre}
+                seed={entry.slug}
+                size="size-5"
+                className="mr-1 inline-flex align-middle"
+              />
               {entry.name}
               <span className="ml-1 text-stone-600">CR {crLabel(entry.cr)}</span>
             </button>

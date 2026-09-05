@@ -3,7 +3,8 @@
 import { Swords } from "lucide-react";
 import { CampaignCover } from "@/components/CampaignCover";
 import { HeroCard } from "@/components/ui/HeroCard";
-import { IconChip, ui } from "@/lib/ui";
+import { miscPlaceholder } from "@/lib/placeholders";
+import { ui } from "@/lib/ui";
 import { holdsDmSeat, type HomeCampaign } from "@/app/home/types";
 
 // The doorway at the top of home: the table you were last at, with its cover
@@ -28,6 +29,8 @@ export function ContinueHero({ campaign, userId }: { campaign: HomeCampaign; use
         <CampaignCover
           cover={campaign.cover}
           title={campaign.title}
+          genre={campaign.genre}
+          seed={campaign.id}
           className="h-full rounded-none border-0 shadow-none aspect-auto"
         />
       }
@@ -46,7 +49,13 @@ export function ContinueHero({ campaign, userId }: { campaign: HomeCampaign; use
 export function EmptyHero() {
   return (
     <div className="flex flex-col items-center gap-4 rounded-xl border border-stone-800 bg-stone-950/40 px-6 py-10 text-center">
-      <IconChip icon={Swords} size="size-12" iconSize="size-5" />
+      {/* The empty plinth plate: the one picture for a table nobody has sat at. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={miscPlaceholder("empty")}
+        alt=""
+        className="aspect-video w-full max-w-xs rounded-lg border border-amber-400/20 object-cover shadow-glow-gold"
+      />
       <div className="max-w-sm">
         <p className="text-balance font-serif text-2xl text-stone-200">
           Every campaign starts with an empty table.

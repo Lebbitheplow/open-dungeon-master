@@ -359,9 +359,9 @@ export function addTraits(draft: MonsterDraft, lines: string[]): MonsterDraft {
 
 // ---- applying a pick ----
 
-// Size, walking speed and the ancestry's own traits. Everything else about
-// the block is left alone: an ancestry says what somebody IS, and the class
-// below says what they can do.
+// Size, type, walking speed and the ancestry's own traits. Everything else
+// about the block is left alone: an ancestry says what somebody IS (a
+// humanoid, whichever one), and the class below says what they can do.
 export function applyAncestry(draft: MonsterDraft, ancestryId: string): MonsterDraft {
   const ancestry = findAncestry(ancestryId);
   if (!ancestry) {
@@ -375,6 +375,7 @@ export function applyAncestry(draft: MonsterDraft, ancestryId: string): MonsterD
       stats: {
         ...draft.stats,
         size,
+        type: "humanoid",
         speed: formatSpeed({ ...speeds, walk: ancestry.speed }),
       },
     },

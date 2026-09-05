@@ -25,6 +25,7 @@ const { findRace, findClass, SRD_BACKGROUNDS } = await import("../src/lib/srd/in
 const { CUSTOM_BACKGROUNDS } = await import("../src/lib/backgrounds/index.ts");
 const { SRD_WEAPONS } = await import("../src/lib/srd/weapons.ts");
 const { SRD_ARMOR } = await import("../src/lib/srd/armor.ts");
+const { normalizeCreatureType } = await import("../src/lib/bestiary/statblock.ts");
 
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
 const target = path.resolve(process.argv[2] ?? path.join(scriptsDir, "..", "data", "worlds"));
@@ -174,7 +175,9 @@ for (const group of groupByFranchise(packs.map(({ pack }) => summarizePack(pack)
 if (fs.existsSync(contentDbPath)) {
   const { default: Database } = await import("better-sqlite3-multiple-ciphers");
   const db = new Database(contentDbPath, { readonly: true });
-  const crBySlug = new Map(db.prepare("SELECT slug, cr FROM monsters").all().map((r) => [r.slug, r.cr]));
+  const monsterRows = db.prepare("SELECT slug, cr, type FROM monsters").all();
+  const crBySlug = new Map(monsterRows.map((r) => [r.slug, r.cr]));
+  const typeBySlug = new Map(monsterRows.map((r) => [r.slug, normalizeCreatureType(r.type)]));
   const spellNames = new Set(db.prepare("SELECT name FROM spells").all().map((r) => r.name.toLowerCase()));
   const itemNames = new Set(db.prepare("SELECT name FROM items").all().map((r) => r.name.toLowerCase()));
   db.close();
@@ -187,6 +190,8 @@ if (fs.existsSync(contentDbPath)) {
         problems.push(`${file}: monster slug "${entry.slug}" is not in the content pack`);
       } else if (crBySlug.get(entry.slug) !== entry.cr) {
         problems.push(`${file}: ${entry.slug} cr is ${entry.cr}, content pack says ${crBySlug.get(entry.slug)}`);
+      } else if (entry.type && typeBySlug.get(entry.slug) !== entry.type) {
+        problems.push(`${file}: ${entry.slug} type is "${entry.type}", content pack says "${typeBySlug.get(entry.slug)}"`);
       }
     }
     for (const entry of pack.spells) {

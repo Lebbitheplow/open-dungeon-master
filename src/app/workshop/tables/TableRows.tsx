@@ -50,7 +50,15 @@ export function coverageLabel(coverage: TableCoverage): string {
 const COVERED = "border-emerald-500/40 bg-emerald-500/10 text-emerald-300";
 const PATCHY = "border-amber-500/40 bg-amber-500/10 text-amber-300";
 
-export type RollResult = { tableId: string; total: number; text: string };
+export type RollResult = {
+  tableId: string;
+  total: number;
+  text: string;
+  // Every step when a row rolled another table; empty for a plain roll.
+  chain: string[];
+  // Results still undealt on a table that draws without replacement.
+  remaining: number | null;
+};
 
 type RowsProps = {
   tables: RollTable[];
@@ -124,6 +132,11 @@ export function TableRows({
                     >
                       {coverageLabel(coverage)}
                     </span>
+                    {table.noReplacement ? (
+                      <span className="rounded-sm border border-violet-500/40 bg-violet-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-violet-300">
+                        deck, {table.drawn.length} dealt
+                      </span>
+                    ) : null}
                   </span>
                 </button>
                 <span className="flex shrink-0 items-center gap-1.5">
@@ -156,9 +169,19 @@ export function TableRows({
                 </span>
               </div>
               {result?.tableId === table.id ? (
-                <p className="mt-2 text-xs text-stone-300">
-                  <span className="text-amber-200">{result.total}:</span> {result.text}
-                </p>
+                <div className="mt-2 text-xs text-stone-300">
+                  <p>
+                    <span className="text-amber-200">{result.total}:</span> {result.text}
+                    {result.remaining !== null ? (
+                      <span className="ml-1 text-stone-500">({result.remaining} left)</span>
+                    ) : null}
+                  </p>
+                  {result.chain.map((line, index) => (
+                    <p key={index} className="text-[11px] text-stone-500">
+                      {line}
+                    </p>
+                  ))}
+                </div>
               ) : null}
             </li>
           );

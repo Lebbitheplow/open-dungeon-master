@@ -242,6 +242,19 @@ export const BattleMapGrid = memo(
           />
         ) : null}
         {cells}
+        {/* The DM's overlay, the annotated picture, in the backdrop's
+            register. Only the DM's projection carries it. */}
+        {view.overlayPath ? (
+          <image
+            href={view.overlayPath}
+            {...(view.backdrop
+              ? backdropRect(view.backdrop.transform, width, height, TILE)
+              : { x: 0, y: 0, width: width * TILE, height: height * TILE })}
+            opacity={0.85}
+            preserveAspectRatio="none"
+            pointerEvents="none"
+          />
+        ) : null}
         {catcher}
         {view.lights.map((light, index) => (
           <circle
@@ -388,6 +401,60 @@ export const BattleMapGrid = memo(
             </g>
           );
         })}
+        {/* The scene layer (src/lib/battlemap/scene.ts): labels where the
+            projection allows them, and for the DM the state of every shut
+            door, as a badge on the door glyph they alone still see. */}
+        {view.labels.map((label) => (
+          <g key={`label-${label.x}-${label.y}`} pointerEvents="none">
+            <circle
+              cx={label.x * TILE + TILE / 2}
+              cy={label.y * TILE + TILE / 2}
+              r={3}
+              fill={label.dmOnly ? "#a78bfa" : "#fbbf24"}
+            />
+            <text
+              x={label.x * TILE + TILE / 2}
+              y={label.y * TILE + TILE / 2 - 6}
+              textAnchor="middle"
+              fontSize={11}
+              fill={label.dmOnly ? "#c4b5fd" : "#fde68a"}
+              stroke="#000"
+              strokeWidth={3}
+              paintOrder="stroke"
+              style={{ fontFamily: "sans-serif" }}
+            >
+              {label.text}
+            </text>
+          </g>
+        ))}
+        {view.doors
+          ? Object.entries(view.doors).map(([key, state]) => {
+              const [dx, dy] = key.split(",").map(Number);
+              return (
+                <g key={`door-${key}`} pointerEvents="none">
+                  <rect
+                    x={dx * TILE + TILE * 0.55}
+                    y={dy * TILE + TILE * 0.05}
+                    width={TILE * 0.4}
+                    height={TILE * 0.4}
+                    rx={2}
+                    fill={state === "locked" ? "#f59e0b" : "#a78bfa"}
+                  />
+                  <text
+                    x={dx * TILE + TILE * 0.75}
+                    y={dy * TILE + TILE * 0.25 + 4}
+                    textAnchor="middle"
+                    fontSize={10}
+                    fontWeight="bold"
+                    fill="#0c0a09"
+                    style={{ fontFamily: "sans-serif" }}
+                  >
+                    {state === "locked" ? "L" : "S"}
+                  </text>
+                </g>
+              );
+            })
+          : null}
         {/* Measured area. Drawn above the tokens so the DM can see who is
             standing in it without hunting for the outline. */}
         {overlay?.template?.length ? (

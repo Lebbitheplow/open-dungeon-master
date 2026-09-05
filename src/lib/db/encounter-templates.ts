@@ -1,7 +1,9 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import {
   EMPTY_TEMPLATE_MAP,
+  normalizeTemplateExtras,
   type TemplateEnemy,
+  type TemplateExtras,
   type TemplateMap,
 } from "@/lib/dm/encounter-template-logic";
 
@@ -18,6 +20,9 @@ export type EncounterTemplate = {
   battlefield: string;
   map: TemplateMap;
   notes: string;
+  // Where each enemy starts, who is hidden, overrides and rewards
+  // (src/lib/dm/encounter-template-logic.ts). Old rows read as empty.
+  extras: TemplateExtras;
   createdByUserId: string;
   createdAt: string;
   updatedAt: string;
@@ -31,6 +36,7 @@ type TemplateRow = {
   battlefield: string;
   map_json: string;
   notes: string;
+  extras_json: string | null;
   created_by_user_id: string;
   created_at: string;
   updated_at: string;
@@ -45,6 +51,7 @@ function mapTemplate(row: TemplateRow): EncounterTemplate {
     battlefield: row.battlefield ?? "",
     map: { ...EMPTY_TEMPLATE_MAP, ...parseJson<Partial<TemplateMap>>(row.map_json, {}) },
     notes: row.notes ?? "",
+    extras: normalizeTemplateExtras(parseJson<unknown>(row.extras_json ?? "{}", {})),
     createdByUserId: row.created_by_user_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -72,6 +79,7 @@ export function insertEncounterTemplate(input: {
   battlefield: string;
   map: TemplateMap;
   notes: string;
+  extras?: TemplateExtras;
   createdByUserId: string;
 }): EncounterTemplate {
   const id = crypto.randomUUID();
@@ -79,9 +87,9 @@ export function insertEncounterTemplate(input: {
   getDatabase()
     .prepare(
       `INSERT INTO encounter_templates
-         (id, campaign_id, name, enemies_json, battlefield, map_json, notes,
+         (id, campaign_id, name, enemies_json, battlefield, map_json, notes, extras_json,
           created_by_user_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -91,6 +99,7 @@ export function insertEncounterTemplate(input: {
       input.battlefield,
       JSON.stringify(input.map),
       input.notes,
+      JSON.stringify(normalizeTemplateExtras(input.extras ?? {})),
       input.createdByUserId,
       now,
       now,
@@ -106,12 +115,13 @@ export function updateEncounterTemplate(
     battlefield: string;
     map: TemplateMap;
     notes: string;
+    extras: TemplateExtras;
   },
 ): EncounterTemplate | null {
   getDatabase()
     .prepare(
       `UPDATE encounter_templates SET name = ?, enemies_json = ?, battlefield = ?,
-         map_json = ?, notes = ?, updated_at = ? WHERE id = ?`,
+         map_json = ?, notes = ?, extras_json = ?, updated_at = ? WHERE id = ?`,
     )
     .run(
       patch.name,
@@ -119,6 +129,7 @@ export function updateEncounterTemplate(
       patch.battlefield,
       JSON.stringify(patch.map),
       patch.notes,
+      JSON.stringify(normalizeTemplateExtras(patch.extras)),
       nowIso(),
       id,
     );

@@ -5,6 +5,7 @@ import {
   bundleCounts,
   bundleWarnings,
   MAX_BUNDLE_BYTES,
+  pickBundleKinds,
   readBundle,
 } from "@/lib/workshop/bundle";
 
@@ -34,6 +35,8 @@ const bodySchema = z.object({
   // encoded size and this measures characters.
   text: z.string().min(1).max(MAX_BUNDLE_BYTES),
   preview: z.boolean().default(false),
+  // The kinds to take. Absent or empty means the whole bundle.
+  kinds: z.array(z.string().max(40)).max(20).default([]),
 });
 
 export async function POST(request: Request) {
@@ -57,11 +60,12 @@ export async function POST(request: Request) {
     return Response.json({
       manifest: bundle.manifest,
       counts: bundleCounts(bundle),
+      houseRules: bundle.houseRulesText.trim().length > 0,
       warnings: bundleWarnings(bundle),
     });
   }
 
-  const result = importWorkshopBundle(user.id, bundle);
+  const result = importWorkshopBundle(user.id, pickBundleKinds(bundle, parsed.data.kinds));
   if ("error" in result) {
     return Response.json({ error: result.error }, { status: 400 });
   }

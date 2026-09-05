@@ -88,6 +88,8 @@ export default function JoinPage({ params }: { params: Promise<{ code: string }>
           <CampaignCover
             cover={preview?.cover ? { id: "", url: preview.cover.url } : null}
             title={preview?.title ?? `Room ${roomCode}`}
+            genre={preview?.genre}
+            seed={roomCode}
           />
           <div className="mt-4 text-center">
             <p className="eyebrow text-[10px] text-amber-400/80">

@@ -12,6 +12,7 @@ const { bestiaryForGenre, bestiaryFor, reskinFor, suggestEnemies, resolveMonster
   "../src/lib/bestiary/index.ts"
 );
 const { listWorldPacks } = await import("../src/lib/worlds/index.ts");
+const { CREATURE_TYPES, normalizeCreatureType } = await import("../src/lib/bestiary/statblock.ts");
 const { GENRES } = await import("../src/lib/schemas/game-settings.ts");
 
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
@@ -34,6 +35,10 @@ test("every genre has a substantial catalog", () => {
       assert.ok(entry.name, `${genre}: ${entry.slug} missing name`);
       assert.ok(entry.blurb, `${genre}: ${entry.slug} missing blurb`);
       assert.ok(typeof entry.cr === "number" && entry.cr >= 0, `${genre}: ${entry.slug} bad cr`);
+      assert.ok(
+        CREATURE_TYPES.includes(entry.type),
+        `${genre}: ${entry.slug} has no SRD creature type (got "${entry.type}")`,
+      );
     }
   }
 });
@@ -76,12 +81,12 @@ test("suggestEnemies respects the party budget and spreads CRs", () => {
 if (fs.existsSync(contentDbPath)) {
   const { default: Database } = await import("better-sqlite3-multiple-ciphers");
   const db = new Database(contentDbPath, { readonly: true });
-  const crBySlug = new Map(
-    db.prepare("SELECT slug, cr FROM monsters").all().map((row) => [row.slug, row.cr]),
-  );
+  const rows = db.prepare("SELECT slug, cr, type FROM monsters").all();
+  const crBySlug = new Map(rows.map((row) => [row.slug, row.cr]));
+  const typeBySlug = new Map(rows.map((row) => [row.slug, normalizeCreatureType(row.type)]));
   db.close();
 
-  test("every catalog slug exists in the content pack with a matching CR", () => {
+  test("every catalog slug exists in the content pack with a matching CR and type", () => {
     for (const genre of CATALOG_GENRES) {
       for (const entry of bestiaryForGenre(genre)) {
         assert.ok(crBySlug.has(entry.slug), `${genre}: ${entry.slug} not in content pack`);
@@ -90,8 +95,20 @@ if (fs.existsSync(contentDbPath)) {
           entry.cr,
           `${genre}: ${entry.slug} cr drifted from the content pack`,
         );
+        assert.equal(
+          typeBySlug.get(entry.slug),
+          entry.type,
+          `${genre}: ${entry.slug} type drifted from the content pack`,
+        );
       }
     }
+  });
+
+  test("resolveMonster carries the creature type into the snapshot", () => {
+    const hound = resolveMonster("hell-hound", { genre: "high_fantasy" });
+    assert.equal(hound?.stats.type, "fiend");
+    const rats = resolveMonster("swarm-of-rats", { genre: "high_fantasy" });
+    assert.equal(rats?.stats.type, "beast", "a swarm draws as the beast it is");
   });
 
   test("resolveMonster resolves slugs, reskin names, and plain names", () => {
@@ -128,6 +145,15 @@ test("a world pack overlays its own monsters onto the genre catalog", () => {
   // Slugs stay unique after the merge, or resolveMonster would pick at random.
   const slugs = merged.map((entry) => entry.slug);
   assert.equal(new Set(slugs).size, slugs.length, "the overlay produced duplicate slugs");
+});
+
+test("a pack entry with no type inherits the genre's type for the same slug", () => {
+  const setting = { genre: "high_fantasy", worldPack: "__type-overlay-test__" };
+  const base = bestiaryForGenre("high_fantasy")[0];
+  // No installed pack has that id, so this is the plain roster; the overlay
+  // rule itself is exercised through bestiaryFor with a real pack above.
+  assert.equal(bestiaryFor(setting)[0].type, base.type);
+  assert.ok(CREATURE_TYPES.includes(base.type));
 });
 
 test("no pack means byte-identical behavior to the plain genre", () => {

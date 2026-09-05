@@ -238,8 +238,8 @@ export function runContentImport(input: {
       )) {
         db.prepare(
           `INSERT INTO lore_entries
-             (id, campaign_id, category, title, body, tags_json, pinned, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             (id, campaign_id, category, title, body, tags_json, pinned, visibility, image_path, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         ).run(
           trackId("lore", row.id),
           campaignId,
@@ -248,6 +248,10 @@ export function runContentImport(input: {
           row.body,
           row.tags_json ?? "[]",
           row.pinned ?? 0,
+          row.visibility ?? "party",
+          // The picture is a file both campaigns can read, the same way a
+          // prepared map's backdrop travels.
+          row.image_path ?? "",
           now,
           now,
         );
@@ -307,10 +311,10 @@ export function runContentImport(input: {
       for (const row of allRows(`SELECT * FROM npcs WHERE campaign_id = ?`, sourceId)) {
         db.prepare(
           `INSERT INTO npcs
-             (id, campaign_id, name, attitude, trait, location, last_shift_turn,
+             (id, campaign_id, name, attitude, trait, location, role, last_shift_turn,
               aliases_json, personality_json, goals_json, relations_json, bonds_json,
               pressure_json, arc_cast_id, portrait_url, archived, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, '', ?, 0, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, '', ?, 0, ?, ?)`,
         ).run(
           trackId("npcs", row.id),
           campaignId,
@@ -318,6 +322,7 @@ export function runContentImport(input: {
           row.attitude ?? "indifferent",
           row.trait ?? "",
           row.location ?? "",
+          row.role ?? "",
           row.aliases_json ?? "[]",
           // These three default to '' rather than '{}' on the column, and
           // src/lib/dm/npc-logic.ts reads '' as untracked; matching the

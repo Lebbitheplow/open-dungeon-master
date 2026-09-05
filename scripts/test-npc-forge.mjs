@@ -422,3 +422,16 @@ test("an NPC with nothing written about them has an empty line, not a stub", () 
 });
 
 console.log(`npc forge: ${passed} assertions passed.`);
+
+// ---- role ----
+
+test("a role is kept as typed, trimmed and bounded, and absent reads as blank", () => {
+  const withRole = normalizeNpcDraft({ name: "Marla", role: "  cyberpunk-fixer " });
+  assert.equal(withRole.draft.role, "cyberpunk-fixer");
+  const typed = normalizeNpcDraft({ name: "Marla", role: "Harbourmaster" });
+  assert.equal(typed.draft.role, "Harbourmaster", "free text survives; the picker is not a whitelist");
+  const none = normalizeNpcDraft({ name: "Marla" });
+  assert.equal(none.draft.role, "");
+  assert.equal(normalizeNpcDraft({ name: "Marla", role: "x".repeat(80) }).draft.role.length, 40);
+  assert.equal(blankDraft().role, "");
+});

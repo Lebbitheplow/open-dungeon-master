@@ -37,6 +37,10 @@ export type LibraryCharacter = {
   level: number;
   xp: number;
   sheet: CreateSheetInput;
+  // The workshop this sheet is a pregen for, or "" for a character of the
+  // library's own. Set by the Party system and carried by a bundle
+  // (docs/workshop-parity-audit.md phase 15).
+  workshopId: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -53,6 +57,7 @@ type LibraryRow = {
   level: number;
   xp: number;
   sheet_json: string;
+  workshop_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -70,6 +75,7 @@ function mapCharacter(row: LibraryRow): LibraryCharacter {
     level: row.level,
     xp: row.xp,
     sheet: parseJson(row.sheet_json, {} as CreateSheetInput),
+    workshopId: row.workshop_id ?? "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -80,6 +86,7 @@ export function createCharacter(
   level: number,
   input: CreateSheetInput,
   role: CharacterRole = "pc",
+  workshopId = "",
 ): LibraryCharacter {
   const db = getDatabase();
   const id = crypto.randomUUID();
@@ -92,9 +99,9 @@ export function createCharacter(
     `
       INSERT INTO library_characters (
         id, user_id, name, role, race, class, subclass, background, level, xp,
-        sheet_json, created_at, updated_at
+        sheet_json, workshop_id, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
     `,
   ).run(
     id,
@@ -107,6 +114,7 @@ export function createCharacter(
     input.background,
     level,
     JSON.stringify(stored),
+    workshopId,
     now,
     now,
   );
@@ -140,6 +148,34 @@ export function listCharactersForUser(
     .all(userId) as LibraryRow[];
   const all = rows.map(mapCharacter);
   return role ? all.filter((character) => character.role === role) : all;
+}
+
+// The workshop's pregens: the owner's library characters filed under it.
+export function listPregens(userId: string, workshopId: string): LibraryCharacter[] {
+  const rows = getDatabase()
+    .prepare(
+      `SELECT * FROM library_characters WHERE user_id = ? AND workshop_id = ? ORDER BY name COLLATE NOCASE`,
+    )
+    .all(userId, workshopId) as LibraryRow[];
+  return rows.map(mapCharacter);
+}
+
+// Files a library character under a workshop as a pregen, or takes it out
+// ("" for the workshop). The sheet is untouched either way: a pregen is an
+// ordinary character the workshop happens to list.
+export function setCharacterWorkshop(
+  userId: string,
+  characterId: string,
+  workshopId: string,
+): LibraryCharacter | null {
+  const character = getCharacterForUser(userId, characterId);
+  if (!character) {
+    return null;
+  }
+  getDatabase()
+    .prepare(`UPDATE library_characters SET workshop_id = ?, updated_at = ? WHERE id = ?`)
+    .run(workshopId, nowIso(), characterId);
+  return getCharacter(characterId);
 }
 
 export function updateCharacter(

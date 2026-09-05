@@ -14,8 +14,16 @@ import magicItemsJson from "@/lib/classes/magic-items.json";
 import type { Ability } from "@/lib/schemas/sheet";
 
 // The minimal item shape the magic-item engine reads: a name and its worn
-// state. The full EquipmentItem satisfies this.
-export type WornMagicItem = { name: string; equipped?: boolean; attuned?: boolean };
+// state. The full EquipmentItem satisfies this. `gear.magic` is a homebrew
+// item's snapshotted effects (src/lib/homebrew/gear.ts), written in the
+// same vocabulary as magic-items.json so nothing below has to know which
+// kind it is reading.
+export type WornMagicItem = {
+  name: string;
+  equipped?: boolean;
+  attuned?: boolean;
+  gear?: { magic?: { requiresAttunement: boolean; effects: MagicItemEffect[] } };
+};
 
 export type MagicItemEffect =
   // Flat armor class from a non-armor item (Cloak/Ring of Protection).
@@ -88,7 +96,9 @@ export function magicItemRiders(equipment: WornMagicItem[]): MagicItemRiders {
     sources: [],
   };
   for (const item of equipment) {
-    const def = matchMagicItem(item.name);
+    const def: MagicItemDef | null = item.gear?.magic
+      ? { name: item.name, match: item.name.toLowerCase(), ...item.gear.magic }
+      : matchMagicItem(item.name);
     if (!def || !itemActive(item, def)) {
       continue;
     }

@@ -86,13 +86,26 @@ const { applyRulesetToCampaign, captureRulesetFromCampaign, createRuleset } = aw
 );
 const { requestDmTurn } = await import("../src/lib/dm/loop.ts");
 const { getPreparedMap, listPreparedMaps } = await import("../src/lib/db/prepared-maps.ts");
-const { createLibraryMap, paintLibraryMap } = await import("../src/lib/dm/map-library.ts");
+const { createLibraryMap, paintLibraryMap, setLibraryLights } = await import(
+  "../src/lib/dm/map-library.ts"
+);
 const { TERRAIN, tileAt } = await import("../src/lib/battlemap/types.ts");
 const { createNpcFromDraft, getNpcById, listNpcs, updateNpcFromDraft } = await import(
   "../src/lib/db/npcs.ts"
 );
 const { normalizeNpcDraft } = await import("../src/lib/npcs/forge.ts");
-const { createCharacter, listCharactersForUser } = await import("../src/lib/db/characters.ts");
+const { createCharacter, listCharactersForUser, listPregens, setCharacterWorkshop } = await import(
+  "../src/lib/db/characters.ts"
+);
+const {
+  getOverworld,
+  overworldView,
+  regenerateOverworld,
+  replaceOverworldTerrain,
+  setOverworldBackdrop,
+  setOverworldLabels,
+  setOverworldPaths,
+} = await import("../src/lib/db/overworld.ts");
 const { createHomebrewMonster, findHomebrewMonster, listHomebrewMonsters } = await import(
   "../src/lib/bestiary/homebrew-monsters.ts"
 );
@@ -112,6 +125,7 @@ const { exportWorkshopBundle, importWorkshopBundle } = await import(
   "../src/lib/db/workshop-bundle.ts"
 );
 const { readBundle } = await import("../src/lib/workshop/bundle.ts");
+const { createHomebrew, listHomebrew } = await import("../src/lib/db/homebrew.ts");
 const { runsAiTurns } = await import("../src/lib/workshop/kind.ts");
 const deleteBeatModule = await import("../src/lib/db/workshop-beats.ts");
 const updateBeatModule = deleteBeatModule;
@@ -420,6 +434,49 @@ test("a prepared map cannot have its border opened either", () => {
   });
   assert.ok(!painted.error, painted.error);
   assert.equal(tileAt(painted.map.terrain, 20, 0, 7), TERRAIN.wall, "the border was opened");
+});
+
+// ---- phase 10: the painter finishes ----
+
+test("a shape tool on a stored map compiles to strokes and lands", () => {
+  const painted = paintLibraryMap(workshop, blank.id, {
+    shape: { tool: "box", brush: "floor", from: { x: 2, y: 2 }, to: { x: 6, y: 5 } },
+  });
+  assert.ok(!painted.error, painted.error);
+  assert.equal(tileAt(painted.map.terrain, 20, 2, 2), TERRAIN.floor);
+  assert.equal(tileAt(painted.map.terrain, 20, 6, 5), TERRAIN.floor);
+  assert.equal(tileAt(painted.map.terrain, 20, 7, 5), TERRAIN.wall);
+});
+
+test("an undo returns a stored map to an earlier picture", () => {
+  const before = getPreparedMap(workshop.id, blank.id).terrain;
+  const painted = paintLibraryMap(workshop, blank.id, {
+    shape: { tool: "line", brush: "water", from: { x: 2, y: 8 }, to: { x: 10, y: 8 } },
+  });
+  assert.ok(!painted.error, painted.error);
+  assert.notEqual(painted.map.terrain, before);
+  const undone = paintLibraryMap(workshop, blank.id, { replaceTerrain: before });
+  assert.ok(!undone.error, undone.error);
+  assert.equal(undone.map.terrain, before);
+  // Returning to the picture already on the map is nothing, not a mistake.
+  const again = paintLibraryMap(workshop, blank.id, { replaceTerrain: before });
+  assert.ok(!again.error, again.error);
+});
+
+test("a light can be placed on a stored map, and not in its rock", () => {
+  const lit = setLibraryLights(workshop, blank.id, {
+    toggle: { x: 3, y: 3, brightRadius: 4, dimRadius: 8 },
+  });
+  assert.ok(!lit.error, lit.error);
+  assert.equal(lit.placed, true);
+  assert.equal(getPreparedMap(workshop.id, blank.id).lights.length, 1);
+  const refused = setLibraryLights(workshop, blank.id, {
+    toggle: { x: 15, y: 12, brightRadius: 4, dimRadius: 8 },
+  });
+  assert.ok(refused.error, "a light in solid rock should be refused");
+  const cleared = setLibraryLights(workshop, blank.id, { lights: [] });
+  assert.ok(!cleared.error, cleared.error);
+  assert.equal(cleared.map.lights.length, 0);
 });
 
 test("a second map with the same name is numbered, not refused", () => {
@@ -940,6 +997,52 @@ test("fixture: Marla's portrait becomes a file that exists", () => {
   );
 });
 
+test("fixture: a homebrew weapon on the shelf, for the bundle to carry", () => {
+  createHomebrew(userId, {
+    kind: "item",
+    name: "Reed spear",
+    data: {
+      desc: "A fishing spear of the marsh folk.",
+      itemKind: "weapon",
+      weapon: { category: "simple", kind: "melee", damage: "1d8 piercing", properties: ["thrown"], rangeFt: 20 },
+    },
+  });
+  assert.equal(listHomebrew(userId, "item").length, 1);
+});
+
+// ---- pregens (docs/workshop-parity-audit.md phase 15) ----
+
+const pregenSheet = {
+  name: "Brannoc",
+  race: "human",
+  class: "fighter",
+  subclass: "",
+  background: "",
+  abilities: { str: 16, dex: 12, con: 14, int: 10, wis: 10, cha: 10 },
+  maxHp: 12,
+  ac: 16,
+  hitDice: { die: "d10", total: 1, spent: 0 },
+  proficiencies: { saves: ["str", "con"], skills: [], languages: [], tools: [], armor: [], weapons: [] },
+};
+
+test("a library character filed under the workshop is its pregen, and can be taken off again", () => {
+  const brannoc = createCharacter(userId, 3, pregenSheet, "pc", workshop.id);
+  assert.equal(brannoc.workshopId, workshop.id);
+  assert.deepEqual(
+    listPregens(userId, workshop.id).map((entry) => entry.name),
+    ["Brannoc"],
+  );
+  // Filing is the owner's to do: a stranger cannot move it.
+  assert.equal(setCharacterWorkshop(randomUUID(), brannoc.id, ""), null);
+  // Off the roster, still in the library.
+  setCharacterWorkshop(userId, brannoc.id, "");
+  assert.equal(listPregens(userId, workshop.id).length, 0);
+  assert.ok(listCharactersForUser(userId).some((entry) => entry.id === brannoc.id));
+  // And back on, for the export below.
+  setCharacterWorkshop(userId, brannoc.id, workshop.id);
+  assert.equal(listPregens(userId, workshop.id).length, 1);
+});
+
 test("a workshop exports to a bundle that reads back in", () => {
   const result = exportWorkshopBundle(workshop.id, shareManifest);
   assert.ok(!("error" in result), result.error);
@@ -968,6 +1071,43 @@ test("the export carries the workshop's own prep", () => {
   assert.ok(exported.lore.length > 0, "no lore travelled");
   assert.ok(exported.storyboard.length > 0, "no board travelled");
   assert.equal(exported.genre, getCampaignById(workshop.id).gameSettings.genre);
+});
+
+test("the shelf's homebrew travels with the bundle", () => {
+  const spear = exported.homebrew.find((entry) => entry.name === "Reed spear");
+  assert.ok(spear, "the homebrew weapon did not travel");
+  assert.equal(spear.kind, "item");
+  assert.equal(spear.data.weapon.damage, "1d8 piercing");
+});
+
+test("homebrew lands on a stranger's shelf, normalized, and never doubles up at home", () => {
+  const stranger = randomUUID();
+  db.prepare(
+    `INSERT INTO users (id, username, password_hash, created_at) VALUES (?, ?, 'x', ?)`,
+  ).run(stranger, `bundle-${stranger.slice(0, 8)}`, nowIso());
+  const landed = importWorkshopBundle(stranger, exported);
+  assert.ok(!("error" in landed), landed.error);
+  const theirs = listHomebrew(stranger, "item");
+  assert.equal(theirs.length, 1);
+  assert.equal(theirs[0].name, "Reed spear");
+  assert.equal(theirs[0].data.weapon.name, "Reed spear", "the weapon block was not normalized on arrival");
+  assert.deepEqual(theirs[0].data.weapon.properties, ["thrown"]);
+  // At home the same import skips it: the owner's own entry wins.
+  importWorkshopBundle(userId, exported);
+  assert.equal(listHomebrew(userId, "item").length, 1);
+  // The pregen travelled: it is in the stranger's library, filed under the
+  // workshop the bundle became, with its features populated on creation.
+  const theirPregens = listPregens(stranger, landed.workshopId);
+  assert.equal(theirPregens.length, 1);
+  assert.equal(theirPregens[0].name, "Brannoc");
+  assert.equal(theirPregens[0].level, 3);
+  assert.equal(theirPregens[0].sheet.class, "fighter");
+});
+
+test("the pregen travels in the bundle as a whole sheet", () => {
+  assert.equal(exported.pregens.length, 1);
+  assert.equal(exported.pregens[0].name, "Brannoc");
+  assert.equal(exported.pregens[0].sheet.abilities.str, 16);
 });
 
 test("art travels as data URLs and never as disk paths", () => {
@@ -1237,6 +1377,86 @@ test("duplicating a character numbers the copy and leaves it at no table", () =>
 
 test("a character somebody else owns cannot be duplicated", () => {
   assert.equal(duplicateCharacter(randomUUID(), hero.id), null);
+});
+
+// ---- the region map's lines, words, picture and size (phase 15) ----
+
+test("roads, labels and a backdrop are written whole and read back fitted", () => {
+  const before = getOverworld(workshop.id);
+  const withRoad = setOverworldPaths(workshop.id, [
+    {
+      kind: "road",
+      label: "Coast Road",
+      points: [{ x: 0, y: 0 }, { x: 5, y: 5 }, { x: 5000, y: 5 }],
+    },
+    { kind: "wall", points: [{ x: 0, y: 0 }, { x: 1, y: 1 }] },
+  ]);
+  assert.equal(withRoad.paths.length, 1);
+  assert.equal(withRoad.paths[0].points.length, 2, "the point off the map should be dropped");
+  assert.equal(getOverworld(workshop.id).paths[0].label, "Coast Road");
+  const labelled = setOverworldLabels(workshop.id, [
+    { x: 2, y: 2, text: "The Weald", size: "large" },
+    { x: before.width - 1, y: 5, text: "Far Edge" },
+  ]);
+  assert.equal(labelled.labels.length, 2);
+  // Only an uploaded image path is a backdrop; anything else is nothing.
+  assert.equal(setOverworldBackdrop(workshop.id, "https://elsewhere.example/x.png").backdropPath, "");
+  assert.equal(setOverworldBackdrop(workshop.id, "/uploads/region.png").backdropPath, "/uploads/region.png");
+  // Every member sees the lines and words; only the story's keeper the notes.
+  const view = overworldView(workshop.id, false);
+  assert.equal(view.map.paths.length, 1);
+  assert.equal(view.map.labels.length, 2);
+  assert.equal(view.map.backdropPath, "/uploads/region.png");
+  assert.equal(view.map.notes, undefined);
+  assert.equal(typeof overworldView(workshop.id, true).map.notes, "string");
+});
+
+test("a reroll at another size keeps what still fits", () => {
+  const smaller = regenerateOverworld(workshop.id, { width: 48, height: 36 });
+  assert.equal(smaller.width, 48);
+  assert.equal(smaller.height, 36);
+  assert.equal(smaller.terrain.length, 48 * 36);
+  // The road fits; the label at the old far edge does not.
+  assert.equal(smaller.paths.length, 1);
+  assert.deepEqual(
+    smaller.labels.map((label) => label.text),
+    ["The Weald"],
+  );
+  assert.equal(smaller.backdropPath, "/uploads/region.png");
+  // A size past the limits is clamped rather than refused.
+  const clamped = regenerateOverworld(workshop.id, { width: 9999, height: 1 });
+  assert.equal(clamped.width, 192);
+  assert.equal(clamped.height, 18);
+});
+
+test("ground drawn elsewhere replaces the terrain and its lines, and keeps the words", () => {
+  const river = { kind: "river", label: "Ashwater", points: [{ x: 1, y: 1 }, { x: 10, y: 10 }] };
+  const wrong = replaceOverworldTerrain(workshop.id, {
+    terrain: "p".repeat(10),
+    width: 24,
+    height: 18,
+    paths: [river],
+  });
+  assert.ok("error" in wrong);
+  const replaced = replaceOverworldTerrain(workshop.id, {
+    terrain: "p".repeat(24 * 18),
+    width: 24,
+    height: 18,
+    paths: [river],
+  });
+  assert.ok(!("error" in replaced), replaced.error);
+  assert.equal(replaced.terrain, "p".repeat(24 * 18));
+  assert.deepEqual(
+    replaced.paths.map((path) => path.label),
+    ["Ashwater"],
+  );
+  assert.deepEqual(
+    replaced.labels.map((label) => label.text),
+    ["The Weald"],
+  );
+  // Every known place got an anchor on the new ground.
+  const view = overworldView(workshop.id, true);
+  assert.ok(view.locations.every((location) => location.anchor !== null));
 });
 
 // Any check that awaited the indexing pass has to finish before the schema

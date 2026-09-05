@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { FileDown, Heart, Minus, Plus, PawPrint, Shield, UserRound, Wrench, X } from "lucide-react";
+import { FileDown, Heart, Minus, Plus, PawPrint, Shield, Wrench, X } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { ui } from "@/lib/ui";
+import { CharacterPortrait, ui } from "@/lib/ui";
 import { downloadCharacterSheetPdf } from "@/lib/pdf/download";
 import { ImageLightbox } from "@/components/ui/ImageLightbox";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -146,9 +146,11 @@ export function CharacterSheetDialog({
                   className="size-14 rounded-lg border border-stone-700 object-cover"
                 />
               ) : (
-                <div className="flex size-14 items-center justify-center rounded-lg border border-stone-700 bg-stone-900">
-                  <UserRound className="size-6 text-stone-600" />
-                </div>
+                <CharacterPortrait
+                  look={{ race: sheet.race, class: sheet.class, gender: sheet.gender }}
+                  alt={sheet.name}
+                  size="size-14"
+                />
               )}
               <div>
                 <Dialog.Title className="font-display text-xl tracking-wide text-amber-50">

@@ -238,9 +238,15 @@ export default function TermsPage() {
 
       <PageSection heading="Contact">
         <p className="text-sm leading-6 text-stone-400">
-          There is no company, support address, or email behind this project. Questions about the
-          software, including license and security reports, belong in the project repository.
-          Questions about a specific server belong to whoever runs it.
+          There is no company behind this project. Questions about the software, including
+          license and security reports, belong in the project repository or with{" "}
+          <a
+            href="mailto:lebbitheplow@proton.me"
+            className="text-amber-200 hover:text-amber-400"
+          >
+            lebbitheplow@proton.me
+          </a>
+          . Questions about a specific server belong to whoever runs it.
         </p>
         <p className="mt-2 text-sm leading-6">
           <a

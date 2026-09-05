@@ -1,31 +1,37 @@
 "use client";
 
+import { useCallback } from "react";
 import { Copy, Play, Trash2, Upload } from "lucide-react";
 import { MAP_THEMES } from "@/lib/battlemap/generate";
+import { TERRAIN, tileAt } from "@/lib/battlemap/types";
 import type { Brush as BrushName } from "@/lib/battlemap/paint";
-import type { StampKind } from "@/lib/battlemap/stamp";
 import { TerrainCanvas } from "@/app/campaigns/[campaignId]/TerrainCanvas";
+import { BackdropControls } from "@/app/campaigns/[campaignId]/MapTools";
+import { AmbienceControls, OverlayControls } from "@/app/campaigns/[campaignId]/MapSceneTools";
 import {
-  BackdropControls,
-  BrushPalette,
-  StampPalette,
-} from "@/app/campaigns/[campaignId]/MapTools";
+  LIBRARY_CAPS,
+  MapToolbox,
+  canvasToolFor,
+  useMapHotkeys,
+  type MapTools,
+} from "@/app/campaigns/[campaignId]/MapToolbox";
+import { usePainter } from "@/app/campaigns/[campaignId]/usePainter";
 import { THEME_LABELS, type LibraryState, type PreparedMap } from "@/app/workshop/maps/types";
 
 // One prepared map, open for editing: the canvas, its name and dials, the
-// brush and stamp palettes, the backdrop, and what can be done with it.
+// toolbox, the scene layer, the backdrop, and what can be done with it.
 // Split out of DmMapLibraryPanel so the workshop gallery can show the same
 // editor inside a sheet; the drawer still renders it inline, unchanged.
 //
-// The brush and stamp state stays with the caller on purpose: a DM who picks
-// the water brush and then clicks through three maps expects to still be
-// holding the water brush.
+// The tool state stays with the caller on purpose: a DM who picks the water
+// brush and then clicks through three maps expects to still be holding the
+// water brush. The undo history is this map's own and starts fresh per map.
 
-export type MapTools = {
-  brush: BrushName | "";
-  stamp: StampKind | "";
-  stampSize: { width: number; height: number };
-};
+export type { MapTools } from "@/app/campaigns/[campaignId]/MapToolbox";
+
+const CHAR_TO_BRUSH = Object.fromEntries(
+  Object.entries(TERRAIN).map(([brush, char]) => [char, brush]),
+) as Record<string, BrushName>;
 
 export function MapEditor({
   selected,
@@ -43,13 +49,57 @@ export function MapEditor({
   busy: boolean;
   tools: MapTools;
   onTools: (next: MapTools) => void;
-  patch: (body: Record<string, unknown>) => Promise<void>;
+  // Resolves true when the server took the edit.
+  patch: (body: Record<string, unknown>) => Promise<boolean>;
   act: (action: "deploy" | "open-scene") => Promise<void>;
   duplicate: () => Promise<void>;
   remove: () => Promise<void>;
 }) {
-  const { brush, stamp, stampSize } = tools;
   const canDeploy = state.board !== null;
+  const painter = usePainter({ key: selected.id, terrain: selected.terrain, send: patch });
+  const undo = {
+    canUndo: painter.canUndo,
+    canRedo: painter.canRedo,
+    onUndo: () => void painter.undo(),
+    onRedo: () => void painter.redo(),
+  };
+  useMapHotkeys({ enabled: true, tools, onTools, caps: LIBRARY_CAPS, undo });
+
+  const pick = useCallback(
+    (x: number, y: number) => {
+      const brush = CHAR_TO_BRUSH[tileAt(selected.terrain, selected.width, x, y)];
+      if (brush) {
+        onTools({ ...tools, brush, mode: "brush" });
+      }
+    },
+    [selected, tools, onTools],
+  );
+
+  // A tap on a labelled tile takes the label away; anywhere else puts the
+  // dial's text there. Props work the same way.
+  function label(x: number, y: number) {
+    const existing = selected.labels.find((entry) => entry.x === x && entry.y === y);
+    const rest = selected.labels.filter((entry) => !(entry.x === x && entry.y === y));
+    if (existing) {
+      void patch({ labels: rest });
+      return;
+    }
+    if (tools.label.text.trim()) {
+      void patch({ labels: [...rest, { x, y, text: tools.label.text.trim(), dmOnly: tools.label.dmOnly }] });
+    }
+  }
+
+  function prop(x: number, y: number) {
+    const existing = selected.props.find((entry) => entry.x === x && entry.y === y);
+    const rest = selected.props.filter((entry) => !(entry.x === x && entry.y === y));
+    if (existing) {
+      void patch({ props: rest });
+      return;
+    }
+    if (tools.prop.name.trim()) {
+      void patch({ props: [...rest, { x, y, name: tools.prop.name.trim(), kind: tools.prop.kind }] });
+    }
+  }
 
   return (
     <section className="space-y-2.5">
@@ -58,19 +108,49 @@ export function MapEditor({
         width={selected.width}
         height={selected.height}
         backdrop={selected.backdrop}
-        onPaint={
-          brush && !stamp ? (x, y) => void patch({ strokes: [{ x, y, brush }] }) : undefined
+        lights={selected.lights}
+        labels={selected.labels}
+        props={selected.props}
+        doors={selected.doors}
+        zones={selected.zones}
+        overlayPath={selected.overlayPath}
+        tool={canvasToolFor(tools, LIBRARY_CAPS)}
+        zoomable
+        onStroke={(x, y) => painter.stroke(x, y, tools.brush, tools.radius)}
+        onStrokeEnd={painter.strokeEnd}
+        onShape={(from, to) => void painter.shape(tools.mode, tools.brush, from, to)}
+        onStamp={(x, y) => void painter.edit({ stamp: { kind: tools.stamp, x, y, ...tools.stampSize } })}
+        onLight={(x, y) => void patch({ light: { x, y, ...tools.light } })}
+        onLabel={label}
+        onProp={prop}
+        onDoor={(x, y) => void patch({ door: { x, y } })}
+        onZone={(from, to) =>
+          void patch({ zones: [...selected.zones, { x0: from.x, y0: from.y, x1: to.x, y1: to.y, ambient: tools.zone }] })
         }
-        onStamp={
-          stamp ? (x, y) => void patch({ stamp: { kind: stamp, x, y, ...stampSize } }) : undefined
-        }
-        stamp={stamp ? { kind: stamp, ...stampSize } : null}
+        onPick={pick}
+      />
+
+      <MapToolbox
+        tools={tools}
+        onTools={onTools}
+        caps={LIBRARY_CAPS}
+        counts={{
+          lights: selected.lights.length,
+          labels: selected.labels.length,
+          props: selected.props.length,
+          zones: selected.zones.length,
+        }}
+        onClearLights={() => void patch({ lights: [] })}
+        onClearLabels={() => void patch({ labels: [] })}
+        onClearZones={() => void patch({ zones: [] })}
+        undo={undo}
       />
 
       <div className="flex flex-wrap items-center gap-1.5">
         <input
           defaultValue={selected.name}
           key={`name-${selected.id}`}
+          aria-label="Map name"
           onBlur={(event) =>
             event.target.value.trim() && event.target.value !== selected.name
               ? void patch({ name: event.target.value.trim() })
@@ -80,6 +160,7 @@ export function MapEditor({
         />
         <select
           value={selected.theme}
+          aria-label="Theme"
           onChange={(event) => void patch({ theme: event.target.value })}
           className="rounded-md border border-stone-700 bg-stone-950 px-1.5 py-1 text-xs text-stone-300"
         >
@@ -91,6 +172,7 @@ export function MapEditor({
         </select>
         <select
           value={selected.ambient}
+          aria-label="Ambient light"
           onChange={(event) => void patch({ ambient: event.target.value })}
           className="rounded-md border border-stone-700 bg-stone-950 px-1.5 py-1 text-xs text-stone-300"
         >
@@ -100,9 +182,27 @@ export function MapEditor({
         </select>
       </div>
 
+      <input
+        defaultValue={selected.tags.join(", ")}
+        key={`tags-${selected.id}`}
+        aria-label="Tags"
+        placeholder="Tags, comma separated: crypt, undead, act two"
+        onBlur={(event) => {
+          const tags = event.target.value
+            .split(",")
+            .map((tag) => tag.trim())
+            .filter(Boolean);
+          if (tags.join("\n") !== selected.tags.join("\n")) {
+            void patch({ tags });
+          }
+        }}
+        className="w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-300"
+      />
+
       <textarea
         defaultValue={selected.notes}
         key={`notes-${selected.id}`}
+        aria-label="Notes"
         onBlur={(event) =>
           event.target.value !== selected.notes ? void patch({ notes: event.target.value }) : undefined
         }
@@ -111,21 +211,14 @@ export function MapEditor({
         className="w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-300"
       />
 
-      <BrushPalette
-        brush={brush}
-        onPick={(next) => onTools({ ...tools, brush: next, stamp: next ? "" : stamp })}
-      />
-      <StampPalette
-        stamp={stamp}
-        size={stampSize}
-        onPick={(next) => onTools({ ...tools, stamp: next, brush: next ? "" : brush })}
-        onResize={(next) => onTools({ ...tools, stampSize: next })}
-      />
+      <AmbienceControls value={selected.ambience} onChange={(ambience) => void patch({ ambience })} />
+
       <BackdropControls
         backdrop={selected.backdrop}
         busy={busy}
         onChange={(next) => void patch({ backdropPath: next.path, backdropTransform: next.transform })}
       />
+      <OverlayControls overlayPath={selected.overlayPath} busy={busy} onChange={(overlayPath) => void patch({ overlayPath })} />
 
       <div className="flex flex-wrap items-center gap-1.5">
         <button

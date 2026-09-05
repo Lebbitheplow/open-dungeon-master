@@ -17,6 +17,9 @@ export const dynamic = "force-dynamic";
 const patchSchema = z.object({
   name: z.string().trim().min(1).max(TABLE_NAME_MAX).optional(),
   text: z.string().trim().max(20_000).optional(),
+  // Draw without replacement, and forget what has been drawn so far.
+  noReplacement: z.boolean().optional(),
+  reset: z.boolean().optional(),
 });
 
 export async function PATCH(
@@ -45,7 +48,14 @@ export async function PATCH(
   if (entries && !entries.length) {
     return Response.json({ error: "No rows found in that." }, { status: 400 });
   }
-  return Response.json({ table: updateRollTable(tableId, { name: parsed.data.name, entries }) });
+  return Response.json({
+    table: updateRollTable(tableId, {
+      name: parsed.data.name,
+      entries,
+      noReplacement: parsed.data.noReplacement,
+      resetDrawn: parsed.data.reset,
+    }),
+  });
 }
 
 export async function DELETE(

@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { TEMPLATE_NAME_MAX } from "@/lib/dm/encounter-template-logic";
 import { MonsterRosterPicker } from "@/app/campaigns/[campaignId]/MonsterRosterPicker";
+import { EncounterExtras } from "@/app/workshop/encounters/EncounterExtras";
 import type { EncounterDraft, MapOption } from "@/app/workshop/encounters/types";
 
 // The prepared-encounter form: a name, the roster (picked or typed), where it
@@ -91,6 +92,12 @@ export function EncounterForm({
           ))}
         </select>
       </label>
+      <EncounterExtras
+        roster={value.enemies}
+        map={maps.find((map) => map.id === value.mapId) ?? null}
+        value={value.extras}
+        onChange={(extras) => set({ extras })}
+      />
       <textarea
         value={value.notes}
         onChange={(event) => set({ notes: event.target.value })}

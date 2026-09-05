@@ -6,6 +6,16 @@ import {
   type Backdrop,
   type BackdropTransform,
 } from "@/lib/battlemap/backdrop";
+import {
+  effectiveTerrain,
+  normalizeDoors,
+  normalizeLabels,
+  normalizeZones,
+  type DoorStates,
+  type LightZone,
+  type MapLabel,
+} from "@/lib/battlemap/scene";
+import { isUploadedImagePath } from "@/lib/uploads";
 
 // Persistence for tactical battle maps. One map per encounter; the active
 // map is always found through the active encounter, so ended encounters
@@ -18,7 +28,13 @@ export type BattleMap = {
   campaignId: string;
   width: number;
   height: number;
+  // What the engine runs: the drawn terrain with every locked and secret
+  // door turned to wall (src/lib/battlemap/scene.ts). Movement, sight,
+  // cover and spawning read this and never learn that doors have states.
   terrain: string;
+  // What the DM painted, door glyphs and all. The painter edits this one;
+  // the DM's own projection shows it.
+  drawnTerrain: string;
   ambient: AmbientLight;
   theme: MapTheme;
   lights: MapLight[];
@@ -27,6 +43,13 @@ export type BattleMap = {
   // Cosmetic art under the grid, or null. Nothing that decides a rule reads
   // it (src/lib/battlemap/backdrop.ts).
   backdrop: Backdrop | null;
+  // The scene layer.
+  doors: DoorStates;
+  labels: MapLabel[];
+  zones: LightZone[];
+  // A second picture over the grid that only the DM's projection carries:
+  // the annotated version of the same map. Same transform as the backdrop.
+  overlayPath: string;
 };
 
 type MapRow = {
@@ -43,6 +66,17 @@ type MapRow = {
   round_marker: number;
   backdrop_path: string | null;
   backdrop_transform_json: string | null;
+  labels_json: string | null;
+  doors_json: string | null;
+  zones_json: string | null;
+  overlay_path: string | null;
+};
+
+export type SceneExtras = {
+  doors?: DoorStates;
+  labels?: MapLabel[];
+  zones?: LightZone[];
+  overlayPath?: string;
 };
 
 type TokenRow = {
@@ -62,13 +96,16 @@ type TokenRow = {
 const TOKEN_COLUMNS = `id, kind, ref_id, name, x, y, moved_this_round, light_radius, hidden`;
 
 function mapRow(row: MapRow): BattleMap {
+  const doors = normalizeDoors(parseJson<unknown>(row.doors_json ?? "{}", {}), row.terrain, row.width, row.height);
+  const overlay = row.overlay_path ?? "";
   return {
     id: row.id,
     encounterId: row.encounter_id,
     campaignId: row.campaign_id,
     width: row.width,
     height: row.height,
-    terrain: row.terrain,
+    terrain: effectiveTerrain(row.terrain, row.width, doors),
+    drawnTerrain: row.terrain,
     ambient: row.ambient,
     theme: row.theme ?? "field",
     lights: parseJson<MapLight[]>(row.lights_json, []),
@@ -80,6 +117,19 @@ function mapRow(row: MapRow): BattleMap {
       row.backdrop_path ?? "",
       parseJson<unknown>(row.backdrop_transform_json ?? "{}", {}),
     ),
+    doors,
+    labels: normalizeLabels(parseJson<unknown>(row.labels_json ?? "[]", []), row.width, row.height),
+    zones: normalizeZones(parseJson<unknown>(row.zones_json ?? "[]", []), row.width, row.height),
+    overlayPath: overlay && isUploadedImagePath(overlay) ? overlay : "",
+  };
+}
+
+function sceneColumns(extras: SceneExtras | undefined, terrain: string, width: number, height: number) {
+  return {
+    doors: JSON.stringify(normalizeDoors(extras?.doors ?? {}, terrain, width, height)),
+    labels: JSON.stringify(normalizeLabels(extras?.labels ?? [], width, height)),
+    zones: JSON.stringify(normalizeZones(extras?.zones ?? [], width, height)),
+    overlay: extras?.overlayPath && isUploadedImagePath(extras.overlayPath) ? extras.overlayPath : "",
   };
 }
 
@@ -110,14 +160,16 @@ export function createBattleMap(input: {
   // Carried over when a prepared map is deployed, so the art that was drawn
   // with the walls arrives with them (src/lib/db/prepared-maps.ts).
   backdrop?: Backdrop | null;
+  scene?: SceneExtras;
 }): BattleMap {
   const id = crypto.randomUUID();
   const now = nowIso();
   const backdrop = normalizeBackdrop(input.backdrop?.path ?? "", input.backdrop?.transform);
+  const scene = sceneColumns(input.scene, input.terrain, input.width, input.height);
   getDatabase()
     .prepare(
-      `INSERT INTO battle_maps (id, encounter_id, campaign_id, width, height, terrain, ambient, theme, lights_json, seed, round_marker, backdrop_path, backdrop_transform_json, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
+      `INSERT INTO battle_maps (id, encounter_id, campaign_id, width, height, terrain, ambient, theme, lights_json, seed, round_marker, backdrop_path, backdrop_transform_json, labels_json, doors_json, zones_json, overlay_path, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -132,10 +184,41 @@ export function createBattleMap(input: {
       input.seed,
       backdrop?.path ?? "",
       JSON.stringify(backdrop?.transform ?? {}),
+      scene.labels,
+      scene.doors,
+      scene.zones,
+      scene.overlay,
       now,
       now,
     );
   return getBattleMap(id) as BattleMap;
+}
+
+// The scene layer on a live board: whichever parts are handed over are
+// replaced, the rest stay. Doors are checked against the DRAWN terrain,
+// because that is where the door glyphs are.
+export function setBattleMapScene(mapId: string, extras: SceneExtras) {
+  const map = getBattleMap(mapId);
+  if (!map) {
+    return;
+  }
+  const merged = sceneColumns(
+    {
+      doors: extras.doors ?? map.doors,
+      labels: extras.labels ?? map.labels,
+      zones: extras.zones ?? map.zones,
+      overlayPath: extras.overlayPath ?? map.overlayPath,
+    },
+    map.drawnTerrain,
+    map.width,
+    map.height,
+  );
+  getDatabase()
+    .prepare(
+      `UPDATE battle_maps SET labels_json = ?, doors_json = ?, zones_json = ?, overlay_path = ?, updated_at = ?
+       WHERE id = ?`,
+    )
+    .run(merged.labels, merged.doors, merged.zones, merged.overlay, nowIso(), mapId);
 }
 
 export function getBattleMap(mapId: string): BattleMap | null {
@@ -166,12 +249,18 @@ export function replaceBattleMapTerrain(
     theme: MapTheme;
     lights: MapLight[];
     seed: number;
+    // The scene layer that came with the new ground; absent means the old
+    // board's labels and door states are cleared with the ground they
+    // described.
+    scene?: SceneExtras;
   },
 ) {
+  const scene = sceneColumns(input.scene, input.terrain, input.width, input.height);
   getDatabase()
     .prepare(
       `UPDATE battle_maps SET width = ?, height = ?, terrain = ?, ambient = ?, theme = ?,
-         lights_json = ?, seed = ?, updated_at = ? WHERE id = ?`,
+         lights_json = ?, seed = ?, labels_json = ?, doors_json = ?, zones_json = ?, overlay_path = ?,
+         updated_at = ? WHERE id = ?`,
     )
     .run(
       input.width,
@@ -181,6 +270,10 @@ export function replaceBattleMapTerrain(
       input.theme,
       JSON.stringify(input.lights),
       input.seed,
+      scene.labels,
+      scene.doors,
+      scene.zones,
+      scene.overlay,
       nowIso(),
       mapId,
     );
@@ -206,7 +299,9 @@ export function setBattleMapBackdrop(
     );
 }
 
-// Terrain only: a painted stroke changes the ground and nothing else.
+// Terrain only: a painted stroke changes the ground and nothing else. The
+// terrain handed in is the DRAWN one (door glyphs and all); a door state on
+// a tile that is no longer a door is dropped on the next read.
 export function setBattleMapTerrain(mapId: string, terrain: string) {
   getDatabase()
     .prepare(`UPDATE battle_maps SET terrain = ?, updated_at = ? WHERE id = ?`)
@@ -300,6 +395,14 @@ export function setTokenHidden(tokenId: string, hidden: boolean) {
   getDatabase()
     .prepare(`UPDATE battle_tokens SET hidden = ?, updated_at = ? WHERE id = ?`)
     .run(hidden ? 1 : 0, nowIso(), tokenId);
+}
+
+// A token's label follows its combatant's name, so a prepared encounter that
+// calls one goblin "Snik" shows Snik on the board too.
+export function renameTokenByRef(mapId: string, refId: string, name: string) {
+  getDatabase()
+    .prepare(`UPDATE battle_tokens SET name = ?, updated_at = ? WHERE map_id = ? AND ref_id = ?`)
+    .run(name.slice(0, 80), nowIso(), mapId, refId);
 }
 
 // Ref ids of every token the DM is keeping off the table. The initiative

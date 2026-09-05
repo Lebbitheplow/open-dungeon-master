@@ -50,13 +50,18 @@ export function WorkshopHelpDialog({
           The tabs are the same tools a human DM has mid-session, pointed at prep instead of play.
           Battle maps has a drawing surface: paint terrain with a brush, stamp props, generate a
           layout from a seed and theme, import a UVTT file, or hang a backdrop image behind the
-          grid. Region is the overworld: paint the land, add and anchor places, name them. Cast
+          grid, with shapes, lights, labels, doors and undo. Region is the overworld: paint the
+          land, draw roads, rivers and borders, write labels, hang a picture in place of the
+          tiles or read in a map from Fantasy Map Generator, anchor and name places, and save
+          it as a PNG. Party lists the pregenerated characters that travel with the workshop. Cast
           builds NPCs with personalities, goals and relationships; Bestiary builds full stat
           blocks with the challenge rating derived for you, and its kit assembles a monster from
           ancestry, class and gear picks. Encounters puts rosters together against the stand-in
-          party, and can name which prepared map the fight starts on. Tables rolls up random
-          tables, Lore holds the setting notes, and Rules carries the house rules and any saved
-          ruleset.
+          party, and can name which prepared map the fight starts on. Homebrew is your own items,
+          spells, feats, backgrounds, species and subclasses: weapons the attack roll reads, armour
+          the AC engine wears, spells the cast tools resolve, all checked against the ruleset as you
+          type. Tables rolls up random tables, Lore holds the setting notes, and Rules carries the
+          house rules and any saved ruleset.
         </p>
       </Section>
 

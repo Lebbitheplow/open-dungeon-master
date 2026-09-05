@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { createSheetSchema } from "@/lib/schemas/sheet";
 import { GENRES } from "@/lib/schemas/game-settings";
 import { BEAT_KINDS } from "@/lib/workshop/board";
 
@@ -113,7 +114,11 @@ export const BUNDLE_LIMITS = {
   maps: 100,
   storyboard: 200,
   monsters: 200,
+  homebrew: 400,
+  pregens: 12,
 } as const;
+
+export const BUNDLE_KINDS = Object.keys(BUNDLE_LIMITS) as Array<keyof typeof BUNDLE_LIMITS>;
 
 // The licensing half, lifted from worldPackSchema so the two cannot drift.
 export const bundleManifestSchema = z.object({
@@ -138,6 +143,9 @@ const loreSchema = z.object({
   title: z.string().trim().min(1).max(200),
   body: z.string().max(20_000).default(""),
   tags: z.array(z.string().trim().max(40)).max(20).default([]),
+  // A secret stays a secret on the other side; a handout keeps its picture.
+  visibility: z.enum(["party", "dm"]).default("party"),
+  image: bundleImageSchema,
 });
 
 const locationSchema = z.object({
@@ -151,6 +159,8 @@ const npcSchema = z.object({
   attitude: z.enum(["hostile", "indifferent", "friendly"]).default("indifferent"),
   trait: z.string().max(500).default(""),
   location: z.string().max(120).default(""),
+  // A role id or free text; bundles written before the field have none.
+  role: z.string().trim().max(40).default(""),
   aliases: z.array(z.string().trim().max(80)).max(20).default([]),
   personality: z.string().max(4_000).default(""),
   goals: z.string().max(4_000).default(""),
@@ -209,6 +219,26 @@ const monsterSchema = z.object({
   extraDamagePerRound: z.number().min(0).max(1_000).default(0),
 });
 
+// Items, spells and character options travel as the same loose blob the
+// homebrew table stores, and are normalized per kind on the way in
+// (src/lib/homebrew/gear.ts), so a bundle written by an older build cannot
+// hand the engine a weapon it cannot roll.
+const homebrewSchema = z.object({
+  kind: z.enum(["spell", "feat", "item", "race", "background", "archetype"]),
+  name: z.string().trim().min(1).max(80),
+  data: z.record(z.string(), z.unknown()).default({}),
+});
+
+// A pregenerated character: a whole sheet, checked by the same schema the
+// character builder submits through, so a bundle cannot hand the dice
+// engine a sheet it would not have accepted from a player.
+const pregenSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  level: z.number().int().min(1).max(20),
+  role: z.enum(["pc", "companion"]).default("pc"),
+  sheet: createSheetSchema,
+});
+
 export const workshopBundleSchema = z.object({
   kind: z.literal(WORKSHOP_BUNDLE_KIND),
   version: z.literal(WORKSHOP_BUNDLE_VERSION),
@@ -232,9 +262,32 @@ export const workshopBundleSchema = z.object({
   maps: z.array(mapSchema).max(BUNDLE_LIMITS.maps).default([]),
   storyboard: z.array(beatSchema).max(BUNDLE_LIMITS.storyboard).default([]),
   monsters: z.array(monsterSchema).max(BUNDLE_LIMITS.monsters).default([]),
+  homebrew: z.array(homebrewSchema).max(BUNDLE_LIMITS.homebrew).default([]),
+  pregens: z.array(pregenSchema).max(BUNDLE_LIMITS.pregens).default([]),
 });
 
 export type WorkshopBundle = z.infer<typeof workshopBundleSchema>;
+
+// The bundle with only the kinds asked for, the rest emptied. What a DM
+// picks in the import preview; an unknown kind is ignored and an empty
+// pick means everything, so an older client keeps importing whole. "rules"
+// stands for the house rules text, which is prose rather than a list.
+export function pickBundleKinds(bundle: WorkshopBundle, kinds: string[]): WorkshopBundle {
+  if (kinds.length === 0) {
+    return bundle;
+  }
+  const wanted = new Set(kinds);
+  const picked: WorkshopBundle = { ...bundle };
+  for (const kind of BUNDLE_KINDS) {
+    if (!wanted.has(kind)) {
+      picked[kind] = [];
+    }
+  }
+  if (!wanted.has("rules")) {
+    picked.houseRulesText = "";
+  }
+  return picked;
+}
 
 export const BUNDLE_KIND_LABELS: Record<string, string> = {
   lore: "World lore",
@@ -245,6 +298,9 @@ export const BUNDLE_KIND_LABELS: Record<string, string> = {
   maps: "Battle maps",
   storyboard: "Storyboard cards",
   monsters: "Hand-built monsters",
+  homebrew: "Homebrew items, spells and options",
+  pregens: "Pregenerated characters",
+  rules: "House rules",
 };
 
 export type BundleCounts = Record<keyof typeof BUNDLE_LIMITS, number>;
@@ -259,6 +315,8 @@ export function bundleCounts(bundle: WorkshopBundle): BundleCounts {
     maps: bundle.maps.length,
     storyboard: bundle.storyboard.length,
     monsters: bundle.monsters.length,
+    homebrew: bundle.homebrew.length,
+    pregens: bundle.pregens.length,
   };
 }
 

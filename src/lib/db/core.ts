@@ -1316,6 +1316,10 @@ function ensureSchema(db: SqliteDatabase) {
     ["concentrating_on", `TEXT`],
     ["library_character_id", `TEXT`],
     ["subclass", `TEXT NOT NULL DEFAULT ''`],
+    // Free text off the builder's identity step. Only ever read by the
+    // portrait prompt and the placeholder resolver (src/lib/placeholders.ts);
+    // no rule depends on it. Sheets from before the column read as "".
+    ["gender", `TEXT NOT NULL DEFAULT ''`],
     // Player-authored backstory, visible to the whole party and the DM.
     ["backstory", `TEXT NOT NULL DEFAULT ''`],
     // Class features, racial traits, and story-granted abilities; the DM
@@ -1486,6 +1490,48 @@ function ensureSchema(db: SqliteDatabase) {
     ["kind", `TEXT NOT NULL DEFAULT 'fight'`],
   ]);
 
+  // The binder (docs/workshop-parity-audit.md phase 14). A lore entry is
+  // party-visible by default, as it always was; 'dm' keeps it as the DM's
+  // secret. An image makes a party-visible entry a handout.
+  addColumns("lore_entries", [
+    ["visibility", `TEXT NOT NULL DEFAULT 'party'`],
+    ["image_path", `TEXT NOT NULL DEFAULT ''`],
+  ]);
+  // Results already drawn from a table that draws without replacement, and
+  // whether it does (src/lib/dm/roll-table-logic.ts).
+  addColumns("roll_tables", [
+    ["drawn_json", `TEXT NOT NULL DEFAULT '[]'`],
+    ["no_replacement", `INTEGER NOT NULL DEFAULT 0`],
+  ]);
+
+  // The scene layer (docs/workshop-parity-audit.md phase 13): labels on
+  // tiles, door states, patches of light, a picture only the DM sees. Each
+  // is a JSON column validated by src/lib/battlemap/scene.ts; the engine
+  // reads none of them directly, because the rim resolves locked and secret
+  // doors into the terrain string it hands out.
+  addColumns("battle_maps", [
+    ["labels_json", `TEXT NOT NULL DEFAULT '[]'`],
+    ["doors_json", `TEXT NOT NULL DEFAULT '{}'`],
+    ["zones_json", `TEXT NOT NULL DEFAULT '[]'`],
+    ["overlay_path", `TEXT NOT NULL DEFAULT ''`],
+  ]);
+  addColumns("prepared_maps", [
+    ["labels_json", `TEXT NOT NULL DEFAULT '[]'`],
+    // Furniture and bystanders placed with the map, copied onto the board as
+    // npc and prop tokens at deploy. Never pcs or enemies: those belong to
+    // the fight (docs/workshop-plan.md phase 4).
+    ["props_json", `TEXT NOT NULL DEFAULT '[]'`],
+    ["doors_json", `TEXT NOT NULL DEFAULT '{}'`],
+    ["zones_json", `TEXT NOT NULL DEFAULT '[]'`],
+    ["overlay_path", `TEXT NOT NULL DEFAULT ''`],
+    // The sound the place makes: cue ids for the bed and the music, played
+    // when the map goes on the table.
+    ["ambience_json", `TEXT NOT NULL DEFAULT '{}'`],
+  ]);
+  // Where each enemy starts, who is hidden, hit point and name overrides,
+  // and what the fight is worth (src/lib/dm/encounter-template-logic.ts).
+  addColumns("encounter_templates", [["extras_json", `TEXT NOT NULL DEFAULT '{}'`]]);
+
   addColumns("encounter_enemies", [
     // Server-tracked enemy conditions (prone, poisoned, ...), applied via
     // set_enemy_condition / clear_enemy_condition.
@@ -1619,6 +1665,14 @@ function ensureSchema(db: SqliteDatabase) {
     // The DM's own notes on the region: what lies beyond the edge, which
     // roads are watched. Never sent to a player.
     ["notes", `TEXT NOT NULL DEFAULT ''`],
+    // Roads, rivers and borders as point lists, and the words written over
+    // the map (src/lib/overworld/features.ts). World facts, not secrets:
+    // every member sees them.
+    ["paths_json", `TEXT NOT NULL DEFAULT '[]'`],
+    ["labels_json", `TEXT NOT NULL DEFAULT '[]'`],
+    // A picture the DM drew or imported, shown in place of the tiles. The
+    // tiles stay underneath it and still decide where a place may land.
+    ["backdrop_path", `TEXT NOT NULL DEFAULT ''`],
   ]);
 
   addColumns("npcs", [
@@ -1655,9 +1709,18 @@ function ensureSchema(db: SqliteDatabase) {
     // attachment JSON character sheets use, because an NPC portrait has no
     // filename or type worth keeping: it is only ever shown.
     ["portrait_url", `TEXT NOT NULL DEFAULT ''`],
+    // What they do: a role id from the cast editor's picker ("merchant",
+    // "cyberpunk-fixer") or free text. Picks the placeholder face before a
+    // portrait exists (src/lib/placeholders.ts) and is shown on the cast
+    // list; no rule reads it.
+    ["role", `TEXT NOT NULL DEFAULT ''`],
   ]);
 
   addColumns("library_characters", [
+    // The workshop this sheet is a pregen for, or empty for a character of
+    // the library's own. A pregen is an ordinary library character that a
+    // workshop lists and a bundle carries (src/lib/workshop/bundle.ts).
+    ["workshop_id", `TEXT NOT NULL DEFAULT ''`],
     // What this library entry is FOR: a character somebody plays, or an ally
     // the DM plays. Both are the same sheet and the same adaptation on the
     // way into a campaign (src/lib/characters/adapt.ts); what differs is

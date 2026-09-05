@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { gearFromHomebrewData, type HomebrewGear } from "@/lib/homebrew/gear";
 import ContentPicker from "./ContentPicker";
 
 const STARTER_PACK: Array<{ name: string; qty: number }> = [
@@ -29,7 +30,7 @@ export default function EquipmentSection({
   equipment: Array<{ name: string; qty: number; slug?: string }>;
   // Name plus a one-word stat to show beside it ("1d8 slashing", "AC 14").
   suggestions: Array<{ name: string; note: string }>;
-  onAdd: (entry: { name: string; qty?: number; slug?: string }) => void;
+  onAdd: (entry: { name: string; qty?: number; slug?: string; gear?: HomebrewGear }) => void;
   onAddMany: (entries: Array<{ name: string; qty: number }>) => void;
   onRemove: (name: string) => void;
   gold: number;
@@ -74,7 +75,15 @@ export default function EquipmentSection({
       <ContentPicker
         kind="items"
         placeholder="Search items (e.g. longsword, chain mail, rope)"
-        onPick={(entry) => onAdd({ name: entry.name, slug: entry.slug })}
+        onPick={(entry) =>
+          onAdd({
+            name: entry.name,
+            slug: entry.slug,
+            ...(entry.source === "homebrew"
+              ? { gear: gearFromHomebrewData(entry.name, entry.data) ?? undefined }
+              : {}),
+          })
+        }
         renderMeta={(entry) => entry.rarity || entry.kind || ""}
       />
       <div className="mt-2 flex flex-wrap gap-1.5">

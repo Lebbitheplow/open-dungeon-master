@@ -55,6 +55,13 @@ export type AttackProfile = {
   riderNotes: string[];
 };
 
+// The weapon block a homebrew item snapshotted onto its equipment line, if
+// it has one.
+export function weaponOf(item: EquipmentItem | undefined): SrdWeapon | null {
+  const weapon = item?.gear?.weapon as SrdWeapon | undefined;
+  return weapon && typeof weapon.damage === "string" ? weapon : null;
+}
+
 function itemMatchesTerm(itemName: string, term: string): boolean {
   const item = itemName.trim().toLowerCase();
   const wanted = term.trim().toLowerCase();
@@ -75,7 +82,10 @@ export function resolveAttackWeapon(
       return { displayName: "Unarmed strike", srd: null, unarmed: true };
     }
     const carriedItem = equipment.find((item) => itemMatchesTerm(item.name, arg));
-    const srd = matchWeapon(arg) ?? (carriedItem ? matchWeapon(carriedItem.name) : null);
+    // A carried homebrew weapon carries its own block (src/lib/homebrew/
+    // gear.ts) and wins over a name that happens to resemble an SRD one.
+    const srd =
+      weaponOf(carriedItem) ?? matchWeapon(arg) ?? (carriedItem ? matchWeapon(carriedItem.name) : null);
     return {
       displayName: carriedItem?.name ?? srd?.name ?? arg,
       srd,
@@ -85,7 +95,7 @@ export function resolveAttackWeapon(
   // No name given: best carried weapon, proficient ones first.
   let best: { item: EquipmentItem; srd: SrdWeapon; proficient: boolean } | null = null;
   for (const item of equipment) {
-    const srd = matchWeapon(item.name);
+    const srd = weaponOf(item) ?? matchWeapon(item.name);
     if (!srd) {
       continue;
     }

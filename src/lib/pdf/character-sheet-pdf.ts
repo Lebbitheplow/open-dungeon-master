@@ -33,7 +33,7 @@ import {
   XP_THRESHOLDS,
 } from "@/lib/srd";
 import { classListFor, slotTableFor } from "@/lib/srd/multiclass";
-import { weaponAttackProfile } from "@/lib/dm/attack-logic";
+import { weaponAttackProfile, weaponOf } from "@/lib/dm/attack-logic";
 import { matchWeapon } from "@/lib/srd/weapons";
 
 // The subset of a character the sheet renders. The runtime CharacterSheet is
@@ -486,7 +486,7 @@ function weaponAttacks(
 ): WeaponRow[] {
   const rows: WeaponRow[] = [];
   for (const item of c.equipment) {
-    const srd = matchWeapon(item.name);
+    const srd = weaponOf(item) ?? matchWeapon(item.name);
     if (!srd) {
       continue;
     }

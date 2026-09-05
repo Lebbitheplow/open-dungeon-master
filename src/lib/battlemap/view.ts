@@ -13,6 +13,7 @@ import { darkvisionTilesFromText, litTiles, visibleTiles } from "@/lib/battlemap
 import { reachableTiles, speedToTiles } from "@/lib/battlemap/movement";
 import { tileIndex, type AmbientLight, type BattleToken, type TokenKind } from "@/lib/battlemap/types";
 import type { Backdrop } from "@/lib/battlemap/backdrop";
+import { labelsFor, type DoorStates, type LightZone, type MapLabel } from "@/lib/battlemap/scene";
 import type { MapTheme } from "@/lib/battlemap/generate";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -64,6 +65,14 @@ export type PlayerMapView = {
   // DM view only: real hit points behind every token, so the person running
   // the fight can see the board the way they see their own notes.
   tokenHp?: Record<string, { current: number; max: number }>;
+  // The scene layer (src/lib/battlemap/scene.ts). Labels a player may see,
+  // and only where they have been; the DM sees them all. Door states,
+  // patches of light and the overlay picture are the DM's alone: a player
+  // sees a locked or secret door as the wall the engine treats it as.
+  labels: MapLabel[];
+  doors?: DoorStates;
+  zones?: LightZone[];
+  overlayPath?: string;
 };
 
 export function sheetDarkvisionTiles(sheet: CharacterSheet): number {
@@ -122,7 +131,13 @@ export function buildPlayerMapView(
   const myToken = sheet ? getTokenByRef(map.id, sheet.id) : null;
 
   // Spectators (no sheet/token) see only ally positions on a dark field.
-  const vision = { terrain: map.terrain, width: map.width, height: map.height, ambient: map.ambient };
+  const vision = {
+    terrain: map.terrain,
+    width: map.width,
+    height: map.height,
+    ambient: map.ambient,
+    zones: map.zones,
+  };
   const lit = litTiles(vision, tokens, map.lights);
   let visible = new Set<number>();
   let explored = new Set<number>();
@@ -145,7 +160,10 @@ export function buildPlayerMapView(
   }
 
   // Terrain memory: what the character has explored, blanked elsewhere.
-  const terrainChars = map.terrain.split("");
+  // The DM's projection is the DRAWN board, door glyphs and all, with the
+  // states beside it; a player's is the engine's, where a locked or secret
+  // door is the wall it currently is.
+  const terrainChars = (fullVision ? map.drawnTerrain : map.terrain).split("");
   for (let i = 0; i < tileCount; i += 1) {
     if (!explored.has(i)) {
       terrainChars[i] = " ";
@@ -230,8 +248,12 @@ export function buildPlayerMapView(
     currentTurnName: currentEntry?.name ?? "",
     board: encounter.kind,
     fullVision,
+    labels: labelsFor(map.labels, map.width, { dm: fullVision, explored }),
     ...(fullVision
       ? {
+          doors: map.doors,
+          zones: map.zones,
+          ...(map.overlayPath ? { overlayPath: map.overlayPath } : {}),
           tokenHp: Object.fromEntries(
             shownTokens.flatMap((token) => {
               const source =

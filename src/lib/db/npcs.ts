@@ -35,6 +35,9 @@ export type Npc = {
   arcCastId: string;
   // A face, as a /uploads/ path, or "". Shown, never read by any rule.
   portraitUrl: string;
+  // What they do ("merchant", "cyberpunk-fixer", or whatever the DM typed).
+  // Picks the placeholder face when portraitUrl is empty; no rule reads it.
+  role: string;
   // Kept out of the Active NPCs prompt block; restored on a name mention.
   archived: boolean;
   createdAt: string;
@@ -57,6 +60,7 @@ type NpcRow = {
   pressure_json: string;
   arc_cast_id: string;
   portrait_url: string | null;
+  role: string | null;
   archived: number;
   created_at: string;
   updated_at: string;
@@ -70,6 +74,7 @@ function mapNpc(row: NpcRow): Npc {
     attitude: row.attitude,
     trait: row.trait,
     location: row.location,
+    role: row.role ?? "",
     lastShiftTurn: row.last_shift_turn,
     aliases: parseJson<string[]>(row.aliases_json, []),
     agency: {
@@ -229,10 +234,10 @@ export function createNpcFromDraft(campaignId: string, draft: NpcDraft): Npc {
   const id = crypto.randomUUID();
   db.prepare(
     `INSERT INTO npcs
-       (id, campaign_id, name, attitude, trait, location, last_shift_turn,
+       (id, campaign_id, name, attitude, trait, location, role, last_shift_turn,
         aliases_json, personality_json, goals_json, relations_json,
         bonds_json, pressure_json, arc_cast_id, portrait_url, archived, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, '[]', '', '', '', 0, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, '[]', '', '', '', 0, ?, ?)`,
   ).run(
     id,
     campaignId,
@@ -240,6 +245,7 @@ export function createNpcFromDraft(campaignId: string, draft: NpcDraft): Npc {
     draft.attitude,
     draft.trait,
     draft.location,
+    draft.role,
     JSON.stringify(draft.aliases),
     draft.personality ? JSON.stringify(draft.personality) : "",
     JSON.stringify(draft.goals),
@@ -264,7 +270,7 @@ export function updateNpcFromDraft(campaignId: string, npcId: string, draft: Npc
   }
   db.prepare(
     `UPDATE npcs
-     SET name = ?, attitude = ?, trait = ?, location = ?, aliases_json = ?,
+     SET name = ?, attitude = ?, trait = ?, location = ?, role = ?, aliases_json = ?,
          personality_json = ?, goals_json = ?, relations_json = ?, updated_at = ?
      WHERE id = ?`,
   ).run(
@@ -272,6 +278,7 @@ export function updateNpcFromDraft(campaignId: string, npcId: string, draft: Npc
     draft.attitude,
     draft.trait,
     draft.location,
+    draft.role,
     JSON.stringify(draft.aliases),
     draft.personality ? JSON.stringify(draft.personality) : "",
     JSON.stringify(draft.goals),

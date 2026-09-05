@@ -1,4 +1,5 @@
 import { tileIndex, type AmbientLight, type BattleToken, type MapLight } from "@/lib/battlemap/types";
+import { describeScene, type DoorStates, type MapLabel } from "@/lib/battlemap/scene";
 
 // Model-facing map text: an ASCII grid with token overlay letters plus a
 // token list carrying exact ids and coordinates. Target is under ~1.5k
@@ -7,9 +8,13 @@ import { tileIndex, type AmbientLight, type BattleToken, type MapLight } from "@
 export type SerializableMap = {
   width: number;
   height: number;
+  // The DRAWN terrain, so the model can see where the doors are; which of
+  // them are shut is said below (src/lib/battlemap/scene.ts).
   terrain: string;
   ambient: AmbientLight;
   lights: MapLight[];
+  doors?: DoorStates;
+  labels?: MapLabel[];
 };
 
 // PCs get A-Z in party order; enemies get digits then lowercase letters.
@@ -50,8 +55,9 @@ export function serializeMapForPrompt(
     `Battle map ${map.width}x${map.height} tiles (1 tile = 5 ft). Coordinates are (col,row); (0,0) is top-left.`,
   );
   lines.push(
-    "Legend: . floor | # wall (blocks movement and sight) | ~ water (difficult) | , difficult ground. Letters and digits are combatants.",
+    "Legend: . floor | # wall (blocks movement and sight) | ~ water (difficult) | , difficult ground | + door. Letters and digits are combatants.",
   );
+  lines.push(...describeScene({ doors: map.doors ?? {}, labels: map.labels ?? [] }));
   // Column header uses last-digit ruler so wide maps stay aligned.
   const header = Array.from({ length: map.width }, (_, x) => String(x % 10)).join("");
   lines.push(`   ${header}`);

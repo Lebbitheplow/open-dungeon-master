@@ -60,6 +60,11 @@ export type PaintInput = {
   // Tiles that currently hold a token. They may not be walled over, and
   // they must still be able to reach each other when the brush lifts.
   occupied?: XY[];
+  // How many strokes to accept. Defaults to MAX_STROKES, which bounds a
+  // request from the wire; strokes compiled on the server from a stamp, a
+  // shape or an undo (src/lib/battlemap/stamp.ts, tools.ts) are already
+  // bounded by the map and pass its area instead.
+  limit?: number;
 };
 
 export type PaintOutcome = { terrain: string } | { error: string };
@@ -97,8 +102,9 @@ export function paintTerrain(input: PaintInput): PaintOutcome {
   if (!input.strokes.length) {
     return { error: "Nothing was painted." };
   }
-  if (input.strokes.length > MAX_STROKES) {
-    return { error: `That is more than ${MAX_STROKES} strokes at once; paint in passes.` };
+  const limit = input.limit ?? MAX_STROKES;
+  if (input.strokes.length > limit) {
+    return { error: `That is more than ${limit} strokes at once; paint in passes.` };
   }
 
   const occupied = input.occupied ?? [];

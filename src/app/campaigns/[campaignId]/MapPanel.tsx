@@ -1,9 +1,10 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { Compass, ImagePlus, Loader2, Map as MapIcon, RefreshCw, X } from "lucide-react";
+import { Compass, ImageOff, ImagePlus, Loader2, Map as MapIcon, RefreshCw, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { cn } from "@/lib/cn";
+import { mapPlaceholder } from "@/lib/placeholders";
 import { offersImages, useCapabilities } from "@/lib/use-capabilities";
 import type {
   CampaignLocation,
@@ -21,11 +22,14 @@ export function MapPanel({
   locations,
   steersStory,
   mediaStatus = {},
+  genre,
 }: {
   campaignId: string;
   locations: CampaignLocation[];
   steersStory: boolean;
   mediaStatus?: Record<string, MediaStatus>;
+  // The table's setting, for the stand-in plate an unmapped area shows.
+  genre?: string | null;
 }) {
   const current = locations.find((location) => location.isCurrent) ?? null;
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -102,6 +106,26 @@ export function MapPanel({
     }
   }
 
+  // The third choice beside upload and redraw: no map, so the stand-in plate
+  // shows. The panel updates through location_map_ready like the others.
+  async function clearToPlaceholder() {
+    if (!shown) {
+      return;
+    }
+    setRegenerateError("");
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/locations/${shown.id}/map`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string };
+        setRegenerateError(data.error ?? "Could not clear the map.");
+      }
+    } catch {
+      setRegenerateError("Could not reach the server.");
+    }
+  }
+
   if (!locations.length) {
     return (
       <p className="px-1 py-6 text-center text-xs text-stone-600">
@@ -171,6 +195,18 @@ export function MapPanel({
                     )}
                   </button>
                 ) : null}
+                {shown.mapImage ? (
+                  <button
+                    type="button"
+                    onClick={() => void clearToPlaceholder()}
+                    disabled={uploading || regenerating}
+                    title="Take the map away and show the stand-in for this kind of place"
+                    aria-label="Use the placeholder instead"
+                    className="text-stone-500 hover:text-amber-400 disabled:opacity-50"
+                  >
+                    <ImageOff className="size-3.5" />
+                  </button>
+                ) : null}
               </span>
             ) : null}
           </div>
@@ -195,13 +231,28 @@ export function MapPanel({
                 : "Drawing the map..."}
             </div>
           ) : (
-            <div className="flex aspect-[4/3] items-center justify-center rounded-md border border-dashed border-stone-800 text-xs text-stone-600">
-              <MapIcon className="mr-1.5 size-4" />
-              {mediaStatus[shown.id]?.state === "failed"
-                ? "Map render failed"
-                : !canPaint && steersStory
-                  ? "Not yet mapped. Upload one above."
-                  : "Not yet mapped"}
+            // The stand-in plate for the kind of place this is, with the
+            // status written over it; a real map replaces it the moment one
+            // is drawn or uploaded.
+            <div className="relative overflow-hidden rounded-md border border-stone-800">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={mapPlaceholder(
+                  { name: shown.name, description: shown.layoutDescription, genre },
+                  shown.id,
+                )}
+                alt=""
+                loading="lazy"
+                className="aspect-[16/9] w-full object-cover opacity-80"
+              />
+              <p className="absolute inset-x-0 bottom-0 flex items-center gap-1.5 bg-gradient-to-t from-stone-950/90 to-transparent px-2 pb-1.5 pt-4 text-xs text-stone-300">
+                <MapIcon className="size-3.5 shrink-0" />
+                {mediaStatus[shown.id]?.state === "failed"
+                  ? "Map render failed"
+                  : !canPaint && steersStory
+                    ? "Not yet mapped. Upload one above."
+                    : "Not yet mapped"}
+              </p>
             </div>
           )}
 

@@ -25,8 +25,11 @@ import {
   partySpawnTiles,
   type MapTheme,
 } from "@/lib/battlemap/generate";
-import { nearestOpenTile, paintTerrain, type Stroke } from "@/lib/battlemap/paint";
-import { stampStrokes, type Stamp } from "@/lib/battlemap/stamp";
+import { nearestOpenTile, paintTerrain } from "@/lib/battlemap/paint";
+import { compilePaint, emptyPaintIsFine, type PaintRequest } from "@/lib/battlemap/tools";
+import { normalizeLights, toggleLight, type LightToggle } from "@/lib/battlemap/lights";
+import { toggleDoor, type SceneAmbience } from "@/lib/battlemap/scene";
+import { handleSetAmbience } from "@/lib/dm/ambience-tools";
 import { parseUvtt } from "@/lib/battlemap/uvtt";
 import { normalizeBackdropTransform, type BackdropTransform } from "@/lib/battlemap/backdrop";
 import { TERRAIN, tileIndex, type AmbientLight, type XY } from "@/lib/battlemap/types";
@@ -148,30 +151,124 @@ export function createLibraryMap(
 // map, so the painter's occupancy rules have nothing to check; what it still
 // enforces is the walled border, which is the promise the engine needs kept
 // whether or not anybody is standing on the map yet.
+//
+// Four ways in, one painter: hand strokes, a stamp, a shape tool, or a whole
+// terrain to go back to (undo), all compiled by src/lib/battlemap/tools.ts.
 export function paintLibraryMap(
   campaign: Campaign,
   mapId: string,
-  input: { strokes?: Stroke[]; stamp?: Stamp },
+  input: PaintRequest,
 ): LibraryOutcome<PreparedMap> {
   const map = getPreparedMap(campaign.id, mapId);
   if (!map) {
     return { error: "That map is not in this library." };
   }
-  const strokes = input.stamp ? stampStrokes(input.stamp) : input.strokes;
-  if (!strokes?.length) {
-    return { error: "Nothing was painted." };
+  const compiled = compilePaint(input, map.terrain, map.width, map.height);
+  if ("error" in compiled) {
+    return { error: compiled.error };
+  }
+  if (!compiled.strokes.length) {
+    return emptyPaintIsFine(input) ? { ok: true, map } : { error: "Nothing was painted." };
   }
   const painted = paintTerrain({
     terrain: map.terrain,
     width: map.width,
     height: map.height,
-    strokes,
+    strokes: compiled.strokes,
+    limit: Math.min(compiled.limit, map.width * map.height),
   });
   if ("error" in painted) {
     return { error: painted.error };
   }
   const updated = updatePreparedMap(campaign.id, mapId, { terrain: painted.terrain });
   return updated ? { ok: true, map: updated } : { error: "That map is not in this library." };
+}
+
+// The lights on a stored map: place or remove one, or hand over the whole
+// list. Nothing about a light touches the terrain, so this never runs the
+// painter; it runs the light rules (src/lib/battlemap/lights.ts) instead.
+export function setLibraryLights(
+  campaign: Campaign,
+  mapId: string,
+  input: { toggle?: LightToggle; lights?: unknown },
+): LibraryOutcome<PreparedMap> & { placed?: boolean } {
+  const map = getPreparedMap(campaign.id, mapId);
+  if (!map) {
+    return { error: "That map is not in this library." };
+  }
+  let lights = map.lights;
+  let placed: boolean | undefined;
+  if (input.lights !== undefined) {
+    lights = normalizeLights(input.lights, map.width, map.height);
+  }
+  if (input.toggle) {
+    const toggled = toggleLight(lights, input.toggle, map.terrain, map.width, map.height);
+    if ("error" in toggled) {
+      return { error: toggled.error };
+    }
+    lights = toggled.lights;
+    placed = toggled.placed;
+  }
+  const updated = updatePreparedMap(campaign.id, mapId, { lights });
+  return updated ? { ok: true, map: updated, placed } : { error: "That map is not in this library." };
+}
+
+// The scene layer on a stored map: labels, furniture, door states, patches
+// of light, the DM's overlay and the sound it makes. A door tap walks the
+// state round (open, locked, secret); everything else is handed over whole.
+export function setLibraryScene(
+  campaign: Campaign,
+  mapId: string,
+  input: {
+    labels?: unknown;
+    props?: unknown;
+    zones?: unknown;
+    overlayPath?: string;
+    ambience?: unknown;
+    door?: XY;
+  },
+): LibraryOutcome<PreparedMap> & { door?: string | null } {
+  const map = getPreparedMap(campaign.id, mapId);
+  if (!map) {
+    return { error: "That map is not in this library." };
+  }
+  let doors = map.doors;
+  let door: string | null | undefined;
+  if (input.door) {
+    const toggled = toggleDoor(doors, input.door, map.terrain, map.width, map.height);
+    if ("error" in toggled) {
+      return { error: toggled.error };
+    }
+    doors = toggled.doors;
+    door = toggled.state;
+  }
+  const updated = updatePreparedMap(campaign.id, mapId, {
+    scene: {
+      doors,
+      ...(input.labels !== undefined ? { labels: input.labels as PreparedMap["labels"] } : {}),
+      ...(input.props !== undefined ? { props: input.props as PreparedMap["props"] } : {}),
+      ...(input.zones !== undefined ? { zones: input.zones as PreparedMap["zones"] } : {}),
+      ...(input.overlayPath !== undefined ? { overlayPath: input.overlayPath } : {}),
+      ...(input.ambience !== undefined ? { ambience: input.ambience as SceneAmbience } : {}),
+    },
+  });
+  return updated ? { ok: true, map: updated, door } : { error: "That map is not in this library." };
+}
+
+// The sound a prepared map makes, played when it goes on the table. Runs
+// through the same tool the model uses, so the cue ids are checked and the
+// change is announced the same way.
+function playPreparedAmbience(campaign: Campaign, ambience: SceneAmbience) {
+  if (!ambience.bed && !ambience.music) {
+    return;
+  }
+  handleSetAmbience(
+    campaign,
+    JSON.stringify({
+      ...(ambience.bed ? { bed: ambience.bed } : {}),
+      ...(ambience.music ? { music: ambience.music } : {}),
+    }),
+  );
 }
 
 // The picture under the grid. The path has already been written to
@@ -244,12 +341,15 @@ export function captureBoardIntoLibrary(
       name: name.trim(),
       width: map.width,
       height: map.height,
-      terrain: map.terrain,
+      // The drawn terrain, doors and all: a locked door on the table is
+      // still a door in the drawer.
+      terrain: map.drawnTerrain,
       ambient: map.ambient,
       theme: map.theme,
       lights: map.lights,
       seed: map.seed,
       backdrop: map.backdrop,
+      scene: { doors: map.doors, labels: map.labels, zones: map.zones, overlayPath: map.overlayPath },
     }),
   };
 }
@@ -297,13 +397,44 @@ export function deployPreparedMap(campaign: Campaign, mapId: string): LibraryOut
     theme: prepared.theme,
     lights: prepared.lights,
     seed: prepared.seed,
+    scene: {
+      doors: prepared.doors,
+      labels: prepared.labels,
+      zones: prepared.zones,
+      overlayPath: prepared.overlayPath,
+    },
   });
   setBattleMapBackdrop(live.id, prepared.backdrop?.path ?? "", prepared.backdrop?.transform ?? null);
   restandOnPrepared(live.id, prepared);
+  placeProps(live.id, campaign.id, prepared);
   // Fog memory is a memory of a map that no longer exists.
   clearExplored(live.id);
   publishBattleMapUpdate(campaign.id);
+  playPreparedAmbience(campaign, prepared.ambience);
   return { ok: true, map: prepared };
+}
+
+// The furniture a prepared map was drawn with, as the DM's own npc and prop
+// tokens. They carry no stat block, so nothing in the rules engine can
+// target them (src/lib/battlemap/types.ts). A tile somebody is already
+// standing on is skipped rather than doubled up.
+function placeProps(mapId: string, campaignId: string, prepared: PreparedMap) {
+  if (!prepared.props.length) {
+    return;
+  }
+  const taken = new Set(listTokens(mapId).map((token) => tileIndex(prepared.width, token.x, token.y)));
+  placeTokens(
+    mapId,
+    campaignId,
+    prepared.props
+      .filter((prop) => !taken.has(tileIndex(prepared.width, prop.x, prop.y)))
+      .map((prop) => ({
+        kind: prop.kind,
+        refId: crypto.randomUUID(),
+        name: prop.name,
+        spot: { x: prop.x, y: prop.y },
+      })),
+  );
 }
 
 // Open a stored map as an exploration scene: the party walks it, with
@@ -340,6 +471,12 @@ export function openSceneOnPreparedMap(
     lights: prepared.lights,
     seed: prepared.seed,
     backdrop: prepared.backdrop,
+    scene: {
+      doors: prepared.doors,
+      labels: prepared.labels,
+      zones: prepared.zones,
+      overlayPath: prepared.overlayPath,
+    },
   });
   const spawns = partySpawnTiles(prepared.terrain, prepared.width, prepared.height, sheets.length);
   const fallback: XY = spawns[0] ?? { x: 1, y: 1 };
@@ -354,7 +491,9 @@ export function openSceneOnPreparedMap(
       lightRadius: carriedLightRadius(sheet),
     })),
   );
+  placeProps(map.id, campaign.id, prepared);
   publishBattleMapUpdate(campaign.id);
+  playPreparedAmbience(campaign, prepared.ambience);
   return { ok: true, map: prepared };
 }
 

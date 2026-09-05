@@ -37,5 +37,10 @@ export async function POST(
     }
     return Response.json({ statblock });
   }
-  return Response.json({ matches: searchStatblocks(context.campaign, query) });
+  return Response.json({
+    matches: searchStatblocks(context.campaign, query),
+    // For the thumbnails: a high-rating match draws this setting's boss
+    // plate (src/lib/placeholders.ts).
+    genre: context.campaign.gameSettings.genre,
+  });
 }

@@ -111,10 +111,12 @@ export type StatblockMatch = {
   slug: string;
   name: string;
   cr: number;
+  type: string;
   blurb: string;
 };
 
-// The genre catalog, filtered by name. With no query it returns the CR-spread
+// The genre catalog, filtered by name, blurb or creature type ("undead"
+// lists every undead in the roster). With no query it returns the CR-spread
 // shortlist the encounter builder already uses, so an empty box is still a
 // useful answer.
 export function searchStatblocks(campaign: Campaign, query: string): StatblockMatch[] {
@@ -126,6 +128,7 @@ export function searchStatblocks(campaign: Campaign, query: string): StatblockMa
       slug: entry.slug,
       name: entry.name,
       cr: entry.cr,
+      type: entry.type,
       blurb: entry.blurb,
     }));
   }
@@ -134,10 +137,17 @@ export function searchStatblocks(campaign: Campaign, query: string): StatblockMa
       (entry) =>
         entry.name.toLowerCase().includes(trimmed) ||
         entry.slug.includes(trimmed) ||
+        entry.type === trimmed ||
         entry.blurb.toLowerCase().includes(trimmed),
     )
     .slice(0, 12)
-    .map((entry) => ({ slug: entry.slug, name: entry.name, cr: entry.cr, blurb: entry.blurb }));
+    .map((entry) => ({
+      slug: entry.slug,
+      name: entry.name,
+      cr: entry.cr,
+      type: entry.type,
+      blurb: entry.blurb,
+    }));
 }
 
 export type StatblockResult = {

@@ -6,6 +6,7 @@ import {
   ArchiveRestore,
   Copy,
   Image as ImageIcon,
+  ImageOff,
   Loader2,
   Sparkles,
   Trash2,
@@ -53,6 +54,8 @@ export function DmNpcForgePanel({
 }) {
   const [npcs, setNpcs] = useState<Npc[]>([]);
   const [graph, setGraph] = useState<RelationGraph>({ nodes: [], edges: [] });
+  // The table's setting, for the role picker's ordering.
+  const [genre, setGenre] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [draft, setDraft] = useState<NpcDraft>(blankDraft());
   const [editorOpen, setEditorOpen] = useState(false);
@@ -72,10 +75,11 @@ export function DmNpcForgePanel({
     () =>
       fetch(`/api/campaigns/${campaignId}/dm/npcs`)
         .then((response) => (response.ok ? response.json() : null))
-        .then((payload: { npcs: Npc[]; graph: RelationGraph } | null) => {
+        .then((payload: { npcs: Npc[]; graph: RelationGraph; genre?: string } | null) => {
           if (payload) {
             setNpcs(payload.npcs);
             setGraph(payload.graph);
+            setGenre(payload.genre ?? "");
           }
         })
         .catch(() => {
@@ -282,6 +286,7 @@ export function DmNpcForgePanel({
         graph={graph}
         others={others}
         suggest={generateButton}
+        genre={genre}
       />
 
       <div className="flex flex-wrap items-center gap-1.5">
@@ -325,6 +330,17 @@ export function DmNpcForgePanel({
                 className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-50"
               >
                 <Sparkles className="size-3" /> Paint one
+              </button>
+            ) : null}
+            {selected.portraitUrl ? (
+              <button
+                type="button"
+                disabled={busy}
+                title="Take the picture away and show the stand-in for their role instead"
+                onClick={() => void patch({ portraitUrl: "" })}
+                className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-400 hover:bg-stone-900 disabled:opacity-50"
+              >
+                <ImageOff className="size-3" /> Use placeholder
               </button>
             ) : null}
             <button

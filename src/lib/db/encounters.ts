@@ -343,6 +343,28 @@ export function listEnemies(encounterId: string): EncounterEnemy[] {
   return rows.map(mapEnemy);
 }
 
+// A prepared encounter's overrides: this one is called Snik, that one has
+// 3 hit points. Written before anybody has acted, so max and current move
+// together and the stat snapshot keeps the printed block.
+export function patchEnemyIdentity(
+  enemyId: string,
+  patch: { displayName?: string; maxHp?: number },
+): EncounterEnemy | null {
+  const existing = getEnemy(enemyId);
+  if (!existing) {
+    return null;
+  }
+  const displayName = patch.displayName?.trim().slice(0, 80) || existing.displayName;
+  const maxHp = patch.maxHp && patch.maxHp > 0 ? Math.round(patch.maxHp) : existing.maxHp;
+  getDatabase()
+    .prepare(
+      `UPDATE encounter_enemies SET display_name = ?, max_hp = ?, current_hp = ?, updated_at = ?
+       WHERE id = ?`,
+    )
+    .run(displayName, maxHp, maxHp, nowIso(), enemyId);
+  return getEnemy(enemyId);
+}
+
 export function patchEnemyHp(
   enemyId: string,
   currentHp: number,

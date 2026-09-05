@@ -14,7 +14,15 @@ export type RollTableEntry = {
   min: number;
   max: number;
   text: string;
+  // A row that IS something rather than says something: another table to
+  // roll on, a monster, an item, an NPC, a lore entry, all by name
+  // (docs/workshop-parity-audit.md phase 14).
+  ref?: RollTableRef;
 };
+
+export const ROLL_REF_KINDS = ["table", "monster", "item", "npc", "lore"] as const;
+export type RollRefKind = (typeof ROLL_REF_KINDS)[number];
+export type RollTableRef = { kind: RollRefKind; name: string };
 
 export const TABLE_NAME_MAX = 80;
 export const TABLE_TEXT_MAX = 300;
@@ -23,6 +31,22 @@ export const TABLE_MAX_ENTRIES = 100;
 // A leading "1-5", "1–5" (en dash, which is what a copied book gives you),
 // "6", "6." or "6)" is a range; anything else is the whole line.
 const RANGE = /^\s*(\d{1,3})\s*(?:[-–—]\s*(\d{1,3}))?\s*[).:\t ]\s*(.+)$/;
+// "x3 A goblin patrol" or "3x A goblin patrol": a bare row worth three
+// results, which is how a weight is written when the ranges are not.
+const WEIGHT = /^(?:x(\d{1,2})|(\d{1,2})x)\s+(.+)$/i;
+// "@table: Gems", "@monster: wolf", "@item: Potion of Healing": a row that
+// is a thing rather than a sentence.
+const REF = /^@(table|monster|item|npc|lore)\s*:\s*(.+)$/i;
+
+// The text of a row split into what it says and what it points at.
+export function parseRowText(raw: string): { text: string; ref?: RollTableRef } {
+  const match = REF.exec(raw.trim());
+  if (!match) {
+    return { text: raw.trim().slice(0, TABLE_TEXT_MAX) };
+  }
+  const name = match[2].trim().slice(0, TABLE_TEXT_MAX);
+  return { text: name, ref: { kind: match[1].toLowerCase() as RollRefKind, name } };
+}
 
 export function parseRollTable(raw: string): RollTableEntry[] {
   const lines = String(raw ?? "")
@@ -41,13 +65,15 @@ export function parseRollTable(raw: string): RollTableEntry[] {
       entries.push({
         min: Math.min(min, max),
         max: Math.max(min, max),
-        text: match[3].trim().slice(0, TABLE_TEXT_MAX),
+        ...parseRowText(match[3]),
       });
       next = Math.max(max, min) + 1;
       continue;
     }
-    entries.push({ min: next, max: next, text: line.slice(0, TABLE_TEXT_MAX) });
-    next += 1;
+    const weighted = WEIGHT.exec(line);
+    const weight = weighted ? Math.max(1, Number(weighted[1] ?? weighted[2])) : 1;
+    entries.push({ min: next, max: next + weight - 1, ...parseRowText(weighted ? weighted[3] : line) });
+    next += weight;
   }
   return entries.sort((a, b) => a.min - b.min || a.max - b.max);
 }
@@ -105,10 +131,93 @@ export function entryForRoll(
 // reads back. A round trip through these two must be stable.
 export function formatRollTable(entries: RollTableEntry[]): string {
   return entries
-    .map((entry) =>
-      entry.min === entry.max
-        ? `${entry.min}. ${entry.text}`
-        : `${entry.min}-${entry.max}. ${entry.text}`,
-    )
+    .map((entry) => {
+      const text = entry.ref ? `@${entry.ref.kind}: ${entry.ref.name}` : entry.text;
+      return entry.min === entry.max ? `${entry.min}. ${text}` : `${entry.min}-${entry.max}. ${text}`;
+    })
     .join("\n");
+}
+
+// ---- drawing without replacement ----
+//
+// A rumour the party has heard should not come up twice. A table that draws
+// without replacement remembers the results it has handed out and picks
+// among the rest; when nothing is left it says so, and the DM resets it.
+// This is also what makes a table a deck of cards.
+
+// The results the die can still land on: covered by a row, not yet drawn.
+export function remainingResults(entries: RollTableEntry[], drawn: number[]): number[] {
+  const die = dieForTable(entries);
+  const taken = new Set(drawn);
+  const out: number[] = [];
+  for (let value = 1; value <= die; value += 1) {
+    if (!taken.has(value) && entryForRoll(entries, value)) {
+      out.push(value);
+    }
+  }
+  return out;
+}
+
+// ---- nested tables ----
+//
+// A row that points at another table rolls it too, so "roll on Gems" is one
+// press. Depth is capped and a table that points at itself stops after one
+// pass, so a careless loop costs a line of output rather than the server.
+
+export type RollStep = {
+  table: string;
+  die: number;
+  total: number;
+  entry: RollTableEntry | null;
+};
+
+export const MAX_NESTED_ROLLS = 4;
+
+// Follows table references from a first result. `roll` is the die roller,
+// so the server can hand in its real dice and a test a fixed one.
+export function followTableRefs(
+  first: RollStep,
+  tables: Array<{ name: string; entries: RollTableEntry[] }>,
+  roll: (sides: number) => number,
+): RollStep[] {
+  const chain: RollStep[] = [first];
+  const visited = new Set<string>([first.table.toLowerCase()]);
+  let current = first;
+  while (chain.length < MAX_NESTED_ROLLS + 1) {
+    const ref = current.entry?.ref;
+    if (!ref || ref.kind !== "table") {
+      break;
+    }
+    const wanted = ref.name.trim().toLowerCase();
+    const next = tables.find((table) => table.name.trim().toLowerCase() === wanted);
+    if (!next || visited.has(wanted)) {
+      chain.push({ table: ref.name, die: 0, total: 0, entry: null });
+      break;
+    }
+    visited.add(wanted);
+    const die = dieForTable(next.entries);
+    if (die < 1) {
+      chain.push({ table: next.name, die: 0, total: 0, entry: null });
+      break;
+    }
+    const total = roll(die);
+    current = { table: next.name, die, total, entry: entryForRoll(next.entries, total) };
+    chain.push(current);
+  }
+  return chain;
+}
+
+// One line per step, for the DM's readout.
+export function describeRollChain(chain: RollStep[]): string[] {
+  return chain.map((step) => {
+    if (!step.die) {
+      return `${step.table}: no such table to roll on.`;
+    }
+    const said = step.entry
+      ? step.entry.ref && step.entry.ref.kind !== "table"
+        ? `${step.entry.ref.kind}: ${step.entry.ref.name}`
+        : step.entry.text
+      : "nothing; that result is not on the table.";
+    return `${step.table} (d${step.die}: ${step.total}): ${said}`;
+  });
 }

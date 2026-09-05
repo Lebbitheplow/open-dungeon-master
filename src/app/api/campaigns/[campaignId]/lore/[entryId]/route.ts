@@ -4,9 +4,12 @@ import {
   LORE_BODY_MAX,
   LORE_TAGS_MAX,
   LORE_TITLE_MAX,
+  LORE_VISIBILITIES,
   WORLD_LORE_CATEGORIES,
+  type LoreVisibility,
   type WorldLoreCategory,
 } from "@/lib/dm/world-lore-logic";
+import { isUploadedImagePath } from "@/lib/uploads";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -52,6 +55,15 @@ export async function PATCH(
   }
   if (typeof raw.pinned === "boolean") {
     patch.pinned = raw.pinned;
+  }
+  if (LORE_VISIBILITIES.includes(raw.visibility as LoreVisibility)) {
+    patch.visibility = raw.visibility as LoreVisibility;
+  }
+  if (raw.imagePath !== undefined) {
+    if (raw.imagePath !== "" && !isUploadedImagePath(raw.imagePath)) {
+      return Response.json({ error: "Not an uploaded file." }, { status: 400 });
+    }
+    patch.imagePath = typeof raw.imagePath === "string" ? raw.imagePath : "";
   }
   return Response.json({ entry: updateLoreEntry(entryId, patch) });
 }

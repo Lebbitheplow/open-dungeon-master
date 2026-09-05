@@ -1,21 +1,9 @@
 "use client";
 
-import {
-  Bot,
-  Check,
-  Crown,
-  Dices,
-  Heart,
-  ImagePlus,
-  PawPrint,
-  Save,
-  Shield,
-  StickyNote,
-  UserPlus,
-  UserRound,
-} from "lucide-react";
+import { Bot, Check, Crown, Dices, Heart, ImagePlus, PawPrint, Save, Shield, StickyNote, UserPlus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
+import { CharacterPortrait } from "@/lib/ui";
 import { CharacterMenu } from "@/app/campaigns/[campaignId]/CharacterMenu";
 import { CharacterNotesDialog } from "@/app/campaigns/[campaignId]/CharacterNotesDialog";
 import { CharacterSheetDialog } from "@/app/campaigns/[campaignId]/CharacterSheetDialog";
@@ -280,18 +268,13 @@ export function PartyPanel({
                 title="View full character sheet"
                 className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
               >
-              {sheet.portrait ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={sheet.portrait.url}
-                  alt={sheet.name}
-                  className="size-12 shrink-0 rounded-lg border border-amber-500/30 object-cover shadow-glow-gold"
-                />
-              ) : (
-                <span className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-stone-700/60 bg-stone-900">
-                  <UserRound className="size-5 text-stone-600" />
-                </span>
-              )}
+              <CharacterPortrait
+                url={sheet.portrait?.url}
+                look={{ race: sheet.race, class: sheet.class, gender: sheet.gender }}
+                alt={sheet.name}
+                size="size-12"
+                className="border-amber-500/30 shadow-glow-gold"
+              />
               <span className="min-w-0">
                 <span className="flex items-center gap-1.5 font-medium">
                   <span className="truncate">{sheet.name}</span>

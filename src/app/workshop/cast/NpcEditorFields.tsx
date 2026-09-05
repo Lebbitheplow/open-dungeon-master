@@ -1,12 +1,13 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import {
   ATTITUDES,
   type GeneratableField,
   type NpcDraft,
   type RelationGraph,
 } from "@/lib/npcs/forge";
+import { npcRoleOptions } from "@/lib/placeholders";
 import {
   GOAL_FIELDS,
   PersonalitySliders,
@@ -23,6 +24,10 @@ import {
 //
 // `suggest` renders the per-field Suggest button, or nothing on a server
 // with no text model. The panel owns it because it owns the request.
+//
+// `genre` orders the role picker: the setting's own roles (a fixer, a street
+// doc) come before the twelve every table gets. The picker is a datalist, so
+// a role the catalog does not know can still be typed and kept.
 
 export function NpcEditorFields({
   draft,
@@ -30,13 +35,17 @@ export function NpcEditorFields({
   graph,
   others,
   suggest,
+  genre,
 }: {
   draft: NpcDraft;
   onChange: (draft: NpcDraft) => void;
   graph: RelationGraph;
   others: string[];
   suggest: (field: GeneratableField) => ReactNode;
+  genre?: string | null;
 }) {
+  const roleListId = useId();
+  const roles = npcRoleOptions(genre);
   return (
     <>
       <section className="space-y-2 rounded-lg border border-stone-800 bg-stone-950/60 px-2.5 py-2">
@@ -47,6 +56,22 @@ export function NpcEditorFields({
             placeholder="Their name"
             className="min-w-32 flex-1 rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-sm text-stone-200"
           />
+          <input
+            list={roleListId}
+            value={draft.role}
+            onChange={(event) => onChange({ ...draft, role: event.target.value })}
+            placeholder="What they do"
+            aria-label="Role: pick one or type your own"
+            title="Pick a role or type your own. It chooses their stand-in face until a portrait exists."
+            className="w-36 rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-300"
+          />
+          <datalist id={roleListId}>
+            {roles.map((role) => (
+              <option key={role.id} value={role.id}>
+                {role.label}
+              </option>
+            ))}
+          </datalist>
           <select
             value={draft.attitude}
             onChange={(event) =>

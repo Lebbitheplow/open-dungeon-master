@@ -306,6 +306,8 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
           <CampaignCover
             cover={campaign.cover}
             title={campaign.title}
+            genre={campaign.gameSettings.genre}
+            seed={campaign.id}
             className="w-full shrink-0 sm:w-44"
           />
           <div className="min-w-0 flex-1">

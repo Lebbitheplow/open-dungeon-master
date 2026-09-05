@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, Copy, Skull, Trash2 } from "lucide-react";
-import { ui } from "@/lib/ui";
+import { MonsterTile, ui } from "@/lib/ui";
 import { MONSTER_NAME_MAX, type MonsterDraft, type MonsterReadout } from "@/lib/bestiary/monster-draft";
 import { Sheet } from "@/components/ui/Sheet";
 import { MonsterBuildControls } from "@/app/workshop/bestiary/MonsterBuildControls";
@@ -37,6 +37,8 @@ export function DmBestiaryPanel({
 }) {
   const [monsters, setMonsters] = useState<Monster[]>([]);
   const [found, setFound] = useState<Found[]>([]);
+  // The table's setting, for the boss plate on high-rating thumbnails.
+  const [genre, setGenre] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [building, setBuilding] = useState(false);
@@ -56,10 +58,11 @@ export function DmBestiaryPanel({
         }`,
       )
         .then((response) => (response.ok ? response.json() : null))
-        .then((payload: { monsters: Monster[]; found: Found[] } | null) => {
+        .then((payload: { monsters: Monster[]; found: Found[]; genre?: string } | null) => {
           if (payload) {
             setMonsters(payload.monsters);
             setFound(payload.found);
+            setGenre(payload.genre ?? "");
           }
         })
         .catch(() => {
@@ -212,6 +215,7 @@ export function DmBestiaryPanel({
                 onCreate={create}
                 error={error}
                 variant="bare"
+                genre={genre}
               />
             </div>
           ) : null}
@@ -220,6 +224,7 @@ export function DmBestiaryPanel({
         <MonsterRows
           monsters={monsters}
           busy={busy}
+          genre={genre}
           onOpen={open}
           onDuplicate={(monster) => void duplicate(monster)}
           onDelete={(monster) => void remove(monster.id)}
@@ -247,6 +252,7 @@ export function DmBestiaryPanel({
         onFind={() => void load(query)}
         onCreate={create}
         error={error}
+        genre={genre}
       />
 
       <div className="flex flex-col gap-1.5">
@@ -258,6 +264,13 @@ export function DmBestiaryPanel({
         {monsters.map((monster) => (
           <div key={monster.id} className="rounded-lg border border-stone-800 bg-stone-900/40">
             <div className="flex items-center gap-2 p-2">
+              <MonsterTile
+                type={monster.draft.stats.type}
+                cr={monster.draft.stats.cr}
+                genre={genre}
+                seed={monster.draft.name}
+                size="size-8"
+              />
               <button
                 type="button"
                 onClick={() => (openId === monster.id ? setOpenId(null) : open(monster))}

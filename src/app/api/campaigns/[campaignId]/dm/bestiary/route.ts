@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { isErrorResponse, requireDm } from "@/lib/campaign-api";
 import { getEntryDetail, searchMonsters } from "@/lib/content";
-import { parseMonster } from "@/lib/bestiary/statblock";
+import { normalizeCreatureType, parseMonster } from "@/lib/bestiary/statblock";
 import {
   checkMonsterDraft,
   draftFromCr,
@@ -53,12 +53,16 @@ export async function GET(
         name: entry.name,
         source: entry.source,
         cr: typeof entry.data.cr === "number" ? entry.data.cr : 0,
+        type: normalizeCreatureType(entry.data.type) ?? "",
       }))
     : [];
 
   return Response.json({
     monsters: listHomebrewMonsters(context.user.id),
     found,
+    // For the thumbnails: a high-rating monster draws this setting's boss
+    // plate (src/lib/placeholders.ts).
+    genre: context.campaign.gameSettings.genre,
   });
 }
 

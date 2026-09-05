@@ -3,8 +3,10 @@ import { isErrorResponse, requireDm } from "@/lib/campaign-api";
 import { insertEncounterTemplate, listEncounterTemplates } from "@/lib/db/encounter-templates";
 import {
   checkRoster,
+  normalizeTemplateExtras,
   normalizeTemplateMap,
   parseRoster,
+  rosterSize,
   TEMPLATE_HINT_MAX,
   TEMPLATE_NAME_MAX,
   TEMPLATE_NOTES_MAX,
@@ -26,6 +28,9 @@ const bodySchema = z.object({
   battlefield: z.string().trim().max(TEMPLATE_HINT_MAX).default(""),
   notes: z.string().trim().max(TEMPLATE_NOTES_MAX).default(""),
   map: z.unknown().optional(),
+  // Placements, hidden slots, overrides, rewards and phases, cleaned
+  // against the roster by the pure normalizer.
+  extras: z.unknown().optional(),
 });
 
 // Each template carries its difficulty readout, computed fresh: the party
@@ -88,6 +93,7 @@ export async function POST(
     battlefield: parsed.data.battlefield,
     map,
     notes: parsed.data.notes,
+    extras: normalizeTemplateExtras(parsed.data.extras, rosterSize(roster.rows)),
     createdByUserId: context.user.id,
   });
   return Response.json(

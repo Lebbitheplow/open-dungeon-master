@@ -5,6 +5,7 @@ import Link from "next/link";
 import { type FormEvent, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { IconChip, ui } from "@/lib/ui";
+import { workshopPlaceholder } from "@/lib/placeholders";
 import { AppHeader } from "@/components/AppHeader";
 import { DEFAULT_TARGET_PARTY } from "@/lib/workshop/kind";
 import { ImportBundleButton } from "@/app/workshop/ImportBundleButton";
@@ -220,7 +221,13 @@ export default function WorkshopListPage() {
                   "aspect-[5/4] w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40",
                 )}
               >
-                <IconChip icon={Hammer} size="size-10" iconSize="size-5" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={workshopPlaceholder("workshop")}
+                  alt=""
+                  loading="lazy"
+                  className="aspect-video w-full rounded-lg border border-amber-400/20 object-cover"
+                />
                 <span className="line-clamp-2 font-display text-[13px] font-semibold uppercase tracking-[0.12em] text-stone-200">
                   {workshop.title}
                 </span>

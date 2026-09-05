@@ -11,6 +11,7 @@ import {
   type MonsterReadout,
 } from "@/lib/bestiary/monster-draft";
 import { CONDITIONS, DAMAGE_TYPES } from "@/lib/bestiary/kit";
+import { CREATURE_TYPES, creatureTypeOf } from "@/lib/bestiary/statblock";
 import { SpeedPicker, TermPicker } from "@/app/campaigns/[campaignId]/MonsterKitFields";
 import { crLabel, type CrPart } from "@/lib/bestiary/derive-cr";
 
@@ -273,6 +274,23 @@ export function SizeAndDefences({
             {SIZES.map((size) => (
               <option key={size} value={size}>
                 {size}
+              </option>
+            ))}
+          </select>
+        </label>
+        {/* What it is, in the SRD's fourteen words. This is also the
+            thumbnail: every list the monster appears in draws the plate for
+            its type until somebody paints it a portrait. */}
+        <label className="flex flex-col gap-0.5">
+          <span className="text-[10px] uppercase tracking-wide text-stone-500">Type</span>
+          <select
+            value={creatureTypeOf(draft.stats)}
+            onChange={(event) => set({ type: event.target.value })}
+            className={cn(input, "w-32 capitalize")}
+          >
+            {CREATURE_TYPES.map((type) => (
+              <option key={type} value={type} className="capitalize">
+                {type}
               </option>
             ))}
           </select>

@@ -1,6 +1,16 @@
 "use client";
 
-import { Camera, Copy, FileDown, FileJson, Hammer, Loader2, Swords } from "lucide-react";
+import {
+  Camera,
+  Copy,
+  FileDown,
+  FileJson,
+  Hammer,
+  ImageOff,
+  Loader2,
+  Sparkles,
+  Swords,
+} from "lucide-react";
 import Link from "next/link";
 import { use, useEffect, useRef, useState } from "react";
 import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
@@ -11,7 +21,8 @@ import { downloadBlob, filenameSlug } from "@/lib/download";
 import { libraryToPdfCharacter } from "@/lib/pdf/character-sheet-pdf";
 import { downloadCharacterSheetPdf } from "@/lib/pdf/download";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
-import { PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
+import { CharacterPortrait, ui } from "@/lib/ui";
+import { offersImages, useCapabilities } from "@/lib/use-capabilities";
 import { SheetSections, StorySoFar, type CharacterEvent } from "./SheetSections";
 
 // Where this character is playing; see src/lib/db/characters.ts.
@@ -59,6 +70,10 @@ export default function CharacterDetailPage({
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
   const [cropping, setCropping] = useState(false);
+  const [painting, setPainting] = useState(false);
+  const [portraitError, setPortraitError] = useState("");
+  // "Paint one" only where the server has an image model to paint with.
+  const canPaint = offersImages(useCapabilities());
   const pollCount = useRef(0);
 
   async function handleDownloadPdf() {
@@ -115,6 +130,46 @@ export default function CharacterDetailPage({
           ? { ...current, portraitStatus: null, sheet: { ...current.sheet, portrait } }
           : current,
       );
+    }
+  }
+
+  // The third choice beside upload and paint: no picture at all, which shows
+  // the stand-in plate for the class or race (src/lib/placeholders.ts).
+  async function clearToPlaceholder() {
+    setPortraitError("");
+    const response = await fetch(`/api/characters/${characterId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ portrait: null }),
+    });
+    if (response.ok) {
+      setCharacter((current) =>
+        current
+          ? { ...current, portraitStatus: null, sheet: { ...current.sheet, portrait: null } }
+          : current,
+      );
+    }
+  }
+
+  // Queues a fresh render; the poll that watches creation renders picks up
+  // the result the same way.
+  async function paintPortrait() {
+    setPortraitError("");
+    setPainting(true);
+    try {
+      const response = await fetch(`/api/characters/${characterId}/portrait`, { method: "POST" });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string };
+        setPortraitError(data.error ?? "Could not queue the portrait.");
+        return;
+      }
+      setCharacter((current) =>
+        current
+          ? { ...current, portraitStatus: "queued", sheet: { ...current.sheet, portrait: null } }
+          : current,
+      );
+    } finally {
+      setPainting(false);
     }
   }
 
@@ -214,7 +269,13 @@ export default function CharacterDetailPage({
               <Loader2 className="size-5 animate-spin text-amber-200" />
             </span>
           ) : (
-            <PixelTile src={PIXEL_ICONS.characters} size="size-20 sm:size-24" />
+            <CharacterPortrait
+              look={{ race: character.race, class: character.class, gender: sheet.gender }}
+              alt={character.name}
+              size="size-20 sm:size-24"
+              rounded="rounded-xl"
+              className="border-amber-500/30 shadow-glow-gold"
+            />
           )}
           <div className="min-w-0 flex-1">
             <h1 className="font-display text-2xl tracking-wide text-amber-50 sm:text-3xl">
@@ -296,8 +357,30 @@ export default function CharacterDetailPage({
           >
             <Camera className="size-4" /> {sheet.portrait ? "Replace portrait" : "Upload portrait"}
           </button>
+          {canPaint ? (
+            <button
+              type="button"
+              onClick={() => void paintPortrait()}
+              disabled={painting || portraitPending}
+              className={ui.btnSmall}
+              title="Paint a new portrait on this server's image model"
+            >
+              <Sparkles className="size-4" /> {portraitPending ? "Painting..." : "Paint one"}
+            </button>
+          ) : null}
+          {sheet.portrait ? (
+            <button
+              type="button"
+              onClick={() => void clearToPlaceholder()}
+              className={ui.btnSmall}
+              title="Take the picture away and show the stand-in for this class or race"
+            >
+              <ImageOff className="size-4" /> Use placeholder
+            </button>
+          ) : null}
         </div>
         {exportError ? <p className="mt-2 text-sm text-red-400">{exportError}</p> : null}
+        {portraitError ? <p className="mt-2 text-sm text-red-400">{portraitError}</p> : null}
       </header>
 
       <SheetSections sheet={sheet} />

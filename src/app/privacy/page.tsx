@@ -218,10 +218,38 @@ export default function PrivacyPage() {
         </p>
       </PageSection>
 
-      <PageSection heading="Contact">
-        <p className="text-sm leading-6 text-stone-400">
-          There is no company, support address, or email behind this project. For questions,
-          reports, or concerns, please open an issue in the project repository:
+      <PageSection heading="Developer and contact">
+        <ul className="list-disc space-y-1 pl-5 text-sm leading-6 text-stone-400">
+          <li>
+            <span className="text-stone-200">Developer:</span> lebbi, publishing as Open Dungeon
+            Master. An independent open source project, MIT licensed.
+          </li>
+          <li>
+            <span className="text-stone-200">Privacy contact:</span>{" "}
+            <a
+              href="mailto:lebbitheplow@proton.me"
+              className="text-amber-200 hover:text-amber-400"
+            >
+              lebbitheplow@proton.me
+            </a>
+          </li>
+          <li>
+            <span className="text-stone-200">Canonical policy:</span>{" "}
+            <a
+              href="https://opendungeonmaster.com/privacy/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-amber-200 hover:text-amber-400"
+            >
+              opendungeonmaster.com/privacy
+            </a>
+            , which also covers the desktop and Android apps.
+          </li>
+        </ul>
+        <p className="mt-3 text-sm leading-6 text-stone-400">
+          Questions about the data on <em>this</em> server go to its operator, who holds it.
+          Questions about the software, or a privacy request the operator cannot answer, go to
+          the address above or the project repository:
         </p>
         <p className="mt-2 text-sm leading-6">
           <a

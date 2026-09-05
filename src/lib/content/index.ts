@@ -1,5 +1,6 @@
 import { getContentDb } from "@/lib/content/db";
 import { listHomebrew } from "@/lib/db/homebrew";
+import { normalizeSpellMech } from "@/lib/homebrew/gear";
 import type { HomebrewKind } from "@/lib/schemas/homebrew";
 import { scaledSpellDice } from "@/lib/srd/spell-scaling";
 import {
@@ -422,7 +423,10 @@ export function spellMechanicsFor(input: {
 }): ResolvedSpellMech | null {
   const entry = findSpellByName(input.spell, input.userId);
   if (entry) {
+    // A homebrew spell may carry its own block (src/lib/homebrew/gear.ts),
+    // which beats parsing its prose; the prose is still parsed for damage.
     const mech =
+      (entry.source === "homebrew" ? normalizeSpellMech(entry.data.mech) : null) ??
       spellMechFor([entry.name, ...entry.aliases, input.spell]) ??
       parseSpellMech({
         desc: String(entry.data.desc ?? ""),

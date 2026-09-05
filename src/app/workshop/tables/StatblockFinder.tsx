@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Dices } from "lucide-react";
-import { ui } from "@/lib/ui";
+import { MonsterTile, ui } from "@/lib/ui";
 
 // Monster lookup: the campaign's own genre catalog, then the exact numbers
 // start_encounter would spawn. A CR with no match falls back to the DMG's
@@ -15,7 +15,7 @@ import { ui } from "@/lib/ui";
 export const inputClass =
   "w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1.5 text-sm text-stone-100 placeholder:text-stone-600 focus:border-amber-700 focus:outline-none";
 
-type StatblockMatch = { slug: string; name: string; cr: number; blurb: string };
+type StatblockMatch = { slug: string; name: string; cr: number; type: string; blurb: string };
 
 export function StatblockFinder({
   campaignId,
@@ -26,6 +26,8 @@ export function StatblockFinder({
 }) {
   const [query, setQuery] = useState("");
   const [matches, setMatches] = useState<StatblockMatch[]>([]);
+  // The table's setting, for the boss plate on high-rating matches.
+  const [genre, setGenre] = useState("");
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
   const [busy, setBusy] = useState(false);
   // Closed by default in the workshop: the tables are what the DM came for,
@@ -43,6 +45,7 @@ export function StatblockFinder({
       });
       const data = await response.json().catch(() => ({}));
       setMatches(data.matches ?? []);
+      setGenre(typeof data.genre === "string" ? data.genre : "");
     } finally {
       setBusy(false);
     }
@@ -92,8 +95,15 @@ export function StatblockFinder({
               <button
                 type="button"
                 onClick={() => openStatblock(match.slug)}
-                className="w-full rounded-md border border-stone-800 px-2 py-1 text-left hover:border-stone-700"
+                className="flex w-full items-center gap-2 rounded-md border border-stone-800 px-2 py-1 text-left hover:border-stone-700"
               >
+                <MonsterTile
+                  type={match.type}
+                  cr={match.cr}
+                  genre={genre}
+                  seed={match.slug}
+                  size="size-7"
+                />
                 <span className="text-xs text-stone-200">
                   {match.name}
                   <span className="ml-1.5 text-stone-500">CR {match.cr}</span>

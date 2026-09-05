@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { homebrewGearSchema } from "@/lib/schemas/homebrew";
 
 export const ABILITIES = ["str", "dex", "con", "int", "wis", "cha"] as const;
 export type Ability = (typeof ABILITIES)[number];
@@ -96,6 +97,11 @@ export const equipmentItemSchema = z.object({
   // the secret was never written to the sheet. The DM's reveal action renames
   // the row and flips this flag in one step.
   identified: z.boolean().optional(),
+  // A homebrew item's mechanics, snapshotted from the entry so the armour,
+  // attack and magic-item engines read it exactly as they read SRD gear
+  // (src/lib/homebrew/gear.ts). Refreshed on every sheet read; absent for
+  // anything that is not homebrew.
+  gear: homebrewGearSchema.optional(),
 });
 export type EquipmentItem = z.infer<typeof equipmentItemSchema>;
 
@@ -435,6 +441,9 @@ export type CharacterSheet = {
   subclass: string;
   background: string;
   alignment: string;
+  // Free text from the builder ("she/her", "male", ""). Read only by the
+  // portrait prompt and the placeholder resolver.
+  gender: string;
   level: number;
   xp: number;
   abilities: AbilityScores;

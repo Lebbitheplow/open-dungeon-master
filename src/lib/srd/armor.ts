@@ -122,7 +122,10 @@ export const ATTUNEMENT_SLOTS = 3;
 
 // ---- AC derivation ----
 
-export type WornItem = { name: string; equipped?: boolean };
+// `gear` is a homebrew item's snapshotted mechanics (src/lib/homebrew/
+// gear.ts): an armour written in the workshop is read here exactly as an
+// SRD one, and the name lookup is only the fallback.
+export type WornItem = { name: string; equipped?: boolean; gear?: { armor?: SrdArmor } };
 
 // An alternative base-AC formula a class feature provides while wearing no
 // armor: Unarmored Defense (barbarian 10 + DEX + CON, monk 10 + DEX + WIS),
@@ -218,7 +221,7 @@ export function computeArmorClass(input: {
   let armorItem: { item: WornItem; armor: SrdArmor } | null = null;
   let shieldItem: { item: WornItem; armor: SrdArmor } | null = null;
   for (const item of worn) {
-    const armor = matchArmor(item.name);
+    const armor = item.gear?.armor ?? matchArmor(item.name);
     if (!armor) {
       continue;
     }

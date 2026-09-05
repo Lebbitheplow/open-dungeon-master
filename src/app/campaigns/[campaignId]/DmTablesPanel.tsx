@@ -44,6 +44,8 @@ export function DmTablesPanel({
   // has.
   const [editingId, setEditingId] = useState("");
   const [editorOpen, setEditorOpen] = useState(false);
+  // Draw without replacement: a rumour heard once is not heard again.
+  const [noReplacement, setNoReplacement] = useState(false);
   // Drafting rows is the story model's job; a server without one offers the
   // paste box alone.
   const canDraft = offersStoryModel(useCapabilities());
@@ -115,7 +117,7 @@ export function DmTablesPanel({
         {
           method: editingId ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: name.trim(), text }),
+          body: JSON.stringify({ name: name.trim(), text, noReplacement }),
         },
       );
       if (!response.ok) {
@@ -126,6 +128,7 @@ export function DmTablesPanel({
       setName("");
       setText("");
       setPrompt("");
+      setNoReplacement(false);
       setEditingId("");
       setEditorOpen(false);
       await load();
@@ -156,10 +159,38 @@ export function DmTablesPanel({
       setResult({
         tableId: table.id,
         total: data.total,
-        text: data.entry?.text ?? "Nothing. That result is not on the table.",
+        text: data.final?.text ?? data.entry?.text ?? "Nothing. That result is not on the table.",
+        chain: Array.isArray(data.chain) && data.chain.length > 1 ? data.chain : [],
+        remaining: typeof data.remaining === "number" ? data.remaining : null,
       });
+      // A no-replacement draw changed the table's memory; the rows show it.
+      if (typeof data.remaining === "number") {
+        await load();
+      }
     } catch {
       setError("Could not reach the server.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  // Forget every result dealt so far, so the deck is whole again.
+  async function reset(table: RollTable) {
+    setBusy(table.id);
+    setError("");
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/dm/roll-tables/${table.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reset: true }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        setError(data.error || "Could not reset that.");
+        return;
+      }
+      setResult(null);
+      await load();
     } finally {
       setBusy("");
     }
@@ -217,11 +248,13 @@ export function DmTablesPanel({
       setEditingId(table.id);
       setName(table.name);
       setText(formatRollTable(table.entries));
+      setNoReplacement(table.noReplacement);
       setPrompt("");
     } else if (editingId) {
       setEditingId("");
       setName("");
       setText("");
+      setNoReplacement(false);
       setPrompt("");
     }
     setEditorOpen(true);
@@ -281,6 +314,30 @@ export function DmTablesPanel({
             : ""}
         </p>
       ) : null}
+      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-1.5 text-[11px] text-stone-400">
+          <input
+            type="checkbox"
+            checked={noReplacement}
+            onChange={(event) => setNoReplacement(event.target.checked)}
+            className="accent-amber-500"
+          />
+          Draw without replacement
+        </label>
+        {editing?.noReplacement && editing.drawn.length ? (
+          <button
+            type="button"
+            onClick={() => void reset(editing)}
+            className="rounded-md border border-stone-700 px-2 py-0.5 text-[11px] text-stone-400 hover:text-amber-100"
+          >
+            Reset ({editing.drawn.length} dealt)
+          </button>
+        ) : null}
+      </div>
+      <p className="mt-1 text-[10px] text-stone-600">
+        Bare rows can carry a weight (x3 A goblin patrol). A row can be a thing: @table: Gems rolls
+        that table too; @monster: wolf, @item: Potion of Healing, @npc: Marla name what they are.
+      </p>
       {error ? <p className="mt-1 text-xs text-red-400">{error}</p> : null}
       <button
         type="button"
@@ -379,9 +436,16 @@ export function DmTablesPanel({
                   </span>
                 </div>
                 {result?.tableId === table.id ? (
-                  <p className="mt-1 text-xs text-stone-300">
-                    <span className="text-amber-200">{result.total}:</span> {result.text}
-                  </p>
+                  <div className="mt-1 text-xs text-stone-300">
+                    <p>
+                      <span className="text-amber-200">{result.total}:</span> {result.text}
+                    </p>
+                    {result.chain.map((line, index) => (
+                      <p key={index} className="text-[11px] text-stone-500">
+                        {line}
+                      </p>
+                    ))}
+                  </div>
                 ) : null}
               </li>
             ))}

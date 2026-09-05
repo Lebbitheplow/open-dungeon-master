@@ -2,7 +2,7 @@
 
 import { Copy, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { ui } from "@/lib/ui";
+import { MonsterTile, ui } from "@/lib/ui";
 import { crLabel } from "@/lib/bestiary/derive-cr";
 import { RatingLine } from "@/app/campaigns/[campaignId]/MonsterFields";
 import type { Monster } from "@/app/workshop/bestiary/types";
@@ -24,12 +24,15 @@ function signed(value: number): string {
 export function MonsterRows({
   monsters,
   busy,
+  genre,
   onOpen,
   onDuplicate,
   onDelete,
 }: {
   monsters: Monster[];
   busy: boolean;
+  // The table's setting, so a high-rating monster draws the boss plate.
+  genre?: string | null;
   onOpen: (monster: Monster) => void;
   onDuplicate: (monster: Monster) => void;
   onDelete: (monster: Monster) => void;
@@ -48,6 +51,13 @@ export function MonsterRows({
         const swings = stats.attacksPerTurn ?? 1;
         return (
           <li key={monster.id} className={cn(ui.cardHover, "flex items-start gap-3 p-3")}>
+            <MonsterTile
+              type={stats.type}
+              cr={stats.cr}
+              genre={genre}
+              seed={monster.draft.name}
+              size="size-12"
+            />
             <button
               type="button"
               onClick={() => onOpen(monster)}

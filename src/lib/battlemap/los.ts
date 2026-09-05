@@ -8,6 +8,7 @@ import {
   type BattleToken,
   type MapLight,
 } from "@/lib/battlemap/types";
+import { ambientAt, type LightZone } from "@/lib/battlemap/scene";
 
 // Field of view via recursive shadowcasting over 8 octants (the classic
 // Bjorn Bergstrom algorithm). Walls are opaque; a blocking tile is itself
@@ -147,6 +148,9 @@ export type MapForVision = {
   width: number;
   height: number;
   ambient: AmbientLight;
+  // Patches where the light is not the map's own: a lit shrine in a dark
+  // crypt, a dark alcove in a bright hall (src/lib/battlemap/scene.ts).
+  zones?: LightZone[];
 };
 
 // How far a viewer can perceive unlit tiles under dim ambient light: dim
@@ -189,16 +193,25 @@ export function visibleTiles(
 ): Set<number> {
   const maxRadius = Math.max(map.width, map.height);
   const los = computeFov(map.terrain, map.width, map.height, viewer.x, viewer.y, maxRadius);
-  if (map.ambient === "bright") {
+  const zones = map.zones ?? [];
+  if (map.ambient === "bright" && !zones.length) {
     return los;
   }
   const lit = precomputedLit ?? litTiles(map, tokens, lights);
   const visible = new Set<number>();
-  const selfRadius = map.ambient === "dim" ? DIM_SELF_RADIUS : 0;
   for (const idx of los) {
     const x = idx % map.width;
     const y = Math.floor(idx / map.width);
+    // The light on THIS tile decides whether it can be seen, so a dark
+    // alcove stays dark inside a bright hall and a lit shrine shows in a
+    // dark crypt.
+    const ambient = zones.length ? ambientAt(zones, x, y, map.ambient) : map.ambient;
+    if (ambient === "bright") {
+      visible.add(idx);
+      continue;
+    }
     const distance = chebyshev(viewer.x, viewer.y, x, y);
+    const selfRadius = ambient === "dim" ? DIM_SELF_RADIUS : 0;
     if (
       lit.has(idx) ||
       distance <= viewer.darkvisionTiles ||

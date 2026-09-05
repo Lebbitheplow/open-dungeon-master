@@ -64,3 +64,24 @@ export async function POST(
   void enqueueLocationMap(context.campaign, locationId);
   return Response.json({ ok: true }, { status: 202 });
 }
+
+// The third choice beside upload and redraw: no map at all, which shows the
+// stand-in plate for the kind of place it is. The same event carries the
+// change so every open panel drops the picture together.
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ campaignId: string; locationId: string }> },
+) {
+  const { campaignId, locationId } = await params;
+  const context = await requireStoryAuthority(campaignId);
+  if (isErrorResponse(context)) {
+    return context;
+  }
+  const location = getLocation(locationId);
+  if (!location || location.campaignId !== campaignId) {
+    return Response.json({ error: "Location not found." }, { status: 404 });
+  }
+  setLocationMap(locationId, null);
+  publishPersisted(campaignId, "location_map_ready", { locationId, image: null });
+  return Response.json({ ok: true });
+}

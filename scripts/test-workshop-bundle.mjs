@@ -17,11 +17,13 @@ import { register } from "node:module";
 register("./lib/register-alias.mjs", import.meta.url);
 
 const {
+  BUNDLE_KINDS,
   BUNDLE_LIMITS,
   bundleCounts,
   bundleTotal,
   bundleWarnings,
   MAX_BUNDLE_BYTES,
+  pickBundleKinds,
   readBundle,
   resolveEdges,
   workshopBundleSchema,
@@ -160,10 +162,64 @@ function rowFor(kind, index) {
       return { name: `Map ${index}`, width: 10, height: 10 };
     case "storyboard":
       return { kind: "event", title: `Beat ${index}` };
+    case "pregens":
+      return { name: `Pregen ${index}`, level: 1, sheet: pregenSheet(`Pregen ${index}`) };
     default:
       return { name: `Monster ${index}`, stats: {} };
   }
 }
+
+// The least a sheet can be and still pass the builder's schema.
+function pregenSheet(name) {
+  return {
+    name,
+    race: "human",
+    class: "fighter",
+    abilities: { str: 16, dex: 12, con: 14, int: 10, wis: 10, cha: 10 },
+    maxHp: 12,
+    ac: 16,
+    hitDice: { die: "d10", total: 1, spent: 0 },
+    proficiencies: { saves: ["str", "con"], skills: [], languages: [], tools: [], armor: [], weapons: [] },
+  };
+}
+
+// ---- pregens and picking kinds (docs/workshop-parity-audit.md phase 15) ----
+
+test("a pregen is a whole sheet, checked like one the builder submits", () => {
+  const result = read({ pregens: [{ name: "Brannoc", level: 3, sheet: pregenSheet("Brannoc") }] });
+  assert.ok("bundle" in result);
+  assert.equal(result.bundle.pregens[0].role, "pc");
+  assert.equal(result.bundle.pregens[0].sheet.class, "fighter");
+  // A sheet the builder would refuse is refused here too.
+  const broken = read({ pregens: [{ name: "Nobody", level: 3, sheet: { name: "Nobody" } }] });
+  assert.ok("error" in broken);
+  // And a level past twenty is not a level.
+  assert.ok("error" in read({ pregens: [{ name: "Brannoc", level: 21, sheet: pregenSheet("Brannoc") }] }));
+});
+
+test("picking kinds empties the rest and leaves the manifest alone", () => {
+  const full = read({
+    lore: [rowFor("lore", 1)],
+    monsters: [rowFor("monsters", 1)],
+    pregens: [rowFor("pregens", 1)],
+    houseRulesText: "Flanking is on.",
+  }).bundle;
+  const picked = pickBundleKinds(full, ["monsters", "pregens"]);
+  assert.equal(picked.lore.length, 0);
+  assert.equal(picked.monsters.length, 1);
+  assert.equal(picked.pregens.length, 1);
+  assert.equal(picked.houseRulesText, "");
+  assert.equal(picked.manifest.name, full.manifest.name);
+  // "rules" is the house rules text; an unknown kind changes nothing.
+  assert.equal(pickBundleKinds(full, ["rules", "dragons"]).houseRulesText, "Flanking is on.");
+  assert.equal(pickBundleKinds(full, ["dragons"]).lore.length, 0);
+  // An empty pick is the whole bundle, so an older client imports whole.
+  assert.deepEqual(pickBundleKinds(full, []), full);
+  // Every list kind is pickable.
+  for (const kind of BUNDLE_KINDS) {
+    assert.ok(Array.isArray(full[kind]), `${kind} is not a list`);
+  }
+});
 
 test("a string past its length is refused rather than silently clipped", () => {
   const result = read({ lore: [{ category: "other", title: "x".repeat(500), body: "" }] });

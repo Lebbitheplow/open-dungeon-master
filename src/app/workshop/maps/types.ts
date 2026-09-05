@@ -1,6 +1,7 @@
 import type { MapTheme } from "@/lib/battlemap/generate";
 import type { Backdrop } from "@/lib/battlemap/backdrop";
-import type { AmbientLight } from "@/lib/battlemap/types";
+import type { DoorStates, LightZone, MapLabel, MapProp, SceneAmbience } from "@/lib/battlemap/scene";
+import type { AmbientLight, MapLight } from "@/lib/battlemap/types";
 
 // What /api/campaigns/:id/dm/maps hands the client. Shared by the map
 // library panel and the workshop's gallery pieces so a tile and the editor
@@ -25,8 +26,15 @@ export type PreparedMap = {
   terrain: string;
   ambient: AmbientLight;
   theme: MapTheme;
+  lights: MapLight[];
   seed: number;
   backdrop: Backdrop | null;
+  labels: MapLabel[];
+  props: MapProp[];
+  doors: DoorStates;
+  zones: LightZone[];
+  overlayPath: string;
+  ambience: SceneAmbience;
 };
 
 export type LibraryState = {

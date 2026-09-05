@@ -7,8 +7,10 @@ import {
 } from "@/lib/db/encounter-templates";
 import {
   checkRoster,
+  normalizeTemplateExtras,
   normalizeTemplateMap,
   parseRoster,
+  rosterSize,
   TEMPLATE_HINT_MAX,
   TEMPLATE_NAME_MAX,
   TEMPLATE_NOTES_MAX,
@@ -26,6 +28,7 @@ const patchSchema = z.object({
   battlefield: z.string().trim().max(TEMPLATE_HINT_MAX).optional(),
   notes: z.string().trim().max(TEMPLATE_NOTES_MAX).optional(),
   map: z.unknown().optional(),
+  extras: z.unknown().optional(),
 });
 
 export async function PATCH(
@@ -70,12 +73,19 @@ export async function PATCH(
       { status: 400 },
     );
   }
+  // Re-fitted to the roster either way: a roster that shrank takes the
+  // placements past its end with it.
+  const extras = normalizeTemplateExtras(
+    parsed.data.extras === undefined ? template.extras : parsed.data.extras,
+    rosterSize(enemies),
+  );
   const updated = updateEncounterTemplate(templateId, {
     name: parsed.data.name ?? template.name,
     enemies,
     battlefield: parsed.data.battlefield ?? template.battlefield,
     map,
     notes: parsed.data.notes ?? template.notes,
+    extras,
   });
   return Response.json({
     template: updated

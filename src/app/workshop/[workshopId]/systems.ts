@@ -1,6 +1,7 @@
 import {
   BookOpen,
   Dices,
+  FlaskConical,
   Globe2,
   LayoutGrid,
   type LucideIcon,
@@ -9,26 +10,30 @@ import {
   Share2,
   Skull,
   Swords,
+  UserRound,
   Users,
 } from "lucide-react";
 import type { WorkshopSummary } from "@/app/workshop/types";
 
-// The ten systems a workshop is made of, and how each one counts itself.
+// The twelve systems a workshop is made of, and how each one counts itself.
 //
 // Nine of the counts come straight off the workshop's contents map, which
-// /api/workshops/:id already serves per importable kind. The bestiary is the
-// exception: homebrew monsters are the builder's, not the workshop's, so they
-// are not an importable kind and their count is fetched from the bestiary
-// list route by the page. Rules is a yes-or-no rather than a number, and
+// /api/workshops/:id already serves per importable kind. The bestiary, the
+// homebrew shelf and the party are the exceptions: monsters, items, spells,
+// character options and pregens are the builder's, not the workshop's, so
+// they are not importable kinds and their counts are fetched from their own
+// list routes by the page. Rules is a yes-or-no rather than a number, and
 // Share has nothing to count.
 
 export const WORKSHOP_SYSTEMS = [
   { id: "storyboard", label: "Storyboard", blurb: "Plan the arc", icon: LayoutGrid },
+  { id: "party", label: "Party", blurb: "Who it is built for", icon: UserRound },
   { id: "maps", label: "Battle maps", blurb: "Rooms to fight in", icon: MapIcon },
   { id: "region", label: "Region", blurb: "The overworld map", icon: Globe2 },
   { id: "encounters", label: "Encounters", blurb: "Fights, budgeted", icon: Swords },
   { id: "cast", label: "Cast", blurb: "NPCs & agendas", icon: Users },
   { id: "bestiary", label: "Bestiary", blurb: "Homebrew monsters", icon: Skull },
+  { id: "homebrew", label: "Homebrew", blurb: "Items, spells & options", icon: FlaskConical },
   { id: "lore", label: "Lore", blurb: "World facts & places", icon: BookOpen },
   { id: "tables", label: "Tables", blurb: "Roll tables", icon: Dices },
   { id: "rules", label: "Rules", blurb: "House & variant", icon: Scale },
@@ -59,9 +64,28 @@ export function systemCount(
   id: SystemId,
   workshop: WorkshopSummary,
   bestiary: number | null,
+  homebrew: number | null = null,
+  pregens: number | null = null,
 ): SystemCount {
   const contents = workshop.contents;
   switch (id) {
+    case "party": {
+      const party = workshop.gameSettings.targetParty;
+      return {
+        figure: String(party.size),
+        phrase:
+          pregens === null
+            ? `at level ${party.level}`
+            : `at level ${party.level}, ${plural(pregens, "pregen ready", "pregens ready")}`,
+        total: pregens ?? 0,
+      };
+    }
+    case "homebrew":
+      return {
+        figure: homebrew === null ? null : String(homebrew),
+        phrase: homebrew === null ? "counting" : plural(homebrew, "piece of homebrew", "pieces of homebrew"),
+        total: homebrew ?? 0,
+      };
     case "storyboard": {
       const count = contents.storyboard;
       return {
@@ -121,9 +145,14 @@ export function systemCount(
 
 // "41 pieces of prep": every countable thing in the workshop, for the hub's
 // section heading.
-export function totalPieces(workshop: WorkshopSummary, bestiary: number | null): number {
+export function totalPieces(
+  workshop: WorkshopSummary,
+  bestiary: number | null,
+  homebrew: number | null = null,
+  pregens: number | null = null,
+): number {
   return WORKSHOP_SYSTEMS.reduce(
-    (sum, system) => sum + systemCount(system.id, workshop, bestiary).total,
+    (sum, system) => sum + systemCount(system.id, workshop, bestiary, homebrew, pregens).total,
     0,
   );
 }

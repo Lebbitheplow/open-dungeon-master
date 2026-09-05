@@ -16,8 +16,18 @@ import { BUNDLE_KIND_LABELS, MAX_BUNDLE_BYTES } from "@/lib/workshop/bundle";
 type Preview = {
   manifest: { name: string; blurb: string; author: string; inspiredBy: string; rightsHolder: string };
   counts: Record<string, number>;
+  houseRules?: boolean;
   warnings: string[];
 };
+
+// The kinds a preview offers, in the order the counts came: every kind with
+// something in it, and the house rules when the bundle carries any.
+function kindsOf(preview: Preview): string[] {
+  const kinds = Object.entries(preview.counts)
+    .filter(([, count]) => count > 0)
+    .map(([kind]) => kind);
+  return preview.houseRules ? [...kinds, "rules"] : kinds;
+}
 
 // `label` and `className` let the hub header show the same control as a
 // small "Import a bundle" action; the shelf keeps the defaults.
@@ -31,6 +41,8 @@ export function ImportBundleButton({
   const input = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
   const [preview, setPreview] = useState<Preview | null>(null);
+  // Which kinds to take. Everything the bundle offers, until unticked.
+  const [kinds, setKinds] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -65,6 +77,7 @@ export function ImportBundleButton({
       const data = await post({ text: contents, preview: true });
       setText(contents);
       setPreview(data);
+      setKinds(kindsOf(data));
     } catch (thrown) {
       setError(thrown instanceof Error ? thrown.message : "That bundle could not be read.");
     } finally {
@@ -76,7 +89,7 @@ export function ImportBundleButton({
     setBusy(true);
     setError("");
     try {
-      const data = await post({ text });
+      const data = await post({ text, kinds });
       window.location.href = `/workshop/${data.workshopId}`;
     } catch (thrown) {
       setError(thrown instanceof Error ? thrown.message : "That bundle could not be imported.");
@@ -117,17 +130,39 @@ export function ImportBundleButton({
             <p className="mt-0.5 text-xs text-stone-500">by {preview.manifest.author}</p>
           ) : null}
 
+          {/* Each kind is a tick: a DM who only wants the monsters takes the
+              monsters. Unticking every one leaves an empty workshop, which
+              the button below says out loud. */}
           <ul className="mt-3 flex flex-wrap gap-1.5">
-            {Object.entries(preview.counts)
-              .filter(([, count]) => count > 0)
-              .map(([kind, count]) => (
-                <li
-                  key={kind}
-                  className="rounded-full border border-stone-700 px-2.5 py-0.5 text-xs text-stone-400"
-                >
-                  {count} {BUNDLE_KIND_LABELS[kind] ?? kind}
+            {kindsOf(preview).map((kind) => {
+              const ticked = kinds.includes(kind);
+              return (
+                <li key={kind}>
+                  <label
+                    className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs ${
+                      ticked
+                        ? "border-amber-700 bg-amber-950/40 text-amber-100"
+                        : "border-stone-700 text-stone-500"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={ticked}
+                      onChange={(event) =>
+                        setKinds((current) =>
+                          event.target.checked
+                            ? [...current, kind]
+                            : current.filter((entry) => entry !== kind),
+                        )
+                      }
+                      className="accent-amber-500"
+                    />
+                    {kind === "rules" ? "" : `${preview.counts[kind]} `}
+                    {BUNDLE_KIND_LABELS[kind] ?? kind}
+                  </label>
                 </li>
-              ))}
+              );
+            })}
           </ul>
 
           <UnofficialPackNotice
@@ -153,7 +188,12 @@ export function ImportBundleButton({
 
           <div className="mt-3 flex gap-2">
             <button type="button" onClick={() => void confirm()} disabled={busy} className={ui.btnPrimary}>
-              {busy ? <Loader2 className="size-4 animate-spin" /> : null} Import it
+              {busy ? <Loader2 className="size-4 animate-spin" /> : null}{" "}
+              {kinds.length === 0
+                ? "Import an empty workshop"
+                : kinds.length === kindsOf(preview).length
+                  ? "Import it"
+                  : `Import ${kinds.length} of ${kindsOf(preview).length} kinds`}
             </button>
             <button
               type="button"

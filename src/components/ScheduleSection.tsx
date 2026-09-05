@@ -4,6 +4,7 @@ import { CalendarClock, Check, CircleHelp, Plus, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
+import { miscPlaceholder } from "@/lib/placeholders";
 import type { RsvpResponse, ScheduledSession } from "@/lib/db/scheduling";
 
 // The out-of-game calendar: when the humans meet next. Lives in the lobby
@@ -239,7 +240,16 @@ export function ScheduleSection({
       ) : null}
 
       {sessions.length === 0 ? (
-        <p className="text-sm text-stone-500">Nothing planned yet.</p>
+        <div className="flex items-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={miscPlaceholder("session")}
+            alt=""
+            loading="lazy"
+            className="h-12 w-20 shrink-0 rounded-lg border border-amber-400/20 object-cover"
+          />
+          <p className="text-sm text-stone-500">Nothing planned yet.</p>
+        </div>
       ) : (
         <ul className="space-y-2">
           {sessions.map((session) => {

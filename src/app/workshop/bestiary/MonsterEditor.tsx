@@ -10,10 +10,15 @@ import {
   RatingLine,
   SaveEditor,
   SizeAndDefences,
-  TraitEditor,
   Working,
 } from "@/app/campaigns/[campaignId]/MonsterFields";
 import { MonsterKitPanel } from "@/app/campaigns/[campaignId]/MonsterKitFields";
+import {
+  AbilityScores,
+  LanguagesAndHabitat,
+  SectionedTraitEditor,
+  SkillsAndSenses,
+} from "@/app/workshop/bestiary/StatBlockFields";
 import { CR_CHOICES, input } from "@/app/workshop/bestiary/types";
 
 // One built monster, open for editing: the block's numbers, the catalogue
@@ -182,13 +187,16 @@ export function MonsterEditor({
         <div className="flex flex-col gap-4 lg:grid lg:grid-cols-2 lg:gap-6">
           <div className="flex flex-col gap-3">
             {coreStats}
+            <AbilityScores draft={draft} onChange={onDraft} />
             <AttackEditor draft={draft} onChange={onDraft} />
             <SaveEditor draft={draft} onChange={onDraft} />
-            <TraitEditor draft={draft} onChange={onDraft} />
+            <SectionedTraitEditor draft={draft} onChange={onDraft} />
           </div>
           <div className="flex flex-col gap-3">
             <MonsterKitPanel draft={draft} onChange={onDraft} />
             <SizeAndDefences draft={draft} onChange={onDraft} />
+            <SkillsAndSenses draft={draft} onChange={onDraft} />
+            <LanguagesAndHabitat draft={draft} onChange={onDraft} />
             {extraDamage}
             {description}
           </div>
@@ -202,11 +210,14 @@ export function MonsterEditor({
   return (
     <div className="flex flex-col gap-3 border-t border-stone-800 p-3">
       {coreStats}
+      <AbilityScores draft={draft} onChange={onDraft} />
       <MonsterKitPanel draft={draft} onChange={onDraft} />
       <AttackEditor draft={draft} onChange={onDraft} />
       <SaveEditor draft={draft} onChange={onDraft} />
-      <TraitEditor draft={draft} onChange={onDraft} />
+      <SectionedTraitEditor draft={draft} onChange={onDraft} />
       <SizeAndDefences draft={draft} onChange={onDraft} />
+      <SkillsAndSenses draft={draft} onChange={onDraft} />
+      <LanguagesAndHabitat draft={draft} onChange={onDraft} />
       {extraDamage}
       {description}
       {rating}

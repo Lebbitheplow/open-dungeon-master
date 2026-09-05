@@ -2,11 +2,13 @@ import { isValidExpression } from "@/lib/dice";
 import { xpForCr } from "@/lib/srd/encounter-math";
 import { synthesizeStats } from "@/lib/bestiary/synthesize";
 import { crLabel, deriveCr, expectedFor, type DerivedCr } from "@/lib/bestiary/derive-cr";
-import type {
-  EnemyAttack,
-  EnemySaveMods,
-  EnemyStats,
-  SaveAbility,
+import {
+  creatureTypeOf,
+  normalizeCreatureType,
+  type EnemyAttack,
+  type EnemySaveMods,
+  type EnemyStats,
+  type SaveAbility,
 } from "@/lib/bestiary/statblock";
 
 // The monster a person writes, and the rules for turning it into the stat
@@ -134,6 +136,9 @@ export function checkMonsterDraft(raw: unknown): DraftCheck {
 
   const cr = Math.min(30, Math.max(0, Number(source.cr) || 0));
   const size = SIZES.find((option) => option === text(source.size, 20)) ?? "Medium";
+  // Rows stored before the field existed read as monstrosity, the plate
+  // that claims the least, until somebody picks.
+  const type = normalizeCreatureType(source.type) ?? "monstrosity";
   const stats: EnemyStats = {
     ac: clamp(source.ac, 1, 30, 12),
     maxHp: clamp(source.maxHp, 1, 1000, 10),
@@ -155,6 +160,8 @@ export function checkMonsterDraft(raw: unknown): DraftCheck {
     xp: xpForCr(cr),
     attacksPerTurn: clamp(source.attacksPerTurn, 1, 3, 1),
     size,
+    type,
+    ...normalizeBlockExtras(source),
   };
 
   return {
@@ -166,6 +173,74 @@ export function checkMonsterDraft(raw: unknown): DraftCheck {
   };
 }
 
+// The printed half of the block (docs/workshop-parity-audit.md phase 12):
+// each field kept only when it says something, so a block that never had
+// scores does not grow six tens.
+function normalizeBlockExtras(
+  source: Record<string, unknown>,
+): Pick<EnemyStats, "abilities" | "skills" | "senses" | "languages" | "alignment" | "spells" | "environment"> {
+  const out: ReturnType<typeof normalizeBlockExtras> = {};
+  const rawAbilities = (source.abilities ?? {}) as Partial<Record<SaveAbility, unknown>>;
+  const abilities: Partial<Record<SaveAbility, number>> = {};
+  for (const ability of SAVE_ABILITIES) {
+    const value = rawAbilities[ability];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      abilities[ability] = clamp(value, 1, 30, 10);
+    }
+  }
+  if (Object.keys(abilities).length) {
+    out.abilities = abilities;
+  }
+  const rawSkills = source.skills;
+  if (rawSkills && typeof rawSkills === "object" && !Array.isArray(rawSkills)) {
+    const skills: Record<string, number> = {};
+    for (const [name, bonus] of Object.entries(rawSkills as Record<string, unknown>).slice(0, 18)) {
+      const key = text(name, 30).toLowerCase();
+      if (key && typeof bonus === "number" && Number.isFinite(bonus)) {
+        skills[key] = clamp(bonus, -5, 20, 0);
+      }
+    }
+    if (Object.keys(skills).length) {
+      out.skills = skills;
+    }
+  }
+  const rawSenses = (source.senses ?? {}) as Record<string, unknown>;
+  const senses: NonNullable<EnemyStats["senses"]> = {};
+  for (const sense of ["darkvision", "blindsight", "tremorsense", "truesight"] as const) {
+    const value = rawSenses[sense];
+    if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+      senses[sense] = clamp(value, 5, 600, 60);
+    }
+  }
+  if (typeof rawSenses.passivePerception === "number" && Number.isFinite(rawSenses.passivePerception)) {
+    senses.passivePerception = clamp(rawSenses.passivePerception, 1, 40, 10);
+  }
+  if (Object.keys(senses).length) {
+    out.senses = senses;
+  }
+  const languages = text(source.languages, 200);
+  if (languages) {
+    out.languages = languages;
+  }
+  const alignment = text(source.alignment, 40);
+  if (alignment) {
+    out.alignment = alignment;
+  }
+  if (Array.isArray(source.spells)) {
+    const spells = [...new Set(source.spells.map((spell) => text(spell, 60)).filter(Boolean))].slice(0, 30);
+    if (spells.length) {
+      out.spells = spells;
+    }
+  }
+  if (Array.isArray(source.environment)) {
+    const environment = [...new Set(source.environment.map((entry) => text(entry, 30).toLowerCase()).filter(Boolean))].slice(0, 11);
+    if (environment.length) {
+      out.environment = environment;
+    }
+  }
+  return out;
+}
+
 // ---- where a draft starts ----
 
 // From a challenge rating: the DMG baseline the AI DM already uses for
@@ -174,7 +249,7 @@ export function checkMonsterDraft(raw: unknown): DraftCheck {
 export function draftFromCr(name: string, cr: number): MonsterDraft {
   return {
     name,
-    stats: { ...synthesizeStats(cr), size: "Medium" },
+    stats: { ...synthesizeStats(cr), size: "Medium", type: "monstrosity" },
     extraDamagePerRound: 0,
   };
 }
@@ -185,7 +260,7 @@ export function draftFromCr(name: string, cr: number): MonsterDraft {
 export function draftFromStats(name: string, stats: EnemyStats): MonsterDraft {
   return {
     name,
-    stats: { ...stats, size: stats.size ?? "Medium" },
+    stats: { ...stats, size: stats.size ?? "Medium", type: creatureTypeOf(stats) },
     extraDamagePerRound: 0,
   };
 }

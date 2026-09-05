@@ -4,6 +4,10 @@ import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { createCampaign, getCampaignById } from "@/lib/db/campaigns";
 import { getHouseRulesText, setHouseRules } from "@/lib/db/rules";
 import { createHomebrewMonster, listHomebrewMonsters } from "@/lib/bestiary/homebrew-monsters";
+import { createHomebrew, listHomebrew } from "@/lib/db/homebrew";
+import { createCharacter } from "@/lib/db/characters";
+import { createSheetSchema } from "@/lib/schemas/sheet";
+import { normalizeHomebrewData } from "@/lib/homebrew/gear";
 import { draftFromData } from "@/lib/bestiary/monster-draft";
 import { isUploadedImagePath } from "@/lib/uploads";
 import {
@@ -109,13 +113,15 @@ export function exportWorkshopBundle(
     houseRulesText: getHouseRulesText(workshopId),
     variantRules: { ...campaign.gameSettings.variantRules },
     lore: allRows(
-      `SELECT category, title, body, tags_json FROM lore_entries WHERE campaign_id = ? ORDER BY created_at`,
+      `SELECT category, title, body, tags_json, visibility, image_path FROM lore_entries WHERE campaign_id = ? ORDER BY created_at`,
       workshopId,
     ).map((row) => ({
       category: str(row.category, "other"),
       title: str(row.title),
       body: str(row.body),
       tags: parseJson<string[]>(str(row.tags_json, "[]"), []),
+      visibility: str(row.visibility) === "dm" ? ("dm" as const) : ("party" as const),
+      image: loadImage(row.image_path, budget),
     })),
     locations: allRows(
       `SELECT name, layout_description, connections_json FROM locations WHERE campaign_id = ? ORDER BY created_at`,
@@ -126,7 +132,7 @@ export function exportWorkshopBundle(
       connections: parseJson<string[]>(str(row.connections_json, "[]"), []),
     })),
     npcs: allRows(
-      `SELECT name, attitude, trait, location, aliases_json, personality_json, goals_json, relations_json, portrait_url
+      `SELECT name, attitude, trait, location, role, aliases_json, personality_json, goals_json, relations_json, portrait_url
          FROM npcs WHERE campaign_id = ? AND archived = 0 ORDER BY name COLLATE NOCASE`,
       workshopId,
     ).map((row) => ({
@@ -138,6 +144,7 @@ export function exportWorkshopBundle(
         : "indifferent",
       trait: str(row.trait),
       location: str(row.location),
+      role: str(row.role),
       aliases: parseJson<string[]>(str(row.aliases_json, "[]"), []),
       personality: str(row.personality_json),
       goals: str(row.goals_json),
@@ -193,6 +200,39 @@ export function exportWorkshopBundle(
       stats: entry.draft.stats,
       extraDamagePerRound: entry.draft.extraDamagePerRound,
     })),
+    // The rest of the homebrew shelf, same reasoning as the monsters: a
+    // prepared encounter or a pregen that names a hand-built item should
+    // find it on the other side.
+    homebrew: listHomebrew(campaign.ownerUserId)
+      .filter((entry) => entry.kind !== "monster")
+      .map((entry) => ({
+        kind: entry.kind as Exclude<typeof entry.kind, "monster">,
+        name: entry.name,
+        data: entry.data,
+      })),
+    // The owner's library characters filed under this workshop. Each sheet
+    // is checked against the builder's schema on the way OUT as well, so
+    // one old sheet the schema no longer accepts drops out of the bundle
+    // rather than making the whole bundle unreadable on the other side.
+    pregens: allRows(
+      `SELECT name, level, role, sheet_json FROM library_characters
+       WHERE workshop_id = ? AND user_id = ? ORDER BY name COLLATE NOCASE`,
+      workshopId,
+      campaign.ownerUserId,
+    ).flatMap((row) => {
+      const sheet = createSheetSchema.safeParse(parseJson<unknown>(str(row.sheet_json, "{}"), {}));
+      if (!sheet.success) {
+        return [];
+      }
+      return [
+        {
+          name: str(row.name),
+          level: Math.min(20, Math.max(1, Number(row.level) || 1)),
+          role: str(row.role) === "companion" ? ("companion" as const) : ("pc" as const),
+          sheet: sheet.data,
+        },
+      ];
+    }),
   };
 
   // The board last, because its arrows have to become indexes into the
@@ -249,6 +289,7 @@ export function importWorkshopBundle(
   mkdirSync(uploadDir, { recursive: true });
   const npcPortraits = bundle.npcs.map((npc) => saveBundleImage(npc.portrait, uploadDir));
   const mapBackdrops = bundle.maps.map((map) => saveBundleImage(map.backdrop, uploadDir));
+  const loreImages = bundle.lore.map((entry) => saveBundleImage(entry.image, uploadDir));
 
   const workshop = createCampaign(userId, {
     title: bundle.manifest.name,
@@ -272,10 +313,10 @@ export function importWorkshopBundle(
   let copied = 0;
 
   db.transaction(() => {
-    for (const entry of bundle.lore) {
+    bundle.lore.forEach((entry, index) => {
       db.prepare(
-        `INSERT INTO lore_entries (id, campaign_id, category, title, body, tags_json, pinned, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+        `INSERT INTO lore_entries (id, campaign_id, category, title, body, tags_json, pinned, visibility, image_path, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
       ).run(
         crypto.randomUUID(),
         workshop.id,
@@ -283,11 +324,13 @@ export function importWorkshopBundle(
         entry.title,
         entry.body,
         JSON.stringify(entry.tags),
+        entry.visibility,
+        loreImages[index],
         now,
         now,
       );
       copied += 1;
-    }
+    });
 
     // Locations carry a UNIQUE (campaign_id, name COLLATE NOCASE), and a
     // bundle written by hand can hold two rows with the same name. A fresh
@@ -319,10 +362,10 @@ export function importWorkshopBundle(
     for (const [index, npc] of bundle.npcs.entries()) {
       db.prepare(
         `INSERT INTO npcs
-           (id, campaign_id, name, attitude, trait, location, last_shift_turn,
+           (id, campaign_id, name, attitude, trait, location, role, last_shift_turn,
             aliases_json, personality_json, goals_json, relations_json, bonds_json,
             pressure_json, arc_cast_id, portrait_url, archived, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, '[]', '', '', ?, 0, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, '[]', '', '', ?, 0, ?, ?)`,
       ).run(
         crypto.randomUUID(),
         workshop.id,
@@ -330,6 +373,7 @@ export function importWorkshopBundle(
         npc.attitude,
         npc.trait,
         npc.location,
+        npc.role,
         JSON.stringify(npc.aliases),
         npc.personality,
         npc.goals,
@@ -462,6 +506,40 @@ export function importWorkshopBundle(
     });
     createHomebrewMonster(userId, draft, monster.desc);
     existing.add(monster.name.toLowerCase());
+    copied += 1;
+  }
+
+  // Items, spells and options, by the same rule: the importer's own entry
+  // of that kind and name wins, and each arrival is normalized by the
+  // module that decides what a legal entry is, so a bundle cannot smuggle a
+  // weapon the dice engine would throw on.
+  const owned = new Set(
+    listHomebrew(userId).map((entry) => `${entry.kind}:${entry.name.toLowerCase()}`),
+  );
+  for (const entry of bundle.homebrew) {
+    const key = `${entry.kind}:${entry.name.toLowerCase()}`;
+    if (owned.has(key)) {
+      continue;
+    }
+    const normalized = normalizeHomebrewData(entry.kind, entry.data, entry.name);
+    if ("error" in normalized) {
+      continue;
+    }
+    createHomebrew(userId, { kind: entry.kind, name: entry.name, data: normalized.data });
+    owned.add(key);
+    copied += 1;
+  }
+
+  // Pregens land in the importer's library, filed under the new workshop,
+  // through the module that populates a sheet's features on creation.
+  for (const pregen of bundle.pregens) {
+    createCharacter(
+      userId,
+      pregen.level,
+      { ...pregen.sheet, name: pregen.name },
+      pregen.role,
+      workshop.id,
+    );
     copied += 1;
   }
 

@@ -1,6 +1,12 @@
 // Sheet schema back-compat: the backstory field and its bounds.
 import assert from "node:assert/strict";
-import { createSheetSchema, patchSheetSchema } from "../src/lib/schemas/sheet.ts";
+import { register } from "node:module";
+
+// The sheet schema imports the homebrew gear schema by alias, so the alias
+// loader has to be in place before the module is loaded.
+register("./lib/register-alias.mjs", import.meta.url);
+
+const { createSheetSchema, patchSheetSchema } = await import("../src/lib/schemas/sheet.ts");
 
 let passed = 0;
 function test(name, fn) {

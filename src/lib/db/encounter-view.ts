@@ -1,4 +1,5 @@
 import { healthState, type HealthState } from "@/lib/bestiary/health";
+import { creatureTypeOf } from "@/lib/bestiary/statblock";
 import { getBattleMapForEncounter, listHiddenRefIds } from "@/lib/db/battle-maps";
 import {
   getActiveEncounter,
@@ -40,6 +41,8 @@ export type PublicEncounter = {
     health: HealthState;
     status: EnemyStatus;
     cr: number;
+    // SRD creature type off the snapshot, for the thumbnail.
+    type: string;
     // Kept off the players' board and tracker by the DM. Only ever true in
     // the DM's own projection: a hidden enemy is absent from a player's.
     hidden: boolean;
@@ -100,6 +103,7 @@ export function publicEncounter(
       health: enemy.status === "fled" ? "healthy" : healthState(enemy.currentHp, enemy.maxHp),
       status: enemy.status,
       cr: enemy.cr,
+      type: creatureTypeOf(enemy.stats),
       groupKey: enemy.slug,
       conditions: enemy.status === "alive" ? enemy.conditions : [],
       conditionRounds:

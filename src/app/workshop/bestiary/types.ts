@@ -14,7 +14,7 @@ export type Monster = {
 };
 
 // A content-pack monster the search turned up, to start from.
-export type Found = { slug: string; name: string; source: string; cr: number };
+export type Found = { slug: string; name: string; source: string; cr: number; type: string };
 
 export const CR_CHOICES = [0, 0.125, 0.25, 0.5, 1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 17, 20, 24, 30];
 

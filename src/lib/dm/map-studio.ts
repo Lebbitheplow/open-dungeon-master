@@ -15,13 +15,16 @@ import {
   placeTokens,
   replaceBattleMapTerrain,
   setBattleMapBackdrop,
+  setBattleMapScene,
   setBattleMapTerrain,
   type BattleMap,
 } from "@/lib/db/battle-maps";
 import { getCurrentLocation } from "@/lib/db/locations";
 import { listSheets } from "@/lib/db/sheets";
 import { generateBattleMap, type GeneratedMap, type MapTheme } from "@/lib/battlemap/generate";
-import { nearestOpenTile, paintTerrain, type Stroke } from "@/lib/battlemap/paint";
+import { nearestOpenTile, paintTerrain } from "@/lib/battlemap/paint";
+import { compilePaint, emptyPaintIsFine, type PaintRequest } from "@/lib/battlemap/tools";
+import { toggleDoor } from "@/lib/battlemap/scene";
 import { tileIndex, type AmbientLight, type XY } from "@/lib/battlemap/types";
 import type { BackdropTransform } from "@/lib/battlemap/backdrop";
 import { carriedLightRadius, publishBattleMapUpdate } from "@/lib/dm/map-tools";
@@ -178,17 +181,30 @@ export function applyStudioMap(campaign: Campaign, settings: StudioSettings): St
 // One brush pass over the live board. The validation that matters is in
 // src/lib/battlemap/paint.ts; this is the part that knows who is standing
 // where and writes the result.
-export function paintStudioMap(campaign: Campaign, strokes: Stroke[]): StudioOutcome {
+export function paintStudioMap(campaign: Campaign, request: PaintRequest): StudioOutcome {
   const board = getActiveBoard(campaign.id);
   const map = board ? getBattleMapForEncounter(board.id) : null;
   if (!map) {
     return { error: "There is no board to paint on." };
   }
+  // The DRAWN terrain is what gets painted: a locked door is still a door
+  // to the brush, and only the engine sees it as rock.
+  const compiled = compilePaint(request, map.drawnTerrain, map.width, map.height);
+  if ("error" in compiled) {
+    return { error: compiled.error };
+  }
+  if (!compiled.strokes.length) {
+    return emptyPaintIsFine(request) ? { ok: true, seed: map.seed } : { error: "Nothing was painted." };
+  }
+  // An undo on a live board is checked against where people are standing
+  // exactly as a fresh stroke is, because it IS fresh strokes: the tiles
+  // that differ from the picture being returned to.
   const painted = paintTerrain({
-    terrain: map.terrain,
+    terrain: map.drawnTerrain,
     width: map.width,
     height: map.height,
-    strokes,
+    strokes: compiled.strokes,
+    limit: Math.min(compiled.limit, map.width * map.height),
     occupied: listTokens(map.id).map((token) => ({ x: token.x, y: token.y })),
   });
   if ("error" in painted) {
@@ -305,11 +321,49 @@ export function studioState(campaign: Campaign) {
           height: map.height,
           theme: map.theme,
           ambient: map.ambient,
-          // The whole board, unfogged. This route is DM-only, and the DM's
-          // own projection has never had fog (src/lib/battlemap/view.ts).
-          terrain: map.terrain,
+          // The whole board, unfogged and as DRAWN, doors and all. This
+          // route is DM-only, and the DM's own projection has never had fog
+          // (src/lib/battlemap/view.ts).
+          terrain: map.drawnTerrain,
           backdrop: map.backdrop,
+          lights: map.lights,
+          doors: map.doors,
+          labels: map.labels,
+          zones: map.zones,
+          overlayPath: map.overlayPath,
         }
       : null,
   };
+}
+
+// The scene layer on the live board: a door tapped round its states, or
+// the labels, zones or overlay handed over whole. Fog memory is untouched:
+// a label is not ground, and a door that locks was already seen as a door.
+export function setStudioScene(
+  campaign: Campaign,
+  input: { door?: XY; labels?: unknown; zones?: unknown; overlayPath?: string },
+): StudioOutcome & { door?: string | null } {
+  const board = getActiveBoard(campaign.id);
+  const map = board ? getBattleMapForEncounter(board.id) : null;
+  if (!map) {
+    return { error: "There is no board to edit." };
+  }
+  let doors = map.doors;
+  let door: string | null | undefined;
+  if (input.door) {
+    const toggled = toggleDoor(doors, input.door, map.drawnTerrain, map.width, map.height);
+    if ("error" in toggled) {
+      return { error: toggled.error };
+    }
+    doors = toggled.doors;
+    door = toggled.state;
+  }
+  setBattleMapScene(map.id, {
+    doors,
+    ...(input.labels !== undefined ? { labels: input.labels as BattleMap["labels"] } : {}),
+    ...(input.zones !== undefined ? { zones: input.zones as BattleMap["zones"] } : {}),
+    ...(input.overlayPath !== undefined ? { overlayPath: input.overlayPath } : {}),
+  });
+  publishBattleMapUpdate(campaign.id);
+  return { ok: true, seed: map.seed, door };
 }

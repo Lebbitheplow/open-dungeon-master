@@ -98,6 +98,10 @@ export const worldPackSchema = z.object({
         slug: z.string().min(1),
         name: z.string().min(1).max(60),
         cr: z.number().min(0),
+        // SRD creature type in lowercase ("undead"), which picks the
+        // thumbnail plate. A slug the genre roster also lists inherits its
+        // type at overlay time when this is left empty.
+        type: z.string().max(20).default(""),
         blurb: z.string().max(200).default(""),
       }),
     )

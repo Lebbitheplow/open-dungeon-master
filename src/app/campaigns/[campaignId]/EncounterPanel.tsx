@@ -3,6 +3,7 @@
 import { ChevronDown, ChevronRight, Skull, Swords, Wind } from "lucide-react";
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
+import { MonsterTile } from "@/lib/ui";
 import { HEALTH_COLORS } from "@/lib/bestiary/health";
 import { DmInitiativePanel } from "@/app/campaigns/[campaignId]/DmInitiativePanel";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
@@ -22,6 +23,7 @@ export function EncounterPanel({
   steersStory,
   canEditOrder = false,
   embedded = false,
+  genre,
 }: {
   campaignId: string;
   encounter: PublicEncounter;
@@ -30,6 +32,8 @@ export function EncounterPanel({
   // story but does not rearrange the turn order.
   canEditOrder?: boolean;
   embedded?: boolean;
+  // The table's setting, so a high-rating enemy draws the genre's boss plate.
+  genre?: string | null;
 }) {
   const [ending, setEnding] = useState(false);
   const [openGroups, setOpenGroups] = useState<string[]>([]);
@@ -160,6 +164,14 @@ export function EncounterPanel({
                     out && "line-through decoration-stone-500",
                   )}
                 >
+                  <MonsterTile
+                    type={enemy.type}
+                    cr={enemy.cr}
+                    genre={genre}
+                    seed={enemy.name}
+                    size="size-6"
+                    className={out ? "grayscale" : ""}
+                  />
                   {enemy.status === "dead" ? (
                     <Skull className="size-3.5 shrink-0 text-stone-500" />
                   ) : enemy.status === "fled" ? (

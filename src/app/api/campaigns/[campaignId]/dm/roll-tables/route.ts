@@ -17,6 +17,7 @@ const createSchema = z.object({
   // The rows as typed. Parsed rather than validated field by field, because
   // the point is that a table pasted out of a book works.
   text: z.string().trim().min(1).max(20_000),
+  noReplacement: z.boolean().optional(),
 });
 
 export async function GET(
@@ -52,6 +53,7 @@ export async function POST(
     campaignId,
     name: parsed.data.name,
     entries,
+    noReplacement: parsed.data.noReplacement,
     createdByUserId: context.user.id,
   });
   return Response.json({ table }, { status: 201 });

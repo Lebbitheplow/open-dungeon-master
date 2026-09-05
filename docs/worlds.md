@@ -109,7 +109,7 @@ A franchise with more than one **must** label every entry.
 | `premise` | seeds `campaigns.description`, max 500 chars |
 | `races` / `classes` / `backgrounds` | `{ id, name, blurb }` reskins. The `id` must be a real id. `classes` also takes `castingLabel`, which must be `null` for a non-caster |
 | `spells` / `items` / `features` | `{ from, name, blurb }` reskins, where `from` is the canonical name |
-| `monsters` | `{ slug, name, cr, blurb }`, the same shape as a bestiary entry. `slug` must be a real Open5e slug and `cr` must match it |
+| `monsters` | `{ slug, name, cr, type, blurb }`, the same shape as a bestiary entry. `slug` must be a real Open5e slug and `cr` must match it. `type` is the SRD creature type in lowercase (`undead`) and picks the thumbnail; it may be left out for a slug the base genre's roster already lists, which supplies it |
 | `alignments` | codes this world leans on, from LG NG CG LN N CN LE NE CE. The other nine stay pickable |
 | `nameSeeds` | `people` and `places`, offered as clickable suggestions in the builder |
 | `factions` / `locations` / `hooks` / `glossary` | story elements, rendered into the DM's game-state block |

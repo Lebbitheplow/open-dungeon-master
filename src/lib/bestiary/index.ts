@@ -15,13 +15,17 @@ import steampunkJson from "@/lib/bestiary/steampunk.json";
 
 // Curated per-genre enemy catalogs: real Open5e stat blocks under
 // genre-appropriate names, so every setting fights with honest mechanics.
-// cr is denormalized into the JSON so suggestions work without the content
-// pack; scripts/test-bestiary.mjs verifies slugs and crs against it.
+// cr and type are denormalized into the JSON so suggestions and thumbnails
+// work without the content pack; scripts/test-bestiary.mjs verifies slugs,
+// crs and types against it.
 
 export type BestiaryEntry = {
   slug: string;
   name: string;
   cr: number;
+  // SRD creature type in lowercase ("undead"): what the entry is, and which
+  // thumbnail plate it draws (monsterThumbnail in src/lib/ui.tsx).
+  type: string;
   blurb: string;
 };
 
@@ -52,7 +56,12 @@ export function bestiaryFor(setting: SettingRef): BestiaryEntry[] {
     return base;
   }
   const overrides = new Map(pack.monsters.map((entry) => [entry.slug, entry]));
-  const merged = base.map((entry) => overrides.get(entry.slug) ?? entry);
+  // A pack that says nothing about type inherits the genre's answer for the
+  // same slug, so a reskin never loses its thumbnail by leaving the field out.
+  const merged = base.map((entry) => {
+    const override = overrides.get(entry.slug);
+    return override ? { ...override, type: override.type || entry.type } : entry;
+  });
   const seen = new Set(base.map((entry) => entry.slug));
   return [...merged, ...pack.monsters.filter((entry) => !seen.has(entry.slug))];
 }

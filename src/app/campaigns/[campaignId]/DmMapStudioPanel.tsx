@@ -4,15 +4,21 @@ import { useCallback, useEffect, useState } from "react";
 import { Dices, Loader2, MapPinned, Play, Square } from "lucide-react";
 import { MAP_SIZE, MAP_THEMES, type MapTheme } from "@/lib/battlemap/generate";
 import type { Brush as BrushName } from "@/lib/battlemap/paint";
-import type { StampKind } from "@/lib/battlemap/stamp";
-import type { AmbientLight } from "@/lib/battlemap/types";
+import { TERRAIN, tileAt, type AmbientLight, type MapLight } from "@/lib/battlemap/types";
 import type { Backdrop, BackdropTransform } from "@/lib/battlemap/backdrop";
 import { TerrainCanvas } from "@/app/campaigns/[campaignId]/TerrainCanvas";
+import { BackdropControls } from "@/app/campaigns/[campaignId]/MapTools";
+import { OverlayControls } from "@/app/campaigns/[campaignId]/MapSceneTools";
 import {
-  BackdropControls,
-  BrushPalette,
-  StampPalette,
-} from "@/app/campaigns/[campaignId]/MapTools";
+  BOARD_CAPS,
+  DEFAULT_MAP_TOOLS,
+  MapToolbox,
+  canvasToolFor,
+  useMapHotkeys,
+  type MapTools,
+} from "@/app/campaigns/[campaignId]/MapToolbox";
+import type { DoorStates, LightZone, MapLabel } from "@/lib/battlemap/scene";
+import { usePainter } from "@/app/campaigns/[campaignId]/usePainter";
 
 // The map studio: build a tactical map on purpose, look at it privately,
 // then put it on the table.
@@ -25,6 +31,12 @@ import {
 // a sentence rather than a broken field.
 
 const AMBIENTS: AmbientLight[] = ["bright", "dim", "dark"];
+
+// The characters a terrain string is written in, back to the brush that
+// paints them, for the eyedropper.
+const CHAR_TO_BRUSH = Object.fromEntries(
+  Object.entries(TERRAIN).map(([brush, char]) => [char, brush]),
+) as Record<string, BrushName>;
 
 const THEME_LABELS: Record<MapTheme, string> = {
   cave: "Cave",
@@ -43,8 +55,13 @@ type StudioMap = {
   ambient: AmbientLight;
   terrain: string;
   // Absent on a preview, which is a map that does not exist yet and so has
-  // no picture stored under it.
+  // no picture stored under it, no lights the DM placed and no scene layer.
   backdrop?: Backdrop | null;
+  lights?: MapLight[];
+  doors?: DoorStates;
+  labels?: MapLabel[];
+  zones?: LightZone[];
+  overlayPath?: string;
 };
 
 type StudioState = {
@@ -68,9 +85,7 @@ export function DmMapStudioPanel({ campaignId }: { campaignId: string }) {
   const [state, setState] = useState<StudioState>({ board: null, enemyCount: 0, map: null });
   const [settings, setSettings] = useState<Settings>(START);
   const [preview, setPreview] = useState<{ seed: number; map: StudioMap } | null>(null);
-  const [brush, setBrush] = useState<BrushName | "">("");
-  const [stamp, setStamp] = useState<StampKind | "">("");
-  const [stampSize, setStampSize] = useState({ width: 5, height: 4 });
+  const [tools, setTools] = useState<MapTools>(DEFAULT_MAP_TOOLS);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -139,8 +154,7 @@ export function DmMapStudioPanel({ campaignId }: { campaignId: string }) {
     const payload = await post({ do: "preview", ...(seed === null ? {} : { seed }) });
     if (payload) {
       setPreview(payload as unknown as { seed: number; map: StudioMap });
-      setBrush("");
-      setStamp("");
+      setTools((current) => ({ ...current, mode: "" }));
     }
   }
 
@@ -165,19 +179,53 @@ export function DmMapStudioPanel({ campaignId }: { campaignId: string }) {
 
   // One request shape for a stroke and for a stamp: the server compiles the
   // shape and both go through the same painter (src/lib/battlemap/paint.ts).
-  async function mark(body: Record<string, unknown>) {
-    setError("");
-    const response = await fetch(`/api/campaigns/${campaignId}/dm/map-studio/paint`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!response.ok) {
-      const payload = await response.json().catch(() => ({}));
-      setError((payload as { error?: string }).error ?? "That was refused.");
+  const mark = useCallback(
+    async (body: Record<string, unknown>) => {
+      setError("");
+      const response = await fetch(`/api/campaigns/${campaignId}/dm/map-studio/paint`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        setError((payload as { error?: string }).error ?? "That was refused.");
+        return false;
+      }
+      await load();
+      return true;
+    },
+    [campaignId, load],
+  );
+
+  const shown = preview?.map ?? state.map;
+  const editable = !preview && Boolean(state.map);
+  const painter = usePainter({
+    key: state.map ? `${state.map.seed}:${state.map.width}x${state.map.height}` : "",
+    terrain: state.map?.terrain ?? "",
+    send: mark,
+  });
+  const undo = {
+    canUndo: painter.canUndo,
+    canRedo: painter.canRedo,
+    onUndo: () => void painter.undo(),
+    onRedo: () => void painter.redo(),
+  };
+  useMapHotkeys({ enabled: editable, tools, onTools: setTools, caps: BOARD_CAPS, undo });
+
+  // A tap on a labelled tile takes the label away; anywhere else puts the
+  // dial's text there.
+  function label(x: number, y: number) {
+    const labels = state.map?.labels ?? [];
+    const existing = labels.find((entry) => entry.x === x && entry.y === y);
+    const rest = labels.filter((entry) => !(entry.x === x && entry.y === y));
+    if (existing) {
+      void mark({ labels: rest });
       return;
     }
-    await load();
+    if (tools.label.text.trim()) {
+      void mark({ labels: [...rest, { x, y, text: tools.label.text.trim(), dmOnly: tools.label.dmOnly }] });
+    }
   }
 
   async function setBackdrop(next: { path: string; transform: BackdropTransform }) {
@@ -190,9 +238,6 @@ export function DmMapStudioPanel({ campaignId }: { campaignId: string }) {
       await load();
     }
   }
-
-  const shown = preview?.map ?? state.map;
-  const editable = !preview && Boolean(state.map);
 
   return (
     <div className="space-y-3">
@@ -344,35 +389,46 @@ export function DmMapStudioPanel({ campaignId }: { campaignId: string }) {
             width={shown.width}
             height={shown.height}
             backdrop={preview ? null : shown.backdrop}
-            onPaint={editable && brush && !stamp ? (x, y) => void mark({ strokes: [{ x, y, brush }] }) : undefined}
-            onStamp={
-              editable && stamp
-                ? (x, y) => void mark({ stamp: { kind: stamp, x, y, ...stampSize } })
-                : undefined
+            lights={preview ? undefined : shown.lights}
+            labels={preview ? undefined : shown.labels}
+            doors={preview ? undefined : shown.doors}
+            zones={preview ? undefined : shown.zones}
+            overlayPath={preview ? undefined : shown.overlayPath}
+            tool={editable ? canvasToolFor(tools, BOARD_CAPS) : null}
+            zoomable
+            onStroke={(x, y) => painter.stroke(x, y, tools.brush, tools.radius)}
+            onStrokeEnd={painter.strokeEnd}
+            onLabel={label}
+            onDoor={(x, y) => void mark({ door: { x, y } })}
+            onZone={(from, to) =>
+              void mark({
+                zones: [...(state.map?.zones ?? []), { x0: from.x, y0: from.y, x1: to.x, y1: to.y, ambient: tools.zone }],
+              })
             }
-            stamp={editable && stamp ? { kind: stamp, ...stampSize } : null}
+            onShape={(from, to) => void painter.shape(tools.mode, tools.brush, from, to)}
+            onStamp={(x, y) => void painter.edit({ stamp: { kind: tools.stamp, x, y, ...tools.stampSize } })}
+            onPick={(x, y) => {
+              const brush = CHAR_TO_BRUSH[tileAt(shown.terrain, shown.width, x, y)];
+              if (brush) {
+                setTools({ ...tools, brush, mode: "brush" });
+              }
+            }}
           />
           {editable ? (
             <div className="space-y-2.5">
-              <BrushPalette
-                brush={brush}
-                onPick={(next) => {
-                  setBrush(next);
-                  if (next) {
-                    setStamp("");
-                  }
-                }}
+              <MapToolbox
+                tools={tools}
+                onTools={setTools}
+                caps={BOARD_CAPS}
+                counts={{ labels: shown.labels?.length ?? 0, zones: shown.zones?.length ?? 0 }}
+                onClearLabels={() => void mark({ labels: [] })}
+                onClearZones={() => void mark({ zones: [] })}
+                undo={undo}
               />
-              <StampPalette
-                stamp={stamp}
-                size={stampSize}
-                onPick={(next) => {
-                  setStamp(next);
-                  if (next) {
-                    setBrush("");
-                  }
-                }}
-                onResize={setStampSize}
+              <OverlayControls
+                overlayPath={shown.overlayPath ?? ""}
+                busy={busy}
+                onChange={(overlayPath) => void mark({ overlayPath })}
               />
               <BackdropControls
                 backdrop={shown.backdrop ?? null}

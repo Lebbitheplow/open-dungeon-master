@@ -1,8 +1,10 @@
-import { z } from "zod";
 import { isErrorResponse, requireDm } from "@/lib/campaign-api";
-import { BRUSHES, MAX_BRUSH_RADIUS, MAX_STROKES } from "@/lib/battlemap/paint";
-import { STAMPS, STAMP_SIZE, normalizeStamp, stampStrokes } from "@/lib/battlemap/stamp";
-import { paintStudioMap } from "@/lib/dm/map-studio";
+import { normalizeStamp } from "@/lib/battlemap/stamp";
+import { normalizeShape } from "@/lib/battlemap/tools";
+import { hasPaint, hasScene, paintRequestSchema, sceneRequestSchema } from "@/lib/schemas/map-paint";
+import { getActiveBoard } from "@/lib/db/encounters";
+import { getBattleMapForEncounter } from "@/lib/db/battle-maps";
+import { paintStudioMap, setStudioScene } from "@/lib/dm/map-studio";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,29 +14,15 @@ export const dynamic = "force-dynamic";
 // person put it where they want it rather than only accept what the
 // generator placed.
 //
-// A stamp is the same request with a shape instead of a stroke: the room,
-// corridor or cavern is compiled here into ordinary strokes and validated by
-// exactly the same painter, so there is one place that decides what a legal
-// map is (src/lib/battlemap/stamp.ts).
-const strokeSchema = z.object({
-  x: z.number().int().min(0).max(255),
-  y: z.number().int().min(0).max(255),
-  brush: z.enum(BRUSHES as unknown as [string, ...string[]]),
-  radius: z.number().int().min(0).max(MAX_BRUSH_RADIUS).optional(),
-});
+// A stamp, a shape tool or an undo is the same request with something other
+// than strokes in it: each is compiled into ordinary strokes
+// (src/lib/battlemap/stamp.ts, tools.ts) and validated by exactly the same
+// painter, so there is one place that decides what a legal map is.
+//
+// The scene layer (a door tapped shut, labels, patches of light, the DM's
+// overlay) rides on the same request and touches no terrain.
 
-const stampSchema = z.object({
-  kind: z.enum(STAMPS as unknown as [string, ...string[]]),
-  x: z.number().int().min(0).max(255),
-  y: z.number().int().min(0).max(255),
-  width: z.number().int().min(STAMP_SIZE.min).max(STAMP_SIZE.max),
-  height: z.number().int().min(STAMP_SIZE.min).max(STAMP_SIZE.max),
-});
-
-const paintSchema = z.object({
-  strokes: z.array(strokeSchema).min(1).max(MAX_STROKES).optional(),
-  stamp: stampSchema.optional(),
-});
+const bodySchema = paintRequestSchema.extend(sceneRequestSchema.shape);
 
 export async function POST(
   request: Request,
@@ -45,27 +33,47 @@ export async function POST(
   if (isErrorResponse(context)) {
     return context;
   }
-  const parsed = paintSchema.safeParse(await request.json().catch(() => ({})));
-  if (!parsed.success) {
+  const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));
+  if (!parsed.success || (!hasPaint(parsed.data) && !hasScene(parsed.data))) {
     return Response.json({ error: "Invalid brush strokes." }, { status: 400 });
   }
+  const body = parsed.data;
 
-  // A stamp expands into far more strokes than a hand could send, so it is
-  // compiled after validation rather than counted against the wire cap.
-  const stamp = parsed.data.stamp ? normalizeStamp(parsed.data.stamp) : null;
-  if (parsed.data.stamp && !stamp) {
-    return Response.json({ error: "That is not a shape this map knows." }, { status: 400 });
-  }
-  const strokes = stamp ? stampStrokes(stamp) : parsed.data.strokes;
-  if (!strokes?.length) {
-    return Response.json({ error: "Nothing was painted." }, { status: 400 });
+  if (hasPaint(body)) {
+    const stamp = body.stamp ? normalizeStamp(body.stamp) : null;
+    if (body.stamp && !stamp) {
+      return Response.json({ error: "That is not a shape this map knows." }, { status: 400 });
+    }
+    // A shape is clamped onto the board it lands on, so the board's size is
+    // needed before the request can be normalized.
+    const board = getActiveBoard(campaignId);
+    const live = board ? getBattleMapForEncounter(board.id) : null;
+    const shape = body.shape && live ? normalizeShape(body.shape, live.width, live.height) : null;
+    if (body.shape && live && !shape) {
+      return Response.json({ error: "That is not a shape this map knows." }, { status: 400 });
+    }
+    const outcome = paintStudioMap(context.campaign, {
+      strokes: body.strokes as Parameters<typeof paintStudioMap>[1]["strokes"],
+      stamp: stamp ?? undefined,
+      shape: shape ?? undefined,
+      replaceTerrain: body.replaceTerrain,
+    });
+    if ("error" in outcome) {
+      return Response.json({ error: outcome.error }, { status: 409 });
+    }
   }
 
-  const outcome = paintStudioMap(
-    context.campaign,
-    strokes as Parameters<typeof paintStudioMap>[1],
-  );
-  return "error" in outcome
-    ? Response.json({ error: outcome.error }, { status: 409 })
-    : Response.json({ ok: true });
+  if (hasScene(body)) {
+    const outcome = setStudioScene(context.campaign, {
+      door: body.door,
+      labels: body.labels,
+      zones: body.zones,
+      overlayPath: body.overlayPath,
+    });
+    if ("error" in outcome) {
+      return Response.json({ error: outcome.error }, { status: 409 });
+    }
+    return Response.json({ ok: true, door: outcome.door ?? null });
+  }
+  return Response.json({ ok: true });
 }

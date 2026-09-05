@@ -1,5 +1,7 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
+import { gearFromHomebrewData } from "@/lib/homebrew/gear";
 import type { CreateHomebrewInput, HomebrewKind } from "@/lib/schemas/homebrew";
+import type { EquipmentItem } from "@/lib/schemas/sheet";
 
 export type HomebrewEntry = {
   id: string;
@@ -112,6 +114,39 @@ export function updateHomebrew(
       id,
     );
   return getHomebrew(userId, id);
+}
+
+// A sheet's equipment with every homebrew item's mechanics snapshotted onto
+// its line (src/lib/homebrew/gear.ts). Matched by slug first, then by name
+// against the owner's own items, so a line typed by hand still finds the
+// entry it was named after. Run on every read, so an item edited in the
+// workshop reaches the sheets that carry it; an entry that has been deleted
+// leaves its last snapshot in place rather than stripping a sword mid-fight.
+export function hydrateHomebrewGear(userId: string, equipment: EquipmentItem[]): EquipmentItem[] {
+  if (!equipment.length) {
+    return equipment;
+  }
+  let items: HomebrewEntry[] | null = null;
+  const load = () => (items ??= listHomebrew(userId, "item"));
+  return equipment.map((item) => {
+    const slugId = item.slug?.startsWith("homebrew:") ? item.slug.slice("homebrew:".length) : null;
+    const wanted = item.name.trim().toLowerCase();
+    const entry = slugId
+      ? load().find((candidate) => candidate.id === slugId)
+      : load().find((candidate) => candidate.name.trim().toLowerCase() === wanted);
+    if (!entry) {
+      return item;
+    }
+    const gear = gearFromHomebrewData(entry.name, entry.data);
+    if (!gear) {
+      return item.gear ? { ...item, gear: undefined } : item;
+    }
+    return {
+      ...item,
+      gear,
+      ...(item.weight === undefined && gear.weight !== undefined ? { weight: gear.weight } : {}),
+    };
+  });
 }
 
 export function deleteHomebrew(userId: string, id: string): boolean {

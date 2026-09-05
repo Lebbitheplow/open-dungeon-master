@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Search, Skull } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { MonsterTile } from "@/lib/ui";
 import { MONSTER_NAME_MAX } from "@/lib/bestiary/monster-draft";
 import { crLabel } from "@/lib/bestiary/derive-cr";
 import { CR_CHOICES, input, type Found } from "@/app/workshop/bestiary/types";
@@ -25,6 +26,7 @@ export function MonsterBuildControls({
   onCreate,
   error,
   variant = "card",
+  genre,
 }: {
   busy: boolean;
   found: Found[];
@@ -36,6 +38,8 @@ export function MonsterBuildControls({
   onCreate: (body: Record<string, unknown>) => Promise<boolean>;
   error: string;
   variant?: "card" | "bare";
+  // The table's setting, so a high-rating find draws the boss plate.
+  genre?: string | null;
 }) {
   const [newName, setNewName] = useState("");
   const [newCr, setNewCr] = useState(1);
@@ -133,8 +137,15 @@ export function MonsterBuildControls({
                   name: newName.trim() || undefined,
                 })
               }
-              className="rounded-md border border-stone-700 px-1.5 py-0.5 text-[11px] text-stone-400 hover:text-amber-100 disabled:opacity-40"
+              className="flex items-center gap-1 rounded-md border border-stone-700 px-1.5 py-0.5 text-[11px] text-stone-400 hover:text-amber-100 disabled:opacity-40"
             >
+              <MonsterTile
+                type={entry.type}
+                cr={entry.cr}
+                genre={genre}
+                seed={entry.slug}
+                size="size-5"
+              />
               {entry.name} <span className="text-stone-600">CR {crLabel(entry.cr)}</span>
             </button>
           ))}

@@ -34,6 +34,8 @@ export function EditCampaignDialog({
     // Optional because the in-game settings panel hands over a narrower
     // shape than the lobby; the dialog fetches the live cover on open anyway.
     cover?: CampaignCoverRef | null;
+    // Same reason: the preview falls back to the generic plate without it.
+    genre?: string;
   };
   onClose: () => void;
 }) {
@@ -263,7 +265,13 @@ export function EditCampaignDialog({
 
             <div>
               <span className="mb-1 block text-stone-400">Cover art</span>
-              <CampaignCover cover={cover} title={title || campaign.title} status={coverStatus} />
+              <CampaignCover
+                cover={cover}
+                title={title || campaign.title}
+                genre={campaign.genre}
+                seed={campaign.id}
+                status={coverStatus}
+              />
               <input
                 ref={fileInput}
                 type="file"

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pin, Plus, Search } from "lucide-react";
+import { EyeOff, Image as ImageIcon, Pin, Plus, Search } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { CATEGORY_LABELS, type LoreEntryView } from "@/app/workshop/lore/types";
@@ -81,6 +81,15 @@ export function LoreRows({
                   <span className="rounded-sm border border-stone-600/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-stone-400">
                     {CATEGORY_LABELS[entry.category]}
                   </span>
+                  {entry.visibility === "dm" ? (
+                    <span className="flex items-center gap-1 rounded-sm border border-violet-500/40 bg-violet-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-violet-300">
+                      <EyeOff className="size-3" /> Secret
+                    </span>
+                  ) : entry.imagePath ? (
+                    <span className="flex items-center gap-1 rounded-sm border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-emerald-300">
+                      <ImageIcon className="size-3" /> Handout
+                    </span>
+                  ) : null}
                 </span>
                 {line ? <span className="line-clamp-1 text-sm text-stone-300">{line}</span> : null}
                 {entry.tags.length ? (
