@@ -57,7 +57,8 @@ export function DiceSourcesButton({ className }: { className?: string }) {
 const SOURCE_MANUAL = "manual";
 const SOURCE_DIGITAL = "digital";
 
-function DiceSourcesPanel() {
+// Also mounted by the apps' own Settings screen, outside any table.
+export function DiceSourcesPanel() {
   const [sources, setSource] = useDiceSources();
   const pixels = useSyncExternalStore(
     onPixelsChanged,

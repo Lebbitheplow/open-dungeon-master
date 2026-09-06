@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { registerOutput } from "@/lib/audio-devices";
 import { AUDIO_PREF_FIELDS, hydrateAudioPrefs, writeAudioPref } from "@/lib/audio-prefs";
 
 // Plays DM narration audio (tts_ready events). Only events that arrive
@@ -93,7 +94,7 @@ export function useNarrationAudio(): NarrationAudio {
     // when the current one ends.
     function run(id: string, src: string) {
       if (!audioRef.current) {
-        audioRef.current = new Audio();
+        audioRef.current = registerOutput(new Audio());
       }
       const audio = audioRef.current;
       const finish = () => {

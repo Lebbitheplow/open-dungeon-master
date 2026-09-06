@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { cueById } from "@/lib/ambience/catalog";
 import type { AmbienceState } from "@/lib/ambience/logic";
+import { registerOutput } from "@/lib/audio-devices";
 import { AUDIO_PREF_FIELDS, hydrateAudioPrefs, writeAudioPref } from "@/lib/audio-prefs";
 
 // Plays what the table is hearing, in this browser, at this listener's own
@@ -207,7 +208,7 @@ export function useAmbienceAudio(
       if (!cueId || !url) {
         continue;
       }
-      const audio = new Audio(url);
+      const audio = registerOutput(new Audio(url));
       audio.loop = true;
       audio.volume = 0;
       layer.audio = audio;
@@ -271,7 +272,7 @@ export function useAmbienceAudio(
     if (!url) {
       return;
     }
-    const audio = new Audio(url);
+    const audio = registerOutput(new Audio(url));
     audio.volume = Math.min(1, volume * (cueById(sting.cue)?.gain ?? 0.7));
     void audio.play().catch(() => {});
   }, [sting, urls, enabled, muted, unlocked, volume]);

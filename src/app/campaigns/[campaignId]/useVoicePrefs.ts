@@ -139,6 +139,17 @@ function writeVolumePrefs(next: VoiceVolumePrefs) {
   window.dispatchEvent(new Event(VOLUMES_EVENT));
 }
 
+// The whole blob, for a control outside the call (the apps' Settings).
+export function useVolumePrefs(): VoiceVolumePrefs {
+  return useSyncExternalStore(subscribeVolumes, readVolumePrefs, () => DEFAULT_VOLUME_PREFS);
+}
+
+// The call's overall level from outside the call, where there is no roster
+// to prune against: the peer map is left exactly as it was.
+export function setMasterVolume(master: number) {
+  writeVolumePrefs({ ...readVolumePrefs(), master: clampVolume(master, MASTER_VOLUME_MAX) });
+}
+
 // `presentUserIds` is only used to decide who survives if the stored map ever
 // has to be trimmed. Pass a stable array (useMemo) so the setters keep their
 // identity between renders.

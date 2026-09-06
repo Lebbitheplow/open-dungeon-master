@@ -22,6 +22,7 @@ import {
   writeMicMode,
   type MicMode,
 } from "@/app/campaigns/[campaignId]/useVoicePrefs";
+import { registerOutput, releaseOutput, withMicGain } from "@/lib/audio-devices";
 
 export type VoiceStatus = "idle" | "connecting" | "connected" | "error" | "reconnecting";
 
@@ -93,6 +94,10 @@ export function useVoiceRoom(
   // tying them to React's tree would risk a re-render tearing one down
   // mid-sentence.
   const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
+  // The device and mode the live capture was last set to, so a preference
+  // written elsewhere (the apps' Settings) is applied exactly once.
+  const activeMicRef = useRef("");
+  const activeModeRef = useRef<MicMode>("open");
   const joinedRef = useRef(false);
   // How loudly this client should play each other person, from the server's
   // audibility matrix. Whether a voice arrives at all is enforced server-side
@@ -153,7 +158,7 @@ export function useVoiceRoom(
         kind: params.kind,
         rtpParameters: params.rtpParameters,
       });
-      const element = new Audio();
+      const element = registerOutput(new Audio());
       element.autoplay = true;
       // Distance and walls arrive as a gain; 1 when no proximity rule is on.
       // This listener's own slider for them multiplies in here rather than in
@@ -219,6 +224,7 @@ export function useVoiceRoom(
     for (const element of audioElementsRef.current.values()) {
       element.pause();
       element.srcObject = null;
+      releaseOutput(element);
     }
     audioElementsRef.current.clear();
   }, []);
@@ -229,7 +235,7 @@ export function useVoiceRoom(
   // arriving from the SFU: a detached element in the same map, so gains,
   // sliders and deafen need no second code path.
   const attachRemoteTrack = useCallback((userId: string, track: MediaStreamTrack) => {
-    const element = new Audio();
+    const element = registerOutput(new Audio());
     element.autoplay = true;
     const prefs = readVolumePrefs();
     const peer = prefs.peers[userId] ?? DEFAULT_PEER_VOLUME;
@@ -372,15 +378,19 @@ export function useVoiceRoom(
     setError("");
     try {
       const savedMic = readMicId();
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          ...(savedMic ? { deviceId: { ideal: savedMic } } : {}),
-        },
-      });
+      const stream = withMicGain(
+        await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            ...(savedMic ? { deviceId: { ideal: savedMic } } : {}),
+          },
+        }),
+      );
       micStreamRef.current = stream;
+      activeMicRef.current = savedMic;
+      activeModeRef.current = readMicMode();
       const data = await post("mesh/join");
       meshIceRef.current = (data.iceServers ?? []) as RTCIceServer[];
       meshHeartbeatMsRef.current = Number(data.heartbeatMs) || 10_000;
@@ -424,17 +434,21 @@ export function useVoiceRoom(
       // it there is nothing worth setting up, and the prompt is the slowest
       // part of joining anyway.
       const savedMic = readMicId();
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          // A saved device that has since been unplugged would make this throw
-          // outright, so it is a preference rather than a requirement.
-          ...(savedMic ? { deviceId: { ideal: savedMic } } : {}),
-        },
-      });
+      const stream = withMicGain(
+        await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            // A saved device that has since been unplugged would make this
+            // throw outright, so it is a preference rather than a requirement.
+            ...(savedMic ? { deviceId: { ideal: savedMic } } : {}),
+          },
+        }),
+      );
       micStreamRef.current = stream;
+      activeMicRef.current = savedMic;
+      activeModeRef.current = readMicMode();
 
       const { Device } = await import("mediasoup-client");
       const data = await post("join");
@@ -549,9 +563,9 @@ export function useVoiceRoom(
 
   // Swaps the microphone without touching the transport: replaceTrack keeps
   // the same producer, so nobody else on the call renegotiates or hears a gap.
-  const selectMic = useCallback(
+  const swapMic = useCallback(
     async (deviceId: string) => {
-      writeMicId(deviceId);
+      activeMicRef.current = deviceId;
       if (!joinedRef.current) {
         return;
       }
@@ -561,14 +575,16 @@ export function useVoiceRoom(
         return;
       }
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-            ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
-          },
-        });
+        const stream = withMicGain(
+          await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+              ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
+            },
+          }),
+        );
         const track = stream.getAudioTracks()[0];
         if (producer) {
           await producer.replaceTrack({ track });
@@ -592,6 +608,20 @@ export function useVoiceRoom(
     [],
   );
 
+  // The stored preference is the one source of truth: the panel here and
+  // the apps' own Settings screen both write it, and the live capture
+  // follows whichever wrote last.
+  const selectMic = useCallback((deviceId: string) => {
+    writeMicId(deviceId);
+  }, []);
+
+  useEffect(() => {
+    if (!joinedRef.current || micId === activeMicRef.current) {
+      return;
+    }
+    void swapMic(micId);
+  }, [micId, swapMic]);
+
   // Push-to-talk. The local track flips instantly so the player hears no lag
   // on their own control, and the server mute follows to make it real for
   // everyone else (a local-only gate would still transmit).
@@ -606,9 +636,9 @@ export function useVoiceRoom(
     [postState],
   );
 
-  const selectMicMode = useCallback(
+  const applyMicMode = useCallback(
     (mode: MicMode) => {
-      writeMicMode(mode);
+      activeModeRef.current = mode;
       // Leaving push-to-talk opens the microphone again; entering it closes
       // the microphone until the control is held.
       const open = mode === "open";
@@ -622,6 +652,19 @@ export function useVoiceRoom(
     },
     [postState],
   );
+
+  // Same one-source rule as the microphone: the mode is written to the
+  // preference, and the live call applies whatever the preference says.
+  const selectMicMode = useCallback((mode: MicMode) => {
+    writeMicMode(mode);
+  }, []);
+
+  useEffect(() => {
+    if (!joinedRef.current || micMode === activeModeRef.current) {
+      return;
+    }
+    applyMicMode(micMode);
+  }, [applyMicMode, micMode]);
 
   // Asking for the floor. Never moves the floor by itself: the DM grants it
   // through the controls they already have, so there is one way the floor
@@ -750,6 +793,7 @@ export function useVoiceRoom(
         if (element) {
           element.pause();
           element.srcObject = null;
+          releaseOutput(element);
           audioElementsRef.current.delete(userId);
         }
       }

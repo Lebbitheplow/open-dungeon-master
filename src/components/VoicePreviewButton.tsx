@@ -2,6 +2,7 @@
 
 import { Loader2, Play, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { registerOutput } from "@/lib/audio-devices";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -37,7 +38,7 @@ export function VoicePreviewButton({ voice, className }: { voice: string; classN
     setLoading(true);
     // Built and configured before it reaches the ref: the clip element is
     // never mutated after the component holds on to it.
-    const audio = new Audio(`/api/tts/preview?voice=${encodeURIComponent(voice)}`);
+    const audio = registerOutput(new Audio(`/api/tts/preview?voice=${encodeURIComponent(voice)}`));
     audio.onended = () => setPlaying(false);
     audioRef.current = audio;
     try {
