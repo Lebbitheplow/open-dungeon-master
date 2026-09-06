@@ -16,7 +16,7 @@
 // fallback is the address the current visitor used. A host playing on
 // 127.0.0.1 behind a tunnel must never hand out 127.0.0.1.
 
-import { pageOrigin } from "@/lib/navigation";
+import { pageOrigin } from "./navigation.ts";
 
 const SHARE_DOMAIN = "https://opendungeonmaster.com";
 

@@ -3,7 +3,7 @@
 // native screens draw these pages against the host's API, the app owns
 // the address (src/lib/shell-host.ts, navigation) and window.location is
 // the app's own page, never to be touched.
-import { shellHost } from "@/lib/shell-host";
+import { shellHost } from "./shell-host.ts";
 
 function nav() {
   return shellHost()?.navigation ?? null;
