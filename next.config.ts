@@ -22,6 +22,12 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: process.cwd(),
   },
+  experimental: {
+    // Portal mode (src/proxy.ts) forwards the apps' data requests through
+    // the proxy, which buffers request bodies. An 8 MB image upload rides
+    // as base64 JSON, past the 10 MB default.
+    proxyClientMaxBodySize: "16mb",
+  },
   ...(dockerBuild
     ? {
         output: "standalone" as const,
