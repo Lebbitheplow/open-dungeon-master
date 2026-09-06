@@ -16,6 +16,8 @@
 // fallback is the address the current visitor used. A host playing on
 // 127.0.0.1 behind a tunnel must never hand out 127.0.0.1.
 
+import { pageOrigin } from "@/lib/navigation";
+
 const SHARE_DOMAIN = "https://opendungeonmaster.com";
 
 export type ShareLinks = {
@@ -33,8 +35,7 @@ export function buildShareLinks({
   inviteCode: string;
   fallbackOrigin?: string;
 }): ShareLinks {
-  const fallback =
-    fallbackOrigin ?? (typeof window !== "undefined" ? window.location.origin : "");
+  const fallback = fallbackOrigin ?? pageOrigin();
   const origin = (publicOrigin || fallback).replace(/\/+$/, "");
   const code = inviteCode.trim().toUpperCase();
   if (!origin || !code) {

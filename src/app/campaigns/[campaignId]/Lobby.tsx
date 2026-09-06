@@ -26,6 +26,7 @@ import {
   type ImportSelection,
 } from "@/app/workshop/ContentImportPicker";
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
+import { navigateTo } from "@/lib/navigation";
 
 // The lobby: where the table gathers before the adventure opens. The cover
 // art and title lead, then the room code, the game's settings and prep,
@@ -285,7 +286,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
         setError(data.error || "Could not delete the campaign.");
         return;
       }
-      window.location.href = "/";
+      navigateTo("/");
     } catch {
       setError("Could not reach the server.");
     } finally {

@@ -22,6 +22,7 @@ import type { MapPing } from "@/lib/dm/board-logic";
 import { capsForRole, type ViewerCaps } from "@/lib/dm/viewer";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { VoiceRosterEntry } from "@/lib/voice/types";
+import { navigateTo } from "@/lib/navigation";
 
 export type DmStatus =
   | "idle"
@@ -764,7 +765,7 @@ export function useCampaignStream(campaignId: string) {
     try {
       const response = await fetch(`/api/campaigns/${campaignId}`);
       if (response.status === 401) {
-        window.location.href = "/";
+        navigateTo("/");
         return 0;
       }
       if (!response.ok) {

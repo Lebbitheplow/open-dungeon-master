@@ -5,6 +5,7 @@ import Link from "next/link";
 import { use, useCallback, useEffect, useState } from "react";
 import { CampaignCover } from "@/components/CampaignCover";
 import AuthForm from "@/app/AuthForm";
+import { navigateTo } from "@/lib/navigation";
 
 // Invite-link landing: /join/CODE. Logged-in users are joined and forwarded
 // to the campaign; everyone else logs in or registers first, with the
@@ -61,7 +62,7 @@ export default function JoinPage({ params }: { params: Promise<{ code: string }>
         setState("error");
         return;
       }
-      window.location.href = `/campaigns/${data.campaign.id}`;
+      navigateTo(`/campaigns/${data.campaign.id}`);
     } catch {
       setError("Could not reach the server.");
       setState("error");

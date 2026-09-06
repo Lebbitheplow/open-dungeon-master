@@ -37,6 +37,18 @@ export interface ShellHost {
   // The phone's share sheet for a link (the app's webview has no Web
   // Share API). Absent on desktop and in apps older than 0.5.1.
   shareLink?(input: { title: string; text: string; url: string }): Promise<boolean>;
+  // Present when the app draws these pages itself (its native screens over
+  // the host's API, apps 0.8.0 and up): the address of the page being
+  // shown and the navigations, which the app owns because window.location
+  // is then the app's own page. src/lib/navigation.ts is the consumer.
+  navigation?: {
+    location(): { pathname: string; search: string };
+    push(url: string): void;
+    replace(url: string): void;
+    reload(): void;
+  };
+  // The host these pages are talking to, when the app draws them.
+  hostOrigin?: string;
 }
 
 declare global {

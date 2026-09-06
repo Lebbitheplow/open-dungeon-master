@@ -3,6 +3,7 @@
 import { type FormEvent, type RefObject, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
+import { navigateTo } from "@/lib/navigation";
 
 // Joining someone else's table by its invite code. The quick tile above
 // scrolls here and drops the cursor into the field through inputRef, so
@@ -27,7 +28,7 @@ export function JoinCard({ inputRef }: { inputRef: RefObject<HTMLInputElement | 
         setJoinError(data.error || "Could not join.");
         return;
       }
-      window.location.href = `/campaigns/${data.campaign.id}`;
+      navigateTo(`/campaigns/${data.campaign.id}`);
     } finally {
       setJoining(false);
     }

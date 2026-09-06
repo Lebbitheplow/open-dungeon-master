@@ -24,6 +24,7 @@ import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import { CharacterPortrait, ui } from "@/lib/ui";
 import { offersImages, useCapabilities } from "@/lib/use-capabilities";
 import { SheetSections, StorySoFar, type CharacterEvent } from "./SheetSections";
+import { navigateTo } from "@/lib/navigation";
 
 // Where this character is playing; see src/lib/db/characters.ts.
 type CharacterAssignment = {
@@ -180,7 +181,7 @@ export default function CharacterDetailPage({
     try {
       const response = await fetch(`/api/characters/${characterId}/clone`, { method: "POST" });
       if (response.ok) {
-        window.location.href = "/characters";
+        navigateTo("/characters");
       }
     } finally {
       setCloning(false);

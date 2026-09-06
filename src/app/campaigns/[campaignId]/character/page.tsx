@@ -11,6 +11,7 @@ import CharacterBuilder, {
 } from "@/app/characters/builder/CharacterBuilder";
 import type { Genre } from "@/lib/schemas/game-settings";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
+import { navigateTo } from "@/lib/navigation";
 
 type LibraryCharacter = {
   id: string;
@@ -99,7 +100,7 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
         setError(data.error || "Could not save the character.");
         return;
       }
-      window.location.assign(`/campaigns/${campaignId}`);
+      navigateTo(`/campaigns/${campaignId}`);
     } catch {
       setError("Could not reach the server.");
     } finally {

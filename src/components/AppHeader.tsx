@@ -1,10 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { PIXEL_ICONS, PixelTile } from "@/lib/ui";
-import { AccountMenu, AppHomeButton, type AccountMenuUser } from "@/components/AccountMenu";
+import { AccountMenu, AppBrand, AppHomeButton, type AccountMenuUser } from "@/components/AccountMenu";
 import { DeletionBanner } from "@/components/DeletionBanner";
 import { NotificationBell } from "@/components/NotificationBell";
 
@@ -49,15 +48,12 @@ export function AppHeader({
     // user resolves, so the page header below never jumps.
     <header className={cn("mb-6", className)}>
       <div className="flex min-h-9 items-center justify-between gap-3">
-      <Link
-        href="/"
-        className="flex min-w-0 items-center gap-2.5 rounded-md outline-none transition-colors hover:text-amber-200 focus-visible:text-amber-200"
-      >
+      <AppBrand>
         <PixelTile src={PIXEL_ICONS.story} size="size-8" />
         <span className="text-balance font-display text-base leading-tight tracking-wide text-amber-50 sm:text-lg">
           Open Dungeon Master
         </span>
-      </Link>
+      </AppBrand>
       {resolved ? (
         <div className="flex shrink-0 items-center gap-2">
           <AppHomeButton />

@@ -9,6 +9,7 @@ import { copyText } from "@/lib/clipboard";
 import { shareableAddresses } from "@/lib/server-address";
 import { shareSheet } from "@/lib/shell-host";
 import { ui } from "@/lib/ui";
+import { pageOrigin } from "@/lib/navigation";
 
 // The little button in the corner of every page: tap it and the server's
 // address comes up as a QR code and as text with a copy button. The client
@@ -42,7 +43,7 @@ export function ServerAddressButton() {
       return;
     }
     let cancelled = false;
-    const current = window.location.origin;
+    const current = pageOrigin();
     fetch("/api/server/addresses")
       .then((response) => (response.ok ? response.json() : null))
       .then((data: { serverName?: string; publicUrl?: string; lanUrls?: string[] } | null) => {

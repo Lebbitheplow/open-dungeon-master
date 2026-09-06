@@ -7,6 +7,7 @@ import { ui } from "@/lib/ui";
 import type { SessionUser } from "@/lib/campaign-types";
 import { ChangePasswordForm } from "@/app/ChangePasswordForm";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { currentPathname, currentQuery, replaceAddress } from "@/lib/navigation";
 
 type AuthMode = "login" | "register";
 
@@ -71,7 +72,7 @@ export default function AuthForm({
   // invite code and locks the field so it cannot be mistyped away.
   const [urlInvite] = useState(() => {
     if (typeof window === "undefined") return "";
-    return (new URLSearchParams(window.location.search).get("invite") || "")
+    return (currentQuery().get("invite") || "")
       .trim()
       .toUpperCase()
       .slice(0, 40);
@@ -79,7 +80,7 @@ export default function AuthForm({
   // Seed the error from an OAuth redirect (?error=...) so it shows on load.
   const [error, setError] = useState(() => {
     if (typeof window === "undefined") return "";
-    const oauthError = new URLSearchParams(window.location.search).get("error");
+    const oauthError = currentQuery().get("error");
     return (oauthError && OAUTH_ERRORS[oauthError]) || "";
   });
   const [busy, setBusy] = useState(false);
@@ -100,8 +101,8 @@ export default function AuthForm({
         }
       })
       .catch(() => undefined);
-    if (new URLSearchParams(window.location.search).get("error")) {
-      window.history.replaceState(null, "", window.location.pathname);
+    if (currentQuery().get("error")) {
+      replaceAddress(currentPathname());
     }
   }, []);
 

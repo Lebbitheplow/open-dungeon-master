@@ -11,6 +11,7 @@ import { DEFAULT_TARGET_PARTY } from "@/lib/workshop/kind";
 import { ImportBundleButton } from "@/app/workshop/ImportBundleButton";
 import { WorkshopHelpDialog } from "@/components/WorkshopHelpDialog";
 import type { WorkshopSummary } from "@/app/workshop/types";
+import { navigateTo } from "@/lib/navigation";
 
 // The shelf. A workshop is a place to build maps, NPCs, monsters, story and
 // rules before any table exists, and to import them into a campaign later
@@ -72,7 +73,7 @@ export default function WorkshopListPage() {
         setError(data.error || "Could not create that workshop.");
         return;
       }
-      window.location.href = `/workshop/${data.workshop.id}`;
+      navigateTo(`/workshop/${data.workshop.id}`);
     } finally {
       setBusy(false);
     }

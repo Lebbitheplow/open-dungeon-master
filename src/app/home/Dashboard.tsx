@@ -6,7 +6,7 @@ import { PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
 import type { SessionUser } from "@/lib/campaign-types";
 import { offersStoryModel, useCapabilities } from "@/lib/use-capabilities";
 import { CreateCampaignDialog } from "@/app/CreateCampaignDialog";
-import { AccountMenu, AppHomeButton } from "@/components/AccountMenu";
+import { AccountMenu, AppBrand, AppHomeButton } from "@/components/AccountMenu";
 import { DeletionBanner } from "@/components/DeletionBanner";
 import { NotificationBell } from "@/components/NotificationBell";
 import { HowToPlayDialog } from "@/components/HowToPlayDialog";
@@ -19,6 +19,7 @@ import { JoinCard } from "@/app/home/JoinCard";
 import { QuickTiles } from "@/app/home/QuickTiles";
 import { WorkshopSection } from "@/app/home/WorkshopSection";
 import { pickContinue, type HomeCampaign } from "@/app/home/types";
+import { currentPathname, currentQuery, navigateTo, replaceAddress } from "@/lib/navigation";
 
 // The desktop and Android shells' quick tiles land here with ?new=1 or
 // ?new=solo and expect the wizard already open. Read once, at mount, as the
@@ -29,7 +30,7 @@ function requestedWizard(): "campaign" | "solo" | null {
   if (typeof window === "undefined") {
     return null;
   }
-  const value = new URLSearchParams(window.location.search).get("new");
+  const value = currentQuery().get("new");
   return value === "solo" ? "solo" : value === "1" ? "campaign" : null;
 }
 
@@ -55,9 +56,9 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
     if (!requestedWizard()) {
       return;
     }
-    const url = new URL(window.location.href);
-    url.searchParams.delete("new");
-    window.history.replaceState(window.history.state, "", url);
+    const query = currentQuery();
+    query.delete("new");
+    replaceAddress(`${currentPathname()}${query.size ? `?${query}` : ""}`);
   }, []);
 
   // Promise-chain shape for the same reason as refreshWorkshops below: the
@@ -166,7 +167,7 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
 
   const continueCampaign = pickContinue(campaigns);
   const onCreated = (campaignId: string) => {
-    window.location.href = `/campaigns/${campaignId}`;
+    navigateTo(`/campaigns/${campaignId}`);
   };
 
   return (
@@ -176,15 +177,15 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
             so on a narrow phone (or a large system font) the account menu
             stays on screen instead of being pushed past the right edge. */}
         <header className="mb-8 flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
+          <AppBrand className="gap-3">
             <PixelTile src={PIXEL_ICONS.story} />
-            <div className="min-w-0">
-              <h1 className="text-balance font-display text-lg leading-tight tracking-wide text-amber-50 sm:text-xl">
+            <span className="min-w-0">
+              <span className="block text-balance font-display text-lg leading-tight tracking-wide text-amber-50 sm:text-xl">
                 Open Dungeon Master
-              </h1>
-              <p className="truncate text-sm text-stone-500">Signed in as {user.username}</p>
-            </div>
-          </div>
+              </span>
+              <span className="block truncate text-sm text-stone-500">Signed in as {user.username}</span>
+            </span>
+          </AppBrand>
           <div className="flex shrink-0 items-center gap-2">
             <AppHomeButton />
             <NotificationBell />

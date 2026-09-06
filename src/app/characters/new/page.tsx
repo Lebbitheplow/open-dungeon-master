@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { PIXEL_ICONS, PixelTile } from "@/lib/ui";
 import CharacterBuilder, { type BuilderResult } from "../builder/CharacterBuilder";
+import { navigateTo } from "@/lib/navigation";
 
 export default function NewCharacterPage() {
   const [busy, setBusy] = useState(false);
@@ -29,7 +30,7 @@ export default function NewCharacterPage() {
         setError(data.error || "Could not save the character.");
         return;
       }
-      window.location.href = "/characters";
+      navigateTo("/characters");
     } catch {
       setError("Could not reach the server.");
     } finally {

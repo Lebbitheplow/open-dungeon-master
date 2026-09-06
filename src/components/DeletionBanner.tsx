@@ -4,6 +4,7 @@ import { Loader2, Undo2 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
+import { reloadPage } from "@/lib/navigation";
 
 // The notice every page shows while the account is scheduled for deletion
 // (src/lib/account-deletion.ts). One button calls it off; the page reloads
@@ -31,7 +32,7 @@ export function DeletionBanner({ dueAt, className }: { dueAt: string; className?
         setBusy(false);
         return;
       }
-      window.location.reload();
+      reloadPage();
     } catch {
       setError("Could not reach the server. Try again from account settings.");
       setBusy(false);

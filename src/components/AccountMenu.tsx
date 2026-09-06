@@ -15,13 +15,49 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
+import type { ReactNode } from "react";
 import { HelpDialog } from "@/components/HelpDialog";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { headerButtonClass } from "@/app/campaigns/[campaignId]/headerButton";
+import { cn } from "@/lib/cn";
 import { shellHost, type ShellHost } from "@/lib/shell-host";
 
 // window.odmShell is set once before any page script runs and never changes.
 const subscribeNever = () => () => {};
+
+// The book tile and wordmark at the top of a page. In a browser it leads
+// to this server's home; inside the desktop or Android app it leads to the
+// app's own home screen, because that is what the same mark does on every
+// screen of the app, and a mark that does one thing here and nothing there
+// is the first thing a newcomer trips over.
+export function AppBrand({
+  children,
+  className,
+}: {
+  // The tile and wordmark, laid out by the caller.
+  children: ReactNode;
+  className?: string;
+}) {
+  const shell = useSyncExternalStore<ShellHost | null>(subscribeNever, shellHost, () => null);
+  const classes = cn(
+    "flex min-w-0 items-center gap-2.5 rounded-md text-left outline-none transition-colors hover:text-amber-200 focus-visible:text-amber-200",
+    className,
+  );
+  if (shell) {
+    return (
+      <Tooltip content="Back to the app's home screen" side="bottom">
+        <button type="button" onClick={() => shell.showServers()} aria-label="App home" className={classes}>
+          {children}
+        </button>
+      </Tooltip>
+    );
+  }
+  return (
+    <Link href="/" className={classes}>
+      {children}
+    </Link>
+  );
+}
 
 // Inside the desktop or Android app, the one visible way back to the app's
 // own home screen (its servers, device world and settings) from any page:

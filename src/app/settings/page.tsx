@@ -11,6 +11,7 @@ import { ImageLightbox } from "@/components/ui/ImageLightbox";
 import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
 import { BlockedPlayersSection } from "@/app/settings/BlockedPlayersSection";
 import { ChangePasswordForm } from "@/app/ChangePasswordForm";
+import { currentPathname, currentQuery, replaceAddress } from "@/lib/navigation";
 
 type Me = {
   id: string;
@@ -57,7 +58,7 @@ export default function SettingsPage() {
   // Seeded from the Discord link redirect (?linked=1 / ?error=...).
   const [discordNotice] = useState(() => {
     if (typeof window === "undefined") return "";
-    const query = new URLSearchParams(window.location.search);
+    const query = currentQuery();
     if (query.get("linked") === "1") return "Discord account linked.";
     if (query.get("error") === "discord_taken") {
       return "That Discord account is already linked to another user.";
@@ -83,9 +84,9 @@ export default function SettingsPage() {
         }
       })
       .catch(() => undefined);
-    const query = new URLSearchParams(window.location.search);
+    const query = currentQuery();
     if (query.get("linked") || query.get("error")) {
-      window.history.replaceState(null, "", window.location.pathname);
+      replaceAddress(currentPathname());
     }
   }, []);
 

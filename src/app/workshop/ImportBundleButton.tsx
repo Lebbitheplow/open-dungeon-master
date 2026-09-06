@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { ui } from "@/lib/ui";
 import { UnofficialPackNotice } from "@/components/UnofficialPackNotice";
 import { BUNDLE_KIND_LABELS, MAX_BUNDLE_BYTES } from "@/lib/workshop/bundle";
+import { navigateTo } from "@/lib/navigation";
 
 // Opening somebody else's workshop.
 //
@@ -90,7 +91,7 @@ export function ImportBundleButton({
     setError("");
     try {
       const data = await post({ text, kinds });
-      window.location.href = `/workshop/${data.workshopId}`;
+      navigateTo(`/workshop/${data.workshopId}`);
     } catch (thrown) {
       setError(thrown instanceof Error ? thrown.message : "That bundle could not be imported.");
       setBusy(false);
