@@ -274,6 +274,7 @@ export function SidePanelRouter({
               encumbranceRule={Boolean(campaign?.gameSettings?.variantRules?.encumbrance)}
               inCombat={Boolean(encounter)}
               campaignId={campaignId}
+              worldPack={campaign?.gameSettings?.worldPack ?? ""}
               companionsAvailable={
                 campaign?.gameSettings
                   ? companionSlotsFree(

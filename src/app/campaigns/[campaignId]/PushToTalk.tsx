@@ -113,6 +113,8 @@ export function PushToTalk({
         onPointerLeave={stop}
         onContextMenu={(event) => event.preventDefault()}
         title="Hold to talk"
+        aria-label="Hold to talk"
+        data-tour="composer-talk"
         className={cn(
           "rounded-md border p-2.5 transition-colors select-none touch-none",
           state === "recording"

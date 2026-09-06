@@ -29,10 +29,14 @@ export interface ShellShare {
 
 export interface ShellHost {
   platform: "desktop" | "android";
-  // Leaves this server's pages for the app's server picker.
+  // Leaves this server's pages for the app's home screen (its servers,
+  // its device world, its settings).
   showServers(): void;
   // Absent in apps older than 0.3.1.
   share?: ShellShare;
+  // The phone's share sheet for a link (the app's webview has no Web
+  // Share API). Absent on desktop and in apps older than 0.5.1.
+  shareLink?(input: { title: string; text: string; url: string }): Promise<boolean>;
 }
 
 declare global {
@@ -46,6 +50,28 @@ export function shellHost(): ShellHost | null {
   if (typeof window === "undefined") return null;
   const host = window.odmShell;
   return host && typeof host.showServers === "function" ? host : null;
+}
+
+// One way to hand a link to another app, wherever the page runs: the
+// browser's own share sheet where it has one, the app's on Android, and
+// nothing on a desktop browser or desktop app (the copy button stays).
+export type ShareSheet = (input: { title: string; text: string; url: string }) => Promise<boolean>;
+
+export function shareSheet(): ShareSheet | null {
+  if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+    return async (input) => {
+      try {
+        await navigator.share(input);
+        return true;
+      } catch {
+        // Dismissing the sheet rejects; nothing to report.
+        return false;
+      }
+    };
+  }
+  const host = shellHost();
+  const link = host?.shareLink;
+  return link ? (input) => link.call(host, input) : null;
 }
 
 export function shellShare(): ShellShare | null {

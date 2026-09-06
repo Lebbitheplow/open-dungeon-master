@@ -194,20 +194,26 @@ export function DmConsolePanel({
           the lead's desk wears ember so the two seats never blur. */}
       <Ribbon tone="gold">Only you</Ribbon>
 
-      <FloorControl campaignId={campaignId} mode={floorMode} />
+      <div data-tour="dm-floor">
+        <FloorControl campaignId={campaignId} mode={floorMode} />
+      </div>
 
       {/* Directly under the floor, because this is where the nudge sends
           them and a reminder that lands on a scroll is not a reminder. */}
-      <DmBeatComposer campaignId={campaignId} beats={beats} canExpand={delegations.narration} />
+      <div data-tour="dm-beats">
+        <DmBeatComposer campaignId={campaignId} beats={beats} canExpand={delegations.narration} />
+      </div>
 
-      <DmDelegationPanel
-        campaignId={campaignId}
-        cover={cover}
-        canMonsters={delegations.monsters}
-        canCover={delegations.cover}
-      />
+      <div data-tour="dm-delegation">
+        <DmDelegationPanel
+          campaignId={campaignId}
+          cover={cover}
+          canMonsters={delegations.monsters}
+          canCover={delegations.cover}
+        />
+      </div>
 
-      <section>
+      <section data-tour="dm-queue">
         <h3 className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
           <Inbox className="size-3.5" />
           Waiting on you
@@ -248,7 +254,7 @@ export function DmConsolePanel({
       </section>
 
       <section>
-        <div className="mb-2 flex flex-wrap gap-1">
+        <div className="mb-2 flex flex-wrap gap-1" data-tour="dm-console-tabs">
           {([
             ["assist", "Assist"],
             ...groups.map((group) => [group.category, group.label] as const),

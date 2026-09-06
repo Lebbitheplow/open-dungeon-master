@@ -167,6 +167,7 @@ function AskDockInner({
       <button
         type="button"
         onClick={() => onOpenChange(!open)}
+        data-tour="ask-dm"
         className="flex w-full items-center gap-1.5 px-3 py-1.5 text-[11px] text-stone-500 transition-colors hover:text-stone-300"
       >
         <MessageCircleQuestion className="size-3.5 text-amber-300/70" />

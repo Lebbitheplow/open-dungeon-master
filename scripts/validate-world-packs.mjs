@@ -26,6 +26,7 @@ const { CUSTOM_BACKGROUNDS } = await import("../src/lib/backgrounds/index.ts");
 const { SRD_WEAPONS } = await import("../src/lib/srd/weapons.ts");
 const { SRD_ARMOR } = await import("../src/lib/srd/armor.ts");
 const { normalizeCreatureType } = await import("../src/lib/bestiary/statblock.ts");
+const { packArtSlots, MAX_PACK_ART_BYTES } = await import("../src/lib/worlds/art.ts");
 
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
 const target = path.resolve(process.argv[2] ?? path.join(scriptsDir, "..", "data", "worlds"));
@@ -159,6 +160,19 @@ for (const { file, pack } of packs) {
   }
   check(file, pack.nameSeeds.people.length >= 6, "needs at least 6 people name seeds");
   check(file, pack.nameSeeds.places.length >= 6, "needs at least 6 place name seeds");
+  // Art: every picture is for something the pack names, no two entries fold
+  // to the same key, and every picture fits the per-picture cap.
+  const slots = packArtSlots(pack);
+  const slotKeys = new Set();
+  for (const slot of slots) {
+    check(file, !slotKeys.has(slot.key), `two ${slot.kind} entries share the art key ${slot.key}; rename one`);
+    slotKeys.add(slot.key);
+  }
+  for (const [key, dataUrl] of Object.entries(pack.art)) {
+    check(file, slotKeys.has(key), `art "${key}" is for nothing this pack names`);
+    const bytes = Math.floor((dataUrl.length - dataUrl.indexOf(",") - 1) * 0.75);
+    check(file, bytes <= MAX_PACK_ART_BYTES, `art "${key}" is ${Math.round(bytes / 1024)} KB, over the ${MAX_PACK_ART_BYTES / 1024} KB cap`);
+  }
 }
 
 for (const group of groupByFranchise(packs.map(({ pack }) => summarizePack(pack)))) {

@@ -6,6 +6,7 @@ import {
   Brain,
   CircleHelp,
   Compass,
+  Footprints,
   Crown,
   Dices,
   DoorOpen,
@@ -21,6 +22,7 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Dialog } from "@/components/ui/Dialog";
+import { ui } from "@/lib/ui";
 
 // Exported for HowToPlayDialog, which is the short orientation read to this
 // dialog's full reference. Both used to carry byte-identical private copies,
@@ -77,9 +79,13 @@ export function ModeRow({
 export function HelpDialog({
   open,
   onOpenChange,
+  tours,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  // The table offers its guided tours from here; each runs once on its own
+  // and can be replayed at will. Other pages pass nothing.
+  tours?: { label: string; detail: string; onStart: () => void }[];
 }) {
   return (
     <Dialog
@@ -89,6 +95,30 @@ export function HelpDialog({
       icon={<CircleHelp className="size-5 text-amber-500/80" />}
       width="w-[min(94vw,44rem)]"
     >
+      {tours && tours.length ? (
+        <Section icon={Footprints} title="Guided tours">
+          <p>
+            A spotlight walk through the table&apos;s controls, one at a time. Each tour ran once
+            when you first sat down; take it again whenever you like.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {tours.map((tour) => (
+              <button
+                key={tour.label}
+                type="button"
+                onClick={() => {
+                  onOpenChange(false);
+                  tour.onStart();
+                }}
+                className={ui.btnSmall}
+                title={tour.detail}
+              >
+                <Footprints className="size-4" /> {tour.label}
+              </button>
+            ))}
+          </div>
+        </Section>
+      ) : null}
       <Section icon={Compass} title="Getting started">
         <p>
           Create a campaign from the home page, or join a friend&apos;s with their invite code or a{" "}

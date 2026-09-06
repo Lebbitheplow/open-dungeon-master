@@ -16,10 +16,10 @@
 // an interrupted run continues where it stopped and --only <group> re-renders
 // one slice. --force ignores what is on disk.
 
-import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { comfyReachable, encodeWebp as encodeWebpAt, renderImage, seedFor } from "./lib/comfy-render.mjs";
 import { placeholderJobs } from "./placeholder-set.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -67,9 +67,6 @@ function shipSize(job) {
 
 const QUALITY = 70;
 
-const JOB_TIMEOUT_MS = 15 * 60 * 1000;
-const POLL_MS = 700;
-
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
 const force = args.includes("--force");
@@ -77,100 +74,9 @@ const reencode = args.includes("--reencode");
 const onlyIndex = args.indexOf("--only");
 const only = onlyIndex >= 0 ? args[onlyIndex + 1] : "";
 
-// A stable seed per file: rerunning one group reproduces the picture that was
-// already reviewed instead of rolling a different one.
-function seedFor(key) {
-  let hash = 2166136261;
-  for (let i = 0; i < key.length; i += 1) {
-    hash ^= key.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0) % 2147483647;
-}
-
-function buildWorkflow({ prompt, negative, width, height, seed }) {
-  return {
-    "1": { class_type: "CheckpointLoaderSimple", inputs: { ckpt_name: CHECKPOINT } },
-    "2": { class_type: "CLIPTextEncode", inputs: { text: prompt, clip: ["1", 1] } },
-    "3": { class_type: "CLIPTextEncode", inputs: { text: negative, clip: ["1", 1] } },
-    "4": { class_type: "EmptyLatentImage", inputs: { width, height, batch_size: 1 } },
-    "5": {
-      class_type: "KSampler",
-      inputs: {
-        model: ["1", 0],
-        positive: ["2", 0],
-        negative: ["3", 0],
-        latent_image: ["4", 0],
-        seed,
-        steps: STEPS,
-        cfg: CFG,
-        sampler_name: SAMPLER,
-        scheduler: SCHEDULER,
-        denoise: 1,
-      },
-    },
-    "6": { class_type: "VAEDecode", inputs: { samples: ["5", 0], vae: ["1", 2] } },
-    "7": { class_type: "SaveImage", inputs: { images: ["6", 0], filename_prefix: "odm-placeholder" } },
-  };
-}
-
-async function render(options) {
-  const submitted = await fetch(`${COMFY_URL}/prompt`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt: buildWorkflow(options) }),
-  });
-  if (!submitted.ok) {
-    throw new Error(`ComfyUI rejected the job (${submitted.status}): ${await submitted.text()}`);
-  }
-  const { prompt_id: promptId } = await submitted.json();
-
-  const deadline = Date.now() + JOB_TIMEOUT_MS;
-  for (;;) {
-    if (Date.now() > deadline) {
-      throw new Error(`ComfyUI job ${promptId} did not finish in ${JOB_TIMEOUT_MS / 1000}s`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-    const history = await fetch(`${COMFY_URL}/history/${promptId}`, { cache: "no-store" });
-    const entry = (await history.json())[promptId];
-    if (!entry) {
-      continue;
-    }
-    if (entry.status?.status_str === "error") {
-      throw new Error(`ComfyUI failed: ${JSON.stringify(entry.status.messages).slice(0, 500)}`);
-    }
-    if (!entry.status?.completed) {
-      continue;
-    }
-    for (const output of Object.values(entry.outputs ?? {})) {
-      for (const image of output.images ?? []) {
-        const query = new URLSearchParams({
-          filename: image.filename,
-          subfolder: image.subfolder ?? "",
-          type: image.type ?? "output",
-        });
-        const file = await fetch(`${COMFY_URL}/view?${query}`);
-        return Buffer.from(await file.arrayBuffer());
-      }
-    }
-    throw new Error(`ComfyUI job ${promptId} produced no image`);
-  }
-}
-
-// ImageMagick rather than a new dependency: the repo has no image library, and
-// this script is the only thing that would ever pull one in.
+// The shared encoder, at this set's quality.
 function encodeWebp(sourcePath, targetPath, size) {
-  execFileSync("magick", [
-    sourcePath,
-    "-resize", `${size.width}x${size.height}^`,
-    "-gravity", "center",
-    "-extent", `${size.width}x${size.height}`,
-    "-strip",
-    "-quality", String(QUALITY),
-    "-define", "webp:method=6",
-    "-define", "webp:sharp-yuv=1",
-    targetPath,
-  ]);
+  encodeWebpAt(sourcePath, targetPath, size, QUALITY);
 }
 
 async function main() {
@@ -195,8 +101,7 @@ async function main() {
     return;
   }
 
-  const status = await fetch(`${COMFY_URL}/system_stats`, { cache: "no-store" }).catch(() => null);
-  if (!status?.ok) {
+  if (!(await comfyReachable(COMFY_URL))) {
     console.error(`Could not reach ComfyUI at ${COMFY_URL}. Start it and try again.`);
     process.exit(1);
   }
@@ -220,10 +125,17 @@ async function main() {
     try {
       // A kept original means only the encode has to run again.
       if (force || !existsSync(srcPath)) {
-        const png = await render({
+        const png = await renderImage({
+          comfyUrl: COMFY_URL,
+          checkpoint: CHECKPOINT,
           prompt: job.prompt,
           negative: job.negative,
           seed: seedFor(`${job.group}/${job.id}`),
+          steps: STEPS,
+          cfg: CFG,
+          sampler: SAMPLER,
+          scheduler: SCHEDULER,
+          prefix: "odm-placeholder",
           ...RENDER[job.aspect],
         });
         writeFileSync(srcPath, png);

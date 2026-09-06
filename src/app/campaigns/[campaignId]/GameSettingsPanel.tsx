@@ -13,6 +13,7 @@ import { Tooltip } from "@/components/ui/Tooltip";
 import { InfoButton } from "@/components/ui/InfoDialog";
 import { GENRE_PRESETS, genrePreset } from "@/lib/genres";
 import type { WorldPackSummary } from "@/lib/worlds/types";
+import { WorldPackGallery } from "@/components/WorldPackGallery";
 import { TTS_VOICES } from "@/lib/tts-voices";
 import { VoicePreviewButton } from "@/components/VoicePreviewButton";
 import {
@@ -277,6 +278,18 @@ export function GameSettingsPanel({
             </span>
           </div>
         ) : null}
+        {selectedPack?.cover ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="w-16 text-stone-500" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={selectedPack.cover}
+              alt=""
+              className="h-20 w-36 rounded-md border border-stone-800 object-cover"
+            />
+          </div>
+        ) : null}
+        {selectedPack ? <WorldPackGallery packId={selectedPack.id} /> : null}
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-16 text-stone-500">Setting</span>
           <select

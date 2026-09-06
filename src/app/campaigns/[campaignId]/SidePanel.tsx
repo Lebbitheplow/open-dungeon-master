@@ -66,6 +66,7 @@ function SidePanelInner({
         label,
         icon,
         tip,
+        tour: `tab-${value}`,
         // The approval queue is the lead's only while they steer the story,
         // so the lead tab carries the count on that condition and the Notes
         // tab keeps it unconditionally as before.

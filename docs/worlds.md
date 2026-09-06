@@ -87,6 +87,78 @@ Ocarina of Time and Breath of the Wild. Ship one pack per era:
 A franchise with one pack leaves `edition` empty and renders as a single button.
 A franchise with more than one **must** label every entry.
 
+## Art
+
+A pack can carry thumbnails: a cover for the picker, and a picture for each
+race, class, background, monster, place and faction it names. They ride inside
+the same JSON file as an `art` map of key to image data URL (PNG, JPEG or
+WebP), so nothing about hosting, installing or the registry changes. The server
+lifts the pictures out when it loads the pack and serves them from
+`/api/worlds/<id>/art/<key>`; the pack a client downloads for its reskin
+tables stays prose.
+
+Keys are derived, never chosen (`src/lib/worlds/art.ts`):
+
+| Key | For |
+| --- | --- |
+| `cover` | the pack itself, 16:9 |
+| `race-<id>` | a race reskin, by the SRD id with `_` folded to `-` (`race-variant-human`) |
+| `class-<id>` | a class reskin |
+| `background-<id>` | a background reskin |
+| `monster-<slug>` | a monster, by its Open5e slug |
+| `location-<slug>` | a place, by its name folded to lowercase and hyphens |
+| `faction-<slug>` | a faction, the same way |
+
+Where a picture shows up:
+
+- the cover, in the campaign creator, the lobby's game settings and the plugin
+  browser;
+- a monster's picture wherever the bestiary draws a tile for it, instead of
+  the creature-type plate;
+- a race or class picture as a character's portrait until somebody paints one
+  (class first, then race, the same order as the default plates);
+- places and factions, as a strip under the world in the lobby's game settings.
+
+Every slot is optional and every slot falls back to the default plate. Sizes
+match the placeholder set: 256 px squares and 704x400 landscapes, WebP around
+quality 75, which comes to roughly 10 KB a picture and under a megabyte for a
+full pack. The caps are 256 KB a picture, 400 pictures, and 16 MB for the whole
+manifest.
+
+You do not write the base64 by hand. Put the files in a folder named for the
+pack, one file per key, and fold them in:
+
+```bash
+node scripts/world-pack-art.mjs embed   data/worlds          # data/world-art/<id>/<key>.webp into each pack
+node scripts/world-pack-art.mjs extract data/worlds/foo.json # the other way, to edit a picture
+node scripts/world-pack-art.mjs list    data/worlds/foo.json # which slots are filled
+node scripts/world-pack-art.mjs strip   data/worlds/foo.json # back to a diffable manifest
+```
+
+`embed` skips a file whose key is for nothing the pack names, and refuses to
+write a manifest the schema would reject. The validator checks the same
+things, plus that no two places or factions fold to the same key.
+
+To render a set through a local ComfyUI, the way the default plates were made:
+
+```bash
+node scripts/generate-world-art.mjs data/worlds --dry-run     # every prompt, no GPU
+node scripts/generate-world-art.mjs data/worlds --only foo    # one pack
+node scripts/generate-world-art.mjs data/worlds               # everything missing
+```
+
+The prompts are built from the pack's own words: the reskin name and blurb,
+the SRD thing behind it, and the pack's `portraitStyle`
+(`scripts/world-art-set.mjs`). Originals land in `data/world-art-src/` and the
+embeddable WebP in `data/world-art/`, both gitignored; a run is resumable and
+`--reencode` rebuilds the WebP from the originals without the GPU. Bump the
+pack's `version` after embedding, or servers that already have it will not be
+offered the update.
+
+**Bundled packs carry no art.** Everything in `public/` and `src/` is vendored
+into the desktop and Android apps, so a picture in a bundled pack is bytes on
+every phone; the test enforces an empty `art` map there.
+
 ## Fields
 
 | Field | Notes |
@@ -113,6 +185,7 @@ A franchise with more than one **must** label every entry.
 | `alignments` | codes this world leans on, from LG NG CG LN N CN LE NE CE. The other nine stay pickable |
 | `nameSeeds` | `people` and `places`, offered as clickable suggestions in the builder |
 | `factions` / `locations` / `hooks` / `glossary` | story elements, rendered into the DM's game-state block |
+| `art` | thumbnails as image data URLs, keyed as described under Art. Optional |
 
 Empty string or empty array on `dmFlavor`, `mapStyle`, `portraitStyle`,
 `nameHints`, `raceHint` and `companionRaces` means "inherit the base genre".
@@ -192,7 +265,7 @@ Hosting notes:
   apply**. Any static host works, including ones that would be unusable from a
   browser.
 - `downloadUrl` must be **https** and must return the raw JSON, not an HTML
-  download page. Bodies are capped at 2MB with a 20 second timeout.
+  download page. Bodies are capped at 16MB with a 20 second timeout.
 - The index and the manifests do not have to live in the same place.
 - Only an admin can install, and a registry install resolves the URL from the
   index rather than from the client, so the set of hosts a server will fetch
@@ -247,6 +320,7 @@ better off on a plain static host.
 node scripts/validate-world-packs.mjs [dir]   # any folder, defaults to data/worlds
 node scripts/test-world-packs.mjs             # the bundled packs, part of npm test
 node scripts/test-world-install.mjs           # the install and removal lifecycle
+node scripts/test-world-art.mjs               # the art keys, the lift and the render list
 ```
 
 `src/lib/worlds/bundled/saltmarch.json` is the worked example. Match its depth.

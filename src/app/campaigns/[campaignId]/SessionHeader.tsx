@@ -13,6 +13,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { ComponentProps } from "react";
+import { AccountMenu, AppHomeButton, type AccountMenuUser } from "@/components/AccountMenu";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { headerButtonClass } from "@/app/campaigns/[campaignId]/headerButton";
 import { VoiceDock } from "@/app/campaigns/[campaignId]/VoiceDock";
@@ -119,10 +120,13 @@ function HeaderAudioControl({
 // The table's header: the campaign title in the display face with the scene
 // line under it, and every table-wide control right-aligned after it. Voice
 // lives here rather than in a panel tab because the call must survive tab
-// switches (see VoiceDock).
+// switches (see VoiceDock). The account menu is the same one every other
+// page carries, so settings, characters, log out and the app's home screen
+// are one tap away from the table too.
 export function SessionHeader({
   title,
   scene,
+  user,
   voice,
   dice3d,
   onToggleDice3d,
@@ -134,6 +138,7 @@ export function SessionHeader({
 }: {
   title: string;
   scene: string;
+  user: AccountMenuUser;
   voice: ComponentProps<typeof VoiceDock>;
   dice3d: boolean;
   onToggleDice3d: () => void;
@@ -162,6 +167,7 @@ export function SessionHeader({
             type="button"
             onClick={onToggleDice3d}
             aria-label={diceLabel}
+            data-tour="header-dice"
             className={headerButtonClass(dice3d)}
           >
             <Dices className="size-4" />
@@ -203,11 +209,12 @@ export function SessionHeader({
             OffIcon={Music2}
           />
         ) : null}
-        <Tooltip content="How everything works" side="bottom">
+        <Tooltip content="How everything works, and the guided tours" side="bottom">
           <button
             type="button"
             onClick={onHelp}
             aria-label="Help"
+            data-tour="header-help"
             className={headerButtonClass(false)}
           >
             <CircleHelp className="size-4" />
@@ -217,12 +224,14 @@ export function SessionHeader({
           <Link
             href="/"
             aria-label="All campaigns"
-            className="flex items-center gap-1.5 rounded-lg border border-transparent p-2.5 text-sm text-stone-500 transition-colors hover:text-amber-200 sm:p-1.5 md:border-stone-700/70 md:px-2.5"
+            className="hidden items-center gap-1.5 rounded-lg border border-transparent p-2.5 text-sm text-stone-500 transition-colors hover:text-amber-200 sm:flex sm:p-1.5 md:border-stone-700/70 md:px-2.5"
           >
             <DoorOpen className="size-4" />
             <span className="hidden md:inline">All campaigns</span>
           </Link>
         </Tooltip>
+        <AppHomeButton className="hidden sm:block" />
+        <AccountMenu user={user} onHelp={onHelp} />
       </div>
     </header>
   );

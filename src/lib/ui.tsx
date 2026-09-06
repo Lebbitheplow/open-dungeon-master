@@ -104,6 +104,7 @@ export function MonsterTile({
   cr,
   genre,
   seed,
+  art,
   size = "size-9",
   className,
 }: {
@@ -111,11 +112,18 @@ export function MonsterTile({
   cr?: number | null;
   genre?: string | null;
   seed?: string | null;
+  // A picture of this monster in particular (a world pack's own art, from
+  // BestiaryEntry.art), which beats any plate.
+  art?: string | null;
   size?: string;
   className?: string;
 }) {
   return (
-    <PixelTile src={monsterThumbnail(type, { cr, genre, seed })} size={size} className={className} />
+    <PixelTile
+      src={art || monsterThumbnail(type, { cr, genre, seed })}
+      size={size}
+      className={className}
+    />
   );
 }
 
@@ -156,6 +164,7 @@ export function UserAvatar({
 // row may have only a name - and src/lib/placeholders.ts narrows from there.
 export function CharacterPortrait({
   url,
+  fallback,
   look,
   alt = "",
   size = "size-12",
@@ -163,6 +172,9 @@ export function CharacterPortrait({
   className,
 }: {
   url?: string | null;
+  // What to draw before the generic plate: a world pack's picture for the
+  // character's class or race (usePackArt in src/lib/worlds/use-pack-art.ts).
+  fallback?: string | null;
   look?: CharacterLook;
   alt?: string;
   size?: string;
@@ -172,7 +184,7 @@ export function CharacterPortrait({
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={url || characterPlaceholder(look ?? {})}
+      src={url || fallback || characterPlaceholder(look ?? {})}
       alt={alt}
       loading="lazy"
       className={cn(

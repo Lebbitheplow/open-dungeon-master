@@ -53,7 +53,12 @@ export function DiceOverlay({
   const initFailedRef = useRef(false);
   const queueRef = useRef<string[][]>([]);
   const animatingRef = useRef(false);
-  const seenSeqRef = useRef<number | null>(null);
+  // Only rolls that arrive after mount animate; the snapshot backlog and
+  // reconnect replays stay silent. The watermark starts at whatever the
+  // stream already holds (0 on a table nothing has rolled at yet), so the
+  // first roll of a fresh table, and the first after the dice are switched
+  // back on, tumbles like every later one instead of passing for backlog.
+  const seenSeqRef = useRef<number>(latestRoll?.seq ?? 0);
   const unmountedRef = useRef(false);
 
   useEffect(() => {
@@ -124,12 +129,6 @@ export function DiceOverlay({
 
   useEffect(() => {
     if (!latestRoll) {
-      return;
-    }
-    // Only rolls that arrive after mount animate; the snapshot backlog and
-    // reconnect replays stay silent.
-    if (seenSeqRef.current === null) {
-      seenSeqRef.current = latestRoll.seq;
       return;
     }
     if (latestRoll.seq <= seenSeqRef.current) {

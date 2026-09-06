@@ -6,6 +6,7 @@ import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { UnofficialPackNotice } from "@/components/UnofficialPackNotice";
 import type { RegistryEntry, WorldPackSummary } from "@/lib/worlds/types";
+import { forgetPackArt } from "@/lib/worlds/use-pack-art";
 
 // The campaign plugin browser.
 //
@@ -17,7 +18,10 @@ import type { RegistryEntry, WorldPackSummary } from "@/lib/worlds/types";
 // are not covered by its MIT license. They are downloaded from whatever
 // registry the operator configured, or added by hand from a file, and they
 // carry an explicit non-affiliation notice wherever they appear.
-const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
+// The same ceiling as MAX_MANIFEST_BYTES in src/lib/worlds/install.ts, which
+// this client component cannot import: a pack with its thumbnails aboard is a
+// few megabytes, and anything near this is not one.
+const MAX_UPLOAD_BYTES = 16 * 1024 * 1024;
 
 type RegistryState = {
   configured: boolean;
@@ -114,6 +118,7 @@ export function AdminWorldsPanel() {
           ? `Updated ${data.pack.name}. Campaigns already using it pick up the new build on their next turn.`
           : `Installed ${data.pack.name}.`,
       );
+      forgetPackArt(data.pack?.id);
       await load();
     } catch {
       setError("Could not reach the server.");
@@ -136,6 +141,7 @@ export function AdminWorldsPanel() {
         return;
       }
       setNotice(`Removed ${pack.name}. Campaigns that used it fall back to their plain setting.`);
+      forgetPackArt(pack.id);
       await load();
     } catch {
       setError("Could not reach the server.");
@@ -146,7 +152,7 @@ export function AdminWorldsPanel() {
 
   async function onFile(file: File) {
     if (file.size > MAX_UPLOAD_BYTES) {
-      setError("That file is larger than 2MB, so it is not a world pack.");
+      setError("That file is larger than 16MB, so it is not a world pack.");
       return;
     }
     let parsed: unknown;
@@ -341,6 +347,14 @@ export function AdminWorldsPanel() {
               const outdated = Boolean(update && update.version !== pack.version);
               return (
                 <li key={pack.id} className="rounded-lg border border-stone-800 p-3">
+                  {pack.cover ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={pack.cover}
+                      alt=""
+                      className="mb-2 h-24 w-full rounded-md border border-stone-800 object-cover"
+                    />
+                  ) : null}
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <span className="text-stone-100">{pack.name}</span>
                     <span className="text-[11px] text-stone-500">

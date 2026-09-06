@@ -23,6 +23,13 @@
 // files off disk lives in ./index.ts, which is server-only.
 import { z } from "zod";
 import { GENRES } from "@/lib/schemas/game-settings";
+import {
+  MAX_PACK_ART_DATA_URL_CHARS,
+  MAX_PACK_ART_KEYS,
+  PACK_ART_DATA_URL,
+  PACK_ART_KEY,
+  packArtUrl,
+} from "@/lib/worlds/art";
 
 // A reskin of something addressed by id (races, classes, backgrounds). The id
 // is canonical and never rewritten; only `name` changes what is displayed.
@@ -125,6 +132,29 @@ export const worldPackSchema = z.object({
   glossary: z
     .array(z.object({ term: z.string().max(40), meaning: z.string().max(160) }))
     .default([]),
+  // Thumbnails, keyed the way src/lib/worlds/art.ts derives keys ("cover",
+  // "monster-<slug>", "race-<id>", ...) and carried as PNG, JPEG or WebP data
+  // URLs, the same way a workshop bundle carries its portraits. This is the
+  // WIRE shape: the server lifts the images out at load time and serves them
+  // from /api/worlds/<id>/art/<key>, so nothing downstream of the loader ever
+  // sees a base64 string here. Art for a key the pack does not name is
+  // tolerated by the schema and flagged by the validator.
+  art: z
+    .record(
+      z.string().regex(PACK_ART_KEY),
+      z.string().max(MAX_PACK_ART_DATA_URL_CHARS).regex(PACK_ART_DATA_URL, {
+        message: "Pack art must be PNG, JPEG or WebP data URLs.",
+      }),
+    )
+    .refine((record) => Object.keys(record).length <= MAX_PACK_ART_KEYS, {
+      message: `A pack carries at most ${MAX_PACK_ART_KEYS} pictures.`,
+    })
+    .default({}),
+  // Which keys `art` carried, filled in by the loader after it lifts the
+  // images out, so a client can ask "does this pack have a picture for my
+  // class" without downloading a single byte of it. Ignored on the way in:
+  // whatever a manifest claims here is overwritten by what it actually holds.
+  artKeys: z.array(z.string().regex(PACK_ART_KEY)).max(MAX_PACK_ART_KEYS).default([]),
 });
 
 export type WorldPack = z.infer<typeof worldPackSchema>;
@@ -154,7 +184,12 @@ export type WorldPackSummary = Pick<
   | "baseGenre"
   | "theme"
   | "premise"
-> & { source: WorldPackSource };
+> & {
+  source: WorldPackSource;
+  // The cover thumbnail's URL, or "" when the pack carries none and the
+  // picker draws the genre plate instead.
+  cover: string;
+};
 
 export function summarizePack(
   pack: WorldPack,
@@ -176,6 +211,7 @@ export function summarizePack(
     theme: pack.theme,
     premise: pack.premise,
     source,
+    cover: pack.artKeys.includes("cover") ? packArtUrl(pack.id, "cover", pack.version) : "",
   };
 }
 

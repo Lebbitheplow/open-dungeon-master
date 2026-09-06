@@ -55,12 +55,16 @@ export function CharacterSheetDialog({
   steersStory,
   encumbranceRule = false,
   inCombat = false,
+  portraitFallback,
   onAdjust,
   onClose,
 }: {
   sheet: CharacterSheet;
   mine: boolean;
   steersStory: boolean;
+  // The world pack's picture for this character's class or race, drawn
+  // before the generic plate when nobody has painted a portrait.
+  portraitFallback?: string | null;
   // The table's optional encumbrance rule.
   encumbranceRule?: boolean;
   // 5e timing: resources only come back at rests, so during an active
@@ -147,6 +151,7 @@ export function CharacterSheetDialog({
                 />
               ) : (
                 <CharacterPortrait
+                  fallback={portraitFallback}
                   look={{ race: sheet.race, class: sheet.class, gender: sheet.gender }}
                   alt={sheet.name}
                   size="size-14"

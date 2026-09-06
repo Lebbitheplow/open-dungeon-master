@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { PIXEL_ICONS, PixelTile } from "@/lib/ui";
-import { AccountMenu, type AccountMenuUser } from "@/components/AccountMenu";
+import { AccountMenu, AppHomeButton, type AccountMenuUser } from "@/components/AccountMenu";
 import { DeletionBanner } from "@/components/DeletionBanner";
 import { NotificationBell } from "@/components/NotificationBell";
 
@@ -60,6 +60,7 @@ export function AppHeader({
       </Link>
       {resolved ? (
         <div className="flex shrink-0 items-center gap-2">
+          <AppHomeButton />
           <NotificationBell />
           <AccountMenu user={resolved} />
         </div>

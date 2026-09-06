@@ -129,6 +129,7 @@ export function VoiceDock({
           }}
           aria-label="Voice chat"
           aria-expanded={open}
+          data-tour="header-voice"
           className={cn(
             headerButtonClass(open, "relative flex items-center gap-1.5 md:px-2.5"),
             // Emerald while on the call so the header says so at a glance,

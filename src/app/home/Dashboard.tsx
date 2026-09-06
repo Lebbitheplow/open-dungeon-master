@@ -6,7 +6,7 @@ import { PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
 import type { SessionUser } from "@/lib/campaign-types";
 import { offersStoryModel, useCapabilities } from "@/lib/use-capabilities";
 import { CreateCampaignDialog } from "@/app/CreateCampaignDialog";
-import { AccountMenu } from "@/components/AccountMenu";
+import { AccountMenu, AppHomeButton } from "@/components/AccountMenu";
 import { DeletionBanner } from "@/components/DeletionBanner";
 import { NotificationBell } from "@/components/NotificationBell";
 import { HowToPlayDialog } from "@/components/HowToPlayDialog";
@@ -186,6 +186,7 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            <AppHomeButton />
             <NotificationBell />
             <Tooltip content="What this app is and how a table works" side="bottom">
               <button type="button" onClick={() => setHowToOpen(true)} className={ui.btnSmall}>

@@ -16,6 +16,7 @@ import type { Note } from "@/lib/db/notes";
 import type { Genre } from "@/lib/schemas/game-settings";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { computeSheetDerived, formatModifier } from "@/lib/srd";
+import { usePackArt } from "@/lib/worlds/use-pack-art";
 
 // Mid-game physical-dice opt-in/out; the same per-member preference the
 // Lobby toggle writes. Turning it ON means the DM pauses on your rolls and
@@ -153,6 +154,7 @@ export function PartyPanel({
   companionBuildAvailable = false,
   companionGenre,
   companionLevel = 1,
+  worldPack = "",
 }: {
   sheets: CharacterSheet[];
   meUserId: string;
@@ -182,7 +184,10 @@ export function PartyPanel({
   companionBuildAvailable?: boolean;
   companionGenre?: Genre;
   companionLevel?: number;
+  // The campaign's world pack, whose art stands in for an unpainted portrait.
+  worldPack?: string;
 }) {
+  const packArt = usePackArt(worldPack);
   const [editingSheetId, setEditingSheetId] = useState("");
   const [viewingSheetId, setViewingSheetId] = useState("");
   const [croppingSheetId, setCroppingSheetId] = useState("");
@@ -270,6 +275,7 @@ export function PartyPanel({
               >
               <CharacterPortrait
                 url={sheet.portrait?.url}
+                fallback={packArt.characterUrl({ race: sheet.race, class: sheet.class })}
                 look={{ race: sheet.race, class: sheet.class, gender: sheet.gender }}
                 alt={sheet.name}
                 size="size-12"
@@ -593,6 +599,7 @@ export function PartyPanel({
           steersStory={steersStory}
           encumbranceRule={encumbranceRule}
           inCombat={inCombat}
+          portraitFallback={packArt.characterUrl({ race: viewingSheet.race, class: viewingSheet.class })}
           onAdjust={() => {
             // Close the sheet dialog fully before mounting the edit dialog;
             // swapping two modals in one commit can strand the body scroll

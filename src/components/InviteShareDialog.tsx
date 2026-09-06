@@ -15,6 +15,7 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { copyText } from "@/lib/clipboard";
 import { buildShareLinks } from "@/lib/share-link";
+import { shareSheet } from "@/lib/shell-host";
 import { ui } from "@/lib/ui";
 import { useShellShare } from "@/lib/use-shell-share";
 import { Dialog } from "@/components/ui/Dialog";
@@ -100,17 +101,18 @@ export function InviteShareDialog({
     }
   }
 
+  // The browser's share sheet where it has one; inside the Android app,
+  // the app's (its webview has no Web Share API). Nothing on desktop.
+  const sheet = shareSheet();
+
   async function share() {
+    if (!sheet) return;
     const title = campaignTitle || "my campaign";
-    try {
-      await navigator.share({
-        title: `Join ${title}`,
-        text: `Join ${campaignTitle ? `"${campaignTitle}"` : "my campaign"} on Open Dungeon Master`,
-        url: appUrl,
-      });
-    } catch {
-      // Dismissed the sheet; nothing to do.
-    }
+    await sheet({
+      title: `Join ${title}`,
+      text: `Join ${campaignTitle ? `"${campaignTitle}"` : "my campaign"} on Open Dungeon Master`,
+      url: appUrl,
+    });
   }
 
   async function regenerate() {
@@ -138,7 +140,6 @@ export function InviteShareDialog({
     }
   }
 
-  const canNativeShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
 
   return (
     <Dialog
@@ -180,8 +181,8 @@ export function InviteShareDialog({
             )}
             {copied === "code" ? "Copied" : "Copy code"}
           </button>
-          {canNativeShare ? (
-            <button type="button" onClick={share} className={ui.btnSmall}>
+          {sheet ? (
+            <button type="button" onClick={() => void share()} className={ui.btnSmall}>
               <Share2 className="size-4" /> Share
             </button>
           ) : null}

@@ -114,6 +114,14 @@ export function PremiseStep({
           </select>
           {selectedPack ? (
             <>
+              {selectedPack.cover ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={selectedPack.cover}
+                  alt=""
+                  className="mt-2 aspect-video w-full max-w-sm rounded-lg border border-stone-800 object-cover"
+                />
+              ) : null}
               <p className="mt-1 text-xs text-stone-500">{selectedPack.blurb}</p>
               <UnofficialPackNotice
                 rightsHolder={selectedPack.rightsHolder}

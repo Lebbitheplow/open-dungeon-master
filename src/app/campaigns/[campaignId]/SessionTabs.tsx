@@ -234,6 +234,7 @@ function BottomTabBarInner({
             key={value}
             type="button"
             onClick={() => onSelectPanel(value)}
+            data-tour={`tab-${value}`}
             className={cn(ui.railCell, "flex-1", tabAccentClass(value, active))}
           >
             <Icon

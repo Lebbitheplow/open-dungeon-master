@@ -19,8 +19,14 @@ const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "odm-worlds-"));
 process.env.WORLD_PACKS_DIR = scratch;
 
 const { worldPackSchema, registryIndexSchema } = await import("../src/lib/worlds/types.ts");
-const { installedPackPath, listWorldPackSummaries, worldPack, worldPackSource, resetWorldPackCache } =
-  await import("../src/lib/worlds/index.ts");
+const {
+  installedPackPath,
+  listWorldPackSummaries,
+  worldPack,
+  worldPackArt,
+  worldPackSource,
+  resetWorldPackCache,
+} = await import("../src/lib/worlds/index.ts");
 const {
   installWorldPack,
   removeWorldPack,
@@ -63,6 +69,56 @@ await test("a valid manifest installs, loads, and removes", async () => {
   assert.ok(removed.ok, "remove failed");
   assert.equal(worldPack("test_world"), null);
   assert.ok(!fs.existsSync(path.join(scratch, "test_world.json")));
+});
+
+// A valid 1x1 WebP, the smallest picture the schema accepts.
+const PIXEL_WEBP =
+  "data:image/webp;base64,UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==";
+
+await test("a pack with art installs with the pictures on disk and lifted out in memory", async () => {
+  const result = await installWorldPack(
+    manifest({
+      races: [{ id: "human", name: "Townsfolk", blurb: "Plain." }],
+      art: { cover: PIXEL_WEBP, "race-human": PIXEL_WEBP },
+      artKeys: ["nonsense"],
+    }),
+  );
+  assert.ok(result.ok, `install failed: ${result.ok ? "" : result.error}`);
+  // The install result is already the lifted shape, so the route's summary
+  // knows about the cover without a second load.
+  assert.deepEqual(result.pack.artKeys, ["cover", "race-human"]);
+  assert.deepEqual(result.pack.art, {});
+  // The file keeps the pictures (that is the whole pack) and not the
+  // loader's claim about them.
+  const onDisk = JSON.parse(fs.readFileSync(path.join(scratch, "test_world.json"), "utf8"));
+  assert.equal(onDisk.art.cover, PIXEL_WEBP);
+  assert.deepEqual(onDisk.artKeys, []);
+  // Loaded fresh: prose only, keys filled, bytes served.
+  const loaded = worldPack("test_world");
+  assert.deepEqual(loaded.art, {});
+  assert.deepEqual(loaded.artKeys, ["cover", "race-human"]);
+  const cover = worldPackArt("test_world", "cover");
+  assert.equal(cover?.mime, "image/webp");
+  assert.ok(cover.bytes.length > 0);
+  assert.equal(worldPackArt("test_world", "race-elf"), null);
+  assert.equal(worldPackArt("test_world", "../cover"), null);
+  assert.equal(worldPackArt("no_such_world", "cover"), null);
+  const summary = listWorldPackSummaries().find((entry) => entry.id === "test_world");
+  assert.equal(summary.cover, "/api/worlds/test_world/art/cover?v=1.0.0");
+  await removeWorldPack("test_world");
+  assert.equal(worldPackArt("test_world", "cover"), null, "art outlived its pack");
+});
+
+await test("a pack whose art is not an image is refused", async () => {
+  for (const art of [
+    { cover: "https://example.invalid/cover.webp" },
+    { cover: "data:text/html;base64,PGI+" },
+    { "../escape": PIXEL_WEBP },
+  ]) {
+    const result = await installWorldPack(manifest({ art }));
+    assert.ok(!result.ok, `${JSON.stringify(art)} installed`);
+    assert.equal(result.status, 400);
+  }
 });
 
 await test("reinstalling the same id reports that it replaced something", async () => {

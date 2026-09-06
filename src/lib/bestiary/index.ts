@@ -1,5 +1,6 @@
 import type { Genre } from "@/lib/schemas/game-settings";
 import { packFor, type SettingRef } from "@/lib/worlds/preset";
+import { packArtKey, packArtUrl } from "@/lib/worlds/art";
 import { getEntryDetail, searchMonsters } from "@/lib/content";
 import { parseMonster, type EnemyStats } from "@/lib/bestiary/statblock";
 import { findHomebrewMonster } from "@/lib/bestiary/homebrew-monsters";
@@ -27,6 +28,9 @@ export type BestiaryEntry = {
   // thumbnail plate it draws (monsterThumbnail in src/lib/ui.tsx).
   type: string;
   blurb: string;
+  // The selected world pack's own picture for this entry, when it carries
+  // one; absent, the tile draws the type's placeholder plate.
+  art?: string;
 };
 
 type CatalogFile = { entries: BestiaryEntry[] };
@@ -55,7 +59,13 @@ export function bestiaryFor(setting: SettingRef): BestiaryEntry[] {
   if (!pack?.monsters.length) {
     return base;
   }
-  const overrides = new Map(pack.monsters.map((entry) => [entry.slug, entry]));
+  const withArt = (entry: (typeof pack.monsters)[number]): BestiaryEntry => {
+    const key = packArtKey("monster", entry.slug);
+    return pack.artKeys.includes(key)
+      ? { ...entry, art: packArtUrl(pack.id, key, pack.version) }
+      : { ...entry };
+  };
+  const overrides = new Map(pack.monsters.map((entry) => [entry.slug, withArt(entry)]));
   // A pack that says nothing about type inherits the genre's answer for the
   // same slug, so a reskin never loses its thumbnail by leaving the field out.
   const merged = base.map((entry) => {
@@ -63,7 +73,7 @@ export function bestiaryFor(setting: SettingRef): BestiaryEntry[] {
     return override ? { ...override, type: override.type || entry.type } : entry;
   });
   const seen = new Set(base.map((entry) => entry.slug));
-  return [...merged, ...pack.monsters.filter((entry) => !seen.has(entry.slug))];
+  return [...merged, ...pack.monsters.filter((entry) => !seen.has(entry.slug)).map(withArt)];
 }
 
 export function reskinFor(setting: SettingRef, slug: string): BestiaryEntry | null {

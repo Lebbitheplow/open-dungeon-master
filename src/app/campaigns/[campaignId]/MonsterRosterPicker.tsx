@@ -31,7 +31,7 @@ export function MonsterRosterPicker({
 }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<
-    Array<{ slug: string; name: string; cr: number; type: string }>
+    Array<{ slug: string; name: string; cr: number; type: string; art?: string }>
   >([]);
   // The table's setting, for the boss plate on high-rating results.
   const [genre, setGenre] = useState("");
@@ -55,7 +55,7 @@ export function MonsterRosterPicker({
         .then(
           (
             payload: {
-              found: Array<{ slug: string; name: string; cr: number; type: string }>;
+              found: Array<{ slug: string; name: string; cr: number; type: string; art?: string }>;
               monsters: Array<{
                 draft: { name: string; stats: { cr: number; type?: string } };
                 slug: string;
@@ -126,6 +126,7 @@ export function MonsterRosterPicker({
                 cr={entry.cr}
                 genre={genre}
                 seed={entry.slug}
+                art={entry.art}
                 size="size-5"
                 className="mr-1 inline-flex align-middle"
               />

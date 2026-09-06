@@ -3,13 +3,17 @@
 import {
   type FormEvent,
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
   useSyncExternalStore,
 } from "react";
 import { JOIN_NOTE_PREFIX, latestUnintroducedJoin } from "@/lib/campaign-types";
+import { markTourSeen, tourSeen } from "@/lib/tours/logic";
+import { DM_TOUR, DM_TOUR_ID, PLAYER_TOUR, PLAYER_TOUR_ID } from "@/lib/tours/table";
 import { HelpDialog } from "@/components/HelpDialog";
+import { GuidedTour } from "@/components/ui/GuidedTour";
 import { CharacterGate } from "@/app/campaigns/[campaignId]/CharacterGate";
 import { Composer, type InputKind } from "@/app/campaigns/[campaignId]/Composer";
 import { composerGate } from "@/app/campaigns/[campaignId]/composerGate";
@@ -40,6 +44,16 @@ import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStre
 function subscribeDicePref(callback: () => void) {
   window.addEventListener("odm-dice3d-pref", callback);
   return () => window.removeEventListener("odm-dice3d-pref", callback);
+}
+
+// The once-only flag of each table tour, read the way the dice preference
+// is: from localStorage as an external store, so finishing a tour in one
+// tab is known to every other.
+const TOUR_SEEN_EVENT = "odm-tour-seen";
+
+function subscribeTourSeen(callback: () => void) {
+  window.addEventListener(TOUR_SEEN_EVENT, callback);
+  return () => window.removeEventListener(TOUR_SEEN_EVENT, callback);
 }
 
 // The play table. Header, the story column, the docked context column and
@@ -93,6 +107,8 @@ export function SessionView({
   // Bumped on pin/unpin so the pins panel refetches without a stream event.
   const [pinsVersion, setPinsVersion] = useState(0);
   const [helpOpen, setHelpOpen] = useState(false);
+  // The guided tour on screen, if any: the player's or the DM's.
+  const [tour, setTour] = useState<"player" | "dm" | null>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const dice3d = useSyncExternalStore(
     subscribeDicePref,
@@ -138,6 +154,25 @@ export function SessionView({
     setSeenDmSeat(true);
     setKind("narrate");
   }
+
+  // The tour for this seat runs once, the first time the table is sat at,
+  // after the layout has had a moment to settle. Help replays it.
+  const tourId = isDm ? DM_TOUR_ID : PLAYER_TOUR_ID;
+  const tourAlreadySeen = useSyncExternalStore(
+    subscribeTourSeen,
+    () => tourSeen(window.localStorage, tourId),
+    () => true,
+  );
+  useEffect(() => {
+    if (tourAlreadySeen) return;
+    const timer = window.setTimeout(() => setTour(isDm ? "dm" : "player"), 1200);
+    return () => clearTimeout(timer);
+  }, [tourAlreadySeen, isDm]);
+  const closeTour = useCallback(() => {
+    markTourSeen(window.localStorage, tourId);
+    window.dispatchEvent(new Event(TOUR_SEEN_EVENT));
+    setTour(null);
+  }, [tourId]);
   // The campaign's opening narration gets everyone's full attention: while
   // it plays for this user, do/say/lead input waits (OOC stays open).
   const firstDmMessageId = messages.find((message) => message.authorType === "dm")?.id;
@@ -259,6 +294,34 @@ export function SessionView({
     [caps.adjudicates, state.messages, state.rolls, beatThreshold, beatSnoozedUntil],
   );
   const openStoryCapture = useCallback(() => selectPanelView("dm"), [selectPanelView]);
+  // What a tour step needs on screen before it can point at anything: the
+  // right side-panel tab, or on a phone the chat column.
+  const hasBattleMap = Boolean(state.battleMap);
+  const prepareTourStep = useCallback(
+    (name: string) => {
+      switch (name) {
+        case "show-chat":
+          setMobileView("chat");
+          break;
+        case "open-dm":
+          selectPanelView("dm");
+          break;
+        case "open-party":
+          selectPanelView("party");
+          break;
+        case "open-story":
+          selectPanelView("story");
+          break;
+        case "open-map":
+          selectPanelView(hasBattleMap ? "battle" : "map");
+          break;
+        case "open-chat":
+          selectPanelView("chat");
+          break;
+      }
+    },
+    [selectPanelView, setMobileView, hasBattleMap],
+  );
   const snoozeStory = useCallback(() => setBeatSnoozedUntil(snoozeUntil(Date.now())), []);
 
   const joinNoticeId = joinNotice?.id;
@@ -289,6 +352,7 @@ export function SessionView({
       <SessionHeader
         title={campaign.title}
         scene={campaign.scene}
+        user={me}
         voice={{
           campaignId: campaign.id,
           meUserId: me.id,
@@ -436,7 +500,33 @@ export function SessionView({
 
       {dice3d ? <DiceOverlay latestRoll={state.latestRoll} enabled /> : null}
 
-      <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+      <HelpDialog
+        open={helpOpen}
+        onOpenChange={setHelpOpen}
+        tours={[
+          {
+            label: "Tour the table",
+            detail: "How a player takes a turn, asks the DM, and finds the party, the story and the maps.",
+            onStart: () => setTour("player"),
+          },
+          ...(caps.adjudicates
+            ? [
+                {
+                  label: "Tour the DM console",
+                  detail: "The floor, story beats, hand-over switches, the queue and the tools.",
+                  onStart: () => setTour("dm"),
+                },
+              ]
+            : []),
+        ]}
+      />
+
+      <GuidedTour
+        open={tour !== null}
+        steps={tour === "dm" ? DM_TOUR : PLAYER_TOUR}
+        onPrepare={prepareTourStep}
+        onClose={closeTour}
+      />
 
       {loreCheck ? (
         <LoreCheckDialog

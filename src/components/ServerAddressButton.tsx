@@ -1,12 +1,13 @@
 "use client";
 
-import { Check, Copy, QrCode, X } from "lucide-react";
+import { Check, Copy, QrCode, Share2, X } from "lucide-react";
 import { usePathname } from "next/navigation";
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { copyText } from "@/lib/clipboard";
 import { shareableAddresses } from "@/lib/server-address";
+import { shareSheet } from "@/lib/shell-host";
 import { ui } from "@/lib/ui";
 
 // The little button in the corner of every page: tap it and the server's
@@ -111,6 +112,19 @@ export function ServerAddressButton() {
     }
   }
 
+  // Copy, share and the code: the same three ways out the invite dialog
+  // offers, so an address travels as easily as a room code does.
+  const sheet = shareSheet();
+
+  async function share() {
+    if (!sheet || !picked) return;
+    await sheet({
+      title: serverName || "Open Dungeon Master",
+      text: `Join me on ${serverName || "Open Dungeon Master"}: ${picked}`,
+      url: picked,
+    });
+  }
+
   if (pathname?.startsWith("/campaigns/")) {
     return null;
   }
@@ -170,15 +184,27 @@ export function ServerAddressButton() {
               </select>
             ) : null}
             <p className="mt-3 break-all font-mono text-xs text-amber-100">{picked}</p>
-            <button
-              type="button"
-              onClick={() => void copy()}
-              disabled={!picked}
-              className={cn(ui.btnSmall, "mt-2 w-full justify-center")}
-            >
-              {copied ? <Check className="size-4 text-emerald-300" /> : <Copy className="size-4" />}
-              {copied ? "Copied" : "Copy address"}
-            </button>
+            <div className="mt-2 flex gap-2">
+              <button
+                type="button"
+                onClick={() => void copy()}
+                disabled={!picked}
+                className={cn(ui.btnSmall, "flex-1 justify-center")}
+              >
+                {copied ? <Check className="size-4 text-emerald-300" /> : <Copy className="size-4" />}
+                {copied ? "Copied" : "Copy"}
+              </button>
+              {sheet ? (
+                <button
+                  type="button"
+                  onClick={() => void share()}
+                  disabled={!picked}
+                  className={cn(ui.btnSmall, "flex-1 justify-center")}
+                >
+                  <Share2 className="size-4" /> Share
+                </button>
+              ) : null}
+            </div>
             <p className="mt-2 text-[11px] leading-4 text-stone-500">
               Scan with the Open Dungeon Master app to add this server, or with a phone camera
               to open it in a browser.

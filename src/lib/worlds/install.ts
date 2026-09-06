@@ -8,14 +8,17 @@ import {
   INSTALLED_DIR,
   installedPackPath,
   resetWorldPackCache,
+  withArtLifted,
   worldPackSource,
 } from "@/lib/worlds";
 import { worldPackSchema, registryIndexSchema, type WorldPack, type RegistryEntry } from "@/lib/worlds/types";
 
-// A manifest is prose and tables, not media. Anything larger than this is not
-// a world pack, and the cap is what stops a hostile registry from streaming
-// until the disk fills.
-export const MAX_MANIFEST_BYTES = 2 * 1024 * 1024;
+// A manifest is prose, tables and a few hundred thumbnails at most. Anything
+// larger than this is not a world pack, and the cap is what stops a hostile
+// registry from streaming until the disk fills. Sixteen megabytes is roughly
+// four hundred pictures at the per-picture cap (src/lib/worlds/art.ts); the
+// packs this project's author maintains are two to three.
+export const MAX_MANIFEST_BYTES = 16 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 20_000;
 
 // The registry every deployment browses unless its operator says otherwise.
@@ -63,7 +66,9 @@ export async function installWorldPack(raw: unknown): Promise<InstallResult> {
       error: `That file is not a valid world pack: ${first ? `${first.path.join(".")} ${first.message}` : "unknown problem"}.`,
     };
   }
-  const pack = parsed.data;
+  // artKeys is the loader's word, not the author's: whatever the manifest
+  // claimed is dropped so the file on disk carries only what it holds.
+  const pack: WorldPack = { ...parsed.data, artKeys: [] };
   const target = installedPackPath(pack.id);
   if (!target) {
     return { ok: false, status: 400, error: "That pack has an unusable id." };
@@ -84,7 +89,9 @@ export async function installWorldPack(raw: unknown): Promise<InstallResult> {
     };
   }
   resetWorldPackCache();
-  return { ok: true, pack, replaced };
+  // The caller gets the pack as the loader will serve it, so a summary built
+  // from this result already knows about the cover.
+  return { ok: true, pack: withArtLifted(pack).pack, replaced };
 }
 
 export type RemoveResult = { ok: true } | { ok: false; error: string; status: number };
@@ -155,7 +162,10 @@ async function fetchJsonCapped(url: string): Promise<{ ok: true; value: unknown 
       total += value.byteLength;
       if (total > MAX_MANIFEST_BYTES) {
         await reader.cancel();
-        return { ok: false, error: "That file is larger than 2MB, so it is not a world pack." };
+        return {
+          ok: false,
+          error: `That file is larger than ${MAX_MANIFEST_BYTES / 1024 / 1024}MB, so it is not a world pack.`,
+        };
       }
       chunks.push(value);
     }

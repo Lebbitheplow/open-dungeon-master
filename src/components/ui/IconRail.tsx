@@ -29,6 +29,8 @@ export type IconRailItem<T extends string = string> = {
   badge?: number;
   dot?: "red" | "amber";
   accent?: "gold" | "ember";
+  // A data-tour name so the guided tour can light this cell.
+  tour?: string;
 };
 
 export function IconRail<T extends string>({
@@ -66,6 +68,7 @@ export function IconRail<T extends string>({
             type="button"
             onClick={() => onChange(item.value)}
             aria-current={active ? "page" : undefined}
+            data-tour={item.tour}
             className={cn(
               ui.railCell,
               !vertical && "flex-1",

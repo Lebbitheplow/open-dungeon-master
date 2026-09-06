@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isErrorResponse, requireDm } from "@/lib/campaign-api";
 import { getEntryDetail, searchMonsters } from "@/lib/content";
+import { reskinFor } from "@/lib/bestiary";
 import { normalizeCreatureType, parseMonster } from "@/lib/bestiary/statblock";
 import {
   checkMonsterDraft,
@@ -54,6 +55,8 @@ export async function GET(
         source: entry.source,
         cr: typeof entry.data.cr === "number" ? entry.data.cr : 0,
         type: normalizeCreatureType(entry.data.type) ?? "",
+        // The world pack's own picture of this monster, when it carries one.
+        art: reskinFor(context.campaign.gameSettings, entry.slug)?.art,
       }))
     : [];
 

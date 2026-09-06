@@ -2,8 +2,9 @@
 
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
-  ArrowLeftRight,
+  AppWindow,
   CircleHelp,
+  DoorOpen,
   HeartHandshake,
   LogOut,
   Settings,
@@ -12,14 +13,36 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
 import { HelpDialog } from "@/components/HelpDialog";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { headerButtonClass } from "@/app/campaigns/[campaignId]/headerButton";
 import { shellHost, type ShellHost } from "@/lib/shell-host";
 
 // window.odmShell is set once before any page script runs and never changes.
 const subscribeNever = () => () => {};
+
+// Inside the desktop or Android app, the one visible way back to the app's
+// own home screen (its servers, device world and settings) from any page:
+// the account menu offers the same door, but a door behind an avatar is
+// not a door a newcomer finds. Renders nothing in a plain browser.
+export function AppHomeButton({ className }: { className?: string }) {
+  const shell = useSyncExternalStore<ShellHost | null>(subscribeNever, shellHost, () => null);
+  if (!shell) return null;
+  return (
+    <Tooltip content="Back to the app's home screen" side="bottom">
+      <button
+        type="button"
+        onClick={() => shell.showServers()}
+        aria-label="App home"
+        className={headerButtonClass(false, className)}
+      >
+        <AppWindow className="size-4" />
+      </button>
+    </Tooltip>
+  );
+}
 
 // The one account menu, extracted from the home page so every top-level page
 // offers the same doors. Only the fields the menu draws from, so any page's
@@ -38,13 +61,18 @@ const itemClass =
 export function AccountMenu({
   user,
   onLogout,
+  onHelp,
 }: {
   user: AccountMenuUser;
   // The home page swaps back to the login screen in place; every other page
   // just leaves. Omitting the prop gets the redirect.
   onLogout?: () => void;
+  // A page with its own Help (the table, whose dialog also offers the
+  // tours) opens that instead of the menu's plain copy.
+  onHelp?: () => void;
 }) {
   const [helpOpen, setHelpOpen] = useState(false);
+  const pathname = usePathname();
   // Inside the desktop or Android app the menu grows a door back to the
   // app's server list. The host object is a client-only global, so it is
   // read as an external store with a null server snapshot: server and
@@ -93,6 +121,13 @@ export function AccountMenu({
             collisionPadding={12}
             className="min-w-44 rounded-lg border border-stone-600/60 bg-stone-950 p-1 shadow-elev-2"
           >
+            {pathname !== "/" ? (
+              <DropdownMenu.Item asChild>
+                <Link href="/" className={itemClass}>
+                  <DoorOpen className="size-4" /> All campaigns
+                </Link>
+              </DropdownMenu.Item>
+            ) : null}
             <DropdownMenu.Item asChild>
               <Link href="/characters" className={itemClass}>
                 <Users className="size-4" /> Characters
@@ -115,13 +150,16 @@ export function AccountMenu({
                 </Link>
               </DropdownMenu.Item>
             ) : null}
-            <DropdownMenu.Item onSelect={() => setHelpOpen(true)} className={itemClass}>
+            <DropdownMenu.Item
+              onSelect={() => (onHelp ? onHelp() : setHelpOpen(true))}
+              className={itemClass}
+            >
               <CircleHelp className="size-4" /> Help
             </DropdownMenu.Item>
             <DropdownMenu.Separator className="my-1 h-px bg-stone-800" />
             {shell ? (
               <DropdownMenu.Item onSelect={() => shell.showServers()} className={itemClass}>
-                <ArrowLeftRight className="size-4" /> Switch server
+                <AppWindow className="size-4" /> App home
               </DropdownMenu.Item>
             ) : null}
             <DropdownMenu.Item onSelect={logout} className={itemClass}>
@@ -130,7 +168,7 @@ export function AccountMenu({
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
-      <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+      {onHelp ? null : <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />}
     </>
   );
 }

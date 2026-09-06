@@ -139,7 +139,7 @@ function ComposerInner({
             onDismiss={joinBanner.onDismiss}
           />
         ) : null}
-        <div className="mb-2 flex gap-1.5">
+        <div className="mb-2 flex gap-1.5" data-tour="composer-modes">
           {/* The DM authors and talks out of character; they have no
               character to act or speak as, and the story directions exist to
               steer an AI narrator they have replaced. */}
@@ -226,7 +226,10 @@ function ComposerInner({
             </Tooltip>
           </div>
         ) : null}
-        <div className="texture-noise flex items-end gap-2 rounded-2xl border border-stone-700/70 bg-stone-950/90 p-2 shadow-elev-1 transition-[border-color,box-shadow] duration-200 focus-within:border-amber-400/60 focus-within:shadow-[0_0_0_3px_rgba(212,171,58,0.1),0_2px_12px_rgba(4,2,12,0.5)]">
+        <div
+          data-tour="composer-input"
+          className="texture-noise flex items-end gap-2 rounded-2xl border border-stone-700/70 bg-stone-950/90 p-2 shadow-elev-1 transition-[border-color,box-shadow] duration-200 focus-within:border-amber-400/60 focus-within:shadow-[0_0_0_3px_rgba(212,171,58,0.1),0_2px_12px_rgba(4,2,12,0.5)]"
+        >
           <textarea
             ref={composerRef}
             value={input}

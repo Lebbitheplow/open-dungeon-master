@@ -21,6 +21,7 @@ const { CUSTOM_BACKGROUNDS } = await import("../src/lib/backgrounds/index.ts");
 const { SRD_WEAPONS } = await import("../src/lib/srd/weapons.ts");
 const { SRD_ARMOR } = await import("../src/lib/srd/armor.ts");
 const { normalizeCreatureType } = await import("../src/lib/bestiary/statblock.ts");
+const { packArtSlots, MAX_PACK_ART_BYTES } = await import("../src/lib/worlds/art.ts");
 
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
 // Only the BUNDLED directory is checked here. Installed packs live in the
@@ -248,6 +249,25 @@ test("every pack carries enough content to be worth selecting", () => {
     assert.ok(pack.nameSeeds.people.length >= 6, `${file}: needs at least 6 people name seeds`);
     assert.ok(pack.nameSeeds.places.length >= 6, `${file}: needs at least 6 place name seeds`);
     assert.ok(pack.dmFlavor.length >= 200, `${file}: dmFlavor is too thin to steer the DM`);
+  }
+});
+
+test("art is for things the pack names, keys do not collide, and pictures fit the cap", () => {
+  for (const { file, pack } of packs) {
+    const slots = packArtSlots(pack);
+    const keys = new Set();
+    for (const slot of slots) {
+      assert.ok(!keys.has(slot.key), `${file}: two ${slot.kind} entries share the art key ${slot.key}`);
+      keys.add(slot.key);
+    }
+    for (const [key, dataUrl] of Object.entries(pack.art)) {
+      assert.ok(keys.has(key), `${file}: art "${key}" is for nothing this pack names`);
+      const bytes = Math.floor((dataUrl.length - dataUrl.indexOf(",") - 1) * 0.75);
+      assert.ok(bytes <= MAX_PACK_ART_BYTES, `${file}: art "${key}" is over the per-picture cap`);
+    }
+    // Bundled packs are vendored into every client shell, so they ship no
+    // art: a picture here is bytes on every phone.
+    assert.equal(Object.keys(pack.art).length, 0, `${file}: a bundled pack must not embed art`);
   }
 });
 

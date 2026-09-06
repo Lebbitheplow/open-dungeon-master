@@ -26,6 +26,7 @@ import {
   type WorldPackSource,
   type WorldPackSummary,
 } from "@/lib/worlds/types";
+import { MAX_PACK_ART_BYTES, PACK_ART_DATA_URL, PACK_ART_KEY } from "@/lib/worlds/art";
 
 // The same process.cwd() + env override pattern the SQLite paths use
 // (src/lib/content/db.ts, src/lib/db/core.ts). The Dockerfile copies /app/src
@@ -35,7 +36,45 @@ const BUNDLED_DIR = path.join(process.cwd(), "src", "lib", "worlds", "bundled");
 export const INSTALLED_DIR =
   process.env.WORLD_PACKS_DIR || path.join(process.cwd(), "data", "worlds");
 
-type LoadedPack = { pack: WorldPack; source: WorldPackSource };
+// One decoded picture, held in memory for the art route. A pack's art is a
+// megabyte or two of WebP, and lifting it out of the manifest at load time is
+// what keeps the pack itself (which the character builder downloads whole)
+// prose-sized.
+export type PackArtImage = { mime: string; bytes: Buffer };
+
+type LoadedPack = {
+  pack: WorldPack;
+  source: WorldPackSource;
+  art: Map<string, PackArtImage>;
+};
+
+// Splits a parsed manifest into the pack every consumer sees (art emptied,
+// artKeys filled) and the decoded images. A data URL the schema accepted but
+// that decodes to nothing, or to more than the per-picture cap, is dropped
+// here rather than served, so the cap is on the bytes the disk pays and not
+// only on the base64 the schema measured.
+function liftArt(parsed: WorldPack): LoadedPack["art"] {
+  const art = new Map<string, PackArtImage>();
+  for (const [key, dataUrl] of Object.entries(parsed.art)) {
+    const match = dataUrl.match(PACK_ART_DATA_URL);
+    if (!match) {
+      continue;
+    }
+    const bytes = Buffer.from(dataUrl.slice(dataUrl.indexOf(",") + 1), "base64");
+    if (!bytes.length || bytes.length > MAX_PACK_ART_BYTES) {
+      continue;
+    }
+    art.set(key, { mime: `image/${match[1]}`, bytes });
+  }
+  return art;
+}
+
+// The pack as everything past the loader sees it: no inline images, and
+// artKeys saying which pictures the art route can answer for.
+export function withArtLifted(parsed: WorldPack): { pack: WorldPack; art: Map<string, PackArtImage> } {
+  const art = liftArt(parsed);
+  return { pack: { ...parsed, art: {}, artKeys: [...art.keys()].sort() }, art };
+}
 
 let cache: Map<string, LoadedPack> | null = null;
 
@@ -71,7 +110,8 @@ function readDirectory(dir: string, source: WorldPackSource, into: Map<string, L
         console.warn(`world pack ${file} declares id ${parsed.data.id}, skipping`);
         continue;
       }
-      into.set(parsed.data.id, { pack: parsed.data, source });
+      const { pack, art } = withArtLifted(parsed.data);
+      into.set(pack.id, { pack, source, art });
     } catch (error) {
       console.warn(`world pack ${file} could not be read, skipping:`, error);
     }
@@ -118,6 +158,15 @@ export function worldPack(id: string): WorldPack | null {
 
 export function worldPackSource(id: string): WorldPackSource | null {
   return loadAll().get(id)?.source ?? null;
+}
+
+// One of a pack's pictures, for the art route. The key is re-checked against
+// the same pattern the schema enforces, because this is reached from a URL.
+export function worldPackArt(id: string, key: string): PackArtImage | null {
+  if (!PACK_ART_KEY.test(key)) {
+    return null;
+  }
+  return loadAll().get(id)?.art.get(key) ?? null;
 }
 
 // The absolute path a pack id maps to inside the installed directory.
