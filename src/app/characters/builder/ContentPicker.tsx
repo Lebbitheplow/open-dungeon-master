@@ -11,6 +11,12 @@ export type { PickerEntry } from "./useContentSearch";
 
 // Debounced search-and-add against /api/content/[kind]. Used for spells,
 // items, and feats in the character builder.
+//
+// The results render inline rather than absolutely positioned. Every caller
+// now sits inside a pane that scrolls on its own (a wizard step, a dialog),
+// and an absolute list is clipped by that pane's overflow: the rows arrive,
+// draw below the fold and never appear, which reads as "no results" for a
+// search that in fact found ninety. MultiContentPicker learned this first.
 export default function ContentPicker({
   kind,
   extraParams = {},
@@ -41,7 +47,7 @@ export default function ContentPicker({
   }, [setOpen]);
 
   return (
-    <div ref={container} className="relative">
+    <div ref={container}>
       <div className="relative">
         <input
           value={query}
@@ -61,8 +67,14 @@ export default function ContentPicker({
           <Loader2 className="absolute right-3 top-2.5 size-4 animate-spin text-stone-500" />
         ) : null}
       </div>
+      {open && !results.length && query.trim() && !loading ? (
+        <p className="mt-1 rounded-lg border border-stone-800 bg-stone-950/60 px-3 py-2 text-xs text-stone-500">
+          Nothing matched &quot;{query.trim()}&quot;. Try fewer letters, or browse the full list
+          below.
+        </p>
+      ) : null}
       {open && results.length ? (
-        <ul className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto panel panel-smoke rounded-lg">
+        <ul className="mt-1 max-h-64 w-full overflow-y-auto panel panel-smoke rounded-lg">
           {results.map((entry) => (
             <li key={entry.slug} className="flex items-center gap-1 pr-2 hover:bg-stone-800">
               <button

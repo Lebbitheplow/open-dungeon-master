@@ -47,6 +47,7 @@ import type { SideThread } from "@/lib/db/side-chat";
 import type { PlayerMapView } from "@/lib/battlemap/view";
 import type { MapPing } from "@/lib/dm/board-logic";
 import { companionSlotsFree, resolveCompanionMode } from "@/lib/schemas/game-settings";
+import { hasHumanDm, partySlotCount } from "@/lib/dm/viewer";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // Everything the side panel's content needs. SidePanel adds the rail's own
@@ -190,6 +191,21 @@ export function SidePanelRouter({
     ["log", "Log", ScrollText],
   ];
 
+  // Who is running the game, in the shape src/lib/dm/viewer.ts asks for. The
+  // companion rules below are counted in party slots, not in people at the
+  // table: a DM seat is not a player, so counting it used to drop a one-player
+  // human-run table out of "auto" companions.
+  const dmSeats = {
+    dmMode: campaign?.gameSettings?.dmMode ?? "ai",
+    humanDmUserId: campaign?.dmUserId ?? null,
+    assistantDmUserId: campaign?.assistantDmUserId ?? null,
+  };
+  const humanDmTable = hasHumanDm(dmSeats);
+  const partySize = partySlotCount(
+    dmSeats,
+    members.map((member) => member.userId),
+  );
+
   if (tab === "dm" && adjudicates) {
     return (
       <DmConsolePanel
@@ -279,7 +295,7 @@ export function SidePanelRouter({
                 campaign?.gameSettings
                   ? companionSlotsFree(
                       campaign.gameSettings,
-                      members.length,
+                      partySize,
                       sheets
                         .filter((sheet) => sheet.isCompanion)
                         .map((sheet) => (sheet.companionKind === "guest" ? "guest" : "party")),
@@ -288,11 +304,12 @@ export function SidePanelRouter({
               }
               companionBuildAvailable={
                 campaign?.gameSettings
-                  ? resolveCompanionMode(campaign.gameSettings, members.length) === "full" &&
+                  ? resolveCompanionMode(campaign.gameSettings, partySize) === "full" &&
                     sheets.filter((sheet) => sheet.isCompanion && sheet.companionKind !== "guest")
                       .length < campaign.gameSettings.maxCompanions
                   : false
               }
+              humanDmTable={humanDmTable}
               companionGenre={campaign?.gameSettings?.genre}
               companionLevel={(() => {
                 const levels = sheets

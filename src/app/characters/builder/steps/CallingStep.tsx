@@ -2,7 +2,7 @@
 
 import { GameTerm } from "@/components/ui/GameTerm";
 import { InfoButton } from "@/components/ui/InfoDialog";
-import { describeFeature } from "@/lib/help";
+import { describeFeature, describeSkill } from "@/lib/help";
 import { SRD_SKILLS } from "@/lib/srd";
 import { displayName } from "@/lib/worlds/reskin-logic";
 import type { WorldPack } from "@/lib/worlds/types";
@@ -133,7 +133,16 @@ export function CallingStep({
       ) : null}
 
       {klass ? (
-        <StepPanel title={`Class skills (pick ${klass.skillChoices.count})`}>
+        <StepPanel
+          title={`Class skills (pick ${klass.skillChoices.count})`}
+          help={
+            <>
+              A <GameTerm id="skill">skill</GameTerm> you are proficient in adds your{" "}
+              <GameTerm id="proficiency_bonus">proficiency bonus</GameTerm> to rolls that use
+              it. Tap any ⓘ to see which ability a skill leans on.
+            </>
+          }
+        >
           <div className="flex flex-wrap gap-2">
             {klass.skillChoices.from.map((skillId) => {
               const skill = SRD_SKILLS.find((entry) => entry.id === skillId);
@@ -141,9 +150,11 @@ export function CallingStep({
               return (
                 <PickPill
                   key={skillId}
+                  label={skill?.name ?? skillId}
                   selected={state.chosenSkills.includes(skillId)}
                   disabled={fromBackground}
                   onClick={() => actions.toggleSkill(skillId)}
+                  info={{ text: describeSkill(skillId) }}
                 >
                   {skill?.name ?? skillId}
                   {fromBackground ? " (background)" : ""}

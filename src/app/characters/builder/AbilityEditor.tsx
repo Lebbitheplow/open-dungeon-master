@@ -1,6 +1,8 @@
 "use client";
 
 import { Dices } from "lucide-react";
+import { GameTerm } from "@/components/ui/GameTerm";
+import { InfoButton } from "@/components/ui/InfoDialog";
 import { cn } from "@/lib/cn";
 import { abilityMod, formatModifier } from "@/lib/srd";
 import {
@@ -23,6 +25,30 @@ export const ABILITY_LABELS: Record<Ability, string> = {
 };
 
 const ABILITY_KEYS = Object.keys(ABILITY_LABELS) as Ability[];
+
+// What each way of getting six numbers actually costs you, for the player who
+// has never been asked this question before.
+const METHODS: Array<{ id: AbilityMethod; label: string; info: string }> = [
+  {
+    id: "standard",
+    label: "Standard array",
+    info: `Everyone starts with the same six numbers: ${STANDARD_ARRAY.join(
+      ", ",
+    )}. You decide which ability gets which. Nothing is left to luck, and no character is accidentally weaker than the rest of the party. This is the safe choice if you are new.`,
+  },
+  {
+    id: "pointbuy",
+    label: "Point buy",
+    info:
+      "You spend 27 points raising each score from 8. The higher a score climbs the more each step costs, so a character with one towering ability pays for it with weak ones. Fair like the standard array, but you choose the shape.",
+  },
+  {
+    id: "roll",
+    label: "Roll 4d6",
+    info:
+      "Roll four six-sided dice for each ability and drop the lowest. It can hand you a hero far above the standard array, or well below it. Some tables love the swing; ask yours before choosing it.",
+  },
+];
 
 export type AbilityState = Record<Ability, number | null>;
 
@@ -59,6 +85,7 @@ export default function AbilityEditor({
   );
   const pointBuyScores = ABILITY_KEYS.map((key) => scores[key] ?? POINT_BUY_MIN);
   const remaining = method === "pointbuy" ? pointBuyRemaining(pointBuyScores) : 0;
+  const activeMethod = METHODS.find((entry) => entry.id === method) ?? METHODS[0];
 
   function setScore(ability: Ability, value: number | null) {
     const next = { ...scores };
@@ -93,29 +120,32 @@ export default function AbilityEditor({
   return (
     <section className="panel rounded-xl p-4">
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <h2 className="eyebrow text-xs text-amber-200/90">Ability scores</h2>
-        <div className="flex rounded-md border border-stone-700 p-0.5 text-xs">
-          {(
-            [
-              ["standard", "Standard array"],
-              ["pointbuy", "Point buy"],
-              ["roll", "Roll 4d6"],
-            ] as const
-          ).map(([value, label]) => (
+        <h2 className="eyebrow text-xs text-amber-200/90">
+          <GameTerm id="ability_score">Ability scores</GameTerm>
+        </h2>
+        <div className="flex items-center rounded-md border border-stone-700 p-0.5 text-xs">
+          {METHODS.map((entry) => (
             <button
-              key={value}
+              key={entry.id}
               type="button"
-              onClick={() => switchMethod(value)}
+              onClick={() => switchMethod(entry.id)}
               className={cn(
                 "rounded px-2.5 py-1",
-                method === value
+                method === entry.id
                   ? "bg-amber-900/60 text-amber-200"
                   : "text-stone-400 hover:text-stone-200",
               )}
             >
-              {label}
+              {entry.label}
             </button>
           ))}
+          {/* Which of the three to use is the question a first character
+              actually gets stuck on, so the answer sits on the control. */}
+          <InfoButton
+            label={activeMethod.label}
+            text={activeMethod.info}
+            className="mx-1"
+          />
         </div>
         {method === "pointbuy" ? (
           <span
@@ -158,7 +188,9 @@ export default function AbilityEditor({
               className="block rounded-lg border border-stone-800 bg-stone-950/60 p-3"
             >
               <span className="mb-1 flex items-baseline justify-between">
-                <span className="text-stone-300">{ABILITY_LABELS[ability]}</span>
+                <span className="text-stone-300">
+                  <GameTerm id={ability}>{ABILITY_LABELS[ability]}</GameTerm>
+                </span>
                 {bonus ? <span className="text-xs text-amber-200">+{bonus} racial</span> : null}
               </span>
               {method === "standard" ? (

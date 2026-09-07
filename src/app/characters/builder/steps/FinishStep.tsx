@@ -2,9 +2,11 @@
 
 import { Camera, UserRound } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { contentSlug } from "@/lib/help";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import { formatModifier, proficiencyBonus } from "@/lib/srd";
 import { ui } from "@/lib/ui";
+import CatalogBrowser from "../CatalogBrowser";
 import ContentPicker from "../ContentPicker";
 import type { RaceOption } from "../useBuilderOptions";
 import type { BuilderDerived } from "../useBuilderDerived";
@@ -129,11 +131,28 @@ export function FinishStep({
             )
           }
         />
+        {/* Feats are the pick a new player is least able to name, so the
+            whole list is one tap away with a ⓘ on every row. */}
+        <CatalogBrowser
+          kind="feats"
+          buttonLabel="Browse every feat"
+          selectedNames={state.feats}
+          onPick={(entry) =>
+            state.setFeats((current) =>
+              current.includes(entry.name) ? current : [...current, entry.name],
+            )
+          }
+          onUnpick={(featName) =>
+            state.setFeats((current) => current.filter((entry) => entry !== featName))
+          }
+          sections={[{ key: "feats:all", label: "All feats" }]}
+        />
         <div className="mt-2 flex flex-wrap gap-1.5">
           {state.feats.map((feat) => (
             <Chip
               key={feat}
               label={feat}
+              info={{ reference: { kind: "feats", slug: contentSlug(feat), name: feat } }}
               onRemove={() => state.setFeats((current) => current.filter((entry) => entry !== feat))}
             />
           ))}

@@ -1,11 +1,19 @@
 "use client";
 
 import { ImageIcon } from "lucide-react";
+import { InfoButton } from "@/components/ui/InfoDialog";
 import { cn } from "@/lib/cn";
 import { GENRE_PRESETS } from "@/lib/genres";
 import type { Genre } from "@/lib/schemas/game-settings";
 import { FieldLabel, inputClass } from "@/app/create-campaign/fields";
 import type { StepProps } from "@/app/create-campaign/draft";
+
+// A tile grid cannot hold a ⓘ per tile, and a `title` tooltip never opens
+// under a finger, so all twelve settings are spelled out in one dialog on
+// the label instead.
+const SETTING_INFO = `The setting decides how the world sounds, what the maps and portraits look like, and which classes and backgrounds the character builder floats to the top. It changes no rule: every setting plays 5e.\n\n${GENRE_PRESETS.map(
+  (preset) => `**${preset.name}**: ${preset.blurb}`,
+).join("\n\n")}`;
 
 // Step 2: the setting, its custom description, the premise and theme notes.
 // Cover art is only pointed at from here: the upload and the AI painter live
@@ -25,7 +33,12 @@ export function WorldStep({
   return (
     <div className="space-y-4 text-sm">
       <div>
-        <FieldLabel className="mb-1.5">Setting</FieldLabel>
+        <FieldLabel className="mb-1.5">
+          <span className="flex items-center gap-1">
+            Setting
+            <InfoButton label="Settings" text={SETTING_INFO} />
+          </span>
+        </FieldLabel>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {GENRE_PRESETS.map((preset) => (
             <button

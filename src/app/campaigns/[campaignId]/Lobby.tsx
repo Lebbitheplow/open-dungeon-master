@@ -19,7 +19,7 @@ import { LorePanel } from "@/app/campaigns/[campaignId]/LorePanel";
 import { RulesPanel } from "@/app/campaigns/[campaignId]/RulesPanel";
 import { VoicePanel } from "@/app/campaigns/[campaignId]/VoicePanel";
 import { resolveCompanionMode } from "@/lib/schemas/game-settings";
-import { viewerCaps } from "@/lib/dm/viewer";
+import { lobbyBlocker, partySlotCount, viewerCaps } from "@/lib/dm/viewer";
 import {
   ContentImportPicker,
   EMPTY_SELECTION,
@@ -92,35 +92,54 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
   // A human sits in the DM seat ("human" and "assisted" alike), so the party
   // list shows who holds it and, for whoever may reassign it, the controls.
   const humanDmTable = campaign.gameSettings.dmMode !== "ai";
+  // The campaign's seats, in the shape every rule in src/lib/dm/viewer.ts
+  // takes. Built once here so the caps, the party count and the start gate
+  // below cannot drift apart.
+  const seats = {
+    ownerUserId: campaign.ownerUserId,
+    leadUserId: campaign.leadUserId,
+    humanDmUserId: campaign.dmUserId,
+    assistantDmUserId: campaign.assistantDmUserId,
+    dmMode: campaign.gameSettings.dmMode,
+  };
   // Who holds the story's secrets and steers it: the lead in an AI-run
   // campaign, the DM once a person runs it. Decided by src/lib/dm/viewer.ts
   // rather than by comparing ids here, which is the rule that module exists
   // to enforce.
-  const { steersStory } = viewerCaps(
-    {
-      ownerUserId: campaign.ownerUserId,
-      leadUserId: campaign.leadUserId,
-      humanDmUserId: campaign.dmUserId,
-      assistantDmUserId: campaign.assistantDmUserId,
-      dmMode: campaign.gameSettings.dmMode,
-    },
-    me.id,
-  );
-  // One-player campaigns skip the invite/party ceremony entirely.
-  const isSolo = campaign.maxPlayers === 1;
+  const { steersStory } = viewerCaps(seats, me.id);
+  // One-player campaigns skip the invite/party ceremony entirely. A table with
+  // a person in the DM seat is never solo, however small: the DM holds no
+  // party slot, so maxPlayers 1 there still means two people who need the room
+  // code, the call and the ordinary ready-then-begin flow between them.
+  const isSolo = campaign.maxPlayers === 1 && !humanDmTable;
+  // Players, not seats: the DM occupies neither a party slot nor a character.
+  const partySize = partySlotCount(seats, members.map((member) => member.userId));
 
-  // Lead/solo can prepare lasting party companions here. Only party companions
-  // are built manually, so the option shows only where they are allowed.
+  // Whoever steers the story can prepare lasting party companions here: the
+  // lead in an AI-run campaign, the DM once a person runs it. The DM's is the
+  // case that matters most, because an ally the DM plays is the only way for
+  // someone running a human table to hold a character sheet at all, and the
+  // /companions/create route has always allowed it (requireStoryAuthority).
+  // Only party companions are built by hand, so the option shows only where
+  // the table allows them.
   const partyCompanions = sheets.filter(
     (sheet) => sheet.isCompanion && sheet.companionKind !== "guest",
   );
   const canBuildCompanion =
-    isLead &&
-    resolveCompanionMode(campaign.gameSettings, members.length) === "full" &&
+    steersStory &&
+    resolveCompanionMode(campaign.gameSettings, partySize) === "full" &&
     partyCompanions.length < campaign.gameSettings.maxCompanions;
-  const allReady = members.length > 0 && members.every((member) => member.ready);
-  const allHaveSheets = members.every((member) =>
-    sheets.some((sheet) => sheet.userId === member.userId),
+  const showCompanions = canBuildCompanion || (steersStory && partyCompanions.length > 0);
+  // Why the adventure cannot open yet, or "" when it can. The server's PATCH
+  // asks the same function of the same seats, so the Begin button is enabled
+  // exactly when the route would accept it.
+  const startBlocker = lobbyBlocker(
+    seats,
+    members.map((member) => ({
+      userId: member.userId,
+      ready: member.ready,
+      hasSheet: sheets.some((sheet) => sheet.userId === member.userId),
+    })),
   );
 
   // Returns whether the server took it, so the solo flow can stop before
@@ -427,7 +446,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
         />
       ) : null}
 
-      {!isSolo || (isLead && (canBuildCompanion || partyCompanions.length > 0)) ? (
+      {!isSolo || showCompanions ? (
         <LobbyParty
           campaign={campaign}
           members={members}
@@ -441,7 +460,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
           canMute={isLead || isOwner}
           onMute={muteMember}
           showParty={!isSolo}
-          showCompanions={isLead && (canBuildCompanion || partyCompanions.length > 0)}
+          showCompanions={showCompanions}
           partyCompanions={partyCompanions}
           canBuildCompanion={canBuildCompanion}
           onBuildCompanion={() => setBuildingCompanion(true)}
@@ -458,8 +477,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
         isOwner={isOwner}
         busy={busy}
         error={error}
-        allReady={allReady}
-        allHaveSheets={allHaveSheets}
+        startBlocker={startBlocker}
         onToggleReady={() => void setReady(!myMember?.ready)}
         onStart={() => void activate("Could not start the campaign.")}
         onBeginSolo={() => void beginSolo()}
@@ -476,6 +494,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
           campaignId={campaign.id}
           genre={campaign.gameSettings.genre}
           level={campaign.startingLevel}
+          humanDm={humanDmTable}
           onClose={() => setBuildingCompanion(false)}
         />
       ) : null}

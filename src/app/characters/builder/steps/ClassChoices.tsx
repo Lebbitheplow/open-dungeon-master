@@ -1,7 +1,9 @@
 "use client";
 
+import { GameTerm } from "@/components/ui/GameTerm";
 import { InfoButton } from "@/components/ui/InfoDialog";
 import { cn } from "@/lib/cn";
+import { describeSkill } from "@/lib/help";
 import { SRD_SKILLS } from "@/lib/srd";
 import { expertiseSlotsFor } from "@/lib/srd/features";
 import { FIGHTING_STYLES } from "@/lib/srd/feature-effects";
@@ -39,7 +41,12 @@ export function ClassChoices({
       {klass && expertiseSlots > 0 && preview ? (
         <StepPanel
           title={`Expertise (pick ${expertiseSlots})`}
-          help="Doubled proficiency bonus on the chosen skills."
+          help={
+            <>
+              <GameTerm id="expertise">Expertise</GameTerm> doubles your{" "}
+              <GameTerm id="proficiency_bonus">proficiency bonus</GameTerm> on the chosen skills.
+            </>
+          }
         >
           <div className="flex flex-wrap gap-2">
             {preview.proficiencies.skills.map((skillId) => {
@@ -48,7 +55,9 @@ export function ClassChoices({
               return (
                 <PickPill
                   key={skillId}
+                  label={skill?.name ?? skillId}
                   selected={selected}
+                  info={{ text: describeSkill(skillId) }}
                   onClick={() =>
                     state.setExpertisePicks((current) =>
                       selected

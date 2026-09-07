@@ -1,10 +1,11 @@
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
-import { allocateSeq, listMembers } from "@/lib/db/campaigns";
+import { allocateSeq, campaignSeats, countPartySlots } from "@/lib/db/campaigns";
 import { companionSlotsFree } from "@/lib/schemas/game-settings";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { getSheetForUser, listSheets } from "@/lib/db/sheets";
 import { companionMode, listCompanions } from "@/lib/dm/companion-tools";
 import { requestDmTurn } from "@/lib/dm/loop";
+import { hasHumanDm } from "@/lib/dm/viewer";
 import { publishWithSeq } from "@/lib/events";
 
 export const runtime = "nodejs";
@@ -25,6 +26,16 @@ export async function POST(
   if (context.campaign.status !== "active") {
     return Response.json({ error: "The campaign is not active." }, { status: 409 });
   }
+  // Nothing to ask. This route posts a note addressed to the AI and wakes a
+  // DM turn; with a person in the seat the turn never comes and the note is
+  // the DM asking themselves. They build the ally directly instead
+  // (/companions/create), which is the door this whole route stands beside.
+  if (hasHumanDm(campaignSeats(context.campaign))) {
+    return Response.json(
+      { error: "This table has its own Dungeon Master. Build the companion instead." },
+      { status: 409 },
+    );
+  }
   const mode = companionMode(context.campaign);
   if (mode === "off") {
     return Response.json({ error: "Companions are disabled for this campaign." }, { status: 409 });
@@ -33,7 +44,7 @@ export async function POST(
   const kinds = listCompanions(sheets).map((sheet) =>
     sheet.companionKind === "guest" ? ("guest" as const) : ("party" as const),
   );
-  if (!companionSlotsFree(context.campaign.gameSettings, listMembers(campaignId).length, kinds)) {
+  if (!companionSlotsFree(context.campaign.gameSettings, countPartySlots(campaignId), kinds)) {
     return Response.json(
       { error: "The party already has its full number of companions." },
       { status: 409 },

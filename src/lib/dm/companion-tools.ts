@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { allocateSeq, listMembers, type Campaign } from "@/lib/db/campaigns";
+import { allocateSeq, countPartySlots, type Campaign } from "@/lib/db/campaigns";
 import {
   createSheet,
   getSheetById,
@@ -67,8 +67,12 @@ function publishEncounterState(campaignId: string) {
   });
 }
 
+// Party slots, not member rows: a DM seat is not a player, so a table of one
+// player and a person running it is still a table that "auto" should give a
+// full companion to. Counting the DM as a second player was what quietly
+// dropped a human-run duo down to guests-only.
 export function companionMode(campaign: Campaign): CompanionMode {
-  return resolveCompanionMode(campaign.gameSettings, listMembers(campaign.id).length);
+  return resolveCompanionMode(campaign.gameSettings, countPartySlots(campaign.id));
 }
 
 export function listCompanions(sheets: CharacterSheet[]): CharacterSheet[] {

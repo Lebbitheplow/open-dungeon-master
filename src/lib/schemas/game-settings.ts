@@ -269,25 +269,28 @@ export type CompanionMode = "full" | "guests" | "off";
 // 'auto' resolves per table size: a solo player gets lasting party members, a
 // multiplayer table gets only scene-scoped guest allies. Pure so the server
 // (companion-tools) and the client panels resolve it identically.
+// `partySize` is the number of PLAYERS, not the number of people at the table:
+// a DM seat holds no party slot, so a lone player with a human DM still counts
+// as one and still gets a full companion out of "auto".
 export function resolveCompanionMode(
   settings: GameSettings,
-  memberCount: number,
+  partySize: number,
 ): CompanionMode {
   const setting = settings.companions;
   if (setting === "off" || setting === "full" || setting === "guests") {
     return setting;
   }
-  return memberCount <= 1 ? "full" : "guests";
+  return partySize <= 1 ? "full" : "guests";
 }
 
 // Whether the DM could still write an ally in: party members and scene guests
 // have separate caps, so either kind having room is enough.
 export function companionSlotsFree(
   settings: GameSettings,
-  memberCount: number,
+  partySize: number,
   companionKinds: Array<"party" | "guest">,
 ): boolean {
-  const mode = resolveCompanionMode(settings, memberCount);
+  const mode = resolveCompanionMode(settings, partySize);
   if (mode === "off") {
     return false;
   }

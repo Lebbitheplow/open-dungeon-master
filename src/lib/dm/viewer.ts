@@ -33,6 +33,14 @@ export type CampaignSeats = {
   dmMode: DmMode;
 };
 
+// The seats alone, for the rules that only need to know who is running the
+// game: whether somebody is a DM, how many players that leaves, and what the
+// lobby is still waiting on. A CampaignSeats satisfies this, so every caller
+// that has the whole thing keeps passing it; callers that only hold the DM
+// columns (the session's side panels) no longer have to invent an owner and a
+// lead to ask.
+export type DmSeats = Pick<CampaignSeats, "dmMode" | "humanDmUserId" | "assistantDmUserId">;
+
 export type ViewerCaps = {
   role: ViewerRole;
   // The story's secret spine: dmOutline, storyArc, the context trace, and
@@ -64,11 +72,11 @@ export function narratorIsAi(mode: DmMode): boolean {
 
 // True when a person holds the DM seat, so player actions queue for them
 // instead of waking a DM turn.
-export function hasHumanDm(seats: CampaignSeats): boolean {
+export function hasHumanDm(seats: DmSeats): boolean {
   return seats.dmMode !== "ai" && Boolean(seats.humanDmUserId);
 }
 
-export function isDmSeat(seats: CampaignSeats, userId: string): boolean {
+export function isDmSeat(seats: DmSeats, userId: string): boolean {
   if (seats.dmMode === "ai") {
     return false;
   }
@@ -78,7 +86,7 @@ export function isDmSeat(seats: CampaignSeats, userId: string): boolean {
 // The DM proper, as distinct from a co-DM. Both hold every in-game power
 // (isDmSeat counts them the same), and this is the one thing that separates
 // them: handing the game to someone else is the boss's call, not a deputy's.
-export function isPrimaryDm(seats: CampaignSeats, userId: string): boolean {
+export function isPrimaryDm(seats: DmSeats, userId: string): boolean {
   return seats.dmMode !== "ai" && userId === seats.humanDmUserId;
 }
 
@@ -147,8 +155,38 @@ export const AI_CAPS: ViewerCaps = capsForRole("ai", "ai");
 
 // How many of a campaign's members occupy a party slot. The DM seats do not,
 // so a five-player cap still means five players.
-export function partySlotCount(seats: CampaignSeats, memberUserIds: string[]): number {
+export function partySlotCount(seats: DmSeats, memberUserIds: string[]): number {
   return memberUserIds.filter((id) => !isDmSeat(seats, id)).length;
+}
+
+// ---- the lobby's start gate ----
+
+// A seat as the lobby sees it, which is all the gate below needs: who it is,
+// whether they said they were ready, and whether they have a character.
+export type LobbySeat = { userId: string; ready: boolean; hasSheet: boolean };
+
+// Why the adventure cannot open yet, or "" when nothing stands in the way.
+//
+// This lives here, with partySlotCount, because it is the same rule seen from
+// the other side: a DM seat holds no party slot, so it is never asked for a
+// character. Counting the DM as somebody who owed a sheet is what made a
+// human-run table impossible to start, and the fix is only safe if the button
+// and the route it calls read one function. Both do (Lobby.tsx and the
+// campaign PATCH route).
+//
+// Readiness still counts every seat, DM included: the DM readies up to say the
+// table is set, which is the whole point of their ready button.
+export function lobbyBlocker(seats: DmSeats, lobby: LobbySeat[]): string {
+  if (!lobby.length) {
+    return "The table is empty.";
+  }
+  if (lobby.some((seat) => !isDmSeat(seats, seat.userId) && !seat.hasSheet)) {
+    return "Every player needs a character before the adventure starts.";
+  }
+  if (lobby.some((seat) => !seat.ready)) {
+    return "Waiting for everyone to ready up.";
+  }
+  return "";
 }
 
 // ---- roll visibility ----

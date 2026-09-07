@@ -16,6 +16,17 @@ export type CampaignStatus = "lobby" | "active" | "ended";
 export const CAMPAIGN_DIFFICULTIES = ["easy", "normal", "hard", "deadly"] as const;
 export type CampaignDifficulty = (typeof CAMPAIGN_DIFFICULTIES)[number];
 
+// A bare "normal" in a dropdown says nothing about what changes. Difficulty
+// is not a damage multiplier: it rides into the DM's own briefing
+// (src/lib/dm/setup.ts) and steers how hard it builds encounters and how
+// often it lets a bad roll actually hurt. Every rule underneath stays 5e.
+export const CAMPAIGN_DIFFICULTY_HINTS: Record<CampaignDifficulty, string> = {
+  easy: "Fights lean easy and the story forgives mistakes. Good for a first table.",
+  normal: "Encounters built to the book. A careless party can still lose someone.",
+  hard: "Bigger fights, fewer second chances, resources that actually run out.",
+  deadly: "Assumes you want to lose characters. Plan retreats and bring spares.",
+};
+
 export type CampaignSummary = {
   id: string;
   title: string;

@@ -1,8 +1,12 @@
 "use client";
 
+import CatalogBrowser from "@/app/characters/builder/CatalogBrowser";
 import ContentPicker from "@/app/characters/builder/ContentPicker";
 import type { RaceOption } from "@/app/characters/builder/useBuilderOptions";
+import { GameTerm } from "@/components/ui/GameTerm";
+import { InfoButton } from "@/components/ui/InfoDialog";
 import { ALL_SKILLS } from "@/lib/content/mechanics";
+import { contentSlug, describeSkill } from "@/lib/help";
 import { SRD_SKILLS } from "@/lib/srd";
 import { ABILITIES, type Ability } from "@/lib/schemas/sheet";
 
@@ -67,29 +71,36 @@ export function RacialChoicesSection({
 
       {race.asiChoice ? (
         <div>
-          <span className="mb-1 block text-stone-400">
-            Ability increases (+{race.asiChoice.amount} to {race.asiChoice.count} abilities of
-            your choice)
+          <span className="mb-1 flex flex-wrap items-center gap-1 text-stone-400">
+            <GameTerm id="ability_score">Ability</GameTerm> increases (+{race.asiChoice.amount} to{" "}
+            {race.asiChoice.count} abilities of your choice)
           </span>
           <div className="grid grid-cols-2 gap-2">
             {Array.from({ length: race.asiChoice.count }, (_, index) => (
-              <select
-                key={index}
-                value={asi[index] ?? ""}
-                onChange={(event) => onAsiChange(index, event.target.value as Ability | "")}
-                className={inputClass}
-              >
-                <option value="">Choose an ability...</option>
-                {ABILITIES.filter(
-                  (ability) =>
-                    !fixedAbilities.has(ability) &&
-                    (asi[index] === ability || !asi.includes(ability)),
-                ).map((ability) => (
-                  <option key={ability} value={ability}>
-                    {ABILITY_NAMES[ability]}
-                  </option>
-                ))}
-              </select>
+              <span key={index} className="flex items-center gap-1">
+                <select
+                  value={asi[index] ?? ""}
+                  onChange={(event) => onAsiChange(index, event.target.value as Ability | "")}
+                  className={inputClass}
+                  aria-label={`Ability increase ${index + 1}`}
+                >
+                  <option value="">Choose an ability...</option>
+                  {ABILITIES.filter(
+                    (ability) =>
+                      !fixedAbilities.has(ability) &&
+                      (asi[index] === ability || !asi.includes(ability)),
+                  ).map((ability) => (
+                    <option key={ability} value={ability}>
+                      {ABILITY_NAMES[ability]}
+                    </option>
+                  ))}
+                </select>
+                {asi[index] ? (
+                  <GameTerm id={asi[index] as Ability} className="shrink-0 text-xs text-stone-500">
+                    what is this?
+                  </GameTerm>
+                ) : null}
+              </span>
             ))}
           </div>
         </div>
@@ -97,28 +108,37 @@ export function RacialChoicesSection({
 
       {race.skillChoice ? (
         <div>
-          <span className="mb-1 block text-stone-400">
-            Skill proficiencies ({race.skillChoice.count} of your choice)
+          <span className="mb-1 flex flex-wrap items-center gap-1 text-stone-400">
+            <GameTerm id="skill">Skill</GameTerm> proficiencies ({race.skillChoice.count} of your
+            choice)
           </span>
           <div className="grid grid-cols-2 gap-2">
             {Array.from({ length: race.skillChoice.count }, (_, index) => (
-              <select
-                key={index}
-                value={skills[index] ?? ""}
-                onChange={(event) => onSkillsChange(index, event.target.value)}
-                className={inputClass}
-              >
-                <option value="">Choose a skill...</option>
-                {ALL_SKILLS.filter(
-                  (skill) =>
-                    skills[index] === skill ||
-                    (!skills.includes(skill) && !grantedSkills.includes(skill)),
-                ).map((skill) => (
-                  <option key={skill} value={skill}>
-                    {skillName(skill)}
-                  </option>
-                ))}
-              </select>
+              <span key={index} className="flex items-center gap-1">
+                <select
+                  value={skills[index] ?? ""}
+                  onChange={(event) => onSkillsChange(index, event.target.value)}
+                  className={inputClass}
+                  aria-label={`Skill proficiency ${index + 1}`}
+                >
+                  <option value="">Choose a skill...</option>
+                  {ALL_SKILLS.filter(
+                    (skill) =>
+                      skills[index] === skill ||
+                      (!skills.includes(skill) && !grantedSkills.includes(skill)),
+                  ).map((skill) => (
+                    <option key={skill} value={skill}>
+                      {skillName(skill)}
+                    </option>
+                  ))}
+                </select>
+                {skills[index] ? (
+                  <InfoButton
+                    label={skillName(skills[index])}
+                    text={describeSkill(skills[index])}
+                  />
+                ) : null}
+              </span>
             ))}
           </div>
         </div>
@@ -144,13 +164,22 @@ export function RacialChoicesSection({
 
       {race.cantripChoice ? (
         <div>
-          <span className="mb-1 block text-stone-400">
-            Bonus cantrip (one {race.cantripChoice.list} cantrip)
+          <span className="mb-1 flex flex-wrap items-center gap-1 text-stone-400">
+            Bonus <GameTerm id="cantrip">cantrip</GameTerm> (one {race.cantripChoice.list}{" "}
+            cantrip)
           </span>
+          <p className="mb-1.5 text-xs text-stone-500">
+            A cantrip is a small spell you can cast as often as you like, forever. Pick one from
+            the list below, or search if you already have one in mind.
+          </p>
           {cantrip ? (
             <div className="mb-1.5 flex items-center gap-2">
-              <span className="rounded-full border border-amber-800 bg-amber-950/40 px-2.5 py-1 text-xs text-amber-200">
+              <span className="flex items-center gap-1 rounded-full border border-amber-800 bg-amber-950/40 px-2.5 py-1 text-xs text-amber-200">
                 {cantrip}
+                <InfoButton
+                  label={cantrip}
+                  reference={{ kind: "spells", slug: contentSlug(cantrip), name: cantrip }}
+                />
               </span>
               <button
                 type="button"
@@ -161,12 +190,31 @@ export function RacialChoicesSection({
               </button>
             </div>
           ) : (
-            <ContentPicker
-              kind="spells"
-              extraParams={{ class: race.cantripChoice.list, level: "0" }}
-              placeholder="Search cantrips (e.g. fire bolt)"
-              onPick={(entry) => onCantripChange(entry.name)}
-            />
+            <>
+              <ContentPicker
+                kind="spells"
+                extraParams={{ class: race.cantripChoice.list, level: "0" }}
+                placeholder="Search cantrips (e.g. fire bolt)"
+                onPick={(entry) => onCantripChange(entry.name)}
+              />
+              {/* Nobody can search for a cantrip they have never heard of.
+                  Every one this race may take is one tap away, each with the
+                  ⓘ that says what it does. */}
+              <CatalogBrowser
+                kind="spells"
+                buttonLabel={`Browse every ${race.cantripChoice.list} cantrip`}
+                selectedNames={cantrip ? [cantrip] : []}
+                onPick={(entry) => onCantripChange(entry.name)}
+                sections={[
+                  {
+                    key: `cantrips:${race.cantripChoice.list}`,
+                    label: `Every ${race.cantripChoice.list} cantrip`,
+                    params: { class: race.cantripChoice.list, level: "0" },
+                  },
+                ]}
+                metaOf={(entry) => entry.school ?? ""}
+              />
+            </>
           )}
         </div>
       ) : null}

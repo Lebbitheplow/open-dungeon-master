@@ -10,19 +10,25 @@ import CharacterBuilder, {
 } from "@/app/characters/builder/CharacterBuilder";
 import type { Genre } from "@/lib/schemas/game-settings";
 
-// The party lead (or solo player) builds a lasting companion with the full
-// character creator. The finished sheet POSTs to /companions/create, which
-// owns it with a bot user and, mid-session, nudges the DM to write them in.
+// Whoever steers the story (the party lead in an AI campaign, the DM in a
+// human-run one) builds a lasting companion with the full character creator.
+// The finished sheet POSTs to /companions/create, which owns it with a bot
+// user and, mid-session, nudges the DM to write them in.
 export function CompanionBuilderDialog({
   campaignId,
   genre,
   level,
+  humanDm = false,
   onClose,
   onCreated,
 }: {
   campaignId: string;
   genre?: Genre;
   level: number;
+  // A person is running this table, so the ally is theirs to play through the
+  // DM console rather than an AI's to voice. Only the sentence below changes;
+  // the sheet is the same object either way.
+  humanDm?: boolean;
   onClose: () => void;
   onCreated?: () => void;
 }) {
@@ -97,8 +103,9 @@ export function CompanionBuilderDialog({
             </Dialog.Close>
           </div>
           <p className="mb-3 text-xs text-stone-500">
-            This ally joins the party as an AI companion the DM plays. They start at the party&apos;s
-            level.
+            {humanDm
+              ? "This ally joins the party as a character you play from the DM console. They start at the party's level."
+              : "This ally joins the party as an AI companion the DM plays. They start at the party's level."}
           </p>
 
           {library.length ? (

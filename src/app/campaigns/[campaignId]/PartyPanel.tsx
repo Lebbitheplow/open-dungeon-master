@@ -152,6 +152,7 @@ export function PartyPanel({
   campaignId = "",
   companionsAvailable = false,
   companionBuildAvailable = false,
+  humanDmTable = false,
   companionGenre,
   companionLevel = 1,
   worldPack = "",
@@ -182,6 +183,10 @@ export function PartyPanel({
   // Manual build (lasting party companion) is offered only when the table
   // allows party companions and a party slot is free.
   companionBuildAvailable?: boolean;
+  // A person runs this table. There is no AI to ask for an ally, so the
+  // request button goes and the build button is the only door left; it is
+  // also the door that lets a human DM hold a character sheet of their own.
+  humanDmTable?: boolean;
   companionGenre?: Genre;
   companionLevel?: number;
   // The campaign's world pack, whose art stands in for an unpainted portrait.
@@ -560,7 +565,7 @@ export function PartyPanel({
 
       {campaignId && companionsAvailable && steersStory ? (
         <div className="space-y-1.5">
-          <RequestCompanionButton campaignId={campaignId} />
+          {humanDmTable ? null : <RequestCompanionButton campaignId={campaignId} />}
           {companionBuildAvailable ? (
             <button
               type="button"
@@ -580,6 +585,7 @@ export function PartyPanel({
           campaignId={campaignId}
           genre={companionGenre}
           level={companionLevel}
+          humanDm={humanDmTable}
           onClose={() => setBuildingCompanion(false)}
         />
       ) : null}

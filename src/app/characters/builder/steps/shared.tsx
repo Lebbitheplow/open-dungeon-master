@@ -2,9 +2,13 @@
 
 import { X } from "lucide-react";
 import type { ReactNode } from "react";
+import { InfoButton, type ContentRef } from "@/components/ui/InfoDialog";
 import { Ribbon } from "@/components/ui/Ribbon";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
+
+// What a ⓘ next to a name needs: text to show, or a pack row to read it from.
+export type InfoSource = { text?: string | null; reference?: ContentRef; meta?: string };
 
 // Field styling shared by every wizard step and the sub-editors that take an
 // inputClass prop (RacialChoicesSection, EquipmentSection).
@@ -54,15 +58,19 @@ export function Field({
 }
 
 // Removable chip for a chosen spell, item or feat. Homebrew entries wear
-// gold so a player can tell them from catalog rows at a glance.
+// gold so a player can tell them from catalog rows at a glance. `info` adds
+// the ⓘ, so a spell can be read from the chip it was added to and not only
+// from the row it was picked in.
 export function Chip({
   label,
   onRemove,
   homebrew = false,
+  info,
 }: {
   label: string;
   onRemove: () => void;
   homebrew?: boolean;
+  info?: InfoSource;
 }) {
   return (
     <span
@@ -74,6 +82,9 @@ export function Chip({
       )}
     >
       {label}
+      {info ? (
+        <InfoButton label={label} text={info.text} meta={info.meta} reference={info.reference} />
+      ) : null}
       <button
         type="button"
         onClick={onRemove}
@@ -87,35 +98,64 @@ export function Chip({
 }
 
 // Toggle pill for a pick-N list (class skills, expertise). Disabled pills
-// are the ones another source already granted.
+// are the ones another source already granted. With `info` the pill carries
+// its own ⓘ, which is why the shell is a span: a button cannot hold one.
 export function PickPill({
   selected,
   disabled = false,
   onClick,
+  info,
+  label,
   children,
 }: {
   selected: boolean;
   disabled?: boolean;
   onClick: () => void;
+  info?: InfoSource;
+  // Names the thing for the ⓘ's dialog and its accessible label; defaults to
+  // whatever the children render as.
+  label?: string;
   children: ReactNode;
 }) {
+  const shell = cn(
+    "inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs transition-colors duration-150",
+    disabled
+      ? "border-stone-800 bg-stone-900/60 text-stone-500"
+      : selected
+        ? "border-amber-500/60 bg-amber-400/15 text-amber-100 shadow-glow-gold"
+        : "border-stone-600/60 text-stone-300 hover:border-amber-500/40 hover:bg-stone-900/70",
+  );
+  if (!info) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        aria-pressed={selected}
+        className={shell}
+      >
+        {children}
+      </button>
+    );
+  }
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-pressed={selected}
-      className={cn(
-        "rounded-full border px-3 py-1 text-xs transition-colors duration-150",
-        disabled
-          ? "border-stone-800 bg-stone-900/60 text-stone-500"
-          : selected
-            ? "border-amber-500/60 bg-amber-400/15 text-amber-100 shadow-glow-gold"
-            : "border-stone-600/60 text-stone-300 hover:border-amber-500/40 hover:bg-stone-900/70",
-      )}
-    >
-      {children}
-    </button>
+    <span className={shell}>
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        aria-pressed={selected}
+        className="disabled:cursor-not-allowed"
+      >
+        {children}
+      </button>
+      <InfoButton
+        label={label ?? String(children)}
+        text={info.text}
+        meta={info.meta}
+        reference={info.reference}
+      />
+    </span>
   );
 }
 

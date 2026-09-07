@@ -3,8 +3,10 @@
 import { GameTerm } from "@/components/ui/GameTerm";
 import { InfoButton } from "@/components/ui/InfoDialog";
 import { cn } from "@/lib/cn";
+import { contentSlug } from "@/lib/help";
 import { displayName } from "@/lib/worlds/reskin-logic";
 import type { WorldPack } from "@/lib/worlds/types";
+import CatalogBrowser from "../CatalogBrowser";
 import ContentPicker from "../ContentPicker";
 import EquipmentSection from "../EquipmentSection";
 import type { ClassOption } from "../useBuilderOptions";
@@ -30,7 +32,7 @@ export function SpellsGearStep({
   return (
     <div className="space-y-4">
       {klass?.spellAbility ? (
-        <SpellsSection state={state} derived={derived} pack={pack} />
+        <SpellsSection state={state} derived={derived} klass={klass} pack={pack} />
       ) : null}
       <EquipmentSection
         equipment={derived.fullEquipment}
@@ -40,9 +42,6 @@ export function SpellsGearStep({
         onRemove={actions.removeEquipmentItem}
         gold={state.gold}
         setGold={state.setGold}
-        chip={(label, onRemove, homebrew) => (
-          <Chip key={label} label={label} onRemove={onRemove} homebrew={homebrew} />
-        )}
         inputClass={inputClass}
       />
     </div>
@@ -52,10 +51,12 @@ export function SpellsGearStep({
 function SpellsSection({
   state,
   derived,
+  klass,
   pack,
 }: {
   state: BuilderState;
   derived: BuilderDerived;
+  klass: ClassOption;
   pack: WorldPack | null;
 }) {
   const { spells, setSpells, setCantripNames } = state;
@@ -156,13 +157,64 @@ function SpellsSection({
         }}
         renderMeta={(entry) => (entry.level === 0 ? "cantrip" : `level ${entry.level}`)}
       />
+      {/* The whole list, not just what a player can already name: every spell
+          this class may take, the recommended ones first, each readable
+          before it is chosen. */}
+      <CatalogBrowser
+        kind="spells"
+        buttonLabel={`Browse every ${klass.name.toLowerCase()} spell`}
+        selectedNames={spells}
+        onPick={(entry) => {
+          if (entry.level === 0) {
+            setCantripNames((current) =>
+              current.includes(entry.name) ? current : [...current, entry.name],
+            );
+          }
+          setSpells((current) => (current.includes(entry.name) ? current : [...current, entry.name]));
+        }}
+        onUnpick={(spellName) =>
+          setSpells((current) =>
+            current.filter((entry) => entry.toLowerCase() !== spellName.toLowerCase()),
+          )
+        }
+        recommended={
+          starters
+            ? {
+                label: `Recommended for a ${klass.name.toLowerCase()}`,
+                entries: [
+                  ...starters.cantrips.map((pick) => ({ name: pick.n, note: "cantrip" })),
+                  ...starters.spells.map((pick) => ({ name: pick.n })),
+                ],
+              }
+            : undefined
+        }
+        sections={[
+          {
+            key: `spells:${spellSearchClass}:${maxSpellLevel}`,
+            label: `Every spell up to level ${maxSpellLevel}`,
+            params: { class: spellSearchClass, level: String(maxSpellLevel) },
+          },
+        ]}
+        bucketOf={(entry) =>
+          entry.level === 0
+            ? { key: "cantrips", label: "Cantrips", order: 0 }
+            : {
+                key: `level-${entry.level}`,
+                label: `Level ${entry.level}`,
+                order: entry.level ?? 99,
+              }
+        }
+        metaOf={(entry) => entry.school ?? ""}
+      />
       <div className="mt-2 flex flex-wrap gap-1.5">
         {/* The chip shows the world's name; the value in state stays the
-            canonical one the sheet and the rules engine need. */}
+            canonical one the sheet and the rules engine need. The ⓘ reads the
+            canonical name, which is what the pack rows are filed under. */}
         {spells.map((spell) => (
           <Chip
             key={spell}
             label={displayName(pack, "spells", spell)}
+            info={{ reference: { kind: "spells", slug: contentSlug(spell), name: spell } }}
             onRemove={() => setSpells((current) => current.filter((entry) => entry !== spell))}
           />
         ))}

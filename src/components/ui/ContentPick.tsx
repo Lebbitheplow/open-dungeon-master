@@ -2,7 +2,9 @@
 
 import { useEffect, useRef } from "react";
 import { Loader2, Search } from "lucide-react";
+import { InfoButton } from "@/components/ui/InfoDialog";
 import { cn } from "@/lib/cn";
+import { describeContentEntry, spellSummary } from "@/lib/help";
 import { useContentSearch, type PickerEntry } from "@/app/characters/builder/useContentSearch";
 
 // Search-and-pick over the content pack (/api/content/<kind>): spells,
@@ -10,6 +12,12 @@ import { useContentSearch, type PickerEntry } from "@/app/characters/builder/use
 // default and narrows as the person types; a pick hands the entry back and
 // clears the box. Renders nothing when the pack is not installed, so the
 // typed field beside it is all a bare server shows.
+//
+// Every row carries a ⓘ, reading the description off the row it already has,
+// so a DM never has to add a spell to a stat block to find out what it does.
+// The list is in the flow rather than absolutely positioned: these fields sit
+// inside editor sheets that scroll, and an absolute list opening near the
+// bottom of one is clipped away entirely.
 
 const input =
   "rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:border-amber-500/50 focus:outline-none";
@@ -48,23 +56,30 @@ export function ContentPick({
   if (unavailable) return null;
 
   return (
-    <div ref={container} className={cn("relative", className)}>
-      <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-stone-500" />
-      <input
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        onFocus={() => results.length && setOpen(true)}
-        placeholder={placeholder}
-        aria-label={label}
-        className={cn(input, "w-full pl-7")}
-      />
-      {loading ? (
-        <Loader2 className="absolute right-2 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-stone-500" />
+    <div ref={container} className={className}>
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-stone-500" />
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          onFocus={() => results.length && setOpen(true)}
+          placeholder={placeholder}
+          aria-label={label}
+          className={cn(input, "w-full pl-7")}
+        />
+        {loading ? (
+          <Loader2 className="absolute right-2 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-stone-500" />
+        ) : null}
+      </div>
+      {open && !results.length && query.trim() && !loading ? (
+        <p className="mt-1 rounded-lg border border-stone-800 bg-stone-950/60 px-3 py-1.5 text-[11px] text-stone-500">
+          Nothing matched &quot;{query.trim()}&quot;. Try fewer letters.
+        </p>
       ) : null}
       {open && results.length ? (
-        <ul className="panel panel-smoke absolute left-0 top-full z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-lg">
+        <ul className="panel panel-smoke mt-1 max-h-56 w-full overflow-y-auto rounded-lg">
           {results.slice(0, 40).map((entry) => (
-            <li key={entry.slug}>
+            <li key={entry.slug} className="flex items-center gap-1 pr-2 hover:bg-stone-800">
               <button
                 type="button"
                 onClick={() => {
@@ -72,13 +87,21 @@ export function ContentPick({
                   setQuery("");
                   setOpen(false);
                 }}
-                className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm hover:bg-stone-800"
+                className="flex grow items-center justify-between gap-2 px-3 py-1.5 text-left text-sm"
               >
                 <span className={cn(entry.source === "homebrew" && "text-amber-300")}>{entry.name}</span>
                 <span className="text-[11px] text-stone-500">
                   {entry.level !== undefined ? `level ${entry.level}` : entry.rarity || entry.kind || ""}
                 </span>
               </button>
+              <InfoButton
+                label={entry.name}
+                meta={kind === "spells" ? spellSummary(entry.data) : undefined}
+                text={describeContentEntry(entry.data)}
+                reference={
+                  entry.source === "homebrew" ? undefined : { kind, slug: entry.slug, name: entry.name }
+                }
+              />
             </li>
           ))}
         </ul>

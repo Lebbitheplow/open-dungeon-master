@@ -41,11 +41,52 @@ function CharacterActions({
   );
 }
 
+// Opening the adventure. Pulled out of the player branch because the DM needs
+// it just as much: a DM who owned the table used to see a Ready button and
+// nothing else, so a human-run game could never be started from the seat that
+// was running it. `blocker` is the server's own rule (lobbyBlocker in
+// src/lib/dm/viewer.ts), so this button is never offered when the PATCH would
+// refuse it, and the reason shown is the reason the server would give.
+function StartBlock({
+  isOwner,
+  busy,
+  blocker,
+  onStart,
+}: {
+  isOwner: boolean;
+  busy: boolean;
+  blocker: string;
+  onStart: () => void;
+}) {
+  if (!isOwner) {
+    return (
+      <p className="text-center text-sm text-stone-500">
+        The owner starts the adventure once everyone is ready.
+      </p>
+    );
+  }
+  return (
+    <>
+      <button
+        type="button"
+        onClick={onStart}
+        disabled={busy || Boolean(blocker)}
+        className={cn(ui.btnPrimary, "w-full py-2.5")}
+      >
+        <Play className="size-4" /> Begin the adventure
+      </button>
+      {blocker ? <p className="text-center text-sm text-stone-500">{blocker}</p> : null}
+    </>
+  );
+}
+
 // The block at the foot of the lobby that changes with the seat. The DM
 // readies up without a character; a solo player readies and begins in one
-// stroke; everyone else creates a character, readies up, and the owner opens
-// the adventure once the whole table is ready with a sheet each. Delete is
-// the owner's alone and sits last, quiet, because it is irreversible.
+// stroke; everyone else creates a character and readies up. Below all of
+// them, for every seat but the solo player, the owner's Begin button: the DM
+// is usually the owner of a game they run, so that button has to reach the DM
+// seat too. Delete is the owner's alone and sits last, quiet, because it is
+// irreversible.
 export function LobbyActions({
   campaign,
   myMember,
@@ -55,8 +96,7 @@ export function LobbyActions({
   isOwner,
   busy,
   error,
-  allReady,
-  allHaveSheets,
+  startBlocker,
   onToggleReady,
   onStart,
   onBeginSolo,
@@ -71,8 +111,7 @@ export function LobbyActions({
   isOwner: boolean;
   busy: boolean;
   error: string;
-  allReady: boolean;
-  allHaveSheets: boolean;
+  startBlocker: string;
   onToggleReady: () => void;
   onStart: () => void;
   onBeginSolo: () => void;
@@ -123,62 +162,44 @@ export function LobbyActions({
             </button>
           </>
         )
+      ) : !mySheet ? (
+        <Link href={`/campaigns/${campaign.id}/character`} className={cn(ui.btnPrimary, "w-full")}>
+          Create your character
+        </Link>
       ) : (
         <>
-          {!mySheet ? (
-            <Link href={`/campaigns/${campaign.id}/character`} className={cn(ui.btnPrimary, "w-full")}>
-              Create your character
-            </Link>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={onToggleReady}
-                disabled={busy}
-                className={cn(
-                  "flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 font-medium transition-colors disabled:opacity-60",
-                  myMember?.ready
-                    ? "border border-stone-700 text-stone-300 hover:bg-stone-900"
-                    : "border border-emerald-500/40 bg-emerald-700 text-emerald-50 hover:bg-emerald-600",
-                )}
-              >
-                {busy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
-                {myMember?.ready ? "Un-ready" : "Ready up"}
-              </button>
-              <CharacterActions
-                campaignId={campaign.id}
-                sheet={mySheet}
-                busy={busy}
-                onRemove={onRemoveCharacter}
-              />
-              <p className="text-center text-xs text-stone-600">
-                Changing your character clears your ready status.
-              </p>
-            </>
-          )}
-
-          {isOwner ? (
-            <button
-              type="button"
-              onClick={onStart}
-              disabled={busy || !allReady || !allHaveSheets}
-              className={cn(ui.btnPrimary, "w-full py-2.5")}
-            >
-              <Play className="size-4" /> Begin the adventure
-            </button>
-          ) : (
-            <p className="text-center text-sm text-stone-500">
-              The owner starts the adventure once everyone is ready.
-            </p>
-          )}
-          {isOwner && (!allReady || !allHaveSheets) ? (
-            <p className="text-center text-sm text-stone-500">
-              {!allHaveSheets
-                ? "Everyone needs a character first."
-                : "Waiting for everyone to ready up."}
-            </p>
-          ) : null}
+          <button
+            type="button"
+            onClick={onToggleReady}
+            disabled={busy}
+            className={cn(
+              "flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 font-medium transition-colors disabled:opacity-60",
+              myMember?.ready
+                ? "border border-stone-700 text-stone-300 hover:bg-stone-900"
+                : "border border-emerald-500/40 bg-emerald-700 text-emerald-50 hover:bg-emerald-600",
+            )}
+          >
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+            {myMember?.ready ? "Un-ready" : "Ready up"}
+          </button>
+          <CharacterActions
+            campaignId={campaign.id}
+            sheet={mySheet}
+            busy={busy}
+            onRemove={onRemoveCharacter}
+          />
+          <p className="text-center text-xs text-stone-600">
+            Changing your character clears your ready status.
+          </p>
         </>
+      )}
+
+      {/* Every seat but the solo player, whose single button readies up and
+          begins in one stroke. A table with a person in the DM seat is never
+          solo, however few players it has (Lobby.tsx), so the DM always lands
+          here. */}
+      {isSolo ? null : (
+        <StartBlock isOwner={isOwner} busy={busy} blocker={startBlocker} onStart={onStart} />
       )}
       {error ? <p className="text-center text-sm text-red-400">{error}</p> : null}
 

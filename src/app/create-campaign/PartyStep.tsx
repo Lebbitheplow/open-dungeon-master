@@ -1,7 +1,12 @@
 "use client";
 
+import { InfoButton } from "@/components/ui/InfoDialog";
 import { cn } from "@/lib/cn";
-import { CAMPAIGN_DIFFICULTIES, type CampaignDifficulty } from "@/lib/campaign-types";
+import {
+  CAMPAIGN_DIFFICULTIES,
+  CAMPAIGN_DIFFICULTY_HINTS,
+  type CampaignDifficulty,
+} from "@/lib/campaign-types";
 import {
   CAMPAIGN_LENGTH_LABELS,
   CAMPAIGN_LENGTHS,
@@ -9,6 +14,13 @@ import {
 } from "@/lib/schemas/game-settings";
 import { FieldLabel, inputClass, ToggleCard } from "@/app/create-campaign/fields";
 import type { StepProps } from "@/app/create-campaign/draft";
+
+const DIFFICULTY_INFO = `Difficulty is guidance to the Dungeon Master, not a damage multiplier: every rule underneath stays 5e. It steers how hard encounters are built and how often a bad roll is allowed to really cost you.\n\n${CAMPAIGN_DIFFICULTIES.map(
+  (value) => `**${value}**: ${CAMPAIGN_DIFFICULTY_HINTS[value]}`,
+).join("\n\n")}\n\nThe party lead can change it later from the table's settings.`;
+
+const LENGTH_INFO =
+  "How far ahead the DM plans the secret story: how many acts the arc spans, and how many villains and threads it seeds at the start.\n\n**Short**: three acts, one focused adventure. A handful of sessions.\n\n**Standard**: four or five acts. The default shape of a campaign.\n\n**Epic**: six to eight acts, several threads running at once.\n\nNo length ever cuts you off. Play past the finale and a sequel saga picks up where the last one ended.";
 
 // Step 3: how many, how strong, how hard, how long, and whose dice. A solo
 // table has no player count (maxPlayers is pinned to 1 in the payload), and
@@ -43,7 +55,12 @@ export function PartyStep({ draft, patch, gates }: StepProps) {
           />
         </label>
         <label className="block">
-          <FieldLabel>Difficulty</FieldLabel>
+          <FieldLabel>
+            <span className="flex items-center gap-1">
+              Difficulty
+              <InfoButton label="Difficulty" text={DIFFICULTY_INFO} />
+            </span>
+          </FieldLabel>
           <select
             value={draft.difficulty}
             onChange={(event) =>
@@ -57,12 +74,21 @@ export function PartyStep({ draft, patch, gates }: StepProps) {
               </option>
             ))}
           </select>
+          {/* The chosen tier says what it means without opening anything. */}
+          <p className="mt-1 text-xs text-stone-500">
+            {CAMPAIGN_DIFFICULTY_HINTS[draft.difficulty]}
+          </p>
         </label>
       </div>
 
       {aiNarrates ? (
         <label className="block">
-          <FieldLabel>Campaign length</FieldLabel>
+          <FieldLabel>
+            <span className="flex items-center gap-1">
+              Campaign length
+              <InfoButton label="Campaign length" text={LENGTH_INFO} />
+            </span>
+          </FieldLabel>
           <select
             value={draft.campaignLength}
             onChange={(event) =>

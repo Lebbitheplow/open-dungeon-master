@@ -19,6 +19,59 @@ import type {
 
 export const ALIGNMENTS = ["LG", "NG", "CG", "LN", "N", "CN", "LE", "NE", "CE"];
 
+// Two-letter codes are the shorthand of people who already play. A first
+// character should not have to guess what "CN" means, so the picker spells
+// each one out and says how it tends to play at a table.
+export const ALIGNMENT_LABELS: Record<string, { name: string; blurb: string }> = {
+  LG: {
+    name: "Lawful Good",
+    blurb:
+      "Does the right thing, by the rules. Keeps promises, protects the weak, trusts institutions to be worth defending. The paladin's default.",
+  },
+  NG: {
+    name: "Neutral Good",
+    blurb:
+      "Does the most good available, law or no law. Helps whoever is in front of them without much regard for who is owed what.",
+  },
+  CG: {
+    name: "Chaotic Good",
+    blurb:
+      "Does the right thing, and breaks whatever rule is in the way. Rebels, smugglers with a conscience, people who free prisoners first and ask later.",
+  },
+  LN: {
+    name: "Lawful Neutral",
+    blurb:
+      "Order for its own sake. The judge, the soldier, the monk: the code matters more than any one outcome it produces.",
+  },
+  N: {
+    name: "True Neutral",
+    blurb:
+      "No strong pull either way. Gets on with life, takes a side when a side has to be taken. The commonest alignment for ordinary people.",
+  },
+  CN: {
+    name: "Chaotic Neutral",
+    blurb:
+      "Freedom above all, their own most of all. Unpredictable but not cruel. Easy to play badly; check with your table before choosing it.",
+  },
+  LE: {
+    name: "Lawful Evil",
+    blurb:
+      "Takes what they want, within a system they respect and use. Tyrants, corrupt officials, devils. Keeps their word, which makes them worse.",
+  },
+  NE: {
+    name: "Neutral Evil",
+    blurb: "Takes what they want and feels no need to dress it up. Loyal to nobody but themselves.",
+  },
+  CE: {
+    name: "Chaotic Evil",
+    blurb:
+      "Destruction for its own sake. Almost always an NPC alignment; a party rarely survives one.",
+  },
+};
+
+const ALIGNMENT_INFO =
+  "Alignment is a two-word shorthand for how your character treats rules (lawful, neutral, chaotic) and other people (good, neutral, evil). It binds nothing: it is a note to yourself and to the DM about how this person tends to act, and characters drift over a campaign. Pick the one that sounds most like them and stop worrying about it.";
+
 // A pack's own heading for its recommended tier ("Peoples of Middle-earth"),
 // so the group reads like the world rather than like a filter.
 function packGroupLabel(pack: WorldPack | null, prefix: string): string {
@@ -139,11 +192,23 @@ export function usePickerGroups({
 
   // A pack's own alignments lead the list, labelled rather than enforced: the
   // other nine stay pickable because a heretic is a legitimate character.
-  const alignmentOrder = useMemo(() => {
+  const alignmentGroups = useMemo<PickerGroup[]>(() => {
+    const toOption = (code: string): PickerOption => ({
+      id: code,
+      name: `${code}: ${ALIGNMENT_LABELS[code]?.name ?? code}`,
+      infoText: ALIGNMENT_LABELS[code]?.blurb ?? ALIGNMENT_INFO,
+    });
     const preferred = (pack?.alignments ?? []).filter((code) => ALIGNMENTS.includes(code));
-    return preferred.length
-      ? [...preferred, ...ALIGNMENTS.filter((code) => !preferred.includes(code))]
-      : ALIGNMENTS;
+    if (!preferred.length) {
+      return [{ label: null, options: ALIGNMENTS.map(toOption) }];
+    }
+    return [
+      { label: packGroupLabel(pack, "Common in"), options: preferred.map(toOption) },
+      {
+        label: "All alignments",
+        options: ALIGNMENTS.filter((code) => !preferred.includes(code)).map(toOption),
+      },
+    ];
   }, [pack]);
 
   const raceGroups = useMemo<PickerGroup[]>(() => {
@@ -297,7 +362,8 @@ export function usePickerGroups({
   }, [backgroundTier, pack]);
 
   return {
-    alignmentOrder,
+    alignmentGroups,
+    alignmentInfo: ALIGNMENT_INFO,
     raceGroups,
     classGroups,
     subclassGroups,

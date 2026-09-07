@@ -1,11 +1,15 @@
 "use client";
 
 import { X } from "lucide-react";
+import { GameTerm } from "@/components/ui/GameTerm";
+import { InfoButton } from "@/components/ui/InfoDialog";
 import { cn } from "@/lib/cn";
+import { contentSlug } from "@/lib/help";
 import { abilityMod, formatModifier } from "@/lib/srd";
 import { ABILITY_SCORE_CAP, applyAsiChoices } from "@/lib/srd/asi";
 import type { Ability, AbilityScores, AsiChoice } from "@/lib/schemas/sheet";
 import { ABILITY_LABELS } from "./AbilityEditor";
+import CatalogBrowser from "./CatalogBrowser";
 import ContentPicker from "./ContentPicker";
 
 const ABILITY_KEYS = Object.keys(ABILITY_LABELS) as Ability[];
@@ -66,8 +70,9 @@ export default function AsiFeatEditor({
         )}
       </div>
       <p className="mb-3 text-xs text-stone-500">
-        This is how higher-level characters raise their stats. Each earned level grants
-        +2 to one ability, +1 to two abilities, or a feat. Scores cap at {ABILITY_SCORE_CAP}.
+        This is how higher-level characters raise their stats. Each earned level grants +2 to one{" "}
+        <GameTerm id="ability_score">ability score</GameTerm>, +1 to two of them, or a feat.
+        Scores cap at {ABILITY_SCORE_CAP}.
       </p>
       {!baseScores ? (
         <p className="rounded-md border border-stone-800 bg-stone-900/60 p-3 text-xs text-stone-400">
@@ -182,20 +187,40 @@ export default function AsiFeatEditor({
                     {choice?.mode === "feat" ? (
                       <span className="mb-2 inline-flex items-center gap-1 rounded-full border border-amber-800 bg-amber-950/40 px-2.5 py-1 text-xs text-amber-200">
                         {choice.feat}
+                        <InfoButton
+                          label={choice.feat}
+                          reference={{
+                            kind: "feats",
+                            slug: contentSlug(choice.feat),
+                            name: choice.feat,
+                          }}
+                        />
                         <button
                           type="button"
                           onClick={() => setChoice(index, null)}
+                          aria-label={`Remove ${choice.feat}`}
                           className="text-stone-500 hover:text-red-400"
                         >
                           <X className="size-3" />
                         </button>
                       </span>
                     ) : (
-                      <ContentPicker
-                        kind="feats"
-                        placeholder="Search feats (e.g. alert, tough)"
-                        onPick={(entry) => setChoice(index, { mode: "feat", feat: entry.name })}
-                      />
+                      <>
+                        <ContentPicker
+                          kind="feats"
+                          placeholder="Search feats (e.g. alert, tough)"
+                          onPick={(entry) => setChoice(index, { mode: "feat", feat: entry.name })}
+                        />
+                        {/* Nobody picks a feat they cannot name; the list is
+                            here, with what each one does on every row. */}
+                        <CatalogBrowser
+                          kind="feats"
+                          buttonLabel="Browse every feat"
+                          selectedNames={[]}
+                          onPick={(entry) => setChoice(index, { mode: "feat", feat: entry.name })}
+                          sections={[{ key: "feats:all", label: "All feats" }]}
+                        />
+                      </>
                     )}
                   </div>
                 ) : null}

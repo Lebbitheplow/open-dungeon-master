@@ -159,7 +159,8 @@ export default function CharacterBuilder({
             packInstalled={packInstalled}
             fixedLevel={fixedLevel}
             role={role}
-            alignmentOrder={pickers.alignmentOrder}
+            alignmentGroups={pickers.alignmentGroups}
+            alignmentInfo={pickers.alignmentInfo}
             backgroundGroups={pickers.backgroundGroups}
             background={background}
           />

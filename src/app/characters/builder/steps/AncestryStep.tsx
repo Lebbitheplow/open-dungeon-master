@@ -47,7 +47,17 @@ export function AncestryStep({
 
       {race && race.bonusLanguages > 0 ? (
         <StepPanel
-          title={`Bonus ${race.bonusLanguages === 1 ? "language" : "languages"}`}
+          title={
+            <span className="flex items-center gap-1">
+              Bonus {race.bonusLanguages === 1 ? "language" : "languages"}
+              <InfoButton
+                label="Languages"
+                text={
+                  "A language you know is one you can speak, read and write. It decides who your character can talk to without help, and it comes up more than new players expect: half the trouble in a dungeon is written on a wall.\n\nCommon is the trade tongue everyone shares. The rest are the tongues of particular peoples: Dwarvish, Elvish, Orc, Draconic and so on. Pick whatever fits where your character grew up, or whoever you expect to be negotiating with."
+                }
+              />
+            </span>
+          }
           help={`${race.name} speaks ${race.languages.join(" and ")} plus ${race.bonusLanguages} of your choice.`}
         >
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">

@@ -3,6 +3,7 @@
 import { UnofficialPackNotice } from "@/components/UnofficialPackNotice";
 import { InfoButton } from "@/components/ui/InfoDialog";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { describeSkill } from "@/lib/help";
 import { SRD_SKILLS } from "@/lib/srd";
 import type { WorldPack } from "@/lib/worlds/types";
 import OptionPicker, { type PickerGroup } from "../OptionPicker";
@@ -23,7 +24,8 @@ export function IdentityStep({
   packInstalled,
   fixedLevel,
   role,
-  alignmentOrder,
+  alignmentGroups,
+  alignmentInfo,
   backgroundGroups,
   background,
 }: {
@@ -34,7 +36,8 @@ export function IdentityStep({
   // Offered by the library page only: a campaign already knows which door
   // the character comes through.
   role?: { value: BuilderRole; onChange: (role: BuilderRole) => void };
-  alignmentOrder: string[];
+  alignmentGroups: PickerGroup[];
+  alignmentInfo: string;
   backgroundGroups: PickerGroup[];
   background: BackgroundOption | undefined;
 }) {
@@ -151,8 +154,22 @@ export function IdentityStep({
             {background ? (
               <span className="mt-1 flex items-start gap-1 text-xs text-stone-500">
                 <span className="grow">
+                  {background.skills.length ? "Grants " : null}
                   {background.skills.length
-                    ? `Grants ${background.skills.map((skillId) => SRD_SKILLS.find((skill) => skill.id === skillId)?.name ?? skillId).join(", ")}`
+                    ? background.skills.map((skillId, index) => {
+                        const name =
+                          SRD_SKILLS.find((skill) => skill.id === skillId)?.name ?? skillId;
+                        return (
+                          <span key={skillId} className="whitespace-nowrap">
+                            {index ? ", " : null}
+                            {name}
+                            {/* Each granted skill says what it is, so
+                                "Grants Deception, Sleight of Hand" is a
+                                sentence a new player can read. */}
+                            <InfoButton label={name} text={describeSkill(skillId)} />
+                          </span>
+                        );
+                      })
                     : "What your character did before adventuring."}
                 </span>
                 <InfoButton
@@ -163,19 +180,20 @@ export function IdentityStep({
               </span>
             ) : null}
           </Field>
-          <Field label="Alignment">
-            <select
+          <Field
+            label={
+              <span className="flex items-center gap-1">
+                Alignment
+                <InfoButton label="Alignment" text={alignmentInfo} />
+              </span>
+            }
+          >
+            <OptionPicker
               value={state.alignment}
-              onChange={(event) => state.setAlignment(event.target.value)}
+              groups={alignmentGroups}
               className={inputClass}
-            >
-              {alignmentOrder.map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                  {pack?.alignments.includes(value) ? " (fits this world)" : ""}
-                </option>
-              ))}
-            </select>
+              onChange={state.setAlignment}
+            />
           </Field>
         </div>
       </StepPanel>

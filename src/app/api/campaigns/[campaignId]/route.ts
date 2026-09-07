@@ -4,10 +4,8 @@ import { z } from "zod";
 import { capsFor, isErrorResponse, isLead, requireMember } from "@/lib/campaign-api";
 import { CAMPAIGN_DIFFICULTIES } from "@/lib/campaign-types";
 import {
-  allMembersReady,
   allocateSeq,
   campaignSeats,
-  countPartySlots,
   deleteCampaign,
   latestSeq,
   listMembers,
@@ -32,7 +30,7 @@ import { insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
 import { listRollsVisibleTo } from "@/lib/db/rolls";
 import { listSheets } from "@/lib/db/sheets";
 import { requestDmTurn } from "@/lib/dm/loop";
-import { hasHumanDm } from "@/lib/dm/viewer";
+import { hasHumanDm, lobbyBlocker } from "@/lib/dm/viewer";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { runStorySetup } from "@/lib/dm/setup";
 import { generateStoryArc } from "@/lib/dm/arc";
@@ -170,18 +168,21 @@ export async function PATCH(
     if (campaign.status !== "lobby") {
       return Response.json({ error: "Campaign has already started." }, { status: 400 });
     }
-    if (!allMembersReady(campaignId)) {
-      return Response.json({ error: "Everyone must ready up first." }, { status: 400 });
-    }
-    const sheetCount = listSheets(campaignId).length;
-    // The DM seats run no character, so they are not counted here; a
-    // human-DM table is ready when every *player* has a sheet.
-    const memberCount = countPartySlots(campaignId);
-    if (sheetCount < memberCount) {
-      return Response.json(
-        { error: "Every player needs a character before the adventure starts." },
-        { status: 400 },
-      );
+    // One rule, shared with the lobby's Begin button (lobbyBlocker in
+    // src/lib/dm/viewer.ts), so this route never refuses a start the UI just
+    // offered. Asking seat by seat also closes a hole the old sheet count
+    // had: a companion's sheet made up the numbers for a player who had none.
+    const lobbySheets = listSheets(campaignId);
+    const blocker = lobbyBlocker(
+      campaignSeats(campaign),
+      listMembers(campaignId).map((member) => ({
+        userId: member.userId,
+        ready: member.ready,
+        hasSheet: lobbySheets.some((sheet) => sheet.userId === member.userId),
+      })),
+    );
+    if (blocker) {
+      return Response.json({ error: blocker }, { status: 400 });
     }
   }
 

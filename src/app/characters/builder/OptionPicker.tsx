@@ -22,6 +22,11 @@ export type PickerGroup = { label: string | null; options: PickerOption[] };
 // selects. A native <option> cannot hold a button, and these lists deserve
 // the same per-row info affordance the spell picker has, so this renders
 // the option list itself with an InfoButton on every row.
+//
+// The list is in the flow rather than absolutely positioned: the builder is a
+// wizard now, and every step scrolls on its own, which clips an absolute
+// child that opens near the bottom of the pane. In flow it always has room,
+// and the step scrolls to it.
 export default function OptionPicker({
   value,
   groups,
@@ -62,7 +67,6 @@ export default function OptionPicker({
   return (
     <div
       ref={container}
-      className="relative"
       onKeyDown={(event) => {
         if (event.key === "Escape") {
           setOpen(false);
@@ -84,7 +88,7 @@ export default function OptionPicker({
       {open ? (
         <ul
           role="listbox"
-          className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto panel panel-smoke rounded-lg"
+          className="mt-1 max-h-64 w-full overflow-y-auto panel panel-smoke rounded-lg"
         >
           {groups.map((group, groupIndex) => (
             <Fragment key={group.label ?? `group-${groupIndex}`}>

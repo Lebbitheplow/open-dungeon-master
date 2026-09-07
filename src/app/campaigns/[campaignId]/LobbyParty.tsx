@@ -43,7 +43,7 @@ function SeatAction({
 
 // The lobby's party list: every member with their seat badges, ready state
 // and, for whoever may hand seats around, the controls to do it. Below it,
-// for the lead, the companions prepared for the party.
+// for whoever steers the story, the companions prepared for the party.
 export function LobbyParty({
   campaign,
   members,
@@ -85,7 +85,7 @@ export function LobbyParty({
   // The lead or the owner may silence a player at this table.
   canMute: boolean;
   onMute: (userId: string, muted: boolean) => void;
-  // A solo campaign has no party list, but its lead may still keep
+  // A solo campaign has no party list, but its player may still keep
   // companions, so the two sections are switched separately.
   showParty: boolean;
   showCompanions: boolean;

@@ -1,10 +1,15 @@
 "use client";
 
+import { useMemo } from "react";
+import OptionPicker, { type PickerGroup } from "@/app/characters/builder/OptionPicker";
 import { UnofficialPackNotice } from "@/components/UnofficialPackNotice";
 import { DM_MODE_HINTS, DM_MODE_LABELS, DM_MODES } from "@/lib/schemas/game-settings";
 import type { FranchiseGroup, WorldPackSummary } from "@/lib/worlds/types";
 import { FieldLabel, inputClass, ToggleCard } from "@/app/create-campaign/fields";
 import type { StepProps } from "@/app/create-campaign/draft";
+
+const NO_PACK_INFO =
+  "A pre-built world is a coat of paint over the same 5e rules. It renames the races, classes, spells and monsters to fit its setting, tells the Dungeon Master how the place sounds, and floats the peoples and callings that belong there to the top of every picker in the character builder. Nothing is locked: you can still play a wizard in a world that calls them something else.\n\nWithout one you get the plain setting your genre implies, with the whole catalog offered in its own words.";
 
 // Step 1: the name, who holds the DM seat, and an optional pre-built world.
 // The pack select is hidden outright when the server has none installed.
@@ -25,6 +30,28 @@ export function PremiseStep({
   onClearPack: () => void;
 }) {
   const { storyKnownMissing, storyUnreachable, aiNarrates } = gates;
+  // Every pack, each with its own blurb behind a ⓘ, so a world can be read
+  // before it is chosen instead of after. A franchise with several eras keeps
+  // them grouped under its name, exactly as the old <optgroup> did.
+  const packGroups = useMemo<PickerGroup[]>(
+    () => [
+      {
+        label: null,
+        options: [
+          { id: "", name: "No pack (plain setting)", infoText: NO_PACK_INFO },
+        ],
+      },
+      ...franchises.map((group) => ({
+        label: group.editions.length === 1 ? null : group.franchise,
+        options: group.editions.map((edition) => ({
+          id: edition.id,
+          name: group.editions.length === 1 ? edition.name : edition.edition || edition.name,
+          infoText: edition.blurb,
+        })),
+      })),
+    ],
+    [franchises],
+  );
   return (
     <div className="space-y-4 text-sm">
       <label className="block">
@@ -80,38 +107,20 @@ export function PremiseStep({
       {franchises.length ? (
         <div>
           <FieldLabel>Pre-built world (optional)</FieldLabel>
-          <select
+          <OptionPicker
             value={draft.worldPack}
-            onChange={(event) => {
-              const next = packs.find((pack) => pack.id === event.target.value);
+            groups={packGroups}
+            placeholder="No pack (plain setting)"
+            className={inputClass}
+            onChange={(id) => {
+              const next = packs.find((pack) => pack.id === id);
               if (next) {
                 onChoosePack(next);
               } else {
                 onClearPack();
               }
             }}
-            className={inputClass}
-          >
-            <option value="">No pack (plain setting)</option>
-            {franchises.map((group) =>
-              // A franchise with one era is a single row. One with several
-              // gets an optgroup, so the eras stay grouped under the name
-              // without the list needing its own expand step.
-              group.editions.length === 1 ? (
-                <option key={group.franchise} value={group.editions[0].id}>
-                  {group.editions[0].name}
-                </option>
-              ) : (
-                <optgroup key={group.franchise} label={group.franchise}>
-                  {group.editions.map((edition) => (
-                    <option key={edition.id} value={edition.id}>
-                      {edition.edition || edition.name}
-                    </option>
-                  ))}
-                </optgroup>
-              ),
-            )}
-          </select>
+          />
           {selectedPack ? (
             <>
               {selectedPack.cover ? (

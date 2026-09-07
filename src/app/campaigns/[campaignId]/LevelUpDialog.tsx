@@ -5,7 +5,7 @@ import { Dices, Loader2, Search, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import { InfoButton, InfoChipList } from "@/components/ui/InfoDialog";
-import { describeFeature } from "@/lib/help";
+import { describeFeature, describeSkill } from "@/lib/help";
 import {
   openOptionSlots,
   optionFeatureName,
@@ -698,20 +698,26 @@ export function LevelUpDialog({
                       <div className="flex flex-wrap gap-1.5">
                         {skillOptions.map((skillId) => {
                           const picked = skillPick === skillId;
+                          const name = findSkill(skillId)?.name ?? skillId;
                           return (
-                            <button
+                            <span
                               key={skillId}
-                              type="button"
-                              onClick={() => setSkillPick(picked ? "" : skillId)}
                               className={cn(
-                                "rounded-full border px-3 py-1 text-sm",
+                                "inline-flex items-center gap-1 rounded-full border px-3 py-1 text-sm",
                                 picked
                                   ? "border-amber-600 bg-stone-900 text-amber-100"
                                   : "border-stone-700 hover:border-amber-800 hover:bg-stone-900",
                               )}
                             >
-                              {findSkill(skillId)?.name ?? skillId}
-                            </button>
+                              <button
+                                type="button"
+                                aria-pressed={picked}
+                                onClick={() => setSkillPick(picked ? "" : skillId)}
+                              >
+                                {name}
+                              </button>
+                              <InfoButton label={name} text={describeSkill(skillId)} />
+                            </span>
                           );
                         })}
                       </div>
@@ -744,28 +750,34 @@ export function LevelUpDialog({
                   <div className="flex flex-wrap gap-1.5">
                     {expertiseOptions.map((skillId) => {
                       const picked = expertisePicks.includes(skillId);
+                      const name = findSkill(skillId)?.name ?? skillId;
                       return (
-                        <button
+                        <span
                           key={skillId}
-                          type="button"
-                          onClick={() =>
-                            setExpertisePicks((current) =>
-                              picked
-                                ? current.filter((entry) => entry !== skillId)
-                                : current.length < expertiseToPick
-                                  ? [...current, skillId]
-                                  : current,
-                            )
-                          }
                           className={cn(
-                            "rounded-full border px-3 py-1 text-sm",
+                            "inline-flex items-center gap-1 rounded-full border px-3 py-1 text-sm",
                             picked
                               ? "border-amber-600 bg-stone-900 text-amber-100"
                               : "border-stone-700 hover:border-amber-800 hover:bg-stone-900",
                           )}
                         >
-                          {findSkill(skillId)?.name ?? skillId}
-                        </button>
+                          <button
+                            type="button"
+                            aria-pressed={picked}
+                            onClick={() =>
+                              setExpertisePicks((current) =>
+                                picked
+                                  ? current.filter((entry) => entry !== skillId)
+                                  : current.length < expertiseToPick
+                                    ? [...current, skillId]
+                                    : current,
+                              )
+                            }
+                          >
+                            {name}
+                          </button>
+                          <InfoButton label={name} text={describeSkill(skillId)} />
+                        </span>
                       );
                     })}
                   </div>
@@ -959,26 +971,35 @@ export function LevelUpDialog({
                         {spellOptions
                           .filter((spell) => !alreadyKnown.has(spell.name.toLowerCase()))
                           .map((spell) => (
-                            <label
+                            <div
                               key={spell.slug}
-                              className="flex cursor-pointer items-center gap-2 rounded-md border border-stone-800 px-3 py-1.5 text-sm hover:border-stone-600"
+                              className="flex items-center gap-2 rounded-md border border-stone-800 pr-2 text-sm hover:border-stone-600"
                             >
-                              <input
-                                type="checkbox"
-                                checked={spellPicks.includes(spell.name)}
-                                disabled={
-                                  !spellPicks.includes(spell.name) &&
-                                  remainingPicks !== null &&
-                                  spellPicks.length >= remainingPicks
-                                }
-                                onChange={() => toggleSpell(spell.name)}
-                                className="accent-amber-400"
+                              <label className="flex flex-1 cursor-pointer items-center gap-2 px-3 py-1.5">
+                                <input
+                                  type="checkbox"
+                                  checked={spellPicks.includes(spell.name)}
+                                  disabled={
+                                    !spellPicks.includes(spell.name) &&
+                                    remainingPicks !== null &&
+                                    spellPicks.length >= remainingPicks
+                                  }
+                                  onChange={() => toggleSpell(spell.name)}
+                                  className="accent-amber-400"
+                                />
+                                <span className="flex-1">{spell.name}</span>
+                                <span className="text-xs text-stone-500">
+                                  {spell.level === 0 ? "cantrip" : `level ${spell.level}`}
+                                </span>
+                              </label>
+                              {/* Nobody should have to accept a spell to find
+                                  out what it does; the pack row is one tap
+                                  away and only fetched when it is opened. */}
+                              <InfoButton
+                                label={spell.name}
+                                reference={{ kind: "spells", slug: spell.slug, name: spell.name }}
                               />
-                              <span className="flex-1">{spell.name}</span>
-                              <span className="text-xs text-stone-500">
-                                {spell.level === 0 ? "cantrip" : `level ${spell.level}`}
-                              </span>
-                            </label>
+                            </div>
                           ))}
                         {!spellOptions.length ? (
                           <p className="px-1 py-2 text-xs text-stone-500">No matching spells.</p>
