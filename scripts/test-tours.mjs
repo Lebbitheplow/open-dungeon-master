@@ -13,6 +13,7 @@ const { HUB_TOUR, SHELF_TOUR, SYSTEM_TOURS, systemTourId, workshopTourAnchors } 
 const { WORKSHOP_GUIDES, guideFor } = await import("../src/lib/tours/workshop-guide.ts");
 const { appendTerm, appendLine, collectTags, insertAt } = await import("../src/lib/workshop/pickers.ts");
 const { readFileSync, readdirSync, statSync } = await import("node:fs");
+const { fileURLToPath } = await import("node:url");
 const { join } = await import("node:path");
 
 let passed = 0;
@@ -149,7 +150,11 @@ function sourceFiles(dir) {
 }
 
 test("every workshop tour anchor exists in the source as data-tour", () => {
-  const root = new URL("../src", import.meta.url).pathname;
+  // fileURLToPath, not .pathname: on Windows the latter hands back
+  // "/D:/a/..." and readdirSync then resolves it against the drive,
+  // scanning "D:\\D:\\a\\..." and failing. That is what red the Windows
+  // smoke run.
+  const root = fileURLToPath(new URL("../src", import.meta.url));
   const source = sourceFiles(root).map((file) => readFileSync(file, "utf8")).join("\n");
   for (const anchor of workshopTourAnchors()) {
     const carried =
