@@ -24,7 +24,27 @@ export type ShareLinks = {
   origin: string;
   joinUrl: string;
   appUrl: string;
+  // The typeable room code, or "" when this server has no address a code
+  // can name (a LAN address, a quick tunnel, an operator's own domain).
+  roomCode: string;
 };
+
+// A world shared through the broker lives at play-CODE.opendungeonmaster.com,
+// where the code and the hostname are the same string. That makes a spoken
+// code enough to find the host: no lookup, no directory. Pair it with the
+// campaign's invite code and it names the table too, which is the whole
+// room code the apps parse back (src/shared/deep-link.ts in the client
+// repo, parseRoomCode; keep the two in step).
+const HOST_CODE_SHAPE = /^[A-HJKMNP-Z2-9]{8}$/;
+
+export function hostCodeFromOrigin(origin: string): string {
+  const label =
+    /^https:\/\/play-([a-z0-9]+)\.opendungeonmaster\.com$/.exec(
+      (origin || "").trim().toLowerCase(),
+    )?.[1] ?? "";
+  const code = label.toUpperCase();
+  return HOST_CODE_SHAPE.test(code) ? code : "";
+}
 
 export function buildShareLinks({
   publicOrigin,
@@ -39,11 +59,13 @@ export function buildShareLinks({
   const origin = (publicOrigin || fallback).replace(/\/+$/, "");
   const code = inviteCode.trim().toUpperCase();
   if (!origin || !code) {
-    return { origin, joinUrl: "", appUrl: "" };
+    return { origin, joinUrl: "", appUrl: "", roomCode: "" };
   }
+  const hostCode = hostCodeFromOrigin(origin);
   return {
     origin,
     joinUrl: `${origin}/join/${code}`,
     appUrl: `${SHARE_DOMAIN}/j?s=${encodeURIComponent(origin)}&c=${code}`,
+    roomCode: hostCode ? `${hostCode}-${code}` : "",
   };
 }

@@ -77,7 +77,12 @@ export function InviteShareDialog({
     };
   }, [open, shareState, shareUrl]);
 
-  const { joinUrl, appUrl } = buildShareLinks({ publicOrigin, inviteCode });
+  const { joinUrl, appUrl, roomCode } = buildShareLinks({ publicOrigin, inviteCode });
+  // Shared through the broker, the code carries the host's half in front of
+  // the table's, so a guest can type it in the app and land here. On any
+  // other address there is nothing for a code to name and the table's own
+  // stands alone.
+  const shownCode = roomCode || inviteCode;
 
   useEffect(() => {
     if (!open || !appUrl) {
@@ -93,7 +98,7 @@ export function InviteShareDialog({
   }, [open, appUrl]);
 
   async function copy(kind: "link" | "code") {
-    const worked = await copyText(kind === "link" ? appUrl : inviteCode);
+    const worked = await copyText(kind === "link" ? appUrl : shownCode);
     setError(worked ? "" : "Copying failed. Select the text and copy it by hand.");
     if (worked) {
       setCopied(kind);
@@ -161,7 +166,19 @@ export function InviteShareDialog({
         ) : null}
         <div className="w-full text-center">
           <p className="eyebrow text-[10px] text-amber-200/70">Room code</p>
-          <p className="font-mono text-2xl tracking-[0.3em] text-amber-100">{inviteCode}</p>
+          <p
+            className={cn(
+              "font-mono text-amber-100",
+              roomCode ? "text-lg tracking-[0.15em] break-all" : "text-2xl tracking-[0.3em]",
+            )}
+          >
+            {shownCode}
+          </p>
+          {roomCode ? (
+            <p className="mt-1 text-xs text-stone-400">
+              Friends can type this code into the app to join.
+            </p>
+          ) : null}
           <p className="mt-1 break-all font-mono text-xs text-stone-500">{joinUrl}</p>
         </div>
         <div className="flex w-full flex-wrap justify-center gap-2">

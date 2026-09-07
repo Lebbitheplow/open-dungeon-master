@@ -1,7 +1,7 @@
 // Canonical invite link shapes, cross-checked against the deployed /j
 // redirector's own parsers so the two cannot drift apart silently.
 import assert from "node:assert/strict";
-import { buildShareLinks } from "../src/lib/share-link.ts";
+import { buildShareLinks, hostCodeFromOrigin } from "../src/lib/share-link.ts";
 import { parseCode, parseServer } from "../workers/j-redirector/src/index.js";
 
 let passed = 0;
@@ -72,6 +72,35 @@ test("the /j link round-trips through the redirector's parsers", () => {
   assert.equal(url.pathname, "/j");
   assert.equal(parseServer(url.searchParams.get("s")), "https://abc.trycloudflare.com");
   assert.equal(parseCode(url.searchParams.get("c")), "WXYZ2345");
+});
+
+test("a brokered address turns into a typeable room code", () => {
+  const links = buildShareLinks({
+    publicOrigin: "https://play-abcd2345.opendungeonmaster.com",
+    inviteCode: "WXYZ2345",
+    fallbackOrigin: "",
+  });
+  assert.equal(links.roomCode, "ABCD2345-WXYZ2345");
+  assert.equal(hostCodeFromOrigin("https://play-abcd2345.opendungeonmaster.com"), "ABCD2345");
+});
+
+test("any other address has no room code to show", () => {
+  for (const publicOrigin of [
+    "https://abc.trycloudflare.com",
+    "http://192.168.1.5:3000",
+    "https://odm.example.com",
+    "https://play-abcd2345.evil.com",
+  ]) {
+    const links = buildShareLinks({ publicOrigin, inviteCode: "WXYZ2345", fallbackOrigin: "" });
+    assert.equal(links.roomCode, "", publicOrigin);
+    assert.equal(hostCodeFromOrigin(publicOrigin), "", publicOrigin);
+  }
+});
+
+test("a host code the broker could not have minted is not shown", () => {
+  // L is missing from the broker's alphabet, and codes are always eight.
+  assert.equal(hostCodeFromOrigin("https://play-abcl2345.opendungeonmaster.com"), "");
+  assert.equal(hostCodeFromOrigin("https://play-abcd234.opendungeonmaster.com"), "");
 });
 
 console.log(`test-share-link: ${passed} tests passed.`);
