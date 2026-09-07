@@ -36,6 +36,9 @@ export default function CampaignPage({
     return (
       <main className="flex flex-1 flex-col items-center justify-center gap-3 p-6">
         <p className="text-stone-400">{state.error || "Campaign not found."}</p>
+        {state.answeredBy ? (
+          <p className="text-xs text-stone-500">Answered by {state.answeredBy}</p>
+        ) : null}
         <Link href="/" className="text-sm text-amber-200 hover:underline">
           Back to campaigns
         </Link>

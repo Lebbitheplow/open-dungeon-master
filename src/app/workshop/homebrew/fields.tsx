@@ -1,8 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { input } from "@/app/workshop/homebrew/types";
+import { Suggestions, type AddOption } from "@/components/ui/AddFromList";
 
 // The three inputs every homebrew form is made of, labelled the same way
 // the monster editor labels its own, so the two read as one workshop.
@@ -35,6 +36,7 @@ export function TextField({
   hint,
   maxLength = 200,
   className,
+  suggestions,
 }: {
   label: string;
   value: string;
@@ -43,16 +45,22 @@ export function TextField({
   hint?: string;
   maxLength?: number;
   className?: string;
+  // The values the field usually takes, offered as a dropdown under it
+  // while anything else can still be typed.
+  suggestions?: readonly AddOption[];
 }) {
+  const listId = useId();
   return (
     <Field label={label} hint={hint} className={className}>
       <input
         value={value}
         maxLength={maxLength}
         placeholder={placeholder}
+        list={suggestions ? listId : undefined}
         onChange={(event) => onChange(event.target.value)}
         className={cn(input, "w-full")}
       />
+      {suggestions ? <Suggestions id={listId} options={suggestions} /> : null}
     </Field>
   );
 }

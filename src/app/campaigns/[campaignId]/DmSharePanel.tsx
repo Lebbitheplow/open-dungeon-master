@@ -124,7 +124,7 @@ export function DmSharePanel({ campaignId }: { campaignId: string }) {
         faces and map backdrops alike, within the size caps. Nothing from any campaign does.
       </p>
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-2">
+      <div className="mb-4 grid gap-3 sm:grid-cols-2" data-tour="share-manifest">
         <label className="block sm:col-span-2">
           <span className="mb-1 block text-xs uppercase tracking-wide text-stone-500">Name</span>
           <input
@@ -212,7 +212,7 @@ export function DmSharePanel({ campaignId }: { campaignId: string }) {
         className="mb-4"
       />
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2" data-tour="share-export">
         <button
           type="button"
           onClick={() => void exportBundle()}

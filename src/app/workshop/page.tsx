@@ -10,6 +10,9 @@ import { AppHeader } from "@/components/AppHeader";
 import { DEFAULT_TARGET_PARTY } from "@/lib/workshop/kind";
 import { ImportBundleButton } from "@/app/workshop/ImportBundleButton";
 import { WorkshopHelpDialog } from "@/components/WorkshopHelpDialog";
+import { GuidedTour } from "@/components/ui/GuidedTour";
+import { markTourSeen, tourSeen } from "@/lib/tours/logic";
+import { SHELF_TOUR, SHELF_TOUR_ID } from "@/lib/tours/workshop";
 import type { WorkshopSummary } from "@/app/workshop/types";
 import { navigateTo } from "@/lib/navigation";
 
@@ -32,6 +35,19 @@ export default function WorkshopListPage() {
   const [cloningId, setCloningId] = useState("");
   const [error, setError] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
+  const [touring, setTouring] = useState(false);
+
+  // The shelf's tour runs once, the first time the shelf is seen with its
+  // list drawn. Help replays it.
+  useEffect(() => {
+    if (loading || tourSeen(window.localStorage, SHELF_TOUR_ID)) return;
+    const timer = window.setTimeout(() => setTouring(true), 900);
+    return () => clearTimeout(timer);
+  }, [loading]);
+  function closeTour() {
+    markTourSeen(window.localStorage, SHELF_TOUR_ID);
+    setTouring(false);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -129,14 +145,27 @@ export default function WorkshopListPage() {
           <button
             type="button"
             aria-label="How workshops work"
+            title="Guides and tours"
             onClick={() => setHelpOpen(true)}
+            data-tour="shelf-help"
             className="ml-auto self-start rounded-md border border-stone-700 p-1.5 text-stone-500 hover:text-stone-300"
           >
             <CircleHelp className="size-4" />
           </button>
         </div>
       </header>
-      <WorkshopHelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+      <WorkshopHelpDialog
+        open={helpOpen}
+        onOpenChange={setHelpOpen}
+        tours={[
+          {
+            label: "Tour the shelf",
+            detail: "Starting a workshop, importing a bundle, and what the tiles do.",
+            onStart: () => setTouring(true),
+          },
+        ]}
+      />
+      <GuidedTour open={touring} steps={SHELF_TOUR} onClose={closeTour} />
 
       <section className="mb-6">
         {creating ? (
@@ -198,10 +227,17 @@ export default function WorkshopListPage() {
           </form>
         ) : (
           <div className="flex flex-wrap items-start gap-2">
-            <button type="button" onClick={() => setCreating(true)} className={ui.btnPrimary}>
+            <button
+              type="button"
+              onClick={() => setCreating(true)}
+              data-tour="shelf-new"
+              className={ui.btnPrimary}
+            >
               <Plus className="size-4" /> New workshop
             </button>
-            <ImportBundleButton />
+            <div data-tour="shelf-import">
+              <ImportBundleButton />
+            </div>
           </div>
         )}
       </section>
@@ -211,7 +247,7 @@ export default function WorkshopListPage() {
           <Loader2 className="size-5 animate-spin text-stone-500" />
         </div>
       ) : workshops.length ? (
-        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4" data-tour="shelf-list">
           {workshops.map((workshop) => (
             <li key={workshop.id} className="group relative">
               <Link

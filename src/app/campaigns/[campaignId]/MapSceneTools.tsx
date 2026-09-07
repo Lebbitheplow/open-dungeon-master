@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { Image as ImageIcon, Loader2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { cueOptions } from "@/lib/ambience/catalog";
@@ -65,11 +65,16 @@ export function PropDial({
   value,
   onChange,
   count,
+  npcNames = [],
 }: {
   value: { name: string; kind: "prop" | "npc" };
   onChange: (next: { name: string; kind: "prop" | "npc" }) => void;
   count: number;
+  // The cast, offered as a dropdown when the token is a bystander.
+  npcNames?: readonly string[];
 }) {
+  const listId = useId();
+  const suggest = value.kind === "npc" && npcNames.length > 0;
   return (
     <div className="space-y-1">
       <div className="flex flex-wrap items-center gap-2">
@@ -78,9 +83,17 @@ export function PropDial({
           maxLength={SCENE_LIMITS.propName}
           placeholder={value.kind === "npc" ? "Innkeeper" : "Barrel"}
           aria-label="Prop name"
+          list={suggest ? listId : undefined}
           onChange={(event) => onChange({ ...value, name: event.target.value })}
           className={cn(input, "min-w-40 flex-1")}
         />
+        {suggest ? (
+          <datalist id={listId}>
+            {npcNames.map((name) => (
+              <option key={name} value={name} />
+            ))}
+          </datalist>
+        ) : null}
         <span className="flex gap-1">
           {(["prop", "npc"] as const).map((kind) => (
             <button

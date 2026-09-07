@@ -6,6 +6,7 @@ import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { backdropDataUrl, nameFromFilename } from "@/lib/battlemap/uvtt";
 import { Sheet } from "@/components/ui/Sheet";
+import { useTourPrepare } from "@/lib/tours/prepare";
 import { DEFAULT_MAP_TOOLS, type MapTools } from "@/app/campaigns/[campaignId]/MapToolbox";
 import { MapCreateControls } from "@/app/workshop/maps/MapCreateControls";
 import { MapEditor } from "@/app/workshop/maps/MapEditor";
@@ -71,8 +72,33 @@ export function DmMapLibraryPanel({
     void load();
   }, [load]);
 
+  // The cast's names, read once, for the bystander token dropdown in the
+  // editor's prop tool.
+  const [npcNames, setNpcNames] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/campaigns/${campaignId}/dm/npcs`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: { npcs?: Array<{ name: string }> } | null) => {
+        if (!cancelled && payload?.npcs) {
+          setNpcNames(payload.npcs.map((npc) => npc.name));
+        }
+      })
+      .catch(() => {
+        // the dropdown simply stays empty
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [campaignId]);
+
   const selected = state.maps.find((map) => map.id === selectedId) ?? null;
   const gallery = layout === "gallery";
+
+  // The tour's "open the new-map controls" step.
+  useTourPrepare((name) => {
+    if (name === "open-map-create") setCreating(true);
+  });
 
   // Selecting a map is the same act in both layouts; in the gallery it also
   // raises the editor sheet, which the drawer has no need of.
@@ -296,6 +322,7 @@ export function DmMapLibraryPanel({
       act={act}
       duplicate={duplicate}
       remove={remove}
+      npcNames={npcNames}
     />
   ) : null;
 
@@ -314,6 +341,7 @@ export function DmMapLibraryPanel({
             type="button"
             onClick={() => setCreating((open) => !open)}
             aria-expanded={creating}
+            data-tour="maps-new"
             className="flex w-full items-center gap-2 text-left font-display text-sm tracking-wide text-amber-100"
           >
             <Plus className="size-4 text-amber-300" />
@@ -337,7 +365,9 @@ export function DmMapLibraryPanel({
           ) : null}
         </section>
 
-        <MapGallery maps={state.maps} selectedId={selectedId} onOpen={(map) => select(map.id)} />
+        <div data-tour="maps-gallery">
+          <MapGallery maps={state.maps} selectedId={selectedId} onOpen={(map) => select(map.id)} />
+        </div>
         {feedback}
 
         <Sheet

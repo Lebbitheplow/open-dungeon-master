@@ -13,6 +13,9 @@ import {
 import type { RollTable } from "@/lib/db/roll-tables";
 import { offersStoryModel, useCapabilities } from "@/lib/use-capabilities";
 import { Sheet } from "@/components/ui/Sheet";
+import { useTourPrepare } from "@/lib/tours/prepare";
+import { appendLine } from "@/lib/workshop/pickers";
+import { RefPicker } from "@/app/workshop/tables/RefPicker";
 import { inputClass, StatblockFinder } from "@/app/workshop/tables/StatblockFinder";
 import { TableRows, type RollResult } from "@/app/workshop/tables/TableRows";
 
@@ -242,6 +245,11 @@ export function DmTablesPanel({
   // Puts a saved table in the editor, or clears it for a new one. A half
   // typed new table survives closing and reopening the sheet; it is only
   // thrown away when a saved table had taken its place.
+  // The tour's "open the editor" step, answered where the editor is a sheet.
+  useTourPrepare((name) => {
+    if (name === "open-table-editor" && rows && !editorOpen) open(null);
+  });
+
   function open(table: RollTable | null) {
     setError("");
     if (table) {
@@ -270,6 +278,7 @@ export function DmTablesPanel({
         value={name}
         onChange={(event) => setName(event.target.value.slice(0, TABLE_NAME_MAX))}
         placeholder="Rumours in the Salt Wharf"
+        data-tour="tables-name"
         className={inputClass}
       />
       {canDraft ? (
@@ -301,8 +310,17 @@ export function DmTablesPanel({
         onChange={(event) => setText(event.target.value)}
         rows={rows ? 10 : 5}
         placeholder={"1-3 A press gang is working the taproom.\n4. The harbourmaster has not been seen in a week.\nOr just paste a table straight out of a book."}
+        data-tour="tables-body"
         className={cn(inputClass, "mt-1.5 resize-y font-mono text-xs")}
       />
+      <div className="mt-1.5">
+        <RefPicker
+          campaignId={campaignId}
+          tables={tables}
+          editingId={editingId}
+          onInsert={(line) => setText((current) => appendLine(current, line))}
+        />
+      </div>
       {draftEntries.length ? (
         <p className="mt-1 text-[11px] text-stone-500">
           {draftEntries.length} rows, rolled on a d{dieForTable(draftEntries)}.
@@ -337,12 +355,14 @@ export function DmTablesPanel({
       <p className="mt-1 text-[10px] text-stone-600">
         Bare rows can carry a weight (x3 A goblin patrol). A row can be a thing: @table: Gems rolls
         that table too; @monster: wolf, @item: Potion of Healing, @npc: Marla name what they are.
+        The picker above writes those rows for you.
       </p>
       {error ? <p className="mt-1 text-xs text-red-400">{error}</p> : null}
       <button
         type="button"
         onClick={save}
         disabled={busy === "save" || !name.trim() || !text.trim()}
+        data-tour="tables-save"
         className="mt-1.5 rounded-md border border-amber-700 bg-amber-950/50 px-2.5 py-1 text-xs text-amber-100 hover:bg-amber-900/50 disabled:opacity-40"
       >
         {busy === "save" ? "Saving..." : "Save table"}

@@ -91,7 +91,7 @@ export function TableRows({
 
   return (
     <div className="space-y-2">
-      <label className="relative block">
+      <label className="relative block" data-tour="tables-search">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-500" />
         <input
           value={query}
@@ -190,6 +190,7 @@ export function TableRows({
           <button
             type="button"
             onClick={() => onOpen(null)}
+            data-tour="tables-new"
             className={cn(
               ui.cardHover,
               "flex h-full w-full items-center gap-3 border-dashed p-3 text-left text-stone-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40",

@@ -171,7 +171,7 @@ export function EncounterRows({
 
   return (
     <div className="space-y-2">
-      <ul className="grid gap-3 lg:grid-cols-2">
+      <ul className="grid gap-3 lg:grid-cols-2" data-tour="encounters-list">
         {encounters.map((encounter) => (
           <li key={encounter.id} className={cn(ui.cardHover, "flex flex-col gap-2 p-3")}>
             <button
@@ -228,6 +228,7 @@ export function EncounterRows({
           <button
             type="button"
             onClick={() => onOpen(null)}
+            data-tour="encounters-new"
             className={cn(
               ui.cardHover,
               "flex h-full w-full items-center gap-3 border-dashed p-3 text-left text-stone-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40",

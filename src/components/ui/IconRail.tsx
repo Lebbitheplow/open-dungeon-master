@@ -54,7 +54,7 @@ export function IconRail<T extends string>({
     <nav
       className={cn(
         "flex gap-1",
-        vertical ? "flex-col" : "flex-row overflow-x-auto [scrollbar-width:none]",
+        vertical ? "flex-col" : "flex-row overflow-x-auto no-scrollbar",
         className,
       )}
     >
@@ -71,7 +71,10 @@ export function IconRail<T extends string>({
             data-tour={item.tour}
             className={cn(
               ui.railCell,
-              !vertical && "flex-1",
+              // A sideways rail scrolls; its cells keep the width their
+              // label needs rather than being squeezed until the text
+              // spills over its neighbours. Spare width is still shared.
+              !vertical && "shrink-0 grow basis-auto",
               // A lead who is not the active tab still reads warm, so the
               // ember cell stands out from the rest of the rail at a glance.
               ember && !active && "text-ember-400/70 hover:text-ember-300",
@@ -79,7 +82,7 @@ export function IconRail<T extends string>({
             )}
           >
             <Icon className="size-4" aria-hidden="true" />
-            <span className="eyebrow text-[9px] leading-none">{item.label}</span>
+            <span className="eyebrow whitespace-nowrap text-[9px] leading-none">{item.label}</span>
             {item.dot ? (
               <span
                 className={cn(

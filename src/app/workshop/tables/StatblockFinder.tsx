@@ -138,7 +138,7 @@ export function StatblockFinder({
 
   if (collapsible) {
     return (
-      <section className={`${ui.card} p-3`}>
+      <section className={`${ui.card} p-3`} data-tour="tables-lookup">
         <button
           type="button"
           onClick={() => setOpen((current) => !current)}

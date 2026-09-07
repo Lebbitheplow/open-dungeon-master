@@ -5,6 +5,8 @@ import { Calculator, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import type { WorkbenchPart, WorkbenchReadout } from "@/lib/dm/encounter-workbench";
+import { useTourPrepare } from "@/lib/tours/prepare";
+import { MonsterRosterPicker } from "@/app/campaigns/[campaignId]/MonsterRosterPicker";
 
 // The encounter workbench: what a roster costs, and what it is likely to do.
 //
@@ -71,6 +73,11 @@ export function DmWorkbenchPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  // The tour's "unfold the workbench" step.
+  useTourPrepare((name) => {
+    if (name === "open-workbench") setOpen(true);
+  });
+
   async function run() {
     setBusy(true);
     setError("");
@@ -109,11 +116,15 @@ export function DmWorkbenchPanel({
             <Calculator className="size-4" /> Weigh a fight
           </h3>
         )}
+        {/* The same search the prepared-encounter form has: pick from what
+            this world holds rather than remembering a spelling. */}
+        <MonsterRosterPicker campaignId={campaignId} roster={enemies} onChange={setEnemies} />
         <textarea
           value={enemies}
           onChange={(event) => setEnemies(event.target.value)}
           rows={3}
           placeholder={"goblin x4\nhobgoblin"}
+          data-tour="encounters-workbench-roster"
           className={cn(input, "w-full resize-y font-mono")}
         />
         <div className="flex flex-wrap items-end gap-2">
@@ -224,6 +235,7 @@ export function DmWorkbenchPanel({
         type="button"
         onClick={() => setOpen((current) => !current)}
         aria-expanded={open}
+        data-tour="encounters-workbench"
         className="flex w-full items-center gap-2 text-left font-display text-sm tracking-wide text-amber-100"
       >
         <Calculator className="size-4 text-amber-300" />

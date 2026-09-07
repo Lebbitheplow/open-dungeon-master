@@ -144,8 +144,12 @@ export function GameSettingsPanel({
   // that exist only to steer one are hidden rather than shown switched off
   // with no explanation.
   const aiNarrates = settings.dmMode !== "human";
+  // A select is as wide as its longest option, and a flex item will not
+  // shrink below that on its own, so a world pack with a long name used to
+  // push the whole panel sideways on a phone. Capped at the row's width and
+  // ellipsised instead.
   const selectClass =
-    "rounded-md border border-stone-700 bg-stone-900 px-2 py-1 text-xs outline-none focus:border-amber-600";
+    "min-w-0 max-w-full truncate rounded-md border border-stone-700 bg-stone-900 px-2 py-1 text-xs outline-none focus:border-amber-600";
 
   if (!steersStory) {
     return (

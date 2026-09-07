@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, CircleHelp } from "lucide-react";
 import { IconRail, type IconRailItem } from "@/components/ui/IconRail";
 import { DmMapLibraryPanel } from "@/app/campaigns/[campaignId]/DmMapLibraryPanel";
 import { DmNpcForgePanel } from "@/app/campaigns/[campaignId]/DmNpcForgePanel";
@@ -39,6 +39,7 @@ export function SystemView({
   pregens,
   onChange,
   onBack,
+  onHelp,
   onRulesApplied,
   onHomebrewChanged,
   onPregensChanged,
@@ -50,6 +51,8 @@ export function SystemView({
   pregens: number | null;
   onChange: (system: SystemId) => void;
   onBack: () => void;
+  // The guide for this tool and its tour.
+  onHelp: () => void;
   onRulesApplied: () => void;
   onHomebrewChanged: () => void;
   onPregensChanged: () => void;
@@ -63,6 +66,7 @@ export function SystemView({
       label: entry.label,
       icon: entry.icon,
       badge: entryCount.total || undefined,
+      tour: `system-tab-${entry.id}`,
     };
   });
 
@@ -75,17 +79,29 @@ export function SystemView({
       >
         <ArrowLeft className="size-4" /> {workshop.title}
       </button>
-      <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+      <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
         <h2 className="font-display text-xl tracking-wide text-amber-50">{current.label}</h2>
         <span className="text-sm text-stone-500">{count.phrase}</span>
+        <button
+          type="button"
+          aria-label={`How ${current.label} works`}
+          title="Guide and tour for this tool"
+          onClick={onHelp}
+          data-tour="system-help"
+          className="ml-auto rounded-md border border-stone-700 p-1.5 text-stone-500 hover:text-stone-300"
+        >
+          <CircleHelp className="size-4" />
+        </button>
       </div>
-      <IconRail
-        items={items}
-        value={current.id}
-        onChange={onChange}
-        orientation="horizontal"
-        className="mb-4 border-b border-stone-800/80 pb-1"
-      />
+      <div data-tour="system-rail">
+        <IconRail
+          items={items}
+          value={current.id}
+          onChange={onChange}
+          orientation="horizontal"
+          className="mb-4 border-b border-stone-800/80 pb-1"
+        />
+      </div>
 
       {system === "storyboard" ? (
         <DmStoryboardPanel campaignId={workshop.id} layout="board" />

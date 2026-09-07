@@ -49,7 +49,10 @@ export function SegmentedControl<T extends string>({
       aria-label={label}
       onKeyDown={onKeyDown}
       className={cn(
-        "inline-flex max-w-full items-stretch rounded-lg border border-stone-700/70 bg-stone-950/70 p-0.5 shadow-[0_2px_6px_rgba(4,2,12,0.45)_inset]",
+        // The labels never wrap, so on a narrow screen the row is wider than
+        // the page: it scrolls inside its own frame rather than dragging the
+        // page sideways with it.
+        "inline-flex max-w-full items-stretch overflow-x-auto rounded-lg border border-stone-700/70 bg-stone-950/70 p-0.5 shadow-[0_2px_6px_rgba(4,2,12,0.45)_inset] no-scrollbar",
         className,
       )}
     >

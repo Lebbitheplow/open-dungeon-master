@@ -1,5 +1,6 @@
 "use client";
 
+import { CONDITIONS } from "@/lib/bestiary/kit";
 import { normalizeSpellMech } from "@/lib/homebrew/gear";
 import {
   baseDamageDice,
@@ -152,6 +153,7 @@ export function SpellFields({ data, onChange }: { data: Data; onChange: (next: D
                   onChange={(name) => setMech({ condition: name ? { ...condition, name } : undefined })}
                   placeholder="frightened"
                   maxLength={40}
+                  suggestions={CONDITIONS}
                 />
                 {condition.name ? (
                   <NumberField
@@ -173,6 +175,7 @@ export function SpellFields({ data, onChange }: { data: Data; onChange: (next: D
                   onChange={(name) => setMech({ buff: { ...buff, condition: name } })}
                   placeholder="blessed"
                   maxLength={40}
+                  suggestions={["blessed", "hasted", "shielded", "invisible", "inspired", ...CONDITIONS]}
                 />
                 <SelectField
                   label="On"

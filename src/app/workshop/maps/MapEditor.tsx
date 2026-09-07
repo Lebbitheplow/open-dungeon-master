@@ -5,6 +5,8 @@ import { Copy, Play, Trash2, Upload } from "lucide-react";
 import { MAP_THEMES } from "@/lib/battlemap/generate";
 import { TERRAIN, tileAt } from "@/lib/battlemap/types";
 import type { Brush as BrushName } from "@/lib/battlemap/paint";
+import { collectTags } from "@/lib/workshop/pickers";
+import { AddFromList } from "@/components/ui/AddFromList";
 import { TerrainCanvas } from "@/app/campaigns/[campaignId]/TerrainCanvas";
 import { BackdropControls } from "@/app/campaigns/[campaignId]/MapTools";
 import { AmbienceControls, OverlayControls } from "@/app/campaigns/[campaignId]/MapSceneTools";
@@ -43,6 +45,7 @@ export function MapEditor({
   act,
   duplicate,
   remove,
+  npcNames,
 }: {
   selected: PreparedMap;
   state: LibraryState;
@@ -54,8 +57,12 @@ export function MapEditor({
   act: (action: "deploy" | "open-scene") => Promise<void>;
   duplicate: () => Promise<void>;
   remove: () => Promise<void>;
+  // The cast, for the bystander token's name dropdown.
+  npcNames?: readonly string[];
 }) {
   const canDeploy = state.board !== null;
+  // Tags already used on the other maps, offered beside the tag field.
+  const knownTags = collectTags(state.maps.filter((map) => map.id !== selected.id));
   const painter = usePainter({ key: selected.id, terrain: selected.terrain, send: patch });
   const undo = {
     canUndo: painter.canUndo,
@@ -144,6 +151,7 @@ export function MapEditor({
         onClearLabels={() => void patch({ labels: [] })}
         onClearZones={() => void patch({ zones: [] })}
         undo={undo}
+        npcNames={npcNames}
       />
 
       <div className="flex flex-wrap items-center gap-1.5">
@@ -182,22 +190,29 @@ export function MapEditor({
         </select>
       </div>
 
-      <input
-        defaultValue={selected.tags.join(", ")}
-        key={`tags-${selected.id}`}
-        aria-label="Tags"
-        placeholder="Tags, comma separated: crypt, undead, act two"
-        onBlur={(event) => {
-          const tags = event.target.value
-            .split(",")
-            .map((tag) => tag.trim())
-            .filter(Boolean);
-          if (tags.join("\n") !== selected.tags.join("\n")) {
-            void patch({ tags });
-          }
-        }}
-        className="w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-300"
-      />
+      <div className="flex flex-wrap items-center gap-1.5">
+        <input
+          defaultValue={selected.tags.join(", ")}
+          key={`tags-${selected.id}-${selected.tags.join("|")}`}
+          aria-label="Tags"
+          placeholder="Tags, comma separated: crypt, undead, act two"
+          onBlur={(event) => {
+            const tags = event.target.value
+              .split(",")
+              .map((tag) => tag.trim())
+              .filter(Boolean);
+            if (tags.join("\n") !== selected.tags.join("\n")) {
+              void patch({ tags });
+            }
+          }}
+          className="min-w-40 flex-1 rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-300"
+        />
+        <AddFromList
+          prompt="Add a tag you already use"
+          options={knownTags.filter((tag) => !selected.tags.includes(tag))}
+          onPick={(tag) => void patch({ tags: [...selected.tags, tag] })}
+        />
+      </div>
 
       <textarea
         defaultValue={selected.notes}

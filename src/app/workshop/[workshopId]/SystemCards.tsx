@@ -53,7 +53,7 @@ export function SystemCards({
           {total} {total === 1 ? "piece" : "pieces"} of prep
         </span>
       </div>
-      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" data-tour="hub-systems">
         {WORKSHOP_SYSTEMS.map((system) => {
           const count = systemCount(system.id, workshop, bestiary, homebrew, pregens);
           const empty = count.figure === "0" || count.figure === "none";

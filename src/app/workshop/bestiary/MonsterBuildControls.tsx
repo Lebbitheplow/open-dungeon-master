@@ -52,6 +52,7 @@ export function MonsterBuildControls({
 
   return (
     <div
+      data-tour="bestiary-build-controls"
       className={cn(
         "flex flex-col gap-2",
         variant === "card" && "rounded-lg border border-stone-800 bg-stone-900/40 p-3",

@@ -20,14 +20,17 @@ function AsideCard({
   title,
   icon,
   children,
+  tour,
 }: {
   title: ReactNode;
   icon?: ReactNode;
   children: ReactNode;
+  // The guided tour's name for this card.
+  tour?: string;
 }) {
   const [open, setOpen] = useState(true);
   return (
-    <section className={cn(ui.card, "p-3")}>
+    <section className={cn(ui.card, "p-3")} data-tour={tour}>
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
@@ -60,7 +63,7 @@ export function SuggestionsCard({
     return null;
   }
   return (
-    <AsideCard title="What this board is missing" icon={<Lightbulb className="size-4" />}>
+    <AsideCard title="What this board is missing" icon={<Lightbulb className="size-4" />} tour="storyboard-missing">
       <p className="text-[10px] text-stone-600">
         Counted, not guessed. Nothing here asked a model what your story needs.
       </p>
@@ -83,7 +86,7 @@ export function SuggestionsCard({
 
 export function CompileCard({ summary }: { summary: CompileSummary }) {
   return (
-    <AsideCard title="What this becomes">
+    <AsideCard title="What this becomes" tour="storyboard-compile">
       <p className="text-[11px] text-stone-500">
         {summary.lines.length
           ? `Imported into a campaign, this board becomes ${summary.lines.join(", ")}.`

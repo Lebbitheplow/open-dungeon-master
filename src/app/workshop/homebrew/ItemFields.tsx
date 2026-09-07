@@ -15,6 +15,7 @@ import {
 import { SRD_ARMOR } from "@/lib/srd/armor";
 import { SRD_WEAPONS } from "@/lib/srd/weapons";
 import type { MagicItemEffect } from "@/lib/srd/magic-items";
+import { RECHARGE_TRIGGERS } from "@/lib/workshop/pickers";
 import {
   CheckField,
   Field,
@@ -385,6 +386,7 @@ export function ItemFields({ data, onChange }: { data: Data; onChange: (next: Da
                 placeholder="dawn"
                 maxLength={80}
                 className="w-40"
+                suggestions={RECHARGE_TRIGGERS}
               />
             ) : null}
           </div>

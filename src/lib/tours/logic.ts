@@ -15,6 +15,11 @@ export interface TourStep {
   // panel tab, switch the phone to the panel view). The host maps names to
   // actions; the tour itself only carries the name.
   prepare?: string;
+  // The target only exists once prepare has run (an editor sheet the step
+  // opens), so the step is kept even when nothing carries its anchor at
+  // the moment the tour starts. A lazy step whose target never appears
+  // shows as a centred card.
+  lazy?: boolean;
 }
 
 export interface ResolvedStep {
@@ -37,7 +42,11 @@ export function resolveSteps(
       continue;
     }
     const anchor = step.anchors.find(present);
-    if (anchor) out.push({ step, anchor });
+    if (anchor) {
+      out.push({ step, anchor });
+    } else if (step.lazy) {
+      out.push({ step, anchor: step.anchors[0] });
+    }
   }
   return out;
 }

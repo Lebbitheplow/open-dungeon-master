@@ -23,6 +23,7 @@ import {
 } from "@/lib/npcs/forge";
 import { Sheet } from "@/components/ui/Sheet";
 import { CastChips, CastRows, type Npc } from "@/app/workshop/cast/CastList";
+import { useTourPrepare } from "@/lib/tours/prepare";
 import { NpcEditorFields } from "@/app/workshop/cast/NpcEditorFields";
 
 // The NPC forge.
@@ -56,6 +57,8 @@ export function DmNpcForgePanel({
   const [graph, setGraph] = useState<RelationGraph>({ nodes: [], edges: [] });
   // The table's setting, for the role picker's ordering.
   const [genre, setGenre] = useState("");
+  // The world's named places, for the location field's dropdown.
+  const [places, setPlaces] = useState<string[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [draft, setDraft] = useState<NpcDraft>(blankDraft());
   const [editorOpen, setEditorOpen] = useState(false);
@@ -92,7 +95,41 @@ export function DmNpcForgePanel({
     void load();
   }, [load]);
 
+  // Places come from the overworld and the geography lore; both lists are
+  // read once, and a world with neither simply offers no dropdown.
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      fetch(`/api/campaigns/${campaignId}/overworld`)
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data: { locations?: Array<{ name: string }> } | null) =>
+          (data?.locations ?? []).map((location) => location.name),
+        )
+        .catch(() => [] as string[]),
+      fetch(`/api/campaigns/${campaignId}/lore`)
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data: { entries?: Array<{ title: string; category: string }> } | null) =>
+          (data?.entries ?? [])
+            .filter((entry) => entry.category === "geography")
+            .map((entry) => entry.title),
+        )
+        .catch(() => [] as string[]),
+    ]).then(([fromMap, fromLore]) => {
+      if (!cancelled) {
+        setPlaces([...new Set([...fromMap, ...fromLore])].sort((a, b) => a.localeCompare(b)));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [campaignId]);
+
   const selected = npcs.find((npc) => npc.id === selectedId) ?? null;
+
+  // The tour's "open the editor" step, answered where the editor is a sheet.
+  useTourPrepare((name) => {
+    if (name === "open-npc-editor" && rows && !editorOpen) open(null);
+  });
 
   function open(npc: Npc | null) {
     setError("");
@@ -287,6 +324,7 @@ export function DmNpcForgePanel({
         others={others}
         suggest={generateButton}
         genre={genre}
+        places={places}
       />
 
       <div className="flex flex-wrap items-center gap-1.5">
@@ -294,6 +332,7 @@ export function DmNpcForgePanel({
           type="button"
           disabled={busy || !draft.name.trim()}
           onClick={() => void save()}
+          data-tour="cast-save"
           className="rounded-md border border-amber-700 bg-amber-950/50 px-2 py-1 text-xs text-amber-100 disabled:opacity-40"
         >
           {busy ? <Loader2 className="inline size-3 animate-spin" /> : null} Save them

@@ -120,7 +120,7 @@ export function PartyPanel({
           <Loader2 className="size-3 animate-spin" /> Reading the roster...
         </p>
       ) : (
-        <ul className="grid gap-2 sm:grid-cols-2">
+        <ul className="grid gap-2 sm:grid-cols-2" data-tour="party-roster">
           {pregens.map((character) => {
             const offLevel = character.level !== targetParty.level;
             return (
@@ -167,7 +167,7 @@ export function PartyPanel({
         </ul>
       )}
 
-      <div className={cn(ui.card, "space-y-2 p-3")}>
+      <div className={cn(ui.card, "space-y-2 p-3")} data-tour="party-add">
         <span className="text-[11px] uppercase tracking-wide text-stone-500">Add to the roster</span>
         <div className="flex flex-wrap items-center gap-2">
           <select

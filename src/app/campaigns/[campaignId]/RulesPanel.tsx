@@ -206,7 +206,7 @@ export function RulesPanel({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-lg border border-stone-800 bg-stone-950/40 p-2.5">
+      <div className="rounded-lg border border-stone-800 bg-stone-950/40 p-2.5" data-tour="rules-variants">
         <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-stone-300">
           <Scale className="size-3.5 text-amber-600" /> Variant rules
         </p>
@@ -258,7 +258,7 @@ export function RulesPanel({
         )}
       </div>
 
-      <div className="rounded-lg border border-stone-800 bg-stone-950/40 p-2.5">
+      <div className="rounded-lg border border-stone-800 bg-stone-950/40 p-2.5" data-tour="rules-house">
         <p className="mb-2 text-xs font-medium text-stone-300">House rules</p>
         {loading ? (
           <p className="flex items-center gap-1 text-[11px] text-stone-500">

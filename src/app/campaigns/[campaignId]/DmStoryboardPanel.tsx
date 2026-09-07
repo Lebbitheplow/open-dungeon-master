@@ -207,15 +207,19 @@ export function DmStoryboardPanel({
     return (
       <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
         <div className="flex flex-col gap-4">
-          <section className={cn(ui.card, "flex flex-col gap-2 p-3")}>{addRow}</section>
-          <BeatBoard
-            board={data.board}
-            inventory={data.inventory}
-            onOpen={(node) => {
-              setOpenId(node.id);
-              setEdit(node);
-            }}
-          />
+          <section className={cn(ui.card, "flex flex-col gap-2 p-3")} data-tour="storyboard-add">
+            {addRow}
+          </section>
+          <div data-tour="storyboard-board">
+            <BeatBoard
+              board={data.board}
+              inventory={data.inventory}
+              onOpen={(node) => {
+                setOpenId(node.id);
+                setEdit(node);
+              }}
+            />
+          </div>
         </div>
         <div className="flex flex-col gap-3">
           <SuggestionsCard

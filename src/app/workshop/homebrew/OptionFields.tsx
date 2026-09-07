@@ -1,7 +1,15 @@
 "use client";
 
 import { Plus, X } from "lucide-react";
-import { NumberField, SelectField, TextArea, TextField } from "@/app/workshop/homebrew/fields";
+import { SKILL_NAMES } from "@/lib/bestiary/block-sections";
+import {
+  LANGUAGES,
+  PREREQUISITE_SUGGESTIONS,
+  VISION_SUGGESTIONS,
+  appendTerm,
+} from "@/lib/workshop/pickers";
+import { AddFromList } from "@/components/ui/AddFromList";
+import { Field, NumberField, SelectField, TextArea, TextField } from "@/app/workshop/homebrew/fields";
 import { CLASS_IDS, input, type EditorKind } from "@/app/workshop/homebrew/types";
 import type { Data } from "@/app/workshop/homebrew/draft";
 
@@ -15,6 +23,47 @@ const ABILITY_NAMES = ["Strength", "Dexterity", "Constitution", "Intelligence", 
 type AsiRow = { attributes: string[]; value: number };
 type FeatureRow = { n: string; d: string };
 
+// The skills as the builder prints them: "Sleight of Hand", "Animal Handling".
+const SKILL_LABELS = SKILL_NAMES.map((skill) =>
+  skill.replace(/\b\w/g, (letter) => letter.toUpperCase()).replace(" Of ", " of "),
+);
+
+// A comma-separated field with a dropdown of what it usually holds beside
+// it. Picking appends; the text stays editable for anything off the list.
+function ListField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  hint,
+  options,
+  prompt,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  hint?: string;
+  options: readonly string[];
+  prompt: string;
+}) {
+  return (
+    <Field label={label} hint={hint}>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <input
+          value={value}
+          maxLength={200}
+          placeholder={placeholder}
+          aria-label={label}
+          onChange={(event) => onChange(event.target.value)}
+          className={`${input} min-w-32 flex-1`}
+        />
+        <AddFromList prompt={prompt} options={options} onPick={(term) => onChange(appendTerm(value, term))} />
+      </div>
+    </Field>
+  );
+}
+
 function FeatFields({ data, set }: { data: Data; set: (patch: Data) => void }) {
   return (
     <TextField
@@ -24,6 +73,7 @@ function FeatFields({ data, set }: { data: Data; set: (patch: Data) => void }) {
       placeholder="Strength 13 or higher"
       maxLength={200}
       hint="Leave empty for none. The builder shows it beside the feat."
+      suggestions={PREREQUISITE_SUGGESTIONS}
     />
   );
 }
@@ -31,12 +81,14 @@ function FeatFields({ data, set }: { data: Data; set: (patch: Data) => void }) {
 function BackgroundFields({ data, set }: { data: Data; set: (patch: Data) => void }) {
   return (
     <div className="grid gap-2 sm:grid-cols-2">
-      <TextField
+      <ListField
         label="Skill proficiencies"
         value={String(data.skill_proficiencies ?? "")}
         onChange={(skill_proficiencies) => set({ skill_proficiencies })}
         placeholder="Insight, Persuasion"
         hint="The builder grants these by name."
+        options={SKILL_LABELS}
+        prompt="Add a skill"
       />
       <TextField
         label="Tool proficiencies"
@@ -44,7 +96,14 @@ function BackgroundFields({ data, set }: { data: Data; set: (patch: Data) => voi
         onChange={(tool_proficiencies) => set({ tool_proficiencies })}
         placeholder="One type of gaming set"
       />
-      <TextField label="Languages" value={String(data.languages ?? "")} onChange={(languages) => set({ languages })} placeholder="Two of your choice" />
+      <ListField
+        label="Languages"
+        value={String(data.languages ?? "")}
+        onChange={(languages) => set({ languages })}
+        placeholder="Two of your choice"
+        options={LANGUAGES}
+        prompt="Add a language"
+      />
       <TextField label="Equipment" value={String(data.equipment ?? "")} onChange={(equipment) => set({ equipment })} placeholder="A set of fine clothes, 15 gp" maxLength={500} />
       <TextField label="Feature" value={String(data.feature ?? "")} onChange={(feature) => set({ feature })} placeholder="Salt Lore" maxLength={80} />
       <TextField label="What the feature does" value={String(data.feature_desc ?? "")} onChange={(feature_desc) => set({ feature_desc })} maxLength={2000} />
@@ -66,8 +125,22 @@ function RaceFields({ data, set }: { data: Data; set: (patch: Data) => void }) {
           onChange={(size) => set({ size })}
         />
         <NumberField label="Speed (ft)" value={speed} min={5} max={120} step={5} onChange={(walk) => set({ speed: { walk: walk === "" ? 30 : walk } })} />
-        <TextField label="Vision" value={String(data.vision ?? "")} onChange={(vision) => set({ vision })} placeholder="Darkvision 60 ft" maxLength={120} />
-        <TextField label="Languages" value={String(data.languages ?? "")} onChange={(languages) => set({ languages })} placeholder="Common and Sylvan" />
+        <TextField
+          label="Vision"
+          value={String(data.vision ?? "")}
+          onChange={(vision) => set({ vision })}
+          placeholder="Darkvision 60 ft"
+          maxLength={120}
+          suggestions={VISION_SUGGESTIONS}
+        />
+        <ListField
+          label="Languages"
+          value={String(data.languages ?? "")}
+          onChange={(languages) => set({ languages })}
+          placeholder="Common and Sylvan"
+          options={LANGUAGES}
+          prompt="Add a language"
+        />
       </div>
       <div className="space-y-1">
         <span className="text-[10px] uppercase tracking-wide text-stone-500">Ability score increases</span>

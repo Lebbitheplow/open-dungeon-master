@@ -53,11 +53,13 @@ export function EncounterForm({
         aria-label="Encounter name"
         className={field}
       />
-      <MonsterRosterPicker
-        campaignId={campaignId}
-        roster={value.enemies}
-        onChange={(enemies) => set({ enemies })}
-      />
+      <div data-tour="encounters-picker">
+        <MonsterRosterPicker
+          campaignId={campaignId}
+          roster={value.enemies}
+          onChange={(enemies) => set({ enemies })}
+        />
+      </div>
       <textarea
         value={value.enemies}
         onChange={(event) => set({ enemies: event.target.value })}
@@ -77,7 +79,7 @@ export function EncounterForm({
         aria-label="Battlefield"
         className={field}
       />
-      <label className="block">
+      <label className="block" data-tour="encounters-map">
         <span className="text-[10px] uppercase tracking-wide text-stone-500">On which map</span>
         <select
           value={value.mapId}
@@ -110,6 +112,7 @@ export function EncounterForm({
         type="button"
         disabled={busy || !value.name.trim() || !value.enemies.trim()}
         onClick={onSubmit}
+        data-tour="encounters-save"
         className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-40"
       >
         {busy ? <Loader2 className="size-3 animate-spin" /> : null}

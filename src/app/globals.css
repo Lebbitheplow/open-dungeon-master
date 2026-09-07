@@ -532,3 +532,14 @@ optgroup {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* A strip that scrolls sideways on a narrow screen (the icon rails, the tab
+   bars) shows no bar at all. Unlayered, like the rules above, so it beats
+   the * default; Chromium ignores scrollbar-width, hence the -webkit half. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

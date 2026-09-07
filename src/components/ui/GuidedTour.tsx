@@ -155,7 +155,11 @@ export function GuidedTour({
 
   return (
     <>
+      {/* data-guided-tour marks the tour's own surfaces so a modal sheet
+          underneath (an editor a step opened) does not read a tap on the
+          card as a tap outside itself and close. */}
       <div
+        data-guided-tour
         className={cn("fixed inset-0 z-[80]", !spot && "bg-[#05030d]/75")}
         onClick={onClose}
         aria-hidden
@@ -169,6 +173,7 @@ export function GuidedTour({
       ) : null}
       <div
         ref={cardRef}
+        data-guided-tour
         role="dialog"
         aria-label="Guided tour"
         className="panel ornate texture-noise fixed z-[82] w-[min(22rem,calc(100vw-1.5rem))] rounded-xl p-4 shadow-elev-2 transition-[top,left] duration-200 ease-snap motion-reduce:transition-none"

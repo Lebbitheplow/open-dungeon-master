@@ -121,7 +121,10 @@ export function OverworldAuthoring({
   }
 
   return (
-    <section className="rounded-lg border border-stone-800 bg-stone-950/40 px-2.5 py-2">
+    <section
+      className="rounded-lg border border-stone-800 bg-stone-950/40 px-2.5 py-2"
+      data-tour="region-shape"
+    >
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}

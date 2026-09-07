@@ -119,11 +119,13 @@ export function WorkshopHeader({
             </button>
           </>
         )}
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex items-center gap-1" data-tour="hub-actions">
           <button
             type="button"
             aria-label="How workshops work"
+            title="Guides and tours"
             onClick={onHelp}
+            data-tour="hub-help"
             className="rounded-md border border-stone-700 p-1.5 text-stone-500 hover:text-stone-300"
           >
             <CircleHelp className="size-4" />
@@ -149,7 +151,9 @@ export function WorkshopHeader({
           </button>
         </div>
       </div>
-      <ImportBundleButton label="Import a bundle" className={ui.btnSmall} />
+      <div data-tour="hub-import" className="w-fit">
+        <ImportBundleButton label="Import a bundle" className={ui.btnSmall} />
+      </div>
     </header>
   );
 }

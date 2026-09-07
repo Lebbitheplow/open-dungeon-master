@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, Copy, Skull, Trash2 } from "lucide-react";
 import { MonsterTile, ui } from "@/lib/ui";
 import { MONSTER_NAME_MAX, type MonsterDraft, type MonsterReadout } from "@/lib/bestiary/monster-draft";
 import { Sheet } from "@/components/ui/Sheet";
+import { useTourPrepare } from "@/lib/tours/prepare";
 import { MonsterBuildControls } from "@/app/workshop/bestiary/MonsterBuildControls";
 import { MonsterEditor } from "@/app/workshop/bestiary/MonsterEditor";
 import { MonsterRows } from "@/app/workshop/bestiary/MonsterRows";
@@ -42,6 +43,10 @@ export function DmBestiaryPanel({
   const [openId, setOpenId] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [building, setBuilding] = useState(false);
+  // The tour's "unfold the builder" step.
+  useTourPrepare((name) => {
+    if (name === "open-monster-build") setBuilding(true);
+  });
   const [draft, setDraft] = useState<MonsterDraft | null>(null);
   const [desc, setDesc] = useState("");
   const [readout, setReadout] = useState<MonsterReadout | null>(null);
@@ -194,6 +199,7 @@ export function DmBestiaryPanel({
             type="button"
             onClick={() => setBuilding((current) => !current)}
             aria-expanded={building}
+            data-tour="bestiary-build"
             className="flex w-full items-center gap-2 text-left font-display text-sm tracking-wide text-amber-100"
           >
             <Skull className="size-4 text-amber-300" />
@@ -221,14 +227,16 @@ export function DmBestiaryPanel({
           ) : null}
         </section>
 
-        <MonsterRows
-          monsters={monsters}
-          busy={busy}
-          genre={genre}
-          onOpen={open}
-          onDuplicate={(monster) => void duplicate(monster)}
-          onDelete={(monster) => void remove(monster.id)}
-        />
+        <div data-tour="bestiary-list">
+          <MonsterRows
+            monsters={monsters}
+            busy={busy}
+            genre={genre}
+            onOpen={open}
+            onDuplicate={(monster) => void duplicate(monster)}
+            onDelete={(monster) => void remove(monster.id)}
+          />
+        </div>
 
         <Sheet
           open={editorOpen && editor !== null}

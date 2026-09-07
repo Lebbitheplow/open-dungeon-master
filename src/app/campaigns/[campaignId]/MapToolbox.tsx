@@ -223,6 +223,7 @@ export function MapToolbox({
   onClearLabels,
   onClearZones,
   undo,
+  npcNames,
 }: {
   tools: MapTools;
   onTools: (next: MapTools) => void;
@@ -232,6 +233,8 @@ export function MapToolbox({
   onClearLabels?: () => void;
   onClearZones?: () => void;
   undo?: UndoControls;
+  // The cast, for the bystander token's name dropdown.
+  npcNames?: readonly string[];
 }) {
   const set = (patch: Partial<MapTools>) => onTools({ ...tools, ...patch });
   const painting = tools.mode === "brush" || SHAPE_MODES.includes(tools.mode as ShapeTool);
@@ -370,7 +373,7 @@ export function MapToolbox({
         <LabelDial value={tools.label} onChange={(label) => set({ label })} count={counts?.labels ?? 0} onClear={onClearLabels} />
       ) : null}
       {tools.mode === "prop" ? (
-        <PropDial value={tools.prop} onChange={(prop) => set({ prop })} count={counts?.props ?? 0} />
+        <PropDial value={tools.prop} onChange={(prop) => set({ prop })} count={counts?.props ?? 0} npcNames={npcNames} />
       ) : null}
       {tools.mode === "door" ? <DoorHint /> : null}
       {tools.mode === "zone" ? (

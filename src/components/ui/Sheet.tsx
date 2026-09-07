@@ -47,6 +47,15 @@ export function Sheet({
           )}
         />
         <RadixDialog.Content
+          // A guided tour runs above the sheet and its card sits outside
+          // this content; a tap on the card must not dismiss the editor the
+          // tour just opened.
+          onInteractOutside={(event) => {
+            const target = event.target as Element | null;
+            if (target?.closest?.("[data-guided-tour]")) {
+              event.preventDefault();
+            }
+          }}
           className={cn(
             "sheet texture-noise fixed inset-x-0 bottom-0 z-[60] flex max-h-[85vh] flex-col rounded-t-2xl border border-stone-600/50 bg-stone-950 px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-2 shadow-elev-2",
             "lg:bottom-auto lg:rounded-xl lg:p-6",

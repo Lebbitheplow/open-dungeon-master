@@ -1,7 +1,10 @@
 "use client";
 
 import { BookMarked, EyeOff, Loader2, Pin, Plus, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useTourPrepare } from "@/lib/tours/prepare";
+import { appendTerm, collectTags, insertAt } from "@/lib/workshop/pickers";
+import { AddFromList } from "@/components/ui/AddFromList";
 import {
   WORLD_LORE_CATEGORIES,
   type LoreLinkTarget,
@@ -48,6 +51,8 @@ export function LorePanel({
   }>({ category: "geography", title: "", body: "", tags: "", visibility: "party", imagePath: "" });
   const [busy, setBusy] = useState(false);
   const rows = layout === "rows";
+  // The body field, so a picked link lands at the caret rather than the end.
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -89,6 +94,13 @@ export function LorePanel({
     setEditingId(null);
     setAdding(true);
   }
+
+  // The tour's "open the editor" step, answered where the editor is a sheet.
+  useTourPrepare((name) => {
+    if (name === "open-lore-editor" && rows && steersStory && !adding && editingId === null) {
+      startAdd();
+    }
+  });
 
   function startEdit(entry: LoreEntryView) {
     setDraft({
@@ -211,11 +223,26 @@ export function LorePanel({
 
   const editorOpen = adding || editingId !== null;
 
+  // [[Link]] another entry by picking it: the titles are the ones the body
+  // renderer resolves, so a picked link always lands somewhere.
+  const linkable = entries.filter((entry) => entry.id !== editingId).map((entry) => entry.title);
+  const knownTags = collectTags(entries);
+  function insertLink(title: string) {
+    const field = bodyRef.current;
+    const at = field?.selectionStart ?? draft.body.length;
+    const next = insertAt(draft.body, at, `[[${title}]]`);
+    setDraft((current) => ({ ...current, body: next.text }));
+    requestAnimationFrame(() => {
+      field?.focus();
+      field?.setSelectionRange(next.caret, next.caret);
+    });
+  }
+
   // The author form is the same fields in both layouts; only what wraps it
   // differs.
   const editorForm = (
     <>
-      <div className="flex gap-1.5">
+      <div className="flex gap-1.5" data-tour="lore-title">
         <select
           value={draft.category}
           onChange={(event) =>
@@ -241,13 +268,21 @@ export function LorePanel({
         />
       </div>
       <textarea
+        ref={bodyRef}
         value={draft.body}
         onChange={(event) => setDraft((current) => ({ ...current, body: event.target.value }))}
         rows={rows ? 8 : 4}
         maxLength={4000}
         placeholder={"What is established about it...\n\n# Headings, **bold**, - lists, and [[The Mill]] to link another entry."}
+        data-tour="lore-body"
         className="w-full rounded border border-stone-700 bg-stone-900 px-2 py-1 text-[11px] leading-4 outline-none focus:border-amber-600"
       />
+      {linkable.length ? (
+        <div className="flex flex-wrap items-center gap-1.5" data-tour="lore-link">
+          <AddFromList prompt="Link another entry" options={linkable} onPick={insertLink} />
+          <span className="text-[10px] text-stone-600">Drops a [[link]] where the cursor is.</span>
+        </div>
+      ) : null}
       <VisibilitySelect
         value={draft.visibility}
         onChange={(visibility) => setDraft((current) => ({ ...current, visibility }))}
@@ -256,13 +291,20 @@ export function LorePanel({
         imagePath={draft.imagePath}
         onChange={(imagePath) => setDraft((current) => ({ ...current, imagePath }))}
       />
-      <input
-        value={draft.tags}
-        onChange={(event) => setDraft((current) => ({ ...current, tags: event.target.value }))}
-        placeholder="Tags, comma separated (optional)"
-        className="w-full rounded border border-stone-700 bg-stone-900 px-2 py-1 text-[11px] outline-none focus:border-amber-600"
-      />
-      <div className="flex gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <input
+          value={draft.tags}
+          onChange={(event) => setDraft((current) => ({ ...current, tags: event.target.value }))}
+          placeholder="Tags, comma separated (optional)"
+          className="min-w-40 flex-1 rounded border border-stone-700 bg-stone-900 px-2 py-1 text-[11px] outline-none focus:border-amber-600"
+        />
+        <AddFromList
+          prompt="Add a tag you already use"
+          options={knownTags}
+          onPick={(tag) => setDraft((current) => ({ ...current, tags: appendTerm(current.tags, tag) }))}
+        />
+      </div>
+      <div className="flex gap-1.5" data-tour="lore-save">
         <button
           type="button"
           onClick={submitDraft}

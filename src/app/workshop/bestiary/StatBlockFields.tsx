@@ -15,6 +15,9 @@ import {
   withSection,
 } from "@/lib/bestiary/block-sections";
 import type { EnemyStats, SaveAbility } from "@/lib/bestiary/statblock";
+import { LANGUAGES, appendTerm } from "@/lib/workshop/pickers";
+import { AddFromList } from "@/components/ui/AddFromList";
+import { ContentPick } from "@/components/ui/ContentPick";
 import { input } from "@/app/workshop/bestiary/types";
 
 // The printed half of a stat block (docs/workshop-parity-audit.md phase
@@ -222,13 +225,20 @@ export function LanguagesAndHabitat({ draft, onChange }: { draft: MonsterDraft; 
       <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
         <label className="flex flex-col gap-0.5">
           <Label>Languages</Label>
-          <input
-            value={stats.languages ?? ""}
-            maxLength={200}
-            placeholder="Common, Goblin"
-            onChange={(event) => set({ languages: event.target.value || undefined })}
-            className={cn(input, "w-full")}
-          />
+          <div className="flex flex-wrap items-center gap-1.5">
+            <input
+              value={stats.languages ?? ""}
+              maxLength={200}
+              placeholder="Common, Goblin"
+              onChange={(event) => set({ languages: event.target.value || undefined })}
+              className={cn(input, "min-w-32 flex-1")}
+            />
+            <AddFromList
+              prompt="Add"
+              options={LANGUAGES}
+              onPick={(term) => set({ languages: appendTerm(stats.languages ?? "", term) })}
+            />
+          </div>
         </label>
         <label className="flex flex-col gap-0.5">
           <Label>Alignment</Label>
@@ -245,12 +255,13 @@ export function LanguagesAndHabitat({ draft, onChange }: { draft: MonsterDraft; 
           </select>
         </label>
       </div>
-      <label className="flex flex-col gap-0.5">
+      <div className="flex flex-col gap-0.5">
         <Label>Spells known (by name, comma separated)</Label>
         <input
           defaultValue={spells.join(", ")}
           key={spells.join("|")}
           maxLength={800}
+          aria-label="Spells known"
           placeholder="Fire Bolt, Shield, Misty Step"
           onBlur={(event) => {
             const next = event.target.value.split(",").map((name) => name.trim()).filter(Boolean);
@@ -260,10 +271,20 @@ export function LanguagesAndHabitat({ draft, onChange }: { draft: MonsterDraft; 
           }}
           className={cn(input, "w-full")}
         />
+        <ContentPick
+          kind="spells"
+          label="Find a spell in the catalogue to add"
+          placeholder="Find a spell to add..."
+          onPick={(entry) => {
+            if (!spells.some((known) => known.toLowerCase() === entry.name.toLowerCase())) {
+              set({ spells: [...spells, entry.name] });
+            }
+          }}
+        />
         <span className="text-[10px] text-stone-600">
           The DM running it sees the list. Put a round of casting into extra damage so the rating counts it.
         </span>
-      </label>
+      </div>
       <div className="space-y-1">
         <Label>Found in</Label>
         <div className="flex flex-wrap gap-1">

@@ -166,7 +166,7 @@ export function RulesetLibrary({
   }
 
   return (
-    <section className={`${ui.card} mb-4 p-3`}>
+    <section className={`${ui.card} mb-4 p-3`} data-tour="rules-library">
       <h2 className="mb-1 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
         <Scale className="size-3.5" /> Ruleset library
       </h2>
@@ -250,7 +250,7 @@ export function RulesetLibrary({
         </p>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2" data-tour="rules-save-as">
         <input
           value={saveName}
           onChange={(event) => setSaveName(event.target.value)}

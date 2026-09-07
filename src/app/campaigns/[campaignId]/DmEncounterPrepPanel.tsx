@@ -7,6 +7,7 @@ import { formatRoster, TEMPLATE_NAME_MAX } from "@/lib/dm/encounter-template-log
 import { thresholdsForParty } from "@/lib/srd/encounter-math";
 import { targetPartyLevels, type TargetParty } from "@/lib/workshop/kind";
 import { Sheet } from "@/components/ui/Sheet";
+import { useTourPrepare } from "@/lib/tours/prepare";
 import { DmWorkbenchPanel } from "@/app/campaigns/[campaignId]/DmWorkbenchPanel";
 import { EncounterForm } from "@/app/workshop/encounters/EncounterForm";
 import { EncounterRows } from "@/app/workshop/encounters/EncounterRows";
@@ -114,6 +115,12 @@ export function DmEncounterPrepPanel({
     void load();
     void loadMaps();
   }, [load, loadMaps, partyKey]);
+
+  // The tour's "open the editor" step, answered only where the editor is a
+  // sheet; in the console the form is always on screen.
+  useTourPrepare((name) => {
+    if (name === "open-encounter-editor" && rows && !editorOpen) openEditor(null);
+  });
 
   function openEditor(template: PreparedEncounter | null) {
     setError("");

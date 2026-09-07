@@ -385,7 +385,11 @@ export function OverworldPanel({
 
   return (
     <div className="space-y-2">
-      <div ref={containerRef} className="relative overflow-hidden rounded-lg border border-stone-800">
+      <div
+        ref={containerRef}
+        className="relative overflow-hidden rounded-lg border border-stone-800"
+        data-tour="region-canvas"
+      >
         {loading ? (
           <p className="flex items-center gap-1 p-6 text-[11px] text-stone-500">
             <Loader2 className="size-3 animate-spin" /> Charting the region...

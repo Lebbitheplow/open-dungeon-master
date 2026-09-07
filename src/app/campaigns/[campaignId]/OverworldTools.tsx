@@ -149,7 +149,7 @@ export function ModeBar({
   onRegenerate: () => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className="flex flex-wrap items-center gap-1.5" data-tour="region-modes">
       {MODES.map(([value, label, Icon]) => (
         <button
           key={value}
@@ -432,7 +432,7 @@ export function FileTools({
           event.target.value = "";
         }}
       />
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5" data-tour="region-files">
         <button
           type="button"
           disabled={uploading}

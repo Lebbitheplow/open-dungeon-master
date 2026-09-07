@@ -36,6 +36,7 @@ export function NpcEditorFields({
   others,
   suggest,
   genre,
+  places = [],
 }: {
   draft: NpcDraft;
   onChange: (draft: NpcDraft) => void;
@@ -43,12 +44,19 @@ export function NpcEditorFields({
   others: string[];
   suggest: (field: GeneratableField) => ReactNode;
   genre?: string | null;
+  // The named places this world already has (the overworld's locations and
+  // the geography lore), offered under the location field.
+  places?: readonly string[];
 }) {
   const roleListId = useId();
+  const placeListId = useId();
   const roles = npcRoleOptions(genre);
   return (
     <>
-      <section className="space-y-2 rounded-lg border border-stone-800 bg-stone-950/60 px-2.5 py-2">
+      <section
+        className="space-y-2 rounded-lg border border-stone-800 bg-stone-950/60 px-2.5 py-2"
+        data-tour="cast-fields"
+      >
         <div className="flex flex-wrap items-center gap-1.5">
           <input
             value={draft.name}
@@ -93,10 +101,19 @@ export function NpcEditorFields({
 
         <input
           value={draft.location}
+          list={places.length ? placeListId : undefined}
           onChange={(event) => onChange({ ...draft, location: event.target.value })}
           placeholder="Where they are usually found"
+          aria-label="Location: pick a place on the map or type your own"
           className="w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-300"
         />
+        {places.length ? (
+          <datalist id={placeListId}>
+            {places.map((place) => (
+              <option key={place} value={place} />
+            ))}
+          </datalist>
+        ) : null}
 
         <input
           value={draft.aliases.join(", ")}

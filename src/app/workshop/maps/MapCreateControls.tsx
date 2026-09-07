@@ -39,7 +39,10 @@ export function MapCreateControls({
   }
 
   return (
-    <section className="space-y-2 rounded-lg border border-stone-800 bg-stone-950/40 px-2.5 py-2">
+    <section
+      className="space-y-2 rounded-lg border border-stone-800 bg-stone-950/40 px-2.5 py-2"
+      data-tour="maps-create"
+    >
       {showHeading ? (
         <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
           <Library className="size-3.5" />

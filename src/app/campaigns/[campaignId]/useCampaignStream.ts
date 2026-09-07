@@ -100,6 +100,11 @@ export type CampaignLocation = {
 export type CampaignState = {
   loading: boolean;
   error: string;
+  // Which address answered the snapshot. The apps draw these screens over
+  // another host's API, and a device world serving them through the portal
+  // can answer for itself, so a table that cannot be found says who was
+  // asked rather than leaving the player to guess which world replied.
+  answeredBy: string;
   campaign: Campaign | null;
   // What this seat may see and do, decided by the server
   // (src/lib/dm/viewer.ts). The client never re-derives it from ids, so a
@@ -209,6 +214,7 @@ export type CampaignState = {
 const initialState: CampaignState = {
   loading: true,
   error: "",
+  answeredBy: "",
   campaign: null,
   // A plain player until the snapshot says otherwise: the safe default is
   // the one that shows the fewest controls and no secrets.
@@ -271,7 +277,7 @@ type Action =
   | { type: "mapPing"; ping: MapPing }
   | { type: "encounter"; encounter: PublicEncounter | null }
   | { type: "rolls"; rolls: StoredRoll[] }
-  | { type: "error"; error: string }
+  | { type: "error"; error: string; answeredBy?: string }
   | { type: "event"; eventType: string; seq: number | null; payload: Record<string, unknown> };
 
 function withoutKey<T>(record: Record<string, T>, key: string): Record<string, T> {
@@ -319,7 +325,7 @@ function reducer(state: CampaignState, action: Action): CampaignState {
     case "mapPing":
       return { ...state, mapPing: action.ping };
     case "error":
-      return { ...state, loading: false, error: action.error };
+      return { ...state, loading: false, error: action.error, answeredBy: action.answeredBy ?? "" };
     case "event": {
       // Persisted events are idempotent by seq; ephemeral ones (seq null)
       // always apply.
@@ -749,6 +755,17 @@ const EPHEMERAL_EVENTS = [
 ];
 const EPHEMERAL_EVENT_SET = new Set(EPHEMERAL_EVENTS);
 
+// The origin a reply really came from. Patched fetch inside the apps sends
+// root-relative calls to the host, so this is the world that answered, not
+// the page's own address.
+function answeringOrigin(url: string): string {
+  try {
+    return new URL(url, window.location.href).origin;
+  } catch {
+    return "";
+  }
+}
+
 export function useCampaignStream(campaignId: string) {
   const [state, dispatch] = useReducer(reducer, initialState);
   // The SSE handlers are registered once, so they cannot close over `state`.
@@ -764,13 +781,18 @@ export function useCampaignStream(campaignId: string) {
   const refresh = useCallback(async (): Promise<number> => {
     try {
       const response = await fetch(`/api/campaigns/${campaignId}`);
+      const answeredBy = answeringOrigin(response.url);
       if (response.status === 401) {
         navigateTo("/");
         return 0;
       }
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        dispatch({ type: "error", error: data.error || "Could not load the campaign." });
+        dispatch({
+          type: "error",
+          error: data.error || "Could not load the campaign.",
+          answeredBy,
+        });
         return 0;
       }
       const data = await response.json();
@@ -778,6 +800,7 @@ export function useCampaignStream(campaignId: string) {
       dispatch({
         type: "snapshot",
         payload: {
+          answeredBy,
           campaign: data.campaign,
           caps: data.caps ?? capsForRole("player", "ai"),
           me: data.me,

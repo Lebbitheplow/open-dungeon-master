@@ -8,6 +8,7 @@ import { describeHomebrew } from "@/lib/homebrew/gear";
 import type { VariantRules } from "@/lib/rulesets/logic";
 import { Sheet } from "@/components/ui/Sheet";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { useTourPrepare } from "@/lib/tours/prepare";
 import { HomebrewEditor } from "@/app/workshop/homebrew/HomebrewEditor";
 import { blankDraft, type HomebrewDraft } from "@/app/workshop/homebrew/draft";
 import {
@@ -37,6 +38,14 @@ export function HomebrewPanel({
   const [editing, setEditing] = useState<{ id: string | null; draft: HomebrewDraft } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  // The tour's "open the editor" step.
+  useTourPrepare((name) => {
+    if (name === "open-homebrew-editor" && !editing) {
+      setError("");
+      setEditing({ id: null, draft: blankDraft(kind) });
+    }
+  });
 
   const load = useCallback(
     () =>
@@ -150,20 +159,22 @@ export function HomebrewPanel({
 
   return (
     <div className="space-y-3">
-      <SegmentedControl
-        options={HOMEBREW_EDITOR_KINDS.map((value) => ({
-          value,
-          label: `${KIND_LABELS[value]}${entries.some((entry) => entry.kind === value) ? ` ${entries.filter((entry) => entry.kind === value).length}` : ""}`,
-        }))}
-        value={kind}
-        onChange={setKind}
-        size="sm"
-        label="Kind of homebrew"
-      />
+      <div data-tour="homebrew-kinds" className="w-fit max-w-full">
+        <SegmentedControl
+          options={HOMEBREW_EDITOR_KINDS.map((value) => ({
+            value,
+            label: `${KIND_LABELS[value]}${entries.some((entry) => entry.kind === value) ? ` ${entries.filter((entry) => entry.kind === value).length}` : ""}`,
+          }))}
+          value={kind}
+          onChange={setKind}
+          size="sm"
+          label="Kind of homebrew"
+        />
+      </div>
 
       <p className="text-[11px] text-stone-500">{KIND_BLURB[kind]}</p>
 
-      <label className="relative block">
+      <label className="relative block" data-tour="homebrew-search">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-500" />
         <input
           value={query}
@@ -200,6 +211,7 @@ export function HomebrewPanel({
               setError("");
               setEditing({ id: null, draft: blankDraft(kind) });
             }}
+            data-tour="homebrew-new"
             className={cn(
               ui.cardHover,
               "flex h-full w-full items-center gap-3 border-dashed p-3 text-left text-stone-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40",

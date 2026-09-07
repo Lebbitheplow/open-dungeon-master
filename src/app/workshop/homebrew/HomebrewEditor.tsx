@@ -51,10 +51,12 @@ export function HomebrewEditor({
 
   return (
     <div className="space-y-3">
-      <CatalogStart
-        kind={draft.kind}
-        onPick={(entry, extra) => onDraft(draftFromCatalog(draft.kind, entry, extra))}
-      />
+      <div data-tour="homebrew-start">
+        <CatalogStart
+          kind={draft.kind}
+          onPick={(entry, extra) => onDraft(draftFromCatalog(draft.kind, entry, extra))}
+        />
+      </div>
 
       <TextField
         label="Name"
@@ -104,6 +106,7 @@ export function HomebrewEditor({
           type="button"
           disabled={busy || refused || !draft.name.trim()}
           onClick={onSave}
+          data-tour="homebrew-save"
           className="flex items-center gap-1 rounded-md border border-amber-700 bg-amber-950/50 px-2 py-1 text-xs text-amber-100 disabled:opacity-40"
         >
           {busy ? <Loader2 className="size-3 animate-spin" /> : null}

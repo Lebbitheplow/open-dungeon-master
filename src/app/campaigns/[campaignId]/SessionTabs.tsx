@@ -218,14 +218,14 @@ function BottomTabBarInner({
   steersStory: boolean;
 }) {
   return (
-    <nav className="glass flex items-stretch gap-1 overflow-x-auto border-t border-stone-700/40 px-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-1 lg:hidden">
+    <nav className="glass no-scrollbar flex items-stretch gap-1 overflow-x-auto border-t border-stone-700/40 px-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-1 lg:hidden">
       <button
         type="button"
         onClick={onSelectChat}
-        className={cn(ui.railCell, "flex-1", mobileView === "chat" && ui.railCellActive)}
+        className={cn(ui.railCell, "shrink-0 grow basis-auto", mobileView === "chat" && ui.railCellActive)}
       >
         <MessageSquareText className="size-5" />
-        <span className="eyebrow text-[9px] leading-none">Table</span>
+        <span className="eyebrow whitespace-nowrap text-[9px] leading-none">Table</span>
       </button>
       {tabs.map(([value, label, Icon]) => {
         const active = mobileView === "panel" && panelTab === value;
@@ -235,12 +235,12 @@ function BottomTabBarInner({
             type="button"
             onClick={() => onSelectPanel(value)}
             data-tour={`tab-${value}`}
-            className={cn(ui.railCell, "flex-1", tabAccentClass(value, active))}
+            className={cn(ui.railCell, "shrink-0 grow basis-auto", tabAccentClass(value, active))}
           >
             <Icon
               className={cn("size-5", value === "chat" && chatUnread > 0 && "animate-wiggle")}
             />
-            <span className="eyebrow text-[9px] leading-none">{label}</span>
+            <span className="eyebrow whitespace-nowrap text-[9px] leading-none">{label}</span>
             {value === "chat" && chatUnread > 0 ? (
               <span className="absolute left-1.5 top-1 size-1.5 rounded-full bg-red-500" />
             ) : null}
