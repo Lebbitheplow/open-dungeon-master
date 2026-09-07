@@ -93,6 +93,106 @@ async function rateLimited(env, ip, kind = "ip", cap = CREATES_PER_DAY) {
   return false;
 }
 
+// ---------- the table registry ----------
+//
+// A table's code is the only code a player ever types. It is the campaign's
+// own invite code, which never changes, while the address its host answers
+// at changes with every share session. This registry is the join between
+// the two: the host's app writes "table EFGH6789 is at <url> right now"
+// whenever it goes online, and a joining app reads it back. That is what
+// lets one short code survive a new tunnel, and what keeps a player's
+// server list from filling with dead addresses.
+//
+// A code is claimed on first write with a secret the claiming app keeps, so
+// nobody else can point someone's table at their own server. The entry
+// holds a URL and a hash, never a campaign, a name or anything about who
+// plays there.
+const TABLE_TTL_S = 45 * 86_400;
+const TABLE_CLAIMS_PER_DAY = 60;
+const TABLE_CODE_SHAPE = /^[A-HJ-NP-Z2-9]{4,12}$/;
+
+export function parseTableCode(raw) {
+  if (typeof raw !== "string") return null;
+  const code = raw.trim().toUpperCase();
+  return TABLE_CODE_SHAPE.test(code) ? code : null;
+}
+
+export function parseTableUrl(raw) {
+  if (typeof raw !== "string" || raw.length > 300) return null;
+  let url;
+  try {
+    url = new URL(raw.trim());
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+  if (url.username || url.password) return null;
+  return url.origin;
+}
+
+async function readTable(env, code) {
+  const raw = await env.SESSIONS.get(`table:${code}`);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+async function putTable(env, request, rawCode) {
+  const code = parseTableCode(rawCode);
+  if (!code) return json({ error: "Bad table code." }, 400);
+  const secret = request.headers.get("x-table-secret") || "";
+  if (secret.length < 16 || secret.length > 128) {
+    return json({ error: "Bad table secret." }, 400);
+  }
+  const body = await request.json().catch(() => ({}));
+  const url = parseTableUrl(body?.url);
+  if (!url) return json({ error: "Send the address the table is reachable at." }, 400);
+  const secretHash = await sha256Hex(secret);
+  const existing = await readTable(env, code);
+  if (existing && existing.secretHash !== secretHash) {
+    return json({ error: "That table code is claimed by another host." }, 409);
+  }
+  if (!existing) {
+    const ip = request.headers.get("cf-connecting-ip") || "unknown";
+    if (await rateLimited(env, ip, "table", TABLE_CLAIMS_PER_DAY)) {
+      return json({ error: "Too many tables claimed today. Try again tomorrow." }, 429);
+    }
+  }
+  await env.SESSIONS.put(`table:${code}`, JSON.stringify({ url, secretHash }), {
+    expirationTtl: TABLE_TTL_S,
+  });
+  return json({ code, url });
+}
+
+// Where a table is right now. Public on purpose: knowing a code is what an
+// invite is, and reaching the host still takes an account there.
+async function getTable(env, rawCode) {
+  const code = parseTableCode(rawCode);
+  if (!code) return json({ error: "Bad table code." }, 400);
+  const entry = await readTable(env, code);
+  if (!entry?.url) return json({ error: "No table is online with that code." }, 404);
+  return json({ code, url: entry.url });
+}
+
+// Stopping the share takes the address down with it, so a friend is told
+// the table is offline rather than sent to a dead address. The claim
+// survives: the same secret re-points it next session.
+async function dropTable(env, request, rawCode) {
+  const code = parseTableCode(rawCode);
+  if (!code) return json({ error: "Bad table code." }, 400);
+  const entry = await readTable(env, code);
+  if (!entry) return json({ code, dropped: true });
+  const secretHash = await sha256Hex(request.headers.get("x-table-secret") || "");
+  if (entry.secretHash !== secretHash) {
+    return json({ error: "That table code is claimed by another host." }, 409);
+  }
+  await env.SESSIONS.delete(`table:${code}`);
+  return json({ code, dropped: true });
+}
+
 function monthKey() {
   return new Date().toISOString().slice(0, 7);
 }
@@ -314,6 +414,12 @@ const worker = {
       const match = url.pathname.match(/^\/session\/([^/]+)$/);
       if (request.method === "DELETE" && match) {
         return await deleteSession(env, request, match[1]);
+      }
+      const table = url.pathname.match(/^\/table\/([^/]+)$/);
+      if (table) {
+        if (request.method === "PUT") return await putTable(env, request, table[1]);
+        if (request.method === "GET") return await getTable(env, table[1]);
+        if (request.method === "DELETE") return await dropTable(env, request, table[1]);
       }
     } catch (err) {
       console.error(err);

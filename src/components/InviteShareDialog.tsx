@@ -48,9 +48,9 @@ export function InviteShareDialog({
   const [error, setError] = useState("");
   const [publicOrigin, setPublicOrigin] = useState("");
   // Inside the desktop or Android app, on the app's own world: the tunnel
-  // that lets friends anywhere join. The lobby starts it on open; this
-  // dialog shows where it landed and offers the off switch.
-  const hosting = useShellShare(open);
+  // that lets friends anywhere join. Nothing here starts it. The row below
+  // is the switch, and the host decides when to be online.
+  const hosting = useShellShare(false);
   const shareState = hosting.status?.state ?? "stopped";
   const shareUrl = hosting.status?.url ?? "";
 
@@ -77,12 +77,7 @@ export function InviteShareDialog({
     };
   }, [open, shareState, shareUrl]);
 
-  const { joinUrl, appUrl, roomCode } = buildShareLinks({ publicOrigin, inviteCode });
-  // Shared through the broker, the code carries the host's half in front of
-  // the table's, so a guest can type it in the app and land here. On any
-  // other address there is nothing for a code to name and the table's own
-  // stands alone.
-  const shownCode = roomCode || inviteCode;
+  const { joinUrl, appUrl } = buildShareLinks({ publicOrigin, inviteCode });
 
   useEffect(() => {
     if (!open || !appUrl) {
@@ -98,7 +93,7 @@ export function InviteShareDialog({
   }, [open, appUrl]);
 
   async function copy(kind: "link" | "code") {
-    const worked = await copyText(kind === "link" ? appUrl : shownCode);
+    const worked = await copyText(kind === "link" ? appUrl : inviteCode);
     setError(worked ? "" : "Copying failed. Select the text and copy it by hand.");
     if (worked) {
       setCopied(kind);
@@ -166,19 +161,10 @@ export function InviteShareDialog({
         ) : null}
         <div className="w-full text-center">
           <p className="eyebrow text-[10px] text-amber-200/70">Room code</p>
-          <p
-            className={cn(
-              "font-mono text-amber-100",
-              roomCode ? "text-lg tracking-[0.15em] break-all" : "text-2xl tracking-[0.3em]",
-            )}
-          >
-            {shownCode}
+          <p className="font-mono text-2xl tracking-[0.3em] text-amber-100">{inviteCode}</p>
+          <p className="mt-1 text-xs text-stone-400">
+            While you are sharing, a friend can type this code into the app and land here.
           </p>
-          {roomCode ? (
-            <p className="mt-1 text-xs text-stone-400">
-              Friends can type this code into the app to join.
-            </p>
-          ) : null}
           <p className="mt-1 break-all font-mono text-xs text-stone-500">{joinUrl}</p>
         </div>
         <div className="flex w-full flex-wrap justify-center gap-2">

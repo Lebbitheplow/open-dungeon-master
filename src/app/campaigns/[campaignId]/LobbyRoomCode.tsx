@@ -54,14 +54,9 @@ export function LobbyRoomCode({
   // The copied link is the /j interstitial: it works whether the recipient
   // has the app or only a browser. The readable /join form stays on screen.
   const shareLinks = buildShareLinks({ publicOrigin, inviteCode });
-  // While the world is shared, the code says where as well as which: the
-  // host's half in front of the table's, one string a guest can type into
-  // the app with nothing else to go on. Off the tunnel there is no address
-  // a code could name, so the table's own code stands alone as before.
-  const shownCode = shareLinks.roomCode || inviteCode;
 
   async function copyInvite() {
-    if (await copyText(shownCode)) {
+    if (await copyText(inviteCode)) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     }
@@ -79,16 +74,7 @@ export function LobbyRoomCode({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className={ui.sectionEyebrow}>Room code</p>
-          <p
-            className={cn(
-              "font-mono text-amber-100",
-              shareLinks.roomCode
-                ? "text-base tracking-[0.15em] break-all"
-                : "text-xl tracking-[0.3em]",
-            )}
-          >
-            {shownCode}
-          </p>
+          <p className="font-mono text-xl tracking-[0.3em] text-amber-100">{inviteCode}</p>
         </div>
         <div className="flex items-center gap-2">
           <button type="button" onClick={copyInvite} className={ui.btnSmall}>

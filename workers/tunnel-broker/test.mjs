@@ -225,4 +225,80 @@ await test("rate limit trips after the daily allowance", async () => {
   assert.equal(last.status, 429);
 });
 
+await test("a table code is claimed, re-pointed by its owner, and read back", async () => {
+  const secret = "0123456789abcdef0123";
+  const put = await worker.fetch(
+    request("PUT", "/table/EFGH6789", {
+      body: { url: "https://play-abcd2345.opendungeonmaster.com" },
+      headers: { "x-table-secret": secret },
+    }),
+    env,
+  );
+  assert.equal(put.status, 200);
+  const found = await worker.fetch(request("GET", "/table/EFGH6789"), env);
+  assert.equal(found.status, 200);
+  assert.equal((await found.json()).url, "https://play-abcd2345.opendungeonmaster.com");
+
+  // The session ends and the world comes back at a new address: the same
+  // code, re-pointed by the same secret, is what makes one code last.
+  const again = await worker.fetch(
+    request("PUT", "/table/EFGH6789", {
+      body: { url: "https://play-wxyz9876.opendungeonmaster.com" },
+      headers: { "x-table-secret": secret },
+    }),
+    env,
+  );
+  assert.equal(again.status, 200);
+  const moved = await worker.fetch(request("GET", "/table/efgh6789"), env);
+  assert.equal((await moved.json()).url, "https://play-wxyz9876.opendungeonmaster.com");
+});
+
+await test("nobody else can point a claimed table somewhere", async () => {
+  const stolen = await worker.fetch(
+    request("PUT", "/table/EFGH6789", {
+      body: { url: "https://evil.example.com" },
+      headers: { "x-table-secret": "ffffffffffffffffffff" },
+    }),
+    env,
+  );
+  assert.equal(stolen.status, 409);
+  const dropped = await worker.fetch(
+    request("DELETE", "/table/EFGH6789", { headers: { "x-table-secret": "ffffffffffffffffffff" } }),
+    env,
+  );
+  assert.equal(dropped.status, 409);
+});
+
+await test("a table goes offline when its host stops sharing", async () => {
+  const secret = "0123456789abcdef0123";
+  const gone = await worker.fetch(
+    request("DELETE", "/table/EFGH6789", { headers: { "x-table-secret": secret } }),
+    env,
+  );
+  assert.equal(gone.status, 200);
+  const missing = await worker.fetch(request("GET", "/table/EFGH6789"), env);
+  assert.equal(missing.status, 404);
+});
+
+await test("junk codes, junk addresses and short secrets are refused", async () => {
+  const secret = "0123456789abcdef0123";
+  const badCode = await worker.fetch(
+    request("PUT", "/table/AB", { body: { url: "https://x.example.com" }, headers: { "x-table-secret": secret } }),
+    env,
+  );
+  assert.equal(badCode.status, 400);
+  const badUrl = await worker.fetch(
+    request("PUT", "/table/JKLM2345", { body: { url: "javascript:alert(1)" }, headers: { "x-table-secret": secret } }),
+    env,
+  );
+  assert.equal(badUrl.status, 400);
+  const shortSecret = await worker.fetch(
+    request("PUT", "/table/JKLM2345", { body: { url: "https://x.example.com" }, headers: { "x-table-secret": "short" } }),
+    env,
+  );
+  assert.equal(shortSecret.status, 400);
+  const unknown = await worker.fetch(request("GET", "/table/JKLM2345"), env);
+  assert.equal(unknown.status, 404);
+});
+
 console.log(`\n${passed} checks passed`);

@@ -45,10 +45,11 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
   const [seatVersion, setSeatVersion] = useState(0);
   const [seatError, setSeatError] = useState("");
 
-  // Inside the desktop or Android app, on the app's own world, opening a
-  // lobby is what puts the world on the internet: a campaign with a lobby
-  // is one other people are meant to join. Elsewhere this is inert.
-  const share = useShellShare(true);
+  // Inside the desktop or Android app, on the app's own world: the state of
+  // the tunnel, watched but never started here. Opening a lobby is not
+  // asking to be online; the host says when, from the invite dialog or the
+  // app's own share screen. Elsewhere this is inert.
+  const share = useShellShare(false);
   const shareUrl = share.status?.url ?? "";
 
   // Whether this viewer may move the DM seats is the seat route's call
