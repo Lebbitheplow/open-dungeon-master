@@ -1,5 +1,10 @@
 import { getGlobalConfig } from "@/lib/db/app-settings";
-import { profileById, resolveSampling } from "@/lib/dm/sampling-logic";
+import {
+  describeEndpoint,
+  profileById,
+  resolveSampling,
+  unsupportedParamFromError,
+} from "@/lib/dm/sampling-logic";
 import {
   buildPropsUrl,
   contextCacheKey,
@@ -69,10 +74,15 @@ export type ChatRequestOptions = {
   // Ask the backend for reasoning/thinking mode on this call. Qwen-family
   // models are unreliable tool callers without it under long prompts
   // (measured ~1/5 request_roll without vs ~4/5 with on qwen3.6-35b);
-  // llama.cpp and vLLM honor chat_template_kwargs, other backends ignore
-  // the unknown field. Reasoning deltas never reach onDelta: the stream
-  // parser forwards only delta.content.
+  // llama.cpp and vLLM honor chat_template_kwargs, and OpenRouter ignores
+  // the unknown field. OpenAI answers 400 for it, so describeEndpoint keeps
+  // it off that backend entirely. Reasoning deltas never reach onDelta: the
+  // stream parser forwards only delta.content.
   thinking?: boolean;
+  // Body fields a previous attempt was rejected for, omitted on the retry.
+  // Set only by requestCustomMessage's own unsupported-parameter path; no
+  // caller outside this module should populate it.
+  dropParams?: readonly string[];
 };
 
 export function configuredMaxOutputTokens() {
@@ -405,6 +415,14 @@ export async function requestCustomMessage(
 
   const globalText = getGlobalConfig().text;
   const globalSampling = getGlobalConfig().sampling;
+  // What this backend accepts in the body. "local" reproduces the behaviour
+  // every self-hosted server already had, so the default llama-server install
+  // receives the same payload it always did.
+  const caps = describeEndpoint(trimmedBase);
+  const dropped = new Set(options.dropParams ?? []);
+  // Kept on its own looser historical test rather than folded into
+  // describeEndpoint: this one only picks attribution headers and error copy,
+  // and rewiring it could change OpenRouter behaviour that already works.
   const isOpenRouter = /(^|\.)openrouter\.ai/i.test(trimmedBase);
   const resolvedModel =
     (model || "").trim() ||
@@ -459,10 +477,9 @@ export async function requestCustomMessage(
         ...(temperature !== undefined ? { temperature } : {}),
       },
       profile: profileById(globalSampling.profile || "default"),
-      // Any OpenAI-compatible server this deployment talks to directly is
-      // self-hosted in practice; OpenRouter is the one that rejects the
-      // local-only sampler fields.
-      allowLocalOnly: !isOpenRouter,
+      // Local servers ignore fields they do not know; OpenRouter and OpenAI
+      // reject the local-only sampler fields (src/lib/dm/sampling-logic.ts).
+      allowLocalOnly: caps.allowLocalOnlySamplers,
       thinking: options.thinking,
     }),
     // Explicit 0 so a server-side sampler preset cannot override it: a
@@ -470,12 +487,30 @@ export async function requestCustomMessage(
     // tool-call token sequence (measured 2/5 vs 4/5 request_roll rate on
     // llama-server with the qwen preset's 1.5). Deliberately NOT exposed as a
     // sampling option, and written after the spread so nothing can reinstate
-    // it from config.
-    presence_penalty: 0,
-    max_tokens: configuredMaxOutputTokens(),
-    ...(options.thinking ? { chat_template_kwargs: { enable_thinking: true } } : {}),
+    // it from config. Skipped on backends with no preset to override, where
+    // 0 is already the default and reasoning models reject the field.
+    ...(caps.sendZeroPresencePenalty ? { presence_penalty: 0 } : {}),
+    ...(caps.allowTemplateKwargs && options.thinking
+      ? { chat_template_kwargs: { enable_thinking: true } }
+      : {}),
     ...(onDelta ? { stream: true } : {}),
   };
+
+  // The output cap, under whichever name this backend takes. Dropping
+  // max_tokens promotes the request to max_completion_tokens rather than
+  // uncapping it, because that rename is why OpenAI's reasoning models
+  // reject the older field.
+  const maxTokensField =
+    caps.maxTokensField === "max_completion_tokens" || dropped.has("max_tokens")
+      ? "max_completion_tokens"
+      : "max_tokens";
+  if (!dropped.has(maxTokensField)) {
+    requestPayload[maxTokensField] = configuredMaxOutputTokens();
+  }
+
+  for (const field of dropped) {
+    delete requestPayload[field];
+  }
 
   if (tools?.length) {
     requestPayload.tools = tools;
@@ -542,6 +577,27 @@ export async function requestCustomMessage(
         stripImageParts(messages),
         options,
       );
+    }
+
+    // A strict backend rejected one named body field. Drop that field and
+    // retry, so a model family ODM has never heard of still runs instead of
+    // costing the table its turn. Checked BEFORE the tool retry below,
+    // whose /not support/ arm would otherwise swallow "Unsupported
+    // parameter: 'temperature' is not supported with this model" and strip
+    // the tools instead of the temperature.
+    //
+    // Bounded three ways: only fields on the droppable list in
+    // sampling-logic.ts, never the same field twice, and at most three drops
+    // per request. Unreachable on a healthy local server, which answers 200.
+    const offending = unsupportedParamFromError(text);
+    if (offending && !dropped.has(offending) && dropped.size < 3) {
+      console.warn(
+        `[model] ${endpoint} rejected "${offending}"; retrying without it`,
+      );
+      return requestCustomMessage(trimmedBase, resolvedModel, apiKey, messages, {
+        ...options,
+        dropParams: [...dropped, offending],
+      });
     }
 
     // Some servers don't implement function tools; retry without them.

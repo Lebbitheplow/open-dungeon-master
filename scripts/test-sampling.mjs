@@ -8,10 +8,13 @@ import {
   STORY_TEMP_DEFAULT,
   STORY_TEMP_THINKING,
   clampSampling,
+  describeEndpoint,
+  endpointKind,
   filterForProvider,
   isDefaultOnly,
   profileById,
   resolveSampling,
+  unsupportedParamFromError,
 } from "../src/lib/dm/sampling-logic.ts";
 
 let passed = 0;
@@ -133,6 +136,136 @@ check("every profile has a label and a real description", () => {
     assert.ok(profile.label.length > 0);
     assert.ok(profile.description.length > 30, `${profile.id} explains itself`);
   }
+});
+
+// --- Endpoint capabilities -------------------------------------------------
+// The reason these exist: the payload ODM grew around llama.cpp with a Qwen
+// preset is exactly the payload OpenAI answers 400 for.
+
+check("the shipped llama.cpp default is classified local", () => {
+  assert.equal(endpointKind("http://127.0.0.1:8001/v1"), "local");
+  assert.equal(endpointKind("http://localhost:11434/v1"), "local");
+  assert.equal(endpointKind("http://host.docker.internal:8001/v1"), "local");
+  assert.equal(endpointKind("https://llama.lebbi.org/v1"), "local");
+});
+
+check("vendor hosts are recognised", () => {
+  assert.equal(endpointKind("https://api.openai.com/v1"), "openai");
+  assert.equal(endpointKind("https://openrouter.ai/api/v1"), "openrouter");
+});
+
+check("a vendor name in the path or a suffixed host is not that vendor", () => {
+  // Whole-host comparison, so neither of these may be treated as a vendor.
+  assert.equal(endpointKind("http://evil.test/v1?upstream=api.openai.com"), "local");
+  assert.equal(endpointKind("https://api.openai.com.evil.test/v1"), "local");
+  assert.equal(endpointKind("https://openrouter.ai.evil.test/v1"), "local");
+});
+
+check("local caps reproduce ODM's pre-existing hardcoded payload", () => {
+  // The regression guard for the default install. Every field here is what
+  // model-client.ts sent before endpoint capabilities existed, so a change
+  // to this assertion is a change to what llama-server receives.
+  assert.deepEqual(describeEndpoint("http://127.0.0.1:8001/v1"), {
+    kind: "local",
+    allowLocalOnlySamplers: true,
+    allowTemplateKwargs: true,
+    maxTokensField: "max_tokens",
+    sendZeroPresencePenalty: true,
+  });
+});
+
+check("OpenRouter caps are unchanged from the old !isOpenRouter behaviour", () => {
+  const caps = describeEndpoint("https://openrouter.ai/api/v1");
+  assert.equal(caps.allowLocalOnlySamplers, false, "was already stripped");
+  assert.equal(caps.allowTemplateKwargs, true, "was already sent");
+  assert.equal(caps.maxTokensField, "max_tokens");
+  assert.equal(caps.sendZeroPresencePenalty, true);
+});
+
+check("OpenAI gets the strict payload", () => {
+  const caps = describeEndpoint("https://api.openai.com/v1");
+  assert.equal(caps.allowLocalOnlySamplers, false, "400s on top_k/min_p");
+  assert.equal(caps.allowTemplateKwargs, false, "400s on chat_template_kwargs");
+  assert.equal(caps.maxTokensField, "max_completion_tokens", "reasoning models dropped max_tokens");
+  assert.equal(caps.sendZeroPresencePenalty, false, "0 is already the default there");
+});
+
+check("an unset base URL does not crash the classifier", () => {
+  assert.equal(endpointKind(""), "local");
+  assert.equal(endpointKind("not a url"), "local");
+});
+
+// --- Unsupported-parameter retry -------------------------------------------
+
+check("OpenAI's error.param is read", () => {
+  const body = JSON.stringify({
+    error: {
+      message: "Unsupported parameter: 'temperature' is not supported with this model.",
+      type: "invalid_request_error",
+      param: "temperature",
+      code: "unsupported_parameter",
+    },
+  });
+  assert.equal(unsupportedParamFromError(body), "temperature");
+});
+
+check("an unrecognised argument is read out of the message when param is null", () => {
+  const body = JSON.stringify({
+    error: {
+      message: "Unrecognized request argument supplied: chat_template_kwargs",
+      type: "invalid_request_error",
+      param: null,
+      code: null,
+    },
+  });
+  assert.equal(unsupportedParamFromError(body), "chat_template_kwargs");
+});
+
+check("unsupported_value on a reasoning model is read", () => {
+  const body = JSON.stringify({
+    error: {
+      message:
+        "Unsupported value: 'temperature' does not support 0.9 with this model. Only the default (1) value is supported.",
+      param: "temperature",
+      code: "unsupported_value",
+    },
+  });
+  assert.equal(unsupportedParamFromError(body), "temperature");
+});
+
+check("max_tokens is droppable so the retry can promote it", () => {
+  const body = JSON.stringify({
+    error: {
+      message:
+        "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.",
+      param: "max_tokens",
+    },
+  });
+  assert.equal(unsupportedParamFromError(body), "max_tokens");
+});
+
+check("tools stay with the retry-without-tools path, not the param drop", () => {
+  // "not supported" here must fall through to the tool retry in
+  // model-client.ts, which drops the whole tool array rather than one field.
+  const body = JSON.stringify({
+    error: { message: "Unsupported parameter: 'tool_choice' is not supported.", param: "tool_choice" },
+  });
+  assert.equal(unsupportedParamFromError(body), null);
+  assert.equal(
+    unsupportedParamFromError('{"error":{"message":"tools are not supported","param":"tools"}}'),
+    null,
+  );
+});
+
+check("the request's own load-bearing fields are never dropped", () => {
+  assert.equal(unsupportedParamFromError('{"error":{"param":"model"}}'), null);
+  assert.equal(unsupportedParamFromError('{"error":{"param":"messages"}}'), null);
+});
+
+check("junk bodies yield nothing to drop", () => {
+  assert.equal(unsupportedParamFromError(""), null);
+  assert.equal(unsupportedParamFromError("<html>502 Bad Gateway</html>"), null);
+  assert.equal(unsupportedParamFromError("rate limit exceeded"), null);
 });
 
 console.log(`sampling: ${passed} tests passed`);

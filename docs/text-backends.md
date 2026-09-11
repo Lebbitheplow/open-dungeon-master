@@ -97,6 +97,44 @@ remote Ollama, or **OpenRouter**. Enter:
 - **API key** — optional, right in the panel. Most local servers need none;
   OpenRouter does.
 
+### OpenAI and other strict vendor APIs
+
+"OpenAI-compatible" covers two different things: a local server that ignores
+fields it does not recognise, and a vendor API that answers 400 for any
+unrecognised argument. ODM's request body grew around the former, so the
+fields that make the local Qwen preset behave are the ones OpenAI rejects.
+The backend URL decides which body gets sent
+(`describeEndpoint` in `src/lib/dm/sampling-logic.ts`):
+
+| | local server | OpenRouter | OpenAI |
+|---|---|---|---|
+| `top_k`, `min_p`, `repeat_penalty` | sent | stripped | stripped |
+| `chat_template_kwargs` (thinking mode) | sent | sent | not sent |
+| output cap field | `max_tokens` | `max_tokens` | `max_completion_tokens` |
+| `presence_penalty: 0` | sent | sent | not sent |
+
+For OpenAI, set the **Backend URL** to `https://api.openai.com/v1`, the
+**Model** to whatever you pay for, and paste your key in the **API key**
+field (or set `OPENAI_COMPAT_API_KEY`). Nothing else needs changing.
+
+Two of those rows are why a paid key works. Reasoning models dropped
+`max_tokens` in favour of `max_completion_tokens`, and they reject
+`presence_penalty` outright; `chat_template_kwargs` is how ODM asks llama.cpp
+and vLLM for thinking mode, and a vendor API has no chat template to pass it
+to. The thinking request is simply not made against OpenAI, which costs
+nothing there: it exists because Qwen is an unreliable tool caller without it,
+not because the DM needs it.
+
+Anything ODM does not recognise by host is treated as a permissive local
+server. If such a backend turns out to be strict, the first 400 that names a
+field is handled rather than failing the turn: that one field is dropped and
+the request is retried, up to three times, and the drop is logged. Tool
+support is deliberately excluded from that path, because a backend without
+function calling is already handled by the retry-without-tools fallback.
+
+Note that the DM leans on tools heavily, so a model with weak function
+calling will narrate past its dice no matter which backend serves it.
+
 You can enter everything in-app and store it locally with the story. The Mac
 DMG and `Launch.command` can also save first-run defaults to `.env.server`:
 `DEFAULT_TEXT_PROVIDER=custom`, `OPENAI_COMPAT_BASE_URL`, and

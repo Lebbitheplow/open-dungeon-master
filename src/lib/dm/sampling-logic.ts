@@ -25,6 +25,152 @@ export const CLOUD_SAFE_PARAMS = ["temperature", "top_p"] as const;
 // Parameters local inference servers understand and strict cloud APIs reject.
 export const LOCAL_ONLY_PARAMS = ["top_k", "min_p", "repeat_penalty"] as const;
 
+// What a backend will actually accept in the request body.
+//
+// "OpenAI-compatible" covers two very different things: a local server that
+// ignores fields it does not know, and OpenAI itself, which answers 400 for
+// any unrecognised argument. ODM's payload grew around the former (llama.cpp
+// with a Qwen preset), so the fields that make Qwen behave are exactly the
+// fields that make OpenAI reject the turn.
+//
+// The values below are chosen so "local" and "openrouter" reproduce the
+// hardcoded behaviour those two backends already had, byte for byte. Only the
+// "openai" row is new. Keep it that way: a change to the local row changes
+// what the default llama-server install receives.
+export type EndpointKind = "openai" | "openrouter" | "local";
+
+export type EndpointCaps = {
+  kind: EndpointKind;
+  // top_k / min_p / repeat_penalty. Strict cloud APIs 400 on them.
+  allowLocalOnlySamplers: boolean;
+  // chat_template_kwargs, how ODM asks llama.cpp and vLLM for thinking mode.
+  // A vendor API has no chat template to pass kwargs to.
+  allowTemplateKwargs: boolean;
+  // OpenAI's reasoning models removed max_tokens in favour of this one.
+  maxTokensField: "max_tokens" | "max_completion_tokens";
+  // ODM pins presence_penalty to 0 so a server-side preset cannot raise it
+  // (a positive value suppresses tool calls over the long DM prompt). A
+  // vendor API has no preset to override and 0 is already its default, so
+  // sending it there buys nothing and costs a 400 on reasoning models.
+  sendZeroPresencePenalty: boolean;
+};
+
+// Host, lowercased, or "" when the URL will not parse. Compared as a whole
+// host rather than a substring so a path or query mentioning a vendor cannot
+// be mistaken for that vendor's endpoint.
+function hostOf(baseUrl: string): string {
+  const raw = (baseUrl || "").trim();
+  if (!raw) return "";
+  try {
+    return new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `http://${raw}`).hostname.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function hostMatches(host: string, domain: string): boolean {
+  return host === domain || host.endsWith(`.${domain}`);
+}
+
+export function endpointKind(baseUrl: string): EndpointKind {
+  const host = hostOf(baseUrl);
+  if (hostMatches(host, "openai.com")) return "openai";
+  if (hostMatches(host, "openrouter.ai")) return "openrouter";
+  // Everything else is treated as a permissive server. That is the right
+  // default for llama.cpp, LM Studio, vLLM, TabbyAPI, KoboldCpp and Ollama,
+  // and a strict host ODM does not know by name is caught after the fact by
+  // the unsupported-parameter retry in model-client.ts.
+  return "local";
+}
+
+export function describeEndpoint(baseUrl: string): EndpointCaps {
+  const kind = endpointKind(baseUrl);
+  if (kind === "openai") {
+    return {
+      kind,
+      allowLocalOnlySamplers: false,
+      allowTemplateKwargs: false,
+      maxTokensField: "max_completion_tokens",
+      sendZeroPresencePenalty: false,
+    };
+  }
+  if (kind === "openrouter") {
+    // Unchanged from the hardcoded `allowLocalOnly: !isOpenRouter`.
+    return {
+      kind,
+      allowLocalOnlySamplers: false,
+      allowTemplateKwargs: true,
+      maxTokensField: "max_tokens",
+      sendZeroPresencePenalty: true,
+    };
+  }
+  return {
+    kind,
+    allowLocalOnlySamplers: true,
+    allowTemplateKwargs: true,
+    maxTokensField: "max_tokens",
+    sendZeroPresencePenalty: true,
+  };
+}
+
+// Body fields the unsupported-parameter retry may drop. Deliberately excludes
+// tools and tool_choice: a backend that cannot do function calling is already
+// handled by the retry-without-tools path, and dropping tool_choice alone
+// would leave a tool-less model still holding 60 tool definitions.
+const DROPPABLE_PARAMS = new Set([
+  "temperature",
+  "top_p",
+  "top_k",
+  "min_p",
+  "repeat_penalty",
+  "presence_penalty",
+  "frequency_penalty",
+  "max_tokens",
+  "max_completion_tokens",
+  "chat_template_kwargs",
+  "stream_options",
+]);
+
+// Pulls the offending field name out of a 4xx body so the caller can drop it
+// and retry. OpenAI names it in `error.param` for unsupported_parameter and
+// unsupported_value, but leaves it null for an unrecognised argument and puts
+// the name in the message instead, so both are read. Returns null unless the
+// name is one ODM is willing to give up, which keeps a message that merely
+// mentions "model" or "messages" from stripping the request.
+export function unsupportedParamFromError(body: string): string | null {
+  const text = (body || "").slice(0, 4000);
+  if (!text) return null;
+
+  const candidates: string[] = [];
+  try {
+    const parsed = JSON.parse(text) as { error?: { param?: unknown } };
+    if (typeof parsed?.error?.param === "string") {
+      candidates.push(parsed.error.param);
+    }
+  } catch {
+    // Not JSON, or not the shape we expect. The message patterns still apply.
+  }
+
+  const patterns = [
+    /Unrecognized request argument supplied:\s*([A-Za-z_][\w.]*)/i,
+    /Unsupported parameter:\s*'([^']+)'/i,
+    /Unsupported value:\s*'([^']+)'/i,
+    /unknown field\s*[`'"]?([A-Za-z_][\w.]*)/i,
+    /unexpected keyword argument\s*'([^']+)'/i,
+  ];
+  for (const pattern of patterns) {
+    const hit = text.match(pattern);
+    if (hit?.[1]) candidates.push(hit[1]);
+  }
+
+  for (const candidate of candidates) {
+    // Nested paths ("body.temperature") reduce to their leaf.
+    const name = candidate.split(".").pop() ?? candidate;
+    if (DROPPABLE_PARAMS.has(name)) return name;
+  }
+  return null;
+}
+
 export type SamplingConfig = {
   temperature?: number;
   top_p?: number;
