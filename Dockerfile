@@ -39,10 +39,12 @@ COPY . .
 # stage; rerunning is cheap and keeps this independent of the COPY order.
 RUN node scripts/copy-dice-assets.mjs
 
-# Bake the content pack (spells, monsters, items, feats, subclasses) from
-# api.open5e.com and the MiniLM embedding model, so a running container never
-# needs the internet to answer a rules lookup or a semantic story recall.
-RUN node scripts/import-open5e.mjs
+# Bake the content pack (spells, monsters, items, feats, subclasses) and the
+# MiniLM embedding model, so a running container never needs the internet to
+# answer a rules lookup or a semantic story recall. The pack comes from this
+# version's GitHub release asset; only an unreleased build rebuilds it from
+# api.open5e.com, which goes down often enough to have failed a publish.
+RUN node scripts/fetch-content-pack.mjs
 RUN npm run fetch-model
 
 ENV NEXT_TELEMETRY_DISABLED=1

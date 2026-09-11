@@ -32,12 +32,45 @@ import {
 
 const API = "https://api.open5e.com";
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-const contentDir = path.join(root, "data", "content");
+const contentDir = process.env.ODM_CONTENT_DIR || path.join(root, "data", "content");
 const rawDir = path.join(contentDir, "raw");
 const dbPath = path.join(contentDir, "open5e.sqlite");
 const refresh = process.argv.includes("--refresh");
 
 mkdirSync(rawDir, { recursive: true });
+
+// api.open5e.com sits behind Cloudflare and answers a slow page with a 524
+// or a 5xx now and then; one such answer used to sink a whole CI build.
+// Server errors and network failures are retried with a growing pause; a
+// 4xx is a real answer and is not.
+const FETCH_ATTEMPTS = 5;
+
+async function fetchPage(url) {
+  let lastError;
+  for (let attempt = 1; attempt <= FETCH_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(120_000) });
+      if (response.ok) {
+        return await response.json();
+      }
+      if (response.status < 500) {
+        throw new Error(`${url} -> HTTP ${response.status}`);
+      }
+      lastError = new Error(`${url} -> HTTP ${response.status}`);
+    } catch (error) {
+      if (error instanceof Error && /HTTP 4\d\d/.test(error.message)) {
+        throw error;
+      }
+      lastError = error;
+    }
+    if (attempt < FETCH_ATTEMPTS) {
+      const pause = 5_000 * attempt;
+      process.stdout.write(`    retrying in ${pause / 1000}s (${lastError?.message ?? lastError})\n`);
+      await new Promise((resolve) => setTimeout(resolve, pause));
+    }
+  }
+  throw lastError;
+}
 
 async function fetchAllPages(endpoint) {
   const cacheFile = path.join(rawDir, `${endpoint.replace(/\W+/g, "_")}.json`);
@@ -48,11 +81,7 @@ async function fetchAllPages(endpoint) {
   let url = `${API}${endpoint}?limit=500`;
   while (url) {
     process.stdout.write(`  fetching ${url}\n`);
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`${url} -> HTTP ${response.status}`);
-    }
-    const page = await response.json();
+    const page = await fetchPage(url);
     results.push(...(page.results ?? []));
     url = page.next;
   }
