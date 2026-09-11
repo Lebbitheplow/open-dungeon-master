@@ -19,7 +19,7 @@ import { LorePanel } from "@/app/campaigns/[campaignId]/LorePanel";
 import { RulesPanel } from "@/app/campaigns/[campaignId]/RulesPanel";
 import { VoicePanel } from "@/app/campaigns/[campaignId]/VoicePanel";
 import { resolveCompanionMode } from "@/lib/schemas/game-settings";
-import { lobbyBlocker, partySlotCount, viewerCaps } from "@/lib/dm/viewer";
+import { isPrimaryDm, lobbyBlocker, partySlotCount, viewerCaps } from "@/lib/dm/viewer";
 import {
   ContentImportPicker,
   EMPTY_SELECTION,
@@ -127,7 +127,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
   );
   const canBuildCompanion =
     steersStory &&
-    resolveCompanionMode(campaign.gameSettings, partySize) === "full" &&
+    resolveCompanionMode(campaign.gameSettings, partySize, humanDmTable) === "full" &&
     partyCompanions.length < campaign.gameSettings.maxCompanions;
   const showCompanions = canBuildCompanion || (steersStory && partyCompanions.length > 0);
   // Why the adventure cannot open yet, or "" when it can. The server's PATCH
@@ -369,15 +369,23 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
         />
       ) : null}
 
+      {/* Settings, rules and lore are story authority (the lead at an AI table,
+          the DM once a person runs it), which is what their routes check.
+          Handing them to the lead alone drew editable panels for a player-lead
+          the server would refuse and read-only ones for the DM it allows. */}
       <GameSettingsPanel
         campaignId={campaign.id}
         settings={campaign.gameSettings}
-        steersStory={isLead}
+        steersStory={steersStory}
       />
 
       <section className="mb-6 space-y-3">
-        <RulesPanel campaignId={campaign.id} settings={campaign.gameSettings} steersStory={isLead} />
-        <LorePanel campaignId={campaign.id} steersStory={isLead} />
+        <RulesPanel
+          campaignId={campaign.id}
+          settings={campaign.gameSettings}
+          steersStory={steersStory}
+        />
+        <LorePanel campaignId={campaign.id} steersStory={steersStory} />
         {/* Prep keeps happening after session one, so the import is not only
             a creation-time step. Gated on story authority rather than on the
             lead, because in a human-DM campaign the lead is a player and the
@@ -475,6 +483,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
         isDm={isDm}
         isSolo={isSolo}
         isOwner={isOwner}
+        canStart={isOwner || isPrimaryDm(seats, me.id)}
         busy={busy}
         error={error}
         startBlocker={startBlocker}

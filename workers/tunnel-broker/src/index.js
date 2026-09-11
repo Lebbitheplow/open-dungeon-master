@@ -179,7 +179,10 @@ async function getTable(env, rawCode) {
 
 // Stopping the share takes the address down with it, so a friend is told
 // the table is offline rather than sent to a dead address. The claim
-// survives: the same secret re-points it next session.
+// survives: the same secret re-points it next session. (It used to be
+// deleted outright, which left the code free for anyone to claim between
+// sessions and locked the real host out with a 409 the next evening.)
+// Same request and reply shape as before; only the stored row changes.
 async function dropTable(env, request, rawCode) {
   const code = parseTableCode(rawCode);
   if (!code) return json({ error: "Bad table code." }, 400);
@@ -189,7 +192,9 @@ async function dropTable(env, request, rawCode) {
   if (entry.secretHash !== secretHash) {
     return json({ error: "That table code is claimed by another host." }, 409);
   }
-  await env.SESSIONS.delete(`table:${code}`);
+  await env.SESSIONS.put(`table:${code}`, JSON.stringify({ url: "", secretHash }), {
+    expirationTtl: TABLE_TTL_S,
+  });
   return json({ code, dropped: true });
 }
 

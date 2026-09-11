@@ -17,6 +17,13 @@ import {
   ToggleChips,
 } from "@/app/workshop/homebrew/fields";
 import { CLASS_IDS, DAMAGE_TYPES, SPELL_SCHOOLS } from "@/app/workshop/homebrew/types";
+import {
+  CASTING_TIMES,
+  SPELL_COMPONENTS,
+  SPELL_DURATIONS,
+  SPELL_RANGES,
+} from "@/lib/workshop/pickers";
+import { CONDITION_BLURBS, SPELL_SCHOOL_BLURBS, glossaryFor } from "@/lib/help/terms";
 import type { Data } from "@/app/workshop/homebrew/draft";
 
 // The spell form. The description is the part the engine reads its damage
@@ -78,11 +85,40 @@ export function SpellFields({ data, onChange }: { data: Data; onChange: (next: D
           value={String(data.school ?? "evocation")}
           options={SPELL_SCHOOLS.map((value) => ({ value, label: value }))}
           onChange={(school) => set({ school })}
+          glossary={{ title: "Schools of magic", entries: glossaryFor(SPELL_SCHOOLS, SPELL_SCHOOL_BLURBS) }}
         />
-        <TextField label="Casting time" value={String(data.casting_time ?? "")} onChange={(casting_time) => set({ casting_time })} maxLength={60} />
-        <TextField label="Range" value={String(data.range ?? "")} onChange={(range) => set({ range })} maxLength={60} />
-        <TextField label="Components" value={String(data.components ?? "")} onChange={(components) => set({ components })} maxLength={120} />
-        <TextField label="Duration" value={String(data.duration ?? "")} onChange={(duration) => set({ duration })} maxLength={60} />
+        <TextField
+          label="Casting time"
+          value={String(data.casting_time ?? "")}
+          onChange={(casting_time) => set({ casting_time })}
+          maxLength={60}
+          suggestions={CASTING_TIMES}
+          hint="How long it takes to cast. Most spells take one action."
+        />
+        <TextField
+          label="Range"
+          value={String(data.range ?? "")}
+          onChange={(range) => set({ range })}
+          maxLength={60}
+          suggestions={SPELL_RANGES}
+          hint="How far away the target can be. Self means the caster only."
+        />
+        <TextField
+          label="Components"
+          value={String(data.components ?? "")}
+          onChange={(components) => set({ components })}
+          maxLength={120}
+          suggestions={SPELL_COMPONENTS}
+          hint="V spoken words, S a free hand, M a material (name it after M in brackets)."
+        />
+        <TextField
+          label="Duration"
+          value={String(data.duration ?? "")}
+          onChange={(duration) => set({ duration })}
+          maxLength={60}
+          suggestions={SPELL_DURATIONS}
+          hint="How long the effect lasts. Concentration spells end when the caster loses focus."
+        />
         <div className="col-span-2 flex flex-wrap items-end gap-3">
           <CheckField label="Concentration" checked={data.concentration === true} onChange={(concentration) => set({ concentration })} />
           <CheckField label="Ritual" checked={data.ritual === true} onChange={(ritual) => set({ ritual })} />
@@ -95,6 +131,9 @@ export function SpellFields({ data, onChange }: { data: Data; onChange: (next: D
           options={CLASS_IDS}
           selected={Array.isArray(data.classes) ? (data.classes as string[]) : []}
           onChange={(classes) => set({ classes })}
+          labels={Object.fromEntries(
+            CLASS_IDS.map((id) => [id, id.charAt(0).toUpperCase() + id.slice(1)]),
+          )}
         />
       </div>
 
@@ -154,6 +193,7 @@ export function SpellFields({ data, onChange }: { data: Data; onChange: (next: D
                   placeholder="frightened"
                   maxLength={40}
                   suggestions={CONDITIONS}
+                  glossary={{ title: "Conditions", entries: glossaryFor(CONDITIONS, CONDITION_BLURBS) }}
                 />
                 {condition.name ? (
                   <NumberField

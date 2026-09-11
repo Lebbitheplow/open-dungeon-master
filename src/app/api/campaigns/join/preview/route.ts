@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { findCampaignByInviteCode } from "@/lib/db/campaigns";
 import { joinPreviewFor } from "@/lib/join-preview";
-import { checkLogin, recordLoginFailure, recordLoginSuccess } from "@/lib/login-throttle";
+import { checkLogin, clientIp, recordLoginFailure, recordLoginSuccess } from "@/lib/login-throttle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +18,7 @@ export async function GET(request: Request) {
   if (!parsed.success) {
     return Response.json({ error: "Invalid invite code." }, { status: 400 });
   }
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
+  const ip = clientIp(request);
   const throttle = `join-preview:${ip}`;
   const gate = checkLogin(throttle);
   if (gate.blocked) {

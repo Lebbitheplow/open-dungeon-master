@@ -141,20 +141,26 @@ export type SignupMode = "open" | "invite" | "closed";
 
 // Blank signupMode falls back to the legacy boolean, so a server whose admin
 // last touched the old checkbox keeps exactly the policy they chose.
-// Both shells launch their bundled server with ODM_DEVICE_WORLD=1.
-function deviceWorld(): boolean {
+// Both shells launch their bundled server with ODM_DEVICE_WORLD=1. Server
+// routes pass isDeviceWorld() from src/lib/server-env (which also reads
+// .env.server); this fallback keeps the schema module free of file reads.
+function deviceWorldFromProcess(): boolean {
   return typeof process !== "undefined" && process.env?.ODM_DEVICE_WORLD === "1";
 }
 
-export function resolveSignupMode(config: GlobalConfig): SignupMode {
+export function resolveSignupMode(
+  config: GlobalConfig,
+  deviceWorld: boolean = deviceWorldFromProcess(),
+): SignupMode {
   // A world one of the apps is hosting is not an administered service and
-  // never gates its own guests. Its front door is the room code its host
-  // read out and the tunnel address that dies with the session, not a
-  // signup policy: the person hosting is sitting at the table, not running
-  // a service with members to vet. Sharing used to flip these worlds to
-  // invite-only, which is what met invited players with "this server needs
-  // an invite code" right after they typed one.
-  if (deviceWorld()) return "open";
+  // never gates its own guests with a signup policy. Its front door is the
+  // room code its host read out (the register route insists on one) and the
+  // tunnel address that dies with the session: the person hosting is
+  // sitting at the table, not running a service with members to vet.
+  // Sharing used to flip these worlds to invite-only, which is what met
+  // invited players with "this server needs an invite code" right after
+  // they typed one.
+  if (deviceWorld) return "open";
   if (config.signupMode !== "") {
     return config.signupMode;
   }

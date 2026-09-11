@@ -26,6 +26,23 @@ import {
 } from "@/app/workshop/homebrew/fields";
 import { DAMAGE_TYPES, input } from "@/app/workshop/homebrew/types";
 import type { Data } from "@/app/workshop/homebrew/draft";
+import { DAMAGE_TYPE_BLURBS, WEAPON_PROPERTY_BLURBS, glossaryFor } from "@/lib/help/terms";
+
+// "1d8 slashing" as the two things a DM actually decides. A type the list
+// does not know (a homebrew "1d6 chitin-shredding") stays in the dice box
+// so nothing typed is ever lost.
+function splitDamage(damage: string): { dice: string; type: string } {
+  const trimmed = damage.trim();
+  const match = /^(.*?)\s+([a-z]+)$/i.exec(trimmed);
+  if (match && (DAMAGE_TYPES as readonly string[]).includes(match[2].toLowerCase())) {
+    return { dice: match[1].trim(), type: match[2].toLowerCase() };
+  }
+  return { dice: trimmed, type: "" };
+}
+
+function joinDamage(dice: string, type: string): string {
+  return [dice.trim(), type.trim()].filter(Boolean).join(" ");
+}
 
 // The item form: what kind of thing it is, then the block that kind carries.
 // A weapon's block is an SRD weapon; an armour's an SRD armour; a magic
@@ -94,13 +111,29 @@ function WeaponBlock({ weapon, onChange }: { weapon: Weapon; onChange: (next: We
           ]}
           onChange={(kind) => set({ kind })}
         />
+        {/* Stored as one string ("1d8 slashing") because that is what the
+            weapon engine reads; edited as dice plus a type picked from the
+            list the monster editor already offers, so nobody has to spell a
+            damage type from memory. */}
         <TextField
-          label="Damage"
-          value={String(weapon.damage ?? "")}
-          onChange={(damage) => set({ damage })}
-          placeholder="1d8 slashing"
-          hint="Dice, then the type."
-          maxLength={40}
+          label="Damage dice"
+          value={splitDamage(String(weapon.damage ?? "")).dice}
+          onChange={(dice) =>
+            set({ damage: joinDamage(dice, splitDamage(String(weapon.damage ?? "")).type) })
+          }
+          placeholder="1d8"
+          maxLength={20}
+        />
+        <SelectField
+          label="Damage type"
+          value={splitDamage(String(weapon.damage ?? "")).type}
+          options={[
+            { value: "", label: "Pick a type..." },
+            ...DAMAGE_TYPES.map((value) => ({ value, label: value })),
+          ]}
+          onChange={(type) => set({ damage: joinDamage(splitDamage(String(weapon.damage ?? "")).dice, type) })}
+          hint="Slashing, piercing and bludgeoning are the weapon types; the rest are for enchanted blades."
+          glossary={{ title: "Damage types", entries: glossaryFor(DAMAGE_TYPES, DAMAGE_TYPE_BLURBS) }}
         />
         <NumberField
           label="Range (ft)"
@@ -110,7 +143,10 @@ function WeaponBlock({ weapon, onChange }: { weapon: Weapon; onChange: (next: We
           onChange={(rangeFt) => set({ rangeFt: rangeFt === "" ? undefined : rangeFt })}
         />
       </div>
-      <Field label="Properties">
+      <Field
+        label="Properties"
+        glossary={{ title: "Weapon properties", entries: glossaryFor(WEAPON_PROPERTIES, WEAPON_PROPERTY_BLURBS) }}
+      >
         <ToggleChips
           options={WEAPON_PROPERTIES}
           selected={properties}

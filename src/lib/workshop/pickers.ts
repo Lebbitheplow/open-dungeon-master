@@ -99,3 +99,87 @@ export function collectTags(entries: ReadonlyArray<{ tags?: readonly string[] }>
   }
   return [...seen.values()].sort((a, b) => a.localeCompare(b));
 }
+
+// The values a spell's timing fields take in the books. Offered beside the
+// field so a new DM picks "1 bonus action" rather than inventing a spelling
+// the engine will not recognise; anything else can still be typed.
+export const CASTING_TIMES = [
+  "1 action",
+  "1 bonus action",
+  "1 reaction",
+  "1 minute",
+  "10 minutes",
+  "1 hour",
+  "8 hours",
+  "12 hours",
+  "24 hours",
+] as const;
+
+export const SPELL_RANGES = [
+  "Self",
+  "Touch",
+  "5 feet",
+  "10 feet",
+  "30 feet",
+  "60 feet",
+  "90 feet",
+  "120 feet",
+  "150 feet",
+  "300 feet",
+  "500 feet",
+  "1 mile",
+  "Sight",
+  "Unlimited",
+  "Self (15-foot cone)",
+  "Self (30-foot radius)",
+] as const;
+
+export const SPELL_DURATIONS = [
+  "Instantaneous",
+  "1 round",
+  "1 minute",
+  "10 minutes",
+  "1 hour",
+  "8 hours",
+  "24 hours",
+  "7 days",
+  "Until dispelled",
+  "Concentration, up to 1 minute",
+  "Concentration, up to 10 minutes",
+  "Concentration, up to 1 hour",
+  "Concentration, up to 8 hours",
+] as const;
+
+export const SPELL_COMPONENTS = ["V", "S", "M", "V, S", "V, M", "S, M", "V, S, M"] as const;
+
+// The SRD's tool proficiencies, the closed list a background grants from.
+export const TOOL_PROFICIENCIES = [
+  "Alchemist's supplies",
+  "Brewer's supplies",
+  "Calligrapher's supplies",
+  "Carpenter's tools",
+  "Cartographer's tools",
+  "Cobbler's tools",
+  "Cook's utensils",
+  "Glassblower's tools",
+  "Jeweler's tools",
+  "Leatherworker's tools",
+  "Mason's tools",
+  "Painter's supplies",
+  "Potter's tools",
+  "Smith's tools",
+  "Tinker's tools",
+  "Weaver's tools",
+  "Woodcarver's tools",
+  "Disguise kit",
+  "Forgery kit",
+  "Herbalism kit",
+  "Navigator's tools",
+  "Poisoner's kit",
+  "Thieves' tools",
+  "One type of gaming set",
+  "One type of musical instrument",
+  "One type of artisan's tools",
+  "Vehicles (land)",
+  "Vehicles (water)",
+] as const;

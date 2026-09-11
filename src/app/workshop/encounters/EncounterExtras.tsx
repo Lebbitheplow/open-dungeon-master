@@ -11,6 +11,7 @@ import {
 } from "@/lib/dm/encounter-template-logic";
 import { TerrainCanvas } from "@/app/campaigns/[campaignId]/TerrainCanvas";
 import type { MapOption } from "@/app/workshop/encounters/types";
+import { RefPicker } from "@/app/workshop/tables/RefPicker";
 
 // The rest of a prepared fight (docs/workshop-parity-audit.md phase 13):
 // where each enemy starts on the linked map, where the party comes in, who
@@ -23,11 +24,13 @@ const field =
   "rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:border-amber-500/50 focus:outline-none";
 
 export function EncounterExtras({
+  campaignId,
   roster,
   map,
   value,
   onChange,
 }: {
+  campaignId: string;
   // The roster as typed; expanded here so the slots follow the text.
   roster: string;
   map: MapOption | null;
@@ -196,6 +199,18 @@ export function EncounterExtras({
           className={cn(field, "mt-0.5 w-full")}
         />
       </label>
+      {/* Pick the loot rather than spell it: a roll on one of this world's
+          tables or an item from the catalogue lands as a line the deploy
+          step resolves, the same @table: and @item: rows the tables use. */}
+      <RefPicker
+        campaignId={campaignId}
+        editingId=""
+        onInsert={(line) =>
+          set({
+            rewards: value.rewards.trim() ? `${value.rewards.replace(/\s+$/, "")}\n${line}` : line,
+          })
+        }
+      />
 
       <div className="space-y-1">
         <span className="text-[10px] uppercase tracking-wide text-stone-500">What happens when</span>

@@ -1,7 +1,7 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { Bot, X } from "lucide-react";
+import { Bot, Users, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
@@ -96,7 +96,12 @@ export function CompanionBuilderDialog({
         >
           <div className="mb-3 flex items-center justify-between">
             <Dialog.Title className="flex items-center gap-2 font-display text-lg tracking-wide text-amber-50">
-              <Bot className="size-4 text-sky-300" /> Build a companion
+              {humanDm ? (
+                <Users className="size-4 text-sky-300" />
+              ) : (
+                <Bot className="size-4 text-sky-300" />
+              )}{" "}
+              Build a companion
             </Dialog.Title>
             <Dialog.Close className="text-stone-500 hover:text-stone-300">
               <X className="size-4" />
@@ -104,7 +109,7 @@ export function CompanionBuilderDialog({
           </div>
           <p className="mb-3 text-xs text-stone-500">
             {humanDm
-              ? "This ally joins the party as a character you play from the DM console. They start at the party's level."
+              ? "This ally joins the party as a character you play from the DM console. In combat their turn waits for you: act for them, then end the turn. They start at the party's level."
               : "This ally joins the party as an AI companion the DM plays. They start at the party's level."}
           </p>
 

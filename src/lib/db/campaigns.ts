@@ -486,6 +486,41 @@ export function findCampaignByInviteCode(inviteCode: string): Campaign | null {
   return row ? mapCampaign(row) : null;
 }
 
+// Whether a room code would seat one more player right now: the campaign
+// exists, has not ended, is not mid-game with the door shut, and has a slot
+// free. Registration asks this before it takes a code as vouching for a
+// signup, so a code from a long-ended campaign is not a standing invitation
+// to make accounts; joining asks it too, so the two never disagree.
+function admitsByRow(row: CampaignRow): string | null {
+  // Mid-game joining is allowed only while the lead has it switched on.
+  if (row.status === "ended") {
+    return "That campaign has ended.";
+  }
+  if (row.status === "active") {
+    const gameSettings = normalizeGameSettings(parseJson(row.game_settings_json, {}));
+    if (!gameSettings.midGameJoinOpen) {
+      return "That campaign has already started.";
+    }
+  }
+  // The DM seats hold no party slot, so a human-DM table with a cap of five
+  // still admits five players.
+  if (countPartySlots(row.id) >= row.max_players) {
+    return "That campaign is full.";
+  }
+  return null;
+}
+
+export function campaignAdmits(inviteCode: string): { campaign: Campaign } | { error: string } {
+  const row = getDatabase()
+    .prepare(`${CAMPAIGN_SELECT} WHERE c.invite_code = ?`)
+    .get(inviteCode) as CampaignRow | undefined;
+  if (!row) {
+    return { error: "No campaign with that invite code." };
+  }
+  const refused = admitsByRow(row);
+  return refused ? { error: refused } : { campaign: mapCampaign(row) };
+}
+
 export function joinByInviteCode(
   userId: string,
   inviteCode: string,
@@ -504,20 +539,9 @@ export function joinByInviteCode(
     return { campaign: existing };
   }
 
-  // Mid-game joining is allowed only while the lead has it switched on.
-  if (row.status === "ended") {
-    return { error: "That campaign has ended." };
-  }
-  if (row.status === "active") {
-    const gameSettings = normalizeGameSettings(parseJson(row.game_settings_json, {}));
-    if (!gameSettings.midGameJoinOpen) {
-      return { error: "That campaign has already started." };
-    }
-  }
-  // The DM seats hold no party slot, so a human-DM table with a cap of five
-  // still admits five players.
-  if (countPartySlots(row.id) >= row.max_players) {
-    return { error: "That campaign is full." };
+  const refused = admitsByRow(row);
+  if (refused) {
+    return { error: refused };
   }
 
   db.prepare(

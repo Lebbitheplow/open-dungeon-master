@@ -11,6 +11,8 @@ import {
   type RulesetChange,
 } from "@/lib/rulesets/logic";
 
+type HomebrewRow = { id: string; name: string; kind: string };
+
 // The ruleset library, and applying one to a table.
 //
 // Shown above the ordinary rules editor in a workshop, so the relationship is
@@ -71,6 +73,9 @@ export function RulesetLibrary({
   const [saveName, setSaveName] = useState("");
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState("");
+  // The DM's homebrew, so a ruleset can say which of it is canon at a table
+  // that runs it. Read once, the first time a ruleset is opened.
+  const [homebrew, setHomebrew] = useState<HomebrewRow[] | null>(null);
 
   const load = useCallback(
     () =>
@@ -107,6 +112,35 @@ export function RulesetLibrary({
     if (response.ok) {
       const data = await response.json();
       setChanges(data.changes ?? []);
+    }
+  }
+
+  useEffect(() => {
+    if (openId === null || homebrew !== null) {
+      return;
+    }
+    fetch("/api/homebrew")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { entries?: HomebrewRow[] } | null) => setHomebrew(data?.entries ?? []))
+      .catch(() => setHomebrew([]));
+  }, [openId, homebrew]);
+
+  // Ticks a homebrew entry into or out of the ruleset's canon list. Saved
+  // straight away: the list is the ruleset, not a draft of it.
+  async function toggleHomebrew(ruleset: Ruleset, id: string) {
+    const next = ruleset.homebrewIds.includes(id)
+      ? ruleset.homebrewIds.filter((entry) => entry !== id)
+      : [...ruleset.homebrewIds, id];
+    setRulesets((current) =>
+      current.map((entry) => (entry.id === ruleset.id ? { ...entry, homebrewIds: next } : entry)),
+    );
+    const response = await fetch(`/api/rulesets/${ruleset.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ homebrewIds: next }),
+    });
+    if (!response.ok) {
+      await load();
     }
   }
 
@@ -214,6 +248,46 @@ export function RulesetLibrary({
                       Applying here would
                     </p>
                     <ChangeList changes={changes} />
+                  </div>
+                  <div data-tour="rules-homebrew">
+                    <p className="mb-1 text-xs uppercase tracking-wide text-stone-500">
+                      Homebrew this ruleset ships
+                    </p>
+                    {homebrew === null ? (
+                      <Loader2 className="size-3.5 animate-spin text-stone-500" />
+                    ) : homebrew.length ? (
+                      <ul className="flex flex-wrap gap-1">
+                        {homebrew.map((entry) => {
+                          const on = ruleset.homebrewIds.includes(entry.id);
+                          return (
+                            <li key={entry.id}>
+                              <button
+                                type="button"
+                                aria-pressed={on}
+                                onClick={() => void toggleHomebrew(ruleset, entry.id)}
+                                className={cn(
+                                  "rounded-md border px-2 py-0.5 text-[11px]",
+                                  on
+                                    ? "border-amber-700 bg-amber-950/50 text-amber-100"
+                                    : "border-stone-700 text-stone-400 hover:text-stone-200",
+                                )}
+                              >
+                                {entry.name}
+                                <span className="ml-1 text-stone-500">{entry.kind}</span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : (
+                      <p className="text-xs text-stone-500">
+                        Nothing homebrewed yet. Entries made in the Homebrew tool appear here.
+                      </p>
+                    )}
+                    <p className="mt-1 text-[10px] text-stone-600">
+                      Ticked entries are canon wherever this ruleset is applied; prepared monsters
+                      that lean on anything else get flagged.
+                    </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <select

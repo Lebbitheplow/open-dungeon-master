@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Search } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { InfoButton } from "@/components/ui/InfoDialog";
+import { describeContentEntry, spellSummary } from "@/lib/help";
 import { useContentSearch, type PickerEntry } from "@/app/characters/builder/useContentSearch";
 import { CLASS_IDS, input, type EditorKind } from "@/app/workshop/homebrew/types";
 
@@ -22,12 +24,16 @@ const CONTENT_KIND: Record<EditorKind, string> = {
 export function CatalogStart({
   kind,
   onPick,
+  scope = {},
 }: {
   kind: EditorKind;
   onPick: (entry: PickerEntry, extra: { classSlug?: string }) => void;
+  // Narrows the search to what the draft already says (a spell's classes),
+  // so a wizard spell starts from wizard spells rather than the whole book.
+  scope?: Record<string, string>;
 }) {
   const [classSlug, setClassSlug] = useState<string>("fighter");
-  const extra: Record<string, string> = kind === "archetype" ? { class: classSlug } : {};
+  const extra: Record<string, string> = kind === "archetype" ? { class: classSlug } : { ...scope };
   const { query, setQuery, results, open, setOpen, loading, unavailable } = useContentSearch(
     CONTENT_KIND[kind],
     extra,
@@ -49,7 +55,7 @@ export function CatalogStart({
   }
 
   return (
-    <div ref={container} className="relative flex flex-wrap items-center gap-1.5">
+    <div ref={container} className="flex flex-wrap items-center gap-1.5">
       {kind === "archetype" ? (
         <select value={classSlug} aria-label="Class to browse" onChange={(event) => setClassSlug(event.target.value)} className={input}>
           {CLASS_IDS.map((id) => (
@@ -71,10 +77,19 @@ export function CatalogStart({
         />
         {loading ? <Loader2 className="absolute right-2 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-stone-500" /> : null}
       </div>
+      {open && !results.length && query.trim() && !loading ? (
+        <p className="basis-full text-[11px] text-stone-500">
+          Nothing in the books matched &quot;{query.trim()}&quot;.
+        </p>
+      ) : null}
+      {/* In the flow, not absolutely positioned: the editor sits in a sheet
+          that scrolls, and an absolute list overlaid the Name field and was
+          clipped near the bottom. Every row carries a ⓘ so a DM can read
+          the entry before copying it. */}
       {open && results.length ? (
-        <ul className="absolute left-0 top-full z-30 mt-1 max-h-64 w-full overflow-y-auto panel panel-smoke rounded-lg">
+        <ul className="mt-1 max-h-64 w-full basis-full overflow-y-auto panel panel-smoke rounded-lg">
           {results.slice(0, 40).map((entry) => (
-            <li key={entry.slug}>
+            <li key={entry.slug} className="flex items-center gap-1 pr-2 hover:bg-stone-800">
               <button
                 type="button"
                 onClick={() => {
@@ -82,13 +97,18 @@ export function CatalogStart({
                   setQuery("");
                   setOpen(false);
                 }}
-                className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm hover:bg-stone-800"
+                className="flex grow items-center justify-between gap-2 px-3 py-1.5 text-left text-sm"
               >
                 <span className={cn(entry.source === "homebrew" && "text-amber-300")}>{entry.name}</span>
                 <span className="text-[11px] text-stone-500">
                   {entry.level !== undefined ? `level ${entry.level}` : entry.rarity || entry.kind || ""}
                 </span>
               </button>
+              <InfoButton
+                label={entry.name}
+                meta={kind === "spell" ? spellSummary(entry.data) : undefined}
+                text={describeContentEntry(entry.data)}
+              />
             </li>
           ))}
         </ul>

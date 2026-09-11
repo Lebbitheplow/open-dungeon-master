@@ -95,6 +95,7 @@ export function EncounterForm({
         </select>
       </label>
       <EncounterExtras
+        campaignId={campaignId}
         roster={value.enemies}
         map={maps.find((map) => map.id === value.mapId) ?? null}
         value={value.extras}

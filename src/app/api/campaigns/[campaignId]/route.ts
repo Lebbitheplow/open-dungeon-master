@@ -30,7 +30,7 @@ import { insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
 import { listRollsVisibleTo } from "@/lib/db/rolls";
 import { listSheets } from "@/lib/db/sheets";
 import { requestDmTurn } from "@/lib/dm/loop";
-import { hasHumanDm, lobbyBlocker } from "@/lib/dm/viewer";
+import { hasHumanDm, isPrimaryDm, lobbyBlocker } from "@/lib/dm/viewer";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { runStorySetup } from "@/lib/dm/setup";
 import { generateStoryArc } from "@/lib/dm/arc";
@@ -161,8 +161,12 @@ export async function PATCH(
   if (!nextStatus) {
     return Response.json({ error: "Invalid update." }, { status: 400 });
   }
-  if (campaign.ownerUserId !== user.id) {
-    return Response.json({ error: "Only the campaign owner can do that." }, { status: 403 });
+  // The owner, or the person in the DM seat: a DM who was handed a table they
+  // do not own still has to be able to open it (the lobby's Begin button asks
+  // the same two, LobbyActions.tsx).
+  const seats = campaignSeats(campaign);
+  if (campaign.ownerUserId !== user.id && !isPrimaryDm(seats, user.id)) {
+    return Response.json({ error: "Only the campaign owner or the DM can do that." }, { status: 403 });
   }
   if (nextStatus === "active") {
     if (campaign.status !== "lobby") {
@@ -174,7 +178,7 @@ export async function PATCH(
     // had: a companion's sheet made up the numbers for a player who had none.
     const lobbySheets = listSheets(campaignId);
     const blocker = lobbyBlocker(
-      campaignSeats(campaign),
+      seats,
       listMembers(campaignId).map((member) => ({
         userId: member.userId,
         ready: member.ready,

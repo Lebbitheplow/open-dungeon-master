@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { allocateSeq, countPartySlots, type Campaign } from "@/lib/db/campaigns";
+import { allocateSeq, campaignSeats, countPartySlots, type Campaign } from "@/lib/db/campaigns";
 import {
   createSheet,
   getSheetById,
@@ -43,6 +43,7 @@ import { settingClassIds } from "@/lib/classes";
 import { presetFor, packFor } from "@/lib/worlds/preset";
 import { packIds } from "@/lib/worlds/reskin-logic";
 import { resolveCompanionMode, type CompanionMode } from "@/lib/schemas/game-settings";
+import { hasHumanDm } from "@/lib/dm/viewer";
 import {
   createSheetSchema,
   type Ability,
@@ -72,7 +73,11 @@ function publishEncounterState(campaignId: string) {
 // full companion to. Counting the DM as a second player was what quietly
 // dropped a human-run duo down to guests-only.
 export function companionMode(campaign: Campaign): CompanionMode {
-  return resolveCompanionMode(campaign.gameSettings, countPartySlots(campaign.id));
+  return resolveCompanionMode(
+    campaign.gameSettings,
+    countPartySlots(campaign.id),
+    hasHumanDm(campaignSeats(campaign)),
+  );
 }
 
 export function listCompanions(sheets: CharacterSheet[]): CharacterSheet[] {

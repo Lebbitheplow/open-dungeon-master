@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { isErrorResponse, requireAdmin } from "@/lib/admin-api";
 import { getGlobalConfig, saveGlobalConfig } from "@/lib/db/app-settings";
-import { serverEnv } from "@/lib/server-env";
+import { isDeviceWorld, serverEnv } from "@/lib/server-env";
 import { resolveSignupMode, type GlobalConfig } from "@/lib/schemas/global-config";
 import { announcedAddressFor, isUnroutableAddress, voiceConfig } from "@/lib/voice/config";
 
@@ -13,7 +13,11 @@ export const dynamic = "force-dynamic";
 function maskedConfig(config: GlobalConfig) {
   return {
     signupsEnabled: config.signupsEnabled,
-    signupMode: resolveSignupMode(config),
+    signupMode: resolveSignupMode(config, isDeviceWorld()),
+    // True when the mode above is not the stored setting but the device
+    // world rule (open to anyone with a live room code), so the panel can
+    // say so instead of showing a policy the host cannot change.
+    signupModeForced: isDeviceWorld(),
     serverName: config.serverName,
     accountDeletionGraceDays: config.accountDeletionGraceDays,
     publicUrl: config.publicUrl,
@@ -84,7 +88,7 @@ function voiceAnnounceUnroutable(): boolean {
 // hides what the shell owns (address, sign-ups, voice transport, Discord)
 // and keeps only the AI settings the player can meaningfully change.
 function deviceWorld(): boolean {
-  return serverEnv("ODM_DEVICE_WORLD") === "1";
+  return isDeviceWorld();
 }
 
 export async function GET() {

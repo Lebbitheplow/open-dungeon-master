@@ -44,24 +44,26 @@ function CharacterActions({
 // Opening the adventure. Pulled out of the player branch because the DM needs
 // it just as much: a DM who owned the table used to see a Ready button and
 // nothing else, so a human-run game could never be started from the seat that
-// was running it. `blocker` is the server's own rule (lobbyBlocker in
-// src/lib/dm/viewer.ts), so this button is never offered when the PATCH would
-// refuse it, and the reason shown is the reason the server would give.
+// was running it. `canStart` is the owner or the person in the DM seat (the
+// PATCH route allows the same two), and `blocker` is the server's own rule
+// (lobbyBlocker in src/lib/dm/viewer.ts), so this button is never offered
+// when the route would refuse it, and the reason shown is the reason the
+// server would give.
 function StartBlock({
-  isOwner,
+  canStart,
   busy,
   blocker,
   onStart,
 }: {
-  isOwner: boolean;
+  canStart: boolean;
   busy: boolean;
   blocker: string;
   onStart: () => void;
 }) {
-  if (!isOwner) {
+  if (!canStart) {
     return (
       <p className="text-center text-sm text-stone-500">
-        The owner starts the adventure once everyone is ready.
+        The owner or the DM starts the adventure once everyone is ready.
       </p>
     );
   }
@@ -94,6 +96,7 @@ export function LobbyActions({
   isDm,
   isSolo,
   isOwner,
+  canStart,
   busy,
   error,
   startBlocker,
@@ -109,6 +112,8 @@ export function LobbyActions({
   isDm: boolean;
   isSolo: boolean;
   isOwner: boolean;
+  // Owner or the person in the DM seat: who may press Begin.
+  canStart: boolean;
   busy: boolean;
   error: string;
   startBlocker: string;
@@ -199,7 +204,7 @@ export function LobbyActions({
           solo, however few players it has (Lobby.tsx), so the DM always lands
           here. */}
       {isSolo ? null : (
-        <StartBlock isOwner={isOwner} busy={busy} blocker={startBlocker} onStart={onStart} />
+        <StartBlock canStart={canStart} busy={busy} blocker={startBlocker} onStart={onStart} />
       )}
       {error ? <p className="text-center text-sm text-red-400">{error}</p> : null}
 

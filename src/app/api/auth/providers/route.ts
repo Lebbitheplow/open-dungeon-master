@@ -2,7 +2,7 @@ import packageJson from "../../../../../package.json";
 import { getGlobalConfig, getInstanceId } from "@/lib/db/app-settings";
 import { discordCredentials } from "@/lib/discord-oauth";
 import { resolveSignupMode } from "@/lib/schemas/global-config";
-import { serverEnv } from "@/lib/server-env";
+import { isDeviceWorld } from "@/lib/server-env";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,17 +12,17 @@ export const dynamic = "force-dynamic";
 // label a saved server in their picker and to check what they connected to.
 export async function GET() {
   const config = getGlobalConfig();
+  const deviceWorld = isDeviceWorld();
   return Response.json({
     discord: discordCredentials() !== null,
     password: true,
-    signupMode: resolveSignupMode(config),
+    signupMode: resolveSignupMode(config, deviceWorld),
     // A world the desktop or Android app is hosting, rather than a server
-    // someone set up and administers. Both shells launch their bundled
-    // server with ODM_DEVICE_WORLD=1. The apps use this to decide that
-    // joining takes a name and nothing else: a person invited to someone's
-    // phone should not be inventing a password for it, while a real
-    // server's owner keeps passwords and their own signup rules.
-    deviceWorld: serverEnv("ODM_DEVICE_WORLD") === "1",
+    // someone set up and administers. The apps use this to decide that
+    // joining takes a name and a room code and nothing else: a person
+    // invited to someone's phone should not be inventing a password for it,
+    // while a real server's owner keeps passwords and their own signup rules.
+    deviceWorld,
     serverName: config.serverName || "Open Dungeon Master",
     version: packageJson.version,
     // How long a deleted account lingers before the purge, so confirmation

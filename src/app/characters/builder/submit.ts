@@ -1,6 +1,6 @@
 import type { Ability, AsiChoice, CreateSheetInput } from "@/lib/schemas/sheet";
-import { spellSlotsFor } from "@/lib/srd";
-import { subclassSpellsFor } from "@/lib/srd/features";
+import { SRD_CLASSES, spellSlotsFor } from "@/lib/srd";
+import { expertiseSlotsFor, subclassLevelFor, subclassSpellsFor } from "@/lib/srd/features";
 import { fightingStyleFeatureName } from "@/lib/srd/feature-effects";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
 import type { BuilderDerived } from "./useBuilderDerived";
@@ -23,13 +23,28 @@ export function identityBlocker(state: BuilderState): string | null {
   return state.name.trim() ? null : "Give your character a name.";
 }
 
-export function ancestryBlocker(state: BuilderState, race: RaceOption | undefined): string | null {
+// Languages the player chooses: the race's bonus ones plus the background's
+// (an acolyte learns two more). Both are picked on the ancestry step.
+export function bonusLanguageCount(
+  race: RaceOption | undefined,
+  background: BackgroundOption | undefined,
+): number {
+  return (race?.bonusLanguages ?? 0) + (background?.languages ?? 0);
+}
+
+export function ancestryBlocker(
+  state: BuilderState,
+  race: RaceOption | undefined,
+  background?: BackgroundOption,
+): string | null {
   if (!race) {
     return "Pick a race.";
   }
   const { bonusLanguages, racialAsi, racialSkills, racialTool, racialCantrip } = state;
-  if (race.bonusLanguages > 0 && bonusLanguages.filter(Boolean).length < race.bonusLanguages) {
-    return `Pick your bonus ${race.bonusLanguages === 1 ? "language" : "languages"} first.`;
+  const languageCount = bonusLanguageCount(race, background);
+  if (languageCount > 0 && bonusLanguages.filter(Boolean).length < languageCount) {
+    const left = languageCount - bonusLanguages.filter(Boolean).length;
+    return `Pick ${left} more ${left === 1 ? "language" : "languages"} first.`;
   }
   if (race.asiChoice && racialAsi.filter(Boolean).length < race.asiChoice.count) {
     return `Pick which abilities your ${race.name} bonus raises first.`;
@@ -46,8 +61,76 @@ export function ancestryBlocker(state: BuilderState, race: RaceOption | undefine
   return null;
 }
 
-export function callingBlocker(klass: ClassOption | undefined): string | null {
-  return klass ? null : "Pick a class.";
+// Whether the counts the SRD gives are rules for this class or only advice.
+// The tables in src/lib/content/mechanics.ts are the SRD's; a homebrew or
+// setting class borrows a list and may well have its own idea of how many.
+function srdClass(klass: ClassOption): boolean {
+  return !klass.genres && SRD_CLASSES.some((entry) => entry.id === klass.id);
+}
+
+// The class step's own picks: skills, the subclass once the level calls for
+// one, fighting styles and expertise. Every one of these used to be a
+// suggestion a player could scroll past; a character built without them
+// then started play with holes the rules do not allow.
+export function callingBlocker(
+  klass: ClassOption | undefined,
+  state?: BuilderState,
+  derived?: BuilderDerived,
+): string | null {
+  if (!klass) {
+    return "Pick a class.";
+  }
+  if (!state || !derived) {
+    return null;
+  }
+  const strict = srdClass(klass);
+  const skillsLeft = klass.skillChoices.count - state.chosenSkills.length;
+  if (strict && skillsLeft > 0) {
+    return `Pick ${skillsLeft} more class ${skillsLeft === 1 ? "skill" : "skills"}.`;
+  }
+  const pickLevel = subclassLevelFor(klass.id);
+  if (pickLevel !== null && derived.effectiveLevel >= pickLevel && !state.subclass.trim()) {
+    return `Pick a subclass: a ${klass.name.toLowerCase()} chooses one at level ${pickLevel}.`;
+  }
+  const stylesLeft = derived.styleSlots - state.stylePicks.slice(0, derived.styleSlots).length;
+  if (stylesLeft > 0) {
+    return `Pick ${stylesLeft === 1 ? "a fighting style" : `${stylesLeft} fighting styles`}.`;
+  }
+  const expertiseSlots = expertiseSlotsFor(klass.id, derived.effectiveLevel);
+  const expertiseLeft = expertiseSlots - state.expertisePicks.length;
+  if (expertiseLeft > 0) {
+    return `Pick ${expertiseLeft} more expertise ${expertiseLeft === 1 ? "skill" : "skills"}.`;
+  }
+  const slot = derived.optionSlots.find((entry) => entry.remaining > 0);
+  if (slot) {
+    return `Pick ${slot.remaining} more ${slot.label.toLowerCase()}.`;
+  }
+  return null;
+}
+
+// The spells step: an SRD caster leaves with every cantrip and spell the
+// rules give them at this level. Setting classes keep the old soft rule
+// (validateBuilder's one-press warning) because their counts are advice.
+export function spellsBlocker(
+  state: BuilderState,
+  derived: BuilderDerived,
+  klass: ClassOption | undefined,
+): string | null {
+  if (!klass || !derived.casts || !srdClass(klass)) {
+    return null;
+  }
+  const cantripsLeft = (derived.cantripAdvice ?? 0) - derived.chosenCantrips.length;
+  if (cantripsLeft > 0) {
+    return `Pick ${cantripsLeft} more ${cantripsLeft === 1 ? "cantrip" : "cantrips"}.`;
+  }
+  if (derived.spellAdvice) {
+    const levelled = state.spells.length - derived.chosenCantrips.length;
+    const spellsLeft = derived.spellAdvice.count - levelled;
+    if (spellsLeft > 0) {
+      return `Pick ${spellsLeft} more ${spellsLeft === 1 ? "spell" : "spells"} (${derived.spellAdvice.label}).`;
+    }
+  }
+  return null;
 }
 
 export function abilitiesBlocker(derived: BuilderDerived): string | null {
@@ -75,8 +158,9 @@ export function validateBuilder(
   const message =
     identityBlocker(state) ??
     abilitiesBlocker(derived) ??
-    ancestryBlocker(state, race) ??
-    callingBlocker(klass);
+    ancestryBlocker(state, race, background) ??
+    callingBlocker(klass, state, derived) ??
+    spellsBlocker(state, derived, klass);
   if (message) {
     return { kind: "error", message };
   }

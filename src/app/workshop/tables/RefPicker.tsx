@@ -35,7 +35,9 @@ export function RefPicker({
   onInsert,
 }: {
   campaignId: string;
-  tables: RollTable[];
+  // The world's tables when the caller already holds them (the tables tool
+  // does); otherwise read here the first time that kind is chosen.
+  tables?: RollTable[];
   // The table being edited, kept out of its own list.
   editingId: string;
   onInsert: (line: string) => void;
@@ -44,10 +46,17 @@ export function RefPicker({
   const [npcs, setNpcs] = useState<Named[] | null>(null);
   const [lore, setLore] = useState<Named[] | null>(null);
   const [monsters, setMonsters] = useState<Named[] | null>(null);
+  const [fetchedTables, setFetchedTables] = useState<RollTable[] | null>(null);
 
   // Each list is fetched once, the first time its kind is chosen; the
   // state lands in .then so the effect reads as a subscription.
   useEffect(() => {
+    if (kind === "table" && !tables && fetchedTables === null) {
+      fetch(`/api/campaigns/${campaignId}/dm/roll-tables`)
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data: { tables?: RollTable[] } | null) => setFetchedTables(data?.tables ?? []))
+        .catch(() => setFetchedTables([]));
+    }
     if (kind === "npc" && npcs === null) {
       fetch(`/api/campaigns/${campaignId}/dm/npcs`)
         .then((response) => (response.ok ? response.json() : null))
@@ -70,14 +79,14 @@ export function RefPicker({
         )
         .catch(() => setMonsters([]));
     }
-  }, [kind, campaignId, npcs, lore, monsters]);
+  }, [kind, campaignId, npcs, lore, monsters, tables, fetchedTables]);
 
   const insert = (name: string) => onInsert(`@${kind}: ${name}`);
 
   const listFor = (): Named[] | null => {
     switch (kind) {
       case "table":
-        return tables.filter((table) => table.id !== editingId);
+        return (tables ?? fetchedTables)?.filter((table) => table.id !== editingId) ?? null;
       case "npc":
         return npcs;
       case "lore":

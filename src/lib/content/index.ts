@@ -145,7 +145,9 @@ export function searchSpells(
     concentration: entry.data.concentration === true,
     aliases: [] as string[],
   }));
-  return [...rows, ...brews];
+  // The DM's own work leads: a homebrew goblin boss should not sit after
+  // twenty-five catalogue goblins.
+  return [...brews, ...rows];
 }
 
 // Does this row answer to `name`? Every caller that wants one specific spell
@@ -223,7 +225,7 @@ export function searchItems(
     category: "homebrew",
     weight: Number(entry.data.weight ?? 0) || 0,
   }));
-  const merged = [...rows, ...brews];
+  const merged = [...brews, ...rows];
   return options.kind ? merged.filter((item) => item.kind === options.kind) : merged;
 }
 
@@ -262,7 +264,7 @@ function searchSimpleTable(
 }
 
 export function searchFeats(options: SearchOptions = {}): ContentEntry[] {
-  return [...searchSimpleTable("feats", options), ...homebrewEntries(options.userId, "feat", options.q)];
+  return [...homebrewEntries(options.userId, "feat", options.q), ...searchSimpleTable("feats", options)];
 }
 
 export function listConditions(options: SearchOptions = {}): ContentEntry[] {

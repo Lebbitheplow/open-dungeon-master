@@ -64,3 +64,20 @@ export function recordLoginFailure(key: string, now = Date.now()) {
 export function recordLoginSuccess(key: string) {
   store().delete(key);
 }
+
+// The address a request came from, for the per-address throttles. Behind
+// Cloudflare the edge states it outright; behind one reverse proxy the LAST
+// x-forwarded-for entry is the one the proxy appended, while the first is
+// whatever the client chose to send (which is how a caller used to dodge
+// the lockout by rotating a made-up header). With no proxy at all the
+// header is absent and every caller shares one bucket, as before.
+export function clientIp(request: Request): string {
+  const edge = request.headers.get("cf-connecting-ip")?.trim();
+  if (edge) return edge;
+  const forwarded = request.headers
+    .get("x-forwarded-for")
+    ?.split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  return forwarded?.length ? forwarded[forwarded.length - 1] : "local";
+}

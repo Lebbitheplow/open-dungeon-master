@@ -135,9 +135,11 @@ export function HelpDialog({
 
       <Section icon={DoorOpen} title="The lobby">
         <p>
-          Before the game begins, each player readies up and the campaign owner can adjust the game
-          settings: genre, an optional secret story setup for the DM, dice policy, narration voice,
-          and maps. Share the invite code or copy the invite link to bring in more players.
+          Before the game begins, each player readies up and whoever steers the story (the party
+          lead, or the DM when a person runs the table) can adjust the game settings: genre, an
+          optional secret story setup for the DM, dice policy, narration voice, and maps. Share the
+          room code or copy the invite link to bring in more players; the owner or the DM opens the
+          table once everyone is ready.
         </p>
       </Section>
 
@@ -262,8 +264,8 @@ export function HelpDialog({
         <ul className="list-none space-y-1.5">
           <li>
             <span className="text-stone-300">Party:</span> the roster, with character sheets, HP and
-            conditions for the whole party, the invite code, and the active encounter during
-            combat. A Bonds sub-tab appears when relationships are on.
+            conditions for the whole party, and the active encounter during combat. A Bonds
+            sub-tab appears when relationships are on. The room code is in the lead&apos;s tab.
           </li>
           <li>
             <span className="text-stone-300">Battle:</span> the tactical battle map, while a fight
@@ -370,8 +372,9 @@ export function HelpDialog({
           a kitchen-table game does: the DM narrates in their own words (most tables do it over
           voice chat), and the app keeps the sheets, the dice, the maps and the record straight
           underneath them. Your Do and Say messages still land in the transcript, but instead of
-          waking the AI they queue as intents for the DM to answer. The DM runs no character,
-          holds the story secrets the party lead would hold at an AI table, and gets a console of
+          waking the AI they queue as intents for the DM to answer. The DM holds no party slot
+          (though they can build a companion to play from the console), holds the story secrets
+          the party lead would hold at an AI table, and gets a console of
           tools: initiative, monsters, maps, NPCs, roll tables and rulings, with an AI assistant
           one click away for stat blocks and suggestions if they want it.
         </p>
@@ -411,10 +414,10 @@ export function HelpDialog({
           them on a guess, the lead is the one who settles it.
         </p>
         <p>
-          At a table with a human DM the split is different: the lead still owns the table
-          (settings, invites, who holds which seat) but is otherwise a player, because the story
-          powers listed above exist to steer the AI and there is no AI to steer. Story secrets,
-          floor control and narration fixes belong to the person in the DM seat instead.
+          At a table with a human DM the split is different: the lead keeps the invites and the
+          campaign details but is otherwise a player, because the story powers listed above exist
+          to steer the AI and there is no AI to steer. Story secrets, settings, rules, floor
+          control, narration fixes and the DM seats belong to the person in the DM seat instead.
         </p>
       </Section>
 

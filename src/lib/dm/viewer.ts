@@ -180,6 +180,10 @@ export function lobbyBlocker(seats: DmSeats, lobby: LobbySeat[]): string {
   if (!lobby.length) {
     return "The table is empty.";
   }
+  // A DM alone at the table has nobody to run the game for.
+  if (lobby.every((seat) => isDmSeat(seats, seat.userId))) {
+    return "Waiting for a player to join.";
+  }
   if (lobby.some((seat) => !isDmSeat(seats, seat.userId) && !seat.hasSheet)) {
     return "Every player needs a character before the adventure starts.";
   }

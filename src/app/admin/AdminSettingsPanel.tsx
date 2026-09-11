@@ -240,9 +240,10 @@ export function AdminSettingsPanel() {
     <div className="space-y-4">
       {deviceWorld ? (
         <p className="text-xs text-stone-500">
-          This world runs inside the app, which manages its address, sign-ups,
-          sharing and voice chat for you. The settings here tune the AI it
-          plays with.
+          This world runs inside the app, which manages its address, sharing
+          and voice chat for you. There are no passwords or sign-up rules to
+          set: anyone you give a live room code to can join, and nobody else
+          can make an account. The settings here tune the AI it plays with.
         </p>
       ) : null}
       {deviceWorld ? null : (

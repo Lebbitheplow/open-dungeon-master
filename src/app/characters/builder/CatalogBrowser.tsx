@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, ChevronDown, ChevronRight, Loader2, Plus } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { InfoButton } from "@/components/ui/InfoDialog";
 import { cn } from "@/lib/cn";
 import { contentSlug, describeContentEntry, spellSummary } from "@/lib/help";
@@ -42,10 +42,25 @@ export type CatalogSection = {
 
 // A named pick the caller already knows about (a class's starter spells, the
 // weapons it is proficient with). These need no fetch: the name is the pick,
-// and the ⓘ looks the entry up from the pack only if it is opened.
-export type CatalogSuggestion = { name: string; note?: string };
+// and the ⓘ looks the entry up from the pack only if it is opened. `level`
+// rides along for spells so a cantrip picked here is counted as one.
+export type CatalogSuggestion = { name: string; note?: string; level?: number };
 
 type Loaded = { rows: PickerEntry[]; truncated: boolean };
+
+// The pack files the same SRD spell under more than one document, so a
+// browse shows Fire Bolt twice. One row per name is what a player expects.
+function uniqueByName(rows: PickerEntry[]): PickerEntry[] {
+  const seen = new Set<string>();
+  return rows.filter((entry) => {
+    const key = entry.name.trim().toLowerCase();
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
 
 export default function CatalogBrowser({
   kind,
@@ -57,6 +72,8 @@ export default function CatalogBrowser({
   selectedNames,
   onPick,
   onUnpick,
+  defaultOpen = false,
+  openSections = [],
 }: {
   kind: "spells" | "items" | "feats";
   // "Browse all spells", "Browse all items"...
@@ -72,9 +89,15 @@ export default function CatalogBrowser({
   onPick: (entry: PickerEntry) => void;
   // Given, rows already on the sheet toggle back off from here too.
   onUnpick?: (name: string) => void;
+  // Shown open from the first render: for a pick the rules require (a
+  // caster's spells, a high elf's cantrip) the list is the field, not an
+  // extra behind a link.
+  defaultOpen?: boolean;
+  // Section keys expanded (and fetched) from the first render.
+  openSections?: string[];
 }) {
-  const [open, setOpen] = useState(false);
-  const [expanded, setExpanded] = useState<string[]>([]);
+  const [open, setOpen] = useState(defaultOpen);
+  const [expanded, setExpanded] = useState<string[]>(openSections);
   const [loaded, setLoaded] = useState<Record<string, Loaded>>({});
   const [loading, setLoading] = useState<string[]>([]);
   const [unavailable, setUnavailable] = useState(false);
@@ -110,7 +133,16 @@ export default function CatalogBrowser({
             setUnavailable(true);
             break;
           }
-          const page: PickerEntry[] = (await response.json()).results ?? [];
+          const body = (await response.json()) as {
+            results?: PickerEntry[];
+            packInstalled?: boolean;
+          };
+          // The route answers 200 with no rows when the pack is missing;
+          // that is "nothing to browse", not "nothing here".
+          if (body.packInstalled === false) {
+            setUnavailable(true);
+          }
+          const page: PickerEntry[] = body.results ?? [];
           rows.push(...page);
           if (page.length < PAGE) {
             break;
@@ -119,7 +151,10 @@ export default function CatalogBrowser({
             truncated = true;
           }
         }
-        setLoaded((current) => ({ ...current, [section.key]: { rows, truncated } }));
+        setLoaded((current) => ({
+          ...current,
+          [section.key]: { rows: uniqueByName(rows), truncated },
+        }));
       } catch {
         // A failed browse leaves the search box, which is the same catalog by
         // another door; forgetting the attempt lets a retry through.
@@ -130,6 +165,26 @@ export default function CatalogBrowser({
     },
     [kind],
   );
+
+  // Sections open from the start fetch from the start. `load` remembers what
+  // it has fetched, so the changing identity of `sections` costs nothing.
+  // Deferred a tick so the fetch's own state updates land after the render
+  // that asked for them rather than inside the effect.
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const wanted = sections.filter((section) => expanded.includes(section.key));
+    if (!wanted.length) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      for (const section of wanted) {
+        void load(section);
+      }
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [open, sections, expanded, load]);
 
   function toggleSection(section: CatalogSection) {
     setExpanded((current) =>
@@ -198,6 +253,7 @@ export default function CatalogBrowser({
                                   name: entry.name,
                                   source: "open5e",
                                   data: {},
+                                  ...(entry.level !== undefined ? { level: entry.level } : {}),
                                 })
                           }
                           className="flex grow items-center justify-between gap-2 px-2 py-1.5 text-left text-xs"
@@ -259,7 +315,7 @@ export default function CatalogBrowser({
                     {!isLoading && !rows.length ? (
                       <p className="px-1 py-1 text-[11px] text-stone-500">
                         {unavailable
-                          ? "Content pack not installed; type a name in the search box above instead."
+                          ? "The content pack is not installed on this server, so there is nothing to list. Whoever runs it can install it with: node scripts/import-open5e.mjs"
                           : "Nothing here."}
                       </p>
                     ) : null}

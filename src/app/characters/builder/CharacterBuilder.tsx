@@ -22,6 +22,7 @@ import {
   buildBuilderResult,
   callingBlocker,
   identityBlocker,
+  spellsBlocker,
   validateBuilder,
   type BuilderResult,
 } from "./submit";
@@ -140,11 +141,12 @@ export default function CharacterBuilder({
   // about a missing pick on the step where they can fix it.
   const blockers = {
     identity: identityBlocker(state),
-    ancestry: ancestryBlocker(state, race),
-    calling: callingBlocker(klass),
+    ancestry: ancestryBlocker(state, race, background),
+    calling: callingBlocker(klass, state, derived),
     abilities: abilitiesBlocker(derived),
+    spells: spellsBlocker(state, derived, klass),
   };
-  const casts = Boolean(klass?.spellAbility);
+  const casts = derived.casts;
 
   const steps: WizardStep[] = [
     {
@@ -223,9 +225,19 @@ export default function CharacterBuilder({
     {
       key: "spells-gear",
       title: casts ? "Spells and gear" : "Gear",
-      blurb: casts ? "Arm your hero, then pick what they can cast." : "Arm your hero.",
+      blurb: casts ? "Pick what they can cast, then arm your hero." : "Arm your hero.",
+      canContinue: !blockers.spells,
       content: (
-        <SpellsGearStep state={state} derived={derived} actions={actions} klass={klass} pack={pack} />
+        <>
+          <SpellsGearStep
+            state={state}
+            derived={derived}
+            actions={actions}
+            klass={klass}
+            pack={pack}
+          />
+          <StepBlocker message={blockers.spells} />
+        </>
       ),
     },
     {

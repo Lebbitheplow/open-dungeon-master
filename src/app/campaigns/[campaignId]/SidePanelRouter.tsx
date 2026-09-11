@@ -299,12 +299,13 @@ export function SidePanelRouter({
                       sheets
                         .filter((sheet) => sheet.isCompanion)
                         .map((sheet) => (sheet.companionKind === "guest" ? "guest" : "party")),
+                      humanDmTable,
                     )
                   : false
               }
               companionBuildAvailable={
                 campaign?.gameSettings
-                  ? resolveCompanionMode(campaign.gameSettings, partySize) === "full" &&
+                  ? resolveCompanionMode(campaign.gameSettings, partySize, humanDmTable) === "full" &&
                     sheets.filter((sheet) => sheet.isCompanion && sheet.companionKind !== "guest")
                       .length < campaign.gameSettings.maxCompanions
                   : false

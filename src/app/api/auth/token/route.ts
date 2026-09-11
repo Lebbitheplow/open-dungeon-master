@@ -1,12 +1,7 @@
 import { z } from "zod";
 import { hashPassword, mintSession, verifyPassword } from "@/lib/auth";
 import { getUserByUsername } from "@/lib/db/users";
-import {
-  checkLogin,
-  recordLoginFailure,
-  recordLoginSuccess,
-  throttleKey,
-} from "@/lib/login-throttle";
+import { checkLogin, clientIp, recordLoginFailure, recordLoginSuccess, throttleKey } from "@/lib/login-throttle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +25,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid input." }, { status: 400 });
   }
 
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
+  const ip = clientIp(request);
   const key = throttleKey(parsed.data.username, ip);
   const gate = checkLogin(key);
   if (gate.blocked) {

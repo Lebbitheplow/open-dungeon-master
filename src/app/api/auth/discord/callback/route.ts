@@ -3,8 +3,9 @@ import { cookies } from "next/headers";
 import { currentUser, startSession } from "@/lib/auth";
 import { consumeAccountInvite } from "@/lib/db/account-invites";
 import { getGlobalConfig } from "@/lib/db/app-settings";
-import { findCampaignByInviteCode } from "@/lib/db/campaigns";
+import { campaignAdmits } from "@/lib/db/campaigns";
 import { resolveSignupMode } from "@/lib/schemas/global-config";
+import { isDeviceWorld } from "@/lib/server-env";
 import {
   countUsers,
   createDiscordUser,
@@ -169,22 +170,27 @@ export async function GET(request: Request) {
   // signups are disabled, invite-gated when invite-only, and the very first
   // account becomes admin.
   const isFirstUser = countUsers() === 0;
-  const signupMode = resolveSignupMode(getGlobalConfig());
+  const deviceWorld = isDeviceWorld();
+  const signupMode = resolveSignupMode(getGlobalConfig(), deviceWorld);
   if (!isFirstUser && signupMode === "closed") {
     return redirect(request.url, "/?error=signups_disabled");
   }
+  // The live campaign room code carried in the return path. Room codes only
+  // reach people a member chose to invite; looked up, never spent, and only
+  // taken as vouching when the table would actually seat one more.
+  const roomCode = next.startsWith("/join/") ? next.slice("/join/".length).trim().toUpperCase() : "";
+  const roomAdmits = roomCode !== "" && !("error" in campaignAdmits(roomCode));
+  if (!isFirstUser && deviceWorld && !roomAdmits) {
+    return redirect(request.url, "/?error=invite_required");
+  }
   if (!isFirstUser && signupMode === "invite") {
     // Same two tickets /api/auth/register accepts: an account invite code,
-    // or the live campaign room code carried in the return path (room codes
-    // only reach people a member chose to invite; looked up, never spent).
-    const roomCode = next.startsWith("/join/")
-      ? next.slice("/join/".length).trim().toUpperCase()
-      : "";
+    // or the live campaign room code.
     if (invite) {
       if (!consumeAccountInvite(invite)) {
         return redirect(request.url, "/?error=invite_invalid");
       }
-    } else if (!roomCode || !findCampaignByInviteCode(roomCode)) {
+    } else if (!roomAdmits) {
       return redirect(request.url, "/?error=invite_required");
     }
   }

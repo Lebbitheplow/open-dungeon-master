@@ -34,8 +34,8 @@ export function HowToPlayDialog({
       <Section icon={Sparkles} title="What this is">
         <p>
           Open Dungeon Master is a Dungeons &amp; Dragons 5e table where an AI sits in the Dungeon
-          Master&apos;s chair. You and your friends play the adventurers. The app is the rulebook
-          and the dice.
+          Master&apos;s chair, or a friend does with the AI as their assistant. You and your
+          friends play the adventurers. The app is the rulebook and the dice.
         </p>
         <p>
           Every table runs on the 5e rules. Where it is set is up to you: a genre of your choosing,

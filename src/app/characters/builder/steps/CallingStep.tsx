@@ -99,6 +99,7 @@ export function CallingStep({
                 </>
               ) : (
                 <span className="grow">
+                  <span className="text-amber-300">Still to choose. </span>
                   Your <GameTerm id="subclass">subclass</GameTerm> is the biggest choice about how
                   this character plays. Tap the info icon next to any option to read what it does
                   before choosing.
@@ -137,6 +138,11 @@ export function CallingStep({
           title={`Class skills (pick ${klass.skillChoices.count})`}
           help={
             <>
+              {klass.skillChoices.count - state.chosenSkills.length > 0 ? (
+                <span className="text-amber-300">
+                  {klass.skillChoices.count - state.chosenSkills.length} still to choose.{" "}
+                </span>
+              ) : null}
               A <GameTerm id="skill">skill</GameTerm> you are proficient in adds your{" "}
               <GameTerm id="proficiency_bonus">proficiency bonus</GameTerm> to rolls that use
               it. Tap any ⓘ to see which ability a skill leans on.

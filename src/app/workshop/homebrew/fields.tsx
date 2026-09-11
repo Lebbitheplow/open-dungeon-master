@@ -3,28 +3,43 @@
 import { useId, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { input } from "@/app/workshop/homebrew/types";
-import { Suggestions, type AddOption } from "@/components/ui/AddFromList";
+import { AddFromList, Suggestions, type AddOption } from "@/components/ui/AddFromList";
+import { OptionGlossary } from "@/components/ui/OptionGlossary";
+import type { GlossaryEntry } from "@/lib/help/terms";
 
 // The three inputs every homebrew form is made of, labelled the same way
 // the monster editor labels its own, so the two read as one workshop.
+
+// What the options of a pick list mean, one sentence each, shown as a ⓘ
+// beside the caption.
+export type FieldGlossary = { title: string; entries: readonly GlossaryEntry[] };
 
 export function Field({
   label,
   hint,
   children,
   className,
+  glossary,
 }: {
   label: string;
   hint?: string;
   children: ReactNode;
   className?: string;
+  glossary?: FieldGlossary;
 }) {
+  // A div rather than a <label> when a glossary button sits in the caption:
+  // a label forwards clicks on its text to the first control inside, which
+  // would open the dialog from the caption and the list from the ⓘ.
+  const Wrap = glossary ? "div" : "label";
   return (
-    <label className={cn("flex flex-col gap-0.5", className)}>
-      <span className="text-[10px] uppercase tracking-wide text-stone-500">{label}</span>
+    <Wrap className={cn("flex flex-col gap-0.5", className)}>
+      <span className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-stone-500">
+        {label}
+        {glossary ? <OptionGlossary title={glossary.title} entries={glossary.entries} /> : null}
+      </span>
       {children}
       {hint ? <span className="text-[10px] text-stone-600">{hint}</span> : null}
-    </label>
+    </Wrap>
   );
 }
 
@@ -37,6 +52,7 @@ export function TextField({
   maxLength = 200,
   className,
   suggestions,
+  glossary,
 }: {
   label: string;
   value: string;
@@ -45,21 +61,26 @@ export function TextField({
   hint?: string;
   maxLength?: number;
   className?: string;
-  // The values the field usually takes, offered as a dropdown under it
-  // while anything else can still be typed.
+  // The values the field usually takes, offered as a pick list beside the
+  // field (a real select, so it lists without typing in every browser; the
+  // datalist only helps Chromium) while anything else can still be typed.
   suggestions?: readonly AddOption[];
+  glossary?: FieldGlossary;
 }) {
   const listId = useId();
   return (
-    <Field label={label} hint={hint} className={className}>
-      <input
-        value={value}
-        maxLength={maxLength}
-        placeholder={placeholder}
-        list={suggestions ? listId : undefined}
-        onChange={(event) => onChange(event.target.value)}
-        className={cn(input, "w-full")}
-      />
+    <Field label={label} hint={hint} className={className} glossary={glossary}>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <input
+          value={value}
+          maxLength={maxLength}
+          placeholder={placeholder}
+          list={suggestions ? listId : undefined}
+          onChange={(event) => onChange(event.target.value)}
+          className={cn(input, "min-w-32 flex-1")}
+        />
+        {suggestions ? <AddFromList prompt="Pick" options={suggestions} onPick={onChange} /> : null}
+      </div>
       {suggestions ? <Suggestions id={listId} options={suggestions} /> : null}
     </Field>
   );
@@ -108,6 +129,7 @@ export function SelectField<T extends string>({
   onChange,
   hint,
   className,
+  glossary,
 }: {
   label: string;
   value: T;
@@ -115,9 +137,10 @@ export function SelectField<T extends string>({
   onChange: (value: T) => void;
   hint?: string;
   className?: string;
+  glossary?: FieldGlossary;
 }) {
   return (
-    <Field label={label} hint={hint} className={className}>
+    <Field label={label} hint={hint} className={className} glossary={glossary}>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value as T)}

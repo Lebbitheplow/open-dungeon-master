@@ -27,7 +27,7 @@ export const PLAYER_TOUR: TourStep[] = [
   {
     id: "compose",
     title: "Take your turn",
-    body: "Type your action here and press Enter. The Dungeon Master reads everything sent up to that moment and writes one reply for the whole table, so agree on a plan before you send.",
+    body: "Type your action here and press Enter. The Dungeon Master reads everything sent up to that moment and answers the whole table at once, whether that is the AI or a person in the DM seat, so agree on a plan before you send.",
     anchors: ["composer-input"],
     prepare: "show-chat",
   },
@@ -48,7 +48,7 @@ export const PLAYER_TOUR: TourStep[] = [
   {
     id: "party",
     title: "The party",
-    body: "Your sheet, everyone's hit points and conditions, the room code, and the fight order during combat.",
+    body: "Your sheet, everyone's hit points and conditions, and the fight order during combat. The room code lives in the lead's tab.",
     anchors: ["tab-party"],
     prepare: "open-party",
   },
@@ -110,7 +110,7 @@ export const DM_TOUR: TourStep[] = [
   {
     id: "console",
     title: "Your console",
-    body: "Only you have this tab. It holds the floor, the story beats, the hand-over switches, the queue of intents waiting on you, and every tool underneath.",
+    body: "Only the DM seats have this tab. It holds the floor, the story beats, the hand-over switches when an assistant is on, the queue of intents waiting on you, and every tool underneath.",
     anchors: ["tab-dm"],
     prepare: "open-dm",
   },

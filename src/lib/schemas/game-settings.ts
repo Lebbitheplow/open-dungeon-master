@@ -272,15 +272,21 @@ export type CompanionMode = "full" | "guests" | "off";
 // `partySize` is the number of PLAYERS, not the number of people at the table:
 // a DM seat holds no party slot, so a lone player with a human DM still counts
 // as one and still gets a full companion out of "auto".
+// `humanDm`: the guests-only rule exists to stop an AI padding a multiplayer
+// party with allies of its own. When a person runs the table there is no AI
+// to pad anything, and a lasting ally the DM plays by hand is the only way
+// for them to hold a character sheet at all, so "auto" gives them the full
+// mode at any party size.
 export function resolveCompanionMode(
   settings: GameSettings,
   partySize: number,
+  humanDm = false,
 ): CompanionMode {
   const setting = settings.companions;
   if (setting === "off" || setting === "full" || setting === "guests") {
     return setting;
   }
-  return partySize <= 1 ? "full" : "guests";
+  return partySize <= 1 || humanDm ? "full" : "guests";
 }
 
 // Whether the DM could still write an ally in: party members and scene guests
@@ -289,8 +295,9 @@ export function companionSlotsFree(
   settings: GameSettings,
   partySize: number,
   companionKinds: Array<"party" | "guest">,
+  humanDm = false,
 ): boolean {
-  const mode = resolveCompanionMode(settings, partySize);
+  const mode = resolveCompanionMode(settings, partySize, humanDm);
   if (mode === "off") {
     return false;
   }

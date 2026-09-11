@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, Crown, Trash2, UserPlus, Volume2, VolumeX } from "lucide-react";
+import { Bot, Crown, Trash2, UserPlus, Users, Volume2, VolumeX } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -221,7 +221,8 @@ export function LobbyParty({
       {showCompanions ? (
         <section className="mb-6">
           <h2 className={cn(ui.sectionEyebrow, "mb-3 flex items-center gap-1.5")}>
-            <Bot className="size-3.5" /> Companions
+            {humanDmTable ? <Users className="size-3.5" /> : <Bot className="size-3.5" />}{" "}
+            Companions
           </h2>
           {partyCompanions.length ? (
             <ul className="mb-2 space-y-2">
@@ -240,7 +241,11 @@ export function LobbyParty({
                       />
                     ) : (
                       <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-stone-700/60 bg-stone-900">
-                        <Bot className="size-4 text-sky-300" />
+                        {humanDmTable ? (
+                          <Users className="size-4 text-sky-300" />
+                        ) : (
+                          <Bot className="size-4 text-sky-300" />
+                        )}
                       </span>
                     )}
                     <div className="min-w-0">

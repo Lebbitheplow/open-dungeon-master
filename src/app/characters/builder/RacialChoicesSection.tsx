@@ -170,7 +170,8 @@ export function RacialChoicesSection({
           </span>
           <p className="mb-1.5 text-xs text-stone-500">
             A cantrip is a small spell you can cast as often as you like, forever. Pick one from
-            the list below, or search if you already have one in mind.
+            the list below (tap ⓘ to read what each does), or search by name if you already have
+            one in mind.
           </p>
           {cantrip ? (
             <div className="mb-1.5 flex items-center gap-2">
@@ -191,18 +192,14 @@ export function RacialChoicesSection({
             </div>
           ) : (
             <>
-              <ContentPicker
-                kind="spells"
-                extraParams={{ class: race.cantripChoice.list, level: "0" }}
-                placeholder="Search cantrips (e.g. fire bolt)"
-                onPick={(entry) => onCantripChange(entry.name)}
-              />
               {/* Nobody can search for a cantrip they have never heard of.
-                  Every one this race may take is one tap away, each with the
-                  ⓘ that says what it does. */}
+                  Every one this race may take is listed from the start, each
+                  with the ⓘ that says what it does; the search is second. */}
               <CatalogBrowser
                 kind="spells"
-                buttonLabel={`Browse every ${race.cantripChoice.list} cantrip`}
+                buttonLabel={`Every ${race.cantripChoice.list} cantrip`}
+                defaultOpen
+                openSections={[`cantrips:${race.cantripChoice.list}`]}
                 selectedNames={cantrip ? [cantrip] : []}
                 onPick={(entry) => onCantripChange(entry.name)}
                 sections={[
@@ -213,6 +210,13 @@ export function RacialChoicesSection({
                   },
                 ]}
                 metaOf={(entry) => entry.school ?? ""}
+              />
+              <p className="mt-2 mb-1 text-xs text-stone-500">Or search by name:</p>
+              <ContentPicker
+                kind="spells"
+                extraParams={{ class: race.cantripChoice.list, level: "0" }}
+                placeholder="Search cantrips (e.g. fire bolt)"
+                onPick={(entry) => onCantripChange(entry.name)}
               />
             </>
           )}

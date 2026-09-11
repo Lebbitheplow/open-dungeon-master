@@ -14,7 +14,7 @@ import {
 } from "@/lib/srd";
 import { ASI_LEVELS, applyAsiChoices } from "@/lib/srd/asi";
 import { defaultArmor, suggestArmor } from "@/lib/srd/armor";
-import { classFeaturesFor } from "@/lib/srd/features";
+import { classFeaturesFor, subclassSpellsFor } from "@/lib/srd/features";
 import { fightingStyleSlots } from "@/lib/srd/feature-effects";
 import { openOptionSlots, optionFeatureName, type OptionSlot } from "@/lib/srd/options";
 import { defaultLoadout, suggestWeapons } from "@/lib/srd/weapons";
@@ -220,31 +220,6 @@ export function useBuilderDerived({
   // Spell lists and advice go through the borrowed SRD list for catalog
   // casters (a Netrunner searches wizard spells).
   const spellSearchClass = klass ? spellClassFor(klass.id) : "";
-  const spellAdvice =
-    klass?.spellAbility && abilities
-      ? suggestedSpellCount(spellSearchClass, effectiveLevel, abilityMod(abilities[klass.spellAbility]))
-      : null;
-  const cantripAdvice = klass?.spellAbility
-    ? suggestedCantripCount(spellSearchClass, effectiveLevel, klass.casterType)
-    : null;
-  // Opening suggestions, so a player who has never seen a 5e spell list is
-  // not left staring at an empty search box.
-  const starters = useMemo(
-    () => (klass?.spellAbility ? starterSpellsFor(klass.id) : null),
-    [klass],
-  );
-  // What this class calls its spells, used in the empty-spell-list warning.
-  const castingLabel = klass?.spellAbility ? (klass.castingLabel || "spells") : "";
-  // Which chosen names are cantrips, so the two counters read separately.
-  // Seeded from the recommendations and topped up by the picker, which knows
-  // each row's level.
-  const chosenCantrips = useMemo(() => {
-    const known = new Set([
-      ...cantripNames.map((spellName) => spellName.toLowerCase()),
-      ...(starters?.cantrips.map((pick) => pick.n.toLowerCase()) ?? []),
-    ]);
-    return spells.filter((spellName) => known.has(spellName.toLowerCase()));
-  }, [spells, cantripNames, starters]);
   const maxSpellLevel = useMemo(() => {
     if (!klass || klass.casterType === "none") {
       return 0;
@@ -252,6 +227,44 @@ export function useBuilderDerived({
     const slots = spellSlotsFor(klass.id, effectiveLevel);
     return Object.keys(slots).reduce((top, slotLevel) => Math.max(top, Number(slotLevel)), 0);
   }, [klass, effectiveLevel]);
+  const rawCantripAdvice = klass?.spellAbility
+    ? suggestedCantripCount(spellSearchClass, effectiveLevel, klass.casterType)
+    : null;
+  // A class that casts, and has something to cast at this level. A level 1
+  // paladin or ranger has a spellcasting ability and no spells, no cantrips
+  // and no slots: showing them a spell step with a level 0 search and an
+  // "unable to cast" warning was a dead end with nothing to pick.
+  const casts = Boolean(klass?.spellAbility) && (maxSpellLevel > 0 || rawCantripAdvice !== null);
+  const cantripAdvice = casts ? rawCantripAdvice : null;
+  const spellAdvice =
+    casts && klass?.spellAbility && abilities
+      ? suggestedSpellCount(spellSearchClass, effectiveLevel, abilityMod(abilities[klass.spellAbility]))
+      : null;
+  // Opening suggestions, so a player who has never seen a 5e spell list is
+  // not left staring at an empty search box.
+  const starters = useMemo(
+    () => (casts && klass ? starterSpellsFor(klass.id) : null),
+    [klass, casts],
+  );
+  // Domain, circle, oath and patron spells: always prepared, free, and worth
+  // showing at the top of the list so a cleric knows what their domain gives.
+  const subclassSpells = useMemo(
+    () => (casts && klass ? subclassSpellsFor(klass.id, subclass, effectiveLevel) : []),
+    [klass, subclass, effectiveLevel, casts],
+  );
+  // What this class calls its spells, used in the empty-spell-list warning.
+  const castingLabel = casts && klass ? (klass.castingLabel || "spells") : "";
+  // Which chosen names are cantrips, so the two counters read separately.
+  // Seeded from the recommendations and topped up by the picker and the
+  // spells step (which loads the class's cantrip list once), so a sheet that
+  // arrives for editing counts its cantrips too.
+  const chosenCantrips = useMemo(() => {
+    const known = new Set([
+      ...cantripNames.map((spellName) => spellName.toLowerCase()),
+      ...(starters?.cantrips.map((pick) => pick.n.toLowerCase()) ?? []),
+    ]);
+    return spells.filter((spellName) => known.has(spellName.toLowerCase()));
+  }, [spells, cantripNames, starters]);
 
   return {
     effectiveLevel,
@@ -268,9 +281,11 @@ export function useBuilderDerived({
     styleSlots,
     optionSlots,
     spellSearchClass,
+    casts,
     spellAdvice,
     cantripAdvice,
     starters,
+    subclassSpells,
     castingLabel,
     chosenCantrips,
     maxSpellLevel,

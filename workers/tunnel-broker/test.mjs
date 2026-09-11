@@ -280,6 +280,33 @@ await test("a table goes offline when its host stops sharing", async () => {
   assert.equal(missing.status, 404);
 });
 
+await test("a dropped table keeps its claim: only its owner can bring it back", async () => {
+  const secret = "0123456789abcdef0123";
+  const squatter = await worker.fetch(
+    request("PUT", "/table/EFGH6789", {
+      body: { url: "https://evil.example.com" },
+      headers: { "x-table-secret": "ffffffffffffffffffff" },
+    }),
+    env,
+  );
+  assert.equal(squatter.status, 409);
+  const back = await worker.fetch(
+    request("PUT", "/table/EFGH6789", {
+      body: { url: "https://play-third.opendungeonmaster.com" },
+      headers: { "x-table-secret": secret },
+    }),
+    env,
+  );
+  assert.equal(back.status, 200);
+  const found = await worker.fetch(request("GET", "/table/EFGH6789"), env);
+  assert.equal(found.status, 200);
+  assert.equal((await found.json()).url, "https://play-third.opendungeonmaster.com");
+  await worker.fetch(
+    request("DELETE", "/table/EFGH6789", { headers: { "x-table-secret": secret } }),
+    env,
+  );
+});
+
 await test("junk codes, junk addresses and short secrets are refused", async () => {
   const secret = "0123456789abcdef0123";
   const badCode = await worker.fetch(

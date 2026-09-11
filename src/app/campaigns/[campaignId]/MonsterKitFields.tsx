@@ -3,6 +3,8 @@
 import { Plus, Wand2 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
+import { OptionGlossary } from "@/components/ui/OptionGlossary";
+import type { GlossaryEntry } from "@/lib/help/terms";
 import {
   ANCESTRY_OPTIONS,
   CLASS_KIT_OPTIONS,
@@ -52,18 +54,24 @@ export function TermPicker({
   value,
   known,
   onChange,
+  glossary,
 }: {
   label: string;
   value: string;
   known: readonly string[];
   onChange: (value: string) => void;
+  // What the known terms mean, one line each, behind a ⓘ in the caption.
+  glossary?: readonly GlossaryEntry[];
 }) {
   const extras = parseTerms(value).filter(
     (term) => !known.some((entry) => entry.toLowerCase() === term.toLowerCase()),
   );
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-[10px] uppercase tracking-wide text-stone-500">{label}</span>
+      <span className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-stone-500">
+        {label}
+        {glossary ? <OptionGlossary title={label} entries={glossary} /> : null}
+      </span>
       <div className="flex flex-wrap gap-1">
         {known.map((term) => {
           const on = hasTerm(value, term);

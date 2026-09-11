@@ -5,11 +5,22 @@ import { SKILL_NAMES } from "@/lib/bestiary/block-sections";
 import {
   LANGUAGES,
   PREREQUISITE_SUGGESTIONS,
+  TOOL_PROFICIENCIES,
   VISION_SUGGESTIONS,
   appendTerm,
 } from "@/lib/workshop/pickers";
 import { AddFromList } from "@/components/ui/AddFromList";
-import { Field, NumberField, SelectField, TextArea, TextField } from "@/app/workshop/homebrew/fields";
+import { ContentPick } from "@/components/ui/ContentPick";
+import {
+  Field,
+  NumberField,
+  SelectField,
+  TextArea,
+  TextField,
+  type FieldGlossary,
+} from "@/app/workshop/homebrew/fields";
+import { describeSkill } from "@/lib/help";
+import type { GlossaryEntry } from "@/lib/help/terms";
 import { CLASS_IDS, input, type EditorKind } from "@/app/workshop/homebrew/types";
 import type { Data } from "@/app/workshop/homebrew/draft";
 
@@ -28,6 +39,12 @@ const SKILL_LABELS = SKILL_NAMES.map((skill) =>
   skill.replace(/\b\w/g, (letter) => letter.toUpperCase()).replace(" Of ", " of "),
 );
 
+// What each skill covers, for the ⓘ beside the list.
+const SKILL_GLOSSARY: GlossaryEntry[] = SKILL_NAMES.flatMap((name, index) => {
+  const blurb = describeSkill(name.toLowerCase().replace(/\s+/g, "_"));
+  return blurb ? [{ name: SKILL_LABELS[index] ?? name, blurb }] : [];
+});
+
 // A comma-separated field with a dropdown of what it usually holds beside
 // it. Picking appends; the text stays editable for anything off the list.
 function ListField({
@@ -38,6 +55,7 @@ function ListField({
   hint,
   options,
   prompt,
+  glossary,
 }: {
   label: string;
   value: string;
@@ -46,9 +64,10 @@ function ListField({
   hint?: string;
   options: readonly string[];
   prompt: string;
+  glossary?: FieldGlossary;
 }) {
   return (
-    <Field label={label} hint={hint}>
+    <Field label={label} hint={hint} glossary={glossary}>
       <div className="flex flex-wrap items-center gap-1.5">
         <input
           value={value}
@@ -89,12 +108,16 @@ function BackgroundFields({ data, set }: { data: Data; set: (patch: Data) => voi
         hint="The builder grants these by name."
         options={SKILL_LABELS}
         prompt="Add a skill"
+        glossary={{ title: "Skills", entries: SKILL_GLOSSARY }}
       />
-      <TextField
+      <ListField
         label="Tool proficiencies"
         value={String(data.tool_proficiencies ?? "")}
         onChange={(tool_proficiencies) => set({ tool_proficiencies })}
         placeholder="One type of gaming set"
+        hint="A tool you are proficient with adds your proficiency bonus to checks made with it."
+        options={TOOL_PROFICIENCIES}
+        prompt="Add a tool"
       />
       <ListField
         label="Languages"
@@ -104,7 +127,24 @@ function BackgroundFields({ data, set }: { data: Data; set: (patch: Data) => voi
         options={LANGUAGES}
         prompt="Add a language"
       />
-      <TextField label="Equipment" value={String(data.equipment ?? "")} onChange={(equipment) => set({ equipment })} placeholder="A set of fine clothes, 15 gp" maxLength={500} />
+      <Field label="Equipment" hint="What the character starts with. Pick from the catalogue or type anything.">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <input
+            value={String(data.equipment ?? "")}
+            maxLength={500}
+            placeholder="A set of fine clothes, 15 gp"
+            aria-label="Equipment"
+            onChange={(event) => set({ equipment: event.target.value })}
+            className={`${input} min-w-32 flex-1`}
+          />
+          <ContentPick
+            kind="items"
+            label="Add an item"
+            placeholder="Add an item..."
+            onPick={(entry) => set({ equipment: appendTerm(String(data.equipment ?? ""), entry.name) })}
+          />
+        </div>
+      </Field>
       <TextField label="Feature" value={String(data.feature ?? "")} onChange={(feature) => set({ feature })} placeholder="Salt Lore" maxLength={80} />
       <TextField label="What the feature does" value={String(data.feature_desc ?? "")} onChange={(feature_desc) => set({ feature_desc })} maxLength={2000} />
     </div>
@@ -225,7 +265,10 @@ function ArchetypeFields({ data, set }: { data: Data; set: (patch: Data) => void
       <SelectField
         label="Class"
         value={String(data.classSlug ?? "fighter")}
-        options={CLASS_IDS.map((value) => ({ value, label: value }))}
+        options={CLASS_IDS.map((value) => ({
+          value,
+          label: value.charAt(0).toUpperCase() + value.slice(1),
+        }))}
         onChange={(classSlug) => set({ classSlug })}
         className="w-48"
         hint="The builder offers it under this class."

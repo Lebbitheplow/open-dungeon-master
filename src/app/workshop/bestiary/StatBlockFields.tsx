@@ -18,6 +18,10 @@ import type { EnemyStats, SaveAbility } from "@/lib/bestiary/statblock";
 import { LANGUAGES, appendTerm } from "@/lib/workshop/pickers";
 import { AddFromList } from "@/components/ui/AddFromList";
 import { ContentPick } from "@/components/ui/ContentPick";
+import { OptionGlossary } from "@/components/ui/OptionGlossary";
+import { describeSkill } from "@/lib/help";
+import type { GlossaryEntry } from "@/lib/help/terms";
+import { ALIGNMENT_LABELS } from "@/app/characters/builder/usePickerGroups";
 import { input } from "@/app/workshop/bestiary/types";
 
 // The printed half of a stat block (docs/workshop-parity-audit.md phase
@@ -51,6 +55,18 @@ type Setter = (patch: Partial<EnemyStats>) => void;
 function Label({ children }: { children: string }) {
   return <span className="text-[10px] uppercase tracking-wide text-stone-500">{children}</span>;
 }
+
+// What each skill and alignment means, for the ⓘ beside those lists. The
+// alignment blurbs are the character builder's; the bestiary's list uses
+// the spelled-out names, so they are matched by name.
+const SKILL_GLOSSARY: GlossaryEntry[] = SKILL_NAMES.flatMap((name) => {
+  const blurb = describeSkill(name.toLowerCase().replace(/\s+/g, "_")) ?? describeSkill(name);
+  return blurb ? [{ name, blurb }] : [];
+});
+const ALIGNMENT_GLOSSARY: GlossaryEntry[] = Object.values(ALIGNMENT_LABELS).map((entry) => ({
+  name: entry.name,
+  blurb: entry.blurb,
+}));
 
 export function AbilityScores({ draft, onChange }: { draft: MonsterDraft; onChange: (draft: MonsterDraft) => void }) {
   const stats = draft.stats;
@@ -133,7 +149,10 @@ export function SkillsAndSenses({ draft, onChange }: { draft: MonsterDraft; onCh
   return (
     <div className="space-y-2">
       <div className="space-y-1">
-        <Label>Skills (tap to add, type the bonus)</Label>
+        <span className="flex items-center gap-1">
+          <Label>Skills (tap to add, type the bonus)</Label>
+          <OptionGlossary title="Skills" entries={SKILL_GLOSSARY} />
+        </span>
         <div className="flex flex-wrap gap-1">
           {SKILL_NAMES.map((name) => {
             const bonus = skills[name];
@@ -241,7 +260,10 @@ export function LanguagesAndHabitat({ draft, onChange }: { draft: MonsterDraft; 
           </div>
         </label>
         <label className="flex flex-col gap-0.5">
-          <Label>Alignment</Label>
+          <span className="flex items-center gap-1">
+            <Label>Alignment</Label>
+            <OptionGlossary title="Alignments" entries={ALIGNMENT_GLOSSARY} />
+          </span>
           <select
             value={stats.alignment ?? ""}
             onChange={(event) => set({ alignment: event.target.value || undefined })}

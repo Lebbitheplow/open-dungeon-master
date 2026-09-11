@@ -7,7 +7,21 @@ import OptionPicker, { type PickerGroup } from "../OptionPicker";
 import { RacialChoicesSection } from "../RacialChoicesSection";
 import type { BackgroundOption, RaceOption } from "../useBuilderOptions";
 import type { BuilderState } from "../useBuilderState";
+import { bonusLanguageCount } from "../submit";
 import { Field, StepPanel, inputClass } from "./shared";
+
+function languageHelp(race: RaceOption, background: BackgroundOption | undefined): string {
+  const parts = [`${race.name} speaks ${race.languages.join(" and ")}`];
+  if (race.bonusLanguages > 0) {
+    parts.push(`plus ${race.bonusLanguages} of your choice`);
+  }
+  if (background?.languages) {
+    parts.push(
+      `${race.bonusLanguages > 0 ? "and" : "plus"} ${background.languages} more from your ${background.name} background`,
+    );
+  }
+  return `${parts.join(" ")}.`;
+}
 
 // Step 2: where they are from. The race picker, then every choice the race
 // leaves to the player: bonus languages, ability bumps, skills, tool, cantrip.
@@ -22,6 +36,9 @@ export function AncestryStep({
   background: BackgroundOption | undefined;
   raceGroups: PickerGroup[];
 }) {
+  // The race's bonus languages plus the background's (an acolyte or a sage
+  // learns two more), which used to be loaded and never asked for.
+  const languageCount = bonusLanguageCount(race, background);
   return (
     <div className="space-y-4">
       <StepPanel title="Where are they from?" ornate>
@@ -45,11 +62,11 @@ export function AncestryStep({
         </Field>
       </StepPanel>
 
-      {race && race.bonusLanguages > 0 ? (
+      {race && languageCount > 0 ? (
         <StepPanel
           title={
             <span className="flex items-center gap-1">
-              Bonus {race.bonusLanguages === 1 ? "language" : "languages"}
+              Bonus {languageCount === 1 ? "language" : "languages"}
               <InfoButton
                 label="Languages"
                 text={
@@ -58,10 +75,10 @@ export function AncestryStep({
               />
             </span>
           }
-          help={`${race.name} speaks ${race.languages.join(" and ")} plus ${race.bonusLanguages} of your choice.`}
+          help={languageHelp(race, background)}
         >
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {Array.from({ length: race.bonusLanguages }, (_, index) => (
+            {Array.from({ length: languageCount }, (_, index) => (
               <select
                 key={index}
                 value={state.bonusLanguages[index] ?? ""}

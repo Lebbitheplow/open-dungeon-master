@@ -32,6 +32,33 @@ const FIELD = cn(ui.input, "h-11");
 const DISCORD_BTN =
   "inline-flex h-11 w-full items-center justify-center gap-2.5 rounded-lg border border-indigo-400/30 bg-[#5865f2]/15 px-4 text-sm text-indigo-100 transition-all duration-150 ease-snap hover:bg-[#5865f2]/25 hover:text-white active:scale-[0.98]";
 
+// The password this browser made up for a seat at a device world, kept so
+// the same name can walk back in from here without one. Per name, since a
+// shared family tablet may hold several seats.
+const SEAT_PREFIX = "odm-seat:";
+
+function seatSecret(name: string): string {
+  try {
+    return window.localStorage.getItem(`${SEAT_PREFIX}${name.toLowerCase()}`) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function rememberSeat(name: string, secret: string): void {
+  try {
+    window.localStorage.setItem(`${SEAT_PREFIX}${name.toLowerCase()}`, secret);
+  } catch {
+    // Private mode or storage off: the seat still works this once.
+  }
+}
+
+function mintSecret(): string {
+  const bytes = new Uint8Array(24);
+  window.crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 function discordStartHref(inviteCode: string, joinCode?: string): string {
   const query = new URLSearchParams();
   if (inviteCode.trim()) {
@@ -86,6 +113,11 @@ export default function AuthForm({
   const [busy, setBusy] = useState(false);
   const [discordEnabled, setDiscordEnabled] = useState(false);
   const [signupMode, setSignupMode] = useState<SignupMode>("open");
+  // A world one of the apps hosts: a guest arriving with a room code gives
+  // a name and nothing else. The browser has no keychain, so the password
+  // the form makes up is kept in this browser's storage and used again the
+  // next time the same name joins from here.
+  const [deviceWorld, setDeviceWorld] = useState(false);
   const [inviteCode, setInviteCode] = useState(urlInvite);
   const [pendingReset, setPendingReset] = useState<{ user: SessionUser; tempPassword: string } | null>(
     null,
@@ -96,6 +128,7 @@ export default function AuthForm({
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => {
         setDiscordEnabled(data?.discord === true);
+        setDeviceWorld(data?.deviceWorld === true);
         if (data?.signupMode === "invite" || data?.signupMode === "closed") {
           setSignupMode(data.signupMode);
         }
@@ -111,29 +144,53 @@ export default function AuthForm({
     setError("");
   }
 
+  // Joining a device world by room code: the form asks for a name only.
+  const seatJoin = deviceWorld && Boolean(joinCode);
+  const effectiveMode: AuthMode = seatJoin ? "register" : mode;
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
     setError("");
     try {
-      const payload: Record<string, string> = { username, password };
-      if (mode === "register" && inviteCode.trim()) {
+      const name = username.trim();
+      const kept = seatJoin ? seatSecret(name) : "";
+      const secret = seatJoin ? kept || mintSecret() : password;
+      const payload: Record<string, string> = { username: name, password: secret };
+      if (effectiveMode === "register" && inviteCode.trim()) {
         payload.inviteCode = inviteCode.trim().toUpperCase();
       }
       // The room code from a /join page vouches for the signup on an
-      // invite-only server (only a member could have shared it).
-      if (mode === "register" && joinCode) {
+      // invite-only server (only a member could have shared it), and is the
+      // whole invitation on a world an app hosts.
+      if (effectiveMode === "register" && joinCode) {
         payload.joinCode = joinCode.trim().toUpperCase();
       }
-      const response = await fetch(`/api/auth/${mode}`, {
+      let response = await fetch(`/api/auth/${effectiveMode}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+      // The same name joining the same world again from this browser: the
+      // account exists, and the password this browser kept opens it.
+      if (seatJoin && response.status === 409 && kept) {
+        response = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: name, password: kept }),
+        });
+      }
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setError(data.error || "Something went wrong.");
+        setError(
+          seatJoin && response.status === 409
+            ? "That name is already taken at this table. Pick another, or ask the host to remove the old seat."
+            : data.error || "Something went wrong.",
+        );
         return;
+      }
+      if (seatJoin) {
+        rememberSeat(name, secret);
       }
       if (data.user?.mustChangePassword) {
         setPendingReset({ user: data.user, tempPassword: password });
@@ -164,13 +221,19 @@ export default function AuthForm({
   }
 
   // A closed server has one mode only, so the switch is hidden rather than
-  // shown with a dead option.
-  const canRegister = signupMode !== "closed";
+  // shown with a dead option; a device world's join page has no modes at all.
+  const canRegister = signupMode !== "closed" && !seatJoin;
   // On a join page both modes end at the same seat, so the button says so.
   const submitLabel = joinCode ? "Join the table" : mode === "login" ? "Log in" : "Create account";
 
   return (
     <>
+      {seatJoin ? (
+        <p className="mb-4 text-sm text-stone-400">
+          This world runs on its host&apos;s device. Give the table a name and you are in; there is
+          no password to remember.
+        </p>
+      ) : null}
       {canRegister ? (
         <SegmentedControl
           options={MODE_OPTIONS}
@@ -191,24 +254,26 @@ export default function AuthForm({
             required
             minLength={3}
             maxLength={24}
-            placeholder={mode === "register" ? "Choose a name" : undefined}
+            placeholder={seatJoin ? "Your name at this table" : mode === "register" ? "Choose a name" : undefined}
             className={FIELD}
           />
         </label>
-        <label className="block">
-          <span className="mb-1.5 block text-xs text-stone-400">Password</span>
-          <input
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            autoComplete={mode === "login" ? "current-password" : "new-password"}
-            required
-            minLength={mode === "register" ? 8 : 1}
-            maxLength={100}
-            className={FIELD}
-          />
-        </label>
-        {mode === "register" && signupMode === "invite" ? (
+        {seatJoin ? null : (
+          <label className="block">
+            <span className="mb-1.5 block text-xs text-stone-400">Password</span>
+            <input
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              required
+              minLength={mode === "register" ? 8 : 1}
+              maxLength={100}
+              className={FIELD}
+            />
+          </label>
+        )}
+        {effectiveMode === "register" && signupMode === "invite" && !seatJoin ? (
           <label className="block">
             <span className="mb-1.5 block text-xs text-stone-400">Invite code</span>
             <input
@@ -239,7 +304,7 @@ export default function AuthForm({
           {busy ? <Loader2 className="size-4 animate-spin" /> : null}
           {submitLabel}
         </button>
-        {mode === "register" ? (
+        {effectiveMode === "register" ? (
           <p className="text-center text-xs leading-5 text-stone-500">
             Creating an account means you accept this server&apos;s{" "}
             <a href="/terms" className="text-stone-400 underline hover:text-amber-200">
@@ -254,7 +319,7 @@ export default function AuthForm({
         ) : null}
       </form>
 
-      {discordEnabled ? (
+      {discordEnabled && !seatJoin ? (
         <>
           <div className="my-4 flex items-center gap-3" aria-hidden="true">
             <span className="h-px flex-1 bg-stone-700/60" />

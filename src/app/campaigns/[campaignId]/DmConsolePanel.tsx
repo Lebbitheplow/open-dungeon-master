@@ -204,14 +204,19 @@ export function DmConsolePanel({
         <DmBeatComposer campaignId={campaignId} beats={beats} canExpand={delegations.narration} />
       </div>
 
-      <div data-tour="dm-delegation">
-        <DmDelegationPanel
-          campaignId={campaignId}
-          cover={cover}
-          canMonsters={delegations.monsters}
-          canCover={delegations.cover}
-        />
-      </div>
+      {/* The anchor goes only where the panel draws: in pure human mode there
+          is nothing to hand over, and an empty anchored div would still give
+          the tour a zero-size target to spotlight and talk about. */}
+      {delegations.monsters || delegations.cover ? (
+        <div data-tour="dm-delegation">
+          <DmDelegationPanel
+            campaignId={campaignId}
+            cover={cover}
+            canMonsters={delegations.monsters}
+            canCover={delegations.cover}
+          />
+        </div>
+      ) : null}
 
       <section data-tour="dm-queue">
         <h3 className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">

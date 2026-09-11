@@ -12,6 +12,14 @@ import { SpellFields } from "@/app/workshop/homebrew/SpellFields";
 import { draftFindings, draftFromCatalog, type HomebrewDraft } from "@/app/workshop/homebrew/draft";
 import { KIND_SINGULAR } from "@/app/workshop/homebrew/types";
 
+// A spell draft that already names its classes searches that class's list
+// first; the catalogue is otherwise the whole book.
+function catalogScope(draft: HomebrewDraft): Record<string, string> {
+  if (draft.kind !== "spell") return {};
+  const classes = Array.isArray(draft.data.classes) ? (draft.data.classes as string[]) : [];
+  return classes.length ? { class: String(classes[0]).toLowerCase() } : {};
+}
+
 // One homebrew entry, open for editing: its name and description, the
 // fields its kind carries, and what the table's ruleset says about it. The
 // findings run on every keystroke through src/lib/rulesets/validate.ts, so
@@ -54,6 +62,7 @@ export function HomebrewEditor({
       <div data-tour="homebrew-start">
         <CatalogStart
           kind={draft.kind}
+          scope={catalogScope(draft)}
           onPick={(entry, extra) => onDraft(draftFromCatalog(draft.kind, entry, extra))}
         />
       </div>

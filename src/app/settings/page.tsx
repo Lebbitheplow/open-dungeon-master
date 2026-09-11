@@ -55,6 +55,10 @@ export default function SettingsPage() {
     version: string;
     graceDays: number;
   } | null>(null);
+  // A world one of the apps hosts: guests never chose a password (the app
+  // minted one and renews their session with it), so offering to change it
+  // would lock them out of their own seat. The host keeps the option.
+  const [deviceWorld, setDeviceWorld] = useState(false);
   // Seeded from the Discord link redirect (?linked=1 / ?error=...).
   const [discordNotice] = useState(() => {
     if (typeof window === "undefined") return "";
@@ -74,6 +78,7 @@ export default function SettingsPage() {
     fetch("/api/auth/providers")
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => {
+        setDeviceWorld(data?.deviceWorld === true);
         if (data?.serverName && data?.version) {
           setAbout({
             serverName: data.serverName,
@@ -244,6 +249,7 @@ export default function SettingsPage() {
         </p>
       </PageSection>
 
+      {deviceWorld && !me.isAdmin ? null : (
       <PageSection heading={me.hasPassword === false ? "Set a password" : "Password"}>
         {me.hasPassword === false ? (
           <>
@@ -272,6 +278,7 @@ export default function SettingsPage() {
           </p>
         ) : null}
       </PageSection>
+      )}
 
       {me.discordAvailable || me.discordLinked ? (
         <PageSection heading="Discord">

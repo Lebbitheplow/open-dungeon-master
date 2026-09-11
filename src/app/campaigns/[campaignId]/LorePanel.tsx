@@ -50,6 +50,10 @@ export function LorePanel({
     imagePath: string;
   }>({ category: "geography", title: "", body: "", tags: "", visibility: "party", imagePath: "" });
   const [busy, setBusy] = useState(false);
+  // Names beyond the lore itself that a [[link]] can point at.
+  const [linkTargets, setLinkTargets] = useState<{ cast: string[]; monsters: string[] } | null>(
+    null,
+  );
   const rows = layout === "rows";
   // The body field, so a picked link lands at the caret rather than the end.
   const bodyRef = useRef<HTMLTextAreaElement>(null);
@@ -223,9 +227,43 @@ export function LorePanel({
 
   const editorOpen = adding || editingId !== null;
 
-  // [[Link]] another entry by picking it: the titles are the ones the body
-  // renderer resolves, so a picked link always lands somewhere.
-  const linkable = entries.filter((entry) => entry.id !== editingId).map((entry) => entry.title);
+  // [[Link]] another entry by picking it: every name the body renderer
+  // resolves, not only other lore. The cast and the DM's own monsters are
+  // read once the editor opens, since they are only needed for this list.
+  useEffect(() => {
+    if (!editorOpen || linkTargets !== null) {
+      return;
+    }
+    let cancelled = false;
+    Promise.all([
+      fetch(`/api/campaigns/${campaignId}/dm/npcs`)
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data: { npcs?: Array<{ name: string }> } | null) =>
+          (data?.npcs ?? []).map((npc) => npc.name),
+        )
+        .catch(() => [] as string[]),
+      fetch(`/api/campaigns/${campaignId}/dm/bestiary`)
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data: { monsters?: Array<{ draft: { name: string } }> } | null) =>
+          (data?.monsters ?? []).map((monster) => monster.draft.name),
+        )
+        .catch(() => [] as string[]),
+    ]).then(([cast, monsters]) => {
+      if (!cancelled) {
+        setLinkTargets({ cast, monsters });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [editorOpen, linkTargets, campaignId]);
+  const linkable = [
+    ...entries
+      .filter((entry) => entry.id !== editingId)
+      .map((entry) => ({ value: entry.title, label: `Lore: ${entry.title}` })),
+    ...(linkTargets?.cast ?? []).map((name) => ({ value: name, label: `Cast: ${name}` })),
+    ...(linkTargets?.monsters ?? []).map((name) => ({ value: name, label: `Monster: ${name}` })),
+  ];
   const knownTags = collectTags(entries);
   function insertLink(title: string) {
     const field = bodyRef.current;

@@ -43,6 +43,11 @@ export function ClassChoices({
           title={`Expertise (pick ${expertiseSlots})`}
           help={
             <>
+              {expertiseSlots - state.expertisePicks.length > 0 ? (
+                <span className="text-amber-300">
+                  {expertiseSlots - state.expertisePicks.length} still to choose.{" "}
+                </span>
+              ) : null}
               <GameTerm id="expertise">Expertise</GameTerm> doubles your{" "}
               <GameTerm id="proficiency_bonus">proficiency bonus</GameTerm> on the chosen skills.
             </>
@@ -77,7 +82,17 @@ export function ClassChoices({
       ) : null}
 
       {styleSlots > 0 ? (
-        <StepPanel title={`Fighting style (pick ${styleSlots})`}>
+        <StepPanel
+          title={`Fighting style (pick ${styleSlots})`}
+          help={
+            styleSlots - state.stylePicks.length > 0 ? (
+              <span className="text-amber-300">
+                {styleSlots - state.stylePicks.length} still to choose. A fighting style is a
+                permanent edge with one kind of weapon or armour; read each card before picking.
+              </span>
+            ) : undefined
+          }
+        >
           <div className="grid gap-1.5 sm:grid-cols-2">
             {FIGHTING_STYLES.map((style) => {
               const selected = state.stylePicks.includes(style.id);

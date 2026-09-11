@@ -1,7 +1,9 @@
 "use client";
 
+import { useId } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { CONDITION_BLURBS, DAMAGE_TYPE_BLURBS, glossaryFor } from "@/lib/help/terms";
 import {
   MAX_ATTACKS,
   MAX_TRAITS,
@@ -67,13 +69,15 @@ export function AttackEditor({
   draft: MonsterDraft;
   onChange: (draft: MonsterDraft) => void;
 }) {
+  // One list per mounted editor: a fixed id collided when two were open.
+  const damageListId = useId();
   const attacks = draft.stats.attacks;
   const setAttacks = (next: typeof attacks) =>
     onChange({ ...draft, stats: { ...draft.stats, attacks: next } });
 
   return (
     <div className="flex flex-col gap-1.5">
-      <datalist id="monster-damage-types">
+      <datalist id={damageListId}>
         {DAMAGE_TYPES.map((type) => (
           <option key={type} value={type} />
         ))}
@@ -125,7 +129,7 @@ export function AttackEditor({
               knows are one keystroke away, and "chitin-shredding" is still
               typeable for a monster that wants it. */}
           <input
-            list="monster-damage-types"
+            list={damageListId}
             value={attack.type}
             onChange={(event) =>
               setAttacks(
@@ -316,6 +320,10 @@ export function SizeAndDefences({
           value={draft.stats[field]}
           known={known}
           onChange={(value) => set({ [field]: value })}
+          glossary={glossaryFor(
+            known,
+            known === CONDITIONS ? CONDITION_BLURBS : DAMAGE_TYPE_BLURBS,
+          )}
         />
       ))}
     </div>

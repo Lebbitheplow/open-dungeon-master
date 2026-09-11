@@ -254,6 +254,11 @@ export function suggestedSpellCount(
   if (known) {
     return { label: "spells known", count: known[clamped - 1] };
   }
+  // A half caster has no spells at all until level 2 (paladins and rangers
+  // pray and track for a level first), so there is nothing to prepare yet.
+  if (HALF_CASTERS.has(slug) && clamped < 2) {
+    return null;
+  }
   if (FULL_CASTERS.has(slug) || HALF_CASTERS.has(slug)) {
     const prepared = Math.max(
       1,

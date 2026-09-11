@@ -39,7 +39,10 @@ export function StepPanel({
   );
 }
 
-// Small caps label over a field.
+// Small caps label over a field. A div, not a <label>: the pickers inside
+// are lists of buttons, and a <label> forwards any click on its caption or
+// its empty space to the first button it contains, which opened the info
+// dialog from the word "Alignment" and closed the list from a group heading.
 export function Field({
   label,
   children,
@@ -50,10 +53,10 @@ export function Field({
   className?: string;
 }) {
   return (
-    <label className={cn("block", className)}>
+    <div className={cn("block", className)}>
       <span className="mb-1 block text-xs text-stone-400">{label}</span>
       {children}
-    </label>
+    </div>
   );
 }
 

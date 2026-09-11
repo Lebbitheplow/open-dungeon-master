@@ -48,3 +48,11 @@ function loadEnvServer() {
 export function serverEnv(key: string, fallback = "") {
   return process.env[key] || loadEnvServer()[key] || fallback;
 }
+
+// A world the desktop or Android app is hosting, rather than a server
+// someone set up and administers. Both shells launch their bundled server
+// with ODM_DEVICE_WORLD=1. One reader for every route, so the providers
+// probe, the signup rule and the admin panel can never disagree about it.
+export function isDeviceWorld(): boolean {
+  return serverEnv("ODM_DEVICE_WORLD") === "1";
+}

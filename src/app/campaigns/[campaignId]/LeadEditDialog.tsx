@@ -6,7 +6,18 @@ import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { spellClassFor } from "@/lib/classes";
+import { spellSlotsFor } from "@/lib/srd";
 import MultiContentPicker from "@/app/characters/builder/MultiContentPicker";
+
+// The highest spell level this character has a slot for, so the pickers
+// below offer what they could actually cast rather than the whole list up
+// to Wish. Cantrips (level 0) always pass.
+function highestSlotLevel(classId: string, level: number): number {
+  return Object.keys(spellSlotsFor(classId, level)).reduce(
+    (top, slotLevel) => Math.max(top, Number(slotLevel)),
+    0,
+  );
+}
 import type { CharacterSheet, EquipmentItem } from "@/lib/schemas/sheet";
 
 type ItemRow = { name: string; qty: string; slug?: string };
@@ -282,7 +293,10 @@ export function LeadEditDialog({
                 />
                 <MultiContentPicker
                   kind="spells"
-                  extraParams={{ class: spellClassFor(sheet.class) }}
+                  extraParams={{
+                    class: spellClassFor(sheet.class),
+                    level: String(highestSlotLevel(sheet.class, sheet.level)),
+                  }}
                   placeholder="Search spells to add as known"
                   selectedNames={known}
                   onAdd={(entries) =>
@@ -307,7 +321,10 @@ export function LeadEditDialog({
                 />
                 <MultiContentPicker
                   kind="spells"
-                  extraParams={{ class: spellClassFor(sheet.class) }}
+                  extraParams={{
+                    class: spellClassFor(sheet.class),
+                    level: String(highestSlotLevel(sheet.class, sheet.level)),
+                  }}
                   placeholder="Search spells to add as prepared"
                   selectedNames={prepared}
                   onAdd={(entries) =>
