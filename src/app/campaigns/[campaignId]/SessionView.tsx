@@ -2,6 +2,8 @@
 
 import {
   type FormEvent,
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -18,7 +20,6 @@ import { CharacterGate } from "@/app/campaigns/[campaignId]/CharacterGate";
 import { Composer, type InputKind } from "@/app/campaigns/[campaignId]/Composer";
 import { composerGate } from "@/app/campaigns/[campaignId]/composerGate";
 import { DiceOverlay } from "@/app/campaigns/[campaignId]/DiceOverlay";
-import { LevelUpDialog } from "@/app/campaigns/[campaignId]/LevelUpDialog";
 import { LoreCheckDialog } from "@/app/campaigns/[campaignId]/LoreCheckDialog";
 import { RenarrateDialog } from "@/app/campaigns/[campaignId]/RenarrateDialog";
 import type { CampaignMessage } from "@/lib/db/messages";
@@ -40,6 +41,15 @@ import { SidePanel } from "@/app/campaigns/[campaignId]/SidePanel";
 import { useChatChime } from "@/app/campaigns/[campaignId]/useChatChime";
 import { useTableAudio } from "@/app/campaigns/[campaignId]/useTableAudio";
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
+
+// The level-up dialog carries the class feature and resource tables of the
+// whole SRD; it loads the first time a character actually levels rather
+// than with the table.
+const LevelUpDialog = lazy(() =>
+  import("@/app/campaigns/[campaignId]/LevelUpDialog").then((module) => ({
+    default: module.LevelUpDialog,
+  })),
+);
 
 function subscribeDicePref(callback: () => void) {
   window.addEventListener("odm-dice3d-pref", callback);
@@ -551,13 +561,15 @@ export function SessionView({
       ) : null}
 
       {myLevelUp && mySheet && dismissedLevelUp !== `${myLevelUp.characterId}:${myLevelUp.level}` ? (
-        <LevelUpDialog
-          campaignId={campaign.id}
-          sheet={mySheet}
-          targetLevel={myLevelUp.level}
-          multiclassAllowed={campaign.gameSettings?.multiclassingEnabled ?? true}
-          onDone={() => setDismissedLevelUp(`${myLevelUp.characterId}:${myLevelUp.level}`)}
-        />
+        <Suspense fallback={null}>
+          <LevelUpDialog
+            campaignId={campaign.id}
+            sheet={mySheet}
+            targetLevel={myLevelUp.level}
+            multiclassAllowed={campaign.gameSettings?.multiclassingEnabled ?? true}
+            onDone={() => setDismissedLevelUp(`${myLevelUp.characterId}:${myLevelUp.level}`)}
+          />
+        </Suspense>
       ) : null}
     </main>
   );

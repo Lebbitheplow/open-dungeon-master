@@ -3,7 +3,8 @@
 import { cn } from "@/lib/cn";
 import { TTS_VOICES } from "@/lib/tts-voices";
 import { VoicePreviewButton } from "@/components/VoicePreviewButton";
-import { COMPANION_LABELS, type GameSettings } from "@/lib/schemas/game-settings";
+import type { GameSettings } from "@/lib/schemas/game-settings";
+import { COMPANION_LABELS } from "@/lib/schemas/game-settings-options";
 import { FieldLabel, inputClass } from "@/app/create-campaign/fields";
 import type { StepProps } from "@/app/create-campaign/draft";
 

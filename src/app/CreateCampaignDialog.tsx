@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Wizard, type WizardStep } from "@/components/ui/Wizard";
 import { submitWorldSetup } from "@/app/WorldSetupFields";
 import { submitContentImport } from "@/app/workshop/ContentImportPicker";
-import { groupByFranchise, type WorldPackSummary } from "@/lib/worlds/types";
+import { groupByFranchise, type WorldPackSummary } from "@/lib/worlds/summary";
 import type { Genre } from "@/lib/schemas/game-settings";
 import {
   applyPack,

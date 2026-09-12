@@ -18,7 +18,6 @@ import { AppHeader } from "@/components/AppHeader";
 import { ImageLightbox } from "@/components/ui/ImageLightbox";
 import { cn } from "@/lib/cn";
 import { downloadBlob, filenameSlug } from "@/lib/download";
-import { libraryToPdfCharacter } from "@/lib/pdf/character-sheet-pdf";
 import { downloadCharacterSheetPdf } from "@/lib/pdf/download";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import { CharacterPortrait, ui } from "@/lib/ui";
@@ -83,6 +82,8 @@ export default function CharacterDetailPage({
     }
     setPdfBusy(true);
     try {
+      // The PDF builder (pdf-lib) loads on demand; see lib/pdf/download.
+      const { libraryToPdfCharacter } = await import("@/lib/pdf/character-sheet-pdf");
       await downloadCharacterSheetPdf(libraryToPdfCharacter(character));
     } finally {
       setPdfBusy(false);

@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { GENRE_PRESETS } from "@/lib/genres";
-import { DM_MODE_LABELS } from "@/lib/schemas/game-settings";
+import { DM_MODE_LABELS } from "@/lib/schemas/game-settings-options";
 import type { WorldPackSummary } from "@/lib/worlds/types";
 import { featuresOn } from "@/app/create-campaign/FeelStep";
 import type { StepProps } from "@/app/create-campaign/draft";

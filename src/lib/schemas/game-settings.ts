@@ -1,43 +1,31 @@
 import { z } from "zod";
+import {
+  CAMPAIGN_LENGTHS,
+  COMPANION_SETTINGS,
+  DICE_POLICIES,
+  DM_MODES,
+  GENRES,
+} from "@/lib/schemas/game-settings-options";
 
-export const GENRES = [
-  "high_fantasy",
-  "dark_fantasy",
-  "mystery",
-  "horror",
-  "cyberpunk",
-  "steampunk",
-  "post_apocalyptic",
-  "custom",
-] as const;
-export type Genre = (typeof GENRES)[number];
-
-export const DICE_POLICIES = ["digital_only", "real_allowed"] as const;
-export type DicePolicy = (typeof DICE_POLICIES)[number];
-
-// Who narrates. Mirrors DmMode in src/lib/dm/viewer.ts, which holds the pure
-// rules about what each seat may see and do; this is the stored setting.
-export const DM_MODES = ["ai", "human", "assisted"] as const;
-export type DmModeSetting = (typeof DM_MODES)[number];
-
-export const DM_MODE_LABELS: Record<DmModeSetting, string> = {
-  ai: "AI Dungeon Master",
-  human: "I run the game",
-  assisted: "I run the game, with AI help",
-};
-
-export const DM_MODE_HINTS: Record<DmModeSetting, string> = {
-  ai: "The AI narrates, adjudicates and runs the world. The party lead steers it.",
-  human: "You narrate. The server still enforces every rule and rolls every die.",
-  assisted: "You own the story; hand the AI the monsters, the prose, or a stretch of turns.",
-};
-
-// How far the secret story saga is planned: how many acts the arc spans and
-// how many bosses/threads it seeds. Read when a saga is generated (activation,
-// lead regenerate, the v2 upgrade pass, and each sequel saga), so changing it
-// mid-campaign applies when the next saga is planned.
-export const CAMPAIGN_LENGTHS = ["short", "standard", "epic"] as const;
-export type CampaignLengthSetting = (typeof CAMPAIGN_LENGTHS)[number];
+// The option lists and their labels live in ./game-settings-options (no
+// zod) so the campaign wizard can draw them without the validator; they
+// are re-exported here because this is where everything else finds them.
+export {
+  CAMPAIGN_LENGTH_LABELS,
+  CAMPAIGN_LENGTHS,
+  COMPANION_LABELS,
+  COMPANION_SETTINGS,
+  DICE_POLICIES,
+  DM_MODE_HINTS,
+  DM_MODE_LABELS,
+  DM_MODES,
+  GENRES,
+  type CampaignLengthSetting,
+  type CompanionSetting,
+  type DicePolicy,
+  type DmModeSetting,
+  type Genre,
+} from "@/lib/schemas/game-settings-options";
 
 // Game-facing campaign settings. Stored in campaigns.game_settings_json,
 // separate from settings_json (the model/image StorySettings) so the two
@@ -113,7 +101,7 @@ export const gameSettingsSchema = z.object({
   // temporary allies (a soldier helping for one battle) so the AI never
   // fabricates campaign-long members; 'off' disables both. 'auto' resolves
   // to full for solo campaigns and guests for multiplayer ones.
-  companions: z.enum(["auto", "full", "guests", "off"]).default("auto"),
+  companions: z.enum(COMPANION_SETTINGS).default("auto"),
   // Lasting party companions allowed at once. Scene-scoped guests have their
   // own cap so a temporary ally never eats a party slot.
   maxCompanions: z.number().int().min(1).max(4).default(2),
@@ -249,20 +237,6 @@ export const gameSettingsSchema = z.object({
 });
 
 export type GameSettings = z.infer<typeof gameSettingsSchema>;
-
-// Shared by the create dialog and the lobby settings panel.
-export const CAMPAIGN_LENGTH_LABELS: Record<CampaignLengthSetting, string> = {
-  short: "Short (3 acts, a focused adventure)",
-  standard: "Standard (4-5 acts)",
-  epic: "Epic (6-8 acts, a sprawling saga)",
-};
-
-export const COMPANION_LABELS: Record<GameSettings["companions"], string> = {
-  auto: "Auto (solo: full; multiplayer: guests only)",
-  full: "Party members and guests",
-  guests: "Temporary guests only",
-  off: "Off",
-};
 
 export type CompanionMode = "full" | "guests" | "off";
 

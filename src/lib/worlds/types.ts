@@ -28,7 +28,6 @@ import {
   MAX_PACK_ART_KEYS,
   PACK_ART_DATA_URL,
   PACK_ART_KEY,
-  packArtUrl,
 } from "@/lib/worlds/art";
 
 // A reskin of something addressed by id (races, classes, backgrounds). The id
@@ -159,61 +158,16 @@ export const worldPackSchema = z.object({
 
 export type WorldPack = z.infer<typeof worldPackSchema>;
 
-// Where a pack came from. Bundled packs ship with the app under its MIT
-// license and are always original works; installed packs were added by an
-// admin from a registry or a file and are the user's own responsibility.
-// Only installed packs can be removed.
-export type WorldPackSource = "bundled" | "installed";
-
-// The subset the campaign-creation picker, the lobby panel and the plugin
-// browser need. Listing every pack in full would ship every reskin table to
-// the client for packs nobody selected.
-export type WorldPackSummary = Pick<
-  WorldPack,
-  | "id"
-  | "name"
-  | "blurb"
-  | "version"
-  | "author"
-  | "homepage"
-  | "inspiredBy"
-  | "rightsHolder"
-  | "franchise"
-  | "edition"
-  | "editionOrder"
-  | "baseGenre"
-  | "theme"
-  | "premise"
-> & {
-  source: WorldPackSource;
-  // The cover thumbnail's URL, or "" when the pack carries none and the
-  // picker draws the genre plate instead.
-  cover: string;
-};
-
-export function summarizePack(
-  pack: WorldPack,
-  source: WorldPackSource = "installed",
-): WorldPackSummary {
-  return {
-    id: pack.id,
-    name: pack.name,
-    blurb: pack.blurb,
-    version: pack.version,
-    author: pack.author,
-    homepage: pack.homepage,
-    inspiredBy: pack.inspiredBy,
-    rightsHolder: pack.rightsHolder,
-    franchise: pack.franchise,
-    edition: pack.edition,
-    editionOrder: pack.editionOrder,
-    baseGenre: pack.baseGenre,
-    theme: pack.theme,
-    premise: pack.premise,
-    source,
-    cover: pack.artKeys.includes("cover") ? packArtUrl(pack.id, "cover", pack.version) : "",
-  };
-}
+// The summary shape and the picker grouping live in ./summary (no zod, so
+// a listing page stays light); they are re-exported here for the loader,
+// the scripts and the tests that always reached them through this module.
+export {
+  groupByFranchise,
+  summarizePack,
+  type FranchiseGroup,
+  type WorldPackSource,
+  type WorldPackSummary,
+} from "@/lib/worlds/summary";
 
 // One entry in a remote registry index. It is deliberately NOT the pack: a
 // browser listing must be cheap, and the manifest is only downloaded when
@@ -242,31 +196,3 @@ export const registryIndexSchema = z.object({
 });
 
 export type RegistryEntry = z.infer<typeof registryEntrySchema>;
-
-export type FranchiseGroup = {
-  franchise: string;
-  editions: WorldPackSummary[];
-};
-
-// Packs grouped for the picker: one button per franchise, and a second row of
-// edition buttons for the franchises that have more than one. Pure so the
-// dialog and its test agree on the ordering.
-export function groupByFranchise(packs: WorldPackSummary[]): FranchiseGroup[] {
-  const groups = new Map<string, WorldPackSummary[]>();
-  for (const pack of packs) {
-    const existing = groups.get(pack.franchise);
-    if (existing) {
-      existing.push(pack);
-    } else {
-      groups.set(pack.franchise, [pack]);
-    }
-  }
-  return [...groups.entries()]
-    .map(([franchise, editions]) => ({
-      franchise,
-      editions: [...editions].sort(
-        (a, b) => a.editionOrder - b.editionOrder || a.name.localeCompare(b.name),
-      ),
-    }))
-    .sort((a, b) => a.franchise.localeCompare(b.franchise));
-}

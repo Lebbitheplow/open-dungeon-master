@@ -11,7 +11,7 @@ import {
   CAMPAIGN_LENGTH_LABELS,
   CAMPAIGN_LENGTHS,
   type CampaignLengthSetting,
-} from "@/lib/schemas/game-settings";
+} from "@/lib/schemas/game-settings-options";
 import { FieldLabel, inputClass, ToggleCard } from "@/app/create-campaign/fields";
 import type { StepProps } from "@/app/create-campaign/draft";
 

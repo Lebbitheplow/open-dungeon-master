@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import OptionPicker, { type PickerGroup } from "@/app/characters/builder/OptionPicker";
 import { UnofficialPackNotice } from "@/components/UnofficialPackNotice";
-import { DM_MODE_HINTS, DM_MODE_LABELS, DM_MODES } from "@/lib/schemas/game-settings";
+import { DM_MODE_HINTS, DM_MODE_LABELS, DM_MODES } from "@/lib/schemas/game-settings-options";
 import type { FranchiseGroup, WorldPackSummary } from "@/lib/worlds/types";
 import { FieldLabel, inputClass, ToggleCard } from "@/app/create-campaign/fields";
 import type { StepProps } from "@/app/create-campaign/draft";

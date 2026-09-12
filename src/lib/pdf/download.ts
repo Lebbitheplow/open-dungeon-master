@@ -3,7 +3,7 @@
 // stays environment-agnostic while this half touches the DOM.
 
 import { downloadBlob, filenameSlug } from "@/lib/download";
-import { buildCharacterSheetPdf, type PdfCharacter } from "./character-sheet-pdf";
+import type { PdfCharacter } from "./character-sheet-pdf";
 
 function isPng(bytes: Uint8Array): boolean {
   return bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
@@ -64,6 +64,9 @@ async function portraitBytes(url: string | null | undefined): Promise<Uint8Array
 }
 
 export async function downloadCharacterSheetPdf(character: PdfCharacter): Promise<void> {
+  // pdf-lib and its fonts only load when someone asks for the sheet, so
+  // the table and the character page do not carry them up front.
+  const { buildCharacterSheetPdf } = await import("./character-sheet-pdf");
   const bytes = await buildCharacterSheetPdf(character, {
     portraitBytes: await portraitBytes(character.portrait?.url),
   });

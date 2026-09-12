@@ -16,15 +16,15 @@ import type { WorldPackSummary } from "@/lib/worlds/types";
 import { WorldPackGallery } from "@/components/WorldPackGallery";
 import { TTS_VOICES } from "@/lib/tts-voices";
 import { VoicePreviewButton } from "@/components/VoicePreviewButton";
+import type { GameSettings } from "@/lib/schemas/game-settings";
 import {
   CAMPAIGN_LENGTH_LABELS,
   CAMPAIGN_LENGTHS,
   COMPANION_LABELS,
   type CampaignLengthSetting,
   type DicePolicy,
-  type GameSettings,
   type Genre,
-} from "@/lib/schemas/game-settings";
+} from "@/lib/schemas/game-settings-options";
 
 // The Living World explainer, shared with the campaign creator's info
 // button so the two never drift.
