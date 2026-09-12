@@ -12,12 +12,13 @@ import {
 } from "@/app/workshop/[workshopId]/systems";
 import type { WorkshopSummary } from "@/app/workshop/types";
 
-// The hub: ten cards, one per system, each wearing its live count so a DM
-// sees at a glance what is built and what is still empty. Tapping one opens
-// that system.
+// The hub: one card per system, each wearing its live count so a DM sees at
+// a glance what is built and what is still empty. Tapping one opens that
+// system.
 
 // Each card's picture. Nine systems have a workshop plate of their own; the
-// region is a journey and the share room is a chest of everything packed.
+// region is a journey, the share room is a chest of everything packed, and
+// the plugin is the world's banner.
 function systemPlate(id: SystemId): string {
   if (id === "region") {
     return miscPlaceholder("journey");
@@ -28,6 +29,9 @@ function systemPlate(id: SystemId): string {
   if (id === "party") {
     return miscPlaceholder("party");
   }
+  if (id === "plugin") {
+    return miscPlaceholder("faction");
+  }
   return workshopPlaceholder(id === "rules" ? "rulesets" : id);
 }
 
@@ -36,15 +40,17 @@ export function SystemCards({
   bestiary,
   homebrew,
   pregens = null,
+  plugin = null,
   onOpen,
 }: {
   workshop: WorkshopSummary;
   bestiary: number | null;
   homebrew: number | null;
   pregens?: number | null;
+  plugin?: number | null;
   onOpen: (system: SystemId) => void;
 }) {
-  const total = totalPieces(workshop, bestiary, homebrew, pregens);
+  const total = totalPieces(workshop, bestiary, homebrew, pregens, plugin);
   return (
     <section className="mt-5">
       <div className="mb-3 flex items-center gap-3">
@@ -55,7 +61,7 @@ export function SystemCards({
       </div>
       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" data-tour="hub-systems">
         {WORKSHOP_SYSTEMS.map((system) => {
-          const count = systemCount(system.id, workshop, bestiary, homebrew, pregens);
+          const count = systemCount(system.id, workshop, bestiary, homebrew, pregens, plugin);
           const empty = count.figure === "0" || count.figure === "none";
           return (
             <li key={system.id}>

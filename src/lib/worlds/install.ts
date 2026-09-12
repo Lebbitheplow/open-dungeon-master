@@ -11,14 +11,18 @@ import {
   withArtLifted,
   worldPackSource,
 } from "@/lib/worlds";
-import { worldPackSchema, registryIndexSchema, type WorldPack, type RegistryEntry } from "@/lib/worlds/types";
+import {
+  MAX_MANIFEST_BYTES,
+  worldPackSchema,
+  registryIndexSchema,
+  type WorldPack,
+  type RegistryEntry,
+} from "@/lib/worlds/types";
 
-// A manifest is prose, tables and a few hundred thumbnails at most. Anything
-// larger than this is not a world pack, and the cap is what stops a hostile
-// registry from streaming until the disk fills. Sixteen megabytes is roughly
-// four hundred pictures at the per-picture cap (src/lib/worlds/art.ts); the
-// packs this project's author maintains are two to three.
-export const MAX_MANIFEST_BYTES = 16 * 1024 * 1024;
+// The manifest byte cap lives in ./types (client-safe) so the workshop's
+// pack editor can measure against it; it is re-exported here for the
+// callers that always found it beside the fetch.
+export { MAX_MANIFEST_BYTES };
 const FETCH_TIMEOUT_MS = 20_000;
 
 // The registry every deployment browses unless its operator says otherwise.

@@ -14,6 +14,7 @@ import {
   type SystemId,
 } from "@/app/workshop/[workshopId]/systems";
 import { markTourSeen, tourSeen } from "@/lib/tours/logic";
+import { draftCount, worldPackDraftSchema } from "@/lib/worlds/draft";
 import { requestTourPrepare } from "@/lib/tours/prepare";
 import { HUB_TOUR, HUB_TOUR_ID, SYSTEM_TOURS, systemTourId } from "@/lib/tours/workshop";
 import { GuidedTour } from "@/components/ui/GuidedTour";
@@ -41,6 +42,7 @@ function WorkshopPageInner({ workshopId }: { workshopId: string }) {
   const [bestiary, setBestiary] = useState<number | null>(null);
   const [homebrew, setHomebrew] = useState<number | null>(null);
   const [pregens, setPregens] = useState<number | null>(null);
+  const [plugin, setPlugin] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [helpOpen, setHelpOpen] = useState(false);
   // The tour on screen: the hub's, or a tool's, by id.
@@ -113,6 +115,25 @@ function WorkshopPageInner({ workshopId }: { workshopId: string }) {
     [workshopId],
   );
 
+  // The world pack draft is one JSON value; its card counts the entries it
+  // names. The panel reports its own count while it is open, so this only
+  // runs when the view changes.
+  const loadPlugin = useCallback(
+    () =>
+      fetch(`/api/workshops/${workshopId}/plugin`)
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data: { draft?: unknown } | null) => {
+          const parsed = worldPackDraftSchema.safeParse(data?.draft);
+          if (parsed.success) {
+            setPlugin(draftCount(parsed.data));
+          }
+        })
+        .catch(() => {
+          // the card simply shows no figure until the next reload
+        }),
+    [workshopId],
+  );
+
   // Refetched whenever the view changes, so a person added inside Cast is
   // counted on the card the moment the DM steps back to the hub.
   useEffect(() => {
@@ -120,7 +141,8 @@ function WorkshopPageInner({ workshopId }: { workshopId: string }) {
     void loadBestiary();
     void loadHomebrew();
     void loadPregens();
-  }, [load, loadBestiary, loadHomebrew, loadPregens, system]);
+    void loadPlugin();
+  }, [load, loadBestiary, loadHomebrew, loadPregens, loadPlugin, system]);
 
   // The once-only tours: the hub's when the workshop first loads, a tool's
   // the first time that tool is opened, after the panel has had a moment to
@@ -234,12 +256,14 @@ function WorkshopPageInner({ workshopId }: { workshopId: string }) {
           bestiary={bestiary}
           homebrew={homebrew}
           pregens={pregens}
+          plugin={plugin}
           onChange={openSystem}
           onBack={() => router.push(pathname)}
           onHelp={() => setHelpOpen(true)}
           onRulesApplied={() => void load()}
           onHomebrewChanged={() => void loadHomebrew()}
           onPregensChanged={() => void loadPregens()}
+          onPluginChanged={setPlugin}
         />
       ) : (
         <SystemCards
@@ -247,6 +271,7 @@ function WorkshopPageInner({ workshopId }: { workshopId: string }) {
           bestiary={bestiary}
           homebrew={homebrew}
           pregens={pregens}
+          plugin={plugin}
           onOpen={openSystem}
         />
       )}

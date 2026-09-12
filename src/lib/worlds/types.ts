@@ -30,6 +30,14 @@ import {
   PACK_ART_KEY,
 } from "@/lib/worlds/art";
 
+// A manifest is prose, tables and a few hundred thumbnails at most. Anything
+// larger than this is not a world pack, and the cap is what stops a hostile
+// registry from streaming until the disk fills. Sixteen megabytes is roughly
+// four hundred pictures at the per-picture cap (src/lib/worlds/art.ts); the
+// packs this project's author maintains are two to three. Declared here,
+// client-safe, so the editor that writes a pack can measure against it.
+export const MAX_MANIFEST_BYTES = 16 * 1024 * 1024;
+
 // A reskin of something addressed by id (races, classes, backgrounds). The id
 // is canonical and never rewritten; only `name` changes what is displayed.
 const idReskin = z.object({

@@ -612,6 +612,15 @@ function ensureSchema(db: SqliteDatabase) {
     CREATE INDEX IF NOT EXISTS idx_workshop_beats_campaign
       ON workshop_beats(campaign_id, created_at);
 
+    -- The world pack a workshop is writing (src/lib/worlds/draft.ts), one
+    -- per workshop, as the draft JSON with its art inline the way a manifest
+    -- carries it. Cascades with the workshop.
+    CREATE TABLE IF NOT EXISTS world_pack_drafts (
+      campaign_id TEXT PRIMARY KEY REFERENCES campaigns(id) ON DELETE CASCADE,
+      draft_json TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS battle_tokens (
       id TEXT PRIMARY KEY,
       map_id TEXT NOT NULL REFERENCES battle_maps(id) ON DELETE CASCADE,

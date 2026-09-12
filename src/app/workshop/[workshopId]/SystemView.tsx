@@ -15,6 +15,7 @@ import { RulesPanel } from "@/app/campaigns/[campaignId]/RulesPanel";
 import { RulesetLibrary } from "@/app/workshop/RulesetLibrary";
 import { HomebrewPanel } from "@/app/workshop/homebrew/HomebrewPanel";
 import { PartyPanel } from "@/app/workshop/party/PartyPanel";
+import { PluginPanel } from "@/app/workshop/plugin/PluginPanel";
 import {
   WORKSHOP_SYSTEMS,
   systemCount,
@@ -30,6 +31,7 @@ import type { WorkshopSummary } from "@/app/workshop/types";
 // to any of them because a workshop IS a campaigns row and its owner holds
 // the DM seat (docs/workshop-plan.md section 1). Cast and Battle maps opt
 // into their workshop layouts; the other eight render as they always have.
+// Party, Homebrew and Plugin are the workshop's own.
 
 export function SystemView({
   workshop,
@@ -37,18 +39,21 @@ export function SystemView({
   bestiary,
   homebrew,
   pregens,
+  plugin,
   onChange,
   onBack,
   onHelp,
   onRulesApplied,
   onHomebrewChanged,
   onPregensChanged,
+  onPluginChanged,
 }: {
   workshop: WorkshopSummary;
   system: SystemId;
   bestiary: number | null;
   homebrew: number | null;
   pregens: number | null;
+  plugin: number | null;
   onChange: (system: SystemId) => void;
   onBack: () => void;
   // The guide for this tool and its tour.
@@ -56,11 +61,12 @@ export function SystemView({
   onRulesApplied: () => void;
   onHomebrewChanged: () => void;
   onPregensChanged: () => void;
+  onPluginChanged: (count: number) => void;
 }) {
   const current = WORKSHOP_SYSTEMS.find((entry) => entry.id === system) ?? WORKSHOP_SYSTEMS[0];
-  const count = systemCount(current.id, workshop, bestiary, homebrew, pregens);
+  const count = systemCount(current.id, workshop, bestiary, homebrew, pregens, plugin);
   const items: IconRailItem<SystemId>[] = WORKSHOP_SYSTEMS.map((entry) => {
-    const entryCount = systemCount(entry.id, workshop, bestiary, homebrew, pregens);
+    const entryCount = systemCount(entry.id, workshop, bestiary, homebrew, pregens, plugin);
     return {
       value: entry.id,
       label: entry.label,
@@ -136,6 +142,9 @@ export function SystemView({
       ) : null}
       {system === "lore" ? <LorePanel campaignId={workshop.id} steersStory layout="rows" /> : null}
       {system === "tables" ? <DmTablesPanel campaignId={workshop.id} layout="rows" /> : null}
+      {system === "plugin" ? (
+        <PluginPanel workshopId={workshop.id} onChanged={onPluginChanged} />
+      ) : null}
       {system === "share" ? <DmSharePanel campaignId={workshop.id} /> : null}
       {system === "rules" ? (
         <>

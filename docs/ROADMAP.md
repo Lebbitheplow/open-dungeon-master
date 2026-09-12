@@ -200,6 +200,19 @@ pack IS its reskin tables, a workshop holds none, and rather than emit an
 empty pack that looks finished it produces the flavour half a workshop does
 accumulate and returns the refusals naming what stayed behind and why.
 
+**The Plugin tool (2026-09)** closes that gap from the other side. The reskin
+tables the compile refused are the one thing a workshop never held, so a
+thirteenth system now holds them: a world pack draft, one per workshop, with
+a guided setup for the identity fields and a builder tab for each part of the
+pack. Every table is filled from a picker (the SRD catalogs for species,
+callings, backgrounds and features; the content pack for spells, gear and
+monsters) so an id is never typed, and Pull from this workshop runs the same
+compile to fill the setting lists from the lore already written. Pictures are
+resized in the browser to the pack's own art scheme. Publish runs the
+validator's checks in the editor and hands over the manifest, or installs it
+in one press for an admin. The draft rides in the workshop bundle and through
+Duplicate. See docs/worlds.md, "Building a pack in the workshop".
+
 World Anvil, which the workshop plan carried as its own phase, is ruled out.
 Its API needs a per-application key that World Anvil issues only to Guild
 members above Grandmaster rank, so the phase could not be started by anyone

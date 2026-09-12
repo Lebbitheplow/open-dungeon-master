@@ -6,6 +6,7 @@ import {
   LayoutGrid,
   type LucideIcon,
   Map as MapIcon,
+  Puzzle,
   Scale,
   Share2,
   Skull,
@@ -15,15 +16,16 @@ import {
 } from "lucide-react";
 import type { WorkshopSummary } from "@/app/workshop/types";
 
-// The twelve systems a workshop is made of, and how each one counts itself.
+// The thirteen systems a workshop is made of, and how each one counts itself.
 //
 // Nine of the counts come straight off the workshop's contents map, which
 // /api/workshops/:id already serves per importable kind. The bestiary, the
-// homebrew shelf and the party are the exceptions: monsters, items, spells,
-// character options and pregens are the builder's, not the workshop's, so
-// they are not importable kinds and their counts are fetched from their own
-// list routes by the page. Rules is a yes-or-no rather than a number, and
-// Share has nothing to count.
+// homebrew shelf, the party and the plugin are the exceptions: monsters,
+// items, spells, character options and pregens are the builder's, not the
+// workshop's, and the world pack draft is one JSON value rather than rows,
+// so none of them are importable kinds and their counts are fetched from
+// their own routes by the page. Rules is a yes-or-no rather than a number,
+// and Share has nothing to count.
 
 export const WORKSHOP_SYSTEMS = [
   { id: "storyboard", label: "Storyboard", blurb: "Plan the arc", icon: LayoutGrid },
@@ -37,6 +39,7 @@ export const WORKSHOP_SYSTEMS = [
   { id: "lore", label: "Lore", blurb: "World facts & places", icon: BookOpen },
   { id: "tables", label: "Tables", blurb: "Roll tables", icon: Dices },
   { id: "rules", label: "Rules", blurb: "House & variant", icon: Scale },
+  { id: "plugin", label: "Plugin", blurb: "Build a world pack", icon: Puzzle },
   { id: "share", label: "Share", blurb: "Export a bundle", icon: Share2 },
 ] as const satisfies ReadonlyArray<{
   id: string;
@@ -66,9 +69,16 @@ export function systemCount(
   bestiary: number | null,
   homebrew: number | null = null,
   pregens: number | null = null,
+  plugin: number | null = null,
 ): SystemCount {
   const contents = workshop.contents;
   switch (id) {
+    case "plugin":
+      return {
+        figure: plugin === null ? null : String(plugin),
+        phrase: plugin === null ? "counting" : plugin ? plural(plugin, "entry in the pack", "entries in the pack") : "no pack yet",
+        total: plugin ?? 0,
+      };
     case "party": {
       const party = workshop.gameSettings.targetParty;
       return {
@@ -150,9 +160,10 @@ export function totalPieces(
   bestiary: number | null,
   homebrew: number | null = null,
   pregens: number | null = null,
+  plugin: number | null = null,
 ): number {
   return WORKSHOP_SYSTEMS.reduce(
-    (sum, system) => sum + systemCount(system.id, workshop, bestiary, homebrew, pregens).total,
+    (sum, system) => sum + systemCount(system.id, workshop, bestiary, homebrew, pregens, plugin).total,
     0,
   );
 }

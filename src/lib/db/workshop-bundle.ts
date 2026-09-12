@@ -6,6 +6,7 @@ import { getHouseRulesText, setHouseRules } from "@/lib/db/rules";
 import { createHomebrewMonster, listHomebrewMonsters } from "@/lib/bestiary/homebrew-monsters";
 import { createHomebrew, listHomebrew } from "@/lib/db/homebrew";
 import { createCharacter } from "@/lib/db/characters";
+import { getPackDraft, hasPackDraft, savePackDraft } from "@/lib/db/world-pack-drafts";
 import { createSheetSchema } from "@/lib/schemas/sheet";
 import { normalizeHomebrewData } from "@/lib/homebrew/gear";
 import { draftFromData } from "@/lib/bestiary/monster-draft";
@@ -233,6 +234,9 @@ export function exportWorkshopBundle(
         },
       ];
     }),
+    // The world pack draft travels whole, art and all; it is the one thing
+    // in a workshop that was built to be handed on.
+    plugin: hasPackDraft(workshopId) ? getPackDraft(workshopId).draft : null,
   };
 
   // The board last, because its arrows have to become indexes into the
@@ -527,6 +531,11 @@ export function importWorkshopBundle(
     }
     createHomebrew(userId, { kind: entry.kind, name: entry.name, data: normalized.data });
     owned.add(key);
+    copied += 1;
+  }
+
+  if (bundle.plugin) {
+    savePackDraft(workshop.id, bundle.plugin);
     copied += 1;
   }
 

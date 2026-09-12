@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createSheetSchema } from "@/lib/schemas/sheet";
 import { GENRES } from "@/lib/schemas/game-settings";
 import { BEAT_KINDS } from "@/lib/workshop/board";
+import { worldPackDraftSchema } from "@/lib/worlds/draft";
 
 // A workshop as a file: what travels between two people, and what does not.
 //
@@ -264,6 +265,11 @@ export const workshopBundleSchema = z.object({
   monsters: z.array(monsterSchema).max(BUNDLE_LIMITS.monsters).default([]),
   homebrew: z.array(homebrewSchema).max(BUNDLE_LIMITS.homebrew).default([]),
   pregens: z.array(pregenSchema).max(BUNDLE_LIMITS.pregens).default([]),
+  // The world pack the workshop is writing (src/lib/worlds/draft.ts), art
+  // inline, so a shared workshop arrives with its plugin half-built rather
+  // than as a folder of lore somebody has to re-key. Null in bundles from
+  // builds before the creator existed.
+  plugin: worldPackDraftSchema.nullable().default(null),
 });
 
 export type WorkshopBundle = z.infer<typeof workshopBundleSchema>;
@@ -286,6 +292,9 @@ export function pickBundleKinds(bundle: WorkshopBundle, kinds: string[]): Worksh
   if (!wanted.has("rules")) {
     picked.houseRulesText = "";
   }
+  if (!wanted.has("plugin")) {
+    picked.plugin = null;
+  }
   return picked;
 }
 
@@ -301,6 +310,7 @@ export const BUNDLE_KIND_LABELS: Record<string, string> = {
   homebrew: "Homebrew items, spells and options",
   pregens: "Pregenerated characters",
   rules: "House rules",
+  plugin: "World pack draft",
 };
 
 export type BundleCounts = Record<keyof typeof BUNDLE_LIMITS, number>;
@@ -354,6 +364,12 @@ export function bundleWarnings(bundle: WorkshopBundle): string[] {
   if (bundle.houseRulesText.trim()) {
     warnings.push(
       "This bundle carries house rules. They land on the new workshop, not on any campaign, until you import them yourself.",
+    );
+  }
+  if (bundle.plugin) {
+    const pictures = Object.keys(bundle.plugin.art).length;
+    warnings.push(
+      `Carries a world pack draft${bundle.plugin.name ? ` ("${bundle.plugin.name}")` : ""}${pictures ? ` with ${pictures} picture${pictures === 1 ? "" : "s"}` : ""}. It lands in the new workshop's Plugin tool; nothing is installed.`,
     );
   }
   return warnings;

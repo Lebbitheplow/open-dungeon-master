@@ -4,6 +4,7 @@ import { createWorkshop, listWorkshopsForUser } from "@/lib/db/workshops";
 import { getImportSourceForUser } from "@/lib/db/import-sources";
 import { runContentImport } from "@/lib/db/content-import";
 import { copyBeats } from "@/lib/db/workshop-beats";
+import { copyPackDraft } from "@/lib/db/world-pack-drafts";
 import { dedupeName, IMPORT_KINDS, type ImportKind } from "@/lib/workshop/import";
 
 // Cloning a whole campaign or workshop.
@@ -97,9 +98,14 @@ export function cloneCampaign(
     return { error: result.error };
   }
 
+  // The board and the world pack draft are the two things a workshop holds
+  // that are not importable kinds, so the clone carries them itself.
   const copied =
     result.copied +
-    (source.kind === "workshop" ? copyBeats(source.id, created.id, result.idMap) : 0);
+    (source.kind === "workshop"
+      ? copyBeats(source.id, created.id, result.idMap) +
+        (copyPackDraft(source.id, created.id) ? 1 : 0)
+      : 0);
 
   return { campaign: created, copied };
 }

@@ -51,7 +51,7 @@ export const HUB_TOUR: TourStep[] = [
   {
     id: "welcome",
     title: "Inside a workshop",
-    body: "Twelve tools, one card each, wearing a live count so you can see what is built and what is still empty. This tour shows the frame; each tool opens with a short tour of its own the first time.",
+    body: "Thirteen tools, one card each, wearing a live count so you can see what is built and what is still empty. This tour shows the frame; each tool opens with a short tour of its own the first time.",
     anchors: [],
   },
   {
@@ -63,7 +63,7 @@ export const HUB_TOUR: TourStep[] = [
   {
     id: "systems",
     title: "The tools",
-    body: "Storyboard plans the arc. Party, Battle maps, Region, Encounters, Cast, Bestiary, Homebrew, Lore and Tables each build one kind of material. Rules holds the house and variant rules. Share packs it all up.",
+    body: "Storyboard plans the arc. Party, Battle maps, Region, Encounters, Cast, Bestiary, Homebrew, Lore and Tables each build one kind of material. Rules holds the house and variant rules. Plugin builds a world pack other servers can install. Share packs it all up.",
     anchors: ["hub-systems"],
   },
   {
@@ -450,6 +450,32 @@ export const SYSTEM_TOURS: Record<string, TourStep[]> = {
       title: "House rules",
       body: "Written rules, grouped by heading. The narrator retrieves only the relevant sections each turn; pin one to include it always.",
       anchors: ["rules-house"],
+    },
+  ]),
+  plugin: tool([
+    {
+      id: "sections",
+      title: "The parts of a world pack",
+      body: "A pack is a name mapping over the rules: the world's own races, classes, spells, gear and monsters, plus its factions, places, hooks and pictures. Each part is a tab here.",
+      anchors: ["plugin-sections"],
+    },
+    {
+      id: "guided",
+      title: "Guided setup",
+      body: "Walks through the identity of the world one question at a time: what it is called, whose setting it stands on, its genre and how the narrator should sound. Come back to it any time.",
+      anchors: ["plugin-guided"],
+    },
+    {
+      id: "pull",
+      title: "Pull from this workshop",
+      body: "Reads the lore, places, hook cards and cast you already built here into the pack's setting lists. It adds; it never overwrites what you wrote by hand.",
+      anchors: ["plugin-pull"],
+    },
+    {
+      id: "publish",
+      title: "Check, download, install",
+      body: "The Publish tab lists what is missing, then hands you the pack as one file. An admin can install it straight onto this server.",
+      anchors: ["plugin-publish"],
     },
   ]),
   share: tool([

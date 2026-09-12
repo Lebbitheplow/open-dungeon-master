@@ -6,6 +6,10 @@ and nudges the character builder. It does not change a single rule.
 
 A pack is one JSON file. That is the whole plugin format.
 
+There are two ways to write one: by hand, following this document, or in the
+workshop's **Plugin** tool, which is the same format behind pickers and
+uploads. See [Building a pack in the workshop](#building-a-pack-in-the-workshop).
+
 ## Where packs live
 
 | Directory | Ships with the app | License | Removable |
@@ -314,6 +318,67 @@ raw bytes rather than the preview page. Two warnings:
 Drive also throttles heavily-downloaded public files, so a busy registry is
 better off on a plain static host.
 
+## Building a pack in the workshop
+
+Every workshop has a **Plugin** tool that writes this format without a text
+editor. It is the same manifest, so a pack built there installs, validates and
+ships exactly like one written by hand, and a hand-written pack can be read
+into it to keep editing.
+
+Two ways in, and both are offered:
+
+- **Guided setup** asks the identity questions in order: the name and blurb,
+  what it is inspired by and who owns that, the base genre and theme, and the
+  narrator's brief. It opens on its own the first time the tool is empty and
+  can be rerun from the header.
+- **The builder tabs** are the pack's parts as editors. People (species,
+  callings, backgrounds), Magic and gear (spells, items, features), Bestiary,
+  Setting (factions, places, hooks, glossary, name seeds), Pictures, and
+  Publish.
+
+Pick, do not type. A species, calling or background is chosen from the catalog
+by its real name and the id is never seen. A spell, item or monster is searched
+in the content pack, which supplies the canonical name or the slug, the
+challenge rating and the creature type. A feature is picked from every feature
+the SRD tables grant. What a person types is the world's word for the thing and
+a line about it, which is all a reskin is.
+
+**Pull from this workshop** reads the lore filed under "factions", the places,
+the storyboard's hook cards and the cast's names into the setting lists, through
+the same compile the Share tool's "Compile a world pack" uses
+(`src/lib/workshop/to-pack.ts`). It adds and never overwrites, so an entry
+written by hand survives a second pull.
+
+**Pictures** are uploaded through a plain file input, one slot per thing the
+pack names, and resized in the browser to the slot's shape (256 px squares,
+704x400 for the cover and places) as WebP under the per-picture cap
+(`src/lib/worlds/art-resize.ts`). They are held in the draft as data URLs, the
+same way the manifest carries them, so nothing lands in `public/uploads/`.
+
+**Publish** runs the same checks as `scripts/validate-world-packs.mjs`
+(`src/lib/worlds/draft-check.ts` in the browser, plus the content-pack
+integrity checks on the server at export) and lists what is missing. The size
+targets above are shown as advice, not as blocks. Then:
+
+- **Download the pack** hands over `<id>.json`, the file Admin, Campaign
+  plugins, Install from a file takes on any server.
+- **Install on this server** does that install in one press. Admin only, for
+  the same reason every install is: it writes a file the whole server serves.
+- **Start from** reads a pack file or an installed world into the draft. An
+  installed world's pictures stay with the installed copy, since the loader has
+  already lifted them out of its manifest.
+
+The draft is one JSON value per workshop (`world_pack_drafts`, one row keyed by
+the workshop), autosaved as it is edited and capped at the manifest size so a
+draft that could not be installed cannot be saved either. Duplicate copies it,
+and it travels inside the workshop bundle as `plugin`, so sharing a workshop
+shares the half-built pack too. The whole thing runs in the desktop and Android
+apps unchanged: file inputs, canvas resizing and the download all work in their
+WebViews, and nothing depends on drag-and-drop.
+
+`scripts/test-world-pack-draft.mjs` covers the draft schema, the finish, the
+checks, the pull merge, the store, the bundle and the clone.
+
 ## Checking your work
 
 ```bash
@@ -321,6 +386,7 @@ node scripts/validate-world-packs.mjs [dir]   # any folder, defaults to data/wor
 node scripts/test-world-packs.mjs             # the bundled packs, part of npm test
 node scripts/test-world-install.mjs           # the install and removal lifecycle
 node scripts/test-world-art.mjs               # the art keys, the lift and the render list
+node scripts/test-world-pack-draft.mjs        # the workshop's Plugin tool: draft, checks, pull, store
 ```
 
 `src/lib/worlds/bundled/saltmarch.json` is the worked example. Match its depth.

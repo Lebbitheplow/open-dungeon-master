@@ -190,6 +190,23 @@ export const WORKSHOP_GUIDES: ToolGuide[] = [
     ],
   },
   {
+    id: "plugin",
+    title: "Plugin",
+    purpose: "A world pack of your own: the setting's names over the rules, its lore, and its pictures, as one file any server can install.",
+    steps: [
+      "Run Guided setup: name the world, say what it is inspired by and who owns that, pick the base genre, and write the narrator's brief.",
+      "Pull from this workshop to bring in the lore, places, hook cards and cast you already built.",
+      "In People, Magic and gear, and Bestiary, pick the thing from the catalog and give it the world's name for it.",
+      "In Pictures, upload a cover and a picture for any race, class, monster, place or faction; they are resized to fit on the way in.",
+      "Open Publish. Fix what it lists, then Download the pack, or Install it here if you run this server.",
+    ],
+    tips: [
+      "A pack renames; it never changes a rule. Anything mechanical is a homebrew entry, not a pack.",
+      "Fill in the rights holder for anything built on somebody else's setting; it turns the notice into a proper disclaimer.",
+      "The draft travels inside the workshop bundle, so sharing the workshop shares the half-built pack too.",
+    ],
+  },
+  {
     id: "share",
     title: "Share",
     purpose: "The whole workshop as one file, or compiled into a draft world pack.",
