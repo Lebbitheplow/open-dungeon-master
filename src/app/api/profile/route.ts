@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { cancelAccountDeletion, requestAccountDeletion } from "@/lib/account-deletion";
 import { currentUser, endSession, unauthorized, verifyPassword } from "@/lib/auth";
+import { isValidDiceLook, type DiceLook } from "@/lib/dice/dice-look";
 import {
   NO_PASSWORD_SENTINEL,
   getUserByUsername,
@@ -14,14 +15,20 @@ export const dynamic = "force-dynamic";
 
 const volumeSchema = z.number().min(0).max(1);
 
-// Audio preferences synced across browsers (src/lib/audio-prefs.ts). Voice
-// device prefs stay client-side on purpose; see useVoicePrefs.ts.
+// The dice look is checked field by field by the dice module rather than
+// spelled out again here, so the two can never disagree on a texture name.
+const diceLookSchema = z.custom<DiceLook>(isValidDiceLook, "Invalid dice look.");
+
+// Audio preferences synced across browsers (src/lib/audio-prefs.ts) and the
+// player's dice look (src/lib/dice/dice-look-store.ts). Voice device prefs
+// stay client-side on purpose; see useVoicePrefs.ts.
 const settingsSchema = z.object({
   narrationVolume: volumeSchema.optional(),
   narrationMuted: z.boolean().optional(),
   ambienceVolume: volumeSchema.optional(),
   ambienceMuted: z.boolean().optional(),
   chimeMuted: z.boolean().optional(),
+  diceLook: diceLookSchema.optional(),
 });
 
 const patchSchema = z.object({

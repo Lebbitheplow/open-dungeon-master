@@ -443,7 +443,7 @@ export function listMembers(campaignId: string): CampaignMember[] {
   const rows = getDatabase()
     .prepare(
       `
-        SELECT m.user_id, u.username, u.avatar_json, m.role, m.ready, m.use_real_dice, m.muted, m.joined_at
+        SELECT m.user_id, u.username, u.avatar_json, m.role, m.ready, m.use_real_dice, m.hold_rolls, m.muted, m.joined_at
         FROM campaign_members m
         JOIN users u ON u.id = m.user_id
         WHERE m.campaign_id = ?
@@ -457,6 +457,7 @@ export function listMembers(campaignId: string): CampaignMember[] {
     role: "owner" | "player";
     ready: number;
     use_real_dice: number;
+    hold_rolls: number;
     muted: number;
     joined_at: string;
   }>;
@@ -468,6 +469,7 @@ export function listMembers(campaignId: string): CampaignMember[] {
     role: row.role,
     ready: Boolean(row.ready),
     useRealDice: Boolean(row.use_real_dice),
+    holdRolls: Boolean(row.hold_rolls),
     muted: Boolean(row.muted),
     joinedAt: row.joined_at,
   }));
@@ -840,6 +842,13 @@ export function setMemberRealDice(campaignId: string, userId: string, useRealDic
   getDatabase()
     .prepare(`UPDATE campaign_members SET use_real_dice = ? WHERE campaign_id = ? AND user_id = ?`)
     .run(useRealDice ? 1 : 0, campaignId, userId);
+  touchCampaign(campaignId);
+}
+
+export function setMemberHoldRolls(campaignId: string, userId: string, holdRolls: boolean) {
+  getDatabase()
+    .prepare(`UPDATE campaign_members SET hold_rolls = ? WHERE campaign_id = ? AND user_id = ?`)
+    .run(holdRolls ? 1 : 0, campaignId, userId);
   touchCampaign(campaignId);
 }
 

@@ -1,16 +1,21 @@
 import { z } from "zod";
 import { isErrorResponse, requireMember } from "@/lib/campaign-api";
-import { setMemberRealDice, listMembers } from "@/lib/db/campaigns";
+import { listMembers, setMemberHoldRolls, setMemberRealDice } from "@/lib/db/campaigns";
 import { publishPersisted } from "@/lib/events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const patchMeSchema = z.object({
-  useRealDice: z.boolean(),
-});
+const patchMeSchema = z
+  .object({
+    useRealDice: z.boolean().optional(),
+    // Shake to roll: park every roll for this player to release. Not gated
+    // by the dice policy because the server still draws the numbers.
+    holdRolls: z.boolean().optional(),
+  })
+  .refine((data) => data.useRealDice !== undefined || data.holdRolls !== undefined);
 
-// Per-member preferences (currently: physical dice opt-in).
+// Per-member preferences: physical dice opt-in and hold-my-rolls.
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ campaignId: string }> },
@@ -34,7 +39,12 @@ export async function PATCH(
     );
   }
 
-  setMemberRealDice(campaignId, context.user.id, parsed.data.useRealDice);
+  if (parsed.data.useRealDice !== undefined) {
+    setMemberRealDice(campaignId, context.user.id, parsed.data.useRealDice);
+  }
+  if (parsed.data.holdRolls !== undefined) {
+    setMemberHoldRolls(campaignId, context.user.id, parsed.data.holdRolls);
+  }
   const member = listMembers(campaignId).find((entry) => entry.userId === context.user.id);
   publishPersisted(campaignId, "member_updated", { member });
   return Response.json({ member });

@@ -26,6 +26,13 @@ import {
 } from "@/lib/audio-devices";
 import { AUDIO_PREF_FIELDS, writeAudioPref, type AudioPrefField } from "@/lib/audio-prefs";
 import { cn } from "@/lib/cn";
+import { DiceLookButton } from "@/components/DiceLookEditor";
+import {
+  requestMotionAccess,
+  supportsShake,
+  useShakeToRoll,
+  writeShakeToRoll,
+} from "@/lib/dice/shake-to-roll";
 import { MASTER_VOLUME_MAX, VOLUME_STEP } from "@/lib/voice/volume";
 
 // Everything about the machine in front of the player: which microphone
@@ -470,6 +477,9 @@ function DiceSection() {
     () => window.localStorage.getItem(DICE3D_KEY) !== "off",
     () => true,
   );
+  const shake = useShakeToRoll();
+  // Sampled once: the sensor and the pointer type do not change mid-visit.
+  const [canShake] = useState(() => supportsShake());
   return (
     <section>
       <h3 className={HEADING}>
@@ -484,6 +494,26 @@ function DiceSection() {
             window.dispatchEvent(new Event(DICE3D_EVENT));
           }}
         />
+        <DiceLookButton />
+        {canShake ? (
+          <div>
+            <Switch
+              label="Shake to roll"
+              on={shake}
+              onChange={(on) => {
+                if (on) {
+                  void requestMotionAccess().then((granted) => writeShakeToRoll(granted));
+                } else {
+                  writeShakeToRoll(false);
+                }
+              }}
+            />
+            <p className="mt-1 text-xs text-stone-500">
+              Your rolls wait for you at the table; shake this device to roll them. A tap
+              works too.
+            </p>
+          </div>
+        ) : null}
         <div className={cn(HEADING, "mb-0")}>
           <Bluetooth className="size-3.5" /> Physical dice
         </div>

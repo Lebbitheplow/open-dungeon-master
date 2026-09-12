@@ -16,6 +16,7 @@ import { getCampaignById, type Campaign } from "@/lib/db/campaigns";
 import { createDmTurn, getDmTurn, saveDmTurn, type DmTurn } from "@/lib/db/dm-turns";
 import { listMembers } from "@/lib/db/campaigns";
 import { listSheets } from "@/lib/db/sheets";
+import { heldRollUserIds } from "@/lib/dice/held-rolls";
 import { listOpenPendingRolls } from "@/lib/db/dm-turns";
 import { adjudication, checkArgs, type CatalogEntry } from "@/lib/dm/invoke-catalog";
 import { dispatchAdjudication } from "@/lib/dm/invoke-dispatch";
@@ -143,14 +144,7 @@ export function normalizeArgs(
 // enter rather than being rolled by the server, for a human DM exactly as
 // for the AI one.
 function realDiceUsers(campaign: Campaign): Set<string> {
-  if (campaign.gameSettings.dicePolicy !== "real_allowed") {
-    return new Set();
-  }
-  return new Set(
-    listMembers(campaign.id)
-      .filter((member) => member.useRealDice)
-      .map((member) => member.userId),
-  );
+  return heldRollUserIds(campaign.gameSettings.dicePolicy, listMembers(campaign.id));
 }
 
 // The turn a human DM's adjudications hang on. Rolls need a turn to belong

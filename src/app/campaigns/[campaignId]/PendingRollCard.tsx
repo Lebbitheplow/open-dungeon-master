@@ -1,9 +1,11 @@
 "use client";
 
-import { Dices, Loader2 } from "lucide-react";
+import { Dices, Loader2, Smartphone } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import type { CampaignMember } from "@/lib/campaign-types";
 import { cn } from "@/lib/cn";
 import { expressionDice } from "@/lib/dice";
+import { buzz, onShake, supportsShake, useShakeToRoll } from "@/lib/dice/shake-to-roll";
 import {
   resolveFaceSource,
   useDiceSources,
@@ -20,19 +22,30 @@ import type { PendingRoll } from "@/app/campaigns/[campaignId]/useCampaignStream
 
 const OWNER_FALLBACK_AFTER_MS = 3 * 60 * 1000;
 
-// A parked physical roll. The rolling player enters each die; everyone else
-// sees a waiting card. The roller can always fall back to a digital roll;
-// the owner can too once the card has sat unanswered for a few minutes.
+const SUBMIT_BUTTON = cn(
+  "rounded-lg bg-gradient-to-b from-amber-100 via-amber-200 to-amber-400 px-3 py-1.5 text-sm font-semibold text-amber-950",
+  "shadow-[0_1px_0_rgba(253,247,231,0.6)_inset] transition-all duration-150 ease-snap",
+  "hover:-translate-y-px hover:shadow-glow-gold-strong active:translate-y-0 active:scale-95",
+  "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none",
+);
+
+// A parked roll. For a physical-dice player the roller enters each die; for
+// a player who holds their own rolls (shake to roll) the card waits for a
+// shake or a tap and the server rolls. Everyone else sees a waiting card.
+// The roller can always fall back to a digital roll; the owner can too once
+// the card has sat unanswered for a few minutes.
 export function PendingRollCard({
   campaignId,
   pending,
   sheets,
+  members,
   meUserId,
   steersStory,
 }: {
   campaignId: string;
   pending: PendingRoll;
   sheets: CharacterSheet[];
+  members: CampaignMember[];
   meUserId: string;
   steersStory: boolean;
 }) {
@@ -52,6 +65,13 @@ export function PendingRollCard({
   }, [pending.expression]);
 
   const mine = pending.userId === meUserId;
+  // Held without real dice: no faces to type, the whole roll is digital
+  // and released by the roller (a shake here, a tap anywhere).
+  const roller = members.find((member) => member.userId === pending.userId);
+  const heldOnly = Boolean(roller?.holdRolls && !roller?.useRealDice);
+  const shakeOn = useShakeToRoll();
+  const [canShake] = useState(() => supportsShake());
+  const shakeActive = mine && shakeOn && canShake;
 
   const [diceSources] = useDiceSources();
   const pixels = useSyncExternalStore(
@@ -175,7 +195,9 @@ export function PendingRollCard({
 
   const autoSubmittedRef = useRef(false);
   useEffect(() => {
-    if (!mine || !fullyAutomatic || autoSubmittedRef.current || busy || !complete) {
+    // A held roll is the player's to release: never auto-submit it, even
+    // when every die source is digital.
+    if (!mine || heldOnly || !fullyAutomatic || autoSubmittedRef.current || busy || !complete) {
       return;
     }
     autoSubmittedRef.current = true;
@@ -183,14 +205,41 @@ export function PendingRollCard({
     // submit is stable enough for this one-shot guarded call; re-running only
     // matters to catch the transition to complete, which the deps below cover.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mine, fullyAutomatic, busy, complete, faces, values]);
+  }, [mine, heldOnly, fullyAutomatic, busy, complete, faces, values]);
+
+  // A shake releases the roll: the typed and Pixels faces when they are all
+  // in, otherwise a fully digital roll. One shake per card.
+  const shakenRef = useRef(false);
+  useEffect(() => {
+    if (!shakeActive || busy) {
+      return;
+    }
+    return onShake(() => {
+      if (shakenRef.current) return;
+      shakenRef.current = true;
+      buzz();
+      void submit(!heldOnly && complete ? { dice: submissionDice() } : { fallback: "digital" });
+    });
+    // submit and submissionDice read the latest values through closure;
+    // the listener is rebound whenever the inputs it depends on change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shakeActive, busy, heldOnly, complete, faces, values]);
+
+  async function stopHolding() {
+    await fetch(`/api/campaigns/${campaignId}/members/me`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ holdRolls: false }),
+    }).catch(() => undefined);
+  }
 
   if (!mine) {
     return (
       <div className="mb-2 flex items-center justify-between rounded-md border border-amber-900/60 bg-amber-950/20 px-3 py-2 text-xs text-amber-200/90">
         <span className="flex items-center gap-2">
           <Dices className="size-4 animate-pulse text-amber-200" />
-          Waiting for {character?.name ?? "a player"} to roll {pending.expression} with real dice
+          Waiting for {character?.name ?? "a player"} to roll {pending.expression}
+          {heldOnly ? "" : " with real dice"}
         </span>
         {steersStory && stale ? (
           <button
@@ -218,7 +267,45 @@ export function PendingRollCard({
       {pending.reason ? (
         <p className="mt-0.5 text-xs text-amber-200/70">{pending.reason}</p>
       ) : null}
-      {diceSummary ? (
+      {heldOnly ? (
+        <>
+          {advantageNote ? (
+            <p className="mt-0.5 text-xs text-amber-200/90">{advantageNote}</p>
+          ) : null}
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            {shakeActive ? (
+              <span className="flex items-center gap-2 text-sm text-amber-100">
+                <Smartphone className="size-5 animate-bounce text-amber-200" />
+                Shake to roll {diceSummary}
+              </span>
+            ) : (
+              <span className="text-xs text-amber-100">
+                Your rolls wait for you{canShake ? "" : " (shake to roll is on on your phone)"}.
+              </span>
+            )}
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => submit({ fallback: "digital" })}
+              className={SUBMIT_BUTTON}
+            >
+              {busy ? <Loader2 className="size-4 animate-spin" /> : "Roll now"}
+            </button>
+            {!shakeActive ? (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void stopHolding()}
+                className="text-xs text-stone-400 hover:text-stone-200 disabled:opacity-50"
+              >
+                Stop holding my rolls
+              </button>
+            ) : null}
+          </div>
+          {error ? <p className="mt-1.5 text-xs text-red-400">{error}</p> : null}
+        </>
+      ) : null}
+      {!heldOnly && diceSummary ? (
         <p className="mt-1 text-xs text-amber-100">
           {fullyAutomatic
             ? `Roll ${diceSummary}. Your assigned dice fill in on their own.`
@@ -227,10 +314,16 @@ export function PendingRollCard({
               } The game waits for your result.`}
         </p>
       ) : null}
-      {advantageNote ? (
+      {!heldOnly && advantageNote ? (
         <p className="mt-0.5 text-xs text-amber-200/90">{advantageNote}</p>
       ) : null}
+      {!heldOnly && shakeActive ? (
+        <p className="mt-0.5 flex items-center gap-1.5 text-xs text-amber-200/90">
+          <Smartphone className="size-3.5" /> Or shake to roll it digitally.
+        </p>
+      ) : null}
 
+      {heldOnly ? null : (
       <div className="mt-2 flex flex-wrap items-end gap-2">
         {faces.map((sides, index) => {
           const source = faceSources[index] ?? { kind: "manual" };
@@ -294,12 +387,7 @@ export function PendingRollCard({
           type="button"
           disabled={busy || !complete}
           onClick={() => submit({ dice: submissionDice() })}
-          className={cn(
-            "rounded-lg bg-gradient-to-b from-amber-100 via-amber-200 to-amber-400 px-3 py-1.5 text-sm font-semibold text-amber-950",
-            "shadow-[0_1px_0_rgba(253,247,231,0.6)_inset] transition-all duration-150 ease-snap",
-            "hover:-translate-y-px hover:shadow-glow-gold-strong active:translate-y-0 active:scale-95",
-            "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none",
-          )}
+          className={SUBMIT_BUTTON}
         >
           {busy ? <Loader2 className="size-4 animate-spin" /> : "Submit roll"}
         </button>
@@ -312,7 +400,8 @@ export function PendingRollCard({
           Roll digitally instead
         </button>
       </div>
-      {error ? <p className="mt-1.5 text-xs text-red-400">{error}</p> : null}
+      )}
+      {!heldOnly && error ? <p className="mt-1.5 text-xs text-red-400">{error}</p> : null}
     </div>
   );
 }

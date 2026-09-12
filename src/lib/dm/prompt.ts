@@ -3,6 +3,7 @@ import type { CampaignMessage } from "@/lib/db/messages";
 import type { StoredRoll } from "@/lib/db/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { LEAD_NOTE_PREFIX, type CampaignMember } from "@/lib/campaign-types";
+import { heldRollUserIds } from "@/lib/dice/held-rolls";
 import { computeSheetDerived, findSkill, formatModifier, sizeForRace, speedFor, SRD_SKILLS } from "@/lib/srd";
 import { encumbranceFor } from "@/lib/srd/encumbrance";
 import { classFeatureDescription, findCustomClass } from "@/lib/classes";
@@ -215,13 +216,10 @@ export type DmGameState = {
   contextTrace?: ContextTrace;
 };
 
-// Players who roll physical dice at the table: campaign policy must allow
-// it and the member must have opted in. Empty set otherwise.
+// Players whose rolls the game parks: real dice where the policy allows
+// it, and anyone who holds their own rolls (src/lib/dice/held-rolls.ts).
 function realDiceUserIds(campaign: Campaign, members: CampaignMember[]): Set<string> {
-  if (campaign.gameSettings.dicePolicy !== "real_allowed") {
-    return new Set();
-  }
-  return new Set(members.filter((member) => member.useRealDice).map((member) => member.userId));
+  return heldRollUserIds(campaign.gameSettings.dicePolicy, members);
 }
 
 // Appended to the system prompt only while an encounter is active.

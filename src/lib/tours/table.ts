@@ -76,7 +76,7 @@ export const PLAYER_TOUR: TourStep[] = [
   {
     id: "dice",
     title: "Dice",
-    body: "Every roll is made by the server, never invented. With this on, each roll tumbles across the screen before the result lands in the chat.",
+    body: "Every roll is made by the server, never invented. This menu turns the tumbling 3D dice on or off, opens the editor for your own dice colours, and on a phone lets you shake to roll.",
     anchors: ["header-dice"],
   },
   {

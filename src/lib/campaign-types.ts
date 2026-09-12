@@ -140,6 +140,8 @@ export type CampaignMember = {
   role: "owner" | "player";
   ready: boolean;
   useRealDice: boolean;
+  // Every roll waits for this player to release it (shake to roll).
+  holdRolls: boolean;
   // Muted by the party lead: reads along, cannot act, ask or side-chat.
   muted: boolean;
   joinedAt: string;

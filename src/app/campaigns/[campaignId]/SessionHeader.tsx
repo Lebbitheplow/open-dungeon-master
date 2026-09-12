@@ -3,11 +3,13 @@
 import Link from "next/link";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
+  Check,
   CircleHelp,
   Dices,
   DoorOpen,
   Music,
   Music2,
+  Palette,
   Volume2,
   VolumeX,
   type LucideIcon,
@@ -130,6 +132,8 @@ export function SessionHeader({
   voice,
   dice3d,
   onToggleDice3d,
+  onCustomizeDice,
+  shake,
   ttsEnabled,
   narration,
   ambienceEnabled,
@@ -142,6 +146,10 @@ export function SessionHeader({
   voice: ComponentProps<typeof VoiceDock>;
   dice3d: boolean;
   onToggleDice3d: () => void;
+  // Opens the editor for the player's own dice colours.
+  onCustomizeDice: () => void;
+  // Shake to roll, offered only where the device can be shaken.
+  shake: { supported: boolean; on: boolean; onToggle: () => void };
   // Narration audio only exists on a table with TTS on; the control is
   // withheld, not disabled, when it is off.
   ttsEnabled: boolean;
@@ -151,7 +159,8 @@ export function SessionHeader({
   ambience: AmbienceAudio;
   onHelp: () => void;
 }) {
-  const diceLabel = dice3d ? "Turn off 3D dice animation" : "Turn on 3D dice animation";
+  const diceItem =
+    "flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-stone-300 outline-none data-[highlighted]:bg-stone-800";
   return (
     <header className="glass z-10 flex items-center gap-3 border-b border-stone-700/40 px-4 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top))]">
       <div className="min-w-0 flex-1">
@@ -162,17 +171,58 @@ export function SessionHeader({
       </div>
       <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
         <VoiceDock {...voice} />
-        <Tooltip content={diceLabel} side="bottom">
-          <button
-            type="button"
-            onClick={onToggleDice3d}
-            aria-label={diceLabel}
-            data-tour="header-dice"
-            className={headerButtonClass(dice3d)}
-          >
-            <Dices className="size-4" />
-          </button>
-        </Tooltip>
+        {/* The dice menu: the 3D animation switch, the player's own dice,
+            and shake to roll on a phone. The toggle used to be the button
+            itself; the menu keeps it one tap away as its first item. */}
+        <DropdownMenu.Root>
+          <Tooltip content="Dice" side="bottom">
+            <DropdownMenu.Trigger asChild>
+              <button
+                type="button"
+                aria-label="Dice settings"
+                data-tour="header-dice"
+                className={headerButtonClass(dice3d)}
+              >
+                <Dices className="size-4" />
+              </button>
+            </DropdownMenu.Trigger>
+          </Tooltip>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content align="end" sideOffset={4} className="panel z-50 min-w-52 rounded-lg p-1">
+              <DropdownMenu.CheckboxItem
+                checked={dice3d}
+                onCheckedChange={onToggleDice3d}
+                className={diceItem}
+              >
+                <span className="flex size-4 items-center justify-center">
+                  <DropdownMenu.ItemIndicator>
+                    <Check className="size-3.5 text-amber-300" />
+                  </DropdownMenu.ItemIndicator>
+                </span>
+                3D dice animation
+              </DropdownMenu.CheckboxItem>
+              {shake.supported ? (
+                <DropdownMenu.CheckboxItem
+                  checked={shake.on}
+                  onCheckedChange={shake.onToggle}
+                  className={diceItem}
+                >
+                  <span className="flex size-4 items-center justify-center">
+                    <DropdownMenu.ItemIndicator>
+                      <Check className="size-3.5 text-amber-300" />
+                    </DropdownMenu.ItemIndicator>
+                  </span>
+                  Shake to roll
+                </DropdownMenu.CheckboxItem>
+              ) : null}
+              <DropdownMenu.Separator className="my-1 h-px bg-stone-700/60" />
+              <DropdownMenu.Item className={diceItem} onSelect={onCustomizeDice}>
+                <Palette className="size-4 text-stone-400" />
+                Customise my dice
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
         {ttsEnabled ? (
           <HeaderAudioControl
             onLabel="Mute narration"

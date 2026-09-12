@@ -4,7 +4,8 @@ declare module "@3d-dice/dice-box-threejs" {
     initialize(): Promise<void>;
     roll(notation: string): Promise<unknown>;
     clearDice(): void;
-    updateConfig(config: Record<string, unknown>): void;
+    // Reloads the theme when any theme_* key is present.
+    updateConfig(config: Record<string, unknown>): Promise<void>;
     // The underlying three.js renderer; exposed so the overlay can tear the
     // WebGL context down on unmount (the lib has no dispose method).
     renderer?: {

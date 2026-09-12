@@ -26,6 +26,7 @@ import { getRoll, insertRoll, listRecentRolls } from "@/lib/db/rolls";
 import { listSheets, patchSheet } from "@/lib/db/sheets";
 import { removeConditions } from "@/lib/dm/condition-logic";
 import { rollExpression } from "@/lib/dice";
+import { heldRollUserIds } from "@/lib/dice/held-rolls";
 import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
 import { generateImageTool, parseGenerateImageToolCall } from "@/lib/image-tool";
 import { createStreamingArtifactFilter, extractStoryText } from "@/lib/story-prompt";
@@ -326,10 +327,7 @@ function buildMapText(encounterId: string, sheets: CharacterSheet[]): string | n
 function loadContext(campaign: Campaign): TurnContext {
   const sheets = listSheets(campaign.id);
   const members = listMembers(campaign.id);
-  const realDiceUserIds =
-    campaign.gameSettings.dicePolicy === "real_allowed"
-      ? new Set(members.filter((member) => member.useRealDice).map((member) => member.userId))
-      : new Set<string>();
+  const realDiceUserIds = heldRollUserIds(campaign.gameSettings.dicePolicy, members);
   return {
     campaign,
     sheets,

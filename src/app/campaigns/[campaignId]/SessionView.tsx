@@ -20,6 +20,13 @@ import { CharacterGate } from "@/app/campaigns/[campaignId]/CharacterGate";
 import { Composer, type InputKind } from "@/app/campaigns/[campaignId]/Composer";
 import { composerGate } from "@/app/campaigns/[campaignId]/composerGate";
 import { DiceOverlay } from "@/app/campaigns/[campaignId]/DiceOverlay";
+import { DiceLookDialog } from "@/components/DiceLookEditor";
+import {
+  requestMotionAccess,
+  supportsShake,
+  useShakeToRoll,
+  writeShakeToRoll,
+} from "@/lib/dice/shake-to-roll";
 import { LoreCheckDialog } from "@/app/campaigns/[campaignId]/LoreCheckDialog";
 import { RenarrateDialog } from "@/app/campaigns/[campaignId]/RenarrateDialog";
 import type { CampaignMessage } from "@/lib/db/messages";
@@ -129,6 +136,43 @@ export function SessionView({
     window.localStorage.setItem("odm:dice3d", dice3d ? "off" : "on");
     window.dispatchEvent(new Event("odm-dice3d-pref"));
   }, [dice3d]);
+  const [diceLookOpen, setDiceLookOpen] = useState(false);
+
+  // Shake to roll is a device preference; while it is on here, this
+  // member's rolls are held at the campaign so the phone can release them.
+  // Synced on arrival and when the switch moves, never on member updates,
+  // so two open devices cannot chase each other's flag.
+  const shakeOn = useShakeToRoll();
+  const [canShake] = useState(() => supportsShake());
+  const toggleShake = useCallback(() => {
+    if (shakeOn) {
+      writeShakeToRoll(false);
+      return;
+    }
+    void requestMotionAccess().then((granted) => writeShakeToRoll(granted));
+  }, [shakeOn]);
+  const myHoldRolls =
+    state.members.find((member) => member.userId === me?.id)?.holdRolls ?? null;
+  const myHoldRollsRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    myHoldRollsRef.current = myHoldRolls;
+  }, [myHoldRolls]);
+  const campaignIdForShake = campaign?.id ?? null;
+  useEffect(() => {
+    if (
+      !canShake ||
+      !campaignIdForShake ||
+      myHoldRollsRef.current === null ||
+      myHoldRollsRef.current === shakeOn
+    ) {
+      return;
+    }
+    void fetch(`/api/campaigns/${campaignIdForShake}/members/me`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ holdRolls: shakeOn }),
+    }).catch(() => undefined);
+  }, [canShake, shakeOn, campaignIdForShake]);
 
   const { narration, ambience } = useTableAudio(state);
   // Chime on new private messages (side chats + DM whispers). The loaded
@@ -380,6 +424,8 @@ export function SessionView({
         }}
         dice3d={dice3d}
         onToggleDice3d={toggleDice3d}
+        onCustomizeDice={() => setDiceLookOpen(true)}
+        shake={{ supported: canShake, on: shakeOn, onToggle: toggleShake }}
         ttsEnabled={Boolean(campaign.gameSettings?.ttsEnabled)}
         narration={narration}
         ambienceEnabled={Boolean(campaign.gameSettings?.ambienceEnabled)}
@@ -423,6 +469,7 @@ export function SessionView({
               placeholder={muted ? "The party lead has muted you at this table." : gate.placeholder}
               dmStatus={dmStatus}
               pendingRolls={pendingRolls}
+              members={state.members}
               floor={floor}
               spotlighted={gate.spotlighted}
               heldSpotlightNames={gate.heldSpotlightNames}
@@ -509,6 +556,7 @@ export function SessionView({
       />
 
       {dice3d ? <DiceOverlay latestRoll={state.latestRoll} enabled /> : null}
+      <DiceLookDialog open={diceLookOpen} onOpenChange={setDiceLookOpen} />
 
       <HelpDialog
         open={helpOpen}

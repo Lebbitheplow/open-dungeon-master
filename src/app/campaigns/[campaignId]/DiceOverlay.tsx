@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import { rollToDiceBoxNotation } from "@/lib/dice-notation";
+import { diceLookKey, diceLookTheme } from "@/lib/dice/dice-look";
+import { hydrateDiceLook, useDiceLook } from "@/lib/dice/dice-look-store";
 import type { StoredRoll } from "@/lib/db/rolls";
 
 // Full-screen 3D dice tray: rolls arriving over SSE replay with baked
@@ -14,6 +16,7 @@ type DiceBoxInstance = {
   initialize: () => Promise<void>;
   roll: (notation: string) => Promise<unknown>;
   clearDice: () => void;
+  updateConfig: (config: Record<string, unknown>) => Promise<void>;
   renderer?: {
     dispose: () => void;
     forceContextLoss: () => void;
@@ -60,6 +63,19 @@ export function DiceOverlay({
   // back on, tumbles like every later one instead of passing for backlog.
   const seenSeqRef = useRef<number>(latestRoll?.seq ?? 0);
   const unmountedRef = useRef(false);
+  // The player's own dice (src/lib/dice/dice-look.ts). The box is themed
+  // from whatever the look is when it is first built, and re-themed in
+  // place when the look changes, so a tweak in the editor shows on the
+  // very next roll without a new WebGL context.
+  const look = useDiceLook();
+  const lookRef = useRef(look);
+  const themedRef = useRef("");
+  useEffect(() => {
+    hydrateDiceLook();
+  }, []);
+  useEffect(() => {
+    lookRef.current = look;
+  }, [look]);
 
   useEffect(() => {
     unmountedRef.current = false;
@@ -83,6 +99,11 @@ export function DiceOverlay({
     try {
       const box = await ensureBox();
       if (box) {
+        const wanted = diceLookKey(lookRef.current);
+        if (themedRef.current !== wanted) {
+          themedRef.current = wanted;
+          await box.updateConfig(diceLookTheme(lookRef.current));
+        }
         for (const notation of notations) {
           await box.roll(notation);
           await new Promise((resolve) => setTimeout(resolve, 1_200));
@@ -108,11 +129,11 @@ export function DiceOverlay({
           assetPath: "/dice-box/",
           sounds: false,
           shadows: true,
-          theme_colorset: "radiant",
-          theme_material: "plastic",
           light_intensity: 0.8,
           baseScale: 85,
-        }) as DiceBoxInstance;
+          ...diceLookTheme(lookRef.current),
+        }) as unknown as DiceBoxInstance;
+        themedRef.current = diceLookKey(lookRef.current);
         await box.initialize();
         if (unmountedRef.current) {
           disposeBox(box);

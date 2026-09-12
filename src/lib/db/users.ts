@@ -1,4 +1,5 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
+import type { DiceLook } from "@/lib/dice/dice-look";
 
 export type UserAvatar = {
   url: string;
@@ -137,6 +138,9 @@ export type UserSettings = {
   ambienceVolume?: number;
   ambienceMuted?: boolean;
   chimeMuted?: boolean;
+  // The player's virtual dice (src/lib/dice/dice-look.ts); absent means
+  // the tray's original look.
+  diceLook?: DiceLook;
 };
 
 export function getUserSettings(userId: string): UserSettings {

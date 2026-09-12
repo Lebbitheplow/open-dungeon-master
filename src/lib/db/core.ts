@@ -1280,6 +1280,10 @@ function ensureSchema(db: SqliteDatabase) {
   addColumns("campaign_members", [
     // Player opted in to rolling physical dice (when the campaign allows it).
     ["use_real_dice", `INTEGER NOT NULL DEFAULT 0`],
+    // Player asked for every roll to wait for them (shake to roll on a
+    // phone, or a tap); the server still draws the numbers, so no policy
+    // gates it. See src/lib/dice/held-rolls.ts.
+    ["hold_rolls", `INTEGER NOT NULL DEFAULT 0`],
   ]);
 
   // How far the reminder job has walked this session's ladder: 0 = nothing

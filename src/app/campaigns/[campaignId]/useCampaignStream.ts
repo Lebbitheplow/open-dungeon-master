@@ -479,6 +479,7 @@ function reducer(state: CampaignState, action: Action): CampaignState {
             role: "player",
             ready: false,
             useRealDice: false,
+            holdRolls: false,
             muted: false,
             joinedAt: new Date().toISOString(),
           };
