@@ -12,7 +12,7 @@
 # instead, which pulls the patched Debian packages at build time.
 
 # --------------------------------------------------------------- dependencies
-FROM node:22.23.2-trixie-slim AS deps
+FROM node:22.23.2-alpine3.24 AS deps
 WORKDIR /app
 
 # Toolchain for the two native modules, in case no prebuild matches the platform.
@@ -68,7 +68,7 @@ RUN cd .next/standalone \
             README.md CLAUDE.md AGENTS.md eslint.config.mjs postcss.config.mjs
 
 # -------------------------------------------------------------------- runner
-FROM node:22.23.2-trixie-slim AS runner
+FROM node:22.23.2-alpine3.24 AS runner
 WORKDIR /app
 
 # The patched Debian packages, as in the deps stage; nothing else is
