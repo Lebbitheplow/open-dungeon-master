@@ -8,6 +8,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { register } from "node:module";
+import { removeTempDir } from "./lib/remove-temp-dir.mjs";
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "odm-calendar-events-"));
 process.env.SQLITE_DB_PATH = path.join(dir, "test.sqlite");
@@ -119,4 +120,4 @@ test("deleting takes an event off the calendar", () => {
 });
 
 console.log(`calendar-events: ${passed} tests passed`);
-fs.rmSync(dir, { recursive: true, force: true });
+removeTempDir(dir);

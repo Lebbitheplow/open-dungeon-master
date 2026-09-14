@@ -8,6 +8,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { register } from "node:module";
+import { removeTempDir } from "./lib/remove-temp-dir.mjs";
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "odm-settlement-"));
 process.env.SQLITE_DB_PATH = path.join(dir, "test.sqlite");
@@ -100,4 +101,4 @@ test("populating a place writes its people, shops, rumours and hook, once", () =
 });
 
 console.log(`settlement: ${passed} tests passed`);
-fs.rmSync(dir, { recursive: true, force: true });
+removeTempDir(dir);

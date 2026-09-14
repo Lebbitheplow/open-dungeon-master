@@ -7,6 +7,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { register } from "node:module";
+import { removeTempDir } from "./lib/remove-temp-dir.mjs";
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "odm-light-timers-"));
 process.env.SQLITE_DB_PATH = path.join(dir, "test.sqlite");
@@ -96,4 +97,4 @@ test("expiry is idempotent and direct", () => {
 });
 
 console.log(`light-timers: ${passed} tests passed`);
-fs.rmSync(dir, { recursive: true, force: true });
+removeTempDir(dir);
