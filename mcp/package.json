@@ -1,0 +1,16 @@
+{
+  "name": "open-dungeon-master-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node server.mjs",
+    "stdio": "node server.mjs --stdio"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/node": "2.0.0",
+    "@modelcontextprotocol/server": "2.0.0",
+    "zod": "4.4.3"
+  }
+}
