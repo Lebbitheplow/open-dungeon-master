@@ -140,7 +140,8 @@ test("the purse and the shelf refuse what they cannot cover", () => {
 });
 
 test("selling pays half list for a known item and restocks the shelf", () => {
-  const result = handleSellItem(campaign, JSON.stringify({ characterId: marla.id, shop: shop.id, item: "Longsword" }));
+  // priceCp is the fallback for a runner without the content pack; with the pack the list price wins.
+  const result = handleSellItem(campaign, JSON.stringify({ characterId: marla.id, shop: shop.id, item: "Longsword", priceCp: 750 }));
   assert.equal(result.ok, true, JSON.stringify(result));
   const after = getSheetById(marla.id);
   assert.ok(after.gold > 9, "the sale paid nothing");
