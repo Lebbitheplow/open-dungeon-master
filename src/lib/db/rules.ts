@@ -21,6 +21,8 @@ export type RuleChunk = {
   pinned: boolean;
   // Words that force this chunk into the prompt when they appear.
   triggerKeywords: string;
+  // 'house' for the house rules; a lore entry id for an attached PDF.
+  source: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -34,12 +36,13 @@ type RuleChunkRow = {
   enabled: number;
   pinned: number;
   trigger_keywords: string;
+  source: string | null;
   created_at: string;
   updated_at: string;
 };
 
 const CHUNK_COLUMNS =
-  "id, campaign_id, chunk_index, heading, text, enabled, pinned, trigger_keywords, created_at, updated_at";
+  "id, campaign_id, chunk_index, heading, text, enabled, pinned, trigger_keywords, source, created_at, updated_at";
 
 function mapChunk(row: RuleChunkRow): RuleChunk {
   return {
@@ -51,6 +54,7 @@ function mapChunk(row: RuleChunkRow): RuleChunk {
     enabled: Boolean(row.enabled),
     pinned: Boolean(row.pinned),
     triggerKeywords: row.trigger_keywords ?? "",
+    source: row.source || "house",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -89,32 +93,50 @@ export function listRuleChunksWithEmbeddings(
 export function setHouseRules(campaignId: string, text: string): RuleChunk[] {
   const db = getDatabase();
   const clipped = text.slice(0, HOUSE_RULES_MAX);
-  const previous = listRuleChunks(campaignId);
+  const previous = listRuleChunks(campaignId).filter((chunk) => chunk.source === "house");
   const drafts = carryChunkFlags(chunkHouseRules(clipped), previous);
+  db.prepare(`UPDATE campaigns SET house_rules_text = ? WHERE id = ?`).run(clipped, campaignId);
+  replaceSourceChunks(campaignId, "house", drafts);
+  return listRuleChunks(campaignId);
+}
+
+// Rewrites every chunk of one source (the house rules, or one attached
+// PDF) and leaves the other sources alone. Chunk indexes continue after
+// the highest index the campaign already holds so ordering stays stable.
+export function replaceSourceChunks(
+  campaignId: string,
+  source: string,
+  drafts: Array<{ heading: string; text: string; enabled?: boolean; pinned?: boolean }>,
+): void {
+  const db = getDatabase();
   const now = nowIso();
   db.transaction(() => {
-    db.prepare(`UPDATE campaigns SET house_rules_text = ? WHERE id = ?`).run(clipped, campaignId);
-    db.prepare(`DELETE FROM rule_chunks WHERE campaign_id = ?`).run(campaignId);
+    db.prepare(`DELETE FROM rule_chunks WHERE campaign_id = ? AND source = ?`).run(campaignId, source);
+    const base = source === "house" ? 0 : 10_000;
     const insert = db.prepare(
-      `INSERT INTO rule_chunks (id, campaign_id, chunk_index, heading, text, enabled, pinned, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO rule_chunks (id, campaign_id, chunk_index, heading, text, enabled, pinned, source, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     drafts.forEach((draft, index) => {
       insert.run(
         crypto.randomUUID(),
         campaignId,
-        index,
+        base + index,
         draft.heading,
         draft.text,
-        draft.enabled ? 1 : 0,
+        draft.enabled === false ? 0 : 1,
         draft.pinned ? 1 : 0,
+        source,
         now,
         now,
       );
     });
   })();
   void embedRuleChunks(campaignId);
-  return listRuleChunks(campaignId);
+}
+
+export function deleteSourceChunks(campaignId: string, source: string): void {
+  getDatabase().prepare(`DELETE FROM rule_chunks WHERE campaign_id = ? AND source = ?`).run(campaignId, source);
 }
 
 export function setRuleChunkFlags(

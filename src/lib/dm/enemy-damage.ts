@@ -3,7 +3,10 @@ import { endEncounter, getActiveEncounter, getEnemy, listEnemies, patchEnemyHp, 
 import { activePublicEncounter } from "@/lib/db/encounter-view";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
 import { getDmTurn, type DmTurn, type PendingRoll } from "@/lib/db/dm-turns";
-import { markRollApplied, type StoredRoll } from "@/lib/db/rolls";
+import { listRollsSince, markRollApplied, type StoredRoll } from "@/lib/db/rolls";
+import { listAuditSince } from "@/lib/db/sheet-audit";
+import { setEncounterSummary } from "@/lib/db/encounters";
+import { computeEncounterSummary, describeEncounterSummary } from "@/lib/dm/encounter-summary";
 import { getBattleMapForEncounter, removeTokenByRef } from "@/lib/db/battle-maps";
 import { publishPersisted } from "@/lib/events";
 import { healthState } from "@/lib/bestiary/health";
@@ -15,6 +18,8 @@ import { enemyDamageMath } from "@/lib/dm/encounter-logic";
 import { damageAdjust } from "@/lib/dm/condition-logic";
 import { applyDmMutation } from "@/lib/dm/mutations";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
+import { planDeathFx } from "@/lib/battlemap/fx-plan";
+import { publishFx, tokenPosition } from "@/lib/dm/fx";
 import { dismissGuestCompanions } from "@/lib/dm/companion-tools";
 import { followCombatAmbience } from "@/lib/dm/ambience-tools";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -116,6 +121,37 @@ export function finishEncounter(
   if (floor.mode === "initiative" || (floor.mode === "hold" && floor.next.mode === "initiative")) {
     setFloor(campaign.id, { mode: "open" });
     publishPersisted(campaign.id, "floor_changed", { floor: { mode: "open" } });
+  }
+  // After the fight (docs/vtt-parity-implementation-plan.md 4.2): the
+  // card the table sees and the line the chapter keeps. Never blocks the
+  // end of a fight.
+  try {
+    const endedAt = new Date().toISOString();
+    const summary = computeEncounterSummary({
+      outcome,
+      rounds: encounter.round,
+      startedAt: encounter.createdAt,
+      endedAt,
+      enemies,
+      sheets,
+      rolls: listRollsSince(campaign.id, encounter.createdAt).map((roll) => ({
+        characterId: roll.characterId,
+        kind: roll.kind,
+        total: roll.total,
+        applied: roll.applied,
+        targetEnemyId: roll.targetEnemyId,
+        crit: roll.breakdown?.crit ?? null,
+      })),
+      audits: listAuditSince(campaign.id, encounter.createdAt).map((entry) => ({
+        characterId: entry.characterId,
+        kind: entry.kind,
+        delta: entry.delta,
+      })),
+    });
+    setEncounterSummary(encounter.id, summary, describeEncounterSummary(summary));
+    publishPersisted(campaign.id, "encounter_summary", { encounterId: encounter.id, summary });
+  } catch (error) {
+    console.error("[encounter] summary failed", error);
   }
   publishPersisted(campaign.id, "encounter_updated", { encounter: null });
   // The fight is over, so the fight music is. Every way an encounter can
@@ -230,6 +266,15 @@ export function applyEnemyDamage(
     base.note = `${updated.displayName} is slain. You may now narrate its death.`;
     const map = getBattleMapForEncounter(encounter.id);
     if (map) {
+      // The death plays where the token stood, then the token goes. A
+      // hidden ambusher dying unseen plays nothing for the party.
+      const pos = tokenPosition(campaign.id, enemy.id);
+      if (pos && !pos.hidden) {
+        publishFx(
+          campaign.id,
+          planDeathFx({ to: pos.at, toTokenId: pos.tokenId, name: updated.displayName }),
+        );
+      }
       removeTokenByRef(map.id, enemy.id);
       publishBattleMapUpdate(campaign.id);
     }

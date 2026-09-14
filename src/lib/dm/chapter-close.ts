@@ -1,3 +1,10 @@
+import { publishTitleCard } from "@/lib/dm/scene-state";
+import { listTranscriptSince } from "@/lib/db/voice-transcript";
+import { renderTranscript } from "@/lib/voice/transcript";
+import { describeInstant } from "@/lib/dm/calendar";
+import { listFactions } from "@/lib/db/factions";
+import { advanceFactionGoals } from "@/lib/dm/faction-logic";
+import { shiftFactionPower } from "@/lib/dm/faction-tools";
 import { getCampaignById, latestSeq, setCampaignSummaryState, allocateSeq } from "@/lib/db/campaigns";
 import {
   closeChapterRow,
@@ -116,7 +123,12 @@ function chapterTranscript(campaignId: string, chapter: Chapter, seqEnd: number)
   const lines = messages.map(
     (message) => `${message.authorType === "dm" ? "DM" : "Player"}: ${message.content}`,
   );
-  let transcript = lines.join("\n\n");
+  // A transcribed table (docs/vtt-parity-implementation-plan.md 13.3) adds
+  // what was said aloud since the chapter's first line, so a chapter the DM
+  // narrated out loud still closes with a summary of what happened.
+  const openedAt = messages[0]?.createdAt ?? "";
+  const spoken = openedAt ? renderTranscript(listTranscriptSince(campaignId, openedAt, 400), 12_000) : "";
+  let transcript = lines.join("\n\n") + (spoken ? `\n\nSaid aloud at the table:\n${spoken}` : "");
   if (transcript.length > TRANSCRIPT_CHAR_BUDGET) {
     transcript = transcript.slice(-TRANSCRIPT_CHAR_BUDGET);
   }
@@ -233,6 +245,7 @@ export async function maybeCloseChapter(
     summary: parsed.summary,
     highlights: parsed.highlights,
     seqEnd,
+    clockLabel: describeInstant(campaign.clock.calendar, campaign.clock.instant),
   });
   if (!result) {
     setDmStatus(campaignId, "idle");
@@ -275,6 +288,12 @@ export async function maybeCloseChapter(
     chapter: result.closed,
     opened: result.opened,
   });
+  // The new chapter's card on every screen (SceneTitle.tsx).
+  publishTitleCard(campaignId, {
+    title: result.opened.title || `Chapter ${result.opened.index}`,
+    subtitle: result.opened.title ? `Chapter ${result.opened.index}` : undefined,
+    tone: "gold",
+  });
   const seq = allocateSeq(campaignId);
   const divider = insertCampaignMessage({
     campaignId,
@@ -299,6 +318,15 @@ export async function maybeCloseChapter(
     advanceNpcAgency(campaignId, transcript);
   } catch (error) {
     console.error("[npc-agency] chapter pass failed", error);
+  }
+  // Factions move between chapters the way people do (docs/vtt-parity-
+  // implementation-plan.md section 6): goal dice, power drift, a fact.
+  try {
+    for (const moved of advanceFactionGoals(listFactions(campaignId))) {
+      shiftFactionPower(campaignId, moved.faction.id, moved.power, moved.fact);
+    }
+  } catch (error) {
+    console.error("[factions] chapter pass failed", error);
   }
 
   // Relationships move with the chapter too: repeated-beat fatigue forgives

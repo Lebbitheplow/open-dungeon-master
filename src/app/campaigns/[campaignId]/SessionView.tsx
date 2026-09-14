@@ -1,5 +1,18 @@
 "use client";
 
+import { haptic, useEffectsRoot, useTurnChime } from "@/lib/effects-mode";
+import { SceneTitle } from "@/components/SceneTitle";
+import { HandoutStage } from "@/components/HandoutStage";
+import { SafetyPause } from "@/app/campaigns/[campaignId]/SafetyPause";
+import type { Speaker } from "@/lib/dm/speech";
+import { LabelSheet } from "@/app/campaigns/[campaignId]/LabelSheet";
+import type { MapLabel } from "@/lib/battlemap/scene";
+
+const NOOP = () => {};
+const NOOP_IDS: (ids: string[]) => void = () => {};
+const NOOP_ID: (id: string) => void = () => {};
+const NOOP_CUE: (cue: string) => void = () => {};
+
 import {
   type FormEvent,
   lazy,
@@ -85,6 +98,10 @@ export function SessionView({
   refreshWhispers,
   refreshAsks,
   refreshBattleMap,
+  markFxPlayed = NOOP_IDS,
+  markCameraDone = NOOP,
+  markTitleCardShown = NOOP_ID,
+  playSting = NOOP_CUE,
 }: {
   state: CampaignState;
   refreshNotes: () => Promise<void>;
@@ -93,7 +110,16 @@ export function SessionView({
   refreshWhispers: () => Promise<void>;
   refreshAsks: () => Promise<void>;
   refreshBattleMap: () => Promise<void>;
+  // The board reports effects it has played and camera moves it has obeyed
+  // (useCampaignStream.ts), and this view may sound a local sting.
+  markFxPlayed?: (ids: string[]) => void;
+  markCameraDone?: () => void;
+  markTitleCardShown?: (id: string) => void;
+  playSting?: (cue: string) => void;
 }) {
+  // The effects mode rides on <html data-effects> for CSS-only consumers.
+  useEffectsRoot();
+  const turnChime = useTurnChime();
   const { campaign, me, sheets, messages, pendingRolls, auditLog, levelUps, locations, dmStatus, caps } =
     state;
   const [input, setInput] = useState("");
@@ -104,6 +130,10 @@ export function SessionView({
   // Defaults to off, so Direct keeps behaving as it always has unless the
   // lead deliberately hides one.
   const [leadPrivate, setLeadPrivate] = useState(false);
+  // Who the DM seat is speaking as (docs/vtt-parity-implementation-plan.md
+  // 8.1); null is the narrator.
+  const [speaker, setSpeaker] = useState<Speaker | null>(null);
+
   // The Ask strip sits in the chat column and starts closed. It owns the rest
   // of the feature itself; all this view keeps is whether it is expanded.
   const [askOpen, setAskOpen] = useState(false);
@@ -266,6 +296,9 @@ export function SessionView({
   const relationshipsEnabled = campaign?.gameSettings?.relationships !== "off";
 
   const campaignId = campaign?.id;
+  const raiseXCard = useCallback(() => {
+    void fetch(`/api/campaigns/${campaignId}/safety/x-card`, { method: "POST" });
+  }, [campaignId]);
 
   const releaseFloor = useCallback(async () => {
     await fetch(`/api/campaigns/${campaignId}/floor`, { method: "POST" });
@@ -287,7 +320,7 @@ export function SessionView({
         // it never enters the transcript.
         const [route, body] =
           kind === "narrate"
-            ? ["dm/narrate", { content }]
+            ? ["dm/narrate", { content, speaker }]
             : kind === "lead"
               ? leadPrivate
                 ? ["director", { oneShot: null, absoluteCommand: content }]
@@ -310,10 +343,64 @@ export function SessionView({
         setSending(false);
       }
     },
-    [campaignId, input, sending, gate.inputBlocked, muted, kind, leadPrivate],
+    [campaignId, input, sending, gate.inputBlocked, muted, kind, leadPrivate, speaker],
   );
 
   const clearChatTarget = useCallback(() => setChatTarget(null), []);
+  // The board's HUD puts words in the composer and brings it forward.
+  const [composerPulse, setComposerPulse] = useState(false);
+  const composeFromBoard = useCallback(
+    (text: string) => {
+      setKind("do");
+      setInput(text);
+      setMobileView("chat");
+      // Focus after the view switch has painted, and put the caret where
+      // the blank is when the text leaves one ("I cast  at the goblin").
+      window.setTimeout(() => {
+        const area = composerRef.current;
+        if (!area) {
+          return;
+        }
+        area.focus();
+        const gap = text.indexOf("  ");
+        const at = gap >= 0 ? gap + 1 : text.length;
+        area.setSelectionRange(at, at);
+      }, 50);
+    },
+    [setMobileView],
+  );
+  // Your turn: one chime, one haptic, one gold pulse on the composer, when
+  // the initiative lands on this player's figure. Opt-out in device settings.
+  const turnTokenId = state.battleMap?.turn?.tokenId ?? null;
+  const myTokenId = state.battleMap?.myTokenId ?? null;
+  const turnRound = state.battleMap?.turn?.round ?? 0;
+  const lastChimeRef = useRef("");
+  useEffect(() => {
+    if (!turnTokenId || !myTokenId || turnTokenId !== myTokenId) {
+      return;
+    }
+    const key = `${turnTokenId}:${turnRound}`;
+    if (lastChimeRef.current === key) {
+      return;
+    }
+    lastChimeRef.current = key;
+    if (!turnChime) {
+      return;
+    }
+    playSting("turn");
+    haptic("turn");
+    // The pulse is a moment: on after this tick, off when the animation
+    // has run (--dur-linger).
+    const on = window.setTimeout(() => setComposerPulse(true), 0);
+    const off = window.setTimeout(() => setComposerPulse(false), 1700);
+    return () => {
+      window.clearTimeout(on);
+      window.clearTimeout(off);
+    };
+  }, [turnTokenId, myTokenId, turnRound, turnChime, playSting]);
+  // A pinned label on the board opens what it points at in a sheet.
+  const [openedLabel, setOpenedLabel] = useState<MapLabel | null>(null);
+  const openLabel = setOpenedLabel;
   const selectChatView = useCallback(() => setMobileView("chat"), [setMobileView]);
   const selectPanelView = useCallback(
     (tab: PanelTab) => {
@@ -419,6 +506,7 @@ export function SessionView({
           adjudicates: caps.adjudicates,
           steersStory,
           sayRangeRule: Boolean(campaign.gameSettings?.voice?.rules?.sayRange),
+          transcribe: Boolean(campaign.gameSettings?.voice?.transcribe),
           audibilityVersion: state.voiceAudibilityVersion,
           meshSignal: state.voiceMeshSignal,
         }}
@@ -477,9 +565,14 @@ export function SessionView({
               onReleaseFloor={releaseFloor}
               joinBanner={joinBanner}
               composerRef={composerRef}
+              highlight={composerPulse}
               directorArm={state.directorArm}
               leadPrivate={leadPrivate}
               onLeadPrivateChange={setLeadPrivate}
+              speaker={speaker}
+              onSpeakerChange={setSpeaker}
+              cast={state.cast}
+              onXCard={campaign.gameSettings?.safety?.xCard ? raiseXCard : undefined}
               storyCadence={storyCadence}
               onCaptureStory={openStoryCapture}
               onSnoozeStory={snoozeStory}
@@ -529,6 +622,14 @@ export function SessionView({
           encounter={state.encounter}
           battleMap={state.battleMap}
           mapPing={state.mapPing}
+          fx={state.fx}
+          onFxPlayed={markFxPlayed}
+          camera={state.camera}
+          onCameraDone={markCameraDone}
+          onCompose={composeFromBoard}
+          scene={state.scene}
+          canDraw={caps.adjudicates || campaign.gameSettings?.boardDrawing !== false}
+          onOpenLabel={openLabel}
           refreshBattleMap={refreshBattleMap}
           tabs={panelTabs}
           tab={panelTab}
@@ -537,6 +638,12 @@ export function SessionView({
           chatUnread={chatUnreadTotal}
           mobileVisible={mobileView === "panel"}
           relationshipsVersion={state.relationshipsVersion}
+          factionsVersion={state.factionsVersion}
+          shopsVersion={state.shopsVersion}
+          coins={state.coins}
+          activeSheetId={state.activeSheetId}
+          questsVersion={state.questsVersion}
+          cast={state.cast}
           relationshipsEnabled={relationshipsEnabled}
           beats={state.beats}
           storyDue={storyDue}
@@ -556,6 +663,22 @@ export function SessionView({
       />
 
       {dice3d ? <DiceOverlay latestRoll={state.latestRoll} enabled /> : null}
+      <SceneTitle card={state.titleCard} onShown={markTitleCardShown} />
+      <SafetyPause campaignId={campaign.id} paused={state.safetyPause !== null} steersStory={steersStory} />
+      <HandoutStage
+        campaignId={campaign.id}
+        handout={state.handout}
+        userId={me?.id ?? ""}
+        steersStory={steersStory}
+        onDismiss={async (id) => {
+          await fetch(`/api/campaigns/${campaign.id}/dm/invoke`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: "dismiss_handout", args: { handoutId: id } }),
+          });
+        }}
+      />
+      <LabelSheet campaignId={campaign.id} label={openedLabel} onClose={() => setOpenedLabel(null)} />
       <DiceLookDialog open={diceLookOpen} onOpenChange={setDiceLookOpen} />
 
       <HelpDialog

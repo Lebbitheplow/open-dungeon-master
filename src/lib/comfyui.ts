@@ -102,6 +102,8 @@ function buildWorkflow(options: {
   width: number;
   height: number;
   seed: number;
+  // Extra negatives from the table's boundary (safety-logic.ts).
+  negative?: string;
 }) {
   return {
     "1": {
@@ -114,7 +116,7 @@ function buildWorkflow(options: {
     },
     "3": {
       class_type: "CLIPTextEncode",
-      inputs: { text: NEGATIVE_PROMPT, clip: ["1", 1] },
+      inputs: { text: options.negative ? `${NEGATIVE_PROMPT}, ${options.negative}` : NEGATIVE_PROMPT, clip: ["1", 1] },
     },
     "4": {
       class_type: "EmptyLatentImage",
@@ -169,6 +171,7 @@ export async function generateComfyImage(options: {
   aspect: AspectPreset;
   seed?: number;
   hasReferences?: boolean;
+  negative?: string;
 }): Promise<GeneratedImage> {
   const url = resolveComfyUrl(options.url);
   const startedAt = Date.now();
@@ -190,7 +193,7 @@ export async function generateComfyImage(options: {
 
   const seed = options.seed ?? Math.floor(Math.random() * 2_147_483_647);
   const { width, height } = comfyDimensions(options.mode, options.aspect);
-  const workflow = buildWorkflow({ checkpoint, prompt: options.prompt, width, height, seed });
+  const workflow = buildWorkflow({ checkpoint, prompt: options.prompt, width, height, seed, negative: options.negative });
 
   const submitTimeout = timeoutSignal(STATUS_TIMEOUT_MS * 2);
   let promptId = "";

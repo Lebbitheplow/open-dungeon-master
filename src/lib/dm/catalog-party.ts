@@ -260,6 +260,25 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
       },
       { name: "value", label: "Amount", kind: "number", min: -30, max: 30 },
       {
+        name: "auraFeet",
+        label: "Reaches (feet)",
+        kind: "number",
+        min: 5,
+        max: 120,
+        help: "Set when the effect surrounds its target; the board draws the ring at this radius.",
+      },
+      {
+        name: "auraTone",
+        label: "Ring reads as",
+        kind: "select",
+        options: [
+          { value: "ward", label: "Protective" },
+          { value: "harm", label: "Hostile" },
+          { value: "bless", label: "Blessing" },
+          { value: "neutral", label: "Neutral" },
+        ],
+      },
+      {
         name: "duration",
         label: "Lasts",
         kind: "select",

@@ -27,11 +27,15 @@ export function ImageLightbox({
   alt,
   caption,
   className,
+  frameClassName,
 }: {
   src: string;
   alt: string;
   caption?: string;
   className?: string;
+  // The trigger's own classes: an overflow-hidden frame lets a drifting
+  // picture (.ken-burns) stay inside its corners.
+  frameClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const label = caption || alt;
@@ -42,7 +46,7 @@ export function ImageLightbox({
         <button
           type="button"
           aria-label={`Enlarge image: ${label}`}
-          className="block cursor-zoom-in transition-opacity hover:opacity-90"
+          className={cn("block cursor-zoom-in transition-opacity hover:opacity-90", frameClassName)}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={src} alt={alt} className={className} />

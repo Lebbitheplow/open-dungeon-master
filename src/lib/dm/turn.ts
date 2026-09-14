@@ -197,7 +197,24 @@ import {
   handleRollTreasure,
   handleDamageObject,
   handleTravel,
+  handleSetWeather,
+  handleShowTitle,
 } from "@/lib/dm/world-tools";
+import {
+  BINDER_TOOL_NAMES,
+  binderTools,
+  handleDismissHandout,
+  handleSetQuest,
+  handleShowHandout,
+  handleTickObjective,
+} from "@/lib/dm/binder-tools";
+import { FACTION_TOOL_NAMES, factionTools, handleAdjustReputation, handleFactionNote } from "@/lib/dm/faction-tools";
+import { SHOP_TOOL_NAMES, shopTools, handleOpenShop, handleBuyItem, handleSellItem, handleHaggle, shopsBlock } from "@/lib/dm/shop-tools";
+import { SETTLEMENT_TOOL_NAMES, settlementTools, handleGenerateSettlement } from "@/lib/dm/settlement-tools";
+import { placeIsWritten, populateSettlement } from "@/lib/dm/settlement";
+import { listFactions } from "@/lib/db/factions";
+import { getParty } from "@/lib/db/party";
+import { renderFactionsForPrompt } from "@/lib/dm/faction-logic";
 import {
   applyCompanionCall,
   COMPANION_TOOL_NAMES,
@@ -406,6 +423,8 @@ export async function startDmTurn(campaignId: string) {
       variantRulesBlock: retrieval.variantRulesBlock,
       houseRulesBlock: retrieval.houseRulesBlock,
       loreBlock: retrieval.loreBlock,
+      factionsBlock: renderFactionsForPrompt(listFactions(campaign.id), getParty(campaign.id).reputation, true),
+      shopsBlock: shopsBlock(campaign),
       members: listMembers(campaignId),
       sheets: context.sheets,
       encounter: buildEncounterState(campaignId, context.sheets),
@@ -616,6 +635,11 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       ...socialTools,
       ...(inEncounter ? [] : relationshipTools(campaign)),
       ...(inEncounter ? [] : worldTools),
+      // Handouts and the quest log are read at the table's pace, not mid-round.
+      ...(inEncounter ? [] : binderTools),
+      ...(inEncounter ? [] : factionTools),
+      ...(inEncounter ? [] : shopTools),
+      ...(inEncounter || !campaign.gameSettings.worldSimulation ? [] : settlementTools),
       // The party's shared pack and common purse. Out of combat only, like
       // the rest of the world tools: nobody rummages in the group kit while
       // initiative is running.
@@ -778,7 +802,11 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         (EFFECT_TOOL_NAMES as readonly string[]).includes(toolCall.name) ||
         (SCENE_TOOL_NAMES as readonly string[]).includes(toolCall.name) ||
         (MOUNT_TOOL_NAMES as readonly string[]).includes(toolCall.name) ||
-        (AMBIENCE_TOOL_NAMES as readonly string[]).includes(toolCall.name),
+        (AMBIENCE_TOOL_NAMES as readonly string[]).includes(toolCall.name) ||
+        (BINDER_TOOL_NAMES as readonly string[]).includes(toolCall.name) ||
+        (FACTION_TOOL_NAMES as readonly string[]).includes(toolCall.name) ||
+        (SHOP_TOOL_NAMES as readonly string[]).includes(toolCall.name) ||
+        (SETTLEMENT_TOOL_NAMES as readonly string[]).includes(toolCall.name),
     );
 
     // Location bookkeeping is synchronous and cheap; maps render async on
@@ -1299,6 +1327,32 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         result = handleTravel(campaign, turn, worldCall.rawArguments, sheets, sheetsById);
       } else if (worldCall.name === "pass_time") {
         result = handlePassTime(campaign, worldCall.rawArguments);
+      } else if (worldCall.name === "set_weather") {
+        result = handleSetWeather(campaign, worldCall.rawArguments);
+      } else if (worldCall.name === "show_title") {
+        result = handleShowTitle(campaign, worldCall.rawArguments);
+      } else if (worldCall.name === "show_handout") {
+        result = handleShowHandout(campaign, turn, worldCall.rawArguments);
+      } else if (worldCall.name === "dismiss_handout") {
+        result = handleDismissHandout(campaign, worldCall.rawArguments);
+      } else if (worldCall.name === "set_quest") {
+        result = handleSetQuest(campaign, worldCall.rawArguments);
+      } else if (worldCall.name === "tick_objective") {
+        result = handleTickObjective(campaign, worldCall.rawArguments);
+      } else if (worldCall.name === "generate_settlement") {
+        result = handleGenerateSettlement(campaign, worldCall.rawArguments);
+      } else if (worldCall.name === "open_shop") {
+        result = handleOpenShop(campaign, worldCall.rawArguments);
+      } else if (worldCall.name === "buy_item") {
+        result = handleBuyItem(campaign, worldCall.rawArguments);
+      } else if (worldCall.name === "sell_item") {
+        result = handleSellItem(campaign, worldCall.rawArguments);
+      } else if (worldCall.name === "haggle") {
+        result = handleHaggle(campaign, worldCall.rawArguments);
+      } else if (worldCall.name === "adjust_reputation") {
+        result = handleAdjustReputation(campaign, worldCall.rawArguments);
+      } else if (worldCall.name === "faction_note") {
+        result = handleFactionNote(campaign, worldCall.rawArguments);
       } else if (worldCall.name === "party_stash") {
         result = handlePartyStash(campaign, worldCall.rawArguments, sheets, sheetsById);
       } else if (worldCall.name === "set_effect") {
@@ -1735,6 +1789,13 @@ export function handleLocationCall(
       connections,
     });
     movedToNewLocation = !previous || previous.id !== location.id;
+    // Somewhere unwritten, with the world simulation on, gets its people
+    // before the model narrates it (docs/vtt-parity-implementation-plan.md
+    // 12.1). Anywhere already peopled is left as it was.
+    if (movedToNewLocation && campaign.gameSettings.worldSimulation && !location.layoutDescription.trim() && !placeIsWritten(campaign, location)) {
+      populateSettlement(campaign, location, {});
+      location = getCurrentLocation(campaign.id) ?? location;
+    }
     // Keep the old area linked to the new one so routes stay consistent.
     if (previous && previous.id !== location.id) {
       const merged = [...new Set([...location.connections, previous.name])];

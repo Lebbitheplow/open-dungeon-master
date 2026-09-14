@@ -245,3 +245,53 @@ characters are always created single-class (multiclassing happens at level-up).
 | Structured non-combat scenes: successes before failures, per-round checks | enforced | `dm/scene-tracker-logic.ts`, `dm/scene-tools.ts` |
 | Freeform typed attributes on NPCs, items, locations, factions and props | enforced | `dm/attributes-logic.ts`, `db/entity-attributes.ts` |
 | Assistant DM seat: full in-game powers, cannot re-seat the DM | enforced | `dm/viewer.ts isPrimaryDm`, `/dm/seat` |
+
+## The stage and the binder (phases 16 to 21)
+
+| Subsystem | State | Where |
+|---|---|---|
+| Weather: rolled per climate with persistence, riders on Perception (passive -5 in fog and heavy rain), ranged attacks past six tiles in a gale, travel pace and exposure hazards | enforced | `srd/weather.ts`, `dm/sky.ts`, `dm/check-tools.ts`, `dm/world-tools.ts` |
+| Hour lights the map: outdoor ambient follows the clock and the sky; indoors keeps its own light | enforced | `battlemap/daylight.ts`, `battlemap/view.ts` |
+| Senses in the light model: darkvision, blindsight, tremorsense, truesight, Devil's Sight, magical darkness | enforced | `srd/senses.ts`, `battlemap/los.ts` |
+| Terrain wall (low wall): blocks movement, half cover across it, a flier may hover over it | enforced | `battlemap/types.ts`, `battlemap/los.ts coverBetween`, `battlemap/movement.ts` |
+| Footprints and movement modes: large creatures occupy their squares, fliers and burrowers ignore what they should | enforced | `battlemap/footprint.ts`, `battlemap/movement.ts`, `dm/map-tools.ts` |
+| Teleport: range, walls, occupancy, the door and the effect that follow | enforced | `dm/map-tools.ts handleTeleportToken` |
+| Auras: Aura of Protection and effect auras drawn and applied within their radius | enforced | `dm/effects-logic.ts`, `battlemap/view.ts tokenAuras` |
+| Lore audiences: an entry for some players opens only for them; secret blocks never cross the wire to a player | enforced | `dm/world-lore-logic.ts loreVisibleTo, stripSecretBlocks`, `/lore` |
+| Show this now: the model may show only party-readable entries; a person may show any | enforced | `dm/binder-tools.ts handleShowHandout` |
+| Sourcebook PDFs: a rules-tagged attachment is chunked into retrieval beside the house rules | enforced | `dm/lore-attachments.ts`, `pdf/text.ts`, `db/rules.ts replaceSourceChunks` |
+| Quests by hand: objectives ticked by the DM or the model, arc sub-arcs mirrored, DM-only rows kept out of a player's log | enforced | `dm/quest-logic.ts`, `db/quests.ts`, `dm/binder-tools.ts` |
+| Inline rolls in handouts and house rules: `[[1d6]]` rolls through the public rolls route | enforced | `components/ui/Markdown.tsx RollChip`, `/rolls` |
+
+## Voices, tone, combat depth, factions and time (phases 22 to 25)
+
+| Subsystem | State | Where |
+|---|---|---|
+| Speech attribution: quoted lines are matched to the cast conservatively; unmatched lines stay the narrator's | enforced | `dm/speech.ts attributeSpeech`, `dm/tts-segments.ts` |
+| Per-NPC voices: a cast member's voice reads their lines, the narrator's voice the rest | enforced | `dm/tts.ts castVoices`, `db/npcs.ts voice_json` |
+| Lines and veils: a line stops the model before it writes; a veil asks it to cut away; both feed the image negatives | enforced | `dm/safety-logic.ts lineViolations, boundaryNegativeTerms`, `dm/narration-guard.ts` |
+| X-card: the queue pauses, the last narration is withdrawn, rewound or rerolled | enforced | `dm/safety.ts`, `dm/queue.ts`, `/safety/x-card`, `/safety/resume` |
+| Strictness: lenient, by the book and harsh shift every difficulty DC by two steps; tone biases reactions and the ambience bed | enforced | `srd/dc.ts dcForDifficulty`, `dm/safety-logic.ts strictnessShift, reactionBias, toneBedBias` |
+| Legendary actions: pools from the stat block's traits, spent by the model or the DM, refilled at the start of the creature's turn | enforced | `dm/legendary-logic.ts`, `dm/legendary-tools.ts`, `dm/encounter-tools.ts advancePointer` |
+| Legendary resistance: a failed save against a condition is turned automatically while charges remain | enforced | `dm/legendary-tools.ts autoLegendaryResistance`, `dm/cast-tools.ts` |
+| Lair actions on initiative count 20 | enforced | `dm/encounter-tools.ts` (wrap note), `dm/legendary-tools.ts handleLairAction` |
+| Fight summary: damage dealt and taken, kills, healing, the deciding roll, at the end of every fight | enforced | `dm/encounter-summary.ts`, `dm/enemy-damage.ts finishEncounter` |
+| Factions: the party's standing per faction bends a member's social DC one point per step; goals advance on the chapter tick and power drifts; an arc that names a faction moves its power | enforced | `dm/faction-logic.ts`, `dm/faction-tools.ts`, `dm/social-tools.ts`, `dm/chapter-close.ts`, `dm/world-tick.ts` |
+| Calendar: months, weekdays, moons and festivals written by hand or shipped by a world pack; the prompt says the day of the fair and the full moon | enforced | `dm/calendar.ts moonPhase, festivalsOn, describeInstant`, `dm/calendar-schema.ts`, `worlds/types.ts calendar` |
+| Calendar events: a party event the clock crosses becomes a fact and a title card, a DM-only one a fact the DM seat reads; yearly and monthly repeats | enforced | `db/calendar-events.ts`, `dm/calendar-fire.ts`, `db/clock.ts advanceClock` |
+| Torch timers: a torch burns an hour, a lantern six, everburning things do not; the clock puts them out and the board gutters the light | enforced | `dm/light-timers.ts`, `db/battle-maps.ts expireBurntLights`, `battlemap/view.ts light` |
+
+## Commerce, generators, the room and the prompt (phases 26 to 30)
+
+| Subsystem | State | Where |
+|---|---|---|
+| Shops: stock from the content pack's costs at the settlement's markup; the purse and the shelf clamp every purchase; the keeper buys at half; restock comes due by the clock | enforced | `dm/shop-logic.ts`, `dm/shop-tools.ts`, `db/shops.ts`, `/shops` |
+| Haggling: a Persuasion check against the settlement's DC moves every price in that shop one step, once per character | enforced | `dm/shop-logic.ts haggleStep, haggleDc`, `dm/shop-tools.ts handleHaggle` |
+| Player-to-player trade: an offer is checked against both packs and purses when made and again when accepted; both sheets move in one transaction with an audit row each | enforced | `dm/trade-logic.ts`, `dm/trade.ts`, `/item-proposals` |
+| Several characters per player: the seat marks the one in play; with one active at a time the others wait out fights and the map | enforced | `db/sheets.ts getSheetForUser`, `dm/roster.ts fieldedSheets`, `/sheet/switch` |
+| Settlement generator: seeded people, shops, rumours and a hook for a place; fired by the DM tool, the places list, or arrival somewhere unwritten with the world simulation on | enforced | `overworld/settlement.ts`, `dm/settlement.ts`, `dm/settlement-tools.ts` |
+| Watabou imports: a One Page Dungeon becomes walls, doors and DM labels; a city export becomes roads, a river and district names around its place | enforced | `battlemap/watabou.ts`, `dm/map-library.ts`, `/overworld/import` |
+| Prepared worlds in the registry: a bundle listed beside the packs installs as a workshop of the installing admin's | enforced | `worlds/types.ts registryBundleSchema`, `worlds/install.ts installBundleFromUrl` |
+| Transcription: each speaker's rings are written down with their name and both clocks; the beat drafter and the chapter close read them; the prompt never does | enforced | `voice/transcript.ts`, `db/voice-transcript.ts`, `stt.ts`, `dm/beats.ts`, `dm/chapter-close.ts` |
+| Dual-track recap: the party's card from what the party may know; a human DM's whisper adds the secrets and the arcs | enforced | `dm/recap-logic.ts`, `dm/recap.ts` |
+| Prompt sections with floors: the lines never drop, the sky, factions, quests and the open shop each hold their slice, and the engine boundary owns the weather, faction standing and shop prices | enforced | `dm/context-budget.ts SECTION_SHARES`, `dm/engine-boundary.ts`, `dm/prompt.ts` |

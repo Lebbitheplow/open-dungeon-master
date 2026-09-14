@@ -1,3 +1,4 @@
+import { normalizeSpeaker, type Speaker } from "@/lib/dm/speech";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { touchCampaign } from "@/lib/db/campaigns";
 import type { GeneratedImage, ImageRequest } from "@/lib/types";
@@ -27,6 +28,9 @@ export type CampaignMessage = {
   // makes the banner disappear for every client at once. Absent on messages
   // written before either feature existed.
   dmTurnId?: string;
+  // Who a DM message is spoken as (docs/vtt-parity-implementation-plan.md
+  // 8.1): an NPC or a monster on the board. Absent for the narrator.
+  speaker?: Speaker;
   createdAt: string;
 };
 
@@ -44,6 +48,7 @@ type MessageRow = {
   variants_json: string | null;
   variant_index: number | null;
   dm_turn_id: string | null;
+  speaker_json: string | null;
   created_at: string;
 };
 
@@ -62,6 +67,7 @@ function mapMessage(row: MessageRow): CampaignMessage {
     variants: parseJson<string[] | undefined>(row.variants_json, undefined),
     variantIndex: row.variant_index ?? undefined,
     dmTurnId: row.dm_turn_id ?? undefined,
+    speaker: normalizeSpeaker(parseJson<unknown>(row.speaker_json ?? "null", null)) ?? undefined,
     createdAt: row.created_at,
   };
 }
@@ -76,6 +82,7 @@ export function insertCampaignMessage(input: {
   imageRequest?: ImageRequest;
   locationId?: string;
   dmTurnId?: string;
+  speaker?: Speaker | null;
 }): CampaignMessage {
   const id = crypto.randomUUID();
   getDatabase()
@@ -83,9 +90,9 @@ export function insertCampaignMessage(input: {
       `
         INSERT INTO campaign_messages (
           id, campaign_id, seq, author_type, user_id, character_id, content,
-          image_request_json, location_id, dm_turn_id, created_at
+          image_request_json, location_id, dm_turn_id, speaker_json, created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
     )
     .run(
@@ -99,6 +106,7 @@ export function insertCampaignMessage(input: {
       input.imageRequest ? JSON.stringify(input.imageRequest) : null,
       input.locationId ?? null,
       input.dmTurnId ?? null,
+      input.speaker && input.speaker.kind !== "narrator" ? JSON.stringify(input.speaker) : null,
       nowIso(),
     );
   touchCampaign(input.campaignId);

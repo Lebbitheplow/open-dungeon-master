@@ -13,6 +13,7 @@ import {
   Swords,
   UserRound,
   Users,
+  Flag,
 } from "lucide-react";
 import type { WorkshopSummary } from "@/app/workshop/types";
 
@@ -34,6 +35,7 @@ export const WORKSHOP_SYSTEMS = [
   { id: "region", label: "Region", blurb: "The overworld map", icon: Globe2 },
   { id: "encounters", label: "Encounters", blurb: "Fights, budgeted", icon: Swords },
   { id: "cast", label: "Cast", blurb: "NPCs & agendas", icon: Users },
+  { id: "factions", label: "Factions", blurb: "Powers & standing", icon: Flag },
   { id: "bestiary", label: "Bestiary", blurb: "Homebrew monsters", icon: Skull },
   { id: "homebrew", label: "Homebrew", blurb: "Items, spells & options", icon: FlaskConical },
   { id: "lore", label: "Lore", blurb: "World facts & places", icon: BookOpen },
@@ -126,6 +128,9 @@ export function systemCount(
         phrase: plural(contents.npcs, "person", "people"),
         total: contents.npcs,
       };
+    case "factions":
+      // Not counted on the summary; the panel reads its own list.
+      return { figure: null, phrase: "powers of the world", total: 0 };
     case "bestiary":
       return {
         figure: bestiary === null ? null : String(bestiary),

@@ -53,6 +53,7 @@ const TOOL_SOURCES = [
   "src/lib/dm/mutations.ts",
   "src/lib/dm/encounter-tools.ts",
   "src/lib/dm/encounter-tools-extra.ts",
+  "src/lib/dm/legendary-tools.ts",
   "src/lib/dm/action-tools.ts",
   "src/lib/dm/check-tools.ts",
   "src/lib/dm/hazard-tools.ts",
@@ -72,6 +73,10 @@ const TOOL_SOURCES = [
   "src/lib/dm/prompt.ts",
   "src/lib/dm/note-tools.ts",
   "src/lib/dm/lore-search.ts",
+  "src/lib/dm/binder-tools.ts",
+  "src/lib/dm/faction-tools.ts",
+  "src/lib/dm/shop-tools.ts",
+  "src/lib/dm/settlement-tools.ts",
   "src/lib/dm/split-damage.ts",
   "src/lib/image-tool.ts",
 ];

@@ -36,8 +36,8 @@ export type PanelTabDef = [PanelTab, string, LucideIcon, string];
 // Story; bonds are grouped per character exactly like the roster, so they
 // live under Party. Keeping them here rather than in the rail is what stops
 // the header overflowing in a 320px panel.
-export type StorySection = "story" | "facts" | "log";
-export type PartySection = "party" | "bonds";
+export type StorySection = "story" | "quests" | "timeline" | "facts" | "log";
+export type PartySection = "party" | "bonds" | "factions" | "market";
 
 export type SubTabDef<T extends string> = [T, string, LucideIcon];
 

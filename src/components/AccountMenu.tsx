@@ -2,6 +2,8 @@
 
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
+  Moon,
+  Sun,
   AppWindow,
   CircleHelp,
   DoorOpen,
@@ -21,6 +23,7 @@ import { Tooltip } from "@/components/ui/Tooltip";
 import { headerButtonClass } from "@/app/campaigns/[campaignId]/headerButton";
 import { cn } from "@/lib/cn";
 import { shellHost, type ShellHost } from "@/lib/shell-host";
+import { useThemePrefs, writeThemeChoice } from "@/lib/theme-mode";
 
 // window.odmShell is set once before any page script runs and never changes.
 const subscribeNever = () => () => {};
@@ -115,6 +118,7 @@ export function AccountMenu({
   // client markup agree, and the entry appears right after hydration.
   const shell = useSyncExternalStore<ShellHost | null>(subscribeNever, shellHost, () => null);
   const router = useRouter();
+  const theme = useThemePrefs();
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -173,6 +177,17 @@ export function AccountMenu({
               <Link href="/friends" className={itemClass}>
                 <HeartHandshake className="size-4" /> Friends
               </Link>
+            </DropdownMenu.Item>
+            <DropdownMenu.Item
+              className={itemClass}
+              onSelect={(event) => {
+                // Stays open so a second press can cycle again.
+                event.preventDefault();
+                writeThemeChoice(theme.mode === "light" ? "dark" : "light");
+              }}
+            >
+              {theme.mode === "light" ? <Moon className="size-4" /> : <Sun className="size-4" />}
+              {theme.mode === "light" ? "Arcane night" : "Parchment day"}
             </DropdownMenu.Item>
             <DropdownMenu.Item asChild>
               <Link href="/settings" className={itemClass}>

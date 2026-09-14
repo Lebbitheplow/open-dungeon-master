@@ -1,3 +1,4 @@
+import { legendaryProfile } from "@/lib/dm/legendary-logic";
 import { healthState, type HealthState } from "@/lib/bestiary/health";
 import { creatureTypeOf } from "@/lib/bestiary/statblock";
 import { getBattleMapForEncounter, listHiddenRefIds } from "@/lib/db/battle-maps";
@@ -59,7 +60,12 @@ export type PublicEncounter = {
     maxHp?: number;
     ac?: number;
     initiative?: number | null;
+    // DM view only: legendary actions left this round and resistances
+    // left this fight (docs/vtt-parity-implementation-plan.md 4.1).
+    legendary?: { actions: number; actionsMax: number; resistances: number; resistancesMax: number };
   }>;
+  // Whether the lair acts on initiative 20, and whether it has this round.
+  lair?: { active: boolean; usedThisRound: boolean };
 };
 
 export function publicEncounter(
@@ -120,9 +126,29 @@ export function publicEncounter(
             maxHp: enemy.maxHp,
             ac: enemy.ac,
             initiative: enemy.initiative,
+            ...legendaryView(encounter, enemy),
           }
         : {}),
     })),
+    ...(encounter.legendary.lair
+      ? { lair: { active: true, usedThisRound: encounter.legendary.lairUsedRound === encounter.round } }
+      : {}),
+  };
+}
+
+function legendaryView(encounter: Encounter, enemy: EncounterEnemy) {
+  const pool = encounter.legendary.pools[enemy.id];
+  const profile = pool ? legendaryProfile(enemy.stats) : null;
+  if (!pool || !profile) {
+    return {};
+  }
+  return {
+    legendary: {
+      actions: pool.actions,
+      actionsMax: profile.actionsPerRound,
+      resistances: pool.resistances,
+      resistancesMax: profile.resistances,
+    },
   };
 }
 

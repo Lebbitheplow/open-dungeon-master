@@ -1,0 +1,22 @@
+{
+  "version": "1.0",
+  "title": "The Sunken Vault",
+  "story": "A vault beneath the old mill, flooded once and drained since.",
+  "rects": [
+    { "x": 0, "y": 0, "w": 6, "h": 5 },
+    { "x": 6, "y": 2, "w": 4, "h": 1 },
+    { "x": 10, "y": 0, "w": 5, "h": 6 },
+    { "x": 2, "y": 5, "w": 1, "h": 3 },
+    { "x": 0, "y": 8, "w": 7, "h": 4 }
+  ],
+  "doors": [
+    { "x": 6, "y": 2, "dir": { "x": 1, "y": 0 }, "type": 1 },
+    { "x": 2, "y": 5, "dir": { "x": 0, "y": 1 }, "type": 2 }
+  ],
+  "notes": [
+    { "text": "A drowned altar, still wet.", "pos": { "x": 12, "y": 3 }, "ref": "1" },
+    { "text": "Chains hang from the ceiling here.", "pos": { "x": 3, "y": 10 }, "ref": "2" }
+  ],
+  "columns": [],
+  "water": []
+}

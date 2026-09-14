@@ -42,6 +42,7 @@ export function VoiceDock({
   sayRangeRule,
   audibilityVersion,
   meshSignal,
+  transcribe = false,
 }: {
   campaignId: string;
   meUserId: string;
@@ -57,6 +58,7 @@ export function VoiceDock({
   sayRangeRule: boolean;
   audibilityVersion: number;
   meshSignal: { to: string; version: number } | null;
+  transcribe?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -194,6 +196,7 @@ export function VoiceDock({
                   audibilityVersion={audibilityVersion}
                   meshSignal={meshSignal}
                   compact
+                  transcribe={transcribe}
                 />
               </div>
             </>,

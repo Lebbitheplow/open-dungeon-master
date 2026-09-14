@@ -1,12 +1,17 @@
 "use client";
 
-import { BookMarked, BookOpen, Heart, ScrollText, Users } from "lucide-react";
-import { useState } from "react";
+import { BookMarked, BookOpen, Flag, Heart, History, ListChecks, ScrollText, ShoppingBag, Users } from "lucide-react";
+import { FactionsPanel } from "@/app/campaigns/[campaignId]/FactionsPanel";
+import { MarketPanel } from "@/app/campaigns/[campaignId]/MarketPanel";
+import { useMemo, useState } from "react";
 import { DmConsolePanel } from "@/app/campaigns/[campaignId]/DmConsolePanel";
 import { LeadPanel } from "@/app/campaigns/[campaignId]/LeadPanel";
 import type { CampaignMessage } from "@/lib/db/messages";
 import type { DmBeat } from "@/lib/db/dm-beats";
 import { BattleMapPanel } from "@/app/campaigns/[campaignId]/BattleMapPanel";
+import type { FxEvent } from "@/lib/battlemap/fx-plan";
+import type { CameraEvent, SceneState } from "@/lib/scene/state";
+import type { MapLabel } from "@/lib/battlemap/scene";
 import { DmWhisperPanel } from "@/app/campaigns/[campaignId]/DmWhisperPanel";
 import { EncounterPanel } from "@/app/campaigns/[campaignId]/EncounterPanel";
 import { EventLog } from "@/app/campaigns/[campaignId]/EventLog";
@@ -22,6 +27,10 @@ import { PinsPanel } from "@/app/campaigns/[campaignId]/PinsPanel";
 import { SessionSettings } from "@/app/campaigns/[campaignId]/SessionSettings";
 import { SideChatPanel } from "@/app/campaigns/[campaignId]/SideChatPanel";
 import { StoryPanel } from "@/app/campaigns/[campaignId]/StoryPanel";
+import { attributeSpeech, speakersIn } from "@/lib/dm/speech";
+import type { CastMember } from "@/lib/dm/cast";
+import { QuestsPanel } from "@/app/campaigns/[campaignId]/QuestsPanel";
+import { TimelinePanel } from "@/app/campaigns/[campaignId]/TimelinePanel";
 import {
   SubTabs,
   type PanelTab,
@@ -56,6 +65,7 @@ export type SidePanelRouterProps = {
   campaignId: string;
   sheets: CharacterSheet[];
   members: CampaignMember[];
+  cast: CastMember[];
   meUserId: string;
   // Runs the story: the party lead in an AI campaign, the DM in a human-run
   // one. Gates every panel that curates the world or fixes its numbers.
@@ -114,11 +124,30 @@ export type SidePanelRouterProps = {
   encounter?: PublicEncounter | null;
   battleMap?: PlayerMapView | null;
   mapPing?: MapPing | null;
+  // Effects planned for the board and the DM's camera, with their
+  // acknowledgements (useCampaignStream.ts).
+  fx?: FxEvent[];
+  onFxPlayed?: (ids: string[]) => void;
+  camera?: CameraEvent | null;
+  onCameraDone?: () => void;
+  // Puts words in the composer: the board HUD's shortcut to an action.
+  onCompose?: (text: string) => void;
+  // The sky over the table, for the board and the scene art.
+  scene?: SceneState | null;
+  // Whether this seat may draw on the live board.
+  canDraw?: boolean;
+  // A pinned map label was tapped: open what it points at.
+  onOpenLabel?: (label: MapLabel) => void;
   refreshBattleMap: () => Promise<void>;
   tab: PanelTab;
   // Bumped by the relationships_updated ephemeral; the Bonds panel refetches
   // its own scoped view when it changes.
   relationshipsVersion: number;
+  factionsVersion?: number;
+  shopsVersion?: number;
+  coins?: { characterId: string; direction: "in" | "out"; amountCp: number; at: number } | null;
+  activeSheetId?: string;
+  questsVersion: number;
   // Gates the Bonds sub-tab. This used to withhold a top-level tab inside
   // buildPanelTabs; Bonds is a Party section now, so the flag has to reach
   // this component instead.
@@ -133,6 +162,7 @@ export function SidePanelRouter({
   campaignId,
   sheets,
   members,
+  cast,
   meUserId,
   steersStory,
   isLead,
@@ -165,9 +195,22 @@ export function SidePanelRouter({
   encounter,
   battleMap,
   mapPing,
+  fx,
+  onFxPlayed,
+  camera,
+  onCameraDone,
+  onCompose,
+  scene,
+  canDraw,
+  onOpenLabel,
   refreshBattleMap,
   tab,
   relationshipsVersion,
+  factionsVersion = 0,
+  shopsVersion = 0,
+  coins = null,
+  activeSheetId = "",
+  questsVersion,
   relationshipsEnabled,
   adjudicates,
   messages,
@@ -184,9 +227,13 @@ export function SidePanelRouter({
   const partySubTabs: SubTabDef<PartySection>[] = [
     ["party", "Roster", Users],
     ...(relationshipsEnabled ? ([["bonds", "Bonds", Heart]] as SubTabDef<PartySection>[]) : []),
+    ["factions", "Factions", Flag],
+    ["market", "Market", ShoppingBag],
   ];
   const storySubTabs: SubTabDef<StorySection>[] = [
     ["story", "Chapters", BookOpen],
+    ["quests", "Quests", ListChecks],
+    ["timeline", "Timeline", History],
     ["facts", "Facts", BookMarked],
     ["log", "Log", ScrollText],
   ];
@@ -201,6 +248,22 @@ export function SidePanelRouter({
     assistantDmUserId: campaign?.assistantDmUserId ?? null,
   };
   const humanDmTable = hasHumanDm(dmSeats);
+
+  // Theatre inserts (docs/vtt-parity-implementation-plan.md 8.3): the
+  // speakers of the latest DM passage, when the table asked for faces.
+  const theatreInserts = useMemo(() => {
+    if (campaign?.gameSettings?.presentation !== "theatre") {
+      return null;
+    }
+    const latest = [...messages].reverse().find((message) => message.authorType === "dm");
+    if (!latest) {
+      return null;
+    }
+    const speakers = latest.speaker
+      ? [latest.speaker]
+      : speakersIn(attributeSpeech(latest.content, cast.map((member) => ({ kind: "npc" as const, id: member.id, name: member.name }))));
+    return { speakers, cast, messageId: latest.id };
+  }, [campaign?.gameSettings?.presentation, messages, cast]);
   const partySize = partySlotCount(
     dmSeats,
     members.map((member) => member.userId),
@@ -260,6 +323,16 @@ export function SidePanelRouter({
         ) : null}
         {partySection === "bonds" ? (
           <BondsPanel campaignId={campaignId} refreshKey={relationshipsVersion} />
+        ) : partySection === "factions" ? (
+          <FactionsPanel campaignId={campaignId} steersStory={steersStory} refreshKey={factionsVersion} />
+        ) : partySection === "market" ? (
+          <MarketPanel
+            campaignId={campaignId}
+            steersStory={steersStory}
+            mySheet={sheets.find((sheet) => sheet.id === activeSheetId) ?? sheets.find((sheet) => sheet.userId === meUserId && !sheet.isCompanion) ?? null}
+            refreshKey={shopsVersion}
+            coins={coins}
+          />
         ) : (
           <>
             {encounter ? (
@@ -291,6 +364,9 @@ export function SidePanelRouter({
               inCombat={Boolean(encounter)}
               campaignId={campaignId}
               worldPack={campaign?.gameSettings?.worldPack ?? ""}
+              lights={Object.fromEntries((battleMap?.tokens ?? []).filter((token) => token.kind === "pc" && token.light).map((token) => [token.refId, token.light!]))}
+              activeSheetId={activeSheetId}
+              multiCharacter={campaign?.gameSettings?.multiCharacter ?? "off"}
               companionsAvailable={
                 campaign?.gameSettings
                   ? companionSlotsFree(
@@ -335,6 +411,14 @@ export function SidePanelRouter({
         canDirect={adjudicates}
         canFocusPing={steersStory}
         ping={mapPing ?? null}
+        fx={fx}
+        onFxPlayed={onFxPlayed}
+        camera={camera ?? null}
+        onCameraDone={onCameraDone}
+        onCompose={onCompose}
+        sky={scene ?? null}
+        canDraw={canDraw ?? true}
+        onOpenLabel={onOpenLabel}
         encounter={encounter ?? null}
         sheets={sheets}
         refreshBattleMap={refreshBattleMap}
@@ -355,6 +439,8 @@ export function SidePanelRouter({
           steersStory={steersStory}
           mediaStatus={mediaStatus}
           genre={campaign?.gameSettings?.genre}
+          scene={scene ?? null}
+          inserts={theatreInserts}
         />
       </div>
     );
@@ -372,8 +458,12 @@ export function SidePanelRouter({
               steersStory={steersStory}
               refreshFacts={refreshFacts}
             />
-            <LorePanel campaignId={campaignId} steersStory={steersStory} />
+            <LorePanel campaignId={campaignId} steersStory={steersStory} members={members} />
           </div>
+        ) : storySection === "quests" ? (
+          <QuestsPanel campaignId={campaignId} steersStory={steersStory} refreshKey={questsVersion} />
+        ) : storySection === "timeline" ? (
+          <TimelinePanel campaignId={campaignId} refreshKey={chapters.length} />
         ) : storySection === "log" ? (
           <EventLog
             campaignId={campaignId}

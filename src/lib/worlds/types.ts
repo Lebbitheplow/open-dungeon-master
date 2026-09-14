@@ -22,6 +22,7 @@
 // The character builder imports it directly. The loader that reads the pack
 // files off disk lives in ./index.ts, which is server-only.
 import { z } from "zod";
+import { calendarDefinitionSchema } from "@/lib/dm/calendar-schema";
 import { GENRES } from "@/lib/schemas/game-settings";
 import {
   MAX_PACK_ART_DATA_URL_CHARS,
@@ -96,6 +97,10 @@ export const worldPackSchema = z.object({
   // caps at 120) and `premise` fills campaigns.description (capped at 500).
   theme: z.string().min(1).max(120),
   premise: z.string().max(500).default(""),
+  // The world's own year: months, weekdays, moons and festivals
+  // (docs/vtt-parity-implementation-plan.md 7.1). Absent means the table's
+  // preset stays.
+  calendar: calendarDefinitionSchema.optional(),
   races: z.array(idReskin).default([]),
   classes: z
     .array(idReskin.extend({ castingLabel: z.string().max(40).nullable().default(null) }))
@@ -199,8 +204,24 @@ export const registryEntrySchema = z.object({
   downloadUrl: z.string().url().startsWith("https://").max(500),
 });
 
+// A prepared world (docs/vtt-parity-implementation-plan.md 12.3): a
+// workshop bundle the registry points at. Installing one creates a
+// workshop for the installing user, under the same notice a pack gets.
+export const registryBundleSchema = z.object({
+  id: z.string().regex(/^[a-z][a-z0-9_]{2,49}$/),
+  name: z.string().min(1).max(70),
+  blurb: z.string().min(1).max(200),
+  version: z.string().trim().max(20).default("1.0.0"),
+  author: z.string().trim().max(80).default(""),
+  inspiredBy: z.string().max(200).default(""),
+  rightsHolder: z.string().trim().max(120).default(""),
+  downloadUrl: z.string().url().startsWith("https://").max(500),
+});
+export type RegistryBundle = z.infer<typeof registryBundleSchema>;
+
 export const registryIndexSchema = z.object({
   packs: z.array(registryEntrySchema).max(500).default([]),
+  bundles: z.array(registryBundleSchema).max(500).default([]),
 });
 
 export type RegistryEntry = z.infer<typeof registryEntrySchema>;

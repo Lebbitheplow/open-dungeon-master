@@ -1,7 +1,9 @@
+import { ThemeApplier } from "@/lib/theme-mode";
 import type { Metadata, Viewport } from "next";
 import { Cinzel, Geist, Geist_Mono, Source_Serif_4 } from "next/font/google";
 import TopoBackground from "./TopoBackground";
 import { ServerAddressButton } from "@/components/ServerAddressButton";
+import { ConfirmHost } from "@/components/ui/ConfirmDialog";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -60,11 +62,16 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col">
+        {/* The reader's theme and scale, applied to <html> before anything
+            else paints (docs/vtt-parity-implementation-plan.md section 14). */}
+        <ThemeApplier />
         <TopoBackground />
         {children}
         {/* Every page: the QR and address a friend scans to add this server
             in the app or open it in a browser on the same network. */}
         <ServerAddressButton />
+        {/* The app's own confirm and notice, asked from anywhere. */}
+        <ConfirmHost />
       </body>
     </html>
   );

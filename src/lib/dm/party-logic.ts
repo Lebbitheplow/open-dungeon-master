@@ -1,3 +1,5 @@
+import { normalizeReputation } from "@/lib/dm/faction-logic";
+
 // The party as a thing in its own right.
 //
 // Party gold, the shared pack, the party's XP and where the party IS were all
@@ -25,6 +27,9 @@ export type PartyItem = {
 };
 
 export type PartyState = {
+  // Standing with each faction by id, minus five to five
+  // (src/lib/dm/faction-logic.ts). Absent ids read as zero.
+  reputation: Record<string, number>;
   // The common purse, in copper (src/lib/srd/currency.ts). Separate from
   // every character's own money: what the party banked together is not
   // anyone's to spend alone.
@@ -53,6 +58,7 @@ export const MAX_PARTY_ITEMS = 120;
 
 export function emptyParty(): PartyState {
   return {
+    reputation: {},
     copper: 0,
     inventory: [],
     bankedXp: 0,
@@ -70,6 +76,7 @@ export function normalizeParty(raw: unknown): PartyState {
   }
   const record = raw as Record<string, unknown>;
   return {
+    reputation: normalizeReputation(record.reputation),
     copper: Math.max(0, Math.round(Number(record.copper) || 0)),
     inventory: Array.isArray(record.inventory)
       ? (record.inventory as Array<Record<string, unknown>>)

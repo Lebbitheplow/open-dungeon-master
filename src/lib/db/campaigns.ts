@@ -14,8 +14,10 @@ import type {
 import { isUploadedImagePath } from "@/lib/uploads";
 import type { StorySettings } from "@/lib/types";
 import { normalizeStoryArc, type StoryArc } from "@/lib/dm/arc-logic";
+import { syncArcQuests } from "@/lib/db/quests";
 import { normalizeCover, type DmCover } from "@/lib/dm/delegation";
-import { normalizeClock, type CampaignClock } from "@/lib/dm/calendar";
+import { MINUTES_PER_DAY, daysPerYear, defaultClock, normalizeCalendarDefinition, normalizeClock, type CampaignClock } from "@/lib/dm/calendar";
+import { packFor } from "@/lib/worlds/preset";
 import { normalizeParty, type PartyState } from "@/lib/dm/party-logic";
 import {
   partySlotCount,
@@ -322,6 +324,20 @@ export function createCampaign(
     ).run(id, ownerUserId, now);
   })();
 
+  // A world pack that names its months hands the table its calendar
+  // (docs/vtt-parity-implementation-plan.md 7.1).
+  const packCalendar = gameSettings.worldPack ? packFor(gameSettings)?.calendar : undefined;
+  if (packCalendar) {
+    const calendar = normalizeCalendarDefinition(packCalendar);
+    if (calendar) {
+      const fresh = defaultClock();
+      db.prepare(`UPDATE campaigns SET clock_json = ? WHERE id = ?`).run(
+        JSON.stringify({ ...fresh, calendar, instant: Math.min(fresh.instant, daysPerYear(calendar) * MINUTES_PER_DAY - 1) }),
+        id,
+      );
+    }
+  }
+
   const campaign = getCampaignForUser(id, ownerUserId);
   if (!campaign) {
     throw new Error("Failed to create campaign.");
@@ -443,7 +459,7 @@ export function listMembers(campaignId: string): CampaignMember[] {
   const rows = getDatabase()
     .prepare(
       `
-        SELECT m.user_id, u.username, u.avatar_json, m.role, m.ready, m.use_real_dice, m.hold_rolls, m.muted, m.joined_at
+        SELECT m.user_id, u.username, u.avatar_json, m.role, m.ready, m.use_real_dice, m.hold_rolls, m.muted, m.active_character_id, m.joined_at
         FROM campaign_members m
         JOIN users u ON u.id = m.user_id
         WHERE m.campaign_id = ?
@@ -459,6 +475,7 @@ export function listMembers(campaignId: string): CampaignMember[] {
     use_real_dice: number;
     hold_rolls: number;
     muted: number;
+    active_character_id: string | null;
     joined_at: string;
   }>;
 
@@ -471,6 +488,7 @@ export function listMembers(campaignId: string): CampaignMember[] {
     useRealDice: Boolean(row.use_real_dice),
     holdRolls: Boolean(row.hold_rolls),
     muted: Boolean(row.muted),
+    activeCharacterId: String(row.active_character_id ?? ""),
     joinedAt: row.joined_at,
   }));
 }
@@ -668,6 +686,13 @@ export function setStoryArc(campaignId: string, arc: StoryArc) {
         }
       : (arc.saga ?? null),
   };
+  // The quest log mirrors the sub-arcs (docs/vtt-parity-implementation-
+  // plan.md section 5.7); a failure there must not lose the arc.
+  try {
+    syncArcQuests(campaignId, trimmed.subArcs);
+  } catch (error) {
+    console.error("[quests] arc sync failed", error);
+  }
   let serialized = JSON.stringify(trimmed);
   while (serialized.length > STORY_ARC_CHAR_CAP) {
     const settledEvent = trimmed.events.findIndex((event) => event.status !== "pending");
@@ -843,6 +868,14 @@ export function setMemberRealDice(campaignId: string, userId: string, useRealDic
     .prepare(`UPDATE campaign_members SET use_real_dice = ? WHERE campaign_id = ? AND user_id = ?`)
     .run(useRealDice ? 1 : 0, campaignId, userId);
   touchCampaign(campaignId);
+}
+
+// Which of their characters a player is running now
+// (docs/vtt-parity-implementation-plan.md 11.3).
+export function setMemberActiveCharacter(campaignId: string, userId: string, characterId: string) {
+  getDatabase()
+    .prepare(`UPDATE campaign_members SET active_character_id = ? WHERE campaign_id = ? AND user_id = ?`)
+    .run(characterId, campaignId, userId);
 }
 
 export function setMemberHoldRolls(campaignId: string, userId: string, holdRolls: boolean) {

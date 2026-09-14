@@ -16,6 +16,7 @@ import type { WorldPackSummary } from "@/lib/worlds/types";
 import { WorldPackGallery } from "@/components/WorldPackGallery";
 import { TTS_VOICES } from "@/lib/tts-voices";
 import { VoicePreviewButton } from "@/components/VoicePreviewButton";
+import { SafetyToneFields } from "@/components/SafetyToneFields";
 import type { GameSettings } from "@/lib/schemas/game-settings";
 import {
   CAMPAIGN_LENGTH_LABELS,
@@ -393,6 +394,23 @@ export function GameSettingsPanel({
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <span className="w-16 text-stone-500">Faces</span>
+          <Tooltip content="Theatre inserts: when a passage has someone speaking, their portrait comes up over the scene art while their lines play.">
+            <button
+              type="button"
+              onClick={() => patch({ presentation: settings.presentation === "theatre" ? "plain" : "theatre" })}
+              className={cn(
+                "rounded-md border px-2 py-1",
+                settings.presentation === "theatre"
+                  ? "border-amber-700 bg-amber-950/50 text-amber-200"
+                  : "border-stone-700 text-stone-400",
+              )}
+            >
+              {settings.presentation === "theatre" ? "Theatre inserts on" : "Theatre inserts off"}
+            </button>
+          </Tooltip>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
           <span className="w-16 text-stone-500">Ambience</span>
           <button
             type="button"
@@ -422,6 +440,20 @@ export function GameSettingsPanel({
               </button>
             </Tooltip>
           ) : null}
+          <Tooltip content="Players may draw on the live board: a plan of attack, a circle round a door. The DM always may.">
+            <button
+              type="button"
+              onClick={() => patch({ boardDrawing: !settings.boardDrawing })}
+              className={cn(
+                "rounded-md border px-2 py-1",
+                settings.boardDrawing
+                  ? "border-amber-700 bg-amber-950/50 text-amber-200"
+                  : "border-stone-700 text-stone-400",
+              )}
+            >
+              {settings.boardDrawing ? "Players may draw" : "Only the DM draws"}
+            </button>
+          </Tooltip>
           {settings.ambienceEnabled && !ambienceInstalled ? (
             // The catalog knows the cues but no audio is on disk, so the
             // toggle above is currently a promise of silence. Say so where
@@ -632,6 +664,16 @@ export function GameSettingsPanel({
               : "DM item and gold changes apply immediately (lead can undo)."}
           </span>
         </div>
+        <div className="rounded-md border border-stone-800 bg-stone-950/40 p-2">
+          <SafetyToneFields
+            safety={settings.safety}
+            gm={settings.gm}
+            ttsVoice={settings.ttsVoice}
+            onSafety={(safety) => patch({ safety })}
+            onGm={(gm) => patch({ gm })}
+            onVoice={(ttsVoice) => patch({ ttsVoice })}
+          />
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-16 text-stone-500">Prose</span>
           <Tooltip content="After each turn the server compares the DM's narration against what the dice and tools actually resolved: a hit written on a miss, a death the hit points deny, a damage number no die rolled. A contradiction is sent back to the DM once for a rewrite. Nothing on any sheet changes either way.">
@@ -698,6 +740,18 @@ export function GameSettingsPanel({
                   <option value="soft">Turns: shown</option>
                   <option value="strict">Turns: enforced</option>
                 </select>
+              </Tooltip>
+              <Tooltip content="Transcription: each speaker's microphone is written down with their name, for the beat drafter and the chapter summary. Never read by the DM prompt. The lobby says out loud that the table is being transcribed while this is on.">
+                <button
+                  type="button"
+                  onClick={() => patch({ voice: { ...settings.voice, transcribe: !settings.voice.transcribe } })}
+                  className={cn(
+                    "rounded-md border px-2 py-1",
+                    settings.voice.transcribe ? "border-amber-700 bg-amber-950/50 text-amber-200" : "border-stone-700 text-stone-400",
+                  )}
+                >
+                  Transcription {settings.voice.transcribe ? "on" : "off"}
+                </button>
               </Tooltip>
               <Tooltip content="Distance decides who hears whom, using the battle map. Outside combat, or with no map, everyone hears everyone as usual. The DM always hears everyone and is always heard.">
                 <button

@@ -1,5 +1,7 @@
 "use client";
 
+import { appConfirm } from "@/components/ui/ConfirmDialog";
+
 import {
   Check,
   Crown,
@@ -227,7 +229,7 @@ function LeadSeatCard({
     sheets.find((sheet) => sheet.userId === userId && !sheet.isCompanion)?.name;
 
   async function makeLead(member: CampaignMember) {
-    if (!window.confirm(`Make ${member.username} the party lead? You will lose this tab.`)) {
+    if (!await appConfirm(`Make ${member.username} the party lead? You will lose this tab.`)) {
       return;
     }
     setBusy(member.userId);

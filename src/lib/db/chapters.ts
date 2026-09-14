@@ -14,6 +14,8 @@ export type Chapter = {
   seqStart: number;
   seqEnd: number | null;
   status: "open" | "closed";
+  // The in-world date it closed on, for the timeline; "" while open.
+  clockLabel: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -28,6 +30,7 @@ type ChapterRow = {
   seq_start: number;
   seq_end: number | null;
   status: "open" | "closed";
+  clock_label: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -35,7 +38,7 @@ type ChapterRow = {
 // Explicit column list so the embedding BLOB never rides along on ordinary
 // chapter reads (listChapters runs every DM turn).
 const CHAPTER_COLUMNS =
-  "id, campaign_id, chapter_index, title, summary, highlights_json, seq_start, seq_end, status, created_at, updated_at";
+  "id, campaign_id, chapter_index, title, summary, highlights_json, seq_start, seq_end, status, clock_label, created_at, updated_at";
 
 function mapChapter(row: ChapterRow): Chapter {
   return {
@@ -45,6 +48,7 @@ function mapChapter(row: ChapterRow): Chapter {
     title: row.title,
     summary: row.summary,
     highlights: parseJson<string[]>(row.highlights_json, []),
+    clockLabel: row.clock_label ?? "",
     seqStart: row.seq_start,
     seqEnd: row.seq_end,
     status: row.status,
@@ -104,7 +108,7 @@ export function ensureOpenChapter(campaignId: string): Chapter {
 // opens the next one, atomically.
 export function closeChapterRow(
   chapterId: string,
-  input: { title: string; summary: string; highlights: string[]; seqEnd: number },
+  input: { title: string; summary: string; highlights: string[]; seqEnd: number; clockLabel?: string },
 ): { closed: Chapter; opened: Chapter } | null {
   const db = getDatabase();
   const chapter = getChapter(chapterId);
@@ -118,13 +122,15 @@ export function closeChapterRow(
       `
         UPDATE chapters
         SET status = 'closed', title = ?, summary = ?, highlights_json = ?,
-            seq_end = ?, updated_at = ?
+            seq_end = ?, clock_label = ?, updated_at = ?
         WHERE id = ? AND status = 'open'
       `,
     ).run(
       input.title.slice(0, 120),
       input.summary.slice(0, 8_000),
       JSON.stringify(input.highlights.slice(0, 6).map((entry) => entry.slice(0, 300))),
+      input.seqEnd,
+      (input.clockLabel ?? "").slice(0, 120),
       input.seqEnd,
       now,
       chapterId,

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { UnofficialPackNotice } from "@/components/UnofficialPackNotice";
-import type { RegistryEntry, WorldPackSummary } from "@/lib/worlds/types";
+import type { RegistryBundle, RegistryEntry, WorldPackSummary } from "@/lib/worlds/types";
 import { forgetPackArt } from "@/lib/worlds/use-pack-art";
 
 // The campaign plugin browser.
@@ -28,6 +28,7 @@ type RegistryState = {
   url?: string;
   error?: string;
   packs: RegistryEntry[];
+  bundles?: RegistryBundle[];
   installed: WorldPackSummary[];
 };
 
@@ -127,6 +128,31 @@ export function AdminWorldsPanel() {
     }
   }
 
+  // A prepared world (docs/vtt-parity-implementation-plan.md 12.3) lands as
+  // a workshop of the installing admin's own.
+  async function installBundle(bundle: RegistryBundle) {
+    setBusyId(`bundle:${bundle.id}`);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/worlds/install", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bundleId: bundle.id }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(data.error || "Could not install that world.");
+        return;
+      }
+      setNotice(`Installed ${bundle.name} as a workshop (${data.copied} entries). Find it under Workshop.`);
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setBusyId("");
+    }
+  }
+
   async function remove(pack: WorldPackSummary) {
     setBusyId(pack.id);
     setError("");
@@ -199,6 +225,37 @@ export function AdminWorldsPanel() {
 
       {error ? <p className="text-xs text-red-400">{error}</p> : null}
       {notice ? <p className="text-xs text-amber-200">{notice}</p> : null}
+
+      {state.bundles?.length ? (
+        <section>
+          <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-stone-400">Prepared worlds</h3>
+          <p className="mb-2 text-[11px] text-stone-500">
+            A workshop someone else built: cast, places, maps, encounters and lore, ready to run. Installing one creates a workshop of your own from it.
+          </p>
+          <ul className="grid gap-2 sm:grid-cols-2">
+            {state.bundles.map((bundle) => (
+              <li key={bundle.id} className={cn(ui.card, "space-y-1.5 p-3")}>
+                <p className="font-display text-sm text-amber-100">{bundle.name}</p>
+                <p className="text-[11px] leading-4 text-stone-400">{bundle.blurb}</p>
+                <p className="text-[10px] text-stone-500">
+                  {bundle.author ? `by ${bundle.author}` : "community work"}
+                  {bundle.version ? `, v${bundle.version}` : ""}
+                </p>
+                {bundle.inspiredBy ? <UnofficialPackNotice inspiredBy={bundle.inspiredBy} rightsHolder={bundle.rightsHolder} /> : null}
+                <button
+                  type="button"
+                  disabled={busyId === `bundle:${bundle.id}`}
+                  onClick={() => void installBundle(bundle)}
+                  className={cn(ui.btnSmall, "text-xs")}
+                >
+                  {busyId === `bundle:${bundle.id}` ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+                  Install as a workshop
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section>
         <div className="mb-2 flex items-center justify-between gap-2">

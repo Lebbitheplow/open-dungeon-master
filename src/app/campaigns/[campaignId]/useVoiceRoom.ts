@@ -23,6 +23,7 @@ import {
   type MicMode,
 } from "@/app/campaigns/[campaignId]/useVoicePrefs";
 import { registerOutput, releaseOutput, withMicGain } from "@/lib/audio-devices";
+import { startTranscriptCapture } from "@/app/campaigns/[campaignId]/transcript-capture";
 
 export type VoiceStatus = "idle" | "connecting" | "connected" | "error" | "reconnecting";
 
@@ -64,8 +65,14 @@ export function useVoiceRoom(
   audibilityVersion = 0,
   // Mesh signaling nudge from the stream: someone left mail in a mailbox.
   meshSignal: { to: string; version: number } | null = null,
+  // The table's transcription switch (docs/vtt-parity-implementation-plan.md 13.3).
+  options: { transcribe?: boolean } = {},
 ) {
   const [status, setStatus] = useState<VoiceStatus>("idle");
+  const optionsRef = useRef(options);
+  useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
   const [error, setError] = useState("");
   const [muted, setMuted] = useState(false);
   const [handRaised, setHandRaised] = useState(false);
@@ -106,6 +113,7 @@ export function useVoiceRoom(
   // Kept so the microphone can be swapped without rebuilding the transport:
   // replaceTrack keeps the same producer, so nobody else renegotiates.
   const producerRef = useRef<Awaited<ReturnType<Transport["produce"]>> | null>(null);
+  const stopCaptureRef = useRef<(() => void) | null>(null);
 
   // Which transport this server runs, learned from the availability probe.
   // "mesh" is browser-to-browser WebRTC: one RTCPeerConnection per other
@@ -209,6 +217,8 @@ export function useVoiceRoom(
 
   const teardown = useCallback(() => {
     joinedRef.current = false;
+    stopCaptureRef.current?.();
+    stopCaptureRef.current = null;
     micStreamRef.current?.getTracks().forEach((track) => track.stop());
     micStreamRef.current = null;
     producerRef.current = null;
@@ -498,6 +508,11 @@ export function useVoiceRoom(
       });
 
       producerRef.current = await sendTransport.produce({ track: stream.getAudioTracks()[0] });
+      // A transcribed table (13.3): this microphone is cut into rings and
+      // written down with this player's name from here on.
+      if (optionsRef.current.transcribe) {
+        stopCaptureRef.current = startTranscriptCapture(campaignId, stream);
+      }
       // Gains before consumers, so the first audio plays at the right volume
       // rather than blaring at full and being corrected a moment later.
       await refreshGains();
@@ -510,7 +525,7 @@ export function useVoiceRoom(
       setError(cause instanceof Error ? cause.message : "Could not join voice chat.");
       setStatus("error");
     }
-  }, [joinMesh, post, refreshGains, status, syncConsumers, teardown]);
+  }, [campaignId, joinMesh, post, refreshGains, status, syncConsumers, teardown]);
 
   const leave = useCallback(async () => {
     const leavePath = modeRef.current === "mesh" ? "mesh/leave" : "leave";

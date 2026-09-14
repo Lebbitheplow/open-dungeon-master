@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/cn";
+import { ListControls, useListControls } from "@/components/ui/ListControls";
 import { ui } from "@/lib/ui";
 import { TerrainCanvas } from "@/app/campaigns/[campaignId]/TerrainCanvas";
 import { THEME_LABELS, type PreparedMap } from "@/app/workshop/maps/types";
@@ -24,6 +25,7 @@ export function MapGallery({
   selectedId: string;
   onOpen: (map: PreparedMap) => void;
 }) {
+  const controls = useListControls(maps);
   if (!maps.length) {
     return (
       <p className="text-xs text-stone-500">
@@ -32,8 +34,13 @@ export function MapGallery({
     );
   }
   return (
+    <div className="space-y-3">
+    <ListControls controls={controls} placeholder="Find a map" />
+    {controls.filtered && !controls.shown.length ? (
+      <p className="text-xs text-stone-500">Nothing matches that. Clear the search or the tag.</p>
+    ) : null}
     <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-      {maps.map((map) => (
+      {controls.shown.map((map) => (
         <li key={map.id}>
           <button
             type="button"
@@ -64,5 +71,6 @@ export function MapGallery({
         </li>
       ))}
     </ul>
+    </div>
   );
 }

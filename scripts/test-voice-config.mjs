@@ -137,4 +137,5 @@ if (failures) {
   console.error(`\n${failures} voice config check(s) failed.`);
   process.exit(1);
 }
+
 console.log("voice config checks passed.");

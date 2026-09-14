@@ -1,5 +1,7 @@
 "use client";
 
+import { appConfirm } from "@/components/ui/ConfirmDialog";
+
 import {
   Check,
   Copy,
@@ -117,7 +119,7 @@ export function InviteShareDialog({
 
   async function regenerate() {
     if (
-      !window.confirm(
+      !await appConfirm(
         "Generate a new invite code? Every link and QR shared so far stops working.",
       )
     ) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search, UserPlus, Users } from "lucide-react";
+import { Flag, Search, UserPlus, Users } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { npcPlaceholder, npcRoleLabel } from "@/lib/placeholders";
@@ -24,6 +24,8 @@ export type Npc = {
   role?: string;
   aliases: string[];
   portraitUrl: string;
+  // The faction they belong to, or "" (optional for older servers).
+  factionId?: string;
   archived: boolean;
   agency: {
     personality: Record<string, number> | null;
@@ -36,6 +38,8 @@ type ListProps = {
   npcs: Npc[];
   selectedId: string;
   onOpen: (npc: Npc | null) => void;
+  // Faction name by id, for the crest chip on each row.
+  factionNames?: Map<string, string>;
 };
 
 export function CastChips({ npcs, selectedId, onOpen }: ListProps) {
@@ -112,7 +116,7 @@ function matches(npc: Npc, query: string): boolean {
   return [npc.name, ...npc.aliases].some((name) => name.toLowerCase().includes(needle));
 }
 
-export function CastRows({ npcs, onOpen }: Omit<ListProps, "selectedId">) {
+export function CastRows({ npcs, onOpen, factionNames }: Omit<ListProps, "selectedId">) {
   const [query, setQuery] = useState("");
   const shown = npcs.filter((npc) => matches(npc, query));
 
@@ -164,6 +168,11 @@ export function CastRows({ npcs, onOpen }: Omit<ListProps, "selectedId">) {
                     >
                       {npc.attitude}
                     </span>
+                    {npc.factionId && factionNames?.get(npc.factionId) ? (
+                      <span className="flex items-center gap-0.5 rounded-sm border border-amber-800/60 bg-amber-950/30 px-1.5 py-0.5 text-[10px] tracking-wide text-amber-200/90">
+                        <Flag className="size-2.5" /> {factionNames.get(npc.factionId)}
+                      </span>
+                    ) : null}
                     {npc.archived ? (
                       <span className="rounded-sm border border-stone-600/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-stone-500">
                         set aside

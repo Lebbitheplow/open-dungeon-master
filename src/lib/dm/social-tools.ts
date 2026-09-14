@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { reactionBias } from "@/lib/dm/safety-logic";
+import { reputationDcOffset } from "@/lib/dm/faction-logic";
+import { getParty } from "@/lib/db/party";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getSheetById } from "@/lib/db/sheets";
 import { insertRoll } from "@/lib/db/rolls";
@@ -259,7 +262,9 @@ export function handleNpcReaction(
   });
   publishRoll(campaign.id, roll);
   turn.rollIds.push(roll.id);
-  const attitude = reactionAttitude(outcome.total);
+  // Strictness leans the stranger a step (docs/vtt-parity-implementation-
+  // plan.md 9.2): warmer when lenient, warier when harsh.
+  const attitude = shiftAttitude(reactionAttitude(outcome.total), reactionBias(campaign.gameSettings.gm?.strictness ?? "standard"));
   const npc = bootstrapAgency(
     campaign,
     upsertNpc({
@@ -326,7 +331,10 @@ export function handleSocialCheck(
   if ("error" in resolved || "autoFail" in resolved) {
     return { error: "error" in resolved ? resolved.error : `${sheet.name} cannot make that check.` };
   }
-  const dc = socialCheckDc(npc.attitude);
+  // A faction's member leans on the party's standing with that faction
+  // (docs/vtt-parity-implementation-plan.md section 6).
+  const factionOffset = npc.factionId ? reputationDcOffset(getParty(campaign.id).reputation[npc.factionId] ?? 0) : 0;
+  const dc = Math.max(5, socialCheckDc(npc.attitude) + factionOffset);
   // Attitude is how this NPC feels about the PARTY; the approval meter is how
   // they feel about THIS character. Standing with someone makes them easier
   // to sway, bounded to +/-4 so a friendship never trivializes a hard ask.
@@ -463,4 +471,11 @@ export function npcRosterForPrompt(campaignId: string): Array<{
     // What this NPC has no on-screen reason to know (witness-logic.ts).
     witnessNote: renderWitnessNote(npc.name, facts),
   }));
+}
+
+const ATTITUDE_LADDER = ["hostile", "indifferent", "friendly"] as const;
+
+function shiftAttitude(attitude: (typeof ATTITUDE_LADDER)[number], steps: number): (typeof ATTITUDE_LADDER)[number] {
+  const index = Math.max(0, Math.min(ATTITUDE_LADDER.length - 1, ATTITUDE_LADDER.indexOf(attitude) + steps));
+  return ATTITUDE_LADDER[index];
 }

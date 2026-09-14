@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { isErrorResponse, steersStory, requireMember } from "@/lib/campaign-api";
 import { getItemProposal, resolveItemProposal } from "@/lib/db/item-proposals";
-import { listSheets } from "@/lib/db/sheets";
+import { getSheetById, listSheets } from "@/lib/db/sheets";
+import { applyTrade } from "@/lib/dm/trade";
+import { canResolveTrade } from "@/lib/dm/trade-logic";
 import { applyDmMutation } from "@/lib/dm/mutations";
 import { canResolveProposal } from "@/lib/dm/proposal-logic";
 import { publicItemProposal } from "@/lib/dm/proposal-intercept";
@@ -38,13 +40,31 @@ export async function POST(
     return Response.json({ error: "The offer was already resolved." }, { status: 400 });
   }
   const actorIsOwner = proposal.userId === context.user.id;
-  if (!canResolveProposal(action, actorIsOwner, steersStory(context))) {
+  const isTrade = proposal.toolName === "trade";
+  if (isTrade) {
+    // A trade: the counterparty answers, the proposer may withdraw, the
+    // lead may do either (docs/vtt-parity-implementation-plan.md 11.2).
+    const counterparty = getSheetById(proposal.toCharacterId);
+    const actorIsCounterparty = Boolean(counterparty && counterparty.userId === context.user.id);
+    if (!canResolveTrade(action, actorIsOwner, actorIsCounterparty, steersStory(context))) {
+      return Response.json({ error: "Only the other side, the offerer or the lead can do that." }, { status: 403 });
+    }
+  } else if (!canResolveProposal(action, actorIsOwner, steersStory(context))) {
     return Response.json({ error: "Only the offer's player or the lead can do that." }, {
       status: 403,
     });
   }
 
-  if (action === "approve") {
+  if (action === "approve" && isTrade) {
+    const applied = applyTrade(context.campaign, proposal);
+    if ("error" in applied) {
+      const declined = resolveItemProposal(proposalId, "declined");
+      if (declined) {
+        publishPersisted(campaignId, "item_proposal_resolved", { proposal: publicItemProposal(declined) });
+      }
+      return Response.json({ error: `The trade could not go through: ${applied.error}` }, { status: 409 });
+    }
+  } else if (action === "approve") {
     // Fresh sheets: the offer may be hours old and the sheet has moved on.
     const sheets = listSheets(campaignId);
     const sheetsById = new Map(sheets.map((sheet) => [sheet.id, sheet]));

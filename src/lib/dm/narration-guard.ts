@@ -1,3 +1,4 @@
+import { buildLinePrompt, lineViolations } from "@/lib/dm/safety-logic";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -23,24 +24,28 @@ export async function enforceEngineBoundary(
   callsRemaining: number,
   sheets: readonly CharacterSheet[],
 ): Promise<void> {
-  if (!campaign.gameSettings.narrationGuard) {
-    return;
-  }
   const narration = turn.narrationParts.join("\n\n").trim();
   if (!narration) {
     return;
   }
+  // A line crossed is refused the same way a hit written on a miss is
+  // (docs/vtt-parity-implementation-plan.md 9.1), whether or not the
+  // outcome check is on: safety is not a setting.
+  const lines = campaign.gameSettings.safety?.lines ?? [];
+  const crossed = lineViolations(narration, lines);
   const partyNames = sheets.map((sheet) => sheet.name);
-  const contradictions = checkNarration({
-    conversation: turn.conversation,
-    narration,
-    partyNames,
-  });
-  if (!contradictions.length) {
+  const contradictions = campaign.gameSettings.narrationGuard
+    ? checkNarration({
+        conversation: turn.conversation,
+        narration,
+        partyNames,
+      })
+    : [];
+  if (!contradictions.length && !crossed.length) {
     return;
   }
 
-  const summary = contradictions.map((entry) => entry.detail).join("; ");
+  const summary = [...contradictions.map((entry) => entry.detail), ...crossed.map((line) => `line crossed: ${line}`)].join("; ");
   if (callsRemaining < 1) {
     console.warn(
       `[engine-boundary] turn ${turn.id}: narration contradicts the resolved outcomes, but the model-call budget is spent (${summary})`,
@@ -57,7 +62,12 @@ export async function enforceEngineBoundary(
     [
       ...turn.conversation,
       { role: "assistant", content: narration },
-      { role: "user", content: buildCorrectionPrompt(contradictions) },
+      {
+        role: "user",
+        content: [contradictions.length ? buildCorrectionPrompt(contradictions) : "", crossed.length ? buildLinePrompt(crossed) : ""]
+          .filter(Boolean)
+          .join("\n\n"),
+      },
     ],
     // No tools: this call exists to rewrite prose, and a tool call here would
     // resolve mechanics a second time.
@@ -83,12 +93,15 @@ export async function enforceEngineBoundary(
   // A rewrite is only an improvement if it actually removes contradictions. A
   // model that swapped one wrong claim for another keeps its original text,
   // which at least the table already saw streaming.
-  const remaining = checkNarration({
-    conversation: turn.conversation,
-    narration: corrected,
-    partyNames,
-  });
-  if (remaining.length >= contradictions.length) {
+  const remaining = campaign.gameSettings.narrationGuard
+    ? checkNarration({
+        conversation: turn.conversation,
+        narration: corrected,
+        partyNames,
+      })
+    : [];
+  const stillCrossed = lineViolations(corrected, lines);
+  if (remaining.length + stillCrossed.length >= contradictions.length + crossed.length) {
     console.warn(
       `[engine-boundary] turn ${turn.id}: correction did not resolve the contradiction (${summary})`,
     );

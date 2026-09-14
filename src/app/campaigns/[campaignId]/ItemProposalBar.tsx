@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Loader2, Package, X } from "lucide-react";
+import { ArrowLeftRight, Check, Loader2, Package, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import type { ItemProposal } from "@/app/campaigns/[campaignId]/useCampaignStream";
@@ -54,9 +54,14 @@ export function ItemProposalBar({
     <div className="mx-3 mb-2 space-y-1.5">
       {error ? <p className="text-[11px] text-red-400">{error}</p> : null}
       {proposals.map((proposal) => {
-        const mine = proposal.userId === meUserId;
+        const trade = proposal.toolName === "trade";
+        // A trade is "mine" to answer when it is made to my character; the
+        // offerer may only withdraw it (docs/vtt-parity-implementation-plan.md 11.2).
+        const counterparty = trade ? sheets.find((sheet) => sheet.id === proposal.toCharacterId) : null;
+        const proposer = proposal.userId === meUserId;
+        const mine = trade ? counterparty?.userId === meUserId : proposal.userId === meUserId;
         const characterName =
-          sheets.find((sheet) => sheet.id === proposal.characterId)?.name ?? "a character";
+          (trade ? counterparty?.name : sheets.find((sheet) => sheet.id === proposal.characterId)?.name) ?? "a character";
         const busy = busyId === proposal.id;
         return (
           <div
@@ -68,14 +73,23 @@ export function ItemProposalBar({
                 : "border-stone-800 bg-stone-950/60 text-stone-400",
             )}
           >
-            <Package className="size-3.5 shrink-0 text-amber-400" />
+            {trade ? <ArrowLeftRight className="size-3.5 shrink-0 text-amber-400" /> : <Package className="size-3.5 shrink-0 text-amber-400" />}
             <span className="min-w-0 flex-1">
               {proposal.summary}
               {proposal.reason ? (
                 <span className="text-stone-500"> ({proposal.reason})</span>
               ) : null}
             </span>
-            {mine || steersStory ? (
+            {trade && proposer && !mine && !steersStory ? (
+              <button
+                type="button"
+                onClick={() => resolve(proposal.id, "cancel")}
+                disabled={busy}
+                className="flex items-center gap-1 rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-400 hover:bg-stone-900 disabled:opacity-50"
+              >
+                <X className="size-3" /> Withdraw
+              </button>
+            ) : mine || steersStory ? (
               <span className="flex shrink-0 items-center gap-1.5">
                 <button
                   type="button"

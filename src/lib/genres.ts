@@ -1,4 +1,5 @@
 import type { Genre } from "@/lib/schemas/game-settings";
+import type { Climate } from "@/lib/srd/weather";
 
 export type GenrePreset = {
   id: Genre;
@@ -20,11 +21,14 @@ export type GenrePreset = {
   // Hints the story-setup pass can lean on.
   nameHints: string;
   defaultTheme: string;
+  // The weather table the sky rolls from (src/lib/srd/weather.ts).
+  climate: Climate;
 };
 
 export const GENRE_PRESETS: GenrePreset[] = [
   {
     id: "high_fantasy",
+    climate: "temperate",
     name: "High fantasy",
     blurb: "Classic swords, sorcery, and shining kingdoms.",
     dmFlavor:
@@ -38,6 +42,7 @@ export const GENRE_PRESETS: GenrePreset[] = [
   },
   {
     id: "dark_fantasy",
+    climate: "boreal",
     name: "Dark fantasy",
     blurb: "Grim lands where hope is scarce and victories cost.",
     dmFlavor:
@@ -51,6 +56,7 @@ export const GENRE_PRESETS: GenrePreset[] = [
   },
   {
     id: "mystery",
+    climate: "temperate",
     name: "Mystery",
     blurb: "Clues, suspects, and secrets behind every door.",
     dmFlavor:
@@ -65,6 +71,7 @@ export const GENRE_PRESETS: GenrePreset[] = [
   },
   {
     id: "horror",
+    climate: "boreal",
     name: "Horror",
     blurb: "Dread, isolation, and things best left unseen.",
     dmFlavor:
@@ -79,6 +86,7 @@ export const GENRE_PRESETS: GenrePreset[] = [
   },
   {
     id: "cyberpunk",
+    climate: "temperate",
     name: "Cyberpunk",
     blurb: "Neon streets, chrome bodies, corporate gods. 5e reskinned.",
     dmFlavor:
@@ -93,6 +101,7 @@ export const GENRE_PRESETS: GenrePreset[] = [
   },
   {
     id: "steampunk",
+    climate: "temperate",
     name: "Steampunk",
     blurb: "Brass, steam, airships, and impossible machines.",
     dmFlavor:
@@ -106,6 +115,7 @@ export const GENRE_PRESETS: GenrePreset[] = [
   },
   {
     id: "post_apocalyptic",
+    climate: "blighted",
     name: "Post-apocalyptic",
     blurb: "Scavenge, survive, and rebuild among the ruins.",
     dmFlavor:
@@ -120,6 +130,7 @@ export const GENRE_PRESETS: GenrePreset[] = [
   },
   {
     id: "custom",
+    climate: "temperate",
     name: "Custom",
     blurb: "Describe your own world and tone.",
     dmFlavor: "",

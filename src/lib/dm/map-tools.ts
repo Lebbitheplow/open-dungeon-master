@@ -1,20 +1,40 @@
+import { carriedLight, lightPlacement } from "@/lib/dm/light-timers";
+import { getClock } from "@/lib/db/clock";
 import type { Campaign } from "@/lib/db/campaigns";
-import { getActiveEncounter, listEnemies, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
+import {
+  getActiveBoard,
+  getActiveEncounter,
+  listEnemies,
+  type Encounter,
+  type EncounterEnemy,
+} from "@/lib/db/encounters";
 import {
   createBattleMap,
   getBattleMapForEncounter,
   getTokenByRef,
   listTokens,
   moveToken,
+  placeToken,
   placeTokens,
+  setTokenMovement,
   type BattleMap,
 } from "@/lib/db/battle-maps";
+import { planTeleportFx } from "@/lib/battlemap/fx-plan";
+import { publishFx } from "@/lib/dm/fx";
 import { generateBattleMap, fnv1a } from "@/lib/battlemap/generate";
 import { findPath, speedToTiles, walkPathWithBudget } from "@/lib/battlemap/movement";
 import { coverBetween, hasLineOfSight } from "@/lib/battlemap/los";
 import { bestFiringPosition } from "@/lib/battlemap/tactics";
-import { occupiedTiles } from "@/lib/battlemap/view";
-import { chebyshev, tileIndex, type BattleToken } from "@/lib/battlemap/types";
+import { footprintLookup, occupiedTiles } from "@/lib/battlemap/view";
+import {
+  blocksMove,
+  chebyshev,
+  tileAt,
+  tileIndex,
+  TILE_FEET,
+  TOKEN_MOVEMENTS,
+  type BattleToken,
+} from "@/lib/battlemap/types";
 import { getCurrentLocation } from "@/lib/db/locations";
 import { publishEphemeral } from "@/lib/events";
 import { resolveSheetRef } from "@/lib/dm/rolls";
@@ -40,8 +60,12 @@ export function publishBattleMapUpdate(campaignId: string) {
 
 // A carried light matters only in dim/dark maps; inferred from equipment.
 export function carriedLightRadius(sheet: CharacterSheet): number {
-  const hasLight = sheet.equipment.some((item) => /torch|lantern|candle/i.test(item.name));
-  return hasLight ? 4 : 0;
+  return carriedLight(sheet).radius;
+}
+
+// The token fields for that light, lit as the party steps onto the board.
+export function carriedLightFields(campaignId: string, sheet: CharacterSheet) {
+  return lightPlacement(carriedLight(sheet), getClock(campaignId).instant);
 }
 
 export function createBattleMapForEncounter(
@@ -78,7 +102,7 @@ export function createBattleMapForEncounter(
       refId: sheet.id,
       name: sheet.name,
       spot: generated.pcSpawns[index] ?? generated.pcSpawns[0],
-      lightRadius: carriedLightRadius(sheet),
+      ...carriedLightFields(campaign.id, sheet),
     })),
     ...enemies.map((enemy, index) => ({
       kind: "enemy" as const,
@@ -89,6 +113,193 @@ export function createBattleMapForEncounter(
   ]);
   publishBattleMapUpdate(campaign.id);
   return map;
+}
+
+// ---- teleport_token and set_movement tools ----
+
+export const teleportTokenTool: ToolDef = {
+  type: "function",
+  function: {
+    name: "teleport_token",
+    description:
+      "Move a combatant to a tile WITHOUT walking: Misty Step, Dimension Door, Thunder Step, a trap door, a shove through a portal. No path is needed and no movement is spent, but the tile must be open floor with nobody on it. Pass rangeFeet for a spell so the server refuses a jump past its range.",
+    parameters: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        tokenName: {
+          type: "string",
+          description: "Character or enemy name or id, exactly as shown on the battle map.",
+        },
+        x: { type: "integer", description: "Destination column." },
+        y: { type: "integer", description: "Destination row." },
+        rangeFeet: {
+          type: "integer",
+          minimum: 5,
+          maximum: 1000,
+          description: "The spell's range, when a spell did it; omitted for a DM's own hand.",
+        },
+        reason: { type: "string" },
+      },
+      required: ["tokenName", "x", "y"],
+    },
+  },
+};
+
+export const setMovementTool: ToolDef = {
+  type: "function",
+  function: {
+    name: "set_movement",
+    description:
+      "Record that a combatant is now flying, burrowing or back on foot (Fly spell, wings, Wild Shape into a bird, a burrowing worm). Flying creatures pass over ground obstacles and are missed by tremorsense; the board draws them lifted.",
+    parameters: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        tokenName: { type: "string", description: "Character or enemy name or id." },
+        movement: { type: "string", enum: ["walk", "fly", "burrow"] },
+        reason: { type: "string" },
+      },
+      required: ["tokenName", "movement"],
+    },
+  },
+};
+
+const teleportArgsSchema = z.object({
+  tokenName: z.string(),
+  x: z.coerce.number().int(),
+  y: z.coerce.number().int(),
+  rangeFeet: z.coerce.number().int().optional(),
+  reason: z.string().optional(),
+});
+
+const movementArgsSchema = z.object({
+  tokenName: z.string(),
+  movement: z.enum(TOKEN_MOVEMENTS),
+  reason: z.string().optional(),
+});
+
+// Any combatant on the board by name or id, PC or enemy, alive or not:
+// a teleport works on whoever is asked for, unlike a walk.
+function resolveAnyToken(
+  map: BattleMap,
+  encounterId: string,
+  ref: string,
+  sheets: CharacterSheet[],
+  sheetsById: Map<string, CharacterSheet>,
+): BattleToken | null {
+  const trimmed = ref.trim();
+  const sheet = resolveSheetRef(trimmed, sheets, sheetsById);
+  if (sheet) {
+    return getTokenByRef(map.id, sheet.id);
+  }
+  const enemies = listEnemies(encounterId);
+  const enemy =
+    enemies.find((entry) => entry.id === trimmed) ??
+    enemies.find((entry) => entry.displayName.toLowerCase() === trimmed.toLowerCase()) ??
+    enemies.find((entry) => entry.displayName.toLowerCase().includes(trimmed.toLowerCase()));
+  if (enemy) {
+    return getTokenByRef(map.id, enemy.id);
+  }
+  // The DM's own pieces, by name.
+  return listTokens(map.id).find((token) => token.name.toLowerCase() === trimmed.toLowerCase()) ?? null;
+}
+
+export function handleTeleportToken(
+  campaign: Campaign,
+  rawArguments: string,
+  sheets: CharacterSheet[],
+  sheetsById: Map<string, CharacterSheet>,
+): Record<string, unknown> {
+  const board = getActiveBoard(campaign.id);
+  if (!board) {
+    return { error: "There is no board on the table." };
+  }
+  const map = getBattleMapForEncounter(board.id);
+  if (!map) {
+    return { error: "This board has no battle map." };
+  }
+  let args: z.infer<typeof teleportArgsSchema>;
+  try {
+    args = teleportArgsSchema.parse(JSON.parse(rawArguments || "{}"));
+  } catch {
+    return { error: "Invalid arguments: teleport_token needs tokenName, x, and y." };
+  }
+  const token = resolveAnyToken(map, board.id, args.tokenName, sheets, sheetsById);
+  if (!token) {
+    return { error: `Unknown combatant "${args.tokenName}"; use a name from the battle map.` };
+  }
+  if (args.x < 0 || args.y < 0 || args.x >= map.width || args.y >= map.height) {
+    return { error: `(${args.x},${args.y}) is outside the ${map.width}x${map.height} map.` };
+  }
+  if (blocksMove(tileAt(map.terrain, map.width, args.x, args.y))) {
+    return { error: `(${args.x},${args.y}) is a wall; a teleport needs open floor.` };
+  }
+  const tokens = listTokens(map.id);
+  const occupied = occupiedTiles(map, tokens, token);
+  if (occupied.has(tileIndex(map.width, args.x, args.y))) {
+    return { error: `(${args.x},${args.y}) is occupied by another combatant.` };
+  }
+  const distanceFeet = Math.max(Math.abs(args.x - token.x), Math.abs(args.y - token.y)) * TILE_FEET;
+  if (args.rangeFeet !== undefined && distanceFeet > args.rangeFeet) {
+    return {
+      error: `(${args.x},${args.y}) is ${distanceFeet} ft away, past the ${args.rangeFeet} ft range. Pick a tile within range.`,
+    };
+  }
+  const from = { x: token.x, y: token.y };
+  placeToken(token.id, args.x, args.y);
+  publishBattleMapUpdate(campaign.id);
+  publishFx(campaign.id, planTeleportFx({ from, to: { x: args.x, y: args.y }, tokenId: token.id }));
+  return {
+    ok: true,
+    name: token.name,
+    from: `(${from.x},${from.y})`,
+    at: `(${args.x},${args.y})`,
+    distanceFeet,
+    note: "No movement was spent; the board already shows the new position.",
+  };
+}
+
+export function handleSetMovement(
+  campaign: Campaign,
+  rawArguments: string,
+  sheets: CharacterSheet[],
+  sheetsById: Map<string, CharacterSheet>,
+): Record<string, unknown> {
+  const board = getActiveBoard(campaign.id);
+  if (!board) {
+    return { error: "There is no board on the table." };
+  }
+  const map = getBattleMapForEncounter(board.id);
+  if (!map) {
+    return { error: "This board has no battle map." };
+  }
+  let args: z.infer<typeof movementArgsSchema>;
+  try {
+    args = movementArgsSchema.parse(JSON.parse(rawArguments || "{}"));
+  } catch {
+    return { error: "Invalid arguments: set_movement needs tokenName and movement (walk, fly or burrow)." };
+  }
+  const token = resolveAnyToken(map, board.id, args.tokenName, sheets, sheetsById);
+  if (!token) {
+    return { error: `Unknown combatant "${args.tokenName}"; use a name from the battle map.` };
+  }
+  if (token.movement === args.movement) {
+    return { ok: true, name: token.name, movement: args.movement, note: "Already so." };
+  }
+  setTokenMovement(token.id, args.movement);
+  publishBattleMapUpdate(campaign.id);
+  return {
+    ok: true,
+    name: token.name,
+    movement: args.movement,
+    note:
+      args.movement === "fly"
+        ? `${token.name} is airborne: ground hazards and tremorsense no longer apply.`
+        : args.movement === "burrow"
+          ? `${token.name} is underground: unseen from above unless it surfaces.`
+          : `${token.name} is back on foot.`,
+  };
 }
 
 // ---- move_token tool ----
@@ -192,16 +403,32 @@ export function handleMoveToken(
   }
 
   const tokens = listTokens(map.id);
-  const occupied = occupiedTiles(map, tokens, resolved.token);
+  // Large creatures cover their whole footprint, so an ogre neither walks
+  // through a one-tile gap nor stops where its second row would overlap.
+  const enemiesById = new Map(listEnemies(encounter.id).map((enemy) => [enemy.id, enemy]));
+  const footprints = footprintLookup(enemiesById);
+  const occupied = occupiedTiles(map, tokens, resolved.token, footprints);
+  const moverFootprint = footprints(resolved.token);
   if (occupied.has(tileIndex(map.width, args.x, args.y))) {
     return { error: `(${args.x},${args.y}) is occupied by another combatant.` };
   }
-  const path = findPath(map.terrain, map.width, map.height, occupied, resolved.token, {
-    x: args.x,
-    y: args.y,
-  });
+  const path = findPath(
+    map.terrain,
+    map.width,
+    map.height,
+    occupied,
+    resolved.token,
+    { x: args.x, y: args.y },
+    moverFootprint,
+    resolved.token.movement === "fly",
+  );
   if (!path) {
-    return { error: `No path to (${args.x},${args.y}); walls block the way.` };
+    return {
+      error:
+        moverFootprint > 1
+          ? `No path to (${args.x},${args.y}) for a creature ${moverFootprint} squares wide; walls or others block the way.`
+          : `No path to (${args.x},${args.y}); walls block the way.`,
+    };
   }
 
   // Forced movement ignores speed (the force decides the distance); normal
@@ -300,7 +527,15 @@ export function allyAdjacentToEnemy(
 // What the map says about an attack beyond whether it is legal: the cover
 // the target enjoys and whether the shot is past its normal range. Returned
 // alongside the refusal so pc_attack can fold both into the roll.
-export type AttackSpatials = { cover: 0 | 2 | 5; longRange: boolean };
+export type AttackSpatials = {
+  cover: 0 | 2 | 5;
+  longRange: boolean;
+  // Tiles between the two, and whether the board is under the sky, so the
+  // weather riders can be applied (src/lib/srd/weather.ts). Zero and false
+  // when there is no board.
+  distanceTiles: number;
+  outdoors: boolean;
+};
 
 export function pcAttackSpatials(
   encounterId: string,
@@ -308,7 +543,7 @@ export function pcAttackSpatials(
   enemyId: string,
   options: { ranged: boolean; rangeTiles: number; thrown: boolean },
 ): AttackSpatials {
-  const none: AttackSpatials = { cover: 0, longRange: false };
+  const none: AttackSpatials = { cover: 0, longRange: false, distanceTiles: 0, outdoors: false };
   const map = getBattleMapForEncounter(encounterId);
   if (!map) {
     return none;
@@ -324,6 +559,8 @@ export function pcAttackSpatials(
     // Past the weapon's normal range but inside its long range: the SRD
     // penalty is disadvantage, and checkPcAttackRange allows up to double.
     longRange: (options.ranged || options.thrown) && distance > options.rangeTiles,
+    distanceTiles: distance,
+    outdoors: map.outdoors,
   };
 }
 

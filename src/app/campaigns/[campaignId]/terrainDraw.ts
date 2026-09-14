@@ -16,6 +16,7 @@ const TILE_FILL: Record<string, string> = {
   [TERRAIN.water]: "#26495e",
   [TERRAIN.difficult]: "#4a4126",
   [TERRAIN.door]: "#6b4f2a",
+  [TERRAIN.lowwall]: "#5a5147",
 };
 
 // Over a backdrop the terrain stops being the surface and becomes the
@@ -27,6 +28,7 @@ const TILE_TINT: Record<string, { fill: string; alpha: number }> = {
   [TERRAIN.water]: { fill: "#26495e", alpha: 0.45 },
   [TERRAIN.difficult]: { fill: "#4a4126", alpha: 0.4 },
   [TERRAIN.door]: { fill: "#6b4f2a", alpha: 0.5 },
+  [TERRAIN.lowwall]: { fill: "#8a7f70", alpha: 0.5 },
 };
 
 const BRUSH_PREVIEW: Record<string, string> = {
@@ -35,6 +37,7 @@ const BRUSH_PREVIEW: Record<string, string> = {
   [TERRAIN.water]: "rgba(80, 160, 210, 0.55)",
   [TERRAIN.difficult]: "rgba(200, 160, 60, 0.55)",
   [TERRAIN.door]: "rgba(220, 150, 70, 0.6)",
+  [TERRAIN.lowwall]: "rgba(190, 180, 160, 0.6)",
 };
 
 const ZONE_TINT: Record<LightZone["ambient"], string> = {
@@ -139,7 +142,12 @@ export function drawScene(
 ) {
   const { width, height, tile } = input;
   for (const zone of scene.zones ?? []) {
-    context.fillStyle = ZONE_TINT[zone.ambient];
+    context.fillStyle =
+      zone.kind === "magical_darkness"
+        ? "rgba(30, 8, 46, 0.7)"
+        : zone.kind === "darkness"
+          ? "rgba(2, 6, 23, 0.65)"
+          : ZONE_TINT[zone.ambient];
     context.fillRect(zone.x0 * tile, zone.y0 * tile, (zone.x1 - zone.x0 + 1) * tile, (zone.y1 - zone.y0 + 1) * tile);
     context.strokeStyle = "rgba(253, 224, 71, 0.5)";
     context.setLineDash([3, 3]);
@@ -288,7 +296,12 @@ export function drawToolPreview(
       const y0 = Math.min(drag.from.y, drag.to.y);
       const x1 = Math.max(drag.from.x, drag.to.x);
       const y1 = Math.max(drag.from.y, drag.to.y);
-      context.fillStyle = ZONE_TINT[tool.ambient];
+      context.fillStyle =
+        tool.zoneKind === "magical_darkness"
+          ? "rgba(30, 8, 46, 0.7)"
+          : tool.zoneKind === "darkness"
+            ? "rgba(2, 6, 23, 0.65)"
+            : ZONE_TINT[tool.ambient];
       context.fillRect(x0 * tile, y0 * tile, (x1 - x0 + 1) * tile, (y1 - y0 + 1) * tile);
       context.strokeRect(x0 * tile, y0 * tile, (x1 - x0 + 1) * tile, (y1 - y0 + 1) * tile);
       return;

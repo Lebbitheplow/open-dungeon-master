@@ -5,8 +5,15 @@ import {
   steersStory,
 } from "@/lib/campaign-api";
 import { insertLoreEntry, listLoreEntries } from "@/lib/db/lore";
-import { loreVisibleTo, normalizeLoreInput } from "@/lib/dm/world-lore-logic";
-import { isUploadedImagePath } from "@/lib/uploads";
+import { ingestLoreAttachment } from "@/lib/dm/lore-attachments";
+import {
+  loreVisibleTo,
+  normalizeLoreAudience,
+  normalizeLoreInput,
+  normalizeLoreStyle,
+  stripSecretBlocks,
+} from "@/lib/dm/world-lore-logic";
+import { isUploadedImagePath, isUploadedPdfPath } from "@/lib/uploads";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,7 +31,12 @@ export async function GET(
   if (isErrorResponse(context)) {
     return context;
   }
-  return Response.json({ entries: loreVisibleTo(listLoreEntries(campaignId), steersStory(context)) });
+  const dm = steersStory(context);
+  const entries = loreVisibleTo(listLoreEntries(campaignId), dm, context.user.id);
+  // A secret passage never crosses the wire to a player's browser.
+  return Response.json({
+    entries: dm ? entries : entries.map((entry) => ({ ...entry, body: stripSecretBlocks(entry.body) })),
+  });
 }
 
 export async function POST(
@@ -46,10 +58,19 @@ export async function POST(
   if (raw.imagePath !== undefined && raw.imagePath !== "" && !isUploadedImagePath(raw.imagePath)) {
     return Response.json({ error: "Not an uploaded file." }, { status: 400 });
   }
+  if (raw.attachmentPath !== undefined && raw.attachmentPath !== "" && !isUploadedPdfPath(raw.attachmentPath)) {
+    return Response.json({ error: "Not an uploaded PDF." }, { status: 400 });
+  }
   const entry = insertLoreEntry({
     campaignId,
     ...input,
     imagePath: typeof raw.imagePath === "string" ? raw.imagePath : "",
+    audience: normalizeLoreAudience(raw.audience),
+    attachmentPath: typeof raw.attachmentPath === "string" ? raw.attachmentPath : "",
+    style: normalizeLoreStyle(raw.style),
   });
+  if (entry.attachmentPath) {
+    void ingestLoreAttachment(entry).catch((error) => console.error("[lore] pdf ingest failed", error));
+  }
   return Response.json({ entry });
 }

@@ -15,9 +15,14 @@ import type { BlockKind, ContextTrace } from "@/lib/dm/context-budget";
 // far better answer than guessing at the model.
 
 const KIND_LABEL: Record<BlockKind, string> = {
+  safety: "Lines and veils",
   contract: "Engine boundary",
   rules: "Rules",
+  sky: "Sky and hour",
   state: "Game state",
+  factions: "Factions",
+  quests: "Quests",
+  shop: "Shop",
   retrieval: "Lore and house rules",
   chapters: "Chapters",
   history: "Transcript",
@@ -27,9 +32,14 @@ const KIND_LABEL: Record<BlockKind, string> = {
 // Tailwind names); anything outside it renders as raw Tailwind and clashes
 // with the indigo-and-gold theme.
 const KIND_COLOR: Record<BlockKind, string> = {
+  safety: "text-ember-300",
   contract: "text-amber-300",
   rules: "text-stone-300",
+  sky: "text-stone-300",
   state: "text-amber-200",
+  factions: "text-amber-200",
+  quests: "text-amber-200",
+  shop: "text-amber-200",
   retrieval: "text-ember-300",
   chapters: "text-ember-400",
   history: "text-stone-200",

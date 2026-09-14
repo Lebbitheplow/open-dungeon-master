@@ -1,15 +1,19 @@
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { deleteLoreEntry, getLoreEntry, updateLoreEntry } from "@/lib/db/lore";
+import { dropLoreAttachment, ingestLoreAttachment } from "@/lib/dm/lore-attachments";
 import {
   LORE_BODY_MAX,
   LORE_TAGS_MAX,
   LORE_TITLE_MAX,
   LORE_VISIBILITIES,
   WORLD_LORE_CATEGORIES,
+  LORE_STYLES,
+  normalizeLoreAudience,
+  type LoreStyle,
   type LoreVisibility,
   type WorldLoreCategory,
 } from "@/lib/dm/world-lore-logic";
-import { isUploadedImagePath } from "@/lib/uploads";
+import { isUploadedImagePath, isUploadedPdfPath } from "@/lib/uploads";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -65,7 +69,23 @@ export async function PATCH(
     }
     patch.imagePath = typeof raw.imagePath === "string" ? raw.imagePath : "";
   }
-  return Response.json({ entry: updateLoreEntry(entryId, patch) });
+  if (raw.audience !== undefined) {
+    patch.audience = normalizeLoreAudience(raw.audience);
+  }
+  if (LORE_STYLES.includes(raw.style as LoreStyle)) {
+    patch.style = raw.style as LoreStyle;
+  }
+  if (raw.attachmentPath !== undefined) {
+    if (raw.attachmentPath !== "" && !isUploadedPdfPath(raw.attachmentPath)) {
+      return Response.json({ error: "Not an uploaded PDF." }, { status: 400 });
+    }
+    patch.attachmentPath = typeof raw.attachmentPath === "string" ? raw.attachmentPath : "";
+  }
+  const updated = updateLoreEntry(entryId, patch);
+  if (updated && (patch.attachmentPath !== undefined || patch.tags !== undefined || patch.title !== undefined)) {
+    void ingestLoreAttachment(updated).catch((error) => console.error("[lore] pdf ingest failed", error));
+  }
+  return Response.json({ entry: updated });
 }
 
 export async function DELETE(
@@ -77,6 +97,7 @@ export async function DELETE(
   if (entry instanceof Response) {
     return entry;
   }
+  dropLoreAttachment(campaignId, entryId);
   deleteLoreEntry(entryId);
   return Response.json({ ok: true });
 }

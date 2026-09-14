@@ -114,7 +114,7 @@ export function exportWorkshopBundle(
     houseRulesText: getHouseRulesText(workshopId),
     variantRules: { ...campaign.gameSettings.variantRules },
     lore: allRows(
-      `SELECT category, title, body, tags_json, visibility, image_path FROM lore_entries WHERE campaign_id = ? ORDER BY created_at`,
+      `SELECT category, title, body, tags_json, visibility, image_path, style FROM lore_entries WHERE campaign_id = ? ORDER BY created_at`,
       workshopId,
     ).map((row) => ({
       category: str(row.category, "other"),
@@ -123,6 +123,8 @@ export function exportWorkshopBundle(
       tags: parseJson<string[]>(str(row.tags_json, "[]"), []),
       visibility: str(row.visibility) === "dm" ? ("dm" as const) : ("party" as const),
       image: loadImage(row.image_path, budget),
+      // How it is dressed (docs/vtt-parity-implementation-plan.md 5.6).
+      style: (str(row.style) === "parchment" || str(row.style) === "notice" ? str(row.style) : "plain") as "plain" | "parchment" | "notice",
     })),
     locations: allRows(
       `SELECT name, layout_description, connections_json FROM locations WHERE campaign_id = ? ORDER BY created_at`,
@@ -151,6 +153,21 @@ export function exportWorkshopBundle(
       goals: str(row.goals_json),
       relations: str(row.relations_json),
       portrait: loadImage(row.portrait_url, budget),
+    })),
+    factions: allRows(
+      `SELECT id, name, blurb, goal, attitude_to_party, power, tags_json, portrait_path FROM factions WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`,
+      workshopId,
+    ).map((row) => ({
+      name: str(row.name),
+      blurb: str(row.blurb),
+      goal: str(row.goal),
+      attitude: (["hostile", "wary", "neutral", "friendly", "allied"] as const).includes(str(row.attitude_to_party) as "neutral")
+        ? (str(row.attitude_to_party) as "hostile" | "wary" | "neutral" | "friendly" | "allied")
+        : "neutral",
+      power: Math.max(0, Math.min(5, Number(row.power) || 0)),
+      tags: parseJson<string[]>(str(row.tags_json, "[]"), []),
+      members: allRows(`SELECT name FROM npcs WHERE campaign_id = ? AND faction_id = ?`, workshopId, String(row.id)).map((npc) => str(npc.name)),
+      portrait: loadImage(row.portrait_path, budget),
     })),
     encounters: allRows(
       `SELECT name, enemies_json, battlefield, notes FROM encounter_templates WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`,
@@ -319,8 +336,8 @@ export function importWorkshopBundle(
   db.transaction(() => {
     bundle.lore.forEach((entry, index) => {
       db.prepare(
-        `INSERT INTO lore_entries (id, campaign_id, category, title, body, tags_json, pinned, visibility, image_path, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
+        `INSERT INTO lore_entries (id, campaign_id, category, title, body, tags_json, pinned, visibility, image_path, style, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)`,
       ).run(
         crypto.randomUUID(),
         workshop.id,
@@ -330,6 +347,7 @@ export function importWorkshopBundle(
         JSON.stringify(entry.tags),
         entry.visibility,
         loreImages[index],
+        entry.style ?? "plain",
         now,
         now,
       );
@@ -390,6 +408,20 @@ export function importWorkshopBundle(
         now,
         now,
       );
+      copied += 1;
+    }
+
+    // Factions land after the cast so members can be matched by name.
+    const factionPortraits = bundle.factions.map((faction) => saveBundleImage(faction.portrait, uploadDir));
+    for (const [index, faction] of bundle.factions.entries()) {
+      const factionId = crypto.randomUUID();
+      db.prepare(
+        `INSERT INTO factions (id, campaign_id, name, blurb, goal, attitude_to_party, power, tags_json, portrait_path, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(factionId, workshop.id, faction.name, faction.blurb, faction.goal, faction.attitude, faction.power, JSON.stringify(faction.tags), factionPortraits[index], now, now);
+      for (const member of faction.members) {
+        db.prepare(`UPDATE npcs SET faction_id = ? WHERE campaign_id = ? AND name = ? COLLATE NOCASE`).run(factionId, workshop.id, member);
+      }
       copied += 1;
     }
 

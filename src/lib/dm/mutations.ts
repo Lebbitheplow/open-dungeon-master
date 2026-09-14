@@ -59,6 +59,8 @@ import { spellClassFor } from "@/lib/classes";
 import { insertRoll } from "@/lib/db/rolls";
 import { rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
+import { planConditionFx, planHealFx } from "@/lib/battlemap/fx-plan";
+import { publishFx, tokenPosition } from "@/lib/dm/fx";
 
 // DM stat authority: the model changes sheets ONLY through these tools.
 // Every mutation is server-clamped, audit-logged, and published live.
@@ -828,6 +830,15 @@ export function applyDmMutation(
         currentHp: math.currentHp,
       });
       publishSheet(campaign, sheet.id);
+      {
+        const pos = tokenPosition(campaign.id, sheet.id);
+        if (pos && amount > 0) {
+          publishFx(
+            campaign.id,
+            planHealFx({ to: pos.at, toTokenId: pos.tokenId, amount: Math.min(amount, 200) }),
+          );
+        }
+      }
       // Any healing ends the dying state.
       const deathInfo = healDeathHook(campaign, turnId, sheet);
       return {
@@ -1155,6 +1166,20 @@ export function applyDmMutation(
         conditionMeta: meta,
       });
       publishSheet(campaign, sheet.id);
+      {
+        const pos = tokenPosition(campaign.id, sheet.id);
+        if (pos) {
+          publishFx(
+            campaign.id,
+            planConditionFx({
+              to: pos.at,
+              toTokenId: pos.tokenId,
+              condition: normalized,
+              applied: true,
+            }),
+          );
+        }
+      }
       return {
         result: {
           ok: true,

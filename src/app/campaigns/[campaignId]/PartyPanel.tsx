@@ -7,6 +7,7 @@ import { CharacterPortrait } from "@/lib/ui";
 import { CharacterMenu } from "@/app/campaigns/[campaignId]/CharacterMenu";
 import { CharacterNotesDialog } from "@/app/campaigns/[campaignId]/CharacterNotesDialog";
 import { CharacterSheetDialog } from "@/app/campaigns/[campaignId]/CharacterSheetDialog";
+import { TradeDialog } from "@/app/campaigns/[campaignId]/TradeDialog";
 import { CompanionBuilderDialog } from "@/app/campaigns/[campaignId]/CompanionBuilderDialog";
 import { DiceSourcesButton } from "@/app/campaigns/[campaignId]/DiceSourcesDialog";
 import { DiceLookButton } from "@/components/DiceLookEditor";
@@ -157,6 +158,9 @@ export function PartyPanel({
   companionGenre,
   companionLevel = 1,
   worldPack = "",
+  lights = {},
+  activeSheetId = "",
+  multiCharacter = "off",
 }: {
   sheets: CharacterSheet[];
   meUserId: string;
@@ -192,6 +196,12 @@ export function PartyPanel({
   companionLevel?: number;
   // The campaign's world pack, whose art stands in for an unpainted portrait.
   worldPack?: string;
+  // A carried light burning down, by character id
+  // (docs/vtt-parity-implementation-plan.md 7.3).
+  lights?: Record<string, { remaining: number; total: number }>;
+  // Several characters per player (11.3): which of mine is in play.
+  activeSheetId?: string;
+  multiCharacter?: "off" | "one_active" | "all_active";
 }) {
   const packArt = usePackArt(worldPack);
   const [editingSheetId, setEditingSheetId] = useState("");
@@ -199,6 +209,20 @@ export function PartyPanel({
   const [croppingSheetId, setCroppingSheetId] = useState("");
   const [notesSheetId, setNotesSheetId] = useState("");
   const [buildingCompanion, setBuildingCompanion] = useState(false);
+  const [tradingWithId, setTradingWithId] = useState("");
+  const [switching, setSwitching] = useState("");
+  const tradingWith = sheets.find((sheet) => sheet.id === tradingWithId);
+  const myOwn = sheets.filter((sheet) => sheet.userId === meUserId && !sheet.isCompanion);
+  const mySheet = myOwn.find((sheet) => sheet.id === activeSheetId) ?? myOwn[0];
+
+  async function playAs(sheetId: string) {
+    setSwitching(sheetId);
+    try {
+      await fetch(`/api/campaigns/${campaignId}/sheet/switch`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ characterId: sheetId }) });
+    } finally {
+      setSwitching("");
+    }
+  }
   const editingSheet = sheets.find((sheet) => sheet.id === editingSheetId);
   const viewingSheet = sheets.find((sheet) => sheet.id === viewingSheetId);
   const croppingSheet = sheets.find((sheet) => sheet.id === croppingSheetId);
@@ -290,6 +314,21 @@ export function PartyPanel({
               <span className="min-w-0">
                 <span className="flex items-center gap-1.5 font-medium">
                   <span className="truncate">{sheet.name}</span>
+                  {lights[sheet.id] ? <LightBar light={lights[sheet.id]} /> : null}
+                  {mine && multiCharacter !== "off" && myOwn.length > 1 ? (
+                    mySheet?.id === sheet.id ? (
+                      <span className="rounded-sm border border-amber-700/60 px-1 text-[9px] uppercase tracking-wider text-amber-300">playing</span>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={switching === sheet.id}
+                        onClick={() => void playAs(sheet.id)}
+                        className="rounded-sm border border-stone-700 px-1 text-[9px] uppercase tracking-wider text-stone-400 transition-colors duration-[var(--dur-quick,150ms)] hover:border-amber-700 hover:text-amber-200 disabled:opacity-50"
+                      >
+                        Play as
+                      </button>
+                    )
+                  ) : null}
                   {!sheet.isCompanion && onlineUserIds.includes(sheet.userId) ? (
                     <span
                       title="Online now"
@@ -337,6 +376,7 @@ export function PartyPanel({
                     ? () => onMessageUser(sheet.userId)
                     : undefined
                 }
+                onTrade={mySheet && sheet.id !== mySheet.id ? () => setTradingWithId(sheet.id) : undefined}
                 canModerate={!mine && !sheet.isCompanion}
                 canMute={canTransferLead && !mine && !sheet.isCompanion}
                 muted={Boolean(
@@ -628,6 +668,9 @@ export function PartyPanel({
         />
       ) : null}
 
+      {tradingWith && mySheet ? (
+        <TradeDialog campaignId={campaignId} me={mySheet} them={tradingWith} onClose={() => setTradingWithId("")} />
+      ) : null}
       {notesSheet && refreshNotes ? (
         <CharacterNotesDialog
           campaignId={notesSheet.campaignId}
@@ -641,5 +684,24 @@ export function PartyPanel({
         />
       ) : null}
     </Wrapper>
+  );
+}
+
+// A torch burning down: a sliver of ember that shortens as the clock moves,
+// and reddens when the last quarter hour is on it.
+function LightBar({ light }: { light: { remaining: number; total: number } }) {
+  const fraction = light.total > 0 ? Math.max(0, Math.min(1, light.remaining / light.total)) : 0;
+  const low = light.remaining <= 15;
+  return (
+    <span
+      title={`Light: ${light.remaining} minutes left`}
+      aria-label={`Light: ${light.remaining} minutes left`}
+      className="flex h-1.5 w-8 shrink-0 items-center overflow-hidden rounded-full border border-amber-900/60 bg-stone-900"
+    >
+      <span
+        className={cn("h-full rounded-full transition-[width] duration-700 ease-out", low ? "bg-red-400 animate-pulse" : "bg-amber-400")}
+        style={{ width: `${Math.round(fraction * 100)}%` }}
+      />
+    </span>
   );
 }

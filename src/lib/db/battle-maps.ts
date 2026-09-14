@@ -1,5 +1,13 @@
+import { resolveOutdoors } from "@/lib/battlemap/daylight";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
-import type { AmbientLight, BattleToken, MapLight, TokenKind, XY } from "@/lib/battlemap/types";
+import type {
+  AmbientLight,
+  BattleToken,
+  MapLight,
+  TokenKind,
+  TokenMovement,
+  XY,
+} from "@/lib/battlemap/types";
 import type { MapTheme } from "@/lib/battlemap/generate";
 import {
   normalizeBackdrop,
@@ -14,6 +22,8 @@ import {
   type DoorStates,
   type LightZone,
   type MapLabel,
+  normalizeDrawings,
+  type MapDrawing,
 } from "@/lib/battlemap/scene";
 import { isUploadedImagePath } from "@/lib/uploads";
 
@@ -37,6 +47,8 @@ export type BattleMap = {
   drawnTerrain: string;
   ambient: AmbientLight;
   theme: MapTheme;
+  // Under the sky: the clock and the weather light it (src/lib/battlemap/daylight.ts).
+  outdoors: boolean;
   lights: MapLight[];
   seed: number;
   roundMarker: number;
@@ -47,6 +59,7 @@ export type BattleMap = {
   doors: DoorStates;
   labels: MapLabel[];
   zones: LightZone[];
+  drawings: MapDrawing[];
   // A second picture over the grid that only the DM's projection carries:
   // the annotated version of the same map. Same transform as the backdrop.
   overlayPath: string;
@@ -70,6 +83,8 @@ type MapRow = {
   doors_json: string | null;
   zones_json: string | null;
   overlay_path: string | null;
+  outdoors: number | null;
+  drawings_json: string | null;
 };
 
 export type SceneExtras = {
@@ -77,6 +92,7 @@ export type SceneExtras = {
   labels?: MapLabel[];
   zones?: LightZone[];
   overlayPath?: string;
+  drawings?: MapDrawing[];
 };
 
 type TokenRow = {
@@ -88,12 +104,15 @@ type TokenRow = {
   y: number;
   moved_this_round: number;
   light_radius: number;
+  burns_until: number;
+  light_minutes: number;
   hidden: number;
+  movement: string | null;
 };
 
 // Every token read selects the same columns, in one place, so adding one
 // cannot leave a projection quietly missing it.
-const TOKEN_COLUMNS = `id, kind, ref_id, name, x, y, moved_this_round, light_radius, hidden`;
+const TOKEN_COLUMNS = `id, kind, ref_id, name, x, y, moved_this_round, light_radius, burns_until, light_minutes, hidden, movement`;
 
 function mapRow(row: MapRow): BattleMap {
   const doors = normalizeDoors(parseJson<unknown>(row.doors_json ?? "{}", {}), row.terrain, row.width, row.height);
@@ -108,6 +127,7 @@ function mapRow(row: MapRow): BattleMap {
     drawnTerrain: row.terrain,
     ambient: row.ambient,
     theme: row.theme ?? "field",
+    outdoors: resolveOutdoors(row.outdoors, row.theme ?? "field"),
     lights: parseJson<MapLight[]>(row.lights_json, []),
     seed: row.seed,
     roundMarker: row.round_marker,
@@ -121,6 +141,7 @@ function mapRow(row: MapRow): BattleMap {
     labels: normalizeLabels(parseJson<unknown>(row.labels_json ?? "[]", []), row.width, row.height),
     zones: normalizeZones(parseJson<unknown>(row.zones_json ?? "[]", []), row.width, row.height),
     overlayPath: overlay && isUploadedImagePath(overlay) ? overlay : "",
+    drawings: normalizeDrawings(parseJson<unknown>(row.drawings_json ?? "[]", []), row.width, row.height),
   };
 }
 
@@ -130,6 +151,7 @@ function sceneColumns(extras: SceneExtras | undefined, terrain: string, width: n
     labels: JSON.stringify(normalizeLabels(extras?.labels ?? [], width, height)),
     zones: JSON.stringify(normalizeZones(extras?.zones ?? [], width, height)),
     overlay: extras?.overlayPath && isUploadedImagePath(extras.overlayPath) ? extras.overlayPath : "",
+    drawings: JSON.stringify(normalizeDrawings(extras?.drawings ?? [], width, height)),
   };
 }
 
@@ -143,7 +165,10 @@ function mapToken(row: TokenRow): BattleToken {
     y: row.y,
     movedThisRound: row.moved_this_round,
     lightRadius: row.light_radius,
+    burnsUntil: row.burns_until ?? 0,
+    lightMinutes: row.light_minutes ?? 0,
     hidden: row.hidden === 1,
+    movement: row.movement === "fly" || row.movement === "burrow" ? row.movement : "walk",
   };
 }
 
@@ -161,6 +186,8 @@ export function createBattleMap(input: {
   // with the walls arrives with them (src/lib/db/prepared-maps.ts).
   backdrop?: Backdrop | null;
   scene?: SceneExtras;
+  // Under the sky or a roof; absent means the theme decides.
+  outdoors?: boolean | null;
 }): BattleMap {
   const id = crypto.randomUUID();
   const now = nowIso();
@@ -191,6 +218,12 @@ export function createBattleMap(input: {
       now,
       now,
     );
+  if (input.outdoors !== undefined && input.outdoors !== null) {
+    setBattleMapOutdoors(id, input.outdoors);
+  }
+  if (scene.drawings !== "[]") {
+    getDatabase().prepare(`UPDATE battle_maps SET drawings_json = ? WHERE id = ?`).run(scene.drawings, id);
+  }
   return getBattleMap(id) as BattleMap;
 }
 
@@ -208,6 +241,7 @@ export function setBattleMapScene(mapId: string, extras: SceneExtras) {
       labels: extras.labels ?? map.labels,
       zones: extras.zones ?? map.zones,
       overlayPath: extras.overlayPath ?? map.overlayPath,
+      drawings: extras.drawings ?? map.drawings,
     },
     map.drawnTerrain,
     map.width,
@@ -215,10 +249,11 @@ export function setBattleMapScene(mapId: string, extras: SceneExtras) {
   );
   getDatabase()
     .prepare(
-      `UPDATE battle_maps SET labels_json = ?, doors_json = ?, zones_json = ?, overlay_path = ?, updated_at = ?
+      `UPDATE battle_maps SET labels_json = ?, doors_json = ?, zones_json = ?, overlay_path = ?,
+         drawings_json = ?, updated_at = ?
        WHERE id = ?`,
     )
-    .run(merged.labels, merged.doors, merged.zones, merged.overlay, nowIso(), mapId);
+    .run(merged.labels, merged.doors, merged.zones, merged.overlay, merged.drawings, nowIso(), mapId);
 }
 
 export function getBattleMap(mapId: string): BattleMap | null {
@@ -324,13 +359,15 @@ export function insertToken(input: {
   x: number;
   y: number;
   lightRadius?: number;
+  burnsUntil?: number;
+  lightMinutes?: number;
   hidden?: boolean;
 }): BattleToken {
   const id = crypto.randomUUID();
   getDatabase()
     .prepare(
-      `INSERT INTO battle_tokens (id, map_id, campaign_id, kind, ref_id, name, x, y, moved_this_round, light_radius, hidden, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+      `INSERT INTO battle_tokens (id, map_id, campaign_id, kind, ref_id, name, x, y, moved_this_round, light_radius, burns_until, light_minutes, hidden, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)
        ON CONFLICT (map_id, ref_id) DO UPDATE SET x = excluded.x, y = excluded.y, updated_at = excluded.updated_at`,
     )
     .run(
@@ -343,6 +380,8 @@ export function insertToken(input: {
       input.x,
       input.y,
       input.lightRadius ?? 0,
+      input.burnsUntil ?? 0,
+      input.lightMinutes ?? 0,
       input.hidden ? 1 : 0,
       nowIso(),
     );
@@ -389,6 +428,19 @@ export function placeToken(tokenId: string, x: number, y: number) {
   getDatabase()
     .prepare(`UPDATE battle_tokens SET x = ?, y = ?, updated_at = ? WHERE id = ?`)
     .run(x, y, nowIso(), tokenId);
+}
+
+// Under the sky or a roof. Null hands the decision back to the theme.
+export function setBattleMapOutdoors(mapId: string, outdoors: boolean | null) {
+  getDatabase()
+    .prepare(`UPDATE battle_maps SET outdoors = ?, updated_at = ? WHERE id = ?`)
+    .run(outdoors === null ? null : outdoors ? 1 : 0, nowIso(), mapId);
+}
+
+export function setTokenMovement(tokenId: string, movement: TokenMovement) {
+  getDatabase()
+    .prepare(`UPDATE battle_tokens SET movement = ?, updated_at = ? WHERE id = ?`)
+    .run(movement, nowIso(), tokenId);
 }
 
 export function setTokenHidden(tokenId: string, hidden: boolean) {
@@ -493,7 +545,7 @@ export function mergeExplored(
 export function placeTokens(
   mapId: string,
   campaignId: string,
-  tokens: Array<{ kind: TokenKind; refId: string; name: string; spot: XY; lightRadius?: number }>,
+  tokens: Array<{ kind: TokenKind; refId: string; name: string; spot: XY; lightRadius?: number; burnsUntil?: number; lightMinutes?: number }>,
 ) {
   const db = getDatabase();
   db.transaction(() => {
@@ -507,7 +559,35 @@ export function placeTokens(
         x: token.spot.x,
         y: token.spot.y,
         lightRadius: token.lightRadius,
+        burnsUntil: token.burnsUntil,
+        lightMinutes: token.lightMinutes,
       });
     }
   })();
+}
+
+// A carried light, lit or relit: the radius and, when it burns down, the
+// instant it gutters out at.
+export function setTokenLight(tokenId: string, lightRadius: number, burnsUntil = 0, lightMinutes = 0) {
+  getDatabase()
+    .prepare(`UPDATE battle_tokens SET light_radius = ?, burns_until = ?, light_minutes = ?, updated_at = ? WHERE id = ?`)
+    .run(lightRadius, burnsUntil, lightMinutes, nowIso(), tokenId);
+}
+
+// Every burning light in the campaign that has run out by `instant`, put
+// out. Returns what guttered so the caller can show it.
+export function expireBurntLights(campaignId: string, instant: number): BattleToken[] {
+  const db = getDatabase();
+  const rows = db
+    .prepare(`SELECT ${TOKEN_COLUMNS} FROM battle_tokens WHERE campaign_id = ? AND burns_until > 0 AND burns_until <= ? AND light_radius > 0`)
+    .all(campaignId, instant) as TokenRow[];
+  if (!rows.length) {
+    return [];
+  }
+  db.prepare(`UPDATE battle_tokens SET light_radius = 0, burns_until = 0, light_minutes = 0, updated_at = ? WHERE campaign_id = ? AND burns_until > 0 AND burns_until <= ?`).run(
+    nowIso(),
+    campaignId,
+    instant,
+  );
+  return rows.map(mapToken);
 }

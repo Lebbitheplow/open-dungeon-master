@@ -1,6 +1,15 @@
 import { getFloor } from "@/lib/db/campaigns";
+import { getClock } from "@/lib/db/clock";
+import { lightRemaining } from "@/lib/dm/light-timers";
+import { breakDown } from "@/lib/dm/calendar";
+import { effectiveAmbient } from "@/lib/battlemap/daylight";
+import { weatherObscurementTiles } from "@/lib/srd/weather";
+import { listEffects } from "@/lib/db/active-effects";
 import { getActiveBoard, getActiveEncounter, listEnemies } from "@/lib/db/encounters";
 import { getSheetForUser, listSheets } from "@/lib/db/sheets";
+import { footprintForSize, footprintIndexes, type Footprint } from "@/lib/battlemap/footprint";
+import { healthWord, type HealthWord } from "@/lib/battlemap/health-words";
+import { orderEntryId } from "@/lib/db/encounters";
 import {
   getBattleMapForEncounter,
   getExplored,
@@ -9,11 +18,31 @@ import {
   mergeExplored,
   type BattleMap,
 } from "@/lib/db/battle-maps";
-import { darkvisionTilesFromText, litTiles, visibleTiles } from "@/lib/battlemap/los";
+import {
+  darkvisionTilesFromText,
+  litTiles,
+  perceivesToken,
+  visibleTiles,
+  type Viewer,
+} from "@/lib/battlemap/los";
+import { sensesFromText, type Senses } from "@/lib/srd/senses";
 import { reachableTiles, speedToTiles } from "@/lib/battlemap/movement";
-import { tileIndex, type AmbientLight, type BattleToken, type TokenKind } from "@/lib/battlemap/types";
+import {
+  tileIndex,
+  type AmbientLight,
+  type BattleToken,
+  type TokenKind,
+  type TokenMovement,
+} from "@/lib/battlemap/types";
 import type { Backdrop } from "@/lib/battlemap/backdrop";
-import { labelsFor, type DoorStates, type LightZone, type MapLabel } from "@/lib/battlemap/scene";
+import {
+  drawingsFor,
+  labelsFor,
+  type DoorStates,
+  type LightZone,
+  type MapDrawing,
+  type MapLabel,
+} from "@/lib/battlemap/scene";
 import type { MapTheme } from "@/lib/battlemap/generate";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -26,7 +55,10 @@ export type PlayerMapView = {
   mapId: string;
   width: number;
   height: number;
+  // The light the board is under right now: the author's for a roofed map,
+  // the clock's and the weather's for one under the sky.
   ambient: AmbientLight;
+  outdoors: boolean;
   theme: MapTheme;
   // Row-major terrain chars; unexplored tiles are replaced with a space.
   terrain: string;
@@ -49,6 +81,9 @@ export type PlayerMapView = {
     // Only ever true in the DM's projection: a hidden token is absent from a
     // player's rather than marked in it.
     hidden: boolean;
+    // A carried light burning down: minutes left of the whole, or null
+    // (docs/vtt-parity-implementation-plan.md 7.3).
+    light: { remaining: number; total: number } | null;
   }>;
   lights: Array<{ x: number; y: number; radius: number }>;
   reachable: number[];
@@ -70,13 +105,64 @@ export type PlayerMapView = {
   // patches of light and the overlay picture are the DM's alone: a player
   // sees a locked or secret door as the wall the engine treats it as.
   labels: MapLabel[];
+  // Marks drawn on the board: everyone's, and the DM's own for the DM.
+  drawings: MapDrawing[];
   doors?: DoorStates;
   zones?: LightZone[];
   overlayPath?: string;
+  // The stage layer (docs/vtt-parity-implementation-plan.md section 1.1).
+  // Every entry states a fact the engine holds: conditions with rounds
+  // left, a health word instead of a number, an aura's reach, a large
+  // creature's footprint, whether it is flying, whose turn it is, and who
+  // attacked whom this round. Keyed by token id; absent keys mean none.
+  tokenConditions: Record<string, Array<{ id: string; label: string; rounds?: number }>>;
+  tokenHealth: Record<string, HealthWord>;
+  tokenAuras: Record<string, Array<{ id: string; radiusFeet: number; tone: AuraTone }>>;
+  tokenFootprint: Record<string, Footprint>;
+  tokenElevation: Record<string, "flying" | "burrowing">;
+  turn: { tokenId: string; round: number } | null;
+  targets: Record<string, string[]>;
 };
+
+type AuraTone = "ward" | "harm" | "bless" | "neutral";
+
+// Aura of Protection reaches 10 ft from paladin 6 and 30 ft from 18; the
+// save bonus itself is applied by src/lib/dm/aura.ts. This is only the ring.
+function paladinAura(sheet: CharacterSheet): { radiusFeet: number; tone: AuraTone } | null {
+  const hasAura = sheet.features.some((feature) => /aura of protection/i.test(feature.name));
+  if (!hasAura) {
+    return null;
+  }
+  return { radiusFeet: sheet.level >= 18 ? 30 : 10, tone: "ward" };
+}
+
+function conditionRows(
+  conditions: string[],
+  meta: Record<string, { rounds?: number } | undefined>,
+): Array<{ id: string; label: string; rounds?: number }> {
+  return conditions.map((condition) => {
+    const rounds = meta[condition]?.rounds;
+    return {
+      id: condition.toLowerCase(),
+      label: condition,
+      ...(typeof rounds === "number" && rounds > 0 ? { rounds } : {}),
+    };
+  });
+}
+
+function elevationOf(movement: TokenMovement): "flying" | "burrowing" | null {
+  return movement === "fly" ? "flying" : movement === "burrow" ? "burrowing" : null;
+}
 
 export function sheetDarkvisionTiles(sheet: CharacterSheet): number {
   return darkvisionTilesFromText([...sheet.features.map((feature) => feature.name), sheet.race]);
+}
+
+// Every sense a character has, from race and feature names (Blind Fighting,
+// Devil's Sight, Ghostly Gaze, a homebrew "blindsight 30 ft" feature).
+export function sheetSenses(sheet: CharacterSheet): Senses {
+  const senses = sensesFromText([...sheet.features.map((feature) => feature.name), sheet.race]);
+  return { ...senses, darkvision: Math.max(senses.darkvision, sheetDarkvisionTiles(sheet)) };
 }
 
 // Whether this player's PC may move right now: open floor, or their own
@@ -130,30 +216,46 @@ export function buildPlayerMapView(
   const tileCount = map.width * map.height;
   const myToken = sheet ? getTokenByRef(map.id, sheet.id) : null;
 
+  // Under the sky, the clock and the weather decide the light and how far
+  // anyone sees; under a roof, the author does (src/lib/battlemap/daylight.ts).
+  const clock = getClock(campaignId);
+  const clockInstant = clock.instant;
+  const ambient = effectiveAmbient(
+    map.ambient,
+    map.outdoors,
+    breakDown(clock.calendar, clock.instant).hour,
+    clock.weather,
+  );
   // Spectators (no sheet/token) see only ally positions on a dark field.
   const vision = {
     terrain: map.terrain,
     width: map.width,
     height: map.height,
-    ambient: map.ambient,
+    ambient,
     zones: map.zones,
+    obscureBeyond: map.outdoors ? weatherObscurementTiles(clock.weather) : Infinity,
   };
   const lit = litTiles(vision, tokens, map.lights);
   let visible = new Set<number>();
   let explored = new Set<number>();
+  let viewer: Viewer | null = null;
   if (fullVision) {
     for (let i = 0; i < tileCount; i += 1) {
       visible.add(i);
       explored.add(i);
     }
   } else if (sheet && myToken) {
-    visible = visibleTiles(
-      vision,
-      { x: myToken.x, y: myToken.y, darkvisionTiles: sheetDarkvisionTiles(sheet) },
-      tokens,
-      map.lights,
-      lit,
-    );
+    const senses = sheetSenses(sheet);
+    viewer = {
+      x: myToken.x,
+      y: myToken.y,
+      darkvisionTiles: senses.darkvision,
+      blindsightTiles: senses.blindsight,
+      tremorsenseTiles: senses.tremorsense,
+      truesightTiles: senses.truesight,
+      devilsSightTiles: senses.devilsSight,
+    };
+    visible = visibleTiles(vision, viewer, tokens, map.lights, lit);
     explored = mergeExplored(map.id, sheet.id, visible, tileCount);
   } else if (sheet) {
     explored = getExplored(map.id, sheet.id, tileCount);
@@ -185,13 +287,14 @@ export function buildPlayerMapView(
         if (!enemy || enemy.status !== "alive") {
           return false;
         }
-        return visible.has(tileIndex(map.width, token.x, token.y));
+        // Seen, or felt through the ground by tremorsense. The DM sees all.
+        return fullVision || (viewer ? perceivesToken(vision, viewer, token, visible) : false);
       }
       // Allies are always drawn: the party coordinates aloud at the table.
       // The DM's own NPCs and props are things standing in the room, so they
       // follow the same rule the enemies do and appear when they are seen.
       if (token.kind === "npc" || token.kind === "prop") {
-        return fullVision || visible.has(tileIndex(map.width, token.x, token.y));
+        return fullVision || (viewer ? perceivesToken(vision, viewer, token, visible) : false);
       }
       return true;
     })
@@ -206,6 +309,7 @@ export function buildPlayerMapView(
       down:
         token.kind === "pc" && (sheetsById.get(token.refId)?.currentHp ?? 1) <= 0,
       hidden: token.hidden,
+      light: lightRemaining(token, clockInstant),
     }));
 
   // Reachable tiles for click-to-move, only when the player may move now.
@@ -219,19 +323,118 @@ export function buildPlayerMapView(
         ? tileCount
         : Math.max(0, speedToTiles(sheet.speed) - myToken.movedThisRound);
     if (budgetLeft > 0) {
-      const occupied = occupiedTiles(map, tokens, myToken);
+      const occupied = occupiedTiles(map, tokens, myToken, footprintLookup(enemiesById));
       reachable = [
-        ...reachableTiles(map.terrain, map.width, map.height, occupied, myToken, budgetLeft).keys(),
+        ...reachableTiles(
+          map.terrain,
+          map.width,
+          map.height,
+          occupied,
+          myToken,
+          budgetLeft,
+          1,
+          myToken.movement === "fly",
+        ).keys(),
       ];
     }
   }
 
   const currentEntry = encounter.orderReady ? encounter.order[encounter.turnIndex] : undefined;
+
+  // The stage layer: facts about each shown token, keyed by token id.
+  const tokenConditions: PlayerMapView["tokenConditions"] = {};
+  const tokenHealth: PlayerMapView["tokenHealth"] = {};
+  const tokenAuras: PlayerMapView["tokenAuras"] = {};
+  const tokenFootprint: PlayerMapView["tokenFootprint"] = {};
+  const tokenElevation: PlayerMapView["tokenElevation"] = {};
+  const tokenByRef = new Map(tokens.map((token) => [token.refId, token]));
+  const effectAuras = new Map<string, Array<{ id: string; radiusFeet: number; tone: AuraTone }>>();
+  for (const effect of listEffects(campaignId)) {
+    if (!effect.aura) {
+      continue;
+    }
+    const list = effectAuras.get(effect.targetId) ?? [];
+    list.push({ id: effect.id, radiusFeet: effect.aura.radiusFeet, tone: effect.aura.tone });
+    effectAuras.set(effect.targetId, list);
+  }
+  for (const shown of shownTokens) {
+    const token = tokenByRef.get(shown.refId);
+    const elevation = token ? elevationOf(token.movement) : null;
+    if (elevation) {
+      tokenElevation[shown.id] = elevation;
+    }
+    const auras = [...(effectAuras.get(shown.refId) ?? [])];
+    if (shown.kind === "enemy") {
+      const enemy = enemiesById.get(shown.refId);
+      if (!enemy) {
+        continue;
+      }
+      const rows = conditionRows(enemy.conditions, enemy.conditionMeta);
+      if (enemy.concentration) {
+        rows.push({ id: "concentrating", label: `Concentrating: ${enemy.concentration}` });
+      }
+      if (rows.length) {
+        tokenConditions[shown.id] = rows;
+      }
+      tokenHealth[shown.id] = healthWord(enemy.currentHp, enemy.maxHp, {
+        dead: enemy.status === "dead",
+      });
+      const footprint = footprintForSize(enemy.stats.size);
+      if (footprint > 1) {
+        tokenFootprint[shown.id] = footprint;
+      }
+    } else if (shown.kind === "pc") {
+      const pcSheet = sheetsById.get(shown.refId);
+      if (!pcSheet) {
+        continue;
+      }
+      const rows = conditionRows(pcSheet.conditions, pcSheet.conditionMeta);
+      if (rows.length) {
+        tokenConditions[shown.id] = rows;
+      }
+      tokenHealth[shown.id] = healthWord(pcSheet.currentHp, pcSheet.maxHp, {
+        dead: Boolean(pcSheet.deathSaves?.dead),
+      });
+      const paladin = paladinAura(pcSheet);
+      if (paladin) {
+        auras.push({ id: `aura-${pcSheet.id}`, ...paladin });
+      }
+    }
+    if (auras.length) {
+      tokenAuras[shown.id] = auras;
+    }
+  }
+  const shownIds = new Set(shownTokens.map((token) => token.id));
+  const turnToken =
+    currentEntry && encounter.kind === "fight"
+      ? tokenByRef.get(orderEntryId(currentEntry))
+      : undefined;
+  const turn =
+    turnToken && shownIds.has(turnToken.id)
+      ? { tokenId: turnToken.id, round: encounter.round }
+      : null;
+  const targets: PlayerMapView["targets"] = {};
+  if (encounter.targets.round === encounter.round) {
+    for (const [attackerRef, targetRefs] of Object.entries(encounter.targets.pairs)) {
+      const attacker = tokenByRef.get(attackerRef);
+      if (!attacker || !shownIds.has(attacker.id)) {
+        continue;
+      }
+      const ids = targetRefs
+        .map((ref) => tokenByRef.get(ref)?.id)
+        .filter((id): id is string => Boolean(id) && shownIds.has(id as string));
+      if (ids.length) {
+        targets[attacker.id] = ids;
+      }
+    }
+  }
+
   return {
     mapId: map.id,
     width: map.width,
     height: map.height,
-    ambient: map.ambient,
+    ambient,
+    outdoors: map.outdoors,
     theme: map.theme,
     terrain: terrainChars.join(""),
     backdrop: map.backdrop,
@@ -249,6 +452,14 @@ export function buildPlayerMapView(
     board: encounter.kind,
     fullVision,
     labels: labelsFor(map.labels, map.width, { dm: fullVision, explored }),
+    drawings: drawingsFor(map.drawings, { dm: fullVision, round: encounter.round }),
+    tokenConditions,
+    tokenHealth,
+    tokenAuras,
+    tokenFootprint,
+    tokenElevation,
+    turn,
+    targets,
     ...(fullVision
       ? {
           doors: map.doors,
@@ -272,18 +483,36 @@ export function buildPlayerMapView(
 }
 
 // Tiles no one may move through or onto: every living token except the
-// mover. Dead enemies keep no token (removed on death), but guard anyway.
+// mover, with a large creature covering its whole footprint. Dead enemies
+// keep no token (removed on death), but guard anyway.
 export function occupiedTiles(
   map: BattleMap,
   tokens: BattleToken[],
   mover: BattleToken | null,
+  footprintOf?: (token: BattleToken) => Footprint,
 ): Set<number> {
   const occupied = new Set<number>();
   for (const token of tokens) {
     if (mover && token.id === mover.id) {
       continue;
     }
-    occupied.add(tileIndex(map.width, token.x, token.y));
+    const footprint = footprintOf?.(token) ?? 1;
+    if (footprint === 1) {
+      occupied.add(tileIndex(map.width, token.x, token.y));
+      continue;
+    }
+    for (const idx of footprintIndexes(map.width, { x: token.x, y: token.y }, footprint)) {
+      occupied.add(idx);
+    }
   }
   return occupied;
+}
+
+// The footprint of each token on a board, from the enemies' stat blocks.
+// Player characters are Small or Medium and take one square.
+export function footprintLookup(
+  enemiesById: Map<string, { stats: { size?: string } }>,
+): (token: BattleToken) => Footprint {
+  return (token) =>
+    token.kind === "enemy" ? footprintForSize(enemiesById.get(token.refId)?.stats.size) : 1;
 }

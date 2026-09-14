@@ -358,7 +358,10 @@ export async function POST(
     return context;
   }
 
-  if (getSheetForUser(campaignId, context.user.id)) {
+  // A table that allows several characters per player lets a second one
+  // in (docs/vtt-parity-implementation-plan.md 11.3); the first stays the
+  // one in play until they switch.
+  if (getSheetForUser(campaignId, context.user.id) && context.campaign.gameSettings.multiCharacter === "off") {
     return Response.json(
       { error: "You already have a character in this campaign." },
       { status: 409 },

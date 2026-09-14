@@ -22,6 +22,8 @@ import { resolveSheetRef } from "@/lib/dm/rolls";
 import { normalizeRestKind } from "@/lib/dm/arg-coerce";
 import { tickWorldTimeskip } from "@/lib/dm/world-tick";
 import { advanceClock } from "@/lib/db/clock";
+import { refreshSky } from "@/lib/dm/sky";
+import { publishTitleCard } from "@/lib/dm/scene-state";
 import { describeDuration, describeInstant, restMinutes } from "@/lib/dm/calendar";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
 
@@ -202,6 +204,13 @@ export function handleTakeRest(
     // A night passing is a timeskip: the off-screen world moves too (world
     // arcs, NPC goals), with results landing as DM-only facts and sparks.
     tickWorldTimeskip(campaign.id, 3);
+    // A new day: the sky rolls again and the dawn card wipes the screen.
+    refreshSky(campaign.id, { minutes: "error" in clockAfter ? 0 : clockAfter.minutes });
+    publishTitleCard(campaign.id, {
+      title: "Dawn",
+      ...(nowReads ? { subtitle: nowReads } : {}),
+      tone: "dawn",
+    });
     return {
       ok: true,
       kind: "long",

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { publishCast } from "@/lib/dm/cast";
 import { isErrorResponse, requireDm } from "@/lib/campaign-api";
 import {
   deleteNpc,
@@ -112,5 +113,6 @@ export async function DELETE(
     return Response.json({ error: "That NPC is not at this table." }, { status: 404 });
   }
   deleteNpc(npcId);
+  publishCast(campaignId);
   return Response.json({ ok: true });
 }

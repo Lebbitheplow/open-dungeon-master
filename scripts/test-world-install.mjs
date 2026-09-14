@@ -366,3 +366,18 @@ await test("a published index.json in the installed directory is not read as a p
 
 removeTempDir(scratch);
 console.log(`test-world-install: ${passed} passed`);
+
+await test("the registry may list prepared worlds beside packs, under the same https rule", () => {
+  // docs/vtt-parity-implementation-plan.md 12.3: bundles ride in the same
+  // index; an absent list reads as none, and a plain http download is refused.
+  const parsed = registryIndexSchema.safeParse({
+    packs: [],
+    bundles: [{ id: "hollow_crown", name: "The Hollow Crown", blurb: "A prepared world.", downloadUrl: "https://example.com/hollow-crown.bundle.json" }],
+  });
+  assert.ok(parsed.success);
+  assert.equal(parsed.data.bundles[0].version, "1.0.0");
+  assert.deepEqual(registryIndexSchema.safeParse({ packs: [] }).data.bundles, []);
+  assert.ok(
+    !registryIndexSchema.safeParse({ packs: [], bundles: [{ id: "x1", name: "X", blurb: "b", downloadUrl: "http://example.com/x.json" }] }).success,
+  );
+});

@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import type { CampaignMember, SessionUser } from "@/lib/campaign-types";
+import type { CastMember } from "@/lib/dm/cast";
+import type { EncounterSummary } from "@/lib/dm/encounter-summary";
 import type { OneShotEventId } from "@/lib/dm/director-logic";
 import { sortCalls, type UtilityCall } from "@/lib/dm/call-tracker-logic";
 import type { Campaign } from "@/lib/db/campaigns";
@@ -18,6 +20,8 @@ import type { WorldFact } from "@/lib/db/facts";
 import type { SideThread } from "@/lib/db/side-chat";
 import { EMPTY_AMBIENCE, type AmbienceState } from "@/lib/ambience/logic";
 import type { PlayerMapView } from "@/lib/battlemap/view";
+import { redactFx, type FxEvent } from "@/lib/battlemap/fx-plan";
+import type { CameraEvent, HandoutShown, SceneState, TitleCard } from "@/lib/scene/state";
 import type { MapPing } from "@/lib/dm/board-logic";
 import { capsForRole, type ViewerCaps } from "@/lib/dm/viewer";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -84,6 +88,9 @@ export type ItemProposal = {
   reason: string;
   status: string;
   createdAt: string;
+  // A trade's other side and its offer (11.2).
+  toCharacterId?: string;
+  offer?: { toCharacterId: string; give: Array<{ name: string; qty: number }>; giveCp: number; want: Array<{ name: string; qty: number }>; wantCp: number } | null;
 };
 
 export type CampaignLocation = {
@@ -112,9 +119,13 @@ export type CampaignState = {
   caps: ViewerCaps;
   me: SessionUser | null;
   members: CampaignMember[];
+  // Names and faces of the cast, for speech lines and theatre inserts.
+  cast: CastMember[];
   // Players this user has blocked (server-wide); see /api/profile/blocks.
   blockedUserIds: string[];
   sheets: CharacterSheet[];
+  // The character this user is playing when they have several (11.3).
+  activeSheetId: string;
   messages: CampaignMessage[];
   rolls: StoredRoll[];
   pendingRolls: PendingRoll[];
@@ -139,6 +150,16 @@ export type CampaignState = {
   // Bumped by the contentless relationships_updated ephemeral; the Bonds
   // panel fetches its own tier-scoped view when this changes.
   relationshipsVersion: number;
+  // Bumped on quests_updated so the quest log refetches.
+  questsVersion: number;
+  // Bumped on factions_updated so the Factions panel refetches.
+  factionsVersion: number;
+  // Bumped on shops_updated so the market refetches (11.1).
+  shopsVersion: number;
+  // The last coin movement, for the purse FX.
+  coins: { characterId: string; direction: "in" | "out"; amountCp: number; at: number } | null;
+  // The last fight's card (docs/vtt-parity-implementation-plan.md 4.2).
+  fightSummary: EncounterSummary | null;
   characterEvents: CharacterEvent[];
   encounter: PublicEncounter | null;
   // Open DM item/gold offers (inventoryApprovals).
@@ -158,6 +179,23 @@ export type CampaignState = {
   // is only true while it is happening, so it is never replayed and the
   // player hook drops it once it has sounded.
   ambienceSting: { cue: string; at: number } | null;
+  // Effects the board has yet to play, newest last. Ephemeral like a ping:
+  // planned on the server from a resolved outcome (src/lib/battlemap/
+  // fx-plan.ts), never replayed, dropped by the renderer once played.
+  fx: FxEvent[];
+  // The sky over the table: hour, weather and the line the prompt reads.
+  // Persisted so a late joiner sees the same weather.
+  scene: SceneState | null;
+  // A chapter, encounter or DM title card. Persisted so it lands in the
+  // log; the overlay shows the newest once.
+  titleCard: TitleCard | null;
+  // The DM steering the board. Ephemeral, like a ping.
+  camera: CameraEvent | null;
+  // The handout the DM put in front of everyone. Persisted so a late joiner
+  // sees it; `dismissed` closes it for all.
+  handout: HandoutShown | null;
+  // Someone raised the X-card and the table is paused; nobody is named.
+  safetyPause: { at: number; reason: "x_card" } | null;
   narrationAudio: Record<string, string>;
   latestTts: { messageId: string; url: string; seq: number } | null;
   latestRoll: { roll: StoredRoll; source: string; seq: number } | null;
@@ -222,7 +260,9 @@ const initialState: CampaignState = {
   me: null,
   members: [],
   blockedUserIds: [],
+  cast: [],
   sheets: [],
+  activeSheetId: "",
   messages: [],
   rolls: [],
   pendingRolls: [],
@@ -240,6 +280,11 @@ const initialState: CampaignState = {
   asksLoaded: false,
   facts: [],
   relationshipsVersion: 0,
+  factionsVersion: 0,
+  shopsVersion: 0,
+  coins: null,
+  questsVersion: 0,
+  fightSummary: null,
   characterEvents: [],
   encounter: null,
   itemProposals: [],
@@ -247,6 +292,12 @@ const initialState: CampaignState = {
   mapPing: null,
   ambience: EMPTY_AMBIENCE,
   ambienceSting: null,
+  fx: [],
+  scene: null,
+  titleCard: null,
+  camera: null,
+  handout: null,
+  safetyPause: null,
   narrationAudio: {},
   latestTts: null,
   latestRoll: null,
@@ -275,6 +326,10 @@ type Action =
   | { type: "facts"; facts: WorldFact[] }
   | { type: "battleMap"; view: PlayerMapView | null }
   | { type: "mapPing"; ping: MapPing }
+  | { type: "fxPlayed"; ids: string[] }
+  | { type: "sting"; cue: string }
+  | { type: "titleCardShown"; id: string }
+  | { type: "cameraDone" }
   | { type: "encounter"; encounter: PublicEncounter | null }
   | { type: "rolls"; rolls: StoredRoll[] }
   | { type: "error"; error: string; answeredBy?: string }
@@ -324,6 +379,16 @@ function reducer(state: CampaignState, action: Action): CampaignState {
       return { ...state, battleMap: action.view };
     case "mapPing":
       return { ...state, mapPing: action.ping };
+    case "sting":
+      return { ...state, ambienceSting: { cue: action.cue, at: Date.now() } };
+    case "fxPlayed": {
+      const played = new Set(action.ids);
+      return { ...state, fx: state.fx.filter((entry) => !played.has(entry.id)) };
+    }
+    case "titleCardShown":
+      return state.titleCard?.id === action.id ? { ...state, titleCard: null } : state;
+    case "cameraDone":
+      return state.camera ? { ...state, camera: null } : state;
     case "error":
       return { ...state, loading: false, error: action.error, answeredBy: action.answeredBy ?? "" };
     case "event": {
@@ -445,6 +510,62 @@ function reducer(state: CampaignState, action: Action): CampaignState {
             at: Number(payload.at ?? Date.now()),
           };
           return next;
+        case "fx": {
+          const raw = payload as unknown as FxEvent;
+          if (!raw || typeof raw.id !== "string" || typeof raw.kind !== "string") {
+            return next;
+          }
+          // Numbers on an enemy ride only to seats allowed real numbers;
+          // everyone else sees the ring change and the health word.
+          const fx = raw.numbers === "dm" && !state.caps.enemyNumbers ? redactFx(raw) : raw;
+          // A bounded queue: an effect that waited through twelve others is
+          // no longer a moment, so it is dropped rather than replayed late.
+          next.fx = [...state.fx.slice(-11), fx];
+          if (fx.sting) {
+            next.ambienceSting = { cue: fx.sting, at: fx.at };
+          }
+          return next;
+        }
+        case "scene_state":
+          next.scene = payload as unknown as SceneState;
+          return next;
+        case "title_card": {
+          const card = payload as unknown as TitleCard;
+          next.titleCard = card;
+          if (card.sting) {
+            next.ambienceSting = { cue: card.sting, at: card.at };
+          }
+          return next;
+        }
+        case "camera":
+          next.camera = payload as unknown as CameraEvent;
+          return next;
+        case "handout_shown":
+          next.handout = payload as unknown as HandoutShown;
+          return next;
+        case "handout_dismissed":
+          // "*" takes down whatever is up.
+          next.handout =
+            state.handout && (payload.id === "*" || state.handout.id === payload.id)
+              ? { ...state.handout, dismissed: true }
+              : state.handout;
+          return next;
+        // Contentless: the log refetches its own filtered view.
+        case "quests_updated":
+          next.questsVersion = state.questsVersion + 1;
+          return next;
+        case "encounter_summary":
+          next.fightSummary = (payload.summary as EncounterSummary | undefined) ?? null;
+          return next;
+        case "fight_summary_dismissed":
+          next.fightSummary = null;
+          return next;
+        case "x_card":
+          next.safetyPause = { at: Number(payload.at ?? Date.now()), reason: "x_card" };
+          return next;
+        case "safety_resumed":
+          next.safetyPause = null;
+          return next;
         case "location_map_ready":
           next.locations = state.locations.map((location) =>
             location.id === payload.locationId
@@ -457,6 +578,23 @@ function reducer(state: CampaignState, action: Action): CampaignState {
         // words, the lead sees numbers), so the panel refetches its own view.
         case "relationships_updated":
           next.relationshipsVersion = state.relationshipsVersion + 1;
+          return next;
+        case "factions_updated":
+          next.factionsVersion = state.factionsVersion + 1;
+          return next;
+        case "calendar_updated":
+          next.questsVersion = state.questsVersion + 1;
+          return next;
+        case "roster_updated":
+          if (String(payload.userId ?? "") === state.me?.id) {
+            next.activeSheetId = String(payload.activeSheetId ?? "");
+          }
+          return next;
+        case "shops_updated":
+          next.shopsVersion = state.shopsVersion + 1;
+          return next;
+        case "coins":
+          next.coins = { characterId: String(payload.characterId ?? ""), direction: payload.direction === "in" ? "in" : "out", amountCp: Number(payload.amountCp) || 0, at: Number(payload.at) || Date.now() };
           return next;
         case "media_status": {
           const targetId = String(payload.targetId ?? "");
@@ -472,6 +610,16 @@ function reducer(state: CampaignState, action: Action): CampaignState {
           }
           return next;
         }
+        case "cast_updated":
+          next.cast = Array.isArray(payload.cast) ? (payload.cast as CastMember[]) : state.cast;
+          return next;
+        case "npc_updated":
+          next.cast = state.cast.map((member) =>
+            member.id === payload.npcId && typeof payload.portraitUrl === "string"
+              ? { ...member, portraitUrl: payload.portraitUrl }
+              : member,
+          );
+          return next;
         case "member_joined": {
           const member: CampaignMember = {
             userId: String(payload.userId),
@@ -481,6 +629,7 @@ function reducer(state: CampaignState, action: Action): CampaignState {
             useRealDice: false,
             holdRolls: false,
             muted: false,
+            activeCharacterId: "",
             joinedAt: new Date().toISOString(),
           };
           next.members = upsertBy(state.members, member, (entry) => entry.userId);
@@ -724,8 +873,24 @@ const PERSISTED_EVENTS = [
   // player joining mid-stretch is told, rather than quietly talking to a
   // stand-in they cannot see.
   "dm_cover_changed",
+  // The sky over the table, a title card, a handout on the table, and the
+  // X-card pause. Persisted so a late joiner lands in the same scene.
+  "scene_state",
+  "encounter_summary",
+  "title_card",
+  "handout_shown",
+  "handout_dismissed",
+  "x_card",
+  "safety_resumed",
 ];
 const EPHEMERAL_EVENTS = [
+  // A visual effect planned from a resolved outcome. Worthless after the
+  // moment, like a sting, so never replayed.
+  "fx",
+  // The DM steering everyone's board. Only true while they are doing it.
+  "camera",
+  "quests_updated",
+  "cast_updated",
   "dm_status",
   "utility_calls",
   "dm_delta",
@@ -735,6 +900,11 @@ const EPHEMERAL_EVENTS = [
   "ask_activity",
   "facts_updated",
   "relationships_updated",
+  "factions_updated",
+  "calendar_updated",
+  "roster_updated",
+  "shops_updated",
+  "coins",
   "battle_map_updated",
   "map_ping",
   // One sound, once. Worthless after the fact, so never replayed.
@@ -807,6 +977,7 @@ export function useCampaignStream(campaignId: string) {
           me: data.me,
           members: data.members,
           blockedUserIds: data.blockedUserIds ?? [],
+          cast: data.cast ?? [],
           sheets: data.sheets,
           messages: data.messages,
           rolls: data.rolls,
@@ -1057,8 +1228,22 @@ export function useCampaignStream(campaignId: string) {
     refreshRolls,
   ]);
 
+  const markFxPlayed = useCallback((ids: string[]) => dispatch({ type: "fxPlayed", ids }), []);
+  const markTitleCardShown = useCallback(
+    (id: string) => dispatch({ type: "titleCardShown", id }),
+    [],
+  );
+  const markCameraDone = useCallback(() => dispatch({ type: "cameraDone" }), []);
+  // A sting this client decided to play (your-turn chime); goes through the
+  // same channel as the server's so volume and muting apply.
+  const playSting = useCallback((cue: string) => dispatch({ type: "sting", cue }), []);
+
   return {
     state,
+    markFxPlayed,
+    markTitleCardShown,
+    markCameraDone,
+    playSting,
     refresh,
     refreshNotes,
     refreshSideChat,

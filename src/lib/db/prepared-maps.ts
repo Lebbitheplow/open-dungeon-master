@@ -14,6 +14,8 @@ import {
   type MapLabel,
   type MapProp,
   type SceneAmbience,
+  normalizeDrawings,
+  type MapDrawing,
 } from "@/lib/battlemap/scene";
 import { isUploadedImagePath } from "@/lib/uploads";
 import { dedupeName } from "@/lib/workshop/import";
@@ -48,6 +50,9 @@ export type PreparedMap = {
   terrain: string;
   ambient: AmbientLight;
   theme: MapTheme;
+  // Under the sky (the clock lights it) or a roof (the author does). Null
+  // lets the theme decide (src/lib/battlemap/daylight.ts).
+  outdoors: boolean | null;
   lights: MapLight[];
   seed: number;
   backdrop: Backdrop | null;
@@ -58,6 +63,7 @@ export type PreparedMap = {
   zones: LightZone[];
   overlayPath: string;
   ambience: SceneAmbience;
+  drawings: MapDrawing[];
   updatedAt: string;
 };
 
@@ -82,6 +88,8 @@ type Row = {
   zones_json: string | null;
   overlay_path: string | null;
   ambience_json: string | null;
+  outdoors: number | null;
+  drawings_json: string | null;
   updated_at: string;
 };
 
@@ -98,6 +106,7 @@ function mapRow(row: Row): PreparedMap {
     terrain: row.terrain,
     ambient: row.ambient,
     theme: row.theme ?? "field",
+    outdoors: row.outdoors === null || row.outdoors === undefined ? null : row.outdoors === 1,
     lights: parseJson<MapLight[]>(row.lights_json, []),
     seed: row.seed,
     backdrop: normalizeBackdrop(
@@ -110,6 +119,7 @@ function mapRow(row: Row): PreparedMap {
     zones: normalizeZones(parseJson<unknown>(row.zones_json ?? "[]", []), row.width, row.height),
     overlayPath: overlay && isUploadedImagePath(overlay) ? overlay : "",
     ambience: normalizeAmbience(parseJson<unknown>(row.ambience_json ?? "{}", {})),
+    drawings: normalizeDrawings(parseJson<unknown>(row.drawings_json ?? "[]", []), row.width, row.height),
     updatedAt: row.updated_at,
   };
 }
@@ -135,6 +145,7 @@ export type PreparedScene = {
   zones?: LightZone[];
   overlayPath?: string;
   ambience?: SceneAmbience;
+  drawings?: MapDrawing[];
 };
 
 export type PreparedMapInput = {
@@ -151,6 +162,7 @@ export type PreparedMapInput = {
   seed?: number;
   backdrop?: Backdrop | null;
   scene?: PreparedScene;
+  outdoors?: boolean | null;
 };
 
 // Every scene column written through one normalizer, so a prepared map can
@@ -164,7 +176,12 @@ function sceneColumns(scene: PreparedScene | undefined, terrain: string, width: 
     zones: JSON.stringify(normalizeZones(scene?.zones ?? [], width, height)),
     overlay: overlay && isUploadedImagePath(overlay) ? overlay : "",
     ambience: JSON.stringify(normalizeAmbience(scene?.ambience ?? EMPTY_AMBIENCE)),
+    drawings: JSON.stringify(normalizeDrawings(scene?.drawings ?? [], width, height)),
   };
+}
+
+function setPreparedMapDrawings(mapId: string, drawings: string) {
+  getDatabase().prepare(`UPDATE prepared_maps SET drawings_json = ? WHERE id = ?`).run(drawings, mapId);
 }
 
 // Names are unique per campaign so the library can be scanned by eye, and a
@@ -212,6 +229,12 @@ export function createPreparedMap(input: PreparedMapInput): PreparedMap {
       now,
       now,
     );
+  if (input.outdoors !== undefined) {
+    setPreparedMapOutdoors(id, input.outdoors);
+  }
+  if (scene.drawings !== "[]") {
+    setPreparedMapDrawings(id, scene.drawings);
+  }
   return getPreparedMap(input.campaignId, id) as PreparedMap;
 }
 
@@ -246,7 +269,14 @@ export type PreparedMapPatch = {
   backdropPath?: string;
   backdropTransform?: BackdropTransform | null;
   scene?: PreparedScene;
+  outdoors?: boolean | null;
 };
+
+function setPreparedMapOutdoors(mapId: string, outdoors: boolean | null) {
+  getDatabase()
+    .prepare(`UPDATE prepared_maps SET outdoors = ? WHERE id = ?`)
+    .run(outdoors === null ? null : outdoors ? 1 : 0, mapId);
+}
 
 export function updatePreparedMap(
   campaignId: string,
@@ -331,6 +361,12 @@ export function updatePreparedMap(
       mapId,
       campaignId,
     );
+  if (patch.outdoors !== undefined) {
+    setPreparedMapOutdoors(mapId, patch.outdoors);
+  }
+  if (patch.scene?.drawings !== undefined) {
+    setPreparedMapDrawings(mapId, scene.drawings);
+  }
   return getPreparedMap(campaignId, mapId);
 }
 
@@ -359,6 +395,7 @@ export function copyPreparedMaps(fromCampaignId: string, toCampaignId: string): 
       // same name number upward instead of all colliding on (2).
       const name = dedupeName(map.name, taken);
       const now = nowIso();
+      const copyId = crypto.randomUUID();
       db.prepare(
         `INSERT INTO prepared_maps (id, campaign_id, name, notes, tags_json, width, height, terrain,
            ambient, theme, lights_json, seed, backdrop_path, backdrop_transform_json,
@@ -366,7 +403,7 @@ export function copyPreparedMaps(fromCampaignId: string, toCampaignId: string): 
            created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
-        crypto.randomUUID(),
+        copyId,
         toCampaignId,
         name,
         map.notes,
@@ -389,6 +426,12 @@ export function copyPreparedMaps(fromCampaignId: string, toCampaignId: string): 
         now,
         now,
       );
+      if (map.outdoors !== null) {
+        setPreparedMapOutdoors(copyId, map.outdoors);
+      }
+      if (map.drawings.length) {
+        setPreparedMapDrawings(copyId, JSON.stringify(map.drawings));
+      }
       copied += 1;
     }
   })();

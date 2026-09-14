@@ -2,6 +2,7 @@
 
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
+  ArrowLeftRight,
   BookUser,
   Crown,
   Flag,
@@ -30,6 +31,7 @@ export function CharacterMenu({
   onNotes,
   onAdjust,
   onMessage,
+  onTrade,
   canModerate = false,
   canMute = false,
   muted = false,
@@ -42,6 +44,8 @@ export function CharacterMenu({
   onNotes: () => void;
   onAdjust: () => void;
   onMessage?: () => void;
+  // Another player's character, when I have one of my own: offer a trade.
+  onTrade?: () => void;
   // Another player's character: report and block are offered.
   canModerate?: boolean;
   // The lead or owner looking at another player: mute and unmute.
@@ -112,6 +116,11 @@ export function CharacterMenu({
           {onMessage ? (
             <DropdownMenu.Item className={item} onSelect={defer(onMessage)}>
               <MessageSquare className="size-3.5 text-stone-500" /> Message
+            </DropdownMenu.Item>
+          ) : null}
+          {onTrade ? (
+            <DropdownMenu.Item className={item} onSelect={defer(onTrade)}>
+              <ArrowLeftRight className="size-3.5 text-stone-500" /> Trade
             </DropdownMenu.Item>
           ) : null}
           {steersStory ? (

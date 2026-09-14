@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isErrorResponse, requireDm } from "@/lib/campaign-api";
 import { createNpcFromDraft, listNpcs } from "@/lib/db/npcs";
+import { publishCast } from "@/lib/dm/cast";
 import { describePersonality, normalizeNpcDraft, relationGraph } from "@/lib/npcs/forge";
 import { queueNpcPortrait } from "@/lib/portrait";
 
@@ -77,6 +78,7 @@ export async function POST(
   }
 
   const npc = createNpcFromDraft(campaignId, outcome.draft);
+  publishCast(campaignId);
   if (parsed.data.portrait) {
     queueNpcPortrait({
       id: npc.id,

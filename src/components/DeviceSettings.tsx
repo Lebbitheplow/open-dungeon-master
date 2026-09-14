@@ -1,6 +1,6 @@
 "use client";
 
-import { Bluetooth, Dices, Mic, Volume2 } from "lucide-react";
+import { Bluetooth, Dices, Mic, Sparkles, Volume2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { DiceSourcesPanel } from "@/app/campaigns/[campaignId]/DiceSourcesDialog";
 import {
@@ -33,6 +33,13 @@ import {
   useShakeToRoll,
   writeShakeToRoll,
 } from "@/lib/dice/shake-to-roll";
+import {
+  isEffectsAuto,
+  useEffectsMode,
+  useTurnChime,
+  writeEffectsMode,
+  writeTurnChime,
+} from "@/lib/effects-mode";
 import { MASTER_VOLUME_MAX, VOLUME_STEP } from "@/lib/voice/volume";
 
 // Everything about the machine in front of the player: which microphone
@@ -523,12 +530,60 @@ function DiceSection() {
   );
 }
 
+// The decorative half of the board (particles, breathing auras, weather,
+// the drift on scene art). Facts always play; this is what a slow phone
+// turns off. "Auto" follows the device's reported memory and the app
+// shell's device class (src/lib/effects-mode.ts).
+function EffectsSection() {
+  const mode = useEffectsMode();
+  const chime = useTurnChime();
+  const [auto, setAuto] = useState(() => isEffectsAuto());
+  return (
+    <section>
+      <h3 className={HEADING}>
+        <Sparkles className="size-3.5" /> Effects
+      </h3>
+      <div className="space-y-3">
+        <Switch
+          label="Full effects on the board and scene"
+          on={mode === "full"}
+          onChange={(on) => {
+            writeEffectsMode(on ? "full" : "low");
+            setAuto(false);
+          }}
+        />
+        <p className="text-xs text-stone-500">
+          {auto
+            ? mode === "low"
+              ? "Set to low automatically for this device. Hits, numbers and rings still play."
+              : "Chosen automatically for this device."
+            : "Chosen by you."}
+          {!auto ? (
+            <button
+              type="button"
+              onClick={() => {
+                writeEffectsMode("auto");
+                setAuto(true);
+              }}
+              className="ml-2 text-amber-300 hover:underline"
+            >
+              Let the device decide
+            </button>
+          ) : null}
+        </p>
+        <Switch label="Chime when it is your turn" on={chime} onChange={writeTurnChime} />
+      </div>
+    </section>
+  );
+}
+
 export function DeviceSettings() {
   const devices = useDevices();
   return (
     <div className="space-y-6 text-sm text-stone-200">
       <MicrophoneSection devices={devices} />
       <PlaybackSection devices={devices} />
+      <EffectsSection />
       <DiceSection />
     </div>
   );

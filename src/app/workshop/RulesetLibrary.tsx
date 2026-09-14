@@ -1,6 +1,7 @@
 "use client";
 
 import { BookmarkPlus, Check, Loader2, Scale, Trash2 } from "lucide-react";
+import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
@@ -190,7 +191,7 @@ export function RulesetLibrary({
   }
 
   async function remove(ruleset: Ruleset) {
-    if (!window.confirm(`Delete the "${ruleset.name}" ruleset? Tables already using it keep it.`)) {
+    if (!await appConfirm(`Delete the "${ruleset.name}" ruleset? Tables already using it keep it.`)) {
       return;
     }
     const response = await fetch(`/api/rulesets/${ruleset.id}`, { method: "DELETE" });

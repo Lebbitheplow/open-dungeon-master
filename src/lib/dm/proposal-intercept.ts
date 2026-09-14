@@ -1,3 +1,4 @@
+import { normalizeTradeOffer } from "@/lib/dm/trade-logic";
 import type { Campaign } from "@/lib/db/campaigns";
 import { allocateSeq } from "@/lib/db/campaigns";
 import { insertItemProposal, type ItemProposal } from "@/lib/db/item-proposals";
@@ -26,7 +27,18 @@ export function publicItemProposal(proposal: ItemProposal) {
     reason: proposal.reason,
     status: proposal.status,
     createdAt: proposal.createdAt,
+    toCharacterId: proposal.toCharacterId,
+    // A trade carries its offer so the bar can lay out both sides.
+    ...(proposal.toolName === "trade" ? { offer: normalizeTradeOffer(safeParse(proposal.argsJson)) } : {}),
   };
+}
+
+function safeParse(raw: string): unknown {
+  try {
+    return JSON.parse(raw || "{}");
+  } catch {
+    return {};
+  }
 }
 
 export function maybeProposeItemChange(

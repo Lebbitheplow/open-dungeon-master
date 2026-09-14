@@ -1,6 +1,7 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import {
   endEncounterEffects,
+  normalizeAura,
   tickMinutes,
   tickRound,
   type ActiveEffect,
@@ -30,10 +31,13 @@ type Row = {
   save_dc: number;
   visible: number;
   created_at: string;
+  aura_json: string | null;
 };
 
 function mapRow(row: Row): ActiveEffect {
+  const aura = normalizeAura(parseJson<unknown>(row.aura_json ?? "null", null));
   return {
+    ...(aura ? { aura } : {}),
     id: row.id,
     campaignId: row.campaign_id,
     targetKind: row.target_kind as EffectTargetKind,
@@ -81,6 +85,7 @@ export function insertEffect(input: {
   saveAbility: string;
   saveDc: number;
   visible: boolean;
+  aura?: ActiveEffect["aura"];
 }): ActiveEffect {
   const id = crypto.randomUUID();
   const now = nowIso();
@@ -88,8 +93,8 @@ export function insertEffect(input: {
     .prepare(
       `INSERT INTO active_effects
         (id, campaign_id, target_kind, target_id, name, source, modifiers_json,
-         duration, remaining, save_ability, save_dc, visible, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         duration, remaining, save_ability, save_dc, visible, created_at, aura_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -105,6 +110,7 @@ export function insertEffect(input: {
       input.saveDc,
       input.visible ? 1 : 0,
       now,
+      input.aura ? JSON.stringify(input.aura) : null,
     );
   return { id, createdAt: now, ...input };
 }

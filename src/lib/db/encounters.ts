@@ -1,3 +1,5 @@
+import { normalizeLegendaryState, type LegendaryState } from "@/lib/dm/legendary-logic";
+import type { EncounterSummary } from "@/lib/dm/encounter-summary";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import type { EnemyStats } from "@/lib/bestiary/statblock";
 import type { ConditionMetaMap } from "@/lib/schemas/sheet";
@@ -63,8 +65,17 @@ export type Encounter = {
   // Ammunition spent in this fight, keyed "<characterId>|<inventory line>".
   // Empty unless the `ammunition` variant rule is on (src/lib/srd/ammunition.ts).
   ammoSpent: Record<string, number>;
+  // Who attacked whom this round (attacker ref id to target ref ids), so
+  // every client draws the same hairlines. Only meaningful while `round`
+  // matches the encounter's; written by recordEncounterTarget.
+  targets: { round: number; pairs: Record<string, string[]> };
+  // Legendary action and resistance pools per enemy, and whether this
+  // fight is in a lair (src/lib/dm/legendary-logic.ts).
+  legendary: LegendaryState;
   outcome: string;
   summary: string;
+  // The after-the-fight card, once the fight has ended.
+  summaryCard: EncounterSummary | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -106,8 +117,11 @@ type EncounterRow = {
   surprised_ids_json: string | null;
   reactions_used_json: string | null;
   ammo_spent_json: string | null;
+  targets_json: string | null;
   outcome: string;
   summary: string;
+  legendary_json: string | null;
+  summary_json: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -133,6 +147,50 @@ type EnemyRow = {
   updated_at: string;
 };
 
+function normalizeTargets(raw: unknown): Encounter["targets"] {
+  const record = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const round = typeof record.round === "number" ? record.round : 0;
+  const pairs: Record<string, string[]> = {};
+  const rawPairs =
+    record.pairs && typeof record.pairs === "object"
+      ? (record.pairs as Record<string, unknown>)
+      : {};
+  for (const [attacker, targets] of Object.entries(rawPairs)) {
+    if (Array.isArray(targets)) {
+      pairs[attacker] = targets.filter((entry): entry is string => typeof entry === "string");
+    }
+  }
+  return { round, pairs };
+}
+
+// One attacker naming one target this round. Kept separate from
+// saveEncounter so a handler holding a stale Encounter cannot clobber it,
+// and keyed by round so a new round simply supersedes the old lines.
+export function recordEncounterTarget(
+  encounterId: string,
+  round: number,
+  attackerRef: string,
+  targetRef: string,
+) {
+  const db = getDatabase();
+  const row = db
+    .prepare(`SELECT targets_json FROM encounters WHERE id = ?`)
+    .get(encounterId) as { targets_json: string | null } | undefined;
+  if (!row) {
+    return;
+  }
+  const current = normalizeTargets(parseJson<unknown>(row.targets_json ?? "{}", {}));
+  const pairs = current.round === round ? current.pairs : {};
+  const list = pairs[attackerRef] ?? [];
+  if (!list.includes(targetRef)) {
+    pairs[attackerRef] = [...list, targetRef].slice(-6);
+  }
+  db.prepare(`UPDATE encounters SET targets_json = ? WHERE id = ?`).run(
+    JSON.stringify({ round, pairs }),
+    encounterId,
+  );
+}
+
 function mapEncounter(row: EncounterRow): Encounter {
   return {
     id: row.id,
@@ -148,8 +206,11 @@ function mapEncounter(row: EncounterRow): Encounter {
     surprisedIds: parseJson<string[]>(row.surprised_ids_json, []),
     reactionsUsed: parseJson<string[]>(row.reactions_used_json, []),
     ammoSpent: parseJson<Record<string, number>>(row.ammo_spent_json, {}),
+    targets: normalizeTargets(parseJson<unknown>(row.targets_json ?? "{}", {})),
+    legendary: normalizeLegendaryState(parseJson<unknown>(row.legendary_json ?? "{}", {})),
     outcome: row.outcome,
     summary: row.summary,
+    summaryCard: parseJson<EncounterSummary | null>(row.summary_json ?? "null", null),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -264,7 +325,7 @@ export function saveEncounter(encounter: Encounter) {
     .prepare(
       `UPDATE encounters SET status = ?, round = ?, turn_index = ?, order_ready = ?,
        order_json = ?, waiting_seq = ?, turn_budget_json = ?, surprised_ids_json = ?,
-       reactions_used_json = ?, ammo_spent_json = ?, outcome = ?, updated_at = ? WHERE id = ?`,
+       reactions_used_json = ?, ammo_spent_json = ?, legendary_json = ?, outcome = ?, updated_at = ? WHERE id = ?`,
     )
     .run(
       encounter.status,
@@ -277,10 +338,17 @@ export function saveEncounter(encounter: Encounter) {
       JSON.stringify(encounter.surprisedIds),
       JSON.stringify(encounter.reactionsUsed),
       JSON.stringify(encounter.ammoSpent),
+      JSON.stringify(encounter.legendary),
       encounter.outcome,
       nowIso(),
       encounter.id,
     );
+}
+
+export function setEncounterSummary(encounterId: string, summary: EncounterSummary, line: string) {
+  getDatabase()
+    .prepare(`UPDATE encounters SET summary_json = ?, summary = ?, updated_at = ? WHERE id = ?`)
+    .run(JSON.stringify(summary), line.slice(0, 600), nowIso(), encounterId);
 }
 
 export function endEncounter(id: string, outcome: string) {

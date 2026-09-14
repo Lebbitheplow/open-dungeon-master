@@ -35,9 +35,20 @@ import {
   handleDamageObject,
   handlePassTime,
   handleRollTreasure,
+  handleSetWeather,
+  handleShowTitle,
   handleTravel,
 } from "@/lib/dm/world-tools";
 import { handleSendWhisper } from "@/lib/dm/whispers";
+import {
+  handleDismissHandout,
+  handleSetQuest,
+  handleShowHandout,
+  handleTickObjective,
+} from "@/lib/dm/binder-tools";
+import { handleAdjustReputation, handleFactionNote } from "@/lib/dm/faction-tools";
+import { handleBuyItem, handleHaggle, handleOpenShop, handleSellItem } from "@/lib/dm/shop-tools";
+import { handleGenerateSettlement } from "@/lib/dm/settlement-tools";
 import {
   handleLocationCall,
   handleRecordEvent,
@@ -126,6 +137,32 @@ export async function dispatchAdjudication(
       return handleTravel(campaign, turn, rawArguments, sheets, sheetsById);
     case "pass_time":
       return handlePassTime(campaign, rawArguments);
+    case "set_weather":
+      return handleSetWeather(campaign, rawArguments);
+    case "show_title":
+      return handleShowTitle(campaign, rawArguments);
+    case "show_handout":
+      return handleShowHandout(campaign, turn, rawArguments);
+    case "dismiss_handout":
+      return handleDismissHandout(campaign, rawArguments);
+    case "set_quest":
+      return handleSetQuest(campaign, rawArguments);
+    case "tick_objective":
+      return handleTickObjective(campaign, rawArguments);
+    case "adjust_reputation":
+      return handleAdjustReputation(campaign, rawArguments);
+    case "open_shop":
+      return handleOpenShop(campaign, rawArguments);
+    case "generate_settlement":
+      return handleGenerateSettlement(campaign, rawArguments);
+    case "buy_item":
+      return handleBuyItem(campaign, rawArguments);
+    case "sell_item":
+      return handleSellItem(campaign, rawArguments);
+    case "haggle":
+      return handleHaggle(campaign, rawArguments);
+    case "faction_note":
+      return handleFactionNote(campaign, rawArguments);
     case "party_stash":
       return handlePartyStash(campaign, rawArguments, sheets, sheetsById);
     case "set_effect":

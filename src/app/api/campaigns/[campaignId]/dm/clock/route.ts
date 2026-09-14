@@ -6,8 +6,10 @@ import {
   CALENDAR_PRESETS,
   calendarPreset,
   describeInstant,
+  normalizeCalendarDefinition,
   toInstant,
 } from "@/lib/dm/calendar";
+import { calendarDefinitionSchema } from "@/lib/dm/calendar-schema";
 import { publishPersisted } from "@/lib/events";
 
 export const runtime = "nodejs";
@@ -31,7 +33,12 @@ const clockSchema = z.discriminatedUnion("do", [
     hour: z.number().int().min(0).max(23).optional(),
     minute: z.number().int().min(0).max(59).optional(),
   }),
-  z.object({ do: z.literal("calendar"), preset: z.string().max(40) }),
+  // A preset by id, or a whole definition written in the Calendar section.
+  z.object({
+    do: z.literal("calendar"),
+    preset: z.string().max(40).optional(),
+    definition: calendarDefinitionSchema.optional(),
+  }),
 ]);
 
 export async function GET(
@@ -80,7 +87,11 @@ export async function POST(
   }
 
   if (body.do === "calendar") {
-    const clock = setCalendar(campaignId, calendarPreset(body.preset));
+    const definition = body.definition ? normalizeCalendarDefinition(body.definition) : null;
+    if (!definition && !body.preset) {
+      return Response.json({ error: "Pick a preset or write a calendar." }, { status: 400 });
+    }
+    const clock = setCalendar(campaignId, definition ?? calendarPreset(body.preset ?? ""));
     publishPersisted(campaignId, "clock_changed", { clock });
     return Response.json({ clock, reads: describeInstant(clock.calendar, clock.instant) });
   }

@@ -10,6 +10,7 @@ import { DiceLookEditor } from "@/components/DiceLookEditor";
 import { PageLoading, PageNotice, PageSection, PageShell } from "@/components/PageShell";
 import { ImageLightbox } from "@/components/ui/ImageLightbox";
 import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
+import { AppearanceSection } from "@/app/settings/AppearanceSection";
 import { BlockedPlayersSection } from "@/app/settings/BlockedPlayersSection";
 import { ChangePasswordForm } from "@/app/ChangePasswordForm";
 import { currentPathname, currentQuery, replaceAddress } from "@/lib/navigation";
@@ -304,6 +305,7 @@ export default function SettingsPage() {
         </PageSection>
       ) : null}
 
+      <AppearanceSection />
       <BlockedPlayersSection />
 
       {me.deletionDueAt ? (

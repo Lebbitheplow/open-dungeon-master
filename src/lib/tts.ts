@@ -6,6 +6,9 @@ import { stripToolText } from "@/lib/dm/tool-text";
 import { enqueueMediaJob } from "@/lib/media-queue";
 import { TTS_VOICES } from "@/lib/tts-voices";
 import { configValue, getGlobalConfig } from "@/lib/app-config";
+import { listNpcs } from "@/lib/db/npcs";
+import type { Speaker } from "@/lib/dm/speech";
+import { planSpeech, type CastVoice } from "@/lib/tts-segments";
 
 // Narration TTS via the local Kokoro-FastAPI service (:8880). Audio is
 // rendered on the media queue's own "tts" lane after a DM message persists,
@@ -45,12 +48,12 @@ function chunkSentences(text: string): string[] {
   return chunks;
 }
 
-async function kokoroSpeech(input: string, voice: string): Promise<Buffer> {
+async function kokoroSpeech(input: string, voice: string, speed = 1): Promise<Buffer> {
   const base = configValue(getGlobalConfig().speech.kokoroUrl, "KOKORO_URL", "http://127.0.0.1:8880");
   const response = await fetch(`${base}/v1/audio/speech`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "kokoro", voice, input, response_format: "mp3" }),
+    body: JSON.stringify({ model: "kokoro", voice, input, response_format: "mp3", ...(speed !== 1 ? { speed } : {}) }),
     signal: AbortSignal.timeout(180_000),
   });
   if (!response.ok) {
@@ -63,11 +66,25 @@ export function narrationAudioPath(campaignId: string, messageId: string): strin
   return path.join(process.cwd(), "public", "generated-audio", campaignId, `${messageId}.mp3`);
 }
 
+// The cast's own voices (docs/vtt-parity-implementation-plan.md 8.2),
+// read when the job runs so a voice picked a moment ago is heard.
+export function castVoices(campaignId: string): CastVoice[] {
+  try {
+    return listNpcs(campaignId)
+      .filter((npc) => npc.voice && !npc.archived)
+      .map((npc) => ({ name: npc.name, voiceId: npc.voice!.voiceId, speed: npc.voice!.speed }));
+  } catch {
+    return [];
+  }
+}
+
 export function enqueueNarrationAudio(
   campaignId: string,
   messageId: string,
   text: string,
   voice: string,
+  // The person the whole message is spoken as, when the DM said so.
+  speaker: Speaker | null = null,
 ) {
   const speech = stripForSpeech(text);
   if (!speech) {
@@ -78,11 +95,15 @@ export function enqueueNarrationAudio(
     `tts ${messageId}`,
     async () => {
       publishMediaStatus(campaignId, "tts", messageId, "generating");
-      const chunks = chunkSentences(speech);
+      // Prose in the narrator's voice, each attributed line in its
+      // speaker's own, concatenated into the one file the transcript keys.
+      const plan = planSpeech(speech, { narratorVoice: voice, cast: castVoices(campaignId), speaker });
       const buffers: Buffer[] = [];
       try {
-        for (const chunk of chunks) {
-          buffers.push(await kokoroSpeech(chunk, voice));
+        for (const part of plan) {
+          for (const chunk of chunkSentences(part.text)) {
+            buffers.push(await kokoroSpeech(chunk, part.voice, part.speed));
+          }
         }
       } catch (error) {
         publishMediaStatus(campaignId, "tts", messageId, "failed");

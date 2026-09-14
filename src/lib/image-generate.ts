@@ -28,6 +28,8 @@ export function generateStoryImage(
     aspect: AspectPreset;
     seed?: number;
     hasReferences?: boolean;
+    // What the picture must leave out, from the table's boundary.
+    negative?: string;
   },
 ): Promise<GeneratedImage> {
   if (settings.imageBackend === "openai") {

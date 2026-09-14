@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { ArrowLeft, Dices, Pencil } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
@@ -251,7 +252,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
   // sheet_deleted stream event flips the UI back to "Create your character".
   async function removeCharacter() {
     if (
-      !window.confirm(
+      !await appConfirm(
         `Remove ${mySheet?.name ?? "your character"} from this campaign? You can create or pick another afterwards.`,
       )
     ) {
@@ -291,7 +292,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
 
   async function deleteCampaign() {
     if (
-      !window.confirm(
+      !await appConfirm(
         `Delete "${campaign!.title}" for everyone? All characters, messages, and story progress are lost. This cannot be undone.`,
       )
     ) {
@@ -439,7 +440,13 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
             audibilityVersion={state.voiceAudibilityVersion}
             meshSignal={state.voiceMeshSignal}
             adjudicates={steersStory}
+            transcribe={campaign.gameSettings.voice.transcribe}
           />
+          {campaign.gameSettings.voice.transcribe ? (
+            <p className="mt-2 text-xs text-amber-300/80">
+              This table is transcribed: while voice is on, what each person says is written down with their name for the story log. Turn it off in campaign settings.
+            </p>
+          ) : null}
         </section>
       ) : null}
 

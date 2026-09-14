@@ -11,6 +11,8 @@ import {
   RETRIEVAL_SHARE_OF_LIMIT,
   computeBudgets,
   estimateTokens,
+  PACK_ORDER,
+  SECTION_SHARES,
   npcFloorTokens,
   fitHistory,
   packBlocks,
@@ -74,7 +76,7 @@ check("history is the residual, not a fixed share", () => {
   const remainder = usable - budgets.retrieval;
   assert.equal(
     budgets.history,
-    remainder - budgets.rules - budgets.state - budgets.chapters,
+    remainder - budgets.rules - budgets.state - budgets.chapters - budgets.sky - budgets.factions - budgets.quests - budgets.shop,
     "whatever the others did not claim",
   );
   assert.ok(budgets.history > 0, "the shares leave real room for transcript");
@@ -281,7 +283,6 @@ check("empty blocks cost nothing and still ride", () => {
   assert.equal(kept.length, 1, "a zero-token block always fits");
 });
 
-console.log(`context-budget: ${passed} tests passed`);
 
 // The budget scales with the model's real window, not a fixed default. This
 // is the whole reason storyContextTokens exists: a 128K local model and a
@@ -297,3 +298,33 @@ console.log(`context-budget: ${passed} tests passed`);
   assert.ok(Math.abs(smallRatio - largeRatio) < 0.01, "same proportions at any size");
   console.log("context-budget: allocation scales with the configured window");
 }
+
+check("the small sections have floors, sit in order, and the lines never drop", () => {
+  // docs/vtt-parity-implementation-plan.md section 15.
+  const budgets = computeBudgets(16_384);
+  const remainder = usableTokens(16_384) - budgets.retrieval;
+  assert.equal(budgets.safety, Number.POSITIVE_INFINITY);
+  assert.equal(budgets.sky, Math.floor(remainder * SECTION_SHARES.sky));
+  assert.equal(budgets.factions, Math.floor(remainder * SECTION_SHARES.factions));
+  assert.equal(budgets.quests, Math.floor(remainder * SECTION_SHARES.quests));
+  assert.equal(budgets.shop, Math.floor(remainder * SECTION_SHARES.shop));
+  assert.ok(budgets.sky > 0 && budgets.shop > budgets.sky);
+  assert.ok(PACK_ORDER.indexOf("safety") < PACK_ORDER.indexOf("contract"));
+  assert.ok(PACK_ORDER.indexOf("sky") < PACK_ORDER.indexOf("state"));
+  assert.ok(PACK_ORDER.indexOf("shop") < PACK_ORDER.indexOf("retrieval"));
+  const packed = packBlocks(
+    [
+      { id: "lines", kind: "safety", text: "x".repeat(2_000) },
+      { id: "sky", kind: "sky", text: "Date and time: dusk." },
+      // Bigger than the whole window: no donation from the kinds before it
+      // can make room, so it is the block that drops.
+      { id: "shop", kind: "shop", text: "y".repeat(12_000) },
+    ],
+    4_000,
+  );
+  assert.ok(packed.kept.some((block) => block.id === "lines"), "the lines were dropped");
+  assert.ok(packed.kept.some((block) => block.id === "sky"));
+  assert.ok(!packed.kept.some((block) => block.id === "shop"), "a shop over the window stayed");
+});
+
+console.log(`context-budget: ${passed} tests passed`);

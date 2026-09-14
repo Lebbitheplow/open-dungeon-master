@@ -144,5 +144,7 @@ export type CampaignMember = {
   holdRolls: boolean;
   // Muted by the party lead: reads along, cannot act, ask or side-chat.
   muted: boolean;
+  // With several characters per player, the one they are running.
+  activeCharacterId: string;
   joinedAt: string;
 };

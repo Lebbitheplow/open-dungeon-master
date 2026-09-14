@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Eye, EyeOff, Hand, MapPin, Ruler, Trash2, UserPlus } from "lucide-react";
+import { Box, Eye, EyeOff, Hand, MapPin, Pencil, Ruler, Trash2, UserPlus } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ADHOC_LABELS, ADHOC_HINTS, ADHOC_NAME_MAX } from "@/lib/dm/board-logic";
 import { SHAPE_LABELS, SHAPE_MEASURES, TEMPLATE_SHAPES } from "@/lib/battlemap/template";
@@ -12,13 +12,14 @@ import type { PlayerMapView } from "@/lib/battlemap/view";
 // token. Presentational only: BattleMapPanel owns the state and does the
 // talking, so the two can be read separately.
 
-export type BoardTool = "handle" | "place" | "measure" | "point";
+export type BoardTool = "handle" | "place" | "measure" | "point" | "draw";
 
 const TOOL_LABELS: Record<BoardTool, string> = {
   handle: "Move pieces",
   place: "Put something down",
   measure: "Measure an area",
   point: "Point at a tile",
+  draw: "Draw on the board",
 };
 
 const TOOL_ICONS: Record<BoardTool, typeof Hand> = {
@@ -26,6 +27,7 @@ const TOOL_ICONS: Record<BoardTool, typeof Hand> = {
   place: Box,
   measure: Ruler,
   point: MapPin,
+  draw: Pencil,
 };
 
 export function BoardToolRail({

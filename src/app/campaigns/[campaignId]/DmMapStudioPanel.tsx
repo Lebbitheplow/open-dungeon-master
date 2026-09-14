@@ -1,6 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { HotkeyOverlay } from "@/components/ui/HotkeyOverlay";
+import { ObjectsPanel, useMapSelection } from "@/app/campaigns/[campaignId]/useMapSelection";
+import { removeObjects, setDmOnly, type MapObjects } from "@/lib/battlemap/objects";
 import { Dices, Loader2, MapPinned, Play, Square } from "lucide-react";
 import { MAP_SIZE, MAP_THEMES, type MapTheme } from "@/lib/battlemap/generate";
 import type { Brush as BrushName } from "@/lib/battlemap/paint";
@@ -16,6 +19,7 @@ import {
   canvasToolFor,
   useMapHotkeys,
   type MapTools,
+  mapHotkeyGroups,
 } from "@/app/campaigns/[campaignId]/MapToolbox";
 import type { DoorStates, LightZone, MapLabel } from "@/lib/battlemap/scene";
 import { usePainter } from "@/app/campaigns/[campaignId]/usePainter";
@@ -211,7 +215,37 @@ export function DmMapStudioPanel({ campaignId }: { campaignId: string }) {
     onUndo: () => void painter.undo(),
     onRedo: () => void painter.redo(),
   };
-  useMapHotkeys({ enabled: editable, tools, onTools: setTools, caps: BOARD_CAPS, undo });
+  // The selection model over the live board's scene layer (labels, light
+  // zones, door states), the objects panel and the keys sheet.
+  const [keysOpen, setKeysOpen] = useState(false);
+  const objects = useMemo<MapObjects>(
+    () => ({
+      labels: state.map?.labels ?? [],
+      props: [],
+      lights: [],
+      doors: state.map?.doors ?? {},
+      zones: state.map?.zones ?? [],
+      drawings: [],
+    }),
+    [state.map],
+  );
+  const selection = useMapSelection({
+    objects,
+    width: state.map?.width ?? 1,
+    height: state.map?.height ?? 1,
+    save: (patch) => mark(patch as Record<string, unknown>),
+    kinds: ["labels", "zones", "doors"],
+  });
+  const openKeys = useCallback(() => setKeysOpen(true), []);
+  useMapHotkeys({
+    enabled: editable,
+    tools,
+    onTools: setTools,
+    caps: BOARD_CAPS,
+    undo,
+    onHelp: openKeys,
+    onDelete: tools.mode === "select" ? selection.remove : undefined,
+  });
 
   // A tap on a labelled tile takes the label away; anywhere else puts the
   // dial's text there.
@@ -402,7 +436,10 @@ export function DmMapStudioPanel({ campaignId }: { campaignId: string }) {
             onDoor={(x, y) => void mark({ door: { x, y } })}
             onZone={(from, to) =>
               void mark({
-                zones: [...(state.map?.zones ?? []), { x0: from.x, y0: from.y, x1: to.x, y1: to.y, ambient: tools.zone }],
+                zones: [
+                  ...(state.map?.zones ?? []),
+                  { x0: from.x, y0: from.y, x1: to.x, y1: to.y, ambient: tools.zone, kind: tools.zoneKind },
+                ],
               })
             }
             onShape={(from, to) => void painter.shape(tools.mode, tools.brush, from, to)}
@@ -413,7 +450,13 @@ export function DmMapStudioPanel({ campaignId }: { campaignId: string }) {
                 setTools({ ...tools, brush, mode: "brush" });
               }
             }}
+            onSelect={selection.onSelect}
+            selected={editable && tools.mode === "select" ? selection.boxes : undefined}
+            onBackdrop={(transform) =>
+              void setBackdrop({ path: shown.backdrop?.path ?? "", transform })
+            }
           />
+          {editable && tools.mode === "select" ? selection.bar : null}
           {editable ? (
             <div className="space-y-2.5">
               <MapToolbox
@@ -424,7 +467,19 @@ export function DmMapStudioPanel({ campaignId }: { campaignId: string }) {
                 onClearLabels={() => void mark({ labels: [] })}
                 onClearZones={() => void mark({ zones: [] })}
                 undo={undo}
+                onHelp={openKeys}
               />
+              <ObjectsPanel
+                objects={objects}
+                refs={selection.refs}
+                onSelect={(refs) => {
+                  selection.setRefs(refs);
+                  setTools({ ...tools, mode: "select" });
+                }}
+                onDelete={(refs) => void mark(removeObjects(objects, refs) as unknown as Record<string, unknown>)}
+                onDmOnly={(refs, dmOnly) => void mark({ labels: setDmOnly(objects, refs, dmOnly).labels })}
+              />
+              <HotkeyOverlay open={keysOpen} onOpenChange={setKeysOpen} groups={mapHotkeyGroups(BOARD_CAPS)} />
               <OverlayControls
                 overlayPath={shown.overlayPath ?? ""}
                 busy={busy}

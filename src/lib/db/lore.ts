@@ -1,12 +1,15 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { embed, vectorToBuffer } from "@/lib/embeddings";
 import {
+  normalizeLoreAudience,
+  normalizeLoreStyle,
   normalizeLoreVisibility,
+  type LoreStyle,
   type LoreVisibility,
   type WorldLoreCategory,
   type WorldLoreEntry,
 } from "@/lib/dm/world-lore-logic";
-import { isUploadedImagePath } from "@/lib/uploads";
+import { isUploadedImagePath, isUploadedPdfPath } from "@/lib/uploads";
 
 // World lore builder storage (lore_entries): lead-authored world bible
 // entries the DM prompt samples from and search_lore queries. Embeddings
@@ -22,12 +25,15 @@ type LoreRow = {
   pinned: number;
   visibility: string | null;
   image_path: string | null;
+  audience_json: string | null;
+  attachment_path: string | null;
+  style: string | null;
   created_at: string;
   updated_at: string;
 };
 
 const LORE_COLUMNS =
-  "id, campaign_id, category, title, body, tags_json, pinned, visibility, image_path, created_at, updated_at";
+  "id, campaign_id, category, title, body, tags_json, pinned, visibility, image_path, audience_json, attachment_path, style, created_at, updated_at";
 
 function mapEntry(row: LoreRow): WorldLoreEntry {
   const image = row.image_path ?? "";
@@ -43,6 +49,9 @@ function mapEntry(row: LoreRow): WorldLoreEntry {
     // Refused rather than trusted: a path this app did not write reads back
     // as no picture.
     imagePath: image && isUploadedImagePath(image) ? image : "",
+    audience: normalizeLoreAudience(parseJson<unknown>(row.audience_json ?? "null", null)),
+    attachmentPath: isUploadedPdfPath(row.attachment_path) ? row.attachment_path : "",
+    style: normalizeLoreStyle(row.style),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -73,13 +82,16 @@ export function insertLoreEntry(input: {
   tags: string[];
   visibility?: LoreVisibility;
   imagePath?: string;
+  audience?: string[] | null;
+  attachmentPath?: string;
+  style?: LoreStyle;
 }): WorldLoreEntry {
   const now = nowIso();
   const id = crypto.randomUUID();
   getDatabase()
     .prepare(
-      `INSERT INTO lore_entries (id, campaign_id, category, title, body, tags_json, pinned, visibility, image_path, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
+      `INSERT INTO lore_entries (id, campaign_id, category, title, body, tags_json, pinned, visibility, image_path, audience_json, attachment_path, style, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -90,6 +102,9 @@ export function insertLoreEntry(input: {
       JSON.stringify(input.tags),
       normalizeLoreVisibility(input.visibility),
       input.imagePath && isUploadedImagePath(input.imagePath) ? input.imagePath : "",
+      input.audience ? JSON.stringify(normalizeLoreAudience(input.audience)) : null,
+      input.attachmentPath && isUploadedPdfPath(input.attachmentPath) ? input.attachmentPath : "",
+      normalizeLoreStyle(input.style),
       now,
       now,
     );
@@ -108,6 +123,11 @@ export function updateLoreEntry(
     visibility?: LoreVisibility;
     // "" takes the picture away.
     imagePath?: string;
+    // null opens the entry to the table again.
+    audience?: string[] | null;
+    // "" takes the PDF away.
+    attachmentPath?: string;
+    style?: LoreStyle;
   },
 ): WorldLoreEntry | null {
   const entry = getLoreEntry(entryId);
@@ -123,10 +143,18 @@ export function updateLoreEntry(
       : patch.imagePath && isUploadedImagePath(patch.imagePath)
         ? patch.imagePath
         : "";
+  const audience = patch.audience === undefined ? entry.audience : normalizeLoreAudience(patch.audience);
+  const attachmentPath =
+    patch.attachmentPath === undefined
+      ? entry.attachmentPath
+      : isUploadedPdfPath(patch.attachmentPath)
+        ? patch.attachmentPath
+        : "";
   getDatabase()
     .prepare(
       `UPDATE lore_entries
-       SET category = ?, title = ?, body = ?, tags_json = ?, pinned = ?, visibility = ?, image_path = ?, updated_at = ?
+       SET category = ?, title = ?, body = ?, tags_json = ?, pinned = ?, visibility = ?, image_path = ?,
+           audience_json = ?, attachment_path = ?, style = ?, updated_at = ?
        WHERE id = ?`,
     )
     .run(
@@ -137,6 +165,9 @@ export function updateLoreEntry(
       patch.pinned === undefined ? (entry.pinned ? 1 : 0) : patch.pinned ? 1 : 0,
       patch.visibility ?? entry.visibility,
       imagePath,
+      audience ? JSON.stringify(audience) : null,
+      attachmentPath,
+      normalizeLoreStyle(patch.style ?? entry.style),
       nowIso(),
       entryId,
     );

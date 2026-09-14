@@ -146,6 +146,7 @@ const loreSchema = z.object({
   tags: z.array(z.string().trim().max(40)).max(20).default([]),
   // A secret stays a secret on the other side; a handout keeps its picture.
   visibility: z.enum(["party", "dm"]).default("party"),
+  style: z.enum(["plain", "parchment", "notice"]).default("plain"),
   image: bundleImageSchema,
 });
 
@@ -169,6 +170,19 @@ const npcSchema = z.object({
   // together arrives with its feuds intact. Same property the workshop
   // import relies on (src/lib/db/content-import.ts).
   relations: z.string().max(8_000).default(""),
+  portrait: bundleImageSchema,
+});
+
+// Factions (docs/vtt-parity-implementation-plan.md section 6). Members are
+// matched back by NPC name on import, the way relations are.
+const factionSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  blurb: z.string().max(400).default(""),
+  goal: z.string().max(400).default(""),
+  attitude: z.enum(["hostile", "wary", "neutral", "friendly", "allied"]).default("neutral"),
+  power: z.number().int().min(0).max(5).default(1),
+  tags: z.array(z.string().trim().max(40)).max(8).default([]),
+  members: z.array(z.string().trim().max(120)).max(40).default([]),
   portrait: bundleImageSchema,
 });
 
@@ -258,6 +272,7 @@ export const workshopBundleSchema = z.object({
   lore: z.array(loreSchema).max(BUNDLE_LIMITS.lore).default([]),
   locations: z.array(locationSchema).max(BUNDLE_LIMITS.locations).default([]),
   npcs: z.array(npcSchema).max(BUNDLE_LIMITS.npcs).default([]),
+  factions: z.array(factionSchema).max(60).default([]),
   encounters: z.array(encounterSchema).max(BUNDLE_LIMITS.encounters).default([]),
   tables: z.array(tableSchema).max(BUNDLE_LIMITS.tables).default([]),
   maps: z.array(mapSchema).max(BUNDLE_LIMITS.maps).default([]),

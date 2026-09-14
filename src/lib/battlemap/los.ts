@@ -7,8 +7,9 @@ import {
   type AmbientLight,
   type BattleToken,
   type MapLight,
+  TERRAIN,
 } from "@/lib/battlemap/types";
-import { ambientAt, type LightZone } from "@/lib/battlemap/scene";
+import { ambientAt, magicalDarknessAt, type LightZone } from "@/lib/battlemap/scene";
 
 // Field of view via recursive shadowcasting over 8 octants (the classic
 // Bjorn Bergstrom algorithm). Walls are opaque; a blocking tile is itself
@@ -141,6 +142,11 @@ export type Viewer = {
   y: number;
   // Darkvision range in tiles (feet / 5); 0 = none.
   darkvisionTiles: number;
+  // The other senses (src/lib/srd/senses.ts), in tiles; absent means none.
+  blindsightTiles?: number;
+  tremorsenseTiles?: number;
+  truesightTiles?: number;
+  devilsSightTiles?: number;
 };
 
 export type MapForVision = {
@@ -151,6 +157,10 @@ export type MapForVision = {
   // Patches where the light is not the map's own: a lit shrine in a dark
   // crypt, a dark alcove in a bright hall (src/lib/battlemap/scene.ts).
   zones?: LightZone[];
+  // Weather: beyond this many tiles from the viewer the light reads as dim
+  // at best (heavy rain, fog). Infinity or absent when the air is clear
+  // (src/lib/srd/weather.ts).
+  obscureBeyond?: number;
 };
 
 // How far a viewer can perceive unlit tiles under dim ambient light: dim
@@ -194,7 +204,8 @@ export function visibleTiles(
   const maxRadius = Math.max(map.width, map.height);
   const los = computeFov(map.terrain, map.width, map.height, viewer.x, viewer.y, maxRadius);
   const zones = map.zones ?? [];
-  if (map.ambient === "bright" && !zones.length) {
+  const obscureBeyond = map.obscureBeyond ?? Infinity;
+  if (map.ambient === "bright" && !zones.length && !Number.isFinite(obscureBeyond)) {
     return los;
   }
   const lit = precomputedLit ?? litTiles(map, tokens, lights);
@@ -205,22 +216,58 @@ export function visibleTiles(
     // The light on THIS tile decides whether it can be seen, so a dark
     // alcove stays dark inside a bright hall and a lit shrine shows in a
     // dark crypt.
-    const ambient = zones.length ? ambientAt(zones, x, y, map.ambient) : map.ambient;
+    const distance = chebyshev(viewer.x, viewer.y, x, y);
+    // Blindsight needs no light at all, only a clear line.
+    if (distance <= (viewer.blindsightTiles ?? 0)) {
+      visible.add(idx);
+      continue;
+    }
+    // Magical darkness: no light and no darkvision reach into it; only
+    // truesight and Devil's Sight do (src/lib/battlemap/scene.ts).
+    if (zones.length && magicalDarknessAt(zones, x, y)) {
+      if (distance <= (viewer.truesightTiles ?? 0) || distance <= (viewer.devilsSightTiles ?? 0)) {
+        visible.add(idx);
+      }
+      continue;
+    }
+    const local = zones.length ? ambientAt(zones, x, y, map.ambient) : map.ambient;
+    // Rain and fog: past the obscurement radius a bright tile reads as dim.
+    const ambient = distance > obscureBeyond && local === "bright" ? "dim" : local;
     if (ambient === "bright") {
       visible.add(idx);
       continue;
     }
-    const distance = chebyshev(viewer.x, viewer.y, x, y);
     const selfRadius = ambient === "dim" ? DIM_SELF_RADIUS : 0;
     if (
       lit.has(idx) ||
       distance <= viewer.darkvisionTiles ||
+      distance <= (viewer.devilsSightTiles ?? 0) ||
+      distance <= (viewer.truesightTiles ?? 0) ||
       distance <= selfRadius
     ) {
       visible.add(idx);
     }
   }
   return visible;
+}
+
+// Whether a viewer perceives a creature: the tile is in view, or a sense
+// reaches it. Tremorsense feels anything on the ground within reach, walls
+// or not, and misses whatever flies; blindsight is already in `visible`.
+export function perceivesToken(
+  map: MapForVision,
+  viewer: Viewer,
+  target: { x: number; y: number; movement?: "walk" | "fly" | "burrow" },
+  visible: Set<number>,
+): boolean {
+  if (visible.has(tileIndex(map.width, target.x, target.y))) {
+    return true;
+  }
+  const distance = chebyshev(viewer.x, viewer.y, target.x, target.y);
+  if (distance <= (viewer.tremorsenseTiles ?? 0) && target.movement !== "fly") {
+    return true;
+  }
+  return false;
 }
 
 // "Darkvision 60 ft" style feature/trait text to a tile radius. A bare
@@ -265,6 +312,7 @@ export function coverBetween(
   const towardX = Math.sign(fromX - toX);
   const towardY = Math.sign(fromY - toY);
   let shields = 0;
+  let lowwalls = 0;
   for (const [dx, dy] of [
     [towardX, 0],
     [0, towardY],
@@ -277,9 +325,16 @@ export function coverBetween(
     if (!inBounds(width, height, x, y)) {
       continue;
     }
-    if (blocksSight(tileAt(terrain, width, x, y))) {
+    const between = tileAt(terrain, width, x, y);
+    if (blocksSight(between)) {
       shields += 1;
+    } else if (between === TERRAIN.lowwall) {
+      // A fence or ledge directly in front: half cover, never more.
+      lowwalls += 1;
     }
   }
-  return shields === 0 ? 0 : shields === 1 ? 2 : 5;
+  if (shields === 0) {
+    return lowwalls > 0 ? 2 : 0;
+  }
+  return shields === 1 ? 2 : 5;
 }

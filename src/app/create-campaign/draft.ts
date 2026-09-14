@@ -40,12 +40,21 @@ export type CampaignDraft = {
   // Scene-following is only meaningful once ambience is on, and is shown as
   // a second toggle beside it rather than buried.
   ambienceAuto: boolean;
+  // Players may draw on the live board (the DM always may).
+  boardDrawing: boolean;
+  // Theatre inserts: the speaking NPC's face over the scene art.
+  presentation: "plain" | "theatre";
+  // Several characters per player: off, one at a time, or all at once.
+  multiCharacter: "off" | "one_active" | "all_active";
   multiclassingEnabled: boolean;
   worldSimulation: boolean;
   inventoryApprovals: boolean;
   midGameJoinOpen: boolean;
   holdSubmissions: boolean;
   narrationGuard: boolean;
+  // Safety and tone (docs/vtt-parity-implementation-plan.md section 9).
+  safety: { xCard: boolean; lines: string[]; veils: string[]; boundaries: "family" | "standard" | "mature" };
+  gm: { strictness: "lenient" | "standard" | "harsh"; tone: string[] };
   relationships: GameSettings["relationships"];
   romance: GameSettings["romance"];
   variantRules: GameSettings["variantRules"];
@@ -80,12 +89,17 @@ export const DEFAULT_DRAFT: CampaignDraft = {
   mapsEnabled: true,
   ambienceEnabled: true,
   ambienceAuto: true,
+  boardDrawing: true,
+  presentation: "plain",
+  multiCharacter: "off",
   multiclassingEnabled: true,
   worldSimulation: true,
   inventoryApprovals: false,
   midGameJoinOpen: false,
   holdSubmissions: false,
   narrationGuard: true,
+  safety: { xCard: true, lines: [], veils: [], boundaries: "standard" },
+  gm: { strictness: "standard", tone: [] },
   relationships: "on",
   romance: "on",
   variantRules: {
@@ -107,6 +121,7 @@ export const DEFAULT_DRAFT: CampaignDraft = {
   voiceChat: {
     enabled: true,
     turnEnforcement: "soft",
+    transcribe: false,
     rules: {
       proximity: false,
       hearingRangeFeet: 30,

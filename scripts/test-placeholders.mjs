@@ -212,6 +212,34 @@ for (const url of shipped) {
     failures.push(`${url} is ${(size / 1024).toFixed(0)} KB, over the ${BUDGET_FILE_BYTES / 1024} KB ceiling`);
   }
 }
+// The effect assets a feature ships under public/fx (stings, glyph sprites;
+// docs/vtt-parity-implementation-plan.md 18.1) ride in the same payload,
+// under their own ceiling. Absent is fine; over is not.
+const FX_DIR = path.join(ROOT, "public", "fx");
+const FX_BUDGET_BYTES = 1.5 * 1024 * 1024;
+const FX_STING_BYTES = 40 * 1024;
+if (existsSync(FX_DIR)) {
+  let fxBytes = 0;
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+        continue;
+      }
+      const size = statSync(full).size;
+      fxBytes += size;
+      if (/\.(ogg|opus|webm)$/i.test(entry.name) && size > FX_STING_BYTES) {
+        failures.push(`${path.relative(ROOT, full)} is ${(size / 1024).toFixed(0)} KB, over the ${FX_STING_BYTES / 1024} KB sting ceiling`);
+      }
+    }
+  };
+  walk(FX_DIR);
+  if (fxBytes > FX_BUDGET_BYTES) {
+    failures.push(`public/fx is ${(fxBytes / 1024 / 1024).toFixed(2)} MB, over the ${FX_BUDGET_BYTES / 1024 / 1024} MB ceiling`);
+  }
+}
+
 if (totalBytes > BUDGET_TOTAL_BYTES) {
   failures.push(
     `the set is ${(totalBytes / 1024 / 1024).toFixed(2)} MB, over the ${(BUDGET_TOTAL_BYTES / 1024 / 1024).toFixed(1)} MB ceiling`,

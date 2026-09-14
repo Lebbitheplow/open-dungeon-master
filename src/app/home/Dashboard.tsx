@@ -1,6 +1,7 @@
 "use client";
 
 import { ScrollText } from "lucide-react";
+import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
 import type { SessionUser } from "@/lib/campaign-types";
@@ -113,7 +114,7 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
 
   async function deleteCampaign(campaign: HomeCampaign) {
     if (
-      !window.confirm(
+      !await appConfirm(
         `Delete "${campaign.title}" for everyone? All characters, messages, and story progress are lost. This cannot be undone.`,
       )
     ) {

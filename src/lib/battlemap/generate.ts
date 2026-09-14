@@ -101,6 +101,29 @@ function pickTheme(text: string, rng: () => number): { theme: MapTheme; ambient:
   return { theme, ambient };
 }
 
+// A low wall across part of the field, broken by a gap of two tiles, so it
+// shapes a fight without cutting the board in half.
+function carveFence(tiles: string[], width: number, height: number, rng: () => number) {
+  const vertical = rng() < 0.5;
+  const along = vertical ? height : width;
+  const across = vertical ? width : height;
+  const at = 2 + Math.floor(rng() * Math.max(1, across - 4));
+  const start = 1 + Math.floor(rng() * Math.max(1, Math.floor(along / 3)));
+  const end = Math.min(along - 2, start + Math.floor(along / 2));
+  const gap = start + Math.floor((end - start) / 2);
+  for (let i = start; i <= end; i += 1) {
+    if (i === gap || i === gap + 1) {
+      continue;
+    }
+    const x = vertical ? at : i;
+    const y = vertical ? i : at;
+    const idx = tileIndex(width, x, y);
+    if (tiles[idx] === TERRAIN.floor) {
+      tiles[idx] = TERRAIN.lowwall;
+    }
+  }
+}
+
 // Cellular-automata cave: random walls smoothed into organic pockets.
 function carveCave(tiles: string[], width: number, height: number, rng: () => number) {
   const wall = (x: number, y: number) =>
@@ -300,6 +323,10 @@ export function generateBattleMap(input: GenerateInput): GeneratedMap {
   } else {
     scatterBlobs(tiles, width, height, rng, TERRAIN.wall, 5, 2);
     scatterBlobs(tiles, width, height, rng, TERRAIN.difficult, 3, 2);
+    // A farm fence or a field wall, with a gap: something to fight across.
+    if (rng() < 0.45) {
+      carveFence(tiles, width, height, rng);
+    }
   }
   if (/\brubble|ice|mud|sand|snow\b/.test(text)) {
     scatterBlobs(tiles, width, height, rng, TERRAIN.difficult, 5, 2);

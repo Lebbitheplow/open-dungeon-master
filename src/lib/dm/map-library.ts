@@ -1,3 +1,4 @@
+import { isOnePageDungeon, parseOnePageDungeon } from "@/lib/battlemap/watabou";
 import type { Campaign } from "@/lib/db/campaigns";
 import { createEncounter, getActiveBoard, getActiveScene } from "@/lib/db/encounters";
 import {
@@ -33,7 +34,7 @@ import { handleSetAmbience } from "@/lib/dm/ambience-tools";
 import { parseUvtt } from "@/lib/battlemap/uvtt";
 import { normalizeBackdropTransform, type BackdropTransform } from "@/lib/battlemap/backdrop";
 import { TERRAIN, tileIndex, type AmbientLight, type XY } from "@/lib/battlemap/types";
-import { carriedLightRadius, publishBattleMapUpdate } from "@/lib/dm/map-tools";
+import { carriedLightFields, publishBattleMapUpdate } from "@/lib/dm/map-tools";
 
 // The map library: building maps that no encounter has asked for yet.
 //
@@ -296,6 +297,31 @@ export function importUvttIntoLibrary(
   campaign: Campaign,
   input: { name: string; file: unknown; backdropPath?: string },
 ): LibraryOutcome<PreparedMap> & { notes?: string[] } {
+  // A One Page Dungeon export (docs/vtt-parity-implementation-plan.md
+  // 12.2) arrives through the same door as a Universal VTT file; the
+  // shape of the JSON says which it is.
+  if (isOnePageDungeon(input.file)) {
+    const dungeon = parseOnePageDungeon(input.file);
+    if ("error" in dungeon) {
+      return { error: dungeon.error };
+    }
+    const map = createPreparedMap({
+      campaignId: campaign.id,
+      name: input.name.trim() || dungeon.map.title || "Imported dungeon",
+      notes: dungeon.map.notes.join("\n\n"),
+      tags: ["imported", "dungeon"],
+      width: dungeon.map.width,
+      height: dungeon.map.height,
+      terrain: dungeon.map.terrain,
+      ambient: dungeon.map.ambient,
+      theme: dungeon.map.theme,
+      lights: dungeon.map.lights,
+      seed: 0,
+      scene: { labels: dungeon.map.labels },
+      backdrop: input.backdropPath ? { path: input.backdropPath, transform: normalizeBackdropTransform({}) } : null,
+    });
+    return { ok: true, map, notes: dungeon.map.notes };
+  }
   const parsed = parseUvtt(input.file);
   if ("error" in parsed) {
     return { error: parsed.error };
@@ -476,7 +502,9 @@ export function openSceneOnPreparedMap(
       labels: prepared.labels,
       zones: prepared.zones,
       overlayPath: prepared.overlayPath,
+      drawings: prepared.drawings,
     },
+    outdoors: prepared.outdoors,
   });
   const spawns = partySpawnTiles(prepared.terrain, prepared.width, prepared.height, sheets.length);
   const fallback: XY = spawns[0] ?? { x: 1, y: 1 };
@@ -488,7 +516,7 @@ export function openSceneOnPreparedMap(
       refId: sheet.id,
       name: sheet.name,
       spot: spawns[index] ?? fallback,
-      lightRadius: carriedLightRadius(sheet),
+      ...carriedLightFields(campaign.id, sheet),
     })),
   );
   placeProps(map.id, campaign.id, prepared);

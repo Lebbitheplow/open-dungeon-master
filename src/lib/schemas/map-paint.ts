@@ -3,7 +3,14 @@ import { BRUSHES, MAX_BRUSH_RADIUS, MAX_STROKES } from "@/lib/battlemap/paint";
 import { STAMPS, STAMP_SIZE } from "@/lib/battlemap/stamp";
 import { SHAPE_TOOLS } from "@/lib/battlemap/tools";
 import { LIGHT_LIMITS } from "@/lib/battlemap/lights";
-import { PROP_KINDS, SCENE_LIMITS } from "@/lib/battlemap/scene";
+import {
+  DRAWING_KINDS,
+  DRAWING_TONES,
+  LABEL_REF_KINDS,
+  PROP_KINDS,
+  SCENE_LIMITS,
+  ZONE_KINDS,
+} from "@/lib/battlemap/scene";
 import { isUploadedImagePath } from "@/lib/uploads";
 
 // What a paint request looks like on the wire, shared by the studio (the
@@ -66,6 +73,18 @@ export function hasPaint(body: z.infer<typeof paintRequestSchema>): boolean {
 const labelSchema = xy.extend({
   text: z.string().trim().min(1).max(SCENE_LIMITS.labelText),
   dmOnly: z.boolean().default(false),
+  ref: z
+    .object({ kind: z.enum(LABEL_REF_KINDS), id: z.string().trim().min(1).max(80) })
+    .optional(),
+});
+const drawingSchema = z.object({
+  id: z.string().max(40).optional(),
+  kind: z.enum(DRAWING_KINDS),
+  points: z.array(z.object({ x: z.number(), y: z.number() })).min(2).max(2000),
+  tone: z.enum(DRAWING_TONES).default("gold"),
+  dmOnly: z.boolean().default(false),
+  expiresRound: z.number().int().min(1).optional(),
+  authorId: z.string().max(80).optional(),
 });
 const propSchema = xy.extend({
   name: z.string().trim().min(1).max(SCENE_LIMITS.propName),
@@ -77,9 +96,11 @@ const zoneSchema = z.object({
   x1: z.number().int().min(0).max(255),
   y1: z.number().int().min(0).max(255),
   ambient: z.enum(["bright", "dim", "dark"]),
+  kind: z.enum(ZONE_KINDS).default("light"),
 });
 
 export const sceneRequestSchema = z.object({
+  drawings: z.array(drawingSchema).max(SCENE_LIMITS.drawings).optional(),
   door: xy.optional(),
   labels: z.array(labelSchema).max(SCENE_LIMITS.labels).optional(),
   props: z.array(propSchema).max(SCENE_LIMITS.props).optional(),

@@ -152,6 +152,14 @@ export function getRoll(rollId: string): StoredRoll | null {
   return row ? mapRoll(row) : null;
 }
 
+// Every roll since a moment, oldest first: the span of one fight.
+export function listRollsSince(campaignId: string, sinceIso: string): StoredRoll[] {
+  const rows = getDatabase()
+    .prepare(`SELECT * FROM rolls WHERE campaign_id = ? AND created_at >= ? ORDER BY created_at ASC, rowid ASC`)
+    .all(campaignId, sinceIso) as RollRow[];
+  return rows.map(mapRoll);
+}
+
 export function listRecentRolls(campaignId: string, limit = 20): StoredRoll[] {
   const rows = getDatabase()
     .prepare(

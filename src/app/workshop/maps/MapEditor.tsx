@@ -1,12 +1,15 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Copy, Play, Trash2, Upload } from "lucide-react";
 import { MAP_THEMES } from "@/lib/battlemap/generate";
+import { removeObjects, setDmOnly, type MapObjects } from "@/lib/battlemap/objects";
+import { HotkeyOverlay } from "@/components/ui/HotkeyOverlay";
+import { ObjectsPanel, useMapSelection } from "@/app/campaigns/[campaignId]/useMapSelection";
 import { TERRAIN, tileAt } from "@/lib/battlemap/types";
 import type { Brush as BrushName } from "@/lib/battlemap/paint";
 import { collectTags } from "@/lib/workshop/pickers";
-import { AddFromList } from "@/components/ui/AddFromList";
+import { MapDetails } from "@/app/workshop/maps/MapDetails";
 import { TerrainCanvas } from "@/app/campaigns/[campaignId]/TerrainCanvas";
 import { BackdropControls } from "@/app/campaigns/[campaignId]/MapTools";
 import { AmbienceControls, OverlayControls } from "@/app/campaigns/[campaignId]/MapSceneTools";
@@ -16,6 +19,7 @@ import {
   canvasToolFor,
   useMapHotkeys,
   type MapTools,
+  mapHotkeyGroups,
 } from "@/app/campaigns/[campaignId]/MapToolbox";
 import { usePainter } from "@/app/campaigns/[campaignId]/usePainter";
 import { THEME_LABELS, type LibraryState, type PreparedMap } from "@/app/workshop/maps/types";
@@ -70,7 +74,35 @@ export function MapEditor({
     onUndo: () => void painter.undo(),
     onRedo: () => void painter.redo(),
   };
-  useMapHotkeys({ enabled: true, tools, onTools, caps: LIBRARY_CAPS, undo });
+  const [keysOpen, setKeysOpen] = useState(false);
+  const objects = useMemo<MapObjects>(
+    () => ({
+      labels: selected.labels,
+      props: selected.props,
+      lights: selected.lights,
+      doors: selected.doors,
+      zones: selected.zones,
+      drawings: [],
+    }),
+    [selected],
+  );
+  const selection = useMapSelection({
+    objects,
+    width: selected.width,
+    height: selected.height,
+    save: (next) => patch(next as Record<string, unknown>),
+    kinds: ["labels", "props", "lights", "doors", "zones"],
+  });
+  const openKeys = useCallback(() => setKeysOpen(true), []);
+  useMapHotkeys({
+    enabled: true,
+    tools,
+    onTools,
+    caps: LIBRARY_CAPS,
+    undo,
+    onHelp: openKeys,
+    onDelete: tools.mode === "select" ? selection.remove : undefined,
+  });
 
   const pick = useCallback(
     (x: number, y: number) => {
@@ -132,10 +164,30 @@ export function MapEditor({
         onProp={prop}
         onDoor={(x, y) => void patch({ door: { x, y } })}
         onZone={(from, to) =>
-          void patch({ zones: [...selected.zones, { x0: from.x, y0: from.y, x1: to.x, y1: to.y, ambient: tools.zone }] })
+          void patch({
+            zones: [
+              ...selected.zones,
+              { x0: from.x, y0: from.y, x1: to.x, y1: to.y, ambient: tools.zone, kind: tools.zoneKind },
+            ],
+          })
         }
         onPick={pick}
+        onSelect={selection.onSelect}
+        selected={tools.mode === "select" ? selection.boxes : undefined}
+        onBackdrop={(transform) => void patch({ backdropPath: selected.backdrop?.path ?? "", backdropTransform: transform })}
       />
+      {tools.mode === "select" ? selection.bar : null}
+      <ObjectsPanel
+        objects={objects}
+        refs={selection.refs}
+        onSelect={(refs) => {
+          selection.setRefs(refs);
+          onTools({ ...tools, mode: "select" });
+        }}
+        onDelete={(refs) => void patch(removeObjects(objects, refs) as unknown as Record<string, unknown>)}
+        onDmOnly={(refs, dmOnly) => void patch({ labels: setDmOnly(objects, refs, dmOnly).labels })}
+      />
+      <HotkeyOverlay open={keysOpen} onOpenChange={setKeysOpen} groups={mapHotkeyGroups(LIBRARY_CAPS)} />
 
       <MapToolbox
         tools={tools}
@@ -152,20 +204,10 @@ export function MapEditor({
         onClearZones={() => void patch({ zones: [] })}
         undo={undo}
         npcNames={npcNames}
+        onHelp={openKeys}
       />
 
-      <div className="flex flex-wrap items-center gap-1.5">
-        <input
-          defaultValue={selected.name}
-          key={`name-${selected.id}`}
-          aria-label="Map name"
-          onBlur={(event) =>
-            event.target.value.trim() && event.target.value !== selected.name
-              ? void patch({ name: event.target.value.trim() })
-              : undefined
-          }
-          className="min-w-32 flex-1 rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-sm text-stone-200"
-        />
+      <MapDetails key={selected.id} selected={selected} patch={patch} knownTags={knownTags}>
         <select
           value={selected.theme}
           aria-label="Theme"
@@ -188,43 +230,7 @@ export function MapEditor({
           <option value="dim">Dim</option>
           <option value="dark">Dark</option>
         </select>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-1.5">
-        <input
-          defaultValue={selected.tags.join(", ")}
-          key={`tags-${selected.id}-${selected.tags.join("|")}`}
-          aria-label="Tags"
-          placeholder="Tags, comma separated: crypt, undead, act two"
-          onBlur={(event) => {
-            const tags = event.target.value
-              .split(",")
-              .map((tag) => tag.trim())
-              .filter(Boolean);
-            if (tags.join("\n") !== selected.tags.join("\n")) {
-              void patch({ tags });
-            }
-          }}
-          className="min-w-40 flex-1 rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-300"
-        />
-        <AddFromList
-          prompt="Add a tag you already use"
-          options={knownTags.filter((tag) => !selected.tags.includes(tag))}
-          onPick={(tag) => void patch({ tags: [...selected.tags, tag] })}
-        />
-      </div>
-
-      <textarea
-        defaultValue={selected.notes}
-        key={`notes-${selected.id}`}
-        aria-label="Notes"
-        onBlur={(event) =>
-          event.target.value !== selected.notes ? void patch({ notes: event.target.value }) : undefined
-        }
-        rows={2}
-        placeholder="What lives here. Nobody but you reads this."
-        className="w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-300"
-      />
+      </MapDetails>
 
       <AmbienceControls value={selected.ambience} onChange={(ambience) => void patch({ ambience })} />
 

@@ -1,3 +1,4 @@
+import { currentScene } from "@/lib/dm/sky";
 import { rm } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
@@ -14,6 +15,7 @@ import {
   updateCampaignInfo,
 } from "@/lib/db/campaigns";
 import { ensureOpenChapter, listChapters } from "@/lib/db/chapters";
+import { publicCast } from "@/lib/dm/cast";
 import { getAmbience } from "@/lib/db/ambience";
 import { captureBoundarySnapshot } from "@/lib/db/snapshots";
 import { listRecentCampaignEvents } from "@/lib/db/character-events";
@@ -28,7 +30,7 @@ import { listLocations } from "@/lib/db/locations";
 import { listRecentAudit } from "@/lib/db/sheet-audit";
 import { insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
 import { listRollsVisibleTo } from "@/lib/db/rolls";
-import { listSheets } from "@/lib/db/sheets";
+import { getSheetForUser, listSheets } from "@/lib/db/sheets";
 import { requestDmTurn } from "@/lib/dm/loop";
 import { hasHumanDm, isPrimaryDm, lobbyBlocker } from "@/lib/dm/viewer";
 import { enqueueDmJob } from "@/lib/dm/queue";
@@ -64,9 +66,13 @@ export async function GET(
     campaign: publicCampaign(campaign),
     me: { id: user.id, username: user.username, avatar: user.avatar },
     members: listMembers(campaignId),
+    // Names and faces of the cast, for the transcript's speech lines.
+    cast: publicCast(campaignId),
     // Players this user has blocked; their table messages fold away.
     blockedUserIds: listBlockedUserIds(user.id),
     sheets,
+    // The character this user is playing when they have several (11.3).
+    activeSheetId: getSheetForUser(campaignId, user.id)?.id ?? "",
     messages: listRecentMessages(campaignId, 100),
     // Blind and DM-only rolls are redacted or dropped here, not in the UI;
     // a player's snapshot must never carry a number they are not meant to
@@ -92,6 +98,9 @@ export async function GET(
     // without the snapshot a reload mid-scene would sit in silence until the
     // next place or fight changed it.
     ambience: getAmbience(campaignId),
+    // The sky over the table: hour and weather, so the board and the scene
+    // art are lit right from a fresh load (src/lib/dm/sky.ts).
+    scene: currentScene(campaign),
     // What this seat may see and do, so the client never re-derives it from
     // ids and never shows a control the server would refuse.
     caps,

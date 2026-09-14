@@ -10,6 +10,7 @@ import {
 } from "@/app/campaigns/[campaignId]/GameSettingsPanel";
 import { ToggleCard } from "@/app/create-campaign/fields";
 import { NarratorFields } from "@/app/create-campaign/NarratorFields";
+import { SafetyFields } from "@/app/create-campaign/SafetyFields";
 import type { CampaignDraft, StepProps, WizardGates } from "@/app/create-campaign/draft";
 
 // Which of the table features are switched on, counting only the ones the
@@ -87,6 +88,24 @@ export function FeelStep(props: StepProps) {
           onClick={() => patch({ multiclassingEnabled: !draft.multiclassingEnabled })}
           label="Multiclassing"
           hint="Second classes at level-up"
+        />
+        <ToggleCard
+          active={draft.boardDrawing}
+          onClick={() => patch({ boardDrawing: !draft.boardDrawing })}
+          label="Players draw on the board"
+          hint="Plans and circles on the battle map; the DM always may"
+        />
+        <ToggleCard
+          active={draft.multiCharacter !== "off"}
+          onClick={() => patch({ multiCharacter: draft.multiCharacter === "off" ? "one_active" : draft.multiCharacter === "one_active" ? "all_active" : "off" })}
+          label={draft.multiCharacter === "all_active" ? "Several characters each, all fielded" : draft.multiCharacter === "one_active" ? "Several characters each, one at a time" : "One character each"}
+          hint="A player may build more than one; press again to field them all at once (solo tables)"
+        />
+        <ToggleCard
+          active={draft.presentation === "theatre"}
+          onClick={() => patch({ presentation: draft.presentation === "theatre" ? "plain" : "theatre" })}
+          label="Theatre inserts"
+          hint="A speaking NPC's face over the scene art while their lines play"
         />
         {aiNarrates ? (
           <div className="relative flex">
@@ -167,6 +186,7 @@ export function FeelStep(props: StepProps) {
       </div>
 
       <NarratorFields {...props} className={cn(!aiNarrates && !draft.ttsEnabled && "hidden")} />
+      <SafetyFields {...props} />
     </div>
   );
 }

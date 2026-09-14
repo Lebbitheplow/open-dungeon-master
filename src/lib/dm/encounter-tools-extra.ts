@@ -25,11 +25,14 @@ import {
   resolveEnemyRef,
 } from "@/lib/dm/enemy-damage";
 import { addEnemiesTool, handleAddEnemies } from "@/lib/dm/encounter-spawn";
+import { handleLairAction, handleLegendaryAction, handleLegendaryResist, legendaryTools } from "@/lib/dm/legendary-tools";
 import { applyDmMutation, canonicalCondition } from "@/lib/dm/mutations";
 import { mergeAdvantage, pruneMeta, rollDerivation } from "@/lib/dm/condition-logic";
 import { conditionRollRiders } from "@/lib/srd/condition-effects";
 import { normalizeAbility } from "@/lib/dm/arg-coerce";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
+import { planConditionFx } from "@/lib/battlemap/fx-plan";
+import { publishFx, tokenPosition } from "@/lib/dm/fx";
 import { resolveSheetRef } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -44,6 +47,9 @@ export const EXTRA_ENCOUNTER_TOOL_NAMES = [
   "set_enemy_condition",
   "clear_enemy_condition",
   "aoe_damage",
+  "legendary_action",
+  "legendary_resist",
+  "lair_action",
 ] as const;
 
 type ToolDef = {
@@ -188,6 +194,7 @@ export const extraEncounterTools: ToolDef[] = [
   setEnemyConditionTool,
   clearEnemyConditionTool,
   aoeDamageTool,
+  ...legendaryTools,
 ];
 
 const enemyRefArgsSchema = z.object({
@@ -298,6 +305,15 @@ function handleEnemyCondition(
         : enemy.conditionMeta;
     patchEnemyConditions(enemy.id, [...enemy.conditions, wanted], meta);
     publishEncounter(campaign.id);
+    {
+      const pos = tokenPosition(campaign.id, enemy.id);
+      if (pos && !pos.hidden) {
+        publishFx(
+          campaign.id,
+          planConditionFx({ to: pos.at, toTokenId: pos.tokenId, condition: wanted, applied: true }),
+        );
+      }
+    }
     return {
       ok: true,
       name: enemy.displayName,
@@ -691,6 +707,12 @@ export function applyExtraEncounterCall(
       return { result: handleEnemyCondition(campaign, "clear", rawArguments) };
     case "aoe_damage":
       return { result: handleAoeDamage(campaign, turn, rawArguments, sheets, sheetsById) };
+    case "legendary_action":
+      return { result: handleLegendaryAction(campaign, rawArguments) };
+    case "legendary_resist":
+      return { result: handleLegendaryResist(campaign, rawArguments) };
+    case "lair_action":
+      return { result: handleLairAction(campaign, turn, rawArguments) };
     default:
       return null;
   }

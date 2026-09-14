@@ -149,7 +149,7 @@ test("a patch of dark in a bright hall hides what stands in it, unless lit", () 
   const terrain = twoRooms();
   const zones = normalizeZones([{ x0: 9, y0: 4, x1: 7, y1: 2, ambient: "dark" }, { x0: 1, y0: 1, x1: 1, y1: 1, ambient: "rainbow" }], WIDTH, HEIGHT);
   assert.equal(zones.length, 1);
-  assert.deepEqual(zones[0], { x0: 7, y0: 2, x1: 9, y1: 4, ambient: "dark" });
+  assert.deepEqual(zones[0], { x0: 7, y0: 2, x1: 9, y1: 4, ambient: "dark", kind: "light" });
   assert.equal(ambientAt(zones, 8, 3, "bright"), "dark");
   assert.equal(ambientAt(zones, 2, 3, "bright"), "bright");
   const viewer = { x: 7, y: 1, darkvisionTiles: 0 };

@@ -238,8 +238,8 @@ export function runContentImport(input: {
       )) {
         db.prepare(
           `INSERT INTO lore_entries
-             (id, campaign_id, category, title, body, tags_json, pinned, visibility, image_path, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             (id, campaign_id, category, title, body, tags_json, pinned, visibility, image_path, attachment_path, style, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         ).run(
           trackId("lore", row.id),
           campaignId,
@@ -250,8 +250,11 @@ export function runContentImport(input: {
           row.pinned ?? 0,
           row.visibility ?? "party",
           // The picture is a file both campaigns can read, the same way a
-          // prepared map's backdrop travels.
+          // prepared map's backdrop travels; so is an attached PDF. The
+          // audience is this campaign's people and does not travel.
           row.image_path ?? "",
+          row.attachment_path ?? "",
+          row.style ?? "plain",
           now,
           now,
         );
@@ -308,13 +311,24 @@ export function runContentImport(input: {
     }
 
     if (selected.has("npcs")) {
+      // Factions ride with the cast (docs/vtt-parity-implementation-plan.md
+      // section 6), renumbered, with each member's link remapped.
+      const factionIds = new Map<string, string>();
+      for (const row of allRows(`SELECT * FROM factions WHERE campaign_id = ?`, sourceId)) {
+        const id = crypto.randomUUID();
+        factionIds.set(String(row.id), id);
+        db.prepare(
+          `INSERT INTO factions (id, campaign_id, name, blurb, goal, attitude_to_party, power, tags_json, portrait_path, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(id, campaignId, row.name, row.blurb ?? "", row.goal ?? "", row.attitude_to_party ?? "neutral", row.power ?? 1, row.tags_json ?? "[]", row.portrait_path ?? "", now, now);
+      }
       for (const row of allRows(`SELECT * FROM npcs WHERE campaign_id = ?`, sourceId)) {
         db.prepare(
           `INSERT INTO npcs
              (id, campaign_id, name, attitude, trait, location, role, last_shift_turn,
               aliases_json, personality_json, goals_json, relations_json, bonds_json,
-              pressure_json, arc_cast_id, portrait_url, archived, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, '', ?, 0, ?, ?)`,
+              pressure_json, arc_cast_id, portrait_url, faction_id, archived, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, '', ?, ?, 0, ?, ?)`,
         ).run(
           trackId("npcs", row.id),
           campaignId,
@@ -344,6 +358,7 @@ export function runContentImport(input: {
           // The face travels as a path, like a prepared map's backdrop: it
           // points at a file in public/uploads both campaigns can read.
           row.portrait_url ?? "",
+          factionIds.get(String(row.faction_id ?? "")) ?? "",
           now,
           now,
         );

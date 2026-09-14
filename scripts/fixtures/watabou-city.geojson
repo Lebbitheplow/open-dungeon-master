@@ -1,0 +1,12 @@
+{
+  "type": "FeatureCollection",
+  "name": "Harrowgate",
+  "features": [
+    { "type": "Feature", "geometry": { "type": "LineString", "coordinates": [[0, 0], [50, 10], [100, 0]] }, "properties": { "type": "road" } },
+    { "type": "Feature", "geometry": { "type": "LineString", "coordinates": [[50, 10], [50, 100]] }, "properties": { "type": "road" } },
+    { "type": "Feature", "geometry": { "type": "LineString", "coordinates": [[0, 80], [100, 90]] }, "properties": { "type": "river" } },
+    { "type": "Feature", "geometry": { "type": "Polygon", "coordinates": [[[0, 0], [40, 0], [40, 40], [0, 40], [0, 0]]] }, "properties": { "type": "district", "name": "Old Quarter" } },
+    { "type": "Feature", "geometry": { "type": "Polygon", "coordinates": [[[60, 40], [100, 40], [100, 100], [60, 100], [60, 40]]] }, "properties": { "type": "district", "name": "Tanners' Row" } },
+    { "type": "Feature", "geometry": { "type": "Polygon", "coordinates": [[[20, 50], [30, 50], [30, 60], [20, 60], [20, 50]]] }, "properties": { "type": "plaza" } }
+  ]
+}

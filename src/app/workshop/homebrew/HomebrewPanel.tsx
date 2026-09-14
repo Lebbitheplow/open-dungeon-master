@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { Plus, Search } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
@@ -143,7 +144,7 @@ export function HomebrewPanel({
     if (!editing?.id) {
       return;
     }
-    if (!window.confirm(`Forget "${editing.draft.name}"? Sheets that carry it keep their last copy of it.`)) {
+    if (!await appConfirm(`Forget "${editing.draft.name}"? Sheets that carry it keep their last copy of it.`)) {
       return;
     }
     setBusy(true);

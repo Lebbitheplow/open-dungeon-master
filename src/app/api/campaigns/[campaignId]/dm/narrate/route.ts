@@ -7,6 +7,8 @@ import { maybeCompactHistory } from "@/lib/dm/compaction";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { enqueueNarrationAudio } from "@/lib/tts";
+import { getNpcById } from "@/lib/db/npcs";
+import type { Speaker } from "@/lib/dm/speech";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +21,16 @@ export const dynamic = "force-dynamic";
 // without knowing who wrote the words.
 const narrateSchema = z.object({
   content: z.string().trim().min(1).max(8000),
+  // Spoken as someone (docs/vtt-parity-implementation-plan.md 8.1): an
+  // NPC by id, or a monster on the board by name. Absent for the narrator.
+  speaker: z
+    .object({
+      kind: z.enum(["npc", "monster"]),
+      id: z.string().max(64).optional(),
+      name: z.string().trim().max(80).optional(),
+    })
+    .nullable()
+    .optional(),
 });
 
 export async function POST(
@@ -40,6 +52,19 @@ export async function POST(
     return Response.json({ error: "Write something to narrate." }, { status: 400 });
   }
 
+  // An NPC speaker is named from the record so a stale client name never
+  // lands in the transcript; a monster is only its name.
+  let speaker: Speaker | null = null;
+  if (parsed.data.speaker?.kind === "npc" && parsed.data.speaker.id) {
+    const npc = getNpcById(parsed.data.speaker.id);
+    if (!npc || npc.campaignId !== campaignId) {
+      return Response.json({ error: "No one by that name in the cast." }, { status: 400 });
+    }
+    speaker = { kind: "npc", id: npc.id, name: npc.name };
+  } else if (parsed.data.speaker?.kind === "monster" && parsed.data.speaker.name) {
+    speaker = { kind: "monster", id: parsed.data.speaker.id ?? "", name: parsed.data.speaker.name };
+  }
+
   const seq = allocateSeq(campaignId);
   // author_type stays "dm" so the transcript, the export and the DM-message
   // affordances (read-aloud, pin, lore check) do not need a third author.
@@ -51,6 +76,7 @@ export async function POST(
     authorType: "dm",
     userId: user.id,
     content: parsed.data.content,
+    speaker,
   });
   publishWithSeq(campaignId, seq, "message_added", { message });
 
@@ -71,6 +97,7 @@ export async function POST(
       message.id,
       parsed.data.content,
       campaign.gameSettings.ttsVoice,
+      speaker,
     );
   }
 

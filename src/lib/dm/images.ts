@@ -5,7 +5,8 @@ import {
   setMessageGeneratedImage,
   setMessageImageRequest,
 } from "@/lib/db/messages";
-import type { Campaign } from "@/lib/db/campaigns";
+import { getCampaignById, type Campaign } from "@/lib/db/campaigns";
+import { boundaryNegativeTerms } from "@/lib/dm/safety-logic";
 import { imageToolArgsSchema, type ImageToolArgs } from "@/lib/image-tool";
 import { publishEphemeral, publishPersisted } from "@/lib/events";
 import { enqueueMediaJob } from "@/lib/media-queue";
@@ -46,10 +47,14 @@ export function fulfillMessageImage(
   return enqueueMediaJob(`image ${messageId}`, async () => {
     publishMediaStatus(campaignId, "image", messageId, "generating");
     try {
+      // The table's boundary decides what the picture leaves out
+      // (docs/vtt-parity-implementation-plan.md 9.1).
+      const boundaries = getCampaignById(campaignId)?.gameSettings.safety?.boundaries ?? "standard";
       const image = await generateStoryImage(settings, {
         prompt,
         mode: request.mode ?? settings.imageMode,
         aspect: request.aspect ?? settings.aspect,
+        negative: boundaryNegativeTerms(boundaries),
       });
       if (!setMessageGeneratedImage(messageId, image)) {
         return;

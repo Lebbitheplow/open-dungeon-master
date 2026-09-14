@@ -1,10 +1,12 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { Loader2, Minus, Plus } from "lucide-react";
+import { useUndoRing } from "@/lib/use-undo-ring";
+import { terrainDiffStrokes } from "@/lib/overworld/undo";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { skinForGenre, type XY } from "@/lib/overworld/logic";
-import type { OverworldBrush } from "@/lib/overworld/paint";
+import { MAX_STROKES, type OverworldBrush } from "@/lib/overworld/paint";
 import {
   featureAt,
   type LabelSize,
@@ -83,7 +85,26 @@ export function OverworldPanel({
   const [error, setError] = useState("");
   const pulseRef = useRef(0);
   const sizeRef = useRef("");
-  const { view, fit, down, move, up } = useOverworldView(canvasRef, !loading);
+  const { view, fit, down, move, up, zoomBy } = useOverworldView(canvasRef, !loading);
+  // A paint drag in flight: the tiles it has touched, sent as one request
+  // on release (docs/vtt-parity-implementation-plan.md section 10.5).
+  const strokeRef = useRef<{ tiles: Map<string, XY> } | null>(null);
+  const [strokeCount, setStrokeCount] = useState(0);
+  // Painted terrain before each paint, so undo can put it back as strokes.
+  const paintUndo = useUndoRing<string>(`${campaignId}:overworld`, {
+    hotkeys: mode === "paint",
+    replace: async (previous) => {
+      if (!data) {
+        return null;
+      }
+      const strokes = terrainDiffStrokes(data.map.terrain, previous, data.map.width);
+      if (!strokes.length) {
+        return previous;
+      }
+      const payload = await patch({ strokes });
+      return payload ? payload.map.terrain : null;
+    },
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -262,15 +283,11 @@ export function OverworldPanel({
         await patch({ partyXy: at });
         setMode("look");
         return;
-      case "paint": {
-        // One tile per tap. A tap already reaches every tile; the radius is
-        // what makes it practical on a big grid.
-        const payload = await patch({
-          strokes: [{ x: at.x, y: at.y, brush, radius: brushRadius }],
-        });
-        setStranded(payload?.stranded ?? []);
+      case "paint":
+        // A paint press starts a stroke; the tiles land on release.
+        strokeRef.current = { tiles: new Map([[`${at.x},${at.y}`, at]]) };
+        setStrokeCount(1);
         return;
-      }
       case "place":
         // First tap picks a marker up, second puts it down.
         if (held) {
@@ -288,6 +305,40 @@ export function OverworldPanel({
         return;
       default:
         return;
+    }
+  }
+
+  // The drag adds tiles under the pointer; nothing is sent until release.
+  function paintMove(clientX: number, clientY: number) {
+    const stroke = strokeRef.current;
+    if (!stroke) {
+      return;
+    }
+    const at = tileAt(clientX, clientY);
+    if (!at) {
+      return;
+    }
+    const key = `${at.x},${at.y}`;
+    if (!stroke.tiles.has(key) && stroke.tiles.size < MAX_STROKES) {
+      stroke.tiles.set(key, at);
+      setStrokeCount(stroke.tiles.size);
+    }
+  }
+
+  async function paintEnd() {
+    const stroke = strokeRef.current;
+    strokeRef.current = null;
+    setStrokeCount(0);
+    if (!stroke || !data) {
+      return;
+    }
+    const before = data.map.terrain;
+    const payload = await patch({
+      strokes: [...stroke.tiles.values()].map((at) => ({ x: at.x, y: at.y, brush, radius: brushRadius })),
+    });
+    if (payload) {
+      paintUndo.remember(before);
+      setStranded(payload.stranded ?? []);
     }
   }
 
@@ -379,6 +430,7 @@ export function OverworldPanel({
     }
   }
 
+  paintUndo.track(data?.map.terrain ?? "");
   const skin = data ? skinForGenre(genre) : null;
   const heldName = data?.locations.find((entry) => entry.id === held)?.name ?? "";
   const ask = askCopy(asking, labelSize, heldName);
@@ -400,16 +452,60 @@ export function OverworldPanel({
             className={cn("block w-full touch-none", mode === "look" ? "cursor-grab" : "cursor-crosshair")}
             onPointerDown={(event) => {
               if (mode !== "look") {
+                if (mode === "paint") {
+                  (event.target as HTMLElement).setPointerCapture(event.pointerId);
+                }
                 void handleClick(event.clientX, event.clientY);
                 return;
               }
               down(event);
             }}
-            onPointerMove={move}
-            onPointerUp={up}
-            onPointerCancel={up}
+            onPointerMove={(event) => {
+              if (strokeRef.current) {
+                paintMove(event.clientX, event.clientY);
+                return;
+              }
+              move(event);
+            }}
+            onPointerUp={(event) => {
+              if (strokeRef.current) {
+                void paintEnd();
+                return;
+              }
+              up(event);
+            }}
+            onPointerCancel={(event) => {
+              strokeRef.current = null;
+              setStrokeCount(0);
+              up(event);
+            }}
           />
         )}
+        {!loading ? (
+          <div className="absolute bottom-2 right-2 flex flex-col gap-1">
+            <button
+              type="button"
+              onClick={() => zoomBy(1.25)}
+              aria-label="Zoom in"
+              className="flex size-9 items-center justify-center rounded-md border border-stone-700 bg-stone-950/80 text-stone-300 hover:text-amber-100"
+            >
+              <Plus className="size-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => zoomBy(0.8)}
+              aria-label="Zoom out"
+              className="flex size-9 items-center justify-center rounded-md border border-stone-700 bg-stone-950/80 text-stone-300 hover:text-amber-100"
+            >
+              <Minus className="size-4" />
+            </button>
+          </div>
+        ) : null}
+        {strokeCount ? (
+          <span className="pointer-events-none absolute left-2 top-2 rounded bg-stone-950/80 px-1.5 py-0.5 text-[11px] text-amber-200">
+            {strokeCount} {strokeCount === 1 ? "tile" : "tiles"}
+          </span>
+        ) : null}
       </div>
       {skin && !backdropImage ? <TileLegend skin={skin} /> : null}
       {steersStory && data ? (
@@ -444,6 +540,12 @@ export function OverworldPanel({
               radius={brushRadius}
               onRadius={setBrushRadius}
               stranded={stranded}
+              undo={{
+                canUndo: paintUndo.canUndo,
+                canRedo: paintUndo.canRedo,
+                onUndo: () => void paintUndo.undo(data.map.terrain),
+                onRedo: () => void paintUndo.redo(data.map.terrain),
+              }}
             />
           ) : null}
           {mode === "line" ? (

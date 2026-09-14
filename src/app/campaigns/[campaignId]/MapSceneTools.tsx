@@ -4,7 +4,7 @@ import { useId, useRef, useState } from "react";
 import { Image as ImageIcon, Loader2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { cueOptions } from "@/lib/ambience/catalog";
-import { SCENE_LIMITS, type SceneAmbience } from "@/lib/battlemap/scene";
+import { SCENE_LIMITS, type SceneAmbience, type ZoneKind } from "@/lib/battlemap/scene";
 import type { AmbientLight } from "@/lib/battlemap/types";
 
 // The dials for the scene tools (docs/workshop-parity-audit.md phase 13):
@@ -121,18 +121,46 @@ export function PropDial({
 
 export function ZoneDial({
   value,
+  kind = "light",
   onChange,
+  onKind,
   count,
   onClear,
 }: {
   value: AmbientLight;
+  kind?: ZoneKind;
   onChange: (next: AmbientLight) => void;
+  onKind?: (next: ZoneKind) => void;
   count: number;
   onClear?: () => void;
 }) {
   return (
     <div className="space-y-1">
-      <div className="flex flex-wrap items-center gap-1">
+      {onKind ? (
+        <div className="flex flex-wrap items-center gap-1">
+          {(
+            [
+              ["light", "Light"],
+              ["darkness", "Darkness"],
+              ["magical_darkness", "Magical darkness"],
+            ] as const
+          ).map(([option, label]) => (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={kind === option}
+              onClick={() => onKind(option)}
+              className={cn(
+                "rounded-md border px-2 py-0.5 text-[11px]",
+                kind === option ? "border-amber-700 bg-amber-950/50 text-amber-100" : "border-stone-700 text-stone-400",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <div className={cn("flex flex-wrap items-center gap-1", kind !== "light" && "opacity-40")}>
         {(
           [
             ["bright", "Lit"],
@@ -161,7 +189,9 @@ export function ZoneDial({
       </div>
       <p className="text-[10px] text-stone-600">
         Drag a box. The light inside it overrides the map&apos;s: a lit shrine in a dark crypt, a dark alcove
-        in a bright hall. Later boxes win where they overlap. Up to {SCENE_LIMITS.zones}.
+        in a bright hall. Darkness is dark whatever the map says; magical darkness defeats darkvision
+        too, and only truesight or Devil&apos;s Sight see into it. Later boxes win where they overlap.
+        Up to {SCENE_LIMITS.zones}.
       </p>
     </div>
   );

@@ -5,11 +5,13 @@
 // character export/import routes call.
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { isUploadedImagePath } from "@/lib/uploads";
+import { isUploadedImagePath, isUploadedPdfPath } from "@/lib/uploads";
 
 // The one size cap for anything that lands in public/uploads, whether it
 // arrives by upload form or inside a character bundle.
 export const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
+// A PDF page set is bigger than a picture; 25 MB holds a sourcebook.
+export const MAX_PDF_BYTES = 25 * 1024 * 1024;
 
 export const UPLOAD_MIME_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
 export type UploadMimeType = (typeof UPLOAD_MIME_TYPES)[number];
@@ -42,6 +44,27 @@ export async function writeUploadedImage(
   await mkdir(dir, { recursive: true });
   await writeFile(path.join(dir, filename), bytes);
   return { id, url: `/uploads/${filename}` };
+}
+
+// A PDF under its own cap, named the same way.
+export async function writeUploadedPdf(bytes: Uint8Array): Promise<{ id: string; url: string }> {
+  const id = crypto.randomUUID();
+  const filename = `${id}.pdf`;
+  const dir = uploadsDir();
+  await mkdir(dir, { recursive: true });
+  await writeFile(path.join(dir, filename), bytes);
+  return { id, url: `/uploads/${filename}` };
+}
+
+export async function readUploadedPdf(url: unknown): Promise<Buffer | null> {
+  if (!isUploadedPdfPath(url)) {
+    return null;
+  }
+  try {
+    return await readFile(path.join(uploadsDir(), url.slice("/uploads/".length)));
+  } catch {
+    return null;
+  }
 }
 
 // Reads back a file this app wrote. Anything that is not a /uploads/<id>.<ext>

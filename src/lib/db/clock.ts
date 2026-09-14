@@ -1,4 +1,6 @@
 import { tickEffectMinutes } from "@/lib/db/active-effects";
+import { gutterBurntLights } from "@/lib/dm/light-timers";
+import { fireCalendarEvents } from "@/lib/dm/calendar-fire";
 import { getDatabase, parseJson } from "@/lib/db/core";
 import {
   advance,
@@ -44,12 +46,16 @@ export function advanceClock(
   if ("error" in moved) {
     return moved;
   }
-  const clock = { calendar: current.calendar, instant: moved.instant };
+  const clock = { calendar: current.calendar, instant: moved.instant, weather: current.weather };
   setClock(campaignId, clock);
   // Time passing is what ends an effect measured in minutes. Doing it here
   // rather than in each caller means travel, a rest and pass_time all expire
   // the same things, which is the point of having one clock.
   tickEffectMinutes(campaignId, moved.minutes);
+  // The same clock burns torches down and brings the calendar's days round
+  // (docs/vtt-parity-implementation-plan.md 7.2 and 7.3).
+  gutterBurntLights(campaignId, moved.instant);
+  fireCalendarEvents(campaignId, current.calendar, current.instant, moved.instant);
   return { clock, minutes: moved.minutes };
 }
 
@@ -57,7 +63,7 @@ export function advanceClock(
 // somewhere other than day one, or to correct a drift.
 export function setClockInstant(campaignId: string, instant: Instant): CampaignClock {
   const current = getClock(campaignId);
-  const clock = { calendar: current.calendar, instant: clampInstant(instant) };
+  const clock = { calendar: current.calendar, instant: clampInstant(instant), weather: current.weather };
   setClock(campaignId, clock);
   return clock;
 }
@@ -67,7 +73,7 @@ export function setClockInstant(campaignId: string, instant: Instant): CampaignC
 // move every date the campaign has ever written down.
 export function setCalendar(campaignId: string, calendar: CalendarDefinition): CampaignClock {
   const current = getClock(campaignId);
-  const clock = { calendar, instant: current.instant };
+  const clock = { calendar, instant: current.instant, weather: current.weather };
   setClock(campaignId, clock);
   return clock;
 }

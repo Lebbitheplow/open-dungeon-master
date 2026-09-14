@@ -1,6 +1,9 @@
 "use client";
 
 import { useId, type ReactNode } from "react";
+import { Mic2 } from "lucide-react";
+import { TTS_VOICES } from "@/lib/tts-voices";
+import { VoicePreviewButton } from "@/components/VoicePreviewButton";
 import {
   ATTITUDES,
   type GeneratableField,
@@ -37,6 +40,7 @@ export function NpcEditorFields({
   suggest,
   genre,
   places = [],
+  factions = [],
 }: {
   draft: NpcDraft;
   onChange: (draft: NpcDraft) => void;
@@ -47,6 +51,8 @@ export function NpcEditorFields({
   // The named places this world already has (the overworld's locations and
   // the geography lore), offered under the location field.
   places?: readonly string[];
+  // The world's factions, for the membership picker.
+  factions?: ReadonlyArray<{ id: string; name: string }>;
 }) {
   const roleListId = useId();
   const placeListId = useId();
@@ -136,6 +142,65 @@ export function NpcEditorFields({
             className="flex-1 rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-300"
           />
           {suggest("trait")}
+        </div>
+
+        {factions.length ? (
+          <select
+            value={draft.factionId}
+            onChange={(event) => onChange({ ...draft, factionId: event.target.value })}
+            aria-label="Faction"
+            className="w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-300"
+          >
+            <option value="">No faction</option>
+            {factions.map((faction) => (
+              <option key={faction.id} value={faction.id}>
+                {faction.name}
+              </option>
+            ))}
+          </select>
+        ) : null}
+
+        {/* Their own read-aloud voice (docs/vtt-parity-implementation-plan.md
+            8.2): a Kokoro voice and a pace, previewed here, heard on every
+            line attributed to them. */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Mic2 className="size-3.5 text-amber-600" />
+          <select
+            value={draft.voice?.voiceId ?? ""}
+            onChange={(event) =>
+              onChange({
+                ...draft,
+                voice: event.target.value ? { voiceId: event.target.value, speed: draft.voice?.speed ?? 1 } : null,
+              })
+            }
+            aria-label="Voice"
+            className="rounded-md border border-stone-700 bg-stone-950 px-1.5 py-1 text-xs text-stone-300"
+          >
+            <option value="">The narrator&apos;s voice</option>
+            {TTS_VOICES.map((voice) => (
+              <option key={voice.id} value={voice.id}>
+                {voice.label}
+              </option>
+            ))}
+          </select>
+          {draft.voice ? (
+            <>
+              <VoicePreviewButton voice={draft.voice.voiceId} />
+              <label className="flex items-center gap-1 text-[11px] text-stone-500">
+                Pace
+                <input
+                  type="range"
+                  min={0.7}
+                  max={1.4}
+                  step={0.05}
+                  value={draft.voice.speed}
+                  onChange={(event) => onChange({ ...draft, voice: { voiceId: draft.voice!.voiceId, speed: Number(event.target.value) } })}
+                  className="w-20 accent-amber-400"
+                />
+                <span className="w-8 text-stone-600">{draft.voice.speed.toFixed(2)}</span>
+              </label>
+            </>
+          ) : null}
         </div>
       </section>
 

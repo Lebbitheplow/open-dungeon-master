@@ -6,6 +6,7 @@ import { MessageList } from "@/app/campaigns/[campaignId]/MessageList";
 import { ReportDialog, type ReportTarget } from "@/app/campaigns/[campaignId]/ReportDialog";
 import { ItemProposalBar } from "@/app/campaigns/[campaignId]/ItemProposalBar";
 import { UtilityCallStrip } from "@/app/campaigns/[campaignId]/UtilityCallStrip";
+import { FightSummaryCard } from "@/app/campaigns/[campaignId]/FightSummaryCard";
 import { AskDock } from "@/app/campaigns/[campaignId]/AskPanel";
 import { DmCoverNotice } from "@/app/campaigns/[campaignId]/DmDelegationPanel";
 import type { NarrationAudio } from "@/app/campaigns/[campaignId]/useNarrationAudio";
@@ -59,6 +60,7 @@ export function SessionChatColumn({
   // Blocks made from this table, hidden at once; the snapshot carries them
   // on the next load.
   const [justBlocked, setJustBlocked] = useState<string[]>([]);
+  const [dismissedSummary, setDismissedSummary] = useState(false);
   const blockedUserIds = useMemo(
     () => [...new Set([...state.blockedUserIds, ...justBlocked])],
     [state.blockedUserIds, justBlocked],
@@ -85,6 +87,7 @@ export function SessionChatColumn({
         rolls={rolls}
         sheets={sheets}
         members={state.members}
+        cast={state.cast}
         meUserId={meUserId}
         blockedUserIds={blockedUserIds}
         onReport={(message) => {
@@ -270,6 +273,9 @@ export function SessionChatColumn({
 
       {/* Directly above the composer, so the answer to "why is nothing
           happening" sits where the player is already looking. */}
+      {state.fightSummary && !dismissedSummary ? (
+        <FightSummaryCard summary={state.fightSummary} onDismiss={() => setDismissedSummary(true)} className="mx-3 mb-2" />
+      ) : null}
       <UtilityCallStrip calls={visibleUtilityCalls} />
 
       {/* Assisted mode: the DM stepped away and the AI is answering for

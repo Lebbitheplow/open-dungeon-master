@@ -8,6 +8,7 @@ import {
   setTokenVisibility,
 } from "@/lib/dm/board";
 import { ADHOC_NAME_MAX } from "@/lib/dm/board-logic";
+import { publishCamera } from "@/lib/dm/scene-state";
 import { ADHOC_TOKEN_KINDS } from "@/lib/battlemap/types";
 import {
   MAX_TEMPLATE_FEET,
@@ -42,6 +43,14 @@ const bodySchema = z.discriminatedUnion("do", [
     tokenId: z.string().min(1),
     hidden: z.boolean(),
   }),
+  // The DM steering everyone's view: pull once, lock until freed, or free.
+  z.object({
+    do: z.literal("camera"),
+    mode: z.enum(["pull", "lock", "free"]),
+    x: coord.optional(),
+    y: coord.optional(),
+    zoom: z.number().min(0.5).max(3).optional(),
+  }),
   z.object({
     do: z.literal("template"),
     shape: z.enum(TEMPLATE_SHAPES as unknown as [string, ...string[]]),
@@ -66,6 +75,16 @@ export async function POST(
   }
   const body = parsed.data;
   const { campaign } = context;
+
+  if (body.do === "camera") {
+    publishCamera(campaign.id, {
+      mode: body.mode,
+      ...(body.x !== undefined ? { x: body.x } : {}),
+      ...(body.y !== undefined ? { y: body.y } : {}),
+      ...(body.zoom !== undefined ? { zoom: body.zoom } : {}),
+    });
+    return Response.json({ ok: true });
+  }
 
   // Measuring changes nothing, so it answers before the write paths below.
   if (body.do === "template") {

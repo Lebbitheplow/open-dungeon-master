@@ -124,6 +124,14 @@ export function getAuditEntry(entryId: string): SheetAuditEntry | null {
   return row ? mapEntry(row) : null;
 }
 
+// Every sheet change since a moment, oldest first: the span of one fight.
+export function listAuditSince(campaignId: string, sinceIso: string): SheetAuditEntry[] {
+  const rows = getDatabase()
+    .prepare(`SELECT * FROM sheet_audit WHERE campaign_id = ? AND created_at >= ? ORDER BY seq ASC`)
+    .all(campaignId, sinceIso) as AuditRow[];
+  return rows.map(mapEntry);
+}
+
 export function listRecentAudit(campaignId: string, limit = 50): SheetAuditEntry[] {
   const rows = getDatabase()
     .prepare(

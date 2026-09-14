@@ -14,7 +14,14 @@
 // Pure by design: a regular expression and nothing else.
 
 const UPLOAD_PATH = /^\/uploads\/[A-Za-z0-9][A-Za-z0-9_-]{0,127}\.(png|jpe?g|webp)$/;
+const PDF_PATH = /^\/uploads\/[A-Za-z0-9][A-Za-z0-9_-]{0,127}\.pdf$/;
 
 export function isUploadedImagePath(value: unknown): value is string {
   return typeof value === "string" && UPLOAD_PATH.test(value);
+}
+
+// A PDF this app wrote (docs/vtt-parity-implementation-plan.md section
+// 5.3), the same shape with the one other extension.
+export function isUploadedPdfPath(value: unknown): value is string {
+  return typeof value === "string" && PDF_PATH.test(value);
 }

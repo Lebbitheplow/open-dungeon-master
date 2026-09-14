@@ -137,10 +137,12 @@ export function LoreBody({
   entry,
   targets,
   onLink,
+  dmView = false,
 }: {
-  entry: Pick<LoreEntryView, "body" | "imagePath" | "title">;
+  entry: Pick<LoreEntryView, "body" | "imagePath" | "title" | "style" | "attachmentPath">;
   targets: LoreLinkTarget[];
   onLink?: (target: LoreLinkTarget) => void;
+  dmView?: boolean;
 }) {
   return (
     <div className="space-y-2">
@@ -152,7 +154,28 @@ export function LoreBody({
           className="max-h-80 w-full rounded-lg border border-stone-800 object-contain"
         />
       ) : null}
-      <Markdown source={entry.body} targets={targets} onLink={onLink} />
+      <Markdown source={entry.body} targets={targets} onLink={onLink} style={entry.style ?? "plain"} dmView={dmView} />
+      {entry.attachmentPath ? (
+        // The PDF's pages in the browser's own viewer (section 5.3). The
+        // Android app has no viewer of its own, so its bridge opens the
+        // file with the system's (docs/vtt-parity-implementation-plan.md 18.2).
+        <>
+          {typeof window !== "undefined" && window.odm?.openDocument ? (
+            <button
+              type="button"
+              onClick={() => void window.odm?.openDocument?.(entry.attachmentPath ?? "")}
+              className="mb-2 rounded border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:border-amber-700 hover:text-amber-100"
+            >
+              Open the pages in your reader
+            </button>
+          ) : null}
+          <iframe
+            src={entry.attachmentPath}
+            title={`${entry.title} pages`}
+            className="h-[70vh] w-full rounded-lg border border-stone-800 bg-stone-100"
+          />
+        </>
+      ) : null}
     </div>
   );
 }

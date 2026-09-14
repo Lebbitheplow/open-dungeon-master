@@ -39,5 +39,5 @@ export async function GET() {
   }
   // The browser also needs to know what is already here so it can offer Update
   // or Installed instead of Install.
-  return Response.json({ configured: true, url, packs: result.packs, installed });
+  return Response.json({ configured: true, url, packs: result.packs, bundles: result.bundles, installed });
 }

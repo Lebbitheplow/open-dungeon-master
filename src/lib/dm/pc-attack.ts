@@ -48,6 +48,11 @@ import { applyEnemyDamage, publishEncounter, resolveEnemyRef } from "@/lib/dm/en
 import { patchEnemyConditions } from "@/lib/db/encounters";
 import { saveModFor } from "@/lib/bestiary/statblock";
 import { allyAdjacentToEnemy, checkPcAttackRange, pcAttackSpatials } from "@/lib/dm/map-tools";
+import { recordEncounterTarget, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
+import { planAttackFx, type RollVisibility } from "@/lib/battlemap/fx-plan";
+import { publishFx, tokenPosition } from "@/lib/dm/fx";
+import { normalizeClock } from "@/lib/dm/calendar";
+import { weatherRangedRider } from "@/lib/srd/weather";
 import {
   attacksAllowedFor,
   budgetFor,
@@ -587,6 +592,17 @@ export function handlePcAttack(
   if (load?.disadvantage && load.note) {
     conditionContext.notes.push(load.note);
   }
+  // A gale over an outdoor board: disadvantage on ranged attacks past 30 ft.
+  const gale = spatials.outdoors
+    ? weatherRangedRider(
+        normalizeClock(campaign.clock).weather,
+        profile.ranged || profile.thrown,
+        spatials.distanceTiles,
+      )
+    : { disadvantage: false, note: null };
+  if (gale.note) {
+    conditionContext.notes.push(gale.note);
+  }
   const advantage: Advantage = mergeAdvantage([
     conditionContext.advantage,
     exhaustion.advantage,
@@ -594,6 +610,7 @@ export function handlePcAttack(
     ...attackRiders.advantageSources,
     ...(spatials.longRange ? ["disadvantage" as const] : []),
     ...(smallWithHeavy ? ["disadvantage" as const] : []),
+    ...(gale.disadvantage ? ["disadvantage" as const] : []),
   ]);
 
   // Sneak Attack, decided here because it turns on the final advantage
@@ -823,6 +840,7 @@ export function handlePcAttack(
   });
   const hit = adjudicated.hit;
   const crit = adjudicated.crit || (hit && conditionContext.autoCrit);
+  const stage = attackStage(campaign.id, encounter, sheet, enemy);
   const base = {
     attacker: sheet.name,
     weapon: profile.weapon,
@@ -847,6 +865,14 @@ export function handlePcAttack(
         : {}),
   };
   if (!hit) {
+    emitAttackFx(campaign.id, stage, {
+      hit: false,
+      crit: false,
+      fumble: hitOutcome.crit === "nat1",
+      ranged: profile.ranged,
+      damageType: profile.damageType,
+      visibility: hitRoll.visibility,
+    });
     return {
       ...base,
       hit: false,
@@ -867,6 +893,14 @@ export function handlePcAttack(
   });
   publishRoll(campaign.id, damageRoll);
   turn.rollIds.push(damageRoll.id);
+  emitAttackFx(campaign.id, stage, {
+    hit: true,
+    crit,
+    ranged: profile.ranged,
+    damage: Math.max(1, damageOutcome.total),
+    damageType: profile.damageType,
+    visibility: hitRoll.visibility,
+  });
 
   const applied = applyEnemyDamage(
     campaign,
@@ -934,6 +968,59 @@ export function handlePcAttack(
       ? `${enemy.displayName} is slain; the server already applied this damage. Narrate the killing blow.`
       : `The server already applied this damage to ${enemy.displayName}. Do NOT call damage_enemy for this hit; narrate from this state.`,
   };
+}
+
+// Where attacker and target stand on the live board, and the target line
+// every client draws for the round. Null when there is no board, which is
+// a theatre-of-the-mind fight with nothing to draw on.
+type AttackStage = {
+  from: { x: number; y: number };
+  to: { x: number; y: number };
+  fromTokenId: string;
+  toTokenId: string;
+} | null;
+
+function attackStage(
+  campaignId: string,
+  encounter: Encounter,
+  sheet: CharacterSheet,
+  enemy: EncounterEnemy,
+): AttackStage {
+  const from = tokenPosition(campaignId, sheet.id);
+  const to = tokenPosition(campaignId, enemy.id);
+  if (!from || !to) {
+    return null;
+  }
+  recordEncounterTarget(encounter.id, encounter.round, sheet.id, enemy.id);
+  return { from: from.at, to: to.at, fromTokenId: from.tokenId, toTokenId: to.tokenId };
+}
+
+function emitAttackFx(
+  campaignId: string,
+  stage: AttackStage,
+  outcome: {
+    hit: boolean;
+    crit: boolean;
+    fumble?: boolean;
+    ranged: boolean;
+    damage?: number;
+    damageType?: string;
+    visibility: RollVisibility;
+  },
+) {
+  if (!stage) {
+    return;
+  }
+  publishFx(
+    campaignId,
+    planAttackFx({
+      ...stage,
+      ...outcome,
+      // Damage to an enemy is a DM secret; the client strips the number
+      // for seats without real enemy numbers.
+      secretNumbers: true,
+    }),
+  );
 }
 
 // Physical-dice adjudication, called from the pending-rolls submit route

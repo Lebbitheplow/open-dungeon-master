@@ -1,6 +1,7 @@
 "use client";
 
 import { CalendarClock, Check, CircleHelp, Plus, X } from "lucide-react";
+import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
@@ -162,7 +163,7 @@ export function ScheduleSection({
   }
 
   async function cancel(sessionId: string) {
-    if (!window.confirm("Call this session off? Everyone gets told.")) {
+    if (!await appConfirm("Call this session off? Everyone gets told.")) {
       return;
     }
     await fetch(`/api/campaigns/${campaignId}/schedule/${sessionId}`, {

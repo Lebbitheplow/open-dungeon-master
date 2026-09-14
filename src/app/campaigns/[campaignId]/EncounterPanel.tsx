@@ -1,6 +1,7 @@
 "use client";
 
-import { ChevronDown, ChevronRight, Skull, Swords, Wind } from "lucide-react";
+import { ChevronDown, ChevronRight, Crown, Shield, Skull, Swords, Wind } from "lucide-react";
+import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import { MonsterTile } from "@/lib/ui";
@@ -52,7 +53,7 @@ export function EncounterPanel({
   }, [encounter.enemies]);
 
   async function forceEnd() {
-    if (!window.confirm("End this encounter without a resolution? No XP is awarded.")) {
+    if (!await appConfirm("End this encounter without a resolution? No XP is awarded.")) {
       return;
     }
     setEnding(true);
@@ -74,6 +75,11 @@ export function EncounterPanel({
         <h2 className="flex items-center gap-1.5 text-sm font-semibold text-red-300">
           <Swords className="size-4" />
           Combat{encounter.orderReady ? ` · Round ${encounter.round}` : " · Rolling initiative"}
+          {encounter.lair ? (
+            <span className={cn("ml-1.5 text-[10px] uppercase tracking-wide", encounter.lair.usedThisRound ? "text-stone-600" : "text-violet-300")}>
+              {encounter.lair.usedThisRound ? "lair acted" : "lair awake"}
+            </span>
+          ) : null}
         </h2>
         {steersStory ? (
           <button
@@ -198,6 +204,22 @@ export function EncounterPanel({
                   </span>
                 ) : null}
               </div>
+              {enemy.legendary ? (
+                <div className="mt-1 flex items-center gap-1" title="Legendary actions this round and resistances this fight">
+                  {Array.from({ length: enemy.legendary.actionsMax }, (_, index) => (
+                    <Crown
+                      key={`a${index}`}
+                      className={cn("size-3", index < enemy.legendary!.actions ? "text-violet-300" : "text-stone-700")}
+                    />
+                  ))}
+                  {Array.from({ length: enemy.legendary.resistancesMax }, (_, index) => (
+                    <Shield
+                      key={`r${index}`}
+                      className={cn("size-3", index < enemy.legendary!.resistances ? "text-amber-300" : "text-stone-700")}
+                    />
+                  ))}
+                </div>
+              ) : null}
               {enemy.conditions?.length ? (
                 <div className="mt-1 flex flex-wrap gap-1">
                   {enemy.conditions.map((condition) => (

@@ -17,7 +17,11 @@ const {
   defaultClock,
   describeDuration,
   describeInstant,
+  festivalsOn,
   formatClock,
+  moonPhase,
+  moonsAt,
+  normalizeCalendarDefinition,
   GENERIC_CALENDAR,
   HOURS_PER_DAY,
   isDark,
@@ -193,6 +197,44 @@ test("a fresh campaign starts on a spring morning", () => {
   assert.equal(date.monthName, "Greening");
   assert.equal(seasonOf(clock.calendar, date.month), "spring");
   assert.equal(dayPart(date.hour), "morning");
+});
+
+
+// Moons and festivals (docs/vtt-parity-implementation-plan.md 7.1).
+const MOONED = {
+  ...GENERIC_CALENDAR,
+  id: "mooned",
+  moons: [{ name: "Reaper's Moon", cycleDays: 28, offset: 0 }],
+  festivals: [{ month: 3, day: 15, name: "the Harvest Fair" }],
+};
+
+test("a moon is new at the start of its cycle, full at the middle", () => {
+  const moon = MOONED.moons[0];
+  assert.equal(moonPhase(moon, 0), "new");
+  assert.equal(moonPhase(moon, 14 * MINUTES_PER_DAY), "full");
+  assert.equal(moonPhase(moon, 7 * MINUTES_PER_DAY), "waxing");
+  assert.equal(moonPhase(moon, 21 * MINUTES_PER_DAY), "waning");
+  assert.equal(moonPhase({ ...moon, offset: 14 }, 0), "full");
+  assert.equal(moonsAt(GENERIC_CALENDAR, 0).length, 0);
+});
+
+test("a festival is found on its day and the prompt line says so", () => {
+  const fair = toInstant(MOONED, { month: 3, day: 15, hour: 20 });
+  assert.equal(festivalsOn(MOONED, fair)[0].name, "the Harvest Fair");
+  assert.equal(festivalsOn(MOONED, fair + MINUTES_PER_DAY).length, 0);
+  assert.match(describeInstant(MOONED, fair), /the day of the Harvest Fair/);
+  assert.match(describeInstant(MOONED, 14 * MINUTES_PER_DAY), /under a full Reaper's Moon/);
+  assert.doesNotMatch(describeInstant(MOONED, 7 * MINUTES_PER_DAY), /Moon/);
+});
+
+test("a hand-written calendar keeps its moons and festivals through normalisation", () => {
+  const round = normalizeClock({ calendar: MOONED, instant: 5 });
+  assert.equal(round.calendar.moons[0].cycleDays, 28);
+  assert.equal(round.calendar.festivals[0].name, "the Harvest Fair");
+  assert.equal(normalizeCalendarDefinition({ months: [] }), null);
+  const clamped = normalizeCalendarDefinition({ name: "X", months: [{ name: "One", days: 10 }], moons: [{ name: "M", cycleDays: 1 }], festivals: [{ month: 9, day: 3, name: "" }, { month: 1, day: 2, name: "Kept" }] });
+  assert.equal(clamped.moons[0].cycleDays, 2);
+  assert.deepEqual(clamped.festivals, [{ month: 1, day: 2, name: "Kept" }]);
 });
 
 console.log(`calendar: ${passed} tests passed`);

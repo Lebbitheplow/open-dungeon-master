@@ -85,6 +85,23 @@ export const MAX_MODIFIERS = 6;
 export const MAX_EFFECT_VALUE = 30;
 export const MAX_EFFECT_ROUNDS = 1000;
 
+export const AURA_TONES = ["ward", "harm", "bless", "neutral"] as const;
+export type AuraTone = (typeof AURA_TONES)[number];
+export type EffectAura = { radiusFeet: number; tone: AuraTone };
+
+export function normalizeAura(raw: unknown): EffectAura | undefined {
+  if (!raw || typeof raw !== "object") {
+    return undefined;
+  }
+  const record = raw as Record<string, unknown>;
+  const radius = Number(record.radiusFeet);
+  if (!Number.isFinite(radius) || radius <= 0) {
+    return undefined;
+  }
+  const tone = AURA_TONES.includes(record.tone as AuraTone) ? (record.tone as AuraTone) : "neutral";
+  return { radiusFeet: Math.min(120, Math.round(radius / 5) * 5 || 5), tone };
+}
+
 export type ActiveEffect = {
   id: string;
   campaignId: string;
@@ -96,6 +113,10 @@ export type ActiveEffect = {
   // number moved.
   source: string;
   modifiers: EffectModifier[];
+  // An effect that reaches around its target, drawn as a ring on the board
+  // (docs/vtt-parity-implementation-plan.md section 1.1). Absent for the
+  // ordinary effect that touches one creature.
+  aura?: EffectAura;
   duration: EffectDuration;
   // Rounds left, for "rounds". Minutes left, for "minutes". Ignored
   // otherwise.

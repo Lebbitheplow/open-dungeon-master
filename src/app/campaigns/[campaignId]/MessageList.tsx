@@ -1,5 +1,7 @@
 "use client";
 
+import { appNotice } from "@/components/ui/ConfirmDialog";
+
 import {
   Bookmark,
   ChevronLeft,
@@ -26,6 +28,9 @@ import { DM_HALTED_PREFIX, JOIN_NOTE_PREFIX, LEAD_NOTE_PREFIX, type CampaignMemb
 import { HaltedTurnBanner } from "@/app/campaigns/[campaignId]/HaltedTurnBanner";
 import { InlineMessageEditor } from "@/app/campaigns/[campaignId]/InlineMessageEditor";
 import { stripToolText } from "@/lib/dm/tool-text";
+import { attributeSpeech, type Speaker } from "@/lib/dm/speech";
+import type { CastMember } from "@/lib/dm/cast";
+import { SpeechLine } from "@/app/campaigns/[campaignId]/SpeechLine";
 import { ImageLightbox } from "@/components/ui/ImageLightbox";
 import type { CampaignMessage } from "@/lib/db/messages";
 import type { StoredRoll } from "@/lib/db/rolls";
@@ -119,10 +124,15 @@ export function MediaPlaceholder({
 
 const ROLL_MARKER = /\[roll:([0-9a-f-]{36})\]/g;
 
-function DmContent({ content, rollsById, sheetsById }: {
+function DmContent({ content, rollsById, sheetsById, cast = [], speaker }: {
   content: string;
   rollsById: Map<string, StoredRoll>;
   sheetsById: Map<string, CharacterSheet>;
+  // The cast, so a quoted line near a known name gets that face
+  // (docs/vtt-parity-implementation-plan.md 8.1).
+  cast?: CastMember[];
+  // The whole passage spoken as one person.
+  speaker?: Speaker;
 }) {
   // Older messages may still carry leaked "[request_roll ...]" tool text;
   // never render it.
@@ -143,16 +153,39 @@ function DmContent({ content, rollsById, sheetsById }: {
     parts.push({ kind: "text", text: cleaned.slice(lastIndex) });
   }
 
+  const speakers: Speaker[] = cast.map((member) => ({ kind: "npc", id: member.id, name: member.name }));
+  if (speaker) {
+    return (
+      <div className="narration space-y-2">
+        {parts.map((part, index) =>
+          part.kind === "text" ? (
+            <SpeechLine key={index} speaker={speaker} cast={cast}>
+              {part.text.trim()}
+            </SpeechLine>
+          ) : (
+            <RollCard key={index} roll={part.roll} characterName={part.roll.characterId ? sheetsById.get(part.roll.characterId)?.name : undefined} />
+          ),
+        )}
+      </div>
+    );
+  }
   return (
     <div className="narration space-y-2">
       {parts.map((part, index) =>
         part.kind === "text" ? (
-          <p
-            key={index}
-            className="whitespace-pre-wrap text-pretty font-serif text-base leading-relaxed text-stone-100"
-          >
-            {part.text.trim()}
-          </p>
+          <div key={index} className="space-y-2">
+            {attributeSpeech(part.text.trim(), speakers).map((segment, at) =>
+              segment.kind === "speech" ? (
+                <SpeechLine key={at} speaker={segment.speaker} cast={cast}>
+                  {segment.text}
+                </SpeechLine>
+              ) : (
+                <p key={at} className="whitespace-pre-wrap text-pretty font-serif text-base leading-relaxed text-stone-100">
+                  {segment.text.trim()}
+                </p>
+              ),
+            )}
+          </div>
         ) : (
           <RollCard
             key={index}
@@ -194,9 +227,11 @@ const MessageItem = memo(function MessageItem({
   mine,
   blocked,
   onReport,
+  cast,
 }: {
   message: CampaignMessage;
   campaignId: string;
+  cast: CastMember[];
   canRetryTurn: boolean;
   // This row is the viewer's own message: nothing to report.
   mine: boolean;
@@ -255,7 +290,7 @@ const MessageItem = memo(function MessageItem({
       });
       const uploaded = await upload.json().catch(() => ({}));
       if (!upload.ok) {
-        window.alert(uploaded.error || "That image would not upload.");
+        void appNotice(uploaded.error || "That image would not upload.");
         return;
       }
       const response = await fetch(
@@ -268,10 +303,10 @@ const MessageItem = memo(function MessageItem({
       );
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        window.alert(data.error || "Could not put that picture under the passage.");
+        void appNotice(data.error || "Could not put that picture under the passage.");
       }
     } catch {
-      window.alert("That image would not upload.");
+      void appNotice("That image would not upload.");
     } finally {
       setAttaching(false);
     }
@@ -322,7 +357,7 @@ const MessageItem = memo(function MessageItem({
       <div className="group animate-fade-up">
         <p className="eyebrow mb-2 flex items-center gap-2 text-[10px] text-amber-300/80">
           <span className="h-px w-8 bg-gradient-to-r from-transparent to-amber-500/60" />
-          Dungeon Master
+          {message.speaker ? `${message.speaker.name}, through the DM` : "Dungeon Master"}
           <span className="h-px flex-1 bg-gradient-to-r from-amber-500/40 to-transparent" />
           {(() => {
             // Reroll takes: the counter only appears once a second one exists.
@@ -465,7 +500,7 @@ const MessageItem = memo(function MessageItem({
                 const error = await onReplayAudio(message.id);
                 setNarrating(false);
                 if (error) {
-                  window.alert(error);
+                  void appNotice(error);
                 }
               }}
               aria-label="Read this passage aloud"
@@ -504,13 +539,14 @@ const MessageItem = memo(function MessageItem({
             }}
           />
         ) : (
-          <DmContent content={message.content} rollsById={rollsById} sheetsById={sheetsById} />
+          <DmContent content={message.content} rollsById={rollsById} sheetsById={sheetsById} cast={cast} speaker={message.speaker} />
         )}
         {message.generatedImage ? (
           <ImageLightbox
             src={message.generatedImage.url}
             alt={message.imageRequest?.prompt || "Scene"}
-            className="mt-3 max-h-96 rounded-xl border border-stone-800"
+            className="ken-burns max-h-96 rounded-xl border border-stone-800"
+            frameClassName="mt-3 overflow-hidden rounded-xl"
           />
         ) : message.imageRequest?.needed ? (
           <MediaPlaceholder
@@ -619,6 +655,7 @@ const MessageItem = memo(function MessageItem({
 
 export function MessageList({
   messages,
+  cast = [],
   campaignId,
   canRetryTurn = false,
   canIllustrate = false,
@@ -658,6 +695,8 @@ export function MessageList({
   sheets: CharacterSheet[];
   members?: CampaignMember[];
   locations?: CampaignLocation[];
+  // Names and faces of the cast, for speech lines.
+  cast?: CastMember[];
   dmStatus: DmStatus;
   dmDraft: string;
   mediaStatus?: Record<string, MediaStatus>;
@@ -819,6 +858,7 @@ export function MessageList({
           sheetsById={sheetsById}
           membersById={membersById}
           locationsById={locationsById}
+          cast={cast}
           sheets={sheets}
           mediaStatus={mediaStatus}
           onReplayAudio={stableReplay}

@@ -3,6 +3,8 @@
 // Everything here writes to the server's data directory, so every entry point
 // is admin-gated at the route and every path is derived from a schema-checked
 // pack id rather than from anything a caller supplied.
+import { importWorkshopBundle } from "@/lib/db/workshop-bundle";
+import { workshopBundleSchema } from "@/lib/workshop/bundle";
 import fs from "node:fs/promises";
 import {
   INSTALLED_DIR,
@@ -17,6 +19,7 @@ import {
   registryIndexSchema,
   type WorldPack,
   type RegistryEntry,
+  type RegistryBundle,
 } from "@/lib/worlds/types";
 
 // The manifest byte cap lives in ./types (client-safe) so the workshop's
@@ -191,7 +194,7 @@ async function fetchJsonCapped(url: string): Promise<{ ok: true; value: unknown 
 
 export async function fetchRegistryIndex(
   url: string,
-): Promise<{ ok: true; packs: RegistryEntry[] } | { ok: false; error: string }> {
+): Promise<{ ok: true; packs: RegistryEntry[]; bundles: RegistryBundle[] } | { ok: false; error: string }> {
   const fetched = await fetchJsonCapped(url);
   if (!fetched.ok) {
     return fetched;
@@ -200,7 +203,29 @@ export async function fetchRegistryIndex(
   if (!parsed.success) {
     return { ok: false, error: "That registry index is not in the expected format." };
   }
-  return { ok: true, packs: parsed.data.packs };
+  return { ok: true, packs: parsed.data.packs, bundles: parsed.data.bundles };
+}
+
+// A prepared world from the registry (docs/vtt-parity-implementation-plan.md
+// 12.3): fetched under the same cap, checked against the bundle schema,
+// and imported as a workshop belonging to whoever pressed install.
+export async function installBundleFromUrl(
+  url: string,
+  userId: string,
+): Promise<{ ok: true; workshopId: string; copied: number } | { ok: false; status: number; error: string }> {
+  const fetched = await fetchJsonCapped(url);
+  if (!fetched.ok) {
+    return { ok: false, status: 502, error: fetched.error };
+  }
+  const parsed = workshopBundleSchema.safeParse(fetched.value);
+  if (!parsed.success) {
+    return { ok: false, status: 422, error: "That download is not a workshop bundle." };
+  }
+  const result = importWorkshopBundle(userId, parsed.data);
+  if ("error" in result) {
+    return { ok: false, status: 409, error: result.error };
+  }
+  return { ok: true, workshopId: result.workshopId, copied: result.copied };
 }
 
 export async function installFromUrl(url: string, expectedId?: string): Promise<InstallResult> {

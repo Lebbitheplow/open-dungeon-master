@@ -25,9 +25,37 @@ export const SCENE_LIMITS = {
   propName: 40,
   doors: 80,
   zones: 12,
+  drawings: 40,
+  drawingPoints: 64,
 } as const;
 
-export type MapLabel = { x: number; y: number; text: string; dmOnly: boolean };
+// What a label may point at: tapping the pin opens the entry for whoever
+// the entry's visibility allows (docs/vtt-parity-implementation-plan.md
+// section 3.5).
+export const LABEL_REF_KINDS = ["lore", "npc", "monster", "table"] as const;
+export type LabelRefKind = (typeof LABEL_REF_KINDS)[number];
+export type LabelRef = { kind: LabelRefKind; id: string };
+
+export type MapLabel = { x: number; y: number; text: string; dmOnly: boolean; ref?: LabelRef };
+
+// A freehand mark on the board (section 3.6): a shared intention, not a
+// fact, so it is never fogged; DM-only marks are projected out. Points are
+// in tile units with decimals, simplified to at most drawingPoints.
+export const DRAWING_KINDS = ["stroke", "arrow", "rect", "ellipse"] as const;
+export type DrawingKind = (typeof DRAWING_KINDS)[number];
+export const DRAWING_TONES = ["gold", "ember", "sky", "moss", "bone"] as const;
+export type DrawingTone = (typeof DRAWING_TONES)[number];
+export type MapDrawing = {
+  id: string;
+  kind: DrawingKind;
+  points: XY[];
+  tone: DrawingTone;
+  dmOnly: boolean;
+  // Who drew it, so they may erase their own.
+  authorId?: string;
+  // The last round it is shown in; absent means until erased.
+  expiresRound?: number;
+};
 
 export const PROP_KINDS = ["prop", "npc"] as const;
 export type PropKind = (typeof PROP_KINDS)[number];
@@ -38,7 +66,19 @@ export type DoorState = (typeof DOOR_STATES)[number];
 // Keyed "x,y". A door tile with no entry is an ordinary open doorway.
 export type DoorStates = Record<string, DoorState>;
 
-export type LightZone = { x0: number; y0: number; x1: number; y1: number; ambient: AmbientLight };
+// A patch of light, a patch of darkness, or magical darkness that even
+// darkvision cannot pierce (section 3.3). "light" is the ordinary zone with
+// its own ambient; the two darkness kinds are always dark.
+export const ZONE_KINDS = ["light", "darkness", "magical_darkness"] as const;
+export type ZoneKind = (typeof ZONE_KINDS)[number];
+export type LightZone = {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  ambient: AmbientLight;
+  kind: ZoneKind;
+};
 
 // Cue ids from src/lib/ambience/catalog.ts, or "" for "leave it alone".
 export type SceneAmbience = { bed: string; music: string };
@@ -91,12 +131,137 @@ export function normalizeLabels(raw: unknown, width: number, height: number): Ma
       continue;
     }
     seen.add(index);
-    out.push({ ...at, text: label, dmOnly: source.dmOnly === true });
+    const ref = normalizeLabelRef(source.ref);
+    out.push({ ...at, text: label, dmOnly: source.dmOnly === true, ...(ref ? { ref } : {}) });
     if (out.length >= SCENE_LIMITS.labels) {
       break;
     }
   }
   return out;
+}
+
+function normalizeLabelRef(raw: unknown): LabelRef | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const source = raw as Raw;
+  const kind = LABEL_REF_KINDS.includes(source.kind as LabelRefKind) ? (source.kind as LabelRefKind) : null;
+  const id = text(source.id, 80);
+  return kind && id ? { kind, id } : null;
+}
+
+// ---- drawings ----
+
+// Ramer-Douglas-Peucker: keep the points that matter to the shape, drop
+// the rest, so a finger's jitter does not become forty vertices.
+export function simplifyPoints(points: XY[], epsilon: number): XY[] {
+  if (points.length <= 2) {
+    return points;
+  }
+  const first = points[0];
+  const last = points[points.length - 1];
+  let farthest = 0;
+  let index = -1;
+  const dx = last.x - first.x;
+  const dy = last.y - first.y;
+  const length = Math.hypot(dx, dy) || 1;
+  for (let i = 1; i < points.length - 1; i += 1) {
+    const p = points[i];
+    const distance = Math.abs(dy * p.x - dx * p.y + last.x * first.y - last.y * first.x) / length;
+    if (distance > farthest) {
+      farthest = distance;
+      index = i;
+    }
+  }
+  if (farthest > epsilon && index > 0) {
+    const left = simplifyPoints(points.slice(0, index + 1), epsilon);
+    const right = simplifyPoints(points.slice(index), epsilon);
+    return [...left.slice(0, -1), ...right];
+  }
+  return [first, last];
+}
+
+function drawingPoint(raw: unknown, width: number, height: number): XY | null {
+  const source = (raw ?? {}) as Raw;
+  const x = Number(source.x);
+  const y = Number(source.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    return null;
+  }
+  return {
+    x: Math.round(Math.max(0, Math.min(width, x)) * 100) / 100,
+    y: Math.round(Math.max(0, Math.min(height, y)) * 100) / 100,
+  };
+}
+
+export function normalizeDrawing(raw: unknown, width: number, height: number): MapDrawing | null {
+  const source = (raw ?? {}) as Raw;
+  const kind = DRAWING_KINDS.includes(source.kind as DrawingKind) ? (source.kind as DrawingKind) : null;
+  if (!kind) {
+    return null;
+  }
+  const rawPoints = Array.isArray(source.points) ? source.points : [];
+  let points = rawPoints
+    .map((entry) => drawingPoint(entry, width, height))
+    .filter((entry): entry is XY => entry !== null);
+  if (kind !== "stroke") {
+    // Two corners describe a box, an ellipse or an arrow.
+    points = points.length >= 2 ? [points[0], points[points.length - 1]] : points;
+  }
+  if (points.length < 2) {
+    return null;
+  }
+  if (kind === "stroke") {
+    let epsilon = 0.08;
+    while (points.length > SCENE_LIMITS.drawingPoints) {
+      points = simplifyPoints(points, epsilon);
+      epsilon *= 1.6;
+    }
+  }
+  const tone = DRAWING_TONES.includes(source.tone as DrawingTone) ? (source.tone as DrawingTone) : "gold";
+  const id = text(source.id, 40) || crypto.randomUUID();
+  const expires = Number(source.expiresRound);
+  const authorId = text(source.authorId, 80);
+  return {
+    id,
+    kind,
+    points,
+    tone,
+    dmOnly: source.dmOnly === true,
+    ...(authorId ? { authorId } : {}),
+    ...(Number.isFinite(expires) && expires > 0 ? { expiresRound: Math.round(expires) } : {}),
+  };
+}
+
+export function normalizeDrawings(raw: unknown, width: number, height: number): MapDrawing[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const out: MapDrawing[] = [];
+  const seen = new Set<string>();
+  for (const entry of raw) {
+    const drawing = normalizeDrawing(entry, width, height);
+    if (!drawing || seen.has(drawing.id)) {
+      continue;
+    }
+    seen.add(drawing.id);
+    out.push(drawing);
+  }
+  // Newest last; the oldest go first when over the cap.
+  return out.slice(-SCENE_LIMITS.drawings);
+}
+
+// The drawings a viewer sees: the DM's own stay with the DM, and a mark
+// with a round to live has already faded once the round has passed.
+export function drawingsFor(
+  drawings: MapDrawing[],
+  viewer: { dm: boolean; round: number },
+): MapDrawing[] {
+  return drawings.filter(
+    (drawing) =>
+      (viewer.dm || !drawing.dmOnly) &&
+      (drawing.expiresRound === undefined || drawing.expiresRound >= viewer.round),
+  );
 }
 
 // Furniture cannot stand in a wall; anything on rock is dropped.
@@ -168,7 +333,9 @@ export function normalizeZones(raw: unknown, width: number, height: number): Lig
     if (x0 === null || y0 === null || x1 === null || y1 === null) {
       continue;
     }
-    const ambient = source.ambient;
+    const kind = ZONE_KINDS.includes(source.kind as ZoneKind) ? (source.kind as ZoneKind) : "light";
+    // A darkness zone is dark whatever it says; a light zone needs a level.
+    const ambient = kind === "light" ? source.ambient : "dark";
     if (ambient !== "bright" && ambient !== "dim" && ambient !== "dark") {
       continue;
     }
@@ -178,6 +345,7 @@ export function normalizeZones(raw: unknown, width: number, height: number): Lig
       x1: Math.max(0, Math.min(width - 1, Math.max(x0, x1))),
       y1: Math.max(0, Math.min(height - 1, Math.max(y0, y1))),
       ambient,
+      kind,
     };
     out.push(zone);
     if (out.length >= SCENE_LIMITS.zones) {
@@ -251,6 +419,17 @@ export function toggleDoor(
 
 // The ambient light on one tile: the last zone drawn over it wins, so a
 // small dark corner inside a lit hall can be drawn after the hall.
+// Whether a tile lies in magical darkness, which darkvision cannot pierce.
+export function magicalDarknessAt(zones: LightZone[], x: number, y: number): boolean {
+  let dark = false;
+  for (const zone of zones) {
+    if (x >= zone.x0 && x <= zone.x1 && y >= zone.y0 && y <= zone.y1) {
+      dark = zone.kind === "magical_darkness";
+    }
+  }
+  return dark;
+}
+
 export function ambientAt(zones: LightZone[], x: number, y: number, base: AmbientLight): AmbientLight {
   let ambient = base;
   for (const zone of zones) {

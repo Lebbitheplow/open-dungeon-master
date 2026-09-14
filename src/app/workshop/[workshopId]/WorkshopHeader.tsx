@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowLeft, CircleHelp, Copy, Loader2, Pencil, Trash2 } from "lucide-react";
+import { appConfirm } from "@/components/ui/ConfirmDialog";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -64,7 +65,7 @@ export function WorkshopHeader({
 
   async function remove() {
     if (
-      !window.confirm(
+      !await appConfirm(
         `Delete "${workshop.title}"? Every map, NPC, table and note in it is lost. Anything already imported into a campaign stays there.`,
       )
     ) {

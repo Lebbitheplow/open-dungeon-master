@@ -14,6 +14,7 @@ import {
   EFFECT_DURATIONS,
   EFFECT_FIELDS,
   EFFECT_MODES,
+  normalizeAura,
   resolveField,
   type ActiveEffect,
   type EffectField,
@@ -70,6 +71,18 @@ export const effectTools: ToolDef[] = [
           saveAbility: { type: "string", enum: ["str", "dex", "con", "int", "wis", "cha"] },
           saveDc: { type: "integer", minimum: 1, maximum: 30 },
           visible: { type: "boolean", description: "True when the party can tell it is there." },
+          auraFeet: {
+            type: "integer",
+            minimum: 5,
+            maximum: 120,
+            description:
+              "Radius in feet when the effect reaches around its target (Aura of Protection 10, Spirit Guardians 15); the board draws the ring.",
+          },
+          auraTone: {
+            type: "string",
+            enum: ["ward", "harm", "bless", "neutral"],
+            description: "How the ring reads: ward (protective), harm (hostile), bless, or neutral.",
+          },
         },
         required: ["name", "modifiers"],
       },
@@ -106,6 +119,8 @@ const setSchema = z.object({
   saveAbility: z.string().optional(),
   saveDc: z.coerce.number().optional(),
   visible: z.coerce.boolean().optional(),
+  auraFeet: z.coerce.number().optional(),
+  auraTone: z.string().optional(),
 });
 
 const clearSchema = z.object({
@@ -199,11 +214,13 @@ export function handleSetEffect(
   // twice on the same target does not double it, and two rows would leave the
   // second one impossible to lift.
   deleteEffectsByName(campaign.id, target, checked.effect.name);
+  const aura = normalizeAura({ radiusFeet: args.auraFeet, tone: args.auraTone });
   const effect = insertEffect({
     campaignId: campaign.id,
     targetKind: target.kind,
     targetId: target.id,
     ...checked.effect,
+    ...(aura ? { aura } : {}),
   });
   publishEffects(campaign.id);
   if (effect.visible) {

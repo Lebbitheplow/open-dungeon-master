@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { autoLegendaryResistance } from "@/lib/dm/legendary-tools";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, patchEnemyConditions, setEnemyConcentration } from "@/lib/db/encounters";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
@@ -19,6 +20,9 @@ import { resolveRollExpression, resolveSheetRef } from "@/lib/dm/rolls";
 import { normalizeAbility } from "@/lib/dm/arg-coerce";
 import type { ConditionMeta } from "@/lib/dm/condition-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { recordEncounterTarget } from "@/lib/db/encounters";
+import { planSpellFx } from "@/lib/battlemap/fx-plan";
+import { publishFx, tokenPosition } from "@/lib/dm/fx";
 
 // cast_at_enemy: single-target save-or-suffer spells a player casts on an
 // enemy (Hold Person, Tasha's Hideous Laughter, single-target Poison
@@ -375,6 +379,43 @@ export function handleCastAtEnemy(
     }
   }
 
+  // The beam and burst on the board, coloured by the damage type, and the
+  // target line for the round. Nothing to draw without a board.
+  {
+    const from = tokenPosition(campaign.id, sheet.id);
+    const to = tokenPosition(campaign.id, enemy.id);
+    if (from && to) {
+      recordEncounterTarget(encounter.id, encounter.round, sheet.id, enemy.id);
+      publishFx(
+        campaign.id,
+        planSpellFx({
+          from: from.at,
+          to: to.at,
+          fromTokenId: from.tokenId,
+          toTokenId: to.tokenId,
+          resolution: autoHit ? "auto" : "save",
+          saved,
+          halfOnSave,
+          ...(damageDealt > 0 ? { damage: damageDealt } : {}),
+          ...(damageType ? { damageType } : {}),
+          secretNumbers: true,
+        }),
+      );
+    }
+  }
+
+  // A legendary creature shrugs off a failed save that would bind it
+  // (docs/vtt-parity-implementation-plan.md 4.1) while it has resistance
+  // left; the count is the DM's to see on the tracker.
+  if (condition && !saved && !autoHit && !base.dead && !base.encounterOver) {
+    const liveEncounter = getActiveEncounter(campaign.id);
+    const liveEnemy = liveEncounter ? resolveEnemyRef(liveEncounter.id, enemy.id) : null;
+    if (liveEncounter && liveEnemy && autoLegendaryResistance(campaign, liveEncounter, liveEnemy)) {
+      saved = true;
+      base.saved = true;
+      base.legendaryResistance = "spent: the failed save becomes a success";
+    }
+  }
   if (condition && !saved && !autoHit && !base.dead && !base.encounterOver) {
     const fresh = resolveEnemyRef(encounter.id, enemy.id);
     if (fresh && fresh.status === "alive" && !fresh.conditions.includes(condition)) {
@@ -814,6 +855,36 @@ export function handleCastAtPlayer(
       Object.assign(base, { damage: dealt, ...applied });
     } else {
       base.damage = 0;
+    }
+  }
+
+  // The effect on the board: a beam from the caster when an enemy cast it,
+  // a burst alone otherwise (a trap, a hazard, an unseen caster).
+  {
+    const to = tokenPosition(campaign.id, sheet.id);
+    if (to) {
+      const from = args.casterEnemyId ? tokenPosition(campaign.id, args.casterEnemyId) : null;
+      if (from && !from.hidden) {
+        recordEncounterTarget(
+          getActiveEncounter(campaign.id)?.id ?? "",
+          getActiveEncounter(campaign.id)?.round ?? 0,
+          args.casterEnemyId ?? "",
+          sheet.id,
+        );
+      }
+      publishFx(
+        campaign.id,
+        planSpellFx({
+          ...(from && !from.hidden ? { from: from.at, fromTokenId: from.tokenId } : {}),
+          to: to.at,
+          toTokenId: to.tokenId,
+          resolution: "save",
+          saved,
+          halfOnSave: Boolean(args.halfOnSave),
+          ...(typeof base.damage === "number" && base.damage > 0 ? { damage: base.damage } : {}),
+          ...(args.damageType ? { damageType: args.damageType } : {}),
+        }),
+      );
     }
   }
 

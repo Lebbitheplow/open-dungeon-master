@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { insertKnownLocation } from "@/lib/db/locations";
-import { overworldView, replaceOverworldTerrain, setOverworldAnchor } from "@/lib/db/overworld";
+import { overworldView, replaceOverworldTerrain, setOverworldAnchor, setOverworldLabels, setOverworldPaths } from "@/lib/db/overworld";
+import { isWatabouCity, parseWatabouCity } from "@/lib/battlemap/watabou";
 import { AZGAAR_LIMITS, importAzgaar } from "@/lib/overworld/azgaar";
 import { getOverworld } from "@/lib/db/overworld";
 
@@ -35,6 +36,37 @@ export async function POST(
     return Response.json({ error: "Hand over one or more GeoJSON files." }, { status: 400 });
   }
   const current = getOverworld(campaignId);
+  // A Watabou city (docs/vtt-parity-implementation-plan.md 12.2) is not a
+  // region: it lands as roads and district names around the party's spot
+  // (or the map's centre) and becomes a known place there.
+  const cityText = parsed.data.files.find((text) => {
+    try {
+      return isWatabouCity(JSON.parse(text));
+    } catch {
+      return false;
+    }
+  });
+  if (cityText) {
+    const at = current.partyXy ?? { x: Math.floor(current.width / 2), y: Math.floor(current.height / 2) };
+    const city = parseWatabouCity(JSON.parse(cityText), { width: current.width, height: current.height }, at);
+    if ("error" in city) {
+      return Response.json({ error: city.error }, { status: 400 });
+    }
+    setOverworldPaths(campaignId, [...current.paths, ...city.city.paths]);
+    setOverworldLabels(campaignId, [...current.labels, ...city.city.labels]);
+    let places = 0;
+    if (city.city.name) {
+      const location = insertKnownLocation({ campaignId, name: city.city.name, layoutDescription: city.city.blurb });
+      if (location) {
+        setOverworldAnchor(campaignId, location.id, at);
+        places = 1;
+      }
+    }
+    return Response.json({
+      ...overworldView(campaignId, true),
+      summary: { cells: 0, places, rivers: city.city.paths.filter((path) => path.kind === "river").length, routes: city.city.paths.filter((path) => path.kind === "road").length },
+    });
+  }
   const read = importAzgaar(
     parsed.data.files,
     { width: parsed.data.width, height: parsed.data.height },

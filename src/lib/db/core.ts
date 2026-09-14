@@ -222,6 +222,20 @@ function ensureSchema(db: SqliteDatabase) {
     CREATE INDEX IF NOT EXISTS idx_library_characters_user
       ON library_characters(user_id, updated_at);
 
+    -- DM personalities (docs/vtt-parity-implementation-plan.md 9.2): a
+    -- preset over strictness, tone and the narrator's voice. user_id NULL
+    -- is a stock preset; a user's own rows sit beside them.
+    CREATE TABLE IF NOT EXISTS library_personalities (
+      id TEXT PRIMARY KEY,
+      user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      blurb TEXT NOT NULL DEFAULT '',
+      gm_json TEXT NOT NULL DEFAULT '{}',
+      tts_voice TEXT NOT NULL DEFAULT 'af_heart',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     -- The per-user ruleset library (docs/workshop-plan.md section 2). Before
     -- this, "the rules at our table" was three unrelated things: the variant
     -- flags in game_settings_json, the prose in campaigns.house_rules_text,
@@ -797,6 +811,41 @@ function ensureSchema(db: SqliteDatabase) {
     CREATE INDEX IF NOT EXISTS idx_lore_entries
       ON lore_entries(campaign_id, category);
 
+    -- Quests a table reads and a DM writes (docs/vtt-parity-implementation-
+    -- plan.md section 5.7). Arc rows mirror the story arc's sub-arcs and are
+    -- rewritten when the arc changes; dm rows are hand-written and kept.
+    CREATE TABLE IF NOT EXISTS quests (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      objectives_json TEXT NOT NULL DEFAULT '[]',
+      source TEXT NOT NULL DEFAULT 'dm',
+      source_ref TEXT NOT NULL DEFAULT '',
+      visibility TEXT NOT NULL DEFAULT 'party',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_quests ON quests(campaign_id, status);
+
+    -- Factions (docs/vtt-parity-implementation-plan.md section 6): who
+    -- holds power in the world and how they stand to the party. Goal and
+    -- power are the DM's; blurb and attitude the table's.
+    CREATE TABLE IF NOT EXISTS factions (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      blurb TEXT NOT NULL DEFAULT '',
+      goal TEXT NOT NULL DEFAULT '',
+      attitude_to_party TEXT NOT NULL DEFAULT 'neutral',
+      power INTEGER NOT NULL DEFAULT 1,
+      tags_json TEXT NOT NULL DEFAULT '[]',
+      portrait_path TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_factions ON factions(campaign_id, name);
+
     -- House-rules chunks: campaigns.house_rules_text split into retrievable
     -- pieces (src/lib/dm/rules-logic.ts). Rechunked on every save; enabled and
     -- pinned flags survive by fuzzy match. Pinned chunks always reach the
@@ -1169,6 +1218,15 @@ function ensureSchema(db: SqliteDatabase) {
     // Party-lead mute: the member stays at the table and can read, but the
     // server refuses their actions, asks and side chats until it is lifted.
     ["muted", `INTEGER NOT NULL DEFAULT 0`],
+    // With several characters per player (docs/vtt-parity-implementation-plan.md
+    // 11.3), the one they are playing right now. Empty means the first.
+    ["active_character_id", `TEXT NOT NULL DEFAULT ''`],
+  ]);
+
+  addColumns("item_proposals", [
+    // A trade between two players (11.2): who the offer is made to. Empty
+    // for the DM's own offers.
+    ["to_character_id", `TEXT NOT NULL DEFAULT ''`],
   ]);
 
   addColumns("campaigns", [
@@ -1425,6 +1483,9 @@ function ensureSchema(db: SqliteDatabase) {
   }
 
   addColumns("campaign_messages", [
+    // Who a DM message is spoken as (docs/vtt-parity-implementation-plan.md
+    // 8.1). NULL is the narrator.
+    ["speaker_json", `TEXT`],
     // Set on the DM message that moved the party somewhere new so the chat
     // can render that location's map inline. The map itself stays on the
     // locations row; this is only a reference.
@@ -1475,7 +1536,116 @@ function ensureSchema(db: SqliteDatabase) {
     ["actor", `TEXT NOT NULL DEFAULT 'ai'`],
   ]);
 
+  addColumns("battle_maps", [
+    // Under the sky (1) or a roof (0); null means "decide from the theme"
+    // (src/lib/battlemap/daylight.ts). An outdoor board takes its light
+    // from the campaign clock and the weather.
+    ["outdoors", `INTEGER`],
+    ["drawings_json", `TEXT NOT NULL DEFAULT '[]'`],
+  ]);
+
+  addColumns("prepared_maps", [
+    ["outdoors", `INTEGER`],
+    // Freehand marks on the map (src/lib/battlemap/scene.ts drawings).
+    ["drawings_json", `TEXT NOT NULL DEFAULT '[]'`],
+  ]);
+
+  addColumns("locations", [
+    // The prepared map this place stands on, so arriving offers the DM a
+    // one-tap deploy, and the sound the place makes.
+    ["prepared_map_id", `TEXT`],
+    ["ambience_json", `TEXT`],
+  ]);
+
+  addColumns("battle_tokens", [
+    // Walking, flying or burrowing (src/lib/battlemap/types.ts). Flying
+    // tokens ignore ground obstacles and tremorsense; the board draws them
+    // lifted. Set by the set_movement tool and by Wild Shape.
+    ["movement", `TEXT NOT NULL DEFAULT 'walk'`],
+    // A carried light that burns down (docs/vtt-parity-implementation-plan.md
+    // 7.3): the clock instant it gutters out at, and how long it had when
+    // lit, for the bar. 0 means the light does not burn down.
+    ["burns_until", `INTEGER NOT NULL DEFAULT 0`],
+    ["light_minutes", `INTEGER NOT NULL DEFAULT 0`],
+  ]);
+
+  // Shops (docs/vtt-parity-implementation-plan.md 11.1): a market at a
+  // place, priced by the server.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS shops (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      location_id TEXT NOT NULL DEFAULT '',
+      location_name TEXT NOT NULL DEFAULT '',
+      name TEXT NOT NULL,
+      keeper_npc_id TEXT NOT NULL DEFAULT '',
+      kind TEXT NOT NULL DEFAULT 'general',
+      size TEXT NOT NULL DEFAULT 'village',
+      stock_json TEXT NOT NULL DEFAULT '[]',
+      markup REAL NOT NULL DEFAULT 1,
+      buys INTEGER NOT NULL DEFAULT 1,
+      restock_days INTEGER NOT NULL DEFAULT 7,
+      restocked_at INTEGER NOT NULL DEFAULT 0,
+      haggled_json TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_shops_campaign ON shops(campaign_id);
+  `);
+
+  // Transcript lines (docs/vtt-parity-implementation-plan.md 13.3): what
+  // was said at a transcribed table, by whom, on both clocks. Never fed to
+  // the DM prompt.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS voice_transcript (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      speaker TEXT NOT NULL,
+      text TEXT NOT NULL,
+      clock_label TEXT NOT NULL DEFAULT '',
+      started_at TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_voice_transcript_campaign ON voice_transcript(campaign_id, started_at);
+  `);
+
+  // Calendar events (docs/vtt-parity-implementation-plan.md 7.2): a moment
+  // on the in-world clock the world tick fires when the clock crosses it.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS calendar_events (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      at_instant INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL DEFAULT '',
+      visibility TEXT NOT NULL DEFAULT 'party' CHECK (visibility IN ('party','dm')),
+      repeat TEXT NOT NULL DEFAULT 'none' CHECK (repeat IN ('none','yearly','monthly')),
+      -- The instant it last fired at, so a repeating event fires once per
+      -- crossing and a one-off never twice.
+      fired_at INTEGER NOT NULL DEFAULT -1,
+      fired_seq INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_calendar_events_campaign ON calendar_events(campaign_id, at_instant);
+  `);
+
+  addColumns("active_effects", [
+    // An effect that reaches around its target (Aura of Protection, Spirit
+    // Guardians): radius in feet and a tone for the ring the board draws.
+    // Null for the ordinary effect that touches one creature.
+    ["aura_json", `TEXT`],
+  ]);
+
   addColumns("encounters", [
+    // Legendary pools per enemy and the lair flag (docs/vtt-parity-
+    // implementation-plan.md 4.1), and the after-the-fight card (4.2).
+    ["legendary_json", `TEXT NOT NULL DEFAULT '{}'`],
+    ["summary_json", `TEXT`],
+    // Who attacked whom this round, as {round, pairs: {attackerRef:
+    // [targetRef]}}, so every client can draw the same hairlines. Read only
+    // while the round matches, so it never needs clearing.
+    ["targets_json", `TEXT NOT NULL DEFAULT '{}'`],
     // The action economy of whichever combatant is currently acting: action,
     // bonus action, reaction, attacks made, and movement spent. Rebuilt from
     // scratch whenever the initiative pointer moves, so it never needs a
@@ -1509,6 +1679,11 @@ function ensureSchema(db: SqliteDatabase) {
   addColumns("lore_entries", [
     ["visibility", `TEXT NOT NULL DEFAULT 'party'`],
     ["image_path", `TEXT NOT NULL DEFAULT ''`],
+    // Who an entry was written for, a PDF that rides with it, and how it is
+    // dressed (docs/vtt-parity-implementation-plan.md sections 5.1 to 5.6).
+    ["audience_json", `TEXT`],
+    ["attachment_path", `TEXT NOT NULL DEFAULT ''`],
+    ["style", `TEXT NOT NULL DEFAULT 'plain'`],
   ]);
   // Results already drawn from a table that draws without replacement, and
   // whether it does (src/lib/dm/roll-table-logic.ts).
@@ -1621,6 +1796,8 @@ function ensureSchema(db: SqliteDatabase) {
     // MiniLM embedding of the chapter summary, for phase-1 chapter picking
     // in semantic recall. NULL until the chapter is indexed.
     ["embedding", `BLOB`],
+    // The in-world date the chapter closed on, for the timeline.
+    ["clock_label", `TEXT NOT NULL DEFAULT ''`],
   ]);
 
   addColumns("world_facts", [
@@ -1652,6 +1829,9 @@ function ensureSchema(db: SqliteDatabase) {
     // in the turn's query, instead of it competing for a retrieval slot
     // (src/lib/dm/rules-activation-logic.ts). Empty means ordinary retrieval.
     ["trigger_keywords", `TEXT NOT NULL DEFAULT ''`],
+    // 'house' for the house-rules text; a lore entry id for the pages of a
+    // PDF attached to an entry tagged rules (section 5.3).
+    ["source", `TEXT NOT NULL DEFAULT 'house'`],
   ]);
 
   addColumns("battle_maps", [
@@ -1689,6 +1869,12 @@ function ensureSchema(db: SqliteDatabase) {
   ]);
 
   addColumns("npcs", [
+    // Their own voice for read-aloud (docs/vtt-parity-implementation-plan.md
+    // 8.2): { voiceId, speed }. NULL reads in the narrator's voice.
+    ["voice_json", `TEXT`],
+    // The faction they belong to (docs/vtt-parity-implementation-plan.md
+    // section 6); '' for none.
+    ["faction_id", `TEXT NOT NULL DEFAULT ''`],
     // Other spellings this NPC has been called, e.g. ["Marla", "Captain
     // Marla"] on the row named "Marla Venn" (src/lib/dm/entity-logic.ts).
     // Merging records the variant here instead of rewriting campaign_messages:

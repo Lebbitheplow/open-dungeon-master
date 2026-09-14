@@ -32,12 +32,25 @@ export function estimateTokens(text: string): number {
 // groups rows, and keeps the "which of these may be dropped" decision in one
 // place rather than scattered through the prompt builder.
 export type BlockKind =
+  | "safety" // lines and veils: a hard block, ordered first so it is cached
   | "contract" // the engine boundary: never dropped, at any budget
   | "rules" // system rules, genre, encounter and companion rules
+  | "sky" // the date, the hour and the weather: one line
   | "state" // the live game-state block (sheets, encounter, location)
+  | "factions" // standing per faction, DM-only power and goals
+  | "quests" // the written quest log with its ticks
+  | "shop" // the shelves at the party's place, while a shop is open
   | "retrieval" // house rules and world lore pulled for this moment
   | "chapters" // sealed chapter summaries
   | "history"; // the transcript
+
+// Floors for the small blocks docs/vtt-parity-implementation-plan.md
+// section 15 adds, as shares of the remainder so the allocation keeps its
+// proportions at any window: each is guaranteed its slice before the
+// transcript takes the rest, and donates what it does not use like every
+// other kind. On a 16K window these come to about 60, 180, 180 and 240
+// tokens.
+export const SECTION_SHARES = { sky: 0.004, factions: 0.012, quests: 0.012, shop: 0.016 } as const;
 
 export type BudgetBlock = {
   id: string;
@@ -111,9 +124,14 @@ export const NPC_FLOOR_SHARE_OF_REMAINDER = 0.05;
 // last precisely because it is the one kind that degrades gracefully: losing
 // the oldest lines costs less than losing the character sheets.
 export const PACK_ORDER: BlockKind[] = [
+  "safety",
   "contract",
   "rules",
+  "sky",
   "state",
+  "factions",
+  "quests",
+  "shop",
   "retrieval",
   "chapters",
   "history",
@@ -136,18 +154,31 @@ export function computeBudgets(contextLimitTokens?: number | null): Record<Block
   const state = Math.floor(remainder * REMAINDER_SHARE.state);
   const chapters = Math.floor(remainder * REMAINDER_SHARE.chapters);
 
+  const floor = (kind: keyof typeof SECTION_SHARES) => Math.floor(remainder * SECTION_SHARES[kind]);
+  const sky = floor("sky");
+  const factions = floor("factions");
+  const quests = floor("quests");
+  const shop = floor("shop");
+  const floors = sky + factions + quests + shop;
   return {
+    // The table's lines are a hard block like the contract: a limit the
+    // table set is never the thing that falls out of the window.
+    safety: Number.POSITIVE_INFINITY,
     // The contract is never budgeted against: it is a few hundred tokens and
     // dropping it would let the model start inventing dice results, which is
     // the single failure this whole system exists to prevent.
     contract: Number.POSITIVE_INFINITY,
     retrieval,
     rules,
+    sky,
     state,
+    factions,
+    quests,
+    shop,
     chapters,
     // The residual, following NE-P: whatever the other kinds did not claim
     // goes to the transcript. Never negative, however the shares are tuned.
-    history: Math.max(0, remainder - rules - state - chapters),
+    history: Math.max(0, remainder - rules - state - chapters - floors),
   };
 }
 
@@ -186,7 +217,7 @@ export function packBlocks(
 
     for (const block of ofKind) {
       const tokens = estimateTokens(block.text);
-      const isContract = kind === "contract";
+      const isContract = kind === "contract" || kind === "safety";
       // Two gates: the kind's own allowance and the overall usable window.
       // The second matters when carry has accumulated: without it a late
       // kind could inherit enough donated budget to overrun the model.

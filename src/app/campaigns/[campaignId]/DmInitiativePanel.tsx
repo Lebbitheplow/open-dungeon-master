@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronDown, ChevronUp, Clock, ListRestart, Plus, SkipBack, SkipForward, Trash2 } from "lucide-react";
+import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { ENTRY_NAME_MAX, MAX_INITIATIVE, MIN_INITIATIVE } from "@/lib/dm/initiative-edit";
@@ -97,8 +98,14 @@ export function DmInitiativePanel({
         <button
           type="button"
           disabled={busy}
-          onClick={() => {
-            if (window.confirm("Clear the order and have everyone roll again?")) {
+          onClick={async () => {
+            if (
+              await appConfirm("Clear the order and have everyone roll again?", {
+                title: "Reset initiative",
+                actionLabel: "Roll again",
+                tone: "plain",
+              })
+            ) {
               void send({ op: "reset" });
             }
           }}

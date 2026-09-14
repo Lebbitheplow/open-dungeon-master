@@ -63,6 +63,31 @@ export const gameSettingsSchema = z.object({
   dicePolicy: z.enum(DICE_POLICIES).default("digital_only"),
   ttsEnabled: z.boolean().default(true),
   ttsVoice: z.string().trim().max(40).default("af_heart"),
+  // Theatre inserts (docs/vtt-parity-implementation-plan.md 8.3): the
+  // speaking NPC's portrait over the scene art while their lines play.
+  presentation: z.enum(["plain", "theatre"]).default("plain"),
+  // Several characters per player (docs/vtt-parity-implementation-plan.md
+  // 11.3): off, one in play at a time (the others wait out fights), or
+  // all of them fielded at once for a solo table running a whole party.
+  multiCharacter: z.enum(["off", "one_active", "all_active"]).default("off"),
+  // Safety tools (docs/vtt-parity-implementation-plan.md 9.1): the X-card,
+  // lines the story never crosses, veils it cuts away from, and the
+  // boundary that sets the stock tone limit and the picture negatives.
+  safety: z
+    .object({
+      xCard: z.boolean().default(true),
+      lines: z.array(z.string().trim().max(60)).max(12).default([]),
+      veils: z.array(z.string().trim().max(60)).max(12).default([]),
+      boundaries: z.enum(["family", "standard", "mature"]).default("standard"),
+    })
+    .default({ xCard: true, lines: [], veils: [], boundaries: "standard" }),
+  // Strictness and tone (9.2): the DC ladder shift and the adjectives.
+  gm: z
+    .object({
+      strictness: z.enum(["lenient", "standard", "harsh"]).default("standard"),
+      tone: z.array(z.enum(["grim", "hopeful", "whimsical", "epic", "intimate", "pulpy", "eerie", "political"])).max(3).default([]),
+    })
+    .default({ strictness: "standard", tone: [] }),
   // The sound library (src/lib/ambience/catalog.ts). On by default and free
   // to leave on: a table with no audio files fetched hears nothing, because
   // the client only plays cues the server says are on disk.
@@ -71,6 +96,9 @@ export const gameSettingsSchema = z.object({
   // each new place, battle music when initiative starts. Off leaves every
   // change to a deliberate set_ambience call, by the model or by a person.
   ambienceAuto: z.boolean().default(true),
+  // Players may draw on the live board (a plan of attack, a circle round a
+  // door); the DM always may (src/lib/battlemap/scene.ts drawings).
+  boardDrawing: z.boolean().default(true),
   mapsEnabled: z.boolean().default(true),
   // Whether characters may take levels in a second (or third) class at
   // level-up. On by default; turning it off keeps the level-up flow
@@ -198,6 +226,10 @@ export const gameSettingsSchema = z.object({
       // server-side, so the mute is real rather than a greyed-out button.
       // Rules live in src/lib/voice/turn-logic.ts.
       turnEnforcement: z.enum(["off", "soft", "strict"]).default("soft"),
+      // Transcription (13.3): each speaker's microphone is cut into rings
+      // and written down with their name. Off by default, and the lobby
+      // says out loud when it is on.
+      transcribe: z.boolean().default(false),
       rules: z
         .object({
           // Distance gates hearing, using the battle map's own geometry.
@@ -226,6 +258,7 @@ export const gameSettingsSchema = z.object({
     .default({
       enabled: true,
       turnEnforcement: "soft",
+      transcribe: false,
       rules: {
         proximity: false,
         hearingRangeFeet: 30,

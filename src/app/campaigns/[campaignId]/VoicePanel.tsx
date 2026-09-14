@@ -46,6 +46,7 @@ export function VoicePanel({
   audibilityVersion = 0,
   meshSignal = null,
   compact = false,
+  transcribe = false,
 }: {
   campaignId: string;
   meUserId: string;
@@ -67,8 +68,10 @@ export function VoicePanel({
   // Mesh signaling nudge from the stream, threaded to the hook.
   meshSignal?: { to: string; version: number } | null;
   compact?: boolean;
+  // The table's transcription switch (13.3).
+  transcribe?: boolean;
 }) {
-  const voice = useVoiceRoom(campaignId, roster, meUserId, audibilityVersion, meshSignal);
+  const voice = useVoiceRoom(campaignId, roster, meUserId, audibilityVersion, meshSignal, { transcribe });
   const [channels, setChannels] = useState<VoiceChannelView[]>([]);
   const [newRoom, setNewRoom] = useState("");
   const [showSettings, setShowSettings] = useState(false);
@@ -444,6 +447,11 @@ export function VoicePanel({
         </div>
       ) : null}
 
+      {transcribe && voice.connected ? (
+        <p className="mt-2 flex items-center gap-1 text-[11px] text-amber-300/80">
+          <Radio className="size-3" /> This table is being transcribed while you are on the call.
+        </p>
+      ) : null}
       {voice.peers.length ? (
         <ul className="mt-3 space-y-1.5">
           {voice.peers.map((peer) => (

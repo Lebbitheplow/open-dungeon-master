@@ -205,6 +205,7 @@ export function PaintTools({
   radius,
   onRadius,
   stranded,
+  undo,
 }: {
   skin: Record<OverworldTile, TileSkin>;
   brush: OverworldBrush;
@@ -212,6 +213,7 @@ export function PaintTools({
   radius: number;
   onRadius: (radius: number) => void;
   stranded: Array<{ id: string; name: string }>;
+  undo?: { canUndo: boolean; canRedo: boolean; onUndo: () => void; onRedo: () => void };
 }) {
   return (
     <div className="space-y-1.5 rounded border border-stone-800 bg-stone-950/50 p-2">
@@ -242,7 +244,30 @@ export function PaintTools({
           className="w-28 accent-amber-400"
         />
         <span className="text-stone-500">{radius === 0 ? "one tile" : `${radius * 2 + 1} across`}</span>
+        {undo ? (
+          <span className="ml-auto flex items-center gap-1">
+            <button
+              type="button"
+              onClick={undo.onUndo}
+              disabled={!undo.canUndo}
+              title="Undo (Ctrl+Z)"
+              className={cn(chip, undo.canUndo ? idle : "border-stone-800 text-stone-700")}
+            >
+              Undo
+            </button>
+            <button
+              type="button"
+              onClick={undo.onRedo}
+              disabled={!undo.canRedo}
+              title="Redo (Ctrl+Shift+Z)"
+              className={cn(chip, undo.canRedo ? idle : "border-stone-800 text-stone-700")}
+            >
+              Redo
+            </button>
+          </span>
+        ) : null}
       </label>
+      <p className="text-[11px] text-stone-500">Press and drag to paint; the tiles land when you let go.</p>
       {stranded.length ? (
         <p className="text-[11px] text-amber-300/90">
           {stranded.map((place) => place.name).filter(Boolean).join(", ")}{" "}

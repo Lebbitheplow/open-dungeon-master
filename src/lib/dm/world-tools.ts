@@ -16,7 +16,12 @@ import {
 import { objectProfile, type ObjectMaterial, type ObjectSize } from "@/lib/srd/objects";
 import { forcedMarchHours, forcedMarchSaveDc, paceEffect, type TravelPace } from "@/lib/srd/travel";
 import { tickWorldTimeskip } from "@/lib/dm/world-tick";
-import { advanceClock } from "@/lib/db/clock";
+import { advanceClock, getClock } from "@/lib/db/clock";
+import { refreshSky } from "@/lib/dm/sky";
+import { publishTitleCard } from "@/lib/dm/scene-state";
+import { handleApplyHazard } from "@/lib/dm/hazard-tools";
+import { describeWeather, weatherExposure, weatherTravelFactor } from "@/lib/srd/weather";
+import type { Weather } from "@/lib/scene/state";
 import { ADVANCE_UNITS, describeDuration, describeInstant } from "@/lib/dm/calendar";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -38,6 +43,8 @@ export const WORLD_TOOL_NAMES = [
   "damage_object",
   "travel",
   "pass_time",
+  "set_weather",
+  "show_title",
 ] as const;
 
 const MATERIALS: ObjectMaterial[] = [
@@ -156,7 +163,114 @@ export const worldTools: ToolDef[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "set_weather",
+      description:
+        "Change the weather over the table when the story calls for it (a storm rolls in, the fog lifts). The server rolls weather on its own at each dawn and on long journeys; call this only to overrule it. Rain and fog cut what anyone sees and give disadvantage on Perception by sight; a gale gives disadvantage on ranged attacks past 30 ft; frigid or hot air is a hazard on a long march; the board's light follows the sky outdoors.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          sky: {
+            type: "string",
+            enum: ["clear", "overcast", "rain", "storm", "snow", "fog", "wind"],
+          },
+          temperature: { type: "string", enum: ["frigid", "cold", "mild", "warm", "hot"] },
+          wind: { type: "string", enum: ["calm", "breeze", "gale"] },
+          precipitation: {
+            type: "integer",
+            minimum: 0,
+            maximum: 3,
+            description: "0 none, 1 light, 2 steady, 3 heavy. Defaults from the sky.",
+          },
+          reason: { type: "string" },
+        },
+        required: ["sky"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "show_title",
+      description:
+        "Put a title card on every screen for a moment: a chapter name, a place the party arrives at, a dramatic reveal. Chapters, fights and dawns already show their own cards; use this for a beat that deserves one.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          title: { type: "string", description: "A few words in display type." },
+          subtitle: { type: "string", description: "One line under it, optional." },
+          tone: {
+            type: "string",
+            enum: ["gold", "ember", "dawn", "plain"],
+            description: "Gold for wonder or a chapter, ember for danger, dawn for relief.",
+          },
+        },
+        required: ["title"],
+      },
+    },
+  },
 ];
+
+const weatherSchema = z.object({
+  sky: z.enum(["clear", "overcast", "rain", "storm", "snow", "fog", "wind"]),
+  temperature: z.enum(["frigid", "cold", "mild", "warm", "hot"]).optional(),
+  wind: z.enum(["calm", "breeze", "gale"]).optional(),
+  precipitation: z.coerce.number().int().min(0).max(3).optional(),
+  reason: z.string().optional(),
+});
+
+export function handleSetWeather(campaign: Campaign, rawArguments: string): Record<string, unknown> {
+  let args: z.infer<typeof weatherSchema>;
+  try {
+    args = weatherSchema.parse(JSON.parse(rawArguments || "{}"));
+  } catch {
+    return { error: "Invalid arguments: set_weather needs a sky." };
+  }
+  const current = getClock(campaign.id).weather;
+  const precipitation =
+    args.precipitation ??
+    (args.sky === "storm" ? 3 : args.sky === "rain" ? 2 : args.sky === "snow" ? 2 : 0);
+  const weather: Weather = {
+    sky: args.sky,
+    temperature: args.temperature ?? current?.temperature ?? "mild",
+    wind: args.wind ?? (args.sky === "storm" || args.sky === "wind" ? "gale" : current?.wind ?? "calm"),
+    precipitation: precipitation as Weather["precipitation"],
+  };
+  const scene = refreshSky(campaign.id, { force: weather });
+  const sentence = describeWeather(weather);
+  tableNote(campaign, `${sentence}${args.reason ? ` ${args.reason}` : ""}`);
+  return {
+    ok: true,
+    weather: sentence,
+    ...(scene ? { light: scene.isDark ? "dark" : "daylight" } : {}),
+    note: "The board's light, Perception, ranged attacks and travel now follow this sky.",
+  };
+}
+
+const titleSchema = z.object({
+  title: z.string().trim().min(1).max(60),
+  subtitle: z.string().trim().max(120).optional(),
+  tone: z.enum(["gold", "ember", "dawn", "plain"]).optional(),
+});
+
+export function handleShowTitle(campaign: Campaign, rawArguments: string): Record<string, unknown> {
+  let args: z.infer<typeof titleSchema>;
+  try {
+    args = titleSchema.parse(JSON.parse(rawArguments || "{}"));
+  } catch {
+    return { error: "Invalid arguments: show_title needs a title." };
+  }
+  publishTitleCard(campaign.id, {
+    title: args.title,
+    ...(args.subtitle ? { subtitle: args.subtitle } : {}),
+    tone: args.tone ?? "gold",
+  });
+  return { ok: true, shown: args.title };
+}
 
 function publishRoll(campaignId: string, roll: ReturnType<typeof insertRoll>) {
   publishWithSeq(campaignId, allocateSeq(campaignId), "roll_result", { roll, source: "digital" });
@@ -340,6 +454,7 @@ export function handlePassTime(
   } catch {
     return { error: "Invalid arguments: pass_time needs an amount and a unit." };
   }
+  const before = getClock(campaign.id);
   const moved = advanceClock(campaign.id, args.amount, args.unit);
   if ("error" in moved) {
     return moved;
@@ -350,6 +465,8 @@ export function handlePassTime(
   if (ticks > 0) {
     tickWorldTimeskip(campaign.id, ticks);
   }
+  // The sky moves with the clock: a new day rolls new weather.
+  const sky = refreshSky(campaign.id, { before, minutes: moved.minutes });
   tableNote(
     campaign,
     `${describeDuration(moved.minutes)} passes${args.reason ? `: ${args.reason}` : ""}. It is now ${describeInstant(moved.clock.calendar, moved.clock.instant)}.`,
@@ -358,6 +475,7 @@ export function handlePassTime(
     ok: true,
     passed: describeDuration(moved.minutes),
     now: describeInstant(moved.clock.calendar, moved.clock.instant),
+    ...(sky?.summary ? { weather: sky.summary } : {}),
   };
 }
 
@@ -385,8 +503,48 @@ export function handleTravel(
   // The hours the party spent on the road are hours the world spent too, so
   // the clock moves with them. Before this the in-world date never changed
   // no matter how far anyone walked.
+  const before = getClock(campaign.id);
   const moved = advanceClock(campaign.id, args.hours, "hours");
   const now = "error" in moved ? "" : describeInstant(moved.clock.calendar, moved.clock.instant);
+  // A leg of four hours or more rolls the sky; the sky then has its say on
+  // the march: snow and storm halve the ground covered, and frigid or hot
+  // air is the extreme cold or heat hazard for every traveller.
+  const sky = refreshSky(campaign.id, {
+    before,
+    minutes: "error" in moved ? 0 : moved.minutes,
+  });
+  const weatherNotes: string[] = [];
+  const weatherOutcome: Record<string, unknown> = {};
+  if (sky?.weather) {
+    const factor = weatherTravelFactor(sky.weather);
+    if (factor < 1) {
+      weatherNotes.push(
+        `${sky.weather.sky === "snow" ? "Snow underfoot" : "The weather"} slows the march: the party covers about ${Math.round(factor * 100)} percent of the usual distance.`,
+      );
+      weatherOutcome.distanceFactor = factor;
+    }
+    const exposure = weatherExposure(sky.weather);
+    if (exposure && args.hours >= 4) {
+      const hazard = handleApplyHazard(
+        campaign,
+        turn,
+        JSON.stringify({
+          type: exposure,
+          characterIds: resolveTargets(args.characterIds, sheets, sheetsById).map((sheet) => sheet.id),
+          reason: exposure === "extreme_cold" ? "hours in the bitter cold" : "hours in the heat",
+        }),
+        sheets,
+        sheetsById,
+      );
+      weatherOutcome.exposure = hazard;
+      weatherNotes.push(
+        exposure === "extreme_cold"
+          ? "The cold is a hazard: the server rolled the Constitution saves and applied any exhaustion."
+          : "The heat is a hazard: the server rolled the Constitution saves and applied any exhaustion.",
+      );
+    }
+    weatherOutcome.weather = sky.summary;
+  }
 
   const paceNote =
     pace === "fast"
@@ -403,7 +561,8 @@ export function handleTravel(
       forcedMarch: false,
       passivePerceptionMod: effect.passivePerceptionMod,
       ...(now ? { now } : {}),
-      note: `A day within 8 hours of marching; no exhaustion. ${paceNote}`,
+      ...weatherOutcome,
+      note: `A day within 8 hours of marching; no exhaustion. ${paceNote}${weatherNotes.length ? ` ${weatherNotes.join(" ")}` : ""}`,
     };
   }
 

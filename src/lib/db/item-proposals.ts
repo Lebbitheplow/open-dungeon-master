@@ -20,6 +20,8 @@ export type ItemProposal = {
   seq: number;
   createdAt: string;
   resolvedAt: string | null;
+  // A trade's counterparty (docs/vtt-parity-implementation-plan.md 11.2).
+  toCharacterId: string;
 };
 
 type ProposalRow = {
@@ -36,10 +38,12 @@ type ProposalRow = {
   seq: number;
   created_at: string;
   resolved_at: string | null;
+  to_character_id: string | null;
 };
 
 function mapProposal(row: ProposalRow): ItemProposal {
   return {
+    toCharacterId: row.to_character_id ?? "",
     id: row.id,
     campaignId: row.campaign_id,
     turnId: row.turn_id,
@@ -66,14 +70,15 @@ export function insertItemProposal(input: {
   summary: string;
   reason: string;
   seq: number;
+  toCharacterId?: string;
 }): ItemProposal {
   const id = crypto.randomUUID();
   getDatabase()
     .prepare(
       `INSERT INTO item_proposals (
          id, campaign_id, turn_id, character_id, user_id, tool_name,
-         args_json, summary, reason, status, seq, created_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
+         args_json, summary, reason, status, seq, created_at, to_character_id
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`,
     )
     .run(
       id,
@@ -87,6 +92,7 @@ export function insertItemProposal(input: {
       input.reason.slice(0, 300),
       input.seq,
       nowIso(),
+      input.toCharacterId ?? "",
     );
   return getItemProposal(id)!;
 }

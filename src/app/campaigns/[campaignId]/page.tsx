@@ -22,6 +22,10 @@ export default function CampaignPage({
     refreshAsks,
     refreshFacts,
     refreshBattleMap,
+    markFxPlayed,
+    markCameraDone,
+    markTitleCardShown,
+    playSting,
   } = useCampaignStream(campaignId);
 
   if (state.loading) {
@@ -57,6 +61,10 @@ export default function CampaignPage({
       refreshWhispers={refreshWhispers}
       refreshAsks={refreshAsks}
       refreshBattleMap={refreshBattleMap}
+      markFxPlayed={markFxPlayed}
+      markCameraDone={markCameraDone}
+      markTitleCardShown={markTitleCardShown}
+      playSting={playSting}
     />
   );
 }

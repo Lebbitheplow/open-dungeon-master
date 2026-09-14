@@ -7,9 +7,13 @@ import { rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
 import { computeSheetDerived, SRD_SKILLS } from "@/lib/srd";
 import { dcForDifficulty, difficultyOfDc, normalizeDifficulty } from "@/lib/srd/dc";
+import { strictnessShift } from "@/lib/dm/safety-logic";
 import { resolveRollExpression, resolveSheetRef } from "@/lib/dm/rolls";
 import type { RollArgs } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { getActiveBattleMap } from "@/lib/battlemap/view";
+import { normalizeClock } from "@/lib/dm/calendar";
+import { weatherPerceptionRider } from "@/lib/srd/weather";
 
 // Two exploration-pillar tools that were pure narration before: a group skill
 // check resolved by the 5e "half the group succeeds" rule, and a passive
@@ -113,10 +117,11 @@ export const checkTools: ToolDef[] = [
 function resolveDc(
   difficulty: unknown,
   dc: unknown,
+  shift = 0,
 ): { dc: number; label: string } | { error: string } {
   const explicit = typeof dc === "number" && Number.isFinite(dc) ? Math.round(dc) : null;
   const tier = normalizeDifficulty(difficulty);
-  const value = explicit ?? (tier ? dcForDifficulty(tier) : null);
+  const value = explicit ?? (tier ? dcForDifficulty(tier, shift) : null);
   if (value === null) {
     return { error: "Pass a difficulty tier (very_easy .. nearly_impossible) or an exact dc." };
   }
@@ -176,7 +181,7 @@ export function handleGroupCheck(
   if (!args.skill && !args.ability) {
     return { error: "group_check needs a skill (e.g. stealth) or an ability (e.g. str)." };
   }
-  const dc = resolveDc(args.difficulty, args.dc);
+  const dc = resolveDc(args.difficulty, args.dc, strictnessShift(campaign.gameSettings.gm?.strictness ?? "standard"));
   if ("error" in dc) {
     return dc;
   }
@@ -257,7 +262,7 @@ function passiveScore(sheet: CharacterSheet, sense: "perception" | "insight" | "
 }
 
 export function handleCheckNotice(
-  _campaign: Campaign,
+  campaign: Campaign,
   rawArguments: string,
   sheets: CharacterSheet[],
   sheetsById: Map<string, CharacterSheet>,
@@ -268,7 +273,7 @@ export function handleCheckNotice(
   } catch {
     return { error: "Invalid arguments: check_notice needs a difficulty and optionally a sense." };
   }
-  const dc = resolveDc(args.difficulty, args.dc);
+  const dc = resolveDc(args.difficulty, args.dc, strictnessShift(campaign.gameSettings.gm?.strictness ?? "standard"));
   if ("error" in dc) {
     return dc;
   }
@@ -278,10 +283,18 @@ export function handleCheckNotice(
     return { error: "No valid characters to test; use characterIds from GAME STATE." };
   }
 
+  // Rain and fog: minus five to passive Perception by sight when the party
+  // is under the sky (no board, or an outdoor one).
+  const board = getActiveBattleMap(campaign.id);
+  const underSky = !board || board.outdoors;
+  const weather =
+    sense === "perception" && underSky
+      ? weatherPerceptionRider(normalizeClock(campaign.clock).weather)
+      : { disadvantage: false, passiveMod: 0, note: null };
   const noticedBy: string[] = [];
   const missedBy: string[] = [];
   for (const sheet of targets) {
-    const passive = passiveScore(sheet, sense);
+    const passive = passiveScore(sheet, sense) + weather.passiveMod;
     if (passive >= dc.dc) {
       noticedBy.push(sheet.name);
     } else {
@@ -297,6 +310,7 @@ export function handleCheckNotice(
     noticedBy,
     missedBy,
     anyNoticed,
+    ...(weather.note ? { weather: weather.note } : {}),
     note: anyNoticed
       ? `${noticedBy.join(", ")} notice${noticedBy.length === 1 ? "s" : ""} it (passive ${sense} vs DC ${dc.dc}); ${missedBy.length ? `${missedBy.join(", ")} do not` : "everyone catches it"}. Reveal it only to those who noticed.`
       : `No one notices it: every passive ${sense} is under DC ${dc.dc}. Keep it hidden; do not describe it.`,

@@ -4,6 +4,7 @@ import { getGlobalConfig } from "@/lib/db/app-settings";
 import { serverEnv } from "@/lib/server-env";
 import {
   fetchRegistryIndex,
+  installBundleFromUrl,
   installFromUrl,
   installWorldPack,
   pickRegistryUrl,
@@ -25,6 +26,8 @@ export const dynamic = "force-dynamic";
 const bodySchema = z.union([
   z.object({ packId: z.string().min(1).max(50) }),
   z.object({ pack: z.unknown() }),
+  // A prepared world from the registry (docs/vtt-parity-implementation-plan.md 12.3).
+  z.object({ bundleId: z.string().min(1).max(50) }),
 ]);
 
 export async function POST(request: Request) {
@@ -56,6 +59,17 @@ export async function POST(request: Request) {
   const index = await fetchRegistryIndex(url);
   if (!index.ok) {
     return Response.json({ error: index.error }, { status: 502 });
+  }
+  if ("bundleId" in body) {
+    const bundle = index.bundles.find((candidate) => candidate.id === body.bundleId);
+    if (!bundle) {
+      return Response.json({ error: "That prepared world is not in the registry." }, { status: 404 });
+    }
+    const result = await installBundleFromUrl(bundle.downloadUrl, admin.id);
+    if (!result.ok) {
+      return Response.json({ error: result.error }, { status: result.status });
+    }
+    return Response.json({ bundle: { id: bundle.id, name: bundle.name }, workshopId: result.workshopId, copied: result.copied });
   }
   const entry = index.packs.find((candidate) => candidate.id === body.packId);
   if (!entry) {

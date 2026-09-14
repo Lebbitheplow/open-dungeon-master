@@ -70,3 +70,44 @@ test("the prompt marks a secret so the model knows the party does not know it", 
 });
 
 console.log(`test-lore-links: ${passed} passed`);
+
+// ---- docs/vtt-parity-implementation-plan.md sections 5.1 and 5.4 ----
+const { hasSecretBlocks, loreBacklinks, loreReadableBy, markSecretBlocks, normalizeLoreAudience, stripSecretBlocks } =
+  await import("../src/lib/dm/world-lore-logic.ts");
+
+test("a secret block is dropped for the table and marked for the prompt", () => {
+  const body = "The mill burned.\n\n:::secret\nThe miller lit it.\n:::\n\nNobody was hurt.";
+  assert.ok(hasSecretBlocks(body));
+  assert.equal(stripSecretBlocks(body), "The mill burned.\n\nNobody was hurt.");
+  assert.ok(markSecretBlocks(body).includes("(SECRET, the party does not know: The miller lit it.)"));
+  assert.equal(stripSecretBlocks("no secrets\r\nhere"), "no secrets\nhere");
+  assert.ok(!hasSecretBlocks("no secrets"));
+  const block = renderLoreForPrompt([entry({ id: "s", body })], []);
+  assert.ok(block.includes("SECRET, the party does not know"));
+});
+
+test("an entry written for some players opens only for them", () => {
+  const forTwo = { ...entry({ id: "a" }), audience: ["u1", "u2"], attachmentPath: "", style: "plain" };
+  const forAll = { ...entry({ id: "b" }), audience: null, attachmentPath: "", style: "plain" };
+  assert.ok(loreReadableBy(forTwo, false, "u1"));
+  assert.ok(!loreReadableBy(forTwo, false, "u3"));
+  assert.ok(loreReadableBy(forTwo, true, "u3"), "the DM reads everything");
+  assert.ok(loreReadableBy(forAll, false, "u3"));
+  assert.deepEqual(loreVisibleTo([forTwo, forAll], false, "u3").map((e) => e.id), ["b"]);
+  assert.deepEqual(loreVisibleTo([forTwo, forAll], false, "u2").map((e) => e.id), ["a", "b"]);
+  assert.equal(normalizeLoreAudience("nope"), null);
+  assert.equal(normalizeLoreAudience([]), null);
+  assert.deepEqual(normalizeLoreAudience(["u1", "u1", 3, "u2"]), ["u1", "u2"]);
+});
+
+test("backlinks name every source that links the title, case-insensitively", () => {
+  const mentions = loreBacklinks("The Mill", [
+    { kind: "lore", id: "l2", name: "Marla", text: "She owns [[the mill]]." },
+    { kind: "beat", id: "b1", name: "beat", text: "Nothing here." },
+    { kind: "note", id: "n1", name: "Party note", text: "Go to [[The Mill]] at dusk." },
+  ]);
+  assert.deepEqual(mentions.map((m) => m.id), ["l2", "n1"]);
+  assert.deepEqual(loreBacklinks("", [{ kind: "lore", id: "x", name: "x", text: "[[]]" }]), []);
+});
+
+console.log(`test-lore-links (binder): ${passed} passed`);

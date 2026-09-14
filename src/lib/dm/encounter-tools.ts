@@ -1,3 +1,4 @@
+import { fieldedSheets } from "@/lib/dm/roster";
 import { z } from "zod";
 import {
   allocateSeq,
@@ -46,9 +47,13 @@ import {
   approachForAttack,
   createBattleMapForEncounter,
   handleMoveToken,
+  handleSetMovement,
+  handleTeleportToken,
   isRangedAttackName,
   moveTokenTool,
   publishBattleMapUpdate,
+  setMovementTool,
+  teleportTokenTool,
 } from "@/lib/dm/map-tools";
 import {
   applyEnemyDamage,
@@ -84,10 +89,18 @@ import {
   attackContext,
   incapacitatedBy,
   isIncapacitated,
+  mergeAdvantage,
 } from "@/lib/dm/condition-logic";
 import { tickEncounterConditions } from "@/lib/dm/condition-tick";
 import { rollDeathSave } from "@/lib/dm/death";
 import { getBattleMapForEncounter, getTokenByRef, resetRoundBudgets } from "@/lib/db/battle-maps";
+import { recordEncounterTarget } from "@/lib/db/encounters";
+import { initLegendaryPools, refillLegendaryForTurn } from "@/lib/dm/legendary-tools";
+import { planAttackFx } from "@/lib/battlemap/fx-plan";
+import { publishFx, tokenPosition } from "@/lib/dm/fx";
+import { normalizeClock } from "@/lib/dm/calendar";
+import { weatherRangedRider } from "@/lib/srd/weather";
+import { publishTitleCard } from "@/lib/dm/scene-state";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // Server-authoritative combat: enemies spawn from real stat blocks, their
@@ -102,6 +115,8 @@ export const ENCOUNTER_TOOL_NAMES = [
   "damage_enemy",
   "enemy_attack",
   "move_token",
+  "teleport_token",
+  "set_movement",
   "end_turn",
   "end_encounter",
   ...EXTRA_ENCOUNTER_TOOL_NAMES,
@@ -161,6 +176,10 @@ const startEncounterTool: ToolDef = {
           type: "string",
           description:
             "One line describing the fighting ground, used to shape the tactical battle map, e.g. 'a torchlit crypt with a flooded channel'.",
+        },
+        lair: {
+          type: "boolean",
+          description: "True when the fight is in a legendary creature's lair, so the lair acts on initiative 20 each round (lair_action).",
         },
       },
       required: ["enemies"],
@@ -261,6 +280,8 @@ export function encounterTools(hasActiveEncounter: boolean): ToolDef[] {
         damageEnemyTool,
         enemyAttackTool,
         moveTokenTool,
+        teleportTokenTool,
+        setMovementTool,
         endTurnTool,
         endEncounterTool,
         ...extraEncounterTools,
@@ -283,6 +304,7 @@ const startArgsSchema = z.object({
   summary: z.string().optional(),
   surprised: z.enum(["none", "enemies", "party"]).optional(),
   battlefield: z.string().max(300).optional(),
+  lair: z.boolean().optional(),
 });
 
 // Accepts the documented {enemies:[...]} shape, or flat monster/name/count
@@ -385,11 +407,25 @@ function handleStartEncounter(
   } else if (args.surprised === "party") {
     encounter.surprisedIds = sheets.map((sheet) => sheet.id);
   }
-  if (encounter.surprisedIds.length) {
-    saveEncounter(encounter);
-  }
+  // Legendary pools and the lair flag (docs/vtt-parity-implementation-
+  // plan.md 4.1), written with the fight so the tracker shows them at once.
+  initLegendaryPools(encounter, enemies, args.lair === true);
+  saveEncounter(encounter);
   createBattleMapForEncounter(campaign, encounter, enemies, sheets, args.battlefield);
   publishEncounter(campaign.id);
+  // The fight's card: the opening line in ember, "Ambush" when the party
+  // was caught, with the combat sting (SceneTitle.tsx).
+  publishTitleCard(campaign.id, {
+    title: args.surprised === "party" ? "Ambush" : (args.summary ?? "").trim().slice(0, 48) || "Battle",
+    subtitle:
+      args.surprised === "party"
+        ? (args.summary ?? "").trim().slice(0, 80) || undefined
+        : args.surprised === "enemies"
+          ? "The party strikes first"
+          : "Roll initiative",
+    tone: "ember",
+    sting: "sword_clash",
+  });
 
   // Initiative is starting: the room's music changes, and the harder the
   // fight reads the bigger the music. The bed is left alone, because the
@@ -532,7 +568,8 @@ export function recordInitiativeRoll(
     initiative: total,
   });
 
-  const sheets = listSheets(campaignId);
+  const campaignForRoster = getCampaignById(campaignId);
+  const sheets = campaignForRoster ? fieldedSheets(campaignForRoster) : listSheets(campaignId);
   const staged = encounter.order.filter(
     (entry): entry is Extract<OrderEntry, { kind: "pc" }> => entry.kind === "pc",
   );
@@ -598,7 +635,7 @@ export function ensureInitiativeProgress(campaign: Campaign): string | null {
       .filter((entry): entry is Extract<OrderEntry, { kind: "pc" }> => entry.kind === "pc")
       .map((entry) => entry.characterId),
   );
-  const missing = listSheets(campaign.id).filter((sheet) => !staged.has(sheet.id));
+  const missing = fieldedSheets(campaign).filter((sheet) => !staged.has(sheet.id));
   if (!missing.length) {
     return null;
   }
@@ -769,6 +806,27 @@ function handleEnemyAttack(
   if (spatial?.blocked) {
     return spatial.blocked;
   }
+  // Where the two stand after the approach, for the effect and the target
+  // line every client draws (src/lib/battlemap/fx-plan.ts).
+  const attackerPos = tokenPosition(campaign.id, enemy.id);
+  const targetPos = tokenPosition(campaign.id, target.id);
+  if (attackerPos && targetPos) {
+    recordEncounterTarget(encounter.id, encounter.round, enemy.id, target.id);
+  }
+  // A gale over an outdoor board: disadvantage on ranged attacks past 30 ft,
+  // for the monsters exactly as for the party.
+  const boardForWeather = getBattleMapForEncounter(encounter.id);
+  const gale =
+    attackerPos && targetPos && boardForWeather?.outdoors
+      ? weatherRangedRider(
+          normalizeClock(campaign.clock).weather,
+          isRangedAttackName(attack.name),
+          Math.max(
+            Math.abs(attackerPos.at.x - targetPos.at.x),
+            Math.abs(attackerPos.at.y - targetPos.at.y),
+          ),
+        )
+      : { disadvantage: false, note: null };
 
   // Conditions on both sides drive advantage and auto-crits; the model's
   // situational claim merges in as one more source.
@@ -783,7 +841,13 @@ function handleEnemyAttack(
 
   // Multiattack: the full routine executes in this ONE call, each swing its
   // own to-hit and damage dice cards, stopping early if the target drops.
-  const advantage: Advantage = conditionContext.advantage;
+  const advantage: Advantage = mergeAdvantage([
+    conditionContext.advantage,
+    ...(gale.disadvantage ? ["disadvantage" as const] : []),
+  ]);
+  if (gale.note) {
+    conditionContext.notes.push(gale.note);
+  }
   const totalSwings = Math.max(1, Math.min(3, enemy.stats.attacksPerTurn ?? 1));
   const swings: Array<Record<string, unknown>> = [];
   let dropped = false;
@@ -817,6 +881,23 @@ function handleEnemyAttack(
         hit: false,
         ...(hitOutcome.crit === "nat1" ? { fumble: true } : {}),
       });
+      if (attackerPos && targetPos && !attackerPos.hidden) {
+        publishFx(
+          campaign.id,
+          planAttackFx({
+            from: attackerPos.at,
+            to: targetPos.at,
+            fromTokenId: attackerPos.tokenId,
+            toTokenId: targetPos.tokenId,
+            hit: false,
+            crit: false,
+            fumble: hitOutcome.crit === "nat1",
+            ranged,
+            damageType: attack.type,
+            visibility: hitRoll.visibility,
+          }),
+        );
+      }
       continue;
     }
 
@@ -859,6 +940,23 @@ function handleEnemyAttack(
       sheetsById,
     ).result;
     totalDamage += damageOutcome.total;
+    if (attackerPos && targetPos && !attackerPos.hidden) {
+      publishFx(
+        campaign.id,
+        planAttackFx({
+          from: attackerPos.at,
+          to: targetPos.at,
+          fromTokenId: attackerPos.tokenId,
+          toTokenId: targetPos.tokenId,
+          hit: true,
+          crit,
+          ranged,
+          damage: damageOutcome.total,
+          damageType: attack.type,
+          visibility: hitRoll.visibility,
+        }),
+      );
+    }
     if (typeof applied.hp === "string") {
       targetHp = applied.hp;
     }
@@ -1057,6 +1155,10 @@ export function applyEncounterCall(
       return { result: handleEnemyAttack(campaign, turn, rawArguments, sheets, sheetsById) };
     case "move_token":
       return { result: handleMoveToken(campaign, rawArguments, sheets, sheetsById) };
+    case "teleport_token":
+      return { result: handleTeleportToken(campaign, rawArguments, sheets, sheetsById) };
+    case "set_movement":
+      return { result: handleSetMovement(campaign, rawArguments, sheets, sheetsById) };
     case "end_encounter":
       return { result: handleEndEncounter(campaign, turn, rawArguments, sheets, sheetsById) };
     default:
@@ -1086,6 +1188,11 @@ function advancePointer(
   // The action economy belongs to whoever was acting; the next combatant
   // starts clean (src/lib/dm/action-budget.ts).
   encounter.turnBudget = null;
+  // A legendary creature's own turn refills its legendary actions.
+  const arriving = encounter.order[encounter.turnIndex];
+  if (arriving?.kind === "enemy") {
+    refillLegendaryForTurn(encounter, enemiesById.get(arriving.enemyId));
+  }
   if (next.wrapped) {
     encounter.round += 1;
     // Reactions come back at the top of each combatant's turn; one round is
@@ -1113,11 +1220,15 @@ function advancePointer(
     const nextEntry = encounter.order[encounter.turnIndex];
     if (nextEntry) {
       const seq = allocateSeq(campaign.id);
+      const lairNote =
+        next.wrapped && encounter.legendary.lair
+          ? " Initiative 20: the lair stirs (lair_action)."
+          : "";
       const message = insertCampaignMessage({
         campaignId: campaign.id,
         seq,
         authorType: "system",
-        content: `It is now ${nextEntry.name}'s turn (round ${encounter.round}).`,
+        content: `It is now ${nextEntry.name}'s turn (round ${encounter.round}).${lairNote}`,
       });
       publishWithSeq(campaign.id, seq, "message_added", { message });
     }

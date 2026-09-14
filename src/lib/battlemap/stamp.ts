@@ -219,4 +219,10 @@ export function normalizeStamp(input: {
 
 // The characters a stamp can put on the map, for a test that asserts the
 // palette never grows a tile the engine cannot read.
-export const STAMP_CHARS: readonly string[] = [TERRAIN.floor, TERRAIN.wall, TERRAIN.water, TERRAIN.difficult];
+export const STAMP_CHARS: readonly string[] = [
+  TERRAIN.floor,
+  TERRAIN.wall,
+  TERRAIN.water,
+  TERRAIN.difficult,
+  TERRAIN.lowwall,
+];

@@ -1,5 +1,7 @@
 "use client";
 
+import { appConfirm } from "@/components/ui/ConfirmDialog";
+
 import {
   Camera,
   Copy,
@@ -177,7 +179,7 @@ export default function CharactersPage() {
   }
 
   async function remove(id: string, name: string) {
-    if (!window.confirm(`Delete ${name} from your library? This cannot be undone.`)) {
+    if (!await appConfirm(`Delete ${name} from your library? This cannot be undone.`)) {
       return;
     }
     const response = await fetch(`/api/characters/${id}`, { method: "DELETE" });

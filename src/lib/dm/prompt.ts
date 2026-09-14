@@ -20,18 +20,22 @@ import { renderWorldArcsForPrompt } from "@/lib/dm/world-arc-logic";
 import { renderFactsForPrompt, type FactLike } from "@/lib/dm/fact-logic";
 import { companionMode } from "@/lib/dm/companion-tools";
 import { breakDown, describeInstant, isDark, normalizeClock } from "@/lib/dm/calendar";
+import { describeWeather } from "@/lib/srd/weather";
 import { describeParty, normalizeParty } from "@/lib/dm/party-logic";
 import { getSceneTracker } from "@/lib/db/scene-tracker";
 import { trackerPromptBlock } from "@/lib/dm/scene-tracker-logic";
 import { getAmbience } from "@/lib/db/ambience";
 import { describeAmbience } from "@/lib/ambience/logic";
 import { listEffects } from "@/lib/db/active-effects";
+import { listQuests } from "@/lib/db/quests";
+import { renderQuestsForPrompt } from "@/lib/dm/quest-logic";
 import { describeEffect } from "@/lib/dm/effects-logic";
 import { getMounts } from "@/lib/db/mounts";
 import { describeMount } from "@/lib/srd/mounts";
 import { formatCopper } from "@/lib/srd/currency";
 import { coverPromptBlock } from "@/lib/dm/delegation";
 import { ENGINE_BOUNDARY_CHECK, ENGINE_BOUNDARY_RULES } from "@/lib/dm/engine-boundary";
+import { normalizeGm, normalizeSafety, renderGmBlock, renderSafetyBlock } from "@/lib/dm/safety-logic";
 import { renderChapterLod } from "@/lib/dm/chapter-lod";
 import { buildPinnedMemoriesBlock } from "@/lib/dm/pin-logic";
 import {
@@ -91,12 +95,20 @@ export function buildDmSystem(campaign: Campaign): string {
   // The engine-boundary contract leads: one labelled statement of which facts
   // the runtime owns, which the numbered rules below it then apply tool by
   // tool (src/lib/dm/engine-boundary.ts).
+  // The table's safety limits stand first of all (docs/vtt-parity-
+  // implementation-plan.md 9.1): they outrank the engine boundary as well
+  // as every rule under it.
   const parts = [
+    renderSafetyBlock(normalizeSafety(campaign.gameSettings.safety)),
     campaign.gameSettings.narrationGuard
       ? `${ENGINE_BOUNDARY_RULES}${ENGINE_BOUNDARY_CHECK}`
       : ENGINE_BOUNDARY_RULES,
     DM_SYSTEM,
   ];
+  const gmBlock = renderGmBlock(normalizeGm(campaign.gameSettings.gm));
+  if (gmBlock) {
+    parts.push(gmBlock);
+  }
   if (preset.dmFlavor) {
     parts.push(preset.dmFlavor);
   }
@@ -201,6 +213,14 @@ export type DmGameState = {
   variantRulesBlock?: string;
   houseRulesBlock?: string;
   loreBlock?: string;
+  // The factions block (docs/vtt-parity-implementation-plan.md section 6).
+  factionsBlock?: string;
+  shopsBlock?: string;
+  // Written while the state block is built, so the trace can cost the sky
+  // line and the quest log on their own (docs/vtt-parity-implementation-plan.md
+  // section 15).
+  skyLine?: string;
+  questsBlock?: string;
   // A one-turn steer the party lead armed (src/lib/dm/director-logic.ts).
   // Rides last in the payload, after the player's own message, because
   // recency is the whole point: it has to outweigh the scene it is bending.
@@ -228,6 +248,7 @@ export const ENCOUNTER_RULES = `Combat rules (an encounter is active):
 - When a monster forces a saving throw on ONE character, call cast_at_player: the server rolls that character's save from their real sheet and applies the damage and condition itself. Several characters caught at once go through aoe_damage. NEVER apply a condition with set_condition when a saving throw should have decided it, and never decide a character's save yourself.
 - Harm from the environment (a fall, a sprung trap, a gout of flame, a collapsing floor, running out of air) goes through apply_hazard, never through numbers you invent or through damage_enemy: pass type 'falling' with the feet, type 'trap' with a severity (setback, dangerous, deadly), type 'generic' with your own dice, save, and DC, or type 'suffocation'/'drowning' with roundsWithoutAir for a character with no air; list every character caught. The server sets falling damage at 1d6 per 10 feet, scales a trap's save DC and damage to each victim's level, derives from Constitution how long a suffocating character lasts before dropping to 0 HP, rolls each save, and applies the result. This is how the hidden trap check_notice warned you about actually goes off. Never decide a drowning character's fate yourself; let the tool say when they go down. Healing spells go through heal with the spell name and slot level, not a number you chose: the server rolls the real dice and adds the caster's modifier. Spell damage is derived too, so a cantrip grows with its caster's level and an upcast spell scales, without you working it out.
 - Enemies act through enemy_attack: name the enemy, its attack, and the target character. The server rolls to-hit from the enemy's real stat block against the target's real AC and applies real damage. Never use request_roll for an enemy's attack or damage, and never invent an enemy's numbers.
+- A creature whose block lists Legendary actions spends them through legendary_action at the END of another creature's turn (never on its own); the server keeps the pool and refills it on the creature's turn. Legendary Resistance is spent by the server the moment a failed save would bind the creature, and by legendary_resist when you choose to. In a lair, call lair_action once a round when the turn note says initiative 20 has come.
 - Enemy numbers are DM-SECRET. The enemy HP, AC, attack bonuses, resistances, and traits in GAME STATE exist only so you can run the fight; NEVER state, quote, or hint at them in narration, not even at an encounter's start, not even when a player asks directly (players already see a rough health indicator in their own interface). Describe enemy condition only in fiction: "barely scratched", "bloodied and slowing", "staggering, near collapse". Saying "the goblin has 12 HP left" or "it has 14 AC" is always wrong; an in-world answer ("it looks winded but far from finished") is the only correct response to questions about an enemy's remaining strength.
 - Follow the initiative order in GAME STATE. On a player's turn, a message that is only talk or a question gets an answer and their turn is NOT spent; wait for them to declare an action. When they declare it, resolve it with the matching tool (pc_attack, cast_at_enemy, aoe_damage, or request_roll).
 - Dodge, Dash, Disengage, Hide, Help, Grapple, and Shove go through take_action, never through narration alone: the server spends the action, rolls the contest a grapple or shove needs against the enemy's real stats, and applies the result (a dodging character is genuinely harder to hit, a grappled enemy genuinely cannot move). Reactions that interrupt someone else's turn (Shield, Uncanny Dodge, Deflect Missiles, Cutting Words) go through use_reaction, which enforces the one-per-round limit. Opportunity attacks are automatic on BOTH sides: when a player walks out of an enemy's reach the server rolls the enemy's swing, and when you move an enemy out of a character's reach with move_token the server rolls that character's swing and applies it. Both post as table notes and come back on the move_token result. Never narrate a free retreat in either direction, never roll one yourself, and never call pc_attack for one the server already reported. Hiding is real too: take_action hide compares their Stealth against the enemies' actual passive Perception, and a successful hide gives their next attack advantage and is spent by making it.
@@ -560,13 +581,12 @@ export function buildGameStateBlock(state: DmGameState): string {
   // built from fixtures in several tests as well as from a real row, and a
   // missing clock should cost the prompt a line, not throw.
   const clock = normalizeClock(campaign.clock);
-  sections.push(
-    `Date and time: ${describeInstant(clock.calendar, clock.instant)}. ${
-      isDark(breakDown(clock.calendar, clock.instant).hour)
-        ? "It is dark; light sources, darkvision and stealth apply."
-        : "It is daylight."
-    }`,
-  );
+  state.skyLine = `Date and time: ${describeInstant(clock.calendar, clock.instant)}. ${
+    isDark(breakDown(clock.calendar, clock.instant).hour)
+      ? "It is dark; light sources, darkvision and stealth apply."
+      : "It is daylight."
+  }${clock.weather ? ` ${describeWeather(clock.weather)} The server enforces it: Perception, sight, ranged attacks and travel already account for the sky; narrate it, never restate the numbers.` : ""}`;
+  sections.push(state.skyLine);
   // The selected world's own nouns, and the alias table that lets the DM
   // narrate "Curaga" while still calling use_spell_slot with "Cure Wounds".
   const worldPrimer = renderWorldPrimer(packFor(campaign.gameSettings));
@@ -735,9 +755,18 @@ export function buildGameStateBlock(state: DmGameState): string {
         .join(", ")}`,
     );
   }
-  // The arc render already lists active quests; avoid double token spend.
-  if (campaign.questLog.length && !campaign.storyArc) {
-    sections.push(`Quests:\n${campaign.questLog.map((quest) => `- ${quest}`).join("\n")}`);
+  // The quest log with its ticks (docs/vtt-parity-implementation-plan.md
+  // section 5.7). The arc's own sub-arcs are in the arc render; this adds
+  // the DM's hand-written quests and the objectives ticked under both.
+  const questBlock = renderQuestsForPrompt(
+    listQuests(campaign.id).filter((quest) => quest.source === "dm" || quest.objectives.some((objective) => objective.done)),
+  );
+  if (questBlock) {
+    state.questsBlock = questBlock;
+    sections.push(questBlock);
+  } else if (campaign.questLog.length && !campaign.storyArc) {
+    state.questsBlock = `Quests:\n${campaign.questLog.map((quest) => `- ${quest}`).join("\n")}`;
+    sections.push(state.questsBlock);
   }
   if (state.variantRulesBlock) {
     sections.push(state.variantRulesBlock);
@@ -782,6 +811,12 @@ export function buildGameStateBlock(state: DmGameState): string {
         )
         .join("\n")}`,
     );
+  }
+  if (state.shopsBlock) {
+    sections.push(state.shopsBlock);
+  }
+  if (state.factionsBlock) {
+    sections.push(state.factionsBlock);
   }
   if (state.relationships?.length) {
     sections.push(
@@ -1193,14 +1228,47 @@ export function buildDmMessages(
       fitted.tokens +
       estimateTokens(state.directorBlock ?? ""),
     blocks: [
-      ...systemParts.map((text, index) => ({
-        id: index === systemParts.length - 1 ? "game-state" : `rules-${index}`,
-        kind: (index === systemParts.length - 1 ? "state" : "rules") as BlockKind,
-        tokens: estimateTokens(text),
+      // The table's lines stand at the head of the first system part; they
+      // are costed on their own so the inspector shows what the limit costs.
+      {
+        id: "safety",
+        kind: "safety" as BlockKind,
+        tokens: estimateTokens(renderSafetyBlock(normalizeSafety(state.campaign.gameSettings.safety))),
         included: true,
-        reason: "always included",
-        position: index + 1,
-      })),
+        reason: "always included; ordered first so it is cached",
+        position: 0,
+      },
+      ...systemParts.map((text, index) => {
+        const last = index === systemParts.length - 1;
+        const carved = last ? [state.skyLine, state.factionsBlock, state.questsBlock, state.shopsBlock].reduce((sum, part) => sum + (part ? estimateTokens(part) : 0), 0) : 0;
+        return {
+          id: last ? "game-state" : `rules-${index}`,
+          kind: (last ? "state" : "rules") as BlockKind,
+          tokens: Math.max(0, estimateTokens(text) - carved),
+          included: true,
+          reason: "always included",
+          position: index + 1,
+        };
+      }),
+      // The sections carved out of the state block, each with its own cost
+      // and floor (src/lib/dm/context-budget.ts SECTION_FLOORS).
+      ...(
+        [
+          ["sky", state.skyLine],
+          ["factions", state.factionsBlock],
+          ["quests", state.questsBlock],
+          ["shop", state.shopsBlock],
+        ] as Array<[BlockKind, string | undefined]>
+      )
+        .filter((entry): entry is [BlockKind, string] => Boolean(entry[1]))
+        .map(([kind, text], index) => ({
+          id: kind,
+          kind,
+          tokens: estimateTokens(text),
+          included: true,
+          reason: kind === "shop" ? "only while a shop is open here" : "inside the game state, under its own floor",
+          position: systemParts.length + 1 + index,
+        })),
       {
         id: "history",
         kind: "history" as BlockKind,

@@ -106,7 +106,7 @@ export function LobbyActions({
   onRemoveCharacter,
   onDelete,
 }: {
-  campaign: { id: string };
+  campaign: { id: string; gameSettings?: { multiCharacter?: string } };
   myMember: CampaignMember | undefined;
   mySheet: CharacterSheet | undefined;
   isDm: boolean;
@@ -156,6 +156,11 @@ export function LobbyActions({
               busy={busy}
               onRemove={onRemoveCharacter}
             />
+            {(campaign.gameSettings?.multiCharacter ?? "off") !== "off" ? (
+              <Link href={`/campaigns/${campaign.id}/character`} className="block text-center text-xs text-amber-300/80 hover:text-amber-200">
+                Add another character
+              </Link>
+            ) : null}
             <button
               type="button"
               onClick={onBeginSolo}
@@ -193,6 +198,11 @@ export function LobbyActions({
             busy={busy}
             onRemove={onRemoveCharacter}
           />
+          {(campaign.gameSettings?.multiCharacter ?? "off") !== "off" ? (
+            <Link href={`/campaigns/${campaign.id}/character`} className="block text-center text-xs text-amber-300/80 hover:text-amber-200">
+              Add another character
+            </Link>
+          ) : null}
           <p className="text-center text-xs text-stone-600">
             Changing your character clears your ready status.
           </p>

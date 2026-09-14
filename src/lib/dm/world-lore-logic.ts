@@ -21,6 +21,15 @@ export type WorldLoreCategory = (typeof WORLD_LORE_CATEGORIES)[number];
 export const LORE_VISIBILITIES = ["party", "dm"] as const;
 export type LoreVisibility = (typeof LORE_VISIBILITIES)[number];
 
+// How a party-visible entry is dressed when it is read or shown
+// (docs/vtt-parity-implementation-plan.md section 5.6): plain for the
+// bible, parchment for a letter or a page, notice for a poster.
+export const LORE_STYLES = ["plain", "parchment", "notice"] as const;
+export type LoreStyle = (typeof LORE_STYLES)[number];
+
+// The most people an entry can be written for by name.
+export const LORE_AUDIENCE_MAX = 12;
+
 export type WorldLoreEntry = {
   id: string;
   campaignId: string;
@@ -33,6 +42,12 @@ export type WorldLoreEntry = {
   // A picture with the entry: the letter the party finds, the notice on the
   // tavern wall. A party-visible entry with one is a handout. Empty for none.
   imagePath: string;
+  // Who may read a party entry: null for the whole table, or the user ids
+  // it was written for (section 5.1). Ignored when visibility is "dm".
+  audience: string[] | null;
+  // A PDF that travels with the entry (section 5.3), as an /uploads/ path.
+  attachmentPath: string;
+  style: LoreStyle;
   createdAt: string;
   updatedAt: string;
 };
@@ -76,10 +91,104 @@ export function normalizeLoreVisibility(raw: unknown): LoreVisibility {
   return raw === "dm" ? "dm" : "party";
 }
 
+export function normalizeLoreStyle(raw: unknown): LoreStyle {
+  return raw === "parchment" || raw === "notice" ? raw : "plain";
+}
+
+// A list of user ids, or null for everyone. Anything that is not a list of
+// strings reads as the table, which is what every entry has always been.
+export function normalizeLoreAudience(raw: unknown): string[] | null {
+  if (!Array.isArray(raw)) {
+    return null;
+  }
+  const ids = [...new Set(raw.filter((id): id is string => typeof id === "string" && id.length > 0))].slice(
+    0,
+    LORE_AUDIENCE_MAX,
+  );
+  return ids.length ? ids : null;
+}
+
+// Whether one reader may open an entry. Whoever steers the story reads all
+// of it; a player reads the table's entries and the ones written for them.
+export function loreReadableBy(entry: WorldLoreEntry, steersStory: boolean, userId?: string | null): boolean {
+  if (steersStory) {
+    return true;
+  }
+  if (entry.visibility === "dm") {
+    return false;
+  }
+  const audience = entry.audience ?? null;
+  return audience === null || (userId !== undefined && userId !== null && audience.includes(userId));
+}
+
 // What a reader may see. The DM prompt and whoever steers the story get
-// everything; the table gets what was written for it.
-export function loreVisibleTo(entries: WorldLoreEntry[], steersStory: boolean): WorldLoreEntry[] {
-  return steersStory ? entries : entries.filter((entry) => entry.visibility !== "dm");
+// everything; the table gets what was written for it, and a player also
+// gets what was written for them by name.
+export function loreVisibleTo(
+  entries: WorldLoreEntry[],
+  steersStory: boolean,
+  userId?: string | null,
+): WorldLoreEntry[] {
+  return entries.filter((entry) => loreReadableBy(entry, steersStory, userId));
+}
+
+// ---- secret blocks ----
+//
+// A body may fence a passage the DM alone reads (section 5.1):
+//
+//   :::secret
+//   The innkeeper is the cult's ear.
+//   :::
+//
+// The renderer keeps it for the DM seat and drops it for everyone else;
+// the prompt reads the whole body, so the model knows what it must not say.
+
+const SECRET_BLOCK = /^[ \t]*:::secret[ \t]*\n([\s\S]*?)^[ \t]*:::[ \t]*$/gm;
+
+export function hasSecretBlocks(body: string): boolean {
+  SECRET_BLOCK.lastIndex = 0;
+  return SECRET_BLOCK.test(body.replace(/\r\n/g, "\n"));
+}
+
+// The body without its secret passages, for any projection that is not
+// the DM seat. Blank lines left behind are collapsed so the page does not
+// show a gap where the secret was.
+export function stripSecretBlocks(body: string): string {
+  return body
+    .replace(/\r\n/g, "\n")
+    .replace(SECRET_BLOCK, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+// The body with each secret passage marked, for the DM prompt: the model
+// must know the secret and must know it is one.
+export function markSecretBlocks(body: string): string {
+  return body.replace(/\r\n/g, "\n").replace(SECRET_BLOCK, (_match, inner: string) => `(SECRET, the party does not know: ${inner.trim()})`);
+}
+
+// ---- backlinks ----
+//
+// "Mentioned in" for an entry (section 5.4): every text on the table that
+// links to it by name. Pure over whatever the caller gathered.
+
+export type LoreMention = { kind: "lore" | "npc" | "beat" | "note"; id: string; name: string };
+
+export function loreBacklinks(
+  title: string,
+  sources: Array<{ kind: LoreMention["kind"]; id: string; name: string; text: string }>,
+): LoreMention[] {
+  const wanted = title.trim().toLowerCase();
+  if (!wanted) {
+    return [];
+  }
+  const out: LoreMention[] = [];
+  for (const source of sources) {
+    if (loreLinkNames(source.text).some((name) => name.toLowerCase() === wanted)) {
+      out.push({ kind: source.kind, id: source.id, name: source.name });
+    }
+  }
+  return out;
 }
 
 // ---- links between documents ----
@@ -164,7 +273,7 @@ export function renderLoreForPrompt(
     }
     seen.add(entry.id);
     const secret = entry.visibility === "dm" ? " (SECRET: the party does not know this)" : "";
-    const line = `- [${entry.category}] ${entry.title}${secret}: ${clipBody(entry.body, 300)}`;
+    const line = `- [${entry.category}] ${entry.title}${secret}: ${clipBody(markSecretBlocks(entry.body), 300)}`;
     if (used + line.length > budget) {
       break;
     }

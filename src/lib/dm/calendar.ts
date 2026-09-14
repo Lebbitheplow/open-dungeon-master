@@ -15,15 +15,28 @@
 // Pure by design: no imports at all, so scripts/test-calendar.mjs can load it
 // and the client can render a date without a request.
 
+import { normalizeWeather } from "@/lib/srd/weather";
+import type { Weather } from "@/lib/scene/state";
+
 export type CalendarMonth = {
   name: string;
   days: number;
 };
 
+// A moon: a cycle in days and where in the cycle day zero falls.
+export type CalendarMoon = { name: string; cycleDays: number; offset: number };
+// A named day of the year (docs/vtt-parity-implementation-plan.md 7.1).
+export type CalendarFestival = { month: number; day: number; name: string };
+
 export type CalendarDefinition = {
   id: string;
   name: string;
   months: CalendarMonth[];
+  // Optional so the presets and every stored calendar before them still
+  // read; an absent list means the sky has no named moon and the year no
+  // named day.
+  moons?: CalendarMoon[];
+  festivals?: CalendarFestival[];
   // Names of the days in a week, in order. An empty list means the setting
   // does not name its days, and nothing will show a weekday.
   weekdays: string[];
@@ -259,11 +272,46 @@ export function formatDate(calendar: CalendarDefinition, instant: Instant): stri
   return `${weekday}${date.monthName} ${date.day}, year ${date.year}${suffix} (${formatClock(date)})`;
 }
 
+export const MOON_PHASES = ["new", "waxing", "full", "waning"] as const;
+export type MoonPhase = (typeof MOON_PHASES)[number];
+
+// Where a moon stands on a given day: full for the eighth of its cycle
+// around the midpoint, new for the eighth around the start.
+export function moonPhase(moon: CalendarMoon, instant: Instant): MoonPhase {
+  const cycle = Math.max(2, moon.cycleDays);
+  const dayIndex = Math.floor(clampInstant(instant) / MINUTES_PER_DAY);
+  const position = (((dayIndex + moon.offset) % cycle) + cycle) % cycle;
+  const fraction = position / cycle;
+  if (fraction < 1 / 16 || fraction >= 15 / 16) return "new";
+  if (fraction >= 7 / 16 && fraction < 9 / 16) return "full";
+  return fraction < 0.5 ? "waxing" : "waning";
+}
+
+export function moonsAt(calendar: CalendarDefinition, instant: Instant): Array<{ moon: CalendarMoon; phase: MoonPhase }> {
+  return (calendar.moons ?? []).map((moon) => ({ moon, phase: moonPhase(moon, instant) }));
+}
+
+export function festivalsOn(calendar: CalendarDefinition, instant: Instant): CalendarFestival[] {
+  const date = breakDown(calendar, instant);
+  return (calendar.festivals ?? []).filter((festival) => festival.month === date.month && festival.day === date.day);
+}
+
 // One line for the DM prompt and the party's status bar. Says the time of
 // day in words as well as numbers, because the model narrates from the words.
+// A festival and a full or new moon ride along, so the prompt can say "the
+// night of the Harvest Fair, under a full Reaper's Moon".
 export function describeInstant(calendar: CalendarDefinition, instant: Instant): string {
   const date = breakDown(calendar, instant);
-  return `${formatDate(calendar, instant)}, ${dayPart(date.hour)}, ${seasonOf(calendar, date.month)}`;
+  const parts = [`${formatDate(calendar, instant)}, ${dayPart(date.hour)}, ${seasonOf(calendar, date.month)}`];
+  for (const festival of festivalsOn(calendar, instant)) {
+    parts.push(`the day of ${festival.name}`);
+  }
+  for (const { moon, phase } of moonsAt(calendar, instant)) {
+    if (phase === "full" || phase === "new") {
+      parts.push(`under a ${phase} ${moon.name}`);
+    }
+  }
+  return parts.join(", ");
 }
 
 // ---- moving the clock ----
@@ -349,13 +397,68 @@ export function describeDuration(minutes: number): string {
 export type CampaignClock = {
   calendar: CalendarDefinition;
   instant: Instant;
+  // The sky, rolled by src/lib/dm/sky.ts when the clock crosses a dawn or a
+  // long leg passes; null until the first roll (src/lib/srd/weather.ts).
+  weather: Weather | null;
 };
 
 export function defaultClock(): CampaignClock {
   // Greening, the first month of spring, at eight in the morning: a campaign
   // that never sets its own date starts on a bright day at the turn of the
   // year rather than in the dark.
-  return { calendar: SEASONS_CALENDAR, instant: toInstant(SEASONS_CALENDAR, { month: 4, day: 1, hour: 8 }) };
+  return {
+    calendar: SEASONS_CALENDAR,
+    instant: toInstant(SEASONS_CALENDAR, { month: 4, day: 1, hour: 8 }),
+    weather: null,
+  };
+}
+
+// A calendar written by hand, read leniently: unreadable months mean no
+// calendar at all (null), everything else clamps.
+export function normalizeCalendarDefinition(raw: unknown): CalendarDefinition | null {
+  const calendarRaw = raw as Record<string, unknown> | undefined;
+  const months = Array.isArray(calendarRaw?.months)
+    ? (calendarRaw.months as Array<Record<string, unknown>>)
+        .map((month) => ({
+          name: String(month?.name ?? "Month").slice(0, 40),
+          days: Math.min(400, Math.max(1, Math.round(Number(month?.days) || 30))),
+        }))
+        .slice(0, 24)
+    : [];
+  if (!months.length) {
+    return null;
+  }
+  const moons = Array.isArray(calendarRaw?.moons)
+    ? (calendarRaw.moons as Array<Record<string, unknown>>)
+        .map((moon) => ({
+          name: String(moon?.name ?? "Moon").slice(0, 40),
+          cycleDays: Math.min(400, Math.max(2, Math.round(Number(moon?.cycleDays) || 28))),
+          offset: Math.max(0, Math.round(Number(moon?.offset) || 0)),
+        }))
+        .slice(0, 6)
+    : [];
+  const festivals = Array.isArray(calendarRaw?.festivals)
+    ? (calendarRaw.festivals as Array<Record<string, unknown>>)
+        .map((festival) => ({
+          month: Math.min(months.length, Math.max(1, Math.round(Number(festival?.month) || 1))),
+          day: Math.max(1, Math.round(Number(festival?.day) || 1)),
+          name: String(festival?.name ?? "").slice(0, 60),
+        }))
+        .filter((festival) => festival.name)
+        .slice(0, 40)
+    : [];
+  return {
+    id: String(calendarRaw?.id ?? "custom").slice(0, 40),
+    name: String(calendarRaw?.name ?? "Custom").slice(0, 60),
+    months,
+    weekdays: Array.isArray(calendarRaw?.weekdays)
+      ? (calendarRaw.weekdays as unknown[]).slice(0, 12).map((day) => String(day).slice(0, 30))
+      : [],
+    yearSuffix: String(calendarRaw?.yearSuffix ?? "").slice(0, 20),
+    epochYear: Math.round(Number(calendarRaw?.epochYear) || 1),
+    ...(moons.length ? { moons } : {}),
+    ...(festivals.length ? { festivals } : {}),
+  };
 }
 
 // Anything unreadable falls back to the default clock rather than throwing:
@@ -365,26 +468,10 @@ export function normalizeClock(raw: unknown): CampaignClock {
     return defaultClock();
   }
   const record = raw as Record<string, unknown>;
-  const calendarRaw = record.calendar as Record<string, unknown> | undefined;
-  const months = Array.isArray(calendarRaw?.months)
-    ? (calendarRaw.months as Array<Record<string, unknown>>)
-        .map((month) => ({
-          name: String(month?.name ?? "Month").slice(0, 40),
-          days: Math.min(400, Math.max(1, Math.round(Number(month?.days) || 30))),
-        }))
-        .slice(0, 24)
-    : [];
-  const calendar: CalendarDefinition = months.length
-    ? {
-        id: String(calendarRaw?.id ?? "custom").slice(0, 40),
-        name: String(calendarRaw?.name ?? "Custom").slice(0, 60),
-        months,
-        weekdays: Array.isArray(calendarRaw?.weekdays)
-          ? (calendarRaw.weekdays as unknown[]).slice(0, 12).map((day) => String(day).slice(0, 30))
-          : [],
-        yearSuffix: String(calendarRaw?.yearSuffix ?? "").slice(0, 20),
-        epochYear: Math.round(Number(calendarRaw?.epochYear) || 1),
-      }
-    : defaultClock().calendar;
-  return { calendar, instant: clampInstant(Number(record.instant) || 0) };
+  const calendar = normalizeCalendarDefinition(record.calendar) ?? defaultClock().calendar;
+  return {
+    calendar,
+    instant: clampInstant(Number(record.instant) || 0),
+    weather: normalizeWeather(record.weather),
+  };
 }

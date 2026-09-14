@@ -255,6 +255,46 @@ actions on library assets, touch-reachable labels and controls across the new
 DM panels, the full test suite wired into CI, and this document brought back
 in line with what is actually built.
 
+**VTT parity, phases 16 to 21 (2026-09-13):** the board became a stage
+(effect planner and FX layer, health words, condition glyphs, auras,
+footprints, movement modes, teleport, the token HUD, camera pull and lock),
+the sky and the hour light the map (a weather engine with rules riders,
+title cards, scene art motion), the map engine's remaining mechanics
+(terrain wall, senses, magical darkness, sounding doors, map notes with
+place links, freehand drawings, picture alignment handles), the editors
+became editors (a selection model with an action bar, drag as a second way,
+undo everywhere, one autosave model, the app's own dialogs, region map drag
+painting and undo, the keys sheet, an objects panel, grouped lists), and
+the binder became a wiki with a stage (secret blocks, audiences by name,
+Show this now with parchment and notice dressings, PDF pages that feed
+retrieval, backlinks, `[[` autocomplete and a live preview, a timeline, a
+drawn relationship graph, quests written and ticked by hand). See
+`docs/vtt-parity-implementation-plan.md`.
+
+**VTT parity, phases 22 to 25 (2026-09-13):** voices and faces (speech
+attributed to the cast, a voice per NPC, the theatre inserts, speaking as
+an NPC from the narrate bar), safety and tone (lines and veils, the X-card
+with continue, rewind and reroll, strictness and tone as DM personality
+presets), combat depth (legendary actions and resistance, lair actions,
+the fight summary card), factions and time (a Factions system with
+standing, goals and power, crest chips and graph hulls; a calendar editor
+with moons, festivals and events; torches that burn down). See
+`docs/vtt-parity-implementation-plan.md` sections 4, 6, 7, 8 and 9.
+
+**VTT parity, phases 26 to 30 (2026-09-14):** commerce (shops priced by
+the server with haggling and restock, player-to-player trade, several
+characters per player), generators and imports (a seeded settlement
+generator on the places list and on arrival, One Page Dungeon and city
+imports from Watabou, prepared worlds in the registry), the room (a chrome-free table view for a second screen,
+transcription for human-DM tables feeding beats and chapters, a dual-track
+recap), the parchment day theme and the interface scale, and the prompt
+sweep (sections with floors, three more engine-owned facts, the inspector
+showing each). The client apps gained the table route and a second-screen
+window, the bridge's haptics, device class and document opener, the
+object URL ring, replay headers, the shell's day theme and the raised host
+version gate. See `docs/vtt-parity-implementation-plan.md` sections 11 to
+15 and 18.
+
 ## Next
 
 - Ruleset validation (`src/lib/rulesets/validate.ts` from the workshop plan):

@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, EyeOff, Loader2, Send } from "lucide-react";
+import { Eye, EyeOff, Hand, Loader2, Send } from "lucide-react";
 import { memo } from "react";
 import type { Dispatch, FormEvent, RefObject, SetStateAction } from "react";
 import { cn } from "@/lib/cn";
@@ -16,6 +16,9 @@ import {
 import { PendingRollCard } from "@/app/campaigns/[campaignId]/PendingRollCard";
 import { PushToTalk } from "@/app/campaigns/[campaignId]/PushToTalk";
 import { StoryNudge } from "@/app/campaigns/[campaignId]/StoryNudge";
+import { SpeakerPicker } from "@/app/campaigns/[campaignId]/SpeakerPicker";
+import type { CastMember } from "@/lib/dm/cast";
+import type { Speaker } from "@/lib/dm/speech";
 import type { BeatCadence } from "@/lib/dm/beat-cadence";
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
 
@@ -63,7 +66,12 @@ function ComposerInner({
   joinBanner,
   leadPrivate,
   onLeadPrivateChange,
+  speaker = null,
+  onSpeakerChange,
+  cast = [],
+  onXCard,
   composerRef,
+  highlight = false,
   directorArm,
   storyCadence,
   onCaptureStory,
@@ -96,7 +104,16 @@ function ComposerInner({
   joinBanner: { text: string; onWriteIntro: () => void; onDismiss: () => void } | null;
   leadPrivate: boolean;
   onLeadPrivateChange: (leadPrivate: boolean) => void;
+  // The DM seat's speaker (docs/vtt-parity-implementation-plan.md 8.1).
+  speaker?: Speaker | null;
+  onSpeakerChange?: (speaker: Speaker | null) => void;
+  cast?: CastMember[];
+  // The X-card (docs/vtt-parity-implementation-plan.md 9.1): always
+  // there when the table uses it, one press, no confirmation.
+  onXCard?: () => void;
   composerRef: RefObject<HTMLTextAreaElement | null>;
+  // A gold pulse on the frame: the board says it is this player's turn.
+  highlight?: boolean;
   directorArm: CampaignState["directorArm"];
   // How overdue the DM's story capture is. Always "quiet" for anyone but the
   // DM, so this renders nothing at a player's table.
@@ -203,6 +220,14 @@ function ComposerInner({
           director buttons above this composer: a canned event to arm, and the
           choice of whether the direction is something the table reads.
         */}
+        {kind === "narrate" && isDm && onSpeakerChange ? (
+          <SpeakerPicker
+            speaker={speaker}
+            onChange={onSpeakerChange}
+            cast={cast}
+            monsters={(encounter?.enemies ?? []).filter((enemy) => enemy.status === "alive").map((enemy) => ({ id: enemy.id, name: enemy.name }))}
+          />
+        ) : null}
         {kind === "lead" && steersStory ? (
           <div className="mb-2 flex flex-wrap items-center gap-1.5">
             <DirectorPresets campaignId={campaignId} />
@@ -232,7 +257,10 @@ function ComposerInner({
         ) : null}
         <div
           data-tour="composer-input"
-          className="texture-noise flex items-end gap-2 rounded-2xl border border-stone-700/70 bg-stone-950/90 p-2 shadow-elev-1 transition-[border-color,box-shadow] duration-200 focus-within:border-amber-400/60 focus-within:shadow-[0_0_0_3px_rgba(212,171,58,0.1),0_2px_12px_rgba(4,2,12,0.5)]"
+          className={
+            "texture-noise flex items-end gap-2 rounded-2xl border border-stone-700/70 bg-stone-950/90 p-2 shadow-elev-1 transition-[border-color,box-shadow] duration-200 focus-within:border-amber-400/60 focus-within:shadow-[0_0_0_3px_rgba(212,171,58,0.1),0_2px_12px_rgba(4,2,12,0.5)]" +
+            (highlight ? " composer-pulse" : "")
+          }
         >
           <textarea
             ref={composerRef}
@@ -249,6 +277,18 @@ function ComposerInner({
             placeholder={placeholder}
             className="flex-1 resize-none bg-transparent px-2 py-1.5 text-sm text-stone-200 outline-none disabled:opacity-50"
           />
+          {onXCard ? (
+            <Tooltip content="X-card: pause the table without saying why. Nobody is told who pressed it.">
+              <button
+                type="button"
+                onClick={onXCard}
+                aria-label="Raise the X-card"
+                className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-stone-700 text-stone-500 hover:border-amber-600 hover:text-amber-200"
+              >
+                <Hand className="size-4" />
+              </button>
+            </Tooltip>
+          ) : null}
           <PushToTalk
             disabled={inputBlocked}
             onTranscript={(text) =>

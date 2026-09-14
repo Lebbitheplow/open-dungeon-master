@@ -134,5 +134,28 @@ export function useOverworldView(canvasRef: RefObject<HTMLCanvasElement | null>,
     dragRef.current = null;
   }
 
-  return { view, fit, down, move, up };
+  // The zoom buttons: a step about the canvas centre, the phone's way in
+  // when there is no wheel and a pinch is awkward one-handed.
+  const zoomBy = useCallback(
+    (factor: number) => {
+      const canvas = canvasRef.current;
+      if (!canvas) {
+        return;
+      }
+      const centreX = canvas.width / 2;
+      const centreY = canvas.height / 2;
+      setView((current) => {
+        const zoom = Math.min(ZOOM.max, Math.max(ZOOM.min, current.zoom * factor));
+        const scale = zoom / current.zoom;
+        return {
+          zoom,
+          x: centreX - (centreX - current.x) * scale,
+          y: centreY - (centreY - current.y) * scale,
+        };
+      });
+    },
+    [canvasRef],
+  );
+
+  return { view, fit, down, move, up, zoomBy };
 }

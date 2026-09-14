@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useMemo, useRef } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef } from "react";
 import { cn } from "@/lib/cn";
 import {
   buildCells,
@@ -8,9 +8,23 @@ import {
   shade,
   TILE,
 } from "@/app/campaigns/[campaignId]/battleMapCells";
+import {
+  AuraLayer,
+  DrawingLayer,
+  StageDefs,
+  TargetLines,
+  TokenFigure,
+} from "@/app/campaigns/[campaignId]/BoardStage";
+import type { MapDrawing, MapLabel } from "@/lib/battlemap/scene";
+import { FxLayer, useFxPlayer } from "@/app/campaigns/[campaignId]/BoardFx";
+import { ParticleCanvas, type ParticleHandle } from "@/components/ParticleCanvas";
 import { backdropRect } from "@/lib/battlemap/backdrop";
+import type { FxEvent } from "@/lib/battlemap/fx-plan";
 import type { PlayerMapView } from "@/lib/battlemap/view";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+
+const NO_FX: FxEvent[] = [];
+const NOOP = () => {};
 
 // Pure SVG renderer for a player's fogged battle-map view, themed by the
 // environment the generator picked. All game rules live server-side; this
@@ -34,6 +48,8 @@ export type MapOverlay = {
   pings?: Array<{ x: number; y: number; by: string; at: number }>;
   // The token the DM is holding, waiting for a tile to put it on.
   selectedTokenId?: string | null;
+  // A drawing in progress, so it lands where it was seen.
+  sketch?: Pick<MapDrawing, "kind" | "points" | "tone"> | null;
 };
 
 // Memoized: the session view re-renders on every SSE event (including each
@@ -49,6 +65,9 @@ export const BattleMapGrid = memo(
     onTokenClick,
     everyTileClickable = false,
     overlay,
+    fx = NO_FX,
+    onFxPlayed = NOOP,
+    onLabelClick,
   }: {
     view: PlayerMapView;
     sheets: CharacterSheet[];
@@ -60,14 +79,22 @@ export const BattleMapGrid = memo(
     // the board too, which is what this turns on.
     everyTileClickable?: boolean;
     overlay?: MapOverlay;
+    // Effects the server planned and this board has yet to play; the grid
+    // reports each one back once it has (src/lib/battlemap/fx-plan.ts).
+    fx?: FxEvent[];
+    onFxPlayed?: (ids: string[]) => void;
+    // A label with a reference was tapped (a lore entry, an NPC).
+    onLabelClick?: (label: MapLabel) => void;
   }) {
     const clickRef = useRef(onTileClick);
     const hoverRef = useRef(onTileHover);
     const tokenRef = useRef(onTokenClick);
+    const labelRef = useRef(onLabelClick);
     useEffect(() => {
       clickRef.current = onTileClick;
       hoverRef.current = onTileHover;
       tokenRef.current = onTokenClick;
+      labelRef.current = onLabelClick;
     });
     // Touch has no hover, so the ruler and range previews the mouse gets for
     // free would never appear on a phone. Instead the first tap on a tile IS
@@ -89,6 +116,24 @@ export const BattleMapGrid = memo(
       sheets.filter((sheet) => sheet.portrait).map((sheet) => [sheet.id, sheet.portrait!.url]),
     );
     const currentName = view.currentTurnName.toLowerCase();
+
+    // The particle canvas sits over the SVG in the same frame; effects are
+    // planned in SVG units and converted at burst time from the frame's
+    // rendered width, so zoom and layout never need to be known here.
+    const frameRef = useRef<HTMLDivElement | null>(null);
+    const particlesRef = useRef<ParticleHandle | null>(null);
+    const onParticles = useCallback((handle: ParticleHandle | null) => {
+      particlesRef.current = handle;
+    }, []);
+    const toCanvas = useCallback(
+      (svgX: number, svgY: number) => {
+        const frame = frameRef.current;
+        const scale = frame ? frame.clientWidth / (width * TILE) : 1;
+        return { x: svgX * scale, y: svgY * scale };
+      },
+      [width],
+    );
+    const activeFx = useFxPlayer(fx, onFxPlayed, particlesRef, toCanvas);
 
     // The terrain/fog/reachable cell layer only changes when the view
     // projection itself changes; token/light layers below stay cheap.
@@ -128,12 +173,25 @@ export const BattleMapGrid = memo(
       const target = event.target as SVGElement;
       const x = target.dataset?.tileX;
       const y = target.dataset?.tileY;
+      // A figure is a group; the click lands on its circle or portrait, so
+      // the id is found on the nearest ancestor that carries it.
+      const tokenId =
+        target.dataset?.tokenId ??
+        (target.closest?.("[data-token-id]") as SVGElement | null)?.dataset?.tokenId;
       return x !== undefined && y !== undefined
-        ? { x: Number(x), y: Number(y), tokenId: target.dataset?.tokenId }
-        : { x: null, y: null, tokenId: target.dataset?.tokenId };
+        ? { x: Number(x), y: Number(y), tokenId }
+        : { x: null, y: null, tokenId };
     }
 
     function handleSvgClick(event: React.MouseEvent<SVGSVGElement>) {
+      const pin = (event.target as SVGElement).closest?.("[data-label-index]") as SVGElement | null;
+      if (pin?.dataset.labelIndex !== undefined && labelRef.current) {
+        const label = view.labels[Number(pin.dataset.labelIndex)];
+        if (label) {
+          labelRef.current(label);
+          return;
+        }
+      }
       const { x, y, tokenId } = readTile(event);
       if (tokenId) {
         tokenRef.current?.(tokenId);
@@ -170,6 +228,7 @@ export const BattleMapGrid = memo(
     }
 
     return (
+      <div ref={frameRef} className="relative">
       <svg
         viewBox={`0 0 ${width * TILE} ${height * TILE}`}
         className="h-auto w-full select-none rounded-lg border border-stone-800 bg-stone-950"
@@ -216,17 +275,7 @@ export const BattleMapGrid = memo(
             <stop offset="0%" stopColor="#000" stopOpacity={0.42} />
             <stop offset="100%" stopColor="#000" stopOpacity={0} />
           </linearGradient>
-          {view.tokens.map((token) =>
-            portraitsByRef.has(token.refId) ? (
-              <clipPath key={`clip-${token.id}`} id={`token-clip-${token.id}`}>
-                <circle
-                  cx={token.x * TILE + TILE / 2}
-                  cy={token.y * TILE + TILE / 2}
-                  r={TILE / 2 - 4}
-                />
-              </clipPath>
-            ) : null,
-          )}
+          <StageDefs />
         </defs>
         {/* The picture under the grid, drawn first so every terrain cell,
             every fog square and every token lands on top of it. Unexplored
@@ -266,152 +315,58 @@ export const BattleMapGrid = memo(
             pointerEvents="none"
           />
         ))}
+        {/* The stage: auras under the figures, the figures, then the lines
+            between attackers and their targets (BoardStage.tsx). */}
+        <AuraLayer tokens={view.tokens} auras={view.tokenAuras} footprints={view.tokenFootprint} />
         {view.tokens.map((token) => {
-          const cx = token.x * TILE + TILE / 2;
-          const cy = token.y * TILE + TILE / 2;
-          const portrait = portraitsByRef.get(token.refId);
-          const isCurrent =
-            !token.down && currentName !== "" && token.name.toLowerCase() === currentName;
-          const held = overlay?.selectedTokenId === token.id;
-          const ring = token.down
-            ? "#57534e"
-            : held
-              ? "#fbbf24"
-              : token.mine
-                ? "#fbbf24"
-                : RING_BY_KIND[token.kind];
-          const hp = view.tokenHp?.[token.id];
+          const isCurrent = view.turn
+            ? view.turn.tokenId === token.id
+            : !token.down && currentName !== "" && token.name.toLowerCase() === currentName;
           return (
-            <g
+            <TokenFigure
               key={token.id}
-              // Tokens only take clicks where somebody upstream wants them:
-              // for a player the map is a floor to walk on, not a set of
-              // pieces to pick up.
-              pointerEvents={onTokenClick ? "auto" : "none"}
-              data-token-id={onTokenClick ? token.id : undefined}
-              className={cn(onTokenClick && "cursor-pointer")}
-              opacity={token.down ? 0.75 : token.hidden ? 0.55 : 1}
-            >
-              <title>{token.name}</title>
-              <ellipse
-                cx={cx}
-                cy={cy + TILE / 2 - 5}
-                rx={TILE / 2.6}
-                ry={3.5}
-                fill="#000"
-                opacity={0.35}
-                pointerEvents="none"
-              />
-              {token.kind === "prop" ? (
-                // A prop is a thing, not a person, so it is not a circle.
-                <rect
-                  x={cx - TILE / 2 + 4}
-                  y={cy - TILE / 2 + 4}
-                  width={TILE - 8}
-                  height={TILE - 8}
-                  rx={3}
-                  fill="#221d18"
-                  stroke={ring}
-                  strokeWidth={1.5}
-                  strokeDasharray={token.hidden ? "3 2" : undefined}
-                />
-              ) : (
-                <circle
-                  cx={cx}
-                  cy={cy}
-                  r={TILE / 2 - 3}
-                  fill={FILL_BY_KIND[token.kind]}
-                  stroke={ring}
-                  strokeWidth={token.mine || isCurrent || held ? 2.5 : 1.5}
-                  strokeDasharray={token.hidden ? "3 2" : undefined}
-                  className={cn((isCurrent || held) && "animate-pulse")}
-                />
-              )}
-              {portrait ? (
-                <image
-                  href={portrait}
-                  x={token.x * TILE + 4}
-                  y={token.y * TILE + 4}
-                  width={TILE - 8}
-                  height={TILE - 8}
-                  preserveAspectRatio="xMidYMid slice"
-                  clipPath={`url(#token-clip-${token.id})`}
-                  opacity={token.down ? 0.45 : 1}
-                />
-              ) : (
-                <text
-                  x={cx}
-                  y={cy + 4.5}
-                  textAnchor="middle"
-                  fontSize={13}
-                  fontWeight={700}
-                  fill={token.down ? "#a8a29e" : token.kind === "enemy" ? "#fca5a5" : "#e7e5e4"}
-                >
-                  {token.name.charAt(0).toUpperCase()}
-                </text>
-              )}
-              {token.down ? (
-                <text
-                  x={cx}
-                  y={cy + 5}
-                  textAnchor="middle"
-                  fontSize={15}
-                  fontWeight={700}
-                  fill="#ef4444"
-                  pointerEvents="none"
-                >
-                  ✕
-                </text>
-              ) : null}
-              {/* Real hit points, DM projection only: the server sends
-                  tokenHp to nobody else (src/lib/battlemap/view.ts). */}
-              {hp && hp.max > 0 ? (
-                <g pointerEvents="none">
-                  <rect
-                    x={cx - TILE / 2 + 4}
-                    y={cy + TILE / 2 - 6}
-                    width={TILE - 8}
-                    height={3}
-                    rx={1.5}
-                    fill="#0c0a09"
-                    opacity={0.85}
-                  />
-                  <rect
-                    x={cx - TILE / 2 + 4}
-                    y={cy + TILE / 2 - 6}
-                    width={Math.max(0, Math.min(1, hp.current / hp.max)) * (TILE - 8)}
-                    height={3}
-                    rx={1.5}
-                    fill={hp.current / hp.max > 0.5 ? "#4ade80" : hp.current / hp.max > 0.25 ? "#facc15" : "#ef4444"}
-                  />
-                </g>
-              ) : null}
-              {token.hidden ? (
-                <text
-                  x={cx + TILE / 2 - 5}
-                  y={cy - TILE / 2 + 9}
-                  textAnchor="middle"
-                  fontSize={9}
-                  fill="#fbbf24"
-                  pointerEvents="none"
-                >
-                  ●
-                </text>
-              ) : null}
-            </g>
+              token={token}
+              portrait={portraitsByRef.get(token.refId)}
+              footprint={view.tokenFootprint[token.id] ?? 1}
+              health={view.tokenHealth[token.id]}
+              conditions={view.tokenConditions[token.id]}
+              elevation={view.tokenElevation[token.id]}
+              isCurrent={isCurrent}
+              held={overlay?.selectedTokenId === token.id}
+              hp={view.tokenHp?.[token.id]}
+              clickable={Boolean(onTokenClick)}
+              showsNumbers={Boolean(view.tokenHp)}
+            />
           );
         })}
+        <TargetLines tokens={view.tokens} targets={view.targets} footprints={view.tokenFootprint} />
+        <DrawingLayer drawings={view.drawings} sketch={overlay?.sketch} />
         {/* The scene layer (src/lib/battlemap/scene.ts): labels where the
             projection allows them, and for the DM the state of every shut
             door, as a badge on the door glyph they alone still see. */}
-        {view.labels.map((label) => (
-          <g key={`label-${label.x}-${label.y}`} pointerEvents="none">
-            <circle
-              cx={label.x * TILE + TILE / 2}
-              cy={label.y * TILE + TILE / 2}
-              r={3}
-              fill={label.dmOnly ? "#a78bfa" : "#fbbf24"}
-            />
+        {view.labels.map((label, index) => (
+          <g
+            key={`label-${label.x}-${label.y}`}
+            pointerEvents={label.ref && onLabelClick ? "auto" : "none"}
+            data-label-index={label.ref && onLabelClick ? index : undefined}
+            className={cn(label.ref && onLabelClick && "cursor-pointer")}
+          >
+            {label.ref ? (
+              // A pin: the label opens something when tapped.
+              <path
+                d={`M ${label.x * TILE + TILE / 2} ${label.y * TILE + TILE / 2 + 2} l -4 -6 a 4 4 0 1 1 8 0 z`}
+                fill="#d4ab3a"
+                stroke="#0c0a09"
+                strokeWidth={1}
+              />
+            ) : (
+              <circle
+                cx={label.x * TILE + TILE / 2}
+                cy={label.y * TILE + TILE / 2}
+                r={3}
+                fill={label.dmOnly ? "#a78bfa" : "#fbbf24"}
+              />
+            )}
             <text
               x={label.x * TILE + TILE / 2}
               y={label.y * TILE + TILE / 2 - 6}
@@ -549,7 +504,10 @@ export const BattleMapGrid = memo(
           fill="url(#mapvignette)"
           pointerEvents="none"
         />
+        <FxLayer active={activeFx} />
       </svg>
+      <ParticleCanvas className="rounded-lg" onReady={onParticles} />
+      </div>
     );
   },
   (prev, next) =>
@@ -558,27 +516,11 @@ export const BattleMapGrid = memo(
     // The overlay is compared by reference, so a parent that rebuilds it
     // every render would defeat the memo. BattleMapPanel memoizes it.
     prev.overlay === next.overlay &&
+    prev.fx === next.fx &&
     prev.everyTileClickable === next.everyTileClickable &&
+    (prev.onLabelClick === undefined) === (next.onLabelClick === undefined) &&
     // Only presence matters; the handlers themselves are read through refs.
     (prev.onTileClick === undefined) === (next.onTileClick === undefined) &&
     (prev.onTileHover === undefined) === (next.onTileHover === undefined) &&
     (prev.onTokenClick === undefined) === (next.onTokenClick === undefined),
 );
-
-// Token colours by what the piece is. Props and NPCs are visibly not
-// combatants, because the fastest way to misread a board is to think the
-// barrel is a monster.
-const RING_BY_KIND: Record<string, string> = {
-  pc: "#78716c",
-  enemy: "#dc2626",
-  npc: "#38bdf8",
-  prop: "#a8a29e",
-};
-
-const FILL_BY_KIND: Record<string, string> = {
-  pc: "#1c1917",
-  enemy: "#450a0a",
-  npc: "#0c1a24",
-  prop: "#221d18",
-};
-

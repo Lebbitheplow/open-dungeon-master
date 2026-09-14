@@ -8,6 +8,9 @@ import { getActiveEncounter } from "@/lib/db/encounters";
 import { recordExtractedFacts } from "@/lib/db/facts";
 import { publishEphemeral } from "@/lib/events";
 import { advanceNpcAgency } from "@/lib/dm/npc-agency";
+import { listFactions } from "@/lib/db/factions";
+import { clampPower, factionsNamedBy } from "@/lib/dm/faction-logic";
+import { shiftFactionPower } from "@/lib/dm/faction-tools";
 import {
   DEFAULT_TICK_CONFIG,
   drainSparks,
@@ -71,6 +74,14 @@ function persistTickResult(campaignId: string, result: TickResult) {
     );
     if (inserted.length) {
       publishEphemeral(campaignId, "facts_updated", {});
+    }
+    // An arc that names a faction moves that faction's power when a rung
+    // is reached (docs/vtt-parity-implementation-plan.md section 6).
+    const factions = listFactions(campaignId);
+    for (const reached of result.reachedRungs) {
+      for (const faction of factionsNamedBy(`${reached.arc.name} ${reached.arc.driver}`, factions)) {
+        shiftFactionPower(campaignId, faction.id, clampPower(faction.power + 1), `${faction.name} grew stronger as "${reached.arc.name}" advanced.`);
+      }
     }
   }
   setWorldTickJson(campaignId, JSON.stringify(result.state));

@@ -2,6 +2,8 @@ import { z } from "zod";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getSheetById } from "@/lib/db/sheets";
 import type { DmTurn } from "@/lib/db/dm-turns";
+import { planHazardFx } from "@/lib/battlemap/fx-plan";
+import { publishFx, tokenPosition } from "@/lib/dm/fx";
 import { rollExpression } from "@/lib/dice";
 import { applyDmMutation } from "@/lib/dm/mutations";
 import { handleCastAtPlayer } from "@/lib/dm/cast-tools";
@@ -194,6 +196,19 @@ export function handleApplyHazard(
         sheets,
         sheetsById,
       ).result;
+      const pos = tokenPosition(campaign.id, sheet.id);
+      if (pos) {
+        publishFx(
+          campaign.id,
+          planHazardFx({
+            to: pos.at,
+            toTokenId: pos.tokenId,
+            hazard: "falling",
+            damageType,
+            amount: rolled.total,
+          }),
+        );
+      }
       return { name: sheet.name, damage: rolled.total, ...applied };
     });
     return {

@@ -12,6 +12,8 @@ import { DmTablesPanel } from "@/app/campaigns/[campaignId]/DmTablesPanel";
 import { LorePanel } from "@/app/campaigns/[campaignId]/LorePanel";
 import { OverworldPanel } from "@/app/campaigns/[campaignId]/OverworldPanel";
 import { RulesPanel } from "@/app/campaigns/[campaignId]/RulesPanel";
+import { FactionsPanel } from "@/app/campaigns/[campaignId]/FactionsPanel";
+import { MarketPanel } from "@/app/campaigns/[campaignId]/MarketPanel";
 import { RulesetLibrary } from "@/app/workshop/RulesetLibrary";
 import { HomebrewPanel } from "@/app/workshop/homebrew/HomebrewPanel";
 import { PartyPanel } from "@/app/workshop/party/PartyPanel";
@@ -140,7 +142,13 @@ export function SystemView({
           onChanged={onHomebrewChanged}
         />
       ) : null}
-      {system === "lore" ? <LorePanel campaignId={workshop.id} steersStory layout="rows" /> : null}
+      {system === "lore" ? (
+        <>
+          <LorePanel campaignId={workshop.id} steersStory layout="rows" />
+          <MarketPanel campaignId={workshop.id} steersStory mySheet={null} />
+        </>
+      ) : null}
+      {system === "factions" ? <FactionsPanel campaignId={workshop.id} steersStory /> : null}
       {system === "tables" ? <DmTablesPanel campaignId={workshop.id} layout="rows" /> : null}
       {system === "plugin" ? (
         <PluginPanel workshopId={workshop.id} onChanged={onPluginChanged} />

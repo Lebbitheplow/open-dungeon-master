@@ -10,7 +10,7 @@ import { TERRAIN, blocksMove, inBounds, tileIndex, type XY } from "@/lib/battlem
 // Pure by design: no DB and no "@/" imports beyond the shared tile
 // primitives, so scripts/test-map-paint.mjs can drive it directly.
 
-export const BRUSHES = ["floor", "wall", "water", "difficult", "door"] as const;
+export const BRUSHES = ["floor", "wall", "water", "difficult", "door", "lowwall"] as const;
 export type Brush = (typeof BRUSHES)[number];
 
 // Written for a person looking at a board, not for the tile alphabet.
@@ -20,6 +20,7 @@ export const BRUSH_LABELS: Record<Brush, string> = {
   water: "Water",
   difficult: "Rough ground",
   door: "Door",
+  lowwall: "Low wall",
 };
 
 // What each brush costs a walker, so the palette can say it out loud.
@@ -29,6 +30,7 @@ export const BRUSH_EFFECTS: Record<Brush, string> = {
   water: "Costs double to cross.",
   difficult: "Costs double to cross.",
   door: "Walk through it; it does not block sight.",
+  lowwall: "A fence or ledge: blocks walking (not flying), not sight, and gives half cover behind it.",
 };
 
 const BRUSH_CHARS: Record<Brush, string> = {
@@ -37,6 +39,7 @@ const BRUSH_CHARS: Record<Brush, string> = {
   water: TERRAIN.water,
   difficult: TERRAIN.difficult,
   door: TERRAIN.door,
+  lowwall: TERRAIN.lowwall,
 };
 
 export type Stroke = {

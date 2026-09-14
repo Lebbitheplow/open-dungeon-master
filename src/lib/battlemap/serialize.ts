@@ -55,7 +55,7 @@ export function serializeMapForPrompt(
     `Battle map ${map.width}x${map.height} tiles (1 tile = 5 ft). Coordinates are (col,row); (0,0) is top-left.`,
   );
   lines.push(
-    "Legend: . floor | # wall (blocks movement and sight) | ~ water (difficult) | , difficult ground | + door. Letters and digits are combatants.",
+    "Legend: . floor | # wall (blocks movement and sight) | ~ water (difficult) | , difficult ground | + door | | low wall or fence (blocks walking, not sight or flying; half cover behind it). Letters and digits are combatants.",
   );
   lines.push(...describeScene({ doors: map.doors ?? {}, labels: map.labels ?? [] }));
   // Column header uses last-digit ruler so wide maps stay aligned.

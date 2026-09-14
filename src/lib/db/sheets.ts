@@ -334,11 +334,34 @@ export function getSheetById(sheetId: string): CharacterSheet | null {
   return row ? mapSheet(row) : null;
 }
 
+// The character this user is playing: the one their seat marks active
+// when they have several (docs/vtt-parity-implementation-plan.md 11.3),
+// else the first they made.
 export function getSheetForUser(campaignId: string, userId: string): CharacterSheet | null {
-  const row = getDatabase()
-    .prepare(`SELECT ${SHEET_COLUMNS} FROM character_sheets WHERE campaign_id = ? AND user_id = ?`)
+  const db = getDatabase();
+  const seat = db
+    .prepare(`SELECT active_character_id FROM campaign_members WHERE campaign_id = ? AND user_id = ?`)
+    .get(campaignId, userId) as { active_character_id?: string | null } | undefined;
+  if (seat?.active_character_id) {
+    const active = db
+      .prepare(`SELECT ${SHEET_COLUMNS} FROM character_sheets WHERE id = ? AND campaign_id = ? AND user_id = ?`)
+      .get(seat.active_character_id, campaignId, userId) as SheetRow | undefined;
+    if (active) {
+      return mapSheet(active);
+    }
+  }
+  const row = db
+    .prepare(`SELECT ${SHEET_COLUMNS} FROM character_sheets WHERE campaign_id = ? AND user_id = ? ORDER BY created_at ASC`)
     .get(campaignId, userId) as SheetRow | undefined;
   return row ? mapSheet(row) : null;
+}
+
+// Every character this user made here, oldest first.
+export function listSheetsForUser(campaignId: string, userId: string): CharacterSheet[] {
+  const rows = getDatabase()
+    .prepare(`SELECT ${SHEET_COLUMNS} FROM character_sheets WHERE campaign_id = ? AND user_id = ? ORDER BY created_at ASC`)
+    .all(campaignId, userId) as SheetRow[];
+  return rows.map(mapSheet);
 }
 
 // Lobby-only character removal (delete, switch, or recreate); returns the

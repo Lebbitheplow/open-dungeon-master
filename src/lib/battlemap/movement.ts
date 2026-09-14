@@ -1,10 +1,41 @@
+import { footprintTiles, type Footprint } from "@/lib/battlemap/footprint";
 import {
-  blocksMove,
+  blocksMoveFor,
   moveCost,
   tileAt,
   tileIndex,
   type XY,
 } from "@/lib/battlemap/types";
+
+// Whether a creature of this footprint may stand with its anchor at (x, y):
+// every square it covers must be inside the map, walkable, and not held by
+// someone else. `goalIdx` lets findPath treat the destination's own tile as
+// free (the caller vouches for it) while still refusing walls.
+function standable(
+  terrain: string,
+  width: number,
+  height: number,
+  occupied: Set<number>,
+  x: number,
+  y: number,
+  footprint: Footprint,
+  allowIdx: number | null,
+  flying: boolean,
+): boolean {
+  for (const tile of footprintTiles({ x, y }, footprint)) {
+    if (tile.x < 0 || tile.y < 0 || tile.x >= width || tile.y >= height) {
+      return false;
+    }
+    if (blocksMoveFor(tileAt(terrain, width, tile.x, tile.y), flying)) {
+      return false;
+    }
+    const idx = tileIndex(width, tile.x, tile.y);
+    if (occupied.has(idx) && idx !== allowIdx) {
+      return false;
+    }
+  }
+  return true;
+}
 
 // Grid movement: uniform-cost search (Dijkstra) with difficult terrain
 // costing double. v1 rule: no moving THROUGH any token, friend or foe
@@ -25,6 +56,8 @@ export function reachableTiles(
   occupied: Set<number>,
   from: XY,
   budget: number,
+  footprint: Footprint = 1,
+  flying = false,
 ): Map<number, number> {
   const startIdx = tileIndex(width, from.x, from.y);
   const best = new Map<number, number>([[startIdx, 0]]);
@@ -50,7 +83,11 @@ export function reachableTiles(
       }
       const ch = tileAt(terrain, width, nx, ny);
       const idx = tileIndex(width, nx, ny);
-      if (blocksMove(ch) || occupied.has(idx)) {
+      if (
+        footprint === 1
+          ? blocksMoveFor(ch, flying) || occupied.has(idx)
+          : !standable(terrain, width, height, occupied, nx, ny, footprint, null, flying)
+      ) {
         continue;
       }
       const cost = current.cost + moveCost(ch);
@@ -75,6 +112,8 @@ export function findPath(
   occupied: Set<number>,
   from: XY,
   to: XY,
+  footprint: Footprint = 1,
+  flying = false,
 ): XY[] | null {
   const startIdx = tileIndex(width, from.x, from.y);
   const goalIdx = tileIndex(width, to.x, to.y);
@@ -104,7 +143,11 @@ export function findPath(
       }
       const ch = tileAt(terrain, width, nx, ny);
       const idx = tileIndex(width, nx, ny);
-      if (blocksMove(ch) || (occupied.has(idx) && idx !== goalIdx)) {
+      if (
+        footprint === 1
+          ? blocksMoveFor(ch, flying) || (occupied.has(idx) && idx !== goalIdx)
+          : !standable(terrain, width, height, occupied, nx, ny, footprint, goalIdx, flying)
+      ) {
         continue;
       }
       const cost = current.cost + moveCost(ch);

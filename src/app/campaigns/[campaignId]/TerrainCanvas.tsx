@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Maximize2, Minus, Plus, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
-import type { Backdrop } from "@/lib/battlemap/backdrop";
+import { backdropRect, type Backdrop, type BackdropTransform } from "@/lib/battlemap/backdrop";
 import type { Brush as BrushName } from "@/lib/battlemap/paint";
 import type { Stamp } from "@/lib/battlemap/stamp";
 import type { ShapeTool } from "@/lib/battlemap/tools";
-import type { DoorStates, LightZone, MapLabel, MapProp } from "@/lib/battlemap/scene";
+import type { DoorStates, LightZone, MapLabel, MapProp, ZoneKind } from "@/lib/battlemap/scene";
 import type { AmbientLight, MapLight, XY } from "@/lib/battlemap/types";
 import {
   drawGrid,
@@ -45,7 +45,9 @@ export type CanvasTool =
   | { kind: "label" }
   | { kind: "prop" }
   | { kind: "door" }
-  | { kind: "zone"; ambient: AmbientLight }
+  | { kind: "zone"; ambient: AmbientLight; zoneKind?: ZoneKind }
+  | { kind: "select" }
+  | { kind: "backdrop" }
   | { kind: "pick" }
   | { kind: "pan" };
 
@@ -124,6 +126,9 @@ export function TerrainCanvas({
   onDoor,
   onZone,
   onPick,
+  onSelect,
+  selected,
+  onBackdrop,
 }: {
   terrain: string;
   width: number;
@@ -152,6 +157,13 @@ export function TerrainCanvas({
   onProp?: (x: number, y: number) => void;
   onDoor?: (x: number, y: number) => void;
   onPick?: (x: number, y: number) => void;
+  // The select tool: a tap reports the tile; the parent decides what stood
+  // there. `selected` is outlined in gold (the selection model, 10.1).
+  onSelect?: (x: number, y: number, shift: boolean) => void;
+  selected?: Array<{ x0: number; y0: number; x1: number; y1: number }>;
+  // The backdrop tool: two corner handles set the picture's register by
+  // hand (section 3.7); the sliders stay for fine work.
+  onBackdrop?: (transform: BackdropTransform) => void;
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -182,9 +194,43 @@ export function TerrainCanvas({
     drawGround(context, { terrain, width, height, tile, backdrop, image: image?.element ?? null });
     drawLights(context, lights ?? [], tile);
     drawScene(context, { labels, props, doors, zones, overlay }, { width, height, tile, backdrop });
+    if (tool?.kind === "backdrop" && backdrop) {
+      const rect = backdropRect(backdrop.transform, width, height, tile);
+      context.setLineDash([4, 4]);
+      context.strokeStyle = "#d4ab3a";
+      context.lineWidth = 1.5;
+      context.strokeRect(rect.x, rect.y, rect.width, rect.height);
+      context.setLineDash([]);
+      for (const corner of [
+        { x: rect.x, y: rect.y },
+        { x: rect.x + rect.width, y: rect.y + rect.height },
+      ]) {
+        context.fillStyle = "#0c0a09";
+        context.beginPath();
+        context.arc(corner.x, corner.y, 7, 0, Math.PI * 2);
+        context.fill();
+        context.strokeStyle = "#d4ab3a";
+        context.lineWidth = 2;
+        context.stroke();
+      }
+      context.fillStyle = "rgba(12, 10, 9, 0.85)";
+      context.fillRect(4, 4, 150, 18);
+      context.fillStyle = "#fde68a";
+      context.font = "11px sans-serif";
+      context.fillText(`one square is ${Math.round((rect.width / width) * 10) / 10} px of picture`, 8, 17);
+    }
+    for (const box of selected ?? []) {
+      context.strokeStyle = "#d4ab3a";
+      context.lineWidth = 2;
+      context.setLineDash([]);
+      context.strokeRect(box.x0 * tile + 1, box.y0 * tile + 1, (box.x1 - box.x0 + 1) * tile - 2, (box.y1 - box.y0 + 1) * tile - 2);
+      context.strokeStyle = "rgba(212, 171, 58, 0.35)";
+      context.lineWidth = 6;
+      context.strokeRect(box.x0 * tile + 1, box.y0 * tile + 1, (box.x1 - box.x0 + 1) * tile - 2, (box.y1 - box.y0 + 1) * tile - 2);
+    }
     drawGrid(context, width, height, tile);
     drawToolPreview(context, { tool, hover, drag, painting, terrain, width, height, tile });
-  }, [terrain, width, height, backdrop, image, lights, labels, props, doors, zones, overlay, tool, hover, drag, painting]);
+  }, [terrain, width, height, backdrop, image, lights, labels, props, doors, zones, overlay, tool, hover, drag, painting, selected]);
 
   // The observer subscribes once; the draw it calls is whichever is current.
   // Keeping the two apart means a hover does not re-subscribe to resizes.
@@ -281,7 +327,18 @@ export function TerrainCanvas({
     return { x: clientX - (rect?.left ?? 0), y: clientY - (rect?.top ?? 0) };
   }
 
+  // A corner of the backdrop being dragged (the backdrop tool).
+  const backdropDragRef = useRef<{
+    corner: "tl" | "br";
+    transform: BackdropTransform;
+    tile: number;
+    px: number;
+    py: number;
+    rect: { x: number; y: number; width: number; height: number };
+  } | null>(null);
+
   function endStroke() {
+    backdropDragRef.current = null;
     if (paintingRef.current) {
       paintingRef.current = null;
       setPainting(false);
@@ -304,7 +361,7 @@ export function TerrainCanvas({
   }
 
   const interactive = Boolean(tool);
-  const cursor = !tool ? "" : tool.kind === "pan" ? "cursor-grab" : tool.kind === "pick" ? "cursor-copy" : "cursor-crosshair";
+  const cursor = !tool ? "" : tool.kind === "pan" ? "cursor-grab" : tool.kind === "pick" ? "cursor-copy" : tool.kind === "select" ? "cursor-pointer" : tool.kind === "backdrop" ? "cursor-move" : "cursor-crosshair";
 
   return (
     <div
@@ -341,6 +398,24 @@ export function TerrainCanvas({
         if (pan) {
           if (zoomable) {
             panRef.current = { x: event.clientX, y: event.clientY, view };
+          }
+          return;
+        }
+        if (tool.kind === "backdrop" && backdrop) {
+          // A press near a corner handle grips it; anywhere else does nothing.
+          const canvas = canvasRef.current;
+          if (!canvas) {
+            return;
+          }
+          const bounds = canvas.getBoundingClientRect();
+          const tile = bounds.width / width;
+          const rect = backdropRect(backdrop.transform, width, height, tile);
+          const px = event.clientX - bounds.left;
+          const py = event.clientY - bounds.top;
+          const near = (cx: number, cy: number) => Math.hypot(px - cx, py - cy) < 14;
+          const corner = near(rect.x, rect.y) ? "tl" : near(rect.x + rect.width, rect.y + rect.height) ? "br" : null;
+          if (corner) {
+            backdropDragRef.current = { corner, transform: backdrop.transform, tile, px, py, rect };
           }
           return;
         }
@@ -384,12 +459,47 @@ export function TerrainCanvas({
           case "pick":
             onPick?.(at.x, at.y);
             break;
+          case "select":
+            onSelect?.(at.x, at.y, event.shiftKey);
+            break;
         }
       }}
       onPointerMove={(event) => {
         const pointers = pointersRef.current;
         if (pointers.has(event.pointerId)) {
           pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        }
+        const grip = backdropDragRef.current;
+        if (grip) {
+          const canvas = canvasRef.current;
+          if (!canvas) {
+            return;
+          }
+          const bounds = canvas.getBoundingClientRect();
+          const px = event.clientX - bounds.left;
+          const py = event.clientY - bounds.top;
+          const dx = (px - grip.px) / grip.tile;
+          const dy = (py - grip.py) / grip.tile;
+          if (grip.corner === "tl") {
+            // Sliding the top-left corner moves the picture.
+            onBackdrop?.({
+              ...grip.transform,
+              offsetX: Math.round((grip.transform.offsetX + dx) * 4) / 4,
+              offsetY: Math.round((grip.transform.offsetY + dy) * 4) / 4,
+            });
+          } else {
+            // Dragging the bottom-right corner scales it about the top-left.
+            const scale = Math.max(0.2, Math.min(5, (grip.rect.width + (px - grip.px)) / (width * grip.tile)));
+            const grow = scale / grip.transform.scale;
+            const centreShift = ((grow - 1) * width) / 2;
+            onBackdrop?.({
+              ...grip.transform,
+              scale: Math.round(scale * 100) / 100,
+              offsetX: Math.round((grip.transform.offsetX + centreShift) * 4) / 4,
+              offsetY: Math.round((grip.transform.offsetY + ((grow - 1) * height) / 2) * 4) / 4,
+            });
+          }
+          return;
         }
         const pinch = pinchRef.current;
         if (pinch && pointers.size >= 2) {

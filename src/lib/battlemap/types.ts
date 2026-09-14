@@ -11,6 +11,9 @@ export const TERRAIN = {
   water: "~",
   difficult: ",",
   door: "+",
+  // A low wall, fence or chasm edge: nothing walks through it, everything
+  // sees over it, and a creature directly behind it has half cover.
+  lowwall: "|",
 } as const;
 
 export type TerrainChar = (typeof TERRAIN)[keyof typeof TERRAIN];
@@ -42,6 +45,13 @@ export type TokenKind = (typeof TOKEN_KINDS)[number];
 export const ADHOC_TOKEN_KINDS = ["npc", "prop"] as const;
 export type AdhocTokenKind = (typeof ADHOC_TOKEN_KINDS)[number];
 
+// How a token is getting about right now. Walking is the default; flying
+// lifts it over the ground (tremorsense misses it, the board draws it
+// raised); burrowing sinks it (set by the set_movement tool, by Wild Shape
+// into a flying form, or by the DM).
+export const TOKEN_MOVEMENTS = ["walk", "fly", "burrow"] as const;
+export type TokenMovement = (typeof TOKEN_MOVEMENTS)[number];
+
 export type BattleToken = {
   id: string;
   kind: TokenKind;
@@ -55,11 +65,17 @@ export type BattleToken = {
   // Carried light (torch/lantern): bright radius in tiles, 0 = none. The
   // dim radius is always double the bright radius.
   lightRadius: number;
+  // When that light gutters out, as a clock instant, and how long it had
+  // when lit (docs/vtt-parity-implementation-plan.md 7.3). 0 = it does not
+  // burn down.
+  burnsUntil: number;
+  lightMinutes: number;
   // Kept off the players' board by the DM: an ambusher in the rafters, a
   // trap that has not sprung. One flag covers the map and the initiative
   // tracker, because a creature the party has not met should not be visible
   // in either (src/lib/db/encounters.ts).
   hidden: boolean;
+  movement: TokenMovement;
 };
 
 export function tileIndex(width: number, x: number, y: number): number {
@@ -75,7 +91,12 @@ export function tileAt(terrain: string, width: number, x: number, y: number): st
 }
 
 export function blocksMove(ch: string): boolean {
-  return ch === TERRAIN.wall;
+  return ch === TERRAIN.wall || ch === TERRAIN.lowwall;
+}
+
+// The same question for a creature in the air: a fence is nothing to it.
+export function blocksMoveFor(ch: string, flying: boolean): boolean {
+  return ch === TERRAIN.wall || (!flying && ch === TERRAIN.lowwall);
 }
 
 export function blocksSight(ch: string): boolean {

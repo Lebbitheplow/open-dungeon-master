@@ -4,6 +4,7 @@ import { Loader2, Pin, Save, Scale } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { CalendarSection } from "@/app/campaigns/[campaignId]/CalendarSection";
 import type { GameSettings } from "@/lib/schemas/game-settings";
 
 type RuleChunkView = {
@@ -352,6 +353,8 @@ export function RulesPanel({
           </ul>
         </div>
       ) : null}
+
+      {steersStory ? <CalendarSection campaignId={campaignId} /> : null}
     </div>
   );
 }

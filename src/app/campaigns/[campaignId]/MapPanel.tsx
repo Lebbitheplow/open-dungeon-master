@@ -1,9 +1,14 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { Compass, ImageOff, ImagePlus, Loader2, Map as MapIcon, RefreshCw, X } from "lucide-react";
+import { Compass, ImageOff, ImagePlus, Loader2, Map as MapIcon, RefreshCw, Users, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { cn } from "@/lib/cn";
+import { SkyLayer } from "@/components/SkyLayer";
+import { TheatreInserts } from "@/app/campaigns/[campaignId]/TheatreInserts";
+import type { CastMember } from "@/lib/dm/cast";
+import type { Speaker } from "@/lib/dm/speech";
+import type { SceneState } from "@/lib/scene/state";
 import { mapPlaceholder } from "@/lib/placeholders";
 import { offersImages, useCapabilities } from "@/lib/use-capabilities";
 import type {
@@ -23,6 +28,8 @@ export function MapPanel({
   steersStory,
   mediaStatus = {},
   genre,
+  scene = null,
+  inserts = null,
 }: {
   campaignId: string;
   locations: CampaignLocation[];
@@ -30,9 +37,30 @@ export function MapPanel({
   mediaStatus?: Record<string, MediaStatus>;
   // The table's setting, for the stand-in plate an unmapped area shows.
   genre?: string | null;
+  // The sky over the table: a tint and weather over the picture.
+  scene?: SceneState | null;
+  // Theatre inserts (docs/vtt-parity-implementation-plan.md 8.3): who is
+  // speaking in the latest passage, and the faces to show for them.
+  inserts?: { speakers: Speaker[]; cast: CastMember[]; messageId: string } | null;
 }) {
   const current = locations.find((location) => location.isCurrent) ?? null;
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [populating, setPopulating] = useState(false);
+  const [populateNote, setPopulateNote] = useState("");
+
+  // "Populate" (docs/vtt-parity-implementation-plan.md 12.1): the settlement
+  // generator writes the place's people, shops, rumours and a hook.
+  async function populate(locationId: string) {
+    setPopulating(true);
+    setPopulateNote("");
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/locations/${locationId}/populate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const data = await response.json().catch(() => ({}));
+      setPopulateNote(response.ok ? `${data.npcs} people and ${data.shops} shops now live here. Hook: ${data.hook?.title ?? ""}` : String(data.error ?? "Could not populate that place."));
+    } finally {
+      setPopulating(false);
+    }
+  }
   const [enlarged, setEnlarged] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   // A redraw the server refused, as distinct from a render the queue failed
@@ -215,13 +243,21 @@ export function MapPanel({
           ) : null}
 
           {shown.mapImage ? (
-            <button type="button" onClick={() => setEnlarged(true)} className="block w-full">
+            <button
+              type="button"
+              onClick={() => setEnlarged(true)}
+              className="relative block w-full overflow-hidden rounded-md border border-stone-800"
+            >
+              {/* The slow drift and the sky's tint over the scene art: the
+                  animated scene without a video asset. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={shown.mapImage.url}
                 alt={`Map of ${shown.name}`}
-                className="w-full rounded-md border border-stone-800"
+                className="ken-burns w-full"
               />
+              <SkyLayer scene={scene} mode="art" />
+              {inserts ? <TheatreInserts speakers={inserts.speakers} cast={inserts.cast} messageId={inserts.messageId} /> : null}
             </button>
           ) : mediaStatus[shown.id] && mediaStatus[shown.id].state !== "failed" ? (
             <div className="flex aspect-[4/3] flex-col items-center justify-center gap-1.5 rounded-md border border-dashed border-stone-800 text-xs text-stone-500">
@@ -259,6 +295,18 @@ export function MapPanel({
           {shown.layoutDescription ? (
             <p className="mt-1.5 text-xs leading-5 text-stone-400">{shown.layoutDescription}</p>
           ) : null}
+          {steersStory ? (
+            <button
+              type="button"
+              disabled={populating}
+              onClick={() => void populate(shown.id)}
+              title="Invent this place's people, shops, rumours and a hook"
+              className="mt-1.5 flex items-center gap-1 rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-400 hover:border-amber-700 hover:text-amber-200 disabled:opacity-50"
+            >
+              {populating ? <Loader2 className="size-3 animate-spin" /> : <Users className="size-3" />} Populate
+            </button>
+          ) : null}
+          {populateNote ? <p className="mt-1 text-[11px] text-amber-300/80">{populateNote}</p> : null}
           {shown.connections.length ? (
             <p className="mt-1 text-xs text-stone-500">
               Routes: {shown.connections.join(", ")}

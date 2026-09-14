@@ -27,7 +27,9 @@ import { compilePaint, emptyPaintIsFine, type PaintRequest } from "@/lib/battlem
 import { toggleDoor } from "@/lib/battlemap/scene";
 import { tileIndex, type AmbientLight, type XY } from "@/lib/battlemap/types";
 import type { BackdropTransform } from "@/lib/battlemap/backdrop";
-import { carriedLightRadius, publishBattleMapUpdate } from "@/lib/dm/map-tools";
+import { carriedLightFields, publishBattleMapUpdate } from "@/lib/dm/map-tools";
+import { planDoorFx } from "@/lib/battlemap/fx-plan";
+import { publishFx } from "@/lib/dm/fx";
 import { publishEncounter } from "@/lib/dm/enemy-damage";
 
 // The map studio: a DM builds a tactical map on purpose instead of accepting
@@ -285,7 +287,7 @@ export function openScene(
       refId: sheet.id,
       name: sheet.name,
       spot: generated.pcSpawns[index] ?? generated.pcSpawns[0] ?? { x: 1, y: 1 },
-      lightRadius: carriedLightRadius(sheet),
+      ...carriedLightFields(campaign.id, sheet),
     })),
   );
   publishBattleMapUpdate(campaign.id);
@@ -365,5 +367,17 @@ export function setStudioScene(
     ...(input.overlayPath !== undefined ? { overlayPath: input.overlayPath } : {}),
   });
   publishBattleMapUpdate(campaign.id);
+  if (input.door && door !== undefined) {
+    // A door with no state is an ordinary door again: it swings open. The
+    // wedge and the sting play for the DM; players hear a locked or secret
+    // door only when the engine later refuses or reveals it.
+    publishFx(
+      campaign.id,
+      planDoorFx({
+        at: input.door,
+        state: door === "locked" ? "locked" : door === "secret" ? "secret" : "open",
+      }),
+    );
+  }
   return { ok: true, seed: map.seed, door };
 }

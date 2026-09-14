@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { toneBedBias } from "@/lib/dm/safety-logic";
 import { cueById, cueIds } from "@/lib/ambience/catalog";
 import {
   applyAuto,
@@ -9,6 +10,8 @@ import {
 } from "@/lib/ambience/logic";
 import { getAmbience, setAmbience } from "@/lib/db/ambience";
 import type { Campaign } from "@/lib/db/campaigns";
+import { weatherBedCue } from "@/lib/srd/weather";
+import type { Weather } from "@/lib/scene/state";
 import { publishEphemeral, publishPersisted } from "@/lib/events";
 
 // Sound at the table: the engine rim around src/lib/ambience/logic.ts.
@@ -202,14 +205,39 @@ export function followSceneAmbience(campaign: Campaign, placeText: string) {
   if (!enabled(campaign) || !campaign.gameSettings.ambienceAuto) {
     return;
   }
-  const bed = inferBedCue(placeText);
+  // The table's tone stands in when the description says nothing about
+  // sound and no bed is playing yet (docs/vtt-parity-implementation-plan.md
+  // 9.2); an unnamed room otherwise keeps the dungeon's drip.
+  const bed = inferBedCue(placeText) ?? (getAmbience(campaign.id).bed ? null : toneBedBias(campaign.gameSettings.gm?.tone ?? []));
   if (!bed) {
-    // Nothing in the description says anything about sound. Leaving the
-    // previous bed alone beats cutting to silence: the party walking into an
-    // unnamed room has not left the dungeon.
     return;
   }
   const { state, changed } = applyAuto(getAmbience(campaign.id), { bed });
+  commit(campaign.id, state, changed);
+}
+
+// The sky changed. A storm, rain or a gale takes the bed when the party is
+// somewhere the weather can be heard: an outdoor bed, or one the weather
+// already set. A dungeon keeps its drip.
+const OUTDOOR_BEDS = new Set([
+  "forest", "deep_forest", "jungle", "swamp", "desert", "mountain", "tundra", "plains",
+  "river", "waterfall", "coast", "ship", "camp", "graveyard", "ruins", "wind", "rain",
+  "storm", "night", "market", "crowd", "town", "city",
+]);
+
+export function followWeatherAmbience(campaign: Campaign, weather: Weather) {
+  if (!enabled(campaign) || !campaign.gameSettings.ambienceAuto) {
+    return;
+  }
+  const current = getAmbience(campaign.id);
+  if (current.bed && !OUTDOOR_BEDS.has(current.bed)) {
+    return;
+  }
+  const bed = weatherBedCue(weather);
+  if (!bed) {
+    return;
+  }
+  const { state, changed } = applyAuto(current, { bed });
   commit(campaign.id, state, changed);
 }
 

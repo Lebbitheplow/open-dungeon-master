@@ -277,6 +277,33 @@ export function buildCells(view: PlayerMapView, palette: Palette) {
           <WallDecoration kind={palette.wallDeco} x={x} y={y} />
         </g>,
       );
+    } else if (ch === "|") {
+      // A low wall or fence: floor underneath, a thin double rail along the
+      // axis its neighbours run, so a line of them reads as one fence.
+      const horizontal = charAt(x - 1, y) === "|" || charAt(x + 1, y) === "|";
+      const vertical = charAt(x, y - 1) === "|" || charAt(x, y + 1) === "|";
+      const rail = shade(palette.wall, 70);
+      const along = horizontal || !vertical;
+      base.push(
+        <g key={idx} pointerEvents="none">
+          <rect x={px} y={py} width={TILE} height={TILE} fill={palette.floorAlt} />
+          {along ? (
+            <>
+              <line x1={px} y1={py + TILE / 2 - 3} x2={px + TILE} y2={py + TILE / 2 - 3} stroke={rail} strokeWidth={2} />
+              <line x1={px} y1={py + TILE / 2 + 3} x2={px + TILE} y2={py + TILE / 2 + 3} stroke={shade(rail, -25)} strokeWidth={2} />
+              <line x1={px + 6} y1={py + TILE / 2 - 6} x2={px + 6} y2={py + TILE / 2 + 6} stroke={rail} strokeWidth={2} />
+              <line x1={px + TILE - 6} y1={py + TILE / 2 - 6} x2={px + TILE - 6} y2={py + TILE / 2 + 6} stroke={rail} strokeWidth={2} />
+            </>
+          ) : (
+            <>
+              <line x1={px + TILE / 2 - 3} y1={py} x2={px + TILE / 2 - 3} y2={py + TILE} stroke={rail} strokeWidth={2} />
+              <line x1={px + TILE / 2 + 3} y1={py} x2={px + TILE / 2 + 3} y2={py + TILE} stroke={shade(rail, -25)} strokeWidth={2} />
+              <line x1={px + TILE / 2 - 6} y1={py + 6} x2={px + TILE / 2 + 6} y2={py + 6} stroke={rail} strokeWidth={2} />
+              <line x1={px + TILE / 2 - 6} y1={py + TILE - 6} x2={px + TILE / 2 + 6} y2={py + TILE - 6} stroke={rail} strokeWidth={2} />
+            </>
+          )}
+        </g>,
+      );
     } else if (ch === "~") {
       // Layered water: gradient body, two wave passes, shore foam on land edges.
       const foam: React.ReactNode[] = [];

@@ -22,6 +22,7 @@ import {
   type RelationGraph,
 } from "@/lib/npcs/forge";
 import { Sheet } from "@/components/ui/Sheet";
+import { RelationGraph as RelationGraphView } from "@/app/campaigns/[campaignId]/RelationGraph";
 import { CastChips, CastRows, type Npc } from "@/app/workshop/cast/CastList";
 import { useTourPrepare } from "@/lib/tours/prepare";
 import { NpcEditorFields } from "@/app/workshop/cast/NpcEditorFields";
@@ -55,6 +56,23 @@ export function DmNpcForgePanel({
 }) {
   const [npcs, setNpcs] = useState<Npc[]>([]);
   const [graph, setGraph] = useState<RelationGraph>({ nodes: [], edges: [] });
+  const [showGraph, setShowGraph] = useState(false);
+  // The factions, for membership and the graph's hulls.
+  const [factions, setFactions] = useState<Array<{ id: string; name: string }>>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/campaigns/${campaignId}/factions`)
+      .then((response) => (response.ok ? response.json() : {}))
+      .then((data: { factions?: Array<{ id: string; name: string }> }) => {
+        if (!cancelled) {
+          setFactions((data.factions ?? []).map((faction) => ({ id: faction.id, name: faction.name })));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [campaignId]);
   // The table's setting, for the role picker's ordering.
   const [genre, setGenre] = useState("");
   // The world's named places, for the location field's dropdown.
@@ -325,6 +343,7 @@ export function DmNpcForgePanel({
         suggest={generateButton}
         genre={genre}
         places={places}
+        factions={factions}
       />
 
       <div className="flex flex-wrap items-center gap-1.5">
@@ -428,10 +447,39 @@ export function DmNpcForgePanel({
     </div>
   );
 
+  // The graph (docs/vtt-parity-implementation-plan.md 5.5), drawn on
+  // demand above either list; a tap on a face opens that person.
+  const graphView = graph.edges.length ? (
+    <div className="space-y-1">
+      <button
+        type="button"
+        aria-pressed={showGraph}
+        onClick={() => setShowGraph((current) => !current)}
+        className="rounded-md border border-stone-700 px-2 py-0.5 text-[11px] text-stone-400 hover:text-amber-200"
+      >
+        {showGraph ? "Hide who knows whom" : "Who knows whom"}
+      </button>
+      {showGraph ? (
+        <RelationGraphView
+          graph={graph}
+          portraits={new Map(npcs.filter((npc) => npc.portraitUrl).map((npc) => [npc.name, npc.portraitUrl]))}
+          factionOf={new Map(npcs.filter((npc) => npc.factionId).map((npc) => [npc.name, factions.find((faction) => faction.id === npc.factionId)?.name ?? ""]))}
+          onOpen={(name) => {
+            const npc = npcs.find((entry) => entry.name.toLowerCase() === name.toLowerCase());
+            if (npc) {
+              open(npc);
+            }
+          }}
+        />
+      ) : null}
+    </div>
+  ) : null;
+
   if (rows) {
     return (
       <div className="space-y-3">
-        <CastRows npcs={npcs} onOpen={open} />
+        {graphView}
+        <CastRows npcs={npcs} onOpen={open} factionNames={new Map(factions.map((faction) => [faction.id, faction.name]))} />
         <Sheet
           open={editorOpen}
           onOpenChange={setEditorOpen}
@@ -446,6 +494,7 @@ export function DmNpcForgePanel({
 
   return (
     <div className="space-y-3">
+      {graphView}
       <CastChips npcs={npcs} selectedId={selectedId} onOpen={open} />
       {editor}
     </div>

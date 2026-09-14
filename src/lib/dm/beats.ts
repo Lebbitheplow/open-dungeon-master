@@ -4,6 +4,8 @@ import { getLatestDmMessage, insertCampaignMessage, listRecentMessages } from "@
 import { listRecentRolls } from "@/lib/db/rolls";
 import { listRecentAudit } from "@/lib/db/sheet-audit";
 import { listSheets } from "@/lib/db/sheets";
+import { listTranscriptSince } from "@/lib/db/voice-transcript";
+import { RECENT_MINUTES } from "@/lib/voice/transcript";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { arcTextTimeoutMs } from "@/lib/model-client";
 import { trackUtilityCall } from "@/lib/dm/call-tracker";
@@ -126,6 +128,14 @@ export function beatSourceLines(campaignId: string, since: string): BeatSourceLi
       at: entry.createdAt,
       text: `Change: ${who}, ${entry.kind}${entry.reason ? ` (${entry.reason})` : ""}.`,
     });
+  }
+
+  // What was said aloud at a transcribed table (docs/vtt-parity-implementation-plan.md
+  // 13.3): the last five minutes when nothing else marks the stretch, else
+  // everything since the story last reached the log.
+  const spokenSince = since || new Date(Date.now() - RECENT_MINUTES * 60_000).toISOString();
+  for (const line of listTranscriptSince(campaignId, spokenSince, 120)) {
+    lines.push({ at: line.startedAt, text: `${line.speaker} said: ${line.text}` });
   }
 
   return lines;

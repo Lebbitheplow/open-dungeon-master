@@ -54,8 +54,19 @@
   --shadow-glow-gold-strong: 0 0 14px rgba(212, 171, 58, 0.35), 0 0 40px rgba(212, 171, 58, 0.12);
   --shadow-glow-ember: 0 0 18px rgba(224, 112, 58, 0.3);
 
-  /* Motion */
+  /* Motion. The scale below is the only set of durations and easings the
+     table uses (docs/vtt-parity-implementation-plan.md section 0.6): one
+     motion per element, nothing loops but the turn ring, the auras and the
+     weather, and light comes from gold while danger comes from ember. */
   --ease-snap: cubic-bezier(0.2, 0.9, 0.25, 1);
+  --ease-settle: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-drift: cubic-bezier(0.45, 0, 0.55, 1);
+  --dur-instant: 90ms;
+  --dur-quick: 180ms;
+  --dur-move: 260ms;
+  --dur-beat: 420ms;
+  --dur-scene: 900ms;
+  --dur-linger: 1600ms;
   --animate-fade-up: fade-up 260ms var(--ease-snap) both;
   --animate-fade-up-slow: fade-up 420ms var(--ease-snap) both;
   --animate-scale-in: scale-in 180ms var(--ease-snap) both;
@@ -231,6 +242,44 @@
   }
 }
 
+/*
+  Parchment day theme (docs/vtt-parity-implementation-plan.md section 14).
+  The same names, a second set of values: the stone ramp runs from cream to
+  ink, gold deepens so it still reads on cream, ember is unchanged. Every
+  glow has a day value here, and the starfield becomes a faint paper grain.
+*/
+[data-theme="light"] {
+  --background: #f4efe4;
+  --foreground: #221a10;
+  --color-stone-950: #fbf8f1;
+  --color-stone-900: #f1ebde;
+  --color-stone-800: #e4dccb;
+  --color-stone-700: #cbc0a8;
+  --color-stone-600: #8f8468;
+  --color-stone-500: #6d6350;
+  --color-stone-400: #55493a;
+  --color-stone-300: #3f3427;
+  --color-stone-200: #2d2419;
+  --color-stone-100: #201a12;
+  --color-stone-50: #15100a;
+  --color-amber-950: #fbf1d6;
+  --color-amber-900: #f3e2ad;
+  --color-amber-800: #e6c877;
+  --color-amber-700: #c9a444;
+  --color-amber-600: #a6842a;
+  --color-amber-500: #8a6b1c;
+  --color-amber-400: #705615;
+  --color-amber-300: #5a4410;
+  --color-amber-200: #47350c;
+  --color-amber-100: #352808;
+  --color-amber-50: #241a05;
+  --shadow-elev-1: 0 1px 2px rgba(60, 40, 10, 0.12), 0 2px 8px rgba(60, 40, 10, 0.08);
+  --shadow-elev-2: 0 2px 6px rgba(60, 40, 10, 0.14), 0 12px 32px rgba(60, 40, 10, 0.12);
+  --shadow-glow-gold: 0 0 20px rgba(166, 132, 42, 0.18);
+  --shadow-glow-gold-strong: 0 0 14px rgba(166, 132, 42, 0.32), 0 0 40px rgba(166, 132, 42, 0.12);
+  --shadow-glow-ember: 0 0 18px rgba(198, 90, 36, 0.28);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -246,6 +295,13 @@ html {
   height: 100%;
   -webkit-text-size-adjust: 100%;
   color-scheme: dark;
+  /* The interface scale (section 14): set on <html> by src/lib/theme-mode.ts
+     as both the variable and the root font size. Canvases size in pixels. */
+  --ui-scale: 1;
+}
+[data-theme="light"] html,
+html[data-theme="light"] {
+  color-scheme: light;
 }
 
 body {
@@ -286,6 +342,31 @@ body::before {
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='0.055'/%3E%3C/svg%3E");
 }
 
+/* By day the stars go and a paper grain stays; glass panels turn warm white. */
+[data-theme="light"] body {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(214, 190, 120, 0.22), transparent 65%),
+    radial-gradient(ellipse 60% 45% at 85% 110%, rgba(190, 160, 100, 0.14), transparent 60%),
+    var(--background);
+}
+[data-theme="light"] body::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E");
+}
+[data-theme="light"] .bg-starfield {
+  background-image: none;
+}
+[data-theme="light"] .panel {
+  background:
+    linear-gradient(180deg, rgba(255, 253, 247, 0.6), rgba(247, 240, 226, 0.6)),
+    radial-gradient(ellipse 120% 60% at 50% -20%, rgba(214, 190, 120, 0.12), transparent 60%);
+  border: 1px solid rgba(120, 96, 50, 0.22);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 -1px 0 rgba(120, 96, 50, 0.1) inset,
+    0 2px 6px rgba(60, 40, 10, 0.1),
+    0 14px 36px rgba(60, 40, 10, 0.08);
+}
+
 @layer components {
   /* Starfield: layered gold and violet specks over a night vignette. Pure
      CSS, no assets, no external requests. */
@@ -316,6 +397,99 @@ body::before {
     border-radius: inherit;
     opacity: 0.05;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* Handout paper (docs/vtt-parity-implementation-plan.md 5.6). Cream
+     parchment with the grain of the noise SVG, a deckled edge cut by a
+     mask, serif body. The notice is a poster: heavier paper, a torn foot. */
+  .parchment {
+    position: relative;
+    color: #3b2a14;
+    background:
+      radial-gradient(120% 80% at 50% 0%, rgba(255, 250, 235, 0.9), rgba(226, 206, 160, 0.95)),
+      #e6d3a3;
+    background-blend-mode: multiply;
+    border-radius: 4px;
+    padding: 1.25rem 1.5rem;
+    box-shadow:
+      inset 0 0 40px rgba(120, 80, 20, 0.18),
+      0 12px 30px rgba(0, 0, 0, 0.45);
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' preserveAspectRatio='none'%3E%3Cpath fill='black' d='M6 4 L60 1 L120 6 L190 2 L260 5 L330 1 L394 6 L399 60 L395 130 L399 200 L394 270 L398 340 L394 396 L330 393 L260 398 L190 394 L120 399 L60 395 L4 398 L2 340 L6 270 L1 200 L5 130 L1 60 Z'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' preserveAspectRatio='none'%3E%3Cpath fill='black' d='M6 4 L60 1 L120 6 L190 2 L260 5 L330 1 L394 6 L399 60 L395 130 L399 200 L394 270 L398 340 L394 396 L330 393 L260 398 L190 394 L120 399 L60 395 L4 398 L2 340 L6 270 L1 200 L5 130 L1 60 Z'/%3E%3C/svg%3E");
+    -webkit-mask-size: 100% 100%;
+    mask-size: 100% 100%;
+  }
+  .parchment::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.12;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .parchment .font-display,
+  .parchment strong {
+    color: #2b1c0a;
+  }
+  .parchment code {
+    background: rgba(120, 80, 20, 0.12);
+    color: #2b1c0a;
+  }
+  .notice {
+    position: relative;
+    color: #2a2118;
+    background:
+      linear-gradient(180deg, rgba(255, 252, 244, 0.95), rgba(236, 226, 200, 0.95)),
+      #efe6cf;
+    border: 3px double #6b4a1c;
+    padding: 1.25rem 1.5rem 1.75rem;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' preserveAspectRatio='none'%3E%3Cpath fill='black' d='M0 0 L400 0 L400 386 L385 393 L370 384 L352 396 L336 386 L318 398 L300 388 L282 397 L262 386 L244 396 L226 387 L208 399 L190 388 L172 396 L154 386 L136 397 L118 387 L100 398 L82 388 L64 396 L46 386 L28 397 L12 388 L0 396 Z'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' preserveAspectRatio='none'%3E%3Cpath fill='black' d='M0 0 L400 0 L400 386 L385 393 L370 384 L352 396 L336 386 L318 398 L300 388 L282 397 L262 386 L244 396 L226 387 L208 399 L190 388 L172 396 L154 386 L136 397 L118 387 L100 398 L82 388 L64 396 L46 386 L28 397 L12 388 L0 396 Z'/%3E%3C/svg%3E");
+    -webkit-mask-size: 100% 100%;
+    mask-size: 100% 100%;
+  }
+  .notice .font-display {
+    color: #1d150c;
+    font-weight: 700;
+  }
+  .wax-seal {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border-radius: 999px;
+    padding: 0.15rem 0.6rem;
+    font-size: 11px;
+    color: #fde7e7;
+    background: radial-gradient(circle at 35% 30%, #c2342f, #6e1512 70%);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  }
+  .found-stamp {
+    position: absolute;
+    right: 1rem;
+    top: 0.9rem;
+    transform: rotate(-12deg);
+    border: 2px solid rgba(140, 30, 30, 0.7);
+    border-radius: 4px;
+    padding: 0.1rem 0.5rem;
+    font-family: var(--font-display);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: rgba(140, 30, 30, 0.8);
+    opacity: 0.85;
+  }
+  /* The handout stage: the scrim fades over --dur-scene and the paper
+     unfolds from 0.96 with the settle curve. */
+  .handout-in {
+    animation: handout-in var(--dur-scene) var(--ease-settle) both;
+  }
+  .handout-scrim-in {
+    animation: title-scrim-in var(--dur-scene) var(--ease-drift) both;
+  }
+  [data-effects="low"] .handout-in,
+  [data-effects="low"] .handout-scrim-in {
+    animation-duration: var(--dur-instant);
   }
 
   /* Glass surface: translucent night panel with a soft hairline. */
@@ -480,6 +654,143 @@ body::before {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Board and scene effects. Every keyframe here plays once from a resolved
+   engine outcome (src/lib/battlemap/fx-plan.ts) or loops on a fact the board
+   knows (the current turn, an aura). The reduced-motion block at the end of
+   this file collapses all of them to their final frame, and [data-effects=
+   "low"] on the root (src/lib/effects-mode.ts) drops the decorative ones. */
+@keyframes fx-jolt {
+  0% { transform: translate(0, 0); }
+  35% { transform: translate(var(--fx-dx, 0px), var(--fx-dy, 0px)); }
+  100% { transform: translate(0, 0); }
+}
+@keyframes fx-rise {
+  0% { opacity: 0; transform: translateY(4px) scale(0.9); }
+  20% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-18px) scale(1); }
+}
+@keyframes fx-flash {
+  0% { opacity: 0; }
+  30% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes fx-sweep {
+  0% { opacity: 0; transform: rotate(-40deg); }
+  40% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(40deg); }
+}
+@keyframes fx-collapse {
+  0% { opacity: 0.9; transform: scale(1.6); }
+  100% { opacity: 0; transform: scale(0.2); }
+}
+@keyframes fx-bloom {
+  0% { opacity: 0; transform: scale(0.4); }
+  40% { opacity: 0.85; }
+  100% { opacity: 0; transform: scale(1.5); }
+}
+@keyframes fx-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-2px); }
+  75% { transform: translateX(2px); }
+}
+@keyframes fx-pop {
+  0% { opacity: 0; transform: scale(0.6); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes fx-dash {
+  to { stroke-dashoffset: -24; }
+}
+@keyframes aura-breathe {
+  0%, 100% { fill-opacity: 0.06; }
+  50% { fill-opacity: 0.12; }
+}
+/* A coin arcing into the purse (docs/vtt-parity-implementation-plan.md 11.1). */
+@keyframes coin-arc {
+  0% { opacity: 0; transform: translate(-16px, 8px) scale(0.6); }
+  30% { opacity: 1; transform: translate(-6px, -10px) scale(1); }
+  100% { opacity: 0; transform: translate(8px, -2px) scale(0.5); }
+}
+.coin-arc {
+  animation: coin-arc var(--dur-scene, 600ms) ease-out both;
+}
+.coin-arc-out {
+  animation-direction: reverse;
+}
+@keyframes handout-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes title-in {
+  0% { opacity: 0; transform: translateY(6px); letter-spacing: 0.08em; }
+  100% { opacity: 1; transform: translateY(0); letter-spacing: 0.02em; }
+}
+@keyframes title-rule {
+  0% { transform: scaleX(0); }
+  100% { transform: scaleX(1); }
+}
+@keyframes ken-burns {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.06); }
+}
+.fx-jolt { animation: fx-jolt var(--dur-beat) var(--ease-settle) both; }
+.fx-rise { animation: fx-rise var(--dur-beat) var(--ease-settle) both; }
+.fx-flash { animation: fx-flash var(--dur-beat) var(--ease-snap) both; }
+.fx-sweep { animation: fx-sweep var(--dur-quick) var(--ease-snap) both; }
+.fx-collapse { animation: fx-collapse var(--dur-scene) var(--ease-settle) both; }
+.fx-bloom { animation: fx-bloom var(--dur-beat) var(--ease-settle) both; }
+.fx-shake { animation: fx-shake var(--dur-quick) var(--ease-snap) both; }
+.fx-pop { animation: fx-pop var(--dur-quick) var(--ease-settle) both; }
+.turn-ring { animation: fx-dash var(--dur-linger) linear infinite; }
+.aura-ring { animation: aura-breathe var(--dur-linger) var(--ease-drift) infinite; }
+.title-in { animation: title-in var(--dur-scene) var(--ease-settle) both; }
+.title-rule { transform-origin: center; animation: title-rule var(--dur-scene) var(--ease-settle) both; }
+.ken-burns { animation: ken-burns 40s var(--ease-drift) infinite alternate; }
+@keyframes storm-flash {
+  0%, 92%, 100% { opacity: 0; }
+  93% { opacity: 0.35; }
+  94% { opacity: 0.05; }
+  95.5% { opacity: 0.25; }
+  97% { opacity: 0; }
+}
+.storm-flash { animation: storm-flash 23s linear infinite; }
+@keyframes title-scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.title-scrim-in { animation: title-scrim-in var(--dur-scene) var(--ease-drift) both; }
+[data-effects="low"] .storm-flash { animation: none; }
+.token-move {
+  transition: transform var(--dur-move) var(--ease-settle);
+}
+@keyframes composer-pulse {
+  0% { border-color: rgba(212, 171, 58, 0.9); box-shadow: var(--shadow-glow-gold-strong); }
+  100% { border-color: rgba(87, 83, 78, 0.7); box-shadow: var(--shadow-elev-1); }
+}
+.composer-pulse {
+  animation: composer-pulse var(--dur-linger) var(--ease-settle) both;
+}
+.sky-wash {
+  transition:
+    background var(--dur-scene) var(--ease-drift),
+    opacity var(--dur-scene) var(--ease-drift);
+}
+[data-effects="low"] .aura-ring,
+[data-effects="low"] .turn-ring,
+[data-effects="low"] .ken-burns {
+  animation: none;
+}
+[data-effects="low"] .token-move,
+[data-effects="low"] .sky-wash {
+  transition: none;
 }
 
 ::selection {

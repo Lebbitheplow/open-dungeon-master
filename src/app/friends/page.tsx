@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, HeartHandshake, Loader2, UserRound, X } from "lucide-react";
+import { appConfirm } from "@/components/ui/ConfirmDialog";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
@@ -155,7 +156,7 @@ export default function FriendsPage() {
   }
 
   async function unfriend(friend: FriendItem) {
-    if (!window.confirm(`Remove ${friend.username} from your friends?`)) {
+    if (!await appConfirm(`Remove ${friend.username} from your friends?`)) {
       return;
     }
     const response = await fetch("/api/friends", {

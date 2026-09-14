@@ -24,8 +24,10 @@ const TIER_DC: Record<DifficultyTier, number> = {
   nearly_impossible: 30,
 };
 
-export function dcForDifficulty(tier: DifficultyTier): number {
-  return TIER_DC[tier];
+// `shift` is the table's strictness (docs/vtt-parity-implementation-plan.md
+// 9.2): minus two when lenient, plus two when harsh, never below five.
+export function dcForDifficulty(tier: DifficultyTier, shift = 0): number {
+  return Math.max(5, TIER_DC[tier] + shift);
 }
 
 // The hardest tier whose DC the number reaches, so a raw DC reads back as a

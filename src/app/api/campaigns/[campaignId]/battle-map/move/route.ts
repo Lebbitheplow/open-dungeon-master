@@ -13,6 +13,8 @@ import { buildPlayerMapView, occupiedTiles } from "@/lib/battlemap/view";
 import { reachableTiles, speedToTiles } from "@/lib/battlemap/movement";
 import { tileIndex } from "@/lib/battlemap/types";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
+import { publishFx } from "@/lib/dm/fx";
+import { planDoorFx } from "@/lib/battlemap/fx-plan";
 import { effectiveSpeed, exhaustionSpeed } from "@/lib/dm/condition-logic";
 import { getCampaignById } from "@/lib/db/campaigns";
 import { budgetApplies } from "@/lib/dm/action-budget";
@@ -20,6 +22,27 @@ import { resolveOpportunityAttacks } from "@/lib/dm/opportunity";
 import { speedFor } from "@/lib/srd";
 
 export const runtime = "nodejs";
+
+// A locked door standing next to the mover or the destination is what
+// stopped a move that otherwise looked open.
+function lockedDoorNear(
+  map: { doors: Record<string, string>; drawnTerrain: string; width: number },
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+): { x: number; y: number } | null {
+  for (const [key, state] of Object.entries(map.doors)) {
+    if (state !== "locked") {
+      continue;
+    }
+    const [dx, dy] = key.split(",").map(Number);
+    const nearFrom = Math.max(Math.abs(dx - from.x), Math.abs(dy - from.y)) <= 1;
+    const nearTo = Math.max(Math.abs(dx - to.x), Math.abs(dy - to.y)) <= 1;
+    if (nearFrom || nearTo) {
+      return { x: dx, y: dy };
+    }
+  }
+  return null;
+}
 export const dynamic = "force-dynamic";
 
 const moveSchema = z.object({
@@ -108,9 +131,26 @@ export async function POST(
     ? map.width * map.height
     : Math.max(0, speedToTiles(speed) * (dashed ? 2 : 1) - token.movedThisRound);
   const occupied = occupiedTiles(map, listTokens(map.id), token);
-  const reach = reachableTiles(map.terrain, map.width, map.height, occupied, token, budget);
+  const reach = reachableTiles(
+    map.terrain,
+    map.width,
+    map.height,
+    occupied,
+    token,
+    budget,
+    1,
+    token.movement === "fly",
+  );
   const cost = reach.get(tileIndex(map.width, x, y));
   if (cost === undefined) {
+    // A locked door on the way: the handle rattles for everyone (the shake
+    // and the sting), and the DM's prompt is told so the model can offer
+    // the lock or the key.
+    const lockedDoor = lockedDoorNear(map, { x: token.x, y: token.y }, { x, y });
+    if (lockedDoor) {
+      publishFx(campaignId, planDoorFx({ at: lockedDoor, state: "locked" }));
+      return Response.json({ error: "The door there is locked." }, { status: 400 });
+    }
     return Response.json({ error: "You cannot reach that tile this round." }, { status: 400 });
   }
 

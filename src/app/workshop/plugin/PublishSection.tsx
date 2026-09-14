@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertTriangle, CheckCircle2, Download, FileUp, Loader2, Server, Trash2 } from "lucide-react";
+import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { useEffect, useRef, useState } from "react";
 import { UnofficialPackNotice } from "@/components/UnofficialPackNotice";
 import { cn } from "@/lib/cn";
@@ -99,10 +100,13 @@ export function PublishSection({
     }
   }
 
-  function replaceDraft(next: WorldPackDraft, from: string): boolean {
+  async function replaceDraft(next: WorldPackDraft, from: string): Promise<boolean> {
     if (
       draft.name.trim() &&
-      !window.confirm(`Replace the draft "${draft.name}" with ${from}? The current draft is lost.`)
+      !(await appConfirm(`Replace the draft "${draft.name}" with ${from}? The current draft is lost.`, {
+        title: "Replace the draft",
+        actionLabel: "Replace",
+      }))
     ) {
       return false;
     }
@@ -129,7 +133,7 @@ export function PublishSection({
       setError(parsed.error);
       return;
     }
-    replaceDraft(parsed, file.name);
+    void replaceDraft(parsed, file.name);
   }
 
   async function fromInstalled(packId: string) {
@@ -148,7 +152,7 @@ export function PublishSection({
         setError(parsed.error);
         return;
       }
-      if (replaceDraft({ ...parsed, id: "" }, `the installed world "${data.pack.name}"`)) {
+      if (await replaceDraft({ ...parsed, id: "" }, `the installed world "${data.pack.name}"`)) {
         setNotice(
           `Started from "${data.pack.name}". Its pictures stay with the installed copy; give this one a new name so the two do not share an id.`,
         );
@@ -265,8 +269,15 @@ export function PublishSection({
           ) : null}
           <button
             type="button"
-            onClick={() => {
-              if (window.confirm("Throw the draft away and start blank? Pictures go with it.")) void onClear();
+            onClick={async () => {
+              if (
+                await appConfirm("Throw the draft away and start blank? Pictures go with it.", {
+                  title: "Start blank",
+                  actionLabel: "Throw it away",
+                })
+              ) {
+                void onClear();
+              }
             }}
             disabled={Boolean(busy)}
             className={cn(ui.btnSmall, "ml-auto text-xs text-red-300/80 hover:text-red-200")}
