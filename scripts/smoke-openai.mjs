@@ -3,7 +3,7 @@
 // Not part of `npm test`: it spends money and needs a key. Everything runs
 // in-process against a throwaway database, the same way the offline tests do,
 // so it drives the real DM turn machine (src/lib/dm/turn.ts) rather than a
-// mock of it. The campaign is deliberately tiny — the point is to prove the
+// mock of it. The campaign is deliberately tiny: the point is to prove the
 // integration, not to score the model.
 //
 // Deliberately, NO image key is configured anywhere: the pictures have to
@@ -13,6 +13,10 @@
 // Usage:
 //   OPENAI_API_KEY=sk-... node scripts/smoke-openai.mjs
 //   ODM_TEXT_MODEL=gpt-5.4-mini ODM_IMAGE_MODEL=gpt-image-1-mini ... (optional)
+//   ODM_SMOKE_DEVICE=1 ...   the way the apps do it: a device world, the
+//     campaign made while the device had no AI, then the key saved once on the
+//     device (admin settings). The campaign never holds a key of its own.
+//   ODM_SMOKE_TURNS=2 ...    stop after that many player turns (cheaper)
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
@@ -29,6 +33,8 @@ if (!KEY) {
 const TEXT_MODEL = process.env.ODM_TEXT_MODEL || "gpt-5.4-mini";
 const IMAGE_MODEL = process.env.ODM_IMAGE_MODEL || "gpt-image-1-mini";
 const BASE_URL = process.env.ODM_TEXT_BASE_URL || "https://api.openai.com/v1";
+const DEVICE = process.env.ODM_SMOKE_DEVICE === "1";
+const MAX_TURNS = Number.parseInt(process.env.ODM_SMOKE_TURNS ?? "", 10) || 5;
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "odm-openai-"));
 process.env.SQLITE_DB_PATH = path.join(dir, "test.sqlite");
@@ -38,9 +44,11 @@ process.env.OPENAI_IMAGE_MODEL = IMAGE_MODEL;
 delete process.env.OPENAI_IMAGE_API_KEY;
 delete process.env.OPENAI_API_KEY;
 delete process.env.OPENAI_COMPAT_API_KEY;
+if (DEVICE) process.env.ODM_DEVICE_WORLD = "1";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
+const { saveGlobalConfig } = await import("../src/lib/db/app-settings.ts");
 const { createUser } = await import("../src/lib/db/users.ts");
 const { createCampaign, getCampaignById, setCampaignStatus, updateStorySettings, allocateSeq } =
   await import("../src/lib/db/campaigns.ts");
@@ -93,6 +101,9 @@ globalThis.fetch = async (input, init) => {
 
 // ---- the table -------------------------------------------------------------
 const lead = createUser("kaleb", "x");
+// The device starts with a human Dungeon Master, so the campaign freezes "no
+// AI" into its own settings: the case a key saved later used to miss.
+if (DEVICE) saveGlobalConfig({ text: { provider: "none" } });
 const campaign = createCampaign(lead.id, {
   title: "The Salt Road",
   description: "A one-scene caravan job that goes wrong at the ford.",
@@ -103,13 +114,36 @@ const campaign = createCampaign(lead.id, {
   gameSettings: {},
 });
 
+if (DEVICE) {
+  assert.equal(getCampaignById(campaign.id).settings.textProvider, "none");
+  // Exactly the patch the apps' Story AI screen sends (client
+  // src/shared/ai-setup.ts), except that the image key is left out so the
+  // pictures still have to borrow the text key.
+  saveGlobalConfig({
+    text: {
+      provider: "custom",
+      customBaseUrl: BASE_URL,
+      customModel: TEXT_MODEL,
+      customApiKey: KEY,
+      utilityProvider: "custom",
+      utilityBaseUrl: BASE_URL,
+      utilityModel: TEXT_MODEL,
+      utilityApiKey: KEY,
+    },
+    images: { defaultBackend: "openai" },
+  });
+}
 updateStorySettings(campaign.id, {
-  textProvider: "custom",
-  customBaseUrl: BASE_URL,
-  customModel: TEXT_MODEL,
-  customApiKey: KEY,
-  // No ComfyUI anywhere in this run.
-  imageBackend: "openai",
+  ...(DEVICE
+    ? {}
+    : {
+        textProvider: "custom",
+        customBaseUrl: BASE_URL,
+        customModel: TEXT_MODEL,
+        customApiKey: KEY,
+        // No ComfyUI anywhere in this run.
+        imageBackend: "openai",
+      }),
   imageMode: "fast",
   aspect: "landscape",
   imageGenerationEnabled: true,
@@ -152,6 +186,15 @@ const bram = createSheet(
   3,
   sheet("Bram", "fighter", { str: 16, dex: 12, con: 15, int: 9, wis: 11, cha: 10 }),
 );
+
+if (DEVICE) {
+  const followed = getCampaignById(campaign.id).settings;
+  assert.equal(followed.textProvider, "custom", "the older campaign did not follow the device");
+  assert.equal(followed.customModel, TEXT_MODEL);
+  assert.equal(followed.imageBackend, "openai");
+  assert.equal(followed.customApiKey, "", "a device key was copied into the campaign");
+  note(`device world: a campaign made under "no AI" now runs ${followed.customModel} with no key of its own`);
+}
 
 const caps = describeEndpoint(BASE_URL);
 note(
@@ -305,6 +348,7 @@ assert.ok(
   "no dice were rolled for an explicit search",
 );
 
+if (MAX_TURNS >= 3) {
 note("\n=== turn 3: combat ===");
 say(bram, other.id, "Bandits break from the reeds. I draw my sword and charge the nearest one.");
 await turn("combat");
@@ -318,7 +362,9 @@ if (encounter) {
 } else {
   note("  no encounter started (the model narrated the fight instead)");
 }
+}
 
+if (MAX_TURNS >= 4) {
 note("\n=== turn 4: an enemy turn and a character-state change ===");
 say(
   avery,
@@ -330,7 +376,9 @@ for (const entry of listSheets(campaign.id)) {
   const fresh = getSheetById(entry.id);
   note(`  ${fresh.name}: ${fresh.currentHp}/${fresh.maxHp} hp, ${fresh.gold} gp, ${fresh.conditions.join(",") || "no conditions"}`);
 }
+}
 
+if (MAX_TURNS >= 5) {
 note("\n=== turn 5: a job offered and taken (quest + NPC + story progression) ===");
 say(
   bram,
@@ -338,6 +386,7 @@ say(
   "Once the last bandit is down I haul the caravan master over and ask what is really in that coffer, and whether the job pays extra to see it through to the tide-ruin.",
 );
 await turn("quest");
+}
 
 note("\n=== scene image, on the borrowed key ===");
 const dmMessage = getLatestDmMessage(campaign.id);
