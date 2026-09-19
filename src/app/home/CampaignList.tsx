@@ -1,6 +1,7 @@
 "use client";
 
 import { Copy, Loader2, Trash2, Users } from "lucide-react";
+import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
 import { CampaignCover } from "@/components/CampaignCover";
@@ -88,7 +89,7 @@ function CampaignTile({
 }) {
   const ended = campaign.status === "ended";
   return (
-    <a
+    <Link
       href={`/campaigns/${campaign.id}`}
       className={cn(ui.cardHover, "group relative block h-full p-4", ended && "opacity-80")}
     >
@@ -164,6 +165,6 @@ function CampaignTile({
           ) : null}
         </span>
       </div>
-    </a>
+    </Link>
   );
 }

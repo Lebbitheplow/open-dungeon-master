@@ -40,6 +40,7 @@ import {
   writeEffectsMode,
   writeTurnChime,
 } from "@/lib/effects-mode";
+import { paintedMapsOn, writePaintedMaps } from "@/lib/painted-maps";
 import { MASTER_VOLUME_MAX, VOLUME_STEP } from "@/lib/voice/volume";
 
 // Everything about the machine in front of the player: which microphone
@@ -538,6 +539,7 @@ function EffectsSection() {
   const mode = useEffectsMode();
   const chime = useTurnChime();
   const [auto, setAuto] = useState(() => isEffectsAuto());
+  const [painted, setPainted] = useState(() => paintedMapsOn());
   return (
     <section>
       <h3 className={HEADING}>
@@ -570,6 +572,17 @@ function EffectsSection() {
               Let the device decide
             </button>
           ) : null}
+        </p>
+        <Switch
+          label="Painted battle maps"
+          on={painted}
+          onChange={(on) => {
+            writePaintedMaps(on);
+            setPainted(on);
+          }}
+        />
+        <p className="text-xs text-stone-500">
+          Paints each board from its terrain on this device. Off keeps the drawn board, which is lighter on an old phone.
         </p>
         <Switch label="Chime when it is your turn" on={chime} onChange={writeTurnChime} />
       </div>

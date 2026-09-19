@@ -1,0 +1,8 @@
+{
+  "_note": "Effect clips rejected on review; the value is a seed salt. Round b (2026-09-18): nine clips that rendered black because their prompts asked for dark or dim content on a black backdrop.",
+  "rejected": {
+    "proj-magic": "b",
+    "teleport-out": "b",
+    "death-collapse": "b"
+  }
+}

@@ -210,9 +210,11 @@ function artTile(idx: number, px: number, py: number, ch: string, palette: Palet
   return null;
 }
 
-export function buildCells(view: PlayerMapView, palette: Palette) {
+export function buildCells(view: PlayerMapView, palette: Palette, painted = false) {
   const { width, height } = view;
-  const art = Boolean(view.backdrop);
+  // Either kind of picture turns the terrain layer into markings. A painted
+  // board is drawn from this very terrain, so it needs no markings at all.
+  const art = Boolean(view.backdrop) || painted;
   const visible = new Set(view.visible);
   const explored = new Set(view.explored);
   const reachable = new Set(view.reachable);
@@ -239,7 +241,7 @@ export function buildCells(view: PlayerMapView, palette: Palette) {
     if (!isExplored) {
       base.push(<rect key={idx} x={px} y={py} width={TILE} height={TILE} fill="#050505" />);
     } else if (art) {
-      const tile = artTile(idx, px, py, ch, palette);
+      const tile = painted ? null : artTile(idx, px, py, ch, palette);
       if (tile) {
         base.push(tile);
       }

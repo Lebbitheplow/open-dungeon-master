@@ -68,9 +68,19 @@ export const BattleMapGrid = memo(
     fx = NO_FX,
     onFxPlayed = NOOP,
     onLabelClick,
+    painted = null,
+    faces,
   }: {
     view: PlayerMapView;
     sheets: CharacterSheet[];
+    // The painted picture of this board, or null while the drawn terrain
+    // stands in for it (usePaintedMap.ts). Never set on a map that carries
+    // its own backdrop.
+    painted?: string | null;
+    // A face for every token that has one, by the token's refId: a portrait,
+    // a placeholder plate, a monster's art. A token without one falls back to
+    // its initial (docs/visual-overhaul-plan.md 5.1).
+    faces?: Map<string, string>;
     onTileClick?: (x: number, y: number) => void;
     onTileHover?: (x: number, y: number | null) => void;
     onTokenClick?: (tokenId: string) => void;
@@ -112,9 +122,14 @@ export const BattleMapGrid = memo(
     }, [view.mapId]);
     const { width, height } = view;
     const palette = PALETTES[view.theme] ?? PALETTES.field;
-    const portraitsByRef = new Map(
-      sheets.filter((sheet) => sheet.portrait).map((sheet) => [sheet.id, sheet.portrait!.url]),
-    );
+    const portraitsByRef = useMemo(() => {
+      const byRef = new Map(faces ?? []);
+      // An uploaded portrait always wins over a plate.
+      for (const sheet of sheets) {
+        if (sheet.portrait) byRef.set(sheet.id, sheet.portrait.url);
+      }
+      return byRef;
+    }, [faces, sheets]);
     const currentName = view.currentTurnName.toLowerCase();
 
     // The particle canvas sits over the SVG in the same frame; effects are
@@ -137,7 +152,8 @@ export const BattleMapGrid = memo(
 
     // The terrain/fog/reachable cell layer only changes when the view
     // projection itself changes; token/light layers below stay cheap.
-    const cells = useMemo(() => buildCells(view, palette), [view, palette]);
+    const isPainted = Boolean(painted) && !view.backdrop;
+    const cells = useMemo(() => buildCells(view, palette, isPainted), [view, palette, isPainted]);
 
     // A transparent grid that makes every tile a click and hover target.
     // It sits UNDER the tokens so that clicking a figure still reaches the
@@ -288,6 +304,19 @@ export const BattleMapGrid = memo(
             opacity={view.backdrop.transform.opacity}
             preserveAspectRatio="none"
             pointerEvents="none"
+          />
+        ) : painted ? (
+          // The painted board: the same layer, drawn from the terrain itself,
+          // so it needs no register and no tint (render/painted.ts).
+          <image
+            href={painted}
+            x={0}
+            y={0}
+            width={width * TILE}
+            height={height * TILE}
+            preserveAspectRatio="none"
+            pointerEvents="none"
+            style={{ animation: "overlay-in 420ms ease-out both" }}
           />
         ) : null}
         {cells}
@@ -513,6 +542,8 @@ export const BattleMapGrid = memo(
   (prev, next) =>
     prev.view === next.view &&
     prev.sheets === next.sheets &&
+    prev.painted === next.painted &&
+    prev.faces === next.faces &&
     // The overlay is compared by reference, so a parent that rebuilds it
     // every render would defeat the memo. BattleMapPanel memoizes it.
     prev.overlay === next.overlay &&

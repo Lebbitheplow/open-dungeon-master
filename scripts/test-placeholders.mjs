@@ -216,7 +216,8 @@ for (const url of shipped) {
 // docs/vtt-parity-implementation-plan.md 18.1) ride in the same payload,
 // under their own ceiling. Absent is fine; over is not.
 const FX_DIR = path.join(ROOT, "public", "fx");
-const FX_BUDGET_BYTES = 1.5 * 1024 * 1024;
+// Raised from 1.5 MB for the painted effect flipbooks (docs/visual-overhaul-plan.md 2.3, 8b.3).
+const FX_BUDGET_BYTES = 8 * 1024 * 1024;
 const FX_STING_BYTES = 40 * 1024;
 if (existsSync(FX_DIR)) {
   let fxBytes = 0;

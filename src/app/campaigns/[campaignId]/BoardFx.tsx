@@ -7,6 +7,8 @@ import { fxTone, type FxEvent, type FxOutcome } from "@/lib/battlemap/fx-plan";
 import { haptic, prefersReducedMotion, useLowEffects } from "@/lib/effects-mode";
 import type { ParticleHandle } from "@/components/ParticleCanvas";
 import type { XY } from "@/lib/battlemap/types";
+import { flipbookFor } from "@/lib/battlemap/flipbooks";
+import { Flipbook } from "@/app/campaigns/[campaignId]/BoardFlipbook";
 
 // The effect player (docs/vtt-parity-implementation-plan.md section 1.3).
 // Effects arrive planned from the server; this component queues them, plays
@@ -618,7 +620,21 @@ function EffectShape({ fx }: { fx: FxEvent }) {
     }
   }
 
+  // The painted flipbook over each target, on top of the drawn effect, which
+  // stays as the fallback when this host has no sheets. Skipped under reduced
+  // motion and low effects, like every other loop and flourish.
+  const sheetId = reduced || lowEffectsNow() ? null : flipbookFor(fx);
+  if (sheetId) {
+    for (const [index, target] of targets.entries()) {
+      nodes.push(<Flipbook key={`book-${index}`} sheetId={sheetId} at={centre(target)} />);
+    }
+  }
+
   return <g pointerEvents="none">{nodes}</g>;
+}
+
+function lowEffectsNow(): boolean {
+  return typeof document !== "undefined" && document.documentElement.dataset.effects === "low";
 }
 
 // Rendered inside the board's <svg>, above every other layer.

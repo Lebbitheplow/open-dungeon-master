@@ -313,7 +313,7 @@ function CharacterCard({
 }) {
   return (
     <li className={cn("group relative", ui.cardHover, "p-4")}>
-      <a href={`/characters/${character.id}`} className="block">
+      <Link href={`/characters/${character.id}`} className="block">
         <div className="flex items-center gap-3">
           {character.sheet?.portrait?.url ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -363,7 +363,7 @@ function CharacterCard({
         {character.background ? (
           <p className="text-xs text-stone-500">{titleCase(character.background)}</p>
         ) : null}
-      </a>
+      </Link>
       {character.campaigns?.length ? (
         <div className="mt-2 flex flex-wrap gap-1.5 border-t border-stone-700/40 pt-2">
           {character.campaigns.map((assignment) => (

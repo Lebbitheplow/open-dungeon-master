@@ -295,6 +295,28 @@ object URL ring, replay headers, the shell's day theme and the raised host
 version gate. See `docs/vtt-parity-implementation-plan.md` sections 11 to
 15 and 18.
 
+- **The painted world** (0.20.0), the first release of the visual overhaul
+  (`docs/visual-overhaul-plan.md`). The art was made once on the table's own
+  ComfyUI and ships with the app: 346 map tiles in three variants (fantasy
+  plus cyberpunk, steampunk, wasteland, horror and mystery sets), 253 map
+  objects, 72 decals, 2,008 icons, 34 effect flipbooks and 45 pieces of UI
+  furniture, each with a catalogue, a generator and a review file under
+  `scripts/`. Battle maps are painted on the device from the terrain the
+  viewer was sent (`src/lib/battlemap/render/`, a skin per setting and theme in
+  `src/lib/battlemap/skins.ts`), in the layer an uploaded backdrop uses and
+  under the same fog, with a device setting to keep the drawn board. Tokens
+  wear faces instead of initials (an uploaded portrait, else the lineage and
+  class plate, else the monster's plate for its type and setting). Painted
+  icons lead spells, features, feats and equipment on both character sheets,
+  condition chips, market stock and the reference lists, addressed by name
+  with a family fallback (`src/lib/icons.ts`). Energy damage, healing, death
+  and crits play a painted flipbook over the drawn effect
+  (`src/lib/battlemap/flipbooks.ts`). Route changes crossfade on the server
+  pages and in the apps, and the three navigations that were full page loads
+  (enter world, a campaign tile, a character card) are soft. Not yet built
+  from the plan: the Map Forge and Editor redesign, the Hand, the creators,
+  the rest-of-app screen pass, skeletons and the moment layer.
+
 ## Next
 
 - Ruleset validation (`src/lib/rulesets/validate.ts` from the workshop plan):

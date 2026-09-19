@@ -1,0 +1,5406 @@
+{
+  "objects": [
+    {
+      "id": "alchemy-bench",
+      "shape": "object",
+      "src": "/assets/props/objects/alchemy-bench.webp",
+      "width": 256,
+      "height": 166,
+      "bytes": 12970,
+      "seed": 866939128,
+      "label": "Alchemy bench",
+      "sets": [
+        "lab",
+        "arcane"
+      ],
+      "span": 1.3,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "altar",
+      "shape": "object",
+      "src": "/assets/props/objects/altar.webp",
+      "width": 243,
+      "height": 256,
+      "bytes": 7162,
+      "seed": 276973880,
+      "label": "Altar",
+      "sets": [
+        "temple",
+        "arcane"
+      ],
+      "span": 1,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "amphora",
+      "shape": "object",
+      "src": "/assets/props/objects/amphora.webp",
+      "width": 203,
+      "height": 256,
+      "bytes": 8282,
+      "seed": 904333818,
+      "label": "Amphora",
+      "sets": [
+        "market",
+        "ship",
+        "temple"
+      ],
+      "span": 0.6,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "anchor",
+      "shape": "object",
+      "src": "/assets/props/objects/anchor.webp",
+      "width": 256,
+      "height": 252,
+      "bytes": 8106,
+      "seed": 1122880180,
+      "label": "Anchor",
+      "sets": [
+        "ship",
+        "river"
+      ],
+      "span": 0.8,
+      "kind": "scatter",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "anthill",
+      "shape": "object",
+      "src": "/assets/props/objects/anthill.webp",
+      "width": 256,
+      "height": 217,
+      "bytes": 15896,
+      "seed": 956577618,
+      "label": "Anthill",
+      "sets": [
+        "field",
+        "desert"
+      ],
+      "span": 0.5,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "anvil",
+      "shape": "object",
+      "src": "/assets/props/objects/anvil.webp",
+      "width": 256,
+      "height": 196,
+      "bytes": 6346,
+      "seed": 724822997,
+      "label": "Anvil",
+      "sets": [
+        "forge"
+      ],
+      "span": 0.5,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "armour-stand",
+      "shape": "object",
+      "src": "/assets/props/objects/armour-stand.webp",
+      "width": 190,
+      "height": 256,
+      "bytes": 8258,
+      "seed": 328253612,
+      "label": "Armour stand",
+      "sets": [
+        "barracks",
+        "throne"
+      ],
+      "span": 0.5,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "banner-pole",
+      "shape": "object",
+      "src": "/assets/props/objects/banner-pole.webp",
+      "width": 206,
+      "height": 256,
+      "bytes": 10774,
+      "seed": 966744269,
+      "label": "Banner pole",
+      "sets": [
+        "camp",
+        "barracks",
+        "ruin"
+      ],
+      "span": 1.1,
+      "kind": "scatter",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "bar-counter",
+      "shape": "object",
+      "src": "/assets/props/objects/bar-counter.webp",
+      "width": 250,
+      "height": 256,
+      "bytes": 7324,
+      "seed": 165432051,
+      "label": "Bar counter",
+      "sets": [
+        "tavern"
+      ],
+      "span": 1.8,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "barrel",
+      "shape": "object",
+      "src": "/assets/props/objects/barrel.webp",
+      "width": 256,
+      "height": 252,
+      "bytes": 9566,
+      "seed": 305960401,
+      "label": "Barrel",
+      "sets": [
+        "dungeon",
+        "tavern",
+        "ship",
+        "market",
+        "camp"
+      ],
+      "span": 0.5,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "barrel-open",
+      "shape": "object",
+      "src": "/assets/props/objects/barrel-open.webp",
+      "width": 256,
+      "height": 237,
+      "bytes": 10396,
+      "seed": 365725780,
+      "label": "Barrel open",
+      "sets": [
+        "tavern",
+        "sewer",
+        "lab"
+      ],
+      "span": 0.5,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "basket",
+      "shape": "object",
+      "src": "/assets/props/objects/basket.webp",
+      "width": 256,
+      "height": 245,
+      "bytes": 9628,
+      "seed": 1151701139,
+      "label": "Basket",
+      "sets": [
+        "market",
+        "kitchen",
+        "garden"
+      ],
+      "span": 0.4,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "bed",
+      "shape": "object",
+      "src": "/assets/props/objects/bed.webp",
+      "width": 256,
+      "height": 157,
+      "bytes": 7594,
+      "seed": 1353598700,
+      "label": "Bed",
+      "sets": [
+        "tavern",
+        "barracks",
+        "prison"
+      ],
+      "span": 1.3,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "bedroll",
+      "shape": "object",
+      "src": "/assets/props/objects/bedroll.webp",
+      "width": 254,
+      "height": 256,
+      "bytes": 5118,
+      "seed": 2068815671,
+      "label": "Bedroll",
+      "sets": [
+        "camp",
+        "cave",
+        "barracks"
+      ],
+      "span": 0.85,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "beehive",
+      "shape": "object",
+      "src": "/assets/props/objects/beehive.webp",
+      "width": 256,
+      "height": 245,
+      "bytes": 13440,
+      "seed": 1777233113,
+      "label": "Beehive",
+      "sets": [
+        "garden",
+        "field"
+      ],
+      "span": 0.35,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "bench",
+      "shape": "object",
+      "src": "/assets/props/objects/bench.webp",
+      "width": 256,
+      "height": 83,
+      "bytes": 3882,
+      "seed": 1651424953,
+      "label": "Bench",
+      "sets": [
+        "tavern",
+        "temple",
+        "barracks"
+      ],
+      "span": 1.1,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "bier",
+      "shape": "object",
+      "src": "/assets/props/objects/bier.webp",
+      "width": 197,
+      "height": 256,
+      "bytes": 11532,
+      "seed": 591224884,
+      "label": "Bier",
+      "sets": [
+        "crypt",
+        "temple"
+      ],
+      "span": 1.1,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "boat",
+      "shape": "object",
+      "src": "/assets/props/objects/boat.webp",
+      "width": 256,
+      "height": 240,
+      "bytes": 5312,
+      "seed": 226763483,
+      "label": "Boat",
+      "sets": [
+        "river",
+        "swamp",
+        "ship"
+      ],
+      "span": 1.8,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "bones",
+      "shape": "object",
+      "src": "/assets/props/objects/bones.webp",
+      "width": 256,
+      "height": 254,
+      "bytes": 22826,
+      "seed": 1746337250,
+      "label": "Bones",
+      "sets": [
+        "crypt",
+        "cave",
+        "dungeon"
+      ],
+      "span": 0.6,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "book-pile",
+      "shape": "object",
+      "src": "/assets/props/objects/book-pile.webp",
+      "width": 256,
+      "height": 214,
+      "bytes": 8578,
+      "seed": 1534227808,
+      "label": "Book pile",
+      "sets": [
+        "library",
+        "arcane",
+        "lab"
+      ],
+      "span": 0.35,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "bookshelf",
+      "shape": "object",
+      "src": "/assets/props/objects/bookshelf.webp",
+      "width": 136,
+      "height": 256,
+      "bytes": 6936,
+      "seed": 1641836621,
+      "label": "Bookshelf",
+      "sets": [
+        "library",
+        "lab",
+        "tavern",
+        "throne"
+      ],
+      "span": 1,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "boulder",
+      "shape": "object",
+      "src": "/assets/props/objects/boulder.webp",
+      "width": 256,
+      "height": 224,
+      "bytes": 9292,
+      "seed": 1195896243,
+      "label": "Boulder",
+      "sets": [
+        "cave",
+        "forest",
+        "field",
+        "river",
+        "frozen"
+      ],
+      "span": 0.8,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "boulder-large",
+      "shape": "object",
+      "src": "/assets/props/objects/boulder-large.webp",
+      "width": 256,
+      "height": 249,
+      "bytes": 9518,
+      "seed": 1405073309,
+      "label": "Boulder large",
+      "sets": [
+        "cave",
+        "field"
+      ],
+      "span": 1.3,
+      "kind": "feature",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "brazier",
+      "shape": "object",
+      "src": "/assets/props/objects/brazier.webp",
+      "width": 256,
+      "height": 218,
+      "bytes": 4846,
+      "seed": 1755273211,
+      "label": "Brazier",
+      "sets": [
+        "dungeon",
+        "temple",
+        "throne",
+        "volcanic"
+      ],
+      "span": 0.55,
+      "kind": "wall",
+      "align": false,
+      "hazard": true
+    },
+    {
+      "id": "broken-cart-wheel",
+      "shape": "object",
+      "src": "/assets/props/objects/broken-cart-wheel.webp",
+      "width": 256,
+      "height": 242,
+      "bytes": 17918,
+      "seed": 1344856555,
+      "label": "Broken cart wheel",
+      "sets": [
+        "ruin",
+        "field",
+        "market"
+      ],
+      "span": 0.5,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "broken-pipe",
+      "shape": "object",
+      "src": "/assets/props/objects/broken-pipe.webp",
+      "width": 151,
+      "height": 256,
+      "bytes": 11358,
+      "seed": 1044560507,
+      "label": "Broken pipe",
+      "sets": [
+        "sewer",
+        "lab"
+      ],
+      "span": 0.5,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "broken-wall",
+      "shape": "object",
+      "src": "/assets/props/objects/broken-wall.webp",
+      "width": 256,
+      "height": 231,
+      "bytes": 10036,
+      "seed": 1912355635,
+      "label": "Broken wall",
+      "sets": [
+        "ruin"
+      ],
+      "span": 1,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "bucket",
+      "shape": "object",
+      "src": "/assets/props/objects/bucket.webp",
+      "width": 218,
+      "height": 256,
+      "bytes": 9476,
+      "seed": 466199248,
+      "label": "Bucket",
+      "sets": [
+        "mine",
+        "tavern",
+        "kitchen"
+      ],
+      "span": 0.3,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "burnt-timber",
+      "shape": "object",
+      "src": "/assets/props/objects/burnt-timber.webp",
+      "width": 184,
+      "height": 256,
+      "bytes": 11804,
+      "seed": 74824032,
+      "label": "Burnt timber",
+      "sets": [
+        "ruin",
+        "field"
+      ],
+      "span": 0.9,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "bush",
+      "shape": "object",
+      "src": "/assets/props/objects/bush.webp",
+      "width": 249,
+      "height": 256,
+      "bytes": 17758,
+      "seed": 1845197635,
+      "label": "Bush",
+      "sets": [
+        "forest",
+        "field",
+        "garden",
+        "ruin"
+      ],
+      "span": 0.7,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "bush-berry",
+      "shape": "object",
+      "src": "/assets/props/objects/bush-berry.webp",
+      "width": 256,
+      "height": 247,
+      "bytes": 12692,
+      "seed": 1186629690,
+      "label": "Bush berry",
+      "sets": [
+        "forest",
+        "field",
+        "garden"
+      ],
+      "span": 0.6,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "butcher-block",
+      "shape": "object",
+      "src": "/assets/props/objects/butcher-block.webp",
+      "width": 235,
+      "height": 256,
+      "bytes": 7892,
+      "seed": 50450020,
+      "label": "Butcher block",
+      "sets": [
+        "kitchen",
+        "market"
+      ],
+      "span": 0.6,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "cabinet",
+      "shape": "object",
+      "src": "/assets/props/objects/cabinet.webp",
+      "width": 256,
+      "height": 252,
+      "bytes": 5506,
+      "seed": 876491891,
+      "label": "Cabinet",
+      "sets": [
+        "kitchen",
+        "lab"
+      ],
+      "span": 0.8,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "cactus",
+      "shape": "object",
+      "src": "/assets/props/objects/cactus.webp",
+      "width": 187,
+      "height": 256,
+      "bytes": 11542,
+      "seed": 1483742951,
+      "label": "Cactus",
+      "sets": [
+        "desert"
+      ],
+      "span": 0.6,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "cage",
+      "shape": "object",
+      "src": "/assets/props/objects/cage.webp",
+      "width": 256,
+      "height": 216,
+      "bytes": 7546,
+      "seed": 453452702,
+      "label": "Cage",
+      "sets": [
+        "dungeon",
+        "prison"
+      ],
+      "span": 0.6,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "campfire",
+      "shape": "object",
+      "src": "/assets/props/objects/campfire.webp",
+      "width": 256,
+      "height": 224,
+      "bytes": 13722,
+      "seed": 853377561,
+      "label": "Campfire",
+      "sets": [
+        "camp",
+        "forest",
+        "field",
+        "cave",
+        "frozen"
+      ],
+      "span": 0.7,
+      "kind": "scatter",
+      "align": false,
+      "hazard": true
+    },
+    {
+      "id": "candelabra",
+      "shape": "object",
+      "src": "/assets/props/objects/candelabra.webp",
+      "width": 256,
+      "height": 252,
+      "bytes": 6998,
+      "seed": 593155456,
+      "label": "Candelabra",
+      "sets": [
+        "temple",
+        "throne",
+        "crypt"
+      ],
+      "span": 0.35,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "candles",
+      "shape": "object",
+      "src": "/assets/props/objects/candles.webp",
+      "width": 256,
+      "height": 242,
+      "bytes": 5350,
+      "seed": 189063922,
+      "label": "Candles",
+      "sets": [
+        "crypt",
+        "temple",
+        "arcane"
+      ],
+      "span": 0.3,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "cannon",
+      "shape": "object",
+      "src": "/assets/props/objects/cannon.webp",
+      "width": 256,
+      "height": 164,
+      "bytes": 8396,
+      "seed": 664985372,
+      "label": "Cannon",
+      "sets": [
+        "ship",
+        "barracks"
+      ],
+      "span": 1,
+      "kind": "wall",
+      "align": true,
+      "hazard": true
+    },
+    {
+      "id": "cannonballs",
+      "shape": "object",
+      "src": "/assets/props/objects/cannonballs.webp",
+      "width": 256,
+      "height": 230,
+      "bytes": 14618,
+      "seed": 189557622,
+      "label": "Cannonballs",
+      "sets": [
+        "ship",
+        "barracks"
+      ],
+      "span": 0.4,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "cart",
+      "shape": "object",
+      "src": "/assets/props/objects/cart.webp",
+      "width": 256,
+      "height": 180,
+      "bytes": 8818,
+      "seed": 405238416,
+      "label": "Cart",
+      "sets": [
+        "market",
+        "field",
+        "mine"
+      ],
+      "span": 1.4,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "cart-wreck",
+      "shape": "object",
+      "src": "/assets/props/objects/cart-wreck.webp",
+      "width": 219,
+      "height": 256,
+      "bytes": 17424,
+      "seed": 235781081,
+      "label": "Cart wreck",
+      "sets": [
+        "ruin",
+        "field"
+      ],
+      "span": 1.4,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "cauldron",
+      "shape": "object",
+      "src": "/assets/props/objects/cauldron.webp",
+      "width": 256,
+      "height": 211,
+      "bytes": 8460,
+      "seed": 1373263996,
+      "label": "Cauldron",
+      "sets": [
+        "arcane",
+        "lab",
+        "swamp"
+      ],
+      "span": 0.55,
+      "kind": "wall",
+      "align": false,
+      "hazard": true
+    },
+    {
+      "id": "cave-pool",
+      "shape": "object",
+      "src": "/assets/props/objects/cave-pool.webp",
+      "width": 256,
+      "height": 256,
+      "bytes": 11552,
+      "seed": 2107135014,
+      "label": "Cave pool",
+      "sets": [
+        "cave"
+      ],
+      "span": 0.8,
+      "kind": "feature",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "chair",
+      "shape": "object",
+      "src": "/assets/props/objects/chair.webp",
+      "width": 256,
+      "height": 254,
+      "bytes": 3102,
+      "seed": 1555340682,
+      "label": "Chair",
+      "sets": [
+        "tavern",
+        "library",
+        "throne"
+      ],
+      "span": 0.4,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "cheese-wheels",
+      "shape": "object",
+      "src": "/assets/props/objects/cheese-wheels.webp",
+      "width": 256,
+      "height": 214,
+      "bytes": 5610,
+      "seed": 1473967071,
+      "label": "Cheese wheels",
+      "sets": [
+        "kitchen",
+        "market"
+      ],
+      "span": 0.4,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "chest",
+      "shape": "object",
+      "src": "/assets/props/objects/chest.webp",
+      "width": 256,
+      "height": 143,
+      "bytes": 7160,
+      "seed": 407392087,
+      "label": "Chest",
+      "sets": [
+        "dungeon",
+        "crypt",
+        "ship",
+        "throne"
+      ],
+      "span": 0.62,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "chest-open",
+      "shape": "object",
+      "src": "/assets/props/objects/chest-open.webp",
+      "width": 256,
+      "height": 186,
+      "bytes": 9230,
+      "seed": 761402638,
+      "label": "Chest open",
+      "sets": [
+        "dungeon",
+        "crypt"
+      ],
+      "span": 0.62,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "clay-jars",
+      "shape": "object",
+      "src": "/assets/props/objects/clay-jars.webp",
+      "width": 223,
+      "height": 256,
+      "bytes": 7960,
+      "seed": 260267361,
+      "label": "Clay jars",
+      "sets": [
+        "desert",
+        "market"
+      ],
+      "span": 0.6,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "coffin",
+      "shape": "object",
+      "src": "/assets/props/objects/coffin.webp",
+      "width": 256,
+      "height": 101,
+      "bytes": 4108,
+      "seed": 52550645,
+      "label": "Coffin",
+      "sets": [
+        "crypt"
+      ],
+      "span": 0.95,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "cookfire",
+      "shape": "object",
+      "src": "/assets/props/objects/cookfire.webp",
+      "width": 208,
+      "height": 256,
+      "bytes": 13818,
+      "seed": 913959454,
+      "label": "Cookfire",
+      "sets": [
+        "camp"
+      ],
+      "span": 0.6,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "cp-barrel-chem",
+      "shape": "object",
+      "src": "/assets/props/objects/cp-barrel-chem.webp",
+      "width": 190,
+      "height": 256,
+      "bytes": 11888,
+      "seed": 418330350,
+      "label": "Barrel chem",
+      "sets": [
+        "cyberpunk"
+      ],
+      "span": 0.5,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "cp-body-bag",
+      "shape": "object",
+      "src": "/assets/props/objects/cp-body-bag.webp",
+      "width": 169,
+      "height": 256,
+      "bytes": 6050,
+      "seed": 624765721,
+      "label": "Body bag",
+      "sets": [
+        "cyberpunk"
+      ],
+      "span": 1,
+      "kind": "scatter",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "cp-cable-spool",
+      "shape": "object",
+      "src": "/assets/props/objects/cp-cable-spool.webp",
+      "width": 207,
+      "height": 256,
+      "bytes": 14980,
+      "seed": 2080070688,
+      "label": "Cable spool",
+      "sets": [
+        "cyberpunk"
+      ],
+      "span": 0.7,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "cp-car",
+      "shape": "object",
+      "src": "/assets/props/objects/cp-car.webp",
+      "width": 256,
+      "height": 244,
+      "bytes": 4982,
+      "seed": 482565990,
+      "label": "Car",
+      "sets": [
+        "cyberpunk"
+      ],
+      "span": 2,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "cp-crate-plastic",
+      "shape": "object",
+      "src": "/assets/props/objects/cp-crate-plastic.webp",
+      "width": 256,
+      "height": 221,
+      "bytes": 6080,
+      "seed": 1867064037,
+      "label": "Crate plastic",
+      "sets": [
+        "cyberpunk"
+      ],
+      "span": 0.55,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "cp-drone-wreck",
+      "shape": "object",
+      "src": "/assets/props/objects/cp-drone-wreck.webp",
+      "width": 256,
+      "height": 167,
+      "bytes": 12530,
+      "seed": 457328367,
+      "label": "Drone wreck",
+      "sets": [
+        "cyberpunk"
+      ],
+      "span": 0.7,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "cp-dumpster",
+      "shape": "object",
+      "src": "/assets/props/objects/cp-dumpster.webp",
+      "width": 232,
+      "height": 256,
+      "bytes": 9492,
+      "seed": 1115327619,
+      "label": "Dumpster",
+      "sets": [
+        "cyberpunk"
+      ],
+      "span": 1,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "cp-holo-table",
+      "shape": "object",
+      "src": "/assets/props/objects/cp-holo-table.webp",
+      "width": 256,
+      "height": 255,
+      "bytes": 11012,
+      "seed": 932769444,
+      "label": "Holo table",
+      "sets": [
+        "cyberpunk"
+      ],
+      "span": 1,
+      "kind": "feature",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "cp-med-pod",
+      "shape": "object",
+      "src": "/assets/props/objects/cp-med-pod.webp",
+      "width": 256,
+      "height": 228,
+      "bytes": 12522,
+      "seed": 1569492963,
+      "label": "Med pod",
+      "sets": [
+        "cyberpunk"
+      ],
+      "span": 1.3,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "cp-motorcycle",
+      "shape": "object",
+      "src": "/assets/props/objects/cp-motorcycle.webp",
+      "width": 141,
+      "height": 256,
+      "bytes": 7490,
+      "seed": 1456953497,
+      "label": "Motorcycle",
+      "sets": [
+        "cyberpunk"
+      ],
+      "span": 1.2,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "cp-neon-sign",
+      "shape": "object",
+      "src": "/assets/props/objects/cp-neon-sign.webp",
+      "width": 256,
+      "height": 204,
+      "bytes": 11918,
+      "seed": 1852937925,
+      "label": "Neon sign",
+      "sets": [
+        "cyberpunk"
+      ],
+      "span": 0.9,
+      "kind": "scatter",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "cp-noodle-cart",
+      "shape": "object",
+      "src": "/assets/props/objects/cp-noodle-cart.webp",
+      "width": 248,
+      "height": 256,
+      "bytes": 13080,
+      "seed": 1221109135,
+      "label": "Noodle cart",
+      "sets": [
+        "cyberpunk"
+      ],
+      "span": 1.2,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "cp-server-rack",
+      "shape": "object",
+      "src": "/assets/props/objects/cp-server-rack.webp",
+      "width": 256,
+      "height": 189,
+      "bytes": 3632,
+      "seed": 1964237086,
+      "label": "Server rack",
+      "sets": [
+        "cyberpunk"
+      ],
+      "span": 0.5,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "cp-street-light",
+      "shape": "object",
+      "src": "/assets/props/objects/cp-street-light.webp",
+      "width": 89,
+      "height": 256,
+      "bytes": 4380,
+      "seed": 914696895,
+      "label": "Street light",
+      "sets": [
+        "cyberpunk"
+      ],
+      "span": 0.4,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "cp-terminal",
+      "shape": "object",
+      "src": "/assets/props/objects/cp-terminal.webp",
+      "width": 256,
+      "height": 185,
+      "bytes": 10758,
+      "seed": 1540324517,
+      "label": "Terminal",
+      "sets": [
+        "cyberpunk"
+      ],
+      "span": 0.8,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "cp-trash-pile",
+      "shape": "object",
+      "src": "/assets/props/objects/cp-trash-pile.webp",
+      "width": 187,
+      "height": 256,
+      "bytes": 15014,
+      "seed": 1447279013,
+      "label": "Trash pile",
+      "sets": [
+        "cyberpunk"
+      ],
+      "span": 0.7,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "cp-turret",
+      "shape": "object",
+      "src": "/assets/props/objects/cp-turret.webp",
+      "width": 203,
+      "height": 256,
+      "bytes": 10336,
+      "seed": 1251775875,
+      "label": "Turret",
+      "sets": [
+        "cyberpunk"
+      ],
+      "span": 0.7,
+      "kind": "feature",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "cp-vending-machine",
+      "shape": "object",
+      "src": "/assets/props/objects/cp-vending-machine.webp",
+      "width": 144,
+      "height": 256,
+      "bytes": 8644,
+      "seed": 718482475,
+      "label": "Vending machine",
+      "sets": [
+        "cyberpunk"
+      ],
+      "span": 0.6,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "crate",
+      "shape": "object",
+      "src": "/assets/props/objects/crate.webp",
+      "width": 229,
+      "height": 256,
+      "bytes": 4660,
+      "seed": 392075840,
+      "label": "Crate",
+      "sets": [
+        "dungeon",
+        "ship",
+        "market",
+        "barracks"
+      ],
+      "span": 0.55,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "crate-stack",
+      "shape": "object",
+      "src": "/assets/props/objects/crate-stack.webp",
+      "width": 256,
+      "height": 223,
+      "bytes": 9424,
+      "seed": 1375154090,
+      "label": "Crate stack",
+      "sets": [
+        "ship",
+        "market",
+        "barracks"
+      ],
+      "span": 0.9,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "crystal-ball",
+      "shape": "object",
+      "src": "/assets/props/objects/crystal-ball.webp",
+      "width": 161,
+      "height": 256,
+      "bytes": 7264,
+      "seed": 1526625809,
+      "label": "Crystal ball",
+      "sets": [
+        "arcane",
+        "lab"
+      ],
+      "span": 0.3,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "crystals",
+      "shape": "object",
+      "src": "/assets/props/objects/crystals.webp",
+      "width": 256,
+      "height": 241,
+      "bytes": 12550,
+      "seed": 1133210574,
+      "label": "Crystals",
+      "sets": [
+        "cave",
+        "arcane"
+      ],
+      "span": 0.5,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "desert-skull",
+      "shape": "object",
+      "src": "/assets/props/objects/desert-skull.webp",
+      "width": 228,
+      "height": 256,
+      "bytes": 10316,
+      "seed": 386887317,
+      "label": "Desert skull",
+      "sets": [
+        "desert",
+        "field"
+      ],
+      "span": 0.5,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "desk",
+      "shape": "object",
+      "src": "/assets/props/objects/desk.webp",
+      "width": 245,
+      "height": 256,
+      "bytes": 8042,
+      "seed": 184749241,
+      "label": "Desk",
+      "sets": [
+        "library",
+        "lab",
+        "throne"
+      ],
+      "span": 1.1,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "dock-crate",
+      "shape": "object",
+      "src": "/assets/props/objects/dock-crate.webp",
+      "width": 256,
+      "height": 250,
+      "bytes": 12506,
+      "seed": 1177047408,
+      "label": "Dock crate",
+      "sets": [
+        "river",
+        "ship"
+      ],
+      "span": 0.55,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "driftwood",
+      "shape": "object",
+      "src": "/assets/props/objects/driftwood.webp",
+      "width": 237,
+      "height": 256,
+      "bytes": 13596,
+      "seed": 631048890,
+      "label": "Driftwood",
+      "sets": [
+        "river",
+        "field"
+      ],
+      "span": 0.8,
+      "kind": "scatter",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "egg-cluster",
+      "shape": "object",
+      "src": "/assets/props/objects/egg-cluster.webp",
+      "width": 256,
+      "height": 226,
+      "bytes": 14854,
+      "seed": 1957945010,
+      "label": "Egg cluster",
+      "sets": [
+        "cave",
+        "swamp"
+      ],
+      "span": 0.7,
+      "kind": "feature",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "fallen-column",
+      "shape": "object",
+      "src": "/assets/props/objects/fallen-column.webp",
+      "width": 245,
+      "height": 256,
+      "bytes": 15020,
+      "seed": 831068120,
+      "label": "Fallen column",
+      "sets": [
+        "ruin",
+        "temple"
+      ],
+      "span": 1.5,
+      "kind": "scatter",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "fence-post",
+      "shape": "object",
+      "src": "/assets/props/objects/fence-post.webp",
+      "width": 203,
+      "height": 256,
+      "bytes": 9362,
+      "seed": 1725730947,
+      "label": "Fence post",
+      "sets": [
+        "field"
+      ],
+      "span": 0.25,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "fern",
+      "shape": "object",
+      "src": "/assets/props/objects/fern.webp",
+      "width": 228,
+      "height": 256,
+      "bytes": 28530,
+      "seed": 1327089749,
+      "label": "Fern",
+      "sets": [
+        "forest",
+        "swamp",
+        "cave"
+      ],
+      "span": 0.6,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "fire-pit",
+      "shape": "object",
+      "src": "/assets/props/objects/fire-pit.webp",
+      "width": 255,
+      "height": 256,
+      "bytes": 14666,
+      "seed": 1359955545,
+      "label": "Fire pit",
+      "sets": [
+        "camp",
+        "tavern",
+        "barracks"
+      ],
+      "span": 0.8,
+      "kind": "feature",
+      "align": false,
+      "hazard": true
+    },
+    {
+      "id": "fish-baskets",
+      "shape": "object",
+      "src": "/assets/props/objects/fish-baskets.webp",
+      "width": 256,
+      "height": 252,
+      "bytes": 20808,
+      "seed": 1547430394,
+      "label": "Fish baskets",
+      "sets": [
+        "market",
+        "river",
+        "ship"
+      ],
+      "span": 0.7,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "fishing-net",
+      "shape": "object",
+      "src": "/assets/props/objects/fishing-net.webp",
+      "width": 256,
+      "height": 232,
+      "bytes": 20818,
+      "seed": 733270148,
+      "label": "Fishing net",
+      "sets": [
+        "ship",
+        "river"
+      ],
+      "span": 0.7,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "flowers",
+      "shape": "object",
+      "src": "/assets/props/objects/flowers.webp",
+      "width": 256,
+      "height": 255,
+      "bytes": 18794,
+      "seed": 349020471,
+      "label": "Flowers",
+      "sets": [
+        "field",
+        "forest",
+        "garden"
+      ],
+      "span": 0.5,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "font",
+      "shape": "object",
+      "src": "/assets/props/objects/font.webp",
+      "width": 256,
+      "height": 253,
+      "bytes": 13298,
+      "seed": 659427984,
+      "label": "Font",
+      "sets": [
+        "temple"
+      ],
+      "span": 0.6,
+      "kind": "feature",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "forge-hearth",
+      "shape": "object",
+      "src": "/assets/props/objects/forge-hearth.webp",
+      "width": 256,
+      "height": 239,
+      "bytes": 14684,
+      "seed": 835978735,
+      "label": "Forge hearth",
+      "sets": [
+        "forge"
+      ],
+      "span": 1.1,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "fountain",
+      "shape": "object",
+      "src": "/assets/props/objects/fountain.webp",
+      "width": 256,
+      "height": 254,
+      "bytes": 8730,
+      "seed": 120268790,
+      "label": "Fountain",
+      "sets": [
+        "garden",
+        "market",
+        "temple"
+      ],
+      "span": 1.4,
+      "kind": "feature",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "frozen-corpse",
+      "shape": "object",
+      "src": "/assets/props/objects/frozen-corpse.webp",
+      "width": 256,
+      "height": 198,
+      "bytes": 10866,
+      "seed": 1687596156,
+      "label": "Frozen corpse",
+      "sets": [
+        "frozen"
+      ],
+      "span": 1,
+      "kind": "scatter",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "fruit-crates",
+      "shape": "object",
+      "src": "/assets/props/objects/fruit-crates.webp",
+      "width": 256,
+      "height": 224,
+      "bytes": 13254,
+      "seed": 666754540,
+      "label": "Fruit crates",
+      "sets": [
+        "market",
+        "kitchen",
+        "garden"
+      ],
+      "span": 0.8,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "glowworm-moss",
+      "shape": "object",
+      "src": "/assets/props/objects/glowworm-moss.webp",
+      "width": 256,
+      "height": 245,
+      "bytes": 10528,
+      "seed": 603993545,
+      "label": "Glowworm moss",
+      "sets": [
+        "cave"
+      ],
+      "span": 0.6,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "grave-mound",
+      "shape": "object",
+      "src": "/assets/props/objects/grave-mound.webp",
+      "width": 247,
+      "height": 256,
+      "bytes": 13356,
+      "seed": 1680647923,
+      "label": "Grave mound",
+      "sets": [
+        "graveyard",
+        "field"
+      ],
+      "span": 0.9,
+      "kind": "scatter",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "gravestone",
+      "shape": "object",
+      "src": "/assets/props/objects/gravestone.webp",
+      "width": 256,
+      "height": 240,
+      "bytes": 8954,
+      "seed": 648815375,
+      "label": "Gravestone",
+      "sets": [
+        "graveyard"
+      ],
+      "span": 0.35,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "grindstone",
+      "shape": "object",
+      "src": "/assets/props/objects/grindstone.webp",
+      "width": 256,
+      "height": 191,
+      "bytes": 7282,
+      "seed": 1627952939,
+      "label": "Grindstone",
+      "sets": [
+        "forge",
+        "barracks"
+      ],
+      "span": 0.6,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "hay-bale",
+      "shape": "object",
+      "src": "/assets/props/objects/hay-bale.webp",
+      "width": 256,
+      "height": 155,
+      "bytes": 13232,
+      "seed": 1322590031,
+      "label": "Hay bale",
+      "sets": [
+        "field",
+        "camp"
+      ],
+      "span": 0.6,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "hay-pile",
+      "shape": "object",
+      "src": "/assets/props/objects/hay-pile.webp",
+      "width": 256,
+      "height": 248,
+      "bytes": 9250,
+      "seed": 332595189,
+      "label": "Hay pile",
+      "sets": [
+        "field",
+        "camp",
+        "tavern"
+      ],
+      "span": 0.8,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "haystack",
+      "shape": "object",
+      "src": "/assets/props/objects/haystack.webp",
+      "width": 256,
+      "height": 248,
+      "bytes": 13090,
+      "seed": 565019868,
+      "label": "Haystack",
+      "sets": [
+        "field"
+      ],
+      "span": 1.2,
+      "kind": "feature",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "hearth",
+      "shape": "object",
+      "src": "/assets/props/objects/hearth.webp",
+      "width": 256,
+      "height": 170,
+      "bytes": 13936,
+      "seed": 551098834,
+      "label": "Hearth",
+      "sets": [
+        "tavern",
+        "kitchen"
+      ],
+      "span": 1,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "hedge-round",
+      "shape": "object",
+      "src": "/assets/props/objects/hedge-round.webp",
+      "width": 256,
+      "height": 179,
+      "bytes": 4754,
+      "seed": 2102566468,
+      "label": "Hedge round",
+      "sets": [
+        "garden",
+        "field"
+      ],
+      "span": 0.6,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "hr-altar-bloody",
+      "shape": "object",
+      "src": "/assets/props/objects/hr-altar-bloody.webp",
+      "width": 256,
+      "height": 225,
+      "bytes": 11126,
+      "seed": 637385091,
+      "label": "Altar bloody",
+      "sets": [
+        "horror"
+      ],
+      "span": 1,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "hr-bathtub",
+      "shape": "object",
+      "src": "/assets/props/objects/hr-bathtub.webp",
+      "width": 256,
+      "height": 213,
+      "bytes": 6240,
+      "seed": 320439414,
+      "label": "Bathtub",
+      "sets": [
+        "horror"
+      ],
+      "span": 1.2,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "hr-bones-pile",
+      "shape": "object",
+      "src": "/assets/props/objects/hr-bones-pile.webp",
+      "width": 226,
+      "height": 256,
+      "bytes": 16872,
+      "seed": 1511631100,
+      "label": "Bones pile",
+      "sets": [
+        "horror"
+      ],
+      "span": 0.6,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "hr-cage-hanging",
+      "shape": "object",
+      "src": "/assets/props/objects/hr-cage-hanging.webp",
+      "width": 189,
+      "height": 256,
+      "bytes": 9790,
+      "seed": 1620978860,
+      "label": "Cage hanging",
+      "sets": [
+        "horror"
+      ],
+      "span": 0.6,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "hr-candles-black",
+      "shape": "object",
+      "src": "/assets/props/objects/hr-candles-black.webp",
+      "width": 187,
+      "height": 256,
+      "bytes": 15874,
+      "seed": 169366102,
+      "label": "Candles black",
+      "sets": [
+        "horror"
+      ],
+      "span": 0.3,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "hr-chains",
+      "shape": "object",
+      "src": "/assets/props/objects/hr-chains.webp",
+      "width": 193,
+      "height": 256,
+      "bytes": 13222,
+      "seed": 1227549809,
+      "label": "Chains",
+      "sets": [
+        "horror"
+      ],
+      "span": 0.5,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "hr-cocoon",
+      "shape": "object",
+      "src": "/assets/props/objects/hr-cocoon.webp",
+      "width": 256,
+      "height": 218,
+      "bytes": 14110,
+      "seed": 855257436,
+      "label": "Cocoon",
+      "sets": [
+        "horror"
+      ],
+      "span": 0.8,
+      "kind": "scatter",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "hr-coffin-open",
+      "shape": "object",
+      "src": "/assets/props/objects/hr-coffin-open.webp",
+      "width": 256,
+      "height": 237,
+      "bytes": 8188,
+      "seed": 172124579,
+      "label": "Coffin open",
+      "sets": [
+        "horror"
+      ],
+      "span": 1,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "hr-doll",
+      "shape": "object",
+      "src": "/assets/props/objects/hr-doll.webp",
+      "width": 256,
+      "height": 220,
+      "bytes": 8890,
+      "seed": 170733372,
+      "label": "Doll",
+      "sets": [
+        "horror"
+      ],
+      "span": 0.3,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "hr-gramophone",
+      "shape": "object",
+      "src": "/assets/props/objects/hr-gramophone.webp",
+      "width": 226,
+      "height": 256,
+      "bytes": 5138,
+      "seed": 616453786,
+      "label": "Gramophone",
+      "sets": [
+        "horror"
+      ],
+      "span": 0.4,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "hr-mirror",
+      "shape": "object",
+      "src": "/assets/props/objects/hr-mirror.webp",
+      "width": 95,
+      "height": 256,
+      "bytes": 6070,
+      "seed": 1303624570,
+      "label": "Mirror",
+      "sets": [
+        "horror"
+      ],
+      "span": 0.9,
+      "kind": "scatter",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "hr-operating-table",
+      "shape": "object",
+      "src": "/assets/props/objects/hr-operating-table.webp",
+      "width": 182,
+      "height": 256,
+      "bytes": 9002,
+      "seed": 1437046160,
+      "label": "Operating table",
+      "sets": [
+        "horror"
+      ],
+      "span": 1.3,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "hr-pew",
+      "shape": "object",
+      "src": "/assets/props/objects/hr-pew.webp",
+      "width": 256,
+      "height": 132,
+      "bytes": 4702,
+      "seed": 1920016454,
+      "label": "Pew",
+      "sets": [
+        "horror"
+      ],
+      "span": 1.1,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "hr-ritual-circle",
+      "shape": "object",
+      "src": "/assets/props/objects/hr-ritual-circle.webp",
+      "width": 256,
+      "height": 256,
+      "bytes": 32718,
+      "seed": 1294652974,
+      "label": "Ritual circle",
+      "sets": [
+        "horror"
+      ],
+      "span": 1.8,
+      "kind": "feature",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "hr-scarecrow-fallen",
+      "shape": "object",
+      "src": "/assets/props/objects/hr-scarecrow-fallen.webp",
+      "width": 247,
+      "height": 256,
+      "bytes": 19572,
+      "seed": 1839650334,
+      "label": "Scarecrow fallen",
+      "sets": [
+        "horror"
+      ],
+      "span": 1,
+      "kind": "scatter",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "hr-wheelchair",
+      "shape": "object",
+      "src": "/assets/props/objects/hr-wheelchair.webp",
+      "width": 228,
+      "height": 256,
+      "bytes": 8936,
+      "seed": 471074617,
+      "label": "Wheelchair",
+      "sets": [
+        "horror"
+      ],
+      "span": 0.5,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "ice-boulder",
+      "shape": "object",
+      "src": "/assets/props/objects/ice-boulder.webp",
+      "width": 254,
+      "height": 256,
+      "bytes": 11450,
+      "seed": 612046205,
+      "label": "Ice boulder",
+      "sets": [
+        "frozen"
+      ],
+      "span": 0.8,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "idol",
+      "shape": "object",
+      "src": "/assets/props/objects/idol.webp",
+      "width": 194,
+      "height": 256,
+      "bytes": 6932,
+      "seed": 357745939,
+      "label": "Idol",
+      "sets": [
+        "cave",
+        "temple",
+        "swamp"
+      ],
+      "span": 0.6,
+      "kind": "feature",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "iron-maiden",
+      "shape": "object",
+      "src": "/assets/props/objects/iron-maiden.webp",
+      "width": 256,
+      "height": 184,
+      "bytes": 8246,
+      "seed": 591090126,
+      "label": "Iron maiden",
+      "sets": [
+        "prison",
+        "dungeon"
+      ],
+      "span": 0.6,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "keg-rack",
+      "shape": "object",
+      "src": "/assets/props/objects/keg-rack.webp",
+      "width": 256,
+      "height": 228,
+      "bytes": 17386,
+      "seed": 953612390,
+      "label": "Keg rack",
+      "sets": [
+        "tavern"
+      ],
+      "span": 1,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "lantern",
+      "shape": "object",
+      "src": "/assets/props/objects/lantern.webp",
+      "width": 232,
+      "height": 256,
+      "bytes": 9534,
+      "seed": 1871746103,
+      "label": "Lantern",
+      "sets": [
+        "mine",
+        "camp",
+        "ship"
+      ],
+      "span": 0.25,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "lava-rock",
+      "shape": "object",
+      "src": "/assets/props/objects/lava-rock.webp",
+      "width": 256,
+      "height": 206,
+      "bytes": 7248,
+      "seed": 1892617779,
+      "label": "Lava rock",
+      "sets": [
+        "volcanic"
+      ],
+      "span": 0.5,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "lectern",
+      "shape": "object",
+      "src": "/assets/props/objects/lectern.webp",
+      "width": 256,
+      "height": 212,
+      "bytes": 8348,
+      "seed": 147441393,
+      "label": "Lectern",
+      "sets": [
+        "temple",
+        "library",
+        "arcane"
+      ],
+      "span": 0.45,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "lever",
+      "shape": "object",
+      "src": "/assets/props/objects/lever.webp",
+      "width": 256,
+      "height": 179,
+      "bytes": 6720,
+      "seed": 496626436,
+      "label": "Lever",
+      "sets": [
+        "dungeon",
+        "mine"
+      ],
+      "span": 0.3,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "lily-pads",
+      "shape": "object",
+      "src": "/assets/props/objects/lily-pads.webp",
+      "width": 208,
+      "height": 256,
+      "bytes": 9406,
+      "seed": 1321880507,
+      "label": "Lily pads",
+      "sets": [
+        "swamp",
+        "river"
+      ],
+      "span": 0.7,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "log",
+      "shape": "object",
+      "src": "/assets/props/objects/log.webp",
+      "width": 256,
+      "height": 211,
+      "bytes": 4258,
+      "seed": 1062293841,
+      "label": "Log",
+      "sets": [
+        "forest",
+        "swamp",
+        "camp"
+      ],
+      "span": 1.2,
+      "kind": "scatter",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "loom",
+      "shape": "object",
+      "src": "/assets/props/objects/loom.webp",
+      "width": 256,
+      "height": 218,
+      "bytes": 10596,
+      "seed": 1760516541,
+      "label": "Loom",
+      "sets": [
+        "market",
+        "tavern"
+      ],
+      "span": 1.1,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "lumber-pile",
+      "shape": "object",
+      "src": "/assets/props/objects/lumber-pile.webp",
+      "width": 256,
+      "height": 246,
+      "bytes": 11180,
+      "seed": 1789846937,
+      "label": "Lumber pile",
+      "sets": [
+        "forge",
+        "mine",
+        "field"
+      ],
+      "span": 1,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "market-stall",
+      "shape": "object",
+      "src": "/assets/props/objects/market-stall.webp",
+      "width": 228,
+      "height": 256,
+      "bytes": 11800,
+      "seed": 1056570294,
+      "label": "Market stall",
+      "sets": [
+        "market"
+      ],
+      "span": 1.6,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "mooring-post",
+      "shape": "object",
+      "src": "/assets/props/objects/mooring-post.webp",
+      "width": 130,
+      "height": 256,
+      "bytes": 7866,
+      "seed": 1026427933,
+      "label": "Mooring post",
+      "sets": [
+        "river",
+        "ship"
+      ],
+      "span": 0.3,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "mushroom-giant",
+      "shape": "object",
+      "src": "/assets/props/objects/mushroom-giant.webp",
+      "width": 232,
+      "height": 256,
+      "bytes": 11850,
+      "seed": 503946720,
+      "label": "Mushroom giant",
+      "sets": [
+        "cave",
+        "swamp"
+      ],
+      "span": 1,
+      "kind": "feature",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "mushrooms",
+      "shape": "object",
+      "src": "/assets/props/objects/mushrooms.webp",
+      "width": 157,
+      "height": 256,
+      "bytes": 12708,
+      "seed": 1506989581,
+      "label": "Mushrooms",
+      "sets": [
+        "cave",
+        "swamp",
+        "forest"
+      ],
+      "span": 0.4,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "my-armchair",
+      "shape": "object",
+      "src": "/assets/props/objects/my-armchair.webp",
+      "width": 249,
+      "height": 256,
+      "bytes": 8862,
+      "seed": 736367506,
+      "label": "Armchair",
+      "sets": [
+        "mystery"
+      ],
+      "span": 0.6,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "my-bookcase-low",
+      "shape": "object",
+      "src": "/assets/props/objects/my-bookcase-low.webp",
+      "width": 201,
+      "height": 256,
+      "bytes": 12364,
+      "seed": 85993024,
+      "label": "Bookcase low",
+      "sets": [
+        "mystery"
+      ],
+      "span": 0.9,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "my-carriage",
+      "shape": "object",
+      "src": "/assets/props/objects/my-carriage.webp",
+      "width": 254,
+      "height": 256,
+      "bytes": 12234,
+      "seed": 77818439,
+      "label": "Carriage",
+      "sets": [
+        "mystery"
+      ],
+      "span": 2,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "my-corpse-sheet",
+      "shape": "object",
+      "src": "/assets/props/objects/my-corpse-sheet.webp",
+      "width": 249,
+      "height": 256,
+      "bytes": 10412,
+      "seed": 1548117044,
+      "label": "Corpse sheet",
+      "sets": [
+        "mystery"
+      ],
+      "span": 1,
+      "kind": "scatter",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "my-crates-dock",
+      "shape": "object",
+      "src": "/assets/props/objects/my-crates-dock.webp",
+      "width": 216,
+      "height": 256,
+      "bytes": 11420,
+      "seed": 212152935,
+      "label": "Crates dock",
+      "sets": [
+        "mystery"
+      ],
+      "span": 0.8,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "my-dining-table",
+      "shape": "object",
+      "src": "/assets/props/objects/my-dining-table.webp",
+      "width": 256,
+      "height": 242,
+      "bytes": 12474,
+      "seed": 1442199063,
+      "label": "Dining table",
+      "sets": [
+        "mystery"
+      ],
+      "span": 1.8,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "my-fireplace",
+      "shape": "object",
+      "src": "/assets/props/objects/my-fireplace.webp",
+      "width": 256,
+      "height": 239,
+      "bytes": 5662,
+      "seed": 1230761665,
+      "label": "Fireplace",
+      "sets": [
+        "mystery"
+      ],
+      "span": 1,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "my-gramophone",
+      "shape": "object",
+      "src": "/assets/props/objects/my-gramophone.webp",
+      "width": 256,
+      "height": 214,
+      "bytes": 8042,
+      "seed": 47716975,
+      "label": "Gramophone",
+      "sets": [
+        "mystery"
+      ],
+      "span": 0.4,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "my-hat-stand",
+      "shape": "object",
+      "src": "/assets/props/objects/my-hat-stand.webp",
+      "width": 186,
+      "height": 256,
+      "bytes": 6978,
+      "seed": 1165603365,
+      "label": "Hat stand",
+      "sets": [
+        "mystery"
+      ],
+      "span": 0.3,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "my-newspaper-stack",
+      "shape": "object",
+      "src": "/assets/props/objects/my-newspaper-stack.webp",
+      "width": 207,
+      "height": 256,
+      "bytes": 9772,
+      "seed": 664501300,
+      "label": "Newspaper stack",
+      "sets": [
+        "mystery"
+      ],
+      "span": 0.4,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "my-piano",
+      "shape": "object",
+      "src": "/assets/props/objects/my-piano.webp",
+      "width": 211,
+      "height": 256,
+      "bytes": 8090,
+      "seed": 865468380,
+      "label": "Piano",
+      "sets": [
+        "mystery"
+      ],
+      "span": 1.6,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "my-street-lamp",
+      "shape": "object",
+      "src": "/assets/props/objects/my-street-lamp.webp",
+      "width": 170,
+      "height": 256,
+      "bytes": 4648,
+      "seed": 70974687,
+      "label": "Street lamp",
+      "sets": [
+        "mystery"
+      ],
+      "span": 0.4,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "my-tea-set",
+      "shape": "object",
+      "src": "/assets/props/objects/my-tea-set.webp",
+      "width": 256,
+      "height": 239,
+      "bytes": 10520,
+      "seed": 426239338,
+      "label": "Tea set",
+      "sets": [
+        "mystery"
+      ],
+      "span": 0.4,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "my-trunk",
+      "shape": "object",
+      "src": "/assets/props/objects/my-trunk.webp",
+      "width": 256,
+      "height": 116,
+      "bytes": 5886,
+      "seed": 1301878944,
+      "label": "Trunk",
+      "sets": [
+        "mystery"
+      ],
+      "span": 0.8,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "my-umbrella-stand",
+      "shape": "object",
+      "src": "/assets/props/objects/my-umbrella-stand.webp",
+      "width": 256,
+      "height": 226,
+      "bytes": 5598,
+      "seed": 540881016,
+      "label": "Umbrella stand",
+      "sets": [
+        "mystery"
+      ],
+      "span": 0.3,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "my-writing-desk",
+      "shape": "object",
+      "src": "/assets/props/objects/my-writing-desk.webp",
+      "width": 235,
+      "height": 256,
+      "bytes": 9288,
+      "seed": 835024892,
+      "label": "Writing desk",
+      "sets": [
+        "mystery"
+      ],
+      "span": 1.1,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "obelisk",
+      "shape": "object",
+      "src": "/assets/props/objects/obelisk.webp",
+      "width": 141,
+      "height": 256,
+      "bytes": 7684,
+      "seed": 239168387,
+      "label": "Obelisk",
+      "sets": [
+        "ruin",
+        "arcane",
+        "desert"
+      ],
+      "span": 0.45,
+      "kind": "feature",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "obsidian-shards",
+      "shape": "object",
+      "src": "/assets/props/objects/obsidian-shards.webp",
+      "width": 256,
+      "height": 247,
+      "bytes": 15876,
+      "seed": 772433062,
+      "label": "Obsidian shards",
+      "sets": [
+        "volcanic",
+        "cave"
+      ],
+      "span": 0.5,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "ore-cart",
+      "shape": "object",
+      "src": "/assets/props/objects/ore-cart.webp",
+      "width": 256,
+      "height": 131,
+      "bytes": 8858,
+      "seed": 36292544,
+      "label": "Ore cart",
+      "sets": [
+        "mine"
+      ],
+      "span": 0.9,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "overgrown-statue",
+      "shape": "object",
+      "src": "/assets/props/objects/overgrown-statue.webp",
+      "width": 90,
+      "height": 256,
+      "bytes": 3966,
+      "seed": 1523339014,
+      "label": "Overgrown statue",
+      "sets": [
+        "ruin",
+        "forest",
+        "graveyard"
+      ],
+      "span": 0.7,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "pa-campfire-barrel",
+      "shape": "object",
+      "src": "/assets/props/objects/pa-campfire-barrel.webp",
+      "width": 256,
+      "height": 252,
+      "bytes": 14188,
+      "seed": 59616432,
+      "label": "Campfire barrel",
+      "sets": [
+        "wasteland"
+      ],
+      "span": 0.5,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "pa-car-wreck",
+      "shape": "object",
+      "src": "/assets/props/objects/pa-car-wreck.webp",
+      "width": 256,
+      "height": 120,
+      "bytes": 7370,
+      "seed": 343405858,
+      "label": "Car wreck",
+      "sets": [
+        "wasteland"
+      ],
+      "span": 2,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "pa-crate-supplies",
+      "shape": "object",
+      "src": "/assets/props/objects/pa-crate-supplies.webp",
+      "width": 256,
+      "height": 187,
+      "bytes": 10046,
+      "seed": 685316681,
+      "label": "Crate supplies",
+      "sets": [
+        "wasteland"
+      ],
+      "span": 0.55,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "pa-fuel-barrel",
+      "shape": "object",
+      "src": "/assets/props/objects/pa-fuel-barrel.webp",
+      "width": 256,
+      "height": 181,
+      "bytes": 5754,
+      "seed": 102508773,
+      "label": "Fuel barrel",
+      "sets": [
+        "wasteland"
+      ],
+      "span": 0.5,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "pa-gas-mask",
+      "shape": "object",
+      "src": "/assets/props/objects/pa-gas-mask.webp",
+      "width": 248,
+      "height": 256,
+      "bytes": 9426,
+      "seed": 1221687353,
+      "label": "Gas mask",
+      "sets": [
+        "wasteland"
+      ],
+      "span": 0.3,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "pa-generator",
+      "shape": "object",
+      "src": "/assets/props/objects/pa-generator.webp",
+      "width": 232,
+      "height": 256,
+      "bytes": 12058,
+      "seed": 1766215267,
+      "label": "Generator",
+      "sets": [
+        "wasteland"
+      ],
+      "span": 0.7,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "pa-mattress",
+      "shape": "object",
+      "src": "/assets/props/objects/pa-mattress.webp",
+      "width": 251,
+      "height": 256,
+      "bytes": 11902,
+      "seed": 1015485960,
+      "label": "Mattress",
+      "sets": [
+        "wasteland"
+      ],
+      "span": 1.2,
+      "kind": "scatter",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "pa-radio",
+      "shape": "object",
+      "src": "/assets/props/objects/pa-radio.webp",
+      "width": 239,
+      "height": 256,
+      "bytes": 16266,
+      "seed": 1991019605,
+      "label": "Radio",
+      "sets": [
+        "wasteland"
+      ],
+      "span": 0.4,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "pa-sandbag-nest",
+      "shape": "object",
+      "src": "/assets/props/objects/pa-sandbag-nest.webp",
+      "width": 253,
+      "height": 256,
+      "bytes": 18278,
+      "seed": 1799872244,
+      "label": "Sandbag nest",
+      "sets": [
+        "wasteland"
+      ],
+      "span": 1.1,
+      "kind": "feature",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "pa-scrap-pile",
+      "shape": "object",
+      "src": "/assets/props/objects/pa-scrap-pile.webp",
+      "width": 256,
+      "height": 251,
+      "bytes": 18500,
+      "seed": 548773078,
+      "label": "Scrap pile",
+      "sets": [
+        "wasteland"
+      ],
+      "span": 0.8,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "pa-shopping-cart",
+      "shape": "object",
+      "src": "/assets/props/objects/pa-shopping-cart.webp",
+      "width": 256,
+      "height": 153,
+      "bytes": 10938,
+      "seed": 280171860,
+      "label": "Shopping cart",
+      "sets": [
+        "wasteland"
+      ],
+      "span": 0.7,
+      "kind": "scatter",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "pa-signpost",
+      "shape": "object",
+      "src": "/assets/props/objects/pa-signpost.webp",
+      "width": 256,
+      "height": 250,
+      "bytes": 5496,
+      "seed": 455190094,
+      "label": "Signpost",
+      "sets": [
+        "wasteland"
+      ],
+      "span": 0.4,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "pa-skeleton",
+      "shape": "object",
+      "src": "/assets/props/objects/pa-skeleton.webp",
+      "width": 256,
+      "height": 242,
+      "bytes": 20858,
+      "seed": 694970255,
+      "label": "Skeleton",
+      "sets": [
+        "wasteland"
+      ],
+      "span": 1,
+      "kind": "scatter",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "pa-tent-tarp",
+      "shape": "object",
+      "src": "/assets/props/objects/pa-tent-tarp.webp",
+      "width": 240,
+      "height": 256,
+      "bytes": 8808,
+      "seed": 115244859,
+      "label": "Tent tarp",
+      "sets": [
+        "wasteland"
+      ],
+      "span": 1.4,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "pa-tyre",
+      "shape": "object",
+      "src": "/assets/props/objects/pa-tyre.webp",
+      "width": 256,
+      "height": 251,
+      "bytes": 19000,
+      "seed": 1365680580,
+      "label": "Tyre",
+      "sets": [
+        "wasteland"
+      ],
+      "span": 0.4,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "pa-water-tank",
+      "shape": "object",
+      "src": "/assets/props/objects/pa-water-tank.webp",
+      "width": 193,
+      "height": 256,
+      "bytes": 8338,
+      "seed": 899640011,
+      "label": "Water tank",
+      "sets": [
+        "wasteland"
+      ],
+      "span": 0.8,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "pack",
+      "shape": "object",
+      "src": "/assets/props/objects/pack.webp",
+      "width": 256,
+      "height": 250,
+      "bytes": 9776,
+      "seed": 1666399712,
+      "label": "Pack",
+      "sets": [
+        "camp",
+        "cave",
+        "forest"
+      ],
+      "span": 0.4,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "palm",
+      "shape": "object",
+      "src": "/assets/props/objects/palm.webp",
+      "width": 256,
+      "height": 256,
+      "bytes": 27518,
+      "seed": 156024302,
+      "label": "Palm",
+      "sets": [
+        "desert",
+        "river"
+      ],
+      "span": 1.4,
+      "kind": "feature",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "pickaxe-pile",
+      "shape": "object",
+      "src": "/assets/props/objects/pickaxe-pile.webp",
+      "width": 256,
+      "height": 252,
+      "bytes": 13418,
+      "seed": 1464812460,
+      "label": "Pickaxe pile",
+      "sets": [
+        "mine"
+      ],
+      "span": 0.5,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "pillar",
+      "shape": "object",
+      "src": "/assets/props/objects/pillar.webp",
+      "width": 255,
+      "height": 256,
+      "bytes": 13918,
+      "seed": 1229402897,
+      "label": "Pillar",
+      "sets": [
+        "temple",
+        "ruin",
+        "throne",
+        "dungeon"
+      ],
+      "span": 0.6,
+      "kind": "feature",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "pillar-broken",
+      "shape": "object",
+      "src": "/assets/props/objects/pillar-broken.webp",
+      "width": 256,
+      "height": 248,
+      "bytes": 8762,
+      "seed": 490411553,
+      "label": "Pillar broken",
+      "sets": [
+        "ruin",
+        "crypt",
+        "cave"
+      ],
+      "span": 0.6,
+      "kind": "feature",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "planter",
+      "shape": "object",
+      "src": "/assets/props/objects/planter.webp",
+      "width": 256,
+      "height": 253,
+      "bytes": 9502,
+      "seed": 2143141862,
+      "label": "Planter",
+      "sets": [
+        "garden",
+        "temple"
+      ],
+      "span": 0.5,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "portcullis-lever",
+      "shape": "object",
+      "src": "/assets/props/objects/portcullis-lever.webp",
+      "width": 256,
+      "height": 251,
+      "bytes": 4906,
+      "seed": 1333456955,
+      "label": "Portcullis lever",
+      "sets": [
+        "dungeon",
+        "prison"
+      ],
+      "span": 0.6,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "pot-cooking",
+      "shape": "object",
+      "src": "/assets/props/objects/pot-cooking.webp",
+      "width": 256,
+      "height": 236,
+      "bytes": 10686,
+      "seed": 1844014194,
+      "label": "Pot cooking",
+      "sets": [
+        "kitchen",
+        "camp"
+      ],
+      "span": 0.4,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "pressure-plate",
+      "shape": "object",
+      "src": "/assets/props/objects/pressure-plate.webp",
+      "width": 247,
+      "height": 256,
+      "bytes": 10654,
+      "seed": 1538384060,
+      "label": "Pressure plate",
+      "sets": [
+        "dungeon"
+      ],
+      "span": 0.5,
+      "kind": "feature",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "quench-tub",
+      "shape": "object",
+      "src": "/assets/props/objects/quench-tub.webp",
+      "width": 256,
+      "height": 245,
+      "bytes": 10194,
+      "seed": 2037168002,
+      "label": "Quench tub",
+      "sets": [
+        "forge"
+      ],
+      "span": 0.5,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "rack",
+      "shape": "object",
+      "src": "/assets/props/objects/rack.webp",
+      "width": 256,
+      "height": 236,
+      "bytes": 14034,
+      "seed": 213630835,
+      "label": "Rack",
+      "sets": [
+        "prison",
+        "dungeon"
+      ],
+      "span": 1.5,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "rat-nest",
+      "shape": "object",
+      "src": "/assets/props/objects/rat-nest.webp",
+      "width": 256,
+      "height": 227,
+      "bytes": 19500,
+      "seed": 1641051541,
+      "label": "Rat nest",
+      "sets": [
+        "sewer",
+        "dungeon"
+      ],
+      "span": 0.5,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "reeds",
+      "shape": "object",
+      "src": "/assets/props/objects/reeds.webp",
+      "width": 256,
+      "height": 245,
+      "bytes": 22300,
+      "seed": 173558406,
+      "label": "Reeds",
+      "sets": [
+        "swamp",
+        "river"
+      ],
+      "span": 0.6,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "rocks",
+      "shape": "object",
+      "src": "/assets/props/objects/rocks.webp",
+      "width": 213,
+      "height": 256,
+      "bytes": 7020,
+      "seed": 1482838630,
+      "label": "Rocks",
+      "sets": [
+        "cave",
+        "field",
+        "river",
+        "mine",
+        "frozen",
+        "desert"
+      ],
+      "span": 0.45,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "rope-coil",
+      "shape": "object",
+      "src": "/assets/props/objects/rope-coil.webp",
+      "width": 256,
+      "height": 251,
+      "bytes": 17642,
+      "seed": 1439364903,
+      "label": "Rope coil",
+      "sets": [
+        "ship",
+        "mine",
+        "camp"
+      ],
+      "span": 0.35,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "rubble",
+      "shape": "object",
+      "src": "/assets/props/objects/rubble.webp",
+      "width": 251,
+      "height": 256,
+      "bytes": 14238,
+      "seed": 333980255,
+      "label": "Rubble",
+      "sets": [
+        "ruin",
+        "dungeon",
+        "cave"
+      ],
+      "span": 0.7,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "rug",
+      "shape": "object",
+      "src": "/assets/props/objects/rug.webp",
+      "width": 256,
+      "height": 256,
+      "bytes": 16036,
+      "seed": 600654789,
+      "label": "Rug",
+      "sets": [
+        "tavern",
+        "library",
+        "throne",
+        "temple"
+      ],
+      "span": 1.6,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "rug-round",
+      "shape": "object",
+      "src": "/assets/props/objects/rug-round.webp",
+      "width": 256,
+      "height": 255,
+      "bytes": 18764,
+      "seed": 124795809,
+      "label": "Rug round",
+      "sets": [
+        "throne",
+        "library"
+      ],
+      "span": 1.1,
+      "kind": "feature",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "sacks",
+      "shape": "object",
+      "src": "/assets/props/objects/sacks.webp",
+      "width": 256,
+      "height": 248,
+      "bytes": 11754,
+      "seed": 665994405,
+      "label": "Sacks",
+      "sets": [
+        "market",
+        "tavern",
+        "kitchen",
+        "mine"
+      ],
+      "span": 0.6,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "saddle",
+      "shape": "object",
+      "src": "/assets/props/objects/saddle.webp",
+      "width": 256,
+      "height": 228,
+      "bytes": 10142,
+      "seed": 770473172,
+      "label": "Saddle",
+      "sets": [
+        "camp",
+        "field"
+      ],
+      "span": 0.5,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "sand-dune-rock",
+      "shape": "object",
+      "src": "/assets/props/objects/sand-dune-rock.webp",
+      "width": 235,
+      "height": 256,
+      "bytes": 8052,
+      "seed": 1020938178,
+      "label": "Sand dune rock",
+      "sets": [
+        "desert"
+      ],
+      "span": 0.7,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "sarcophagus",
+      "shape": "object",
+      "src": "/assets/props/objects/sarcophagus.webp",
+      "width": 256,
+      "height": 254,
+      "bytes": 11032,
+      "seed": 1766393836,
+      "label": "Sarcophagus",
+      "sets": [
+        "crypt",
+        "temple"
+      ],
+      "span": 1.1,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "scarecrow",
+      "shape": "object",
+      "src": "/assets/props/objects/scarecrow.webp",
+      "width": 256,
+      "height": 220,
+      "bytes": 9122,
+      "seed": 771207676,
+      "label": "Scarecrow",
+      "sets": [
+        "field"
+      ],
+      "span": 0.6,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "scroll-pile",
+      "shape": "object",
+      "src": "/assets/props/objects/scroll-pile.webp",
+      "width": 256,
+      "height": 151,
+      "bytes": 10336,
+      "seed": 1616895491,
+      "label": "Scroll pile",
+      "sets": [
+        "library",
+        "arcane"
+      ],
+      "span": 0.4,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "sewer-grate",
+      "shape": "object",
+      "src": "/assets/props/objects/sewer-grate.webp",
+      "width": 253,
+      "height": 256,
+      "bytes": 12470,
+      "seed": 944590699,
+      "label": "Sewer grate",
+      "sets": [
+        "sewer",
+        "dungeon"
+      ],
+      "span": 0.5,
+      "kind": "feature",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "shackles",
+      "shape": "object",
+      "src": "/assets/props/objects/shackles.webp",
+      "width": 256,
+      "height": 247,
+      "bytes": 9792,
+      "seed": 215781970,
+      "label": "Shackles",
+      "sets": [
+        "prison",
+        "dungeon"
+      ],
+      "span": 0.45,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "shelf-jars",
+      "shape": "object",
+      "src": "/assets/props/objects/shelf-jars.webp",
+      "width": 230,
+      "height": 256,
+      "bytes": 6350,
+      "seed": 523191713,
+      "label": "Shelf jars",
+      "sets": [
+        "lab",
+        "kitchen"
+      ],
+      "span": 0.9,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "shield-sword",
+      "shape": "object",
+      "src": "/assets/props/objects/shield-sword.webp",
+      "width": 230,
+      "height": 256,
+      "bytes": 10284,
+      "seed": 863670676,
+      "label": "Shield sword",
+      "sets": [
+        "ruin",
+        "barracks",
+        "field"
+      ],
+      "span": 0.6,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "ship-wheel",
+      "shape": "object",
+      "src": "/assets/props/objects/ship-wheel.webp",
+      "width": 256,
+      "height": 249,
+      "bytes": 15908,
+      "seed": 195879846,
+      "label": "Ship wheel",
+      "sets": [
+        "ship"
+      ],
+      "span": 0.5,
+      "kind": "feature",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "shrine",
+      "shape": "object",
+      "src": "/assets/props/objects/shrine.webp",
+      "width": 256,
+      "height": 211,
+      "bytes": 14974,
+      "seed": 1236965627,
+      "label": "Shrine",
+      "sets": [
+        "forest",
+        "field",
+        "graveyard"
+      ],
+      "span": 0.6,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "siege-ladder",
+      "shape": "object",
+      "src": "/assets/props/objects/siege-ladder.webp",
+      "width": 190,
+      "height": 256,
+      "bytes": 7704,
+      "seed": 1601289819,
+      "label": "Siege ladder",
+      "sets": [
+        "ruin",
+        "field",
+        "barracks"
+      ],
+      "span": 2,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "signpost",
+      "shape": "object",
+      "src": "/assets/props/objects/signpost.webp",
+      "width": 256,
+      "height": 239,
+      "bytes": 5130,
+      "seed": 546456623,
+      "label": "Signpost",
+      "sets": [
+        "field",
+        "forest"
+      ],
+      "span": 0.4,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "skeleton",
+      "shape": "object",
+      "src": "/assets/props/objects/skeleton.webp",
+      "width": 248,
+      "height": 256,
+      "bytes": 10772,
+      "seed": 827103087,
+      "label": "Skeleton",
+      "sets": [
+        "crypt",
+        "cave",
+        "dungeon"
+      ],
+      "span": 1,
+      "kind": "scatter",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "skulls",
+      "shape": "object",
+      "src": "/assets/props/objects/skulls.webp",
+      "width": 253,
+      "height": 256,
+      "bytes": 14456,
+      "seed": 1664289499,
+      "label": "Skulls",
+      "sets": [
+        "crypt",
+        "cave",
+        "dungeon"
+      ],
+      "span": 0.45,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "sled",
+      "shape": "object",
+      "src": "/assets/props/objects/sled.webp",
+      "width": 256,
+      "height": 171,
+      "bytes": 3052,
+      "seed": 502077724,
+      "label": "Sled",
+      "sets": [
+        "frozen"
+      ],
+      "span": 1,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "sludge-pile",
+      "shape": "object",
+      "src": "/assets/props/objects/sludge-pile.webp",
+      "width": 256,
+      "height": 241,
+      "bytes": 16102,
+      "seed": 360703387,
+      "label": "Sludge pile",
+      "sets": [
+        "sewer",
+        "prison"
+      ],
+      "span": 0.7,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "snow-pile",
+      "shape": "object",
+      "src": "/assets/props/objects/snow-pile.webp",
+      "width": 256,
+      "height": 253,
+      "bytes": 6880,
+      "seed": 1920157302,
+      "label": "Snow pile",
+      "sets": [
+        "frozen"
+      ],
+      "span": 0.9,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "sp-airship-crate",
+      "shape": "object",
+      "src": "/assets/props/objects/sp-airship-crate.webp",
+      "width": 256,
+      "height": 220,
+      "bytes": 6532,
+      "seed": 548118072,
+      "label": "Airship crate",
+      "sets": [
+        "steampunk"
+      ],
+      "span": 0.7,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "sp-armchair",
+      "shape": "object",
+      "src": "/assets/props/objects/sp-armchair.webp",
+      "width": 224,
+      "height": 256,
+      "bytes": 9646,
+      "seed": 756272783,
+      "label": "Armchair",
+      "sets": [
+        "steampunk"
+      ],
+      "span": 0.6,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "sp-automaton-wreck",
+      "shape": "object",
+      "src": "/assets/props/objects/sp-automaton-wreck.webp",
+      "width": 241,
+      "height": 256,
+      "bytes": 7916,
+      "seed": 796620435,
+      "label": "Automaton wreck",
+      "sets": [
+        "steampunk"
+      ],
+      "span": 1,
+      "kind": "scatter",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "sp-boiler",
+      "shape": "object",
+      "src": "/assets/props/objects/sp-boiler.webp",
+      "width": 245,
+      "height": 256,
+      "bytes": 10832,
+      "seed": 245377468,
+      "label": "Boiler",
+      "sets": [
+        "steampunk"
+      ],
+      "span": 1.1,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "sp-coal-cart",
+      "shape": "object",
+      "src": "/assets/props/objects/sp-coal-cart.webp",
+      "width": 222,
+      "height": 256,
+      "bytes": 12880,
+      "seed": 1527524500,
+      "label": "Coal cart",
+      "sets": [
+        "steampunk"
+      ],
+      "span": 0.9,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "sp-crate-explosives",
+      "shape": "object",
+      "src": "/assets/props/objects/sp-crate-explosives.webp",
+      "width": 256,
+      "height": 243,
+      "bytes": 11620,
+      "seed": 426220691,
+      "label": "Crate explosives",
+      "sets": [
+        "steampunk"
+      ],
+      "span": 0.55,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "sp-gaslamp",
+      "shape": "object",
+      "src": "/assets/props/objects/sp-gaslamp.webp",
+      "width": 104,
+      "height": 256,
+      "bytes": 6822,
+      "seed": 534076281,
+      "label": "Gaslamp",
+      "sets": [
+        "steampunk"
+      ],
+      "span": 0.4,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "sp-gear-cluster",
+      "shape": "object",
+      "src": "/assets/props/objects/sp-gear-cluster.webp",
+      "width": 235,
+      "height": 256,
+      "bytes": 20854,
+      "seed": 1206542990,
+      "label": "Gear cluster",
+      "sets": [
+        "steampunk"
+      ],
+      "span": 0.7,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "sp-globe",
+      "shape": "object",
+      "src": "/assets/props/objects/sp-globe.webp",
+      "width": 231,
+      "height": 256,
+      "bytes": 9102,
+      "seed": 531047575,
+      "label": "Globe",
+      "sets": [
+        "steampunk"
+      ],
+      "span": 0.5,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "sp-oil-can",
+      "shape": "object",
+      "src": "/assets/props/objects/sp-oil-can.webp",
+      "width": 222,
+      "height": 256,
+      "bytes": 7704,
+      "seed": 2028594747,
+      "label": "Oil can",
+      "sets": [
+        "steampunk"
+      ],
+      "span": 0.3,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "sp-pipe-stack",
+      "shape": "object",
+      "src": "/assets/props/objects/sp-pipe-stack.webp",
+      "width": 156,
+      "height": 256,
+      "bytes": 10234,
+      "seed": 1742024105,
+      "label": "Pipe stack",
+      "sets": [
+        "steampunk"
+      ],
+      "span": 0.9,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "sp-pressure-gauge",
+      "shape": "object",
+      "src": "/assets/props/objects/sp-pressure-gauge.webp",
+      "width": 123,
+      "height": 256,
+      "bytes": 10218,
+      "seed": 308089332,
+      "label": "Pressure gauge",
+      "sets": [
+        "steampunk"
+      ],
+      "span": 0.4,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "sp-steam-engine",
+      "shape": "object",
+      "src": "/assets/props/objects/sp-steam-engine.webp",
+      "width": 230,
+      "height": 256,
+      "bytes": 5790,
+      "seed": 1044653317,
+      "label": "Steam engine",
+      "sets": [
+        "steampunk"
+      ],
+      "span": 1,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "sp-telescope",
+      "shape": "object",
+      "src": "/assets/props/objects/sp-telescope.webp",
+      "width": 141,
+      "height": 256,
+      "bytes": 9418,
+      "seed": 957534295,
+      "label": "Telescope",
+      "sets": [
+        "steampunk"
+      ],
+      "span": 0.5,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "sp-toolbox",
+      "shape": "object",
+      "src": "/assets/props/objects/sp-toolbox.webp",
+      "width": 178,
+      "height": 256,
+      "bytes": 5288,
+      "seed": 1454913477,
+      "label": "Toolbox",
+      "sets": [
+        "steampunk"
+      ],
+      "span": 0.4,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "sp-workbench",
+      "shape": "object",
+      "src": "/assets/props/objects/sp-workbench.webp",
+      "width": 182,
+      "height": 256,
+      "bytes": 10764,
+      "seed": 736921426,
+      "label": "Workbench",
+      "sets": [
+        "steampunk"
+      ],
+      "span": 1.2,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "spike-barricade",
+      "shape": "object",
+      "src": "/assets/props/objects/spike-barricade.webp",
+      "width": 256,
+      "height": 253,
+      "bytes": 8392,
+      "seed": 476859032,
+      "label": "Spike barricade",
+      "sets": [
+        "barracks",
+        "field",
+        "ruin"
+      ],
+      "span": 1.2,
+      "kind": "feature",
+      "align": true,
+      "hazard": true
+    },
+    {
+      "id": "spinning-wheel",
+      "shape": "object",
+      "src": "/assets/props/objects/spinning-wheel.webp",
+      "width": 250,
+      "height": 256,
+      "bytes": 20610,
+      "seed": 45816378,
+      "label": "Spinning wheel",
+      "sets": [
+        "tavern"
+      ],
+      "span": 0.5,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "stalagmite-tall",
+      "shape": "object",
+      "src": "/assets/props/objects/stalagmite-tall.webp",
+      "width": 256,
+      "height": 253,
+      "bytes": 4850,
+      "seed": 1699844319,
+      "label": "Stalagmite tall",
+      "sets": [
+        "cave"
+      ],
+      "span": 0.4,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "stalagmites",
+      "shape": "object",
+      "src": "/assets/props/objects/stalagmites.webp",
+      "width": 256,
+      "height": 250,
+      "bytes": 8384,
+      "seed": 866747203,
+      "label": "Stalagmites",
+      "sets": [
+        "cave"
+      ],
+      "span": 0.6,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "statue-broken",
+      "shape": "object",
+      "src": "/assets/props/objects/statue-broken.webp",
+      "width": 256,
+      "height": 252,
+      "bytes": 3216,
+      "seed": 428368482,
+      "label": "Statue broken",
+      "sets": [
+        "ruin",
+        "crypt"
+      ],
+      "span": 0.6,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "statue-knight",
+      "shape": "object",
+      "src": "/assets/props/objects/statue-knight.webp",
+      "width": 256,
+      "height": 218,
+      "bytes": 3494,
+      "seed": 90395498,
+      "label": "Statue knight",
+      "sets": [
+        "temple",
+        "throne",
+        "crypt",
+        "ruin"
+      ],
+      "span": 0.7,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "stocks",
+      "shape": "object",
+      "src": "/assets/props/objects/stocks.webp",
+      "width": 219,
+      "height": 256,
+      "bytes": 4596,
+      "seed": 399133008,
+      "label": "Stocks",
+      "sets": [
+        "prison",
+        "market"
+      ],
+      "span": 0.9,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "stool",
+      "shape": "object",
+      "src": "/assets/props/objects/stool.webp",
+      "width": 251,
+      "height": 256,
+      "bytes": 8536,
+      "seed": 454480781,
+      "label": "Stool",
+      "sets": [
+        "tavern",
+        "kitchen",
+        "barracks",
+        "camp"
+      ],
+      "span": 0.35,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "straw-pallet",
+      "shape": "object",
+      "src": "/assets/props/objects/straw-pallet.webp",
+      "width": 256,
+      "height": 223,
+      "bytes": 14772,
+      "seed": 41827105,
+      "label": "Straw pallet",
+      "sets": [
+        "prison",
+        "dungeon"
+      ],
+      "span": 0.9,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "stump",
+      "shape": "object",
+      "src": "/assets/props/objects/stump.webp",
+      "width": 256,
+      "height": 256,
+      "bytes": 7180,
+      "seed": 1901810633,
+      "label": "Stump",
+      "sets": [
+        "forest",
+        "field",
+        "camp"
+      ],
+      "span": 0.5,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "sulphur-vent",
+      "shape": "object",
+      "src": "/assets/props/objects/sulphur-vent.webp",
+      "width": 219,
+      "height": 256,
+      "bytes": 8334,
+      "seed": 277237033,
+      "label": "Sulphur vent",
+      "sets": [
+        "volcanic",
+        "cave"
+      ],
+      "span": 0.5,
+      "kind": "scatter",
+      "align": false,
+      "hazard": true
+    },
+    {
+      "id": "summoning-circle",
+      "shape": "object",
+      "src": "/assets/props/objects/summoning-circle.webp",
+      "width": 256,
+      "height": 255,
+      "bytes": 14658,
+      "seed": 1270891798,
+      "label": "Summoning circle",
+      "sets": [
+        "arcane"
+      ],
+      "span": 1.8,
+      "kind": "feature",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "supply-pile",
+      "shape": "object",
+      "src": "/assets/props/objects/supply-pile.webp",
+      "width": 256,
+      "height": 256,
+      "bytes": 15126,
+      "seed": 862046082,
+      "label": "Supply pile",
+      "sets": [
+        "camp",
+        "ship",
+        "market",
+        "frozen"
+      ],
+      "span": 1.2,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "table-long",
+      "shape": "object",
+      "src": "/assets/props/objects/table-long.webp",
+      "width": 256,
+      "height": 232,
+      "bytes": 5598,
+      "seed": 693000288,
+      "label": "Table long",
+      "sets": [
+        "tavern",
+        "barracks",
+        "kitchen"
+      ],
+      "span": 1.6,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "table-round",
+      "shape": "object",
+      "src": "/assets/props/objects/table-round.webp",
+      "width": 256,
+      "height": 253,
+      "bytes": 7430,
+      "seed": 1146670159,
+      "label": "Table round",
+      "sets": [
+        "tavern",
+        "kitchen"
+      ],
+      "span": 0.9,
+      "kind": "scatter",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "tent",
+      "shape": "object",
+      "src": "/assets/props/objects/tent.webp",
+      "width": 191,
+      "height": 256,
+      "bytes": 8782,
+      "seed": 705908321,
+      "label": "Tent",
+      "sets": [
+        "camp",
+        "field"
+      ],
+      "span": 1.4,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "tent-round",
+      "shape": "object",
+      "src": "/assets/props/objects/tent-round.webp",
+      "width": 256,
+      "height": 252,
+      "bytes": 7210,
+      "seed": 326594598,
+      "label": "Tent round",
+      "sets": [
+        "camp",
+        "field",
+        "desert"
+      ],
+      "span": 1.6,
+      "kind": "feature",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "tomb-altar",
+      "shape": "object",
+      "src": "/assets/props/objects/tomb-altar.webp",
+      "width": 256,
+      "height": 241,
+      "bytes": 7868,
+      "seed": 73625511,
+      "label": "Tomb altar",
+      "sets": [
+        "crypt",
+        "temple"
+      ],
+      "span": 1,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "tool-bench",
+      "shape": "object",
+      "src": "/assets/props/objects/tool-bench.webp",
+      "width": 256,
+      "height": 115,
+      "bytes": 6796,
+      "seed": 1383266396,
+      "label": "Tool bench",
+      "sets": [
+        "forge",
+        "mine"
+      ],
+      "span": 1.1,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "torch-stand",
+      "shape": "object",
+      "src": "/assets/props/objects/torch-stand.webp",
+      "width": 202,
+      "height": 256,
+      "bytes": 7830,
+      "seed": 1347006084,
+      "label": "Torch stand",
+      "sets": [
+        "dungeon",
+        "barracks"
+      ],
+      "span": 0.3,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "trapdoor-open",
+      "shape": "object",
+      "src": "/assets/props/objects/trapdoor-open.webp",
+      "width": 256,
+      "height": 241,
+      "bytes": 8034,
+      "seed": 1876410037,
+      "label": "Trapdoor open",
+      "sets": [
+        "dungeon",
+        "tavern"
+      ],
+      "span": 0.6,
+      "kind": "feature",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "tree-autumn",
+      "shape": "object",
+      "src": "/assets/props/objects/tree-autumn.webp",
+      "width": 256,
+      "height": 235,
+      "bytes": 20842,
+      "seed": 145962,
+      "label": "Tree autumn",
+      "sets": [
+        "forest",
+        "field"
+      ],
+      "span": 1.5,
+      "kind": "feature",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "tree-dead",
+      "shape": "object",
+      "src": "/assets/props/objects/tree-dead.webp",
+      "width": 256,
+      "height": 255,
+      "bytes": 26442,
+      "seed": 2119102551,
+      "label": "Tree dead",
+      "sets": [
+        "swamp",
+        "graveyard",
+        "ruin"
+      ],
+      "span": 1.2,
+      "kind": "feature",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "tree-oak",
+      "shape": "object",
+      "src": "/assets/props/objects/tree-oak.webp",
+      "width": 256,
+      "height": 247,
+      "bytes": 13240,
+      "seed": 57174789,
+      "label": "Tree oak",
+      "sets": [
+        "forest",
+        "field"
+      ],
+      "span": 1.6,
+      "kind": "feature",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "tree-pine",
+      "shape": "object",
+      "src": "/assets/props/objects/tree-pine.webp",
+      "width": 256,
+      "height": 235,
+      "bytes": 40128,
+      "seed": 498345574,
+      "label": "Tree pine",
+      "sets": [
+        "forest",
+        "frozen"
+      ],
+      "span": 1.2,
+      "kind": "feature",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "tree-willow",
+      "shape": "object",
+      "src": "/assets/props/objects/tree-willow.webp",
+      "width": 223,
+      "height": 256,
+      "bytes": 14460,
+      "seed": 1472262963,
+      "label": "Tree willow",
+      "sets": [
+        "river",
+        "swamp"
+      ],
+      "span": 1.7,
+      "kind": "feature",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "trough",
+      "shape": "object",
+      "src": "/assets/props/objects/trough.webp",
+      "width": 256,
+      "height": 93,
+      "bytes": 5128,
+      "seed": 1648596525,
+      "label": "Trough",
+      "sets": [
+        "field",
+        "market"
+      ],
+      "span": 1,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "urn",
+      "shape": "object",
+      "src": "/assets/props/objects/urn.webp",
+      "width": 218,
+      "height": 256,
+      "bytes": 7708,
+      "seed": 814696696,
+      "label": "Urn",
+      "sets": [
+        "crypt",
+        "temple",
+        "market"
+      ],
+      "span": 0.42,
+      "kind": "wall",
+      "align": false,
+      "hazard": false
+    },
+    {
+      "id": "wagon",
+      "shape": "object",
+      "src": "/assets/props/objects/wagon.webp",
+      "width": 256,
+      "height": 152,
+      "bytes": 6788,
+      "seed": 568038096,
+      "label": "Wagon",
+      "sets": [
+        "field",
+        "camp",
+        "market"
+      ],
+      "span": 2,
+      "kind": "feature",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "wardrobe",
+      "shape": "object",
+      "src": "/assets/props/objects/wardrobe.webp",
+      "width": 203,
+      "height": 256,
+      "bytes": 6546,
+      "seed": 1335769669,
+      "label": "Wardrobe",
+      "sets": [
+        "tavern",
+        "throne"
+      ],
+      "span": 0.9,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "weapon-rack",
+      "shape": "object",
+      "src": "/assets/props/objects/weapon-rack.webp",
+      "width": 141,
+      "height": 256,
+      "bytes": 10856,
+      "seed": 1679356031,
+      "label": "Weapon rack",
+      "sets": [
+        "barracks",
+        "dungeon",
+        "throne"
+      ],
+      "span": 0.9,
+      "kind": "wall",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "web-cocoon",
+      "shape": "object",
+      "src": "/assets/props/objects/web-cocoon.webp",
+      "width": 256,
+      "height": 253,
+      "bytes": 19686,
+      "seed": 1102204561,
+      "label": "Web cocoon",
+      "sets": [
+        "cave",
+        "dungeon"
+      ],
+      "span": 0.7,
+      "kind": "scatter",
+      "align": true,
+      "hazard": false
+    },
+    {
+      "id": "well",
+      "shape": "object",
+      "src": "/assets/props/objects/well.webp",
+      "width": 220,
+      "height": 256,
+      "bytes": 8804,
+      "seed": 1958051338,
+      "label": "Well",
+      "sets": [
+        "field",
+        "market"
+      ],
+      "span": 0.9,
+      "kind": "feature",
+      "align": false,
+      "hazard": false
+    }
+  ],
+  "decals": [
+    {
+      "id": "chasm-ice-lip",
+      "shape": "edge",
+      "src": "/assets/props/edges/chasm-ice-lip.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 6288,
+      "seed": 1747243728,
+      "family": "chasm"
+    },
+    {
+      "id": "chasm-lip",
+      "shape": "edge",
+      "src": "/assets/props/edges/chasm-lip.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 6888,
+      "seed": 1474275342,
+      "family": "chasm"
+    },
+    {
+      "id": "chasm-roots",
+      "shape": "edge",
+      "src": "/assets/props/edges/chasm-roots.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 8372,
+      "seed": 139970105,
+      "family": "chasm"
+    },
+    {
+      "id": "edge-ash-lip",
+      "shape": "edge",
+      "src": "/assets/props/edges/edge-ash-lip.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 13444,
+      "seed": 585859758,
+      "family": "wall-volcanic"
+    },
+    {
+      "id": "edge-cobweb-lip",
+      "shape": "edge",
+      "src": "/assets/props/edges/edge-cobweb-lip.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 7086,
+      "seed": 445759034,
+      "family": "wall-stone"
+    },
+    {
+      "id": "edge-damp-stain",
+      "shape": "edge",
+      "src": "/assets/props/edges/edge-damp-stain.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 9204,
+      "seed": 712529378,
+      "family": "wall-stone"
+    },
+    {
+      "id": "edge-grass-fringe",
+      "shape": "edge",
+      "src": "/assets/props/edges/edge-grass-fringe.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 9120,
+      "seed": 875529437,
+      "family": "wall-earth"
+    },
+    {
+      "id": "edge-ice-rime",
+      "shape": "edge",
+      "src": "/assets/props/edges/edge-ice-rime.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 8922,
+      "seed": 1325097511,
+      "family": "wall-ice"
+    },
+    {
+      "id": "edge-ivy-lip",
+      "shape": "edge",
+      "src": "/assets/props/edges/edge-ivy-lip.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 15214,
+      "seed": 1909927572,
+      "family": "wall-green"
+    },
+    {
+      "id": "edge-leaf-fringe",
+      "shape": "edge",
+      "src": "/assets/props/edges/edge-leaf-fringe.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 14204,
+      "seed": 107145045,
+      "family": "wall-green"
+    },
+    {
+      "id": "edge-mortar-lip",
+      "shape": "edge",
+      "src": "/assets/props/edges/edge-mortar-lip.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 8456,
+      "seed": 1426242118,
+      "family": "wall-stone"
+    },
+    {
+      "id": "edge-moss-lip",
+      "shape": "edge",
+      "src": "/assets/props/edges/edge-moss-lip.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 6292,
+      "seed": 402549149,
+      "family": "wall-stone"
+    },
+    {
+      "id": "edge-root-lip",
+      "shape": "edge",
+      "src": "/assets/props/edges/edge-root-lip.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 10394,
+      "seed": 1982278736,
+      "family": "wall-earth"
+    },
+    {
+      "id": "edge-rubble-crumbs",
+      "shape": "edge",
+      "src": "/assets/props/edges/edge-rubble-crumbs.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 12204,
+      "seed": 228287668,
+      "family": "wall-stone"
+    },
+    {
+      "id": "edge-scorch-lip",
+      "shape": "edge",
+      "src": "/assets/props/edges/edge-scorch-lip.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 8220,
+      "seed": 541533988,
+      "family": "wall-volcanic"
+    },
+    {
+      "id": "edge-snow-lip",
+      "shape": "edge",
+      "src": "/assets/props/edges/edge-snow-lip.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 3658,
+      "seed": 469597904,
+      "family": "wall-ice"
+    },
+    {
+      "id": "edge-timber-shavings",
+      "shape": "edge",
+      "src": "/assets/props/edges/edge-timber-shavings.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 11612,
+      "seed": 1170544408,
+      "family": "wall-wood"
+    },
+    {
+      "id": "lava-crust",
+      "shape": "edge",
+      "src": "/assets/props/edges/lava-crust.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 6994,
+      "seed": 1318563398,
+      "family": "lava"
+    },
+    {
+      "id": "lava-embers",
+      "shape": "edge",
+      "src": "/assets/props/edges/lava-embers.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 13316,
+      "seed": 444037886,
+      "family": "lava"
+    },
+    {
+      "id": "lava-scorch",
+      "shape": "edge",
+      "src": "/assets/props/edges/lava-scorch.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 6860,
+      "seed": 1069252022,
+      "family": "lava"
+    },
+    {
+      "id": "rough-bone-fringe",
+      "shape": "edge",
+      "src": "/assets/props/edges/rough-bone-fringe.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 9602,
+      "seed": 1967300169,
+      "family": "rough"
+    },
+    {
+      "id": "rough-bramble-fringe",
+      "shape": "edge",
+      "src": "/assets/props/edges/rough-bramble-fringe.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 12144,
+      "seed": 2044213949,
+      "family": "rough"
+    },
+    {
+      "id": "rough-grass-fringe",
+      "shape": "edge",
+      "src": "/assets/props/edges/rough-grass-fringe.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 16474,
+      "seed": 146738027,
+      "family": "rough"
+    },
+    {
+      "id": "rough-gravel-spill",
+      "shape": "edge",
+      "src": "/assets/props/edges/rough-gravel-spill.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 14270,
+      "seed": 1441054682,
+      "family": "rough"
+    },
+    {
+      "id": "rough-mud-edge",
+      "shape": "edge",
+      "src": "/assets/props/edges/rough-mud-edge.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 6112,
+      "seed": 976370917,
+      "family": "rough"
+    },
+    {
+      "id": "rough-snow-edge",
+      "shape": "edge",
+      "src": "/assets/props/edges/rough-snow-edge.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 4264,
+      "seed": 379895153,
+      "family": "rough"
+    },
+    {
+      "id": "shore-foam",
+      "shape": "edge",
+      "src": "/assets/props/edges/shore-foam.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 7424,
+      "seed": 1818108786,
+      "family": "water"
+    },
+    {
+      "id": "shore-ice-edge",
+      "shape": "edge",
+      "src": "/assets/props/edges/shore-ice-edge.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 6410,
+      "seed": 971829787,
+      "family": "water"
+    },
+    {
+      "id": "shore-lily-fringe",
+      "shape": "edge",
+      "src": "/assets/props/edges/shore-lily-fringe.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 15800,
+      "seed": 1769958008,
+      "family": "water"
+    },
+    {
+      "id": "shore-reeds",
+      "shape": "edge",
+      "src": "/assets/props/edges/shore-reeds.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 9682,
+      "seed": 2121586836,
+      "family": "water"
+    },
+    {
+      "id": "shore-scum",
+      "shape": "edge",
+      "src": "/assets/props/edges/shore-scum.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 13192,
+      "seed": 90398341,
+      "family": "water"
+    },
+    {
+      "id": "shore-wet-sand",
+      "shape": "edge",
+      "src": "/assets/props/edges/shore-wet-sand.webp",
+      "width": 512,
+      "height": 128,
+      "bytes": 7584,
+      "seed": 1515160073,
+      "family": "water"
+    },
+    {
+      "id": "ash-pile",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/ash-pile.webp",
+      "width": 160,
+      "height": 149,
+      "bytes": 6468,
+      "seed": 1331415063,
+      "on": [
+        "stone",
+        "volcanic"
+      ],
+      "blend": "normal"
+    },
+    {
+      "id": "blood-drops",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/blood-drops.webp",
+      "width": 160,
+      "height": 147,
+      "bytes": 3948,
+      "seed": 1179305969,
+      "on": [
+        "stone",
+        "earth"
+      ],
+      "blend": "multiply"
+    },
+    {
+      "id": "blood-pool",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/blood-pool.webp",
+      "width": 160,
+      "height": 126,
+      "bytes": 4672,
+      "seed": 69977845,
+      "on": [
+        "stone",
+        "earth"
+      ],
+      "blend": "multiply"
+    },
+    {
+      "id": "bone-chips",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/bone-chips.webp",
+      "width": 157,
+      "height": 160,
+      "bytes": 2414,
+      "seed": 171013133,
+      "on": [
+        "stone",
+        "earth"
+      ],
+      "blend": "normal"
+    },
+    {
+      "id": "broken-arrows",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/broken-arrows.webp",
+      "width": 155,
+      "height": 160,
+      "bytes": 7208,
+      "seed": 953478086,
+      "on": [
+        "earth",
+        "stone",
+        "grass"
+      ],
+      "blend": "normal"
+    },
+    {
+      "id": "chalk-marks",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/chalk-marks.webp",
+      "width": 160,
+      "height": 121,
+      "bytes": 4884,
+      "seed": 1782152107,
+      "on": [
+        "stone"
+      ],
+      "blend": "normal"
+    },
+    {
+      "id": "cobweb-corner",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/cobweb-corner.webp",
+      "width": 160,
+      "height": 159,
+      "bytes": 3886,
+      "seed": 650931135,
+      "on": [
+        "stone"
+      ],
+      "blend": "normal"
+    },
+    {
+      "id": "coins",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/coins.webp",
+      "width": 160,
+      "height": 160,
+      "bytes": 7478,
+      "seed": 239155694,
+      "on": [
+        "stone",
+        "earth"
+      ],
+      "blend": "normal"
+    },
+    {
+      "id": "crack",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/crack.webp",
+      "width": 160,
+      "height": 98,
+      "bytes": 4214,
+      "seed": 1031052385,
+      "on": [
+        "stone"
+      ],
+      "blend": "multiply"
+    },
+    {
+      "id": "cracks-web",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/cracks-web.webp",
+      "width": 160,
+      "height": 129,
+      "bytes": 5330,
+      "seed": 1579233957,
+      "on": [
+        "stone"
+      ],
+      "blend": "multiply"
+    },
+    {
+      "id": "drip-stain",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/drip-stain.webp",
+      "width": 160,
+      "height": 142,
+      "bytes": 2106,
+      "seed": 1671951161,
+      "on": [
+        "stone"
+      ],
+      "blend": "multiply"
+    },
+    {
+      "id": "embers",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/embers.webp",
+      "width": 160,
+      "height": 156,
+      "bytes": 6006,
+      "seed": 1348732565,
+      "on": [
+        "volcanic",
+        "stone"
+      ],
+      "blend": "normal"
+    },
+    {
+      "id": "feathers",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/feathers.webp",
+      "width": 160,
+      "height": 159,
+      "bytes": 3478,
+      "seed": 86092353,
+      "on": [
+        "earth",
+        "stone",
+        "grass"
+      ],
+      "blend": "normal"
+    },
+    {
+      "id": "flowers-small",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/flowers-small.webp",
+      "width": 160,
+      "height": 159,
+      "bytes": 3462,
+      "seed": 1387988870,
+      "on": [
+        "grass"
+      ],
+      "blend": "normal"
+    },
+    {
+      "id": "footprints-mud",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/footprints-mud.webp",
+      "width": 160,
+      "height": 115,
+      "bytes": 5492,
+      "seed": 1133872894,
+      "on": [
+        "earth",
+        "stone"
+      ],
+      "blend": "normal"
+    },
+    {
+      "id": "frost-patch",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/frost-patch.webp",
+      "width": 160,
+      "height": 156,
+      "bytes": 7584,
+      "seed": 373848478,
+      "on": [
+        "stone",
+        "ice"
+      ],
+      "blend": "normal"
+    },
+    {
+      "id": "grass-tuft",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/grass-tuft.webp",
+      "width": 160,
+      "height": 112,
+      "bytes": 2164,
+      "seed": 1720993001,
+      "on": [
+        "earth",
+        "stone",
+        "sand"
+      ],
+      "blend": "normal"
+    },
+    {
+      "id": "grass-tuft-dry",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/grass-tuft-dry.webp",
+      "width": 160,
+      "height": 152,
+      "bytes": 8820,
+      "seed": 780737541,
+      "on": [
+        "earth",
+        "sand"
+      ],
+      "blend": "normal"
+    },
+    {
+      "id": "ivy-sprig",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/ivy-sprig.webp",
+      "width": 160,
+      "height": 157,
+      "bytes": 2738,
+      "seed": 1242988900,
+      "on": [
+        "stone"
+      ],
+      "blend": "normal"
+    },
+    {
+      "id": "leaf-drift",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/leaf-drift.webp",
+      "width": 160,
+      "height": 149,
+      "bytes": 8398,
+      "seed": 104647539,
+      "on": [
+        "earth",
+        "grass",
+        "stone"
+      ],
+      "blend": "normal"
+    },
+    {
+      "id": "leaves-green",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/leaves-green.webp",
+      "width": 160,
+      "height": 136,
+      "bytes": 5570,
+      "seed": 963166103,
+      "on": [
+        "grass",
+        "earth"
+      ],
+      "blend": "normal"
+    },
+    {
+      "id": "lichen-patch",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/lichen-patch.webp",
+      "width": 160,
+      "height": 158,
+      "bytes": 2786,
+      "seed": 26970298,
+      "on": [
+        "stone"
+      ],
+      "blend": "normal"
+    },
+    {
+      "id": "moss-patch",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/moss-patch.webp",
+      "width": 154,
+      "height": 160,
+      "bytes": 5754,
+      "seed": 647979841,
+      "on": [
+        "stone",
+        "earth"
+      ],
+      "blend": "normal"
+    },
+    {
+      "id": "mud-splash",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/mud-splash.webp",
+      "width": 160,
+      "height": 156,
+      "bytes": 6312,
+      "seed": 1390490980,
+      "on": [
+        "earth"
+      ],
+      "blend": "multiply"
+    },
+    {
+      "id": "mushrooms-small",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/mushrooms-small.webp",
+      "width": 157,
+      "height": 160,
+      "bytes": 2418,
+      "seed": 1086133746,
+      "on": [
+        "earth",
+        "stone"
+      ],
+      "blend": "normal"
+    },
+    {
+      "id": "oil-stain",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/oil-stain.webp",
+      "width": 160,
+      "height": 118,
+      "bytes": 2602,
+      "seed": 66357524,
+      "on": [
+        "stone"
+      ],
+      "blend": "multiply"
+    },
+    {
+      "id": "pebbles",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/pebbles.webp",
+      "width": 160,
+      "height": 123,
+      "bytes": 8774,
+      "seed": 772007658,
+      "on": [
+        "earth",
+        "stone",
+        "sand"
+      ],
+      "blend": "normal"
+    },
+    {
+      "id": "puddle",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/puddle.webp",
+      "width": 160,
+      "height": 153,
+      "bytes": 2622,
+      "seed": 1773216313,
+      "on": [
+        "stone",
+        "earth"
+      ],
+      "blend": "multiply"
+    },
+    {
+      "id": "puddle-mud",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/puddle-mud.webp",
+      "width": 160,
+      "height": 146,
+      "bytes": 6626,
+      "seed": 1661576467,
+      "on": [
+        "earth"
+      ],
+      "blend": "multiply"
+    },
+    {
+      "id": "rune-mark",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/rune-mark.webp",
+      "width": 160,
+      "height": 157,
+      "bytes": 3304,
+      "seed": 1342806065,
+      "on": [
+        "stone"
+      ],
+      "blend": "multiply"
+    },
+    {
+      "id": "salt-ring",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/salt-ring.webp",
+      "width": 160,
+      "height": 160,
+      "bytes": 4176,
+      "seed": 131237406,
+      "on": [
+        "stone",
+        "earth"
+      ],
+      "blend": "normal"
+    },
+    {
+      "id": "sand-drift",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/sand-drift.webp",
+      "width": 160,
+      "height": 157,
+      "bytes": 4028,
+      "seed": 1528062242,
+      "on": [
+        "sand",
+        "stone"
+      ],
+      "blend": "normal"
+    },
+    {
+      "id": "sand-ripple",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/sand-ripple.webp",
+      "width": 160,
+      "height": 140,
+      "bytes": 5820,
+      "seed": 238403713,
+      "on": [
+        "sand"
+      ],
+      "blend": "normal"
+    },
+    {
+      "id": "scorch-mark",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/scorch-mark.webp",
+      "width": 113,
+      "height": 160,
+      "bytes": 4746,
+      "seed": 1998543309,
+      "on": [
+        "stone",
+        "earth"
+      ],
+      "blend": "multiply"
+    },
+    {
+      "id": "shattered-pot",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/shattered-pot.webp",
+      "width": 160,
+      "height": 156,
+      "bytes": 9426,
+      "seed": 1494682521,
+      "on": [
+        "stone",
+        "earth"
+      ],
+      "blend": "normal"
+    },
+    {
+      "id": "snow-patch",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/snow-patch.webp",
+      "width": 160,
+      "height": 132,
+      "bytes": 3618,
+      "seed": 1444432786,
+      "on": [
+        "ice",
+        "earth",
+        "stone"
+      ],
+      "blend": "normal"
+    },
+    {
+      "id": "soot-stain",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/soot-stain.webp",
+      "width": 160,
+      "height": 157,
+      "bytes": 4468,
+      "seed": 266794981,
+      "on": [
+        "stone"
+      ],
+      "blend": "multiply"
+    },
+    {
+      "id": "straw-scatter",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/straw-scatter.webp",
+      "width": 160,
+      "height": 155,
+      "bytes": 13424,
+      "seed": 1723209479,
+      "on": [
+        "stone",
+        "earth"
+      ],
+      "blend": "normal"
+    },
+    {
+      "id": "torn-cloth",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/torn-cloth.webp",
+      "width": 160,
+      "height": 136,
+      "bytes": 4482,
+      "seed": 878314366,
+      "on": [
+        "stone",
+        "earth"
+      ],
+      "blend": "normal"
+    },
+    {
+      "id": "twigs",
+      "shape": "scatter",
+      "src": "/assets/props/scatters/twigs.webp",
+      "width": 160,
+      "height": 157,
+      "bytes": 10334,
+      "seed": 1088646857,
+      "on": [
+        "earth",
+        "grass"
+      ],
+      "blend": "normal"
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import { Bot, Check, Crown, Dices, Heart, ImagePlus, PawPrint, Save, Shield, StickyNote, UserPlus } from "lucide-react";
+import { GameIcon } from "@/components/ui/GameIcon";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { CharacterPortrait } from "@/lib/ui";
@@ -556,8 +557,9 @@ export function PartyPanel({
                 {sheet.conditions.map((condition) => (
                   <span
                     key={condition}
-                    className="rounded-full bg-red-950 px-2 py-0.5 text-xs text-red-300"
+                    className="inline-flex items-center gap-1 rounded-full bg-red-950 px-2 py-0.5 text-xs text-red-300"
                   >
+                    <GameIcon icon={{ kind: "condition", key: condition }} size="size-4" className="border-red-800/60" />
                     {condition}
                     {sheet.conditionMeta?.[condition]?.rounds
                       ? ` (${sheet.conditionMeta[condition].rounds} rd)`

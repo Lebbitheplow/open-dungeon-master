@@ -13,7 +13,7 @@ export function resolve(specifier, context, nextResolve) {
   if (spec.startsWith("@/")) {
     const bare = path.join(srcDir, spec.slice(2));
     let target = bare;
-    if (!/\.(ts|tsx|json)$/.test(bare)) {
+    if (!/\.(ts|tsx|json|js|mjs)$/.test(bare)) {
       target = fs.existsSync(path.join(bare, "index.ts"))
         ? path.join(bare, "index.ts")
         : `${bare}.ts`;

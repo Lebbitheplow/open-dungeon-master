@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { GameIcon } from "@/components/ui/GameIcon";
 import * as Dialog from "@radix-ui/react-dialog";
 import { FileDown, Heart, Minus, Plus, PawPrint, Shield, Wrench, X } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -370,6 +371,7 @@ export function CharacterSheetDialog({
                       ...new Set([...sheet.spellcasting.known, ...sheet.spellcasting.prepared]),
                     ].map((spell) => ({
                       name: spell,
+                      icon: { kind: "spell" as const, key: spell },
                       reference: { kind: "spells", slug: contentSlug(spell), name: spell },
                     }))}
                   />
@@ -470,11 +472,14 @@ export function CharacterSheetDialog({
               <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
                 Equipment
               </h3>
-              <p className="text-xs text-stone-300">
-                {sheet.equipment
-                  .map((item) => (item.qty > 1 ? `${item.name} x${item.qty}` : item.name))
-                  .join(", ")}
-              </p>
+              <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-stone-300">
+                {sheet.equipment.map((item, index) => (
+                  <li key={`${item.name}-${index}`} className="flex items-center gap-1">
+                    <GameIcon icon={{ kind: "item", key: item.name, family: "item-gear" }} size="size-8" />
+                    {item.qty > 1 ? `${item.name} x${item.qty}` : item.name}
+                  </li>
+                ))}
+              </ul>
               {mine && wearable.length ? (
                 <div className="mt-2 space-y-1">
                   <p className="text-[11px] text-stone-500">
@@ -550,6 +555,7 @@ export function CharacterSheetDialog({
               <InfoChipList
                 items={sheet.features.map((feature) => ({
                   name: feature.name,
+                  icon: { kind: "feature" as const, key: feature.name, family: `class-${sheet.class.toLowerCase()}` },
                   note: feature.source === "story" ? "(story)" : undefined,
                   meta: feature.level ? `Level ${feature.level}` : undefined,
                   text: describeFeature(sheet.class, sheet.subclass, feature.name),
@@ -566,6 +572,7 @@ export function CharacterSheetDialog({
               <InfoChipList
                 items={sheet.feats.map((feat) => ({
                   name: feat,
+                  icon: { kind: "feat" as const, key: feat },
                   text: describeFeature(sheet.class, sheet.subclass, feat),
                   reference: { kind: "feats", slug: contentSlug(feat), name: feat },
                 }))}

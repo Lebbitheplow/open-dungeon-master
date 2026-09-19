@@ -1,6 +1,8 @@
 "use client";
 
 import { Calculator, Columns3, Loader2, MessageCircleQuestion, Search } from "lucide-react";
+import type { IconKind } from "@/lib/icons";
+import { GameIcon } from "@/components/ui/GameIcon";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import { PIXEL_ICONS, ui } from "@/lib/ui";
@@ -17,6 +19,14 @@ import { CalculatorsPanel } from "@/app/reference/CalculatorsPanel";
 import { ComparePanel, type CompareSelection } from "@/app/reference/ComparePanel";
 import { DeskPanel } from "@/app/reference/DeskPanel";
 import { MAX_COMPARE, type CompareKind } from "@/lib/reference/compare";
+
+// Which painted icon set a reference category draws from (src/lib/icons.ts).
+const REFERENCE_ICON_KIND: Record<string, IconKind | undefined> = {
+  spells: "spell",
+  feats: "feat",
+  items: "item",
+  conditions: "condition",
+};
 
 // The research desk: what used to be a player's rules lookup, grown into the
 // thing a DM actually uses between sessions.
@@ -337,10 +347,13 @@ export default function ReferencePage() {
                     <span className="flex items-center justify-between gap-2">
                       <span
                         className={cn(
-                          "text-sm",
+                          "flex min-w-0 items-center gap-2 text-sm",
                           row.source === "homebrew" ? "text-amber-300" : "text-stone-200",
                         )}
                       >
+                        {REFERENCE_ICON_KIND[kind] ? (
+                          <GameIcon icon={{ kind: REFERENCE_ICON_KIND[kind], key: row.name }} size="size-6" />
+                        ) : null}
                         {row.name}
                       </span>
                       {kind === "spells" ? (

@@ -1,6 +1,7 @@
 "use client";
 
 import { BookOpen } from "lucide-react";
+import { GameIcon } from "@/components/ui/GameIcon";
 import type { ReactNode } from "react";
 import { GameTerm } from "@/components/ui/GameTerm";
 import { InfoChipList } from "@/components/ui/InfoDialog";
@@ -87,6 +88,7 @@ export function SheetSections({ sheet }: { sheet: CreateSheetInput }) {
               ...new Set([...sheet.spellcasting.known, ...sheet.spellcasting.prepared]),
             ].map((spell) => ({
               name: spell,
+                      icon: { kind: "spell" as const, key: spell },
               reference: { kind: "spells", slug: contentSlug(spell), name: spell },
             }))}
             emptyText="None chosen."
@@ -96,11 +98,14 @@ export function SheetSections({ sheet }: { sheet: CreateSheetInput }) {
 
       {sheet.equipment.length ? (
         <SheetPanel title="Equipment">
-          <p className="text-sm text-stone-400">
-            {sheet.equipment
-              .map((item) => (item.qty > 1 ? `${item.name} x${item.qty}` : item.name))
-              .join(", ")}
-          </p>
+          <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-stone-300">
+                {sheet.equipment.map((item, index) => (
+                  <li key={`${item.name}-${index}`} className="flex items-center gap-1">
+                    <GameIcon icon={{ kind: "item", key: item.name, family: "item-gear" }} size="size-8" />
+                    {item.qty > 1 ? `${item.name} x${item.qty}` : item.name}
+                  </li>
+                ))}
+              </ul>
         </SheetPanel>
       ) : null}
 
@@ -109,6 +114,7 @@ export function SheetSections({ sheet }: { sheet: CreateSheetInput }) {
           <InfoChipList
             items={sheet.features.map((feature) => ({
               name: feature.name,
+                  icon: { kind: "feature" as const, key: feature.name, family: `class-${sheet.class.toLowerCase()}` },
               note: feature.source === "story" ? "(story)" : undefined,
               meta: feature.level ? `Level ${feature.level}` : undefined,
               text: describeFeature(sheet.class, sheet.subclass, feature.name),
@@ -122,6 +128,7 @@ export function SheetSections({ sheet }: { sheet: CreateSheetInput }) {
           <InfoChipList
             items={sheet.feats.map((feat) => ({
               name: feat,
+                  icon: { kind: "feat" as const, key: feat },
               text: describeFeature(sheet.class, sheet.subclass, feat),
               reference: { kind: "feats", slug: contentSlug(feat), name: feat },
             }))}

@@ -39,6 +39,7 @@ export default function TablePage({ params }: { params: Promise<{ campaignId: st
             <BattleMapPanel
               campaignId={campaignId}
               view={state.battleMap}
+              genre={state.campaign.gameSettings?.genre ?? null}
               encounter={state.encounter ?? null}
               sheets={state.sheets}
               refreshBattleMap={refreshBattleMap}

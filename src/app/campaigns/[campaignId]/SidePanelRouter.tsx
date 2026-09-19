@@ -408,6 +408,7 @@ export function SidePanelRouter({
       <BattleMapPanel
         campaignId={campaignId}
         view={battleMap}
+        genre={campaign?.gameSettings?.genre ?? null}
         canDirect={adjudicates}
         canFocusPing={steersStory}
         ping={mapPing ?? null}

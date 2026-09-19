@@ -854,3 +854,29 @@ optgroup {
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/* Route changes (src/app/template.tsx): the old page fades, the new one fades
+   and rises into place. Nothing moves under reduced motion. */
+@keyframes page-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+::view-transition-old(.page-exit) {
+  animation: page-out 140ms var(--ease-snap) both;
+}
+::view-transition-new(.page-enter) {
+  animation: page-in 260ms var(--ease-settle) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(.page-exit),
+  ::view-transition-new(.page-enter) {
+    animation: none;
+  }
+}

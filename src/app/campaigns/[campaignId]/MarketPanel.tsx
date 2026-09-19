@@ -1,6 +1,7 @@
 "use client";
 
 import { Coins, Loader2, Plus, ShoppingBag, Trash2 } from "lucide-react";
+import { GameIcon } from "@/components/ui/GameIcon";
 import { useEffect, useState } from "react";
 import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { cn } from "@/lib/cn";
@@ -206,8 +207,9 @@ export function MarketPanel({
           <ul className="grid grid-cols-2 gap-1 sm:grid-cols-3">
             {shop.stock.map((line) => (
               <li key={line.itemName} className="flex flex-col justify-between rounded border border-stone-800 bg-stone-900/60 p-1.5 transition-transform duration-[var(--dur-quick,150ms)] hover:-translate-y-0.5">
-                <span className="truncate text-[11px] text-stone-200" title={line.note || line.itemName}>
-                  {line.itemName}
+                <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-stone-200" title={line.note || line.itemName}>
+                  <GameIcon icon={{ kind: "item", key: line.itemName, family: "item-gear" }} size="size-6" />
+                  <span className="truncate">{line.itemName}</span>
                 </span>
                 <span className="mt-1 flex items-center justify-between gap-1">
                   <span className="rounded-full border border-amber-900/60 px-1.5 text-[10px] text-amber-200">{formatCopper(line.askingCp)}</span>

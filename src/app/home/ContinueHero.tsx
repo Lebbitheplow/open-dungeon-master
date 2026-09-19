@@ -1,6 +1,7 @@
 "use client";
 
 import { Swords } from "lucide-react";
+import Link from "next/link";
 import { CampaignCover } from "@/components/CampaignCover";
 import { HeroCard } from "@/components/ui/HeroCard";
 import { miscPlaceholder } from "@/lib/placeholders";
@@ -35,9 +36,9 @@ export function ContinueHero({ campaign, userId }: { campaign: HomeCampaign; use
         />
       }
       action={
-        <a href={`/campaigns/${campaign.id}`} className={ui.btnPrimary}>
+        <Link href={`/campaigns/${campaign.id}`} className={ui.btnPrimary}>
           <Swords className="size-4" /> Enter world
-        </a>
+        </Link>
       }
     />
   );

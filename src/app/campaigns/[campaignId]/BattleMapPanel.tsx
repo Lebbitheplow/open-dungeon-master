@@ -54,6 +54,8 @@ import type { PublicEncounter } from "@/lib/db/encounter-view";
 import type { CameraEvent, SceneState } from "@/lib/scene/state";
 import { SkyLayer } from "@/components/SkyLayer";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { characterPlaceholder, monsterPlaceholder } from "@/lib/placeholders";
+import { usePaintedMap } from "@/app/campaigns/[campaignId]/usePaintedMap";
 
 // The tactical battle map tab.
 //
@@ -99,8 +101,12 @@ export function BattleMapPanel({
   sky = null,
   canDraw = true,
   onOpenLabel,
+  genre = null,
 }: {
   campaignId: string;
+  // The campaign's setting: it picks the skin the board is painted in and the
+  // plates the monsters wear.
+  genre?: string | null;
   view: PlayerMapView;
   encounter: PublicEncounter | null;
   sheets: CharacterSheet[];
@@ -127,6 +133,21 @@ export function BattleMapPanel({
   // A pinned label was tapped: open what it points at.
   onOpenLabel?: (label: MapLabel) => void;
 }) {
+  // The board's picture, painted on this device from the terrain it was sent.
+  const painted = usePaintedMap(view, genre);
+  // A face for every token: the character's plate by lineage and class (an
+  // uploaded portrait overrides it in the grid), a monster's plate by creature
+  // type and setting. The DM's ad hoc NPCs and props keep their initial.
+  const faces = useMemo(() => {
+    const byRef = new Map<string, string>();
+    for (const sheet of sheets) {
+      byRef.set(sheet.id, characterPlaceholder({ race: sheet.race, class: sheet.class, gender: sheet.gender }));
+    }
+    for (const enemy of encounter?.enemies ?? []) {
+      byRef.set(enemy.id, monsterPlaceholder(enemy.type, { cr: enemy.cr, genre, seed: enemy.name }));
+    }
+    return byRef;
+  }, [sheets, encounter?.enemies, genre]);
   const [enlarged, setEnlarged] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -758,6 +779,8 @@ export function BattleMapPanel({
         <BattleMapGrid
           view={view}
           sheets={sheets}
+          painted={painted}
+          faces={faces}
           onTileClick={canDirect || canMove || pointing ? handleTile : undefined}
           onTileHover={
             canMove || held

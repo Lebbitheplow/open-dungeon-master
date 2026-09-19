@@ -1,6 +1,8 @@
 "use client";
 
 import { Info, Loader2 } from "lucide-react";
+import { GameIcon } from "@/components/ui/GameIcon";
+import type { IconRef } from "@/lib/icons";
 import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { Dialog } from "@/components/ui/Dialog";
@@ -240,6 +242,8 @@ export function InfoChipList({
     reference?: ContentRef;
     // Rendered after the name, e.g. "(story)" for a feature the DM granted.
     note?: string;
+    // The painted icon that leads the chip, when the thing has one.
+    icon?: IconRef;
   }>;
   emptyText?: string;
 }) {
@@ -247,9 +251,10 @@ export function InfoChipList({
     return emptyText ? <p className="text-xs text-stone-500">{emptyText}</p> : null;
   }
   return (
-    <div className="flex flex-wrap gap-x-3 gap-y-1">
+    <div className="flex flex-wrap gap-x-4 gap-y-1.5">
       {items.map((item) => (
         <span key={item.name} className="flex items-center gap-1 text-xs text-stone-300">
+          {item.icon ? <GameIcon icon={item.icon} size="size-8" /> : null}
           {item.name}
           {item.note ? <span className="text-stone-500">{item.note}</span> : null}
           <InfoButton
