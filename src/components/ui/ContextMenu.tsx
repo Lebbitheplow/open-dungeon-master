@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { overlayRoot } from "@/lib/overlay-root";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { cn } from "@/lib/cn";
 import { haptic } from "@/lib/effects-mode";
@@ -190,7 +191,7 @@ export function ContextMenu({
               <DropdownMenu.Trigger asChild>
                 <span aria-hidden="true" tabIndex={-1} className="ctx-anchor" style={{ left: point.x, top: point.y }} />
               </DropdownMenu.Trigger>,
-              document.body,
+              overlayRoot(),
             )
           : null}
         <DropdownMenu.Portal>

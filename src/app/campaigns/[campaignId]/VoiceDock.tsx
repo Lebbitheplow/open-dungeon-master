@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
+import { overlayRoot } from "@/lib/overlay-root";
 import { cn } from "@/lib/cn";
 import { VoicePanel } from "@/app/campaigns/[campaignId]/VoicePanel";
 import { headerButtonClass } from "@/app/campaigns/[campaignId]/headerButton";
@@ -207,7 +208,7 @@ export function VoiceDock({
                 />
               </div>
             </>,
-            document.body,
+            overlayRoot(),
           )
         : null}
     </>
