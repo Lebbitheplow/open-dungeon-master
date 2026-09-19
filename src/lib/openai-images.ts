@@ -1,13 +1,15 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { configValue, getGlobalConfig } from "@/lib/app-config";
+import { endpointKind } from "@/lib/dm/sampling-logic";
 import { serverEnv } from "@/lib/server-env";
-import type { AspectPreset, GeneratedImage, ImageMode } from "@/lib/types";
+import type { AspectPreset, GeneratedImage, ImageMode, StorySettings } from "@/lib/types";
 
 // OpenAI Images backend: the paid escape hatch for a server (or an app-only
 // host) whose hardware cannot run a local image model. The key is the server
-// owner's, lives in the admin config or the environment, and every request
-// originates server-side, so campaign members never see it.
+// owner's or the table's, lives in the admin config, the campaign's Text
+// Model panel, or the environment, and every request originates server-side,
+// so campaign members never see it.
 //
 // The base URL is configurable for OpenAI-compatible image proxies, but the
 // defaults are api.openai.com and gpt-image-1.
@@ -16,7 +18,33 @@ const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_MODEL = "gpt-image-1";
 const GENERATE_TIMEOUT_MS = 4 * 60 * 1000;
 
-function resolveConfig() {
+// The story backend's key, but only when that backend IS OpenAI. Images are a
+// different API on the same account, so a table already paying OpenAI for its
+// DM should not have to paste the key twice; the host gate is what makes that
+// safe, since a llama.cpp, LM Studio or OpenRouter key must never be posted
+// to api.openai.com. Campaign settings first, then the server-wide backend.
+export type TextBackendKey = Pick<StorySettings, "customBaseUrl" | "customApiKey">;
+
+function borrowedTextKey(story?: TextBackendKey): string {
+  const text = getGlobalConfig().text;
+  const candidates: Array<[string, string]> = [
+    [story?.customBaseUrl ?? "", story?.customApiKey ?? ""],
+    [
+      text.customBaseUrl || serverEnv("OPENAI_COMPAT_BASE_URL"),
+      text.customApiKey || serverEnv("OPENAI_COMPAT_API_KEY"),
+    ],
+  ];
+  for (const [baseUrl, apiKey] of candidates) {
+    // endpointKind reads the whole host, and a blank URL is never "openai",
+    // so an unconfigured field cannot lend anything.
+    if (endpointKind(baseUrl) === "openai" && apiKey.trim()) {
+      return apiKey.trim();
+    }
+  }
+  return "";
+}
+
+function resolveConfig(story?: TextBackendKey) {
   const images = getGlobalConfig().images;
   return {
     baseUrl: configValue(images.openaiBaseUrl, "OPENAI_IMAGE_BASE_URL", DEFAULT_BASE_URL).replace(
@@ -24,20 +52,22 @@ function resolveConfig() {
       "",
     ),
     model: configValue(images.openaiModel, "OPENAI_IMAGE_MODEL", DEFAULT_MODEL),
-    // OPENAI_API_KEY as the last fallback because it is the name every other
-    // tool trains people to set.
+    // OPENAI_API_KEY before the borrowed text key because it is the name
+    // every other tool trains people to set, and an image-specific setting
+    // is a deliberate choice that must beat an inferred one.
     apiKey:
       images.openaiApiKey.trim() ||
       serverEnv("OPENAI_IMAGE_API_KEY") ||
-      serverEnv("OPENAI_API_KEY"),
+      serverEnv("OPENAI_API_KEY") ||
+      borrowedTextKey(story),
   };
 }
 
 // Whether picking the "openai" backend can actually produce anything. The
 // dispatcher checks this before enqueueing, so a backend selected without a
 // key degrades to "request recorded" like the FLUX backends do.
-export function openAiImagesConfigured(): boolean {
-  return resolveConfig().apiKey !== "";
+export function openAiImagesConfigured(story?: TextBackendKey): boolean {
+  return resolveConfig(story).apiKey !== "";
 }
 
 // gpt-image-1 sizes; dall-e-3 uses its own pair for the non-square shapes.
@@ -66,16 +96,19 @@ function promptSlug(prompt: string) {
   );
 }
 
-export async function generateOpenAiImage(options: {
-  prompt: string;
-  mode: ImageMode;
-  aspect: AspectPreset;
-  hasReferences?: boolean;
-}): Promise<GeneratedImage> {
-  const { baseUrl, model, apiKey } = resolveConfig();
+export async function generateOpenAiImage(
+  options: {
+    prompt: string;
+    mode: ImageMode;
+    aspect: AspectPreset;
+    hasReferences?: boolean;
+  },
+  story?: TextBackendKey,
+): Promise<GeneratedImage> {
+  const { baseUrl, model, apiKey } = resolveConfig(story);
   if (!apiKey) {
     throw new Error(
-      "The OpenAI image backend has no API key. Add one in Admin > Image generation.",
+      "The OpenAI image backend has no API key. Add one in Admin > Image generation, or point this story's Text Model at OpenAI so its key covers pictures too.",
     );
   }
 

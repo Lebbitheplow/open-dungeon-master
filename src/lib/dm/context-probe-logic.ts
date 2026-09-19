@@ -46,6 +46,34 @@ export function readContextWindow(props: PropsShape | null | undefined): number 
   return null;
 }
 
+// OpenAI reports no window on any endpoint, and an app-hosted world has no
+// environment file to set OPENAI_COMPAT_CONTEXT in, so a table on its own
+// key would otherwise pack against the 16K stand-in forever. Every chat model
+// OpenAI still sells has at least 128K of room; the newer lines have far
+// more, but the prompt is billed by the token on this backend, so the floor
+// they all share is also the ceiling worth paying for. Only the retired
+// small-window models are named, which keeps a model this table has never
+// heard of on the safe number instead of a guess.
+export const OPENAI_CONTEXT_TOKENS = 128_000;
+
+const OPENAI_SMALL_WINDOWS: Array<[RegExp, number]> = [
+  [/^gpt-3\.5/, 16_385],
+  [/^gpt-4-32k/, 32_768],
+  [/^gpt-4(-0314|-0613)?$/, 8_192],
+];
+
+export function openAiContextWindow(model: string): number {
+  // A fine-tune is named ft:<base model>:<org>:<suffix>:<id>.
+  const name = (model ?? "").trim().toLowerCase();
+  const base = name.startsWith("ft:") ? (name.split(":")[1] ?? "") : name;
+  for (const [pattern, window] of OPENAI_SMALL_WINDOWS) {
+    if (pattern.test(base)) {
+      return window;
+    }
+  }
+  return OPENAI_CONTEXT_TOKENS;
+}
+
 export function contextCacheKey(baseUrl: string, model: string): string {
   return `${normalizeBaseUrl(baseUrl)}::${model ?? ""}`;
 }

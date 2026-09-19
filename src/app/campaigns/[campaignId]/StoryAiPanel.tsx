@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { Select } from "@/components/ui/Select";
 import type { MaskedStorySettings } from "@/lib/db/settings";
+import { endpointKind } from "@/lib/dm/sampling-logic";
+import { shellHost } from "@/lib/shell-host";
 import type { TextProvider } from "@/lib/text-models";
 import {
   PROSE_SIZE_VALUES,
@@ -52,6 +54,13 @@ export function StoryAiPanel({
   // Defaults to true so the warning never flashes while the answer is in
   // flight on servers that are fine.
   const [imagesConfigured, setImagesConfigured] = useState(true);
+  // This campaign's own backend, which for a table on its own OpenAI key is
+  // ready even when the server has no image backend of its own.
+  const [imagesReady, setImagesReady] = useState(true);
+  // A world an app hosts: the backend is chosen once for the device and every
+  // campaign follows it, so this panel shows it instead of editing it. null
+  // until the answer lands, so the editable rows never flash on a device.
+  const [deviceManaged, setDeviceManaged] = useState<boolean | null>(null);
   // Text fields commit on blur or Enter, so a half-typed URL never PATCHes.
   const [drafts, setDrafts] = useState({
     customBaseUrl: settings.customBaseUrl,
@@ -73,9 +82,18 @@ export function StoryAiPanel({
         if (!cancelled && data?.settings) {
           setHasCustomKey(data.settings.hasCustomApiKey);
           setHasUtilityKey(data.settings.hasUtilityApiKey);
+          setImagesReady(data.settings.imagesReady);
+        }
+        if (!cancelled) {
+          // A server older than this field, or a failed read, edits as before.
+          setDeviceManaged(data?.settings?.deviceManaged === true);
         }
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (!cancelled) {
+          setDeviceManaged(false);
+        }
+      });
     void fetch("/api/capabilities")
       .then((response) => (response.ok ? response.json() : null))
       .then((data: { images?: { configured?: boolean } } | null) => {
@@ -109,6 +127,7 @@ export function StoryAiPanel({
       if (data.settings) {
         setHasCustomKey(data.settings.hasCustomApiKey);
         setHasUtilityKey(data.settings.hasUtilityApiKey);
+        setImagesReady(data.settings.imagesReady);
       }
       if (update.customApiKey !== undefined) {
         setDrafts((prev) => ({ ...prev, customApiKey: SECRET_KEPT }));
@@ -171,6 +190,15 @@ export function StoryAiPanel({
     );
   }
 
+  const shell = shellHost();
+  const backendName = { openai: "OpenAI", openrouter: "OpenRouter", local: "local model" }[
+    endpointKind(settings.customBaseUrl)
+  ];
+  const deviceStoryteller =
+    settings.textProvider === "custom"
+      ? `${settings.customModel || "custom backend"} (${backendName})`
+      : PROVIDER_LABELS[settings.textProvider];
+
   const selectClass =
     "rounded-md border border-stone-700 bg-stone-900 px-2 py-1 text-xs outline-none focus:border-amber-600";
   const inputClass = cn(selectClass, "w-64 max-w-full");
@@ -186,125 +214,158 @@ export function StoryAiPanel({
       <h2 className="mb-3 text-sm font-medium text-stone-300">Story AI</h2>
       {error ? <p className="motion-shake mb-2 text-xs text-red-400">{error}</p> : null}
       <div className={cn("space-y-3 text-xs", busy && "opacity-70")}>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className={labelClass}>Storyteller</span>
-          <Select
-            value={settings.textProvider}
-            onChange={(textProvider) => patch({ textProvider })}
-            options={(Object.keys(PROVIDER_LABELS) as TextProvider[]).map((provider) => ({ value: provider, label: PROVIDER_LABELS[provider] }))}
-            label="Storyteller"
-            size="sm"
-          />
-        </div>
-        {settings.textProvider === "custom" ? (
-          <>
+        {deviceManaged === null ? null : deviceManaged ? (
+          <div className="reveal space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <span className={labelClass}>Base URL</span>
-              <input
-                value={drafts.customBaseUrl}
-                onChange={(event) =>
-                  setDrafts((prev) => ({ ...prev, customBaseUrl: event.target.value }))
-                }
-                onBlur={() => commitText("customBaseUrl")}
-                onKeyDown={blurOnEnter}
-                placeholder="http://127.0.0.1:8080/v1"
-                className={inputClass}
-              />
+              <span className={labelClass}>Storyteller</span>
+              <span className="text-stone-300">{deviceStoryteller}</span>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className={labelClass}>Model</span>
-              <input
-                value={drafts.customModel}
-                onChange={(event) =>
-                  setDrafts((prev) => ({ ...prev, customModel: event.target.value }))
-                }
-                onBlur={() => commitText("customModel")}
-                onKeyDown={blurOnEnter}
-                className={inputClass}
-              />
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className={labelClass}>API key</span>
-              <input
-                type="password"
-                value={drafts.customApiKey === SECRET_KEPT ? "" : drafts.customApiKey}
-                onChange={(event) =>
-                  setDrafts((prev) => ({ ...prev, customApiKey: event.target.value }))
-                }
-                onBlur={() => commitKey("customApiKey")}
-                onKeyDown={blurOnEnter}
-                placeholder={hasCustomKey ? "•••••••• (set)" : "Not set"}
-                className={inputClass}
-              />
-              {hasCustomKey ? (
-                <button
-                  type="button"
-                  onClick={() => patch({ customApiKey: "" })}
-                  className="rounded-md border border-stone-700 px-2 py-1 text-stone-400 hover:text-red-400"
-                >
-                  Clear
-                </button>
-              ) : null}
-            </div>
-            <p className="text-stone-500">Blank fields fall back to the server&apos;s settings.</p>
-          </>
-        ) : null}
-
-        <div className="flex flex-wrap items-center gap-2 border-t border-stone-800/60 pt-3">
-          <span className={labelClass}>Utility</span>
-          <Select
-            value={settings.utilityProvider}
-            onChange={(utilityProvider) => patch({ utilityProvider })}
-            options={(["local", "custom"] as TextProvider[]).map((provider) => ({ value: provider, label: PROVIDER_LABELS[provider] }))}
-            label="Utility model provider"
-            size="sm"
-          />
-          <input
-            value={drafts.utilityModel}
-            onChange={(event) =>
-              setDrafts((prev) => ({ ...prev, utilityModel: event.target.value }))
-            }
-            onBlur={() => commitText("utilityModel")}
-            onKeyDown={blurOnEnter}
-            placeholder="Model (blank keeps everything on the storyteller)"
-            className={inputClass}
-          />
-        </div>
-        {settings.utilityProvider === "custom" && settings.utilityModel ? (
-          <div className="reveal flex flex-wrap items-center gap-2">
-            <span className={labelClass}>Utility URL</span>
-            <input
-              value={drafts.utilityBaseUrl}
-              onChange={(event) =>
-                setDrafts((prev) => ({ ...prev, utilityBaseUrl: event.target.value }))
-              }
-              onBlur={() => commitText("utilityBaseUrl")}
-              onKeyDown={blurOnEnter}
-              placeholder="http://127.0.0.1:8080/v1"
-              className={inputClass}
-            />
-            <input
-              type="password"
-              value={drafts.utilityApiKey === SECRET_KEPT ? "" : drafts.utilityApiKey}
-              onChange={(event) =>
-                setDrafts((prev) => ({ ...prev, utilityApiKey: event.target.value }))
-              }
-              onBlur={() => commitKey("utilityApiKey")}
-              onKeyDown={blurOnEnter}
-              placeholder={hasUtilityKey ? "•••••••• (set)" : "API key (optional)"}
-              className={cn(selectClass, "w-40")}
-            />
-            {hasUtilityKey ? (
+            {settings.textProvider !== "none" && settings.utilityModel ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={labelClass}>Utility</span>
+                <span className="text-stone-300">{settings.utilityModel}</span>
+              </div>
+            ) : null}
+            <p className="text-stone-500">
+              Story AI is chosen once for this device, and every campaign here follows it.{" "}
+              {shell
+                ? "Change it from Story AI on the app's home screen."
+                : "Change it in the app that hosts this world."}
+            </p>
+            {shell ? (
               <button
                 type="button"
-                onClick={() => patch({ utilityApiKey: "" })}
-                className="rounded-md border border-stone-700 px-2 py-1 text-stone-400 hover:text-red-400"
+                onClick={() => shell.showServers()}
+                className="motion-press rounded-md border border-stone-700 px-2 py-1 text-stone-300 hover:border-amber-700 hover:text-amber-200"
               >
-                Clear
+                App home
               </button>
             ) : null}
           </div>
-        ) : null}
+        ) : (
+          <div className="reveal space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={labelClass}>Storyteller</span>
+              <Select
+                value={settings.textProvider}
+                onChange={(textProvider) => patch({ textProvider })}
+                options={(Object.keys(PROVIDER_LABELS) as TextProvider[]).map((provider) => ({ value: provider, label: PROVIDER_LABELS[provider] }))}
+                label="Storyteller"
+                size="sm"
+              />
+            </div>
+            {settings.textProvider === "custom" ? (
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={labelClass}>Base URL</span>
+                  <input
+                    value={drafts.customBaseUrl}
+                    onChange={(event) =>
+                      setDrafts((prev) => ({ ...prev, customBaseUrl: event.target.value }))
+                    }
+                    onBlur={() => commitText("customBaseUrl")}
+                    onKeyDown={blurOnEnter}
+                    placeholder="http://127.0.0.1:8080/v1"
+                    className={inputClass}
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={labelClass}>Model</span>
+                  <input
+                    value={drafts.customModel}
+                    onChange={(event) =>
+                      setDrafts((prev) => ({ ...prev, customModel: event.target.value }))
+                    }
+                    onBlur={() => commitText("customModel")}
+                    onKeyDown={blurOnEnter}
+                    className={inputClass}
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={labelClass}>API key</span>
+                  <input
+                    type="password"
+                    value={drafts.customApiKey === SECRET_KEPT ? "" : drafts.customApiKey}
+                    onChange={(event) =>
+                      setDrafts((prev) => ({ ...prev, customApiKey: event.target.value }))
+                    }
+                    onBlur={() => commitKey("customApiKey")}
+                    onKeyDown={blurOnEnter}
+                    placeholder={hasCustomKey ? "•••••••• (set)" : "Not set"}
+                    className={inputClass}
+                  />
+                  {hasCustomKey ? (
+                    <button
+                      type="button"
+                      onClick={() => patch({ customApiKey: "" })}
+                      className="rounded-md border border-stone-700 px-2 py-1 text-stone-400 hover:text-red-400"
+                    >
+                      Clear
+                    </button>
+                  ) : null}
+                </div>
+                <p className="text-stone-500">Blank fields fall back to the server&apos;s settings.</p>
+              </>
+            ) : null}
+
+            <div className="flex flex-wrap items-center gap-2 border-t border-stone-800/60 pt-3">
+              <span className={labelClass}>Utility</span>
+              <Select
+                value={settings.utilityProvider}
+                onChange={(utilityProvider) => patch({ utilityProvider })}
+                options={(["local", "custom"] as TextProvider[]).map((provider) => ({ value: provider, label: PROVIDER_LABELS[provider] }))}
+                label="Utility model provider"
+                size="sm"
+              />
+              <input
+                value={drafts.utilityModel}
+                onChange={(event) =>
+                  setDrafts((prev) => ({ ...prev, utilityModel: event.target.value }))
+                }
+                onBlur={() => commitText("utilityModel")}
+                onKeyDown={blurOnEnter}
+                placeholder="Model (blank keeps everything on the storyteller)"
+                className={inputClass}
+              />
+            </div>
+            {settings.utilityProvider === "custom" && settings.utilityModel ? (
+              <div className="reveal flex flex-wrap items-center gap-2">
+                <span className={labelClass}>Utility URL</span>
+                <input
+                  value={drafts.utilityBaseUrl}
+                  onChange={(event) =>
+                    setDrafts((prev) => ({ ...prev, utilityBaseUrl: event.target.value }))
+                  }
+                  onBlur={() => commitText("utilityBaseUrl")}
+                  onKeyDown={blurOnEnter}
+                  placeholder="http://127.0.0.1:8080/v1"
+                  className={inputClass}
+                />
+                <input
+                  type="password"
+                  value={drafts.utilityApiKey === SECRET_KEPT ? "" : drafts.utilityApiKey}
+                  onChange={(event) =>
+                    setDrafts((prev) => ({ ...prev, utilityApiKey: event.target.value }))
+                  }
+                  onBlur={() => commitKey("utilityApiKey")}
+                  onKeyDown={blurOnEnter}
+                  placeholder={hasUtilityKey ? "•••••••• (set)" : "API key (optional)"}
+                  className={cn(selectClass, "w-40")}
+                />
+                {hasUtilityKey ? (
+                  <button
+                    type="button"
+                    onClick={() => patch({ utilityApiKey: "" })}
+                    className="rounded-md border border-stone-700 px-2 py-1 text-stone-400 hover:text-red-400"
+                  >
+                    Clear
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-2 border-t border-stone-800/60 pt-3">
           <span className={labelClass}>Images</span>
@@ -314,7 +375,12 @@ export function StoryAiPanel({
             size="sm"
             options={[
               { value: "off", label: "Off" },
-              ...(Object.keys(BACKEND_LABELS) as ImageBackend[]).map((backend) => ({ value: backend, label: BACKEND_LABELS[backend] })),
+              // On a device the backend follows the device; only on and off
+              // are this campaign's to choose.
+              ...(deviceManaged
+                ? [settings.imageBackend]
+                : (Object.keys(BACKEND_LABELS) as ImageBackend[])
+              ).map((backend) => ({ value: backend, label: BACKEND_LABELS[backend] })),
             ]}
             onChange={(value) => {
               // "Off" is imageGenerationEnabled, not a backend: picking a
@@ -364,7 +430,13 @@ export function StoryAiPanel({
             </>
           ) : null}
         </div>
-        {settings.imageGenerationEnabled && !imagesConfigured ? (
+        {settings.imageGenerationEnabled && settings.imageBackend === "openai" && !imagesReady ? (
+          <p className="reveal text-amber-400/90">
+            {deviceManaged
+              ? "No OpenAI API key is saved on this device. Add one from Story AI on the app's home screen and it covers narration and pictures in every campaign."
+              : "The OpenAI picture backend has no API key. Add one in Admin > Image generation, or point this story's text model at OpenAI so its key covers pictures too."}
+          </p>
+        ) : settings.imageGenerationEnabled && !imagesConfigured && imagesReady ? (
           <p className="reveal text-amber-400/90">
             The server has no image backend configured; these settings will not take effect
             until it does.

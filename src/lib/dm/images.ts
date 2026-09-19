@@ -109,7 +109,7 @@ export function handleGenerateImage(
   }
   // Backends without a producer side record the request and the existing
   // placeholder tells the table a picture is coming.
-  if (imageProducerReady(campaign.settings.imageBackend)) {
+  if (imageProducerReady(campaign.settings)) {
     void fulfillMessageImage(campaign.id, message.id, request, campaign.settings);
   }
   return { ok: true, illustrating: message.id };

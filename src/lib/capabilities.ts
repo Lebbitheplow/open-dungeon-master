@@ -1,4 +1,5 @@
 import { configValue, getGlobalConfig } from "@/lib/app-config";
+import { openAiImagesConfigured } from "@/lib/openai-images";
 import { configuredDefaultStorySettings } from "@/lib/runtime-defaults";
 import { serverEnv } from "@/lib/server-env";
 import { voiceConfig, type VoiceMode } from "@/lib/voice/config";
@@ -186,7 +187,18 @@ export async function probeReachable(
 // promises a picture: is there an image backend on this server at all? Cached
 // through the same probe window as the endpoint, so a burst of character
 // creations costs one probe, not one per character.
-export async function imagesAvailable(): Promise<boolean> {
+export async function imagesAvailable(
+  settings?: Pick<StorySettings, "imageBackend" | "customBaseUrl" | "customApiKey">,
+): Promise<boolean> {
+  // A campaign holding its own OpenAI key answers for itself. The snapshot
+  // below describes the SERVER's default backend, which on a
+  // bring-your-own-key host is "none at all", and would refuse a render the
+  // campaign can perfectly well pay for. Only the key-gated backend may take
+  // this shortcut: a self-hosted one's readiness is liveness, and only the
+  // probe knows that.
+  if (settings?.imageBackend === "openai" && openAiImagesConfigured(settings)) {
+    return true;
+  }
   try {
     return (await capabilitiesSnapshot()).images.configured;
   } catch {
@@ -220,9 +232,10 @@ export async function capabilitiesSnapshot(): Promise<Capabilities> {
     probeReachable(imagesProbeUrl(settings.imageBackend, comfyBase, fluxBase)),
   ]);
   const voice = voiceConfig();
-  const hasOpenaiImageKey = Boolean(
-    cfg.images.openaiApiKey || serverEnv("OPENAI_IMAGE_API_KEY") || serverEnv("OPENAI_API_KEY"),
-  );
+  // Asked of the backend's own resolver rather than re-listed here, so the
+  // key a table lends from its OpenAI text model counts the same way at the
+  // creator as it does at render time (src/lib/openai-images.ts).
+  const hasOpenaiImageKey = openAiImagesConfigured();
   const explicitImageUrl =
     settings.imageBackend === "comfyui"
       ? configValue(cfg.images.comfyUrl, "COMFYUI_URL")

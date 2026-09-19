@@ -190,7 +190,9 @@ check("portrait renders are gated on imagesAvailable", () => {
   const portrait = readFileSync(path.join(root, "src/lib/portrait.ts"), "utf8");
   assert.match(portrait, /import \{ imagesAvailable \} from "@\/lib\/capabilities"/);
   assert.equal((portrait.match(/whenImagesAvailable\(/g) || []).length >= 4, true);
-  assert.match(source, /export async function imagesAvailable\(\)/);
+  // The settings argument is OPTIONAL on purpose: a library portrait belongs
+  // to no campaign and must keep asking the server-wide question.
+  assert.match(source, /export async function imagesAvailable\(\s*(settings\?:|\))/);
 });
 
 check("speech is configured by an explicit URL or a live default", () => {

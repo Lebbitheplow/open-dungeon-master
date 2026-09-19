@@ -4,13 +4,14 @@ Inline images are optional — text play works without any image setup. Image
 requests made while no backend is available show a Generate button that
 succeeds once one is up.
 
-Three backends are exposed in the Images panel:
+Four backends are exposed in the Images panel:
 
 | Backend | Hardware | Models |
 |---|---|---|
 | MFLUX Mac | Apple Silicon (MLX) | FLUX.2-klein uncensored |
 | SDNQ GPU/CPU | NVIDIA CUDA, supported AMD (ROCm), CPU | FLUX.2-klein |
 | ComfyUI | anything ComfyUI runs on | your ComfyUI checkpoints |
+| OpenAI | none, the pictures are made off-box | gpt-image-1 and friends |
 
 ## The FLUX worker (MFLUX / SDNQ)
 
@@ -68,6 +69,46 @@ SDXL-class checkpoints. Notes:
   saved characters generate from the text prompt alone.
 - Generations queue behind whatever else your ComfyUI instance is doing.
 - Set `COMFYUI_URL` in `.env.local` to change the default server URL.
+
+## OpenAI
+
+The one backend that needs no GPU at all. Pick **OpenAI** in the Images panel
+and every picture (scene art, location maps, portraits) is made by OpenAI's
+images API and saved alongside the rest. Renders bill to whichever key the
+request finds, in this order:
+
+1. the key in **Admin > Image generation**
+2. `OPENAI_IMAGE_API_KEY`, then `OPENAI_API_KEY`
+3. **the story's own OpenAI text key**, when that story's Text Model points at
+   `api.openai.com`
+
+That third rule is what makes a bring-your-own-key table work with one key
+instead of two: the DM model and the pictures are two APIs on the same
+account, so pasting the key once in the Text Model panel covers both. It is
+gated on the host, so a key for llama.cpp, LM Studio or OpenRouter is never
+sent to OpenAI. Keys stay server-side either way; the campaign's settings are
+masked before they reach any player.
+
+Blank model = `gpt-image-1`; set `OPENAI_IMAGE_MODEL` (or the admin field) for
+anything else. `OPENAI_IMAGE_BASE_URL` exists for OpenAI-compatible image
+proxies. The app's fast/slow dial maps onto the quality tiers (`medium` and
+`high` for the gpt-image family, `standard` and `hd` for dall-e), so **slow**
+is several times the price of **fast**. Notes:
+
+- Character portrait references are not used by this backend, same as ComfyUI;
+  the picture comes from the text prompt alone.
+- Nothing is probed: a backend with no key simply records the request and the
+  placeholder tells the table a picture is coming.
+- Prompts go to OpenAI, so this is the one backend that is not on-device.
+- A key that lives only in ONE campaign's Text Model panel covers that
+  campaign's own pictures: scene art, the story image tool, and location maps.
+  Campaign covers and library portraits are painted from the server's default
+  image settings, because a library character belongs to no campaign. Put the
+  key in **Admin > Image generation** (or make OpenAI the server-wide text
+  backend) and every picture on the server is covered.
+- In the desktop and Android apps none of that applies: the key is saved once
+  for the device on the app's **Story AI** screen, and it covers every
+  picture in every campaign on that device, covers and portraits included.
 
 ## AMD GPUs
 

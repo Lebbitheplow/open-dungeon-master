@@ -1,6 +1,7 @@
 import { getGlobalConfig } from "@/lib/db/app-settings";
 import {
   describeEndpoint,
+  endpointKind,
   profileById,
   resolveSampling,
   unsupportedParamFromError,
@@ -8,6 +9,7 @@ import {
 import {
   buildPropsUrl,
   contextCacheKey,
+  openAiContextWindow,
   readContextWindow,
 } from "@/lib/dm/context-probe-logic";
 import { serverEnv } from "@/lib/server-env";
@@ -150,6 +152,16 @@ export function storyContextTokens(settings: {
   if (Number.isFinite(raw) && raw > 0) {
     return Math.max(2_048, raw);
   }
+  // OpenAI has nothing to probe, so its window comes from the model's name
+  // (src/lib/dm/context-probe-logic.ts). A blank campaign model resolves the
+  // way requestCustomMessage resolves it.
+  if (endpointKind(settings.customBaseUrl ?? "") === "openai") {
+    return openAiContextWindow(
+      (settings.customModel ?? "").trim() ||
+        getGlobalConfig().text.customModel ||
+        serverEnv("OPENAI_COMPAT_MODEL"),
+    );
+  }
   const probed = probedContextWindows.get(
     contextCacheKey(settings.customBaseUrl ?? "", settings.customModel ?? ""),
   );
@@ -170,7 +182,9 @@ export async function probeCustomContextWindow(
   apiKey: string,
   model: string,
 ): Promise<number | null> {
-  const url = buildPropsUrl(baseUrl, model);
+  // A vendor API has no /props; asking would only post the table's key to a
+  // path that answers 404.
+  const url = endpointKind(baseUrl) === "local" ? buildPropsUrl(baseUrl, model) : "";
   if (!url) {
     return null;
   }

@@ -55,7 +55,7 @@ export async function POST(
 
   // No image backend means the queue would only ever publish "failed"; say
   // so up front, and the panel offers the upload instead.
-  if (!(await imagesAvailable())) {
+  if (!(await imagesAvailable(context.campaign.settings))) {
     return Response.json(
       { error: "This server has no image model to draw with. Upload a map instead." },
       { status: 409 },

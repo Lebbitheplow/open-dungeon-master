@@ -18,6 +18,8 @@ register("./lib/register-alias.mjs", import.meta.url);
 const { maskStorySettings, normalizeSettings, scrubStorySettings } = await import(
   "../src/lib/db/settings.ts"
 );
+const { saveGlobalConfig } = await import("../src/lib/db/app-settings.ts");
+const { storyContextTokens } = await import("../src/lib/model-client.ts");
 const { createUser } = await import("../src/lib/db/users.ts");
 const { createCampaign, getCampaignById, publicCampaign, updateStorySettings } = await import(
   "../src/lib/db/campaigns.ts"
@@ -142,6 +144,86 @@ test("the snapshot never carries a key the database still holds", () => {
   assert.equal("storyArc" in shared, false);
   // The scrub must not have written through to the stored campaign.
   assert.equal(getCampaignById(campaign.id).settings.customApiKey, "sk-table");
+});
+
+test("a campaign on an OpenAI key packs against a real window, not the 16K stand-in", () => {
+  const openai = { textProvider: "custom", localTextModel: "", customBaseUrl: "https://api.openai.com/v1" };
+  assert.equal(storyContextTokens({ ...openai, customModel: "gpt-5.1" }), 128_000);
+  assert.equal(storyContextTokens({ ...openai, customModel: "gpt-3.5-turbo" }), 16_385);
+  // Any other endpoint still gets the conservative default until it is probed.
+  assert.equal(
+    storyContextTokens({ ...openai, customBaseUrl: "http://127.0.0.1:9/v1", customModel: "m" }),
+    16_384,
+  );
+  process.env.OPENAI_COMPAT_CONTEXT = "200000";
+  assert.equal(storyContextTokens({ ...openai, customModel: "gpt-5.1" }), 200_000, "the operator's number wins");
+  delete process.env.OPENAI_COMPAT_CONTEXT;
+});
+
+// A world an app hosts: the backend is the device's, chosen once in the app's
+// Story AI screen, and every campaign follows it. The campaign above was
+// created before the key existed, which is exactly the case that used to
+// leave a player pasting the key into each campaign.
+test("on a device world every campaign follows the device's Story AI", () => {
+  updateStorySettings(campaign.id, {
+    textProvider: "custom",
+    customBaseUrl: "http://127.0.0.1:8001/v1",
+    customModel: "old-local-model",
+    customApiKey: "sk-table",
+    imageBackend: "comfyui",
+    proseSize: "small",
+    autoImages: true,
+  });
+  saveGlobalConfig({
+    text: {
+      provider: "custom",
+      customBaseUrl: "https://api.openai.com/v1",
+      customModel: "gpt-5.1",
+      customApiKey: "sk-device",
+      utilityProvider: "custom",
+      utilityBaseUrl: "https://api.openai.com/v1",
+      utilityModel: "gpt-5-mini",
+      utilityApiKey: "sk-device",
+    },
+    images: { defaultBackend: "openai", openaiApiKey: "sk-device" },
+  });
+
+  // A server somebody administers keeps the campaign's own backend.
+  let settings = getCampaignById(campaign.id).settings;
+  assert.equal(settings.customModel, "old-local-model");
+  assert.equal(settings.customApiKey, "sk-table");
+  assert.equal(maskStorySettings(settings).deviceManaged, false);
+
+  process.env.ODM_DEVICE_WORLD = "1";
+  try {
+    settings = getCampaignById(campaign.id).settings;
+    assert.equal(settings.textProvider, "custom");
+    assert.equal(settings.customBaseUrl, "https://api.openai.com/v1");
+    assert.equal(settings.customModel, "gpt-5.1");
+    assert.equal(settings.utilityModel, "gpt-5-mini");
+    assert.equal(settings.imageBackend, "openai");
+    // The device's key is attached at request time, never copied into a
+    // campaign, and a key an older build stored there is not used.
+    assert.equal(settings.customApiKey, "");
+    assert.equal(settings.utilityApiKey, "");
+    // What the campaign tunes for itself stays its own.
+    assert.equal(settings.proseSize, "small");
+    assert.equal(settings.autoImages, true);
+    const masked = maskStorySettings(settings);
+    assert.equal(masked.deviceManaged, true);
+    assert.equal(masked.imagesReady, true, "the device key covers pictures");
+
+    // A stale client cannot move a campaign off the device's backend.
+    const patched = updateStorySettings(campaign.id, { customModel: "sneaky", proseSize: "large" });
+    assert.equal(patched.customModel, "gpt-5.1");
+    assert.equal(patched.proseSize, "large");
+
+    // Changing Story AI on the device reaches the campaign with no edit to it.
+    saveGlobalConfig({ text: { provider: "none" } });
+    assert.equal(getCampaignById(campaign.id).settings.textProvider, "none");
+  } finally {
+    delete process.env.ODM_DEVICE_WORLD;
+  }
 });
 
 console.log(`story settings: ${passed} tests passed`);

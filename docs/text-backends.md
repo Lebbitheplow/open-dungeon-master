@@ -117,6 +117,34 @@ For OpenAI, set the **Backend URL** to `https://api.openai.com/v1`, the
 **Model** to whatever you pay for, and paste your key in the **API key**
 field (or set `OPENAI_COMPAT_API_KEY`). Nothing else needs changing.
 
+Two things follow from that one field:
+
+- **Pictures are covered too.** Choose **OpenAI** as the Images backend and,
+  with no image key configured anywhere, renders go out on this same key: it
+  is the same account, just a different API. See
+  [image-generation.md](image-generation.md). Local image generation is
+  untouched: ComfyUI and the FLUX workers work exactly as before.
+- **The window is 128K.** No vendor API reports its context size, so an
+  unknown endpoint packs against a 16K default. OpenAI is known by name
+  instead: every chat model it still sells has at least 128K of room, so the
+  prompt packs against 128,000 tokens (the retired `gpt-3.5` and 8K/32K
+  `gpt-4` models keep their real, smaller sizes). The newest models hold more
+  than that, but the prompt is billed by the token here, so ODM stops at the
+  floor they share; set `OPENAI_COMPAT_CONTEXT` to go higher or lower.
+- **In the apps the key belongs to the device, not to a campaign.** A world
+  hosted by the desktop or Android app takes its key once, on the app's
+  **Story AI** screen. Every campaign on that device follows it, including
+  the ones made before the key was added, and changing the model there
+  changes it everywhere. The campaign's Setup tab shows the choice and keeps
+  only what is the campaign's own: pictures on or off, their shape and speed,
+  and passage length.
+
+Reasoning models (the gpt-5.x and o-series lines) reject `temperature`
+outright. That is handled rather than fatal: the 400 names the field, ODM
+drops it and retries, and the turn lands with its tool calls intact. The only
+cost is one wasted round trip per call, which a sampling profile of **ODM
+default** with no per-role temperature avoids entirely.
+
 Two of those rows are why a paid key works. Reasoning models dropped
 `max_tokens` in favour of `max_completion_tokens`, and they reject
 `presence_penalty` outright; `chat_template_kwargs` is how ODM asks llama.cpp

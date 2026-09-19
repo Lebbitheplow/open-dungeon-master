@@ -7,6 +7,8 @@ import {
   buildPropsUrl,
   contextCacheKey,
   normalizeBaseUrl,
+  openAiContextWindow,
+  OPENAI_CONTEXT_TOKENS,
   readContextWindow,
 } from "../src/lib/dm/context-probe-logic.ts";
 
@@ -80,6 +82,33 @@ check("the cache key separates models sharing one port", () => {
   const b = contextCacheKey("http://127.0.0.1:8001/v1", "qwen3.6-27b");
   assert.notEqual(a, b);
   assert.equal(a, contextCacheKey("http://127.0.0.1:8001", "qwen3.6-35b"), "normalized");
+});
+
+// OpenAI reports no window anywhere, so it is read off the model's name.
+check("a current OpenAI model packs against the shared 128K floor", () => {
+  for (const model of ["gpt-5.1", "gpt-5-mini", "gpt-5.4-mini", "gpt-4o", "gpt-4.1", "o3", "o4-mini"]) {
+    assert.equal(openAiContextWindow(model), OPENAI_CONTEXT_TOKENS, model);
+  }
+});
+
+check("a model this table has never heard of gets the floor, not a guess", () => {
+  assert.equal(openAiContextWindow("gpt-7-omni"), OPENAI_CONTEXT_TOKENS);
+  assert.equal(openAiContextWindow(""), OPENAI_CONTEXT_TOKENS);
+});
+
+check("the retired small-window models keep their real size", () => {
+  assert.equal(openAiContextWindow("gpt-3.5-turbo"), 16_385);
+  assert.equal(openAiContextWindow("gpt-4"), 8_192);
+  assert.equal(openAiContextWindow("gpt-4-0613"), 8_192);
+  assert.equal(openAiContextWindow("gpt-4-32k"), 32_768);
+  // Same prefix, far bigger window: these must not match the gpt-4 row.
+  assert.equal(openAiContextWindow("gpt-4-turbo"), OPENAI_CONTEXT_TOKENS);
+  assert.equal(openAiContextWindow("gpt-4-0125-preview"), OPENAI_CONTEXT_TOKENS);
+});
+
+check("a fine-tune is sized by its base model", () => {
+  assert.equal(openAiContextWindow("ft:gpt-3.5-turbo-0125:acme::abc123"), 16_385);
+  assert.equal(openAiContextWindow("ft:gpt-4o-mini-2024-07-18:acme::abc123"), OPENAI_CONTEXT_TOKENS);
 });
 
 console.log(`context-probe: ${passed} tests passed`);

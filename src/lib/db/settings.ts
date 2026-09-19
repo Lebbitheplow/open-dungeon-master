@@ -1,4 +1,6 @@
+import { openAiImagesConfigured } from "@/lib/openai-images";
 import { configuredDefaultStorySettings } from "@/lib/runtime-defaults";
+import { isDeviceWorld } from "@/lib/server-env";
 import { isLocalTextModelId, isTextProvider } from "@/lib/text-models";
 import { isImageBackend, isProseSize } from "@/lib/types";
 import type { StorySettings } from "@/lib/types";
@@ -88,7 +90,32 @@ export function normalizeSettings(settings?: Partial<StorySettings>): StorySetti
   merged.utilityApiKey =
     typeof merged.utilityApiKey === "string" ? merged.utilityApiKey.trim().slice(0, 400) : "";
 
-  return merged;
+  return isDeviceWorld() ? { ...merged, ...deviceBackend(defaultSettings) } : merged;
+}
+
+// On a world an app hosts, who narrates and who paints is chosen once for the
+// device (the app's Story AI screen writes it to the admin config), and every
+// campaign follows it. A campaign freezes its settings when it is created, so
+// without this a key added later would reach new campaigns only, and the
+// player would be pasting it into each older one by hand. Applied where
+// settings are read rather than copied into each row, so the next change on
+// the device reaches every campaign too. The keys stay blank: model-client
+// and openai-images attach the device's own at request time.
+function deviceBackend(device: StorySettings): Partial<StorySettings> {
+  return {
+    textProvider: device.textProvider,
+    localTextModel: device.localTextModel,
+    customBaseUrl: device.customBaseUrl,
+    customModel: device.customModel,
+    customApiKey: "",
+    utilityProvider: device.utilityProvider,
+    utilityModel: device.utilityModel,
+    utilityBaseUrl: device.utilityBaseUrl,
+    utilityApiKey: "",
+    imageBackend: device.imageBackend,
+    comfyUrl: device.comfyUrl,
+    comfyCheckpoint: device.comfyCheckpoint,
+  };
 }
 
 // The campaign snapshot and the SSE stream deliver StorySettings to every
@@ -102,6 +129,15 @@ export function scrubStorySettings(settings: StorySettings): StorySettings {
 export type MaskedStorySettings = Omit<StorySettings, "customApiKey" | "utilityApiKey"> & {
   hasCustomApiKey: boolean;
   hasUtilityApiKey: boolean;
+  // Whether THIS campaign's image backend can render, which /api/capabilities
+  // cannot answer: that snapshot describes the server's own default backend,
+  // and a table on its own OpenAI key is exactly the case the two disagree
+  // about. Only meaningful for key-gated backends; a self-hosted one is
+  // reported ready and its liveness still comes from the capability probe.
+  imagesReady: boolean;
+  // True on a world an app hosts, where the backend fields follow the device
+  // and the panel shows them instead of editing them.
+  deviceManaged: boolean;
 };
 
 // What the story authority's settings panel receives: every editable field,
@@ -113,5 +149,7 @@ export function maskStorySettings(settings: StorySettings): MaskedStorySettings 
     ...rest,
     hasCustomApiKey: customApiKey !== "",
     hasUtilityApiKey: utilityApiKey !== "",
+    imagesReady: settings.imageBackend === "openai" ? openAiImagesConfigured(settings) : true,
+    deviceManaged: isDeviceWorld(),
   };
 }

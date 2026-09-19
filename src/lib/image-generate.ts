@@ -1,6 +1,6 @@
 import { generateComfyImage } from "@/lib/comfyui";
 import { generateOpenAiImage, openAiImagesConfigured } from "@/lib/openai-images";
-import type { AspectPreset, GeneratedImage, ImageBackend, ImageMode, StorySettings } from "@/lib/types";
+import type { AspectPreset, GeneratedImage, ImageMode, StorySettings } from "@/lib/types";
 
 // The one producer-side door for story images, so every enqueue site
 // (narration images, location maps, portraits) honors the campaign's backend
@@ -10,12 +10,18 @@ import type { AspectPreset, GeneratedImage, ImageBackend, ImageMode, StorySettin
 // sdnq-hs) are driven by their own worker process; for them a request is
 // recorded and the placeholder tells the table a picture is coming, exactly
 // as before.
-export function imageProducerReady(backend: ImageBackend): boolean {
-  if (backend === "comfyui") {
+//
+// Takes the campaign's settings rather than the backend alone, because the
+// OpenAI backend can run on the key the table already gave its OpenAI text
+// model (src/lib/openai-images.ts).
+export function imageProducerReady(
+  settings: Pick<StorySettings, "imageBackend" | "customBaseUrl" | "customApiKey">,
+): boolean {
+  if (settings.imageBackend === "comfyui") {
     return true;
   }
-  if (backend === "openai") {
-    return openAiImagesConfigured();
+  if (settings.imageBackend === "openai") {
+    return openAiImagesConfigured(settings);
   }
   return false;
 }
@@ -33,7 +39,7 @@ export function generateStoryImage(
   },
 ): Promise<GeneratedImage> {
   if (settings.imageBackend === "openai") {
-    return generateOpenAiImage(options);
+    return generateOpenAiImage(options, settings);
   }
   // Everything else lands on ComfyUI, which was the previous behavior for
   // every producer-side call regardless of the selected backend.
