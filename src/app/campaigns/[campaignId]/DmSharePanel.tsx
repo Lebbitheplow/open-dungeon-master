@@ -1,8 +1,10 @@
 "use client";
 
-import { Download, Loader2, Package, Share2 } from "lucide-react";
+import { Download, Loader2, Package } from "lucide-react";
 import { useState } from "react";
 import { ui } from "@/lib/ui";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { FieldLabel } from "@/app/campaigns/[campaignId]/DmConsoleParts";
 import { UnofficialPackNotice } from "@/components/UnofficialPackNotice";
 import { BUNDLE_KIND_LABELS } from "@/lib/workshop/bundle";
 
@@ -115,9 +117,7 @@ export function DmSharePanel({ campaignId }: { campaignId: string }) {
 
   return (
     <section className={ui.card + " p-4"}>
-      <h2 className="mb-1 flex items-center gap-2 font-display text-lg text-amber-100">
-        <Share2 className="size-4 text-amber-500/80" /> Share this workshop
-      </h2>
+      <SectionHead title="Share this workshop" glyph="system-share" level="h2" />
       <p className="mb-4 text-sm text-stone-400">
         A bundle is everything you prepared here as one file: lore, places, NPCs, fights, tables,
         map geometry, the board and your hand-built monsters. Pictures travel with it too, NPC
@@ -126,7 +126,7 @@ export function DmSharePanel({ campaignId }: { campaignId: string }) {
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2" data-tour="share-manifest">
         <label className="block sm:col-span-2">
-          <span className="mb-1 block text-xs uppercase tracking-wide text-stone-500">Name</span>
+          <FieldLabel>Name</FieldLabel>
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
@@ -136,9 +136,7 @@ export function DmSharePanel({ campaignId }: { campaignId: string }) {
           />
         </label>
         <label className="block sm:col-span-2">
-          <span className="mb-1 block text-xs uppercase tracking-wide text-stone-500">
-            One line about it
-          </span>
+          <FieldLabel>One line about it</FieldLabel>
           <input
             value={blurb}
             onChange={(event) => setBlurb(event.target.value)}
@@ -148,7 +146,7 @@ export function DmSharePanel({ campaignId }: { campaignId: string }) {
           />
         </label>
         <label className="block">
-          <span className="mb-1 block text-xs uppercase tracking-wide text-stone-500">Author</span>
+          <FieldLabel>Author</FieldLabel>
           <input
             value={author}
             onChange={(event) => setAuthor(event.target.value)}
@@ -157,7 +155,7 @@ export function DmSharePanel({ campaignId }: { campaignId: string }) {
           />
         </label>
         <label className="block">
-          <span className="mb-1 block text-xs uppercase tracking-wide text-stone-500">Version</span>
+          <FieldLabel>Version</FieldLabel>
           <input
             value={version}
             onChange={(event) => setVersion(event.target.value)}
@@ -166,9 +164,7 @@ export function DmSharePanel({ campaignId }: { campaignId: string }) {
           />
         </label>
         <label className="block sm:col-span-2">
-          <span className="mb-1 block text-xs uppercase tracking-wide text-stone-500">
-            Homepage (optional)
-          </span>
+          <FieldLabel>Homepage (optional)</FieldLabel>
           <input
             value={homepage}
             onChange={(event) => setHomepage(event.target.value)}
@@ -177,9 +173,7 @@ export function DmSharePanel({ campaignId }: { campaignId: string }) {
           />
         </label>
         <label className="block sm:col-span-2">
-          <span className="mb-1 block text-xs uppercase tracking-wide text-stone-500">
-            Inspired by
-          </span>
+          <FieldLabel>Inspired by</FieldLabel>
           <input
             value={inspiredBy}
             onChange={(event) => setInspiredBy(event.target.value)}
@@ -189,9 +183,7 @@ export function DmSharePanel({ campaignId }: { campaignId: string }) {
           />
         </label>
         <label className="block sm:col-span-2">
-          <span className="mb-1 block text-xs uppercase tracking-wide text-stone-500">
-            Rights holder
-          </span>
+          <FieldLabel>Rights holder</FieldLabel>
           <input
             value={rightsHolder}
             onChange={(event) => setRightsHolder(event.target.value)}
@@ -217,7 +209,8 @@ export function DmSharePanel({ campaignId }: { campaignId: string }) {
           type="button"
           onClick={() => void exportBundle()}
           disabled={!ready || Boolean(busy)}
-          className={ui.btnSecondary}
+          aria-busy={busy === "bundle"}
+          className={ui.btnPrimary}
         >
           {busy === "bundle" ? (
             <Loader2 className="size-4 animate-spin" />
@@ -241,21 +234,21 @@ export function DmSharePanel({ campaignId }: { campaignId: string }) {
         </button>
       </div>
       {!ready ? (
-        <p className="mt-2 text-xs text-stone-500">
+        <p className="reveal mt-2 text-xs text-stone-500">
           A name, a line about it and what it is inspired by are required before it can leave.
         </p>
       ) : null}
 
-      {error ? <p className="mt-3 text-sm text-red-300">{error}</p> : null}
+      {error ? <p className="motion-shake mt-3 text-sm text-red-300">{error}</p> : null}
 
       {counts ? (
-        <ul className="mt-4 flex flex-wrap gap-1.5">
+        <ul className="stagger mt-4 flex flex-wrap gap-1.5">
           {Object.entries(counts)
             .filter(([, count]) => count > 0)
             .map(([kind, count]) => (
               <li
                 key={kind}
-                className="rounded-full border border-stone-700 px-2.5 py-0.5 text-xs text-stone-400"
+                className="rounded-full border border-amber-500/30 bg-amber-400/5 px-2.5 py-0.5 text-xs text-stone-300"
               >
                 {count} {BUNDLE_KIND_LABELS[kind] ?? kind}
               </li>
@@ -264,11 +257,9 @@ export function DmSharePanel({ campaignId }: { campaignId: string }) {
       ) : null}
 
       {refusals.length ? (
-        <div className="mt-4 border-t border-stone-800 pt-3">
-          <p className="mb-2 text-xs uppercase tracking-wide text-stone-500">
-            What did not fit in a world pack
-          </p>
-          <ul className="space-y-1.5">
+        <div className="dm-card reveal mt-4 border-t border-amber-500/15 pt-3">
+          <SectionHead title="What did not fit in a world pack" glyph="quest-failed" />
+          <ul className="stagger space-y-1.5">
             {refusals.map((refusal) => (
               <li key={refusal.field} className="text-xs text-stone-400">
                 <span className="text-stone-300">{refusal.field}</span>
@@ -280,7 +271,7 @@ export function DmSharePanel({ campaignId }: { campaignId: string }) {
       ) : null}
 
       {warnings.length ? (
-        <ul className="mt-3 space-y-1 border-t border-stone-800 pt-3">
+        <ul className="stagger mt-3 space-y-1 border-t border-stone-800 pt-3">
           {warnings.map((warning) => (
             <li key={warning} className="text-xs text-amber-200/80">
               {warning}

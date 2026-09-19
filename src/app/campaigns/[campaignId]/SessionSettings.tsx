@@ -59,7 +59,7 @@ export function SessionSettings({
           {campaign.maxPlayers} players
         </p>
         {campaign.theme ? (
-          <p className="mt-1 line-clamp-2 text-xs text-stone-500">Setting: {campaign.theme}</p>
+          <p className="reveal mt-1 line-clamp-2 text-xs text-stone-500">Setting: {campaign.theme}</p>
         ) : null}
       </div>
 
@@ -80,7 +80,7 @@ export function SessionSettings({
       ) : null}
 
       {campaign.gameSettings ? (
-        <div className="mt-3">
+        <div className="reveal mt-3">
           <RulesPanel
             campaignId={campaign.id}
             settings={campaign.gameSettings}

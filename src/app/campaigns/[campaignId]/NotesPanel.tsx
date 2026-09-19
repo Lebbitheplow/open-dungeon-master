@@ -79,7 +79,7 @@ function NoteCard({
   return (
     <li className="rounded-lg border border-stone-800 bg-stone-950/40 p-2.5">
       {editing ? (
-        <div className="space-y-1.5">
+        <div className="reveal space-y-1.5">
           <input
             value={title}
             onChange={(event) => setTitle(event.target.value)}
@@ -123,7 +123,7 @@ function NoteCard({
       ) : (
         <>
           {note.title ? (
-            <p className="flex items-center gap-1 text-xs font-medium text-amber-200">
+            <p className="reveal flex items-center gap-1 text-xs font-medium text-amber-200">
               {note.pinned ? <Pin className="size-3 shrink-0 text-amber-400" /> : null}
               {note.title}
             </p>
@@ -137,7 +137,7 @@ function NoteCard({
               {canApprove ? (
                 <button
                   type="button"
-                  disabled={busy}
+                  disabled={busy} aria-busy={busy}
                   onClick={() => patch({ status: "active" })}
                   title="Approve: publish to the whole party"
                   className="flex items-center gap-0.5 rounded border border-emerald-900 px-1.5 py-0.5 text-emerald-400 hover:bg-emerald-950/50"
@@ -148,7 +148,7 @@ function NoteCard({
               {canPin ? (
                 <button
                   type="button"
-                  disabled={busy}
+                  disabled={busy} aria-busy={busy}
                   onClick={() => patch({ pinned: !note.pinned })}
                   title={note.pinned ? "Unpin" : "Pin to the top (the DM treats pinned notes as key canon)"}
                   className="text-stone-500 hover:text-amber-300"
@@ -169,7 +169,7 @@ function NoteCard({
               {canDelete ? (
                 <button
                   type="button"
-                  disabled={busy}
+                  disabled={busy} aria-busy={busy}
                   onClick={remove}
                   title={deleteLabel}
                   className="text-stone-500 hover:text-red-400"
@@ -287,7 +287,7 @@ export function NoteComposer({
         }
         className="w-full rounded border border-stone-700 bg-stone-900 px-2 py-1 text-[11px] leading-4 outline-none focus:border-amber-600"
       />
-      {error ? <p className="mt-1 text-[10px] text-red-400">{error}</p> : null}
+      {error ? <p className="motion-shake mt-1 text-[10px] text-red-400">{error}</p> : null}
       <button
         type="button"
         onClick={submit}
@@ -329,7 +329,7 @@ export function PendingNotesList({
   const nameFor = (userId: string) =>
     members.find((member) => member.userId === userId)?.username ?? "Unknown";
   return (
-    <ul className="space-y-1.5">
+    <ul className="stagger space-y-1.5">
       {notes.map((note) => (
         <NoteCard
           key={note.id}
@@ -388,7 +388,7 @@ export function NotesPanel({
       <NoteComposer campaignId={campaignId} steersStory={steersStory} refreshNotes={refreshNotes} />
 
       {leadQueue.length ? (
-        <div className="space-y-1.5">
+        <div className="reveal space-y-1.5">
           <h3 className={cn(section, "text-amber-400")}>Suggestions awaiting you</h3>
           <PendingNotesList
             campaignId={campaignId}
@@ -401,9 +401,9 @@ export function NotesPanel({
       ) : null}
 
       {mySuggestions.length ? (
-        <div className="space-y-1.5">
+        <div className="reveal space-y-1.5">
           <h3 className={section}>My suggestions (awaiting the lead)</h3>
-          <ul className="space-y-1.5">
+          <ul className="stagger space-y-1.5">
             {mySuggestions.map((note) => (
               <NoteCard
                 key={note.id}
@@ -425,7 +425,7 @@ export function NotesPanel({
       <div className="space-y-1.5">
         <h3 className={section}>Party notes</h3>
         {partyNotes.length ? (
-          <ul className="space-y-1.5">
+          <ul className="stagger space-y-1.5">
             {partyNotes.map((note) => (
               <NoteCard
                 key={note.id}
@@ -453,7 +453,7 @@ export function NotesPanel({
       <div className="space-y-1.5">
         <h3 className={section}>My private notes</h3>
         {myPrivate.length ? (
-          <ul className="space-y-1.5">
+          <ul className="stagger space-y-1.5">
             {myPrivate.map((note) => (
               <NoteCard
                 key={note.id}

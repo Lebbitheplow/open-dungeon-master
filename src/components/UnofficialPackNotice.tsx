@@ -48,7 +48,7 @@ export function UnofficialPackNotice({
         Unofficial community campaign
       </p>
       <p className="mt-1">{body}</p>
-      {inspiredBy ? <p className="mt-1 text-stone-500">{inspiredBy}</p> : null}
+      {inspiredBy ? <p className="reveal mt-1 text-stone-500">{inspiredBy}</p> : null}
     </div>
   );
 }

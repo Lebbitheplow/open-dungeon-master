@@ -1,12 +1,16 @@
 "use client";
 
-import * as Dialog from "@radix-ui/react-dialog";
-import { Loader2, X } from "lucide-react";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { Loader2, Pencil } from "lucide-react";
+import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
+import { Dialog } from "@/components/ui/Dialog";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { NumberStepper as KitStepper } from "@/components/ui/NumberStepper";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import {
   CAMPAIGN_DIFFICULTIES,
+  CAMPAIGN_DIFFICULTY_HINTS,
   type CampaignCover as CampaignCoverRef,
   type CampaignDifficulty,
 } from "@/lib/campaign-types";
@@ -19,6 +23,43 @@ import { CampaignCover, type CoverStatus } from "@/components/CampaignCover";
 // job the server never resolves cannot poll forever.
 const COVER_POLL_MS = 2500;
 const COVER_POLL_LIMIT = 240;
+
+// A group of fields under a painted glyph and a rule that wipes in.
+function Group({ glyph, title, children }: { glyph: string; title: string; children: ReactNode }) {
+  return (
+    <fieldset className="min-w-0 space-y-3">
+      <legend className="lobby-head mb-3 w-full">
+        <GameIcon icon={{ kind: "glyph", key: glyph }} size="size-7" />
+        <span className="lobby-head-title">{title}</span>
+        <span className="lobby-head-rule motion-rule" aria-hidden="true" />
+      </legend>
+      {children}
+    </fieldset>
+  );
+}
+
+// The kit stepper under its visible label. The field is still a real number
+// input with the same bounds, so typing a value works as it always did.
+function NumberStepper({
+  label,
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  onChange: (next: number) => void;
+}) {
+  return (
+    <div className="block">
+      <span className="mb-1 block text-stone-400">{label}</span>
+      <KitStepper label={label} value={value} min={min} max={max} onChange={onChange} />
+    </div>
+  );
+}
 
 // Party-lead edit of the campaign's core settings, available in the lobby
 // and mid-game (the DM prompt reads them fresh each turn); game settings
@@ -181,157 +222,134 @@ export function EditCampaignDialog({
   const inputClass = ui.input;
 
   return (
-    <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[min(92vw,28rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto panel rounded-xl p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <Dialog.Title className="font-display text-lg tracking-wide text-amber-50">
-              Edit campaign
-            </Dialog.Title>
-            <Dialog.Close className="rounded p-1 text-stone-400 hover:bg-stone-900">
-              <X className="size-4" />
-            </Dialog.Close>
+    <Dialog
+      open
+      onOpenChange={(open) => !open && onClose()}
+      title="Edit campaign"
+      icon={<Pencil className="size-4 text-amber-300" />}
+      width="w-[min(94vw,32rem)]"
+    >
+      <form onSubmit={submit} className="space-y-6 text-sm">
+        <Group glyph="tab-story" title="The story">
+          <label className="block">
+            <span className="mb-1 block text-stone-400">Title</span>
+            <input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              required
+              maxLength={80}
+              className={inputClass}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 flex items-baseline justify-between text-stone-400">
+              Premise
+              <span className="text-[11px] text-stone-500">{description.length}/500</span>
+            </span>
+            <textarea
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              rows={3}
+              maxLength={500}
+              className={inputClass}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-stone-400">World or theme notes</span>
+            <input
+              value={theme}
+              onChange={(event) => setTheme(event.target.value)}
+              maxLength={120}
+              className={inputClass}
+            />
+          </label>
+        </Group>
+
+        <Group glyph="tab-party" title="The table">
+          <div className="grid grid-cols-2 gap-3">
+            <NumberStepper label="Players" value={maxPlayers} min={1} max={8} onChange={setMaxPlayers} />
+            <NumberStepper label="Start level" value={startingLevel} min={1} max={20} onChange={setStartingLevel} />
           </div>
+          <div>
+            <span className="mb-1 block text-stone-400">Difficulty</span>
+            <SegmentedControl
+              size="sm"
+              label="Difficulty"
+              className="w-full"
+              options={CAMPAIGN_DIFFICULTIES.map((value) => ({ value, label: value }))}
+              value={difficulty}
+              onChange={setDifficulty}
+            />
+            <p key={difficulty} className="motion-tab mt-1.5 text-xs text-stone-500">
+              {CAMPAIGN_DIFFICULTY_HINTS[difficulty]}
+            </p>
+          </div>
+        </Group>
 
-          <form onSubmit={submit} className="space-y-4 text-sm">
-            <label className="block">
-              <span className="mb-1 block text-stone-400">Title</span>
-              <input
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                required
-                maxLength={80}
-                className={inputClass}
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-stone-400">Premise</span>
-              <textarea
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                rows={2}
-                maxLength={500}
-                className={inputClass}
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-stone-400">World or theme notes</span>
-              <input
-                value={theme}
-                onChange={(event) => setTheme(event.target.value)}
-                maxLength={120}
-                className={inputClass}
-              />
-            </label>
-            <div className="grid grid-cols-3 gap-3">
-              <label className="block">
-                <span className="mb-1 block text-stone-400">Players</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={8}
-                  value={maxPlayers}
-                  onChange={(event) => setMaxPlayers(Number(event.target.value))}
-                  className={inputClass}
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-stone-400">Start level</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={20}
-                  value={startingLevel}
-                  onChange={(event) => setStartingLevel(Number(event.target.value))}
-                  className={inputClass}
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-stone-400">Difficulty</span>
-                <select
-                  value={difficulty}
-                  onChange={(event) => setDifficulty(event.target.value as CampaignDifficulty)}
-                  className={inputClass}
-                >
-                  {CAMPAIGN_DIFFICULTIES.map((value) => (
-                    <option key={value} value={value}>
-                      {value}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <div>
-              <span className="mb-1 block text-stone-400">Cover art</span>
-              <CampaignCover
-                cover={cover}
-                title={title || campaign.title}
-                genre={campaign.genre}
-                seed={campaign.id}
-                status={coverStatus}
-              />
-              <input
-                ref={fileInput}
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                className="hidden"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  event.target.value = "";
-                  if (file) {
-                    void uploadCover(file);
-                  }
-                }}
-              />
-              <div className="mt-2 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled={coverBusy || coverPending}
-                  onClick={() => fileInput.current?.click()}
-                  className={ui.btnSmall}
-                >
-                  Upload
-                </button>
-                {offersImages(capabilities) ? (
-                  <button
-                    type="button"
-                    disabled={coverBusy || coverPending}
-                    onClick={() => void coverRequest("POST")}
-                    className={ui.btnSmall}
-                  >
-                    {coverPending ? <Loader2 className="size-3.5 animate-spin" /> : null}
-                    {coverPending ? "Painting" : "Paint one"}
-                  </button>
-                ) : null}
-                {cover ? (
-                  <button
-                    type="button"
-                    disabled={coverBusy || coverPending}
-                    onClick={() => void coverRequest("DELETE")}
-                    className={ui.btnSmall}
-                  >
-                    Remove
-                  </button>
-                ) : null}
-              </div>
-              {coverStatus === "failed" ? (
-                <p className="mt-1 text-xs text-red-400">
-                  The cover did not paint. Try again, or upload one.
-                </p>
-              ) : null}
-              {coverError ? <p className="mt-1 text-xs text-red-400">{coverError}</p> : null}
-            </div>
-
-            {error ? <p className="text-red-400">{error}</p> : null}
-            <button type="submit" disabled={busy} className={cn(ui.btnPrimary, "w-full")}>
-              {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-              Save changes
+        <Group glyph="tab-handout" title="Cover art">
+          <CampaignCover
+            cover={cover}
+            title={title || campaign.title}
+            genre={campaign.genre}
+            seed={campaign.id}
+            status={coverStatus}
+          />
+          <input
+            ref={fileInput}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (file) {
+                void uploadCover(file);
+              }
+            }}
+          />
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={coverBusy || coverPending}
+              onClick={() => fileInput.current?.click()}
+              className={ui.btnSmall}
+            >
+              Upload
             </button>
-          </form>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+            {offersImages(capabilities) ? (
+              <button
+                type="button"
+                disabled={coverBusy || coverPending}
+                onClick={() => void coverRequest("POST")}
+                className={ui.btnSmall}
+              >
+                {coverPending ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                {coverPending ? "Painting" : "Paint one"}
+              </button>
+            ) : null}
+            {cover ? (
+              <button
+                type="button"
+                disabled={coverBusy || coverPending}
+                onClick={() => void coverRequest("DELETE")}
+                className={ui.btnSmall}
+              >
+                Remove
+              </button>
+            ) : null}
+          </div>
+          {coverStatus === "failed" ? (
+            <p className="motion-shake text-xs text-red-400">The cover did not paint. Try again, or upload one.</p>
+          ) : null}
+          {coverError ? <p className="motion-shake text-xs text-red-400">{coverError}</p> : null}
+        </Group>
+
+        {error ? <p className="motion-shake text-red-400">{error}</p> : null}
+        <button type="submit" disabled={busy} className={cn(ui.btnPrimary, "w-full")}>
+          {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+          Save changes
+        </button>
+      </form>
+    </Dialog>
   );
 }

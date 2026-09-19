@@ -121,7 +121,7 @@ export function ReportDialog({
       icon={blockOnly ? <ShieldBan className="size-4 text-red-300" /> : <Flag className="size-4 text-amber-300" />}
     >
       {done ? (
-        <div className="space-y-4">
+        <div className="reveal space-y-4">
           <p className="text-sm text-stone-300">{done}</p>
           <div className="flex justify-end">
             <button type="button" onClick={close} className={ui.btnPrimary}>
@@ -130,21 +130,21 @@ export function ReportDialog({
           </div>
         </div>
       ) : blockOnly ? (
-        <div className="space-y-4">
+        <div className="reveal space-y-4">
           <p className="text-sm leading-6 text-stone-400">
             Blocking hides {target?.label}&apos;s table messages from you on this server, and
             stops either of you from opening a private chat or sending a friend request.
             You can undo it any time from Account settings.
           </p>
-          {error ? <p className="text-sm text-red-400">{error}</p> : null}
+          {error ? <p className="motion-shake text-sm text-red-400">{error}</p> : null}
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={close} className={ui.btnSmall} disabled={busy}>
+            <button type="button" onClick={close} className={ui.btnSmall} disabled={busy} aria-busy={busy}>
               Cancel
             </button>
             <button
               type="button"
               onClick={submit}
-              disabled={busy}
+              disabled={busy} aria-busy={busy}
               className={cn(ui.btnPrimary, "from-red-200 via-red-300 to-red-500 text-red-950")}
             >
               {busy ? <Loader2 className="size-4 animate-spin" /> : <ShieldBan className="size-4" />}
@@ -199,12 +199,12 @@ export function ReportDialog({
               Also block {target.label}
             </label>
           ) : null}
-          {error ? <p className="text-sm text-red-400">{error}</p> : null}
+          {error ? <p className="motion-shake text-sm text-red-400">{error}</p> : null}
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={close} className={ui.btnSmall} disabled={busy}>
+            <button type="button" onClick={close} className={ui.btnSmall} disabled={busy} aria-busy={busy}>
               Cancel
             </button>
-            <button type="button" onClick={submit} disabled={busy} className={ui.btnPrimary}>
+            <button type="button" onClick={submit} disabled={busy} aria-busy={busy} className={ui.btnPrimary}>
               {busy ? <Loader2 className="size-4 animate-spin" /> : <Flag className="size-4" />}
               Send report
             </button>

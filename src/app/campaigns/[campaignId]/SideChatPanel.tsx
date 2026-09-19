@@ -1,10 +1,15 @@
 "use client";
 
-import { ArrowLeft, Bell, BellOff, Loader2, MessagesSquare, Plus, Send, UserRound, Users } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
+import { ArrowLeft, Bell, BellOff, Loader2, Plus, Send } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { setChimeMuted, useChimeMuted } from "@/app/campaigns/[campaignId]/useChatChime";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { Reveal } from "@/components/ui/Reveal";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { KitButton, PanelError, Tick } from "./PanelKit";
 import type { CampaignMember } from "@/lib/campaign-types";
 import type { SideMessage, SideThread } from "@/lib/db/side-chat";
 
@@ -102,59 +107,60 @@ export function SideChatPanel({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-xs font-medium uppercase tracking-wide text-stone-500">
-          Private chats
-        </h3>
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setChimeMuted(!chimeMuted)}
-            className={ui.btnSmall}
-            title={
-              chimeMuted
-                ? "Chime muted. Click to play a chime when a private message arrives."
-                : "The chime plays when a private message arrives. Click to mute."
-            }
-          >
-            {chimeMuted ? <BellOff className="size-3.5" /> : <Bell className="size-3.5" />}
-          </button>
-          <button type="button" onClick={() => setCreating(true)} className={ui.btnSmall}>
-            <Plus className="size-3.5" /> New
-          </button>
-        </div>
-      </div>
-      <p className="text-[11px] leading-4 text-stone-600">
+      <SectionHead
+        title="Private chats"
+        glyph="tab-chat"
+        aside={
+          <>
+            <KitButton
+              onClick={() => setChimeMuted(!chimeMuted)}
+              aria-pressed={!chimeMuted}
+              aria-label={chimeMuted ? "Chime muted" : "Chime on"}
+              title={
+                chimeMuted
+                  ? "Chime muted. Click to play a chime when a private message arrives."
+                  : "The chime plays when a private message arrives. Click to mute."
+              }
+            >
+              {chimeMuted ? <BellOff className="size-3.5" /> : <Bell className="size-3.5" />}
+            </KitButton>
+            <KitButton onClick={() => setCreating(true)}>
+              <Plus className="size-3.5" /> New
+            </KitButton>
+          </>
+        }
+      />
+      <p className="text-xs leading-5 text-stone-500">
         Only the people in a chat can read it. The Dungeon Master never sees these.
       </p>
-      {error ? <p className="text-sm text-red-400">{error}</p> : null}
+      {error ? <PanelError className="text-sm">{error}</PanelError> : null}
 
       {threads.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 py-8 text-center">
-          <MessagesSquare className="size-6 text-stone-700" />
-          <p className="text-xs text-stone-600">
-            No side chats yet. Whisper a party member from their card, or start one here.
-          </p>
-        </div>
+        <EmptyState
+          size="sm"
+          art="board"
+          title="No side chats yet. Whisper a party member from their card, or start one here."
+          action={
+            <KitButton onClick={() => setCreating(true)}>
+              <Plus className="size-3.5" /> New
+            </KitButton>
+          }
+        />
       ) : (
-        <ul className="space-y-1.5">
+        <ul className="stagger space-y-1.5">
           {threads.map((thread) => (
             <li key={thread.id}>
               <button
                 type="button"
                 onClick={() => setOpenThreadId(thread.id)}
-                className="flex w-full items-center gap-2 rounded-lg border border-stone-800 bg-stone-950/40 px-3 py-2 text-left transition-colors hover:border-amber-500/40"
+                className={cn(ui.cardHover, "flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-left")}
               >
-                {thread.kind === "dm" ? (
-                  <UserRound className="size-4 shrink-0 text-stone-500" />
-                ) : (
-                  <Users className="size-4 shrink-0 text-stone-500" />
-                )}
+                <GameIcon icon={{ kind: "glyph", key: thread.kind === "dm" ? "tab-chat" : "tab-party" }} size="size-6" className="shrink-0" />
                 <span className="min-w-0 flex-1 truncate text-sm text-stone-200">
                   {threadLabel(thread)}
                 </span>
                 {thread.unread > 0 ? (
-                  <span className="rounded-full bg-gradient-to-b from-amber-300 to-amber-500 px-1.5 text-[10px] font-semibold text-amber-950 shadow-glow-gold">
+                  <span key={thread.unread} className="count-pop rounded-full bg-gradient-to-b from-amber-300 to-amber-500 px-1.5 text-[11px] font-semibold text-amber-950 shadow-glow-gold">
                     {thread.unread}
                   </span>
                 ) : null}
@@ -164,18 +170,21 @@ export function SideChatPanel({
         </ul>
       )}
 
-      {creating ? (
-        <NewChatForm
-          campaignId={campaignId}
-          members={members.filter((member) => member.userId !== meUserId)}
-          onCreated={async (threadId) => {
-            setCreating(false);
-            await refreshSideChat();
-            setOpenThreadId(threadId);
-          }}
-          onCancel={() => setCreating(false)}
-        />
-      ) : null}
+      {/* Opens by height and folds away again, rather than blinking in. */}
+      <Reveal open={creating}>
+        {creating ? (
+          <NewChatForm
+            campaignId={campaignId}
+            members={members.filter((member) => member.userId !== meUserId)}
+            onCreated={async (threadId) => {
+              setCreating(false);
+              await refreshSideChat();
+              setOpenThreadId(threadId);
+            }}
+            onCancel={() => setCreating(false)}
+          />
+        ) : null}
+      </Reveal>
     </div>
   );
 }
@@ -227,23 +236,18 @@ function NewChatForm({
   }
 
   return (
-    <div className="rounded-lg border border-stone-800 bg-stone-950/40 p-3">
-      <p className="mb-2 text-xs font-medium text-stone-400">Who&apos;s in it?</p>
-      <ul className="space-y-1">
+    <div className="panel rounded-lg p-3">
+      <SectionHead title="Who&apos;s in it?" glyph="tab-party" level="h4" />
+      <ul className="stagger space-y-1">
         {members.map((member) => (
           <li key={member.userId}>
-            <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-sm text-stone-300 hover:bg-stone-900/60">
-              <input
-                type="checkbox"
+            <label className="flex min-h-9 cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-sm text-stone-300 hover:bg-stone-900/60">
+              <Tick
                 checked={selected.includes(member.userId)}
-                onChange={(event) =>
-                  setSelected((current) =>
-                    event.target.checked
-                      ? [...current, member.userId]
-                      : current.filter((id) => id !== member.userId),
-                  )
+                label={member.username}
+                onChange={(checked) =>
+                  setSelected((current) => (checked ? [...current, member.userId] : current.filter((id) => id !== member.userId)))
                 }
-                className="size-3.5 accent-amber-400"
               />
               {member.username}
             </label>
@@ -259,14 +263,12 @@ function NewChatForm({
           className={cn(ui.input, "mt-2 text-sm")}
         />
       ) : null}
-      {error ? <p className="mt-2 text-xs text-red-400">{error}</p> : null}
+      {error ? <PanelError className="mt-2">{error}</PanelError> : null}
       <div className="mt-2 flex justify-end gap-2">
-        <button type="button" onClick={onCancel} className="text-xs text-stone-500 hover:text-stone-300">
-          Cancel
-        </button>
-        <button type="button" onClick={create} disabled={busy} className={ui.btnSmall}>
-          {busy ? <Loader2 className="size-3.5 animate-spin" /> : null} Start chat
-        </button>
+        <KitButton onClick={onCancel}>Cancel</KitButton>
+        <KitButton tone="primary" onClick={create} disabled={busy} busy={busy}>
+          Start chat
+        </KitButton>
       </div>
     </div>
   );
@@ -383,18 +385,14 @@ function ThreadView({
   return (
     <div className="flex h-full flex-col">
       <div className="mb-2 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={onBack}
-          title="All chats"
-          className="rounded p-1 text-stone-500 hover:bg-stone-900 hover:text-stone-300"
-        >
+        <KitButton tone="icon" always onClick={onBack} title="All chats" aria-label="All chats">
           <ArrowLeft className="size-4" />
-        </button>
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-stone-200">{label}</span>
+        </KitButton>
+        <GameIcon icon={{ kind: "glyph", key: thread.kind === "dm" ? "tab-chat" : "tab-party" }} size="size-6" className="shrink-0" />
+        <span className="gold-title min-w-0 flex-1 truncate text-sm">{label}</span>
       </div>
       {thread.kind === "group" ? (
-        <p className="mb-2 truncate text-[11px] text-stone-600">
+        <p className="reveal mb-2 truncate text-xs text-stone-500">
           {thread.memberUserIds.map(nameOf).join(", ")}
         </p>
       ) : null}
@@ -406,14 +404,12 @@ function ThreadView({
             <div key={message.id} className={cn("flex", mine && "justify-end")}>
               <div
                 className={cn(
-                  "max-w-[85%] rounded-lg px-2.5 py-1.5 text-sm",
-                  mine
-                    ? "bg-amber-400/10 text-amber-100"
-                    : "bg-stone-900/70 text-stone-200",
+                  "live-in max-w-[85%] rounded-lg border px-2.5 py-1.5 text-sm",
+                  mine ? "border-amber-500/25 bg-amber-400/10 text-amber-100" : "border-stone-700/50 bg-stone-900/70 text-stone-200",
                 )}
               >
                 {!mine ? (
-                  <p className="text-[10px] font-medium text-stone-500">
+                  <p className="reveal text-[11px] font-medium text-amber-300/70">
                     {nameOf(message.authorUserId)}
                   </p>
                 ) : null}
@@ -426,7 +422,7 @@ function ThreadView({
       </div>
 
       <form onSubmit={send} className="mt-2">
-        <div className="flex items-end gap-1.5 rounded-lg border border-stone-700/70 bg-stone-950/80 p-1.5">
+        <div className="flex items-end gap-1.5 rounded-lg border border-stone-700/70 bg-stone-950/80 p-1.5 shadow-[0_2px_6px_rgba(4,2,12,0.45)_inset] transition-[border-color] focus-within:border-amber-400/70">
           <textarea
             value={input}
             onChange={(event) => setInput(event.target.value)}
@@ -439,17 +435,19 @@ function ThreadView({
             rows={1}
             maxLength={2000}
             placeholder={`Message ${label}`}
+            aria-label={`Message ${label}`}
             className="flex-1 resize-none bg-transparent px-1.5 py-1 text-sm text-stone-200 outline-none"
           />
           <button
             type="submit"
             disabled={sending || !input.trim()}
-            className="rounded-lg bg-gradient-to-b from-amber-100 via-amber-200 to-amber-400 p-2 text-amber-950 transition-all duration-150 ease-snap active:scale-95 disabled:opacity-40"
+            aria-label="Send"
+            className={cn(ui.btnPrimary, "pk-tap size-9 shrink-0 px-0 disabled:opacity-40")}
           >
             {sending ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
           </button>
         </div>
-        {error ? <p className="mt-1 text-xs text-red-400">{error}</p> : null}
+        {error ? <PanelError className="mt-1">{error}</PanelError> : null}
       </form>
     </div>
   );

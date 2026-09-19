@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Loader2, Sparkles, Wand2 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { Select } from "@/components/ui/Select";
+import { Slider } from "@/components/ui/Slider";
 import {
   DEFAULT_OVERWORLD_PARAMS,
   OVERWORLD_PARAM_LABELS,
@@ -135,7 +137,7 @@ export function OverworldAuthoring({
       </button>
 
       {open ? (
-        <div className="mt-2 space-y-2">
+        <div className="reveal mt-2 space-y-2">
           {canDescribe ? (
             <>
               <textarea
@@ -155,7 +157,7 @@ export function OverworldAuthoring({
                 Read it into the dials
               </button>
               {plan ? (
-                <p className="text-[11px] text-stone-500">
+                <p className="reveal text-[11px] text-stone-500">
                   {plan.note || "Dials set."} Reroll below until the coastline falls where you want it.
                 </p>
               ) : null}
@@ -165,15 +167,14 @@ export function OverworldAuthoring({
           {(Object.keys(OVERWORLD_PARAM_LABELS) as Array<keyof OverworldParams>).map((key) => (
             <label key={key} className="flex items-center gap-2 text-[11px] text-stone-500">
               <span className="w-20 shrink-0">{OVERWORLD_PARAM_LABELS[key]}</span>
-              <input
-                type="range"
+              <Slider
                 min={0}
                 max={100}
                 value={Math.round(params[key] * 100)}
-                onChange={(event) =>
-                  setParams({ ...params, [key]: Number(event.target.value) / 100 })
-                }
-                className="flex-1 accent-amber-600"
+                onChange={(next) => setParams({ ...params, [key]: next / 100 })}
+                label={OVERWORLD_PARAM_LABELS[key]}
+                bubble={(percent) => `${percent}%`}
+                className="min-w-0 flex-1"
               />
             </label>
           ))}
@@ -181,35 +182,35 @@ export function OverworldAuthoring({
           <div className="flex flex-wrap items-center gap-1.5">
             <button
               type="button"
-              disabled={busy}
+              disabled={busy} aria-busy={busy}
               onClick={() => void patch({ regenerate: true, params, ...size })}
               title="Reroll the terrain under these dials, at this size. Places, pins, lines and notes stay."
               className="rounded-md border border-amber-700 bg-amber-950/50 px-2 py-1 text-xs text-amber-100 disabled:opacity-40"
             >
               Roll a world
             </button>
-            <select
-              value={sizeId}
-              aria-label="Size of the next roll"
-              onChange={(event) => {
-                const preset = OVERWORLD_SIZES.find((entry) => entry.id === event.target.value);
+            <Select
+              value={sizeId as string}
+              label="Size of the next roll"
+              size="sm"
+              onChange={(next) => {
+                const preset = OVERWORLD_SIZES.find((entry) => entry.id === next);
                 if (preset) {
                   setSize({ width: preset.width, height: preset.height });
                 }
               }}
-              className="rounded-md border border-stone-700 bg-stone-950 px-1.5 py-1 text-xs text-stone-300"
-            >
-              {sizeId === "custom" ? <option value="custom">{sizeLabel(size)}</option> : null}
-              {OVERWORLD_SIZES.map((entry) => (
-                <option key={entry.id} value={entry.id}>
-                  {entry.label} ({entry.width} by {entry.height})
-                </option>
-              ))}
-            </select>
+              options={[
+                ...(sizeId === "custom" ? [{ value: "custom", label: sizeLabel(size) }] : []),
+                ...OVERWORLD_SIZES.map((entry) => ({
+                  value: entry.id as string,
+                  label: `${entry.label} (${entry.width} by ${entry.height})`,
+                })),
+              ]}
+            />
             {plan?.places.length ? (
               <button
                 type="button"
-                disabled={busy}
+                disabled={busy} aria-busy={busy}
                 onClick={() => void patch({ places: plan.places })}
                 className={cn(
                   "rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300",
@@ -221,7 +222,7 @@ export function OverworldAuthoring({
             ) : null}
           </div>
           {plan?.places.length ? (
-            <ul className="space-y-0.5 text-[11px] text-stone-500">
+            <ul className="reveal space-y-0.5 text-[11px] text-stone-500">
               {plan.places.map((place) => (
                 <li key={place.name}>
                   <span className="text-stone-300">{place.name}</span>
@@ -276,7 +277,7 @@ export function OverworldAuthoring({
             <span className="text-[10px] text-stone-600">Yours alone; players never see this.</span>
           </label>
 
-          {error ? <p className="text-[11px] text-red-400">{error}</p> : null}
+          {error ? <p className="motion-shake text-[11px] text-red-400">{error}</p> : null}
         </div>
       ) : null}
     </section>

@@ -2,10 +2,12 @@
 
 import { Copy, Loader2, Trash2, Users } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
 import { CampaignCover } from "@/components/CampaignCover";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { ExportMenu } from "@/app/campaigns/[campaignId]/ExportMenu";
 import { steersStory, type HomeCampaign } from "@/app/home/types";
 
@@ -40,11 +42,12 @@ export function CampaignList({
         <h2 className="eyebrow text-sm text-amber-200/90">Your campaigns</h2>
       </div>
 
-      {actionError ? <p className="mb-3 text-sm text-red-400">{actionError}</p> : null}
+      {actionError ? <p className="motion-shake mb-3 text-sm text-red-400">{actionError}</p> : null}
 
       {loading ? (
-        <div className="flex justify-center py-10">
-          <Loader2 className="size-5 animate-spin text-stone-500" />
+        <div className="reveal grid gap-4 sm:grid-cols-2" aria-busy="true">
+          <div className="skeleton-block h-72 rounded-xl" />
+          <div className="skeleton-block hidden h-72 rounded-xl sm:block" />
         </div>
       ) : loadFailed && campaigns.length === 0 ? (
         // The list never arrived; a table full of campaigns may still
@@ -56,7 +59,7 @@ export function CampaignList({
           </button>
         </div>
       ) : campaigns.length === 0 ? null : ( // the hero above has already said "empty table"
-        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <ul className="stagger-up grid grid-cols-1 gap-3 sm:grid-cols-2">
           {campaigns.map((campaign) => (
             <li key={campaign.id}>
               <CampaignTile
@@ -88,7 +91,23 @@ function CampaignTile({
   onDelete: () => void;
 }) {
   const ended = campaign.status === "ended";
+  const router = useRouter();
+  // The same doors as the tile and its three buttons, under a right-click or
+  // a long press. The buttons stay: the menu is a second way, not the only one.
+  const menu: ContextMenuItem[] = [
+    { id: "open", label: "Open", glyph: "tab-campaigns", onSelect: () => router.push(`/campaigns/${campaign.id}`) },
+    { id: "export-html", label: "Export story: HTML page", glyph: "tab-story", separated: true, onSelect: () => downloadStory(campaign.id, "html") },
+    { id: "export-odt", label: "Export story: OpenDocument (.odt)", glyph: "tab-journal", onSelect: () => downloadStory(campaign.id, "odt") },
+    { id: "export-docx", label: "Export story: Word (.docx)", glyph: "tab-handout", onSelect: () => downloadStory(campaign.id, "docx") },
+    ...(steersStory(campaign, userId)
+      ? [{ id: "duplicate", label: "Duplicate", glyph: "tab-notes", separated: true, disabled: cloning, onSelect: onClone }]
+      : []),
+    ...(campaign.role === "owner"
+      ? [{ id: "delete", label: "Delete", glyph: "quest-failed", tone: "danger" as const, separated: !steersStory(campaign, userId), onSelect: onDelete }]
+      : []),
+  ];
   return (
+    <ContextMenu items={menu} label={campaign.title} className="h-full">
     <Link
       href={`/campaigns/${campaign.id}`}
       className={cn(ui.cardHover, "group relative block h-full p-4", ended && "opacity-80")}
@@ -166,5 +185,17 @@ function CampaignTile({
         </span>
       </div>
     </Link>
+    </ContextMenu>
   );
+}
+
+// The download ExportMenu performs for the same three formats: the server
+// sets Content-Disposition, so a bare anchor click saves the file.
+function downloadStory(campaignId: string, format: "html" | "odt" | "docx") {
+  const anchor = document.createElement("a");
+  anchor.href = `/api/campaigns/${campaignId}/export?format=${format}`;
+  anchor.download = "";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
 }

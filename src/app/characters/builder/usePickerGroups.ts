@@ -203,7 +203,7 @@ export function usePickerGroups({
       return [{ label: null, options: ALIGNMENTS.map(toOption) }];
     }
     return [
-      { label: packGroupLabel(pack, "Common in"), options: preferred.map(toOption) },
+      { label: packGroupLabel(pack, "Common in"), recommended: true, options: preferred.map(toOption) },
       {
         label: "All alignments",
         options: ALIGNMENTS.filter((code) => !preferred.includes(code)).map(toOption),
@@ -223,7 +223,11 @@ export function usePickerGroups({
     });
     if (raceTier.recommended.length) {
       return [
-        { label: packGroupLabel(pack, "Peoples of"), options: raceTier.recommended.map(toOption) },
+        {
+          label: packGroupLabel(pack, "Peoples of"),
+          recommended: true,
+          options: raceTier.recommended.map(toOption),
+        },
         { label: "All races", options: raceTier.other.map(toOption) },
       ];
     }
@@ -246,6 +250,7 @@ export function usePickerGroups({
       return [
         {
           label: pack ? packGroupLabel(pack, "Callings of") : "Recommended for this setting",
+          recommended: true,
           options: classTier.recommended.map(toOption),
         },
         { label: "All classes", options: classTier.other.map(toOption) },
@@ -340,6 +345,7 @@ export function usePickerGroups({
       return [
         {
           label: pack ? packGroupLabel(pack, "Lives in") : "Recommended for this setting",
+          recommended: true,
           options: backgroundTier.recommended.map(toOption),
         },
         { label: "All backgrounds", options: backgroundTier.other.map(toOption) },

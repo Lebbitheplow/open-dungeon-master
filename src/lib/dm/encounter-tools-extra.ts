@@ -26,6 +26,7 @@ import {
 } from "@/lib/dm/enemy-damage";
 import { addEnemiesTool, handleAddEnemies } from "@/lib/dm/encounter-spawn";
 import { handleLairAction, handleLegendaryAction, handleLegendaryResist, legendaryTools } from "@/lib/dm/legendary-tools";
+import { declareIntentTool, handleDeclareIntent } from "@/lib/dm/intent-tools";
 import { applyDmMutation, canonicalCondition } from "@/lib/dm/mutations";
 import { mergeAdvantage, pruneMeta, rollDerivation } from "@/lib/dm/condition-logic";
 import { conditionRollRiders } from "@/lib/srd/condition-effects";
@@ -50,6 +51,7 @@ export const EXTRA_ENCOUNTER_TOOL_NAMES = [
   "legendary_action",
   "legendary_resist",
   "lair_action",
+  "declare_intent",
 ] as const;
 
 type ToolDef = {
@@ -195,6 +197,7 @@ export const extraEncounterTools: ToolDef[] = [
   clearEnemyConditionTool,
   aoeDamageTool,
   ...legendaryTools,
+  declareIntentTool,
 ];
 
 const enemyRefArgsSchema = z.object({
@@ -713,6 +716,8 @@ export function applyExtraEncounterCall(
       return { result: handleLegendaryResist(campaign, rawArguments) };
     case "lair_action":
       return { result: handleLairAction(campaign, turn, rawArguments) };
+    case "declare_intent":
+      return { result: handleDeclareIntent(campaign, rawArguments, sheets, sheetsById) };
     default:
       return null;
   }

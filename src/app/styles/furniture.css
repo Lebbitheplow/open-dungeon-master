@@ -1,0 +1,203 @@
+/* Painted furniture: the scroll (src/components/ui/Scroll.tsx), the book
+   (Book.tsx) and the ambient dust layer. The art is under public/assets/ui;
+   everything that moves is CSS, and all of it rests under reduced motion. */
+
+/* ---- the scroll ---- */
+.kit-scroll {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  filter: drop-shadow(0 18px 40px rgba(4, 2, 12, 0.6));
+}
+.kit-scroll-roller {
+  position: relative;
+  z-index: 2;
+  width: calc(100% + 2.5rem);
+  max-width: none;
+  height: auto;
+  pointer-events: none;
+  user-select: none;
+  filter: drop-shadow(0 4px 6px rgba(4, 2, 12, 0.55));
+}
+.kit-scroll-roller-foot { margin-top: -0.6rem; }
+.kit-scroll-length {
+  display: grid;
+  width: 100%;
+  margin-top: -0.6rem;
+  grid-template-rows: 1fr;
+  animation: scroll-unroll var(--dur-scene) var(--ease-settle) both;
+}
+.kit-scroll-paper {
+  min-height: 0;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, rgba(60, 40, 12, 0.28), transparent 9%, transparent 91%, rgba(60, 40, 12, 0.28)),
+    url("/assets/ui/parchment-body.webp") center / 320px;
+  color: #33240c;
+}
+.kit-scroll-paper-dark {
+  background:
+    linear-gradient(90deg, rgba(20, 12, 4, 0.45), transparent 9%, transparent 91%, rgba(20, 12, 4, 0.45)),
+    url("/assets/ui/parchment-dark.webp") center / 320px;
+  color: #f1e3c4;
+}
+.kit-scroll-text {
+  padding: 1.75rem 1.75rem 2rem;
+  font-family: var(--font-serif, Georgia, serif);
+  line-height: 1.7;
+  animation: scroll-ink 700ms var(--ease-snap) 520ms both;
+}
+@keyframes scroll-unroll {
+  from { grid-template-rows: 0fr; }
+  to { grid-template-rows: 1fr; }
+}
+@keyframes scroll-ink {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- the book ---- */
+.kit-book {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  aspect-ratio: 4 / 3;
+  max-height: 72vh;
+  width: 100%;
+  margin: 0 auto;
+  background: url("/assets/ui/book-spread.webp") center / 100% 100% no-repeat;
+  filter: drop-shadow(0 24px 50px rgba(4, 2, 12, 0.7));
+  perspective: 2200px;
+  animation: scale-in var(--dur-beat) var(--ease-spring) both;
+}
+.kit-book-page {
+  position: relative;
+  min-height: 0;
+  overflow-y: auto;
+  /* The painted pages sit well inside the cover; percentages are of the
+     page's own width. */
+  padding: 25% 9% 18% 23%;
+  color: #2f220d;
+  font-family: var(--font-serif, Georgia, serif);
+  transition: opacity 200ms var(--ease-snap);
+}
+.kit-book-right { padding: 25% 23% 18% 10%; }
+.kit-book-forward .kit-book-right,
+.kit-book-back .kit-book-left { opacity: 0.15; }
+.kit-book-kicker {
+  font-family: var(--font-display, serif);
+  font-size: 0.7rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #7a5a18;
+}
+.kit-book-heading {
+  margin-top: 0.4rem;
+  font-family: var(--font-display, serif);
+  font-size: clamp(1.15rem, 2.4vw, 1.9rem);
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  color: #3d2a08 !important;
+  -webkit-text-fill-color: #3d2a08;
+}
+.kit-book-rule { width: 70%; margin: 1rem 0; opacity: 0.85; }
+.kit-book-note { white-space: pre-line; font-size: 0.85rem; font-style: italic; color: #5f4a23; }
+.kit-book-body { white-space: pre-wrap; font-size: clamp(0.85rem, 1.35vw, 1rem); line-height: 1.75; }
+.kit-book-body::first-letter {
+  float: left;
+  padding: 0.1em 0.12em 0 0;
+  font-family: var(--font-display, serif);
+  font-size: 3.1em;
+  line-height: 0.85;
+  color: #8a2f14;
+}
+.kit-book-ribbon {
+  position: absolute;
+  top: -2%;
+  left: 49%;
+  width: 4.5%;
+  height: auto;
+  pointer-events: none;
+  filter: drop-shadow(0 3px 4px rgba(4, 2, 12, 0.5));
+}
+/* The leaf that turns: a painted page hinged on the spine. */
+.kit-book-leaf {
+  position: absolute;
+  top: 5%;
+  bottom: 6%;
+  left: 50%;
+  width: 44%;
+  transform-origin: left center;
+  background: url("/assets/ui/page-single.webp") center / 100% 100%;
+  box-shadow: -12px 0 24px rgba(4, 2, 12, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  backface-visibility: visible;
+}
+.kit-book-forward .kit-book-leaf { animation: leaf-forward 620ms var(--ease-drift) both; }
+.kit-book-back .kit-book-leaf { animation: leaf-back 620ms var(--ease-drift) both; }
+@keyframes leaf-forward {
+  0% { opacity: 1; transform: rotateY(0deg); }
+  100% { opacity: 1; transform: rotateY(-180deg); }
+}
+@keyframes leaf-back {
+  0% { opacity: 1; transform: rotateY(-180deg); }
+  100% { opacity: 1; transform: rotateY(0deg); }
+}
+@media (max-width: 640px) {
+  .kit-book { grid-template-columns: 1fr; aspect-ratio: 3 / 4; background-image: url("/assets/ui/page-single.webp"); }
+  .kit-book-page, .kit-book-right { padding: 12% 11%; }
+  .kit-book-left { overflow: visible; padding-bottom: 0; }
+  .kit-book-leaf { left: 0; width: 100%; top: 0; bottom: 0; transform-origin: left center; }
+  .kit-book-ribbon { left: 84%; width: 8%; }
+}
+
+/* ---- ambient dust ---- */
+/* A few motes drifting UNDER the animated contour lines (TopoBackground,
+   z -10): the contours are the background and are drawn at 4 to 7 per cent,
+   so anything laid over them drowns them. The dust sits one layer below the
+   canvas, in the contours' own gold, and is never a veil across them. The painted tile is not pure black between its
+   motes, so laid straight over the page it hazed the whole background and
+   buried the contours: the contrast filter crushes everything but the bright
+   cores to black, which the screen blend then treats as clear. */
+.ambient-dust {
+  position: fixed;
+  inset: 0;
+  z-index: -11;
+  overflow: hidden;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  opacity: 0.16;
+}
+/* The motes ride a layer one tile larger than the screen, moved by transform
+   alone so the drift never repaints. */
+.ambient-dust::before {
+  content: "";
+  position: absolute;
+  inset: 0 -360px -720px 0;
+  background: url("/assets/ui/dust-motes.webp") 0 0 / 360px;
+  /* Crushed hard and drawn small: only the brightest cores survive, as
+     pinpricks, so the dust is texture under the lines and never a shape. */
+  filter: contrast(9) brightness(0.42) grayscale(1) sepia(1) saturate(2.2);
+  animation: dust-drift 90s linear infinite;
+  will-change: transform;
+}
+html[data-theme="light"] .ambient-dust { display: none; }
+@keyframes dust-drift {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-360px, -720px, 0); }
+}
+[data-effects="low"] .ambient-dust { opacity: 0.1; }
+[data-effects="low"] .ambient-dust::before { animation: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .kit-scroll-length,
+  .kit-scroll-text,
+  .kit-book,
+  .kit-book-leaf,
+  .ambient-dust {
+    animation: none !important;
+  }
+}

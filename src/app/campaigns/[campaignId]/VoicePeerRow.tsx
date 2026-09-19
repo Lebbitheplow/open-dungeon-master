@@ -2,6 +2,9 @@
 
 import { Hand, Mic, MicOff, ShieldBan, Volume1, Volume2, VolumeX } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
+import { Select } from "@/components/ui/Select";
+import { Slider } from "@/components/ui/Slider";
 import {
   PEER_VOLUME_MAX,
   VOLUME_STEP,
@@ -55,7 +58,7 @@ export function VoicePeerRow({
 
   return (
     <li className="text-sm">
-      <div className="flex items-center gap-2">
+      <div className="flex min-h-8 items-center gap-2">
         {/* Three distinct states, because they mean different things: a
             force-mute is the floor, a self-mute is a choice, and speaking is
             neither. All three are about their microphone, not about the
@@ -98,10 +101,11 @@ export function VoicePeerRow({
             }
             aria-expanded={expanded}
             className={cn(
-              "ml-auto shrink-0 rounded p-0.5 transition-colors",
+              ui.btnSmall,
+              "session-voice-mini ml-auto",
               // Coloured when it is not at its default, so a row somebody
               // turned down is legible without opening anything.
-              untouched ? "text-stone-600 hover:text-stone-300" : "text-amber-400",
+              !untouched && "border-amber-500/50 text-amber-300",
             )}
           >
             <VolumeIcon className="size-3.5" />
@@ -110,49 +114,38 @@ export function VoicePeerRow({
         {/* Moving somebody is a field change, so it takes effect on the next
             recompute with no renegotiation and no gap in audio. */}
         {adjudicates && channels.length > 1 ? (
-          <select
+          <Select
             value={peer.channelId}
-            onChange={(event) => onMove(event.target.value)}
-            aria-label={`Move ${peer.username} to another room`}
-            title={`Move ${peer.username}`}
-            className={cn(
-              "rounded border border-stone-800 bg-stone-950 px-1 py-0.5 text-[11px] text-stone-400",
-              !adjustable && "ml-auto",
-            )}
-          >
-            {channels.map((channel) => (
-              <option key={channel.id} value={channel.id}>
-                {channel.name}
-              </option>
-            ))}
-          </select>
+            onChange={onMove}
+            label={`Move ${peer.username} to another room`}
+            size="sm"
+            align="end"
+            className={cn("w-24 shrink-0", !adjustable && "ml-auto")}
+            options={channels.map((channel) => ({ value: channel.id, label: channel.name }))}
+          />
         ) : null}
       </div>
 
       {expanded && adjustable ? (
-        <div className="mt-1 flex items-center gap-2 pl-5">
+        <div className="reveal mt-1 flex items-center gap-2 pl-5">
           <button
             type="button"
             onClick={onToggleMute}
             aria-label={volume.muted ? `Unmute ${peer.username}` : `Mute ${peer.username} for you`}
             title={volume.muted ? `Unmute ${peer.username}` : `Mute ${peer.username} for you`}
-            className={cn(
-              "shrink-0 rounded p-0.5 transition-colors",
-              volume.muted ? "text-red-400" : "text-stone-500 hover:text-stone-300",
-            )}
+            className={cn(ui.btnSmall, "session-voice-mini", volume.muted && "border-red-800 text-red-400")}
           >
             {volume.muted ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
           </button>
-          <input
-            type="range"
+          <Slider
             min={0}
             max={PEER_VOLUME_MAX}
             step={VOLUME_STEP}
             value={volume.volume}
             disabled={volume.muted}
-            onChange={(event) => onVolume(Number(event.target.value))}
-            aria-label={`How loud ${peer.username} is for you`}
-            className="min-w-0 flex-1 accent-amber-600 disabled:opacity-40"
+            onChange={onVolume}
+            label={`How loud ${peer.username} is for you`}
+            className="min-w-0 flex-1"
           />
           {/* Doubles as the way back to default, because a slider is hard to
               land exactly on 100% by hand. */}
@@ -161,7 +154,7 @@ export function VoicePeerRow({
             onClick={onReset}
             disabled={untouched}
             title="Back to normal"
-            className="w-9 shrink-0 text-right text-[11px] tabular-nums text-stone-500 enabled:hover:text-stone-300 disabled:cursor-default"
+            className={cn(ui.btnSmall, "session-voice-mini w-auto min-w-11 px-1.5 text-[11px] tabular-nums disabled:cursor-default")}
           >
             {volume.muted ? "off" : `${percent}%`}
           </button>

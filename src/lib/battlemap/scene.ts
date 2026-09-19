@@ -59,7 +59,16 @@ export type MapDrawing = {
 
 export const PROP_KINDS = ["prop", "npc"] as const;
 export type PropKind = (typeof PROP_KINDS)[number];
-export type MapProp = { x: number; y: number; name: string; kind: PropKind };
+// `stamp` is the painted object it is drawn as (an id from
+// public/assets/props/manifest.json); absent, it is the plain marker. The id
+// is only ever a lookup key, never a path, and one the catalogue does not
+// have simply draws the marker.
+export type MapProp = { x: number; y: number; name: string; kind: PropKind; stamp?: string };
+
+const STAMP_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+export function isStampId(value: unknown): value is string {
+  return typeof value === "string" && value.length <= 64 && STAMP_ID.test(value);
+}
 
 export const DOOR_STATES = ["locked", "secret"] as const;
 export type DoorState = (typeof DOOR_STATES)[number];
@@ -283,7 +292,12 @@ export function normalizeProps(raw: unknown, terrain: string, width: number, hei
       continue;
     }
     seen.add(index);
-    out.push({ ...at, name, kind: source.kind === "npc" ? "npc" : "prop" });
+    out.push({
+      ...at,
+      name,
+      kind: source.kind === "npc" ? "npc" : "prop",
+      ...(isStampId(source.stamp) ? { stamp: source.stamp } : {}),
+    });
     if (out.length >= SCENE_LIMITS.props) {
       break;
     }

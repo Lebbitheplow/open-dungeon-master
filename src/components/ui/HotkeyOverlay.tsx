@@ -21,7 +21,7 @@ export function HotkeyOverlay({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange} title={title} width="w-[min(92vw,30rem)]">
-      <div className="space-y-4">
+      <div className="stagger space-y-4">
         {groups.map((group) => (
           <section key={group.title}>
             <h3 className="mb-1.5 text-[11px] uppercase tracking-wide text-stone-500">{group.title}</h3>

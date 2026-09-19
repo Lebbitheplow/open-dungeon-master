@@ -54,6 +54,7 @@ const TOOL_SOURCES = [
   "src/lib/dm/encounter-tools.ts",
   "src/lib/dm/encounter-tools-extra.ts",
   "src/lib/dm/legendary-tools.ts",
+  "src/lib/dm/intent-tools.ts",
   "src/lib/dm/action-tools.ts",
   "src/lib/dm/check-tools.ts",
   "src/lib/dm/hazard-tools.ts",

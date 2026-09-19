@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
+import { NumberStepper } from "@/components/ui/NumberStepper";
+import { Select } from "@/components/ui/Select";
 import { CALCULATORS, type CalcInput } from "@/lib/reference/calculators";
 
 // Every table calculation on one screen.
@@ -30,17 +32,19 @@ export function CalculatorsPanel() {
 
   return (
     <div>
-      <div className="mb-3 flex flex-wrap gap-1.5">
+      <div data-pill-group="" role="group" aria-label="Calculator" className="stagger-pop mb-3 flex flex-wrap gap-1.5">
         {CALCULATORS.map((entry) => (
           <button
             key={entry.id}
             type="button"
             onClick={() => setOpenId(entry.id)}
+            data-on={entry.id === calculator.id ? "" : undefined}
+            aria-pressed={entry.id === calculator.id}
             className={cn(
-              "rounded-full border px-3 py-1 text-xs transition-colors",
+              "motion-press min-h-9 rounded-full border px-3 py-1 text-xs transition-colors",
               entry.id === calculator.id
-                ? "border-amber-600 bg-stone-900 text-amber-100"
-                : "border-stone-700 text-stone-400 hover:border-amber-800 hover:text-stone-200",
+                ? "border-amber-400/50 bg-amber-400/10 text-amber-100"
+                : "border-stone-700/70 text-stone-400 hover:border-amber-500/40 hover:text-stone-200",
             )}
           >
             {entry.label}
@@ -50,43 +54,38 @@ export function CalculatorsPanel() {
 
       <p className="mb-3 text-sm text-stone-400">{calculator.blurb}</p>
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-2">
+      <div className="stagger-up mb-4 grid gap-3 sm:grid-cols-2">
         {calculator.fields.map((field) => (
-          <label key={field.key} className="block">
-            <span className="mb-1 block text-xs uppercase tracking-wide text-stone-500">
+          <div key={field.key} role="group" aria-label={field.label}>
+            <span className="mb-1 block text-xs text-stone-400">
               {field.label}
               {field.kind === "number" && field.suffix ? ` (${field.suffix})` : ""}
             </span>
             {field.kind === "number" ? (
-              <input
-                type="number"
+              <NumberStepper
+                label={field.label}
                 min={field.min}
                 max={field.max}
                 step={field.step ?? 1}
-                value={String(input[field.key] ?? "")}
-                onChange={(event) => set(field.key, event.target.value)}
-                className="w-full rounded-lg border border-stone-800 bg-stone-950 px-3 py-2 text-sm text-stone-200 outline-none focus:border-amber-300"
+                value={Number(input[field.key] ?? 0) || 0}
+                onChange={(next) => set(field.key, String(next))}
               />
             ) : (
-              <select
+              <Select
+                label={field.label}
                 value={String(input[field.key] ?? "")}
-                onChange={(event) => set(field.key, event.target.value)}
-                className="w-full rounded-lg border border-stone-800 bg-stone-950 px-3 py-2 text-sm text-stone-200 outline-none focus:border-amber-300"
-              >
-                {field.options.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(next) => set(field.key, next)}
+                options={field.options.map((option) => ({ value: option.value, label: option.label }))}
+                className="w-full"
+              />
             )}
-          </label>
+          </div>
         ))}
       </div>
 
-      <div className="rounded-xl border border-stone-800 bg-stone-950/60 p-4">
-        <p className="font-display text-2xl text-amber-100">{result.headline}</p>
-        <ul className="mt-3 space-y-2">
+      <div className="panel ornate rounded-xl p-4">
+        <p key={result.headline} className="gold-title count-pop font-display text-2xl">{result.headline}</p>
+        <ul className="stagger mt-3 space-y-2">
           {result.parts.map((part) => (
             <li key={part.label} className="flex items-baseline justify-between gap-3">
               <span className="text-sm text-stone-400">{part.label}</span>
@@ -100,7 +99,7 @@ export function CalculatorsPanel() {
           ))}
         </ul>
         {result.note ? (
-          <p className="mt-3 border-t border-stone-800 pt-3 text-xs text-stone-500">{result.note}</p>
+          <p className="reveal mt-3 border-t border-amber-500/15 pt-3 text-xs text-stone-500">{result.note}</p>
         ) : null}
       </div>
     </div>

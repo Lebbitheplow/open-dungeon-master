@@ -1,5 +1,7 @@
 "use client";
 
+import { Select } from "@/components/ui/Select";
+import { SectionHead } from "@/components/ui/SectionHead";
 import { AlertTriangle, CheckCircle2, Download, FileUp, Loader2, Server, Trash2 } from "lucide-react";
 import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { useEffect, useRef, useState } from "react";
@@ -169,15 +171,16 @@ export function PublishSection({
   return (
     <div className="space-y-4">
       <section className={ui.card + " p-4"}>
-        <h3 className="mb-1 flex items-center gap-2 font-display text-base tracking-wide text-amber-200">
-          {ready ? <CheckCircle2 className="size-4 text-emerald-400" /> : <AlertTriangle className="size-4 text-amber-400" />}
-          {ready ? "Ready to export" : `${check.problems.length} thing${check.problems.length === 1 ? "" : "s"} to fix first`}
-        </h3>
+        <SectionHead
+          glyph={ready ? "quest-done" : "quest-active"}
+          title={ready ? "Ready to export" : `${check.problems.length} thing${check.problems.length === 1 ? "" : "s"} to fix first`}
+          aside={ready ? <CheckCircle2 className="size-4 text-emerald-400" /> : <AlertTriangle className="size-4 text-amber-400" />}
+        />
         <p className="mb-3 text-[11px] text-stone-500">
           Will install as <span className="text-stone-300">{id}.json</span>, {bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`} of {MAX_MANIFEST_BYTES / 1024 / 1024} MB.
         </p>
         {check.problems.length || serverProblems.length ? (
-          <ul className="mb-3 space-y-1">
+          <ul className="stagger mb-3 space-y-1">
             {[...check.problems, ...serverProblems].map((problem) => (
               <li key={problem} className="flex gap-2 text-xs text-red-300">
                 <span aria-hidden="true">·</span>
@@ -191,7 +194,7 @@ export function PublishSection({
             <summary className="cursor-pointer text-stone-500">
               {check.advice.length} suggestion{check.advice.length === 1 ? "" : "s"} before sharing
             </summary>
-            <ul className="mt-2 space-y-1">
+            <ul className="stagger mt-2 space-y-1">
               {check.advice.map((line) => (
                 <li key={line} className="flex gap-2">
                   <span aria-hidden="true">·</span>
@@ -206,7 +209,7 @@ export function PublishSection({
       <UnofficialPackNotice rightsHolder={draft.rightsHolder} inspiredBy={draft.inspiredBy.trim() || undefined} />
 
       <section className={ui.card + " p-4"}>
-        <h3 className="mb-3 font-display text-base tracking-wide text-amber-200">Share it</h3>
+        <SectionHead title="Share it" glyph="system-share" />
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={() => void exportPack(false)} disabled={!ready || Boolean(busy)} className={ui.btnPrimary}>
             {busy === "download" ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
@@ -224,12 +227,12 @@ export function PublishSection({
             ? "Download hands you the manifest as a file for other servers and registries. Install writes it to this server's data directory, where it appears in the campaign creator at once."
             : "The file installs from Admin, Campaign plugins, Install from a file, on any server whose admin trusts it. Only an admin can install here."}
         </p>
-        {notice ? <p className="mt-2 text-xs text-amber-200/90">{notice}</p> : null}
-        {error ? <p className="mt-2 text-xs text-red-300">{error}</p> : null}
+        {notice ? <p className="live-in mt-2 text-xs text-amber-200/90">{notice}</p> : null}
+        {error ? <p className="motion-shake mt-2 text-xs text-red-300">{error}</p> : null}
       </section>
 
       <section className={ui.card + " p-4"}>
-        <h3 className="mb-1 font-display text-base tracking-wide text-amber-200">Start from something</h3>
+        <SectionHead title="Start from something" glyph="tab-reference" />
         <p className="mb-3 text-[11px] text-stone-500">
           Read a pack into the draft to keep working on it: one you downloaded, one somebody sent you, or a world installed here.
         </p>
@@ -249,23 +252,20 @@ export function PublishSection({
             <FileUp className="size-3.5" /> A pack file
           </button>
           {installed.length ? (
-            <select
-              value={startFrom}
-              aria-label="An installed world"
-              disabled={busy === "installed"}
-              onChange={(event) => {
-                setStartFrom(event.target.value);
-                void fromInstalled(event.target.value);
-              }}
-              className="rounded-md border border-stone-700 bg-stone-950 px-1.5 py-1 text-xs text-stone-300 focus:border-amber-500/50 focus:outline-none"
-            >
-              <option value="">An installed world...</option>
-              {installed.map((pack) => (
-                <option key={pack.id} value={pack.id}>
-                  {pack.name}
-                </option>
-              ))}
-            </select>
+            <span className="w-56">
+              <Select
+                value={startFrom}
+                label="An installed world"
+                placeholder="An installed world..."
+                size="sm"
+                disabled={busy === "installed"}
+                onChange={(next) => {
+                  setStartFrom(next);
+                  void fromInstalled(next);
+                }}
+                options={installed.map((pack) => ({ value: pack.id, label: pack.name, icon: { kind: "glyph" as const, key: "system-plugin" } }))}
+              />
+            </span>
           ) : null}
           <button
             type="button"

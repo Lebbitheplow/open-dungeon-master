@@ -3,10 +3,12 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { Loader2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { GoldTitle } from "@/components/ui/GoldTitle";
 import { Wizard, type WizardStep } from "@/components/ui/Wizard";
 import { submitWorldSetup } from "@/app/WorldSetupFields";
 import { submitContentImport } from "@/app/workshop/ContentImportPicker";
 import { groupByFranchise, type WorldPackSummary } from "@/lib/worlds/summary";
+import { genrePreset } from "@/lib/genres";
 import type { Genre } from "@/lib/schemas/game-settings";
 import {
   applyPack,
@@ -15,6 +17,7 @@ import {
   type CampaignDraft,
   type WizardGates,
 } from "@/app/create-campaign/draft";
+import { presetTheme } from "@/app/create-campaign/portals";
 import { PremiseStep } from "@/app/create-campaign/PremiseStep";
 import { WorldStep } from "@/app/create-campaign/WorldStep";
 import { PartyStep } from "@/app/create-campaign/PartyStep";
@@ -30,6 +33,9 @@ type ServerCapabilities = {
   images: { configured: boolean };
   tts: { configured: boolean };
 };
+
+const STEP_KEYS = ["premise", "world", "party", "feel", "advanced", "review"] as const;
+type StepKey = (typeof STEP_KEYS)[number];
 
 // The new-campaign wizard: six screens over one draft (src/app/create-
 // campaign/draft.ts), paced one decision at a time instead of one long form.
@@ -55,7 +61,21 @@ export function CreateCampaignDialog({
   onCreated: (campaignId: string) => void;
   solo?: boolean;
 }) {
-  const [draft, setDraft] = useState<CampaignDraft>(DEFAULT_DRAFT);
+  // The default genre's preset writes the first theme, exactly as picking any
+  // other portal would; typing in the field takes it over for good.
+  const [draft, setDraft] = useState<CampaignDraft>(() => presetTheme(DEFAULT_DRAFT));
+  // The wizard's step is held here so each step can be told when it is the
+  // one on screen: every step is mounted at once, and an entrance should play
+  // when it is seen. It starts over each time the dialog opens, as it did
+  // while the wizard kept it.
+  const [step, setStep] = useState(0);
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) {
+      setStep(0);
+    }
+  }
   const [packs, setPacks] = useState<WorldPackSummary[]>([]);
   const [capabilities, setCapabilities] = useState<ServerCapabilities | null>(null);
   const [error, setError] = useState("");
@@ -132,16 +152,20 @@ export function CreateCampaignDialog({
   const selectedPack = packs.find((pack) => pack.id === draft.worldPack) ?? null;
 
   const choosePack = (pack: WorldPackSummary) => setDraft((current) => applyPack(current, pack));
-  const dropPack = () => setDraft((current) => clearPack(current, selectedPack));
+  // Leaving a pack hands the theme back to the genre's preset, unless the
+  // person typed their own.
+  const dropPack = () => setDraft((current) => presetTheme(clearPack(current, selectedPack)));
   // Picking a bare genre by hand leaves the pack. A pack is defined as its
   // baseGenre plus overrides, so letting the two disagree would blend the
   // pack's flavor over the wrong preset and overlay its monsters onto the
   // wrong bestiary catalog.
   const pickGenre = (genre: Genre) =>
-    setDraft((current) => ({
-      ...(current.worldPack ? clearPack(current, selectedPack) : current),
-      genre,
-    }));
+    setDraft((current) =>
+      presetTheme({
+        ...(current.worldPack ? clearPack(current, selectedPack) : current),
+        genre,
+      }),
+    );
 
   async function submit() {
     if (busy || (solo && storyKnownMissing)) {
@@ -166,6 +190,7 @@ export function CreateCampaignDialog({
       ambienceEnabled,
       ambienceAuto,
       boardDrawing,
+      enemyIntent,
       presentation,
       multiCharacter,
       multiclassingEnabled,
@@ -214,6 +239,7 @@ export function CreateCampaignDialog({
             ambienceEnabled,
             ambienceAuto: ambienceEnabled && ambienceAuto,
             boardDrawing,
+            enemyIntent,
             presentation,
             multiCharacter,
             multiclassingEnabled,
@@ -282,11 +308,33 @@ export function CreateCampaignDialog({
   // least one field in every mode (voice chat leaves the Advanced step on a
   // solo table, but the variant rules and prep stay), so the filter is there
   // for the mode that changes that, not for one that exists now.
+  const applies: Record<StepKey, boolean> = {
+    premise: true,
+    world: true,
+    party: true,
+    feel: true,
+    advanced: true,
+    review: true,
+  };
+  const order = STEP_KEYS.filter((key) => applies[key]);
+  const activeKey = order[Math.min(Math.max(step, 0), order.length - 1)];
+  // The step's short name stays as the eyebrow; the question under it is the
+  // gold title, which rises again each time its step comes on screen.
+  const heading = (key: StepKey, name: string, question: string) => (
+    <span className="block">
+      <span className="cc-eyebrow block text-stone-500">{name}</span>
+      <GoldTitle as="span" size="text-lg sm:text-xl" animate={activeKey === key} className="inline-block">
+        {question}
+      </GoldTitle>
+    </span>
+  );
+
   const steps = (
     [
       {
         key: "premise",
-        title: "The premise",
+        label: "Premise",
+        title: heading("premise", "The premise", solo ? "What is this adventure?" : "What is this campaign?"),
         blurb: solo ? "Name the adventure and decide who narrates." : "Name it and decide who runs the table.",
         content: (
           <PremiseStep
@@ -299,63 +347,97 @@ export function CreateCampaignDialog({
           />
         ),
         canContinue: draft.title.trim().length > 0,
-        applies: true,
       },
       {
         key: "world",
-        title: "The world",
-        blurb: "Pick a setting and say what the story is about.",
-        content: <WorldStep {...stepProps} onPickGenre={pickGenre} />,
-        applies: true,
+        label: "Setting",
+        title: heading("world", "The world", "What kind of world is this?"),
+        blurb:
+          "Pick a setting and say what the story is about. Every setting is the same 5e underneath; what changes is how the Dungeon Master talks, what the maps look like, and who lives there.",
+        continueLabel: `Continue in ${genrePreset(draft.genre).name}`,
+        content: (
+          <WorldStep
+            {...stepProps}
+            active={activeKey === "world"}
+            selectedPack={selectedPack}
+            onPickGenre={pickGenre}
+          />
+        ),
       },
       {
         key: "party",
-        title: "The party",
+        label: "Party",
+        title: heading("party", "The party", solo ? "How strong, and how hard?" : "Who is playing, and how hard?"),
         blurb: solo ? "Where your hero begins." : "Who is adventuring, and how hard the road is.",
         content: <PartyStep {...stepProps} />,
-        applies: true,
       },
       {
         key: "feel",
-        title: "The feel",
+        label: "The table",
+        title: heading("feel", "The feel", "How does this table feel?"),
         blurb: "What is on at the table. Flip any of these later in the lobby too.",
-        content: <FeelStep {...stepProps} />,
-        applies: true,
+        content: <FeelStep {...stepProps} active={activeKey === "feel"} />,
       },
       {
         key: "advanced",
-        title: "Advanced",
+        label: "Advanced",
+        title: heading("advanced", "Advanced", "The parts you can skip"),
         blurb: "Variant rules, house rules, prep and live voice. All optional.",
         content: <AdvancedStep {...stepProps} />,
-        applies: true,
       },
       {
         key: "review",
-        title: "Review",
-        blurb: "Ready the table.",
-        content: <ReviewStep {...stepProps} selectedPack={selectedPack} error={error} />,
+        label: "Review",
+        title: heading("review", "Review", "Here is what you made"),
+        blurb: "Ready the table. The cover is the tile this will wear on the home screen until you paint it one.",
+        content: (
+          <ReviewStep
+            {...stepProps}
+            active={activeKey === "review"}
+            selectedPack={selectedPack}
+            error={error}
+          />
+        ),
         canContinue: !busy && !(solo && storyKnownMissing),
-        applies: true,
       },
-    ] satisfies Array<WizardStep & { applies: boolean }>
-  ).filter((step) => step.applies);
+    ] satisfies Array<WizardStep & { key: StepKey }>
+  ).filter((entry) => applies[entry.key]);
+
+  // The choices so far, in one quiet line in the header, so a later step
+  // still says which world it is furnishing.
+  const draftLine = [
+    genrePreset(draft.genre).name,
+    solo ? "solo" : `${draft.maxPlayers} players`,
+    `level ${draft.startingLevel}`,
+    draft.difficulty,
+  ].join(" · ");
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-black/60" />
+        <Dialog.Overlay className="dialog-overlay fixed inset-0 z-50 bg-[#05030d]/70 backdrop-blur-sm" />
         {/* A fixed height rather than a cap: the wizard's steps sit side by
             side and each scrolls on its own, so the panel has to be the
             thing that decides how tall a step may be. 90vh reads as a full
-            sheet on a phone; the rem cap keeps it a dialog on a monitor. */}
-        <Dialog.Content className="panel fixed left-1/2 top-1/2 flex h-[min(90vh,46rem)] w-[min(92vw,34rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl p-6">
+            sheet on a phone; the rem cap keeps it a dialog on a monitor.
+            Wide at lg so the eight portals sit four across; on a phone the
+            panel takes nearly the whole width so they still fit two. */}
+        <Dialog.Content className="cc-shell panel fixed left-1/2 top-1/2 z-50 flex h-[min(90vh,46rem)] w-[min(96vw,34rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl p-4 sm:p-6 lg:w-[min(96vw,60rem)]">
           <Dialog.Title className="sr-only">{title}</Dialog.Title>
-          <Dialog.Close className="absolute right-5 top-5 z-10 rounded p-1 text-stone-400 hover:bg-stone-900">
+          <Dialog.Close
+            aria-label="Close"
+            className="absolute right-3 top-3 z-10 rounded p-1 text-stone-400 hover:bg-stone-900 sm:right-5 sm:top-5"
+          >
             <X className="size-4" />
           </Dialog.Close>
           <Wizard
             title={title}
+            aside={<span className="pr-2">{draftLine}</span>}
+            variant="diamonds"
+            wipe
             steps={steps}
+            step={step}
+            onStepChange={setStep}
             onDone={() => void submit()}
             onCancel={() => onOpenChange(false)}
             doneLabel={

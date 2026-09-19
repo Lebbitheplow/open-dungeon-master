@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { EyeOff, Image as ImageIcon, Loader2, Trash2, Users } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
 import type { LoreLinkTarget, LoreVisibility } from "@/lib/dm/world-lore-logic";
 import { Markdown } from "@/components/ui/Markdown";
 import type { LoreEntryView } from "@/app/workshop/lore/types";
@@ -12,7 +13,7 @@ import type { LoreEntryView } from "@/app/workshop/lore/types";
 // rendered with headings, lists and [[links]] instead of as a block of
 // text.
 
-const chip = "flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px]";
+const chip = cn(ui.btnSmall, "px-2.5 py-1.5");
 
 export function VisibilitySelect({
   value,
@@ -22,30 +23,30 @@ export function VisibilitySelect({
   onChange: (next: LoreVisibility) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-1">
-      <button
+    <div data-pill-group="" className="flex flex-wrap items-center gap-1.5 text-xs">
+      <button data-on={value === "party" ? "" : undefined}
         type="button"
         aria-pressed={value === "party"}
         onClick={() => onChange("party")}
         className={cn(
           chip,
-          value === "party" ? "border-emerald-700 bg-emerald-950/40 text-emerald-200" : "border-stone-700 text-stone-400",
+          value === "party" ? "border-emerald-700 bg-emerald-950/40 text-emerald-200" : "",
         )}
       >
         <Users className="size-3" /> The table reads it
       </button>
-      <button
+      <button data-on={value === "dm" ? "" : undefined}
         type="button"
         aria-pressed={value === "dm"}
         onClick={() => onChange("dm")}
         className={cn(
           chip,
-          value === "dm" ? "border-violet-700 bg-violet-950/40 text-violet-200" : "border-stone-700 text-stone-400",
+          value === "dm" ? "border-violet-700 bg-violet-950/40 text-violet-200" : "",
         )}
       >
         <EyeOff className="size-3" /> Only I read it
       </button>
-      <span className="text-[10px] text-stone-600">
+      <span className="text-[11px] text-stone-500">
         {value === "dm"
           ? "A secret: the DM prompt knows it, the players never see it."
           : "Part of the world bible every player can open. With a picture, a handout."}
@@ -94,7 +95,7 @@ export function LoreImageField({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className="flex flex-wrap items-center gap-1.5 text-xs">
       <input
         ref={fileRef}
         type="file"
@@ -116,17 +117,17 @@ export function LoreImageField({
         type="button"
         disabled={uploading}
         onClick={() => fileRef.current?.click()}
-        className={cn(chip, "border-stone-700 text-stone-300 hover:bg-stone-900 disabled:opacity-50")}
+        className={chip}
       >
         {uploading ? <Loader2 className="size-3 animate-spin" /> : <ImageIcon className="size-3" />}
         {imagePath ? "Replace the picture" : "Add a picture"}
       </button>
       {imagePath ? (
-        <button type="button" onClick={() => onChange("")} className={cn(chip, "border-stone-700 text-stone-400 hover:bg-stone-900")}>
+        <button type="button" onClick={() => onChange("")} className={chip}>
           <Trash2 className="size-3" /> Take it away
         </button>
       ) : null}
-      {error ? <span className="text-[11px] text-red-400">{error}</span> : null}
+      {error ? <span className="motion-shake inline-block text-[11px] text-red-400">{error}</span> : null}
     </div>
   );
 }
@@ -164,7 +165,7 @@ export function LoreBody({
             <button
               type="button"
               onClick={() => void window.odm?.openDocument?.(entry.attachmentPath ?? "")}
-              className="mb-2 rounded border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:border-amber-700 hover:text-amber-100"
+              className={cn(ui.btnSmall, "mb-2 text-sm")}
             >
               Open the pages in your reader
             </button>

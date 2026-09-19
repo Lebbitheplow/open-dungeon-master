@@ -69,15 +69,16 @@ function StartBlock({
   }
   return (
     <>
+      {/* The lobby's one hero action: wide, foiled while it can be pressed. */}
       <button
         type="button"
         onClick={onStart}
         disabled={busy || Boolean(blocker)}
-        className={cn(ui.btnPrimary, "w-full py-2.5")}
+        className={cn(ui.btnPrimary, "h-14 w-full text-[15px]", !busy && !blocker && "motion-foil begin-glow")}
       >
-        <Play className="size-4" /> Begin the adventure
+        <Play className="size-5" /> Begin the adventure
       </button>
-      {blocker ? <p className="text-center text-sm text-stone-500">{blocker}</p> : null}
+      {blocker ? <p className="reveal text-center text-sm text-stone-500">{blocker}</p> : null}
     </>
   );
 }
@@ -184,9 +185,10 @@ export function LobbyActions({
             disabled={busy}
             className={cn(
               "flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 font-medium transition-colors disabled:opacity-60",
+              "motion-press font-display uppercase tracking-[0.12em]",
               myMember?.ready
-                ? "border border-stone-700 text-stone-300 hover:bg-stone-900"
-                : "border border-emerald-500/40 bg-emerald-700 text-emerald-50 hover:bg-emerald-600",
+                ? "border border-amber-500/40 bg-amber-400/10 text-amber-200 hover:bg-amber-400/15"
+                : "border border-amber-400/60 bg-gradient-to-b from-amber-100 via-amber-200 to-amber-400 text-amber-950 shadow-glow-gold hover:brightness-105",
             )}
           >
             {busy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
@@ -216,7 +218,7 @@ export function LobbyActions({
       {isSolo ? null : (
         <StartBlock canStart={canStart} busy={busy} blocker={startBlocker} onStart={onStart} />
       )}
-      {error ? <p className="text-center text-sm text-red-400">{error}</p> : null}
+      {error ? <p className="motion-shake text-center text-sm text-red-400">{error}</p> : null}
 
       {isOwner ? (
         <button

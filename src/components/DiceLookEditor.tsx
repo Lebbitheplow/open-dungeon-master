@@ -1,8 +1,13 @@
 "use client";
 
-import { Dices, Loader2, RotateCcw } from "lucide-react";
+import { Switch } from "@/components/ui/Switch";
+import { Loader2, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Dialog } from "@/components/ui/Dialog";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { Select } from "@/components/ui/Select";
+import { ui } from "@/lib/ui";
 import { cn } from "@/lib/cn";
 import {
   DEFAULT_DICE_LOOK,
@@ -24,11 +29,6 @@ import { hydrateDiceLook, useDiceLook, writeDiceLook } from "@/lib/dice/dice-loo
 // the table behind the dialog, and every other device, follows along.
 
 const LABEL = "text-xs text-stone-400";
-const SELECT = cn(
-  "w-full rounded-md border border-stone-700 bg-stone-900 px-2 py-1.5 text-xs",
-  "text-stone-200 outline-none focus:border-amber-500",
-);
-
 type PreviewBox = {
   initialize: () => Promise<void>;
   roll: (notation: string) => Promise<unknown>;
@@ -122,7 +122,7 @@ function DiceLookPreview({ look }: { look: DiceLook }) {
   }, [look, state]);
 
   return (
-    <div className="relative h-52 overflow-hidden rounded-lg border border-stone-700/70 bg-[radial-gradient(ellipse_at_center,rgba(120,90,40,0.25),rgba(12,10,20,0.9))]">
+    <div className="relative h-52 overflow-hidden rounded-xl border border-amber-500/25 shadow-[0_2px_10px_rgba(4,2,12,0.5)_inset] bg-[radial-gradient(ellipse_at_center,rgba(120,90,40,0.25),rgba(12,10,20,0.9))]">
       <div
         id={id}
         ref={hostRef}
@@ -219,10 +219,8 @@ export function DiceLookEditor({ className }: { className?: string }) {
       <DiceLookPreview look={look} />
 
       <div>
-        <span className={cn(LABEL, "mb-2 block font-medium uppercase tracking-wide")}>
-          Start from
-        </span>
-        <div className="flex flex-wrap gap-1.5">
+        <SectionHead title="Start from" glyph="tab-dice" level="h4" />
+        <div data-pill-group="" className="stagger-pop flex flex-wrap gap-1.5">
           {DICE_LOOK_PRESETS.map((preset) => {
             const active = sameDiceLook(preset.look, look);
             return (
@@ -233,8 +231,9 @@ export function DiceLookEditor({ className }: { className?: string }) {
                 title={preset.label}
                 aria-label={`${preset.label} dice`}
                 aria-pressed={active}
+                data-on={active ? "" : undefined}
                 className={cn(
-                  "flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2.5 text-xs transition-colors",
+                  "motion-press flex min-h-8 items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2.5 text-xs transition-colors",
                   active
                     ? "border-amber-500/70 bg-amber-950/40 text-amber-100"
                     : "border-stone-700 text-stone-400 hover:border-stone-500 hover:text-stone-200",
@@ -265,57 +264,36 @@ export function DiceLookEditor({ className }: { className?: string }) {
                   value={look.outline}
                   onChange={(event) => set({ outline: event.target.value.toUpperCase() })}
                   aria-label="Outline colour"
-                  className="h-8 w-12 cursor-pointer rounded-md border border-stone-700 bg-stone-900 p-0.5"
+                  className="reveal-pop h-8 w-12 cursor-pointer rounded-md border border-stone-700 bg-stone-900 p-0.5"
                 />
               ) : null}
-              <button
-                type="button"
-                role="switch"
-                aria-checked={outlined}
-                onClick={() => set({ outline: outlined ? "" : "#000000" })}
-                className={cn(
-                  "rounded-md border px-2.5 py-1 text-xs",
-                  outlined
-                    ? "border-amber-700 bg-amber-950/40 text-amber-200"
-                    : "border-stone-700 text-stone-400 hover:bg-stone-900",
-                )}
-              >
-                {outlined ? "On" : "Off"}
-              </button>
+              <Switch on={outlined} onChange={(next) => set({ outline: next ? "#000000" : "" })} label="Outline the numbers" />
             </span>
           </div>
         </div>
         <div className="space-y-3">
-          <label className="block">
+          <div>
             <span className={cn(LABEL, "mb-1 block")}>Pattern</span>
-            <select
+            <Select<DiceTexture>
               value={look.texture}
-              onChange={(event) => set({ texture: event.target.value as DiceTexture })}
-              aria-label="Pattern"
-              className={SELECT}
-            >
-              {DICE_TEXTURES.map((texture) => (
-                <option key={texture.id} value={texture.id}>
-                  {texture.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block">
+              onChange={(texture) => set({ texture })}
+              options={DICE_TEXTURES.map((texture) => ({ value: texture.id, label: texture.label }))}
+              label="Pattern"
+              size="sm"
+              className="w-full"
+            />
+          </div>
+          <div>
             <span className={cn(LABEL, "mb-1 block")}>Finish</span>
-            <select
+            <Select<DiceMaterial>
               value={look.material}
-              onChange={(event) => set({ material: event.target.value as DiceMaterial })}
-              aria-label="Finish"
-              className={SELECT}
-            >
-              {DICE_MATERIALS.map((material) => (
-                <option key={material.id} value={material.id}>
-                  {material.label}
-                </option>
-              ))}
-            </select>
-          </label>
+              onChange={(material) => set({ material })}
+              options={DICE_MATERIALS.map((material) => ({ value: material.id, label: material.label }))}
+              label="Finish"
+              size="sm"
+              className="w-full"
+            />
+          </div>
         </div>
       </div>
 
@@ -327,7 +305,7 @@ export function DiceLookEditor({ className }: { className?: string }) {
           type="button"
           onClick={() => writeDiceLook(DEFAULT_DICE_LOOK)}
           disabled={isDefault}
-          className="flex shrink-0 items-center gap-1 text-xs text-stone-400 hover:text-stone-200 disabled:opacity-40"
+          className={cn(ui.btnSmall, "shrink-0 px-2.5 py-1 text-xs disabled:opacity-40")}
         >
           <RotateCcw className="size-3" /> Reset
         </button>
@@ -349,7 +327,7 @@ export function DiceLookDialog({
       open={open}
       onOpenChange={onOpenChange}
       title="Your dice"
-      icon={<Dices className="size-5 text-amber-300" />}
+      icon={<GameIcon icon={{ kind: "glyph", key: "die-d20" }} size="size-7" />}
       width="w-[min(92vw,38rem)]"
     >
       {open ? <DiceLookEditor /> : null}
@@ -368,10 +346,7 @@ export function DiceLookButton({ className }: { className?: string }) {
         type="button"
         onClick={() => setOpen(true)}
         title="Choose the colours, pattern and finish of your virtual dice."
-        className={cn(
-          "flex w-full items-center justify-center gap-1.5 rounded border border-stone-700 py-1 text-xs text-stone-400 hover:bg-stone-900",
-          className,
-        )}
+        className={cn(ui.btnSmall, "w-full justify-center py-1 text-xs", className)}
       >
         <Swatch look={look} className="size-4" />
         Customise my dice

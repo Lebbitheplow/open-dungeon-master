@@ -3,6 +3,7 @@
 import { UnofficialPackNotice } from "@/components/UnofficialPackNotice";
 import { InfoButton } from "@/components/ui/InfoDialog";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { Select } from "@/components/ui/Select";
 import { describeSkill } from "@/lib/help";
 import { SRD_SKILLS } from "@/lib/srd";
 import type { WorldPack } from "@/lib/worlds/types";
@@ -116,16 +117,13 @@ export function IdentityStep({
       <StepPanel title="Details">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Gender">
-            <select
+            <Select<string>
               value={state.gender}
-              onChange={(event) => state.setGender(event.target.value)}
-              className={inputClass}
-            >
-              <option value="">Unspecified</option>
-              {GENDERS.map((value) => (
-                <option key={value} value={value}>{value}</option>
-              ))}
-            </select>
+              onChange={state.setGender}
+              label="Gender"
+              className="w-full"
+              options={[{ value: "", label: "Unspecified" }, ...GENDERS.map((value) => ({ value: value as string, label: value as string }))]}
+            />
           </Field>
           <Field label="Level">
             {fixedLevel ? (
@@ -133,15 +131,13 @@ export function IdentityStep({
                 {fixedLevel} (campaign)
               </span>
             ) : (
-              <select
-                value={state.level}
-                onChange={(event) => state.setLevel(Number(event.target.value))}
-                className={inputClass}
-              >
-                {Array.from({ length: 20 }, (_, index) => index + 1).map((value) => (
-                  <option key={value} value={value}>{value}</option>
-                ))}
-              </select>
+              <Select<string>
+                value={String(state.level)}
+                onChange={(next) => state.setLevel(Number(next))}
+                label="Level"
+                className="w-full"
+                options={Array.from({ length: 20 }, (_, index) => ({ value: String(index + 1), label: String(index + 1) }))}
+              />
             )}
           </Field>
           <Field label="Background">

@@ -317,6 +317,34 @@ version gate. See `docs/vtt-parity-implementation-plan.md` sections 11 to
   from the plan: the Map Forge and Editor redesign, the Hand, the creators,
   the rest-of-app screen pass, skeletons and the moment layer.
 
+- **The redesign** (0.21.0), the rest of the visual overhaul
+  (`docs/visual-overhaul-plan.md` section 9.0b has the table). The mockup
+  screens: the Hand (fanned cards, aim bar, two-step commit, with the composer
+  still there to type a move), the board as a stage (spotlight, initiative
+  portraits, turn HUD from the engine's budget, violet roll cards, delivery
+  shapes per damage type, enemy intent behind a table setting), the Map Forge
+  and Editor with per-map skins and stamped props, the character creator
+  (diamond stepper, 4d6 dice grid, lineage and class card grids with the
+  setting's recommendations leading) and the six-step campaign creator with
+  all 30 settings still sent. Motion is on everything: every interactive
+  element lifts, sinks and springs without opting in
+  (`src/lib/motion/answer.ts`) and one highlight slides between the choices
+  of any marked row and every tab strip (`src/lib/motion/pill.ts`). The kit
+  gained `Select`, `NumberStepper`, `Slider`, `DateTimePicker`, `Switch`,
+  `SectionHead`, `ContextMenu` and a command palette, and no browser-native
+  select, number, range or date control is left under `src`. The design was
+  carried to the screens the mockups did not draw: session panels, the DM
+  console, the workshop systems, account, help and admin, the session frame,
+  one shared character sheet, the painted handout scroll, the chronicle book,
+  moments (level up, rest, loot, travel), page skeletons and painted empty
+  states. The QR button shares the one public address. The apps build the
+  same screens; their stylesheet builder inlines nested imports and ships the
+  painted furniture beside the game sheet, and their own screens now need a
+  host on 0.21.0. The front door is two panels on a desk: a painting of one of
+  the seven kinds of world, a different one each visit, with fireflies over
+  it, beside the form. Not built: the NPC conversation panel, which is a new
+  play mode with its own model calls rather than a restyle.
+
 ## Next
 
 - Ruleset validation (`src/lib/rulesets/validate.ts` from the workshop plan):

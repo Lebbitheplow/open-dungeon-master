@@ -34,6 +34,23 @@ export const beatInput =
 
 // Link field, the inventory bucket it picks from, the label the editor shows,
 // and the one word a card chip has room for.
+// The painted glyph for a kind of card and for each thing a card points at.
+export const KIND_GLYPH: Record<BeatKind, string> = {
+  setting: "system-region",
+  backstory: "tab-journal",
+  event: "tab-timeline",
+  encounter: "system-encounters",
+  hook: "quest-active",
+  secret: "quest-hidden",
+  npc_moment: "system-cast",
+};
+export const LINK_GLYPH: Record<keyof BeatLinks, string> = {
+  npcId: "system-cast",
+  mapId: "system-maps",
+  encounterId: "system-encounters",
+  locationId: "system-region",
+};
+
 export const LINK_FIELDS: Array<[keyof BeatLinks, keyof BoardInventory, string, string]> = [
   ["npcId", "npcs", "Who", "who"],
   ["mapId", "maps", "On which map", "map"],

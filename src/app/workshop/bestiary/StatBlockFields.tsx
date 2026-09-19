@@ -22,7 +22,12 @@ import { OptionGlossary } from "@/components/ui/OptionGlossary";
 import { describeSkill } from "@/lib/help";
 import type { GlossaryEntry } from "@/lib/help/terms";
 import { ALIGNMENT_LABELS } from "@/app/characters/builder/usePickerGroups";
-import { input } from "@/app/workshop/bestiary/types";
+import { ui } from "@/lib/ui";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { NumberStepper } from "@/components/ui/NumberStepper";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { Select } from "@/components/ui/Select";
+import { Field, FieldLabel, OptionalStepper, addChip, chip, chipOn, chipRow, rowIcon } from "@/app/workshop/kit";
 
 // The printed half of a stat block (docs/workshop-parity-audit.md phase
 // 12): ability scores, skills, senses, languages and alignment, the spells
@@ -52,9 +57,16 @@ function signed(value: number): string {
 
 type Setter = (patch: Partial<EnemyStats>) => void;
 
-function Label({ children }: { children: string }) {
-  return <span className="text-[10px] uppercase tracking-wide text-stone-500">{children}</span>;
-}
+const capital = (text: string) => text.replace(/(^|\s)\S/g, (letter) => letter.toUpperCase());
+const ALIGNMENT_OPTIONS = ALIGNMENTS.map((alignment) => ({ value: alignment as string, label: alignment ? capital(alignment) : "Unstated" }));
+const SECTION_OPTIONS = TRAIT_SECTIONS.map((section) => ({ value: section, label: SECTION_LABELS[section] }));
+// The painted glyph for a sense; the names are the engine's keys.
+const SENSE_GLYPHS: Record<string, string> = {
+  blindsight: "sense-blindsight",
+  darkvision: "sense-darkvision",
+  tremorsense: "sense-tremorsense",
+  truesight: "sense-truesight",
+};
 
 // What each skill and alignment means, for the ⓘ beside those lists. The
 // alignment blurbs are the character builder's; the bestiary's list uses
@@ -95,37 +107,41 @@ export function AbilityScores({ draft, onChange }: { draft: MonsterDraft; onChan
     });
   return (
     <div className="space-y-1">
-      <div className="flex items-center gap-2">
-        <Label>Ability scores</Label>
-        <button
-          type="button"
-          onClick={derive}
-          disabled={!Object.keys(scores).length}
-          className="rounded-md border border-stone-700 px-1.5 py-0.5 text-[10px] text-stone-400 hover:text-amber-100 disabled:opacity-40"
-          title="Set the DEX modifier and the saving throws from these scores"
-        >
-          Saves from scores
-        </button>
-      </div>
-      <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-6">
+      <SectionHead
+        title="Ability scores"
+        glyph="ability-str"
+        className="mb-1"
+        aside={
+          <button
+            type="button"
+            onClick={derive}
+            disabled={!Object.keys(scores).length}
+            className={cn(ui.btnSmall, addChip)}
+            title="Set the DEX modifier and the saving throws from these scores"
+          >
+            Saves from scores
+          </button>
+        }
+      />
+      <div className="stagger-up grid grid-cols-2 gap-2 sm:grid-cols-3">
         {ABILITY_ORDER.map((ability) => (
-          <label key={ability} className="flex flex-col gap-0.5">
-            <span className="text-[10px] uppercase text-stone-500">
-              {ability}
+          <div key={ability} className="flex flex-col gap-1">
+            <span className="flex items-center gap-1">
+              <GameIcon icon={{ kind: "glyph", key: `ability-${ability}` }} size="size-5" />
+              <FieldLabel className="uppercase">{ability}</FieldLabel>
               {typeof scores[ability] === "number" ? (
-                <span className="ml-1 text-stone-600">{signed(abilityMod(scores[ability] as number))}</span>
+                <span className="text-[11px] text-stone-400">{signed(abilityMod(scores[ability] as number))}</span>
               ) : null}
             </span>
-            <input
-              type="number"
+            <OptionalStepper
+              label={`${ability.toUpperCase()} score`}
               min={1}
               max={30}
-              value={scores[ability] ?? ""}
-              placeholder="10"
-              onChange={(event) => setScore(ability, event.target.value === "" ? "" : Number(event.target.value))}
-              className={cn(input, "w-full")}
+              fallback={10}
+              value={scores[ability]}
+              onChange={(next) => setScore(ability, next)}
             />
-          </label>
+          </div>
         ))}
       </div>
     </div>
@@ -137,6 +153,7 @@ export function SkillsAndSenses({ draft, onChange }: { draft: MonsterDraft; onCh
   const set: Setter = (patch) => onChange({ ...draft, stats: { ...stats, ...patch } });
   const skills = stats.skills ?? {};
   const senses = stats.senses ?? {};
+  const passiveDefault = 10 + (skills.perception ?? stats.saveMods?.wis ?? 0);
   const setSense = (name: keyof NonNullable<EnemyStats["senses"]>, value: number | "") => {
     const next = { ...senses };
     if (value === "" || value === 0) {
@@ -149,16 +166,17 @@ export function SkillsAndSenses({ draft, onChange }: { draft: MonsterDraft; onCh
   return (
     <div className="space-y-2">
       <div className="space-y-1">
+        <SectionHead title="Skills and senses" glyph="skill-perception" className="mb-1" />
         <span className="flex items-center gap-1">
-          <Label>Skills (tap to add, type the bonus)</Label>
+          <FieldLabel>Skills (tap to add, type the bonus)</FieldLabel>
           <OptionGlossary title="Skills" entries={SKILL_GLOSSARY} />
         </span>
-        <div className="flex flex-wrap gap-1">
+        <div className={cn("stagger-pop", chipRow)}>
           {SKILL_NAMES.map((name) => {
             const bonus = skills[name];
             const on = typeof bonus === "number";
             return (
-              <span key={name} className="flex items-center">
+              <span key={name} className="flex items-center gap-1">
                 <button
                   type="button"
                   aria-pressed={on}
@@ -171,24 +189,19 @@ export function SkillsAndSenses({ draft, onChange }: { draft: MonsterDraft; onCh
                     }
                     set({ skills: Object.keys(next).length ? next : undefined });
                   }}
-                  className={cn(
-                    "rounded-l-md border px-1.5 py-0.5 text-[11px] capitalize",
-                    on
-                      ? "border-amber-700 bg-amber-950/50 text-amber-100"
-                      : "rounded-r-md border-stone-700 text-stone-400 hover:text-stone-200",
-                  )}
+                  className={cn(ui.btnSmall, chip, on && chipOn)}
                 >
+                  <GameIcon icon={{ kind: "glyph", key: `skill-${name.toLowerCase().replace(/\s+/g, "-")}` }} size="size-4" />
                   {name}
                 </button>
                 {on ? (
-                  <input
-                    type="number"
-                    aria-label={`${name} bonus`}
+                  <NumberStepper
+                    size="sm"
+                    label={`${name} bonus`}
                     min={-5}
                     max={20}
                     value={bonus}
-                    onChange={(event) => set({ skills: { ...skills, [name]: Number(event.target.value) } })}
-                    className={cn(input, "w-12 rounded-l-none border-l-0 py-0.5 text-[11px]")}
+                    onChange={(next) => set({ skills: { ...skills, [name]: next } })}
                   />
                 ) : null}
               </span>
@@ -196,38 +209,44 @@ export function SkillsAndSenses({ draft, onChange }: { draft: MonsterDraft; onCh
           })}
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-5">
+      <div className="stagger-up grid grid-cols-2 gap-2 sm:grid-cols-3">
         {SENSE_NAMES.map((name) => (
-          <label key={name} className="flex flex-col gap-0.5">
-            <span className="text-[10px] uppercase tracking-wide text-stone-500">{name} (ft)</span>
-            <input
-              type="number"
+          <div key={name} className="flex flex-col gap-1">
+            <span className="flex items-center gap-1">
+              {SENSE_GLYPHS[name] ? <GameIcon icon={{ kind: "glyph", key: SENSE_GLYPHS[name] }} size="size-5" /> : null}
+              <FieldLabel className="capitalize">{name}</FieldLabel>
+            </span>
+            <OptionalStepper
+              label={`${name} in feet`}
               min={0}
               max={600}
               step={5}
-              value={senses[name] ?? ""}
-              placeholder="0"
-              onChange={(event) => setSense(name, event.target.value === "" ? "" : Number(event.target.value))}
-              className={cn(input, "w-full")}
+              suffix="ft"
+              fallback={0}
+              value={senses[name]}
+              onChange={(next) => setSense(name, next)}
             />
-          </label>
+          </div>
         ))}
-        <label className="flex flex-col gap-0.5">
-          <span className="text-[10px] uppercase tracking-wide text-stone-500">Passive Perception</span>
-          <input
-            type="number"
+        <div className="flex flex-col gap-1">
+          <span className="flex items-center gap-1">
+            <GameIcon icon={{ kind: "glyph", key: "sense-passive-perception" }} size="size-5" />
+            <FieldLabel>Passive Perception</FieldLabel>
+          </span>
+          <OptionalStepper
+            label="Passive Perception"
             min={1}
             max={40}
-            value={senses.passivePerception ?? ""}
-            placeholder={String(10 + (skills.perception ?? stats.saveMods?.wis ?? 0))}
-            onChange={(event) =>
-              setSense("passivePerception", event.target.value === "" ? "" : Number(event.target.value))
-            }
-            className={cn(input, "w-full")}
+            fallback={passiveDefault}
+            value={senses.passivePerception}
+            onChange={(next) => setSense("passivePerception", next)}
           />
-        </label>
+          {typeof senses.passivePerception === "number" ? null : (
+            <span className="text-[11px] text-stone-500">Unset, so it reads as {passiveDefault}.</span>
+          )}
+        </div>
       </div>
-      <p className="text-[10px] text-stone-600">
+      <p className="text-[11px] text-stone-500">
         A hiding character has to beat the passive Perception; the printed number wins, then the skill, then Wisdom.
       </p>
     </div>
@@ -241,16 +260,16 @@ export function LanguagesAndHabitat({ draft, onChange }: { draft: MonsterDraft; 
   const spells = stats.spells ?? [];
   return (
     <div className="space-y-2">
-      <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-        <label className="flex flex-col gap-0.5">
-          <Label>Languages</Label>
+      <SectionHead title="Tongue, creed and habitat" glyph="system-lore" className="mb-1" />
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <Field as="label" label="Languages">
           <div className="flex flex-wrap items-center gap-1.5">
             <input
               value={stats.languages ?? ""}
               maxLength={200}
               placeholder="Common, Goblin"
               onChange={(event) => set({ languages: event.target.value || undefined })}
-              className={cn(input, "min-w-32 flex-1")}
+              className={cn(ui.input, "min-w-32 flex-1")}
             />
             <AddFromList
               prompt="Add"
@@ -258,27 +277,18 @@ export function LanguagesAndHabitat({ draft, onChange }: { draft: MonsterDraft; 
               onPick={(term) => set({ languages: appendTerm(stats.languages ?? "", term) })}
             />
           </div>
-        </label>
-        <label className="flex flex-col gap-0.5">
-          <span className="flex items-center gap-1">
-            <Label>Alignment</Label>
-            <OptionGlossary title="Alignments" entries={ALIGNMENT_GLOSSARY} />
-          </span>
-          <select
+        </Field>
+        <Field label="Alignment" aside={<OptionGlossary title="Alignments" entries={ALIGNMENT_GLOSSARY} />}>
+          <Select
+            label="Alignment"
             value={stats.alignment ?? ""}
-            onChange={(event) => set({ alignment: event.target.value || undefined })}
-            className={cn(input, "w-full capitalize")}
-          >
-            {ALIGNMENTS.map((alignment) => (
-              <option key={alignment} value={alignment} className="capitalize">
-                {alignment || "unstated"}
-              </option>
-            ))}
-          </select>
-        </label>
+            onChange={(next) => set({ alignment: next || undefined })}
+            options={ALIGNMENT_OPTIONS}
+          />
+        </Field>
       </div>
-      <div className="flex flex-col gap-0.5">
-        <Label>Spells known (by name, comma separated)</Label>
+      <div className="flex flex-col gap-1">
+        <FieldLabel>Spells known (by name, comma separated)</FieldLabel>
         <input
           defaultValue={spells.join(", ")}
           key={spells.join("|")}
@@ -291,7 +301,7 @@ export function LanguagesAndHabitat({ draft, onChange }: { draft: MonsterDraft; 
               set({ spells: next.length ? next : undefined });
             }
           }}
-          className={cn(input, "w-full")}
+          className={ui.input}
         />
         <ContentPick
           kind="spells"
@@ -303,13 +313,13 @@ export function LanguagesAndHabitat({ draft, onChange }: { draft: MonsterDraft; 
             }
           }}
         />
-        <span className="text-[10px] text-stone-600">
+        <span className="text-[11px] text-stone-500">
           The DM running it sees the list. Put a round of casting into extra damage so the rating counts it.
         </span>
       </div>
       <div className="space-y-1">
-        <Label>Found in</Label>
-        <div className="flex flex-wrap gap-1">
+        <FieldLabel>Found in</FieldLabel>
+        <div className={cn("stagger-pop", chipRow)}>
           {ENVIRONMENTS.map((place) => {
             const on = environment.includes(place);
             return (
@@ -321,10 +331,7 @@ export function LanguagesAndHabitat({ draft, onChange }: { draft: MonsterDraft; 
                   const next = on ? environment.filter((entry) => entry !== place) : [...environment, place];
                   set({ environment: next.length ? next : undefined });
                 }}
-                className={cn(
-                  "rounded-md border px-1.5 py-0.5 text-[11px] capitalize",
-                  on ? "border-amber-700 bg-amber-950/50 text-amber-100" : "border-stone-700 text-stone-400 hover:text-stone-200",
-                )}
+                className={cn(ui.btnSmall, chip, on && chipOn)}
               >
                 {place}
               </button>
@@ -342,26 +349,20 @@ export function SectionedTraitEditor({ draft, onChange }: { draft: MonsterDraft;
   const traits = draft.stats.traits;
   const setTraits = (next: string[]) => onChange({ ...draft, stats: { ...draft.stats, traits: next } });
   return (
-    <div className="flex flex-col gap-1">
-      <Label>Traits and actions</Label>
+    <div className="flex flex-col gap-1.5">
+      <SectionHead title="Traits and actions" glyph="tab-notes" className="mb-0" />
       {traits.map((trait, index) => {
         const { section, text } = sectionOfLine(trait);
         return (
-          <div key={index} className="flex items-center gap-1.5">
-            <select
-              value={section}
-              aria-label="Section"
-              onChange={(event) =>
-                setTraits(traits.map((row, at) => (at === index ? withSection(row, event.target.value as typeof section) : row)))
-              }
-              className={cn(input, "w-32 shrink-0 py-0.5 text-[11px]")}
-            >
-              {TRAIT_SECTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {SECTION_LABELS[option]}
-                </option>
-              ))}
-            </select>
+          <div key={index} className="flex flex-wrap items-center gap-1.5 sm:flex-nowrap">
+            <span className="w-40 shrink-0">
+              <Select
+                label="Section"
+                value={section}
+                onChange={(next) => setTraits(traits.map((row, at) => (at === index ? withSection(row, next) : row)))}
+                options={SECTION_OPTIONS}
+              />
+            </span>
             <input
               value={text}
               maxLength={TRAIT_MAX}
@@ -369,12 +370,12 @@ export function SectionedTraitEditor({ draft, onChange }: { draft: MonsterDraft;
                 setTraits(traits.map((row, at) => (at === index ? withSection(event.target.value, section) : row)))
               }
               placeholder="Fire Breath (Recharge 5-6): DC 15 Dex save, 6d6 fire, half on a success"
-              className={cn(input, "flex-1")}
+              className={cn(ui.input, "min-w-40 flex-1")}
             />
             <button
               type="button"
               onClick={() => setTraits(traits.filter((_, at) => at !== index))}
-              className="text-stone-600 hover:text-red-300"
+              className={cn(ui.iconAction, rowIcon, "hover:text-red-300")}
               aria-label="Remove trait"
             >
               <Trash2 className="size-3.5" />
@@ -383,20 +384,20 @@ export function SectionedTraitEditor({ draft, onChange }: { draft: MonsterDraft;
         );
       })}
       {traits.length < MAX_TRAITS ? (
-        <div className="flex flex-wrap gap-1">
+        <div className={cn("reveal", chipRow)}>
           {TRAIT_SECTIONS.map((section) => (
             <button
               key={section}
               type="button"
               onClick={() => setTraits([...traits, withSection("", section)])}
-              className="inline-flex items-center gap-1 rounded-md border border-stone-700 px-2 py-0.5 text-[11px] text-stone-400 hover:text-amber-100"
+              className={cn(ui.btnSmall, addChip)}
             >
               <Plus className="size-3" /> {SECTION_LABELS[section]}
             </button>
           ))}
         </div>
       ) : (
-        <p className="text-[10px] text-stone-600">The block is full at {MAX_TRAITS} lines.</p>
+        <p className="text-[11px] text-stone-500">The block is full at {MAX_TRAITS} lines.</p>
       )}
     </div>
   );

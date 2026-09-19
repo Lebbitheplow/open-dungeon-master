@@ -1,6 +1,7 @@
 "use client";
 
 import { Info, Loader2 } from "lucide-react";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { GameIcon } from "@/components/ui/GameIcon";
 import type { IconRef } from "@/lib/icons";
 import { useEffect, useState, type ReactNode } from "react";
@@ -96,7 +97,7 @@ export function renderRules(text: string): ReactNode {
     return (
       <div key={blockIndex}>
         {heading ? (
-          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-amber-200/80">
+          <p className="reveal mb-1 text-xs font-medium uppercase tracking-wide text-amber-200/80">
             {heading[1]}
           </p>
         ) : null}
@@ -251,22 +252,49 @@ export function InfoChipList({
     return emptyText ? <p className="text-xs text-stone-500">{emptyText}</p> : null;
   }
   return (
-    <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-      {items.map((item) => (
-        <span key={item.name} className="flex items-center gap-1 text-xs text-stone-300">
-          {item.icon ? <GameIcon icon={item.icon} size="size-8" /> : null}
-          {item.name}
-          {item.note ? <span className="text-stone-500">{item.note}</span> : null}
-          <InfoButton
-            label={item.name}
-            meta={item.meta}
-            text={item.text}
-            reference={item.reference}
-          />
-        </span>
-      ))}
+    <div className="stagger-pop flex flex-wrap gap-1.5">
+      {items.map((item) => {
+        const line = firstLine(item.text);
+        return (
+          <span key={item.name} className="info-chip">
+            <Tooltip
+              content={
+                <span className="flex items-start gap-2.5">
+                  {item.icon ? <GameIcon icon={item.icon} size="size-12" className="shrink-0" /> : null}
+                  <span className="min-w-0">
+                    <span className="block font-display text-[13px] tracking-wide text-amber-100">{item.name}</span>
+                    {item.meta ? <span className="block text-[10px] uppercase tracking-wider text-stone-500">{item.meta}</span> : null}
+                    <span className="mt-0.5 block text-stone-300">{line ?? "Select the mark beside it for the full entry."}</span>
+                  </span>
+                </span>
+              }
+            >
+              <span className="flex min-w-0 items-center gap-1.5" tabIndex={-1}>
+                {item.icon ? <GameIcon icon={item.icon} size="size-8" /> : null}
+                <span className="truncate">{item.name}</span>
+                {item.note ? <span className="text-stone-500">{item.note}</span> : null}
+              </span>
+            </Tooltip>
+            <InfoButton
+              label={item.name}
+              meta={item.meta}
+              text={item.text}
+              reference={item.reference}
+            />
+          </span>
+        );
+      })}
     </div>
   );
+}
+
+// The first sentence of a write-up, for the hover preview.
+function firstLine(text: string | null | undefined): string | null {
+  const plain = text?.replace(/\s+/g, " ").trim();
+  if (!plain) return null;
+  const stop = plain.search(/[.!?](\s|$)/);
+  const line = stop > 0 ? plain.slice(0, stop + 1) : plain;
+  return line.length > 160 ? `${line.slice(0, 157)}...` : line;
 }
 
 export function InfoDialog({
@@ -289,7 +317,7 @@ export function InfoDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange} title={title} width="w-[min(92vw,32rem)]">
       {meta ? (
-        <p className="mb-3 text-xs uppercase tracking-wide text-amber-200/70">{meta}</p>
+        <p className="reveal mb-3 text-xs uppercase tracking-wide text-amber-200/70">{meta}</p>
       ) : null}
       <div className="space-y-2 text-sm leading-relaxed text-stone-400">
         {text?.trim() ? renderRules(text) : reference ? <ContentBody reference={reference} /> : null}

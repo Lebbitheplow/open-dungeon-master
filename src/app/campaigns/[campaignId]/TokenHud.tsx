@@ -144,12 +144,14 @@ export function TokenHud({
                 action.onPick();
               }}
               className={cn(
-                "pointer-events-auto fx-pop absolute flex size-10 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-full border shadow-elev-2 backdrop-blur",
+                // The Dial's sigil: a dark glass disc with a lit rim, the same
+                // on the painted board in both themes.
+                "token-sigil pointer-events-auto fx-pop absolute flex size-10 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-full border shadow-elev-2 backdrop-blur",
                 action.tone === "gold"
-                  ? "border-amber-500/70 bg-stone-950/95 text-amber-200 hover:bg-amber-950/70"
+                  ? "border-[rgba(212,171,58,0.75)] text-[#ecd287]"
                   : action.tone === "ember"
-                    ? "border-ember-500/70 bg-stone-950/95 text-ember-300 hover:bg-red-950/60"
-                    : "border-stone-600 bg-stone-950/95 text-stone-200 hover:bg-stone-800",
+                    ? "border-[rgba(224,112,58,0.75)] text-[#ffbe8f]"
+                    : "border-[rgba(143,138,171,0.6)] text-[#dedbec]",
               )}
               style={{
                 left: x,
@@ -169,14 +171,14 @@ export function TokenHud({
             onClose();
           }}
           aria-label="Close"
-          className="pointer-events-auto fx-pop absolute flex size-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-stone-700 bg-stone-950/95 text-stone-400 hover:text-stone-100"
+          className="token-sigil pointer-events-auto fx-pop absolute flex size-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-[rgba(107,99,148,0.6)] text-[#aeaac6] hover:text-white"
           style={{ left: 0, top: flip ? -radius - 16 : radius + 16 }}
         >
           <X className="size-3.5" />
         </button>
         {hint ? (
           <p
-            className="pointer-events-none absolute -translate-x-1/2 whitespace-nowrap rounded-md bg-stone-950/90 px-2 py-0.5 text-[11px] text-amber-200 shadow-elev-1"
+            className="fx-pop pointer-events-none absolute -translate-x-1/2 whitespace-nowrap rounded-md border border-[rgba(224,112,58,0.5)] bg-[rgba(13,11,28,0.94)] px-2 py-0.5 text-[11px] text-[#ffbe8f] shadow-elev-1"
             style={{ left: 0, top: flip ? radius + 18 : -radius - 30 }}
           >
             {hint}
@@ -189,8 +191,9 @@ export function TokenHud({
           return (
             <span
               key={`label-${action.id}`}
-              className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap text-[10px] font-medium uppercase tracking-wide text-stone-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]"
-              style={{ left: x, top: y }}
+              // Each name arrives with its sigil, on the same stagger.
+              className="fx-pop pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap font-display text-[9px] font-semibold uppercase tracking-[0.14em] text-[#dedbec] drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]"
+              style={{ left: x, top: y, animationDelay: `${index * 22}ms` }}
             >
               {action.label}
             </span>

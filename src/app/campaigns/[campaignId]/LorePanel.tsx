@@ -1,11 +1,14 @@
 "use client";
 
-import { BookMarked, Loader2, Plus, X } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
+import { Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTourPrepare } from "@/lib/tours/prepare";
 import { collectTags } from "@/lib/workshop/pickers";
 import { WORLD_LORE_CATEGORIES, type LoreLinkTarget } from "@/lib/dm/world-lore-logic";
+import { SectionHead } from "@/components/ui/SectionHead";
 import { Sheet } from "@/components/ui/Sheet";
+import { KitButton, PanelLoading } from "./PanelKit";
 import { LoreEntryActions } from "@/app/workshop/lore/LoreEntryActions";
 import { LoreEditorForm } from "@/app/workshop/lore/LoreEditorForm";
 import { LoreEntryRow, MentionedIn } from "@/app/workshop/lore/LoreEntryRow";
@@ -278,25 +281,17 @@ export function LorePanel({
         rows={rows}
       />
       <div className="flex gap-1.5" data-tour="lore-save">
-        <button
-          type="button"
-          onClick={submitDraft}
-          disabled={busy || !draft.title.trim() || !draft.body.trim()}
-          className="flex items-center gap-1 rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-300 hover:bg-stone-900 disabled:opacity-50"
-        >
-          {busy ? <Loader2 className="size-3 animate-spin" /> : null}
+        <KitButton tone="primary" onClick={submitDraft} disabled={busy || !draft.title.trim() || !draft.body.trim()} busy={busy}>
           {editingId ? "Save" : "Add"}
-        </button>
-        <button
-          type="button"
+        </KitButton>
+        <KitButton
           onClick={() => {
             setAdding(false);
             setEditingId(null);
           }}
-          className="flex items-center gap-1 rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-500 hover:bg-stone-900"
         >
-          <X className="size-3" /> Cancel
-        </button>
+          <X className="size-3.5" /> Cancel
+        </KitButton>
       </div>
     </>
   );
@@ -307,9 +302,7 @@ export function LorePanel({
     return (
       <div className="space-y-3">
         {loading ? (
-          <p className="flex items-center gap-1 text-[11px] text-stone-500">
-            <Loader2 className="size-3 animate-spin" /> Loading...
-          </p>
+          <PanelLoading label="Loading..." />
         ) : (
           <LoreRows
             entries={entries}
@@ -329,7 +322,7 @@ export function LorePanel({
           className="lg:w-[min(92vw,40rem)]"
         >
           {editorOpen ? (
-            <div className="space-y-1.5">
+            <div className="reveal space-y-1.5">
               {editorForm}
               {editing ? (
                 <LoreEntryActions
@@ -341,10 +334,10 @@ export function LorePanel({
               ) : null}
             </div>
           ) : reading ? (
-            <div className="space-y-1">
+            <div className="reveal space-y-1">
               <LoreBody entry={reading} targets={targets} onLink={followLink} dmView={steersStory} />
               {reading.tags.length ? (
-                <p className="text-[10px] text-stone-600">{reading.tags.join(" · ")}</p>
+                <p className="reveal text-[11px] text-stone-500">{reading.tags.join(" · ")}</p>
               ) : null}
               <MentionedIn campaignId={campaignId} entryId={reading.id} onOpen={followLink} />
             </div>
@@ -355,44 +348,33 @@ export function LorePanel({
   }
 
   return (
-    <div className="rounded-lg border border-stone-800 bg-stone-950/40 p-2.5">
-      <div className="mb-2 flex items-center justify-between">
-        <p className="flex items-center gap-1.5 text-xs font-medium text-stone-300">
-          <BookMarked className="size-3.5 text-amber-600" /> World lore
-        </p>
-        {steersStory && !editorOpen ? (
-          <button
-            type="button"
-            onClick={startAdd}
-            className="flex items-center gap-1 rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-400 hover:bg-stone-900"
-          >
-            <Plus className="size-3" /> Add entry
-          </button>
-        ) : null}
-      </div>
+    <div className="panel rounded-lg p-3">
+      <SectionHead
+        title="World lore"
+        glyph="system-lore"
+        aside={
+          steersStory && !editorOpen ? (
+            <KitButton onClick={startAdd}>
+              <Plus className="size-3.5" /> Add entry
+            </KitButton>
+          ) : null
+        }
+      />
       {loading ? (
-        <p className="flex items-center gap-1 text-[11px] text-stone-500">
-          <Loader2 className="size-3 animate-spin" /> Loading...
-        </p>
+        <PanelLoading label="Loading..." />
       ) : null}
       {!loading && !entries.length && !editorOpen ? (
-        <p className="text-[11px] italic text-stone-600">
-          {steersStory
-            ? "No lore yet. Write your world's places, factions, and history; the DM treats it as canon."
-            : "The party lead has not written any world lore yet."}
-        </p>
+        <EmptyState size="sm" art="scrolls" title={steersStory ? "No lore yet. Write your world's places, factions, and history; the DM treats it as canon." : "The party lead has not written any world lore yet."} />
       ) : null}
       {editorOpen ? (
-        <div className="mb-2 space-y-1.5 rounded border border-stone-800 bg-stone-950/60 p-2">
+        <div className="reveal mb-2 space-y-1.5 rounded-lg border border-amber-500/20 bg-stone-950/60 p-2.5">
           {editorForm}
         </div>
       ) : null}
       {categories.map((category) => (
         <div key={category} className="mb-2">
-          <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-stone-500">
-            {CATEGORY_LABELS[category]}
-          </p>
-          <ul className="space-y-1">
+          <SectionHead title={CATEGORY_LABELS[category]} glyph="tab-journal" level="h4" aside={entries.filter((entry) => entry.category === category).length} />
+          <ul className="stagger space-y-1">
             {entries
               .filter((entry) => entry.category === category)
               .map((entry) => (

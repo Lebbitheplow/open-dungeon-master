@@ -21,9 +21,22 @@ function loadSheets(): Promise<Map<string, FlipbookSheet>> {
 // board's <svg>. The sheet is painted on black, so it is screened over the
 // map: black adds nothing and the glow adds light. The nested <svg> is the
 // crop: its viewBox walks the sheet one frame at a time.
-export function Flipbook({ sheetId, at, tiles = 2.4 }: { sheetId: string; at: XY; tiles?: number }) {
+//
+// `delay` holds the first frame back until the impact beat, so a lobbed ember
+// bursts when it lands (src/lib/battlemap/delivery.ts).
+export function Flipbook({
+  sheetId,
+  at,
+  tiles = 2.4,
+  delay = 0,
+}: {
+  sheetId: string;
+  at: XY;
+  tiles?: number;
+  delay?: number;
+}) {
   const [sheet, setSheet] = useState<FlipbookSheet | null>(null);
-  const [frame, setFrame] = useState(0);
+  const [frame, setFrame] = useState(delay > 0 ? -1 : 0);
 
   useEffect(() => {
     let alive = true;
@@ -40,13 +53,18 @@ export function Flipbook({ sheetId, at, tiles = 2.4 }: { sheetId: string; at: XY
     const started = performance.now();
     let raf = 0;
     const tick = () => {
-      const next = flipbookFrame(sheet, performance.now() - started);
+      const elapsed = performance.now() - started - delay;
+      if (elapsed < 0) {
+        raf = requestAnimationFrame(tick);
+        return;
+      }
+      const next = flipbookFrame(sheet, elapsed);
       setFrame(next);
       if (next >= 0) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [sheet]);
+  }, [sheet, delay]);
 
   if (!sheet || frame < 0) {
     return null;

@@ -1,8 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Copy, Dices, Loader2, Plus, Sparkles, Trash2 } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
 import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
+import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { Switch } from "@/components/ui/Switch";
+import { PanelLoading, RowMenu, panelRow } from "@/app/campaigns/[campaignId]/PanelKit";
+import { DeskCard } from "@/app/campaigns/[campaignId]/DmConsoleParts";
 import {
   dieForTable,
   formatRollTable,
@@ -23,6 +30,12 @@ import { TableRows, type RollResult } from "@/app/workshop/tables/TableRows";
 // DM's own reference: rolling a table writes an ordinary roll everyone can
 // see, but what the row SAYS comes back here alone.
 //
+// The painted die a table rolls on, where the kit has one that size.
+const PAINTED_DICE = new Set([4, 6, 8, 10, 12, 20, 100]);
+function dieGlyph(sides: number): string {
+  return PAINTED_DICE.has(sides) ? `die-d${sides}` : "die-d20";
+}
+
 // Two layouts over one set of requests. "list" is the DM console's: the
 // tables, the new-table form and the lookup stacked in three sections.
 // "rows" is the workshop's: a searchable row per table with its coverage at
@@ -278,15 +291,17 @@ export function DmTablesPanel({
         value={name}
         onChange={(event) => setName(event.target.value.slice(0, TABLE_NAME_MAX))}
         placeholder="Rumours in the Salt Wharf"
+        aria-label="Table name"
         data-tour="tables-name"
         className={inputClass}
       />
       {canDraft ? (
-        <div className="mt-1.5 flex gap-1.5">
+        <div className="reveal mt-1.5 flex gap-1.5">
           <input
             value={prompt}
             onChange={(event) => setPrompt(event.target.value.slice(0, 300))}
             placeholder="what the dockhands are whispering about"
+            aria-label="What the table is about"
             className={inputClass}
           />
           <button
@@ -294,7 +309,8 @@ export function DmTablesPanel({
             onClick={draft}
             disabled={busy === "draft" || !prompt.trim()}
             title="Drafts rows for you to edit. Nothing is saved until you save it."
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-40"
+            aria-busy={busy === "draft"}
+            className={cn(ui.btnSmall, "shrink-0 text-xs")}
           >
             {busy === "draft" ? (
               <Loader2 className="size-3.5 animate-spin" />
@@ -310,6 +326,7 @@ export function DmTablesPanel({
         onChange={(event) => setText(event.target.value)}
         rows={rows ? 10 : 5}
         placeholder={"1-3 A press gang is working the taproom.\n4. The harbourmaster has not been seen in a week.\nOr just paste a table straight out of a book."}
+        aria-label="Table rows"
         data-tour="tables-body"
         className={cn(inputClass, "mt-1.5 resize-y font-mono text-xs")}
       />
@@ -322,7 +339,7 @@ export function DmTablesPanel({
         />
       </div>
       {draftEntries.length ? (
-        <p className="mt-1 text-[11px] text-stone-500">
+        <p className="reveal mt-1 text-[11px] text-stone-500">
           {draftEntries.length} rows, rolled on a d{dieForTable(draftEntries)}.
           {gaps?.uncovered.length
             ? ` Nothing on ${gaps.uncovered.join(", ")}.`
@@ -333,37 +350,33 @@ export function DmTablesPanel({
         </p>
       ) : null}
       <div className="mt-1.5 flex flex-wrap items-center gap-2">
-        <label className="flex items-center gap-1.5 text-[11px] text-stone-400">
-          <input
-            type="checkbox"
-            checked={noReplacement}
-            onChange={(event) => setNoReplacement(event.target.checked)}
-            className="accent-amber-500"
-          />
+        <span className="flex min-h-10 items-center gap-2 text-xs text-stone-300">
+          <Switch on={noReplacement} onChange={setNoReplacement} label="Draw without replacement" />
           Draw without replacement
-        </label>
+        </span>
         {editing?.noReplacement && editing.drawn.length ? (
           <button
             type="button"
             onClick={() => void reset(editing)}
-            className="rounded-md border border-stone-700 px-2 py-0.5 text-[11px] text-stone-400 hover:text-amber-100"
+            className={cn(ui.btnSmall, "px-2 py-1 text-[11px]")}
           >
             Reset ({editing.drawn.length} dealt)
           </button>
         ) : null}
       </div>
-      <p className="mt-1 text-[10px] text-stone-600">
+      <p className="mt-1 text-[10px] leading-snug text-stone-500">
         Bare rows can carry a weight (x3 A goblin patrol). A row can be a thing: @table: Gems rolls
         that table too; @monster: wolf, @item: Potion of Healing, @npc: Marla name what they are.
         The picker above writes those rows for you.
       </p>
-      {error ? <p className="mt-1 text-xs text-red-400">{error}</p> : null}
+      {error ? <p className="motion-shake mt-1 text-xs text-red-400">{error}</p> : null}
       <button
         type="button"
         onClick={save}
         disabled={busy === "save" || !name.trim() || !text.trim()}
+        aria-busy={busy === "save"}
         data-tour="tables-save"
-        className="mt-1.5 rounded-md border border-amber-700 bg-amber-950/50 px-2.5 py-1 text-xs text-amber-100 hover:bg-amber-900/50 disabled:opacity-40"
+        className={cn(ui.btnPrimary, "mt-2")}
       >
         {busy === "save" ? "Saving..." : "Save table"}
       </button>
@@ -387,7 +400,7 @@ export function DmTablesPanel({
         {/* A roll or a copy that fails happens in the rows, not the sheet,
             so its message has to show out here as well. */}
         {error && !editorOpen ? (
-          <p className="text-xs text-red-400 lg:col-span-2">{error}</p>
+          <p className="motion-shake text-xs text-red-400 lg:col-span-2">{error}</p>
         ) : null}
         <Sheet
           open={editorOpen}
@@ -403,87 +416,69 @@ export function DmTablesPanel({
 
   return (
     <div className="space-y-3">
-      <section className="rounded-lg border border-stone-800 bg-stone-950/60 px-2.5 py-2">
-        <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
-          <Dices className="size-3.5" />
-          Your tables
-        </p>
+      <DeskCard
+        glyph="system-tables"
+        title="Your tables"
+        aside={tables.length ? <span key={tables.length} className="count-pop">{tables.length}</span> : undefined}
+      >
         {tables.length ? (
-          <ul className="space-y-1.5">
-            {tables.map((table) => (
-              <li
-                key={table.id}
-                className="rounded-lg border border-stone-800 bg-stone-950/40 px-2.5 py-2"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="min-w-0 truncate text-sm text-stone-200">
-                    {table.name}
-                    <span className="ml-1.5 text-[11px] text-stone-500">
-                      d{dieForTable(table.entries)}
+          <ul className="stagger space-y-1.5">
+            {tables.map((table) => {
+              const sides = dieForTable(table.entries);
+              // Roll stays the row's visible button. The two that were icons
+              // live in the row's menu under the words they always carried.
+              const items: ContextMenuItem[] = [
+                { id: "roll", label: "Roll", glyph: dieGlyph(sides), disabled: busy === table.id, onSelect: () => void roll(table) },
+                { id: "duplicate", label: `Duplicate ${table.name}`, glyph: "system-homebrew", disabled: busy === `copy-${table.id}`, onSelect: () => void duplicate(table) },
+                { id: "delete", label: "Delete this table", glyph: "quest-failed", tone: "danger", separated: true, onSelect: () => void remove(table) },
+              ];
+              return (
+                <ContextMenu key={table.id} as="li" items={items} label={table.name} className={panelRow}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex min-w-0 items-center gap-2 text-sm text-stone-100">
+                      <GameIcon icon={{ kind: "glyph", key: dieGlyph(sides) }} size="size-6" className="shrink-0" />
+                      <span className="min-w-0 truncate">{table.name}</span>
+                      <span className="shrink-0 text-[11px] text-stone-400">d{sides}</span>
                     </span>
-                  </span>
-                  <span className="flex shrink-0 items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => roll(table)}
-                      disabled={busy === table.id}
-                      className="rounded-md border border-amber-700 bg-amber-950/50 px-2 py-1 text-xs text-amber-100 hover:bg-amber-900/50 disabled:opacity-40"
-                    >
-                      {busy === table.id ? (
-                        <Loader2 className="size-3.5 animate-spin" />
-                      ) : (
-                        "Roll"
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => duplicate(table)}
-                      disabled={busy === `copy-${table.id}`}
-                      aria-label={`Duplicate ${table.name}`}
-                      className="rounded-md border border-stone-700 p-1 text-stone-500 hover:text-stone-300 disabled:opacity-40"
-                    >
-                      <Copy className="size-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => remove(table)}
-                      aria-label={`Delete ${table.name}`}
-                      title="Delete this table"
-                      className="rounded-md border border-stone-700 p-1 text-stone-500 hover:text-red-300"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </button>
-                  </span>
-                </div>
-                {result?.tableId === table.id ? (
-                  <div className="mt-1 text-xs text-stone-300">
-                    <p>
-                      <span className="text-amber-200">{result.total}:</span> {result.text}
-                    </p>
-                    {result.chain.map((line, index) => (
-                      <p key={index} className="text-[11px] text-stone-500">
-                        {line}
-                      </p>
-                    ))}
+                    <span className="flex shrink-0 items-center gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => roll(table)}
+                        disabled={busy === table.id}
+                        aria-busy={busy === table.id}
+                        className={cn(ui.btnPrimary, "h-9 px-3 text-[11px]")}
+                      >
+                        {busy === table.id ? <Loader2 className="size-3.5 animate-spin" /> : "Roll"}
+                      </button>
+                      <RowMenu items={items} label={table.name} />
+                    </span>
                   </div>
-                ) : null}
-              </li>
-            ))}
+                  {result?.tableId === table.id ? (
+                    <div className="live-in mt-1.5 rounded-lg border border-amber-500/25 bg-stone-950/50 px-2 py-1.5 text-xs text-stone-200">
+                      <p>
+                        <span key={result.total} className="count-pop inline-block font-display text-amber-200">{result.total}:</span> {result.text}
+                      </p>
+                      {result.chain.map((line, index) => (
+                        <p key={index} className="text-[11px] text-stone-400">
+                          {line}
+                        </p>
+                      ))}
+                    </div>
+                  ) : null}
+                </ContextMenu>
+              );
+            })}
           </ul>
+        ) : loaded ? (
+          <EmptyState size="sm" art="scrolls" title="No tables yet. Paste one in below." />
         ) : (
-          <p className="text-xs text-stone-500">
-            {loaded ? "No tables yet. Paste one in below." : "Loading..."}
-          </p>
+          <PanelLoading label="Loading..." rows={2} />
         )}
-      </section>
+      </DeskCard>
 
-      <section className="rounded-lg border border-stone-800 bg-stone-950/60 px-2.5 py-2">
-        <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
-          <Plus className="size-3.5" />
-          New table
-        </p>
+      <DeskCard glyph="system-homebrew" title="New table">
         {editor}
-      </section>
+      </DeskCard>
 
       <StatblockFinder campaignId={campaignId} />
     </div>

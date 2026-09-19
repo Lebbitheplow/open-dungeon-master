@@ -3,26 +3,64 @@
 import { cn } from "@/lib/cn";
 import { ListControls, useListControls } from "@/components/ui/ListControls";
 import { ui } from "@/lib/ui";
+import { resolveSkin } from "@/lib/battlemap/skins";
 import { TerrainCanvas } from "@/app/campaigns/[campaignId]/TerrainCanvas";
+import { stampsOf, useMapThumb } from "@/app/campaigns/[campaignId]/useMapPaint";
 import { THEME_LABELS, type PreparedMap } from "@/app/workshop/maps/types";
 
-// The workshop's map gallery: every prepared map as a thumbnail tile that
-// renders the real terrain grid, with its size and theme underneath. Tapping
-// a tile hands the map to the caller, which opens the editor.
+// The workshop's map gallery: every prepared map as a thumbnail with its size,
+// theme and skin underneath. Tapping a tile hands the map to the caller, which
+// opens the editor.
 //
-// The thumbnail is the same TerrainCanvas the editor draws on, sized by its
-// container: the canvas fits itself to clientWidth, so no second renderer is
-// needed. It is wrapped pointer-events-none because a thumbnail is a picture,
-// not a surface, and the hover outline would otherwise flicker under a
-// finger scrolling the gallery.
+// The thumbnail is painted by the renderer the table plays on
+// (docs/visual-overhaul-plan.md 3.7), small and with the dressing off, one at
+// a time in idle moments and cached per map and version. Until its picture
+// arrives, and on a host without the painted sets, a tile shows the flat
+// TerrainCanvas it always did, so the list is never waiting on art. A map with
+// its own backdrop keeps showing that. The picture is wrapped
+// pointer-events-none because a thumbnail is a picture, not a surface.
+
+// Sharper than the history strip's 8 px: a gallery card is some 300 px wide.
+const CARD_CELL = 16;
+
+function MapThumb({ map, genre }: { map: PreparedMap; genre: string | null | undefined }) {
+  const thumb = useMapThumb(
+    map.backdrop
+      ? null
+      : {
+          width: map.width,
+          height: map.height,
+          terrain: map.terrain,
+          theme: map.theme,
+          genre,
+          skin: map.skin,
+          seedKey: map.id,
+          stamps: stampsOf(map.props),
+        },
+    CARD_CELL,
+  );
+  return (
+    <div className="pointer-events-none relative overflow-hidden rounded-md" style={{ aspectRatio: `${map.width} / ${map.height}` }}>
+      {thumb ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={thumb} alt="" className="map-fade-in block size-full object-cover" />
+      ) : (
+        <TerrainCanvas terrain={map.terrain} width={map.width} height={map.height} backdrop={map.backdrop} />
+      )}
+    </div>
+  );
+}
 
 export function MapGallery({
   maps,
   selectedId,
+  genre,
   onOpen,
 }: {
   maps: PreparedMap[];
   selectedId: string;
+  // The campaign's setting, which decides a map's default skin.
+  genre?: string | null;
   onOpen: (map: PreparedMap) => void;
 }) {
   const controls = useListControls(maps);
@@ -53,18 +91,11 @@ export function MapGallery({
               map.id === selectedId && "border-amber-500/40",
             )}
           >
-            <div className="pointer-events-none overflow-hidden rounded-md">
-              <TerrainCanvas
-                terrain={map.terrain}
-                width={map.width}
-                height={map.height}
-                backdrop={map.backdrop}
-              />
-            </div>
+            <MapThumb map={map} genre={genre} />
             <div className="min-w-0 px-1 pb-1">
               <p className="truncate font-display text-sm tracking-wide text-amber-50">{map.name}</p>
               <p className="text-[11px] text-stone-500">
-                {map.width} × {map.height} · {THEME_LABELS[map.theme]}
+                {map.width} × {map.height} · {THEME_LABELS[map.theme]} · {resolveSkin(genre, map.theme, map.skin).name}
               </p>
             </div>
           </button>

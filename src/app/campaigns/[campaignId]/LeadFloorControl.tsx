@@ -1,8 +1,10 @@
 "use client";
 
-import { Check, Loader2, Megaphone } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { PanelError, kitButtonClass, panelField } from "./PanelKit";
 import type { Floor } from "@/lib/db/campaigns";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -22,9 +24,10 @@ type FloorRequest =
   | { set: "spotlight"; characterIds: string[]; prompt: string }
   | Record<string, never>;
 
-const chip = "rounded-md border px-2 py-1 text-xs disabled:opacity-40";
-const chipOn = "border-amber-700 bg-amber-950/50 text-amber-100";
-const chipOff = "border-stone-700 text-stone-400 hover:text-stone-200";
+// The kit's small button (ui.btnSmall through PanelKit); the mode in force wears gold.
+const chip = kitButtonClass("small", "disabled:opacity-40");
+const chipOn = "border-amber-500/60 bg-amber-400/10 text-amber-100 disabled:opacity-100";
+const chipOff = "";
 
 function modeLabel(floor: Floor): string {
   switch (floor.mode) {
@@ -99,15 +102,13 @@ export function LeadFloorControl({
   }
 
   return (
-    <div className="mb-3 rounded-lg border border-stone-800 bg-stone-950/40 p-3">
-      <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-stone-400">
-        <Megaphone className="size-3.5" /> The floor
-      </p>
+    <div className="panel mb-3 rounded-lg p-3">
+      <SectionHead title="The floor" glyph="rest-initiative" />
       <p className="text-xs text-stone-300">{modeLabel(floor)}</p>
 
       {floor.mode === "initiative" ? (
-        <div className="mt-2 space-y-1.5">
-          <p className="text-[11px] text-stone-500">
+        <div className="reveal mt-2 space-y-1.5">
+          <p className="text-xs text-stone-500">
             Round {floor.round}
             {encounter?.orderReady && encounter.order.length ? (
               <>
@@ -116,7 +117,7 @@ export function LeadFloorControl({
                   <span
                     key={entry.id}
                     className={
-                      index === encounter.turnIndex ? "font-medium text-stone-200" : undefined
+                      index === encounter.turnIndex ? "font-medium text-amber-200" : undefined
                     }
                   >
                     {index > 0 ? " > " : ""}
@@ -130,7 +131,7 @@ export function LeadFloorControl({
           </p>
           <button
             type="button"
-            disabled={busy}
+            disabled={busy} aria-busy={busy}
             onClick={() => post({})}
             title="Skip the current player's turn"
             className={cn(chip, chipOff)}
@@ -140,8 +141,8 @@ export function LeadFloorControl({
         </div>
       ) : (
         <>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            <button
+          <div data-pill-group="" role="group" aria-label="Floor mode" className="mt-2 flex flex-wrap gap-1.5">
+            <button data-on={floor.mode === "open" ? "" : undefined}
               type="button"
               disabled={busy || floor.mode === "open"}
               onClick={() => post({ set: "open" })}
@@ -150,7 +151,7 @@ export function LeadFloorControl({
             >
               Open floor
             </button>
-            <button
+            <button data-on={floor.mode === "hold" ? "" : undefined}
               type="button"
               disabled={busy || floor.mode === "hold"}
               onClick={() => post({ set: "hold" })}
@@ -162,7 +163,7 @@ export function LeadFloorControl({
           </div>
 
           {floor.mode === "hold" && floor.next.mode === "spotlight" ? (
-            <p className="mt-1.5 text-[11px] text-stone-500">
+            <p className="reveal mt-1.5 text-xs text-stone-500">
               On release: spotlight on{" "}
               {players
                 .filter(
@@ -176,9 +177,9 @@ export function LeadFloorControl({
           ) : null}
 
           {floor.mode === "spotlight" ? (
-            <div className="mt-2 rounded-md border border-amber-900/60 bg-amber-950/30 px-2.5 py-2">
+            <div className="panel ornate reveal mt-2 rounded-lg border-amber-500/40 px-2.5 py-2">
               {floor.prompt ? (
-                <p className="mb-1 text-[11px] italic text-amber-200/80">{floor.prompt}</p>
+                <p className="reveal mb-1 font-serif text-xs italic text-amber-200/80">{floor.prompt}</p>
               ) : null}
               <ul className="space-y-0.5 text-xs">
                 {spotlighted.map((sheet) => {
@@ -199,7 +200,7 @@ export function LeadFloorControl({
                         </span>
                       )}
                       {sheet.name}
-                      <span className="text-[10px] text-stone-600">
+                      <span className="text-[11px] text-stone-500">
                         {answered ? "answered" : "waiting"}
                       </span>
                     </li>
@@ -208,7 +209,7 @@ export function LeadFloorControl({
               </ul>
               <button
                 type="button"
-                disabled={busy}
+                disabled={busy} aria-busy={busy}
                 onClick={() => post({})}
                 title="Open the floor now; whatever has been answered goes to the DM"
                 className={cn(chip, chipOff, "mt-1.5")}
@@ -218,7 +219,7 @@ export function LeadFloorControl({
             </div>
           ) : null}
 
-          <p className="mb-1 mt-3 text-[11px] font-medium text-stone-500">Give the floor</p>
+          <SectionHead title="Give the floor" glyph="tab-party" level="h4" className="mt-3" aside={picked.length ? `${picked.length} picked` : null} />
           <div className="flex flex-wrap gap-1.5">
             {players.length ? (
               players.map((sheet) => {
@@ -227,23 +228,21 @@ export function LeadFloorControl({
                   <button
                     key={sheet.id}
                     type="button"
-                    disabled={busy}
+                    disabled={busy} aria-busy={busy}
                     onClick={() => togglePick(sheet.id)}
                     aria-pressed={on}
-                    className={cn(
-                      "flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2 text-[11px] disabled:opacity-40",
-                      on ? chipOn : chipOff,
-                    )}
+                    data-on={on ? "" : undefined}
+                    className="pk-pill pk-tap motion-press py-0.5 pl-0.5"
                   >
                     {sheet.portrait ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={sheet.portrait.url}
                         alt=""
-                        className="size-5 rounded-full border border-stone-800 object-cover"
+                        className="size-6 rounded-full border border-amber-500/30 object-cover"
                       />
                     ) : (
-                      <span className="flex size-5 items-center justify-center rounded-full bg-stone-800 text-[10px] font-medium text-stone-300">
+                      <span className="flex size-6 items-center justify-center rounded-full bg-stone-800 text-[10px] font-medium text-stone-300">
                         {sheet.name.slice(0, 1).toUpperCase()}
                       </span>
                     )}
@@ -252,7 +251,7 @@ export function LeadFloorControl({
                 );
               })
             ) : (
-              <span className="text-[11px] text-stone-600">No player characters yet.</span>
+              <span className="text-xs text-stone-500">No player characters yet.</span>
             )}
           </div>
           <div className="mt-1.5 flex gap-1.5">
@@ -261,23 +260,24 @@ export function LeadFloorControl({
               onChange={(event) => setPrompt(event.target.value)}
               maxLength={300}
               placeholder="What are you asking them? (optional)"
-              className="min-w-0 flex-1 rounded border border-stone-700 bg-stone-900 px-2 py-1 text-xs outline-none focus:border-amber-600"
+              aria-label="What are you asking them? (optional)"
+              className={cn(panelField, "w-auto min-w-0 flex-1")}
             />
             <button
               type="button"
               disabled={busy || !picked.length}
               onClick={spotlight}
               title="Only the picked players may act until each has answered or you release"
-              className={cn(chip, chipOff, "flex shrink-0 items-center gap-1")}
+              className={kitButtonClass("primary", "shrink-0")}
             >
-              {busy ? <Loader2 className="size-3 animate-spin" /> : null}
+              {busy ? <Loader2 className="size-3.5 animate-spin" /> : null}
               Spotlight
             </button>
           </div>
         </>
       )}
 
-      {error ? <p className="mt-1.5 text-xs text-red-400">{error}</p> : null}
+      {error ? <PanelError className="mt-1.5">{error}</PanelError> : null}
     </div>
   );
 }

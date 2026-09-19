@@ -6,6 +6,7 @@ import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import type { SessionUser } from "@/lib/campaign-types";
 import { ChangePasswordForm } from "@/app/ChangePasswordForm";
+import { GameIcon } from "@/components/ui/GameIcon";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { currentPathname, currentQuery, replaceAddress } from "@/lib/navigation";
 
@@ -25,12 +26,24 @@ const MODE_OPTIONS: Array<{ value: AuthMode; label: string }> = [
   { value: "register", label: "Create account" },
 ];
 
-// The prototype draws the fields a touch taller than the app's default input
-// and the Discord button in Discord's own blurple, so it reads as a third
-// party door rather than one of ours.
+// The fields sit a touch taller than the app's default input, each led by a
+// painted glyph. Discord is a kit secondary button (it keeps the second
+// weight beside the gold submit) wearing Discord's own mark, so it still
+// reads as a third party door rather than one of ours.
 const FIELD = cn(ui.input, "h-11");
-const DISCORD_BTN =
-  "inline-flex h-11 w-full items-center justify-center gap-2.5 rounded-lg border border-indigo-400/30 bg-[#5865f2]/15 px-4 text-sm text-indigo-100 transition-all duration-150 ease-snap hover:bg-[#5865f2]/25 hover:text-white active:scale-[0.98]";
+const DISCORD_BTN = cn(ui.btnSecondary, "h-11 w-full normal-case tracking-normal font-sans text-sm");
+
+function FieldLabel({ glyph, text, children }: { glyph: string; text: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-xs text-stone-400">{text}</span>
+      <span className="glyph-field">
+        <GameIcon icon={{ kind: "glyph", key: glyph }} size="size-7" className="glyph-field-icon" />
+        {children}
+      </span>
+    </label>
+  );
+}
 
 // The password this browser made up for a seat at a device world, kept so
 // the same name can walk back in from here without one. Per name, since a
@@ -207,7 +220,7 @@ export default function AuthForm({
   if (pendingReset) {
     return (
       <>
-        <p className="mb-3 text-sm text-stone-400">
+        <p className="live-in mb-3 text-sm text-stone-400">
           An admin reset your password. Pick a new one to continue.
         </p>
         <ChangePasswordForm
@@ -229,7 +242,7 @@ export default function AuthForm({
   return (
     <>
       {seatJoin ? (
-        <p className="mb-4 text-sm text-stone-400">
+        <p className="reveal mb-4 text-sm text-stone-400">
           This world runs on its host&apos;s device. Give the table a name and you are in; there is
           no password to remember.
         </p>
@@ -245,8 +258,7 @@ export default function AuthForm({
       ) : null}
 
       <form onSubmit={submit} className="space-y-3.5">
-        <label className="block">
-          <span className="mb-1.5 block text-xs text-stone-400">Username</span>
+        <FieldLabel glyph="tab-characters" text="Username">
           <input
             value={username}
             onChange={(event) => setUsername(event.target.value)}
@@ -257,10 +269,9 @@ export default function AuthForm({
             placeholder={seatJoin ? "Your name at this table" : mode === "register" ? "Choose a name" : undefined}
             className={FIELD}
           />
-        </label>
+        </FieldLabel>
         {seatJoin ? null : (
-          <label className="block">
-            <span className="mb-1.5 block text-xs text-stone-400">Password</span>
+          <FieldLabel glyph="tab-admin" text="Password">
             <input
               type="password"
               value={password}
@@ -271,11 +282,11 @@ export default function AuthForm({
               maxLength={100}
               className={FIELD}
             />
-          </label>
+          </FieldLabel>
         )}
         {effectiveMode === "register" && signupMode === "invite" && !seatJoin ? (
-          <label className="block">
-            <span className="mb-1.5 block text-xs text-stone-400">Invite code</span>
+          <div className="reveal">
+          <FieldLabel glyph="tab-handout" text="Invite code">
             <input
               value={inviteCode}
               onChange={(event) => setInviteCode(event.target.value)}
@@ -283,29 +294,33 @@ export default function AuthForm({
               readOnly={Boolean(urlInvite)}
               maxLength={40}
               placeholder="ODM-XXXXXXXXXX"
+              aria-describedby="invite-code-hint"
               className={cn(FIELD, "font-mono uppercase tracking-wider", urlInvite && "text-amber-200")}
             />
-            <span className="mt-1.5 block text-xs text-stone-500">
+          </FieldLabel>
+            <span id="invite-code-hint" className="mt-1.5 block text-xs text-stone-500">
               {urlInvite
                 ? "This code came with your invite link."
                 : "This server is invite-only. Ask whoever runs it for a code."}
             </span>
-          </label>
+          </div>
         ) : null}
         {error ? (
           <p
             role="alert"
-            className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300"
+            // Keyed by the message so a second failure shakes again.
+            key={error}
+            className="motion-shake rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300"
           >
             {error}
           </p>
         ) : null}
-        <button type="submit" disabled={busy} className={cn(ui.btnPrimary, "h-12 w-full")}>
+        <button type="submit" disabled={busy} aria-busy={busy} className={cn(ui.btnPrimary, "h-12 w-full")}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : null}
           {submitLabel}
         </button>
         {effectiveMode === "register" ? (
-          <p className="text-center text-xs leading-5 text-stone-500">
+          <p className="reveal text-center text-xs leading-5 text-stone-500">
             Creating an account means you accept this server&apos;s{" "}
             <a href="/terms" className="text-stone-400 underline hover:text-amber-200">
               terms of service
@@ -321,10 +336,10 @@ export default function AuthForm({
 
       {discordEnabled && !seatJoin ? (
         <>
-          <div className="my-4 flex items-center gap-3" aria-hidden="true">
-            <span className="h-px flex-1 bg-stone-700/60" />
-            <span className="text-[11px] uppercase tracking-[0.2em] text-stone-600">or</span>
-            <span className="h-px flex-1 bg-stone-700/60" />
+          <div className="auth-or" aria-hidden="true">
+            <span />
+            <span className="auth-or-word">or</span>
+            <span />
           </div>
           <a
             // A filled invite code rides along so a brand-new Discord account
@@ -341,18 +356,18 @@ export default function AuthForm({
       ) : null}
 
       {canRegister ? (
-        <p className="mt-5 text-center text-[13px] text-stone-400">
+        <p className="reveal mt-5 text-center text-[13px] text-stone-400">
           {mode === "login" ? "New here? " : "Have an account? "}
           <button
             type="button"
             onClick={() => switchMode(mode === "login" ? "register" : "login")}
-            className="text-amber-200 underline-offset-2 hover:text-amber-100 hover:underline"
+            className="-my-2 inline-flex min-h-10 items-center text-amber-200 underline-offset-2 hover:text-amber-100 hover:underline"
           >
             {mode === "login" ? "Create an account" : "Log in"}
           </button>
         </p>
       ) : mode === "login" ? (
-        <p className="mt-5 text-center text-xs text-stone-500">
+        <p className="reveal mt-5 text-center text-xs text-stone-500">
           This server is not accepting new accounts.
         </p>
       ) : null}

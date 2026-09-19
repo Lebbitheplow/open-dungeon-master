@@ -6,8 +6,13 @@ import type { Dispatch, FormEvent, RefObject, SetStateAction } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { D20Spinner } from "@/components/ui/D20Spinner";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { Switch } from "@/components/ui/Switch";
+import { MODE_GLYPHS } from "@/app/campaigns/[campaignId]/sessionGlyphs";
+import { useLingeringEncounter } from "@/app/campaigns/[campaignId]/useLingeringEncounter";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { FloorBanners } from "@/app/campaigns/[campaignId]/FloorBanners";
+import { Hand as CombatHand } from "@/app/campaigns/[campaignId]/Hand";
 import { NewAdventurerBanner } from "@/app/campaigns/[campaignId]/NewAdventurerBanner";
 import {
   DirectorArmedBanner,
@@ -71,6 +76,7 @@ function ComposerInner({
   cast = [],
   onXCard,
   composerRef,
+  trackAmmo,
   highlight = false,
   directorArm,
   storyCadence,
@@ -112,6 +118,8 @@ function ComposerInner({
   // there when the table uses it, one press, no confirmation.
   onXCard?: () => void;
   composerRef: RefObject<HTMLTextAreaElement | null>;
+  // The ammunition variant rule, for the Hand's ranged cards.
+  trackAmmo?: boolean;
   // A gold pulse on the frame: the board says it is this player's turn.
   highlight?: boolean;
   directorArm: CampaignState["directorArm"];
@@ -122,8 +130,10 @@ function ComposerInner({
   onSnoozeStory: () => void;
   onSubmit: (event: FormEvent) => void;
 }) {
+  // The Hand outlives the fight by one beat so its fold-away can play.
+  const hand = useLingeringEncounter(encounter);
   return (
-    <form onSubmit={onSubmit} className="glass border-t border-stone-700/40 px-3 pb-3 pt-2.5">
+    <form onSubmit={onSubmit} className="glass session-desk border-t border-stone-700/40 px-3 pb-3 pt-2.5">
       <div className="mx-auto max-w-3xl sm:px-3">
         {pendingRolls.map((pending) => (
           <PendingRollCard
@@ -160,7 +170,28 @@ function ComposerInner({
             onDismiss={joinBanner.onDismiss}
           />
         ) : null}
-        <div className="mb-2 flex gap-1.5" data-tour="composer-modes">
+        {/* The Hand (docs/visual-overhaul-plan.md 5.2): a player's combat options
+            as cards, only while a fight is on. It adds to everything below and
+            takes nothing away: the pills, the box, the mic and the send button
+            work exactly as they do without it. */}
+        {!isDm && hand.encounter ? (
+          <CombatHand
+            campaignId={campaignId}
+            sheets={sheets}
+            meUserId={meUserId}
+            encounter={hand.encounter}
+            leaving={hand.leaving}
+            floor={floor}
+            inputBlocked={inputBlocked}
+            blockedReason={placeholder}
+            input={input}
+            setInput={setInput}
+            onKindChange={onKindChange}
+            composerRef={composerRef}
+            trackAmmo={trackAmmo}
+          />
+        ) : null}
+        <div data-pill-group="" className="mb-2 flex flex-wrap items-center gap-1.5" data-tour="composer-modes">
           {/* The DM authors and talks out of character; they have no
               character to act or speak as, and the story directions exist to
               steer an AI narrator they have replaced. */}
@@ -175,18 +206,13 @@ function ComposerInner({
           ).map(
             (option) => (
               <Tooltip key={option} content={KIND_TIPS[option]}>
-                <button
+                <button data-on={kind === option ? "" : undefined}
+                  data-mode={option}
                   type="button"
                   onClick={() => onKindChange(option)}
-                  className={cn(
-                    "rounded-full px-3.5 py-2 text-xs font-medium transition-all duration-150 ease-snap active:scale-95 sm:px-3 sm:py-1",
-                    kind === option
-                      ? option === "lead"
-                        ? "bg-gradient-to-b from-ember-400 to-ember-600 text-stone-950 shadow-glow-ember"
-                        : "bg-gradient-to-b from-amber-100 to-amber-400 text-amber-950 shadow-glow-gold"
-                      : "bg-stone-900/80 text-stone-400 hover:bg-stone-800 hover:text-stone-200",
-                  )}
+                  className="session-mode"
                 >
+                  <GameIcon icon={{ kind: "glyph", key: MODE_GLYPHS[option] }} size="size-6" />
                   {option === "do"
                     ? "Do"
                     : option === "say"
@@ -199,8 +225,8 @@ function ComposerInner({
             ),
           )}
           {dmStatus !== "idle" ? (
-            <span className="ml-auto flex items-center gap-1.5 text-xs text-stone-500">
-              <D20Spinner className="size-3.5 shrink-0 text-amber-600" />
+            <span className="session-status live-in">
+              <D20Spinner className="size-4 shrink-0 text-amber-500" />
               {dmStatus === "rolling"
                 ? "DM rolling dice..."
                 : dmStatus === "awaiting_rolls"
@@ -229,7 +255,7 @@ function ComposerInner({
           />
         ) : null}
         {kind === "lead" && steersStory ? (
-          <div className="mb-2 flex flex-wrap items-center gap-1.5">
+          <div className="reveal mb-2 flex flex-wrap items-center gap-1.5">
             <DirectorPresets campaignId={campaignId} />
             <Tooltip
               content={
@@ -238,27 +264,18 @@ function ComposerInner({
                   : "The table sees this direction, and the DM acts on it now."
               }
             >
-              <button
-                type="button"
-                role="switch"
-                aria-checked={leadPrivate}
-                onClick={() => onLeadPrivateChange(!leadPrivate)}
-                className={cn(
-                  ui.btnSmall,
-                  "ml-auto px-2 py-1 text-[11px]",
-                  leadPrivate && "border-amber-500/50 bg-amber-500/10 text-amber-100",
-                )}
-              >
-                {leadPrivate ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
+              <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-stone-300">
+                {leadPrivate ? <EyeOff className="size-3.5 text-amber-300" /> : <Eye className="size-3.5 text-stone-500" />}
                 Private
-              </button>
+                <Switch on={leadPrivate} onChange={onLeadPrivateChange} label="Private" />
+              </span>
             </Tooltip>
           </div>
         ) : null}
         <div
           data-tour="composer-input"
           className={
-            "texture-noise flex items-end gap-2 rounded-2xl border border-stone-700/70 bg-stone-950/90 p-2 shadow-elev-1 transition-[border-color,box-shadow] duration-200 focus-within:border-amber-400/60 focus-within:shadow-[0_0_0_3px_rgba(212,171,58,0.1),0_2px_12px_rgba(4,2,12,0.5)]" +
+            "session-well texture-noise flex items-end gap-2 p-2" +
             (highlight ? " composer-pulse" : "")
           }
         >
@@ -283,7 +300,7 @@ function ComposerInner({
                 type="button"
                 onClick={onXCard}
                 aria-label="Raise the X-card"
-                className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-stone-700 text-stone-500 hover:border-amber-600 hover:text-amber-200"
+                className={cn(ui.btnSmall, "session-deskbtn text-stone-400")}
               >
                 <Hand className="size-4" />
               </button>
@@ -298,12 +315,13 @@ function ComposerInner({
           <button
             type="submit"
             disabled={sending || !input.trim() || inputBlocked}
-            className="rounded-lg bg-gradient-to-b from-amber-100 via-amber-200 to-amber-400 p-2.5 text-amber-950 shadow-[0_1px_0_rgba(253,247,231,0.6)_inset] transition-all duration-150 ease-snap hover:-translate-y-px hover:shadow-glow-gold-strong active:translate-y-0 active:scale-95 disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+            aria-label="Send"
+            className={cn(ui.btnPrimary, "session-deskbtn")}
           >
             {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
           </button>
         </div>
-        {error ? <p className="mt-1.5 text-sm text-red-400">{error}</p> : null}
+        {error ? <p className="motion-shake mt-1.5 text-sm text-red-400">{error}</p> : null}
       </div>
     </form>
   );

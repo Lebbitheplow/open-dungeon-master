@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  DoorOpen,
   HeadphoneOff,
   Hand,
   Headphones,
@@ -12,14 +11,17 @@ import {
   Radio,
   Settings2,
   ShieldBan,
-  Users,
   WifiOff,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { Select } from "@/components/ui/Select";
+import { VoiceRooms, VoiceSettings } from "@/app/campaigns/[campaignId]/VoicePanelParts";
 import { useVoiceRoom } from "@/app/campaigns/[campaignId]/useVoiceRoom";
 import { VoicePeerRow } from "@/app/campaigns/[campaignId]/VoicePeerRow";
-import { MASTER_VOLUME_MAX, VOLUME_STEP } from "@/lib/voice/volume";
 import {
   FLOOR_VOICE_LABELS,
   TRANSMIT_BLOCK_LABELS,
@@ -73,7 +75,6 @@ export function VoicePanel({
 }) {
   const voice = useVoiceRoom(campaignId, roster, meUserId, audibilityVersion, meshSignal, { transcribe });
   const [channels, setChannels] = useState<VoiceChannelView[]>([]);
-  const [newRoom, setNewRoom] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   // Whose volume slider is open. One at a time, so a busy table does not turn
   // the roster into a mixing desk.
@@ -117,16 +118,16 @@ export function VoicePanel({
 
   if (!voice.available) {
     return (
-      <div className="rounded-lg border border-stone-800 bg-stone-950/60 px-4 py-3">
-        <p className="flex items-center gap-2 text-sm text-stone-400">
-          <Headphones className="size-4 shrink-0" />
-          Voice chat is off
-        </p>
-        <p className="mt-1 text-xs text-stone-500">
-          {voice.unavailableReason === "server"
-            ? "This server has voice chat switched off."
-            : "Turn it on in campaign settings to talk at this table."}
-        </p>
+      <div className="panel flex items-start gap-3 rounded-xl px-4 py-3">
+        <GameIcon icon={{ kind: "glyph", key: "cue-turn" }} size="size-9" className="opacity-60 grayscale" />
+        <div className="min-w-0">
+          <p className="font-display text-sm tracking-wide text-stone-300">Voice chat is off</p>
+          <p className="mt-0.5 text-xs text-stone-500">
+            {voice.unavailableReason === "server"
+              ? "This server has voice chat switched off."
+              : "Turn it on in campaign settings to talk at this table."}
+          </p>
+        </div>
       </div>
     );
   }
@@ -147,169 +148,151 @@ export function VoicePanel({
   );
   const floorNote =
     turnEnforcement === "off" || floorMode === "open" ? "" : FLOOR_VOICE_LABELS[floorMode];
+  const control = cn(ui.btnSmall, "session-voice-btn");
 
   return (
-    <div className={cn("rounded-lg border border-stone-800 bg-stone-950/60", compact ? "p-3" : "p-4")}>
-      <div className="flex items-center justify-between gap-3">
-        <p className="flex items-center gap-2 font-serif text-sm text-stone-200">
-          <Headphones className="size-4 text-amber-300" />
-          Voice
-          {voice.peers.length ? (
-            <span className="text-xs text-stone-500">{voice.peers.length} on the call</span>
-          ) : null}
-        </p>
-        <div className="flex items-center gap-2">
-          {voice.connected ? (
-            <>
-              {/* Asking for the floor without talking over whoever holds it.
-                  Hidden for the DM, who never has to queue for their own
-                  floor. */}
-              {!adjudicates && !myVerdict.mayTransmit ? (
-                <button
-                  type="button"
-                  onClick={() => void voice.toggleHand()}
-                  aria-label={voice.handRaised ? "Lower your hand" : "Ask to speak"}
-                  title={voice.handRaised ? "Lower your hand" : "Ask to speak"}
-                  className={cn(
-                    "rounded-md border p-2 transition-colors",
-                    voice.handRaised
-                      ? "border-amber-700 bg-amber-950/50 text-amber-200"
-                      : "border-stone-700 text-stone-300 hover:bg-stone-900",
-                  )}
-                >
-                  <Hand className="size-4" />
-                </button>
-              ) : null}
-              {/* How far your voice carries. Only meaningful while the rule
-                  is on, so it is hidden otherwise rather than being a control
-                  that does nothing. */}
-              {sayRangeRule ? (
-                <select
-                  value={voice.sayRange}
-                  onChange={(event) =>
-                    void voice.setSayRange(event.target.value as "whisper" | "normal" | "shout")
-                  }
-                  aria-label="How far your voice carries"
-                  title="How far your voice carries"
-                  className="rounded-md border border-stone-700 bg-stone-950 px-2 py-1.5 text-xs text-stone-300"
-                >
-                  <option value="whisper">Whisper</option>
-                  <option value="normal">Normal</option>
-                  <option value="shout">Shout</option>
-                </select>
-              ) : null}
-              {/* Deafen. Sits next to mute because that is the pair every
-                  voice app puts together, but it only silences what arrives:
-                  your microphone keeps transmitting, which is why the icon
-                  and the label both say headphones rather than mic. */}
+    <div className={cn("panel rounded-xl", compact ? "p-3" : "p-4")}>
+      <SectionHead
+        title="Voice"
+        glyph="cue-turn"
+        level="h3"
+        className="mb-2"
+        aside={
+          voice.peers.length ? (
+            <span key={voice.peers.length} className="count-pop text-xs text-stone-400">
+              {voice.peers.length} on the call
+            </span>
+          ) : null
+        }
+      />
+      <div className="flex flex-wrap items-center justify-end gap-1.5">
+        {voice.connected ? (
+          <>
+            {/* Asking for the floor without talking over whoever holds it.
+                Hidden for the DM, who never has to queue for their own
+                floor. */}
+            {!adjudicates && !myVerdict.mayTransmit ? (
               <button
                 type="button"
-                onClick={voice.toggleDeafen}
-                aria-label={voice.deafened ? "Turn the call back on" : "Silence the call"}
-                title={
-                  voice.deafened
-                    ? "Turn the call back on"
-                    : "Silence everyone (you keep transmitting)"
-                }
-                className={cn(
-                  "rounded-md border p-2 transition-colors",
-                  voice.deafened
-                    ? "border-red-800 bg-red-950/60 text-red-300"
-                    : "border-stone-700 text-stone-300 hover:bg-stone-900",
-                )}
+                onClick={() => void voice.toggleHand()}
+                aria-label={voice.handRaised ? "Lower your hand" : "Ask to speak"}
+                title={voice.handRaised ? "Lower your hand" : "Ask to speak"}
+                data-tone={voice.handRaised ? "on" : undefined}
+                className={control}
               >
-                {voice.deafened ? (
-                  <HeadphoneOff className="size-4" />
-                ) : (
-                  <Headphones className="size-4" />
-                )}
+                <Hand className="size-4" />
               </button>
-              {/* In push-to-talk the same slot becomes a hold control, so
-                  there is never both a mute button and a talk button arguing
-                  about who owns the microphone. */}
-              {voice.micMode === "ptt" ? (
-                <button
-                  type="button"
-                  onPointerDown={(event) => {
-                    event.preventDefault();
-                    voice.setTalking(true);
-                  }}
-                  onPointerUp={() => voice.setTalking(false)}
-                  onPointerLeave={() => voice.setTalking(false)}
-                  onContextMenu={(event) => event.preventDefault()}
-                  title="Hold to talk (or hold the ` key)"
-                  className={cn(
-                    "select-none touch-none rounded-md border px-3 py-2 text-xs transition-colors",
-                    voice.talking
-                      ? "border-emerald-700 bg-emerald-950/60 text-emerald-200"
-                      : "border-stone-700 text-stone-300 hover:bg-stone-900",
-                  )}
-                >
-                  <Radio className={cn("mr-1 inline size-3.5", voice.talking && "animate-pulse")} />
-                  {voice.talking ? "Talking" : "Hold"}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => void voice.toggleMute()}
-                  aria-label={voice.muted ? "Unmute" : "Mute"}
-                  title={voice.muted ? "Unmute" : "Mute"}
-                  className={cn(
-                    "rounded-md border p-2 transition-colors",
-                    voice.muted
-                      ? "border-red-800 bg-red-950/60 text-red-300"
-                      : "border-stone-700 text-stone-300 hover:bg-stone-900",
-                  )}
-                >
-                  {voice.muted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setShowSettings((open) => !open)}
-                aria-label="Microphone settings"
-                title="Microphone settings"
-                className={cn(
-                  "rounded-md border p-2 transition-colors",
-                  showSettings
-                    ? "border-amber-700 bg-amber-950/50 text-amber-200"
-                    : "border-stone-700 text-stone-300 hover:bg-stone-900",
-                )}
-              >
-                <Settings2 className="size-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => void voice.leave()}
-                aria-label="Leave voice"
-                title="Leave voice"
-                className="rounded-md border border-stone-700 p-2 text-stone-300 hover:bg-stone-900"
-              >
-                <PhoneOff className="size-4" />
-              </button>
-            </>
-          ) : (
+            ) : null}
+            {/* How far your voice carries. Only meaningful while the rule
+                is on, so it is hidden otherwise rather than being a control
+                that does nothing. */}
+            {sayRangeRule ? (
+              <Select
+                value={voice.sayRange}
+                onChange={(next) => void voice.setSayRange(next)}
+                label="How far your voice carries"
+                size="sm"
+                align="end"
+                className="w-28"
+                options={[
+                  { value: "whisper", label: "Whisper" },
+                  { value: "normal", label: "Normal" },
+                  { value: "shout", label: "Shout" },
+                ]}
+              />
+            ) : null}
+            {/* Deafen. Sits next to mute because that is the pair every
+                voice app puts together, but it only silences what arrives:
+                your microphone keeps transmitting, which is why the icon
+                and the label both say headphones rather than mic. */}
             <button
               type="button"
-              disabled={voice.status === "connecting"}
-              onClick={() => void voice.join()}
-              className="flex items-center gap-2 rounded-lg bg-amber-200 px-3 py-1.5 text-sm font-medium text-stone-950 hover:bg-amber-100 disabled:opacity-50"
+              onClick={voice.toggleDeafen}
+              aria-label={voice.deafened ? "Turn the call back on" : "Silence the call"}
+              title={
+                voice.deafened
+                  ? "Turn the call back on"
+                  : "Silence everyone (you keep transmitting)"
+              }
+              data-tone={voice.deafened ? "off" : undefined}
+              className={control}
             >
-              {voice.status === "connecting" ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Mic className="size-4" />
-              )}
-              Join
+              {voice.deafened ? <HeadphoneOff className="size-4" /> : <Headphones className="size-4" />}
             </button>
-          )}
-        </div>
+            {/* In push-to-talk the same slot becomes a hold control, so
+                there is never both a mute button and a talk button arguing
+                about who owns the microphone. */}
+            {voice.micMode === "ptt" ? (
+              <button
+                type="button"
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  voice.setTalking(true);
+                }}
+                onPointerUp={() => voice.setTalking(false)}
+                onPointerLeave={() => voice.setTalking(false)}
+                onContextMenu={(event) => event.preventDefault()}
+                title="Hold to talk (or hold the ` key)"
+                data-tone={voice.talking ? "live" : undefined}
+                className={cn(control, "select-none touch-none gap-1 px-3 text-xs")}
+              >
+                <Radio className={cn("size-3.5", voice.talking && "animate-pulse")} />
+                {voice.talking ? "Talking" : "Hold"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void voice.toggleMute()}
+                aria-label={voice.muted ? "Unmute" : "Mute"}
+                title={voice.muted ? "Unmute" : "Mute"}
+                data-tone={voice.muted ? "off" : undefined}
+                className={control}
+              >
+                {voice.muted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowSettings((open) => !open)}
+              aria-label="Microphone settings"
+              title="Microphone settings"
+              aria-expanded={showSettings}
+              data-tone={showSettings ? "on" : undefined}
+              className={control}
+            >
+              <Settings2 className="size-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => void voice.leave()}
+              aria-label="Leave voice"
+              title="Leave voice"
+              className={control}
+            >
+              <PhoneOff className="size-4" />
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            disabled={voice.status === "connecting"}
+            onClick={() => void voice.join()}
+            className={cn(ui.btnPrimary, "w-full sm:w-auto")}
+          >
+            {voice.status === "connecting" ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Mic className="size-4" />
+            )}
+            Join
+          </button>
+        )}
       </div>
 
       {/* Whose turn it is. Shown under soft enforcement too, because saying so
           is the entire point of soft: the table is told, not policed. */}
       {floorNote ? (
-        <p className="mt-2 flex items-center gap-1.5 text-xs text-amber-200/80">
+        <p className="reveal mt-2 flex flex-wrap items-center gap-x-1.5 text-xs text-amber-200/80">
           <ShieldBan className="size-3.5 shrink-0" />
           {floorNote}
           {voice.connected && !myVerdict.mayTransmit && myVerdict.block ? (
@@ -323,137 +306,46 @@ export function VoicePanel({
       {/* A dropped candidate pair is recovered by an ICE restart rather than
           by rejoining, so this is a passing state and not a failure. */}
       {voice.reconnecting ? (
-        <p className="mt-2 flex items-center gap-1.5 text-xs text-amber-300">
+        <p className="live-in mt-2 flex items-center gap-1.5 text-xs text-amber-300">
           <WifiOff className="size-3.5 shrink-0" />
           Connection dropped, reconnecting
         </p>
       ) : null}
 
-      {voice.error ? <p className="mt-2 text-xs text-red-400">{voice.error}</p> : null}
+      {voice.error ? <p className="motion-shake mt-2 text-xs text-red-400">{voice.error}</p> : null}
 
       {showSettings && voice.connected ? (
-        <div className="mt-2 space-y-2 rounded border border-stone-800 bg-stone-950 p-2">
-          {/* Everyone at once. Lives in here rather than in the header
-              because the dock is 320px wide and the header has no room, and
-              because this block already says these settings are per browser.
-              Per-player sliders are on each row below. */}
-          <label className="block">
-            <span className="mb-1 block text-[11px] text-stone-500">
-              Everyone{"\u2019"}s volume
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={MASTER_VOLUME_MAX}
-              step={VOLUME_STEP}
-              value={voice.masterVolume}
-              disabled={voice.deafened}
-              onChange={(event) => voice.setMasterVolume(Number(event.target.value))}
-              aria-label="How loud the whole call is"
-              className="w-full accent-amber-600 disabled:opacity-40"
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-[11px] text-stone-500">Microphone</span>
-            <select
-              value={voice.micId}
-              onChange={(event) => void voice.selectMic(event.target.value)}
-              className="w-full rounded border border-stone-800 bg-stone-950 px-2 py-1 text-xs text-stone-200"
-            >
-              <option value="">System default</option>
-              {voice.micDevices.map((device) => (
-                <option key={device.deviceId} value={device.deviceId}>
-                  {device.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-[11px] text-stone-500">
-              Mode {voice.micMode === "ptt" ? "(hold ` or the button)" : ""}
-            </span>
-            <select
-              value={voice.micMode}
-              onChange={(event) => voice.selectMicMode(event.target.value as "open" | "ptt")}
-              className="w-full rounded border border-stone-800 bg-stone-950 px-2 py-1 text-xs text-stone-200"
-            >
-              <option value="open">Open mic</option>
-              <option value="ptt">Push to talk</option>
-            </select>
-          </label>
-          <p className="text-[11px] text-stone-600">
-            Saved in this browser.
-          </p>
-        </div>
+        <VoiceSettings
+          masterVolume={voice.masterVolume}
+          deafened={voice.deafened}
+          onMasterVolume={voice.setMasterVolume}
+          micId={voice.micId}
+          micDevices={voice.micDevices}
+          onSelectMic={(deviceId) => void voice.selectMic(deviceId)}
+          micMode={voice.micMode}
+          onSelectMicMode={voice.selectMicMode}
+        />
       ) : null}
 
       {/* Breakout rooms. Everyone can see the list and who is in each: a side
           room nobody can see reads as a bug rather than a secret. Only story
           authority can open one or move anybody. */}
       {channels.length > 1 || steersStory ? (
-        <div className="mt-3 space-y-1.5 border-t border-stone-800 pt-2">
-          {channels.map((channel) => {
-            const occupants = voice.peers.filter((peer) => peer.channelId === channel.id);
-            return (
-              <div key={channel.id} className="flex items-center gap-2 text-xs">
-                <Users className="size-3.5 shrink-0 text-stone-600" />
-                <span className="truncate text-stone-400">{channel.name}</span>
-                <span className="text-stone-600">{occupants.length}</span>
-                {steersStory && channel.id !== "table" ? (
-                  <button
-                    type="button"
-                    onClick={() => void channelAction({ action: "close", channelId: channel.id })}
-                    aria-label={`Close ${channel.name} and send everyone back to the table`}
-                    title="Close this room and send everyone back to the table"
-                    className="ml-auto text-stone-600 hover:text-red-400"
-                  >
-                    <DoorOpen className="size-3.5" />
-                  </button>
-                ) : null}
-              </div>
-            );
-          })}
-          {steersStory ? (
-            <div className="flex gap-1.5 pt-1">
-              <input
-                value={newRoom}
-                onChange={(event) => setNewRoom(event.target.value)}
-                placeholder="New side room"
-                className="min-w-0 flex-1 rounded border border-stone-800 bg-stone-950 px-2 py-1 text-xs text-stone-200"
-              />
-              <button
-                type="button"
-                disabled={!newRoom.trim()}
-                onClick={() => {
-                  void channelAction({ action: "open", name: newRoom.trim() });
-                  setNewRoom("");
-                }}
-                className="rounded border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-40"
-              >
-                Open
-              </button>
-              {channels.length > 1 ? (
-                <button
-                  type="button"
-                  onClick={() => void channelAction({ action: "recall" })}
-                  title="Bring everyone back to the table"
-                  className="rounded border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900"
-                >
-                  Recall
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
+        <VoiceRooms
+          channels={channels}
+          occupants={(channelId) => voice.peers.filter((peer) => peer.channelId === channelId).length}
+          steersStory={steersStory}
+          onAction={(body) => void channelAction(body)}
+        />
       ) : null}
 
       {transcribe && voice.connected ? (
-        <p className="mt-2 flex items-center gap-1 text-[11px] text-amber-300/80">
+        <p className="reveal mt-2 flex items-center gap-1 text-[11px] text-amber-300/80">
           <Radio className="size-3" /> This table is being transcribed while you are on the call.
         </p>
       ) : null}
       {voice.peers.length ? (
-        <ul className="mt-3 space-y-1.5">
+        <ul className="stagger mt-3 space-y-1.5">
           {voice.peers.map((peer) => (
             <VoicePeerRow
               key={peer.userId}

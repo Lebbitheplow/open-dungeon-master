@@ -1,7 +1,12 @@
 "use client";
 
+import { EmptyState } from "@/components/EmptyState";
 import { useCallback, useEffect, useState } from "react";
-import { Lightbulb, Loader2, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { Select } from "@/components/ui/Select";
+import { FieldLabel, quietRow } from "@/app/campaigns/[campaignId]/DmConsoleParts";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import {
@@ -17,7 +22,7 @@ import {
 } from "@/lib/workshop/board";
 import type { CompiledBoard, CompileSummary } from "@/lib/workshop/board-compile";
 import { Sheet } from "@/components/ui/Sheet";
-import { KIND_TONE, beatInput as input } from "@/app/workshop/storyboard/beat-fields";
+import { KIND_TONE } from "@/app/workshop/storyboard/beat-fields";
 import { BeatBoard } from "@/app/workshop/storyboard/BeatBoard";
 import { BeatEditor } from "@/app/workshop/storyboard/BeatEditor";
 import { CompileCard, SuggestionsCard } from "@/app/workshop/storyboard/BoardAsides";
@@ -35,6 +40,17 @@ import { CompileCard, SuggestionsCard } from "@/app/workshop/storyboard/BoardAsi
 // a list is what reads on a phone, and prep gets done on a phone. "board" is
 // the workshop's: the same cards as a card grid, the editor in a sheet, and
 // the suggestions and the compile folded into cards beside the board.
+
+// The painted face of each kind of card, in the picker and on the list.
+const KIND_GLYPH: Record<BeatKind, string> = {
+  setting: "system-region",
+  backstory: "system-lore",
+  event: "tab-timeline",
+  encounter: "system-encounters",
+  hook: "quest-active",
+  secret: "quest-hidden",
+  npc_moment: "system-cast",
+};
 
 type Payload = {
   board: Board;
@@ -137,7 +153,7 @@ export function DmStoryboardPanel({
   }
 
   if (!data) {
-    return <Loader2 className="size-5 animate-spin text-stone-500" />;
+    return <div className="skeleton-block h-24 rounded-xl" aria-busy="true" aria-label="Loading the storyboard" />;
   }
 
   const nodes = data.board.nodes;
@@ -148,22 +164,22 @@ export function DmStoryboardPanel({
   const addRow = (
     <>
       <div className="flex flex-wrap items-end gap-2">
-        <label className="flex flex-col gap-0.5">
-          <span className="text-[10px] uppercase tracking-wide text-stone-500">Card</span>
-          <select
+        <div className="w-full sm:w-52">
+          <FieldLabel>Card</FieldLabel>
+          <Select
             value={newKind}
-            onChange={(event) => setNewKind(event.target.value as BeatKind)}
-            className={cn(input, "w-48")}
-          >
-            {BEAT_KINDS.map((kind) => (
-              <option key={kind} value={kind}>
-                {BEAT_LABELS[kind]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-1 flex-col gap-0.5">
-          <span className="text-[10px] uppercase tracking-wide text-stone-500">In a few words</span>
+            onChange={setNewKind}
+            options={BEAT_KINDS.map((kind) => ({
+              value: kind,
+              label: BEAT_LABELS[kind],
+              hint: BEAT_HINTS[kind],
+              icon: { kind: "glyph" as const, key: KIND_GLYPH[kind] },
+            }))}
+            label="Card"
+          />
+        </div>
+        <label className="flex min-w-[10rem] flex-1 flex-col">
+          <FieldLabel>In a few words</FieldLabel>
           <input
             value={newTitle}
             onChange={(event) => setNewTitle(event.target.value.slice(0, TITLE_MAX))}
@@ -173,20 +189,20 @@ export function DmStoryboardPanel({
               }
             }}
             placeholder="The miller's daughter has not come home"
-            className={cn(input, "w-full")}
+            className={ui.input}
           />
         </label>
         <button
           type="button"
           disabled={busy || !newTitle.trim()}
           onClick={() => void add(newKind, newTitle)}
-          className="inline-flex items-center gap-1 rounded-md border border-amber-500/40 px-3 py-1 text-xs text-amber-100 hover:bg-stone-800 disabled:opacity-40"
+          className={ui.btnSecondary}
         >
-          <Plus className="size-3.5" /> Add
+          <Plus className="size-4" /> Add
         </button>
       </div>
-      <p className="text-[10px] text-stone-600">{BEAT_HINTS[newKind]}</p>
-      {error ? <p className="text-[11px] text-red-400">{error}</p> : null}
+      <p key={newKind} className="live-in text-[11px] leading-snug text-stone-400">{BEAT_HINTS[newKind]}</p>
+      {error ? <p className="motion-shake text-[11px] text-red-400">{error}</p> : null}
     </>
   );
 
@@ -241,9 +257,9 @@ export function DmStoryboardPanel({
           className="lg:w-[min(92vw,40rem)]"
         >
           {open && edit ? (
-            <div className="flex flex-col gap-2">
+            <div className="reveal flex flex-col gap-2">
               {editorFor(edit, () => void remove(open.id))}
-              {error ? <p className="text-[11px] text-red-400">{error}</p> : null}
+              {error ? <p className="motion-shake text-[11px] text-red-400">{error}</p> : null}
             </div>
           ) : null}
         </Sheet>
@@ -253,16 +269,15 @@ export function DmStoryboardPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2 rounded-lg border border-stone-800 bg-stone-900/40 p-3">
+      <section className={cn(ui.card, "dm-card flex flex-col gap-2 p-3")}>
+        <SectionHead title="Add a card" glyph="system-storyboard" />
         {addRow}
-      </div>
+      </section>
 
       {data.suggestions.length ? (
-        <div className="flex flex-col gap-1.5 rounded-lg border border-stone-800 bg-stone-900/40 p-3">
-          <h3 className="flex items-center gap-1.5 text-sm text-amber-100">
-            <Lightbulb className="size-4" /> What this board is missing
-          </h3>
-          <p className="text-[10px] text-stone-600">
+        <div className={cn(ui.card, "dm-card reveal flex flex-col gap-1.5 p-3")}>
+          <SectionHead title="What this board is missing" glyph="quest-hidden" />
+          <p className="text-[11px] text-stone-500">
             Counted, not guessed. Nothing here asked a model what your story needs.
           </p>
           {data.suggestions.map((suggestion) => (
@@ -270,10 +285,11 @@ export function DmStoryboardPanel({
               <span className="flex-1 text-[11px] text-stone-400">{suggestion.reason}</span>
               <button
                 type="button"
-                disabled={busy}
+                disabled={busy} aria-busy={busy}
                 onClick={() => void add(suggestion.kind, suggestion.title)}
-                className="rounded-md border border-stone-700 px-1.5 py-0.5 text-[10px] text-stone-400 hover:text-amber-100 disabled:opacity-40"
+                className={cn(ui.btnSmall, "min-h-9 gap-1 px-2 py-1 text-[11px]")}
               >
+                <GameIcon icon={{ kind: "glyph", key: KIND_GLYPH[suggestion.kind] }} size="size-5" />
                 + {BEAT_LABELS[suggestion.kind]}
               </button>
             </div>
@@ -283,9 +299,7 @@ export function DmStoryboardPanel({
 
       <div className="flex flex-col gap-1.5">
         {nodes.length === 0 ? (
-          <p className="text-xs text-stone-500">
-            Nothing on the board. Start with a reason the party would go somewhere.
-          </p>
+          <EmptyState size="sm" art="board" title="Nothing on the board. Start with a reason the party would go somewhere." />
         ) : null}
         {data.board.order.map((id) => {
           const node = nodes.find((entry) => entry.id === id);
@@ -295,9 +309,10 @@ export function DmStoryboardPanel({
           return (
             <div
               key={node.id}
-              className={cn("rounded-lg border bg-stone-900/40", KIND_TONE[node.kind])}
+              className={cn(ui.card, "rounded-lg", KIND_TONE[node.kind])}
             >
               <div className="flex items-center gap-2 p-2">
+                <GameIcon icon={{ kind: "glyph", key: KIND_GLYPH[node.kind] }} size="size-7" className="shrink-0" />
                 <button
                   type="button"
                   onClick={() => {
@@ -308,14 +323,15 @@ export function DmStoryboardPanel({
                       setEdit(node);
                     }
                   }}
-                  className="flex-1 text-left"
+                  aria-expanded={openId === node.id}
+                  className={cn(ui.btnSmall, quietRow, "flex-1 flex-wrap gap-x-2 gap-y-0")}
                 >
-                  <span className="text-[10px] uppercase tracking-wide text-stone-500">
+                  <span className="font-display text-[10px] tracking-[0.12em] text-amber-200/80">
                     {BEAT_LABELS[node.kind]}
                   </span>
-                  <span className="ml-2 text-sm text-stone-200">{node.title}</span>
+                  <span className="text-sm text-stone-100">{node.title}</span>
                   {node.out.length ? (
-                    <span className="ml-2 text-[10px] text-stone-600">
+                    <span className="basis-full text-[10px] text-stone-500">
                       leads to {node.out.map(nameOf).filter(Boolean).join(", ")}
                     </span>
                   ) : null}
@@ -323,7 +339,7 @@ export function DmStoryboardPanel({
                 <button
                   type="button"
                   onClick={() => void remove(node.id)}
-                  className="text-stone-600 hover:text-red-300"
+                  className={cn(ui.iconAction, "hover:text-red-300")}
                   aria-label={`Delete ${node.title}`}
                 >
                   <Trash2 className="size-3.5" />
@@ -331,7 +347,7 @@ export function DmStoryboardPanel({
               </div>
 
               {openId === node.id && edit ? (
-                <div className="flex flex-col gap-2 border-t border-stone-800 p-3">
+                <div className="reveal flex flex-col gap-2 border-t border-amber-500/15 p-3">
                   {editorFor(edit)}
                 </div>
               ) : null}
@@ -341,15 +357,15 @@ export function DmStoryboardPanel({
       </div>
 
       {nodes.length ? (
-        <div className="flex flex-col gap-1 rounded-lg border border-stone-800 bg-stone-950/60 p-3">
-          <h3 className="text-sm text-amber-100">What this becomes</h3>
-          <p className="text-[11px] text-stone-500">
+        <div className={cn(ui.card, "dm-card reveal flex flex-col gap-1 p-3")}>
+          <SectionHead title="What this becomes" glyph="system-lore" />
+          <p className="text-[11px] leading-snug text-stone-400">
             {data.compiled.summary.lines.length
               ? `Imported into a campaign, this board becomes ${data.compiled.summary.lines.join(", ")}.`
               : "Nothing yet. Cards become lore, quests, prepared fights, DM notes and the story arc."}
           </p>
           {data.compiled.summary.arcRefusal ? (
-            <p className="text-[10px] text-amber-300/70">{data.compiled.summary.arcRefusal}</p>
+            <p className="reveal text-[10px] text-amber-300/70">{data.compiled.summary.arcRefusal}</p>
           ) : null}
         </div>
       ) : null}

@@ -91,12 +91,12 @@ export function SafetyToneFields({
     <div className="space-y-3 text-sm">
       <div>
         <p className="mb-1 text-xs uppercase tracking-wide text-stone-500">Safety</p>
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div data-pill-group="" className="flex flex-wrap items-center gap-1.5">
           <button type="button" aria-pressed={safety.xCard} onClick={() => onSafety({ ...safety, xCard: !safety.xCard })} className={cn(chip, safety.xCard ? on : off)}>
             X-card {safety.xCard ? "on" : "off"}
           </button>
           {BOUNDARIES.map((boundary) => (
-            <button key={boundary} type="button" aria-pressed={safety.boundaries === boundary} onClick={() => onSafety({ ...safety, boundaries: boundary })} className={cn(chip, safety.boundaries === boundary ? on : off)}>
+            <button data-on={safety.boundaries === boundary ? "" : undefined} key={boundary} type="button" aria-pressed={safety.boundaries === boundary} onClick={() => onSafety({ ...safety, boundaries: boundary })} className={cn(chip, safety.boundaries === boundary ? on : off)}>
               {BOUNDARY_LABELS[boundary]}
             </button>
           ))}
@@ -108,14 +108,14 @@ export function SafetyToneFields({
       </div>
       <div>
         <p className="mb-1 text-xs uppercase tracking-wide text-stone-500">Strictness and tone</p>
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div data-pill-group="" className="flex flex-wrap items-center gap-1.5">
           {STRICTNESS.map((level) => (
-            <button key={level} type="button" aria-pressed={gm.strictness === level} onClick={() => onGm({ ...gm, strictness: level })} className={cn(chip, gm.strictness === level ? on : off)}>
+            <button data-on={gm.strictness === level ? "" : undefined} key={level} type="button" aria-pressed={gm.strictness === level} onClick={() => onGm({ ...gm, strictness: level })} className={cn(chip, gm.strictness === level ? on : off)}>
               {STRICTNESS_LABELS[level]}
             </button>
           ))}
         </div>
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+        <div className="stagger-pop mt-1.5 flex flex-wrap items-center gap-1.5">
           {TONES.map((tone) => (
             <button key={tone} type="button" aria-pressed={gm.tone.includes(tone)} onClick={() => toggleTone(tone)} className={cn(chip, gm.tone.includes(tone) ? on : off)}>
               {tone}
@@ -127,7 +127,7 @@ export function SafetyToneFields({
       {showPresets && presets.length ? (
         <div>
           <p className="mb-1 text-xs uppercase tracking-wide text-stone-500">Or pick a DM personality</p>
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="stagger-pop flex flex-wrap items-center gap-1.5">
             {presets.map((preset) => {
               const active = preset.gm.strictness === gm.strictness && preset.gm.tone.join() === gm.tone.join() && (!ttsVoice || preset.ttsVoice === ttsVoice);
               return (

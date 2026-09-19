@@ -1,6 +1,8 @@
 "use client";
 
 import { ArrowLeft, CircleHelp, Copy, Loader2, Pencil, Trash2 } from "lucide-react";
+import { cn } from "@/lib/cn";
+import { headIcon } from "@/app/workshop/kit";
 import { appConfirm } from "@/components/ui/ConfirmDialog";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -102,11 +104,11 @@ export function WorkshopHeader({
               }
             }}
             aria-label="Workshop name"
-            className="w-full max-w-md rounded-md border border-stone-700 bg-stone-950 px-2 py-1 font-display text-xl tracking-wide text-amber-50"
+            className={cn(ui.input, "max-w-md font-display text-xl tracking-wide text-amber-50")}
           />
         ) : (
           <>
-            <h1 className="font-display text-xl tracking-wide text-amber-50">{workshop.title}</h1>
+            <h1 className="gold-title font-display text-xl tracking-wide">{workshop.title}</h1>
             <button
               type="button"
               aria-label="Rename this workshop"
@@ -114,7 +116,7 @@ export function WorkshopHeader({
                 setTitleDraft(workshop.title);
                 setRenaming(true);
               }}
-              className="rounded p-1 text-stone-500 hover:text-stone-300"
+              className={cn(ui.iconAction, "grid size-9 place-items-center opacity-100 text-stone-500")}
             >
               <Pencil className="size-3.5" />
             </button>
@@ -127,7 +129,7 @@ export function WorkshopHeader({
             title="Guides and tours"
             onClick={onHelp}
             data-tour="hub-help"
-            className="rounded-md border border-stone-700 p-1.5 text-stone-500 hover:text-stone-300"
+            className={cn(ui.iconAction, headIcon)}
           >
             <CircleHelp className="size-4" />
           </button>
@@ -137,7 +139,7 @@ export function WorkshopHeader({
             onClick={() => void clone()}
             aria-label={`Duplicate ${workshop.title}`}
             title="Duplicate this workshop and everything in it"
-            className="rounded-md border border-stone-700 p-1.5 text-stone-500 hover:text-stone-300 disabled:opacity-50"
+            className={cn(ui.iconAction, headIcon, "disabled:opacity-50")}
           >
             {cloning ? <Loader2 className="size-4 animate-spin" /> : <Copy className="size-4" />}
           </button>
@@ -146,7 +148,7 @@ export function WorkshopHeader({
             onClick={() => void remove()}
             aria-label={`Delete ${workshop.title}`}
             title="Delete this workshop"
-            className="rounded-md border border-stone-700 p-1.5 text-stone-500 hover:text-red-300"
+            className={cn(ui.iconAction, headIcon, "hover:text-red-300")}
           >
             <Trash2 className="size-4" />
           </button>

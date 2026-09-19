@@ -1,7 +1,10 @@
 "use client";
 
-import { Loader2, RotateCcw, TriangleAlert } from "lucide-react";
+import { Loader2, RotateCcw } from "lucide-react";
 import { useState } from "react";
+import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
+import { SectionHead } from "@/components/ui/SectionHead";
 import { DM_HALTED_PREFIX } from "@/lib/campaign-types";
 
 // A DM turn that threw. Everything the turn had (its conversation, tool calls
@@ -55,18 +58,16 @@ export function HaltedTurnBanner({
   }
 
   return (
-    <div className="mx-auto max-w-xl rounded-lg border border-amber-900/60 bg-amber-950/20 px-4 py-2.5">
-      <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-amber-300">
-        <TriangleAlert className="size-3.5 shrink-0" /> DM halted, context preserved
-      </p>
-      <p className="mt-0.5 text-sm text-stone-400">{reason}</p>
+    <div className="panel ornate session-banner-card reveal-banner rounded-xl">
+      <SectionHead title="DM halted, context preserved" glyph="cue-bell" level="h4" className="mb-1.5" />
+      <p className="text-sm text-stone-400">{reason}</p>
       {canRetry ? (
         <button
           type="button"
           onClick={retry}
           disabled={retrying}
           title="Send the DM back into this turn with everything it already had"
-          className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-amber-800/70 px-2.5 py-1 text-xs text-amber-200 hover:border-amber-600 hover:text-amber-100 disabled:opacity-50"
+          className={cn(ui.btnSmall, "mt-2.5")}
         >
           {retrying ? (
             <Loader2 className="size-3.5 animate-spin" />
@@ -76,11 +77,11 @@ export function HaltedTurnBanner({
           {retrying ? "Picking the thread back up..." : "Retry the turn"}
         </button>
       ) : (
-        <p className="mt-1 text-xs text-stone-600">
+        <p className="mt-1 text-xs text-stone-500">
           The party lead can send the DM back in from here.
         </p>
       )}
-      {error ? <p className="mt-1 text-xs text-red-400">{error}</p> : null}
+      {error ? <p className="motion-shake mt-1 text-xs text-red-400">{error}</p> : null}
     </div>
   );
 }

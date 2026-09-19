@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isErrorResponse, requireMember } from "@/lib/campaign-api";
+import { capsFor, isErrorResponse, requireMember } from "@/lib/campaign-api";
 import { getFloor } from "@/lib/db/campaigns";
 import { getActiveBoard } from "@/lib/db/encounters";
 import { getSheetForUser } from "@/lib/db/sheets";
@@ -167,7 +167,7 @@ export async function POST(
 
   // Fresh self view in the response saves the mover a follow-up fetch.
   return Response.json({
-    view: buildPlayerMapView(campaignId, user.id),
+    view: buildPlayerMapView(campaignId, user.id, { enemyNumbers: capsFor(context).enemyNumbers }),
     ...(opportunity.notes.length ? { opportunityAttacks: opportunity.notes } : {}),
   });
 }

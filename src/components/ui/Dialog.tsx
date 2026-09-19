@@ -35,7 +35,7 @@ export function Dialog({
           <div className="mb-4 flex items-center justify-between gap-3">
             <RadixDialog.Title className="flex items-center gap-2 font-display text-lg tracking-wide text-amber-100">
               {icon}
-              {title}
+              <span className="gold-title">{title}</span>
             </RadixDialog.Title>
             <RadixDialog.Close className="rounded-md p-1 text-stone-400 transition-colors hover:bg-stone-800 hover:text-stone-200">
               <X className="size-4" />

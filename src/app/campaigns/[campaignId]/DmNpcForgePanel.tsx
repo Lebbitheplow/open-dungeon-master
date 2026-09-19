@@ -11,6 +11,9 @@ import {
   Sparkles,
   Trash2,
 } from "lucide-react";
+import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
+import { GameIcon } from "@/components/ui/GameIcon";
 import { offersImages, offersStoryModel, useCapabilities } from "@/lib/use-capabilities";
 import {
   FIELD_LABELS,
@@ -322,7 +325,7 @@ export function DmNpcForgePanel({
         disabled={generating !== "" || busy}
         title={`Ask the model for ${FIELD_LABELS[field].toLowerCase()}`}
         onClick={() => void suggest(field)}
-        className="flex shrink-0 items-center gap-1 rounded-md border border-stone-700 px-1.5 py-0.5 text-[10px] text-stone-400 hover:text-amber-200 disabled:opacity-40"
+        className={cn(ui.btnSmall, "shrink-0 gap-1 px-2 py-1 text-[10px]")}
       >
         {generating === field ? (
           <Loader2 className="size-3 animate-spin" />
@@ -351,10 +354,11 @@ export function DmNpcForgePanel({
           type="button"
           disabled={busy || !draft.name.trim()}
           onClick={() => void save()}
+          aria-busy={busy}
           data-tour="cast-save"
-          className="rounded-md border border-amber-700 bg-amber-950/50 px-2 py-1 text-xs text-amber-100 disabled:opacity-40"
+          className={ui.btnPrimary}
         >
-          {busy ? <Loader2 className="inline size-3 animate-spin" /> : null} Save them
+          {busy ? <Loader2 className="size-4 animate-spin" /> : null} Save them
         </button>
         {selected ? (
           <>
@@ -373,19 +377,19 @@ export function DmNpcForgePanel({
             />
             <button
               type="button"
-              disabled={busy}
+              disabled={busy} aria-busy={busy}
               onClick={() => fileRef.current?.click()}
-              className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-50"
+              className={cn(ui.btnSmall, "min-h-9 gap-1 px-2 py-1 text-xs")}
             >
               <ImageIcon className="size-3" /> {selected.portraitUrl ? "Replace face" : "Add a face"}
             </button>
             {canPaint ? (
               <button
                 type="button"
-                disabled={busy}
+                disabled={busy} aria-busy={busy}
                 title="Render one on the shared media queue"
                 onClick={() => void patch({ draft, generatePortrait: true })}
-                className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-50"
+                className={cn(ui.btnSmall, "min-h-9 gap-1 px-2 py-1 text-xs")}
               >
                 <Sparkles className="size-3" /> Paint one
               </button>
@@ -393,24 +397,24 @@ export function DmNpcForgePanel({
             {selected.portraitUrl ? (
               <button
                 type="button"
-                disabled={busy}
+                disabled={busy} aria-busy={busy}
                 title="Take the picture away and show the stand-in for their role instead"
                 onClick={() => void patch({ portraitUrl: "" })}
-                className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-400 hover:bg-stone-900 disabled:opacity-50"
+                className={cn(ui.btnSmall, "min-h-9 gap-1 px-2 py-1 text-xs")}
               >
                 <ImageOff className="size-3" /> Use placeholder
               </button>
             ) : null}
             <button
               type="button"
-              disabled={busy}
+              disabled={busy} aria-busy={busy}
               title={
                 selected.archived
                   ? "Put them back in the DM's prompt"
                   : "Keep them, but take them out of the DM's prompt"
               }
               onClick={() => void patch({ archived: !selected.archived })}
-              className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-400 hover:bg-stone-900 disabled:opacity-50"
+              className={cn(ui.btnSmall, "min-h-9 gap-1 px-2 py-1 text-xs")}
             >
               {selected.archived ? (
                 <>
@@ -424,18 +428,18 @@ export function DmNpcForgePanel({
             </button>
             <button
               type="button"
-              disabled={busy}
+              disabled={busy} aria-busy={busy}
               aria-label={`Duplicate ${selected.name}`}
               onClick={() => void duplicate()}
-              className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-50"
+              className={cn(ui.btnSmall, "min-h-9 gap-1 px-2 py-1 text-xs")}
             >
               <Copy className="size-3" /> Duplicate
             </button>
             <button
               type="button"
-              disabled={busy}
+              disabled={busy} aria-busy={busy}
               onClick={() => void remove()}
-              className="ml-auto flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-500 hover:text-red-300 disabled:opacity-50"
+              className={cn(ui.btnSmall, "ml-auto min-h-9 gap-1 px-2 py-1 text-xs hover:border-red-400/50 hover:text-red-300")}
             >
               <Trash2 className="size-3" /> Forget them
             </button>
@@ -443,7 +447,7 @@ export function DmNpcForgePanel({
         ) : null}
       </div>
 
-      {error ? <p className="text-[11px] text-red-400">{error}</p> : null}
+      {error ? <p className="motion-shake text-[11px] text-red-400">{error}</p> : null}
     </div>
   );
 
@@ -455,8 +459,10 @@ export function DmNpcForgePanel({
         type="button"
         aria-pressed={showGraph}
         onClick={() => setShowGraph((current) => !current)}
-        className="rounded-md border border-stone-700 px-2 py-0.5 text-[11px] text-stone-400 hover:text-amber-200"
+        data-on={showGraph ? "" : undefined}
+        className={cn(ui.btnSmall, "min-h-9 px-2 py-1 text-xs", showGraph && "border-amber-500/70 bg-amber-400/10 text-amber-100")}
       >
+        <GameIcon icon={{ kind: "glyph", key: "tab-bonds" }} size="size-5" />
         {showGraph ? "Hide who knows whom" : "Who knows whom"}
       </button>
       {showGraph ? (
@@ -495,6 +501,7 @@ export function DmNpcForgePanel({
   return (
     <div className="space-y-3">
       {graphView}
+      {/* The chips and the editor fields draw their own heads and cards. */}
       <CastChips npcs={npcs} selectedId={selectedId} onOpen={open} />
       {editor}
     </div>

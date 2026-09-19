@@ -1,10 +1,14 @@
 "use client";
 
-import * as AlertDialog from "@radix-ui/react-alert-dialog";
-import { Copy, KeyRound, Loader2, Shield, ShieldOff, Trash2, Undo2, UserRound } from "lucide-react";
+import { Check, Copy, KeyRound, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { cn } from "@/lib/cn";
-import { ui } from "@/lib/ui";
+import { UserAvatar, ui } from "@/lib/ui";
+import { KebabMenu } from "@/components/KebabMenu";
+import { PageSkeleton } from "@/components/PageSkeleton";
+import { appConfirm } from "@/components/ui/ConfirmDialog";
+import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { SectionHead } from "@/components/ui/SectionHead";
 
 type AdminUser = {
   id: string;
@@ -30,7 +34,6 @@ export function AdminUsersPanel({ meId }: { meId: string }) {
     null,
   );
   const [copied, setCopied] = useState(false);
-  const [deleting, setDeleting] = useState<AdminUser | null>(null);
 
   const refresh = useCallback(() => {
     fetch("/api/admin/users")
@@ -93,31 +96,61 @@ export function AdminUsersPanel({ meId }: { meId: string }) {
   }
 
   async function deleteUser(user: AdminUser) {
+    const sure = await appConfirm(
+      "Their account, campaigns they own, characters, pictures and private chats are erased right now, with no grace period. Messages they wrote in other people's campaigns stay in those transcripts without their name.",
+      { title: `Delete ${user.username}?`, actionLabel: "Delete forever", tone: "danger" },
+    );
+    if (!sure) return;
     const response = await act(user.id, () =>
       fetch(`/api/admin/users/${user.id}`, { method: "DELETE" }),
     );
-    setDeleting(null);
     if (response) refresh();
   }
 
+  // Everything that can be done to one account, for the kebab and for the
+  // right-click or long press alike. Reset password is also the row's button.
+  function actionsFor(user: AdminUser): ContextMenuItem[] {
+    const busy = busyId === user.id;
+    return [
+      {
+        id: "admin",
+        label: user.isAdmin ? "Remove admin" : "Make admin",
+        glyph: "tab-dm",
+        disabled: busy,
+        onSelect: () => void toggleAdmin(user),
+      },
+      { id: "reset", label: "Reset password", glyph: "tab-admin", disabled: busy, onSelect: () => void resetPassword(user) },
+      ...(user.deletionDueAt
+        ? [{ id: "keep", label: "Call off the scheduled deletion", glyph: "rest-hp", disabled: busy, onSelect: () => void keepAccount(user) }]
+        : []),
+      {
+        id: "delete",
+        label: user.deletionDueAt ? "Erase now instead of waiting" : "Delete user",
+        glyph: "quest-failed",
+        tone: "danger" as const,
+        separated: true,
+        // An admin cannot delete the account they are signed in with.
+        disabled: busy || user.id === meId,
+        onSelect: () => void deleteUser(user),
+      },
+    ];
+  }
+
   if (!users) {
-    return (
-      <div className="flex justify-center py-10">
-        <Loader2 className="size-5 animate-spin text-stone-500" />
-      </div>
-    );
+    return <PageSkeleton kind="flat" className="px-0 py-2" />;
   }
 
   return (
     <div className="space-y-4">
       {tempPassword ? (
-        <div className="panel rounded-xl border-amber-500/40 p-4">
+        <div className="live-in panel ornate rounded-xl border-amber-500/40 p-4">
+          <SectionHead title="Temporary password" glyph="tab-admin" />
           <p className="text-sm text-stone-200">
             Temporary password for <span className="text-amber-200">{tempPassword.username}</span>.
             It is shown only once; they must change it at next login.
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <code className="rounded-lg border border-stone-700 bg-stone-950/80 px-3 py-1.5 font-mono text-sm text-amber-100">
+            <code className="rounded-lg border border-amber-500/30 bg-stone-950/80 px-3 py-1.5 font-mono text-sm text-amber-100">
               {tempPassword.password}
             </code>
             <button
@@ -128,150 +161,75 @@ export function AdminUsersPanel({ meId }: { meId: string }) {
                 setCopied(true);
               }}
             >
-              <Copy className="size-3.5" /> {copied ? "Copied" : "Copy"}
+              {copied ? <Check className="size-3.5 text-emerald-400" /> : <Copy className="size-3.5" />} {copied ? "Copied" : "Copy"}
             </button>
-            <button
-              type="button"
-              className="text-xs text-stone-500 hover:text-stone-300"
-              onClick={() => setTempPassword(null)}
-            >
+            <button type="button" className={ui.btnSmall} onClick={() => setTempPassword(null)}>
               Dismiss
             </button>
           </div>
         </div>
       ) : null}
 
-      {error ? <p className="text-sm text-red-400">{error}</p> : null}
+      {error ? <p role="alert" className="motion-shake text-sm text-red-400">{error}</p> : null}
 
-      <section className={cn(ui.card, "texture-noise")}>
-        <ul className="divide-y divide-stone-800/70">
-          {users.map((user) => (
-            <li key={user.id} className="flex flex-wrap items-center gap-3 p-4">
-              {user.avatar ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={user.avatar.url}
-                  alt=""
-                  className="size-8 rounded-full border border-stone-700 object-cover"
-                />
-              ) : (
-                <div className="flex size-8 items-center justify-center rounded-full border border-stone-700 bg-stone-900">
-                  <UserRound className="size-4 text-stone-600" />
+      <section className="panel texture-noise rounded-xl p-5">
+        <SectionHead
+          level="h2"
+          title="Accounts"
+          glyph="tab-party"
+          aside={<span className="count-pop tabular-nums">{users.length}</span>}
+        />
+        <ul className="stagger space-y-2">
+          {users.map((user) => {
+            const menu = actionsFor(user);
+            return (
+              <ContextMenu as="li" key={user.id} items={menu} label={user.username} className="plate-row">
+                <span className="medallion">
+                  <UserAvatar url={user.avatar?.url} userId={user.id} size="size-10" />
+                </span>
+                <div className="min-w-0 flex-1 basis-40">
+                  <p className="flex flex-wrap items-center gap-1.5 text-sm text-stone-100">
+                    {user.username}
+                    {user.id === meId ? <span className="text-xs text-stone-500">(you)</span> : null}
+                    {user.isAdmin ? (
+                      <span className="plate-chip">
+                        <GameIcon icon={{ kind: "glyph", key: "tab-admin" }} size="size-4" /> Admin
+                      </span>
+                    ) : null}
+                    {user.hasDiscord ? <span className="plate-chip" data-tone="indigo">Discord</span> : null}
+                    {user.mustChangePassword ? <span className="plate-chip" data-tone="orange">Reset pending</span> : null}
+                    {user.deletionDueAt ? (
+                      <span
+                        title={`Asked to delete their account; erased on ${new Date(user.deletionDueAt).toLocaleString()}`}
+                        className="plate-chip"
+                        data-tone="red"
+                      >
+                        Deletion {new Date(user.deletionDueAt).toLocaleDateString()}
+                      </span>
+                    ) : null}
+                  </p>
+                  <p className="text-xs text-stone-500">
+                    {user.campaignCount} campaign{user.campaignCount === 1 ? "" : "s"} · joined{" "}
+                    {new Date(user.createdAt).toLocaleDateString()}
+                  </p>
                 </div>
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="flex flex-wrap items-center gap-2 text-sm text-stone-100">
-                  {user.username}
-                  {user.id === meId ? <span className="text-xs text-stone-500">(you)</span> : null}
-                  {user.isAdmin ? (
-                    <span className="rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-amber-300">
-                      Admin
-                    </span>
-                  ) : null}
-                  {user.hasDiscord ? (
-                    <span className="rounded border border-indigo-500/40 bg-indigo-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-indigo-300">
-                      Discord
-                    </span>
-                  ) : null}
-                  {user.mustChangePassword ? (
-                    <span className="rounded border border-orange-500/40 bg-orange-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-orange-300">
-                      Reset pending
-                    </span>
-                  ) : null}
-                  {user.deletionDueAt ? (
-                    <span
-                      title={`Asked to delete their account; erased on ${new Date(user.deletionDueAt).toLocaleString()}`}
-                      className="rounded border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-red-300"
-                    >
-                      Deletion {new Date(user.deletionDueAt).toLocaleDateString()}
-                    </span>
-                  ) : null}
-                </p>
-                <p className="text-xs text-stone-500">
-                  {user.campaignCount} campaign{user.campaignCount === 1 ? "" : "s"} · joined{" "}
-                  {new Date(user.createdAt).toLocaleDateString()}
-                </p>
-              </div>
-              <div className="flex w-full flex-wrap items-center justify-end gap-1.5 sm:w-auto">
-                <button
-                  type="button"
-                  title={user.isAdmin ? "Remove admin" : "Make admin"}
-                  disabled={busyId === user.id}
-                  onClick={() => toggleAdmin(user)}
-                  className={ui.btnSmall}
-                >
-                  {user.isAdmin ? <ShieldOff className="size-3.5" /> : <Shield className="size-3.5" />}
-                  {user.isAdmin ? "Demote" : "Admin"}
-                </button>
-                <button
-                  type="button"
-                  title="Reset password"
-                  disabled={busyId === user.id}
-                  onClick={() => resetPassword(user)}
-                  className={ui.btnSmall}
-                >
-                  <KeyRound className="size-3.5" /> Reset
-                </button>
-                {user.deletionDueAt ? (
+                <div className="ml-auto flex items-center gap-1.5">
                   <button
                     type="button"
-                    title="Call off the scheduled deletion"
+                    title="Reset password"
                     disabled={busyId === user.id}
-                    onClick={() => keepAccount(user)}
+                    onClick={() => resetPassword(user)}
                     className={ui.btnSmall}
                   >
-                    <Undo2 className="size-3.5" /> Keep
+                    {busyId === user.id ? <Loader2 className="size-3.5 animate-spin" /> : <KeyRound className="size-3.5" />} Reset
                   </button>
-                ) : null}
-                <button
-                  type="button"
-                  title={user.deletionDueAt ? "Erase now instead of waiting" : "Delete user"}
-                  disabled={busyId === user.id || user.id === meId}
-                  onClick={() => setDeleting(user)}
-                  className={cn(ui.btnSmall, "hover:border-red-500/50 hover:text-red-400")}
-                >
-                  <Trash2 className="size-3.5" />
-                </button>
-              </div>
-            </li>
-          ))}
+                  <KebabMenu items={menu} label={`More actions for ${user.username}`} heading={user.username} />
+                </div>
+              </ContextMenu>
+            );
+          })}
         </ul>
       </section>
-
-      {deleting ? (
-        <AlertDialog.Root open onOpenChange={(open) => !open && setDeleting(null)}>
-          <AlertDialog.Portal>
-            <AlertDialog.Overlay className="fixed inset-0 z-50 bg-black/70" />
-            <AlertDialog.Content
-              className={cn(
-                ui.dialog,
-                "fixed left-1/2 top-1/2 z-50 max-h-[85vh] w-[min(92vw,24rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto",
-              )}
-            >
-              <AlertDialog.Title className="font-display text-lg tracking-wide text-amber-50">
-                Delete {deleting.username}?
-              </AlertDialog.Title>
-              <AlertDialog.Description className="mt-2 text-xs text-stone-400">
-                Their account, campaigns they own, characters, pictures and private chats are
-                erased right now, with no grace period. Messages they wrote in other people&apos;s
-                campaigns stay in those transcripts without their name.
-              </AlertDialog.Description>
-              <div className="mt-4 flex justify-end gap-2">
-                <AlertDialog.Cancel className={ui.btnSmall}>Cancel</AlertDialog.Cancel>
-                <button
-                  type="button"
-                  onClick={() => deleteUser(deleting)}
-                  disabled={busyId === deleting.id}
-                  className={cn(ui.btnPrimary, "from-red-200 via-red-300 to-red-500 text-red-950")}
-                >
-                  {busyId === deleting.id ? <Loader2 className="size-4 animate-spin" /> : null}
-                  Delete forever
-                </button>
-              </div>
-            </AlertDialog.Content>
-          </AlertDialog.Portal>
-        </AlertDialog.Root>
-      ) : null}
     </div>
   );
 }

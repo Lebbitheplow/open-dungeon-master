@@ -20,8 +20,9 @@ import { pageOrigin } from "@/lib/navigation";
 //
 // The address on offer is the server's public URL when one is configured, a
 // local-network address when the host is on 127.0.0.1, and otherwise the
-// address this tab is on (src/lib/server-address.ts). More than one and the
-// host picks.
+// address this tab is on (src/lib/server-address.ts). Only that one is shown:
+// a list to choose from asked the host to know which address a guest can
+// reach, and offered ones (container bridges, a stale setting) nobody could.
 //
 // Not shown inside a campaign: the table's composer and dice live in that
 // corner, and the lobby's room-code card already carries a QR that names
@@ -29,7 +30,6 @@ import { pageOrigin } from "@/lib/navigation";
 export function ServerAddressButton() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const [addresses, setAddresses] = useState<string[]>([]);
   const [picked, setPicked] = useState("");
   // The rendered code remembers which address it is for, so a stale one is
   // never shown beside a newly picked address.
@@ -55,13 +55,13 @@ export function ServerAddressButton() {
           lanUrls: data?.lanUrls,
           current,
         });
-        setAddresses(list);
-        setPicked((previous) => (list.includes(previous) ? previous : (list[0] ?? "")));
+        // One address, the best one: the public URL when the server has a
+        // live one, else the address on the local network, else this tab's.
+        setPicked(list[0] ?? current);
         setServerName(data?.serverName ?? "");
       })
       .catch(() => {
         if (!cancelled) {
-          setAddresses([current]);
           setPicked(current);
         }
       });
@@ -140,7 +140,7 @@ export function ServerAddressButton() {
           <div
             role="dialog"
             aria-label="This server's address"
-            className={cn(ui.card, "ornate w-72 border-amber-400/30 p-4 shadow-glow-gold")}
+            className={cn(ui.card, "ornate w-72 origin-bottom-right animate-scale-in border-amber-400/30 p-4 shadow-glow-gold")}
           >
             <div className="mb-2 flex items-start justify-between gap-2">
               <div className="min-w-0">
@@ -170,20 +170,6 @@ export function ServerAddressButton() {
                 Preparing the code...
               </div>
             )}
-            {addresses.length > 1 ? (
-              <select
-                value={picked}
-                onChange={(event) => setPicked(event.target.value)}
-                aria-label="Which address to share"
-                className="mt-3 w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200"
-              >
-                {addresses.map((address) => (
-                  <option key={address} value={address}>
-                    {address}
-                  </option>
-                ))}
-              </select>
-            ) : null}
             <p className="mt-3 break-all font-mono text-xs text-amber-100">{picked}</p>
             <div className="mt-2 flex gap-2">
               <button

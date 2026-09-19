@@ -34,6 +34,7 @@ import { handleSetAmbience } from "@/lib/dm/ambience-tools";
 import { parseUvtt } from "@/lib/battlemap/uvtt";
 import { normalizeBackdropTransform, type BackdropTransform } from "@/lib/battlemap/backdrop";
 import { TERRAIN, tileIndex, type AmbientLight, type XY } from "@/lib/battlemap/types";
+import { normalizeMapSkin, type MapSkin } from "@/lib/battlemap/skins";
 import { carriedLightFields, publishBattleMapUpdate } from "@/lib/dm/map-tools";
 
 // The map library: building maps that no encounter has asked for yet.
@@ -88,6 +89,8 @@ export function createLibraryMap(
     seed?: number;
     // Absent means roll one with the generator.
     blank?: BlankFill;
+    // The skin it starts in; absent is the default for setting and theme.
+    skin?: MapSkin;
   },
 ): LibraryOutcome<PreparedMap> {
   const name = input.name.trim();
@@ -110,6 +113,7 @@ export function createLibraryMap(
         theme: input.theme ?? (input.blank === "rock" ? "cave" : "field"),
         lights: [],
         seed: 0,
+        skin: input.skin,
       }),
     };
   }
@@ -144,6 +148,7 @@ export function createLibraryMap(
       theme: generated.theme,
       lights: generated.lights,
       seed,
+      skin: input.skin,
     }),
   };
 }
@@ -272,6 +277,14 @@ function playPreparedAmbience(campaign: Campaign, ambience: SceneAmbience) {
   );
 }
 
+// What the map is painted with. Cosmetic, so there is nothing to refuse: the
+// normaliser keeps what is a skin and drops the rest
+// (src/lib/battlemap/skins.ts).
+export function setLibrarySkin(campaign: Campaign, mapId: string, skin: unknown): LibraryOutcome<PreparedMap> {
+  const updated = updatePreparedMap(campaign.id, mapId, { skin: normalizeMapSkin(skin) });
+  return updated ? { ok: true, map: updated } : { error: "That map is not in this library." };
+}
+
 // The picture under the grid. The path has already been written to
 // public/uploads by /api/upload, which is the only place in this app that
 // turns bytes into a file, and normalizeBackdrop refuses anything that does
@@ -376,6 +389,7 @@ export function captureBoardIntoLibrary(
       seed: map.seed,
       backdrop: map.backdrop,
       scene: { doors: map.doors, labels: map.labels, zones: map.zones, overlayPath: map.overlayPath },
+      skin: map.skin,
     }),
   };
 }
@@ -429,6 +443,7 @@ export function deployPreparedMap(campaign: Campaign, mapId: string): LibraryOut
       zones: prepared.zones,
       overlayPath: prepared.overlayPath,
     },
+    skin: prepared.skin,
   });
   setBattleMapBackdrop(live.id, prepared.backdrop?.path ?? "", prepared.backdrop?.transform ?? null);
   restandOnPrepared(live.id, prepared);
@@ -459,6 +474,9 @@ function placeProps(mapId: string, campaignId: string, prepared: PreparedMap) {
         refId: crypto.randomUUID(),
         name: prop.name,
         spot: { x: prop.x, y: prop.y },
+        // The object it was drawn as in the editor, so the board can draw it
+        // the same way (docs/visual-overhaul-plan.md 4.5).
+        stamp: prop.stamp,
       })),
   );
 }
@@ -505,6 +523,7 @@ export function openSceneOnPreparedMap(
       drawings: prepared.drawings,
     },
     outdoors: prepared.outdoors,
+    skin: prepared.skin,
   });
   const spawns = partySpawnTiles(prepared.terrain, prepared.width, prepared.height, sheets.length);
   const fallback: XY = spawns[0] ?? { x: 1, y: 1 };
@@ -540,5 +559,7 @@ export function libraryState(campaign: Campaign) {
     // hasParty says a scene cannot open YET; this says it never can, so the
     // panel hides the control instead of disabling it forever.
     workshop: isWorkshop(campaign),
+    // The setting, which decides the skin a map wears until it is given one.
+    genre: campaign.gameSettings.genre,
   };
 }

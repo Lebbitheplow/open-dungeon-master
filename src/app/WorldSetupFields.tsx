@@ -2,8 +2,8 @@
 
 import { ChevronDown, ChevronRight, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
+import { Select } from "@/components/ui/Select";
 import {
   WORLD_LORE_CATEGORIES,
   type WorldLoreCategory,
@@ -130,21 +130,13 @@ export function WorldSetupFields({
                   className="space-y-1.5 rounded-lg border border-stone-800 bg-stone-950/60 p-2"
                 >
                   <div className="flex gap-1.5">
-                    <select
+                    <Select<WorldLoreCategory>
                       value={draft.category}
-                      onChange={(event) =>
-                        patchDraft(index, {
-                          category: event.target.value as WorldLoreCategory,
-                        })
-                      }
-                      className={cn(ui.input, "w-32 shrink-0")}
-                    >
-                      {WORLD_LORE_CATEGORIES.map((category) => (
-                        <option key={category} value={category}>
-                          {CATEGORY_LABELS[category]}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(category) => patchDraft(index, { category })}
+                      label="Lore category"
+                      className="w-32 shrink-0"
+                      options={WORLD_LORE_CATEGORIES.map((category) => ({ value: category, label: CATEGORY_LABELS[category] }))}
+                    />
                     <input
                       value={draft.title}
                       onChange={(event) => patchDraft(index, { title: event.target.value })}

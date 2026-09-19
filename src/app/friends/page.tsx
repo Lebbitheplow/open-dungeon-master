@@ -1,11 +1,15 @@
 "use client";
 
-import { Check, HeartHandshake, Loader2, UserRound, X } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
+import { Check, Loader2, UserPlus, X } from "lucide-react";
 import { appConfirm } from "@/components/ui/ConfirmDialog";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
-import { IconChip, PIXEL_ICONS, ui } from "@/lib/ui";
+import { PIXEL_ICONS, UserAvatar, ui } from "@/lib/ui";
+import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { Select } from "@/components/ui/Select";
 import { PageLoading, PageNotice, PageSection, PageShell } from "@/components/PageShell";
 
 // The server's social circle: accounts are per-server, so these are the
@@ -33,24 +37,19 @@ type CampaignOption = {
 
 type Note = { text: string; error: boolean };
 
+// A face in the gold ring; online lights a candle on the rim.
 function Avatar({ friend }: { friend: FriendItem }) {
-  return friend.avatar ? (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={friend.avatar.url}
-      alt=""
-      className="size-9 shrink-0 rounded-full border border-amber-500/30 object-cover"
-    />
-  ) : (
-    <span className="flex size-9 shrink-0 items-center justify-center rounded-full border border-stone-700/60 bg-stone-900">
-      <UserRound className="size-4 text-stone-500" />
+  return (
+    <span className="medallion">
+      <UserAvatar url={friend.avatar?.url} userId={friend.userId} size="size-10" />
+      {friend.online ? <span title="Online now" role="img" aria-label="Online now" className="online-candle" /> : null}
     </span>
   );
 }
 
-// Rows inside a section card share one divider rhythm instead of nesting
-// a card per person.
-const ROW = "flex flex-wrap items-center gap-3 px-5 py-3";
+// One plate per person instead of a divider list.
+const ROW = "plate-row";
+const LIST = "stagger space-y-2 px-5 pb-5";
 
 export default function FriendsPage() {
   const [data, setData] = useState<FriendsData>({ friends: [], incoming: [], outgoing: [] });
@@ -204,33 +203,37 @@ export default function FriendsPage() {
   return (
     <PageShell
       icon={PIXEL_ICONS.chats}
+      glyph="tab-friends"
       title="Friends"
       blurb="People on this server; invite them to your campaigns."
     >
-      <PageSection heading="Add a friend">
+      <PageSection heading="Add a friend" glyph="tab-friends">
         <form onSubmit={add} className="flex gap-2">
+          <label className="glyph-field min-w-0 flex-1">
+            <GameIcon icon={{ kind: "glyph", key: "tab-characters" }} size="size-7" className="glyph-field-icon" />
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="Add by exact username"
             maxLength={64}
             aria-label="Username"
-            className={ui.input}
+            className={cn(ui.input, "h-10")}
           />
+          </label>
           <button type="submit" disabled={sending || !name.trim()} className={ui.btnPrimary}>
-            {sending ? <Loader2 className="size-4 animate-spin" /> : null} Add
+            {sending ? <Loader2 className="size-4 animate-spin" /> : <UserPlus className="size-4" />} Add
           </button>
         </form>
         {addNote ? (
-          <p className={cn("mt-2 text-sm", addNote.error ? "text-red-400" : "text-emerald-300")}>
+          <p role={addNote.error ? "alert" : "status"} className={cn("mt-2 text-sm", addNote.error ? "motion-shake text-red-400" : "live-in text-emerald-300")}>
             {addNote.text}
           </p>
         ) : null}
       </PageSection>
 
       {data.incoming.length > 0 ? (
-        <PageSection heading="Requests for you" ribbon="Waiting on you" padded={false}>
-          <ul className="divide-y divide-stone-800/70">
+        <PageSection heading="Requests for you" glyph="cue-bell" ribbon="Waiting on you" padded={false}>
+          <ul className={LIST}>
             {data.incoming.map((request) => (
               <li key={request.userId} className={ROW}>
                 <Avatar friend={request} />
@@ -238,7 +241,7 @@ export default function FriendsPage() {
                   {request.username}
                 </span>
                 {rowNotes[request.userId] ? (
-                  <span className="text-xs text-red-400">{rowNotes[request.userId].text}</span>
+                  <span className="live-in inline-block text-xs text-red-400">{rowNotes[request.userId].text}</span>
                 ) : null}
                 <button
                   type="button"
@@ -260,81 +263,40 @@ export default function FriendsPage() {
         </PageSection>
       ) : null}
 
-      <PageSection heading="Friends" padded={data.friends.length === 0}>
+      <PageSection
+        heading="Friends"
+        glyph="tab-party"
+        actions={data.friends.length ? <span className="count-pop tabular-nums">{data.friends.length}</span> : undefined}
+        padded={data.friends.length === 0}
+      >
         {data.friends.length === 0 ? (
-          <div className="flex flex-col items-center gap-4 px-6 py-8 text-center">
-            <IconChip icon={HeartHandshake} size="size-12" iconSize="size-5" />
-            <div className="max-w-sm">
-              <p className="text-balance font-serif text-2xl text-stone-200">
-                No party outside the party yet.
-              </p>
-              <p className="mt-2 text-pretty text-sm text-stone-500">
-                Add someone by their exact username on this server.
-              </p>
-            </div>
-          </div>
+          <EmptyState art="board" title="No party outside the party yet." hint="Add someone by their exact username on this server." />
         ) : (
-          <ul className="divide-y divide-stone-800/70 pb-2">
+          <ul className={LIST}>
             {data.friends.map((friend) => (
-              <li key={friend.userId} className="px-5 py-3">
-                <div className="flex flex-wrap items-center gap-3">
-                  <Avatar friend={friend} />
-                  <span className="flex min-w-0 flex-1 items-center gap-1.5">
-                    <span className="truncate font-medium text-stone-100">{friend.username}</span>
-                    {friend.online ? (
-                      <span
-                        title="Online now"
-                        className="size-2 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.7)]"
-                      />
-                    ) : null}
-                  </span>
-                  {campaigns.length > 0 ? (
-                    <select
-                      value=""
-                      onChange={(event) => {
-                        if (event.target.value) {
-                          void invite(friend.userId, event.target.value);
-                        }
-                      }}
-                      aria-label={`Invite ${friend.username} to a campaign`}
-                      className={cn(ui.input, "w-auto max-w-40 py-1.5 text-stone-300")}
-                    >
-                      <option value="">Invite to campaign...</option>
-                      {campaigns.map((campaign) => (
-                        <option key={campaign.id} value={campaign.id}>
-                          {campaign.title}
-                        </option>
-                      ))}
-                    </select>
-                  ) : null}
-                  <button type="button" onClick={() => unfriend(friend)} className={ui.btnSmall}>
-                    <X className="size-4 text-red-400" /> Unfriend
-                  </button>
-                </div>
-                {rowNotes[friend.userId] ? (
-                  <p
-                    className={cn(
-                      "mt-1.5 pl-12 text-xs",
-                      rowNotes[friend.userId].error ? "text-red-400" : "text-emerald-300",
-                    )}
-                  >
-                    {rowNotes[friend.userId].text}
-                  </p>
-                ) : null}
-              </li>
+              <FriendRow
+                key={friend.userId}
+                friend={friend}
+                campaigns={campaigns}
+                note={rowNotes[friend.userId]}
+                onInvite={(campaignId) => void invite(friend.userId, campaignId)}
+                onUnfriend={() => void unfriend(friend)}
+              />
             ))}
           </ul>
         )}
       </PageSection>
 
       {data.outgoing.length > 0 ? (
-        <PageSection heading="Sent requests" padded={false}>
-          <ul className="divide-y divide-stone-800/70 pb-2">
+        <PageSection heading="Sent requests" glyph="tab-handout" padded={false}>
+          <ul className={LIST}>
             {data.outgoing.map((request) => (
               <li key={request.userId} className={ROW}>
                 <Avatar friend={request} />
                 <span className="min-w-0 flex-1 truncate text-stone-300">{request.username}</span>
-                <span className="text-xs text-stone-500">Waiting</span>
+                <span className="inline-flex items-center gap-1 text-xs text-stone-500">
+                  <GameIcon icon={{ kind: "glyph", key: "rest-short" }} size="size-5" /> Waiting
+                </span>
                 <button
                   type="button"
                   onClick={() => respond(request.userId, false)}
@@ -348,5 +310,66 @@ export default function FriendsPage() {
         </PageSection>
       ) : null}
     </PageShell>
+  );
+}
+
+// One friend: the face, the name, the invite picker and the way out, with the
+// same actions under a right-click or a long press.
+function FriendRow({
+  friend,
+  campaigns,
+  note,
+  onInvite,
+  onUnfriend,
+}: {
+  friend: FriendItem;
+  campaigns: CampaignOption[];
+  note?: Note;
+  onInvite: (campaignId: string) => void;
+  onUnfriend: () => void;
+}) {
+  const menu: ContextMenuItem[] = [
+    ...campaigns.map((campaign) => ({
+      id: `invite-${campaign.id}`,
+      label: `Invite to ${campaign.title}`,
+      glyph: "tab-campaigns",
+      onSelect: () => onInvite(campaign.id),
+    })),
+    { id: "unfriend", label: "Unfriend", glyph: "quest-failed", tone: "danger" as const, separated: campaigns.length > 0, onSelect: onUnfriend },
+  ];
+  return (
+    <ContextMenu as="li" items={menu} label={friend.username} className="plate-row">
+      <Avatar friend={friend} />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate font-medium text-stone-100">{friend.username}</span>
+        <span className="text-[11px] text-stone-500">{friend.online ? "Online now" : "Not online"}</span>
+      </span>
+      {campaigns.length > 0 ? (
+        // Always empty: choosing a campaign sends the invite, it does not
+        // remember one.
+        <Select
+          value=""
+          onChange={onInvite}
+          options={campaigns.map((campaign) => ({
+            value: campaign.id,
+            label: campaign.title,
+            icon: { kind: "glyph" as const, key: "tab-campaigns" },
+          }))}
+          label={`Invite ${friend.username} to a campaign`}
+          placeholder="Invite to campaign..."
+          size="sm"
+          align="end"
+          className="max-w-44"
+        />
+      ) : null}
+      <button type="button" onClick={onUnfriend} className={ui.btnSmall}>
+        <X className="size-4 text-red-400" /> Unfriend
+      </button>
+      {note ? (
+        <p role={note.error ? "alert" : "status"} className={cn("w-full pl-14 text-xs", note.error ? "motion-shake text-red-400" : "live-in text-emerald-300")}>
+          {note.text}
+        </p>
+      ) : null}
+    </ContextMenu>
   );
 }

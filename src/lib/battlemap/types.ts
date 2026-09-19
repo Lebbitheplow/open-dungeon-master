@@ -75,6 +75,9 @@ export type BattleToken = {
   // tracker, because a creature the party has not met should not be visible
   // in either (src/lib/db/encounters.ts).
   hidden: boolean;
+  // The painted object this token is drawn as (public/assets/props), for the
+  // DM's own furniture placed with a prepared map; "" draws the plain figure.
+  stamp?: string;
   movement: TokenMovement;
 };
 

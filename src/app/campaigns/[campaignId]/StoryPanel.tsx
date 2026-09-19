@@ -1,7 +1,13 @@
 "use client";
 
+import { EmptyState } from "@/components/EmptyState";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
-import { ArrowDown, ArrowUp, BookOpen, Check, ChevronDown, ChevronRight, Compass, Crosshair, Loader2, Pencil, Plus, RefreshCw, Rewind, Scissors, SkipForward, Users, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronRight, Crosshair, Loader2, Pencil, Plus, RefreshCw, Rewind, Scissors, SkipForward, X } from "lucide-react";
+import { Book } from "@/components/ui/Book";
+import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { KitButton, PanelError, PanelLoading, RowMenu, panelField } from "./PanelKit";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
@@ -31,30 +37,30 @@ function ConfirmRewindDialog({
   return (
     <AlertDialog.Root open onOpenChange={(open) => !open && onCancel()}>
       <AlertDialog.Portal>
-        <AlertDialog.Overlay className="fixed inset-0 z-50 bg-black/70" />
+        <AlertDialog.Overlay className="dialog-overlay fixed inset-0 z-50 bg-[#05030d]/70 backdrop-blur-sm" />
         <AlertDialog.Content
           className={cn(
             ui.dialog,
             "fixed left-1/2 top-1/2 z-50 max-h-[85vh] w-[min(92vw,22rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto",
           )}
         >
-          <AlertDialog.Title className="font-display text-lg tracking-wide text-amber-50">
+          <AlertDialog.Title className="gold-title font-display text-lg tracking-wide">
             Rewind to Chapter {chapterIndex}?
           </AlertDialog.Title>
           <AlertDialog.Description className="mt-2 text-xs text-stone-400">
             The story returns to the start of Chapter {chapterIndex}. Sheets, NPCs, facts, and the
             world roll back with it. This cannot be undone.
           </AlertDialog.Description>
-          <ul className="mt-2 space-y-1">
+          <ul className="stagger mt-2 space-y-1">
             {warnings.slice(0, 8).map((warning, index) => (
-              <li key={index} className="text-[11px] leading-4 text-amber-300/80">
+              <li key={index} className="text-xs leading-5 text-amber-300/80">
                 {warning}
               </li>
             ))}
           </ul>
           <div className="mt-4 flex justify-end gap-2">
             <AlertDialog.Cancel className={ui.btnSmall}>Cancel</AlertDialog.Cancel>
-            <button type="button" onClick={onConfirm} disabled={busy} className={ui.btnPrimary}>
+            <button type="button" onClick={onConfirm} disabled={busy} aria-busy={busy} className={ui.btnPrimary}>
               {busy ? <Loader2 className="size-4 animate-spin" /> : null} Rewind
             </button>
           </div>
@@ -99,28 +105,29 @@ function ChapterCard({
   }
 
   return (
-    <li className="rounded-lg border border-stone-800 bg-stone-950/40 p-2.5">
+    <li className="panel group rounded-lg p-2.5">
       <button
         type="button"
         onClick={() => setExpanded((current) => !current)}
-        className="flex w-full items-start gap-1.5 text-left"
+        aria-expanded={expanded}
+        className="pk-tap flex w-full items-start gap-1.5 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40 motion-press"
       >
         {expanded ? (
-          <ChevronDown className="mt-0.5 size-3.5 shrink-0 text-stone-500" />
+          <ChevronDown className="mt-1 size-3.5 shrink-0 text-amber-400/80" />
         ) : (
-          <ChevronRight className="mt-0.5 size-3.5 shrink-0 text-stone-500" />
+          <ChevronRight className="mt-1 size-3.5 shrink-0 text-amber-400/80" />
         )}
         <span className="min-w-0">
-          <span className="block text-xs font-medium text-amber-200">
+          <span className="gold-title block font-display text-sm">
             {chapter.index}. {chapter.title || `Chapter ${chapter.index}`}
           </span>
         </span>
       </button>
       {chapter.highlights.length && !editing ? (
-        <ul className="mt-1.5 space-y-0.5 pl-5">
+        <ul className="reveal mt-1.5 space-y-0.5 pl-5">
           {(expanded ? chapter.highlights : chapter.highlights.slice(0, 2)).map(
             (highlight, index) => (
-              <li key={index} className="list-disc text-[11px] leading-4 text-stone-400">
+              <li key={index} className="list-disc text-xs leading-5 text-stone-400">
                 {highlight}
               </li>
             ),
@@ -128,73 +135,59 @@ function ChapterCard({
         </ul>
       ) : null}
       {expanded && !editing ? (
-        <div className="mt-2 space-y-1.5 pl-5">
+        <div className="reveal mt-2 space-y-1.5 pl-5">
           {chapter.summary ? (
-            <p className="whitespace-pre-wrap text-[11px] leading-4 text-stone-300">
+            <p className="reveal whitespace-pre-wrap font-serif text-xs leading-5 text-stone-300">
               {chapter.summary}
             </p>
           ) : (
-            <p className="text-[11px] italic text-stone-600">No summary recorded.</p>
+            <p className="text-xs italic text-stone-500">No summary recorded.</p>
           )}
           {steersStory ? (
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setEditing(true)}
-                className="flex items-center gap-1 text-[11px] text-stone-500 hover:text-stone-300"
-              >
+            <div className="reveal flex flex-wrap items-center gap-1.5">
+              <KitButton onClick={() => setEditing(true)}>
                 <Pencil className="size-3" /> Edit
-              </button>
+              </KitButton>
               {onRewind ? (
-                <button
-                  type="button"
-                  onClick={onRewind}
-                  title="Rewind the whole campaign to the start of this chapter"
-                  className="flex items-center gap-1 text-[11px] text-stone-500 hover:text-amber-300"
-                >
+                <KitButton tone="danger" onClick={onRewind} title="Rewind the whole campaign to the start of this chapter">
                   <Rewind className="size-3" /> Rewind to start
-                </button>
+                </KitButton>
               ) : null}
             </div>
           ) : null}
         </div>
       ) : null}
       {editing ? (
-        <div className="mt-2 space-y-1.5 pl-5">
+        <div className="reveal mt-2 space-y-1.5 pl-5">
           <input
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             maxLength={80}
-            className="w-full rounded border border-stone-700 bg-stone-900 px-2 py-1 text-xs outline-none focus:border-amber-600"
+            aria-label="Chapter title"
+            className={panelField}
           />
           <textarea
             value={summary}
             onChange={(event) => setSummary(event.target.value)}
             rows={6}
             maxLength={4000}
-            className="w-full rounded border border-stone-700 bg-stone-900 px-2 py-1 text-[11px] leading-4 outline-none focus:border-amber-600"
+            aria-label="Chapter summary"
+            className={cn(panelField, "leading-5")}
           />
           <div className="flex gap-1.5">
-            <button
-              type="button"
-              onClick={save}
-              disabled={busy}
-              className="flex items-center gap-1 rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-300 hover:bg-stone-900"
-            >
-              {busy ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
+            <KitButton tone="primary" onClick={save} disabled={busy} busy={busy}>
+              {busy ? null : <Check className="size-3.5" />}
               Save
-            </button>
-            <button
-              type="button"
+            </KitButton>
+            <KitButton
               onClick={() => {
                 setEditing(false);
                 setTitle(chapter.title);
                 setSummary(chapter.summary);
               }}
-              className="flex items-center gap-1 rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-500 hover:bg-stone-900"
             >
-              <X className="size-3" /> Cancel
-            </button>
+              <X className="size-3.5" /> Cancel
+            </KitButton>
           </div>
         </div>
       ) : null}
@@ -208,23 +201,25 @@ function ChapterCard({
 function NpcReviewCard({ campaignId }: { campaignId: string }) {
   const [expanded, setExpanded] = useState(false);
   return (
-    <div className="rounded-lg border border-stone-800 bg-stone-950/40 p-2.5">
+    <div className="panel rounded-lg p-2.5">
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-start gap-1.5 text-left"
+        aria-expanded={expanded}
+        className="pk-tap flex w-full items-center gap-1.5 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40 motion-press"
       >
         {expanded ? (
-          <ChevronDown className="mt-0.5 size-3.5 shrink-0 text-stone-500" />
+          <ChevronDown className="mt-1 size-3.5 shrink-0 text-amber-400/80" />
         ) : (
-          <ChevronRight className="mt-0.5 size-3.5 shrink-0 text-stone-500" />
+          <ChevronRight className="mt-1 size-3.5 shrink-0 text-amber-400/80" />
         )}
-        <span className="flex items-center gap-1.5 text-xs font-medium text-amber-200">
-          <Users className="size-3.5 text-amber-600" /> NPC roster
+        <span className="flex items-center gap-1.5">
+          <GameIcon icon={{ kind: "glyph", key: "system-cast" }} size="size-6" />
+          <span className="section-head-title">NPC roster</span>
         </span>
       </button>
       {expanded ? (
-        <div className="mt-2 pl-5">
+        <div className="reveal mt-2 pl-5">
           <NpcReviewPanel campaignId={campaignId} />
         </div>
       ) : null}
@@ -356,27 +351,26 @@ function ArcCard({ campaignId }: { campaignId: string }) {
     : 0;
 
   return (
-    <div className="rounded-lg border border-stone-800 bg-stone-950/40 p-2.5">
-      <button type="button" onClick={toggle} className="flex w-full items-start gap-1.5 text-left">
+    <div className="panel ornate rounded-lg p-2.5">
+      <button type="button" onClick={toggle} aria-expanded={expanded} className="pk-tap flex w-full items-center gap-1.5 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40 motion-press">
         {expanded ? (
-          <ChevronDown className="mt-0.5 size-3.5 shrink-0 text-stone-500" />
+          <ChevronDown className="mt-1 size-3.5 shrink-0 text-amber-400/80" />
         ) : (
-          <ChevronRight className="mt-0.5 size-3.5 shrink-0 text-stone-500" />
+          <ChevronRight className="mt-1 size-3.5 shrink-0 text-amber-400/80" />
         )}
-        <span className="flex items-center gap-1.5 text-xs font-medium text-amber-200">
-          <Compass className="size-3.5 text-amber-600" /> DM story arc (secret)
+        <span className="flex items-center gap-1.5">
+          <GameIcon icon={{ kind: "glyph", key: "system-storyboard" }} size="size-6" />
+          <span className="section-head-title">DM story arc (secret)</span>
         </span>
       </button>
       {expanded ? (
-        <div className="mt-2 space-y-2 pl-5">
+        <div className="reveal mt-2 space-y-2 pl-5">
           {loading ? (
-            <p className="flex items-center gap-1 text-[11px] text-stone-500">
-              <Loader2 className="size-3 animate-spin" /> Loading...
-            </p>
+            <PanelLoading label="Loading..." rows={2} />
           ) : arc ? (
             <>
               {arc.saga ? (
-                <p className="text-[11px] font-medium leading-4 text-amber-200">
+                <p className="reveal text-[11px] font-medium leading-4 text-amber-200">
                   {arc.saga.sagaIndex > 1 ? `Saga ${arc.saga.sagaIndex} (sequel): ` : ""}
                   &ldquo;{arc.saga.title}&rdquo;
                   <span className="font-normal text-stone-400">
@@ -385,16 +379,16 @@ function ArcCard({ campaignId }: { campaignId: string }) {
                   </span>
                 </p>
               ) : null}
-              <p className="text-[11px] leading-4 text-stone-300">{arc.premise}</p>
+              <p className="text-xs leading-5 text-stone-300">{arc.premise}</p>
               {arc.stakes ? (
-                <p className="text-[11px] leading-4 text-stone-400">Stakes: {arc.stakes}</p>
+                <p className="reveal text-xs leading-5 text-stone-400">Stakes: {arc.stakes}</p>
               ) : null}
               {arc.antagonist ? (
-                <p className="text-[11px] leading-4 text-stone-400">Antagonist: {arc.antagonist}</p>
+                <p className="reveal text-xs leading-5 text-stone-400">Antagonist: {arc.antagonist}</p>
               ) : null}
               {actGroups.map((act) => (
                 <div key={act}>
-                  <p className="text-[11px] font-medium text-stone-400">Act {act}</p>
+                  <SectionHead title={`Act ${act}`} glyph="tab-story" level="h4" className="mb-1" />
                   <ol className="mt-0.5 space-y-0.5">
                     {arc.beats.map((beat, index) => {
                       if (beat.act !== act) {
@@ -417,21 +411,21 @@ function ArcCard({ campaignId }: { campaignId: string }) {
                                   closeEditor();
                                 }
                               }}
-                              className={cn(ui.input, "px-2 py-1 text-[11px]")}
+                              className={panelField}
                             />
                             <div className="mt-1 flex items-center gap-1">
                               <button
                                 type="button"
                                 onClick={() => void submitDraft()}
                                 disabled={beatBusy || !draft.trim()}
-                                className={cn(ui.btnSmall, "px-2 py-0.5 text-[11px]")}
+                                className={cn(ui.btnSmall, "pk-tap px-2.5 py-1 text-xs")}
                               >
                                 <Check className="size-3" /> Save
                               </button>
                               <button
                                 type="button"
                                 onClick={closeEditor}
-                                className={cn(ui.btnSmall, "px-2 py-0.5 text-[11px]")}
+                                className={cn(ui.btnSmall, "pk-tap px-2.5 py-1 text-xs")}
                               >
                                 Cancel
                               </button>
@@ -439,10 +433,34 @@ function ArcCard({ campaignId }: { campaignId: string }) {
                           </li>
                         );
                       }
+                      const beatItems: ContextMenuItem[] = settled
+                        ? []
+                        : [
+                            ...(beat.status === "active"
+                              ? []
+                              : [{ id: "now", label: "Make this the beat in play", glyph: "quest-active", disabled: beatBusy, onSelect: () => void editBeat({ op: "setNow", beat: number }) }]),
+                            { id: "up", label: "Move up", glyph: "pace-fast", disabled: beatBusy, onSelect: () => void editBeat({ op: "move", beat: number, direction: "up" }) },
+                            { id: "down", label: "Move down", glyph: "pace-slow", disabled: beatBusy, onSelect: () => void editBeat({ op: "move", beat: number, direction: "down" }) },
+                            {
+                              id: "reword",
+                              label: "Reword this beat",
+                              glyph: "tab-notes",
+                              disabled: beatBusy,
+                              onSelect: () => {
+                                closeEditor();
+                                setEditingBeat(number);
+                                setDraft(beat.text);
+                              },
+                            },
+                            { id: "skip", label: "Skip this beat", glyph: "quest-failed", separated: true, disabled: beatBusy, onSelect: () => void editBeat({ op: "skip", beat: number }) },
+                          ];
                       return (
-                        <li
+                        <ContextMenu
+                          as="li"
+                          items={beatItems}
+                          label={`Beat ${number}`}
                           key={index}
-                          className={`group flex items-start gap-1 text-[11px] leading-4 ${
+                          className={`group flex items-start gap-1 text-xs leading-5 ${
                             settled
                               ? "text-stone-600 line-through"
                               : beat.status === "active"
@@ -460,6 +478,8 @@ function ArcCard({ campaignId }: { campaignId: string }) {
                           </span>
                           {settled ? null : (
                             <span className="flex shrink-0 items-center">
+                              {/* A mouse gets the five on hover; a finger gets the kebab and the long press. */}
+                              <span className="flex items-center [@media(pointer:coarse)]:hidden">
                               {beat.status === "active" ? null : (
                                 <button
                                   type="button"
@@ -520,14 +540,16 @@ function ArcCard({ campaignId }: { campaignId: string }) {
                               >
                                 <SkipForward className="size-3" />
                               </button>
+                              </span>
+                              <RowMenu items={beatItems} label={`Beat ${number}`} className="p-1" />
                             </span>
                           )}
-                        </li>
+                        </ContextMenu>
                       );
                     })}
                   </ol>
                   {addingToAct === act ? (
-                    <div className="mt-1">
+                    <div className="reveal mt-1">
                       <input
                         value={draft}
                         autoFocus
@@ -541,47 +563,47 @@ function ArcCard({ campaignId }: { campaignId: string }) {
                             closeEditor();
                           }
                         }}
-                        className={cn(ui.input, "px-2 py-1 text-[11px]")}
+                        className={panelField}
                       />
                       <div className="mt-1 flex items-center gap-1">
                         <button
                           type="button"
                           onClick={() => void submitDraft()}
                           disabled={beatBusy || !draft.trim()}
-                          className={cn(ui.btnSmall, "px-2 py-0.5 text-[11px]")}
+                          className={cn(ui.btnSmall, "pk-tap px-2.5 py-1 text-xs")}
                         >
                           <Check className="size-3" /> Add
                         </button>
                         <button
                           type="button"
                           onClick={closeEditor}
-                          className={cn(ui.btnSmall, "px-2 py-0.5 text-[11px]")}
+                          className={cn(ui.btnSmall, "pk-tap px-2.5 py-1 text-xs")}
                         >
                           Cancel
                         </button>
                       </div>
                     </div>
                   ) : (
-                    <button
-                      type="button"
+                    <KitButton
+                      tone="link"
                       onClick={() => {
                         closeEditor();
                         setAddingToAct(act);
                       }}
-                      className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-stone-600 hover:text-amber-200"
+                      className="mt-0.5"
                     >
                       <Plus className="size-3" /> Add a beat
-                    </button>
+                    </KitButton>
                   )}
                 </div>
               ))}
-              {beatError ? <p className="text-[11px] text-red-400">{beatError}</p> : null}
+              {beatError ? <PanelError>{beatError}</PanelError> : null}
               {aheadSketches.length ? (
                 <div>
-                  <p className="text-[11px] font-medium text-stone-500">Acts ahead (sketches)</p>
+                  <SectionHead title="Acts ahead (sketches)" glyph="quest-hidden" level="h4" className="mb-1" />
                   <ul className="mt-0.5 space-y-0.5">
                     {aheadSketches.map((sketch) => (
-                      <li key={sketch.act} className="list-none text-[11px] leading-4 text-stone-500">
+                      <li key={sketch.act} className="list-none text-xs leading-5 text-stone-500">
                         Act {sketch.act}: {sketch.milestone}
                         {sketch.boss ? (
                           <span className="text-stone-600"> &middot; boss: {sketch.boss.name}</span>
@@ -599,7 +621,7 @@ function ArcCard({ campaignId }: { campaignId: string }) {
                 </div>
               ) : null}
               {arc.finale ? (
-                <p className="text-[11px] leading-4 text-stone-400">
+                <p className="reveal text-xs leading-5 text-stone-400">
                   Finale: {arc.finale}
                   {arc.saga?.finaleBoss ? (
                     <span className="text-stone-500">
@@ -611,10 +633,10 @@ function ArcCard({ campaignId }: { campaignId: string }) {
               ) : null}
               {cast?.length ? (
                 <div>
-                  <p className="text-[11px] font-medium text-stone-400">Recurring cast</p>
+                  <SectionHead title="Recurring cast" glyph="system-cast" level="h4" className="mb-1" />
                   <ul className="mt-0.5 space-y-0.5">
                     {cast.map((npc) => (
-                      <li key={npc.id} className="list-none text-[11px] leading-4 text-stone-400">
+                      <li key={npc.id} className="list-none text-xs leading-5 text-stone-400">
                         {npc.name}
                         {npc.role ? `, ${npc.role}` : ""}
                         {npc.agenda ? (
@@ -627,12 +649,10 @@ function ArcCard({ campaignId }: { campaignId: string }) {
               ) : null}
               {plannedEvents?.length ? (
                 <div>
-                  <p className="text-[11px] font-medium text-stone-400">
-                    Planned events (may never fire)
-                  </p>
+                  <SectionHead title="Planned events (may never fire)" glyph="tab-timeline" level="h4" className="mb-1" />
                   <ul className="mt-0.5 space-y-0.5">
                     {plannedEvents.map((event) => (
-                      <li key={event.id} className="list-none text-[11px] leading-4 text-stone-400">
+                      <li key={event.id} className="list-none text-xs leading-5 text-stone-400">
                         {event.name}
                         <span className="text-stone-500">
                           {" "}
@@ -646,10 +666,10 @@ function ArcCard({ campaignId }: { campaignId: string }) {
               ) : null}
               {openThreads?.length ? (
                 <div>
-                  <p className="text-[11px] font-medium text-stone-400">Open threads</p>
+                  <SectionHead title="Open threads" glyph="quest-active" level="h4" className="mb-1" />
                   <ul className="mt-0.5 space-y-0.5">
                     {openThreads.map((subArc) => (
-                      <li key={subArc.id} className="list-none text-[11px] leading-4 text-stone-400">
+                      <li key={subArc.id} className="list-none text-xs leading-5 text-stone-400">
                         {subArc.name}: {subArc.goal}
                       </li>
                     ))}
@@ -658,10 +678,10 @@ function ArcCard({ campaignId }: { campaignId: string }) {
               ) : null}
               {arc.saga?.priorSagas.length ? (
                 <div>
-                  <p className="text-[11px] font-medium text-stone-500">Previous sagas</p>
+                  <SectionHead title="Previous sagas" glyph="quest-done" level="h4" className="mb-1" />
                   <ul className="mt-0.5 space-y-0.5">
                     {arc.saga.priorSagas.map((prior, index) => (
-                      <li key={index} className="list-none text-[11px] leading-4 text-stone-500">
+                      <li key={index} className="list-none text-xs leading-5 text-stone-500">
                         &ldquo;{prior.title}&rdquo;
                         {prior.resolution ? (
                           <span className="text-stone-600"> &middot; {prior.resolution}</span>
@@ -673,22 +693,12 @@ function ArcCard({ campaignId }: { campaignId: string }) {
               ) : null}
             </>
           ) : outline ? (
-            <p className="whitespace-pre-wrap text-[11px] leading-4 text-stone-400">{outline}</p>
+            <p className="reveal whitespace-pre-wrap text-xs leading-5 text-stone-400">{outline}</p>
           ) : (
-            <p className="text-[11px] italic text-stone-600">
-              {canPlot
-                ? "No story arc yet. It is written when the adventure begins, or generate one now."
-                : "No story arc yet."}
-            </p>
+            <EmptyState size="sm" art="scrolls" title={canPlot ? "No story arc yet. It is written when the adventure begins, or generate one now." : "No story arc yet."} />
           )}
           {!loading && canPlot ? (
-            <button
-              type="button"
-              onClick={regenerate}
-              disabled={regenerating}
-              title="Discard the current arc and have the DM plot a fresh one from the premise"
-              className="flex items-center gap-1 rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-400 hover:bg-stone-900 disabled:opacity-50"
-            >
+            <KitButton onClick={regenerate} disabled={regenerating} title="Discard the current arc and have the DM plot a fresh one from the premise">
               {regenerating ? (
                 <>
                   <Loader2 className="size-3 animate-spin" /> Plotting a new arc...
@@ -698,7 +708,7 @@ function ArcCard({ campaignId }: { campaignId: string }) {
                   <RefreshCw className="size-3" /> Regenerate arc
                 </>
               )}
-            </button>
+            </KitButton>
           ) : null}
         </div>
       ) : null}
@@ -722,6 +732,7 @@ export function StoryPanel({
     warnings: string[];
   } | null>(null);
   const [rewindBusy, setRewindBusy] = useState(false);
+  const [reading, setReading] = useState(false);
   const closed = chapters.filter((chapter) => chapter.status === "closed");
   const open = chapters.find((chapter) => chapter.status === "open");
 
@@ -784,9 +795,7 @@ export function StoryPanel({
       <div className="space-y-2">
         {steersStory ? <ArcCard campaignId={campaignId} /> : null}
         {steersStory ? <NpcReviewCard campaignId={campaignId} /> : null}
-        <p className="px-1 py-6 text-center text-xs text-stone-600">
-          The story has not begun. Chapters appear here as the adventure unfolds.
-        </p>
+        <EmptyState art="scrolls" size="sm" title="The story has not begun" hint="Chapters appear here as the adventure unfolds." />
       </div>
     );
   }
@@ -796,19 +805,15 @@ export function StoryPanel({
       {steersStory ? <ArcCard campaignId={campaignId} /> : null}
       {steersStory ? <NpcReviewCard campaignId={campaignId} /> : null}
       <ExportMenu campaignId={campaignId} />
-      <div className="rounded-lg border border-dashed border-stone-800 p-2.5">
-        <p className="flex items-center gap-1.5 text-xs text-stone-400">
-          <BookOpen className="size-3.5 text-amber-600" />
-          Chapter {open?.index ?? closed.length + 1} in progress
-        </p>
+      {closed.length ? (
+        <KitButton tone="secondary" onClick={() => setReading(true)} title="Read the closed chapters as a book, one spread each" className="h-10 w-full border-amber-500/50 text-amber-100">
+          <GameIcon icon={{ kind: "glyph", key: "tab-story" }} size="size-6" /> Open the chronicle
+        </KitButton>
+      ) : null}
+      <div className="panel rounded-lg p-2.5">
+        <SectionHead title={`Chapter ${open?.index ?? closed.length + 1} in progress`} glyph="tab-journal" className="mb-0" />
         {steersStory ? (
-          <button
-            type="button"
-            onClick={closeChapter}
-            disabled={closing}
-            title="Seal this chapter; the DM writes its title and summary"
-            className="mt-1.5 flex w-full items-center justify-center gap-1 rounded border border-stone-700 py-1 text-[11px] text-stone-400 hover:bg-stone-900 disabled:opacity-50"
-          >
+          <KitButton onClick={closeChapter} disabled={closing} title="Seal this chapter; the DM writes its title and summary" className="mt-2 w-full justify-center">
             {closing ? (
               <>
                 <Loader2 className="size-3 animate-spin" /> Writing the chapter...
@@ -818,21 +823,15 @@ export function StoryPanel({
                 <Scissors className="size-3" /> Close chapter
               </>
             )}
-          </button>
+          </KitButton>
         ) : null}
         {steersStory && open && rewindable.includes(open.index) ? (
-          <button
-            type="button"
-            onClick={() => void postRewind(open.index, false)}
-            disabled={rewindBusy}
-            title="Discard this chapter's progress and return to how it began"
-            className="mt-1.5 flex w-full items-center justify-center gap-1 rounded border border-stone-700 py-1 text-[11px] text-stone-400 hover:bg-stone-900 disabled:opacity-50"
-          >
-            <Rewind className="size-3" /> Restart this chapter
-          </button>
+          <KitButton tone="danger" onClick={() => void postRewind(open.index, false)} disabled={rewindBusy} busy={rewindBusy} title="Discard this chapter's progress and return to how it began" className="mt-1.5 w-full justify-center">
+            {rewindBusy ? null : <Rewind className="size-3" />} Restart this chapter
+          </KitButton>
         ) : null}
       </div>
-      <ol className="space-y-2">
+      <ol className="stagger space-y-2">
         {[...closed].reverse().map((chapter) => (
           <ChapterCard
             key={chapter.id}
@@ -847,6 +846,19 @@ export function StoryPanel({
           />
         ))}
       </ol>
+      <Book
+        open={reading}
+        onOpenChange={setReading}
+        title="The chronicle"
+        startAt={closed.length - 1}
+        entries={closed.map((chapter) => ({
+          id: chapter.id,
+          kicker: `Chapter ${chapter.index}`,
+          heading: chapter.title || `Chapter ${chapter.index}`,
+          body: chapter.summary || "No summary was recorded for this chapter.",
+          note: chapter.highlights.length ? chapter.highlights.join("\n") : undefined,
+        }))}
+      />
       {rewindTarget ? (
         <ConfirmRewindDialog
           chapterIndex={rewindTarget.chapterIndex}

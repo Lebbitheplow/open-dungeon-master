@@ -15,6 +15,16 @@ import {
   TargetLines,
   TokenFigure,
 } from "@/app/campaigns/[campaignId]/BoardStage";
+import {
+  AimLayer,
+  AimScrim,
+  MoteLayer,
+  StageLayerDefs,
+  tokenCentre,
+  TurnSpotlight,
+  type AimOverlay,
+} from "@/app/campaigns/[campaignId]/BoardStageLayers";
+import { recoilFor, seedOf, type Shake } from "@/lib/battlemap/delivery";
 import type { MapDrawing, MapLabel } from "@/lib/battlemap/scene";
 import { FxLayer, useFxPlayer } from "@/app/campaigns/[campaignId]/BoardFx";
 import { ParticleCanvas, type ParticleHandle } from "@/components/ParticleCanvas";
@@ -50,6 +60,8 @@ export type MapOverlay = {
   selectedTokenId?: string | null;
   // A drawing in progress, so it lands where it was seen.
   sketch?: Pick<MapDrawing, "kind" | "points" | "tone"> | null;
+  // A target being chosen: the scrim, the reticles, the ember arc.
+  aim?: AimOverlay | null;
 };
 
 // Memoized: the session view re-renders on every SSE event (including each
@@ -70,6 +82,7 @@ export const BattleMapGrid = memo(
     onLabelClick,
     painted = null,
     faces,
+    onTokenHover,
   }: {
     view: PlayerMapView;
     sheets: CharacterSheet[];
@@ -84,6 +97,8 @@ export const BattleMapGrid = memo(
     onTileClick?: (x: number, y: number) => void;
     onTileHover?: (x: number, y: number | null) => void;
     onTokenClick?: (tokenId: string) => void;
+    // The pointer came to rest on a figure, or left it: the hover plate.
+    onTokenHover?: (tokenId: string | null) => void;
     // Players may only click where they can walk, so the reachable overlay
     // is the whole clickable surface. A DM placing a token needs the rest of
     // the board too, which is what this turns on.
@@ -100,11 +115,14 @@ export const BattleMapGrid = memo(
     const hoverRef = useRef(onTileHover);
     const tokenRef = useRef(onTokenClick);
     const labelRef = useRef(onLabelClick);
+    const tokenHoverRef = useRef(onTokenHover);
+    const hoveredTokenRef = useRef<string | null>(null);
     useEffect(() => {
       clickRef.current = onTileClick;
       hoverRef.current = onTileHover;
       tokenRef.current = onTokenClick;
       labelRef.current = onLabelClick;
+      tokenHoverRef.current = onTokenHover;
     });
     // Touch has no hover, so the ruler and range previews the mouse gets for
     // free would never appear on a phone. Instead the first tap on a tile IS
@@ -148,7 +166,78 @@ export const BattleMapGrid = memo(
       },
       [width],
     );
-    const activeFx = useFxPlayer(fx, onFxPlayed, particlesRef, toCanvas);
+    // Stage shake on a landed blow: translate only, on the frame, through the
+    // animation API so no React state moves and nothing re-renders. The
+    // player never asks for one under reduced motion or low effects.
+    const onShake = useCallback((shake: Shake, delay: number, struck: FxEvent) => {
+      const frame = frameRef.current;
+      if (!frame?.animate) {
+        return;
+      }
+      const px = shake.px;
+      frame.animate(
+        [
+          { transform: "translate(0, 0)" },
+          { transform: `translate(${px}px, ${-px * 0.45}px)`, offset: 0.12 },
+          { transform: `translate(${-px}px, ${px * 0.45}px)`, offset: 0.25 },
+          { transform: `translate(${px}px, 0)`, offset: 0.38 },
+          { transform: `translate(${-px * 0.6}px, ${-px * 0.3}px)`, offset: 0.5 },
+          { transform: `translate(${px * 0.4}px, 0)`, offset: 0.62 },
+          { transform: `translate(${-px * 0.2}px, 0)`, offset: 0.75 },
+          { transform: "translate(0, 0)" },
+        ],
+        { duration: shake.ms, delay, easing: "cubic-bezier(0.45, 0, 0.55, 1)" },
+      );
+      // On the same beat each struck figure kicks away from the blow and its
+      // health ring swells (the mockup's card-recoil and hit-ring). The
+      // `translate` and `rotate` properties leave the figure's own transform,
+      // and the move transition on it, alone.
+      const tiles = struck.to ? (Array.isArray(struck.to) ? struck.to : [struck.to]) : [];
+      const ids = struck.toTokenId ? (Array.isArray(struck.toTokenId) ? struck.toTokenId : [struck.toTokenId]) : [];
+      ids.forEach((id, index) => {
+        const tile = tiles[index] ?? tiles[0];
+        const outcome = struck.outcomes?.[index];
+        if (!id || !tile || outcome === "save" || outcome === "miss") {
+          return;
+        }
+        const figure = frame.querySelector(`[data-fx-token="${CSS.escape(id)}"]`);
+        const recoil = recoilFor(struck.from, tile, shake);
+        if (!figure || !recoil) {
+          return;
+        }
+        const timing = { duration: recoil.ms, delay, easing: "cubic-bezier(0.2, 0.9, 0.25, 1)" };
+        figure.animate(
+          [
+            { translate: "0 0", rotate: "0deg" },
+            { translate: `${recoil.dx}px ${recoil.dy}px`, rotate: `${recoil.deg}deg`, offset: 0.3 },
+            { translate: "0 0", rotate: "0deg" },
+          ],
+          timing,
+        );
+        figure
+          .querySelector("[data-health-ring]")
+          ?.animate([{ strokeWidth: 2 }, { strokeWidth: 6, offset: 0.4 }, { strokeWidth: 2 }], timing);
+      });
+    }, []);
+    const activeFx = useFxPlayer(fx, onFxPlayed, particlesRef, toCanvas, onShake);
+
+    // The figure whose turn it is, for the spotlight and the gold ring.
+    const currentToken = useMemo(() => {
+      if (view.board !== "fight") {
+        return null;
+      }
+      return (
+        view.tokens.find((token) =>
+          view.turn
+            ? view.turn.tokenId === token.id
+            : !token.down && currentName !== "" && token.name.toLowerCase() === currentName,
+        ) ?? null
+      );
+    }, [view.board, view.tokens, view.turn, currentName]);
+    const aimFrom = overlay?.aim ? view.tokens.find((token) => token.id === overlay.aim?.fromTokenId) : null;
+    const spotToken = aimFrom ?? currentToken;
+    const spotAt = spotToken ? tokenCentre(spotToken, view.tokenFootprint) : null;
+    const boardSeed = useMemo(() => seedOf(view.mapId), [view.mapId]);
 
     // The terrain/fog/reachable cell layer only changes when the view
     // projection itself changes; token/light layers below stay cheap.
@@ -231,7 +320,22 @@ export const BattleMapGrid = memo(
       clickRef.current?.(x, y);
     }
 
+    function handleTokenHover(event: React.MouseEvent<SVGSVGElement>) {
+      if (!tokenHoverRef.current) {
+        return;
+      }
+      const figure = (event.target as SVGElement).closest?.("[data-token-id]") as SVGElement | null;
+      const id = figure?.dataset.tokenId ?? null;
+      // Reported only when it changes, so a moving pointer costs the parent
+      // nothing while it stays on one figure.
+      if (id !== hoveredTokenRef.current) {
+        hoveredTokenRef.current = id;
+        tokenHoverRef.current(id);
+      }
+    }
+
     function handleSvgMove(event: React.MouseEvent<SVGSVGElement>) {
+      handleTokenHover(event);
       if (!hoverRef.current) {
         return;
       }
@@ -254,8 +358,18 @@ export const BattleMapGrid = memo(
         onPointerDown={(event) => {
           pointerTypeRef.current = event.pointerType;
         }}
-        onMouseMove={onTileHover ? handleSvgMove : undefined}
-        onMouseLeave={onTileHover ? () => hoverRef.current?.(0, null) : undefined}
+        onMouseMove={onTileHover || onTokenHover ? handleSvgMove : undefined}
+        onMouseLeave={
+          onTileHover || onTokenHover
+            ? () => {
+                hoverRef.current?.(0, null);
+                if (hoveredTokenRef.current !== null) {
+                  hoveredTokenRef.current = null;
+                  tokenHoverRef.current?.(null);
+                }
+              }
+            : undefined
+        }
       >
         <defs>
           <radialGradient id="torchglow">
@@ -292,6 +406,7 @@ export const BattleMapGrid = memo(
             <stop offset="100%" stopColor="#000" stopOpacity={0} />
           </linearGradient>
           <StageDefs />
+          <StageLayerDefs />
         </defs>
         {/* The picture under the grid, drawn first so every terrain cell,
             every fog square and every token lands on top of it. Unexplored
@@ -342,8 +457,16 @@ export const BattleMapGrid = memo(
             r={light.radius * TILE}
             fill="url(#torchglow)"
             pointerEvents="none"
+            // Torchlight gutters; each torch on its own phase.
+            className="board-torch"
+            style={{ animationDelay: `${-((index * 1.3) % 4.1).toFixed(1)}s` }}
           />
         ))}
+        {/* The stage dressing (BoardStageLayers.tsx): dust in the light, then
+            the spotlight on whoever's turn it is, deepened while aiming. */}
+        {view.board === "fight" ? <MoteLayer seed={boardSeed} width={width} height={height} /> : null}
+        <TurnSpotlight at={spotAt} width={width} height={height} aiming={Boolean(overlay?.aim)} />
+        {overlay?.aim ? <AimScrim width={width} height={height} /> : null}
         {/* The stage: auras under the figures, the figures, then the lines
             between attackers and their targets (BoardStage.tsx). */}
         <AuraLayer tokens={view.tokens} auras={view.tokenAuras} footprints={view.tokenFootprint} />
@@ -355,7 +478,9 @@ export const BattleMapGrid = memo(
             <TokenFigure
               key={token.id}
               token={token}
-              portrait={portraitsByRef.get(token.refId)}
+              // A prop the DM stamped from the catalogue shows that object's
+              // painted art (public/assets/props/objects), not a letter.
+              portrait={token.stamp ? `/assets/props/objects/${token.stamp}.webp` : portraitsByRef.get(token.refId)}
               footprint={view.tokenFootprint[token.id] ?? 1}
               health={view.tokenHealth[token.id]}
               conditions={view.tokenConditions[token.id]}
@@ -365,10 +490,18 @@ export const BattleMapGrid = memo(
               hp={view.tokenHp?.[token.id]}
               clickable={Boolean(onTokenClick)}
               showsNumbers={Boolean(view.tokenHp)}
+              // Aiming at one figure: the others that could have been chosen
+              // step back, so the eye follows the arc.
+              dimmed={Boolean(
+                overlay?.aim?.hoverId &&
+                  overlay.aim.hoverId !== token.id &&
+                  overlay.aim.targetIds.includes(token.id),
+              )}
             />
           );
         })}
         <TargetLines tokens={view.tokens} targets={view.targets} footprints={view.tokenFootprint} />
+        {overlay?.aim ? <AimLayer aim={overlay.aim} tokens={view.tokens} footprints={view.tokenFootprint} /> : null}
         <DrawingLayer drawings={view.drawings} sketch={overlay?.sketch} />
         {/* The scene layer (src/lib/battlemap/scene.ts): labels where the
             projection allows them, and for the DM the state of every shut
@@ -553,5 +686,6 @@ export const BattleMapGrid = memo(
     // Only presence matters; the handlers themselves are read through refs.
     (prev.onTileClick === undefined) === (next.onTileClick === undefined) &&
     (prev.onTileHover === undefined) === (next.onTileHover === undefined) &&
-    (prev.onTokenClick === undefined) === (next.onTokenClick === undefined),
+    (prev.onTokenClick === undefined) === (next.onTokenClick === undefined) &&
+    (prev.onTokenHover === undefined) === (next.onTokenHover === undefined),
 );

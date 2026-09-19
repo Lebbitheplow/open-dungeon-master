@@ -1,3 +1,9 @@
+// The shared styles below carry motion classes; this installs the one
+// listener that drives them (src/lib/motion/pointer.ts), in the browser and
+// in the apps alike, since both import this file.
+import "@/lib/motion/pointer";
+import "@/lib/motion/answer";
+import "@/lib/motion/pill";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 import {
@@ -24,35 +30,35 @@ export const PIXEL_ICONS = {
 export const ui = {
   // Buttons
   btnPrimary:
-    "inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-gradient-to-b from-amber-100 via-amber-200 to-amber-400 px-4 font-display text-[13px] font-semibold uppercase tracking-[0.14em] text-amber-950 shadow-[0_1px_0_rgba(253,247,231,0.6)_inset,0_2px_8px_rgba(4,2,12,0.5)] transition-all duration-150 ease-snap hover:-translate-y-px hover:shadow-[0_1px_0_rgba(253,247,231,0.6)_inset,0_4px_16px_rgba(212,171,58,0.35)] active:translate-y-0 active:scale-[0.98] active:shadow-none disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none",
+    "inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-gradient-to-b from-amber-100 via-amber-200 to-amber-400 px-4 font-display text-[13px] font-semibold uppercase tracking-[0.14em] text-amber-950 shadow-[0_1px_0_rgba(253,247,231,0.6)_inset,0_2px_8px_rgba(4,2,12,0.5)] hover:shadow-[0_1px_0_rgba(253,247,231,0.6)_inset,0_4px_16px_rgba(212,171,58,0.35)] active:shadow-none disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:shadow-none motion-magnet",
   btnSecondary:
-    "inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-amber-500/25 bg-stone-900/50 px-3 font-display text-[13px] uppercase tracking-[0.12em] text-stone-200 shadow-[0_1px_0_rgba(233,230,244,0.06)_inset,0_2px_6px_rgba(4,2,12,0.4)] transition-all duration-150 ease-snap hover:border-amber-500/50 hover:bg-stone-800/70 hover:text-amber-100 hover:shadow-glow-gold active:scale-[0.98] disabled:opacity-50",
+    "inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-amber-500/25 bg-stone-900/50 px-3 font-display text-[13px] uppercase tracking-[0.12em] text-stone-200 shadow-[0_1px_0_rgba(233,230,244,0.06)_inset,0_2px_6px_rgba(4,2,12,0.4)] hover:border-amber-500/50 hover:bg-stone-800/70 hover:text-amber-100 hover:shadow-glow-gold disabled:opacity-50 motion-magnet",
   btnSmall:
-    "inline-flex items-center gap-1.5 rounded-lg border border-stone-600/60 bg-stone-900/50 px-3 py-1.5 text-sm text-stone-300 shadow-[0_1px_0_rgba(233,230,244,0.05)_inset] transition-all duration-150 ease-snap hover:border-amber-500/40 hover:bg-stone-800/70 hover:text-amber-100 active:scale-[0.97] disabled:opacity-50",
+    "inline-flex items-center gap-1.5 rounded-lg border border-stone-600/60 bg-stone-900/50 px-3 py-1.5 text-sm text-stone-300 shadow-[0_1px_0_rgba(233,230,244,0.05)_inset] hover:border-amber-500/40 hover:bg-stone-800/70 hover:text-amber-100 disabled:opacity-50 motion-press",
   // Small icon action pinned to a card or message. Fades in on hover for mouse
   // users and stays visible on touch (see .reveal-on-hover in globals.css).
   // The padding keeps the tap target reachable on a phone; add a negative
   // margin at call sites where the surrounding row is tight.
   iconAction:
-    "reveal-on-hover rounded-md p-1.5 text-stone-600 hover:text-amber-200 focus-visible:text-amber-200",
+    "reveal-on-hover rounded-md p-1.5 text-stone-600 hover:text-amber-200 focus-visible:text-amber-200 motion-nudge",
   // Fields
   input:
-    "w-full rounded-lg border border-stone-700/70 bg-stone-950/80 px-3 py-2 text-sm text-stone-100 shadow-[0_2px_6px_rgba(4,2,12,0.45)_inset] outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-stone-500 focus:border-amber-400/70 focus:shadow-[0_0_0_3px_rgba(212,171,58,0.12),0_2px_6px_rgba(4,2,12,0.45)_inset]",
+    "w-full rounded-lg border border-stone-700/70 bg-stone-950/80 px-3 py-2 text-sm text-stone-100 shadow-[0_2px_6px_rgba(4,2,12,0.45)_inset] outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-stone-500 focus:border-amber-400/70 focus:shadow-[0_0_0_3px_rgba(212,171,58,0.12),0_2px_6px_rgba(4,2,12,0.45)_inset] motion-input",
   // Surfaces
   card: "panel rounded-xl",
   cardHover:
-    "panel ornate rounded-xl transition-all duration-200 ease-snap hover:-translate-y-0.5 hover:border-amber-500/40 hover:shadow-[0_1px_0_rgba(233,230,244,0.08)_inset,0_8px_28px_rgba(4,2,12,0.55),0_0_24px_rgba(212,171,58,0.12)]",
+    "panel ornate rounded-xl hover:border-amber-500/40 hover:shadow-[0_1px_0_rgba(233,230,244,0.08)_inset,0_8px_28px_rgba(4,2,12,0.55),0_0_24px_rgba(212,171,58,0.12)] motion-card",
   dialog: "panel rounded-xl p-5",
   // Quick-action tile: a square-ish panel that lifts on hover (QuickTile).
   tile: "panel ornate flex flex-col items-center justify-center gap-2 rounded-xl p-4 text-center",
   tileHover:
-    "transition-all duration-200 ease-snap hover:-translate-y-0.5 hover:border-amber-500/40 hover:shadow-[0_1px_0_rgba(233,230,244,0.08)_inset,0_8px_28px_rgba(4,2,12,0.55),0_0_24px_rgba(212,171,58,0.12)] active:translate-y-0 active:scale-[0.98]",
+    "hover:border-amber-500/40 hover:shadow-[0_1px_0_rgba(233,230,244,0.08)_inset,0_8px_28px_rgba(4,2,12,0.55),0_0_24px_rgba(212,171,58,0.12)] motion-card",
   // Small caps label that heads a section or sits in a Ribbon.
   sectionEyebrow: "eyebrow text-[10px] text-amber-400/80",
   // Icon rail cells: icon over a tiny eyebrow label. Active gets the gold
   // glow the session tab rail uses; the ember variant marks the party lead.
   railCell:
-    "relative flex min-w-[3.25rem] flex-col items-center gap-1 rounded-lg px-2 py-2 text-stone-500 transition-all duration-150 ease-snap hover:bg-stone-900/60 hover:text-stone-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40",
+    "relative flex min-w-[3.25rem] flex-col items-center gap-1 rounded-lg px-2 py-2 text-stone-500 hover:bg-stone-900/60 hover:text-stone-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40 motion-rail",
   railCellActive:
     "bg-amber-400/10 text-amber-300 shadow-[0_1px_0_rgba(244,224,166,0.15)_inset,0_0_16px_rgba(212,171,58,0.12)] hover:bg-amber-400/10 hover:text-amber-300",
   railCellActiveEmber:

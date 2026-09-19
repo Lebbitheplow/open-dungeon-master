@@ -1,0 +1,261 @@
+/* The character sheet (src/components/sheet/SheetParts.tsx): the medallion
+   portrait, painted ability tiles with tiered numbers, vitals medallions and
+   the save and skill rows. Drawn by the session dialog and the character
+   page alike. */
+
+@layer components {
+  /* ---- medallion ---- */
+  .sheet-medallion {
+    position: relative;
+    flex: none;
+    width: 5.25rem;
+    height: 5.25rem;
+  }
+  .sheet-medallion-face {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    border-radius: 9999px;
+    border: 2px solid rgba(212, 171, 58, 0.75);
+    box-shadow:
+      0 0 0 3px rgba(12, 8, 24, 0.9),
+      0 0 0 4px rgba(212, 171, 58, 0.35),
+      var(--shadow-glow-gold);
+    background: #0c0818;
+  }
+  .sheet-medallion-face > *,
+  .sheet-medallion-face img {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+    object-fit: cover;
+  }
+  .sheet-medallion-emblem {
+    position: absolute;
+    right: -0.35rem;
+    bottom: -0.35rem;
+    display: grid;
+    place-items: center;
+    width: 2.1rem;
+    height: 2.1rem;
+    overflow: hidden;
+    border-radius: 9999px;
+    border: 1px solid rgba(212, 171, 58, 0.7);
+    background: #0c0818;
+    box-shadow: 0 2px 6px rgba(4, 2, 12, 0.7);
+  }
+  .sheet-medallion-level {
+    position: absolute;
+    left: -0.3rem;
+    bottom: -0.2rem;
+    display: grid;
+    place-items: center;
+    min-width: 1.5rem;
+    height: 1.5rem;
+    padding: 0 0.3rem;
+    border-radius: 9999px;
+    border: 1px solid rgba(212, 171, 58, 0.7);
+    background: linear-gradient(180deg, #3a2a0c, #1a1206);
+    font-family: var(--font-display, serif);
+    font-size: 0.75rem;
+    color: #f4e3b0;
+    box-shadow: 0 2px 6px rgba(4, 2, 12, 0.7);
+  }
+
+  /* ---- blocks ---- */
+  .sheet-block { min-width: 0; }
+  .sheet-block-head {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.5rem;
+  }
+  .sheet-block-title {
+    font-family: var(--font-display, serif);
+    font-size: 0.7rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--color-amber-300);
+    white-space: nowrap;
+  }
+  .sheet-block-rule {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(212, 171, 58, 0.5), transparent);
+    transform-origin: left center;
+  }
+  .sheet-block-aside {
+    font-size: 0.7rem;
+    color: var(--color-stone-400);
+    white-space: nowrap;
+  }
+
+  /* ---- ability tiles ---- */
+  .sheet-ability {
+    position: relative;
+    padding: 0.55rem 0.25rem 0.5rem;
+    text-align: center;
+    border-radius: 0.6rem;
+    border: 1px solid rgba(120, 100, 160, 0.28);
+    background:
+      radial-gradient(120% 70% at 50% 0%, rgba(212, 171, 58, 0.07), transparent 70%),
+      rgba(10, 7, 20, 0.7);
+    box-shadow: inset 0 2px 8px rgba(4, 2, 12, 0.5);
+    animation: item-in 420ms var(--ease-spring, ease-out) both;
+  }
+  .sheet-ability-mod {
+    font-family: var(--font-display, serif);
+    font-size: 1.5rem;
+    line-height: 1.15;
+    color: var(--color-stone-100);
+  }
+  .sheet-ability-score {
+    display: inline-block;
+    min-width: 1.9rem;
+    margin-top: 0.1rem;
+    padding: 0 0.35rem;
+    border-radius: 9999px;
+    border: 1px solid rgba(120, 100, 160, 0.35);
+    font-size: 0.7rem;
+    color: var(--color-stone-300);
+    background: rgba(4, 2, 12, 0.55);
+  }
+  .sheet-ability-save {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    margin-top: 0.35rem;
+    font-size: 0.65rem;
+    color: var(--color-stone-400);
+  }
+  .sheet-ability-save-on { color: var(--color-amber-200); }
+  .sheet-ability[data-tier="low"] .sheet-ability-mod { color: var(--color-stone-500); }
+  .sheet-ability[data-tier="high"] .sheet-ability-mod { color: var(--color-amber-200); }
+  .sheet-ability[data-tier="high"] { border-color: rgba(212, 171, 58, 0.3); }
+  .sheet-ability[data-tier="peak"] {
+    border-color: rgba(212, 171, 58, 0.6);
+    box-shadow: inset 0 2px 8px rgba(4, 2, 12, 0.5), var(--shadow-glow-gold);
+  }
+  .sheet-ability[data-tier="peak"] .sheet-ability-mod {
+    color: var(--color-amber-300);
+    text-shadow: 0 0 14px rgba(212, 171, 58, 0.45);
+  }
+
+  .sheet-pip {
+    flex: none;
+    width: 0.4rem;
+    height: 0.4rem;
+    transform: rotate(45deg);
+    border: 1px solid rgba(160, 140, 190, 0.5);
+  }
+  .sheet-pip-on {
+    border-color: rgba(212, 171, 58, 0.9);
+    background: #d4ab3a;
+    box-shadow: 0 0 6px rgba(212, 171, 58, 0.6);
+  }
+
+  /* ---- vitals ---- */
+  .sheet-vital,
+  .sheet-hp {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    padding: 0.35rem 0.55rem 0.35rem 0.35rem;
+    border-radius: 0.55rem;
+    border: 1px solid rgba(120, 100, 160, 0.25);
+    background: rgba(10, 7, 20, 0.6);
+  }
+  .sheet-vital[data-tone="warn"] { border-color: rgba(212, 171, 58, 0.55); }
+  .sheet-vital[data-tone="warn"] .sheet-vital-value { color: var(--color-amber-300); }
+  .sheet-vital-label {
+    display: block;
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-stone-500);
+    white-space: nowrap;
+  }
+  .sheet-vital-value {
+    display: block;
+    overflow: hidden;
+    font-family: var(--font-display, serif);
+    font-size: 0.9rem;
+    line-height: 1.2;
+    color: var(--color-amber-50);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .sheet-hp-track {
+    position: relative;
+    height: 0.5rem;
+    margin-top: 0.25rem;
+    overflow: hidden;
+    border-radius: 9999px;
+    background: rgba(4, 2, 12, 0.8);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+  }
+  /* A block, not an absolute layer: .motion-bar makes it position: relative
+     for its shine, and that rule lands after this sheet. */
+  .sheet-hp-fill {
+    display: block;
+    height: 100%;
+    border-radius: 9999px;
+    background: linear-gradient(90deg, #8f1d2c, #d8434f);
+    transition: width 520ms var(--ease-settle, ease-out);
+  }
+  .sheet-hp-fill[data-low] { background: linear-gradient(90deg, #5c0f1a, #a3202e); }
+  .sheet-hp-temp {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, #2f6fb0, #6db4f0);
+  }
+
+  /* ---- skills ---- */
+  .sheet-skill {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+    padding: 0.1rem 0.25rem;
+    border-radius: 0.35rem;
+    font-size: 0.75rem;
+    color: var(--color-stone-300);
+    transition: background-color 160ms ease-out;
+  }
+  .sheet-skill:hover { background: rgba(212, 171, 58, 0.07); }
+  .sheet-skill-on { color: var(--color-amber-200); }
+
+  /* ---- conditions ---- */
+  .sheet-condition {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.1rem 0.55rem 0.1rem 0.15rem;
+    border-radius: 9999px;
+    border: 1px solid rgba(216, 67, 79, 0.45);
+    background: rgba(70, 12, 20, 0.6);
+    font-size: 0.72rem;
+    text-transform: capitalize;
+    color: #f3b4ba;
+  }
+}
+
+html[data-theme="light"] .sheet-ability,
+html[data-theme="light"] .sheet-vital,
+html[data-theme="light"] .sheet-hp {
+  background: rgba(255, 252, 244, 0.75);
+  border-color: rgba(120, 96, 40, 0.3);
+  box-shadow: none;
+}
+html[data-theme="light"] .sheet-ability-score { background: rgba(255, 252, 244, 0.9); }
+html[data-theme="light"] .sheet-medallion-face,
+html[data-theme="light"] .sheet-medallion-emblem { background: #f6efdc; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet-ability { animation: none; }
+  .sheet-hp-fill { transition: none; }
+}

@@ -112,10 +112,10 @@ export function NpcReviewPanel({ campaignId }: { campaignId: string }) {
         resolving.
       </p>
 
-      {error ? <p className="text-[11px] text-red-400">{error}</p> : null}
+      {error ? <p className="motion-shake text-[11px] text-red-400">{error}</p> : null}
 
       {suggestions.length ? (
-        <div className="space-y-1.5">
+        <div className="reveal space-y-1.5">
           <p className="text-[10px] font-medium uppercase tracking-wide text-stone-600">
             Possible duplicates
           </p>
@@ -140,7 +140,7 @@ export function NpcReviewPanel({ campaignId }: { campaignId: string }) {
                     <>
                       <button
                         type="button"
-                        disabled={busy}
+                        disabled={busy} aria-busy={busy}
                         onClick={() =>
                           void act({ action: "merge", keepId: left.id, mergeId: right.id })
                         }
@@ -150,7 +150,7 @@ export function NpcReviewPanel({ campaignId }: { campaignId: string }) {
                       </button>
                       <button
                         type="button"
-                        disabled={busy}
+                        disabled={busy} aria-busy={busy}
                         onClick={() =>
                           void act({ action: "merge", keepId: right.id, mergeId: left.id })
                         }
@@ -162,7 +162,7 @@ export function NpcReviewPanel({ campaignId }: { campaignId: string }) {
                   ) : null}
                   <button
                     type="button"
-                    disabled={busy}
+                    disabled={busy} aria-busy={busy}
                     onClick={() =>
                       void act({
                         action: "dismiss",
@@ -190,9 +190,9 @@ export function NpcReviewPanel({ campaignId }: { campaignId: string }) {
           Everyone the campaign is tracking
         </p>
         {!npcs.length ? (
-          <p className="text-[11px] text-stone-600">Nobody yet.</p>
+          <p className="reveal text-[11px] text-stone-600">Nobody yet.</p>
         ) : (
-          <ul className="space-y-1">
+          <ul className="stagger space-y-1">
             {npcs.map((npc) => (
               <li
                 key={npc.id}
@@ -246,14 +246,14 @@ export function NpcReviewPanel({ campaignId }: { campaignId: string }) {
                         {npc.location ? ` · ${npc.location}` : ""}
                       </p>
                       {npc.aliases.length ? (
-                        <p className="mt-0.5 text-[11px] leading-4 text-stone-600">
+                        <p className="reveal mt-0.5 text-[11px] leading-4 text-stone-600">
                           also called {npc.aliases.join(", ")}
                         </p>
                       ) : null}
                     </div>
                     <button
                       type="button"
-                      disabled={busy}
+                      disabled={busy} aria-busy={busy}
                       onClick={() => {
                         setRenaming(npc.id);
                         setDraft(npc.name);

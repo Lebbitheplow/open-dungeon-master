@@ -1,7 +1,12 @@
 "use client";
 
 import { useId, type ReactNode } from "react";
-import { Mic2 } from "lucide-react";
+import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { Select } from "@/components/ui/Select";
+import { Slider } from "@/components/ui/Slider";
 import { TTS_VOICES } from "@/lib/tts-voices";
 import { VoicePreviewButton } from "@/components/VoicePreviewButton";
 import {
@@ -60,15 +65,16 @@ export function NpcEditorFields({
   return (
     <>
       <section
-        className="space-y-2 rounded-lg border border-stone-800 bg-stone-950/60 px-2.5 py-2"
+        className="panel space-y-2 rounded-xl p-3"
         data-tour="cast-fields"
       >
+        <SectionHead title="On the surface" glyph="system-cast" className="mb-0" />
         <div className="flex flex-wrap items-center gap-1.5">
           <input
             value={draft.name}
             onChange={(event) => onChange({ ...draft, name: event.target.value })}
             placeholder="Their name"
-            className="min-w-32 flex-1 rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-sm text-stone-200"
+            className={cn(ui.input, "min-w-32 flex-1")}
           />
           <input
             list={roleListId}
@@ -77,7 +83,7 @@ export function NpcEditorFields({
             placeholder="What they do"
             aria-label="Role: pick one or type your own"
             title="Pick a role or type your own. It chooses their stand-in face until a portrait exists."
-            className="w-36 rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-300"
+            className={cn(ui.input, "w-full sm:w-40")}
           />
           <datalist id={roleListId}>
             {roles.map((role) => (
@@ -86,23 +92,26 @@ export function NpcEditorFields({
               </option>
             ))}
           </datalist>
-          <select
+          <span className="w-full sm:w-60">
+          <Select<NpcDraft["attitude"]>
+            label="Attitude to the party"
             value={draft.attitude}
-            onChange={(event) =>
-              onChange({ ...draft, attitude: event.target.value as NpcDraft["attitude"] })
-            }
-            className="rounded-md border border-stone-700 bg-stone-950 px-1.5 py-1 text-xs text-stone-300"
-          >
-            {ATTITUDES.map((attitude) => (
-              <option key={attitude} value={attitude}>
-                {attitude === "hostile"
+            onChange={(attitude) => onChange({ ...draft, attitude })}
+            options={ATTITUDES.map((attitude) => ({
+              value: attitude,
+              label:
+                attitude === "hostile"
                   ? "Hostile to the party"
                   : attitude === "friendly"
                     ? "Friendly to the party"
-                    : "Indifferent"}
-              </option>
-            ))}
-          </select>
+                    : "Indifferent",
+              icon: {
+                kind: "glyph" as const,
+                key: attitude === "hostile" ? "attitude-hostile" : attitude === "friendly" ? "attitude-friendly" : "attitude-neutral",
+              },
+            }))}
+          />
+          </span>
         </div>
 
         <input
@@ -111,7 +120,7 @@ export function NpcEditorFields({
           onChange={(event) => onChange({ ...draft, location: event.target.value })}
           placeholder="Where they are usually found"
           aria-label="Location: pick a place on the map or type your own"
-          className="w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-300"
+          className={ui.input}
         />
         {places.length ? (
           <datalist id={placeListId}>
@@ -130,7 +139,7 @@ export function NpcEditorFields({
             })
           }
           placeholder="Other names they answer to, separated by commas"
-          className="w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-300"
+          className={ui.input}
         />
 
         <div className="flex items-start gap-1.5">
@@ -139,107 +148,98 @@ export function NpcEditorFields({
             onChange={(event) => onChange({ ...draft, trait: event.target.value })}
             rows={2}
             placeholder="What a player notices about them first"
-            className="flex-1 rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-300"
+            className={cn(ui.input, "min-w-0 flex-1")}
           />
           {suggest("trait")}
         </div>
 
         {factions.length ? (
-          <select
+          <Select
+            label="Faction"
             value={draft.factionId}
-            onChange={(event) => onChange({ ...draft, factionId: event.target.value })}
-            aria-label="Faction"
-            className="w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-300"
-          >
-            <option value="">No faction</option>
-            {factions.map((faction) => (
-              <option key={faction.id} value={faction.id}>
-                {faction.name}
-              </option>
-            ))}
-          </select>
+            onChange={(factionId) => onChange({ ...draft, factionId })}
+            options={[
+              { value: "", label: "No faction" },
+              ...factions.map((faction) => ({ value: faction.id, label: faction.name, icon: { kind: "glyph" as const, key: "system-factions" } })),
+            ]}
+          />
         ) : null}
 
         {/* Their own read-aloud voice (docs/vtt-parity-implementation-plan.md
             8.2): a Kokoro voice and a pace, previewed here, heard on every
             line attributed to them. */}
         <div className="flex flex-wrap items-center gap-1.5">
-          <Mic2 className="size-3.5 text-amber-600" />
-          <select
+          <GameIcon icon={{ kind: "glyph", key: "tab-ambience" }} size="size-7" />
+          <span className="min-w-0 flex-1 sm:max-w-72">
+          <Select
+            label="Voice"
             value={draft.voice?.voiceId ?? ""}
-            onChange={(event) =>
+            onChange={(voiceId) =>
               onChange({
                 ...draft,
-                voice: event.target.value ? { voiceId: event.target.value, speed: draft.voice?.speed ?? 1 } : null,
+                voice: voiceId ? { voiceId, speed: draft.voice?.speed ?? 1 } : null,
               })
             }
-            aria-label="Voice"
-            className="rounded-md border border-stone-700 bg-stone-950 px-1.5 py-1 text-xs text-stone-300"
-          >
-            <option value="">The narrator&apos;s voice</option>
-            {TTS_VOICES.map((voice) => (
-              <option key={voice.id} value={voice.id}>
-                {voice.label}
-              </option>
-            ))}
-          </select>
+            options={[
+              { value: "", label: "The narrator's voice" },
+              ...TTS_VOICES.map((voice) => ({ value: voice.id as string, label: voice.label })),
+            ]}
+          />
+          </span>
           {draft.voice ? (
             <>
               <VoicePreviewButton voice={draft.voice.voiceId} />
-              <label className="flex items-center gap-1 text-[11px] text-stone-500">
+              <span className="flex items-center gap-2 text-xs text-stone-400">
                 Pace
-                <input
-                  type="range"
+                <span className="w-28">
+                <Slider
+                  label="Pace"
                   min={0.7}
                   max={1.4}
                   step={0.05}
                   value={draft.voice.speed}
-                  onChange={(event) => onChange({ ...draft, voice: { voiceId: draft.voice!.voiceId, speed: Number(event.target.value) } })}
-                  className="w-20 accent-amber-400"
+                  onChange={(speed) => onChange({ ...draft, voice: { voiceId: draft.voice!.voiceId, speed } })}
+                  bubble={(speed) => speed.toFixed(2)}
                 />
-                <span className="w-8 text-stone-600">{draft.voice.speed.toFixed(2)}</span>
-              </label>
+                </span>
+                <span className="w-8 text-stone-500">{draft.voice.speed.toFixed(2)}</span>
+              </span>
             </>
           ) : null}
         </div>
       </section>
 
-      <section className="space-y-1.5 rounded-lg border border-stone-800 bg-stone-950/60 px-2.5 py-2">
-        <div className="flex items-center justify-between">
-          <p className="text-[11px] uppercase tracking-wide text-stone-500">Who they are</p>
-          {suggest("personality")}
-        </div>
+      <section className="panel space-y-2 rounded-xl p-3">
+        <SectionHead title="Who they are" glyph="tab-bonds" className="mb-0" aside={suggest("personality")} />
         <PersonalitySliders draft={draft} onChange={onChange} />
       </section>
 
-      <section className="space-y-1.5 rounded-lg border border-stone-800 bg-stone-950/60 px-2.5 py-2">
-        <p className="text-[11px] uppercase tracking-wide text-stone-500">What they want</p>
+      <section className="panel space-y-2 rounded-xl p-3">
+        <SectionHead title="What they want" glyph="quest-active" className="mb-0" />
         {GOAL_FIELDS.map(([field, placeholder]) => (
           <div key={field} className="flex items-center gap-1.5">
             <input
               value={goalText(draft, field)}
               onChange={(event) => onChange(setGoal(draft, field, event.target.value))}
               placeholder={placeholder}
-              className="flex-1 rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-300"
+              className={cn(ui.input, "min-w-0 flex-1")}
             />
             {field === "session" && draft.goals.session ? (
-              <span className="shrink-0 text-[10px] text-stone-600">
+              <span className="shrink-0 text-[11px] text-stone-500">
                 {draft.goals.session.progress}/{draft.goals.session.target}
               </span>
             ) : null}
             {suggest(field)}
           </div>
         ))}
-        <p className="text-[10px] text-stone-600">
+        <p className="text-[11px] text-stone-500">
           The middle one advances on background dice at the end of a chapter, so its progress is
           the engine&apos;s to move, not yours.
         </p>
       </section>
 
-      <section className="space-y-1.5 rounded-lg border border-stone-800 bg-stone-950/60 px-2.5 py-2">
-        <p className="text-[11px] uppercase tracking-wide text-stone-500">
-          How they feel about other people
-        </p>
+      <section className="panel space-y-2 rounded-xl p-3">
+        <SectionHead title="How they feel about other people" glyph="attitude-wary" className="mb-0" />
         <RelationEditor draft={draft} graph={graph} others={others} onChange={onChange} />
       </section>
     </>

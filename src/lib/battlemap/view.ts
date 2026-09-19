@@ -1,4 +1,4 @@
-import { getFloor } from "@/lib/db/campaigns";
+import { getCampaignById, getFloor } from "@/lib/db/campaigns";
 import { getClock } from "@/lib/db/clock";
 import { lightRemaining } from "@/lib/dm/light-timers";
 import { breakDown } from "@/lib/dm/calendar";
@@ -44,7 +44,10 @@ import {
   type MapLabel,
 } from "@/lib/battlemap/scene";
 import type { MapTheme } from "@/lib/battlemap/generate";
+import type { MapSkin } from "@/lib/battlemap/skins";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import type { TokenIntent } from "@/lib/battlemap/intent";
+import { projectIntents } from "@/lib/dm/intent";
 
 // Per-player projection of the battle map. This is the ONLY battlemap
 // module that touches the DB, and the only shape clients ever see: terrain
@@ -66,6 +69,9 @@ export type PlayerMapView = {
   // explored tiles, so a picture cannot show a player through the fog that
   // is hiding the terrain (src/lib/battlemap/backdrop.ts).
   backdrop: Backdrop | null;
+  // What the board is painted with when it has no backdrop; empty means the
+  // setting and theme decide. Cosmetic, so it is the same for every viewer.
+  skin: MapSkin;
   visible: number[];
   explored: number[];
   tokens: Array<{
@@ -84,6 +90,9 @@ export type PlayerMapView = {
     // A carried light burning down: minutes left of the whole, or null
     // (docs/vtt-parity-implementation-plan.md 7.3).
     light: { remaining: number; total: number } | null;
+    // The painted object a prop or bystander is drawn as, or "" for the
+    // plain figure (public/assets/props/manifest.json ids).
+    stamp: string;
   }>;
   lights: Array<{ x: number; y: number; radius: number }>;
   reachable: number[];
@@ -122,6 +131,10 @@ export type PlayerMapView = {
   tokenElevation: Record<string, "flying" | "burrowing">;
   turn: { tokenId: string; round: number } | null;
   targets: Record<string, string[]>;
+  // What each enemy this viewer can see is about to do: the DM's declaration
+  // for this round, else the engine's guess (src/lib/dm/intent.ts, which also
+  // holds the redaction). Empty when the table has `enemyIntent` off.
+  intents: TokenIntent[];
 };
 
 type AuraTone = "ward" | "harm" | "bless" | "neutral";
@@ -197,7 +210,9 @@ export function getActiveBattleMap(campaignId: string): BattleMap | null {
 export function buildPlayerMapView(
   campaignId: string,
   userId: string,
-  options: { fullVision?: boolean } = {},
+  // `enemyNumbers` is the seat's capsFor().enemyNumbers: whether an intent
+  // may carry its expected damage.
+  options: { fullVision?: boolean; enemyNumbers?: boolean } = {},
 ): PlayerMapView | null {
   // The DM sees the whole board. Everything below that reads `visible` or
   // `explored` then falls through to the full tile set, so there is one
@@ -310,6 +325,7 @@ export function buildPlayerMapView(
         token.kind === "pc" && (sheetsById.get(token.refId)?.currentHp ?? 1) <= 0,
       hidden: token.hidden,
       light: lightRemaining(token, clockInstant),
+      stamp: token.stamp ?? "",
     }));
 
   // Reachable tiles for click-to-move, only when the player may move now.
@@ -429,6 +445,35 @@ export function buildPlayerMapView(
     }
   }
 
+  // Intent is a fight's business: a scene has no rounds to declare one for.
+  const intentOn =
+    encounter.kind === "fight" &&
+    getCampaignById(campaignId)?.gameSettings.enemyIntent !== false;
+  const intents = intentOn
+    ? projectIntents({
+        round: encounter.round,
+        declared: encounter.intents,
+        enemies: tokens.flatMap((token) => {
+          const enemy = token.kind === "enemy" ? enemiesById.get(token.refId) : undefined;
+          return enemy && enemy.status === "alive"
+            ? [{ id: enemy.id, stats: enemy.stats, token }]
+            : [];
+        }),
+        pcTokens: tokens
+          .filter((token) => token.kind === "pc")
+          .map((token) => ({
+            id: token.id,
+            refId: token.refId,
+            x: token.x,
+            y: token.y,
+            hidden: token.hidden,
+            down: (sheetsById.get(token.refId)?.currentHp ?? 1) <= 0,
+          })),
+        shownTokenIds: shownIds,
+        enemyNumbers: fullVision || options.enemyNumbers === true,
+      })
+    : [];
+
   return {
     mapId: map.id,
     width: map.width,
@@ -438,6 +483,7 @@ export function buildPlayerMapView(
     theme: map.theme,
     terrain: terrainChars.join(""),
     backdrop: map.backdrop,
+    skin: map.skin,
     visible: [...visible],
     explored: [...explored],
     tokens: shownTokens,
@@ -460,6 +506,7 @@ export function buildPlayerMapView(
     tokenElevation,
     turn,
     targets,
+    intents,
     ...(fullVision
       ? {
           doors: map.doors,

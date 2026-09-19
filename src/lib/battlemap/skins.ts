@@ -384,3 +384,126 @@ export function defaultSkinFor(genre: string | null | undefined, theme: string |
 export function skinFor(genre: string | null | undefined, theme: string | null | undefined): Skin {
   return skinById(defaultSkinFor(genre, theme)) ?? SKINS[0];
 }
+
+// ---- A map's own skin (docs/visual-overhaul-plan.md 3.8, 4.4) ----
+//
+// A map may name one of the skins above and may override any of the six
+// terrain characters with another material. Stored as `skin_json` beside the
+// scene columns and normalised on every read and write, so a map can never
+// hold a key that is not a terrain character or an id that is not shaped like
+// one. Whether an id is a material that SHIPPED is decided where the catalogue
+// is known (the painter, below): an unknown one falls back to the skin's own,
+// so a map drawn against a newer tile set still paints on an older host.
+
+export const SKIN_CHARS = [".", "#", "~", ",", "+", "|"] as const;
+export type SkinChar = (typeof SKIN_CHARS)[number];
+
+// What each character is called in the picker and which catalogue categories
+// may paint it (public/assets/tiles/manifest.json `category`). Lava is a
+// hazard that paints as the liquid, which is why water takes two.
+export const SKIN_ROLES: Record<SkinChar, { label: string; categories: readonly string[] }> = {
+  ".": { label: "Floor", categories: ["floor"] },
+  "#": { label: "Wall", categories: ["wall"] },
+  "~": { label: "Water", categories: ["water", "hazard"] },
+  ",": { label: "Rough ground", categories: ["rough", "hazard"] },
+  "+": { label: "Door", categories: ["door"] },
+  "|": { label: "Low wall", categories: ["lowwall"] },
+};
+
+export type MapSkin = {
+  // A skin id from SKINS, or "" for the default the setting and theme give.
+  id: string;
+  // Terrain character to material id, only for the characters overridden.
+  bind: Partial<Record<SkinChar, string>>;
+};
+
+export const EMPTY_MAP_SKIN: MapSkin = { id: "", bind: {} };
+
+const MATERIAL_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const MATERIAL_ID_MAX = 64;
+
+export function isMaterialId(value: unknown): value is string {
+  return typeof value === "string" && value.length <= MATERIAL_ID_MAX && MATERIAL_ID.test(value);
+}
+
+export function normalizeMapSkin(raw: unknown): MapSkin {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { id: "", bind: {} };
+  }
+  const source = raw as { id?: unknown; bind?: unknown };
+  const id = typeof source.id === "string" && skinById(source.id) ? source.id : "";
+  const bind: MapSkin["bind"] = {};
+  if (source.bind && typeof source.bind === "object" && !Array.isArray(source.bind)) {
+    for (const char of SKIN_CHARS) {
+      const material = (source.bind as Record<string, unknown>)[char];
+      if (isMaterialId(material)) {
+        bind[char] = material;
+      }
+    }
+  }
+  return { id, bind };
+}
+
+export function isEmptyMapSkin(skin: MapSkin | null | undefined): boolean {
+  return !skin || (!skin.id && Object.keys(skin.bind).length === 0);
+}
+
+// Stable text for cache keys and change checks.
+export function mapSkinKey(skin: MapSkin | null | undefined): string {
+  if (isEmptyMapSkin(skin)) {
+    return "";
+  }
+  const own = skin as MapSkin;
+  return `${own.id}:${SKIN_CHARS.map((char) => own.bind[char] ?? "").join(",")}`;
+}
+
+// The skin a map is painted with: the one it names (else the default for its
+// setting and theme) with its overrides laid over. `catalogue` maps a
+// material id to its category; when given, an override that is not in it, or
+// is the wrong kind of thing for its character, is dropped. An override that
+// matches the skin's own material is a no-op and the very same Skin object
+// comes back, so callers can compare by identity.
+export function resolveSkin(
+  genre: string | null | undefined,
+  theme: string | null | undefined,
+  mapSkin?: MapSkin | null,
+  catalogue?: ReadonlyMap<string, string> | null,
+): Skin {
+  const base = (mapSkin?.id ? skinById(mapSkin.id) : undefined) ?? skinFor(genre, theme);
+  if (!mapSkin) {
+    return base;
+  }
+  let bind: Record<string, string> | null = null;
+  for (const char of SKIN_CHARS) {
+    const material = mapSkin.bind[char];
+    if (!material || material === base.bind[char] || !isMaterialId(material)) {
+      continue;
+    }
+    if (catalogue) {
+      const category = catalogue.get(material);
+      if (!category || !SKIN_ROLES[char].categories.includes(category)) {
+        continue;
+      }
+    }
+    bind ??= { ...base.bind };
+    bind[char] = material;
+  }
+  return bind ? { ...base, bind } : base;
+}
+
+// The picker's list: the setting's own skins first, then the fantasy ones
+// (every setting can wear them), then the other settings'.
+export function skinChoices(genre: string | null | undefined): Array<{ group: string; skins: Skin[] }> {
+  const setting = (genre || "").toLowerCase().replace(/-/g, "_");
+  const own = GENRES.includes(setting) ? setting : null;
+  const groups: Array<{ group: string; skins: Skin[] }> = [];
+  if (own) {
+    groups.push({ group: "This setting", skins: SKINS.filter((s) => s.genre === own) });
+  }
+  groups.push({ group: own ? "Fantasy" : "This setting", skins: SKINS.filter((s) => !s.genre) });
+  const rest = SKINS.filter((s) => s.genre && s.genre !== own);
+  if (rest.length) {
+    groups.push({ group: "Other settings", skins: rest });
+  }
+  return groups;
+}

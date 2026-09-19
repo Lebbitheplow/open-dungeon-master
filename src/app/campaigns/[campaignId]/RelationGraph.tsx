@@ -1,5 +1,6 @@
 "use client";
 
+import { EmptyState } from "@/components/EmptyState";
 import { useMemo } from "react";
 import { cn } from "@/lib/cn";
 import { layoutGraph } from "@/lib/npcs/graph-layout";
@@ -48,7 +49,7 @@ export function RelationGraph({
     [graph],
   );
   if (!graph.nodes.length) {
-    return <p className="text-[11px] italic text-stone-600">Write two people who know each other and the map draws itself.</p>;
+    return <EmptyState size="sm" art="board" title="Write two people who know each other and the map draws itself." />;
   }
   // A faction's hull: a soft disc around its members' centre, wide enough
   // to hold them all (docs/vtt-parity-implementation-plan.md section 6).
@@ -73,7 +74,7 @@ export function RelationGraph({
       viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
       role="img"
       aria-label="Who knows whom"
-      className={cn("w-full rounded-lg border border-stone-800 bg-stone-950/60", className)}
+      className={cn("panel w-full rounded-lg", className)}
     >
       <defs>
         {graph.nodes.map((node) => {

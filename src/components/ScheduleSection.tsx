@@ -1,11 +1,14 @@
 "use client";
 
-import { CalendarClock, Check, CircleHelp, Plus, X } from "lucide-react";
+import { Check, CircleHelp, Plus, X } from "lucide-react";
 import { appConfirm } from "@/components/ui/ConfirmDialog";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { cn } from "@/lib/cn";
-import { ui } from "@/lib/ui";
-import { miscPlaceholder } from "@/lib/placeholders";
+import { UserAvatar, ui } from "@/lib/ui";
+import { EmptyState } from "@/components/EmptyState";
+import { DateTimePicker } from "@/components/ui/DateTimePicker";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import type { RsvpResponse, ScheduledSession } from "@/lib/db/scheduling";
 
 // The out-of-game calendar: when the humans meet next. Lives in the lobby
@@ -34,6 +37,71 @@ function toLocalInput(startsAt: string): string {
 
 const DURATION_CHOICES = [60, 120, 180, 240];
 
+// The part of the day a session falls in, as the painted glyph that heads its
+// row, so "Saturday evening" reads at a glance before the numbers do.
+function daypartOf(startsAt: string): string {
+  const hour = new Date(startsAt).getHours();
+  if (hour < 5) return "night";
+  if (hour < 8) return "dawn";
+  if (hour < 12) return "morning";
+  if (hour < 17) return "day";
+  // The evening painting is near black at this size, so the dusk one stands
+  // for the whole stretch from late afternoon to bedtime.
+  if (hour < 22) return "dusk";
+  return "night";
+}
+
+// One press sets the hour on the chosen day (tomorrow when none is chosen
+// yet); the field beside them still takes any date and time by hand.
+const QUICK_TIMES = [
+  { glyph: "morning", label: "Morning", hour: 10 },
+  { glyph: "day", label: "Afternoon", hour: 14 },
+  { glyph: "dusk", label: "Evening", hour: 19 },
+  { glyph: "night", label: "Late", hour: 21 },
+];
+
+function withHour(current: string, hour: number): string {
+  const base = current ? new Date(current) : new Date(Date.now() + 86_400_000);
+  if (Number.isNaN(base.getTime())) {
+    return current;
+  }
+  base.setHours(hour, 0, 0, 0);
+  return toLocalInput(base.toISOString());
+}
+
+function QuickTimes({ value, onPick }: { value: string; onPick: (next: string) => void }) {
+  const hour = value ? new Date(value).getHours() : -1;
+  const onTheHour = value ? new Date(value).getMinutes() === 0 : false;
+  return (
+    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Quick times">
+      {QUICK_TIMES.map((choice) => {
+        const active = onTheHour && hour === choice.hour;
+        return (
+          <button
+            key={choice.glyph}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onPick(withHour(value, choice.hour))}
+            className={cn(
+              "motion-press inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2.5 text-xs",
+              active
+                ? "border-amber-400/60 bg-amber-400/15 text-amber-100"
+                : "border-stone-700/70 bg-stone-900/50 text-stone-400 hover:border-amber-500/40 hover:text-amber-100",
+            )}
+          >
+            <GameIcon icon={{ kind: "glyph", key: `daypart-${choice.glyph}` }} size="size-6" />
+            {choice.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return <span className="eyebrow mb-1 block text-[9px] text-stone-400">{children}</span>;
+}
+
 const RSVP_CHOICES: Array<{ value: RsvpResponse; label: string; icon: typeof Check }> = [
   { value: "yes", label: "Going", icon: Check },
   { value: "maybe", label: "Maybe", icon: CircleHelp },
@@ -45,13 +113,21 @@ export function ScheduleSection({
   meUserId,
   isLead,
   usernames,
+  avatars,
   version,
+  className,
+  style,
 }: {
   campaignId: string;
   meUserId: string;
   isLead: boolean;
   usernames: Record<string, string>;
+  // Faces for the RSVP stacks. Optional: without one a player shows as the
+  // sigil their id hashes to, the same as everywhere else.
+  avatars?: Record<string, string | null | undefined>;
   version: number;
+  className?: string;
+  style?: CSSProperties;
 }) {
   const [sessions, setSessions] = useState<ScheduledSession[]>([]);
   const [planning, setPlanning] = useState(false);
@@ -177,15 +253,26 @@ export function ScheduleSection({
   }
 
   return (
-    <section className="mb-6">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="eyebrow text-sm text-amber-200/90">
-          <CalendarClock className="mr-1.5 inline size-4" />
-          Next session
-        </h2>
+    <section
+      data-lobby-schedule
+      className={cn(ui.card, "ornate mb-6 p-4 sm:p-5", className)}
+      style={style}
+    >
+      <div className="lobby-head mb-3">
+        <GameIcon icon={{ kind: "glyph", key: "tab-session" }} size="size-7" />
+        <h2 className="lobby-head-title">Next session</h2>
+        <span className="lobby-head-rule motion-rule" aria-hidden="true" />
         {isLead ? (
-          <button type="button" onClick={() => setPlanning(!planning)} className={ui.btnSmall}>
-            <Plus className="size-4" /> Plan a session
+          <button
+            type="button"
+            onClick={() => setPlanning(!planning)}
+            aria-expanded={planning}
+            className={cn(ui.btnSmall, planning && "border-amber-500/40 text-amber-100")}
+          >
+            <Plus
+              className={cn("size-4 transition-transform duration-300 ease-[var(--ease-spring)]", planning && "rotate-45")}
+            />{" "}
+            Plan a session
           </button>
         ) : null}
       </div>
@@ -193,167 +280,192 @@ export function ScheduleSection({
       {planning ? (
         <form
           onSubmit={plan}
-          className="mb-3 space-y-2 rounded-xl border border-stone-800 bg-stone-900/60 p-3"
+          className="motion-tab mb-4 space-y-3 rounded-xl border border-stone-700/60 bg-stone-950/40 p-3"
         >
-          <div className="flex flex-wrap gap-2">
-            <input
-              type="datetime-local"
-              value={when}
-              onChange={(event) => setWhen(event.target.value)}
-              className={cn(ui.input, "w-auto")}
-              required
+          <label className="block">
+            <FieldLabel>When</FieldLabel>
+            {/* No native "required" here: plan() already refuses an empty time. */}
+            <DateTimePicker value={when} onChange={setWhen} label="When" placeholder="Pick a date and time" className="w-full" />
+          </label>
+          <QuickTimes value={when} onPick={setWhen} />
+          <div>
+            <FieldLabel>How long</FieldLabel>
+            <SegmentedControl
+              size="sm"
+              label="How long the session runs"
+              className="w-full"
+              options={DURATION_CHOICES.map((minutes) => ({
+                value: String(minutes),
+                label: `${minutes / 60} hour${minutes === 60 ? "" : "s"}`,
+              }))}
+              value={String(duration)}
+              onChange={(next) => setDuration(Number(next))}
             />
-            <select
-              value={duration}
-              onChange={(event) => setDuration(Number(event.target.value))}
-              aria-label="How long the session runs"
-              title="How long the session runs"
-              className={cn(ui.input, "w-auto")}
-            >
-              {DURATION_CHOICES.map((minutes) => (
-                <option key={minutes} value={minutes}>
-                  {minutes / 60} hour{minutes === 60 ? "" : "s"}
-                </option>
-              ))}
-            </select>
+          </div>
+          <label className="block">
+            <FieldLabel>Title</FieldLabel>
             <input
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               placeholder="Title (optional)"
               maxLength={120}
-              className={cn(ui.input, "flex-1")}
+              className={ui.input}
             />
-          </div>
-          <input
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            placeholder="Note, e.g. we pick up at the bridge (optional)"
-            maxLength={500}
-            className={ui.input}
-          />
-          <div className="flex items-center gap-2">
-            <button type="submit" disabled={busy} className={ui.btnSmall}>
+          </label>
+          <label className="block">
+            <FieldLabel>Note</FieldLabel>
+            <input
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder="Note, e.g. we pick up at the bridge (optional)"
+              maxLength={500}
+              className={ui.input}
+            />
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="submit" disabled={busy} className={cn(ui.btnPrimary, "h-9")}>
               Schedule
             </button>
-            {error ? <p className="text-sm text-red-400">{error}</p> : null}
+            {error ? <p className="motion-shake text-sm text-red-400">{error}</p> : null}
           </div>
         </form>
       ) : null}
 
       {sessions.length === 0 ? (
-        <div className="flex items-center gap-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={miscPlaceholder("session")}
-            alt=""
-            loading="lazy"
-            className="h-12 w-20 shrink-0 rounded-lg border border-amber-400/20 object-cover"
-          />
-          <p className="text-sm text-stone-500">Nothing planned yet.</p>
-        </div>
+        <EmptyState
+          art="board"
+          size="sm"
+          title="Nothing planned yet."
+          hint="Plan a session and everyone at the table is asked whether they can make it."
+        />
       ) : (
-        <ul className="space-y-2">
-          {sessions.map((session) => {
+        <ul className="stagger space-y-2.5">
+          {sessions.map((session, index) => {
             const mine = session.rsvps.find((entry) => entry.userId === meUserId)?.response;
+            const starts = new Date(session.startsAt);
+            const going = (response: RsvpResponse) =>
+              session.rsvps.filter((entry) => entry.response === response);
             const names = (response: RsvpResponse) =>
-              session.rsvps
-                .filter((entry) => entry.response === response)
+              going(response)
                 .map((entry) => usernames[entry.userId] ?? "someone")
                 .join(", ");
             return (
               <li
                 key={session.id}
+                style={{ "--i": Math.min(index, 6) } as CSSProperties}
                 className={cn(
-                  "rounded-xl border border-stone-800 bg-stone-900/60 p-3",
+                  "lobby-seat rounded-xl border border-stone-700/60 bg-stone-900/50 p-3",
                   session.cancelledAt && "opacity-60",
                 )}
               >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="text-sm text-amber-100">
-                      {whenLabel(session.startsAt)}
-                      <span className="ml-2 text-stone-400">
-                        {session.title || `${Math.round(session.durationMin / 60)}h session`}
-                      </span>
-                      {session.cancelledAt ? (
-                        <span className="ml-2 text-red-400">cancelled</span>
-                      ) : null}
+                <div className="flex items-start gap-3">
+                  <div className="lobby-date" aria-hidden="true">
+                    <span className="lobby-date-month">
+                      {starts.toLocaleString(undefined, { month: "short" })}
+                    </span>
+                    <span className="lobby-date-day">{starts.getDate()}</span>
+                    <span className="lobby-date-dow">
+                      {starts.toLocaleString(undefined, { weekday: "short" })}
+                    </span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-amber-100">
+                      <GameIcon
+                        icon={{ kind: "glyph", key: `daypart-${daypartOf(session.startsAt)}` }}
+                        size="size-6"
+                      />
+                      <span>{whenLabel(session.startsAt)}</span>
+                      {session.cancelledAt ? <span className="text-red-400">cancelled</span> : null}
+                    </p>
+                    <p className="mt-0.5 font-serif text-sm text-stone-300">
+                      {session.title || `${Math.round(session.durationMin / 60)}h session`}
                     </p>
                     {session.note ? (
-                      <p className="text-xs text-stone-500">{session.note}</p>
+                      <p className="reveal mt-0.5 text-xs text-stone-500">{session.note}</p>
                     ) : null}
-                    <p className="text-xs text-stone-500">
+                    <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-500">
                       {RSVP_CHOICES.map((choice) => {
-                        const count = session.rsvps.filter(
-                          (entry) => entry.response === choice.value,
-                        ).length;
-                        return count > 0 ? (
+                        const entries = going(choice.value);
+                        return entries.length > 0 ? (
                           <span
                             key={choice.value}
                             title={names(choice.value)}
-                            className="mr-3"
+                            className="inline-flex items-center gap-1.5"
                           >
-                            {choice.label} {count}
+                            <span className="lobby-stack">
+                              {entries.slice(0, 5).map((entry) => (
+                                <UserAvatar
+                                  key={entry.userId}
+                                  url={avatars?.[entry.userId]}
+                                  userId={entry.userId}
+                                  size="size-5"
+                                />
+                              ))}
+                            </span>
+                            {choice.label} {entries.length}
                           </span>
                         ) : null;
                       })}
                     </p>
                   </div>
-                  {!session.cancelledAt ? (
-                    <div className="flex items-center gap-1">
-                      {RSVP_CHOICES.map((choice) => (
-                        <button
-                          key={choice.value}
-                          type="button"
-                          onClick={() => void rsvp(session.id, choice.value)}
-                          className={cn(
-                            ui.btnSmall,
-                            mine === choice.value && "border-amber-400/60 text-amber-200",
-                          )}
-                          title={choice.label}
-                        >
-                          <choice.icon className="size-4" />
-                          <span className="hidden sm:inline">{choice.label}</span>
-                        </button>
-                      ))}
-                      {isLead ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setMovingId(movingId === session.id ? null : session.id);
-                              setMoveWhen(toLocalInput(session.startsAt));
-                              setMoveError("");
-                            }}
-                            className="ml-1 text-xs text-stone-500 transition-colors hover:text-amber-300"
-                          >
-                            Move
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void cancel(session.id)}
-                            className="ml-1 text-xs text-stone-500 transition-colors hover:text-red-400"
-                          >
-                            Call off
-                          </button>
-                        </>
-                      ) : null}
-                    </div>
-                  ) : null}
                 </div>
+                {!session.cancelledAt ? (
+                  <div data-pill-group="" className="reveal mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-stone-700/40 pt-2.5">
+                    {RSVP_CHOICES.map((choice) => (
+                      <button data-on={mine === choice.value ? "" : undefined}
+                        key={choice.value}
+                        type="button"
+                        onClick={() => void rsvp(session.id, choice.value)}
+                        aria-pressed={mine === choice.value}
+                        className={cn(
+                          ui.btnSmall,
+                          mine === choice.value &&
+                            "border-amber-400/60 bg-amber-400/15 text-amber-100 shadow-glow-gold",
+                        )}
+                        title={choice.label}
+                      >
+                        <choice.icon
+                          key={mine === choice.value ? "on" : "off"}
+                          className={cn("size-4", mine === choice.value && "lobby-pop")}
+                        />
+                        <span>{choice.label}</span>
+                      </button>
+                    ))}
+                    {isLead ? (
+                      <span className="ml-auto flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMovingId(movingId === session.id ? null : session.id);
+                            setMoveWhen(toLocalInput(session.startsAt));
+                            setMoveError("");
+                          }}
+                          aria-expanded={movingId === session.id}
+                          className="rounded-md px-2 py-1.5 text-xs text-stone-500 transition-colors hover:text-amber-300"
+                        >
+                          Move
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void cancel(session.id)}
+                          className="rounded-md px-2 py-1.5 text-xs text-stone-500 transition-colors hover:text-red-400"
+                        >
+                          Call off
+                        </button>
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
                 {movingId === session.id && !session.cancelledAt ? (
-                  <form onSubmit={move} className="mt-2 flex flex-wrap items-center gap-2">
-                    <input
-                      type="datetime-local"
-                      value={moveWhen}
-                      onChange={(event) => setMoveWhen(event.target.value)}
-                      className={cn(ui.input, "w-auto")}
-                      required
-                    />
-                    <button type="submit" disabled={moveBusy} className={ui.btnSmall}>
-                      Move it
-                    </button>
-                    {moveError ? <p className="text-sm text-red-400">{moveError}</p> : null}
+                  <form onSubmit={move} className="motion-tab mt-2.5 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <DateTimePicker value={moveWhen} onChange={setMoveWhen} label="New date and time" placeholder="Pick a date and time" className="w-auto min-w-0 flex-1" />
+                      <button type="submit" disabled={moveBusy} className={ui.btnSmall}>
+                        Move it
+                      </button>
+                    </div>
+                    <QuickTimes value={moveWhen} onPick={setMoveWhen} />
+                    {moveError ? <p className="motion-shake text-sm text-red-400">{moveError}</p> : null}
                   </form>
                 ) : null}
               </li>

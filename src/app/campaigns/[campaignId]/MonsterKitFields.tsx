@@ -3,6 +3,9 @@
 import { Plus, Wand2 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
+import { NumberStepper } from "@/components/ui/NumberStepper";
+import { Select as KitSelect } from "@/components/ui/Select";
+import { Switch } from "@/components/ui/Switch";
 import { OptionGlossary } from "@/components/ui/OptionGlossary";
 import type { GlossaryEntry } from "@/lib/help/terms";
 import {
@@ -72,7 +75,7 @@ export function TermPicker({
         {label}
         {glossary ? <OptionGlossary title={label} entries={glossary} /> : null}
       </span>
-      <div className="flex flex-wrap gap-1">
+      <div className="stagger-pop flex flex-wrap gap-1">
         {known.map((term) => {
           const on = hasTerm(value, term);
           return (
@@ -133,18 +136,18 @@ export function SpeedPicker({
       <span className="text-[10px] uppercase tracking-wide text-stone-500">Speed</span>
       <div className="flex flex-wrap gap-2">
         {(["walk", ...MOVEMENT_MODES] as const).map((mode) => (
-          <label key={mode} className="flex flex-col gap-0.5">
+          <div key={mode} className="flex flex-col gap-0.5">
             <span className="text-[10px] capitalize text-stone-600">{mode}</span>
-            <input
-              type="number"
+            <NumberStepper
               min={0}
               max={999}
               step={5}
               value={speeds[mode] ?? 0}
-              onChange={(event) => set(mode, Number(event.target.value))}
-              className={cn(input, "w-16")}
+              onChange={(feet) => set(mode, feet)}
+              label={`${mode} speed in feet`}
+              size="sm"
             />
-          </label>
+          </div>
         ))}
       </div>
       <span className="text-[10px] text-stone-600">Reads as &quot;{value || "0"}&quot;. Zero hides a mode.</span>
@@ -156,25 +159,21 @@ function Select({
   label,
   value,
   onChange,
-  children,
+  options,
   className,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
-  children: React.ReactNode;
+  // The first row is the "" choice ("Pick one", "None"), still pickable so a
+  // choice can be taken back, as the blank option of the old list was.
+  options: Array<{ value: string; label: string }>;
   className?: string;
 }) {
   return (
     <label className="flex flex-col gap-0.5">
       <span className="text-[10px] uppercase tracking-wide text-stone-500">{label}</span>
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className={cn(input, className ?? "w-40")}
-      >
-        {children}
-      </select>
+      <KitSelect value={value} onChange={onChange} options={options} label={label} size="sm" className={className ?? "w-40"} />
     </label>
   );
 }
@@ -216,14 +215,12 @@ export function MonsterKitPanel({
       </p>
 
       <div className="flex flex-wrap items-end gap-2">
-        <Select label="Ancestry" value={ancestryId} onChange={setAncestryId}>
-          <option value="">Pick one</option>
-          {ANCESTRY_OPTIONS.map((ancestry) => (
-            <option key={ancestry.id} value={ancestry.id}>
-              {ancestry.name}
-            </option>
-          ))}
-        </Select>
+        <Select
+          label="Ancestry"
+          value={ancestryId}
+          onChange={setAncestryId}
+          options={[{ value: "", label: "Pick one" }, ...ANCESTRY_OPTIONS.map((ancestry) => ({ value: ancestry.id as string, label: ancestry.name }))]}
+        />
         <button
           type="button"
           disabled={!ancestryId}
@@ -242,44 +239,22 @@ export function MonsterKitPanel({
             setClassId(next);
             setSubclass("");
           }}
-        >
-          <option value="">Pick one</option>
-          {CLASS_KIT_OPTIONS.map((klass) => (
-            <option key={klass.id} value={klass.id}>
-              {klass.name}
-            </option>
-          ))}
-        </Select>
-        <Select label="Subclass" value={subclass} onChange={setSubclass}>
-          <option value="">{subclasses.length ? "None" : "None available"}</option>
-          {subclasses.map((name) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
-          ))}
-        </Select>
-        <label className="flex flex-col gap-0.5">
+          options={[{ value: "", label: "Pick one" }, ...CLASS_KIT_OPTIONS.map((klass) => ({ value: klass.id as string, label: klass.name }))]}
+        />
+        <Select
+          label="Subclass"
+          value={subclass}
+          onChange={setSubclass}
+          options={[{ value: "", label: subclasses.length ? "None" : "None available" }, ...subclasses.map((name) => ({ value: name, label: name }))]}
+        />
+        <div className="flex flex-col gap-0.5">
           <span className="text-[10px] uppercase tracking-wide text-stone-500">Level</span>
-          <input
-            type="number"
-            min={1}
-            max={20}
-            value={level}
-            onChange={(event) => setLevel(Number(event.target.value))}
-            className={cn(input, "w-16")}
-          />
-        </label>
-        <label className="flex flex-col gap-0.5">
+          <NumberStepper min={1} max={20} value={level} onChange={setLevel} label="Level" size="sm" />
+        </div>
+        <div className="flex flex-col gap-0.5">
           <span className="text-[10px] uppercase tracking-wide text-stone-500">CON</span>
-          <input
-            type="number"
-            min={1}
-            max={30}
-            value={con}
-            onChange={(event) => setCon(Number(event.target.value))}
-            className={cn(input, "w-16")}
-          />
-        </label>
+          <NumberStepper min={1} max={30} value={con} onChange={setCon} label="CON" size="sm" />
+        </div>
         <button
           type="button"
           disabled={!classId}
@@ -290,15 +265,15 @@ export function MonsterKitPanel({
         </button>
       </div>
       {classId ? (
-        <p className="text-[10px] text-stone-600">{describeChassis(chassis)}</p>
+        <p className="reveal text-[10px] text-stone-600">{describeChassis(chassis)}</p>
       ) : null}
 
       {features.length ? (
-        <div className="flex flex-col gap-1">
+        <div className="reveal flex flex-col gap-1">
           <span className="text-[10px] uppercase tracking-wide text-stone-500">
             Its abilities at that level {traitsFull ? "(trait list full)" : "(click to add)"}
           </span>
-          <div className="flex flex-wrap gap-1">
+          <div className="stagger-pop flex flex-wrap gap-1">
             {features.map((feature) => {
               const on = draft.stats.traits.some(
                 (trait) => trait.trim().toLowerCase() === feature.line.toLowerCase(),
@@ -328,23 +303,19 @@ export function MonsterKitPanel({
       ) : null}
 
       <div className="flex flex-wrap items-end gap-2">
-        <Select label="Armour" value={armorName} onChange={setArmorName}>
-          <option value="">Unarmoured</option>
-          {armorOptionsFor(classId)
-            .filter((armor) => armor.category !== "shield")
-            .map((armor) => (
-              <option key={armor.name} value={armor.name}>
-                {armor.name} ({armor.baseAc})
-              </option>
-            ))}
-        </Select>
-        <label className="flex items-center gap-1 pb-1 text-[11px] text-stone-400">
-          <input
-            type="checkbox"
-            checked={shield}
-            onChange={(event) => setShield(event.target.checked)}
-            className="accent-amber-500"
-          />
+        <Select
+          label="Armour"
+          value={armorName}
+          onChange={setArmorName}
+          options={[
+            { value: "", label: "Unarmoured" },
+            ...armorOptionsFor(classId)
+              .filter((armor) => armor.category !== "shield")
+              .map((armor) => ({ value: armor.name, label: `${armor.name} (${armor.baseAc})` })),
+          ]}
+        />
+        <label className="flex items-center gap-1.5 pb-1 text-[11px] text-stone-400">
+          <Switch on={shield} onChange={setShield} label="Shield" />
           Shield
         </label>
         <button
@@ -357,25 +328,17 @@ export function MonsterKitPanel({
       </div>
 
       <div className="flex flex-wrap items-end gap-2">
-        <Select label="Weapon" value={weaponName} onChange={setWeaponName} className="w-44">
-          <option value="">Pick one</option>
-          {weaponOptionsFor(classId).map((weapon) => (
-            <option key={weapon.name} value={weapon.name}>
-              {weapon.name} ({weapon.damage})
-            </option>
-          ))}
-        </Select>
-        <label className="flex flex-col gap-0.5">
+        <Select
+          label="Weapon"
+          value={weaponName}
+          onChange={setWeaponName}
+          className="w-44"
+          options={[{ value: "", label: "Pick one" }, ...weaponOptionsFor(classId).map((weapon) => ({ value: weapon.name, label: `${weapon.name} (${weapon.damage})` }))]}
+        />
+        <div className="flex flex-col gap-0.5">
           <span className="text-[10px] uppercase tracking-wide text-stone-500">Ability mod</span>
-          <input
-            type="number"
-            min={0}
-            max={10}
-            value={weaponMod}
-            onChange={(event) => setWeaponMod(Number(event.target.value))}
-            className={cn(input, "w-16")}
-          />
-        </label>
+          <NumberStepper min={0} max={10} value={weaponMod} onChange={setWeaponMod} label="Ability mod" size="sm" />
+        </div>
         <button
           type="button"
           disabled={!weaponName || attacksFull}

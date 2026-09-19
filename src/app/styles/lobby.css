@@ -1,0 +1,336 @@
+/* The lobby (src/app/campaigns/[campaignId]/Lobby*.tsx), the schedule card,
+   the invite dialog and the campaign editor. Colours lean on the stone and
+   amber ramps, which the day theme remaps, so most rules need no day twin;
+   the few hardcoded tints below each carry one. */
+
+@keyframes lobby-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes lobby-ring {
+  0% { opacity: 0.7; transform: scale(0.5); }
+  100% { opacity: 0; transform: scale(2.4); }
+}
+@keyframes lobby-seal-stamp {
+  0% { opacity: 0; transform: rotate(-24deg) scale(1.6); }
+  60% { opacity: 1; transform: rotate(-10deg) scale(0.94); }
+  100% { opacity: 1; transform: rotate(-12deg) scale(1); }
+}
+
+@layer components {
+  /* ---- staggered entrances ---- */
+  /* Fill is backwards only: once a section has landed it keeps no transform,
+     so nothing inside it (a popover, a sticky bar) gets a new containing block. */
+  .lobby-enter,
+  .lobby-seat,
+  .lobby-sigil { animation: none; }
+
+  /* ---- group head: glyph, small caps title, a rule that wipes in ---- */
+  .lobby-head {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 0;
+  }
+  .lobby-head-title {
+    font-family: var(--font-display), Georgia, serif;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: var(--color-amber-200);
+  }
+  .lobby-head-rule {
+    flex: 1;
+    min-width: 1rem;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(212, 171, 58, 0.55), transparent);
+    transform-origin: left center;
+  }
+  html[data-theme="light"] .lobby-head-rule {
+    background: linear-gradient(90deg, rgba(138, 107, 28, 0.6), transparent);
+  }
+
+  /* ---- hero ---- */
+  .lobby-hero { overflow: hidden; }
+  .lobby-hero-art { position: relative; }
+  .lobby-hero-art::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 45%;
+    pointer-events: none;
+    background: linear-gradient(180deg, transparent, rgba(13, 11, 28, 0.85));
+  }
+  html[data-theme="light"] .lobby-hero-art::after {
+    background: linear-gradient(180deg, transparent, rgba(251, 248, 241, 0.8));
+  }
+
+  /* ---- the room code card ---- */
+  .lobby-code {
+    position: relative;
+    overflow: hidden;
+    border-color: rgba(212, 171, 58, 0.38);
+    background-image:
+      radial-gradient(120% 90% at 0% 0%, rgba(212, 171, 58, 0.13), transparent 55%),
+      radial-gradient(90% 80% at 100% 100%, rgba(122, 78, 200, 0.12), transparent 60%);
+  }
+  html[data-theme="light"] .lobby-code {
+    border-color: rgba(138, 107, 28, 0.45);
+    background-image:
+      radial-gradient(120% 90% at 0% 0%, rgba(214, 180, 90, 0.22), transparent 55%),
+      radial-gradient(90% 80% at 100% 100%, rgba(190, 150, 80, 0.14), transparent 60%);
+  }
+  .lobby-code-seal {
+    position: absolute;
+    top: 0.35rem;
+    right: 0.5rem;
+    width: 3.25rem;
+    height: 3.25rem;
+    pointer-events: none;
+    transform: rotate(-12deg);
+    filter: drop-shadow(0 4px 8px rgba(4, 2, 12, 0.55));
+    opacity: 0.92;
+  }
+
+  /* The code, one sigil to a plate. */
+  .lobby-sigils {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+  }
+  .lobby-sigil {
+    display: grid;
+    place-items: center;
+    min-width: 1.9rem;
+    height: 2.5rem;
+    padding: 0 0.2rem;
+    border-radius: 0.45rem;
+    border: 1px solid rgba(212, 171, 58, 0.32);
+    border-bottom-color: rgba(212, 171, 58, 0.7);
+    background: linear-gradient(180deg, rgba(4, 2, 12, 0.55), rgba(40, 30, 70, 0.35));
+    box-shadow: inset 0 2px 6px rgba(4, 2, 12, 0.55);
+    font-family: var(--font-display), Georgia, serif;
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--color-amber-100);
+    text-shadow: 0 0 14px rgba(212, 171, 58, 0.45);
+    user-select: all;
+  }
+  .lobby-sigils[data-size="lg"] .lobby-sigil {
+    min-width: 2.15rem;
+    height: 2.9rem;
+    font-size: 1.75rem;
+  }
+  html[data-theme="light"] .lobby-sigil {
+    border-color: rgba(138, 107, 28, 0.4);
+    border-bottom-color: rgba(138, 107, 28, 0.85);
+    background: linear-gradient(180deg, rgba(255, 252, 240, 0.9), rgba(236, 224, 192, 0.9));
+    box-shadow: inset 0 1px 3px rgba(60, 40, 10, 0.18);
+    text-shadow: none;
+  }
+
+  /* The QR slot: the box is there before the code is, so nothing moves when
+     it lands. Dark ink on a parchment tile keeps a phone camera happy in both
+     themes. */
+  .lobby-qr {
+    position: relative;
+    flex: none;
+    width: var(--qr, 8.5rem);
+    height: var(--qr, 8.5rem);
+    overflow: hidden;
+    border-radius: 0.7rem;
+    border: 1px solid rgba(212, 171, 58, 0.5);
+    box-shadow: 0 0 0 3px rgba(12, 8, 24, 0.55), var(--shadow-glow-gold);
+  }
+  .lobby-qr[data-ready] {
+    background:
+      linear-gradient(rgba(255, 251, 238, 0.72), rgba(255, 249, 230, 0.72)),
+      url("/assets/ui/parchment-body.webp") center / cover;
+  }
+  .lobby-qr > .skeleton-block { position: absolute; inset: 0; border: 0; }
+  .lobby-qr > img { position: absolute; inset: 0; width: 100%; height: 100%; }
+  html[data-theme="light"] .lobby-qr { box-shadow: 0 0 0 3px rgba(255, 252, 240, 0.8), var(--shadow-glow-gold); }
+
+  /* Copy confirmation: the tick pops and a gold ring leaves it. */
+  .lobby-tick {
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    color: var(--color-amber-300);
+  }
+  .lobby-copy[data-copied] {
+    border-color: rgba(212, 171, 58, 0.65);
+    color: var(--color-amber-100);
+    box-shadow: var(--shadow-glow-gold);
+  }
+
+  /* ---- party seats ---- */
+  .lobby-medallion {
+    position: relative;
+    flex: none;
+    width: 3.5rem;
+    height: 3.5rem;
+  }
+  .lobby-medallion-face {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    border-radius: 9999px;
+    border: 2px solid rgba(212, 171, 58, 0.7);
+    box-shadow: 0 0 0 2px rgba(12, 8, 24, 0.85), 0 0 0 3px rgba(212, 171, 58, 0.3), var(--shadow-glow-gold);
+    background: var(--color-stone-950);
+    transition: transform 320ms var(--ease-spring);
+  }
+  .lobby-medallion-face > img {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+    object-fit: cover;
+  }
+  html[data-theme="light"] .lobby-medallion-face {
+    box-shadow: 0 0 0 2px rgba(255, 252, 240, 0.9), 0 0 0 3px rgba(138, 107, 28, 0.35), var(--shadow-glow-gold);
+  }
+  .lobby-medallion-emblem {
+    position: absolute;
+    right: -0.3rem;
+    bottom: -0.3rem;
+    display: grid;
+    place-items: center;
+    border-radius: 9999px;
+    box-shadow: 0 2px 6px rgba(4, 2, 12, 0.6);
+  }
+  .lobby-medallion[data-ready] .lobby-medallion-face { border-color: rgba(244, 224, 166, 0.95); }
+  .lobby-seat[data-ready] { border-color: rgba(212, 171, 58, 0.42); }
+  html[data-theme="light"] .lobby-seat[data-ready] { border-color: rgba(138, 107, 28, 0.5); }
+
+  /* ---- schedule ---- */
+  .lobby-date {
+    display: grid;
+    flex: none;
+    justify-items: center;
+    align-content: center;
+    width: 3.5rem;
+    height: 4rem;
+    overflow: hidden;
+    border-radius: 0.6rem;
+    border: 1px solid rgba(212, 171, 58, 0.4);
+    background: linear-gradient(180deg, rgba(4, 2, 12, 0.5), rgba(40, 30, 70, 0.3));
+    box-shadow: inset 0 2px 6px rgba(4, 2, 12, 0.5);
+    line-height: 1;
+  }
+  html[data-theme="light"] .lobby-date {
+    border-color: rgba(138, 107, 28, 0.45);
+    background: linear-gradient(180deg, rgba(255, 252, 240, 0.95), rgba(236, 224, 192, 0.9));
+    box-shadow: inset 0 1px 3px rgba(60, 40, 10, 0.15);
+  }
+  .lobby-date-month {
+    width: 100%;
+    padding: 0.2rem 0;
+    text-align: center;
+    font-family: var(--font-display), Georgia, serif;
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-amber-950);
+    background: linear-gradient(180deg, var(--color-amber-200), var(--color-amber-400));
+  }
+  html[data-theme="light"] .lobby-date-month { color: #fbf1d6; background: linear-gradient(180deg, #a6842a, #705615); }
+  .lobby-date-day {
+    font-family: var(--font-display), Georgia, serif;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--color-amber-100);
+  }
+  .lobby-date-dow {
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-stone-400);
+  }
+  .lobby-stack { display: inline-flex; align-items: center; }
+  .lobby-stack > * + * { margin-left: -0.4rem; }
+
+  /* ---- number stepper (campaign editor) ---- */
+  .lobby-stepper {
+    display: flex;
+    align-items: stretch;
+    overflow: hidden;
+    border-radius: 0.5rem;
+    border: 1px solid color-mix(in srgb, var(--color-stone-700) 70%, transparent);
+    background: color-mix(in srgb, var(--color-stone-950) 80%, transparent);
+    box-shadow: inset 0 2px 6px rgba(4, 2, 12, 0.45);
+    transition: border-color var(--dur-quick) var(--ease-snap), box-shadow var(--dur-quick) var(--ease-snap);
+  }
+  html[data-theme="light"] .lobby-stepper { box-shadow: inset 0 1px 3px rgba(60, 40, 10, 0.15); }
+  .lobby-stepper:focus-within {
+    border-color: color-mix(in srgb, var(--color-amber-400) 70%, transparent);
+    box-shadow: 0 0 0 3px rgba(212, 171, 58, 0.12), inset 0 2px 6px rgba(4, 2, 12, 0.45);
+  }
+  .lobby-stepper > input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    padding: 0.5rem 0;
+    text-align: center;
+    font-family: var(--font-display), Georgia, serif;
+    font-size: 1rem;
+    color: var(--color-stone-100);
+    outline: none;
+    box-shadow: none;
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+  .lobby-stepper > input::-webkit-outer-spin-button,
+  .lobby-stepper > input::-webkit-inner-spin-button { appearance: none; margin: 0; }
+  .lobby-stepper > button {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 2.25rem;
+    color: var(--color-amber-200);
+    background: color-mix(in srgb, var(--color-stone-800) 60%, transparent);
+    transition: background-color var(--dur-quick) var(--ease-snap), transform 200ms var(--ease-spring);
+  }
+  .lobby-stepper > button:hover:not(:disabled) { background: color-mix(in srgb, var(--color-amber-400) 18%, transparent); }
+  .lobby-stepper > button:active:not(:disabled) { transform: scale(0.9); }
+  .lobby-stepper > button:disabled { opacity: 0.35; cursor: not-allowed; }
+}
+
+/* Motion lives behind the reader's preference and the effects switch; the
+   static layout above is the fallback for both. */
+@media (prefers-reduced-motion: no-preference) {
+  html:not([data-effects="low"]) .lobby-enter {
+    animation: lobby-rise var(--dur-beat) var(--ease-settle) backwards;
+    animation-delay: calc(var(--i, 0) * 70ms);
+  }
+  html:not([data-effects="low"]) .lobby-seat {
+    animation: item-in var(--dur-beat) var(--ease-spring) backwards;
+    animation-delay: calc(140ms + var(--i, 0) * 80ms);
+  }
+  html:not([data-effects="low"]) .lobby-sigil {
+    animation: pop-in var(--dur-beat) var(--ease-spring) backwards;
+    animation-delay: calc(260ms + var(--i, 0) * 45ms);
+  }
+  html:not([data-effects="low"]) .lobby-code-seal {
+    animation: lobby-seal-stamp var(--dur-beat) var(--ease-spring) 620ms backwards;
+  }
+  html:not([data-effects="low"]) .lobby-qr > img { animation: overlay-soft var(--dur-beat) var(--ease-snap) both; }
+  html:not([data-effects="low"]) .lobby-tick > svg { animation: pop-in var(--dur-beat) var(--ease-spring) both; }
+  html:not([data-effects="low"]) .lobby-tick::after {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    border-radius: 9999px;
+    border: 1px solid var(--color-amber-300);
+    pointer-events: none;
+    animation: lobby-ring var(--dur-beat) var(--ease-settle) both;
+  }
+  html:not([data-effects="low"]) .lobby-pop { animation: pop-in var(--dur-beat) var(--ease-spring) both; }
+  .lobby-seat:hover .lobby-medallion-face { transform: scale(1.06); }
+}

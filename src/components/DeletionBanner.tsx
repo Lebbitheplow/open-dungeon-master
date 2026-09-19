@@ -49,9 +49,9 @@ export function DeletionBanner({ dueAt, className }: { dueAt: string; className?
     >
       <span>
         This account is scheduled for deletion on {when}. Everything it owns goes with it.
-        {error ? <span className="block text-xs text-red-300">{error}</span> : null}
+        {error ? <span className="motion-shake block text-xs text-red-300">{error}</span> : null}
       </span>
-      <button type="button" onClick={keep} disabled={busy} className={ui.btnSmall}>
+      <button type="button" onClick={keep} disabled={busy} aria-busy={busy} className={ui.btnSmall}>
         {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Undo2 className="size-3.5" />}
         Keep my account
       </button>

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { cn } from "@/lib/cn";
+import { ExtrudedTitle } from "@/components/ui/GoldTitle";
 import { prefersReducedMotion } from "@/lib/effects-mode";
 import type { TitleCard } from "@/lib/scene/state";
 
@@ -10,23 +11,39 @@ import type { TitleCard } from "@/lib/scene/state";
 // dark scrim with a rule in the card's tone. In over --dur-scene, held for
 // --dur-linger, out over --dur-scene; on reduced motion a plain toast for
 // the same span. Reports itself shown so the stream drops it.
+//
+// The entrance is the battle announce ("Rolls and Effects" mockup 5a): the
+// title is carved (eight bronze layers under a gradient face), flies in from
+// far away and below the plane on the spring, and a shock ring and sparks
+// fire when it LANDS, not when it enters. The hairlines grow out from a
+// diamond above it. All of it is CSS in src/app/styles/motion-app.css; low
+// effects gets one layer, a plain fade and no loop.
 
 const IN_MS = 900;
 const HOLD_MS = 1600;
 const OUT_MS = 900;
 
-const RULE: Record<TitleCard["tone"], string> = {
-  gold: "bg-amber-400",
-  ember: "bg-ember-500",
-  dawn: "bg-amber-200",
-  plain: "bg-stone-400",
-};
+// Eighteen sparks on a ring, fixed so every client draws the same burst.
+const SPARKS = Array.from({ length: 18 }, (_, index) => {
+  const angle = (index / 18) * Math.PI * 2;
+  const distance = 90 + ((index * 37) % 70);
+  const size = 3 + ((index * 13) % 4);
+  return {
+    "--tx": `${(Math.cos(angle) * distance).toFixed(0)}px`,
+    "--ty": `${(Math.sin(angle) * distance).toFixed(0)}px`,
+    width: `${size}px`,
+    height: `${size}px`,
+    animationDuration: `${700 + ((index * 53) % 400)}ms`,
+  } as CSSProperties;
+});
 
+// Written as colours, not theme tokens: the card is a cinematic beat and its
+// gold face needs the dark behind it on the parchment theme too.
 const SCRIM: Record<TitleCard["tone"], string> = {
-  gold: "bg-stone-950/70",
+  gold: "bg-[rgba(10,8,23,0.74)]",
   ember: "bg-[rgba(30,8,4,0.72)]",
   dawn: "bg-[linear-gradient(180deg,rgba(40,28,60,0.75),rgba(212,140,110,0.55))]",
-  plain: "bg-stone-950/70",
+  plain: "bg-[rgba(12,10,9,0.74)]",
 };
 
 export function SceneTitle({
@@ -40,18 +57,29 @@ export function SceneTitle({
   const [shownId, setShownId] = useState<string | null>(null);
   const reduced = prefersReducedMotion();
 
+  // The latest callback without making it a reason to restart the card.
+  const shown = useRef(onShown);
   useEffect(() => {
-    if (!card || card.id === shownId) {
+    shown.current = onShown;
+  }, [onShown]);
+
+  // Keyed on the card's id and stamp alone. It used to depend on shownId as
+  // well, so marking the card shown re-ran the effect, whose cleanup cleared
+  // the hold and out timers: the card arrived and never left.
+  const cardId = card?.id ?? null;
+  const cardAt = card?.at ?? 0;
+  useEffect(() => {
+    if (!cardId) {
       return;
     }
     // Cards older than a minute are history, not a moment: a late joiner
     // reads them in the log rather than watching them play.
-    if (Date.now() - card.at > 60_000) {
-      onShown(card.id);
+    if (Date.now() - cardAt > 60_000) {
+      shown.current(cardId);
       return;
     }
     const timers: number[] = [];
-    timers.push(window.setTimeout(() => setShownId(card.id), 0));
+    timers.push(window.setTimeout(() => setShownId(cardId), 0));
     timers.push(window.setTimeout(() => setPhase("in"), 0));
     timers.push(window.setTimeout(() => setPhase("hold"), reduced ? 10 : IN_MS));
     timers.push(window.setTimeout(() => setPhase("out"), IN_MS + HOLD_MS));
@@ -59,7 +87,7 @@ export function SceneTitle({
       window.setTimeout(
         () => {
           setPhase(null);
-          onShown(card.id);
+          shown.current(cardId);
         },
         IN_MS + HOLD_MS + (reduced ? 10 : OUT_MS),
       ),
@@ -69,7 +97,7 @@ export function SceneTitle({
         window.clearTimeout(timer);
       }
     };
-  }, [card, shownId, onShown, reduced]);
+  }, [cardId, cardAt, reduced]);
 
   if (!card || !phase || card.id !== shownId) {
     return null;
@@ -100,23 +128,24 @@ export function SceneTitle({
       )}
       style={{ transition: `opacity ${OUT_MS}ms var(--ease-drift)`, opacity: phase === "out" ? 0 : 1 }}
     >
-      <div className="max-w-3xl text-center">
-        <h2
-          className={cn(
-            "title-in font-display text-4xl leading-tight text-stone-50 drop-shadow-[0_2px_18px_rgba(0,0,0,0.8)] sm:text-6xl",
-          )}
-        >
-          {card.title}
-        </h2>
-        <div className={cn("title-rule mx-auto mt-4 h-px w-40", RULE[card.tone])} />
-        {card.subtitle ? (
-          <p
-            className="title-in mt-3 text-sm uppercase tracking-[0.3em] text-stone-300"
-            style={{ animationDelay: "180ms" }}
-          >
-            {card.subtitle}
-          </p>
-        ) : null}
+      <div className="announce relative max-w-3xl text-center" data-tone={card.tone}>
+        <div className="announce-rules" aria-hidden="true">
+          <span className="announce-rule" />
+          <span className="announce-diamond" />
+          <span className="announce-rule announce-rule-end" />
+        </div>
+        <div className="announce-fly">
+          <div className="announce-breathe">
+            <ExtrudedTitle tone={card.tone} className="text-4xl sm:text-6xl">
+              {card.title}
+            </ExtrudedTitle>
+          </div>
+        </div>
+        {card.subtitle ? <p className="announce-sub mt-4 font-display text-[11px] sm:text-sm">{card.subtitle}</p> : null}
+        <span className="announce-ring" aria-hidden="true" />
+        {SPARKS.map((spark, index) => (
+          <span key={index} aria-hidden="true" className={cn("announce-spark", index % 3 === 0 && "announce-spark-hot")} style={spark} />
+        ))}
       </div>
     </div>
   );

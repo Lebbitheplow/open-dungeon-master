@@ -1,5 +1,6 @@
 "use client";
 
+import { SectionHead } from "@/components/ui/SectionHead";
 import { CONDITIONS } from "@/lib/bestiary/kit";
 import { normalizeSpellMech } from "@/lib/homebrew/gear";
 import {
@@ -71,6 +72,7 @@ export function SpellFields({ data, onChange }: { data: Data; onChange: (next: D
 
   return (
     <div className="space-y-3">
+      <SectionHead title="The casting" glyph="rest-spell-slot" className="mb-1" />
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <NumberField
           label="Level"
@@ -126,7 +128,7 @@ export function SpellFields({ data, onChange }: { data: Data; onChange: (next: D
       </div>
 
       <div className="space-y-1">
-        <span className="text-[10px] uppercase tracking-wide text-stone-500">Classes that can learn it</span>
+        <SectionHead title="Classes that can learn it" glyph="tab-characters" className="mb-1" />
         <ToggleChips
           options={CLASS_IDS}
           selected={Array.isArray(data.classes) ? (data.classes as string[]) : []}
@@ -146,14 +148,15 @@ export function SpellFields({ data, onChange }: { data: Data; onChange: (next: D
         hint="The engine scales the dice from this sentence when a spell is upcast."
       />
 
-      <p className="rounded-md border border-stone-800 bg-stone-950/60 px-2 py-1.5 text-[11px] text-stone-400">
-        <span className="uppercase tracking-wide text-stone-500">From the description the engine reads: </span>
+      <p className="panel rounded-lg px-3 py-2 text-xs text-stone-400">
+        <span className="font-display tracking-wide text-amber-200/70">From the description the engine reads: </span>
         {read.dice ? `${read.dice}${read.type ? ` ${read.type}` : ""} damage` : read.heal ? `heals ${read.heal}` : "no dice"}
         {read.save ? `, ${read.save.toUpperCase()} save${read.half ? ", half on a success" : ""}` : ""}.
         {!read.dice && !read.heal ? " Write it as \"takes 3d6 fire damage\" and it will." : ""}
       </p>
 
-      <div className="space-y-2 rounded-md border border-stone-800 p-2">
+      <div className="panel space-y-2 rounded-xl p-3">
+        <SectionHead title="What the engine does with it" glyph="cue-arcane" className="mb-1" />
         <SelectField
           label="How it resolves"
           value={String(mech.resolution ?? "")}
@@ -162,7 +165,7 @@ export function SpellFields({ data, onChange }: { data: Data; onChange: (next: D
           hint="Set this and the cast tools trust it over the prose."
         />
         {block ? (
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="reveal grid grid-cols-2 gap-2 sm:grid-cols-4">
             {block.resolution === "save" ? (
               <>
                 <SelectField

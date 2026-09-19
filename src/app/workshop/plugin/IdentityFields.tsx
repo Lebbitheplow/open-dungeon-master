@@ -1,5 +1,8 @@
 "use client";
 
+import { NumberStepper } from "@/components/ui/NumberStepper";
+import { Select } from "@/components/ui/Select";
+import { SectionHead } from "@/components/ui/SectionHead";
 import { UnofficialPackNotice } from "@/components/UnofficialPackNotice";
 import { ui } from "@/lib/ui";
 import { GENRE_OPTIONS, RACE_OPTIONS, ALIGNMENT_OPTIONS, catalogLabel } from "@/lib/worlds/catalog";
@@ -98,18 +101,17 @@ export function OriginFields({ draft, onDraft }: SectionProps) {
         maxLength={60}
         placeholder="Empty for a single-era world"
       />
-      <label className="block">
-        <span className="mb-1 block text-xs uppercase tracking-wide text-stone-500">Edition order</span>
-        <input
-          type="number"
+      <div className="block">
+        <span className="mb-1 block font-display text-[11px] tracking-[0.1em] text-amber-300/85">Edition order</span>
+        <NumberStepper
+          label="Edition order"
           min={0}
           max={999}
           value={draft.editionOrder}
-          onChange={(event) => set({ editionOrder: Math.max(0, Math.min(999, Number(event.target.value) || 0)) })}
-          className={ui.input}
+          onChange={(next) => set({ editionOrder: Math.max(0, Math.min(999, next || 0)) })}
         />
         <span className="mt-1 block text-[11px] text-stone-500">Sorts editions inside the franchise, release order first.</span>
-      </label>
+      </div>
     </div>
   );
 }
@@ -118,25 +120,20 @@ export function WorldFields({ draft, onDraft }: SectionProps) {
   const set = (patch: Partial<WorldPackDraft>) => onDraft({ ...draft, ...patch });
   return (
     <div className="grid gap-3 sm:grid-cols-2">
-      <label className="block">
-        <span className="mb-1 block text-xs uppercase tracking-wide text-stone-500">
+      <div className="block">
+        <span className="mb-1 block font-display text-[11px] tracking-[0.1em] text-amber-300/85">
           Base genre <span className="text-amber-400/80">*</span>
         </span>
-        <select
+        <Select<WorldPackDraft["baseGenre"]>
+          label="Base genre"
           value={draft.baseGenre}
-          onChange={(event) => set({ baseGenre: event.target.value as WorldPackDraft["baseGenre"] })}
-          className={ui.input}
-        >
-          {GENRE_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+          onChange={(baseGenre) => set({ baseGenre })}
+          options={GENRE_OPTIONS.map((option) => ({ value: option.value as WorldPackDraft["baseGenre"], label: option.label }))}
+        />
         <span className="mt-1 block text-[11px] text-stone-500">
           Every campaign that picks this world also takes this genre, so everything that knows about genres keeps working.
         </span>
-      </label>
+      </div>
       <TextField
         label="Theme"
         value={draft.theme}
@@ -157,7 +154,7 @@ export function WorldFields({ draft, onDraft }: SectionProps) {
         className="sm:col-span-2"
       />
       <div className="sm:col-span-2">
-        <span className="mb-1 block text-xs uppercase tracking-wide text-stone-500">Alignments this world leans on</span>
+        <span className="mb-1 block font-display text-[11px] tracking-[0.1em] text-amber-300/85">Alignments this world leans on</span>
         <ChipList
           items={draft.alignments}
           onChange={(alignments) => set({ alignments })}
@@ -223,7 +220,7 @@ export function VoiceFields({ draft, onDraft }: SectionProps) {
         hint="One line for the companion tools."
       />
       <div className="sm:col-span-2">
-        <span className="mb-1 block text-xs uppercase tracking-wide text-stone-500">Companion races</span>
+        <span className="mb-1 block font-display text-[11px] tracking-[0.1em] text-amber-300/85">Companion races</span>
         <ChipList
           items={draft.companionRaces}
           onChange={(companionRaces) => set({ companionRaces })}
@@ -241,19 +238,19 @@ export function IdentitySection(props: SectionProps) {
   return (
     <div className="space-y-6">
       <section className={ui.card + " p-4"}>
-        <h3 className="mb-3 font-display text-base tracking-wide text-amber-200">What it is called</h3>
+        <SectionHead title="What it is called" glyph="system-plugin" />
         <NameFields {...props} />
       </section>
       <section className={ui.card + " p-4"}>
-        <h3 className="mb-3 font-display text-base tracking-wide text-amber-200">Whose world it is</h3>
+        <SectionHead title="Whose world it is" glyph="tab-friends" />
         <OriginFields {...props} />
       </section>
       <section className={ui.card + " p-4"}>
-        <h3 className="mb-3 font-display text-base tracking-wide text-amber-200">What kind of world</h3>
+        <SectionHead title="What kind of world" glyph="system-region" />
         <WorldFields {...props} />
       </section>
       <section className={ui.card + " p-4"}>
-        <h3 className="mb-3 font-display text-base tracking-wide text-amber-200">How the narrator sounds</h3>
+        <SectionHead title="How the narrator sounds" glyph="tab-ambience" />
         <VoiceFields {...props} />
       </section>
     </div>

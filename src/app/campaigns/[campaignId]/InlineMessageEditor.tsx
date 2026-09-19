@@ -82,7 +82,7 @@ export function InlineMessageEditor({
         }}
         className={cn(ui.input, "resize-none p-3 font-serif text-base leading-relaxed disabled:opacity-60")}
       />
-      {error ? <p className="text-xs text-red-400">{error}</p> : null}
+      {error ? <p className="motion-shake text-xs text-red-400">{error}</p> : null}
       <div className="flex items-center gap-2">
         <button
           type="button"
@@ -95,7 +95,7 @@ export function InlineMessageEditor({
         <button
           type="button"
           onClick={onCancel}
-          disabled={busy}
+          disabled={busy} aria-busy={busy}
           className={cn(ui.btnSmall, "px-3 py-1.5 text-[11px]")}
         >
           <X className="size-3" /> Cancel

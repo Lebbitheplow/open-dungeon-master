@@ -19,6 +19,7 @@ export async function GET(
   return Response.json({
     view: buildPlayerMapView(campaignId, context.user.id, {
       fullVision: capsFor(context).fullMap,
+      enemyNumbers: capsFor(context).enemyNumbers,
     }),
   });
 }

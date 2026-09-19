@@ -1,21 +1,14 @@
 "use client";
 
-import {
-  BookMarked,
-  Check,
-  Eye,
-  EyeOff,
-  Loader2,
-  Pencil,
-  Pin,
-  PinOff,
-  Trash2,
-  X,
-} from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
+import { BookMarked, Check, Eye, EyeOff, Pin, PinOff, X } from "lucide-react";
 import { useState } from "react";
+import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
+import { SectionHead } from "@/components/ui/SectionHead";
 import { cn } from "@/lib/cn";
 import type { WorldFact } from "@/lib/db/facts";
 import { FACT_CATEGORIES, type FactCategory } from "@/lib/dm/fact-logic";
+import { KitButton, PanelError, RowMenu, panelField, panelRow } from "./PanelKit";
 
 // The world-state fact sheet: server-tracked canon extracted at chapter
 // close (plus manual pins). Everyone sees party-known facts; the lead can
@@ -28,6 +21,16 @@ const CATEGORY_LABELS: Record<FactCategory, string> = {
   world: "World state",
   party: "The party",
   lore: "Lore & rules",
+};
+
+// The painted glyph each heading leads with.
+const CATEGORY_GLYPHS: Record<FactCategory, string> = {
+  location: "tab-map",
+  npc: "tab-bonds",
+  promise: "coin-purse",
+  world: "system-region",
+  party: "tab-party",
+  lore: "system-lore",
 };
 
 function FactCard({
@@ -59,93 +62,92 @@ function FactCard({
     }
   }
 
+  const pinTitle = fact.pinned ? "Unpin" : "Pin: always kept in front of the DM, never auto-replaced";
+  const items: ContextMenuItem[] = steersStory
+    ? [
+        { id: "pin", label: pinTitle, glyph: "tab-facts", disabled: busy, onSelect: () => void patch({ pinned: !fact.pinned }) },
+        { id: "edit", label: "Edit", glyph: "tab-notes", onSelect: () => setEditing(true) },
+        {
+          id: "retire",
+          label: "Retire: the DM stops treating this as true",
+          glyph: "quest-failed",
+          tone: "danger",
+          separated: true,
+          disabled: busy,
+          onSelect: () => void patch({ status: "retired" }),
+        },
+      ]
+    : [];
+
   return (
-    <li className="rounded-lg border border-stone-800 bg-stone-950/40 p-2.5">
+    <ContextMenu as="li" items={editing ? [] : items} label={fact.subject || CATEGORY_LABELS[fact.category]} className={panelRow}>
       {editing ? (
-        <div className="space-y-1.5">
+        <div className="reveal space-y-1.5">
           <textarea
             value={text}
             onChange={(event) => setText(event.target.value)}
             rows={2}
             maxLength={300}
-            className="w-full rounded border border-stone-700 bg-stone-900 px-2 py-1 text-[11px] leading-4 outline-none focus:border-amber-600"
+            aria-label="Fact"
+            className={cn(panelField, "leading-5")}
           />
           <div className="flex gap-1.5">
-            <button
-              type="button"
+            <KitButton
+              tone="primary"
               disabled={busy || !text.trim()}
+              busy={busy}
               onClick={async () => {
                 await patch({ fact: text.trim() });
                 setEditing(false);
               }}
-              className="flex items-center gap-1 rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-300 hover:bg-stone-900 disabled:opacity-50"
             >
-              {busy ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
+              {busy ? null : <Check className="size-3.5" />}
               Save
-            </button>
-            <button
-              type="button"
+            </KitButton>
+            <KitButton
               onClick={() => {
                 setEditing(false);
                 setText(fact.fact);
               }}
-              className="flex items-center gap-1 rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-500 hover:bg-stone-900"
             >
-              <X className="size-3" /> Cancel
-            </button>
+              <X className="size-3.5" /> Cancel
+            </KitButton>
           </div>
         </div>
       ) : (
         <>
-          <p className="text-[11px] leading-4 text-stone-300">
+          <p className="text-xs leading-5 text-stone-300">
             {fact.pinned ? <Pin className="mr-1 inline size-3 text-amber-400" /> : null}
             {fact.subject ? (
               <span className="font-medium text-amber-200">{fact.subject}: </span>
             ) : null}
             {fact.fact}
           </p>
-          <div className="mt-1.5 flex items-center gap-2 text-[10px] text-stone-600">
-            <span>
+          <div className="mt-1 flex min-h-6 items-center gap-2 text-[11px] text-stone-500">
+            <span className={fact.knownBy === "dm" ? "text-violet-300" : undefined}>
               {fact.knownBy === "dm" ? "DM secret" : CATEGORY_LABELS[fact.category]}
             </span>
             {steersStory ? (
-              <span className="ml-auto flex shrink-0 items-center gap-1.5">
-                <button
-                  type="button"
+              <span className="ml-auto flex shrink-0 items-center gap-0.5">
+                <KitButton
+                  tone="icon"
+                  always
                   disabled={busy}
+                  busy={busy}
                   onClick={() => patch({ pinned: !fact.pinned })}
-                  title={
-                    fact.pinned
-                      ? "Unpin"
-                      : "Pin: always kept in front of the DM, never auto-replaced"
-                  }
-                  className="text-stone-500 hover:text-amber-300"
+                  title={pinTitle}
+                  aria-label={pinTitle}
+                  aria-pressed={fact.pinned}
                 >
-                  {fact.pinned ? <PinOff className="size-3" /> : <Pin className="size-3" />}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditing(true)}
-                  title="Edit"
-                  className="text-stone-500 hover:text-stone-300"
-                >
-                  <Pencil className="size-3" />
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => patch({ status: "retired" })}
-                  title="Retire: the DM stops treating this as true"
-                  className="text-stone-500 hover:text-red-400"
-                >
-                  <Trash2 className="size-3" />
-                </button>
+                  {busy ? null : fact.pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
+                </KitButton>
+                <RowMenu items={items} label={fact.subject || CATEGORY_LABELS[fact.category]} />
               </span>
             ) : null}
           </div>
         </>
       )}
-    </li>
+    </ContextMenu>
   );
 }
 
@@ -190,19 +192,17 @@ function FactComposer({
   }
 
   return (
-    <div className="rounded-lg border border-dashed border-stone-800 p-2.5">
-      <div className="mb-1.5 flex flex-wrap gap-1">
+    <div className="panel rounded-lg p-2.5">
+      <SectionHead title="Pin a fact" glyph="tab-facts" level="h4" />
+      <div data-pill-group="" role="group" aria-label="Category" className="mb-1.5 flex flex-wrap gap-1">
         {FACT_CATEGORIES.map((value) => (
           <button
+            data-on={category === value ? "" : undefined}
+            aria-pressed={category === value}
             key={value}
             type="button"
             onClick={() => setCategory(value)}
-            className={cn(
-              "rounded-full border px-2 py-0.5 text-[10px]",
-              category === value
-                ? "border-amber-700 bg-amber-950/40 text-amber-200"
-                : "border-stone-800 text-stone-500 hover:text-stone-300",
-            )}
+            className="pk-pill pk-tap motion-press"
           >
             {CATEGORY_LABELS[value]}
           </button>
@@ -213,7 +213,8 @@ function FactComposer({
         onChange={(event) => setSubject(event.target.value)}
         maxLength={80}
         placeholder="Subject (who or what it is about)"
-        className="mb-1.5 w-full rounded border border-stone-700 bg-stone-900 px-2 py-1 text-xs outline-none focus:border-amber-600"
+        aria-label="Subject"
+        className={cn(panelField, "mb-1.5")}
       />
       <textarea
         value={fact}
@@ -221,18 +222,14 @@ function FactComposer({
         rows={2}
         maxLength={300}
         placeholder="One sentence the DM must never contradict"
-        className="w-full rounded border border-stone-700 bg-stone-900 px-2 py-1 text-[11px] leading-4 outline-none focus:border-amber-600"
+        aria-label="Fact"
+        className={cn(panelField, "leading-5")}
       />
-      {error ? <p className="mt-1 text-[10px] text-red-400">{error}</p> : null}
-      <button
-        type="button"
-        onClick={submit}
-        disabled={busy || !fact.trim()}
-        className="mt-1.5 flex w-full items-center justify-center gap-1 rounded border border-stone-700 py-1 text-[11px] text-stone-400 hover:bg-stone-900 disabled:opacity-50"
-      >
-        {busy ? <Loader2 className="size-3 animate-spin" /> : <BookMarked className="size-3" />}
+      {error ? <PanelError className="mt-1">{error}</PanelError> : null}
+      <KitButton tone="secondary" onClick={submit} disabled={busy || !fact.trim()} busy={busy} className="mt-1.5 w-full">
+        {busy ? null : <BookMarked className="size-3.5" />}
         Pin fact
-      </button>
+      </KitButton>
     </div>
   );
 }
@@ -279,16 +276,15 @@ export function FactsPanel({
   };
 
   const pinned = facts.filter((fact) => fact.pinned);
-  const section = "px-1 text-[10px] font-medium uppercase tracking-wide text-stone-500";
 
   return (
     <div className="space-y-3">
       {steersStory ? <FactComposer campaignId={campaignId} refresh={refresh} /> : null}
 
       {pinned.length ? (
-        <div className="space-y-1.5">
-          <h3 className={cn(section, "text-amber-400")}>Pinned</h3>
-          <ul className="space-y-1.5">
+        <div className="reveal space-y-1.5">
+          <SectionHead title="Pinned" glyph="tab-facts" aside={pinned.length} />
+          <ul className="stagger space-y-1.5">
             {pinned.map((fact) => (
               <FactCard
                 key={fact.id}
@@ -309,8 +305,8 @@ export function FactsPanel({
         }
         return (
           <div key={category} className="space-y-1.5">
-            <h3 className={section}>{CATEGORY_LABELS[category]}</h3>
-            <ul className="space-y-1.5">
+            <SectionHead title={CATEGORY_LABELS[category]} glyph={CATEGORY_GLYPHS[category]} aside={entries.length} />
+            <ul className="stagger space-y-1.5">
               {entries.map((fact) => (
                 <FactCard
                   key={fact.id}
@@ -326,25 +322,18 @@ export function FactsPanel({
       })}
 
       {!facts.length ? (
-        <p className="px-1 text-[11px] text-stone-600">
-          Nothing recorded yet. The DM writes durable facts here as chapters close
-          {steersStory ? ", or pin one yourself above" : ""}.
-        </p>
+        <EmptyState size="sm" art="board" title={`Nothing recorded yet. The DM writes durable facts here as chapters close${steersStory ? ", or pin one yourself above" : ""}.`} />
       ) : null}
 
       {steersStory ? (
-        <div className="space-y-1.5">
-          <button
-            type="button"
-            onClick={toggleSecrets}
-            className="flex items-center gap-1 px-1 text-[10px] font-medium uppercase tracking-wide text-stone-500 hover:text-amber-300"
-          >
-            {secrets ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
+        <div className="reveal space-y-1.5">
+          <KitButton tone="link" onClick={toggleSecrets} aria-expanded={Boolean(secrets)}>
+            {secrets ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
             {secrets ? "Hide DM secrets" : "Show DM secrets (spoilers)"}
-          </button>
+          </KitButton>
           {secrets ? (
             secrets.length ? (
-              <ul className="space-y-1.5">
+              <ul className="stagger space-y-1.5">
                 {secrets.map((fact) => (
                   <FactCard
                     key={fact.id}
@@ -356,7 +345,7 @@ export function FactsPanel({
                 ))}
               </ul>
             ) : (
-              <p className="px-1 text-[11px] text-stone-600">No DM secrets recorded.</p>
+              <p className="live-in px-1 text-xs text-stone-500">No DM secrets recorded.</p>
             )
           ) : null}
         </div>

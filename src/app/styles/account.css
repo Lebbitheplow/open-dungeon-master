@@ -1,0 +1,407 @@
+/* The screens around the game: settings, friends, admin, join, the front door,
+   the reference desk and the character library. Everything here dresses kit
+   pieces that already exist; colours that would break the parchment day theme
+   carry an html[data-theme="light"] twin. */
+
+@layer components {
+  /* ---- Rows -------------------------------------------------------------- */
+
+  /* A plated row: what a table row or a list line becomes. One plate per thing,
+     warming on hover or focus-within so a keyboard sees the same cue. */
+  .plate-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(212, 171, 58, 0.16);
+    background: linear-gradient(180deg, rgba(233, 230, 244, 0.035), rgba(4, 2, 12, 0.22));
+    box-shadow: inset 0 1px 0 rgba(233, 230, 244, 0.05), 0 2px 6px rgba(4, 2, 12, 0.3);
+    padding: 0.65rem 0.8rem;
+    transition:
+      border-color var(--dur-quick, 180ms) var(--ease-snap, ease),
+      box-shadow var(--dur-quick, 180ms) var(--ease-snap, ease);
+  }
+  .plate-row:hover,
+  .plate-row:focus-within {
+    border-color: rgba(212, 171, 58, 0.42);
+    box-shadow: inset 0 1px 0 rgba(233, 230, 244, 0.07), 0 4px 14px rgba(4, 2, 12, 0.4), 0 0 16px rgba(212, 171, 58, 0.08);
+  }
+  .plate-row[data-tone="muted"] { opacity: 0.72; }
+  .plate-row[data-tone="danger"] { border-color: rgba(200, 70, 60, 0.4); }
+  html[data-theme="light"] .plate-row {
+    border-color: rgba(120, 96, 52, 0.3);
+    background: linear-gradient(180deg, rgba(255, 252, 240, 0.6), rgba(120, 96, 52, 0.07));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 4px rgba(80, 60, 20, 0.12);
+  }
+  html[data-theme="light"] .plate-row:hover,
+  html[data-theme="light"] .plate-row:focus-within {
+    border-color: rgba(150, 110, 30, 0.6);
+  }
+  /* A plate that is one big button (a reference result, a glossary term). */
+  button.plate-row { width: 100%; text-align: left; cursor: pointer; }
+
+  /* A small engraved chip on a plate: Admin, Discord, Reset pending. */
+  .plate-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: 999px;
+    border: 1px solid rgba(212, 171, 58, 0.4);
+    background: rgba(212, 171, 58, 0.1);
+    padding: 0.05rem 0.5rem;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-amber-300, #f4d37a);
+    white-space: nowrap;
+  }
+  .plate-chip[data-tone="indigo"] { border-color: rgba(129, 140, 248, 0.4); background: rgba(99, 102, 241, 0.1); color: #a5b4fc; }
+  .plate-chip[data-tone="orange"] { border-color: rgba(249, 115, 22, 0.4); background: rgba(249, 115, 22, 0.1); color: #fdba74; }
+  .plate-chip[data-tone="red"] { border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.1); color: #fca5a5; }
+  html[data-theme="light"] .plate-chip { color: #7a5408; }
+  html[data-theme="light"] .plate-chip[data-tone="indigo"] { color: #3730a3; }
+  html[data-theme="light"] .plate-chip[data-tone="orange"] { color: #9a3412; }
+  html[data-theme="light"] .plate-chip[data-tone="red"] { color: #991b1b; }
+
+  /* A face in a gold ring. The ring is a padding box so any img fits it. */
+  .medallion {
+    display: inline-flex;
+    flex-shrink: 0;
+    border-radius: 999px;
+    padding: 2px;
+    background: linear-gradient(145deg, #f4e0a6, #a87a1e 45%, #5a3e0c 70%, #d4ab3a);
+    box-shadow: 0 2px 6px rgba(4, 2, 12, 0.5);
+    position: relative;
+  }
+
+  /* Online: a small candle flame on the medallion's rim, not a green dot that
+     has to be read against two themes. */
+  .online-candle {
+    position: absolute;
+    right: -2px;
+    bottom: -2px;
+    width: 0.7rem;
+    height: 0.7rem;
+    border-radius: 999px;
+    border: 2px solid #120d1f;
+    background: radial-gradient(circle at 50% 35%, #fff4c2, #f5b942 55%, #d9701c);
+    box-shadow: 0 0 8px rgba(245, 185, 66, 0.85);
+    animation: candle-flicker var(--dur-linger, 1600ms) var(--ease-drift, ease-in-out) infinite alternate;
+  }
+  html[data-theme="light"] .online-candle { border-color: #f3ead3; }
+  @keyframes candle-flicker {
+    from { box-shadow: 0 0 5px rgba(245, 185, 66, 0.6); }
+    to { box-shadow: 0 0 11px rgba(245, 185, 66, 0.95); }
+  }
+
+  /* ---- The danger zone ---------------------------------------------------- */
+
+  /* Visibly not like the other cards: an ember frame, a scorched wash and a
+     hazard band along the top edge. */
+
+  /* ---- The front door ----------------------------------------------------- */
+
+  /* A desk gets two panels: the painting of tonight's world to the left, the
+     form to the right. Below 1024px the painting is not drawn at all and the
+     form stands alone, as it always has. */
+  .auth-door {
+    display: grid;
+    flex: 1;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .auth-door-form {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+  @media (min-width: 640px) {
+    .auth-door-form { padding: 1.5rem; }
+  }
+  .auth-door-art { display: none; }
+  @media (min-width: 1024px) {
+    .auth-door { grid-template-columns: minmax(0, 1.15fr) minmax(28rem, 0.85fr); }
+    .auth-door-art {
+      /* Pinned to the screen, so the caption stays in view when a short
+         window lets the form side scroll. */
+      position: sticky;
+      top: 0;
+      align-self: start;
+      display: block;
+      overflow: hidden;
+      height: 100dvh;
+      /* The gold edge the form side meets. */
+      border-right: 1px solid rgba(212, 171, 58, 0.35);
+      box-shadow: 8px 0 40px rgba(4, 2, 12, 0.6), 1px 0 18px rgba(212, 171, 58, 0.18);
+    }
+  }
+  .auth-door-painting {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    animation:
+      door-art-in 2.6s var(--ease-drift, ease-out) both,
+      door-art-drift 46s var(--ease-drift, ease-in-out) 2.6s infinite alternate;
+  }
+  /* Night closes in at the edges so the caption and the fireflies read. */
+  .auth-door-art::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(to top, rgba(10, 8, 23, 0.9) 0%, rgba(10, 8, 23, 0.35) 28%, transparent 52%),
+      linear-gradient(to right, transparent 70%, rgba(10, 8, 23, 0.55) 100%),
+      radial-gradient(120% 90% at 40% 35%, transparent 55%, rgba(10, 8, 23, 0.6) 100%);
+  }
+  .auth-door-caption {
+    position: absolute;
+    z-index: 2;
+    left: 2.5rem;
+    right: 2.5rem;
+    bottom: 2.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    animation: door-caption-in 900ms var(--ease-spring, ease-out) 900ms both;
+  }
+  /* The painting is dark in both themes, so the caption keeps its night
+     colours in daylight instead of following the theme's turned amber scale. */
+  .auth-door-eyebrow { color: rgba(245, 222, 160, 0.82); }
+  .auth-door-world {
+    background: linear-gradient(180deg, #fdf3cf, #ecd287 50%, #c99a2e);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 2px 6px rgba(4, 2, 12, 0.7));
+  }
+  .auth-door-line { color: rgba(253, 247, 231, 0.72); }
+  .auth-door-caption::before {
+    content: "";
+    width: 3.5rem;
+    height: 1px;
+    margin-bottom: 0.5rem;
+    background: linear-gradient(to right, rgba(245, 205, 110, 0.9), transparent);
+    transform-origin: left;
+    animation: door-rule-in 900ms var(--ease-drift, ease-out) 1200ms both;
+  }
+  /* Fireflies: each span takes its place, size, pace and delay from its index,
+     so the markup is fourteen empty spans. */
+  .auth-door-fireflies { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+  .auth-door-fireflies > span {
+    --x: calc(6% + mod(var(--n) * 37, 88) * 1%);
+    --y: calc(34% + mod(var(--n) * 53, 56) * 1%);
+    position: absolute;
+    left: var(--x);
+    top: var(--y);
+    width: calc(3px + mod(var(--n), 3) * 1px);
+    height: calc(3px + mod(var(--n), 3) * 1px);
+    border-radius: 9999px;
+    background: #ffe9a8;
+    box-shadow: 0 0 6px 2px rgba(255, 214, 120, 0.85), 0 0 18px 6px rgba(245, 185, 66, 0.35);
+    opacity: 0;
+    animation:
+      firefly-wander calc(11s + mod(var(--n) * 7, 9) * 1s) var(--ease-drift, ease-in-out) calc(var(--n) * -1.7s) infinite alternate,
+      firefly-glow calc(3.2s + mod(var(--n) * 3, 4) * 0.6s) ease-in-out calc(var(--n) * -0.9s) infinite;
+  }
+  @keyframes door-art-in {
+    from { opacity: 0; scale: 1.08; filter: blur(6px) brightness(0.6); }
+    to { opacity: 1; scale: 1.02; filter: none; }
+  }
+  @keyframes door-art-drift {
+    from { scale: 1.02; translate: 0 0; }
+    to { scale: 1.09; translate: -1.5% -1%; }
+  }
+  @keyframes door-caption-in {
+    from { opacity: 0; translate: 0 14px; }
+    to { opacity: 1; translate: 0 0; }
+  }
+  @keyframes door-rule-in {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+  }
+  @keyframes firefly-wander {
+    0% { translate: 0 0; }
+    33% { translate: 28px -36px; }
+    66% { translate: -22px -58px; }
+    100% { translate: 34px -92px; }
+  }
+  @keyframes firefly-glow {
+    0%, 100% { opacity: 0; }
+    35%, 65% { opacity: 0.95; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .auth-door-painting, .auth-door-caption, .auth-door-caption::before { animation: none; }
+    .auth-door-fireflies > span { animation: none; opacity: 0.7; }
+  }
+  [data-effects="low"] .auth-door-painting { animation: door-art-in 1.2s ease-out both; }
+  [data-effects="low"] .auth-door-fireflies > span { animation: none; opacity: 0.6; }
+
+  .auth-mark {
+    width: 7.5rem;
+    height: 7.5rem;
+    object-fit: contain;
+    filter: drop-shadow(0 10px 22px rgba(4, 2, 12, 0.7)) drop-shadow(0 0 26px rgba(212, 171, 58, 0.28));
+    animation: auth-mark-float calc(var(--dur-linger, 1600ms) * 2.5) var(--ease-drift, ease-in-out) infinite alternate;
+  }
+  @keyframes auth-mark-float {
+    from { transform: translateY(0) rotate(-1.5deg); }
+    to { transform: translateY(-6px) rotate(1.5deg); }
+  }
+  .auth-card { padding: 1.5rem; }
+  @media (max-width: 400px) {
+    .auth-card { padding: 1.15rem; }
+    .auth-mark { width: 6rem; height: 6rem; }
+  }
+  /* A field with a painted glyph at its head. */
+  .glyph-field { position: relative; display: block; }
+  .glyph-field > .glyph-field-icon {
+    position: absolute;
+    left: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+
+  .auth-or { display: flex; align-items: center; gap: 0.75rem; margin: 1rem 0; }
+  .auth-or > span:not(.auth-or-word) { height: 1px; flex: 1; background: linear-gradient(90deg, transparent, rgba(212, 171, 58, 0.4), transparent); }
+  .auth-or-word { font-family: var(--font-display); font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--color-stone-500); }
+
+  /* ---- The invitation (join) ---------------------------------------------- */
+
+  .invite-letter { position: relative; }
+  .invite-seal {
+    position: absolute;
+    right: 0.9rem;
+    bottom: -1.4rem;
+    width: 3.6rem;
+    height: 3.6rem;
+    object-fit: contain;
+    transform: rotate(-10deg);
+    filter: drop-shadow(0 4px 8px rgba(4, 2, 12, 0.6));
+    animation: pop-in var(--dur-beat, 420ms) var(--ease-spring, ease) 300ms backwards;
+  }
+  .room-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(212, 171, 58, 0.3);
+    background: rgba(212, 171, 58, 0.1);
+    padding: 0.1rem 0.5rem;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    color: var(--color-amber-200, #f4e0a6);
+  }
+  html[data-theme="light"] .room-chip { color: #6b4a08; }
+
+  /* ---- Admin contents rail ------------------------------------------------ */
+
+  .contents-rail {
+    position: sticky;
+    top: 0.5rem;
+    z-index: 5;
+    display: flex;
+    gap: 0.35rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+    border-radius: 0.75rem;
+    padding: 0.35rem;
+  }
+  .contents-rail::-webkit-scrollbar { display: none; }
+  .contents-rail > a,
+  .contents-rail > button {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 2.5rem;
+    border-radius: 0.55rem;
+    padding: 0.25rem 0.7rem 0.25rem 0.35rem;
+    font-size: 12px;
+    color: var(--color-stone-300);
+    white-space: nowrap;
+  }
+  .contents-rail > a:hover,
+  .contents-rail > button:hover,
+  .contents-rail > a:focus-visible,
+  .contents-rail > button:focus-visible { background: rgba(212, 171, 58, 0.1); color: var(--color-amber-100, #fdf3d0); outline: none; }
+
+  /* A theme choice as a painted card (Appearance). */
+  .theme-card {
+    display: flex;
+    min-height: 2.75rem;
+    flex: 1 1 9rem;
+    align-items: center;
+    gap: 0.6rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(120, 113, 108, 0.45);
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    font-size: 13px;
+    color: var(--color-stone-300);
+  }
+  .theme-card:hover { border-color: rgba(212, 171, 58, 0.45); color: var(--color-amber-100, #fdf3d0); }
+  .theme-card[aria-pressed="true"] {
+    border-color: rgba(212, 171, 58, 0.7);
+    background: rgba(212, 171, 58, 0.1);
+    color: var(--color-amber-100, #fdf3d0);
+    box-shadow: 0 0 16px rgba(212, 171, 58, 0.14);
+  }
+  html[data-theme="light"] .theme-card:hover,
+  html[data-theme="light"] .theme-card[aria-pressed="true"] { color: #5a3e0c; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .auth-mark, .online-candle, .invite-seal { animation: none; }
+  }
+  [data-effects="low"] .auth-mark,
+  [data-effects="low"] .online-candle { animation: none; }
+}
+
+/* Unlayered on purpose: these have to win over a Tailwind utility on the same
+   element (a border, a padding) or over an unlayered kit rule. */
+/* The painted glyph beside a page title: the same plate GameIcon draws, lit
+   like the pixel tile it replaces. */
+.page-glyph {
+  border-color: rgba(212, 171, 58, 0.55);
+  box-shadow: 0 0 0 1px rgba(4, 2, 12, 0.6), 0 0 18px rgba(212, 171, 58, 0.22);
+}
+.medallion > img { border-width: 0; }
+.section-head-danger .section-head-title {
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  color: #fca5a5;
+}
+.section-head-danger .section-head-rule { background: linear-gradient(90deg, rgba(239, 68, 68, 0.55), transparent); }
+html[data-theme="light"] .section-head-danger .section-head-title { color: #991b1b; }
+.glyph-field > input { padding-left: 2.6rem; }
+
+/* A plate whose contents stack (a report, a world pack) instead of sitting in
+   one line. */
+.plate-row[data-layout="stack"] { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 0.4rem; }
+
+/* The panel paints its own background outside any layer, so the danger
+   dressing has to sit out here to be seen. */
+.danger-zone {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(200, 70, 60, 0.55) !important;
+  /* The hazard band is a background layer, not a pseudo-element: the panel's
+     texture and corner ornaments already own both of those. */
+  background-image:
+    repeating-linear-gradient(135deg, rgba(220, 80, 60, 0.9) 0 10px, rgba(40, 12, 10, 0.9) 10px 20px),
+    linear-gradient(180deg, rgba(160, 40, 30, 0.16), rgba(160, 40, 30, 0.04) 55%, transparent);
+  background-size: 100% 5px, 100% 100%;
+  background-repeat: no-repeat;
+  background-position: top left;
+  box-shadow: inset 0 1px 0 rgba(255, 190, 170, 0.08), 0 8px 28px rgba(4, 2, 12, 0.5), 0 0 22px rgba(200, 60, 40, 0.1);
+}
+html[data-theme="light"] .danger-zone {
+  background-image:
+    repeating-linear-gradient(135deg, rgba(190, 50, 40, 0.85) 0 10px, rgba(90, 30, 20, 0.85) 10px 20px),
+    linear-gradient(180deg, rgba(190, 50, 40, 0.12), rgba(190, 50, 40, 0.03) 55%, transparent);
+}

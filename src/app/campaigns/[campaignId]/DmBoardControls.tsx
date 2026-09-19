@@ -2,6 +2,7 @@
 
 import { Box, Eye, EyeOff, Hand, MapPin, Pencil, Ruler, Trash2, UserPlus } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { Slider } from "@/components/ui/Slider";
 import { ADHOC_LABELS, ADHOC_HINTS, ADHOC_NAME_MAX } from "@/lib/dm/board-logic";
 import { SHAPE_LABELS, SHAPE_MEASURES, TEMPLATE_SHAPES } from "@/lib/battlemap/template";
 import type { TemplateShape } from "@/lib/battlemap/template";
@@ -40,11 +41,11 @@ export function BoardToolRail({
   disabled: boolean;
 }) {
   return (
-    <div className="flex flex-wrap gap-1">
+    <div data-pill-group="" className="flex flex-wrap gap-1">
       {(Object.keys(TOOL_LABELS) as BoardTool[]).map((option) => {
         const Icon = TOOL_ICONS[option];
         return (
-          <button
+          <button data-on={tool === option ? "" : undefined}
             key={option}
             type="button"
             disabled={disabled}
@@ -79,9 +80,9 @@ export function PlaceTokenForm({
 }) {
   return (
     <div className="space-y-1.5 rounded-lg border border-stone-800 bg-stone-950/60 px-2.5 py-2">
-      <div className="flex gap-1">
+      <div data-pill-group="" className="flex gap-1">
         {(Object.keys(ADHOC_LABELS) as AdhocTokenKind[]).map((option) => (
-          <button
+          <button data-on={kind === option ? "" : undefined}
             key={option}
             type="button"
             onClick={() => onKind(option)}
@@ -133,9 +134,9 @@ export function MeasureControls({
   const enemyIds = caught.map((entry) => entry.enemyId).filter(Boolean).join(", ");
   return (
     <div className="space-y-1.5 rounded-lg border border-stone-800 bg-stone-950/60 px-2.5 py-2">
-      <div className="flex flex-wrap gap-1">
+      <div data-pill-group="" className="flex flex-wrap gap-1">
         {TEMPLATE_SHAPES.map((option) => (
-          <button
+          <button data-on={shape === option ? "" : undefined}
             key={option}
             type="button"
             onClick={() => onShape(option)}
@@ -152,14 +153,15 @@ export function MeasureControls({
       </div>
       <label className="flex items-center gap-2 text-[11px] text-stone-400">
         <span className="w-16 capitalize">{SHAPE_MEASURES[shape]}</span>
-        <input
-          type="range"
+        <Slider
           min={5}
           max={60}
           step={5}
           value={sizeFeet}
-          onChange={(event) => onSize(Number(event.target.value))}
-          className="flex-1 accent-amber-500"
+          onChange={onSize}
+          label={`Template ${SHAPE_MEASURES[shape]} in feet`}
+          bubble={(feet) => `${feet} ft`}
+          className="min-w-0 flex-1"
         />
         <span className="w-12 text-right tabular-nums text-stone-300">{sizeFeet} ft</span>
       </label>
@@ -243,7 +245,7 @@ export function TokenCard({
       <div className="flex flex-wrap gap-1">
         <button
           type="button"
-          disabled={busy}
+          disabled={busy} aria-busy={busy}
           onClick={onHold}
           className={cn(
             "flex items-center gap-1 rounded-md border px-2 py-1 text-xs disabled:opacity-40",
@@ -258,7 +260,7 @@ export function TokenCard({
         {token.kind === "pc" ? null : (
           <button
             type="button"
-            disabled={busy}
+            disabled={busy} aria-busy={busy}
             onClick={() => onVisibility(!token.hidden)}
             className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-400 hover:text-stone-200 disabled:opacity-40"
           >
@@ -269,7 +271,7 @@ export function TokenCard({
         {adhoc ? (
           <button
             type="button"
-            disabled={busy}
+            disabled={busy} aria-busy={busy}
             onClick={onRemove}
             className="flex items-center gap-1 rounded-md border border-red-900/60 px-2 py-1 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-40"
           >

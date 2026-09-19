@@ -3,6 +3,8 @@
 import { useId } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { NumberStepper } from "@/components/ui/NumberStepper";
+import { Select } from "@/components/ui/Select";
 import { CONDITION_BLURBS, DAMAGE_TYPE_BLURBS, glossaryFor } from "@/lib/help/terms";
 import {
   MAX_ATTACKS,
@@ -45,18 +47,11 @@ export function NumberField({
   hint?: string;
 }) {
   return (
-    <label className="flex flex-col gap-0.5">
+    <div className="flex flex-col gap-0.5">
       <span className="text-[10px] uppercase tracking-wide text-stone-500">{label}</span>
-      <input
-        type="number"
-        min={min}
-        max={max}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-        className={cn(input, "w-full")}
-      />
+      <NumberStepper min={min} max={max} value={value} onChange={onChange} label={label} size="sm" className="w-fit" />
       {hint ? <span className="text-[10px] text-stone-600">{hint}</span> : null}
-    </label>
+    </div>
   );
 }
 
@@ -96,23 +91,17 @@ export function AttackEditor({
             placeholder="Bite"
             className={cn(input, "w-28")}
           />
-          <label className="flex items-center gap-1 text-[10px] text-stone-500">
+          <span className="flex items-center gap-1 text-[10px] text-stone-500">
             to hit
-            <input
-              type="number"
+            <NumberStepper
               min={-5}
               max={20}
               value={attack.toHit}
-              onChange={(event) =>
-                setAttacks(
-                  attacks.map((row, at) =>
-                    at === index ? { ...row, toHit: Number(event.target.value) } : row,
-                  ),
-                )
-              }
-              className={cn(input, "w-14")}
+              onChange={(toHit) => setAttacks(attacks.map((row, at) => (at === index ? { ...row, toHit } : row)))}
+              label={`To hit, ${attack.name || "attack"}`}
+              size="sm"
             />
-          </label>
+          </span>
           <input
             value={attack.damage}
             onChange={(event) =>
@@ -179,29 +168,31 @@ export function SaveEditor({
 }) {
   const saves = draft.stats.saveMods ?? { str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0 };
   return (
-    // Six abreast needs more width than the 320px side panel has; narrower
-    // screens fold to rows that still read in the familiar stat order.
-    <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 md:grid-cols-6">
+    // A stepper is wider than the bare box it replaced, so the columns are as
+    // many as the container holds (the 320px side panel, the workshop's half
+    // page); the rows still read in the familiar stat order.
+    <div className="stagger-up grid grid-cols-[repeat(auto-fill,minmax(6rem,1fr))] gap-1">
       {SAVE_ABILITIES.map((ability) => (
-        <label key={ability} className="flex flex-col gap-0.5">
+        <div key={ability} className="flex flex-col gap-0.5">
           <span className="text-[10px] uppercase text-stone-500">{ability}</span>
-          <input
-            type="number"
+          <NumberStepper
             min={-5}
             max={15}
             value={saves[ability]}
-            onChange={(event) =>
+            onChange={(next) =>
               onChange({
                 ...draft,
                 stats: {
                   ...draft.stats,
-                  saveMods: { ...saves, [ability]: Number(event.target.value) },
+                  saveMods: { ...saves, [ability]: next },
                 },
               })
             }
-            className={cn(input, "w-full")}
+            label={`${ability.toUpperCase()} save`}
+            size="sm"
+            className="w-fit"
           />
-        </label>
+        </div>
       ))}
     </div>
   );
@@ -270,34 +261,28 @@ export function SizeAndDefences({
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-0.5">
           <span className="text-[10px] uppercase tracking-wide text-stone-500">Size</span>
-          <select
+          <Select
             value={draft.stats.size ?? "Medium"}
-            onChange={(event) => set({ size: event.target.value })}
-            className={cn(input, "w-32")}
-          >
-            {SIZES.map((size) => (
-              <option key={size} value={size}>
-                {size}
-              </option>
-            ))}
-          </select>
+            onChange={(size) => set({ size })}
+            options={SIZES.map((size) => ({ value: size as string, label: size }))}
+            label="Size"
+            size="sm"
+            className="w-32"
+          />
         </label>
         {/* What it is, in the SRD's fourteen words. This is also the
             thumbnail: every list the monster appears in draws the plate for
             its type until somebody paints it a portrait. */}
         <label className="flex flex-col gap-0.5">
           <span className="text-[10px] uppercase tracking-wide text-stone-500">Type</span>
-          <select
-            value={creatureTypeOf(draft.stats)}
-            onChange={(event) => set({ type: event.target.value })}
-            className={cn(input, "w-32 capitalize")}
-          >
-            {CREATURE_TYPES.map((type) => (
-              <option key={type} value={type} className="capitalize">
-                {type}
-              </option>
-            ))}
-          </select>
+          <Select
+            value={creatureTypeOf(draft.stats) as string}
+            onChange={(type) => set({ type })}
+            options={CREATURE_TYPES.map((type) => ({ value: type as string, label: type.charAt(0).toUpperCase() + type.slice(1) }))}
+            label="Type"
+            size="sm"
+            className="w-32"
+          />
         </label>
         <SpeedPicker value={draft.stats.speed} onChange={(speed) => set({ speed })} />
       </div>

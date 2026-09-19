@@ -3,6 +3,7 @@
 import { AlignLeft, Bot, Image as ImageIcon, Wrench } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
+import { Select } from "@/components/ui/Select";
 import type { MaskedStorySettings } from "@/lib/db/settings";
 import type { TextProvider } from "@/lib/text-models";
 import {
@@ -183,21 +184,17 @@ export function StoryAiPanel({
   return (
     <section className="rounded-lg border border-stone-800 bg-stone-950/60 p-4">
       <h2 className="mb-3 text-sm font-medium text-stone-300">Story AI</h2>
-      {error ? <p className="mb-2 text-xs text-red-400">{error}</p> : null}
+      {error ? <p className="motion-shake mb-2 text-xs text-red-400">{error}</p> : null}
       <div className={cn("space-y-3 text-xs", busy && "opacity-70")}>
         <div className="flex flex-wrap items-center gap-2">
           <span className={labelClass}>Storyteller</span>
-          <select
+          <Select
             value={settings.textProvider}
-            onChange={(event) => patch({ textProvider: event.target.value as TextProvider })}
-            className={selectClass}
-          >
-            {(Object.keys(PROVIDER_LABELS) as TextProvider[]).map((provider) => (
-              <option key={provider} value={provider}>
-                {PROVIDER_LABELS[provider]}
-              </option>
-            ))}
-          </select>
+            onChange={(textProvider) => patch({ textProvider })}
+            options={(Object.keys(PROVIDER_LABELS) as TextProvider[]).map((provider) => ({ value: provider, label: PROVIDER_LABELS[provider] }))}
+            label="Storyteller"
+            size="sm"
+          />
         </div>
         {settings.textProvider === "custom" ? (
           <>
@@ -255,16 +252,13 @@ export function StoryAiPanel({
 
         <div className="flex flex-wrap items-center gap-2 border-t border-stone-800/60 pt-3">
           <span className={labelClass}>Utility</span>
-          <select
+          <Select
             value={settings.utilityProvider}
-            onChange={(event) =>
-              patch({ utilityProvider: event.target.value as TextProvider })
-            }
-            className={selectClass}
-          >
-            <option value="local">{PROVIDER_LABELS.local}</option>
-            <option value="custom">{PROVIDER_LABELS.custom}</option>
-          </select>
+            onChange={(utilityProvider) => patch({ utilityProvider })}
+            options={(["local", "custom"] as TextProvider[]).map((provider) => ({ value: provider, label: PROVIDER_LABELS[provider] }))}
+            label="Utility model provider"
+            size="sm"
+          />
           <input
             value={drafts.utilityModel}
             onChange={(event) =>
@@ -277,7 +271,7 @@ export function StoryAiPanel({
           />
         </div>
         {settings.utilityProvider === "custom" && settings.utilityModel ? (
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="reveal flex flex-wrap items-center gap-2">
             <span className={labelClass}>Utility URL</span>
             <input
               value={drafts.utilityBaseUrl}
@@ -314,50 +308,47 @@ export function StoryAiPanel({
 
         <div className="flex flex-wrap items-center gap-2 border-t border-stone-800/60 pt-3">
           <span className={labelClass}>Images</span>
-          <select
+          <Select<ImageBackend | "off">
             value={settings.imageGenerationEnabled ? settings.imageBackend : "off"}
-            onChange={(event) => {
-              const value = event.target.value;
+            label="Images"
+            size="sm"
+            options={[
+              { value: "off", label: "Off" },
+              ...(Object.keys(BACKEND_LABELS) as ImageBackend[]).map((backend) => ({ value: backend, label: BACKEND_LABELS[backend] })),
+            ]}
+            onChange={(value) => {
               // "Off" is imageGenerationEnabled, not a backend: picking a
               // backend again switches images back on in the same PATCH.
               void patch(
                 value === "off"
                   ? { imageGenerationEnabled: false }
-                  : { imageBackend: value as ImageBackend, imageGenerationEnabled: true },
+                  : { imageBackend: value, imageGenerationEnabled: true },
               );
             }}
-            className={selectClass}
-          >
-            <option value="off">Off</option>
-            {(Object.keys(BACKEND_LABELS) as ImageBackend[]).map((backend) => (
-              <option key={backend} value={backend}>
-                {BACKEND_LABELS[backend]}
-              </option>
-            ))}
-          </select>
+          />
           {settings.imageGenerationEnabled ? (
             <>
-              <select
+              <Select<StorySettings["aspect"]>
                 value={settings.aspect}
-                onChange={(event) =>
-                  patch({ aspect: event.target.value as StorySettings["aspect"] })
-                }
-                className={selectClass}
-              >
-                <option value="square">Square</option>
-                <option value="portrait">Portrait</option>
-                <option value="landscape">Landscape</option>
-              </select>
-              <select
+                onChange={(aspect) => patch({ aspect })}
+                options={[
+                  { value: "square", label: "Square" },
+                  { value: "portrait", label: "Portrait" },
+                  { value: "landscape", label: "Landscape" },
+                ]}
+                label="Picture shape"
+                size="sm"
+              />
+              <Select<StorySettings["imageMode"]>
                 value={settings.imageMode}
-                onChange={(event) =>
-                  patch({ imageMode: event.target.value as StorySettings["imageMode"] })
-                }
-                className={selectClass}
-              >
-                <option value="fast">Fast</option>
-                <option value="slow">Slow (higher quality)</option>
-              </select>
+                onChange={(imageMode) => patch({ imageMode })}
+                options={[
+                  { value: "fast", label: "Fast" },
+                  { value: "slow", label: "Slow (higher quality)" },
+                ]}
+                label="Picture speed"
+                size="sm"
+              />
               <button
                 type="button"
                 onClick={() => patch({ autoImages: !settings.autoImages })}
@@ -374,7 +365,7 @@ export function StoryAiPanel({
           ) : null}
         </div>
         {settings.imageGenerationEnabled && !imagesConfigured ? (
-          <p className="text-amber-400/90">
+          <p className="reveal text-amber-400/90">
             The server has no image backend configured; these settings will not take effect
             until it does.
           </p>
@@ -382,19 +373,13 @@ export function StoryAiPanel({
 
         <div className="flex flex-wrap items-center gap-2 border-t border-stone-800/60 pt-3">
           <span className={labelClass}>Passages</span>
-          <select
+          <Select<StorySettings["proseSize"]>
             value={settings.proseSize}
-            onChange={(event) =>
-              patch({ proseSize: event.target.value as StorySettings["proseSize"] })
-            }
-            className={selectClass}
-          >
-            {PROSE_SIZE_VALUES.map((size) => (
-              <option key={size} value={size}>
-                {size}
-              </option>
-            ))}
-          </select>
+            onChange={(proseSize) => patch({ proseSize })}
+            options={PROSE_SIZE_VALUES.map((size) => ({ value: size, label: size }))}
+            label="Passages"
+            size="sm"
+          />
           <span className="text-stone-500">How long each narrated passage runs.</span>
         </div>
       </div>

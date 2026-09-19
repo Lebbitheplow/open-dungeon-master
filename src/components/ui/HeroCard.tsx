@@ -48,7 +48,7 @@ export function HeroCard({
       </div>
       <div className="relative flex min-w-0 flex-1 flex-col gap-2 p-5 md:justify-center md:p-6">
         <span className="eyebrow text-[10px] text-amber-400/80">{eyebrow}</span>
-        <h2 className="font-display text-2xl leading-tight tracking-wide text-amber-100">{title}</h2>
+        <h2 className="gold-title font-display text-2xl leading-tight sm:text-3xl">{title}</h2>
         <p className="truncate text-sm text-stone-400">{line}</p>
         <div className="mt-2 flex flex-wrap items-center gap-3">
           {action}

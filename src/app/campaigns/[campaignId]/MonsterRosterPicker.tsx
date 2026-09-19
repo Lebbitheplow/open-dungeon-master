@@ -112,7 +112,7 @@ export function MonsterRosterPicker({
         ) : null}
       </div>
       {results.length ? (
-        <div className="flex flex-wrap gap-1">
+        <div className="reveal flex flex-wrap gap-1">
           {results.map((entry) => (
             <button
               key={entry.slug}

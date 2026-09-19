@@ -2,21 +2,15 @@
 
 import Link from "next/link";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import {
-  Check,
-  CircleHelp,
-  Dices,
-  DoorOpen,
-  Music,
-  Music2,
-  Palette,
-  Volume2,
-  VolumeX,
-  type LucideIcon,
-} from "lucide-react";
+import { Check } from "lucide-react";
 import type { ComponentProps } from "react";
+import { HeaderGlyph } from "@/app/campaigns/[campaignId]/SessionGlyph";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { Slider } from "@/components/ui/Slider";
 import { AccountMenu, AppHomeButton, type AccountMenuUser } from "@/components/AccountMenu";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
 import { headerButtonClass } from "@/app/campaigns/[campaignId]/headerButton";
 import { VoiceDock } from "@/app/campaigns/[campaignId]/VoiceDock";
 import type { NarrationAudio } from "@/app/campaigns/[campaignId]/useNarrationAudio";
@@ -38,8 +32,7 @@ function HeaderAudioControl({
   volume,
   onToggle,
   onVolume,
-  OnIcon,
-  OffIcon,
+  glyph,
 }: {
   onLabel: string;
   offLabel: string;
@@ -50,16 +43,17 @@ function HeaderAudioControl({
   volume: number;
   onToggle: () => void;
   onVolume: (value: number) => void;
-  OnIcon: LucideIcon;
-  OffIcon: LucideIcon;
+  // The painting for this audio group; muted strikes it through.
+  glyph: string;
 }) {
   const quiet = muted || !unlocked;
   const toggleLabel = !unlocked ? enableLabel : muted ? offLabel : onLabel;
   const buttonClass = headerButtonClass(!quiet);
-  const icon = quiet ? <OffIcon className="size-4" /> : <OnIcon className="size-4" />;
+  const icon = <HeaderGlyph glyph={glyph} off={quiet} />;
+  const percent = (value: number) => `${Math.round(value * 100)}%`;
   return (
     <>
-      <div className="hidden items-center gap-1.5 sm:flex">
+      <div className="hidden items-center sm:flex">
         <Tooltip content={toggleLabel} side="bottom">
           <button type="button" onClick={onToggle} aria-label={toggleLabel} className={buttonClass}>
             {icon}
@@ -67,15 +61,15 @@ function HeaderAudioControl({
         </Tooltip>
         {unlocked && !muted ? (
           <Tooltip content={volumeLabel} side="bottom">
-            <input
-              type="range"
+            <Slider
               min={0}
               max={1}
               step={0.05}
               value={volume}
-              onChange={(event) => onVolume(Number(event.target.value))}
-              className="w-16 accent-amber-600"
-              aria-label={volumeLabel}
+              onChange={onVolume}
+              label={volumeLabel}
+              bubble={percent}
+              className="session-volume"
             />
           </Tooltip>
         ) : null}
@@ -89,25 +83,23 @@ function HeaderAudioControl({
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
             <DropdownMenu.Content align="end" sideOffset={4} className="panel z-50 min-w-44 rounded-lg p-1">
-              <DropdownMenu.Item
-                className="cursor-pointer rounded-md px-2 py-1.5 text-sm text-stone-300 outline-none data-[highlighted]:bg-stone-800"
-                onSelect={onToggle}
-              >
+              <DropdownMenu.Item className="session-menu-row" onSelect={onToggle}>
+                {icon}
                 {toggleLabel}
               </DropdownMenu.Item>
               {unlocked && !muted ? (
                 // A plain row rather than an Item so dragging the slider does
                 // not close the menu.
-                <div className="px-2 py-1.5">
-                  <input
-                    type="range"
+                <div className="px-2 pb-2 pt-3">
+                  <Slider
                     min={0}
                     max={1}
                     step={0.05}
                     value={volume}
-                    onChange={(event) => onVolume(Number(event.target.value))}
-                    className="w-full accent-amber-600"
-                    aria-label={volumeLabel}
+                    onChange={onVolume}
+                    label={volumeLabel}
+                    bubble={percent}
+                    className="w-full"
                   />
                 </div>
               ) : null}
@@ -159,17 +151,19 @@ export function SessionHeader({
   ambience: AmbienceAudio;
   onHelp: () => void;
 }) {
-  const diceItem =
-    "flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-stone-300 outline-none data-[highlighted]:bg-stone-800";
+  const diceItem = "session-menu-row";
   return (
-    <header className="glass z-10 flex items-center gap-3 border-b border-stone-700/40 px-4 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top))]">
+    <header className="glass session-header z-10 flex items-center gap-2 border-b border-stone-700/40 px-3 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top))] sm:gap-3 sm:px-4">
       <div className="min-w-0 flex-1">
-        <h1 className="truncate font-display text-base leading-tight tracking-wide text-amber-50 sm:text-lg">
-          {title}
-        </h1>
-        <p className="truncate text-xs text-stone-500">{scene || "The adventure unfolds"}</p>
+        <h1 className="gold-title session-title font-display">{title}</h1>
+        <p key={scene} className="live-in truncate font-serif text-xs italic text-stone-400">
+          {scene || "The adventure unfolds"}
+        </p>
       </div>
-      <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">
+        {/* Every table-wide control on one brass plate; the way out and the
+            account menu stay beside it as the app's own furniture. */}
+        <div className="session-cluster">
         <VoiceDock {...voice} />
         {/* The dice menu: the 3D animation switch, the player's own dice,
             and shake to roll on a phone. The toggle used to be the button
@@ -183,7 +177,7 @@ export function SessionHeader({
                 data-tour="header-dice"
                 className={headerButtonClass(dice3d)}
               >
-                <Dices className="size-4" />
+                <HeaderGlyph glyph="tab-dice" />
               </button>
             </DropdownMenu.Trigger>
           </Tooltip>
@@ -217,7 +211,7 @@ export function SessionHeader({
               ) : null}
               <DropdownMenu.Separator className="my-1 h-px bg-stone-700/60" />
               <DropdownMenu.Item className={diceItem} onSelect={onCustomizeDice}>
-                <Palette className="size-4 text-stone-400" />
+                <GameIcon icon={{ kind: "glyph", key: "die-d20" }} size="size-6" />
                 Customise my dice
               </DropdownMenu.Item>
             </DropdownMenu.Content>
@@ -237,8 +231,7 @@ export function SessionHeader({
               narration.setMuted(!narration.muted);
             }}
             onVolume={(value) => narration.setVolume(value)}
-            OnIcon={Volume2}
-            OffIcon={VolumeX}
+            glyph="cue-horn"
           />
         ) : null}
         {ambienceEnabled && ambience.installed ? (
@@ -255,8 +248,7 @@ export function SessionHeader({
               ambience.setMuted(!ambience.muted);
             }}
             onVolume={(value) => ambience.setVolume(value)}
-            OnIcon={Music}
-            OffIcon={Music2}
+            glyph="tab-ambience"
           />
         ) : null}
         <Tooltip content="How everything works, and the guided tours" side="bottom">
@@ -267,16 +259,17 @@ export function SessionHeader({
             data-tour="header-help"
             className={headerButtonClass(false)}
           >
-            <CircleHelp className="size-4" />
+            <HeaderGlyph glyph="tab-reference" />
           </button>
         </Tooltip>
+        </div>
         <Tooltip content="All campaigns" side="bottom">
           <Link
             href="/"
             aria-label="All campaigns"
-            className="hidden items-center gap-1.5 rounded-lg border border-transparent p-2.5 text-sm text-stone-500 transition-colors hover:text-amber-200 sm:flex sm:p-1.5 md:border-stone-700/70 md:px-2.5"
+            className={cn(ui.btnSmall, "hidden h-9 gap-1.5 py-0 pl-1 sm:inline-flex")}
           >
-            <DoorOpen className="size-4" />
+            <HeaderGlyph glyph="tab-campaigns" />
             <span className="hidden md:inline">All campaigns</span>
           </Link>
         </Tooltip>

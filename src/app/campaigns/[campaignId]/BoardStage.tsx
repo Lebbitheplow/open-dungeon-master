@@ -9,7 +9,8 @@ import {
   glyphFor,
   MAX_BADGES,
 } from "@/lib/battlemap/condition-glyphs";
-import { HEALTH_RING, type HealthWord } from "@/lib/battlemap/health-words";
+import { HEALTH_LABEL, HEALTH_RING, type HealthWord } from "@/lib/battlemap/health-words";
+import { iconPath } from "@/lib/icons";
 import type { Footprint } from "@/lib/battlemap/footprint";
 import type { MapDrawing } from "@/lib/battlemap/scene";
 import type { PlayerMapView } from "@/lib/battlemap/view";
@@ -69,6 +70,11 @@ export const StageDefs = memo(function StageDefs() {
           />
         </clipPath>
       ))}
+      {/* A painted condition icon ships with a wide margin, so the badge draws
+          it oversized and this clip crops it back to the disc. */}
+      <clipPath id="badge-clip" clipPathUnits="objectBoundingBox">
+        <circle cx={0.5} cy={0.5} r={0.3} />
+      </clipPath>
       <filter id="turn-glow" x="-40%" y="-40%" width="180%" height="180%">
         <feGaussianBlur stdDeviation={3} result="blur" />
         <feColorMatrix
@@ -215,6 +221,8 @@ export type TokenFigureProps = {
   // Whether this seat sees real numbers; the health ring is for everyone
   // else, and for the DM too when there is no bar.
   showsNumbers: boolean;
+  // Aiming at somebody else: this figure steps back until the aim moves on.
+  dimmed?: boolean;
 };
 
 // One figure. Drawn in its own coordinate space (0,0 is the top-left of
@@ -232,6 +240,7 @@ export const TokenFigure = memo(function TokenFigure({
   hp,
   clickable,
   showsNumbers,
+  dimmed,
 }: TokenFigureProps) {
   const size = footprint * TILE;
   const cx = size / 2;
@@ -247,10 +256,11 @@ export const TokenFigure = memo(function TokenFigure({
   const healthColor = health ? HEALTH_RING[health] : null;
   const badges = (conditions ?? []).slice(0, MAX_BADGES);
   const extra = (conditions ?? []).length - badges.length;
-  const lift = elevation === "flying" ? -3 : 0;
+  // A flier hovers; the figure whose turn it is stands a little taller.
+  const lift = (elevation === "flying" ? -3 : 0) + (isCurrent && !down ? -2 : 0);
   const title = [
     token.name,
-    health ? health.replace(/^\w/, (c) => c.toUpperCase()) : null,
+    health ? HEALTH_LABEL[health] ?? health : null,
     ...(conditions ?? []).map((c) => (c.rounds ? `${c.label} (${c.rounds})` : c.label)),
   ]
     .filter(Boolean)
@@ -260,22 +270,26 @@ export const TokenFigure = memo(function TokenFigure({
     <g
       pointerEvents={clickable ? "auto" : "none"}
       data-token-id={clickable ? token.id : undefined}
-      className={cn("token-move", clickable && "cursor-pointer")}
+      role="img"
+      aria-label={title}
+      className={cn("token-move token-figure", clickable && "cursor-pointer")}
       style={{ transform: `translate(${token.x * TILE}px, ${token.y * TILE}px)` }}
-      opacity={dead ? 0.55 : down ? 0.75 : token.hidden ? 0.55 : 1}
+      opacity={dimmed ? 0.28 : dead ? 0.55 : down ? 0.75 : token.hidden ? 0.55 : 1}
     >
-      <title>{title}</title>
+      {/* The name lives in the board's hover plate (BoardChrome.tsx) and in
+          the label above, not in a native tooltip that would double it. */}
       {/* Ground shadow: wider and softer when the figure is in the air. */}
       <ellipse
         cx={cx}
         cy={cy + size / 2 - 5}
-        rx={elevation === "flying" ? size / 2.2 : size / 2.6}
+        rx={elevation === "flying" || (isCurrent && !down) ? size / 2.2 : size / 2.6}
         ry={elevation === "flying" ? 4.5 : 3.5}
         fill="#000"
         opacity={elevation === "flying" ? 0.22 : 0.35}
         pointerEvents="none"
       />
-      <g style={{ transform: `translateY(${lift}px)` }}>
+      {/* data-fx-token: the effect player finds the struck figure by it. */}
+      <g className="token-lift" data-fx-token={token.id} style={{ transform: `translateY(${lift}px)` }}>
         {/* Footprint plate for anything larger than one square. */}
         {footprint > 1 ? (
           <rect
@@ -294,6 +308,18 @@ export const TokenFigure = memo(function TokenFigure({
         ) : null}
         {/* The current turn: a gold ring with a slow walking dash and a soft
             glow behind it. The only loop on a token. */}
+        {isCurrent && !down ? (
+          <circle
+            cx={cx}
+            cy={cy}
+            r={radius + 3}
+            fill="none"
+            stroke="#d4ab3a"
+            strokeOpacity={0.22}
+            strokeWidth={7}
+            pointerEvents="none"
+          />
+        ) : null}
         {isCurrent && !down ? (
           <circle
             cx={cx}
@@ -331,6 +357,21 @@ export const TokenFigure = memo(function TokenFigure({
             strokeDasharray={token.hidden || elevation === "burrowing" ? "3 2" : undefined}
           />
         )}
+        {/* The initial is the last resort: it sits under the face, so it shows
+            only when no picture loads (docs/visual-overhaul-plan.md 5.1). */}
+        {!portrait || !down ? (
+          <text
+            x={cx}
+            y={cy + 4.5 * Math.min(2, footprint)}
+            textAnchor="middle"
+            fontSize={13 * Math.min(2, footprint)}
+            fontWeight={700}
+            fill={down ? "#a8a29e" : token.kind === "enemy" ? "#fca5a5" : "#e7e5e4"}
+            pointerEvents="none"
+          >
+            {token.name.charAt(0).toUpperCase()}
+          </text>
+        ) : null}
         {portrait ? (
           <image
             href={portrait}
@@ -343,18 +384,7 @@ export const TokenFigure = memo(function TokenFigure({
             opacity={down ? 0.45 : 1}
             style={dead ? { filter: "grayscale(1)" } : undefined}
           />
-        ) : (
-          <text
-            x={cx}
-            y={cy + 4.5 * Math.min(2, footprint)}
-            textAnchor="middle"
-            fontSize={13 * Math.min(2, footprint)}
-            fontWeight={700}
-            fill={down ? "#a8a29e" : token.kind === "enemy" ? "#fca5a5" : "#e7e5e4"}
-          >
-            {token.name.charAt(0).toUpperCase()}
-          </text>
-        )}
+        ) : null}
         {/* The health ring: a word as a colour for everyone; the DM seat
             keeps the bar below and gets the ring too. Down is a dashed grey. */}
         {healthColor && token.kind !== "prop" && !dead ? (
@@ -368,6 +398,7 @@ export const TokenFigure = memo(function TokenFigure({
             strokeDasharray={down ? "3 3" : undefined}
             strokeOpacity={0.9}
             pointerEvents="none"
+            data-health-ring=""
             style={{ transition: "stroke var(--dur-beat) var(--ease-snap)" }}
           />
         ) : null}
@@ -429,6 +460,19 @@ export const TokenFigure = memo(function TokenFigure({
                     height={badgeSize - 3}
                     color={GLYPH_TONE_COLOR[glyph.tone]}
                   />
+                  {/* The painted icon over the drawn glyph, which stays as
+                      the fallback for a condition with no painting. */}
+                  {glyph.id !== "effect" ? (
+                    <image
+                      href={iconPath("condition", glyph.id)}
+                      x={bx + badgeSize / 2 - badgeSize * 0.92}
+                      y={by + badgeSize / 2 - badgeSize * 0.92}
+                      width={badgeSize * 1.84}
+                      height={badgeSize * 1.84}
+                      clipPath="url(#badge-clip)"
+                      preserveAspectRatio="xMidYMid slice"
+                    />
+                  ) : null}
                 </g>
               );
             })}

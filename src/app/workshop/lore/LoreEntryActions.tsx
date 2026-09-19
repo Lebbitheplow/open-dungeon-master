@@ -2,6 +2,9 @@
 
 import { Copy, Pencil, Pin, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
+
+const action = "px-2.5 py-1.5";
 import type { LoreEntryView } from "@/app/workshop/lore/types";
 
 // What the lead can do to one lore entry: edit it, pin it into every DM
@@ -26,12 +29,12 @@ export function LoreEntryActions({
   onDelete: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2.5">
+    <div className="flex flex-wrap items-center gap-1.5 text-xs">
       {onEdit ? (
         <button
           type="button"
           onClick={onEdit}
-          className="flex items-center gap-1 text-[11px] text-stone-500 hover:text-stone-300"
+          className={cn(ui.btnSmall, action)}
         >
           <Pencil className="size-3" /> Edit
         </button>
@@ -42,10 +45,8 @@ export function LoreEntryActions({
         title={
           entry.pinned ? "Unpin: retrieved only when relevant" : "Pin: included in every DM turn"
         }
-        className={cn(
-          "flex items-center gap-1 text-[11px]",
-          entry.pinned ? "text-amber-300" : "text-stone-500 hover:text-stone-300",
-        )}
+        aria-pressed={entry.pinned}
+        className={cn(ui.btnSmall, action, entry.pinned && "border-amber-500/60 bg-amber-400/10 text-amber-200")}
       >
         <Pin className="size-3" /> {entry.pinned ? "Pinned" : "Pin"}
       </button>
@@ -53,14 +54,14 @@ export function LoreEntryActions({
         type="button"
         onClick={onDuplicate}
         aria-label={`Duplicate ${entry.title}`}
-        className="flex items-center gap-1 text-[11px] text-stone-500 hover:text-stone-300"
+        className={cn(ui.btnSmall, action)}
       >
         <Copy className="size-3" /> Duplicate
       </button>
       <button
         type="button"
         onClick={onDelete}
-        className="flex items-center gap-1 text-[11px] text-stone-500 hover:text-red-400"
+        className={cn(ui.btnSmall, action, "hover:border-red-500/50 hover:text-red-300")}
       >
         <Trash2 className="size-3" /> Delete
       </button>

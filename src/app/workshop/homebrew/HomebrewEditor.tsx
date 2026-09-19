@@ -1,6 +1,9 @@
 "use client";
 
 import { AlertTriangle, Copy, Info, Loader2, OctagonX, Trash2 } from "lucide-react";
+import { ui } from "@/lib/ui";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { KIND_GLYPHS } from "@/app/workshop/homebrew/HomebrewIcon";
 import { cn } from "@/lib/cn";
 import type { VariantRules } from "@/lib/rulesets/logic";
 import type { Finding } from "@/lib/rulesets/validate";
@@ -60,6 +63,7 @@ export function HomebrewEditor({
   return (
     <div className="space-y-3">
       <div data-tour="homebrew-start">
+        <SectionHead title="Start from the books" glyph="tab-reference" />
         <CatalogStart
           kind={draft.kind}
           scope={catalogScope(draft)}
@@ -67,6 +71,7 @@ export function HomebrewEditor({
         />
       </div>
 
+      <SectionHead title={`The ${KIND_SINGULAR[draft.kind]}`} glyph={KIND_GLYPHS[draft.kind]} className="mb-0" />
       <TextField
         label="Name"
         value={draft.name}
@@ -95,12 +100,12 @@ export function HomebrewEditor({
       />
 
       {findings.length ? (
-        <ul className="space-y-1 rounded-md border border-stone-800 bg-stone-950/60 p-2">
+        <ul className="panel stagger space-y-1 rounded-lg p-3">
           {findings.map((finding, index) => {
             const { icon: Icon, className } = LEVEL_STYLE[finding.level];
             return (
-              <li key={index} className={cn("flex items-start gap-1.5 text-[11px]", className)}>
-                <Icon className="mt-0.5 size-3 shrink-0" />
+              <li key={index} className={cn("flex items-start gap-1.5 text-xs", className)}>
+                <Icon className="mt-0.5 size-3.5 shrink-0" />
                 <span>{finding.text}</span>
               </li>
             );
@@ -108,17 +113,17 @@ export function HomebrewEditor({
         </ul>
       ) : null}
 
-      {error ? <p className="text-[11px] text-red-400">{error}</p> : null}
+      {error ? <p className="motion-shake text-xs text-red-400">{error}</p> : null}
 
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
         <button
           type="button"
           disabled={busy || refused || !draft.name.trim()}
           onClick={onSave}
           data-tour="homebrew-save"
-          className="flex items-center gap-1 rounded-md border border-amber-700 bg-amber-950/50 px-2 py-1 text-xs text-amber-100 disabled:opacity-40"
+          className={ui.btnPrimary}
         >
-          {busy ? <Loader2 className="size-3 animate-spin" /> : null}
+          {busy ? <Loader2 className="size-4 animate-spin" /> : null}
           {isNew ? "Keep it" : "Save"}
         </button>
         {!isNew ? (
@@ -127,17 +132,17 @@ export function HomebrewEditor({
               type="button"
               disabled={busy}
               onClick={onDuplicate}
-              className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-50"
+              className={ui.btnSecondary}
             >
-              <Copy className="size-3" /> Duplicate
+              <Copy className="size-3.5" /> Duplicate
             </button>
             <button
               type="button"
               disabled={busy}
               onClick={onDelete}
-              className="ml-auto flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-500 hover:text-red-300 disabled:opacity-50"
+              className={cn(ui.btnSmall, "ml-auto hover:border-red-500/50 hover:text-red-300")}
             >
-              <Trash2 className="size-3" /> Forget it
+              <Trash2 className="size-3.5" /> Forget it
             </button>
           </>
         ) : null}

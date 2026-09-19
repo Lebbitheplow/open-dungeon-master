@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, Star } from "lucide-react";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { InfoButton, type ContentRef } from "@/components/ui/InfoDialog";
@@ -16,7 +16,9 @@ export type PickerOption = {
   reference?: ContentRef;
 };
 
-export type PickerGroup = { label: string | null; options: PickerOption[] };
+// `recommended` marks the tier the campaign's setting or world pack puts
+// first, so every surface that lists the group can badge its rows.
+export type PickerGroup = { label: string | null; recommended?: boolean; options: PickerOption[] };
 
 // Dropdown replacement for the builder's race/class/subclass/background
 // selects. A native <option> cannot hold a button, and these lists deserve
@@ -127,6 +129,14 @@ export default function OptionPicker({
                           <span className="size-3.5 shrink-0" />
                         )}
                         {option.name}
+                        {/* A star, not a word: these rows sit in half-width
+                            columns, and the group heading says the rest. */}
+                        {group.recommended ? (
+                          <span className="shrink-0 text-amber-300" title="Recommended for this setting">
+                            <Star className="size-3 fill-current" aria-hidden="true" />
+                            <span className="sr-only">Recommended for this setting</span>
+                          </span>
+                        ) : null}
                       </span>
                       <span className="shrink-0 text-xs text-stone-500">
                         {option.meta ?? ""}

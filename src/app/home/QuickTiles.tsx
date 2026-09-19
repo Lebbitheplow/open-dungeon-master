@@ -25,11 +25,11 @@ export function QuickTiles({
         showSolo ? "md:grid-cols-5" : "md:grid-cols-4",
       )}
     >
-      <QuickTile icon={Plus} label="New campaign" onClick={onNewCampaign} />
-      {showSolo ? <QuickTile icon={BookOpen} label="Solo adventure" onClick={onSolo} /> : null}
-      <QuickTile icon={Users} label="Characters" href="/characters" />
-      <QuickTile icon={Hammer} label="Workshop" href="/workshop" />
-      <QuickTile icon={KeyRound} label="Join with a code" onClick={onJoin} />
+      <QuickTile icon={Plus} glyph="tab-campaigns" label="New campaign" onClick={onNewCampaign} />
+      {showSolo ? <QuickTile icon={BookOpen} glyph="tab-story" label="Solo adventure" onClick={onSolo} /> : null}
+      <QuickTile icon={Users} glyph="tab-characters" label="Characters" href="/characters" />
+      <QuickTile icon={Hammer} glyph="system-homebrew" label="Workshop" href="/workshop" />
+      <QuickTile icon={KeyRound} glyph="tab-handout" label="Join with a code" onClick={onJoin} />
     </div>
   );
 }

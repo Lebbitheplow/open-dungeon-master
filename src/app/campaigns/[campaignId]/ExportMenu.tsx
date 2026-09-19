@@ -2,6 +2,7 @@
 
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { ChevronDown, FileCode, FileDown, FileText, FileType, type LucideIcon } from "lucide-react";
+import { GameIcon } from "@/components/ui/GameIcon";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 
@@ -11,10 +12,10 @@ import { ui } from "@/lib/ui";
 
 type ExportFormat = "html" | "odt" | "docx";
 
-const OPTIONS: { format: ExportFormat; label: string; icon: LucideIcon }[] = [
-  { format: "html", label: "HTML page", icon: FileCode },
-  { format: "odt", label: "OpenDocument (.odt)", icon: FileType },
-  { format: "docx", label: "Word (.docx)", icon: FileText },
+const OPTIONS: { format: ExportFormat; label: string; hint: string; icon: LucideIcon }[] = [
+  { format: "html", label: "HTML page", hint: "Opens in any browser", icon: FileCode },
+  { format: "odt", label: "OpenDocument (.odt)", hint: "LibreOffice Writer", icon: FileType },
+  { format: "docx", label: "Word (.docx)", hint: "Microsoft Word", icon: FileText },
 ];
 
 function triggerDownload(campaignId: string, format: ExportFormat) {
@@ -52,7 +53,8 @@ export function ExportMenu({
           </button>
         ) : (
           <button type="button" className={cn(ui.btnSmall, "w-full justify-center")}>
-            <FileDown className="size-3.5" /> Export story <ChevronDown className="size-3" />
+            <GameIcon icon={{ kind: "glyph", key: "tab-story" }} size="size-5" /> Export story{" "}
+            <ChevronDown className="size-3" />
           </button>
         )}
       </DropdownMenu.Trigger>
@@ -60,18 +62,20 @@ export function ExportMenu({
         <DropdownMenu.Content
           align="end"
           sideOffset={6}
-          className="z-50 min-w-52 rounded-lg border border-stone-600/60 bg-stone-950 p-1 shadow-elev-2"
+          className="panel z-50 min-w-56 rounded-lg p-1.5"
         >
-          <DropdownMenu.Label className="px-3 py-1.5 text-[11px] uppercase tracking-wide text-stone-500">
-            Export story as
-          </DropdownMenu.Label>
+          <DropdownMenu.Label className="ctx-menu-label gold-title">Export story as</DropdownMenu.Label>
           {OPTIONS.map((option) => (
             <DropdownMenu.Item
               key={option.format}
               onSelect={() => triggerDownload(campaignId, option.format)}
-              className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-stone-300 outline-none data-[highlighted]:bg-stone-800 data-[highlighted]:text-amber-100"
+              className="session-menu-row"
             >
-              <option.icon className="size-4" /> {option.label}
+              <option.icon className="size-4 shrink-0 text-amber-300/80" />
+              <span className="min-w-0">
+                {option.label}
+                <span className="session-menu-hint">{option.hint}</span>
+              </span>
             </DropdownMenu.Item>
           ))}
         </DropdownMenu.Content>

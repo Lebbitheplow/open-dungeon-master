@@ -24,7 +24,13 @@ import {
   TextField,
   ToggleChips,
 } from "@/app/workshop/homebrew/fields";
-import { DAMAGE_TYPES, input } from "@/app/workshop/homebrew/types";
+import { DAMAGE_TYPES } from "@/app/workshop/homebrew/types";
+import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
+import { NumberStepper } from "@/components/ui/NumberStepper";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { Select } from "@/components/ui/Select";
+import { FieldLabel, addChip, rowIcon } from "@/app/workshop/kit";
 import type { Data } from "@/app/workshop/homebrew/draft";
 import { DAMAGE_TYPE_BLURBS, WEAPON_PROPERTY_BLURBS, glossaryFor } from "@/lib/help/terms";
 
@@ -67,14 +73,25 @@ function WeaponBlock({ weapon, onChange }: { weapon: Weapon; onChange: (next: We
   const set = (patch: Weapon) => onChange({ ...weapon, ...patch });
   const properties = Array.isArray(weapon.properties) ? (weapon.properties as string[]) : [];
   return (
-    <div className="space-y-2 rounded-md border border-stone-800 p-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[11px] uppercase tracking-wide text-stone-500">Weapon</span>
-        <select
+    <div className="panel space-y-2 rounded-xl p-3">
+      <SectionHead
+        title="Weapon"
+        glyph="tab-battle"
+        className="mb-1"
+      />
+      <div className="max-w-sm">
+        <Select
           value=""
-          aria-label="Start from an SRD weapon"
-          onChange={(event) => {
-            const srd = SRD_WEAPONS.find((entry) => entry.name === event.target.value);
+          label="Start from an SRD weapon"
+          placeholder="Start from an SRD weapon..."
+          options={SRD_WEAPONS.map((entry) => ({
+            value: entry.name,
+            label: entry.name,
+            hint: entry.damage,
+            icon: { kind: "item" as const, key: entry.name, family: "item-weapon" },
+          }))}
+          onChange={(name) => {
+            const srd = SRD_WEAPONS.find((entry) => entry.name === name);
             if (srd) {
               onChange({
                 category: srd.category,
@@ -85,15 +102,7 @@ function WeaponBlock({ weapon, onChange }: { weapon: Weapon; onChange: (next: We
               });
             }
           }}
-          className={input}
-        >
-          <option value="">Start from an SRD weapon...</option>
-          {SRD_WEAPONS.map((entry) => (
-            <option key={entry.name} value={entry.name}>
-              {entry.name} ({entry.damage})
-            </option>
-          ))}
-        </select>
+        />
       </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <SelectField
@@ -161,14 +170,21 @@ function ArmorBlock({ armor, onChange }: { armor: Armor; onChange: (next: Armor)
   const set = (patch: Armor) => onChange({ ...armor, ...patch });
   const category = String(armor.category ?? "light");
   return (
-    <div className="space-y-2 rounded-md border border-stone-800 p-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[11px] uppercase tracking-wide text-stone-500">Armour</span>
-        <select
+    <div className="panel space-y-2 rounded-xl p-3">
+      <SectionHead title="Armour" glyph="rest-ac" className="mb-1" />
+      <div className="max-w-sm">
+        <Select
           value=""
-          aria-label="Start from SRD armour"
-          onChange={(event) => {
-            const srd = SRD_ARMOR.find((entry) => entry.name === event.target.value);
+          label="Start from SRD armour"
+          placeholder="Start from SRD armour..."
+          options={SRD_ARMOR.map((entry) => ({
+            value: entry.name,
+            label: entry.name,
+            hint: `AC ${entry.baseAc}`,
+            icon: { kind: "item" as const, key: entry.name, family: "item-armor" },
+          }))}
+          onChange={(name) => {
+            const srd = SRD_ARMOR.find((entry) => entry.name === name);
             if (srd) {
               onChange({
                 category: srd.category,
@@ -180,15 +196,7 @@ function ArmorBlock({ armor, onChange }: { armor: Armor; onChange: (next: Armor)
               });
             }
           }}
-          className={input}
-        >
-          <option value="">Start from SRD armour...</option>
-          {SRD_ARMOR.map((entry) => (
-            <option key={entry.name} value={entry.name}>
-              {entry.name} (AC {entry.baseAc})
-            </option>
-          ))}
-        </select>
+        />
       </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <SelectField
@@ -262,17 +270,17 @@ function EffectsBlock({
   const update = (index: number, next: MagicItemEffect) =>
     onChange(effects.map((effect, at) => (at === index ? next : effect)));
   return (
-    <div className="space-y-1.5">
-      <span className="text-[10px] uppercase tracking-wide text-stone-500">
-        Standing effects (the engine applies these while the item is worn, and attuned if it needs it)
-      </span>
+    <div className="space-y-1.5 text-sm">
+      <SectionHead title="Standing effects" glyph="cue-arcane" className="mb-1" />
+      <FieldLabel>The engine applies these while the item is worn, and attuned if it needs it</FieldLabel>
       {effects.map((effect, index) => (
         <div key={index} className="flex flex-wrap items-center gap-1.5">
-          <select
+          <span className="w-56">
+          <Select<(typeof EFFECT_KINDS)[number]>
             value={effect.kind}
-            aria-label="Effect kind"
-            onChange={(event) => {
-              const kind = event.target.value as (typeof EFFECT_KINDS)[number];
+            label="Effect kind"
+            options={EFFECT_KINDS.map((kind) => ({ value: kind, label: EFFECT_LABELS[kind] }))}
+            onChange={(kind) => {
               update(
                 index,
                 kind === "set_ability"
@@ -282,50 +290,32 @@ function EffectsBlock({
                     : { kind, amount: 1 },
               );
             }}
-            className={input}
-          >
-            {EFFECT_KINDS.map((kind) => (
-              <option key={kind} value={kind}>
-                {EFFECT_LABELS[kind]}
-              </option>
-            ))}
-          </select>
+          />
+          </span>
           {"amount" in effect ? (
-            <input
-              type="number"
-              aria-label="Amount"
+            <NumberStepper
+              label="Amount"
               value={effect.amount}
               min={-GEAR_LIMITS.bonusMax}
               max={GEAR_LIMITS.bonusMax}
-              onChange={(event) => update(index, { ...effect, amount: Number(event.target.value) })}
-              className={`${input} w-16`}
+              onChange={(amount) => update(index, { ...effect, amount })}
             />
           ) : null}
           {effect.kind === "set_ability" ? (
             <>
-              <select
-                value={effect.ability}
-                aria-label="Ability"
-                onChange={(event) =>
-                  update(index, { ...effect, ability: event.target.value as MagicItemEffect extends { ability: infer A } ? A : never })
-                }
-                className={input}
-              >
-                {(["str", "dex", "con", "int", "wis", "cha"] as const).map((ability) => (
-                  <option key={ability} value={ability}>
-                    {ability.toUpperCase()}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="number"
-                aria-label="Score"
-                value={effect.score}
-                min={3}
-                max={30}
-                onChange={(event) => update(index, { ...effect, score: Number(event.target.value) })}
-                className={`${input} w-16`}
-              />
+              <span className="w-32">
+                <Select
+                  value={effect.ability}
+                  label="Ability"
+                  options={(["str", "dex", "con", "int", "wis", "cha"] as const).map((ability) => ({
+                    value: ability,
+                    label: ability.toUpperCase(),
+                    icon: { kind: "glyph" as const, key: `ability-${ability}` },
+                  }))}
+                  onChange={(ability) => update(index, { ...effect, ability })}
+                />
+              </span>
+              <NumberStepper label="Score" value={effect.score} min={3} max={30} onChange={(score) => update(index, { ...effect, score })} />
             </>
           ) : null}
           {effect.kind === "resistance" ? (
@@ -340,9 +330,9 @@ function EffectsBlock({
             type="button"
             aria-label="Remove effect"
             onClick={() => onChange(effects.filter((_, at) => at !== index))}
-            className="rounded-md border border-stone-700 p-1 text-stone-500 hover:text-red-300"
+            className={cn(ui.iconAction, rowIcon, "hover:text-red-300")}
           >
-            <X className="size-3" />
+            <X className="size-3.5" />
           </button>
         </div>
       ))}
@@ -350,7 +340,7 @@ function EffectsBlock({
         <button
           type="button"
           onClick={() => onChange([...effects, { kind: "ac_bonus", amount: 1 }])}
-          className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-[11px] text-stone-300 hover:bg-stone-900"
+          className={cn(ui.btnSmall, addChip, "text-xs")}
         >
           <Plus className="size-3" /> Add an effect
         </button>
@@ -369,6 +359,7 @@ export function ItemFields({ data, onChange }: { data: Data; onChange: (next: Da
 
   return (
     <div className="space-y-3">
+      <SectionHead title="What it is" glyph="tab-loot" className="mb-1" />
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <SelectField
           label="Kind"
@@ -397,7 +388,8 @@ export function ItemFields({ data, onChange }: { data: Data; onChange: (next: Da
       {itemKind === "armor" ? <ArmorBlock armor={armor} onChange={(next) => set({ armor: next })} /> : null}
 
       {itemKind === "magic_item" ? (
-        <div className="space-y-2 rounded-md border border-stone-800 p-2">
+        <div className="panel reveal space-y-3 rounded-xl p-3">
+          <SectionHead title="Magic" glyph="cue-wonder" className="mb-1" />
           <div className="flex flex-wrap items-center gap-3">
             <CheckField
               label="Requires attunement"
@@ -412,7 +404,7 @@ export function ItemFields({ data, onChange }: { data: Data; onChange: (next: Da
               onChange={(max) =>
                 set({ charges: max === "" || max === 0 ? undefined : { max, recharge: charges.recharge ?? "dawn" } })
               }
-              className="w-24"
+              className="w-40"
             />
             {charges.max ? (
               <TextField

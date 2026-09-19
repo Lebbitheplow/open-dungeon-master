@@ -1,8 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, LogOut, Skull } from "lucide-react";
+import { Loader2, LogOut } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { Select } from "@/components/ui/Select";
+import { DeskCard } from "@/app/campaigns/[campaignId]/DmConsoleParts";
 import {
   coverActive,
   describeCover,
@@ -54,14 +58,14 @@ function MonsterButton({ campaignId }: { campaignId: string }) {
       <button
         type="button"
         onClick={run}
-        disabled={busy}
+        disabled={busy} aria-busy={busy}
         title="Every living enemy takes one action, chosen by the AI and resolved by the rules engine. It does not move the initiative pointer; that stays yours."
-        className="inline-flex items-center gap-1.5 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-40"
+        className={cn(ui.btnSmall, "min-h-10 w-full text-left text-sm")}
       >
-        {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Skull className="size-3.5" />}
+        {busy ? <Loader2 className="size-5 animate-spin" /> : <GameIcon icon={{ kind: "glyph", key: "system-bestiary" }} size="size-6" />}
         Take the monsters&apos; turn
       </button>
-      {notice ? <p className="mt-1 text-[11px] text-stone-500">{notice}</p> : null}
+      {notice ? <p className="live-in mt-1 text-[11px] text-stone-400">{notice}</p> : null}
     </div>
   );
 }
@@ -101,12 +105,16 @@ function CoverControl({ campaignId, cover }: { campaignId: string; cover: DmCove
     <div className="space-y-1.5">
       {running ? (
         <>
-          <p className="text-xs text-amber-200">{describeCover(cover)}</p>
+          <p className="live-in flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-400/10 px-2.5 py-2 text-xs text-amber-100">
+            <GameIcon icon={{ kind: "glyph", key: "tab-dm" }} size="size-5" className="shrink-0" />
+            {describeCover(cover)}
+          </p>
           <button
             type="button"
             onClick={() => set(0)}
             disabled={busy}
-            className="rounded-md border border-amber-700 bg-amber-950/50 px-2.5 py-1 text-xs text-amber-100 hover:bg-amber-900/50 disabled:opacity-40"
+            aria-busy={busy}
+            className={ui.btnPrimary}
           >
             {busy ? "Taking it back..." : "I am back"}
           </button>
@@ -117,41 +125,40 @@ function CoverControl({ campaignId, cover }: { campaignId: string; cover: DmCove
             value={brief}
             onChange={(event) => setBrief(event.target.value)}
             placeholder="They are haggling in the market; keep it light and do not let them leave town."
-            className="w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 placeholder:text-stone-600 focus:border-amber-700 focus:outline-none"
+            aria-label="Brief for the AI while you are away"
+            className={ui.input}
           />
           <div className="flex flex-wrap items-center gap-1.5">
-            <select
-              value={turns}
-              onChange={(event) => setTurns(Number(event.target.value))}
-              className="rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-300 focus:border-amber-700 focus:outline-none"
-            >
-              {[1, 3, 5, 10, MAX_COVER_TURNS].map((count) => (
-                <option key={count} value={count}>
-                  {count === 1 ? "1 answer" : `${count} answers`}
-                </option>
-              ))}
-            </select>
+            <Select
+              value={String(turns)}
+              onChange={(next) => setTurns(Number(next))}
+              options={[1, 3, 5, 10, MAX_COVER_TURNS].map((count) => ({
+                value: String(count),
+                label: count === 1 ? "1 answer" : `${count} answers`,
+              }))}
+              label="How many answers to hand over"
+              size="sm"
+              className="w-auto min-w-[8rem]"
+            />
             <button
               type="button"
               onClick={() => set(turns)}
               disabled={busy}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs disabled:opacity-40",
-                "border-stone-700 text-stone-300 hover:bg-stone-900",
-              )}
+              aria-busy={busy}
+              className={ui.btnSecondary}
             >
               {busy ? <Loader2 className="size-3.5 animate-spin" /> : <LogOut className="size-3.5" />}
               Step away
             </button>
           </div>
           {cover && cover.turnsLeft <= 0 ? (
-            <p className="text-[11px] text-stone-500">
+            <p className="reveal text-[11px] text-stone-500">
               The AI answered the last stretch you handed over.
             </p>
           ) : null}
         </>
       )}
-      {error ? <p className="text-xs text-red-400">{error}</p> : null}
+      {error ? <p className="motion-shake text-xs text-red-400">{error}</p> : null}
     </div>
   );
 }
@@ -171,11 +178,12 @@ export function DmDelegationPanel({
     return null;
   }
   return (
-    <section className="space-y-2 rounded-lg border border-stone-800 bg-stone-950/60 px-2.5 py-2">
-      <p className="text-xs font-medium uppercase tracking-wide text-stone-500">Hand it over</p>
-      {canMonsters ? <MonsterButton campaignId={campaignId} /> : null}
-      {canCover ? <CoverControl campaignId={campaignId} cover={cover} /> : null}
-    </section>
+    <DeskCard glyph="tab-dm" title="Hand it over">
+      <div className="space-y-2.5">
+        {canMonsters ? <MonsterButton campaignId={campaignId} /> : null}
+        {canCover ? <CoverControl campaignId={campaignId} cover={cover} /> : null}
+      </div>
+    </DeskCard>
   );
 }
 
@@ -187,7 +195,8 @@ export function DmCoverNotice({ cover }: { cover: DmCover | null }) {
     return null;
   }
   return (
-    <p className="mb-2 rounded-md border border-amber-900/60 bg-amber-950/30 px-2.5 py-1.5 text-xs text-amber-200/90">
+    <p className="live-in mb-2 flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-400/10 px-2.5 py-1.5 text-xs text-amber-100">
+      <GameIcon icon={{ kind: "glyph", key: "tab-dm" }} size="size-5" className="shrink-0" />
       {describeCover(cover)}
     </p>
   );

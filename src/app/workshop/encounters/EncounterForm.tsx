@@ -2,6 +2,10 @@
 
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { Select } from "@/components/ui/Select";
+import { Field } from "@/app/workshop/kit";
 import { TEMPLATE_NAME_MAX } from "@/lib/dm/encounter-template-logic";
 import { MonsterRosterPicker } from "@/app/campaigns/[campaignId]/MonsterRosterPicker";
 import { EncounterExtras } from "@/app/workshop/encounters/EncounterExtras";
@@ -14,8 +18,7 @@ import type { EncounterDraft, MapOption } from "@/app/workshop/encounters/types"
 // list, and the "sheet" variant is the same fields without the frame,
 // because the sheet is the frame.
 
-const field =
-  "w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-sm text-stone-200";
+const field = ui.input;
 
 export function EncounterForm({
   campaignId,
@@ -41,10 +44,11 @@ export function EncounterForm({
     <section
       className={cn(
         variant === "card"
-          ? "space-y-1.5 rounded-lg border border-stone-800 bg-stone-950/40 px-2.5 py-2"
+          ? "panel space-y-2 rounded-xl p-3"
           : "space-y-2",
       )}
     >
+      <SectionHead title="The fight" glyph="system-encounters" className="mb-1" />
       <input
         value={value.name}
         maxLength={TEMPLATE_NAME_MAX}
@@ -53,6 +57,7 @@ export function EncounterForm({
         aria-label="Encounter name"
         className={field}
       />
+      <SectionHead title="Who is in it" glyph="system-bestiary" className="mb-1 pt-1" />
       <div data-tour="encounters-picker">
         <MonsterRosterPicker
           campaignId={campaignId}
@@ -68,10 +73,11 @@ export function EncounterForm({
         aria-label="Roster"
         className={field}
       />
-      <p className="text-[10px] text-stone-600">
+      <p className="text-[11px] text-stone-500">
         One per line, name or slug, optional xN. The same shorthand Start a fight takes, so
         picking above and typing here are the same thing.
       </p>
+      <SectionHead title="Where it happens" glyph="system-maps" className="mb-1 pt-1" />
       <input
         value={value.battlefield}
         onChange={(event) => set({ battlefield: event.target.value })}
@@ -79,21 +85,19 @@ export function EncounterForm({
         aria-label="Battlefield"
         className={field}
       />
-      <label className="block" data-tour="encounters-map">
-        <span className="text-[10px] uppercase tracking-wide text-stone-500">On which map</span>
-        <select
-          value={value.mapId}
-          onChange={(event) => set({ mapId: event.target.value })}
-          className={cn(field, "mt-0.5")}
-        >
-          <option value="">Generator&apos;s choice</option>
-          {maps.map((map) => (
-            <option key={map.id} value={map.id}>
-              {map.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div data-tour="encounters-map">
+        <Field label="On which map">
+          <Select
+            label="On which map"
+            value={value.mapId}
+            onChange={(mapId) => set({ mapId })}
+            options={[
+              { value: "", label: "Generator's choice", icon: { kind: "glyph", key: "die-d20" } },
+              ...maps.map((map) => ({ value: map.id, label: map.name, icon: { kind: "glyph" as const, key: "system-maps" } })),
+            ]}
+          />
+        </Field>
+      </div>
       <EncounterExtras
         campaignId={campaignId}
         roster={value.enemies}
@@ -101,6 +105,7 @@ export function EncounterForm({
         value={value.extras}
         onChange={(extras) => set({ extras })}
       />
+      <SectionHead title="Notes" glyph="tab-notes" className="mb-1 pt-1" />
       <textarea
         value={value.notes}
         onChange={(event) => set({ notes: event.target.value })}
@@ -114,7 +119,7 @@ export function EncounterForm({
         disabled={busy || !value.name.trim() || !value.enemies.trim()}
         onClick={onSubmit}
         data-tour="encounters-save"
-        className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-40"
+        className={ui.btnPrimary}
       >
         {busy ? <Loader2 className="size-3 animate-spin" /> : null}
         {submitLabel}

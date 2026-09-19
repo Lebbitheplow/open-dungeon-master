@@ -192,7 +192,7 @@ export function PluginPanel({
   if (!draft) {
     return (
       <div className="flex justify-center py-10">
-        {error ? <p className="text-sm text-red-300">{error}</p> : <Loader2 className="size-5 animate-spin text-stone-500" />}
+        {error ? <p className="reveal text-sm text-red-300">{error}</p> : <Loader2 className="size-5 animate-spin text-stone-500" />}
       </div>
     );
   }
@@ -234,8 +234,8 @@ export function PluginPanel({
             <Download className="size-3.5" /> Check &amp; publish
           </button>
         </div>
-        {pullNotice ? <p className="basis-full text-xs text-amber-200/90">{pullNotice}</p> : null}
-        {error ? <p className="basis-full text-xs text-red-300">{error}</p> : null}
+        {pullNotice ? <p className="live-in basis-full text-xs text-amber-200/90">{pullNotice}</p> : null}
+        {error ? <p className="motion-shake basis-full text-xs text-red-300">{error}</p> : null}
       </section>
 
       <div data-tour="plugin-sections" className="w-fit max-w-full">
@@ -248,22 +248,24 @@ export function PluginPanel({
         />
       </div>
 
-      {section === "identity" ? <IdentitySection draft={draft} onDraft={update} /> : null}
-      {section === "people" ? <PeopleSection draft={draft} onDraft={update} /> : null}
-      {section === "magic" ? <MagicSection draft={draft} onDraft={update} /> : null}
-      {section === "bestiary" ? <MonsterSection draft={draft} onDraft={update} /> : null}
-      {section === "setting" ? <SettingSection draft={draft} onDraft={update} /> : null}
-      {section === "art" ? <ArtSection draft={draft} onDraft={update} /> : null}
-      {section === "publish" ? (
-        <PublishSection
-          draft={draft}
-          onDraft={update}
-          workshopId={workshopId}
-          isAdmin={isAdmin}
-          flushSave={flushSave}
-          onClear={clear}
-        />
-      ) : null}
+      <div key={section} className="motion-tab">
+        {section === "identity" ? <IdentitySection draft={draft} onDraft={update} /> : null}
+        {section === "people" ? <PeopleSection draft={draft} onDraft={update} /> : null}
+        {section === "magic" ? <MagicSection draft={draft} onDraft={update} /> : null}
+        {section === "bestiary" ? <MonsterSection draft={draft} onDraft={update} /> : null}
+        {section === "setting" ? <SettingSection draft={draft} onDraft={update} /> : null}
+        {section === "art" ? <ArtSection draft={draft} onDraft={update} /> : null}
+        {section === "publish" ? (
+          <PublishSection
+            draft={draft}
+            onDraft={update}
+            workshopId={workshopId}
+            isAdmin={isAdmin}
+            flushSave={flushSave}
+            onClear={clear}
+          />
+        ) : null}
+      </div>
 
       <Sheet
         open={wizardOpen}

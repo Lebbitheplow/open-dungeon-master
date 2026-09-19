@@ -4,7 +4,6 @@ import Link from "next/link";
 import {
   BookOpen,
   Brain,
-  CircleHelp,
   Compass,
   Footprints,
   Crown,
@@ -17,60 +16,16 @@ import {
   PanelRight,
   Puzzle,
   RefreshCw,
+  Swords,
   Volume2,
-  type LucideIcon,
 } from "lucide-react";
-import type { ReactNode } from "react";
 import { Dialog } from "@/components/ui/Dialog";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { HelpContents, ModeRow, Section } from "@/components/HelpParts";
 import { ui } from "@/lib/ui";
 
-// Exported for HowToPlayDialog, which is the short orientation read to this
-// dialog's full reference. Both used to carry byte-identical private copies,
-// so a styling change had to be made twice or the two drifted apart.
-export function Section({
-  icon: Icon,
-  title,
-  children,
-}: {
-  icon: LucideIcon;
-  title: string;
-  children: ReactNode;
-}) {
-  return (
-    <section className="mb-5 last:mb-0">
-      <h3 className="mb-2 flex items-center gap-2 font-display text-sm tracking-wide text-amber-200/90">
-        <Icon className="size-4 text-amber-500/80" />
-        {title}
-      </h3>
-      <div className="space-y-2 text-sm leading-relaxed text-stone-400">{children}</div>
-    </section>
-  );
-}
-
-export function ModeRow({
-  label,
-  lead,
-  children,
-}: {
-  label: string;
-  lead?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <div className="flex items-start gap-3">
-      <span
-        className={
-          lead
-            ? "mt-0.5 w-14 shrink-0 rounded-full bg-gradient-to-b from-ember-400 to-ember-600 px-2 py-0.5 text-center text-xs font-medium text-stone-950"
-            : "mt-0.5 w-14 shrink-0 rounded-full bg-gradient-to-b from-amber-100 to-amber-400 px-2 py-0.5 text-center text-xs font-medium text-amber-950"
-        }
-      >
-        {label}
-      </span>
-      <span>{children}</span>
-    </div>
-  );
-}
+// HowToPlayDialog and WorkshopHelpDialog import these from here.
+export { ModeRow, Section };
 
 // One walkthrough of the whole app: menus, side-panel tabs, composer modes,
 // asking the DM, fixing a bad narration, what the DM remembers, dice, voice,
@@ -92,9 +47,10 @@ export function HelpDialog({
       open={open}
       onOpenChange={onOpenChange}
       title="Help"
-      icon={<CircleHelp className="size-5 text-amber-500/80" />}
+      icon={<GameIcon icon={{ kind: "glyph", key: "tab-story" }} size="size-7" />}
       width="w-[min(94vw,44rem)]"
     >
+      <HelpContents withTours={Boolean(tours?.length)} />
       {tours && tours.length ? (
         <Section icon={Footprints} title="Guided tours">
           <p>
@@ -184,6 +140,28 @@ export function HelpDialog({
           Small chips above the message box name the background work the engine is doing between
           turns, such as compacting history, sealing a chapter, running the world tick or answering
           an Ask, with how long it has been going.
+        </p>
+      </Section>
+
+      <Section icon={Swords} title="Your hand in a fight">
+        <p>
+          While a fight is on, your options appear as a hand of cards above the message box: one
+          for each weapon you carry, each spell you have prepared, your class features, and the
+          basic actions (Dodge, Dash, Disengage, Help, Hide, Ready, Grapple, Shove, Use an object,
+          End turn). Each card shows what it costs (action, bonus action, reaction, a spell slot, a
+          use) and what it rolls, worked out from your sheet.
+        </p>
+        <p>
+          Pick a card, pick who it lands on from the chips or by tapping them on the battle map,
+          check the line under <span className="text-stone-300">Sends</span>, then press the gold
+          button named after the card. <span className="text-stone-300">Edit</span> puts that line
+          in the message box so you can change it first. A dimmed card is spent for the turn; hover
+          or press it to see why. Rider cards such as Divine Smite attach to your next attack.
+        </p>
+        <p>
+          The hand never replaces typing. The message box, Do, Say and OOC, the microphone and
+          Enter to send all work exactly as before, and the arrow on the hand&apos;s bar puts it
+          away. The question mark beside it replays the two-line introduction.
         </p>
       </Section>
 

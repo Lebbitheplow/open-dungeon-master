@@ -1,8 +1,16 @@
 "use client";
 
-import { BookmarkPlus, Check, Loader2, Scale, Trash2 } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
+import { BookmarkPlus, Check, ChevronDown, Loader2 } from "lucide-react";
 import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { useCallback, useEffect, useState } from "react";
+import { ListHead, useListHead } from "@/app/workshop/ListHead";
+import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { Select } from "@/components/ui/Select";
+import { FieldLabel, GlyphPlate, RowMenu, chip, chipOn, chipRow } from "@/app/workshop/kit";
+import { KIND_GLYPHS } from "@/app/workshop/homebrew/HomebrewIcon";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import {
@@ -11,6 +19,8 @@ import {
   type Ruleset,
   type RulesetChange,
 } from "@/lib/rulesets/logic";
+
+const readRuleset = (ruleset: Ruleset) => ({ name: ruleset.name });
 
 type HomebrewRow = { id: string; name: string; kind: string };
 
@@ -67,6 +77,7 @@ export function RulesetLibrary({
 }) {
   const [rulesets, setRulesets] = useState<Ruleset[]>([]);
   const [loading, setLoading] = useState(true);
+  const head = useListHead(rulesets, readRuleset);
   const [openId, setOpenId] = useState<string | null>(null);
   const [changes, setChanges] = useState<RulesetChange[]>([]);
   const [mode, setMode] = useState<"replace" | "append">("replace");
@@ -202,62 +213,66 @@ export function RulesetLibrary({
 
   return (
     <section className={`${ui.card} mb-4 p-3`} data-tour="rules-library">
-      <h2 className="mb-1 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
-        <Scale className="size-3.5" /> Ruleset library
-      </h2>
-      <p className="mb-3 text-xs text-stone-500">
+      <SectionHead title="Ruleset library" glyph="system-rulesets" level="h2" />
+      <p className="mb-3 text-xs text-stone-400">
         A ruleset is your table&apos;s variant rules and house rulings kept as one thing, reusable
         across campaigns. Applying one copies it here; editing it later never reaches back.
       </p>
 
       {loading ? (
-        <Loader2 className="size-4 animate-spin text-stone-500" />
+        <div className="reveal mb-3 space-y-1.5" aria-busy="true">
+          <div className="skeleton-block h-10 rounded-lg" />
+          <div className="skeleton-block h-10 rounded-lg" />
+        </div>
       ) : rulesets.length ? (
-        <ul className="mb-3 space-y-1.5">
-          {rulesets.map((ruleset) => (
-            <li key={ruleset.id} className="rounded-lg border border-stone-800 bg-stone-950/50">
-              <div className="flex items-center gap-2 p-2">
+        <>
+        <ListHead head={head} noun={["ruleset", "rulesets"]} placeholder="Find a ruleset" />
+        <ul className="stagger mb-3 space-y-1.5">
+          {head.shown.map((ruleset) => {
+            // Opening is the row; deleting sits behind the kebab and the
+            // right-click or long-press menu. Applying stays inside the opened
+            // row, under the list of what it would change.
+            const items: ContextMenuItem[] = [
+              { id: "open", label: openId === ruleset.id ? "Close" : "Open", glyph: "system-rulesets", onSelect: () => void open(ruleset) },
+              { id: "delete", label: "Delete", glyph: "quest-failed", tone: "danger", separated: true, onSelect: () => void remove(ruleset) },
+            ];
+            return (
+            <ContextMenu as="li" key={ruleset.id} label={ruleset.name} items={items} className="panel rounded-xl">
+              <div className="flex items-center gap-3 p-2.5">
+                <GlyphPlate glyph="system-rulesets" size="size-11" />
                 <button
                   type="button"
                   onClick={() => open(ruleset)}
                   aria-expanded={openId === ruleset.id}
-                  className="min-w-0 flex-1 text-left"
+                  className="flex min-h-10 min-w-0 flex-1 items-center gap-2 text-left"
                 >
-                  <p className="truncate text-sm text-stone-200">{ruleset.name}</p>
-                  <p className="truncate text-xs text-stone-500">{describeRuleset(ruleset)}</p>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-display tracking-wide text-amber-50">{ruleset.name}</span>
+                    <span className="block truncate text-xs text-stone-500">{describeRuleset(ruleset)}</span>
+                  </span>
+                  <ChevronDown className={cn("size-4 shrink-0 text-stone-500 transition-transform", openId === ruleset.id && "rotate-180")} aria-hidden="true" />
                 </button>
-                <button
-                  type="button"
-                  onClick={() => remove(ruleset)}
-                  aria-label={`Delete ${ruleset.name}`}
-                  className={ui.iconAction}
-                >
-                  <Trash2 className="size-3.5" />
-                </button>
+                <RowMenu items={items} label={ruleset.name} />
               </div>
               {openId === ruleset.id ? (
-                <div className="space-y-2 border-t border-stone-800/70 p-2">
+                <div className="reveal space-y-3 border-t border-stone-800/70 p-3">
                   {activeVariantRules(ruleset.variantRules).length ? (
-                    <ul className="text-xs text-stone-400">
+                    <ul className="stagger text-xs text-stone-400">
                       {activeVariantRules(ruleset.variantRules).map((label) => (
                         <li key={label}>{label}</li>
                       ))}
                     </ul>
                   ) : null}
                   <div>
-                    <p className="mb-1 text-xs uppercase tracking-wide text-stone-500">
-                      Applying here would
-                    </p>
+                    <FieldLabel className="mb-1 block">Applying here would</FieldLabel>
                     <ChangeList changes={changes} />
                   </div>
                   <div data-tour="rules-homebrew">
-                    <p className="mb-1 text-xs uppercase tracking-wide text-stone-500">
-                      Homebrew this ruleset ships
-                    </p>
+                    <SectionHead title="Homebrew this ruleset ships" glyph="system-homebrew" level="h4" />
                     {homebrew === null ? (
                       <Loader2 className="size-3.5 animate-spin text-stone-500" />
                     ) : homebrew.length ? (
-                      <ul className="flex flex-wrap gap-1">
+                      <ul className={cn("stagger", chipRow)}>
                         {homebrew.map((entry) => {
                           const on = ruleset.homebrewIds.includes(entry.id);
                           return (
@@ -266,13 +281,9 @@ export function RulesetLibrary({
                                 type="button"
                                 aria-pressed={on}
                                 onClick={() => void toggleHomebrew(ruleset, entry.id)}
-                                className={cn(
-                                  "rounded-md border px-2 py-0.5 text-[11px]",
-                                  on
-                                    ? "border-amber-700 bg-amber-950/50 text-amber-100"
-                                    : "border-stone-700 text-stone-400 hover:text-stone-200",
-                                )}
+                                className={cn(ui.btnSmall, chip, "normal-case", on && chipOn)}
                               >
+                                <GameIcon icon={{ kind: "glyph", key: KIND_GLYPHS[entry.kind as keyof typeof KIND_GLYPHS] ?? "system-homebrew" }} size="size-4" />
                                 {entry.name}
                                 <span className="ml-1 text-stone-500">{entry.kind}</span>
                               </button>
@@ -285,26 +296,28 @@ export function RulesetLibrary({
                         Nothing homebrewed yet. Entries made in the Homebrew tool appear here.
                       </p>
                     )}
-                    <p className="mt-1 text-[10px] text-stone-600">
+                    <p className="mt-1 text-[11px] text-stone-500">
                       Ticked entries are canon wherever this ruleset is applied; prepared monsters
                       that lean on anything else get flagged.
                     </p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <select
-                      value={mode}
-                      onChange={(event) => setMode(event.target.value as "replace" | "append")}
-                      aria-label="How to handle existing house rules"
-                      className={cn(ui.input, "w-auto py-1 text-xs")}
-                    >
-                      <option value="replace">Replace the house rules here</option>
-                      <option value="append">Add to the house rules here</option>
-                    </select>
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <span className="w-full sm:w-72">
+                      <Select<"replace" | "append">
+                        value={mode}
+                        onChange={setMode}
+                        label="How to handle existing house rules"
+                        options={[
+                          { value: "replace", label: "Replace the house rules here" },
+                          { value: "append", label: "Add to the house rules here" },
+                        ]}
+                      />
+                    </span>
                     <button
                       type="button"
                       onClick={() => apply(ruleset)}
                       disabled={busy === ruleset.id}
-                      className={ui.btnSmall}
+                      className={ui.btnPrimary}
                     >
                       {busy === ruleset.id ? (
                         <Loader2 className="size-3.5 animate-spin" />
@@ -316,28 +329,29 @@ export function RulesetLibrary({
                   </div>
                 </div>
               ) : null}
-            </li>
-          ))}
+            </ContextMenu>
+            );
+          })}
         </ul>
+        </>
       ) : (
-        <p className="mb-3 text-xs text-stone-500">
-          No saved rulesets yet. Set the rules below the way your table plays, then save them.
-        </p>
+        <EmptyState size="md" art="scrolls" title="No saved rulesets yet. Set the rules below the way your table plays, then save them." />
       )}
 
-      <div className="flex flex-wrap items-center gap-2" data-tour="rules-save-as">
+      <div className="flex flex-wrap items-center gap-2 text-sm" data-tour="rules-save-as">
         <input
           value={saveName}
           onChange={(event) => setSaveName(event.target.value)}
           maxLength={80}
           placeholder="Save these rules as..."
-          className={cn(ui.input, "w-56 py-1 text-xs")}
+          aria-label="Save these rules as"
+          className={cn(ui.input, "w-full sm:w-64")}
         />
         <button
           type="button"
           onClick={capture}
           disabled={saving || !saveName.trim()}
-          className={ui.btnSmall}
+          className={ui.btnSecondary}
         >
           {saving ? (
             <Loader2 className="size-3.5 animate-spin" />
@@ -347,7 +361,7 @@ export function RulesetLibrary({
           Save
         </button>
       </div>
-      {note ? <p className="mt-2 text-xs text-emerald-400">{note}</p> : null}
+      {note ? <p className="live-in mt-2 text-xs text-emerald-400">{note}</p> : null}
     </section>
   );
 }

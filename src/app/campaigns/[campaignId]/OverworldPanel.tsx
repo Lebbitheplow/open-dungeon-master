@@ -5,6 +5,8 @@ import { useUndoRing } from "@/lib/use-undo-ring";
 import { terrainDiffStrokes } from "@/lib/overworld/undo";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { KitButton, PanelError } from "./PanelKit";
 import { skinForGenre, type XY } from "@/lib/overworld/logic";
 import { MAX_STROKES, type OverworldBrush } from "@/lib/overworld/paint";
 import {
@@ -437,14 +439,15 @@ export function OverworldPanel({
 
   return (
     <div className="space-y-2">
+      <SectionHead title="The region" glyph="system-region" />
       <div
         ref={containerRef}
-        className="relative overflow-hidden rounded-lg border border-stone-800"
+        className="panel relative overflow-hidden rounded-lg"
         data-tour="region-canvas"
       >
         {loading ? (
-          <p className="flex items-center gap-1 p-6 text-[11px] text-stone-500">
-            <Loader2 className="size-3 animate-spin" /> Charting the region...
+          <p role="status" className="skeleton-block reveal flex aspect-[4/3] items-center justify-center gap-1.5 text-xs text-stone-400">
+            <Loader2 className="size-3.5 animate-spin" /> Charting the region...
           </p>
         ) : (
           <canvas
@@ -483,26 +486,16 @@ export function OverworldPanel({
         )}
         {!loading ? (
           <div className="absolute bottom-2 right-2 flex flex-col gap-1">
-            <button
-              type="button"
-              onClick={() => zoomBy(1.25)}
-              aria-label="Zoom in"
-              className="flex size-9 items-center justify-center rounded-md border border-stone-700 bg-stone-950/80 text-stone-300 hover:text-amber-100"
-            >
+            <KitButton tone="secondary" onClick={() => zoomBy(1.25)} aria-label="Zoom in" className="size-10 bg-stone-950/85 px-0">
               <Plus className="size-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => zoomBy(0.8)}
-              aria-label="Zoom out"
-              className="flex size-9 items-center justify-center rounded-md border border-stone-700 bg-stone-950/80 text-stone-300 hover:text-amber-100"
-            >
+            </KitButton>
+            <KitButton tone="secondary" onClick={() => zoomBy(0.8)} aria-label="Zoom out" className="size-10 bg-stone-950/85 px-0">
               <Minus className="size-4" />
-            </button>
+            </KitButton>
           </div>
         ) : null}
         {strokeCount ? (
-          <span className="pointer-events-none absolute left-2 top-2 rounded bg-stone-950/80 px-1.5 py-0.5 text-[11px] text-amber-200">
+          <span key={strokeCount} className="count-pop pointer-events-none absolute left-2 top-2 rounded-md border border-amber-500/30 bg-stone-950/85 px-1.5 py-0.5 text-[11px] text-amber-200">
             {strokeCount} {strokeCount === 1 ? "tile" : "tiles"}
           </span>
         ) : null}
@@ -521,15 +514,9 @@ export function OverworldPanel({
             onRegenerate={() => void regenerate()}
           />
           {held ? (
-            <p className="flex items-center gap-2 text-[11px] text-amber-200">
+            <p className="reveal flex flex-wrap items-center gap-2 text-xs text-amber-200">
               Holding {heldName}. Tap where it belongs.
-              <button
-                type="button"
-                onClick={() => setAsking({ kind: "rename", locationId: held })}
-                className="rounded border border-stone-700 px-1.5 py-0.5 text-stone-400 hover:bg-stone-900"
-              >
-                Rename it
-              </button>
+              <KitButton onClick={() => setAsking({ kind: "rename", locationId: held })}>Rename it</KitButton>
             </p>
           ) : null}
           {mode === "paint" && skin ? (
@@ -562,7 +549,7 @@ export function OverworldPanel({
           ) : null}
           {mode === "label" ? <LabelTools size={labelSize} onSize={setLabelSize} /> : null}
           {mode === "erase" ? (
-            <p className="text-[11px] text-stone-500">Tap a line, a label or a pin to take it off the map.</p>
+            <p className="reveal text-xs text-stone-500">Tap a line, a label or a pin to take it off the map.</p>
           ) : null}
           <FileTools
             backdropPath={data.map.backdropPath}
@@ -574,11 +561,11 @@ export function OverworldPanel({
             importNote={importNote}
             mapSize={{ width: data.map.width, height: data.map.height }}
           />
-          {error ? <p className="text-[11px] text-red-400">{error}</p> : null}
+          {error ? <PanelError>{error}</PanelError> : null}
           <OverworldAuthoring campaignId={campaignId} data={data} onData={setData} />
         </>
       ) : null}
-      <p className="text-[10px] text-stone-600">
+      <p className="text-[11px] text-stone-500">
         Drag to pan, scroll or pinch to zoom. Locations appear as the party discovers them.
       </p>
       <PromptDialog

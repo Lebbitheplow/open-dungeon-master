@@ -1,12 +1,14 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import type { KeyboardEvent, ReactNode } from "react";
+import { useLayoutEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
 // Segmented control: a row of options where the active one wears the gold
 // foil of the primary button. Behaves as a radio group, so arrow keys move
-// the selection.
+// the selection. The foil is one pill that travels between the options
+// (measured from the active button); until it has been measured, and under
+// reduced motion, the active button simply wears the foil itself.
 //
 //   <SegmentedControl
 //     options={[{ value: "mine", label: "Mine" }, { value: "all", label: "All" }]}
@@ -35,6 +37,29 @@ export function SegmentedControl<T extends string>({
   label?: string;
   className?: string;
 }) {
+  const group = useRef<HTMLDivElement | null>(null);
+  const pill = useRef<HTMLSpanElement | null>(null);
+  useLayoutEffect(() => {
+    const root = group.current;
+    const mark = pill.current;
+    if (!root || !mark) return;
+    const place = () => {
+      const active = root.querySelector<HTMLElement>('[aria-checked="true"]');
+      if (!active) {
+        root.removeAttribute("data-pill");
+        return;
+      }
+      mark.style.width = `${active.offsetWidth}px`;
+      mark.style.height = `${active.offsetHeight}px`;
+      mark.style.transform = `translate(${active.offsetLeft}px, ${active.offsetTop}px)`;
+      root.setAttribute("data-pill", "");
+    };
+    place();
+    const observer = new ResizeObserver(place);
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, [value, options.length, size]);
+
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     const dir = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
     if (!dir) return;
@@ -45,10 +70,12 @@ export function SegmentedControl<T extends string>({
   };
   return (
     <div
+      ref={group}
       role="radiogroup"
       aria-label={label}
       onKeyDown={onKeyDown}
       className={cn(
+        "seg-control relative",
         // The labels never wrap, so on a narrow screen the row is wider than
         // the page: it scrolls inside its own frame rather than dragging the
         // page sideways with it.
@@ -56,6 +83,7 @@ export function SegmentedControl<T extends string>({
         className,
       )}
     >
+      <span ref={pill} className="seg-pill" aria-hidden="true" />
       {options.map((o) => {
         const active = o.value === value;
         const Icon = o.icon;
@@ -68,7 +96,7 @@ export function SegmentedControl<T extends string>({
             tabIndex={active ? 0 : -1}
             onClick={() => onChange(o.value)}
             className={cn(
-              "inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md font-display uppercase transition-all duration-150 ease-snap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40",
+              "relative inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md font-display uppercase transition-colors duration-150 ease-snap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40",
               size === "sm" ? "h-7 px-2.5 text-[11px] tracking-[0.1em]" : "h-9 px-3.5 text-[13px] tracking-[0.14em]",
               active
                 ? "bg-gradient-to-b from-amber-100 via-amber-200 to-amber-400 font-semibold text-amber-950 shadow-[0_1px_0_rgba(253,247,231,0.6)_inset,0_2px_8px_rgba(4,2,12,0.5)]"

@@ -1,5 +1,6 @@
 "use client";
 
+import { rowIcon } from "@/app/workshop/kit";
 import { ImagePlus, Loader2, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
 import { cn } from "@/lib/cn";
@@ -132,13 +133,13 @@ function ArtSlot({
             type="button"
             onClick={onRemove}
             aria-label={`Remove the picture for ${label}`}
-            className="rounded-md p-1 text-stone-600 hover:text-red-300"
+            className={cn(ui.iconAction, rowIcon, "hover:text-red-300")}
           >
             <Trash2 className="size-3.5" />
           </button>
         ) : null}
       </div>
-      {error ? <p className="text-[11px] text-red-300">{error}</p> : null}
+      {error ? <p className="motion-shake text-[11px] text-red-300">{error}</p> : null}
     </li>
   );
 }
@@ -173,11 +174,11 @@ export function ArtSection({ draft, onDraft }: SectionProps) {
         {filled} of {slots.length} pictures, {Math.round(bytes / 1024)} KB in all. Each is resized on the way in: squares to 256 px, the cover and places to 704 by 400, under {MAX_PACK_ART_BYTES / 1024} KB apiece, at most {MAX_PACK_ART_KEYS} in a pack. Every slot is optional and falls back to the default plate.
       </p>
       {slots.length === 1 ? (
-        <p className="text-[11px] italic text-stone-600">
+        <p className="reveal text-xs italic text-stone-500">
           Name a species, calling, monster, place or faction and its slot appears here.
         </p>
       ) : null}
-      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+      <ul className="stagger-up grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
         {slots.map((slot) => (
           <ArtSlot
             key={slot.key}
@@ -190,7 +191,7 @@ export function ArtSection({ draft, onDraft }: SectionProps) {
         ))}
       </ul>
       {orphans.length ? (
-        <div className="rounded-lg border border-amber-500/20 p-3 text-[11px] text-amber-200/80">
+        <div className="reveal rounded-lg border border-amber-500/20 p-3 text-[11px] text-amber-200/80">
           <p>
             {orphans.length} picture{orphans.length === 1 ? " is" : "s are"} for something the pack no longer names ({orphans.join(", ")}). They are left out of the export.
           </p>

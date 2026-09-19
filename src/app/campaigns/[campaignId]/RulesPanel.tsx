@@ -1,9 +1,14 @@
 "use client";
 
-import { Loader2, Pin, Save, Scale } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
+import { Pin, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { Select } from "@/components/ui/Select";
+import { Switch } from "@/components/ui/Switch";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { KitButton, PanelLoading, panelField } from "./PanelKit";
 import { CalendarSection } from "@/app/campaigns/[campaignId]/CalendarSection";
 import type { GameSettings } from "@/lib/schemas/game-settings";
 
@@ -66,6 +71,27 @@ export const REST_LABELS: Record<GameSettings["variantRules"]["restVariant"], st
 // The variant-rule controls on their own, so the campaign-creation dialog can
 // offer the same choices this panel does without the lead having to open the
 // lobby afterwards to find them.
+type RestVariant = GameSettings["variantRules"]["restVariant"];
+const REST_OPTIONS = (Object.keys(REST_LABELS) as RestVariant[]).map((variant) => ({
+  value: variant,
+  label: REST_LABELS[variant],
+  icon: { kind: "glyph" as const, key: variant === "standard" ? "rest-short" : "rest-long" },
+}));
+
+// One variant rule: the kit switch, its name, and the word that says which
+// way it is set (a player reads "on" or "off", not the knob's position).
+function VariantSwitch({ label, tip, on, onChange }: { label: string; tip: string; on: boolean; onChange: (next: boolean) => void }) {
+  return (
+    <Tooltip content={tip}>
+      <span className="flex min-h-9 items-center gap-2 text-xs text-stone-300">
+        <Switch on={on} onChange={onChange} label={label} />
+        <span className="min-w-0 flex-1">{label}</span>
+        <span className={on ? "text-amber-200" : "text-stone-500"}>{on ? "on" : "off"}</span>
+      </span>
+    </Tooltip>
+  );
+}
+
 export function VariantRulesFields({
   value,
   onChange,
@@ -75,43 +101,19 @@ export function VariantRulesFields({
 }) {
   return (
     <div>
-      <span className="mb-1.5 block text-stone-400">Variant rules</span>
-      <div className="flex flex-wrap gap-1.5">
+      <SectionHead title="Variant rules" glyph="system-rules" level="h4" />
+      <div className="stagger-pop grid gap-x-4 gap-y-0.5 sm:grid-cols-2">
         {VARIANT_TOGGLES.map((toggle) => (
-          <Tooltip key={toggle.key} content={toggle.tip}>
-            <button
-              type="button"
-              onClick={() => onChange({ ...value, [toggle.key]: !value[toggle.key] })}
-              className={cn(
-                "rounded-md border px-2 py-1 text-xs transition-colors",
-                value[toggle.key]
-                  ? "border-amber-200/40 bg-amber-200/10 text-amber-100"
-                  : "border-stone-800 text-stone-400 hover:border-stone-600",
-              )}
-            >
-              {toggle.label}
-            </button>
-          </Tooltip>
+          <VariantSwitch key={toggle.key} label={toggle.label} tip={toggle.tip} on={Boolean(value[toggle.key])} onChange={(next) => onChange({ ...value, [toggle.key]: next })} />
         ))}
       </div>
-      <select
+      <Select<RestVariant>
         value={value.restVariant}
-        onChange={(event) =>
-          onChange({
-            ...value,
-            restVariant: event.target.value as GameSettings["variantRules"]["restVariant"],
-          })
-        }
-        className="mt-2 w-full rounded-lg border border-stone-800 bg-stone-950/60 px-2 py-1.5 text-xs text-stone-300"
-      >
-        {(Object.keys(REST_LABELS) as Array<GameSettings["variantRules"]["restVariant"]>).map(
-          (variant) => (
-            <option key={variant} value={variant}>
-              {REST_LABELS[variant]}
-            </option>
-          ),
-        )}
-      </select>
+        onChange={(restVariant) => onChange({ ...value, restVariant })}
+        options={REST_OPTIONS}
+        label="Rest lengths"
+        className="mt-2 w-full"
+      />
     </div>
   );
 }
@@ -207,48 +209,28 @@ export function RulesPanel({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-lg border border-stone-800 bg-stone-950/40 p-2.5" data-tour="rules-variants">
-        <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-stone-300">
-          <Scale className="size-3.5 text-amber-600" /> Variant rules
-        </p>
+      <div className="panel rounded-lg p-3" data-tour="rules-variants">
+        <SectionHead title="Variant rules" glyph="system-rules" />
         {steersStory ? (
-          <div className={cn("flex flex-wrap items-center gap-1.5", settingsBusy && "opacity-70")}>
+          <div className={cn("reveal space-y-0.5", settingsBusy && "opacity-70")}>
             {VARIANT_TOGGLES.map((toggle) => (
-              <Tooltip key={toggle.key} content={toggle.tip}>
-                <button
-                  type="button"
-                  onClick={() => patchVariant({ [toggle.key]: !variant[toggle.key] })}
-                  className={cn(
-                    "rounded-md border px-2 py-1 text-[11px]",
-                    variant[toggle.key]
-                      ? "border-amber-700 bg-amber-950/50 text-amber-200"
-                      : "border-stone-700 text-stone-400",
-                  )}
-                >
-                  {toggle.label} {variant[toggle.key] ? "on" : "off"}
-                </button>
-              </Tooltip>
+              <VariantSwitch key={toggle.key} label={toggle.label} tip={toggle.tip} on={Boolean(variant[toggle.key])} onChange={(next) => patchVariant({ [toggle.key]: next })} />
             ))}
             <Tooltip content="How long short and long rests take at this table. The DM's rest tool follows it.">
-              <select
-                value={variant.restVariant}
-                onChange={(event) =>
-                  patchVariant({
-                    restVariant: event.target.value as GameSettings["variantRules"]["restVariant"],
-                  })
-                }
-                className="rounded-md border border-stone-700 bg-stone-900 px-2 py-1 text-[11px] outline-none focus:border-amber-600"
-              >
-                {(Object.keys(REST_LABELS) as Array<keyof typeof REST_LABELS>).map((value) => (
-                  <option key={value} value={value}>
-                    {REST_LABELS[value]}
-                  </option>
-                ))}
-              </select>
+              <span className="block pt-1.5">
+                <Select<RestVariant>
+                  size="sm"
+                  value={variant.restVariant}
+                  onChange={(restVariant) => patchVariant({ restVariant })}
+                  options={REST_OPTIONS}
+                  label="Rest lengths"
+                  className="w-full"
+                />
+              </span>
             </Tooltip>
           </div>
         ) : (
-          <p className="text-[11px] leading-4 text-stone-400">
+          <p className="text-xs leading-5 text-stone-400">
             {[
               ...VARIANT_TOGGLES.filter((toggle) => variant[toggle.key]).map(
                 (toggle) => toggle.label,
@@ -259,12 +241,10 @@ export function RulesPanel({
         )}
       </div>
 
-      <div className="rounded-lg border border-stone-800 bg-stone-950/40 p-2.5" data-tour="rules-house">
-        <p className="mb-2 text-xs font-medium text-stone-300">House rules</p>
+      <div className="panel rounded-lg p-3" data-tour="rules-house">
+        <SectionHead title="House rules" glyph="system-homebrew" />
         {loading ? (
-          <p className="flex items-center gap-1 text-[11px] text-stone-500">
-            <Loader2 className="size-3 animate-spin" /> Loading...
-          </p>
+          <PanelLoading label="Loading..." rows={2} />
         ) : steersStory ? (
           <>
             <textarea
@@ -275,74 +255,54 @@ export function RulesPanel({
               placeholder={
                 "Write your table's house rules. Use headings to group them, e.g.\n\nDrinking potions:\nDrinking a potion is a bonus action at this table.\n\nThe DM retrieves only the relevant rules each turn."
               }
-              className="w-full rounded border border-stone-700 bg-stone-900 px-2 py-1.5 text-[11px] leading-4 outline-none focus:border-amber-600"
+              aria-label="House rules"
+              className={cn(panelField, "leading-5")}
             />
             <div className="mt-1.5 flex items-center gap-2">
-              <button
-                type="button"
-                onClick={saveText}
-                disabled={saving || text === savedText}
-                className="flex items-center gap-1 rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-300 hover:bg-stone-900 disabled:opacity-50"
-              >
-                {saving ? <Loader2 className="size-3 animate-spin" /> : <Save className="size-3" />}
+              <KitButton tone="primary" onClick={saveText} disabled={saving || text === savedText} busy={saving}>
+                {saving ? null : <Save className="size-3.5" />}
                 Save rules
-              </button>
+              </KitButton>
               {text !== savedText ? (
-                <span className="text-[11px] text-amber-300/80">Unsaved changes</span>
+                <span className="live-in text-xs text-amber-300/80">Unsaved changes</span>
               ) : null}
             </div>
           </>
         ) : savedText ? (
-          <p className="whitespace-pre-wrap text-[11px] leading-4 text-stone-400">{savedText}</p>
+          <p className="reveal whitespace-pre-wrap text-xs leading-5 text-stone-400">{savedText}</p>
         ) : (
-          <p className="text-[11px] italic text-stone-600">No house rules set.</p>
+          <EmptyState size="sm" art="board" title="No house rules set." />
         )}
       </div>
 
       {steersStory && chunks.length ? (
-        <div className="rounded-lg border border-stone-800 bg-stone-950/40 p-2.5">
-          <p className="mb-1 text-xs font-medium text-stone-300">Rule sections</p>
-          <p className="mb-2 text-[11px] leading-4 text-stone-500">
+        <div className="panel reveal rounded-lg p-3">
+          <SectionHead title="Rule sections" glyph="system-rulesets" aside={chunks.length} />
+          <p className="mb-2 text-xs leading-5 text-stone-500">
             The DM sees only the sections relevant to each turn. Pin one to include it every turn;
             switch one off to silence it without deleting the text.
           </p>
-          <ul className="space-y-1.5">
+          <ul className="stagger space-y-1.5">
             {chunks.map((chunk) => (
               <li
                 key={chunk.id}
-                className="flex items-start gap-2 rounded border border-stone-800/70 bg-stone-950/40 p-1.5"
+                className={cn("flex items-start gap-2 rounded-md border border-stone-700/50 bg-stone-950/40 p-2", !chunk.enabled && "opacity-60")}
               >
-                <button
-                  type="button"
-                  onClick={() => patchChunk(chunk.id, { enabled: !chunk.enabled })}
-                  title={chunk.enabled ? "Switch this section off" : "Switch this section on"}
-                  className={cn(
-                    "mt-0.5 shrink-0 rounded border px-1.5 py-0.5 text-[10px]",
-                    chunk.enabled
-                      ? "border-amber-700 bg-amber-950/50 text-amber-200"
-                      : "border-stone-700 text-stone-500",
-                  )}
-                >
-                  {chunk.enabled ? "on" : "off"}
-                </button>
-                <button
-                  type="button"
+                <span className="mt-0.5 shrink-0" title={chunk.enabled ? "Switch this section off" : "Switch this section on"}>
+                  <Switch on={chunk.enabled} onChange={(enabled) => patchChunk(chunk.id, { enabled })} label={chunk.enabled ? "Switch this section off" : "Switch this section on"} />
+                </span>
+                <KitButton
+                  tone="icon"
+                  always
                   onClick={() => patchChunk(chunk.id, { pinned: !chunk.pinned })}
-                  title={
-                    chunk.pinned
-                      ? "Unpin: retrieved only when relevant"
-                      : "Pin: included in every DM turn"
-                  }
-                  className={cn(
-                    "mt-0.5 shrink-0 rounded border px-1 py-0.5",
-                    chunk.pinned
-                      ? "border-amber-700 bg-amber-950/50 text-amber-200"
-                      : "border-stone-700 text-stone-500",
-                  )}
+                  aria-pressed={chunk.pinned}
+                  aria-label={chunk.pinned ? "Unpin: retrieved only when relevant" : "Pin: included in every DM turn"}
+                  title={chunk.pinned ? "Unpin: retrieved only when relevant" : "Pin: included in every DM turn"}
+                  className={cn("shrink-0", chunk.pinned && "text-amber-300")}
                 >
-                  <Pin className="size-3" />
-                </button>
-                <span className="min-w-0 text-[11px] leading-4 text-stone-400">
+                  <Pin className={cn("size-3.5", chunk.pinned && "fill-current")} />
+                </KitButton>
+                <span className="min-w-0 text-xs leading-5 text-stone-400">
                   {chunk.heading ? (
                     <span className="font-medium text-stone-300">{chunk.heading}: </span>
                   ) : null}

@@ -1,7 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Calculator } from "lucide-react";
+import { ui } from "@/lib/ui";
+import { NumberStepper } from "@/components/ui/NumberStepper";
+import { Select, optionsFrom } from "@/components/ui/Select";
+import { DeskCard, FieldLabel } from "@/app/campaigns/[campaignId]/DmConsoleParts";
 import { asPercent, forecastAttack, roundsToDrop } from "@/lib/srd/odds";
 
 // The consequence preview: hit chance, expected damage, and how long a target
@@ -13,28 +16,12 @@ import { asPercent, forecastAttack, roundsToDrop } from "@/lib/srd/odds";
 // GameSettings type through three components.
 export type CritRules = { powerfulCritical: boolean; criticalDamageMods: boolean };
 
-const inputClass =
-  "w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1.5 text-sm text-stone-100 placeholder:text-stone-600 focus:border-amber-700 focus:outline-none";
-
-function Section({
-  icon: Icon,
-  title,
-  children,
-}: {
-  icon: typeof Calculator;
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-lg border border-stone-800 bg-stone-950/60 px-2.5 py-2">
-      <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
-        <Icon className="size-3.5" />
-        {title}
-      </p>
-      {children}
-    </section>
-  );
-}
+type Roll = "none" | "advantage" | "disadvantage";
+const ROLLS = optionsFrom<Roll>([
+  ["none", "Straight"],
+  ["advantage", "Advantage"],
+  ["disadvantage", "Disadvantage"],
+]);
 
 // Hit chance, expected damage, and how long a target lasts. Pure arithmetic
 // from src/lib/srd/odds.ts, so it is instant and always available.
@@ -49,7 +36,7 @@ export function OddsCalculator({
   const [attackBonus, setAttackBonus] = useState(5);
   const [ac, setAc] = useState(15);
   const [damage, setDamage] = useState("1d8+3");
-  const [advantage, setAdvantage] = useState<"none" | "advantage" | "disadvantage">("none");
+  const [advantage, setAdvantage] = useState<Roll>("none");
   const [hitPoints, setHitPoints] = useState(30);
   const [attacksPerRound, setAttacksPerRound] = useState(1);
   const [extraCritDice, setExtraCritDice] = useState(0);
@@ -73,79 +60,44 @@ export function OddsCalculator({
   const rounds = roundsToDrop(hitPoints, perRound);
 
   return (
-    <Section icon={Calculator} title="What is this likely to do?">
-      <div className="grid grid-cols-2 gap-1.5">
-        <label className="text-[11px] text-stone-500">
-          Attack bonus
-          <input
-            type="number"
-            value={attackBonus}
-            onChange={(event) => setAttackBonus(Number(event.target.value) || 0)}
-            className={inputClass}
-          />
-        </label>
-        <label className="text-[11px] text-stone-500">
-          Target AC
-          <input
-            type="number"
-            value={ac}
-            onChange={(event) => setAc(Number(event.target.value) || 0)}
-            className={inputClass}
-          />
-        </label>
-        <label className="text-[11px] text-stone-500">
-          Damage
+    <DeskCard glyph="tab-dice" title="What is this likely to do?">
+      {/* Divs, not labels: a label would press the stepper's minus button
+          whenever its caption was tapped. Each control carries its name. */}
+      <div className="grid grid-cols-1 gap-x-2 gap-y-2.5 min-[24rem]:grid-cols-2">
+        <div>
+          <FieldLabel>Attack bonus</FieldLabel>
+          <NumberStepper value={attackBonus} onChange={setAttackBonus} label="Attack bonus" size="sm" />
+        </div>
+        <div>
+          <FieldLabel>Target AC</FieldLabel>
+          <NumberStepper value={ac} onChange={setAc} label="Target AC" size="sm" />
+        </div>
+        <div>
+          <FieldLabel>Damage</FieldLabel>
           <input
             value={damage}
             onChange={(event) => setDamage(event.target.value)}
             placeholder="2d6+4"
-            className={inputClass}
+            aria-label="Damage"
+            className={ui.input}
           />
-        </label>
-        <label className="text-[11px] text-stone-500">
-          Roll
-          <select
-            value={advantage}
-            onChange={(event) =>
-              setAdvantage(event.target.value as "none" | "advantage" | "disadvantage")
-            }
-            className={inputClass}
-          >
-            <option value="none">Straight</option>
-            <option value="advantage">Advantage</option>
-            <option value="disadvantage">Disadvantage</option>
-          </select>
-        </label>
-        <label className="text-[11px] text-stone-500">
-          Target hit points
-          <input
-            type="number"
-            value={hitPoints}
-            onChange={(event) => setHitPoints(Number(event.target.value) || 0)}
-            className={inputClass}
-          />
-        </label>
-        <label className="text-[11px] text-stone-500">
-          Attacks per round
-          <input
-            type="number"
-            min={1}
-            value={attacksPerRound}
-            onChange={(event) => setAttacksPerRound(Number(event.target.value) || 1)}
-            className={inputClass}
-          />
-        </label>
-        <label className="text-[11px] text-stone-500" title="Brutal Critical, Savage Attacks.">
-          Extra dice on a crit
-          <input
-            type="number"
-            min={0}
-            max={4}
-            value={extraCritDice}
-            onChange={(event) => setExtraCritDice(Math.max(0, Number(event.target.value) || 0))}
-            className={inputClass}
-          />
-        </label>
+        </div>
+        <div>
+          <FieldLabel>Roll</FieldLabel>
+          <Select value={advantage} onChange={setAdvantage} options={ROLLS} label="Roll" />
+        </div>
+        <div>
+          <FieldLabel>Target hit points</FieldLabel>
+          <NumberStepper value={hitPoints} onChange={setHitPoints} label="Target hit points" size="sm" />
+        </div>
+        <div>
+          <FieldLabel>Attacks per round</FieldLabel>
+          <NumberStepper value={attacksPerRound} onChange={setAttacksPerRound} min={1} label="Attacks per round" size="sm" />
+        </div>
+        <div title="Brutal Critical, Savage Attacks.">
+          <FieldLabel>Extra dice on a crit</FieldLabel>
+          <NumberStepper value={extraCritDice} onChange={setExtraCritDice} min={0} max={4} label="Extra dice on a crit" size="sm" />
+        </div>
       </div>
       {forecast.exact ? null : (
         <p className="mt-2 text-xs text-amber-300/90">
@@ -153,17 +105,17 @@ export function OddsCalculator({
           real. The chance to hit never depended on it.
         </p>
       )}
-      <dl className="mt-2 space-y-0.5 text-xs">
-        <div className="flex justify-between">
-          <dt className="text-stone-500">Chance to hit</dt>
-          <dd className="text-stone-200">
+      <dl className="mt-3 rounded-lg border border-amber-500/20 bg-stone-950/50 px-2.5 py-1.5 text-xs">
+        <div className="dm-readout flex justify-between gap-3 py-0.5">
+          <dt className="text-stone-400">Chance to hit</dt>
+          <dd className="text-right font-medium text-amber-100">
             {asPercent(forecast.odds.hit)}
             <span className="text-stone-500"> ({asPercent(forecast.odds.crit)} crit)</span>
           </dd>
         </div>
-        <div className="flex justify-between">
-          <dt className="text-stone-500">Damage on a hit</dt>
-          <dd className="text-stone-200">
+        <div className="dm-readout flex justify-between gap-3 py-0.5">
+          <dt className="text-stone-400">Damage on a hit</dt>
+          <dd className="text-right font-medium text-amber-100">
             {forecast.exact ? (
               <>
                 {forecast.onHit.toFixed(1)}
@@ -174,17 +126,17 @@ export function OddsCalculator({
             )}
           </dd>
         </div>
-        <div className="flex justify-between">
-          <dt className="text-stone-500">Average per round</dt>
-          <dd className="text-stone-200">{forecast.exact ? perRound.toFixed(1) : "unknown"}</dd>
+        <div className="dm-readout flex justify-between gap-3 py-0.5">
+          <dt className="text-stone-400">Average per round</dt>
+          <dd className="text-right font-medium text-amber-100">{forecast.exact ? perRound.toFixed(1) : "unknown"}</dd>
         </div>
-        <div className="flex justify-between">
-          <dt className="text-stone-500">Rounds to drop</dt>
-          <dd className="text-stone-200">
+        <div className="dm-readout flex justify-between gap-3 py-0.5">
+          <dt className="text-stone-400">Rounds to drop</dt>
+          <dd className="text-right font-medium text-amber-100">
             {!forecast.exact ? "unknown" : rounds === null ? "never" : rounds}
           </dd>
         </div>
       </dl>
-    </Section>
+    </DeskCard>
   );
 }

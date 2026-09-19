@@ -53,7 +53,7 @@ export function ImageLightbox({
         </button>
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[60] bg-black/85" />
+        <Dialog.Overlay className="dialog-overlay fixed inset-0 z-[60] bg-[#05030d]/85 backdrop-blur-sm" />
         <Dialog.Content className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-3 p-4 outline-none sm:p-8">
           <Dialog.Title className="sr-only">{label}</Dialog.Title>
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -63,7 +63,7 @@ export function ImageLightbox({
             className="max-h-[88vh] max-w-full rounded-lg object-contain shadow-elev-1"
           />
           {caption ? (
-            <p className="max-w-2xl text-center text-sm text-stone-400">{caption}</p>
+            <p className="reveal max-w-2xl text-center text-sm text-stone-400">{caption}</p>
           ) : null}
           <div className="absolute right-3 top-3 flex items-center gap-2 sm:right-6 sm:top-6">
             <a

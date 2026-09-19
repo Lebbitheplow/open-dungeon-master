@@ -1,10 +1,8 @@
 "use client";
 
-import { Eye, EyeOff, Trash2 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { PromptDialog } from "@/components/ui/PromptDialog";
 import { SelectionBar, type SelectionAction } from "@/components/ui/SelectionBar";
-import { cn } from "@/lib/cn";
 import {
   duplicateObject,
   listObjects,
@@ -12,7 +10,6 @@ import {
   objectAt,
   OBJECT_LABELS,
   refBounds,
-  refKey,
   removeObjects,
   sameRef,
   setDmOnly,
@@ -26,9 +23,10 @@ import type { XY } from "@/lib/battlemap/types";
 // the live board studio. Tapping a placed thing with the Select tool
 // selects it; the bar above offers Edit, Move, Duplicate, Delete and the
 // DM-only flag; Shift-tap extends; Move arms the next tap; Escape and
-// Delete come through the map hotkeys. The objects panel lists everything
-// placed with the same selection. Every change is one whole-list patch, so
-// the caller's undo ring sees it like any other edit.
+// Delete come through the map hotkeys. The layers panel (MapLayersPanel.tsx)
+// lists everything placed with the same selection, and the inspector
+// (MapInspector.tsx) shows it with the same actions. Every change is one
+// whole-list patch, so the caller's undo ring sees it like any other edit.
 
 type Save = (objects: Partial<MapObjects> & { door?: XY }) => Promise<boolean> | void;
 
@@ -234,10 +232,9 @@ export function useMapSelection({
     return out;
   }, [live]);
 
-  const bar =
-    live.length > 0 ? (
-      <>
-        <SelectionBar title={title} count={live.length} actions={actions} moving={moving} onAction={onAction} onClear={clear} />
+  // The edit prompt, apart from the bar so a surface that shows the actions
+  // somewhere else (the inspector) still gets the dialog.
+  const dialog = (
         <PromptDialog
           open={editing !== null}
           onOpenChange={(open) => {
@@ -252,109 +249,11 @@ export function useMapSelection({
           submitLabel="Apply"
           onSubmit={submitEdit}
         />
-      </>
+  );
+  const bar =
+    live.length > 0 ? (
+      <SelectionBar title={title} count={live.length} actions={actions} moving={moving} onAction={onAction} onClear={clear} />
     ) : null;
 
-  return { refs: live, boxes, moving, onSelect, remove, clear, bar, setRefs };
-}
-
-// Every placed thing in a list, with the same selection as the canvas.
-export function ObjectsPanel({
-  objects,
-  refs,
-  onSelect,
-  onDelete,
-  onDmOnly,
-  className,
-}: {
-  objects: MapObjects;
-  refs: ObjectRef[];
-  onSelect: (refs: ObjectRef[]) => void;
-  onDelete: (refs: ObjectRef[]) => void;
-  onDmOnly: (refs: ObjectRef[], dmOnly: boolean) => void;
-  className?: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const rows = useMemo(() => listObjects(objects), [objects]);
-  const selectedKeys = new Set(refs.map(refKey));
-  if (!rows.length) {
-    return null;
-  }
-  return (
-    <section className={cn("rounded-lg border border-stone-800 bg-stone-950/40", className)}>
-      <button
-        type="button"
-        onClick={() => setOpen((current) => !current)}
-        aria-expanded={open}
-        className="flex w-full items-center justify-between px-2.5 py-1.5 text-[11px] uppercase tracking-wide text-stone-500 hover:text-stone-300"
-      >
-        <span>Placed things ({rows.length})</span>
-        <span>{open ? "Hide" : "Show"}</span>
-      </button>
-      {open ? (
-        <div className="space-y-1 px-2 pb-2">
-          {refs.length > 1 ? (
-            <div className="flex items-center gap-1 text-[11px] text-stone-400">
-              {refs.length} selected
-              <button type="button" onClick={() => onDelete(refs)} className="ml-auto flex items-center gap-1 rounded-md border border-red-900/60 px-2 py-0.5 text-red-300">
-                <Trash2 className="size-3" /> Delete
-              </button>
-              <button type="button" onClick={() => onDmOnly(refs, true)} className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-0.5">
-                <EyeOff className="size-3" /> DM only
-              </button>
-              <button type="button" onClick={() => onDmOnly(refs, false)} className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-0.5">
-                <Eye className="size-3" /> Shown
-              </button>
-            </div>
-          ) : null}
-          <ul className="max-h-56 space-y-0.5 overflow-y-auto">
-            {rows.map((row) => {
-              const key = refKey(row.ref);
-              const selected = selectedKeys.has(key);
-              return (
-                <li key={key} className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={selected}
-                    aria-label={`Select ${row.name}`}
-                    onChange={(event) =>
-                      onSelect(
-                        event.target.checked
-                          ? [...refs, row.ref]
-                          : refs.filter((ref) => refKey(ref) !== key),
-                      )
-                    }
-                    className="accent-amber-400"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => onSelect([row.ref])}
-                    className={cn(
-                      "min-w-0 flex-1 truncate rounded px-1 py-0.5 text-left text-xs",
-                      selected ? "bg-amber-950/50 text-amber-100" : "text-stone-300 hover:bg-stone-900",
-                    )}
-                    title={row.detail}
-                  >
-                    {row.name}
-                    <span className="ml-1 text-[10px] text-stone-500">{row.detail}</span>
-                    {row.dmOnly ? <span className="ml-1 text-[10px] text-violet-300">DM</span> : null}
-                  </button>
-                  {row.ref.kind !== "doors" ? (
-                    <button
-                      type="button"
-                      onClick={() => onDelete([row.ref])}
-                      aria-label={`Delete ${row.name}`}
-                      className="rounded p-1 text-stone-600 hover:text-red-300"
-                    >
-                      <Trash2 className="size-3" />
-                    </button>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ) : null}
-    </section>
-  );
+  return { refs: live, boxes, moving, onSelect, remove, clear, bar, dialog, title, actions, onAction, setRefs };
 }

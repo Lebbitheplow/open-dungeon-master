@@ -177,11 +177,11 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
         {/* The title block may shrink and wrap; the action cluster never does,
             so on a narrow phone (or a large system font) the account menu
             stays on screen instead of being pushed past the right edge. */}
-        <header className="mb-8 flex items-center justify-between gap-3">
+        <header className="relative z-30 mb-8 flex animate-fade-up items-center justify-between gap-3">
           <AppBrand className="gap-3">
             <PixelTile src={PIXEL_ICONS.story} />
             <span className="min-w-0">
-              <span className="block text-balance font-display text-lg leading-tight tracking-wide text-amber-50 sm:text-xl">
+              <span className="gold-title block text-balance font-display text-lg leading-tight sm:text-2xl">
                 Open Dungeon Master
               </span>
               <span className="block truncate text-sm text-stone-500">Signed in as {user.username}</span>
@@ -205,16 +205,16 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
             answer arrives would flash a lie at every account with tables,
             and a failed fetch is not an empty account either. */}
         {!loading && continueCampaign ? (
-          <section className="mb-6">
+          <section className="mb-6 animate-fade-up" style={{ animationDelay: "60ms" }}>
             <ContinueHero campaign={continueCampaign} userId={user.id} />
           </section>
         ) : !loading && !loadFailed && campaigns.length === 0 ? (
-          <section className="mb-6">
+          <section className="mb-6 animate-fade-up" style={{ animationDelay: "60ms" }}>
             <EmptyHero />
           </section>
         ) : null}
 
-        <section className="mb-8">
+        <section className="mb-8 animate-fade-up" style={{ animationDelay: "120ms" }}>
           <QuickTiles
             onNewCampaign={() => setCreateOpen(true)}
             onSolo={() => setSoloOpen(true)}
@@ -223,6 +223,7 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
           />
         </section>
 
+        <div className="animate-fade-up" style={{ animationDelay: "180ms" }}>
         <CampaignList
           campaigns={campaigns}
           loading={loading}
@@ -237,10 +238,15 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
           onClone={clone}
           onDelete={deleteCampaign}
         />
+        </div>
 
-        <WorkshopSection workshops={workshops} cloningId={cloningId} onClone={clone} />
+        <div className="animate-fade-up" style={{ animationDelay: "240ms" }}>
+          <WorkshopSection workshops={workshops} cloningId={cloningId} onClone={clone} />
+        </div>
 
-        <JoinCard inputRef={joinInputRef} />
+        <div className="animate-fade-up" style={{ animationDelay: "300ms" }}>
+          <JoinCard inputRef={joinInputRef} />
+        </div>
 
         <HomeFooter />
 

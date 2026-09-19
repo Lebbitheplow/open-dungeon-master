@@ -18,6 +18,10 @@ import {
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { cn } from "@/lib/cn";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { Select } from "@/components/ui/Select";
+import { Slider } from "@/components/ui/Slider";
+import { PanelError, kitButtonClass, panelField } from "./PanelKit";
 import type { OverworldTile, TileSkin } from "@/lib/overworld/logic";
 import {
   MAX_BRUSH_RADIUS,
@@ -115,9 +119,11 @@ export type OverworldMode =
   | "label"
   | "erase";
 
-const chip = "flex items-center gap-1 rounded border px-2 py-0.5 text-[11px]";
-const idle = "border-stone-700 text-stone-400 hover:bg-stone-900";
-const active = "border-amber-700 bg-amber-950/50 text-amber-200";
+// Every button here is the kit's small button (ui.btnSmall through PanelKit);
+// a chosen mode or brush wears the gold on-state over it.
+const chip = kitButtonClass("small");
+const idle = "";
+const active = "border-amber-500/60 bg-amber-400/10 text-amber-100";
 
 const MODES = [
   ["pin", "Add pin", MapPin],
@@ -158,7 +164,7 @@ export function ModeBar({
           onClick={() => onMode(mode === value ? "look" : value)}
           className={cn(chip, mode === value ? active : idle)}
         >
-          <Icon className="size-3" /> {mode === value ? "Tap the map..." : label}
+          <Icon className="size-3.5" /> {mode === value ? "Tap the map..." : label}
         </button>
       ))}
       {partyPlaced ? (
@@ -168,7 +174,7 @@ export function ModeBar({
       ) : null}
       {pinsCount ? (
         <button type="button" onClick={onClearPins} className={cn(chip, idle)}>
-          <X className="size-3" /> Clear pins
+          <X className="size-3.5" /> Clear pins
         </button>
       ) : null}
       <button
@@ -178,7 +184,7 @@ export function ModeBar({
         title="Reroll the terrain. Locations keep their spots where the new ground allows."
         className={cn(chip, idle, "disabled:opacity-50")}
       >
-        {regenBusy ? <Loader2 className="size-3 animate-spin" /> : <RefreshCw className="size-3" />}
+        {regenBusy ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
         Regenerate
       </button>
     </div>
@@ -187,10 +193,10 @@ export function ModeBar({
 
 export function TileLegend({ skin }: { skin: Record<OverworldTile, TileSkin> }) {
   return (
-    <div className="flex flex-wrap gap-x-3 gap-y-1">
+    <div className="stagger-pop flex flex-wrap gap-x-3 gap-y-1">
       {(Object.keys(skin) as OverworldTile[]).map((tile) => (
-        <span key={tile} className="flex items-center gap-1 text-[10px] text-stone-500">
-          <span className="inline-block size-2.5 rounded-sm" style={{ backgroundColor: skin[tile].fill }} />
+        <span key={tile} className="flex items-center gap-1 text-[11px] text-stone-400">
+          <span className="inline-block size-3 rounded-sm border border-black/30" style={{ backgroundColor: skin[tile].fill }} />
           {skin[tile].label}
         </span>
       ))}
@@ -216,12 +222,14 @@ export function PaintTools({
   undo?: { canUndo: boolean; canRedo: boolean; onUndo: () => void; onRedo: () => void };
 }) {
   return (
-    <div className="space-y-1.5 rounded border border-stone-800 bg-stone-950/50 p-2">
-      <div className="flex flex-wrap items-center gap-1">
+    <div className="panel reveal space-y-2 rounded-lg p-2.5">
+      <SectionHead title="Paint terrain" glyph="climate-temperate" level="h4" />
+      <div data-pill-group="" role="group" aria-label="Brush" className="flex flex-wrap items-center gap-1">
         {OVERWORLD_BRUSHES.map((value) => (
-          <button
+          <button data-on={brush === value ? "" : undefined}
             key={value}
             type="button"
+            aria-pressed={brush === value}
             onClick={() => onBrush(value)}
             className={cn(chip, brush === value ? active : idle)}
           >
@@ -233,16 +241,9 @@ export function PaintTools({
           </button>
         ))}
       </div>
-      <label className="flex items-center gap-2 text-[11px] text-stone-400">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-stone-400">
         Brush size
-        <input
-          type="range"
-          min={0}
-          max={MAX_BRUSH_RADIUS}
-          value={radius}
-          onChange={(event) => onRadius(Number(event.target.value))}
-          className="w-28 accent-amber-400"
-        />
+        <Slider min={0} max={MAX_BRUSH_RADIUS} value={radius} onChange={onRadius} label="Brush size" className="pk-w-28" />
         <span className="text-stone-500">{radius === 0 ? "one tile" : `${radius * 2 + 1} across`}</span>
         {undo ? (
           <span className="ml-auto flex items-center gap-1">
@@ -266,10 +267,10 @@ export function PaintTools({
             </button>
           </span>
         ) : null}
-      </label>
-      <p className="text-[11px] text-stone-500">Press and drag to paint; the tiles land when you let go.</p>
+      </div>
+      <p className="text-xs text-stone-500">Press and drag to paint; the tiles land when you let go.</p>
       {stranded.length ? (
-        <p className="text-[11px] text-amber-300/90">
+        <p role="status" className="live-in text-xs text-amber-300/90">
           {stranded.map((place) => place.name).filter(Boolean).join(", ")}{" "}
           {stranded.length === 1 ? "is" : "are"} now standing in sea or on a peak. The marker
           stays where you put it; move it with Move a place if that was not the idea.
@@ -301,12 +302,14 @@ export function LineTools({
   onCancel: () => void;
 }) {
   return (
-    <div className="space-y-1.5 rounded border border-stone-800 bg-stone-950/50 p-2">
-      <div className="flex flex-wrap items-center gap-1">
+    <div className="panel reveal space-y-2 rounded-lg p-2.5">
+      <SectionHead title="Draw a line" glyph="pace-normal" level="h4" />
+      <div data-pill-group="" role="group" aria-label="Kind of line" className="flex flex-wrap items-center gap-1">
         {PATH_KINDS.map((value) => (
-          <button
+          <button data-on={kind === value ? "" : undefined}
             key={value}
             type="button"
+            aria-pressed={kind === value}
             disabled={pendingCount > 0 && value !== kind}
             onClick={() => onKind(value)}
             className={cn(chip, kind === value ? active : idle, "disabled:opacity-40")}
@@ -319,10 +322,11 @@ export function LineTools({
           maxLength={FEATURE_LIMITS.labelLength}
           onChange={(event) => onLabel(event.target.value)}
           placeholder={`Name the ${kind} (optional)`}
-          className="min-w-32 flex-1 rounded-md border border-stone-700 bg-stone-950 px-2 py-0.5 text-[11px] text-stone-200"
+          aria-label={`Name the ${kind} (optional)`}
+          className={cn(panelField, "w-auto min-w-32 flex-1")}
         />
       </div>
-      <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-stone-500">
+      <div className="flex flex-wrap items-center gap-1.5 text-xs text-stone-500">
         <span>
           {pendingCount === 0
             ? "Tap where it starts, then along its course."
@@ -332,7 +336,7 @@ export function LineTools({
           type="button"
           disabled={pendingCount < 2}
           onClick={onFinish}
-          className={cn(chip, "border-amber-700 bg-amber-950/50 text-amber-100 disabled:opacity-40")}
+          className={kitButtonClass("primary", "disabled:opacity-40")}
         >
           Finish the {kind}
         </button>
@@ -349,12 +353,12 @@ export function LineTools({
 
 export function LabelTools({ size, onSize }: { size: LabelSize; onSize: (size: LabelSize) => void }) {
   return (
-    <div className="flex flex-wrap items-center gap-1.5 rounded border border-stone-800 bg-stone-950/50 p-2 text-[11px] text-stone-500">
+    <div data-pill-group="" className="panel reveal flex flex-wrap items-center gap-1.5 rounded-lg p-2.5 text-xs text-stone-500">
       <span>Tap where the words go.</span>
-      <button type="button" onClick={() => onSize("small")} className={cn(chip, size === "small" ? active : idle)}>
+      <button data-on={size === "small" ? "" : undefined} type="button" aria-pressed={size === "small"} onClick={() => onSize("small")} className={cn(chip, size === "small" ? active : idle)}>
         Place name
       </button>
-      <button type="button" onClick={() => onSize("large")} className={cn(chip, size === "large" ? active : idle)}>
+      <button data-on={size === "large" ? "" : undefined} type="button" aria-pressed={size === "large"} onClick={() => onSize("large")} className={cn(chip, size === "large" ? active : idle)}>
         Region name
       </button>
     </div>
@@ -432,7 +436,8 @@ export function FileTools({
   }
 
   return (
-    <div className="space-y-1.5 rounded border border-stone-800 bg-stone-950/50 p-2">
+    <div className="panel space-y-2 rounded-lg p-2.5">
+      <SectionHead title="The map as a file" glyph="tab-handout" level="h4" />
       <input
         ref={imageRef}
         type="file"
@@ -464,12 +469,12 @@ export function FileTools({
           onClick={() => imageRef.current?.click()}
           className={cn(chip, idle, "disabled:opacity-50")}
         >
-          {uploading ? <Loader2 className="size-3 animate-spin" /> : <ImageIcon className="size-3" />}
+          {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <ImageIcon className="size-3.5" />}
           {backdropPath ? "Replace the picture" : "Use a picture instead of tiles"}
         </button>
         {backdropPath ? (
           <button type="button" onClick={() => onBackdrop("")} className={cn(chip, idle)}>
-            <Trash2 className="size-3" /> Back to the tiles
+            <Trash2 className="size-3.5" /> Back to the tiles
           </button>
         ) : null}
         <button
@@ -478,7 +483,7 @@ export function FileTools({
           onClick={onExport}
           className={cn(chip, idle, "disabled:opacity-50")}
         >
-          {exporting ? <Loader2 className="size-3 animate-spin" /> : <Download className="size-3" />}
+          {exporting ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
           Save as PNG
         </button>
       </div>
@@ -489,30 +494,26 @@ export function FileTools({
           onClick={() => geoRef.current?.click()}
           className={cn(chip, idle, "disabled:opacity-50")}
         >
-          {importing ? <Loader2 className="size-3 animate-spin" /> : <FileUp className="size-3" />}
+          {importing ? <Loader2 className="size-3.5 animate-spin" /> : <FileUp className="size-3.5" />}
           Read an Azgaar map
         </button>
-        <select
+        <Select
+          size="sm"
           value={sizeId}
-          onChange={(event) => setSizeId(event.target.value)}
-          aria-label="Grid size for the imported map"
-          className="rounded-md border border-stone-700 bg-stone-950 px-1.5 py-0.5 text-[11px] text-stone-300"
-        >
-          <option value="current">
-            At this size ({mapSize.width} by {mapSize.height})
-          </option>
-          {OVERWORLD_SIZES.map((entry) => (
-            <option key={entry.id} value={entry.id}>
-              {entry.label} ({entry.width} by {entry.height})
-            </option>
-          ))}
-        </select>
-        <span className="text-[10px] text-stone-600">
+          onChange={setSizeId}
+          label="Grid size for the imported map"
+          options={[
+            { value: "current", label: `At this size (${mapSize.width} by ${mapSize.height})` },
+            ...OVERWORLD_SIZES.map((entry) => ({ value: entry.id as string, label: `${entry.label} (${entry.width} by ${entry.height})` })),
+          ]}
+          className="min-w-0 max-w-full"
+        />
+        <span className="text-[11px] leading-4 text-stone-500">
           Fantasy Map Generator: export Cells as GeoJSON, plus Burgs, Rivers and Routes if you like.
         </span>
       </div>
-      {importNote ? <p className="text-[11px] text-emerald-300/90">{importNote}</p> : null}
-      {error ? <p className="text-[11px] text-red-400">{error}</p> : null}
+      {importNote ? <p role="status" className="live-in text-xs text-emerald-300/90">{importNote}</p> : null}
+      {error ? <PanelError>{error}</PanelError> : null}
     </div>
   );
 }

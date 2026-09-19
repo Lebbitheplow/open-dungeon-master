@@ -2,6 +2,10 @@
 
 import { ArrowLeft, CircleHelp } from "lucide-react";
 import { IconRail, type IconRailItem } from "@/components/ui/IconRail";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
+import { headIcon } from "@/app/workshop/kit";
 import { DmMapLibraryPanel } from "@/app/campaigns/[campaignId]/DmMapLibraryPanel";
 import { DmNpcForgePanel } from "@/app/campaigns/[campaignId]/DmNpcForgePanel";
 import { DmEncounterPrepPanel } from "@/app/campaigns/[campaignId]/DmEncounterPrepPanel";
@@ -83,12 +87,13 @@ export function SystemView({
       <button
         type="button"
         onClick={onBack}
-        className="mb-3 inline-flex items-center gap-1.5 text-sm text-stone-500 hover:text-amber-200"
+        className={cn(ui.btnSmall, "mb-3 border-transparent bg-transparent px-1 text-sm text-stone-400 shadow-none")}
       >
         <ArrowLeft className="size-4" /> {workshop.title}
       </button>
       <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-        <h2 className="font-display text-xl tracking-wide text-amber-50">{current.label}</h2>
+        <GameIcon icon={{ kind: "glyph", key: `system-${current.id}` }} size="size-9" />
+        <h2 className="gold-title font-display text-xl tracking-wide">{current.label}</h2>
         <span className="text-sm text-stone-500">{count.phrase}</span>
         <button
           type="button"
@@ -96,7 +101,7 @@ export function SystemView({
           title="Guide and tour for this tool"
           onClick={onHelp}
           data-tour="system-help"
-          className="ml-auto rounded-md border border-stone-700 p-1.5 text-stone-500 hover:text-stone-300"
+          className={cn(ui.iconAction, headIcon, "ml-auto")}
         >
           <CircleHelp className="size-4" />
         </button>
@@ -111,62 +116,65 @@ export function SystemView({
         />
       </div>
 
-      {system === "storyboard" ? (
-        <DmStoryboardPanel campaignId={workshop.id} layout="board" />
-      ) : null}
-      {system === "party" ? (
-        <PartyPanel
-          workshopId={workshop.id}
-          targetParty={workshop.gameSettings.targetParty}
-          onChanged={onPregensChanged}
-        />
-      ) : null}
-      {system === "maps" ? <DmMapLibraryPanel campaignId={workshop.id} layout="gallery" /> : null}
-      {system === "region" ? (
-        <OverworldPanel campaignId={workshop.id} genre={workshop.gameSettings.genre} steersStory />
-      ) : null}
-      {system === "cast" ? <DmNpcForgePanel campaignId={workshop.id} layout="rows" /> : null}
-      {system === "encounters" ? (
-        // Rows mode renders the workbench itself, as the collapsible
-        // "How hard is this?" card above the fights.
-        <DmEncounterPrepPanel
-          campaignId={workshop.id}
-          layout="rows"
-          targetParty={workshop.gameSettings.targetParty}
-        />
-      ) : null}
-      {system === "bestiary" ? <DmBestiaryPanel campaignId={workshop.id} layout="rows" /> : null}
-      {system === "homebrew" ? (
-        <HomebrewPanel
-          variantRules={workshop.gameSettings.variantRules}
-          onChanged={onHomebrewChanged}
-        />
-      ) : null}
-      {system === "lore" ? (
-        <>
-          <LorePanel campaignId={workshop.id} steersStory layout="rows" />
-          <MarketPanel campaignId={workshop.id} steersStory mySheet={null} />
-        </>
-      ) : null}
-      {system === "factions" ? <FactionsPanel campaignId={workshop.id} steersStory /> : null}
-      {system === "tables" ? <DmTablesPanel campaignId={workshop.id} layout="rows" /> : null}
-      {system === "plugin" ? (
-        <PluginPanel workshopId={workshop.id} onChanged={onPluginChanged} />
-      ) : null}
-      {system === "share" ? <DmSharePanel campaignId={workshop.id} /> : null}
-      {system === "rules" ? (
-        <>
-          <RulesetLibrary campaignId={workshop.id} onApplied={onRulesApplied} />
-          {/* Remounted on every apply so the editor below shows what the
-              ruleset just wrote rather than the text it replaced. */}
-          <RulesPanel
-            key={workshop.updatedAt}
-            campaignId={workshop.id}
-            settings={workshop.gameSettings}
-            steersStory
+      {/* Keyed by system so the incoming tool rises in instead of cutting. */}
+      <div key={system} className="motion-tab">
+        {system === "storyboard" ? (
+          <DmStoryboardPanel campaignId={workshop.id} layout="board" />
+        ) : null}
+        {system === "party" ? (
+          <PartyPanel
+            workshopId={workshop.id}
+            targetParty={workshop.gameSettings.targetParty}
+            onChanged={onPregensChanged}
           />
-        </>
-      ) : null}
+        ) : null}
+        {system === "maps" ? <DmMapLibraryPanel campaignId={workshop.id} layout="gallery" /> : null}
+        {system === "region" ? (
+          <OverworldPanel campaignId={workshop.id} genre={workshop.gameSettings.genre} steersStory />
+        ) : null}
+        {system === "cast" ? <DmNpcForgePanel campaignId={workshop.id} layout="rows" /> : null}
+        {system === "encounters" ? (
+          // Rows mode renders the workbench itself, as the collapsible
+          // "How hard is this?" card above the fights.
+          <DmEncounterPrepPanel
+            campaignId={workshop.id}
+            layout="rows"
+            targetParty={workshop.gameSettings.targetParty}
+          />
+        ) : null}
+        {system === "bestiary" ? <DmBestiaryPanel campaignId={workshop.id} layout="rows" /> : null}
+        {system === "homebrew" ? (
+          <HomebrewPanel
+            variantRules={workshop.gameSettings.variantRules}
+            onChanged={onHomebrewChanged}
+          />
+        ) : null}
+        {system === "lore" ? (
+          <>
+            <LorePanel campaignId={workshop.id} steersStory layout="rows" />
+            <MarketPanel campaignId={workshop.id} steersStory mySheet={null} />
+          </>
+        ) : null}
+        {system === "factions" ? <FactionsPanel campaignId={workshop.id} steersStory /> : null}
+        {system === "tables" ? <DmTablesPanel campaignId={workshop.id} layout="rows" /> : null}
+        {system === "plugin" ? (
+          <PluginPanel workshopId={workshop.id} onChanged={onPluginChanged} />
+        ) : null}
+        {system === "share" ? <DmSharePanel campaignId={workshop.id} /> : null}
+        {system === "rules" ? (
+          <>
+            <RulesetLibrary campaignId={workshop.id} onApplied={onRulesApplied} />
+            {/* Remounted on every apply so the editor below shows what the
+                ruleset just wrote rather than the text it replaced. */}
+            <RulesPanel
+              key={workshop.updatedAt}
+              campaignId={workshop.id}
+              settings={workshop.gameSettings}
+              steersStory
+            />
+          </>
+        ) : null}
+      </div>
     </section>
   );
 }

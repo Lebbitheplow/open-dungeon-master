@@ -1,9 +1,12 @@
 "use client";
 
-import { Loader2, X } from "lucide-react";
+import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
+import { EmptyState } from "@/components/EmptyState";
+import { D20Spinner } from "@/components/ui/D20Spinner";
+import { Switch } from "@/components/ui/Switch";
 import type { CompareKind, CompareTable } from "@/lib/reference/compare";
 
 // Several monsters or spells side by side, with the rows that differ marked.
@@ -83,9 +86,11 @@ export function ComparePanel({
 
   if (selection.entries.length < 2) {
     return (
-      <p className="text-sm text-stone-500">
-        Pick two or more spells or monsters in Browse to compare them. Only one kind at a time.
-      </p>
+      <EmptyState
+        art="scrolls"
+        title="Pick two or more spells or monsters in Browse to compare them."
+        hint="Only one kind at a time."
+      />
     );
   }
 
@@ -93,18 +98,18 @@ export function ComparePanel({
 
   return (
     <div>
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+      <div className="stagger-pop mb-3 flex flex-wrap items-center gap-2">
         {selection.entries.map((entry) => (
           <span
             key={entry.slug}
-            className="inline-flex items-center gap-1.5 rounded-full border border-stone-700 px-3 py-1 text-xs text-stone-300"
+            className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-400/10 py-0.5 pl-3 pr-1 text-xs text-amber-100"
           >
             {entry.name}
             <button
               type="button"
               onClick={() => onRemove(entry.slug)}
               aria-label={`Remove ${entry.name}`}
-              className="text-stone-600 hover:text-amber-200"
+              className="motion-nudge inline-flex size-7 items-center justify-center rounded-full text-stone-400 hover:text-amber-200"
             >
               <X className="size-3" />
             </button>
@@ -116,35 +121,30 @@ export function ComparePanel({
       </div>
 
       {loading ? (
-        <p className="flex items-center gap-2 text-sm text-stone-500">
-          <Loader2 className="size-4 animate-spin" /> Building the table
+        <p className="reveal flex items-center gap-2 text-sm text-stone-500">
+          <D20Spinner className="size-4 text-amber-300" /> Building the table
         </p>
       ) : null}
-      {error ? <p className="text-sm text-red-300">{error}</p> : null}
+      {error ? <p role="alert" className="motion-shake text-sm text-red-300">{error}</p> : null}
 
       {table ? (
         <>
-          <label className="mb-3 flex items-center gap-2 text-xs text-stone-400">
-            <input
-              type="checkbox"
-              checked={onlyDiffering}
-              onChange={(event) => setOnlyDiffering(event.target.checked)}
-              className="accent-amber-500"
-            />
+          <div className="mb-3 flex items-center gap-2 text-xs text-stone-400">
+            <Switch on={onlyDiffering} onChange={setOnlyDiffering} label="Only what differs" />
             Only what differs ({table.differingRows} of {table.rows.length} rows)
-          </label>
+          </div>
 
-          <div className="overflow-x-auto rounded-xl border border-stone-800">
+          <div className="panel overflow-x-auto rounded-xl">
             <table className="w-full border-collapse text-left text-sm">
               <thead>
-                <tr className="border-b border-stone-800 bg-stone-950/60">
-                  <th className="px-3 py-2 text-xs uppercase tracking-wide text-stone-500" />
+                <tr className="border-b border-amber-500/20 bg-stone-950/60">
+                  <th className="px-3 py-2" />
                   {table.columns.map((column) => (
                     <th
                       key={column.slug}
                       className={cn(
-                        "px-3 py-2 font-normal",
-                        column.source === "homebrew" ? "text-amber-300" : "text-stone-200",
+                        "px-3 py-2 font-display font-normal tracking-wide",
+                        column.source === "homebrew" ? "text-amber-300" : "text-amber-100",
                       )}
                     >
                       {column.name}
@@ -154,8 +154,8 @@ export function ComparePanel({
               </thead>
               <tbody>
                 {rows.map((row) => (
-                  <tr key={row.label} className="border-b border-stone-900 last:border-0">
-                    <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-normal uppercase tracking-wide text-stone-500">
+                  <tr key={row.label} className="border-b border-stone-800/60 last:border-0">
+                    <th className="section-head-title whitespace-nowrap px-3 py-2 text-left font-normal">
                       {row.label}
                     </th>
                     {row.cells.map((cell, index) => (

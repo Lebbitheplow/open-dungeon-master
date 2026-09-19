@@ -103,7 +103,7 @@ export function WorkshopHelpDialog({
                   ))}
                 </ol>
                 {guide.tips.length ? (
-                  <ul className="space-y-1 text-xs text-stone-500">
+                  <ul className="reveal space-y-1 text-xs text-stone-500">
                     {guide.tips.map((tip) => (
                       <li key={tip} className="flex gap-1.5">
                         <span className="text-amber-500/70">&#8226;</span>

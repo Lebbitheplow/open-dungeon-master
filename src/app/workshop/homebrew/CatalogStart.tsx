@@ -3,10 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Search } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { Select } from "@/components/ui/Select";
+import { homebrewIcon } from "@/app/workshop/homebrew/HomebrewIcon";
 import { InfoButton } from "@/components/ui/InfoDialog";
 import { describeContentEntry, spellSummary } from "@/lib/help";
 import { useContentSearch, type PickerEntry } from "@/app/characters/builder/useContentSearch";
-import { CLASS_IDS, input, type EditorKind } from "@/app/workshop/homebrew/types";
+import { CLASS_IDS, type EditorKind } from "@/app/workshop/homebrew/types";
 
 // "Start from": a search over the content pack that hands back a row to
 // copy into the draft. Pick, do not type: a DM changing one number on an
@@ -57,28 +61,29 @@ export function CatalogStart({
   return (
     <div ref={container} className="flex flex-wrap items-center gap-1.5">
       {kind === "archetype" ? (
-        <select value={classSlug} aria-label="Class to browse" onChange={(event) => setClassSlug(event.target.value)} className={input}>
-          {CLASS_IDS.map((id) => (
-            <option key={id} value={id}>
-              {id}
-            </option>
-          ))}
-        </select>
+        <span className="w-44">
+          <Select
+            value={classSlug}
+            label="Class to browse"
+            onChange={setClassSlug}
+            options={CLASS_IDS.map((id) => ({ value: id as string, label: id, icon: { kind: "family" as const, key: `class-${id}` } }))}
+          />
+        </span>
       ) : null}
       <div className="relative min-w-48 flex-1">
-        <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-stone-500" />
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-500" />
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           onFocus={() => results.length && setOpen(true)}
           placeholder="Start from something in the books..."
           aria-label="Search the content pack to start from"
-          className={cn(input, "w-full pl-7")}
+          className={cn(ui.input, "pl-9")}
         />
-        {loading ? <Loader2 className="absolute right-2 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-stone-500" /> : null}
+        {loading ? <Loader2 className="absolute right-3 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-stone-500" /> : null}
       </div>
       {open && !results.length && query.trim() && !loading ? (
-        <p className="basis-full text-[11px] text-stone-500">
+        <p className="live-in basis-full text-xs text-stone-500">
           Nothing in the books matched &quot;{query.trim()}&quot;.
         </p>
       ) : null}
@@ -87,7 +92,7 @@ export function CatalogStart({
           clipped near the bottom. Every row carries a ⓘ so a DM can read
           the entry before copying it. */}
       {open && results.length ? (
-        <ul className="mt-1 max-h-64 w-full basis-full overflow-y-auto panel panel-smoke rounded-lg">
+        <ul className="reveal mt-1 max-h-64 w-full basis-full overflow-y-auto panel panel-smoke rounded-lg text-sm">
           {results.slice(0, 40).map((entry) => (
             <li key={entry.slug} className="flex items-center gap-1 pr-2 hover:bg-stone-800">
               <button
@@ -97,9 +102,15 @@ export function CatalogStart({
                   setQuery("");
                   setOpen(false);
                 }}
-                className="flex grow items-center justify-between gap-2 px-3 py-1.5 text-left text-sm"
+                className={cn(ui.btnSmall, "min-h-10 grow justify-between gap-2 border-transparent bg-transparent text-left shadow-none")}
               >
-                <span className={cn(entry.source === "homebrew" && "text-amber-300")}>{entry.name}</span>
+                <span className={cn("flex min-w-0 items-center gap-2", entry.source === "homebrew" && "text-amber-300")}>
+                  {(() => {
+                    const icon = homebrewIcon(kind, entry.name, entry.data as Record<string, unknown>);
+                    return icon ? <GameIcon icon={icon} size="size-6" /> : null;
+                  })()}
+                  <span className="truncate">{entry.name}</span>
+                </span>
                 <span className="text-[11px] text-stone-500">
                   {entry.level !== undefined ? `level ${entry.level}` : entry.rarity || entry.kind || ""}
                 </span>

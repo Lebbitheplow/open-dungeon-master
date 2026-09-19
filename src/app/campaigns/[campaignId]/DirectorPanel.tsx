@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
+import { GameIcon } from "@/components/ui/GameIcon";
 import { Tooltip } from "@/components/ui/Tooltip";
 import {
   ONE_SHOT_EVENT_IDS,
@@ -21,6 +22,17 @@ import {
 // the controls folded into it and only the mechanism survived: a preset arms a
 // canned event, and the pill's Private toggle arms free text. Both are the
 // same one-turn steer underneath (src/lib/dm/director-logic.ts).
+
+// The painted cue each canned event wears on its button.
+const ONE_SHOT_GLYPH: Record<OneShotEventId, string> = {
+  combat: "cue-battle",
+  location: "cue-travel",
+  social: "cue-tavern",
+  romance: "cue-festive",
+  mystery: "cue-mystery",
+  weird: "cue-arcane",
+  windfall: "cue-coin",
+};
 
 type ArmState = {
   armed: boolean;
@@ -85,11 +97,16 @@ export function DirectorArmedBanner({
   }
 
   return (
-    <div className="mb-2 flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-200">
+    <div className="reveal-banner mb-2 flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-200">
       <span className="relative flex h-2 w-2 shrink-0">
         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-70" />
         <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-400" />
       </span>
+      <GameIcon
+        icon={{ kind: "glyph", key: state.oneShot && !state.absoluteCommand ? ONE_SHOT_GLYPH[state.oneShot] : "tab-lead" }}
+        size="size-5"
+        className="shrink-0"
+      />
       <span className="min-w-0 flex-1 truncate">
         {state.absoluteCommand
           ? `Direction armed: "${state.absoluteCommand}"`
@@ -98,7 +115,7 @@ export function DirectorArmedBanner({
       {steersStory ? (
         <button
           type="button"
-          disabled={busy}
+          disabled={busy} aria-busy={busy}
           onClick={() => {
             setBusy(true);
             void fetch(`/api/campaigns/${campaignId}/director`, { method: "DELETE" })
@@ -157,10 +174,11 @@ export function DirectorPresets({ campaignId }: { campaignId: string }) {
         <Tooltip key={id} content={oneShotBlurb(id)}>
           <button
             type="button"
-            disabled={busy}
+            disabled={busy} aria-busy={busy}
             onClick={() => void arm(id)}
-            className={cn(ui.btnSmall, "px-2 py-1 text-[11px] disabled:opacity-50")}
+            className={cn(ui.btnSmall, "min-h-9 gap-1 py-1 pl-1.5 pr-2 text-[11px] disabled:opacity-50")}
           >
+            <GameIcon icon={{ kind: "glyph", key: ONE_SHOT_GLYPH[id] }} size="size-5" />
             {oneShotLabel(id)}
           </button>
         </Tooltip>

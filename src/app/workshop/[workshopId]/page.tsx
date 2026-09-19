@@ -1,6 +1,7 @@
 "use client";
 
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
+import { PageSkeleton } from "@/components/PageSkeleton";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, use, useCallback, useEffect, useState } from "react";
@@ -11,8 +12,11 @@ import { WorkshopHeader } from "@/app/workshop/[workshopId]/WorkshopHeader";
 import {
   WORKSHOP_SYSTEMS,
   isSystemId,
+  systemCount,
   type SystemId,
 } from "@/app/workshop/[workshopId]/systems";
+import { workshopCommands } from "@/app/workshop/[workshopId]/palette-commands";
+import { CommandPalette } from "@/components/CommandPalette";
 import { markTourSeen, tourSeen } from "@/lib/tours/logic";
 import { draftCount, worldPackDraftSchema } from "@/lib/worlds/draft";
 import { requestTourPrepare } from "@/lib/tours/prepare";
@@ -166,6 +170,25 @@ function WorkshopPageInner({ workshopId }: { workshopId: string }) {
     router.push(`${pathname}?system=${next}`);
   }
 
+  // "Create an entry" from the palette: go to the system, then ask its panel
+  // to open its editor. The panel answers only once its rows have loaded, so
+  // the request is made twice, a beat apart; the panels ignore a request for
+  // an editor that is already open.
+  const [creating, setCreating] = useState<{ prepare: string; ask: number } | null>(null);
+  useEffect(() => {
+    if (!creating) return;
+    const timers = [450, 1400].map((delay) =>
+      window.setTimeout(() => requestTourPrepare(creating.prepare), delay),
+    );
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [creating]);
+  function createIn(next: SystemId, prepare: string) {
+    if (system !== next) {
+      openSystem(next);
+    }
+    setCreating((previous) => ({ prepare, ask: (previous?.ask ?? 0) + 1 }));
+  }
+
   // What Help can replay from here: the hub's tour and, inside a tool, that
   // tool's own.
   const helpTours: HelpTour[] = [
@@ -188,9 +211,7 @@ function WorkshopPageInner({ workshopId }: { workshopId: string }) {
 
   if (loading) {
     return (
-      <main className="flex flex-1 items-center justify-center">
-        <Loader2 className="size-6 animate-spin text-stone-500" />
-      </main>
+      <PageSkeleton kind="hub" />
     );
   }
 
@@ -247,6 +268,20 @@ function WorkshopPageInner({ workshopId }: { workshopId: string }) {
                 : current,
             )
           }
+          aside={
+            <CommandPalette
+              title="Workshop commands"
+              placeholder="Jump to, or create"
+              commands={workshopCommands({
+                current: system,
+                phrase: (id) => systemCount(id, workshop, bestiary, homebrew, pregens, plugin).phrase,
+                onJump: openSystem,
+                onCreate: createIn,
+                onHub: () => router.push(pathname),
+                onHelp: () => setHelpOpen(true),
+              })}
+            />
+          }
         />
       </div>
       {system ? (
@@ -289,9 +324,7 @@ export default function WorkshopPage({
   return (
     <Suspense
       fallback={
-        <main className="flex flex-1 items-center justify-center">
-          <Loader2 className="size-6 animate-spin text-stone-500" />
-        </main>
+        <PageSkeleton kind="hub" />
       }
     >
       <WorkshopPageInner workshopId={workshopId} />

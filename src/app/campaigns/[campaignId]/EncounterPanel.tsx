@@ -7,7 +7,11 @@ import { cn } from "@/lib/cn";
 import { MonsterTile } from "@/lib/ui";
 import { HEALTH_COLORS } from "@/lib/bestiary/health";
 import { DmInitiativePanel } from "@/app/campaigns/[campaignId]/DmInitiativePanel";
+import { ConditionChip, type FaceLookup } from "@/app/campaigns/[campaignId]/BoardChrome";
+import { familyIconPath } from "@/lib/icons";
+import { characterPlaceholder, monsterPlaceholder, npcPlaceholder } from "@/lib/placeholders";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
+import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 function crLabel(cr: number): string {
   if (cr === 0.125) return "1/8";
@@ -25,6 +29,7 @@ export function EncounterPanel({
   canEditOrder = false,
   embedded = false,
   genre,
+  sheets,
 }: {
   campaignId: string;
   encounter: PublicEncounter;
@@ -35,6 +40,9 @@ export function EncounterPanel({
   embedded?: boolean;
   // The table's setting, so a high-rating enemy draws the genre's boss plate.
   genre?: string | null;
+  // The party's sheets, so the order shows the adventurers' faces as well as
+  // the monsters'. Without them a player's row falls back to an initial.
+  sheets?: CharacterSheet[];
 }) {
   const [ending, setEnding] = useState(false);
   const [openGroups, setOpenGroups] = useState<string[]>([]);
@@ -51,6 +59,28 @@ export function EncounterPanel({
     }
     return [...byKey.entries()].map(([key, members]) => ({ key, members }));
   }, [encounter.enemies]);
+
+  // Faces for the order, by the same rule the board uses: own portrait, then
+  // the plate, then the class emblem (docs/visual-overhaul-plan.md 5.1).
+  const faceOf = useMemo<FaceLookup>(() => {
+    const sheetsById = new Map((sheets ?? []).map((sheet) => [sheet.id, sheet]));
+    const enemiesById = new Map(encounter.enemies.map((enemy) => [enemy.id, enemy]));
+    return (entry) => {
+      const sheet = sheetsById.get(entry.id);
+      if (sheet) {
+        return [
+          sheet.portrait?.url,
+          characterPlaceholder({ race: sheet.race, class: sheet.class, gender: sheet.gender }),
+          familyIconPath(`class-${sheet.class}`),
+        ];
+      }
+      const enemy = enemiesById.get(entry.id);
+      if (enemy) {
+        return [monsterPlaceholder(enemy.type, { cr: enemy.cr, genre, seed: enemy.name })];
+      }
+      return entry.kind === "npc" ? [npcPlaceholder(null, entry.name)] : [];
+    };
+  }, [sheets, encounter.enemies, genre]);
 
   async function forceEnd() {
     if (!await appConfirm("End this encounter without a resolution? No XP is awarded.")) {
@@ -132,6 +162,14 @@ export function EncounterPanel({
               >
                 <span className="flex min-w-0 items-center gap-1.5 text-sm text-stone-200">
                   <ChevronRight className="size-3.5 shrink-0 text-stone-500" />
+                  <MonsterTile
+                    type={group.members[0].type}
+                    cr={group.members[0].cr}
+                    genre={genre}
+                    seed={group.members[0].name}
+                    size="size-6"
+                    className={cn("rounded-full", !standing.length && "grayscale")}
+                  />
                   <span className="truncate">
                     {group.members[0].name.replace(/\s+\d+$/, "")} x{group.members.length}
                   </span>
@@ -148,7 +186,7 @@ export function EncounterPanel({
         })}
       </ul>
       {canEditOrder ? (
-        <DmInitiativePanel campaignId={campaignId} encounter={encounter} />
+        <DmInitiativePanel campaignId={campaignId} encounter={encounter} faceOf={faceOf} />
       ) : null}
     </section>
   );
@@ -159,7 +197,7 @@ export function EncounterPanel({
             <li
               key={enemy.id}
               className={cn(
-                "rounded-md border border-stone-800 bg-stone-950/60 px-2.5 py-1.5",
+                "animate-fade-up rounded-md border border-stone-800 bg-stone-950/60 px-2 py-1.5 transition-[color,background-color,border-color,opacity] duration-[260ms] ease-settle hover:border-stone-700",
                 out && "opacity-60",
               )}
             >
@@ -175,8 +213,8 @@ export function EncounterPanel({
                     cr={enemy.cr}
                     genre={genre}
                     seed={enemy.name}
-                    size="size-6"
-                    className={out ? "grayscale" : ""}
+                    size="size-8"
+                    className={cn("rounded-full", out && "grayscale")}
                   />
                   {enemy.status === "dead" ? (
                     <Skull className="size-3.5 shrink-0 text-stone-500" />
@@ -190,7 +228,8 @@ export function EncounterPanel({
                 </span>
                 <span
                   className={cn(
-                    "ml-2 shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize",
+                    // The health word changes tone the way the ring on the board does.
+                    "ml-2 shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize transition-colors duration-[420ms] ease-snap",
                     HEALTH_COLORS[enemy.status === "fled" ? "dead" : enemy.health],
                   )}
                 >
@@ -223,15 +262,11 @@ export function EncounterPanel({
               {enemy.conditions?.length ? (
                 <div className="mt-1 flex flex-wrap gap-1">
                   {enemy.conditions.map((condition) => (
-                    <span
+                    <ConditionChip
                       key={condition}
-                      className="rounded-full border border-amber-900/60 bg-amber-950/30 px-1.5 py-px text-[10px] capitalize text-amber-300"
-                    >
-                      {condition}
-                      {enemy.conditionRounds?.[condition]
-                        ? ` (${enemy.conditionRounds[condition]} rd)`
-                        : ""}
-                    </span>
+                      label={condition}
+                      rounds={enemy.conditionRounds?.[condition]}
+                    />
                   ))}
                 </div>
               ) : null}

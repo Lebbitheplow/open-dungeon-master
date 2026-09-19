@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { Brush, Image as ImageIcon, Loader2, Shapes, Trash2 } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { Image as ImageIcon, Loader2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import {
   BRUSHES,
@@ -10,24 +10,39 @@ import {
   MAX_BRUSH_RADIUS,
   type Brush as BrushName,
 } from "@/lib/battlemap/paint";
-import { STAMPS, STAMP_EFFECTS, STAMP_LABELS, STAMP_SIZE, type StampKind } from "@/lib/battlemap/stamp";
+import {
+  STAMPS,
+  STAMP_EFFECTS,
+  STAMP_LABELS,
+  STAMP_SIZE,
+  stampFootprint,
+  stampStrokes,
+  type StampKind,
+} from "@/lib/battlemap/stamp";
 import {
   BACKDROP_LIMITS,
   DEFAULT_BACKDROP_TRANSFORM,
   type Backdrop,
   type BackdropTransform,
 } from "@/lib/battlemap/backdrop";
+import { TERRAIN, TILE_FEET } from "@/lib/battlemap/types";
+import { FLAT_TONES, FinePrint, RangeRow, Swatch, brushChar, mapButton, mapDanger } from "@/app/campaigns/[campaignId]/mapUi";
 
-// The three tool bars a map editor needs, shared by the studio (which edits
+// The three paint dials a map editor needs, shared by the studio (which edits
 // the board on the table) and the library (which edits maps in a drawer).
 // Neither of them decides anything: every change here becomes a request the
 // server validates.
 
+const NIBS = [0, 1, 2, 3].filter((radius) => radius <= MAX_BRUSH_RADIUS);
+
+// Six brushes as a list: the material the skin paints it with, its name, and
+// what it costs a walker. A second press on the held brush lets it go.
 export function BrushPalette({
   brush,
   onPick,
   radius,
   onRadius,
+  swatches,
 }: {
   brush: BrushName | "";
   onPick: (brush: BrushName | "") => void;
@@ -35,52 +50,117 @@ export function BrushPalette({
   // the caller can use one (a freehand brush can; a line cannot).
   radius?: number;
   onRadius?: (radius: number) => void;
+  // Terrain character to the picture of the material the map's skin uses.
+  swatches?: Record<string, string>;
 }) {
   return (
-    <div className="space-y-1">
-      <p className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-stone-500">
-        <Brush className="size-3.5" /> Paint the ground
-      </p>
-      <div className="flex flex-wrap items-center gap-1">
-        {BRUSHES.map((option, index) => (
-          <button
-            key={option}
-            type="button"
-            title={`${BRUSH_EFFECTS[option]} (${index + 1})`}
-            onClick={() => onPick(brush === option ? "" : option)}
-            className={cn(
-              "rounded-md border px-2 py-0.5 text-[11px]",
-              brush === option
-                ? "border-amber-700 bg-amber-950/50 text-amber-100"
-                : "border-stone-700 text-stone-400 hover:text-stone-200",
-            )}
-          >
-            {BRUSH_LABELS[option]}
-          </button>
-        ))}
-        {radius !== undefined && onRadius ? (
-          <label className="ml-1 flex items-center gap-1 text-[11px] text-stone-500">
-            Size
-            <input
-              type="range"
-              min={0}
-              max={MAX_BRUSH_RADIUS}
-              value={radius}
-              onChange={(event) => onRadius(Number(event.target.value))}
-              className="w-16 accent-amber-500"
-            />
-            <span className="w-8 tabular-nums text-stone-400">
-              {radius * 2 + 1}x{radius * 2 + 1}
+    <div className="space-y-2">
+      <ul data-pill-group="" className="space-y-1">
+        {BRUSHES.map((option, index) => {
+          const active = brush === option;
+          return (
+            <li key={option}>
+              <button
+                type="button"
+                aria-pressed={active}
+                data-on={active ? "" : undefined}
+                title={`${BRUSH_EFFECTS[option]} (${index + 1})`}
+                onClick={() => onPick(active ? "" : option)}
+                className={cn(
+                  "flex w-full items-start gap-2 rounded-lg border px-2 py-1.5 text-left motion-press",
+                  active
+                    ? "border-amber-500/60 bg-amber-400/10 shadow-[0_0_14px_rgba(212,171,58,0.12)]"
+                    : "border-stone-800 bg-stone-950/40 hover:border-stone-600",
+                )}
+              >
+                <Swatch char={brushChar(option)} src={swatches?.[brushChar(option)]} className="mt-0.5" />
+                <span className="min-w-0 flex-1">
+                  <span className={cn("flex items-center justify-between text-[12px]", active ? "text-amber-100" : "text-stone-200")}>
+                    {BRUSH_LABELS[option]}
+                    <span className="font-mono text-[8px] text-stone-600">{index + 1}</span>
+                  </span>
+                  <span className="block font-mono text-[9px] leading-tight text-stone-500">{BRUSH_EFFECTS[option]}</span>
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {radius !== undefined && onRadius ? (
+        <div className="space-y-1">
+          <div className="flex items-center justify-between font-display text-[9px] uppercase tracking-[0.18em] text-stone-500">
+            Nib
+            <span className="font-mono normal-case tracking-normal text-amber-200">
+              {radius * 2 + 1} × {radius * 2 + 1} tiles
             </span>
-          </label>
-        ) : null}
-      </div>
-      <p className="text-[10px] text-stone-600">
-        {brush
-          ? "Drag across the map above. Every stroke is checked before it lands."
-          : "Pick a brush, then drag on the map."}
-      </p>
+          </div>
+          <div data-pill-group="" className="grid grid-cols-4 gap-1">
+            {NIBS.map((nib) => (
+              <button data-on={radius === nib ? "" : undefined}
+                key={nib}
+                type="button"
+                aria-pressed={radius === nib}
+                aria-label={`${nib * 2 + 1} by ${nib * 2 + 1} tiles`}
+                onClick={() => onRadius(nib)}
+                className={cn(
+                  "flex h-8 items-center justify-center rounded-md border motion-press",
+                  radius === nib ? "border-amber-500/60 bg-amber-400/10" : "border-stone-800 bg-stone-950/40 hover:border-stone-600",
+                )}
+              >
+                <span
+                  aria-hidden="true"
+                  className={cn("rounded-[2px]", radius === nib ? "bg-amber-300" : "bg-stone-500")}
+                  style={{ width: 4 + nib * 4, height: 4 + nib * 4 }}
+                />
+              </button>
+            ))}
+          </div>
+          {/* The slider stays for the keyboard: arrow keys walk the same four sizes. */}
+          <RangeRow label="Size" min={0} max={MAX_BRUSH_RADIUS} value={radius} readout={`${radius * 2 + 1}x${radius * 2 + 1}`} onChange={onRadius} />
+        </div>
+      ) : null}
+      <FinePrint>
+        {brush ? "Drag across the map. Every stroke is checked before it lands." : "Pick a brush, then drag on the map."}
+      </FinePrint>
     </div>
+  );
+}
+
+// What a stamp lays down, drawn small: the same strokes the server compiles.
+function StampPreview({ kind, swatches }: { kind: StampKind; swatches?: Record<string, string> }) {
+  const cells = useMemo(() => {
+    const stamp = { kind, x: 4, y: 3, width: 5, height: 4 };
+    const box = stampFootprint(stamp);
+    const across = box.x1 - box.x0 + 1;
+    const down = box.y1 - box.y0 + 1;
+    const grid: string[] = new Array(across * down).fill("");
+    for (const stroke of stampStrokes(stamp)) {
+      const x = stroke.x - box.x0;
+      const y = stroke.y - box.y0;
+      if (x >= 0 && y >= 0 && x < across && y < down) {
+        grid[y * across + x] = TERRAIN[stroke.brush];
+      }
+    }
+    return { grid, across };
+  }, [kind]);
+  return (
+    <span
+      aria-hidden="true"
+      className="grid w-full gap-px overflow-hidden rounded-[3px] bg-black/40"
+      style={{ gridTemplateColumns: `repeat(${cells.across}, 1fr)` }}
+    >
+      {cells.grid.map((char, index) => (
+        <span
+          key={index}
+          className="aspect-square bg-cover"
+          style={
+            char
+              ? { backgroundColor: FLAT_TONES[char], backgroundImage: swatches?.[char] ? `url("${swatches[char]}")` : undefined }
+              : { backgroundColor: "transparent" }
+          }
+        />
+      ))}
+    </span>
   );
 }
 
@@ -89,63 +169,55 @@ export function StampPalette({
   size,
   onPick,
   onResize,
+  swatches,
 }: {
   stamp: StampKind | "";
   size: { width: number; height: number };
   onPick: (stamp: StampKind | "") => void;
   onResize: (size: { width: number; height: number }) => void;
+  swatches?: Record<string, string>;
 }) {
   return (
-    <div className="space-y-1">
-      <p className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-stone-500">
-        <Shapes className="size-3.5" /> Stamp a shape
-      </p>
-      <div className="flex flex-wrap gap-1">
-        {STAMPS.map((option) => (
-          <button
-            key={option}
-            type="button"
-            title={STAMP_EFFECTS[option]}
-            onClick={() => onPick(stamp === option ? "" : option)}
-            className={cn(
-              "rounded-md border px-2 py-0.5 text-[11px]",
-              stamp === option
-                ? "border-amber-700 bg-amber-950/50 text-amber-100"
-                : "border-stone-700 text-stone-400 hover:text-stone-200",
-            )}
-          >
-            {STAMP_LABELS[option]}
-          </button>
-        ))}
+    <div className="space-y-2">
+      <div className="grid grid-cols-3 gap-1">
+        {STAMPS.map((option) => {
+          const active = stamp === option;
+          return (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={active}
+              title={STAMP_EFFECTS[option]}
+              onClick={() => onPick(active ? "" : option)}
+              className={cn(
+                "flex flex-col items-center gap-1 rounded-lg border p-1.5 motion-press",
+                active ? "border-amber-500/60 bg-amber-400/10" : "border-stone-800 bg-stone-950/40 hover:border-stone-600",
+              )}
+            >
+              <StampPreview kind={option} swatches={swatches} />
+              <span className={cn("text-[10px] leading-tight", active ? "text-amber-100" : "text-stone-300")}>{STAMP_LABELS[option]}</span>
+            </button>
+          );
+        })}
       </div>
       {stamp ? (
         <>
-          <div className="flex flex-wrap items-center gap-2 text-[11px] text-stone-500">
-            {(["width", "height"] as const).map((side) => (
-              <label key={side} className="flex items-center gap-1">
-                {side === "width" ? "Across" : "Down"}
-                <input
-                  type="range"
-                  min={STAMP_SIZE.min}
-                  max={STAMP_SIZE.max}
-                  value={size[side]}
-                  onChange={(event) =>
-                    onResize({ ...size, [side]: Number(event.target.value) })
-                  }
-                  className="w-20 accent-amber-500"
-                />
-                <span className="w-10 tabular-nums text-stone-400">{size[side] * 5}ft</span>
-              </label>
-            ))}
-          </div>
-          <p className="text-[10px] text-stone-600">
-            Click once on the map. The outline shows where it will land.
-          </p>
+          <FinePrint>{STAMP_EFFECTS[stamp]}</FinePrint>
+          {(["width", "height"] as const).map((side) => (
+            <RangeRow
+              key={side}
+              label={side === "width" ? "Across" : "Down"}
+              min={STAMP_SIZE.min}
+              max={STAMP_SIZE.max}
+              value={size[side]}
+              readout={`${size[side] * TILE_FEET}ft`}
+              onChange={(value) => onResize({ ...size, [side]: value })}
+            />
+          ))}
+          <FinePrint>Click once on the map. The outline shows where it will land.</FinePrint>
         </>
       ) : (
-        <p className="text-[10px] text-stone-600">
-          Rooms and corridors in one click, drawn in the same five tiles the rules read.
-        </p>
+        <FinePrint>Rooms and corridors in one click, drawn in the same five tiles the rules read.</FinePrint>
       )}
     </div>
   );
@@ -201,8 +273,8 @@ export function BackdropControls({
     onChange({ path: backdrop?.path ?? "", transform: { ...transform, ...patch } });
 
   return (
-    <div className="space-y-1.5">
-      <p className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-stone-500">
+    <div className="space-y-2">
+      <p className="flex items-center gap-1.5 font-display text-[9px] uppercase tracking-[0.18em] text-stone-500">
         <ImageIcon className="size-3.5" /> Picture under the grid
       </p>
       <div className="flex flex-wrap items-center gap-1.5">
@@ -219,12 +291,7 @@ export function BackdropControls({
             event.target.value = "";
           }}
         />
-        <button
-          type="button"
-          disabled={uploading || busy}
-          onClick={() => fileRef.current?.click()}
-          className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-50"
-        >
+        <button type="button" disabled={uploading || busy} onClick={() => fileRef.current?.click()} className={mapButton}>
           {uploading ? <Loader2 className="size-3 animate-spin" /> : <ImageIcon className="size-3" />}
           {backdrop ? "Replace it" : "Add a picture"}
         </button>
@@ -233,7 +300,7 @@ export function BackdropControls({
             type="button"
             disabled={busy}
             onClick={() => onChange({ path: "", transform: DEFAULT_BACKDROP_TRANSFORM })}
-            className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-400 hover:bg-stone-900 disabled:opacity-50"
+            className={mapDanger}
           >
             <Trash2 className="size-3" /> Take it away
           </button>
@@ -242,60 +309,48 @@ export function BackdropControls({
 
       {backdrop ? (
         <>
-          <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-stone-500">
-            <label className="flex items-center gap-1">
-              Across
-              <input
-                type="range"
-                min={-BACKDROP_LIMITS.maxOffset}
-                max={BACKDROP_LIMITS.maxOffset}
-                step={0.25}
-                value={transform.offsetX}
-                onChange={(event) => set({ offsetX: Number(event.target.value) })}
-                className="w-full accent-amber-500"
-              />
-            </label>
-            <label className="flex items-center gap-1">
-              Down
-              <input
-                type="range"
-                min={-BACKDROP_LIMITS.maxOffset}
-                max={BACKDROP_LIMITS.maxOffset}
-                step={0.25}
-                value={transform.offsetY}
-                onChange={(event) => set({ offsetY: Number(event.target.value) })}
-                className="w-full accent-amber-500"
-              />
-            </label>
-            <label className="flex items-center gap-1">
-              Size
-              <input
-                type="range"
-                min={BACKDROP_LIMITS.minScale}
-                max={BACKDROP_LIMITS.maxScale}
-                step={0.01}
-                value={transform.scale}
-                onChange={(event) => set({ scale: Number(event.target.value) })}
-                className="w-full accent-amber-500"
-              />
-            </label>
-            <label className="flex items-center gap-1">
-              Strength
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.05}
-                value={transform.opacity}
-                onChange={(event) => set({ opacity: Number(event.target.value) })}
-                className="w-full accent-amber-500"
-              />
-            </label>
+          <div className="space-y-1">
+            <RangeRow
+              label="Across"
+              min={-BACKDROP_LIMITS.maxOffset}
+              max={BACKDROP_LIMITS.maxOffset}
+              step={0.25}
+              value={transform.offsetX}
+              readout={String(transform.offsetX)}
+              onChange={(offsetX) => set({ offsetX })}
+            />
+            <RangeRow
+              label="Down"
+              min={-BACKDROP_LIMITS.maxOffset}
+              max={BACKDROP_LIMITS.maxOffset}
+              step={0.25}
+              value={transform.offsetY}
+              readout={String(transform.offsetY)}
+              onChange={(offsetY) => set({ offsetY })}
+            />
+            <RangeRow
+              label="Size"
+              min={BACKDROP_LIMITS.minScale}
+              max={BACKDROP_LIMITS.maxScale}
+              step={0.01}
+              value={transform.scale}
+              readout={`${Math.round(transform.scale * 100)}%`}
+              onChange={(scale) => set({ scale })}
+            />
+            <RangeRow
+              label="Strength"
+              min={0}
+              max={1}
+              step={0.05}
+              value={transform.opacity}
+              readout={`${Math.round(transform.opacity * 100)}%`}
+              onChange={(opacity) => set({ opacity })}
+            />
           </div>
-          <p className="text-[10px] text-stone-600">
+          <FinePrint>
             The picture is scenery. The walls that stop a rogue are the ones painted into the
             terrain, so line the two up and check them before anyone plays on it.
-          </p>
+          </FinePrint>
         </>
       ) : null}
       {error ? <p className="text-[11px] text-red-400">{error}</p> : null}

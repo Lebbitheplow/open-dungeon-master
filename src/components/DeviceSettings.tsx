@@ -1,6 +1,5 @@
 "use client";
 
-import { Bluetooth, Dices, Mic, Sparkles, Volume2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { DiceSourcesPanel } from "@/app/campaigns/[campaignId]/DiceSourcesDialog";
 import {
@@ -40,6 +39,11 @@ import {
   writeEffectsMode,
   writeTurnChime,
 } from "@/lib/effects-mode";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { Select, type SelectOption } from "@/components/ui/Select";
+import { Slider as KitSlider } from "@/components/ui/Slider";
+import { Switch as KitSwitch } from "@/components/ui/Switch";
+import { ui } from "@/lib/ui";
 import { paintedMapsOn, writePaintedMaps } from "@/lib/painted-maps";
 import { MASTER_VOLUME_MAX, VOLUME_STEP } from "@/lib/voice/volume";
 
@@ -51,16 +55,23 @@ import { MASTER_VOLUME_MAX, VOLUME_STEP } from "@/lib/voice/volume";
 // the table's hooks read (useVoicePrefs, audio-devices, audio-prefs,
 // dice-sources), and those hooks apply the change live.
 
-const SELECT = cn(
-  "w-full rounded-md border border-stone-700 bg-stone-900 px-2 py-1.5 text-xs",
-  "text-stone-200 outline-none focus:border-amber-500",
-);
-const RANGE = "w-full accent-amber-400";
-const BUTTON = cn(
-  "rounded-md border border-stone-700 px-2.5 py-1 text-xs text-stone-300",
-  "hover:bg-stone-900 disabled:opacity-50",
-);
-const HEADING = "mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-stone-400";
+const BUTTON = cn(ui.btnSmall, "shrink-0 px-2.5 py-1 text-xs");
+// The kit Select needs a non-empty value to show a choice; the stores keep ""
+// for "whatever the system uses", so that one option is translated both ways.
+const SYSTEM_DEFAULT = "__default";
+const MIC_MODES: SelectOption<MicMode>[] = [
+  { value: "open", label: "Open mic" },
+  { value: "ptt", label: "Push to talk" },
+];
+
+function deviceOptions(devices: Device[]): SelectOption<string>[] {
+  return [
+    { value: SYSTEM_DEFAULT, label: "System default" },
+    // A browser without permission reports every device with an empty id.
+    ...devices.filter((device) => device.deviceId).map((device) => ({ value: device.deviceId, label: device.label })),
+  ];
+}
+
 const ROW = "flex items-center justify-between gap-3";
 const LABEL = "text-xs text-stone-400";
 
@@ -286,22 +297,22 @@ function Slider({
   onChange: (value: number) => void;
 }) {
   return (
-    <label className="block">
+    <div>
       <span className={cn(ROW, "mb-1")}>
         <span className={LABEL}>{label}</span>
         <span className="font-mono text-xs text-stone-300">{percent(value)}</span>
       </span>
-      <input
-        type="range"
+      <KitSlider
         min={min}
         max={max}
         step={VOLUME_STEP}
         value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-        aria-label={label}
-        className={RANGE}
+        onChange={onChange}
+        label={label}
+        bubble={percent}
+        className="w-full"
       />
-    </label>
+    </div>
   );
 }
 
@@ -317,20 +328,7 @@ function Switch({
   return (
     <div className={ROW}>
       <span className={LABEL}>{label}</span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={on}
-        onClick={() => onChange(!on)}
-        className={cn(
-          "rounded-md border px-2.5 py-1 text-xs",
-          on
-            ? "border-amber-700 bg-amber-950/40 text-amber-200"
-            : "border-stone-700 text-stone-400 hover:bg-stone-900",
-        )}
-      >
-        {on ? "On" : "Off"}
-      </button>
+      <KitSwitch on={on} onChange={onChange} label={label} />
     </div>
   );
 }
@@ -342,25 +340,18 @@ function MicrophoneSection({ devices }: { devices: ReturnType<typeof useDevices>
   const meter = useMicMeter(micId, gain);
   return (
     <section>
-      <h3 className={HEADING}>
-        <Mic className="size-3.5" /> Microphone
-      </h3>
+      <SectionHead title="Microphone" glyph="cue-horn" />
       <div className="space-y-3">
         <div>
           <span className={cn(LABEL, "mb-1 block")}>Recording device</span>
-          <select
-            value={micId}
-            onChange={(event) => writeMicId(event.target.value)}
-            aria-label="Recording device"
-            className={SELECT}
-          >
-            <option value="">System default</option>
-            {devices.inputs.map((device) => (
-              <option key={device.deviceId} value={device.deviceId}>
-                {device.label}
-              </option>
-            ))}
-          </select>
+          <Select
+            value={micId || SYSTEM_DEFAULT}
+            onChange={(value) => writeMicId(value === SYSTEM_DEFAULT ? "" : value)}
+            options={deviceOptions(devices.inputs)}
+            label="Recording device"
+            size="sm"
+            className="w-full"
+          />
           {!devices.labelled ? (
             <button type="button" onClick={() => void devices.allow()} className={cn(BUTTON, "mt-1.5")}>
               Allow microphone access to see device names
@@ -369,7 +360,7 @@ function MicrophoneSection({ devices }: { devices: ReturnType<typeof useDevices>
         </div>
         <Slider label="Recording level" value={gain} max={MIC_GAIN_MAX} onChange={writeMicGain} />
         <div className={ROW}>
-          <div className="h-2 flex-1 overflow-hidden rounded-full bg-stone-800">
+          <div className="h-2 flex-1 overflow-hidden rounded-full border border-amber-500/15 bg-stone-900">
             <div
               className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-amber-300 transition-[width] duration-75"
               style={{ width: percent(meter.level) }}
@@ -387,15 +378,14 @@ function MicrophoneSection({ devices }: { devices: ReturnType<typeof useDevices>
           <span className={LABEL}>
             Mode{micMode === "ptt" ? ` (hold ${PTT_KEY === "Backquote" ? "`" : PTT_KEY} or the talk button)` : ""}
           </span>
-          <select
+          <Select
             value={micMode}
-            onChange={(event) => writeMicMode(event.target.value as MicMode)}
-            aria-label="Microphone mode"
-            className={cn(SELECT, "w-auto")}
-          >
-            <option value="open">Open mic</option>
-            <option value="ptt">Push to talk</option>
-          </select>
+            onChange={writeMicMode}
+            options={MIC_MODES}
+            label="Microphone mode"
+            size="sm"
+            align="end"
+          />
         </div>
       </div>
     </section>
@@ -412,27 +402,20 @@ function PlaybackSection({ devices }: { devices: ReturnType<typeof useDevices> }
   const selectable = supportsOutputSelection();
   return (
     <section>
-      <h3 className={HEADING}>
-        <Volume2 className="size-3.5" /> Playback
-      </h3>
+      <SectionHead title="Playback" glyph="tab-ambience" />
       <div className="space-y-3">
         <div>
           <span className={cn(LABEL, "mb-1 block")}>Playback device</span>
           {selectable ? (
-            <div className="flex items-center gap-2">
-              <select
-                value={outputId}
-                onChange={(event) => writeOutputId(event.target.value)}
-                aria-label="Playback device"
-                className={SELECT}
-              >
-                <option value="">System default</option>
-                {devices.outputs.map((device) => (
-                  <option key={device.deviceId} value={device.deviceId}>
-                    {device.label}
-                  </option>
-                ))}
-              </select>
+            <div className="reveal flex items-center gap-2">
+              <Select
+                value={outputId || SYSTEM_DEFAULT}
+                onChange={(value) => writeOutputId(value === SYSTEM_DEFAULT ? "" : value)}
+                options={deviceOptions(devices.outputs)}
+                label="Playback device"
+                size="sm"
+                className="min-w-0 flex-1"
+              />
               <button type="button" onClick={() => void playTestTone()} className={BUTTON}>
                 Test
               </button>
@@ -490,9 +473,7 @@ function DiceSection() {
   const [canShake] = useState(() => supportsShake());
   return (
     <section>
-      <h3 className={HEADING}>
-        <Dices className="size-3.5" /> Dice
-      </h3>
+      <SectionHead title="Dice" glyph="die-d20" />
       <div className="space-y-3">
         <Switch
           label="Roll 3D dice on the table"
@@ -522,9 +503,7 @@ function DiceSection() {
             </p>
           </div>
         ) : null}
-        <div className={cn(HEADING, "mb-0")}>
-          <Bluetooth className="size-3.5" /> Physical dice
-        </div>
+        <SectionHead title="Physical dice" glyph="tab-dice" level="h4" className="mb-0" />
         <DiceSourcesPanel />
       </div>
     </section>
@@ -542,9 +521,7 @@ function EffectsSection() {
   const [painted, setPainted] = useState(() => paintedMapsOn());
   return (
     <section>
-      <h3 className={HEADING}>
-        <Sparkles className="size-3.5" /> Effects
-      </h3>
+      <SectionHead title="Effects" glyph="cue-arcane" />
       <div className="space-y-3">
         <Switch
           label="Full effects on the board and scene"
@@ -567,7 +544,7 @@ function EffectsSection() {
                 writeEffectsMode("auto");
                 setAuto(true);
               }}
-              className="ml-2 text-amber-300 hover:underline"
+              className={cn(ui.btnSmall, "ml-2 px-2 py-0.5 text-[11px]")}
             >
               Let the device decide
             </button>

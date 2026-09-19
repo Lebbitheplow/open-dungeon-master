@@ -60,26 +60,32 @@ export default function AdminPage() {
     <PageShell
       user={me}
       icon={PIXEL_ICONS.localData}
+      glyph="tab-admin"
       title="Admin panel"
       blurb={`Signed in as ${me.username}`}
     >
-      <SegmentedControl
-        options={TABS}
-        value={tab}
-        onChange={setTab}
-        label="Admin section"
-        className="w-full sm:w-auto"
-      />
+      {/* Four long labels do not fit 360 px: the row scrolls rather than clipping the last mode. */}
+      <div className="-mx-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
+        <SegmentedControl
+          options={TABS}
+          value={tab}
+          onChange={setTab}
+          label="Admin section"
+          className="w-max"
+        />
+      </div>
 
-      {tab === "settings" ? (
-        <AdminSettingsPanel />
-      ) : tab === "worlds" ? (
-        <AdminWorldsPanel />
-      ) : tab === "reports" ? (
-        <AdminReportsPanel />
-      ) : (
-        <AdminUsersPanel meId={me.id} />
-      )}
+      <div key={tab} className="motion-tab space-y-4">
+        {tab === "settings" ? (
+          <AdminSettingsPanel />
+        ) : tab === "worlds" ? (
+          <AdminWorldsPanel />
+        ) : tab === "reports" ? (
+          <AdminReportsPanel />
+        ) : (
+          <AdminUsersPanel meId={me.id} />
+        )}
+      </div>
     </PageShell>
   );
 }

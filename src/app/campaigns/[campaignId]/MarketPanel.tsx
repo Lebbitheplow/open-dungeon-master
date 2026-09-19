@@ -1,12 +1,17 @@
 "use client";
 
-import { Coins, Loader2, Plus, ShoppingBag, Trash2 } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
+import { ChevronDown, Plus, Trash2 } from "lucide-react";
+import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { GameIcon } from "@/components/ui/GameIcon";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { Select } from "@/components/ui/Select";
 import { useEffect, useState } from "react";
 import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { cn } from "@/lib/cn";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { formatCopper } from "@/lib/srd/currency";
+import { KitButton, PanelLoading, panelField } from "./PanelKit";
 
 // The market (docs/vtt-parity-implementation-plan.md 11.1): the shops at
 // the party's place, stock as tiles with a price chip in coin, a Buy on
@@ -31,6 +36,13 @@ type ShopView = {
 
 const KINDS = ["general", "smith", "apothecary", "outfitter", "curiosities"] as const;
 const SIZES = ["hamlet", "village", "town", "city"] as const;
+const KIND_OPTIONS = KINDS.map((kind) => ({ value: kind as string, label: kind }));
+const SIZE_OPTIONS = SIZES.map((size) => ({ value: size as string, label: size }));
+
+// The coin a price is mostly made of, so a chip leads with the right metal.
+function coinGlyph(copper: number): string {
+  return copper >= 100 ? "coin-gp" : copper >= 10 ? "coin-sp" : "coin-cp";
+}
 
 export function MarketPanel({
   campaignId,
@@ -121,126 +133,134 @@ export function MarketPanel({
   const coinFx = coins && mySheet && coins.characterId === mySheet.id ? coins : null;
 
   if (shops === null) {
-    return (
-      <p className="flex items-center gap-1 text-[11px] text-stone-500">
-        <Loader2 className="size-3 animate-spin" /> Looking over the stalls...
-      </p>
-    );
+    return <PanelLoading label="Looking over the stalls..." />;
   }
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <p className="flex items-center gap-1.5 text-xs font-medium text-stone-300">
-          <ShoppingBag className="size-3.5 text-amber-600" /> Market{here ? <span className="text-stone-500">at {here.name}</span> : null}
-        </p>
-        {mySheet ? (
-          <span key={coinFx?.at ?? 0} className="relative flex items-center gap-1 rounded-full border border-amber-900/60 bg-stone-950 px-2 py-0.5 text-[11px] text-amber-200">
-            <Coins className="size-3" /> {formatCopper(purse)}
-            {coinFx ? <span aria-hidden className={cn("coin-arc pointer-events-none absolute -left-3 top-1/2 text-amber-300", coinFx.direction === "out" && "coin-arc-out")}>●</span> : null}
-          </span>
-        ) : null}
-      </div>
-      {error ? <p className="text-[11px] text-amber-300/90">{error}</p> : null}
+      <SectionHead
+        title="Market"
+        glyph="tab-market"
+        aside={
+          mySheet ? (
+            <span key={coinFx?.at ?? 0} className="pk-chip relative py-0.5 text-xs text-amber-200">
+              <GameIcon icon={{ kind: "glyph", key: "coin-purse" }} size="size-5" /> {formatCopper(purse)}
+              {coinFx ? <span aria-hidden className={cn("coin-arc pointer-events-none absolute -left-3 top-1/2 text-amber-300", coinFx.direction === "out" && "coin-arc-out")}>●</span> : null}
+            </span>
+          ) : null
+        }
+      />
+      {here ? <p className="-mt-1 text-xs text-stone-500">at {here.name}</p> : null}
+      {error ? <p role="status" className="live-in text-xs text-amber-300/90">{error}</p> : null}
       {steersStory ? (
         opening ? (
-          <div className="flex flex-wrap items-center gap-1 rounded border border-stone-800 bg-stone-950/60 p-2">
-            <input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} maxLength={80} placeholder="Marla's Sundries" className="min-w-0 flex-1 rounded border border-stone-700 bg-stone-900 px-1.5 py-0.5 text-[11px] outline-none focus:border-amber-600" />
-            <select value={draft.kind} onChange={(event) => setDraft({ ...draft, kind: event.target.value })} className="rounded border border-stone-700 bg-stone-900 px-1 py-0.5 text-[11px]">
-              {KINDS.map((kind) => (
-                <option key={kind} value={kind}>
-                  {kind}
-                </option>
-              ))}
-            </select>
-            <select value={draft.size} onChange={(event) => setDraft({ ...draft, size: event.target.value })} className="rounded border border-stone-700 bg-stone-900 px-1 py-0.5 text-[11px]">
-              {SIZES.map((size) => (
-                <option key={size} value={size}>
-                  {size}
-                </option>
-              ))}
-            </select>
-            <button type="button" disabled={busy === "open" || !draft.name.trim()} onClick={() => void open()} className="rounded border border-amber-700 bg-amber-950/50 px-2 py-0.5 text-[11px] text-amber-100 disabled:opacity-50">
+          <div className="panel reveal flex flex-wrap items-center gap-1.5 rounded-lg p-2.5">
+            <input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} maxLength={80} placeholder="Marla's Sundries" aria-label="Shop name" className={cn(panelField, "min-w-[9rem] flex-1")} />
+            <Select size="sm" label="Kind of shop" value={draft.kind} options={KIND_OPTIONS} onChange={(kind) => setDraft({ ...draft, kind })} className="pk-w-28" />
+            <Select size="sm" label="Size of the place" value={draft.size} options={SIZE_OPTIONS} onChange={(size) => setDraft({ ...draft, size })} className="pk-w-24" />
+            <KitButton tone="primary" disabled={busy === "open" || !draft.name.trim()} busy={busy === "open"} onClick={() => void open()}>
               Open here
-            </button>
-            <button type="button" onClick={() => setOpening(false)} className="rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-500">
-              Cancel
-            </button>
+            </KitButton>
+            <KitButton onClick={() => setOpening(false)}>Cancel</KitButton>
           </div>
         ) : (
-          <button type="button" onClick={() => setOpening(true)} className="flex items-center gap-1 rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-400 hover:bg-stone-900">
-            <Plus className="size-3" /> Open a shop {here ? `at ${here.name}` : ""}
-          </button>
+          <KitButton onClick={() => setOpening(true)}>
+            <Plus className="size-3.5" /> Open a shop {here ? `at ${here.name}` : ""}
+          </KitButton>
         )
       ) : null}
-      {!shops.length ? <p className="text-[11px] italic text-stone-600">{here ? `No shops at ${here.name}.` : "The party is nowhere with a market yet."}</p> : null}
-      {shops.map((shop) => (
-        <section key={shop.id} className="space-y-1.5 rounded-lg border border-stone-800 bg-stone-950/40 p-2">
-          <div className="flex items-center gap-2">
-            {shop.keeperPortrait ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={shop.keeperPortrait} alt="" className="size-9 rounded-full border border-amber-800/50 object-cover" />
-            ) : (
-              <span className="flex size-9 items-center justify-center rounded-full border border-stone-700 bg-stone-900 text-amber-200">
-                <ShoppingBag className="size-4" />
-              </span>
-            )}
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-medium text-stone-200">{shop.name}</p>
-              <p className="truncate text-[10px] text-stone-500">
-                {shop.kind}
-                {shop.keeperName ? `, kept by ${shop.keeperName}` : ""}
-                {steersStory && shop.locationName ? ` at ${shop.locationName}` : ""}
-                {shop.markup !== 1 ? ` (prices ${Math.round((shop.markup - 1) * 100)}%)` : ""}
-              </p>
-            </div>
-            {mySheet && !shop.haggledBy.includes(mySheet.id) ? (
-              <button type="button" disabled={Boolean(busy)} onClick={() => void counter(shop, "haggle")} className="rounded border border-stone-700 px-1.5 py-0.5 text-[10px] text-stone-400 hover:text-amber-200 disabled:opacity-50">
-                Haggle
-              </button>
-            ) : null}
-            {steersStory ? (
-              <button type="button" aria-label={`Close ${shop.name}`} onClick={() => void close(shop)} className="rounded p-1 text-stone-600 hover:text-red-300">
-                <Trash2 className="size-3" />
-              </button>
-            ) : null}
-          </div>
-          <ul className="grid grid-cols-2 gap-1 sm:grid-cols-3">
-            {shop.stock.map((line) => (
-              <li key={line.itemName} className="flex flex-col justify-between rounded border border-stone-800 bg-stone-900/60 p-1.5 transition-transform duration-[var(--dur-quick,150ms)] hover:-translate-y-0.5">
-                <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-stone-200" title={line.note || line.itemName}>
-                  <GameIcon icon={{ kind: "item", key: line.itemName, family: "item-gear" }} size="size-6" />
-                  <span className="truncate">{line.itemName}</span>
+      {!shops.length ? <EmptyState size="sm" art="chest" title={here ? `No shops at ${here.name}.` : "The party is nowhere with a market yet."} /> : null}
+      {shops.map((shop) => {
+        const canHaggle = Boolean(mySheet && !shop.haggledBy.includes(mySheet.id));
+        const shopItems: ContextMenuItem[] = [
+          ...(canHaggle ? [{ id: "haggle", label: "Haggle", glyph: "skill-persuasion", disabled: Boolean(busy), onSelect: () => void counter(shop, "haggle") }] : []),
+          ...(steersStory ? [{ id: "close", label: `Close ${shop.name}`, glyph: "quest-failed", tone: "danger" as const, separated: canHaggle, onSelect: () => void close(shop) }] : []),
+        ];
+        return (
+          <section key={shop.id} className="panel space-y-2 rounded-lg p-2.5">
+            <ContextMenu items={shopItems} label={shop.name} className="group flex items-center gap-2">
+              {shop.keeperPortrait ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={shop.keeperPortrait} alt="" className="size-10 rounded-full border border-amber-500/40 object-cover shadow-[0_2px_8px_rgba(4,2,12,0.5)]" />
+              ) : (
+                <span className="flex size-10 items-center justify-center rounded-full border border-amber-500/25 bg-stone-900/70">
+                  <GameIcon icon={{ kind: "glyph", key: "tab-shop" }} size="size-7" />
                 </span>
-                <span className="mt-1 flex items-center justify-between gap-1">
-                  <span className="rounded-full border border-amber-900/60 px-1.5 text-[10px] text-amber-200">{formatCopper(line.askingCp)}</span>
-                  <span className="text-[10px] text-stone-500">x{line.qty}</span>
-                  {mySheet ? (
-                    <button type="button" disabled={Boolean(busy) || purse < line.askingCp} onClick={() => void counter(shop, "buy", line.itemName)} className="rounded border border-amber-800/60 px-1.5 py-0.5 text-[10px] text-amber-100 hover:bg-amber-950/50 disabled:opacity-40">
-                      {busy === `${shop.id}:buy:${line.itemName}` ? <Loader2 className="size-3 animate-spin" /> : "Buy"}
-                    </button>
-                  ) : null}
-                </span>
-              </li>
-            ))}
-            {!shop.stock.length ? <li className="col-span-full text-[11px] italic text-stone-600">Bare shelves.</li> : null}
-          </ul>
-          {shop.buys && mySheet?.equipment.length ? (
-            <details className="text-[11px]">
-              <summary className="cursor-pointer text-stone-500 hover:text-stone-300">Sell from your pack</summary>
-              <ul className="mt-1 flex flex-wrap gap-1">
-                {mySheet.equipment.map((item) => (
-                  <li key={item.name}>
-                    <button type="button" disabled={Boolean(busy)} onClick={() => void counter(shop, "sell", item.name)} className="rounded border border-stone-700 px-1.5 py-0.5 text-[10px] text-stone-300 hover:border-amber-700 hover:text-amber-100 disabled:opacity-50">
-                      {item.name}
-                      {item.qty > 1 ? ` x${item.qty}` : ""}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          ) : null}
-        </section>
-      ))}
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="gold-title truncate text-sm">{shop.name}</p>
+                <p className="truncate text-[11px] text-stone-500">
+                  {shop.kind}
+                  {shop.keeperName ? `, kept by ${shop.keeperName}` : ""}
+                  {steersStory && shop.locationName ? ` at ${shop.locationName}` : ""}
+                  {shop.markup !== 1 ? ` (prices ${Math.round((shop.markup - 1) * 100)}%)` : ""}
+                </p>
+              </div>
+              {canHaggle ? (
+                <KitButton disabled={Boolean(busy)} busy={busy === `${shop.id}:haggle:`} onClick={() => void counter(shop, "haggle")}>
+                  Haggle
+                </KitButton>
+              ) : null}
+              {steersStory ? (
+                <KitButton tone="iconDanger" always aria-label={`Close ${shop.name}`} onClick={() => void close(shop)}>
+                  <Trash2 className="size-3.5" />
+                </KitButton>
+              ) : null}
+            </ContextMenu>
+            <ul className="stagger-up grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+              {shop.stock.map((line) => {
+                const buying = busy === `${shop.id}:buy:${line.itemName}`;
+                const cannotBuy = Boolean(busy) || purse < line.askingCp;
+                return (
+                  <ContextMenu
+                    as="li"
+                    key={line.itemName}
+                    label={line.itemName}
+                    items={mySheet ? [{ id: "buy", label: `Buy for ${formatCopper(line.askingCp)}`, glyph: coinGlyph(line.askingCp), disabled: cannotBuy, onSelect: () => void counter(shop, "buy", line.itemName) }] : []}
+                    className="flex flex-col justify-between rounded-lg border border-stone-700/60 bg-stone-900/50 p-2 transition-transform duration-[var(--dur-quick,150ms)] hover:-translate-y-0.5 hover:border-amber-500/40"
+                  >
+                    <span className="flex min-w-0 items-center gap-1.5 text-xs text-stone-200" title={line.note || line.itemName}>
+                      <GameIcon icon={{ kind: "item", key: line.itemName, family: "item-gear" }} size="size-7" />
+                      <span className="truncate">{line.itemName}</span>
+                    </span>
+                    <span className="mt-1.5 flex items-center justify-between gap-1">
+                      <span className="pk-chip text-amber-200">
+                        <GameIcon icon={{ kind: "glyph", key: coinGlyph(line.askingCp) }} size="size-4" />
+                        {formatCopper(line.askingCp)}
+                      </span>
+                      <span className="text-[11px] tabular-nums text-stone-500">x{line.qty}</span>
+                    </span>
+                    {mySheet ? (
+                      <KitButton disabled={cannotBuy} busy={buying} onClick={() => void counter(shop, "buy", line.itemName)} className="mt-1.5 w-full justify-center border-amber-500/30 text-amber-100">
+                        {buying ? null : "Buy"}
+                      </KitButton>
+                    ) : null}
+                  </ContextMenu>
+                );
+              })}
+              {!shop.stock.length ? <li className="col-span-full text-xs italic text-stone-500">Bare shelves.</li> : null}
+            </ul>
+            {shop.buys && mySheet?.equipment.length ? (
+              <details className="group/sell text-xs">
+                <summary className="pk-link pk-tap flex cursor-pointer list-none items-center gap-1">
+                  <GameIcon icon={{ kind: "glyph", key: "tab-trade" }} size="size-5" /> Sell from your pack
+                  <ChevronDown className="size-3.5 transition-transform group-open/sell:rotate-180" />
+                </summary>
+                <ul className="stagger mt-1.5 flex flex-wrap gap-1">
+                  {mySheet.equipment.map((item) => (
+                    <li key={item.name}>
+                      <KitButton disabled={Boolean(busy)} onClick={() => void counter(shop, "sell", item.name)}>
+                        <GameIcon icon={{ kind: "item", key: item.name, family: "item-gear" }} size="size-4" />
+                        {item.name}
+                        {item.qty > 1 ? ` x${item.qty}` : ""}
+                      </KitButton>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
+          </section>
+        );
+      })}
     </div>
   );
 }

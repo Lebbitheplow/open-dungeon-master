@@ -4,6 +4,7 @@ import { Dices, Loader2, Smartphone } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { CampaignMember } from "@/lib/campaign-types";
 import { cn } from "@/lib/cn";
+import { OptionalStepper } from "@/app/workshop/kit";
 import { expressionDice } from "@/lib/dice";
 import { buzz, onShake, supportsShake, useShakeToRoll } from "@/lib/dice/shake-to-roll";
 import {
@@ -19,11 +20,32 @@ import {
 } from "@/lib/dice/pixels-dice";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { PendingRoll } from "@/app/campaigns/[campaignId]/useCampaignStream";
+import { CheckDie, CheckFrame, ModifierBreakdown } from "@/app/campaigns/[campaignId]/SkillCheckCard";
+import { findSkill } from "@/lib/srd";
+
+const KIND_TITLES: Record<string, string> = {
+  skill_check: "Skill check",
+  saving_throw: "Saving throw",
+  ability_check: "Ability check",
+  attack: "Attack roll",
+  damage: "Damage",
+  initiative: "Initiative",
+  custom: "Roll",
+};
+
+const ABILITY_NAMES: Record<string, string> = {
+  str: "Strength",
+  dex: "Dexterity",
+  con: "Constitution",
+  int: "Intelligence",
+  wis: "Wisdom",
+  cha: "Charisma",
+};
 
 const OWNER_FALLBACK_AFTER_MS = 3 * 60 * 1000;
 
 const SUBMIT_BUTTON = cn(
-  "rounded-lg bg-gradient-to-b from-amber-100 via-amber-200 to-amber-400 px-3 py-1.5 text-sm font-semibold text-amber-950",
+  "motion-press rounded-lg bg-gradient-to-b from-amber-100 via-amber-200 to-amber-400 px-3 py-1.5 text-sm font-semibold text-amber-950",
   "shadow-[0_1px_0_rgba(253,247,231,0.6)_inset] transition-all duration-150 ease-snap",
   "hover:-translate-y-px hover:shadow-glow-gold-strong active:translate-y-0 active:scale-95",
   "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none",
@@ -34,6 +56,12 @@ const SUBMIT_BUTTON = cn(
 // shake or a tap and the server rolls. Everyone else sees a waiting card.
 // The roller can always fall back to a digital roll; the owner can too once
 // the card has sat unanswered for a few minutes.
+//
+// The presentation is the violet skill-check card (SkillCheckCard.tsx,
+// docs/visual-overhaul-plan.md 5.4): the halo breathes while the roll is
+// parked, the die tumbles once it has been sent, and the landing itself
+// plays where the roll arrives, in the chronicle (RollCard.tsx). Every
+// source and control is as it was.
 export function PendingRollCard({
   campaignId,
   pending,
@@ -233,53 +261,75 @@ export function PendingRollCard({
     }).catch(() => undefined);
   }
 
+  // What the card is about, for its head: the kind, the DC the table was
+  // sent, and the ability behind a skill ("Athletics" is Strength).
+  const title = KIND_TITLES[pending.kind] ?? "Roll";
+  const skillId = pending.detail.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  const abilityId =
+    pending.kind === "skill_check"
+      ? findSkill(skillId)?.ability
+      : pending.kind === "saving_throw" || pending.kind === "ability_check"
+        ? skillId.slice(0, 3)
+        : undefined;
+  const abilityName = abilityId ? ABILITY_NAMES[abilityId] : undefined;
+
   if (!mine) {
     return (
-      <div className="mb-2 flex items-center justify-between rounded-md border border-amber-900/60 bg-amber-950/20 px-3 py-2 text-xs text-amber-200/90">
-        <span className="flex items-center gap-2">
-          <Dices className="size-4 animate-pulse text-amber-200" />
-          Waiting for {character?.name ?? "a player"} to roll {pending.expression}
-          {heldOnly ? "" : " with real dice"}
+      <CheckFrame className="mb-2 flex items-center justify-between gap-2 px-3 py-2 text-xs">
+        <span className="flex min-w-0 items-center gap-2">
+          <CheckDie state="waiting" sides={faces[0] ?? 20} size="size-7" />
+          <span className="min-w-0">
+            Waiting for {character?.name ?? "a player"} to roll {pending.expression}
+            {heldOnly ? "" : " with real dice"}
+          </span>
         </span>
         {steersStory && stale ? (
           <button
             type="button"
             disabled={busy}
             onClick={() => submit({ fallback: "digital" })}
-            className="shrink-0 text-amber-200 hover:text-amber-300 disabled:opacity-50"
+            className="motion-press shrink-0 font-medium underline decoration-dotted underline-offset-2 disabled:opacity-50"
           >
             Roll digitally
           </button>
         ) : null}
-      </div>
+      </CheckFrame>
     );
   }
 
   return (
-    <div className="mb-2 animate-fade-up rounded-lg border border-amber-500/50 bg-amber-950/30 px-3 py-2.5 shadow-glow-gold">
-      <div className="flex items-center justify-between text-sm">
-        <span className="flex items-center gap-2 text-amber-100">
-          <Dices className="size-4 text-amber-200" />
-          Your roll: {label}
-        </span>
-        <span className="font-mono text-xs text-amber-400">{pending.expression}</span>
-      </div>
-      {pending.reason ? (
-        <p className="mt-0.5 text-xs text-amber-200/70">{pending.reason}</p>
-      ) : null}
+    <CheckFrame className="mb-2 animate-fade-up px-3 py-2.5">
+      <div className="flex flex-wrap items-start gap-3">
+        {/* The die: resting under its halo, tumbling once the roll is sent. */}
+        <CheckDie state={busy ? "waiting" : "idle"} sides={faces[0] ?? 20} halo={!busy} />
+        <div className="min-w-0 flex-1 basis-52">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="check-well px-2 py-0.5 font-display text-[11px] font-semibold uppercase tracking-[0.08em]">
+              {title}
+            </span>
+            {pending.dc !== null ? (
+              <span className="check-well check-dim px-2 py-0.5 font-mono text-[11px]">Difficulty Class: {pending.dc}</span>
+            ) : null}
+            <ModifierBreakdown expression={pending.expression} caption={abilityName} />
+          </div>
+          <p className="mt-1 flex items-center gap-2 text-sm">
+            <Dices className="size-4 shrink-0" style={{ color: "var(--check-vine)" }} />
+            <span className="min-w-0">Your roll: {label}</span>
+          </p>
+          {pending.reason ? <p className="check-dim mt-0.5 text-xs">{pending.reason}</p> : null}
       {heldOnly ? (
         <>
           {advantageNote ? (
-            <p className="mt-0.5 text-xs text-amber-200/90">{advantageNote}</p>
+            <p className="check-dim mt-0.5 text-xs">{advantageNote}</p>
           ) : null}
           <div className="mt-2 flex flex-wrap items-center gap-3">
             {shakeActive ? (
-              <span className="flex items-center gap-2 text-sm text-amber-100">
-                <Smartphone className="size-5 animate-bounce text-amber-200" />
+              <span className="flex items-center gap-2 text-sm">
+                <Smartphone className="size-5 animate-bounce" style={{ color: "var(--check-vine)" }} />
                 Shake to roll {diceSummary}
               </span>
             ) : (
-              <span className="text-xs text-amber-100">
+              <span className="text-xs">
                 Your rolls wait for you{canShake ? "" : " (shake to roll is on on your phone)"}.
               </span>
             )}
@@ -296,7 +346,7 @@ export function PendingRollCard({
                 type="button"
                 disabled={busy}
                 onClick={() => void stopHolding()}
-                className="text-xs text-stone-400 hover:text-stone-200 disabled:opacity-50"
+                className="check-dim text-xs hover:underline disabled:opacity-50"
               >
                 Stop holding my rolls
               </button>
@@ -306,7 +356,7 @@ export function PendingRollCard({
         </>
       ) : null}
       {!heldOnly && diceSummary ? (
-        <p className="mt-1 text-xs text-amber-100">
+        <p className="mt-1 text-xs">
           {fullyAutomatic
             ? `Roll ${diceSummary}. Your assigned dice fill in on their own.`
             : `Roll ${diceSummary} at your table and enter each die below.${
@@ -315,10 +365,10 @@ export function PendingRollCard({
         </p>
       ) : null}
       {!heldOnly && advantageNote ? (
-        <p className="mt-0.5 text-xs text-amber-200/90">{advantageNote}</p>
+        <p className="check-dim mt-0.5 text-xs">{advantageNote}</p>
       ) : null}
       {!heldOnly && shakeActive ? (
-        <p className="mt-0.5 flex items-center gap-1.5 text-xs text-amber-200/90">
+        <p className="check-dim mt-0.5 flex items-center gap-1.5 text-xs">
           <Smartphone className="size-3.5" /> Or shake to roll it digitally.
         </p>
       ) : null}
@@ -349,38 +399,33 @@ export function PendingRollCard({
           // stubborn die never blocks the roll.
           const isPixel = source.kind === "pixel";
           return (
-            <label key={index} className="block">
+            <div key={index} className="block">
               <span
                 title={isPixel ? source.name : undefined}
                 className={cn(
-                  "mb-0.5 block max-w-14 truncate text-center text-[10px]",
-                  isPixel ? "text-sky-300/90" : "text-amber-400/80",
+                  "mb-0.5 block max-w-24 truncate text-center text-[10px]",
+                  isPixel ? "text-sky-300/90" : "check-dim",
                 )}
               >
                 {isPixel ? source.name : `d${sides}`}
               </span>
               <div className="relative">
-                <input
-                  type="number"
+                {/* Blank means "not rolled yet", so the stepper is the optional
+                    one: the cross clears a mistyped die back to blank. */}
+                <OptionalStepper
                   min={1}
                   max={sides}
-                  inputMode="numeric"
-                  value={values[index] ?? ""}
-                  onChange={(event) =>
-                    setValues((current) => ({ ...current, [index]: event.target.value }))
-                  }
-                  className={cn(
-                    "w-14 rounded-md border bg-stone-900 px-2 py-1.5 text-center text-sm outline-none",
-                    isPixel
-                      ? "border-sky-800 focus:border-sky-500"
-                      : "border-amber-800 focus:border-amber-500",
-                  )}
+                  fallback={1}
+                  value={filled === "" || !Number.isFinite(Number(filled)) ? undefined : Number(filled)}
+                  onChange={(next) => setValues((current) => ({ ...current, [index]: next === "" ? "" : String(next) }))}
+                  label={isPixel ? `${source.name}, d${sides}` : `d${sides}`}
+                  size="sm"
                 />
                 {isPixel && !filled ? (
-                  <Dices className="pointer-events-none absolute right-1 top-1/2 size-3 -translate-y-1/2 animate-pulse text-sky-400/70" />
+                  <Dices className="pointer-events-none absolute -right-1 -top-1 size-3 animate-pulse text-sky-400/70" />
                 ) : null}
               </div>
-            </label>
+            </div>
           );
         })}
         <button
@@ -395,13 +440,15 @@ export function PendingRollCard({
           type="button"
           disabled={busy}
           onClick={() => submit({ fallback: "digital" })}
-          className="text-xs text-stone-400 hover:text-stone-200 disabled:opacity-50"
+          className="check-dim text-xs hover:underline disabled:opacity-50"
         >
           Roll digitally instead
         </button>
       </div>
       )}
       {!heldOnly && error ? <p className="mt-1.5 text-xs text-red-400">{error}</p> : null}
-    </div>
+        </div>
+      </div>
+    </CheckFrame>
   );
 }

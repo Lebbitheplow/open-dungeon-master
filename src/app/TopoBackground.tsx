@@ -110,8 +110,8 @@ export default function TopoBackground() {
       LEVELS.forEach((iso, levelIndex) => {
         const isIndexLine = levelIndex % INDEX_EVERY === 1;
         ctx.strokeStyle = isIndexLine
-          ? "rgba(212, 171, 58, 0.075)"
-          : "rgba(212, 171, 58, 0.04)";
+          ? "rgba(212, 171, 58, 0.115)"
+          : "rgba(212, 171, 58, 0.065)";
         ctx.beginPath();
 
         for (let row = 0; row < rows - 1; row += 1) {

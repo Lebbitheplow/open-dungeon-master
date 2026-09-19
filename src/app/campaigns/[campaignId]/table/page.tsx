@@ -1,6 +1,7 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { PageSkeleton } from "@/components/PageSkeleton";
+import { EmptyState } from "@/components/EmptyState";
 import { use } from "react";
 import { BattleMapPanel } from "@/app/campaigns/[campaignId]/BattleMapPanel";
 import { MapPanel } from "@/app/campaigns/[campaignId]/MapPanel";
@@ -19,15 +20,13 @@ export default function TablePage({ params }: { params: Promise<{ campaignId: st
 
   if (state.loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-stone-950">
-        <Loader2 className="size-6 animate-spin text-stone-500" />
-      </main>
+      <PageSkeleton kind="table" />
     );
   }
   if (state.error || !state.campaign || !state.me) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-stone-950">
-        <p className="text-sm text-stone-400">{state.error || "Sign in as a member of this table to show it."}</p>
+        <EmptyState art="map" title={state.error || "Sign in as a member of this table to show it."} />
       </main>
     );
   }
@@ -39,6 +38,7 @@ export default function TablePage({ params }: { params: Promise<{ campaignId: st
             <BattleMapPanel
               campaignId={campaignId}
               view={state.battleMap}
+              intents={state.battleMap.intents}
               genre={state.campaign.gameSettings?.genre ?? null}
               encounter={state.encounter ?? null}
               sheets={state.sheets}

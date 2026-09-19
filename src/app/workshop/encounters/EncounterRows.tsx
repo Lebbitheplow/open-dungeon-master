@@ -1,10 +1,14 @@
 "use client";
 
-import { Copy, Map as MapIcon, Plus, Swords, Trash2 } from "lucide-react";
+import { Plus, Swords } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { formatRoster } from "@/lib/dm/encounter-template-logic";
 import { budgetBarGeometry, type Thresholds } from "@/app/workshop/encounters/budget-bar";
+import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { ListHead, useListHead } from "@/app/workshop/ListHead";
+import { GlyphPlate, RowMenu } from "@/app/workshop/kit";
 import type { MapOption, PreparedEncounter, TemplateReadout } from "@/app/workshop/encounters/types";
 
 // The workshop's encounter list: one full-width row per prepared fight with
@@ -64,7 +68,7 @@ function shortVerdict(verdict: string): string {
 export function DifficultyPill({ readout }: { readout: TemplateReadout }) {
   if (readout.unknownMonster) {
     return (
-      <span className="rounded-sm border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-red-300">
+      <span className="rounded-sm border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 font-display text-[10px] tracking-wider text-red-300">
         unknown monster
       </span>
     );
@@ -72,7 +76,7 @@ export function DifficultyPill({ readout }: { readout: TemplateReadout }) {
   return (
     <span
       className={cn(
-        "rounded-sm border px-1.5 py-0.5 text-[10px] uppercase tracking-wider",
+        "rounded-sm border px-1.5 py-0.5 font-display text-[10px] capitalize tracking-wider",
         toneFor(readout.verdict).pill,
       )}
     >
@@ -110,7 +114,7 @@ export function BudgetBar({
         aria-label={`${readout.adjustedXp} adjusted XP against a ${readout.ceiling} ceiling`}
       >
         <div
-          className={cn("absolute inset-y-0 left-0 rounded-full", tone.bar)}
+          className={cn("bar-ease absolute inset-y-0 left-0 rounded-full", tone.bar)}
           style={{ width: `${geometry.fillPercent}%` }}
         />
         {geometry.ticks.map((tick) => (
@@ -138,8 +142,7 @@ export function BudgetBar({
   );
 }
 
-const rowAction =
-  "inline-flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-40";
+const readEncounter = (encounter: PreparedEncounter) => ({ name: encounter.name });
 
 export function EncounterRows({
   encounters,
@@ -168,63 +171,57 @@ export function EncounterRows({
       ? (maps.find((map) => map.id === encounter.map.mapId)?.name ??
         "a map no longer in the drawer")
       : "Generator's choice";
+  const head = useListHead(encounters, readEncounter);
 
   return (
     <div className="space-y-2">
-      <ul className="grid gap-3 lg:grid-cols-2" data-tour="encounters-list">
-        {encounters.map((encounter) => (
-          <li key={encounter.id} className={cn(ui.cardHover, "flex flex-col gap-2 p-3")}>
-            <button
-              type="button"
-              onClick={() => onOpen(encounter)}
-              className="min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40"
-            >
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <span className="font-display tracking-wide text-amber-50">{encounter.name}</span>
-                <DifficultyPill readout={encounter.readout} />
+      <ListHead head={head} noun={["fight", "fights"]} placeholder="Find a fight" className="" />
+      <ul className="stagger-up grid gap-3 lg:grid-cols-2" data-tour="encounters-list">
+        {head.shown.map((encounter) => {
+          // The kebab and the right-click or long-press menu list the same
+          // doors; Deploy stays the row's one visible button.
+          const items: ContextMenuItem[] = [
+            { id: "open", label: "Open", glyph: "system-encounters", onSelect: () => onOpen(encounter) },
+            { id: "deploy", label: "Deploy", glyph: "tab-battle", disabled: busy, onSelect: () => onDeploy(encounter) },
+            { id: "duplicate", label: "Duplicate", glyph: "tab-notes", disabled: busy, onSelect: () => onDuplicate(encounter) },
+            { id: "delete", label: "Delete", glyph: "quest-failed", tone: "danger", separated: true, onSelect: () => onDelete(encounter) },
+          ];
+          return (
+            <ContextMenu as="li" key={encounter.id} label={encounter.name} items={items} className={cn(ui.cardHover, "flex min-w-0 flex-col gap-2 p-3")}>
+              <div className="flex items-start gap-3">
+                <GlyphPlate glyph="system-encounters" />
+                <button
+                  type="button"
+                  onClick={() => onOpen(encounter)}
+                  className="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40"
+                >
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="font-display tracking-wide text-amber-50">{encounter.name}</span>
+                    <DifficultyPill readout={encounter.readout} />
+                  </div>
+                  <p className="mt-1 text-sm text-stone-300">
+                    {formatRoster(encounter.enemies).replace(/\n/g, ", ")}
+                  </p>
+                  {encounter.battlefield ? (
+                    <p className="reveal truncate text-xs text-stone-500">On {encounter.battlefield}</p>
+                  ) : null}
+                  <p className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-stone-500">
+                    <GameIcon icon={{ kind: "glyph", key: "system-maps" }} size="size-4" />
+                    {mapName(encounter)}
+                  </p>
+                </button>
+                <RowMenu items={items} label={encounter.name} />
               </div>
-              <p className="mt-1 text-sm text-stone-300">
-                {formatRoster(encounter.enemies).replace(/\n/g, ", ")}
-              </p>
-              {encounter.battlefield ? (
-                <p className="truncate text-xs text-stone-500">On {encounter.battlefield}</p>
-              ) : null}
-              <p className="flex items-center gap-1 truncate text-[11px] text-stone-500">
-                <MapIcon className="size-3 shrink-0" aria-hidden="true" />
-                {mapName(encounter)}
-              </p>
-            </button>
-            <BudgetBar readout={encounter.readout} thresholds={thresholds} />
-            <div className="flex flex-wrap items-center gap-1.5">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => onDeploy(encounter)}
-                className="inline-flex items-center gap-1 rounded-md border border-amber-700 bg-amber-950/50 px-2 py-1 text-xs text-amber-100 disabled:opacity-40"
-              >
-                <Swords className="size-3" /> Deploy
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                aria-label={`Duplicate ${encounter.name}`}
-                onClick={() => onDuplicate(encounter)}
-                className={rowAction}
-              >
-                <Copy className="size-3" /> Duplicate
-              </button>
-              <button
-                type="button"
-                aria-label={`Delete ${encounter.name}`}
-                onClick={() => onDelete(encounter)}
-                className={cn(rowAction, "ml-auto text-stone-500 hover:text-red-300")}
-              >
-                <Trash2 className="size-3" /> Delete
-              </button>
-            </div>
-          </li>
-        ))}
-        <li>
+              <BudgetBar readout={encounter.readout} thresholds={thresholds} />
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button type="button" disabled={busy} onClick={() => onDeploy(encounter)} className={cn(ui.btnSecondary, "h-9")}>
+                  <Swords className="size-3.5" /> Deploy
+                </button>
+              </div>
+            </ContextMenu>
+          );
+        })}
+        <li className="min-w-0">
           <button
             type="button"
             onClick={() => onOpen(null)}
@@ -234,15 +231,16 @@ export function EncounterRows({
               "flex h-full w-full items-center gap-3 border-dashed p-3 text-left text-stone-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40",
             )}
           >
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-full border border-dashed border-stone-600">
-              <Plus className="size-4" />
+            <span className="relative shrink-0">
+              <GameIcon icon={{ kind: "glyph", key: "system-encounters" }} size="size-10" />
+              <Plus className="absolute -bottom-1 -right-1 size-4 rounded-full bg-stone-900 text-amber-300" aria-hidden="true" />
             </span>
             <span className="font-display tracking-wide">New encounter</span>
           </button>
         </li>
       </ul>
       {encounters.length === 0 ? (
-        <p className="text-[11px] text-stone-500">
+        <p className="reveal text-[11px] text-stone-500">
           Nothing prepared. Write a roster and it is one button at the table.
         </p>
       ) : null}

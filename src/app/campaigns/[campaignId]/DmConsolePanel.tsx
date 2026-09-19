@@ -1,9 +1,14 @@
 "use client";
 
+import { EmptyState } from "@/components/EmptyState";
 import { useMemo, useState } from "react";
-import { Inbox, Megaphone } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
+import { GameIcon } from "@/components/ui/GameIcon";
 import { Ribbon } from "@/components/ui/Ribbon";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { ActionPlate, CloseForm, DeskCard, adjudicationGlyph } from "@/app/campaigns/[campaignId]/DmConsoleParts";
+import { CommandPalette, type PaletteCommand } from "@/components/CommandPalette";
 import { consoleAdjudications, type AdjudicationCategory } from "@/lib/dm/invoke-catalog";
 import { offersImages, useCapabilities } from "@/lib/use-capabilities";
 import { DmActionForm } from "@/app/campaigns/[campaignId]/DmActionForm";
@@ -61,47 +66,61 @@ function FloorControl({
   }
 
   return (
-    <section className="rounded-lg border border-stone-800 bg-stone-950/60 px-2.5 py-2">
-      <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
-        <Megaphone className="size-3.5" />
-        The floor
-      </p>
+    <DeskCard
+      title="The floor"
+      glyph="tab-session"
+      aside={
+        <span key={mode} className="count-pop rounded-full border border-amber-500/40 bg-amber-400/10 px-2 py-0.5 text-[11px] text-amber-100">
+          {FLOOR_STATUS[mode]}
+        </span>
+      }
+    >
       {mode === "initiative" ? (
-        <p className="text-xs text-stone-500">
+        <p className="reveal flex items-center gap-2 text-xs text-stone-400">
+          <GameIcon icon={{ kind: "glyph", key: "rest-initiative" }} size="size-5" className="shrink-0" />
           The initiative order has it while the fight runs.
         </p>
       ) : (
-        <div className="flex flex-wrap gap-1">
+        <div data-pill-group="" className="flex flex-wrap gap-1.5">
           {(["open", "hold"] as const).map((option) => (
-            <button
+            <button data-on={mode === option ? "" : undefined}
               key={option}
               type="button"
               disabled={busy || mode === option}
               onClick={() => set(option)}
               className={cn(
-                "rounded-md border px-2 py-1 text-xs disabled:opacity-40",
-                mode === option
-                  ? "border-amber-700 bg-amber-950/50 text-amber-100"
-                  : "border-stone-700 text-stone-400 hover:text-stone-200",
+                ui.btnSmall,
+                "min-h-10 text-xs",
+                mode === option && "border-amber-500/70 bg-amber-400/10 text-amber-100 shadow-glow-gold disabled:opacity-100",
               )}
             >
+              <GameIcon icon={{ kind: "glyph", key: option === "open" ? "tab-chat" : "cue-bell" }} size="size-5" />
               {option === "open" ? "Anyone may act" : "Hold everyone"}
             </button>
           ))}
           {mode === "spotlight" ? (
-            <span className="rounded-md border border-amber-700 bg-amber-950/50 px-2 py-1 text-xs text-amber-100">
+            <span className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-amber-500/70 bg-amber-400/10 px-3 text-xs text-amber-100">
+              <GameIcon icon={{ kind: "glyph", key: "tab-lead" }} size="size-5" />
               Spotlight
             </span>
           ) : (
-            <span className="self-center text-[11px] text-stone-600">
+            <span className="basis-full text-[11px] leading-snug text-stone-500">
               Give the floor to named players with Give the floor, under Story.
             </span>
           )}
         </div>
       )}
-    </section>
+    </DeskCard>
   );
 }
+
+// The floor's state in a word, for the card's corner.
+const FLOOR_STATUS = {
+  open: "Open",
+  hold: "Held",
+  spotlight: "Spotlight",
+  initiative: "Initiative",
+} as const;
 
 // The console rail: the catalog's own categories, plus three tabs that are
 // not adjudications at all. "assist" answers questions and applies nothing;
@@ -109,6 +128,28 @@ function FloorControl({
 // a map is built before the table sees it and a fight is written down before
 // it happens.
 type ConsoleTab = AdjudicationCategory | "assist" | "tables" | "maps" | "cast" | "bestiary" | "storyboard";
+
+// The painted glyph each console tab wears in the command palette.
+const TAB_GLYPH: Record<ConsoleTab, string> = {
+  assist: "tab-dm",
+  combat: "tab-battle",
+  party: "tab-party",
+  world: "tab-map",
+  social: "tab-chat",
+  story: "tab-story",
+  table: "tab-dice",
+  maps: "system-maps",
+  cast: "system-cast",
+  bestiary: "system-bestiary",
+  storyboard: "system-storyboard",
+  tables: "system-tables",
+};
+
+// Rests, death and levelling have glyphs of their own (adjudicationGlyph);
+// everything else wears its category's.
+function actionGlyph(name: string, category: AdjudicationCategory): string {
+  return adjudicationGlyph(name, TAB_GLYPH[category]);
+}
 
 export function DmConsolePanel({
   campaignId,
@@ -188,11 +229,81 @@ export function DmConsolePanel({
 
   const active = groups.find((group) => group.category === category) ?? null;
 
+  const tabs: Array<readonly [ConsoleTab, string]> = [
+    ["assist", "Assist"],
+    ...groups.map((group) => [group.category, group.label] as const),
+    ["maps", "Maps"],
+    ["cast", "Cast"],
+    ["bestiary", "Bestiary"],
+    ["storyboard", "Storyboard"],
+    ["tables", "Tables"],
+  ];
+
+  // The palette presses the same buttons the console draws: a tab, an
+  // adjudication's row, or a walk to one of the sections above them. It holds
+  // no action of its own.
+  // Sections are found by the anchors the guided tour already uses.
+  function reveal(anchor: string) {
+    window.requestAnimationFrame(() =>
+      document.querySelector(`[data-tour="${anchor}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" }),
+    );
+  }
+  function goTo(tab: ConsoleTab, action = "") {
+    setCategory(tab);
+    setOpenAction(action);
+    reveal("dm-console-tabs");
+  }
+  const sections: Array<[anchor: string, label: string, hint: string, glyph: string]> = [
+    ["dm-floor", "The floor", "Who may speak right now", "tab-session"],
+    ["dm-beats", "Write the story", "The beat composer", "tab-journal"],
+    ...(delegations.monsters || delegations.cover
+      ? [["dm-delegation", "Hand things to the AI", "Monsters and cover", "tab-dm"] as [string, string, string, string]]
+      : []),
+    ["dm-queue", "Waiting on you", queue.length ? `${queue.length} unanswered` : "Nothing waiting", "tab-log"],
+  ];
+  const commands: PaletteCommand[] = [
+    ...groups.flatMap((group) =>
+      group.entries.map((entry) => ({
+        id: `do-${entry.name}`,
+        label: entry.label,
+        hint: entry.summary,
+        group: group.label,
+        glyph: actionGlyph(entry.name, group.category),
+        keywords: [entry.name.replace(/_/g, " ")],
+        onSelect: () => goTo(group.category, entry.name),
+      })),
+    ),
+    ...tabs.map(([tab, label]) => ({
+      id: `tab-${tab}`,
+      label: `Open ${label}`,
+      group: "Console tabs",
+      glyph: TAB_GLYPH[tab],
+      keywords: ["tab", "section", tab],
+      onSelect: () => goTo(tab),
+    })),
+    ...sections.map(([anchor, label, hint, glyph]) => ({
+      id: `see-${anchor}`,
+      label,
+      hint,
+      group: "On this console",
+      glyph,
+      keywords: ["jump", "scroll"],
+      onSelect: () => reveal(anchor),
+    })),
+  ];
+
   return (
     <div className="space-y-4">
       {/* Gold, the DM's colour: nobody else at the table has this tab, and
           the lead's desk wears ember so the two seats never blur. */}
-      <Ribbon tone="gold">Only you</Ribbon>
+      <div className="flex items-center gap-2">
+        <Ribbon tone="gold" className="min-w-0 flex-1">Only you</Ribbon>
+        <CommandPalette
+          title="DM console commands"
+          placeholder="Find an action or a tab"
+          commands={commands}
+        />
+      </div>
 
       <div data-tour="dm-floor">
         <FloorControl campaignId={campaignId} mode={floorMode} />
@@ -218,25 +329,29 @@ export function DmConsolePanel({
         </div>
       ) : null}
 
-      <section data-tour="dm-queue">
-        <h3 className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
-          <Inbox className="size-3.5" />
-          Waiting on you
-          {queue.length ? (
-            <span className="rounded-full bg-amber-900/60 px-1.5 text-[10px] text-amber-200">
-              {queue.length}
-            </span>
-          ) : null}
-        </h3>
+      <section data-tour="dm-queue" className={cn(ui.card, "dm-card p-3")}>
+        <SectionHead
+          title="Waiting on you"
+          glyph="tab-log"
+          aside={
+            queue.length ? (
+              <span key={queue.length} className="count-pop rounded-full border border-amber-500/40 bg-amber-400/15 px-2 py-0.5 text-[11px] font-semibold text-amber-100">
+                {queue.length}
+              </span>
+            ) : (
+              "All answered"
+            )
+          }
+        />
         {queue.length ? (
-          <ul className="space-y-1.5">
+          <ul className="stagger space-y-1.5">
             {queue.map(({ intent, message, name }) => (
               <li
                 key={intent.messageId}
-                className="rounded-lg border border-stone-800 bg-stone-950/60 px-2.5 py-2"
+                className="rounded-lg border border-amber-500/20 bg-stone-950/50 px-2.5 py-2"
               >
-                <p className="text-[11px] uppercase tracking-wide text-amber-200/80">{name}</p>
-                <p className="whitespace-pre-wrap text-sm text-stone-300">{message?.content}</p>
+                <p className="font-display text-[11px] tracking-[0.12em] text-amber-200/90">{name}</p>
+                <p className="whitespace-pre-wrap text-sm text-stone-200">{message?.content}</p>
                 <button
                   type="button"
                   onClick={() => {
@@ -244,110 +359,110 @@ export function DmConsolePanel({
                     setCategory("assist");
                     setOpenAction("");
                   }}
-                  className="mt-1 text-[11px] text-stone-500 hover:text-amber-200"
+                  className={cn(ui.btnSmall, "mt-1.5 min-h-9 px-2 py-1 text-xs")}
                 >
+                  <GameIcon icon={{ kind: "glyph", key: "die-d20" }} size="size-5" />
                   What should I press?
                 </button>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="rounded-lg border border-stone-800 bg-stone-950/40 px-2.5 py-2 text-xs text-stone-500">
-            Nothing waiting. Everything the party has said has been answered.
-          </p>
+          <EmptyState size="sm" art="scrolls" title="Nothing waiting. Everything the party has said has been answered." />
         )}
       </section>
 
       <section>
-        <div className="mb-2 flex flex-wrap gap-1" data-tour="dm-console-tabs">
-          {([
-            ["assist", "Assist"],
-            ...groups.map((group) => [group.category, group.label] as const),
-            ["maps", "Maps"],
-            ["cast", "Cast"],
-            ["bestiary", "Bestiary"],
-            ["storyboard", "Storyboard"],
-            ["tables", "Tables"],
-          ] as Array<readonly [ConsoleTab, string]>).map(([tab, label]) => (
+        {/* Twelve tabs in a 20rem panel: icon over a small-caps label, four to
+            a row, so the rail is three rows instead of five. */}
+        <div className="mb-3 grid grid-cols-4 gap-1" data-tour="dm-console-tabs" data-pill-group="">
+          {tabs.map(([tab, label]) => (
             <button
               key={tab}
               type="button"
+              data-on={tab === category ? "" : undefined}
+              aria-pressed={tab === category}
               onClick={() => {
                 setCategory(tab);
                 setOpenAction("");
               }}
               className={cn(
-                "rounded-md border px-2 py-1 text-xs",
-                tab === category
-                  ? "border-amber-700 bg-amber-950/50 text-amber-100"
-                  : "border-stone-700 text-stone-400 hover:text-stone-200",
+                ui.railCell,
+                "dm-tab min-w-0 border border-transparent px-0",
+                tab === category && cn(ui.railCellActive, "border-amber-500/40"),
               )}
             >
-              {label}
+              <GameIcon icon={{ kind: "glyph", key: TAB_GLYPH[tab] }} size="size-7" />
+              <span className="eyebrow max-w-full truncate text-[8.5px] !tracking-normal">{label}</span>
             </button>
           ))}
         </div>
 
-        {category === "assist" ? (
-          <DmAssistPanel
-            campaignId={campaignId}
-            sheets={sheets}
-            encounter={encounter}
-            variantRules={variantRules}
-            intent={assistIntent}
-            onIntentChange={setAssistIntent}
-          />
-        ) : category === "maps" ? (
-          <div className="space-y-4">
-            <DmMapStudioPanel campaignId={campaignId} />
-            <DmMapLibraryPanel campaignId={campaignId} />
-            <DmEncounterPrepPanel campaignId={campaignId} />
+        {/* Keyed by category so the incoming tool rises in instead of cutting. */}
+        <div key={category} className="motion-tab">
+          {category === "assist" ? (
+            <DmAssistPanel
+              campaignId={campaignId}
+              sheets={sheets}
+              encounter={encounter}
+              variantRules={variantRules}
+              intent={assistIntent}
+              onIntentChange={setAssistIntent}
+            />
+          ) : category === "maps" ? (
+            <div className="reveal space-y-4">
+              <DmMapStudioPanel campaignId={campaignId} />
+              <DmMapLibraryPanel campaignId={campaignId} />
+              <DmEncounterPrepPanel campaignId={campaignId} />
+            </div>
+          ) : category === "cast" ? (
+            <DmNpcForgePanel campaignId={campaignId} />
+          ) : category === "bestiary" ? (
+            <div className="reveal space-y-4">
+              <DmBestiaryPanel campaignId={campaignId} />
+              <DmWorkbenchPanel campaignId={campaignId} />
+            </div>
+          ) : category === "storyboard" ? (
+            <DmStoryboardPanel campaignId={campaignId} />
+          ) : category === "tables" ? (
+            <DmTablesPanel campaignId={campaignId} />
+          ) : (
+          <div>
+            {active ? (
+              <SectionHead
+                title={active.label}
+                glyph={TAB_GLYPH[active.category]}
+                aside={`${active.entries.length} ${active.entries.length === 1 ? "action" : "actions"}`}
+              />
+            ) : null}
+            <ul className="stagger space-y-1.5">
+              {(active?.entries ?? []).map((entry) => (
+                <li key={entry.name}>
+                  {openAction === entry.name ? (
+                    <div className="reveal space-y-1.5">
+                      <DmActionForm
+                        campaignId={campaignId}
+                        entry={entry}
+                        sheets={sheets}
+                        encounter={encounter}
+                        glyph={actionGlyph(entry.name, active?.category ?? "table")}
+                      />
+                      <CloseForm onClick={() => setOpenAction("")} />
+                    </div>
+                  ) : (
+                    <ActionPlate
+                      glyph={actionGlyph(entry.name, active?.category ?? "table")}
+                      label={entry.label}
+                      summary={entry.summary}
+                      onClick={() => setOpenAction(entry.name)}
+                    />
+                  )}
+                </li>
+              ))}
+            </ul>
           </div>
-        ) : category === "cast" ? (
-          <DmNpcForgePanel campaignId={campaignId} />
-        ) : category === "bestiary" ? (
-          <div className="space-y-4">
-            <DmBestiaryPanel campaignId={campaignId} />
-            <DmWorkbenchPanel campaignId={campaignId} />
-          </div>
-        ) : category === "storyboard" ? (
-          <DmStoryboardPanel campaignId={campaignId} />
-        ) : category === "tables" ? (
-          <DmTablesPanel campaignId={campaignId} />
-        ) : (
-        <ul className="space-y-1.5">
-          {(active?.entries ?? []).map((entry) => (
-            <li key={entry.name}>
-              {openAction === entry.name ? (
-                <div className="space-y-1">
-                  <DmActionForm
-                    campaignId={campaignId}
-                    entry={entry}
-                    sheets={sheets}
-                    encounter={encounter}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setOpenAction("")}
-                    className="text-[11px] text-stone-500 hover:text-stone-300"
-                  >
-                    Close
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setOpenAction(entry.name)}
-                  className="w-full rounded-lg border border-stone-800 bg-stone-950/40 px-2.5 py-2 text-left hover:border-stone-700"
-                >
-                  <span className="block text-sm text-stone-200">{entry.label}</span>
-                  <span className="block text-xs text-stone-500">{entry.summary}</span>
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-        )}
+          )}
+        </div>
       </section>
     </div>
   );

@@ -1,6 +1,8 @@
 "use client";
 
 import { InfoButton } from "@/components/ui/InfoDialog";
+import { NumberStepper } from "@/components/ui/NumberStepper";
+import { Select } from "@/components/ui/Select";
 import { cn } from "@/lib/cn";
 import {
   CAMPAIGN_DIFFICULTIES,
@@ -12,7 +14,7 @@ import {
   CAMPAIGN_LENGTHS,
   type CampaignLengthSetting,
 } from "@/lib/schemas/game-settings-options";
-import { FieldLabel, inputClass, ToggleCard } from "@/app/create-campaign/fields";
+import { FieldLabel, ToggleCard } from "@/app/create-campaign/fields";
 import type { StepProps } from "@/app/create-campaign/draft";
 
 const DIFFICULTY_INFO = `Difficulty is guidance to the Dungeon Master, not a damage multiplier: every rule underneath stays 5e. It steers how hard encounters are built and how often a bad roll is allowed to really cost you.\n\n${CAMPAIGN_DIFFICULTIES.map(
@@ -31,29 +33,15 @@ export function PartyStep({ draft, patch, gates }: StepProps) {
     <div className="space-y-4 text-sm">
       <div className={cn("grid gap-3", solo ? "grid-cols-2" : "grid-cols-3")}>
         {!solo ? (
-          <label className="block">
+          <div className="block">
             <FieldLabel>Players</FieldLabel>
-            <input
-              type="number"
-              min={1}
-              max={8}
-              value={draft.maxPlayers}
-              onChange={(event) => patch({ maxPlayers: Number(event.target.value) })}
-              className={inputClass}
-            />
-          </label>
+            <NumberStepper min={1} max={8} value={draft.maxPlayers} onChange={(maxPlayers) => patch({ maxPlayers })} label="Players" />
+          </div>
         ) : null}
-        <label className="block">
+        <div className="block">
           <FieldLabel>Start level</FieldLabel>
-          <input
-            type="number"
-            min={1}
-            max={20}
-            value={draft.startingLevel}
-            onChange={(event) => patch({ startingLevel: Number(event.target.value) })}
-            className={inputClass}
-          />
-        </label>
+          <NumberStepper min={1} max={20} value={draft.startingLevel} onChange={(startingLevel) => patch({ startingLevel })} label="Start level" />
+        </div>
         <label className="block">
           <FieldLabel>
             <span className="flex items-center gap-1">
@@ -61,19 +49,13 @@ export function PartyStep({ draft, patch, gates }: StepProps) {
               <InfoButton label="Difficulty" text={DIFFICULTY_INFO} />
             </span>
           </FieldLabel>
-          <select
+          <Select<CampaignDifficulty>
             value={draft.difficulty}
-            onChange={(event) =>
-              patch({ difficulty: event.target.value as CampaignDifficulty })
-            }
-            className={inputClass}
-          >
-            {CAMPAIGN_DIFFICULTIES.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
+            onChange={(difficulty) => patch({ difficulty })}
+            label="Difficulty"
+            className="w-full"
+            options={CAMPAIGN_DIFFICULTIES.map((value) => ({ value, label: value }))}
+          />
           {/* The chosen tier says what it means without opening anything. */}
           <p className="mt-1 text-xs text-stone-500">
             {CAMPAIGN_DIFFICULTY_HINTS[draft.difficulty]}
@@ -89,19 +71,13 @@ export function PartyStep({ draft, patch, gates }: StepProps) {
               <InfoButton label="Campaign length" text={LENGTH_INFO} />
             </span>
           </FieldLabel>
-          <select
+          <Select<CampaignLengthSetting>
             value={draft.campaignLength}
-            onChange={(event) =>
-              patch({ campaignLength: event.target.value as CampaignLengthSetting })
-            }
-            className={inputClass}
-          >
-            {CAMPAIGN_LENGTHS.map((value) => (
-              <option key={value} value={value}>
-                {CAMPAIGN_LENGTH_LABELS[value]}
-              </option>
-            ))}
-          </select>
+            onChange={(campaignLength) => patch({ campaignLength })}
+            label="Campaign length"
+            className="w-full"
+            options={CAMPAIGN_LENGTHS.map((value) => ({ value, label: CAMPAIGN_LENGTH_LABELS[value] }))}
+          />
           <p className="mt-1 text-xs text-stone-500">
             How far the DM plans the story ahead. Any length keeps going if you play past the
             finale: a sequel saga picks up where the last one ended.

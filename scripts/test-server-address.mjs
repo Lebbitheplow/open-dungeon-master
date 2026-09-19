@@ -7,7 +7,7 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { lanOrigins, shareableAddresses, isLoopbackOrigin } = await import(
+const { lanOrigins, shareableAddresses, isLoopbackOrigin, livePublicUrl } = await import(
   "../src/lib/server-address.ts"
 );
 
@@ -30,11 +30,13 @@ const interfaces = {
 };
 
 test("lanOrigins keeps routable IPv4 addresses on the request port", () => {
+  // docker0 is a container bridge: only this machine can reach it.
   assert.deepEqual(lanOrigins(interfaces, "http:", "3005"), [
     "http://192.168.1.128:3005",
-    "http://172.17.0.1:3005",
     "http://100.64.0.9:3005",
   ]);
+  const bridges = { ...interfaces, "br-e7b446ea28f9": [{ address: "172.19.0.1", family: "IPv4", internal: false }], veth12: [{ address: "172.30.0.1", family: "IPv4", internal: false }] };
+  assert.ok(lanOrigins(bridges, "http:", "3005").every((entry) => !entry.includes("172.")));
 });
 
 test("lanOrigins drops loopback, IPv6, link-local, and dedups", () => {
@@ -44,6 +46,18 @@ test("lanOrigins drops loopback, IPv6, link-local, and dedups", () => {
   assert.ok(origins.every((entry) => entry.startsWith("https://")));
   assert.ok(origins.every((entry) => !entry.includes("127.0.0.1") && !entry.includes("169.254")));
   assert.ok(origins.every((entry) => !/:\d+$/.test(entry)), "no port when the request had none");
+});
+
+test("a saved public URL is only offered while it can be true", () => {
+  // A hostname or a public address is taken at its word.
+  assert.equal(livePublicUrl("https://abc.trycloudflare.com/", interfaces), "https://abc.trycloudflare.com");
+  assert.equal(livePublicUrl("http://203.0.113.9:3005", interfaces), "http://203.0.113.9:3005");
+  // A private address this machine holds is fine.
+  assert.equal(livePublicUrl("http://192.168.1.128:3005/", interfaces), "http://192.168.1.128:3005");
+  // One it does not hold is a leftover from another machine or network.
+  assert.equal(livePublicUrl("http://192.168.1.169:3210", interfaces), "");
+  assert.equal(livePublicUrl("", interfaces), "");
+  assert.equal(livePublicUrl("not a url", interfaces), "");
 });
 
 test("isLoopbackOrigin recognises the local names", () => {

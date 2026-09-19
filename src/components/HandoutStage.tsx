@@ -4,6 +4,7 @@ import { Download, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { Markdown } from "@/components/ui/Markdown";
+import { Scroll } from "@/components/ui/Scroll";
 import type { HandoutShown } from "@/lib/scene/state";
 import type { LoreEntryView } from "@/app/workshop/lore/types";
 
@@ -29,6 +30,9 @@ export function HandoutStage({
 }) {
   const [folded, setFolded] = useState<string | null>(null);
   const [entry, setEntry] = useState<LoreEntryView | null>(null);
+  // The binder entry this stage last finished asking for, found or not: the
+  // scroll waits for its words so it unrolls once, at its full length.
+  const [askedFor, setAskedFor] = useState("");
   const allowed =
     handout !== null &&
     !handout.dismissed &&
@@ -46,9 +50,14 @@ export function HandoutStage({
       .then((data: { entries?: LoreEntryView[] } | null) => {
         if (!cancelled) {
           setEntry(data?.entries?.find((candidate) => candidate.id === loreId) ?? null);
+          setAskedFor(loreId);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) {
+          setAskedFor(loreId);
+        }
+      });
     return () => {
       cancelled = true;
     };
@@ -67,7 +76,7 @@ export function HandoutStage({
     return () => window.removeEventListener("keydown", onKey);
   }, [handout]);
 
-  if (!allowed || !handout || folded === handout.id) {
+  if (!allowed || !handout || folded === handout.id || (loreId && askedFor !== loreId)) {
     return null;
   }
   const style = handout.style;
@@ -83,6 +92,31 @@ export function HandoutStage({
     return typeof data.roll?.total === "number" ? data.roll.total : null;
   };
 
+  const paper = (
+    <>
+      {style === "parchment" ? <span className="found-stamp">Found</span> : null}
+      <h2 className={cn("font-display", style === "notice" ? "text-center text-2xl uppercase tracking-[0.2em]" : "text-xl")}>
+        {handout.title}
+      </h2>
+      {image ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={image} alt="" className="my-3 max-h-72 w-full rounded object-contain" />
+      ) : null}
+      {body ? <Markdown source={body} style={style === "notice" ? "notice" : "parchment"} onRoll={roll} className="mt-2" /> : null}
+      {handout.caption ? (
+        <p className={cn("mt-4 text-[11px] italic opacity-80", style === "notice" ? "text-center" : "")}>{handout.caption}</p>
+      ) : null}
+      <div className="mt-4 flex items-center justify-between">
+        <span className="wax-seal">From the DM</span>
+        {entry?.attachmentPath ? (
+          <a href={entry.attachmentPath} target="_blank" rel="noreferrer" className="text-[11px] underline">
+            Open the pages
+          </a>
+        ) : null}
+      </div>
+    </>
+  );
+
   return (
     <div className="fixed inset-0 z-[55] flex items-center justify-center p-4 sm:p-8" role="dialog" aria-label={handout.title}>
       <div className="handout-scrim-in absolute inset-0 bg-stone-950/80" onClick={() => setFolded(handout.id)} />
@@ -92,29 +126,13 @@ export function HandoutStage({
             // eslint-disable-next-line @next/next/no-img-element
             <img src={image} alt={handout.title} className="mx-auto max-h-[80vh] rounded-lg object-contain shadow-elev-1" />
           ) : null
-        ) : (
-          <div className={cn(style === "notice" ? "notice" : "parchment")}>
-            {style === "parchment" ? <span className="found-stamp">Found</span> : null}
-            <h2 className={cn("font-display", style === "notice" ? "text-center text-2xl uppercase tracking-[0.2em]" : "text-xl")}>
-              {handout.title}
-            </h2>
-            {image ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={image} alt="" className="my-3 max-h-72 w-full rounded object-contain" />
-            ) : null}
-            {body ? <Markdown source={body} style={style} onRoll={roll} className="mt-2" /> : null}
-            {handout.caption ? (
-              <p className={cn("mt-4 text-[11px] italic opacity-80", style === "notice" ? "text-center" : "")}>{handout.caption}</p>
-            ) : null}
-            <div className="mt-4 flex items-center justify-between">
-              <span className="wax-seal">From the DM</span>
-              {entry?.attachmentPath ? (
-                <a href={entry.attachmentPath} target="_blank" rel="noreferrer" className="text-[11px] underline">
-                  Open the pages
-                </a>
-              ) : null}
-            </div>
+        ) : style === "parchment" ? (
+          // The rollers overhang the paper, so the scroll keeps a gutter.
+          <div className="px-5 sm:px-6">
+            <Scroll>{paper}</Scroll>
           </div>
+        ) : (
+          <div className="notice">{paper}</div>
         )}
         {handout.caption && style === "image" ? (
           <p className="mt-2 text-center text-sm text-stone-300">{handout.caption}</p>

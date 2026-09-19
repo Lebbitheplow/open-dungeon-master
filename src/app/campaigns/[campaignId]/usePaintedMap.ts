@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { paintKey, paintMap, type PaintQuality } from "@/lib/battlemap/render/painted";
+import { mapSkinKey } from "@/lib/battlemap/skins";
 import type { PlayerMapView } from "@/lib/battlemap/view";
 import { onPaintedMapsChange, paintedMapsOn } from "@/lib/painted-maps";
 
@@ -22,6 +23,8 @@ export function usePaintedMap(view: PlayerMapView | null, genre: string | null |
   const shown = useRef<{ key: string; url: string } | null>(null);
   const mapId = view?.mapId ?? null;
   const terrain = view?.terrain ?? "";
+  // The skin the DM chose for this map; a change repaints the board.
+  const skinKey = mapSkinKey(view?.skin);
   const wanted = Boolean(view) && !view?.backdrop && enabled;
 
   useEffect(() => {
@@ -32,7 +35,7 @@ export function usePaintedMap(view: PlayerMapView | null, genre: string | null |
     if (!quality) {
       return;
     }
-    const request = { width: view.width, height: view.height, terrain, theme: view.theme, genre, seedKey: view.mapId, quality };
+    const request = { width: view.width, height: view.height, terrain, theme: view.theme, genre, seedKey: view.mapId, quality, skin: view.skin };
     const key = paintKey(request);
     if (shown.current?.key === key) {
       return;
@@ -60,7 +63,7 @@ export function usePaintedMap(view: PlayerMapView | null, genre: string | null |
     };
     // The view object changes every tick; the picture depends only on these.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapId, terrain, wanted, genre, view?.width, view?.height, view?.theme]);
+  }, [mapId, terrain, wanted, genre, skinKey, view?.width, view?.height, view?.theme]);
 
   useEffect(
     () => () => {

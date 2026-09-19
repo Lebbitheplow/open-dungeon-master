@@ -1,10 +1,14 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { Loader2, Pencil, StickyNote, Trash2, X, Check } from "lucide-react";
+import { Pencil, Trash2, X, Check } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
+import { EmptyState } from "@/components/EmptyState";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { KitButton, panelField, panelRow } from "./PanelKit";
 import { NoteComposer } from "@/app/campaigns/[campaignId]/NotesPanel";
 import type { CampaignMember } from "@/lib/campaign-types";
 import type { Note } from "@/lib/db/notes";
@@ -43,20 +47,22 @@ function CharacterNoteRow({
   }
 
   return (
-    <li className="rounded-md border border-stone-800 bg-stone-950/40 px-2.5 py-1.5">
+    <li className={panelRow}>
       {editing ? (
-        <div className="space-y-1.5">
+        <div className="reveal space-y-1.5">
           <textarea
             value={body}
             onChange={(event) => setBody(event.target.value)}
             rows={2}
             maxLength={2000}
-            className="w-full rounded border border-stone-700 bg-stone-900 px-2 py-1 text-[11px] leading-4 outline-none focus:border-amber-600"
+            aria-label="Note"
+            className={cn(panelField, "leading-5")}
           />
           <div className="flex gap-1.5">
-            <button
-              type="button"
+            <KitButton
+              tone="primary"
               disabled={busy || !body.trim()}
+              busy={busy}
               onClick={async () => {
                 await run(() =>
                   fetch(`/api/campaigns/${campaignId}/notes/${note.id}`, {
@@ -67,43 +73,38 @@ function CharacterNoteRow({
                 );
                 setEditing(false);
               }}
-              className="flex items-center gap-1 rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-300 hover:bg-stone-900 disabled:opacity-50"
             >
-              {busy ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
+              {busy ? null : <Check className="size-3.5" />}
               Save
-            </button>
-            <button
-              type="button"
+            </KitButton>
+            <KitButton
               onClick={() => {
                 setEditing(false);
                 setBody(note.body);
               }}
-              className="flex items-center gap-1 rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-500 hover:bg-stone-900"
             >
-              <X className="size-3" /> Cancel
-            </button>
+              <X className="size-3.5" /> Cancel
+            </KitButton>
           </div>
         </div>
       ) : (
         <>
-          <p className="whitespace-pre-wrap text-[11px] leading-4 text-stone-300">{note.body}</p>
-          <div className="mt-1 flex items-center gap-2 text-[10px] text-stone-600">
+          <p className="whitespace-pre-wrap text-xs leading-5 text-stone-300">{note.body}</p>
+          <div className="mt-1 flex min-h-6 items-center gap-2 text-[11px] text-stone-500">
             <span className="truncate">{authorName}</span>
-            <span className="ml-auto flex shrink-0 items-center gap-1.5">
+            <span className="ml-auto flex shrink-0 items-center gap-0.5">
               {canEdit ? (
-                <button
-                  type="button"
-                  onClick={() => setEditing(true)}
-                  title="Edit"
-                  className="text-stone-500 hover:text-stone-300"
-                >
-                  <Pencil className="size-3" />
-                </button>
+                <KitButton tone="icon" always onClick={() => setEditing(true)} title="Edit" aria-label="Edit">
+                  <Pencil className="size-3.5" />
+                </KitButton>
               ) : null}
               {canDelete ? (
-                <button
-                  type="button"
+                <KitButton
+                  tone="iconDanger"
+                  always
                   disabled={busy}
+                  busy={busy}
+                  aria-label="Delete note"
                   onClick={() =>
                     run(() =>
                       fetch(`/api/campaigns/${campaignId}/notes/${note.id}`, {
@@ -112,10 +113,9 @@ function CharacterNoteRow({
                     )
                   }
                   title="Delete note"
-                  className="text-stone-500 hover:text-red-400"
                 >
-                  <Trash2 className="size-3" />
-                </button>
+                  {busy ? null : <Trash2 className="size-3.5" />}
+                </KitButton>
               ) : null}
             </span>
           </div>
@@ -158,12 +158,10 @@ export function CharacterNotesDialog({
     .sort((a, b) => b.seq - a.seq);
   const ownsCharacter = sheet.userId === meUserId;
 
-  const section = "text-[10px] font-medium uppercase tracking-wide text-stone-500";
-
   return (
     <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/70" />
+        <Dialog.Overlay className="dialog-overlay fixed inset-0 z-50 bg-[#05030d]/70 backdrop-blur-sm" />
         <Dialog.Content
           className={cn(
             ui.dialog,
@@ -171,10 +169,11 @@ export function CharacterNotesDialog({
           )}
         >
           <div className="mb-3 flex items-center justify-between">
-            <Dialog.Title className="flex items-center gap-2 font-display text-lg tracking-wide text-amber-50">
-              <StickyNote className="size-4 text-amber-300" /> Notes on {sheet.name}
+            <Dialog.Title className="flex items-center gap-2 font-display text-lg tracking-wide">
+              <GameIcon icon={{ kind: "glyph", key: "tab-notes" }} size="size-7" />
+              <span className="gold-title">Notes on {sheet.name}</span>
             </Dialog.Title>
-            <Dialog.Close className="text-stone-500 hover:text-stone-300">
+            <Dialog.Close aria-label="Close" className="pk-tap rounded p-1 text-stone-500 hover:text-amber-200 motion-nudge">
               <X className="size-4" />
             </Dialog.Close>
           </div>
@@ -188,9 +187,9 @@ export function CharacterNotesDialog({
             />
 
             <div className="space-y-1.5">
-              <h3 className={section}>Party notes</h3>
+              <SectionHead title="Party notes" glyph="tab-party" aside={publicNotes.length || null} />
               {publicNotes.length ? (
-                <ul className="space-y-1.5">
+                <ul className="stagger space-y-1.5">
                   {publicNotes.map((note) => (
                     <CharacterNoteRow
                       key={note.id}
@@ -204,16 +203,14 @@ export function CharacterNotesDialog({
                   ))}
                 </ul>
               ) : (
-                <p className="text-[11px] text-stone-600">
-                  No party notes on {sheet.name} yet.
-                </p>
+                <EmptyState size="sm" art="scrolls" title={`No party notes on ${sheet.name} yet.`} />
               )}
             </div>
 
             <div className="space-y-1.5">
-              <h3 className={section}>My notes (only you see these)</h3>
+              <SectionHead title="My notes (only you see these)" glyph="tab-journal" aside={myNotes.length || null} />
               {myNotes.length ? (
-                <ul className="space-y-1.5">
+                <ul className="stagger space-y-1.5">
                   {myNotes.map((note) => (
                     <CharacterNoteRow
                       key={note.id}
@@ -227,7 +224,7 @@ export function CharacterNotesDialog({
                   ))}
                 </ul>
               ) : (
-                <p className="text-[11px] text-stone-600">No private notes yet.</p>
+                <EmptyState size="sm" art="scrolls" title="No private notes yet." />
               )}
             </div>
           </div>

@@ -4,6 +4,7 @@ import { Loader2, Mic } from "lucide-react";
 import { useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { micBlockMessage, micBlockReason } from "@/lib/secure-context";
+import { ui } from "@/lib/ui";
 
 type PttState = "idle" | "recording" | "transcribing" | "error";
 
@@ -115,11 +116,12 @@ export function PushToTalk({
         title="Hold to talk"
         aria-label="Hold to talk"
         data-tour="composer-talk"
+        // The kit's secondary button without its magnet: a button that follows
+        // the pointer would slide out from under a held finger and end the take.
         className={cn(
-          "rounded-md border p-2.5 transition-colors select-none touch-none",
-          state === "recording"
-            ? "border-red-700 bg-red-950 text-red-300"
-            : "border-stone-700 text-stone-300 hover:bg-stone-900",
+          ui.btnSecondary.replace("motion-magnet", "motion-press"),
+          "session-deskbtn select-none touch-none",
+          state === "recording" && "border-red-600/80 bg-red-950/80 text-red-200 shadow-[0_0_16px_rgba(220,38,38,0.35)]",
           (disabled || state === "transcribing") && "opacity-40",
         )}
       >
@@ -130,7 +132,7 @@ export function PushToTalk({
         )}
       </button>
       {state === "error" && hint ? (
-        <p className="absolute bottom-full right-0 mb-1 w-64 rounded bg-stone-900 px-2 py-1 text-xs text-red-400 shadow">
+        <p className="reveal-pop absolute bottom-full right-0 mb-1 w-64 rounded bg-stone-900 px-2 py-1 text-xs text-red-400 shadow">
           {hint}
         </p>
       ) : null}

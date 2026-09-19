@@ -8,6 +8,7 @@ import { backdropDataUrl, nameFromFilename } from "@/lib/battlemap/uvtt";
 import { Sheet } from "@/components/ui/Sheet";
 import { useTourPrepare } from "@/lib/tours/prepare";
 import { DEFAULT_MAP_TOOLS, type MapTools } from "@/app/campaigns/[campaignId]/MapToolbox";
+import { useMapToasts } from "@/app/campaigns/[campaignId]/MapToasts";
 import { MapCreateControls } from "@/app/workshop/maps/MapCreateControls";
 import { MapEditor } from "@/app/workshop/maps/MapEditor";
 import { MapGallery } from "@/app/workshop/maps/MapGallery";
@@ -24,10 +25,14 @@ import type { LibraryState, PreparedMap } from "@/app/workshop/maps/types";
 // live board uses, so a map in this drawer is a map that can be played on.
 //
 // Two layouts over one set of requests. "drawer" is the DM console's: the
-// creation controls, a chip per map, and the editor inline below. "gallery"
-// is the workshop's: the controls fold into a New map card, every map is a
-// thumbnail tile, and the editor opens in a sheet (full screen on a phone, a
-// wide dialog on a desk) so the canvas gets the room it deserves.
+// forge, a chip per map, and the editor inline below. "gallery" is the
+// workshop's: the forge folds into a New map card, every map is a painted
+// thumbnail, and the editor opens in a sheet that takes the whole screen, so
+// the rail, the canvas and the layers all have room.
+//
+// A refused edit, and a deploy that landed, are toasts over the editor's
+// canvas (MapToasts.tsx); the line of text under the gallery is kept for what
+// happens while no editor is open (a create or an import that failed).
 
 export function DmMapLibraryPanel({
   campaignId,
@@ -49,6 +54,7 @@ export function DmMapLibraryPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
+  const { toasts, push } = useMapToasts();
 
   // The state lands in a .then callback rather than after an await, so the
   // refetch reads as "subscribe to an external system" to React and to the
@@ -159,13 +165,14 @@ export function DmMapLibraryPanel({
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
-        setError((payload as { error?: string }).error ?? "That was refused.");
+        // The server's own sentence, over the canvas where the eyes are.
+        push((payload as { error?: string }).error ?? "That was refused.");
         return false;
       }
       await load();
       return true;
     },
-    [campaignId, load],
+    [campaignId, load, push],
   );
 
   async function act(action: "deploy" | "open-scene") {
@@ -183,10 +190,10 @@ export function DmMapLibraryPanel({
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setError((payload as { error?: string }).error ?? "That did not work.");
+        push((payload as { error?: string }).error ?? "That did not work.");
         return;
       }
-      setNote(action === "deploy" ? "It is on the table." : "The scene is open.");
+      push(action === "deploy" ? "It is on the table." : "The scene is open.", "done");
       await load();
     } finally {
       setBusy(false);
@@ -229,6 +236,7 @@ export function DmMapLibraryPanel({
         zones: original.zones,
         overlayPath: original.overlayPath,
         ambience: original.ambience,
+        ...(original.skin ? { skin: original.skin } : {}),
       };
       if (original.backdrop) {
         carry.backdropPath = original.backdrop.path;
@@ -313,6 +321,8 @@ export function DmMapLibraryPanel({
 
   const editor = selected ? (
     <MapEditor
+      // Keyed so another map starts from its own words, selection and history.
+      key={selected.id}
       selected={selected}
       state={state}
       busy={busy}
@@ -323,6 +333,8 @@ export function DmMapLibraryPanel({
       duplicate={duplicate}
       remove={remove}
       npcNames={npcNames}
+      toasts={toasts}
+      inSheet={gallery}
     />
   ) : null;
 
@@ -357,6 +369,7 @@ export function DmMapLibraryPanel({
               <MapCreateControls
                 busy={busy}
                 board={state.board}
+                genre={state.genre}
                 showHeading={false}
                 onCreate={create}
                 onImport={(file) => void importUvtt(file)}
@@ -366,7 +379,7 @@ export function DmMapLibraryPanel({
         </section>
 
         <div data-tour="maps-gallery">
-          <MapGallery maps={state.maps} selectedId={selectedId} onOpen={(map) => select(map.id)} />
+          <MapGallery maps={state.maps} selectedId={selectedId} genre={state.genre} onOpen={(map) => select(map.id)} />
         </div>
         {feedback}
 
@@ -374,10 +387,11 @@ export function DmMapLibraryPanel({
           open={editorOpen && selected !== null}
           onOpenChange={setEditorOpen}
           title={selected?.name ?? "Map"}
-          className="top-0 h-dvh max-h-none rounded-none lg:top-1/2 lg:h-auto lg:max-h-[92vh] lg:w-[min(96vw,64rem)] lg:rounded-xl"
+          // The editor brings its own top bar, with the map's name in it.
+          hideTitle
+          className="top-0 h-dvh max-h-none rounded-none px-0 pb-0 pt-0 lg:top-1/2 lg:h-[94vh] lg:max-h-[94vh] lg:w-[min(98vw,110rem)] lg:rounded-xl lg:p-0"
         >
-          {editor}
-          <div className="mt-2">{feedback}</div>
+          <div className="h-full">{editor}</div>
         </Sheet>
       </div>
     );
@@ -388,14 +402,15 @@ export function DmMapLibraryPanel({
       <MapCreateControls
         busy={busy}
         board={state.board}
+        genre={state.genre}
         onCreate={create}
         onImport={(file) => void importUvtt(file)}
       />
 
       {state.maps.length ? (
-        <div className="flex flex-wrap gap-1">
+        <div data-pill-group="" className="flex flex-wrap gap-1">
           {state.maps.map((map) => (
-            <button
+            <button data-on={map.id === selectedId ? "" : undefined}
               key={map.id}
               type="button"
               onClick={() => setSelectedId((current) => (current === map.id ? "" : map.id))}
@@ -419,7 +434,7 @@ export function DmMapLibraryPanel({
         </p>
       )}
 
-      {editor}
+      {editor ? <div className="h-[min(86dvh,48rem)]">{editor}</div> : null}
       {feedback}
     </div>
   );

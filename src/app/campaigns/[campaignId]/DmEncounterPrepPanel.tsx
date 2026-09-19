@@ -1,8 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Copy, Swords, Trash2 } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
 import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
+import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { RowMenu, panelRow } from "@/app/campaigns/[campaignId]/PanelKit";
 import { formatRoster, TEMPLATE_NAME_MAX } from "@/lib/dm/encounter-template-logic";
 import { thresholdsForParty } from "@/lib/srd/encounter-math";
 import { targetPartyLevels, type TargetParty } from "@/lib/workshop/kind";
@@ -43,7 +48,7 @@ function DifficultyLine({ readout }: { readout: TemplateReadout }) {
     );
   }
   return (
-    <p className={cn("text-[11px]", readout.tooDeadly ? "text-red-400" : "text-stone-500")}>
+    <p className={cn("text-[11px]", readout.tooDeadly ? "text-red-400" : "text-stone-400")}>
       {readout.count} creature{readout.count === 1 ? "" : "s"}, {readout.verdict} ({readout.adjustedXp} XP
       against a {readout.ceiling} ceiling)
       {readout.tooDeadly ? ". The engine will refuse this as written." : ""}
@@ -244,8 +249,8 @@ export function DmEncounterPrepPanel({
 
   const feedback = (
     <>
-      {error ? <p className="text-[11px] text-red-400">{error}</p> : null}
-      {note ? <p className="text-[11px] text-emerald-400">{note}</p> : null}
+      {error ? <p className="motion-shake text-[11px] text-red-400">{error}</p> : null}
+      {note ? <p className="live-in text-[11px] text-emerald-400">{note}</p> : null}
     </>
   );
 
@@ -291,65 +296,57 @@ export function DmEncounterPrepPanel({
   return (
     <div className="space-y-3">
       <section>
-        <h3 className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
-          <Swords className="size-3.5" /> Prepared encounters
-        </h3>
+        <SectionHead
+          title="Prepared encounters"
+          glyph="system-encounters"
+          aside={templates.length ? <span key={templates.length} className="count-pop">{templates.length}</span> : undefined}
+        />
         {templates.length ? (
-          <ul className="space-y-1.5">
-            {templates.map((template) => (
-              <li
-                key={template.id}
-                className="rounded-lg border border-stone-800 bg-stone-950/40 px-2.5 py-2"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm text-stone-200">{template.name}</p>
-                    <p className="truncate text-xs text-stone-400">
-                      {formatRoster(template.enemies).replace(/\n/g, ", ")}
-                      {template.battlefield ? ` on ${template.battlefield}` : ""}
-                    </p>
-                    <DifficultyLine readout={template.readout} />
-                    {template.notes ? (
-                      <p className="mt-0.5 whitespace-pre-wrap text-[11px] text-stone-500">
-                        {template.notes}
+          <ul className="stagger space-y-1.5">
+            {templates.map((template) => {
+              // Deploy stays the row's one visible button; the two that were
+              // icons keep the names they announced, in the row's menu.
+              const items: ContextMenuItem[] = [
+                { id: "deploy", label: "Deploy", glyph: "tab-battle", disabled: busy, onSelect: () => void deploy(template.id) },
+                { id: "duplicate", label: `Duplicate ${template.name}`, glyph: "system-homebrew", disabled: busy, onSelect: () => void duplicate(template) },
+                { id: "delete", label: `Delete ${template.name}`, glyph: "quest-failed", tone: "danger", separated: true, onSelect: () => void remove(template.id) },
+              ];
+              return (
+                <ContextMenu key={template.id} as="li" items={items} label={template.name} className={panelRow}>
+                  <div className="flex items-start gap-2">
+                    <GameIcon icon={{ kind: "glyph", key: "system-encounters" }} size="size-7" className="mt-0.5 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-stone-100">{template.name}</p>
+                      <p className="truncate text-xs text-stone-400">
+                        {formatRoster(template.enemies).replace(/\n/g, ", ")}
+                        {template.battlefield ? ` on ${template.battlefield}` : ""}
                       </p>
-                    ) : null}
+                      <DifficultyLine readout={template.readout} />
+                      {template.notes ? (
+                        <p className="reveal mt-0.5 whitespace-pre-wrap text-[11px] text-stone-500">
+                          {template.notes}
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-0.5">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        aria-busy={busy}
+                        onClick={() => void deploy(template.id)}
+                        className={cn(ui.btnPrimary, "h-9 px-3 text-[11px]")}
+                      >
+                        Deploy
+                      </button>
+                      <RowMenu items={items} label={template.name} />
+                    </div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void deploy(template.id)}
-                      className="rounded-md border border-amber-700 bg-amber-950/50 px-2 py-1 text-xs text-amber-100 disabled:opacity-40"
-                    >
-                      Deploy
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      aria-label={`Duplicate ${template.name}`}
-                      onClick={() => void duplicate(template)}
-                      className="rounded p-1 text-stone-500 hover:text-stone-200 disabled:opacity-40"
-                    >
-                      <Copy className="size-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`Delete ${template.name}`}
-                      onClick={() => void remove(template.id)}
-                      className="rounded p-1 text-stone-500 hover:text-red-400"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </button>
-                  </div>
-                </div>
-              </li>
-            ))}
+                </ContextMenu>
+              );
+            })}
           </ul>
         ) : (
-          <p className="rounded-lg border border-stone-800 bg-stone-950/40 px-2.5 py-2 text-xs text-stone-500">
-            Nothing prepared. Write a roster below and it is one button at the table.
-          </p>
+          <EmptyState size="sm" art="map" title="Nothing prepared. Write a roster below and it is one button at the table." />
         )}
       </section>
 

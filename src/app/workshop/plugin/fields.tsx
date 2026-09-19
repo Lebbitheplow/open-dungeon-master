@@ -1,5 +1,6 @@
 "use client";
 
+import { rowIcon } from "@/app/workshop/kit";
 import { Plus, X } from "lucide-react";
 import { useState } from "react";
 import { AddFromList, type AddOption } from "@/components/ui/AddFromList";
@@ -44,12 +45,12 @@ export function TextField({
   };
   return (
     <label className={cn("block", className)}>
-      <span className="mb-1 flex items-baseline justify-between gap-2 text-xs uppercase tracking-wide text-stone-500">
+      <span className="mb-1 flex items-baseline justify-between gap-2 font-display text-[11px] tracking-[0.1em] text-amber-300/85">
         <span>
           {label}
           {required ? <span className="text-amber-400/80"> *</span> : null}
         </span>
-        <span className="text-[10px] normal-case tracking-normal text-stone-600">
+        <span className="font-sans text-[10px] tracking-normal text-stone-500">
           {value.length}/{maxLength}
         </span>
       </span>
@@ -80,7 +81,7 @@ export function PairList<T extends Record<string, string>>({
 }) {
   return (
     <div className="space-y-1.5">
-      {items.length === 0 ? <p className="text-[11px] italic text-stone-600">{empty}</p> : null}
+      {items.length === 0 ? <p className="reveal text-xs italic text-stone-500">{empty}</p> : null}
       {items.map((item, index) => (
         <div key={index} className="flex items-start gap-1.5">
           <input
@@ -107,7 +108,7 @@ export function PairList<T extends Record<string, string>>({
             type="button"
             onClick={() => onChange(removeAt(items, index))}
             aria-label={`Remove ${item[first.key] || "this row"}`}
-            className="rounded-md p-1 text-stone-600 hover:text-red-300"
+            className={cn(ui.iconAction, rowIcon, "hover:text-red-300")}
           >
             <X className="size-3.5" />
           </button>
@@ -145,7 +146,7 @@ export function LineList({
 }) {
   return (
     <div className="space-y-1.5">
-      {items.length === 0 ? <p className="text-[11px] italic text-stone-600">{empty}</p> : null}
+      {items.length === 0 ? <p className="reveal text-xs italic text-stone-500">{empty}</p> : null}
       {items.map((item, index) => (
         <div key={index} className="flex items-start gap-1.5">
           <input
@@ -160,7 +161,7 @@ export function LineList({
             type="button"
             onClick={() => onChange(removeAt(items, index))}
             aria-label="Remove this line"
-            className="rounded-md p-1 text-stone-600 hover:text-red-300"
+            className={cn(ui.iconAction, rowIcon, "hover:text-red-300")}
           >
             <X className="size-3.5" />
           </button>
@@ -216,18 +217,18 @@ export function ChipList({
   });
   return (
     <div className="space-y-1.5">
-      <ul className="flex flex-wrap gap-1.5">
+      <ul className="stagger flex flex-wrap gap-1.5">
         {items.map((item) => (
           <li
             key={item}
-            className="flex items-center gap-1 rounded-full border border-stone-700 bg-stone-900/60 py-0.5 pl-2.5 pr-1 text-xs text-stone-200"
+            className="pop-in flex items-center gap-1 rounded-full border border-amber-500/25 bg-stone-900/60 py-0.5 pl-2.5 pr-1 text-xs text-stone-200"
           >
             {labelFor ? labelFor(item) : item}
             <button
               type="button"
               onClick={() => onChange(items.filter((current) => current !== item))}
               aria-label={`Remove ${item}`}
-              className="rounded-full p-0.5 text-stone-500 hover:text-red-300"
+              className={cn(ui.iconAction, "rounded-full p-1 opacity-100 hover:text-red-300")}
             >
               <X className="size-3" />
             </button>

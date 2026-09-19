@@ -72,12 +72,12 @@ export function ContentPick({
         ) : null}
       </div>
       {open && !results.length && query.trim() && !loading ? (
-        <p className="mt-1 rounded-lg border border-stone-800 bg-stone-950/60 px-3 py-1.5 text-[11px] text-stone-500">
+        <p className="reveal mt-1 rounded-lg border border-stone-800 bg-stone-950/60 px-3 py-1.5 text-[11px] text-stone-500">
           Nothing matched &quot;{query.trim()}&quot;. Try fewer letters.
         </p>
       ) : null}
       {open && results.length ? (
-        <ul className="panel panel-smoke mt-1 max-h-56 w-full overflow-y-auto rounded-lg">
+        <ul className="reveal panel panel-smoke mt-1 max-h-56 w-full overflow-y-auto rounded-lg">
           {results.slice(0, 40).map((entry) => (
             <li key={entry.slug} className="flex items-center gap-1 pr-2 hover:bg-stone-800">
               <button

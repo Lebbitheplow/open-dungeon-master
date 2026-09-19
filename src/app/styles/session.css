@@ -1,0 +1,384 @@
+/* The frame of a running session: the header, the tab rail, the transcript,
+   the composer desk and the banners above it. Unlayered on purpose, so these
+   rules win over the layered kit where a shared part (the sheet medallion,
+   the section head) is resized for the transcript. */
+
+/* ---- Header ---- */
+.session-header { position: relative; }
+.session-header::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 -1px 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(212, 171, 58, 0.55) 18%, rgba(212, 171, 58, 0.55) 82%, transparent);
+  pointer-events: none;
+}
+/* On a phone the plate takes most of the bar, so the title runs to a second
+   line instead of being cut to its first word. */
+.session-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 0.8rem;
+  line-height: 1.12;
+}
+@media (min-width: 640px) {
+  .session-title { display: block; white-space: nowrap; text-overflow: ellipsis; font-size: 1.2rem; line-height: 1.15; }
+}
+
+/* One brass plate holding every table-wide control, so the header reads as
+   a single instrument and spends no width on gaps between loose buttons. */
+.session-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(212, 171, 58, 0.3);
+  background: linear-gradient(180deg, rgba(38, 30, 62, 0.85), rgba(14, 10, 28, 0.92));
+  box-shadow: 0 1px 0 rgba(244, 224, 166, 0.12) inset, 0 2px 8px rgba(4, 2, 12, 0.5);
+}
+.session-hbtn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-width: 2.3rem;
+  height: 2.5rem;
+  padding: 0 0.2rem;
+  border-radius: 0.6rem;
+  border: 1px solid transparent;
+  color: var(--color-stone-400);
+  transition: background-color var(--dur-quick) var(--ease-snap), border-color var(--dur-quick) var(--ease-snap), color var(--dur-quick) var(--ease-snap);
+}
+@media (min-width: 640px) {
+  .session-hbtn { min-width: 2.25rem; height: 2.25rem; }
+}
+.session-hbtn:hover { background: rgba(212, 171, 58, 0.1); color: var(--color-amber-100); }
+.session-hbtn:focus-visible { outline: none; border-color: rgba(212, 171, 58, 0.7); }
+.session-hbtn-lit {
+  border-color: rgba(212, 171, 58, 0.45);
+  background: rgba(212, 171, 58, 0.13);
+  color: var(--color-amber-300);
+  box-shadow: 0 0 14px rgba(212, 171, 58, 0.18);
+}
+.session-hbtn-call {
+  border-color: rgba(4, 120, 87, 0.7);
+  background: rgba(2, 44, 34, 0.55);
+  color: var(--color-emerald-300);
+}
+/* A switched-off feature keeps its painting, dimmed and struck through, so
+   the header never falls back to a bare line icon to say "muted". */
+.session-glyph { transition: filter var(--dur-quick) var(--ease-snap), opacity var(--dur-quick) var(--ease-snap); }
+.session-glyph-off { position: relative; display: inline-flex; }
+.session-glyph-off .session-glyph { filter: grayscale(0.9) brightness(0.7); opacity: 0.75; }
+.session-glyph-off::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -1px;
+  bottom: -1px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--color-red-400);
+  box-shadow: 0 0 0 1px rgba(12, 8, 24, 0.9);
+  rotate: 45deg;
+}
+.session-volume { width: 4.5rem; margin: 0 0.35rem 0 0.15rem; }
+.session-menu-row {
+  display: flex;
+  cursor: pointer;
+  align-items: center;
+  gap: 0.55rem;
+  border-radius: 0.4rem;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.875rem;
+  color: var(--color-stone-300);
+  outline: none;
+}
+.session-menu-row[data-highlighted] { background: rgba(212, 171, 58, 0.12); color: var(--color-amber-100); }
+.session-menu-row[data-disabled] { opacity: 0.4; cursor: default; }
+.session-menu-hint { display: block; font-size: 0.7rem; line-height: 1.25; color: var(--color-stone-500); }
+
+/* ---- Tab rail ---- */
+.rail-glyph {
+  width: 2rem;
+  height: 2rem;
+  filter: saturate(0.7);
+  opacity: 0.82;
+  transition: filter var(--dur-quick) var(--ease-snap), scale var(--dur-move) var(--ease-spring), box-shadow var(--dur-quick) var(--ease-snap);
+}
+button:hover > .rail-glyph { filter: none; opacity: 1; }
+[aria-current="page"] > .rail-glyph {
+  filter: none;
+  opacity: 1;
+  scale: 1.08;
+  box-shadow: 0 0 0 1px rgba(212, 171, 58, 0.65), 0 0 12px rgba(212, 171, 58, 0.35);
+}
+.session-subtab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2rem;
+  padding: 0.15rem 0.7rem 0.15rem 0.25rem;
+  border-radius: 9999px;
+  border: 1px solid var(--color-stone-700);
+  font-size: 0.72rem;
+  color: var(--color-stone-400);
+  transition: border-color var(--dur-quick) var(--ease-snap), color var(--dur-quick) var(--ease-snap), background-color var(--dur-quick) var(--ease-snap);
+}
+.session-subtab:hover { color: var(--color-stone-200); border-color: rgba(212, 171, 58, 0.4); }
+.session-subtab[data-on] { border-color: rgba(212, 171, 58, 0.6); background: rgba(212, 171, 58, 0.1); color: var(--color-amber-200); }
+.session-subtab > svg { margin-left: 0.3rem; }
+/* A pill with no painting in front of it: even padding on both sides. */
+.session-subtab-plain { padding-inline: 0.8rem; }
+
+/* ---- Transcript ---- */
+.session-dm .section-head { margin-bottom: 0.65rem; flex-wrap: nowrap; }
+.session-dm .section-head-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* The narration is the hero: a gold thread down its edge ties the passage
+   to its heading, and the prose keeps the full measure. */
+.session-dm-body {
+  padding-left: 0.9rem;
+  border-left: 1px solid transparent;
+  border-image: linear-gradient(180deg, rgba(212, 171, 58, 0.55), rgba(212, 171, 58, 0.05)) 1;
+}
+@media (min-width: 640px) { .session-dm-body { padding-left: 1.15rem; } }
+.session-actions { display: inline-flex; align-items: center; gap: 0.05rem; }
+/* The kebab is the one action that is always on show: it is how a phone,
+   and anyone who has not found the hover, reaches the rest. */
+.session-actions-more.reveal-on-hover { opacity: 1; color: var(--color-stone-500); }
+
+.session-player { display: flex; flex-direction: row-reverse; align-items: flex-end; gap: 0.6rem; }
+.session-bubble {
+  border-radius: 1rem 1rem 0.3rem 1rem;
+  border: 1px solid rgba(212, 171, 58, 0.22);
+  background: linear-gradient(180deg, rgba(40, 32, 66, 0.78), rgba(20, 15, 38, 0.86));
+  box-shadow: 0 1px 0 rgba(244, 224, 166, 0.09) inset, 0 3px 10px rgba(4, 2, 12, 0.45);
+  padding: 0.7rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.5rem;
+  color: var(--color-stone-200);
+}
+.session-bubble-ooc { font-style: italic; color: var(--color-stone-500); border-style: dashed; }
+.session-speaker {
+  font-family: var(--font-display, serif);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-amber-200);
+}
+.sheet-medallion.session-medallion { width: 2.5rem; height: 2.5rem; margin-bottom: 0.15rem; }
+.session-medallion .sheet-medallion-face { border-width: 1.5px; box-shadow: 0 0 0 2px rgba(12, 8, 24, 0.9), 0 0 0 3px rgba(212, 171, 58, 0.3); }
+.session-medallion .sheet-medallion-emblem { right: -0.3rem; bottom: -0.3rem; width: 1.2rem; height: 1.2rem; }
+.session-medallion .sheet-medallion-emblem > span { width: 100%; height: 100%; border: 0; }
+
+.session-sysline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  margin-inline: auto;
+  max-width: 36rem;
+  font-family: var(--font-serif, serif);
+  font-size: 0.875rem;
+  font-style: italic;
+  text-align: center;
+  color: var(--color-stone-500);
+}
+.session-sysline::before,
+.session-sysline::after {
+  content: "";
+  flex: 1;
+  min-width: 0.75rem;
+  max-width: 4rem;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(212, 171, 58, 0.35));
+}
+.session-sysline::after { scale: -1 1; }
+
+/* ---- Banners above the composer and in the transcript ---- */
+.session-banner {
+  --banner-rim: rgba(212, 171, 58, 0.4);
+  --banner-wash: rgba(212, 171, 58, 0.08);
+  --banner-ink: var(--color-amber-100);
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+  padding: 0.4rem 0.6rem 0.4rem 0.45rem;
+  border-radius: 0.7rem;
+  border: 1px solid var(--banner-rim);
+  background: linear-gradient(90deg, var(--banner-wash), transparent 70%), linear-gradient(180deg, rgba(34, 27, 56, 0.85), rgba(16, 12, 30, 0.9));
+  box-shadow: 0 1px 0 rgba(244, 224, 166, 0.08) inset, 0 2px 8px rgba(4, 2, 12, 0.4);
+  font-size: 0.78rem;
+  line-height: 1.3;
+  color: var(--banner-ink);
+}
+.session-banner[data-tone="blood"] { --banner-rim: rgba(185, 28, 28, 0.6); --banner-wash: rgba(185, 28, 28, 0.16); --banner-ink: var(--color-red-100); }
+.session-banner[data-tone="ember"] { --banner-rim: rgba(224, 112, 58, 0.55); --banner-wash: rgba(224, 112, 58, 0.12); }
+.session-banner[data-tone="quiet"] { --banner-rim: rgba(120, 113, 108, 0.45); --banner-wash: transparent; --banner-ink: var(--color-stone-400); }
+.session-banner-body { min-width: 0; flex: 1; }
+.session-banner-title {
+  display: block;
+  font-family: var(--font-display, serif);
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-amber-300);
+}
+.session-banner[data-tone="blood"] .session-banner-title { color: var(--color-red-300); }
+.session-banner-actions { display: flex; flex-shrink: 0; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.35rem; }
+.session-banner-btn { padding: 0.25rem 0.6rem; font-size: 0.75rem; min-height: 2rem; }
+.session-banner-card { display: block; margin-inline: auto; max-width: 36rem; padding: 0.7rem 0.9rem; }
+/* A phone keeps a single remedy on the banner's own line, because every row
+   spent here is a row of story lost; two or more drop to a row of their own. */
+@media (max-width: 480px) {
+  .session-banner:has(.session-banner-actions > :nth-child(2)) { flex-wrap: wrap; }
+  .session-banner:has(.session-banner-actions > :nth-child(2)) .session-banner-actions { width: 100%; }
+  .session-banner-btn { min-height: 2.5rem; }
+}
+
+/* ---- Composer desk ---- */
+.session-desk { position: relative; }
+.session-desk::before {
+  content: "";
+  position: absolute;
+  inset: -1px 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(212, 171, 58, 0.5) 20%, rgba(212, 171, 58, 0.5) 80%, transparent);
+  pointer-events: none;
+}
+.session-well {
+  border-radius: 1rem;
+  border: 1px solid rgba(212, 171, 58, 0.26);
+  background: linear-gradient(180deg, rgba(12, 8, 24, 0.95), rgba(22, 17, 40, 0.92));
+  box-shadow: 0 2px 8px rgba(4, 2, 12, 0.55) inset, 0 1px 0 rgba(244, 224, 166, 0.08);
+  transition: border-color var(--dur-quick) var(--ease-snap), box-shadow var(--dur-quick) var(--ease-snap);
+}
+.session-well:focus-within {
+  border-color: rgba(212, 171, 58, 0.65);
+  box-shadow: 0 2px 8px rgba(4, 2, 12, 0.55) inset, 0 0 0 3px rgba(212, 171, 58, 0.12);
+}
+.session-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2.5rem;
+  padding: 0 0.85rem 0 0.3rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(120, 113, 108, 0.4);
+  background: rgba(20, 15, 38, 0.8);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-stone-400);
+  transition: color var(--dur-quick) var(--ease-snap), border-color var(--dur-quick) var(--ease-snap), scale var(--dur-instant) var(--ease-snap);
+}
+@media (min-width: 640px) { .session-mode { min-height: 2rem; } }
+.session-mode:hover { color: var(--color-stone-200); border-color: rgba(212, 171, 58, 0.4); }
+.session-mode:active { scale: 0.96; }
+.session-mode[data-on] {
+  border-color: rgba(244, 224, 166, 0.7);
+  background: linear-gradient(180deg, #fdf3d0, #e3c15c);
+  color: #3a2808;
+  box-shadow: var(--shadow-glow-gold);
+}
+.session-mode[data-on][data-mode="lead"] {
+  border-color: rgba(255, 190, 143, 0.7);
+  background: linear-gradient(180deg, #f0a070, #d0602a);
+  color: #1c1008;
+  box-shadow: var(--shadow-glow-ember);
+}
+.session-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
+  padding: 0.2rem 0.65rem 0.2rem 0.4rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(212, 171, 58, 0.22);
+  background: rgba(20, 15, 38, 0.7);
+  font-size: 0.74rem;
+  color: var(--color-stone-400);
+}
+.session-deskbtn {
+  display: inline-flex;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+/* ---- Voice panel ---- */
+.session-voice-btn {
+  display: inline-flex;
+  min-width: 2.5rem;
+  height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.5rem;
+}
+@media (min-width: 1024px) { .session-voice-btn { min-width: 2.1rem; height: 2.1rem; } }
+.session-voice-btn[data-tone="on"] { border-color: rgba(212, 171, 58, 0.6); background: rgba(212, 171, 58, 0.12); color: var(--color-amber-200); }
+.session-voice-btn[data-tone="off"] { border-color: rgba(153, 27, 27, 0.8); background: rgba(69, 10, 10, 0.6); color: var(--color-red-300); }
+.session-voice-btn[data-tone="live"] { border-color: rgba(4, 120, 87, 0.8); background: rgba(2, 44, 34, 0.6); color: var(--color-emerald-200); }
+.session-field-label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-family: var(--font-display, serif);
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-amber-300);
+}
+
+/* ---- Day theme: parchment plates instead of night glass ---- */
+html[data-theme="light"] .session-cluster,
+html[data-theme="light"] .session-banner,
+html[data-theme="light"] .session-bubble,
+html[data-theme="light"] .session-mode,
+html[data-theme="light"] .session-status {
+  background: linear-gradient(180deg, #fbf5e4, #efe4c6);
+  border-color: rgba(122, 88, 20, 0.4);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 2px 6px rgba(74, 52, 8, 0.15);
+}
+html[data-theme="light"] .session-well {
+  background: linear-gradient(180deg, #fffaf0, #f6eed8);
+  border-color: rgba(122, 88, 20, 0.4);
+  box-shadow: 0 2px 6px rgba(74, 52, 8, 0.12) inset;
+}
+html[data-theme="light"] .session-banner { --banner-ink: #4a3408; }
+html[data-theme="light"] .session-banner[data-tone="blood"] { --banner-ink: #7f1d1d; border-color: rgba(153, 27, 27, 0.5); background: linear-gradient(180deg, #fbeae4, #f3d6cc); }
+html[data-theme="light"] .session-banner[data-tone="quiet"] { --banner-ink: #57534e; }
+html[data-theme="light"] .session-banner-title,
+html[data-theme="light"] .session-field-label,
+html[data-theme="light"] .session-speaker { color: #6f500f; }
+html[data-theme="light"] .session-banner[data-tone="blood"] .session-banner-title { color: #991b1b; }
+html[data-theme="light"] .session-mode[data-on] { background: linear-gradient(180deg, #8a6514, #5f440c); color: #fff6da; border-color: #4a3408; }
+html[data-theme="light"] .session-mode[data-on][data-mode="lead"] { background: linear-gradient(180deg, #c2571f, #8f3a10); color: #fff1e6; }
+html[data-theme="light"] .session-hbtn-lit { background: rgba(122, 88, 20, 0.16); border-color: rgba(122, 88, 20, 0.55); color: #6f500f; box-shadow: none; }
+html[data-theme="light"] .session-hbtn-call { background: rgba(4, 120, 87, 0.14); color: #065f46; }
+html[data-theme="light"] .session-medallion .sheet-medallion-face { box-shadow: 0 0 0 2px #f6efdc, 0 0 0 3px rgba(122, 88, 20, 0.4); }
+html[data-theme="light"] .session-dm-body { border-image: linear-gradient(180deg, rgba(122, 88, 20, 0.6), rgba(122, 88, 20, 0.05)) 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rail-glyph, .session-mode, .session-hbtn, .session-glyph { transition: none; }
+  [aria-current="page"] > .rail-glyph { scale: 1; }
+}
+
+/* Roster-row controls: small on a desktop dock, finger-sized on the sheet. */
+.session-voice-mini {
+  display: inline-flex;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+@media (min-width: 1024px) { .session-voice-mini { width: 1.9rem; height: 1.9rem; } }

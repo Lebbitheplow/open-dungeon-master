@@ -1,0 +1,247 @@
+/* The Map Forge and the Map Editor (docs/visual-overhaul-plan.md section 4).
+   Plain CSS: keyframes and the few things utilities cannot say. Layout is in
+   the components as container-query utilities, so the editor still stands up
+   if this sheet is late. Every animation sits on the motion scale in
+   globals.css, has a reduced-motion answer, and every loop stops under
+   [data-effects="low"]. Colours come from the theme tokens, so parchment day
+   inherits them. */
+
+@keyframes map-toast-up {
+  0% { opacity: 0; translate: 0 10px; }
+  12% { opacity: 1; translate: 0 0; }
+  80% { opacity: 1; }
+  100% { opacity: 0; translate: 0 -4px; }
+}
+@keyframes map-panel-slide {
+  from { opacity: 0; translate: -8px 0; }
+  to { opacity: 1; translate: 0 0; }
+}
+/* No end frame: a row settles to its own opacity, so a hidden layer's row
+   stays dimmed once it has arrived. */
+@keyframes map-row-in {
+  from { opacity: 0; translate: 0 -4px; }
+}
+@keyframes map-fade-up {
+  from { opacity: 0; translate: 0 8px; }
+  to { opacity: 1; translate: 0 0; }
+}
+@keyframes map-marching {
+  to { stroke-dashoffset: -12; }
+}
+@keyframes map-flash-tile {
+  from { opacity: 0.7; }
+  to { opacity: 0; }
+}
+@keyframes map-badge-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+@keyframes map-sheet-up {
+  from { translate: 0 100%; }
+  to { translate: 0 0; }
+}
+@keyframes map-scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes map-sweep {
+  0% { opacity: 0; transform: translateX(-110%); }
+  25% { opacity: 0.7; }
+  100% { opacity: 0; transform: translateX(110%); }
+}
+@keyframes map-die-spin {
+  to { rotate: 360deg; }
+}
+@keyframes map-word-hit {
+  0% { background-color: rgba(212, 171, 58, 0); }
+  30% { background-color: rgba(212, 171, 58, 0.45); }
+  100% { background-color: rgba(212, 171, 58, 0.16); }
+}
+@keyframes map-chip-claim {
+  0% { scale: 1; }
+  45% { scale: 1.16; }
+  100% { scale: 1; }
+}
+@keyframes map-seed-roll {
+  from { opacity: 0; translate: 0 6px; }
+  to { opacity: 1; translate: 0 0; }
+}
+@keyframes map-torch-pulse {
+  0%, 100% { opacity: 0.55; scale: 0.94; }
+  50% { opacity: 1; scale: 1.06; }
+}
+@keyframes map-disc-pop {
+  0% { opacity: 0; scale: 0.5; }
+  60% { scale: 1.15; }
+  100% { opacity: 1; scale: 1; }
+}
+@keyframes map-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* The ember toast: a refusal rises, holds, and leaves on its own. */
+.map-toast {
+  animation: map-toast-up 2.4s var(--ease-snap) both;
+}
+
+/* The options column changes with the tool; its content slides in from the rail. */
+.map-panel-in {
+  animation: map-panel-slide var(--dur-quick) var(--ease-snap) both;
+}
+.map-row-in {
+  /* Backwards only: once a row has arrived the animation lets go, so the row's
+     own transitions (a layer dimming) are not overruled by its fill. */
+  animation: map-row-in var(--dur-quick) var(--ease-snap) backwards;
+}
+
+/* The phone's two sheets rise over the canvas, inside the editor's own box. */
+.map-sheet {
+  animation: map-sheet-up 300ms var(--ease-snap) both;
+}
+.map-scrim {
+  animation: map-scrim-in var(--dur-instant) linear both;
+}
+
+/* The inspector's facts rise in when a thing is selected. */
+.map-inspect-in {
+  animation: map-fade-up var(--dur-quick) var(--ease-snap) both;
+}
+
+/* A layer row eases between shown, hidden and holding the selection; its eye
+   eases its ink. */
+.map-layer-row {
+  transition:
+    border-color var(--dur-quick) var(--ease-snap),
+    background-color var(--dur-quick) var(--ease-snap),
+    opacity var(--dur-quick) var(--ease-snap);
+}
+.map-eye {
+  transition:
+    color var(--dur-quick) var(--ease-snap),
+    background-color var(--dur-quick) var(--ease-snap);
+}
+
+/* The save dot breathes while the save is in flight. */
+.map-save-pulse {
+  animation: map-badge-pulse 1s var(--ease-drift) infinite;
+}
+
+/* Marching ants round whatever is selected. The dashes are drawn either way;
+   only the march is motion. */
+.map-ants {
+  animation: map-marching 600ms linear infinite;
+}
+
+/* A tile answers the tool: gold where the tap landed, ember where the map
+   refused it. The element removes itself when the flash ends. */
+.map-flash {
+  animation: map-flash-tile var(--dur-beat) var(--ease-snap) both;
+}
+
+/* The active tool's spine on the rail. */
+.map-rail-spine {
+  transition:
+    opacity var(--dur-quick) var(--ease-snap),
+    scale var(--dur-move) var(--ease-spring);
+}
+
+/* The forge. */
+.map-sweep {
+  animation: map-sweep var(--map-sweep-ms, 1080ms) var(--ease-drift) both;
+}
+.map-die-spin {
+  animation: map-die-spin 700ms linear infinite;
+}
+/* The die keeps turning while the map draws itself in, then rests: the same
+   keyframes as the waiting spin, so the hand-over between them is seamless. */
+.map-die-roll {
+  animation: map-die-spin 700ms linear var(--map-spins, 2);
+}
+.map-word-hit {
+  animation: map-word-hit var(--dur-beat) var(--ease-snap) both;
+}
+.map-chip-claim {
+  animation: map-chip-claim var(--dur-beat) var(--ease-spring) both;
+}
+.map-seed-roll {
+  animation: map-seed-roll var(--dur-move) var(--ease-snap) both;
+}
+.map-torch {
+  animation: map-torch-pulse 3.6s var(--ease-drift) infinite;
+}
+.map-disc {
+  animation: map-disc-pop var(--dur-beat) var(--ease-spring) both;
+}
+.map-fade-in {
+  animation: map-fade-in var(--dur-scene) var(--ease-settle) both;
+}
+
+/* What it read: the panel and the hint field warm up when a word lands. */
+.map-read {
+  transition:
+    border-color var(--dur-move) var(--ease-snap),
+    background-color var(--dur-move) var(--ease-snap);
+}
+
+/* A range input in the theme's gold, with a thumb a finger can take. */
+.map-range {
+  accent-color: var(--color-amber-500);
+  min-height: 1.5rem;
+}
+
+/* The canvas well: a quiet checker so the edge of the map is an edge. */
+.map-well {
+  background-color: var(--color-stone-950);
+  background-image:
+    linear-gradient(45deg, color-mix(in srgb, var(--color-stone-900) 70%, transparent) 25%, transparent 25%, transparent 75%, color-mix(in srgb, var(--color-stone-900) 70%, transparent) 75%),
+    linear-gradient(45deg, color-mix(in srgb, var(--color-stone-900) 70%, transparent) 25%, transparent 25%, transparent 75%, color-mix(in srgb, var(--color-stone-900) 70%, transparent) 75%);
+  background-size: 24px 24px;
+  background-position: 0 0, 12px 12px;
+}
+
+[data-effects="low"] .map-torch,
+[data-effects="low"] .map-die-spin,
+[data-effects="low"] .map-save-pulse,
+[data-effects="low"] .map-ants {
+  animation: none;
+}
+[data-effects="low"] .map-sweep {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-toast {
+    animation-name: map-fade-in;
+    animation-duration: 0.01ms;
+  }
+  .map-panel-in,
+  .map-row-in,
+  .map-sheet,
+  .map-scrim,
+  .map-word-hit,
+  .map-chip-claim,
+  .map-seed-roll,
+  .map-disc,
+  .map-fade-in,
+  .map-torch,
+  .map-die-spin,
+  .map-die-roll,
+  .map-inspect-in,
+  .map-save-pulse,
+  .map-ants,
+  .map-flash {
+    animation: none;
+  }
+  .map-flash {
+    opacity: 0;
+  }
+  .map-layer-row,
+  .map-eye,
+  .map-read {
+    transition: none;
+  }
+  .map-sweep {
+    display: none;
+  }
+}

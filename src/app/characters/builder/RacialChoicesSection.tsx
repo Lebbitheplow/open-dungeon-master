@@ -5,6 +5,7 @@ import ContentPicker from "@/app/characters/builder/ContentPicker";
 import type { RaceOption } from "@/app/characters/builder/useBuilderOptions";
 import { GameTerm } from "@/components/ui/GameTerm";
 import { InfoButton } from "@/components/ui/InfoDialog";
+import { Select } from "@/components/ui/Select";
 import { ALL_SKILLS } from "@/lib/content/mechanics";
 import { contentSlug, describeSkill } from "@/lib/help";
 import { SRD_SKILLS } from "@/lib/srd";
@@ -38,7 +39,6 @@ export function RacialChoicesSection({
   onCantripChange,
   tool,
   onToolChange,
-  inputClass,
 }: {
   race: RaceOption;
   // Skills already granted by class and background, so they are not offered
@@ -78,23 +78,20 @@ export function RacialChoicesSection({
           <div className="grid grid-cols-2 gap-2">
             {Array.from({ length: race.asiChoice.count }, (_, index) => (
               <span key={index} className="flex items-center gap-1">
-                <select
+                <Select<Ability | "">
                   value={asi[index] ?? ""}
-                  onChange={(event) => onAsiChange(index, event.target.value as Ability | "")}
-                  className={inputClass}
-                  aria-label={`Ability increase ${index + 1}`}
-                >
-                  <option value="">Choose an ability...</option>
-                  {ABILITIES.filter(
-                    (ability) =>
-                      !fixedAbilities.has(ability) &&
-                      (asi[index] === ability || !asi.includes(ability)),
-                  ).map((ability) => (
-                    <option key={ability} value={ability}>
-                      {ABILITY_NAMES[ability]}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(next) => onAsiChange(index, next)}
+                  className="min-w-0 grow"
+                  label={`Ability increase ${index + 1}`}
+                  placeholder="Choose an ability..."
+                  options={[
+                    // Still a row of its own, so a pick can be taken back.
+                    { value: "" as const, label: "Choose an ability..." },
+                    ...ABILITIES.filter(
+                      (ability) => !fixedAbilities.has(ability) && (asi[index] === ability || !asi.includes(ability)),
+                    ).map((ability) => ({ value: ability, label: ABILITY_NAMES[ability] })),
+                  ]}
+                />
                 {asi[index] ? (
                   <GameTerm id={asi[index] as Ability} className="shrink-0 text-xs text-stone-500">
                     what is this?
@@ -115,23 +112,19 @@ export function RacialChoicesSection({
           <div className="grid grid-cols-2 gap-2">
             {Array.from({ length: race.skillChoice.count }, (_, index) => (
               <span key={index} className="flex items-center gap-1">
-                <select
+                <Select<string>
                   value={skills[index] ?? ""}
-                  onChange={(event) => onSkillsChange(index, event.target.value)}
-                  className={inputClass}
-                  aria-label={`Skill proficiency ${index + 1}`}
-                >
-                  <option value="">Choose a skill...</option>
-                  {ALL_SKILLS.filter(
-                    (skill) =>
-                      skills[index] === skill ||
-                      (!skills.includes(skill) && !grantedSkills.includes(skill)),
-                  ).map((skill) => (
-                    <option key={skill} value={skill}>
-                      {skillName(skill)}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(next) => onSkillsChange(index, next)}
+                  className="min-w-0 grow"
+                  label={`Skill proficiency ${index + 1}`}
+                  placeholder="Choose a skill..."
+                  options={[
+                    { value: "", label: "Choose a skill..." },
+                    ...ALL_SKILLS.filter(
+                      (skill) => skills[index] === skill || (!skills.includes(skill) && !grantedSkills.includes(skill)),
+                    ).map((skill) => ({ value: skill as string, label: skillName(skill) })),
+                  ]}
+                />
                 {skills[index] ? (
                   <InfoButton
                     label={skillName(skills[index])}
@@ -147,18 +140,14 @@ export function RacialChoicesSection({
       {race.toolChoice ? (
         <label className="block">
           <span className="mb-1 block text-stone-400">Tool proficiency</span>
-          <select
+          <Select<string>
             value={tool}
-            onChange={(event) => onToolChange(event.target.value)}
-            className={inputClass}
-          >
-            <option value="">Choose a tool...</option>
-            {race.toolChoice.from.map((entry) => (
-              <option key={entry} value={entry}>
-                {entry}
-              </option>
-            ))}
-          </select>
+            onChange={onToolChange}
+            className="w-full"
+            label="Tool proficiency"
+            placeholder="Choose a tool..."
+            options={[{ value: "", label: "Choose a tool..." }, ...race.toolChoice.from.map((entry) => ({ value: entry, label: entry }))]}
+          />
         </label>
       ) : null}
 

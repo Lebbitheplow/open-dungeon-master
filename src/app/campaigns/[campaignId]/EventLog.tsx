@@ -1,5 +1,6 @@
 "use client";
 
+import { EmptyState } from "@/components/EmptyState";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { Loader2, RotateCcw, ScrollText, Star } from "lucide-react";
 import { useState } from "react";
@@ -91,7 +92,7 @@ function ConfirmUndoDialog({
   return (
     <AlertDialog.Root open onOpenChange={(open) => !open && onCancel()}>
       <AlertDialog.Portal>
-        <AlertDialog.Overlay className="fixed inset-0 z-50 bg-black/70" />
+        <AlertDialog.Overlay className="dialog-overlay fixed inset-0 z-50 bg-[#05030d]/70 backdrop-blur-sm" />
         <AlertDialog.Content
           className={cn(
             ui.dialog,
@@ -113,7 +114,7 @@ function ConfirmUndoDialog({
           </ul>
           <div className="mt-4 flex justify-end gap-2">
             <AlertDialog.Cancel className={ui.btnSmall}>Cancel</AlertDialog.Cancel>
-            <button type="button" onClick={onConfirm} disabled={busy} className={ui.btnPrimary}>
+            <button type="button" onClick={onConfirm} disabled={busy} aria-busy={busy} className={ui.btnPrimary}>
               {busy ? <Loader2 className="size-4 animate-spin" /> : null} Undo anyway
             </button>
           </div>
@@ -193,10 +194,7 @@ export function EventLog({
 
   if (!feed.length) {
     return (
-      <p className="px-1 py-6 text-center text-xs text-stone-600">
-        No stat changes yet. Damage, loot, XP, conditions, and milestones the DM applies will show
-        here.
-      </p>
+      <EmptyState size="sm" art="scrolls" title="No stat changes yet. Damage, loot, XP, conditions, and milestones the DM applies will show here." />
     );
   }
 
@@ -217,7 +215,7 @@ export function EventLog({
             return (
               <li
                 key={`m-${item.event.id}`}
-                className="rounded-md border border-amber-900/40 bg-amber-950/15 px-2.5 py-1.5 text-xs text-stone-300"
+                className="check-log rounded-md border border-amber-900/40 bg-amber-950/15 px-2.5 py-1.5 text-xs text-stone-300"
               >
                 <Star className="mr-1.5 inline size-3 text-amber-400" />
                 {nameForCharacter(item.event.campaignCharacterId)}: {item.event.summary}
@@ -237,7 +235,9 @@ export function EventLog({
             revertShownForTurn.add(turnId);
           }
           return (
-            <li key={entry.id} className="space-y-1">
+            // check-log: a row written by a roll or a change rises into the
+            // log (the mockups' log-in) instead of appearing in place.
+            <li key={entry.id} className="check-log space-y-1">
               {showRevertTurn ? (
                 <button
                   type="button"
@@ -256,7 +256,7 @@ export function EventLog({
               ) : null}
               <div
                 className={cn(
-                  "rounded-md border border-stone-800 bg-stone-950/40 px-2.5 py-1.5 text-xs text-stone-300",
+                  "rounded-md border border-stone-800 bg-stone-950/40 px-2.5 py-1.5 text-xs text-stone-300 transition-opacity duration-[260ms] ease-settle",
                   reverted && "opacity-60",
                 )}
               >

@@ -3,6 +3,11 @@
 import { useMemo, useState } from "react";
 import { Loader2, Play } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { Select, type SelectOption } from "@/components/ui/Select";
+import { Switch } from "@/components/ui/Switch";
+import { FieldLabel, OptionalNumber } from "@/app/campaigns/[campaignId]/DmConsoleParts";
 import type { CatalogEntry, CatalogField } from "@/lib/dm/invoke-catalog";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -12,8 +17,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 // come from the server, which is what keeps a tool added for the AI DM
 // reachable by a human one without touching this file.
 
-const inputClass =
-  "w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1.5 text-sm text-stone-100 placeholder:text-stone-600 focus:border-amber-700 focus:outline-none";
+const inputClass = ui.input;
 
 type Value = string | number | boolean | string[];
 
@@ -60,6 +64,7 @@ export function DmActionForm({
   encounter,
   initialArgs,
   onRan,
+  glyph = "tab-dm",
 }: {
   campaignId: string;
   entry: CatalogEntry;
@@ -69,6 +74,9 @@ export function DmActionForm({
   // the button, and anything that does not fit its field is left blank.
   initialArgs?: Record<string, unknown>;
   onRan?: () => void;
+  // The painted glyph the console gave this action's plate, so the open form
+  // wears the same face the row did.
+  glyph?: string;
 }) {
   const [values, setValues] = useState<Record<string, Value>>(() =>
     Object.fromEntries(
@@ -132,25 +140,32 @@ export function DmActionForm({
   }
 
   return (
-    <div className="space-y-2 rounded-lg border border-stone-800 bg-stone-950/60 p-3">
-      <div>
-        <p className="text-sm font-medium text-amber-100">{entry.label}</p>
-        <p className="text-xs text-stone-500">{entry.summary}</p>
+    <div className={cn(ui.card, "ornate space-y-3 p-3")}>
+      <div className="flex items-start gap-2.5">
+        <GameIcon icon={{ kind: "glyph", key: glyph }} size="size-8" className="shrink-0" />
+        <div className="min-w-0">
+          <p className="gold-title font-display text-sm tracking-wide">{entry.label}</p>
+          <p className="text-xs leading-snug text-stone-400">{entry.summary}</p>
+        </div>
       </div>
 
       {blocked ? (
-        <p className="rounded-md border border-stone-800 bg-stone-900/60 px-2 py-1.5 text-xs text-stone-400">
+        <p className="reveal flex items-center gap-2 rounded-lg border border-amber-500/25 bg-stone-900/60 px-2.5 py-2 text-xs text-stone-300">
+          <GameIcon icon={{ kind: "glyph", key: "tab-battle" }} size="size-5" className="shrink-0" />
           Needs a fight running. Start one first.
         </p>
       ) : null}
 
-      <div className="space-y-2">
+      {/* A div, not a label: the kit controls hold several buttons, and a
+          label would press the first of them (the stepper's minus) whenever
+          its caption was tapped. Each control carries the field's name. */}
+      <div className="stagger space-y-2.5">
         {entry.fields.map((field) => (
-          <label key={field.name} className="block space-y-1">
-            <span className="text-[11px] uppercase tracking-wide text-stone-500">
+          <div key={field.name} className={cn(field.kind === "boolean" && "flex flex-wrap items-center justify-between gap-x-3")}>
+            <FieldLabel className={cn(field.kind === "boolean" && "mb-0")}>
               {field.label}
-              {field.required ? <span className="text-amber-500"> *</span> : null}
-            </span>
+              {field.required ? <span className="text-amber-400"> *</span> : null}
+            </FieldLabel>
             <FieldInput
               field={field}
               value={values[field.name]}
@@ -158,26 +173,24 @@ export function DmActionForm({
               sheets={sheets}
               enemies={enemies}
             />
-            {field.help ? <span className="block text-[11px] text-stone-600">{field.help}</span> : null}
-          </label>
+            {field.help ? <span className="mt-1 block basis-full text-[11px] leading-snug text-stone-500">{field.help}</span> : null}
+          </div>
         ))}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={run}
           disabled={busy || blocked}
-          className={cn(
-            "flex items-center gap-1.5 rounded-md border border-amber-800 bg-amber-950/40 px-2.5 py-1.5 text-xs text-amber-100",
-            "hover:bg-amber-900/40 disabled:opacity-40",
-          )}
+          aria-busy={busy}
+          className={ui.btnPrimary}
         >
-          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5" />}
+          {busy ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
           Run
         </button>
-        {error ? <span className="text-xs text-red-300">{error}</span> : null}
-        {outcome ? <span className="text-xs text-emerald-300">{outcome}</span> : null}
+        {error ? <span className="motion-shake inline-block text-xs text-red-300">{error}</span> : null}
+        {outcome ? <span className="live-in text-xs text-emerald-300">{outcome}</span> : null}
       </div>
     </div>
   );
@@ -224,39 +237,45 @@ function FieldInput({
   enemies: NonNullable<PublicEncounter["enemies"]>;
 }) {
   switch (field.kind) {
-    case "character":
+    case "character": {
+      // The empty row stays in the list, as it did in the browser's own
+      // select, so a picked target can be unpicked.
+      const options: SelectOption<string>[] = [
+        { value: "", label: "Pick a character" },
+        ...sheets.map((sheet) => ({
+          value: sheet.id,
+          label: sheet.name,
+          icon: { kind: "glyph" as const, key: "tab-characters" },
+        })),
+      ];
       return (
-        <select
+        <Select
           value={String(value ?? "")}
-          onChange={(event) => onChange(event.target.value)}
-          className={inputClass}
-        >
-          <option value="">Pick a character</option>
-          {sheets.map((sheet) => (
-            <option key={sheet.id} value={sheet.id}>
-              {sheet.name}
-            </option>
-          ))}
-        </select>
+          onChange={onChange}
+          options={options}
+          label={field.label}
+          placeholder="Pick a character"
+        />
       );
+    }
     case "characters": {
       const picked = Array.isArray(value) ? value : [];
       return (
-        <div className="flex flex-wrap gap-1">
+        <div className="stagger-pop flex flex-wrap gap-1.5" role="group" aria-label={field.label}>
           {sheets.map((sheet) => {
             const on = picked.includes(sheet.id);
             return (
               <button
                 key={sheet.id}
                 type="button"
+                aria-pressed={on}
                 onClick={() =>
                   onChange(on ? picked.filter((id) => id !== sheet.id) : [...picked, sheet.id])
                 }
                 className={cn(
-                  "rounded-md border px-2 py-1 text-xs",
-                  on
-                    ? "border-amber-700 bg-amber-950/50 text-amber-100"
-                    : "border-stone-700 text-stone-400 hover:text-stone-200",
+                  ui.btnSmall,
+                  "min-h-9 px-2.5 py-1 text-xs",
+                  on && "border-amber-500/70 bg-amber-400/10 text-amber-100 shadow-glow-gold",
                 )}
               >
                 {sheet.name}
@@ -264,62 +283,56 @@ function FieldInput({
             );
           })}
           {sheets.length === 0 ? (
-            <span className="text-xs text-stone-600">Nobody has a character yet.</span>
+            <span className="text-xs text-stone-500">Nobody has a character yet.</span>
           ) : null}
         </div>
       );
     }
-    case "enemy":
+    case "enemy": {
+      const options: SelectOption<string>[] = [
+        { value: "", label: "Pick an enemy" },
+        ...enemies.map((enemy) => ({
+          value: enemy.id,
+          label: `${enemy.name}${enemy.currentHp !== undefined ? ` (${enemy.currentHp}/${enemy.maxHp})` : ""}`,
+          icon: { kind: "glyph" as const, key: "system-bestiary" },
+        })),
+      ];
       return (
-        <select
+        <Select
           value={String(value ?? "")}
-          onChange={(event) => onChange(event.target.value)}
-          className={inputClass}
-        >
-          <option value="">Pick an enemy</option>
-          {enemies.map((enemy) => (
-            <option key={enemy.id} value={enemy.id}>
-              {enemy.name}
-              {enemy.currentHp !== undefined ? ` (${enemy.currentHp}/${enemy.maxHp})` : ""}
-            </option>
-          ))}
-        </select>
-      );
-    case "select":
-      return (
-        <select
-          value={String(value ?? "")}
-          onChange={(event) => onChange(event.target.value)}
-          className={inputClass}
-        >
-          <option value="">Not set</option>
-          {(field.options ?? []).map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      );
-    case "boolean":
-      return (
-        <input
-          type="checkbox"
-          checked={Boolean(value)}
-          onChange={(event) => onChange(event.target.checked)}
-          className="size-4 accent-amber-600"
+          onChange={onChange}
+          options={options}
+          label={field.label}
+          placeholder="Pick an enemy"
         />
       );
+    }
+    case "select": {
+      const options: SelectOption<string>[] = [
+        { value: "", label: "Not set" },
+        ...(field.options ?? []).map((option) => ({ value: option.value, label: option.label })),
+      ];
+      return (
+        <Select
+          value={String(value ?? "")}
+          onChange={onChange}
+          options={options}
+          label={field.label}
+          placeholder="Not set"
+        />
+      );
+    }
+    case "boolean":
+      return <Switch on={Boolean(value)} onChange={onChange} label={field.label} />;
     case "number":
       return (
-        <input
-          type="number"
+        <OptionalNumber
           value={value === "" || value === undefined ? "" : Number(value)}
           min={field.min}
           max={field.max}
-          onChange={(event) =>
-            onChange(event.target.value === "" ? "" : Number(event.target.value))
-          }
-          className={inputClass}
+          onChange={onChange}
+          label={field.label}
+          emptyHint="Not set"
         />
       );
     case "longtext":
@@ -328,6 +341,7 @@ function FieldInput({
           value={String(value ?? "")}
           rows={3}
           placeholder={field.placeholder}
+          aria-label={field.label}
           onChange={(event) => onChange(event.target.value)}
           className={cn(inputClass, "resize-y")}
         />
@@ -338,6 +352,7 @@ function FieldInput({
           type="text"
           value={String(value ?? "")}
           placeholder={field.placeholder}
+          aria-label={field.label}
           onChange={(event) => onChange(event.target.value)}
           className={inputClass}
         />

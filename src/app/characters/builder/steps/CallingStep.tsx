@@ -1,11 +1,14 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { GameTerm } from "@/components/ui/GameTerm";
-import { InfoButton } from "@/components/ui/InfoDialog";
+import { InfoButton, InfoDialog } from "@/components/ui/InfoDialog";
 import { describeFeature, describeSkill } from "@/lib/help";
 import { SRD_SKILLS } from "@/lib/srd";
-import { displayName } from "@/lib/worlds/reskin-logic";
+import { displayName, type Reskinned } from "@/lib/worlds/reskin-logic";
 import type { WorldPack } from "@/lib/worlds/types";
+import { classArt } from "../lineage";
+import { OptionCardGrid, type OptionCardGroup } from "../OptionCardGrid";
 import OptionPicker, { type PickerGroup } from "../OptionPicker";
 import type { ArchetypeOption, BackgroundOption, ClassOption } from "../useBuilderOptions";
 import type { BuilderActions, BuilderDerived } from "../useBuilderDerived";
@@ -13,7 +16,9 @@ import type { BuilderState } from "../useBuilderState";
 import { ClassChoices } from "./ClassChoices";
 import { Field, PickPill, StepPanel, inputClass } from "./shared";
 
-// Step 3: the class, its subclass once the level allows one, what the pair
+// Step 3: the class (painted cards in the picker's groups and order, the
+// setting's callings first and badged, each with its emblem and a ? that
+// opens its write-up), its subclass once the level allows one, what the pair
 // grants at this level, and the class skill picks. Expertise, fighting
 // styles and option lists (invocations and the like) follow in ClassChoices.
 export function CallingStep({
@@ -23,6 +28,7 @@ export function CallingStep({
   klass,
   background,
   pack,
+  classes,
   classGroups,
   subclassGroups,
   offersSubclass,
@@ -34,6 +40,7 @@ export function CallingStep({
   klass: ClassOption | undefined;
   background: BackgroundOption | undefined;
   pack: WorldPack | null;
+  classes: Array<Reskinned<ClassOption>>;
   classGroups: PickerGroup[];
   subclassGroups: PickerGroup[];
   offersSubclass: boolean;
@@ -41,18 +48,47 @@ export function CallingStep({
 }) {
   const { subclass } = state;
   const { effectiveLevel, grantedFeatures } = derived;
+  const { gender } = state;
+  const [detailsFor, setDetailsFor] = useState<string | null>(null);
+
+  const cardGroups = useMemo<OptionCardGroup[]>(
+    () =>
+      classGroups.map((group) => ({
+        label: group.label,
+        recommended: group.recommended,
+        options: group.options.map((option) => {
+          const entry = classes.find((candidate) => candidate.id === option.id);
+          // Under a reskin the canonical class name leads the tagline, the
+          // same fact the dropdown kept in its meta column.
+          const canonical = entry?.packName ? option.meta?.split(" · ")[1] : undefined;
+          return {
+            id: option.id,
+            name: option.name,
+            meta: canonical,
+            art: classArt(option.id, gender),
+            tagline: [canonical, entry ? `Saves ${entry.saves.map((save) => save.toUpperCase()).join(" ")}` : ""]
+              .filter(Boolean)
+              .join(" · "),
+            chips: entry
+              ? [`d${entry.hitDie}`, ...(entry.spellAbility ? [`${entry.spellAbility.toUpperCase()} caster`] : [])]
+              : [],
+            icon: { kind: "family" as const, key: `class-${option.id}` },
+          };
+        }),
+      })),
+    [classGroups, classes, gender],
+  );
+  const details = detailsFor
+    ? classGroups.flatMap((group) => group.options).find((option) => option.id === detailsFor)
+    : undefined;
+
   return (
     <div className="space-y-4">
       <StepPanel title="Choose a class" ornate>
         <Field label="Class">
-          <OptionPicker
-            value={klass?.id ?? ""}
-            groups={classGroups}
-            className={inputClass}
-            onChange={state.changeClass}
-          />
           {klass ? (
-            <span className="mt-1 flex flex-wrap items-center gap-x-1 text-xs text-stone-500">
+            <span className="mb-3 flex flex-wrap items-center gap-x-1 text-xs text-stone-500">
+              <span className="text-amber-200">{klass.name}:</span>{" "}
               <GameTerm id="hit_dice">d{klass.hitDie} hit die</GameTerm> ·{" "}
               <GameTerm id="saving_throw">saves</GameTerm>{" "}
               {klass.saves.map((save) => save.toUpperCase()).join(", ")}
@@ -71,6 +107,24 @@ export function CallingStep({
               />
             </span>
           ) : null}
+          <OptionCardGrid
+            groups={cardGroups}
+            value={klass?.id ?? ""}
+            onChoose={state.changeClass}
+            onDetails={setDetailsFor}
+            noun="class"
+            compact
+          />
+          {/* The same write-up the dropdown's info button opened: the pack's
+              blurb, the catalog blurb or the content pack's entry. */}
+          <InfoDialog
+            open={Boolean(details)}
+            onOpenChange={(open) => (open ? undefined : setDetailsFor(null))}
+            title={details?.name ?? ""}
+            meta={details?.meta}
+            text={details?.infoText}
+            reference={details?.reference}
+          />
         </Field>
         {offersSubclass ? (
           <Field label="Subclass" className="mt-3">

@@ -2,23 +2,15 @@
 
 import { appConfirm } from "@/components/ui/ConfirmDialog";
 
-import {
-  Check,
-  Crown,
-  Link as LinkIcon,
-  Pencil,
-  QrCode,
-  StickyNote,
-  UserPlus,
-  Wand2,
-  type LucideIcon,
-} from "lucide-react";
+import { Check, Crown, Link as LinkIcon, Pencil, QrCode } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import { cn } from "@/lib/cn";
 import { copyText } from "@/lib/clipboard";
 import { buildShareLinks } from "@/lib/share-link";
 import { InviteShareDialog } from "@/components/InviteShareDialog";
 import { Ribbon } from "@/components/ui/Ribbon";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { Switch } from "@/components/ui/Switch";
+import { KitButton, PanelError } from "./PanelKit";
 import { EditCampaignDialog } from "@/app/campaigns/[campaignId]/EditCampaignDialog";
 import { LeadFloorControl } from "@/app/campaigns/[campaignId]/LeadFloorControl";
 import {
@@ -54,24 +46,20 @@ export type LeadCampaign = Parameters<typeof EditCampaignDialog>[0]["campaign"] 
 };
 
 function Card({
-  icon: Icon,
+  glyph,
   title,
   aside,
   children,
 }: {
-  icon: LucideIcon;
+  // A painted glyph under public/assets/icons/glyph.
+  glyph: string;
   title: string;
   aside?: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <div className="mb-3 rounded-lg border border-stone-800 bg-stone-950/40 p-3">
-      <div className="mb-1.5 flex items-center justify-between gap-2">
-        <p className="flex items-center gap-1.5 text-xs font-medium text-stone-400">
-          <Icon className="size-3.5" /> {title}
-        </p>
-        {aside}
-      </div>
+    <div className="panel mb-3 rounded-lg p-3">
+      <SectionHead title={title} glyph={glyph} aside={aside} />
       {children}
     </div>
   );
@@ -142,57 +130,34 @@ function InvitesCard({
   }
 
   return (
-    <Card icon={UserPlus} title="Invites">
-      <div className="flex items-center gap-1.5">
+    <Card glyph="tab-friends" title="Invites">
+      <div className="flex flex-wrap items-center gap-1.5">
         {steersStory ? (
-          <button
-            type="button"
-            onClick={toggleMidGameJoin}
-            title="Allow new players to join with the invite code mid-game"
-            className={cn(
-              "rounded-md border px-2 py-1 text-xs",
-              midGameJoinOpen
-                ? "border-amber-700 bg-amber-950/50 text-amber-200"
-                : "border-stone-700 text-stone-400",
-            )}
-          >
+          <span className="flex items-center gap-2 text-xs text-stone-300" title="Allow new players to join with the invite code mid-game">
+            <Switch on={midGameJoinOpen} onChange={() => void toggleMidGameJoin()} label="Allow new players to join with the invite code mid-game" />
             Joining {midGameJoinOpen ? "open" : "closed"}
-          </button>
+          </span>
         ) : (
           // A lead at a human-DM table shares the code but the setting is
           // the DM's, so the state shows without a control the server would
           // refuse.
-          <span className="rounded-md border border-stone-800 px-2 py-1 text-xs text-stone-500">
+          <span className="pk-chip px-2 text-xs text-stone-400">
             Joining {midGameJoinOpen ? "open" : "closed"}
           </span>
         )}
         {midGameJoinOpen ? (
           <>
-            <button
-              type="button"
-              onClick={copyInviteLink}
-              title="Copy the invite link"
-              className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-400 hover:text-stone-200"
-            >
-              {inviteCopied ? (
-                <Check className="size-3.5 text-emerald-400" />
-              ) : (
-                <LinkIcon className="size-3.5" />
-              )}
+            <KitButton onClick={copyInviteLink} title="Copy the invite link" className="font-mono">
+              {inviteCopied ? <Check className="motion-pop size-3.5 text-emerald-400" /> : <LinkIcon className="size-3.5" />}
               {inviteCode}
-            </button>
-            <button
-              type="button"
-              onClick={() => setInviteSharing(true)}
-              title="Show the invite QR code and share options"
-              className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-400 hover:text-stone-200"
-            >
+            </KitButton>
+            <KitButton onClick={() => setInviteSharing(true)} title="Show the invite QR code and share options" aria-label="Show the invite QR code and share options">
               <QrCode className="size-3.5" />
-            </button>
+            </KitButton>
           </>
         ) : null}
       </div>
-      {joinToggleError ? <p className="mt-1.5 text-xs text-red-400">{joinToggleError}</p> : null}
+      {joinToggleError ? <PanelError className="mt-1.5">{joinToggleError}</PanelError> : null}
       <InviteShareDialog
         open={inviteSharing}
         onOpenChange={setInviteSharing}
@@ -252,35 +217,30 @@ function LeadSeatCard({
   }
 
   return (
-    <Card icon={Crown} title="The lead seat">
+    <Card glyph="tab-lead" title="The lead seat">
       {candidates.length ? (
-        <ul className="space-y-1">
+        <ul className="stagger space-y-1">
           {candidates.map((member) => {
             const character = characterFor(member.userId);
             return (
-              <li key={member.userId} className="flex items-center gap-2 text-xs">
+              <li key={member.userId} className="flex min-h-9 items-center gap-2 text-xs">
                 <span className="min-w-0 flex-1 truncate text-stone-300">
                   {member.username}
                   {character ? (
                     <span className="text-stone-500"> as {character}</span>
                   ) : null}
                 </span>
-                <button
-                  type="button"
-                  disabled={busy !== ""}
-                  onClick={() => makeLead(member)}
-                  className="shrink-0 rounded-md border border-stone-700 px-2 py-0.5 text-[11px] text-stone-400 hover:text-stone-200 disabled:opacity-40"
-                >
+                <KitButton disabled={busy !== ""} busy={busy === member.userId} onClick={() => makeLead(member)} className="shrink-0 disabled:opacity-40">
                   Make lead
-                </button>
+                </KitButton>
               </li>
             );
           })}
         </ul>
       ) : (
-        <p className="text-[11px] text-stone-600">Nobody else at the table to hand it to.</p>
+        <p className="text-xs text-stone-500">Nobody else at the table to hand it to.</p>
       )}
-      {error ? <p className="mt-1.5 text-xs text-red-400">{error}</p> : null}
+      {error ? <PanelError className="mt-1.5">{error}</PanelError> : null}
     </Card>
   );
 }
@@ -356,11 +316,11 @@ export function LeadPanel({
 
       {steersStory ? (
         <Card
-          icon={StickyNote}
+          glyph="tab-notes"
           title="Notes to approve"
           aside={
             pending.length ? (
-              <span className="rounded-full bg-amber-900/60 px-1.5 text-[10px] text-amber-200">
+              <span key={pending.length} className="count-pop rounded-full bg-gradient-to-b from-amber-300 to-amber-500 px-1.5 text-[11px] font-semibold text-amber-950">
                 {pending.length}
               </span>
             ) : null
@@ -375,14 +335,14 @@ export function LeadPanel({
               refreshNotes={refreshNotes}
             />
           ) : (
-            <p className="text-[11px] text-stone-600">Nothing waiting for you.</p>
+            <p className="text-xs text-stone-500">Nothing waiting for you.</p>
           )}
         </Card>
       ) : null}
 
       {directsAi ? (
-        <Card icon={Wand2} title="Direct the story">
-          <p className="mb-2 text-[11px] text-stone-500">
+        <Card glyph="system-cast" title="Direct the story">
+          <p className="mb-2 text-xs text-stone-500">
             Pick Direct in the composer, then Private for a note only the DM sees.
           </p>
           <DirectorArmedBanner campaignId={campaignId} steersStory armed={directorArm} />
@@ -413,20 +373,15 @@ export function LeadPanel({
 
       {isLead ? (
         <Card
-          icon={Pencil}
+          glyph="tab-campaigns"
           title="Campaign details"
           aside={
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              title="Edit title, premise, setting, difficulty, and player slots"
-              className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900"
-            >
+            <KitButton onClick={() => setEditing(true)} title="Edit title, premise, setting, difficulty, and player slots">
               <Pencil className="size-3" /> Edit details
-            </button>
+            </KitButton>
           }
         >
-          <p className="truncate text-stone-200">{campaign.title}</p>
+          <p className="gold-title truncate font-display">{campaign.title}</p>
           <p className="mt-1 text-xs text-stone-500">
             Difficulty {campaign.difficulty} · Level {campaign.startingLevel} start · Up to{" "}
             {campaign.maxPlayers} players

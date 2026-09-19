@@ -1,9 +1,13 @@
 "use client";
 
-import { ChevronDown, Loader2, MessageCircleQuestion, Send, Users } from "lucide-react";
+import { ChevronDown, Loader2, Send, Users } from "lucide-react";
 import { memo, useCallback, useState } from "react";
 import type { FormEvent } from "react";
 import { cn } from "@/lib/cn";
+import { EmptyState } from "@/components/EmptyState";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { PanelError, PanelLoading, panelRow } from "./PanelKit";
 import { Tooltip } from "@/components/ui/Tooltip";
 import type { CampaignAsk } from "@/lib/db/asks";
 import type { AskScope, AskVisibility } from "@/lib/dm/ask-logic";
@@ -39,41 +43,43 @@ const SCOPE_PICKER_LABELS: Record<AskScope | "auto", string> = {
   sheet: "My sheet",
 };
 
+// The painted glyph for what a question was about.
+const SCOPE_GLYPHS: Record<string, string> = { auto: "tab-reference", story: "tab-story", rules: "system-rules", sheet: "tab-characters" };
+
 function AskEntry({ ask, meUserId }: { ask: CampaignAsk; meUserId: string }) {
   const mine = ask.userId === meUserId;
   return (
-    <li className="rounded-lg border border-stone-800 bg-stone-950/40 p-2.5">
-      <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-[10px] uppercase tracking-wide text-stone-500">
-        <span className="rounded bg-stone-800 px-1 text-stone-400">
+    <li className={panelRow}>
+      <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-stone-400">
+        <span className="pk-chip">
+          <GameIcon icon={{ kind: "glyph", key: SCOPE_GLYPHS[ask.scope] ?? "tab-reference" }} size="size-4" />
           {SCOPE_LABELS[ask.scope] ?? ask.scope}
         </span>
         {ask.visibility === "table" ? (
-          <span className="inline-flex items-center gap-1 text-stone-500">
+          <span className="inline-flex items-center gap-1 text-stone-400">
             <Users className="size-3" /> {mine ? "Shared with the table" : "Asked by the table"}
           </span>
         ) : (
-          <span className="text-stone-600">Only you</span>
+          <span className="text-stone-500">Only you</span>
         )}
       </div>
       <p className="mb-1.5 text-xs font-medium leading-5 text-stone-200">{ask.question}</p>
       {ask.status === "failed" ? (
-        <p className="text-xs italic text-red-400">The DM could not answer this one.</p>
+        <p className="live-in text-xs italic text-red-400">The DM could not answer this one.</p>
       ) : (
         <p className="whitespace-pre-wrap font-serif text-xs leading-5 text-stone-300">
           {ask.answer}
         </p>
       )}
       {ask.citations.length ? (
-        <div className="mt-2 space-y-1">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-stone-600">
-            From the record
-          </p>
+        <div className="reveal mt-2 space-y-1">
+          <SectionHead title="From the record" glyph="tab-log" level="h4" />
           {ask.citations.map((citation, index) => (
             <p
               key={index}
-              className="rounded border border-stone-800/80 bg-stone-950/60 p-1.5 text-[11px] leading-4 text-stone-500"
+              className="rounded-md border border-stone-700/50 bg-stone-950/60 p-1.5 text-[11px] leading-4 text-stone-400"
             >
-              <span className="mr-1 rounded bg-stone-800 px-1 text-[9px] uppercase text-stone-500">
+              <span className="eyebrow mr-1 rounded bg-stone-800 px-1 text-[9px] text-amber-300/80">
                 {citation.kind}
                 {citation.ref ? ` ${citation.ref}` : ""}
               </span>
@@ -168,11 +174,12 @@ function AskDockInner({
         type="button"
         onClick={() => onOpenChange(!open)}
         data-tour="ask-dm"
-        className="flex w-full items-center gap-1.5 px-3 py-1.5 text-[11px] text-stone-500 transition-colors hover:text-stone-300"
+        aria-expanded={open}
+        className="pk-tap flex w-full items-center gap-1.5 px-3 py-1.5 text-xs text-stone-400 transition-colors hover:text-amber-100 motion-press"
       >
-        <MessageCircleQuestion className="size-3.5 text-amber-300/70" />
-        <span>Ask the DM</span>
-        {answered ? <span className="text-stone-600">({answered})</span> : null}
+        <GameIcon icon={{ kind: "glyph", key: "tab-reference" }} size="size-5" />
+        <span className="eyebrow text-[11px] text-amber-300/90">Ask the DM</span>
+        {answered ? <span key={answered} className="count-pop text-stone-500">({answered})</span> : null}
         {pendingQuestion && !open ? (
           <Loader2 className="size-3 animate-spin text-stone-500" />
         ) : null}
@@ -186,25 +193,21 @@ function AskDockInner({
           pushes the question box off screen. */}
       <div className={cn("max-h-[28rem] flex-col", open ? "flex" : "hidden")}>
         <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-1">
-          <p className="pb-2 text-[11px] leading-4 text-stone-500">
+          <p className="pb-2 text-xs leading-5 text-stone-500">
             Questions about the story, the world, the rules, or your sheet. Answers come from
             what the campaign has on record and never move the story forward.
           </p>
           {!loaded ? (
-            <p className="flex items-center gap-2 text-xs text-stone-500">
-              <Loader2 className="size-3.5 animate-spin" /> Loading...
-            </p>
+            <PanelLoading label="Loading..." rows={2} />
           ) : !asks.length && !pendingQuestion ? (
-            <p className="text-xs leading-5 text-stone-600">
-              Nothing asked yet. Put a question to the DM below.
-            </p>
+            <EmptyState size="sm" art="scrolls" title="Nothing asked yet. Put a question to the DM below." />
           ) : (
-            <ul className="space-y-2">
+            <ul className="stagger space-y-2">
               {asks.map((ask) => (
                 <AskEntry key={ask.id} ask={ask} meUserId={meUserId} />
               ))}
               {pendingQuestion ? (
-                <li className="rounded-lg border border-stone-800 bg-stone-950/40 p-2.5 opacity-70">
+                <li className={cn(panelRow, "live-in opacity-70")}>
                   <p className="mb-1.5 text-xs font-medium leading-5 text-stone-200">
                     {pendingQuestion}
                   </p>
@@ -221,22 +224,23 @@ function AskDockInner({
         <form onSubmit={submit} className="border-t border-stone-800 px-3 py-2.5">
           <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-stone-500">
             <span>About</span>
+            {/* Each choice row is its own group, so each gets its own sliding pill. */}
+            <span data-pill-group="" role="group" aria-label="About" className="inline-flex flex-wrap items-center gap-1.5">
             {(["auto", "story", "rules", "sheet"] as const).map((option) => (
-              <button
+              <button data-on={scope === option ? "" : undefined}
                 key={option}
                 type="button"
+                aria-pressed={scope === option}
                 onClick={() => setScope(option)}
-                className={cn(
-                  "rounded-full border px-2 py-1 transition-colors sm:py-0.5",
-                  scope === option
-                    ? "border-amber-700 bg-amber-950/40 text-amber-200"
-                    : "border-stone-700 text-stone-400 hover:text-stone-200",
-                )}
+                className="pk-pill pk-tap motion-press"
               >
+                <GameIcon icon={{ kind: "glyph", key: SCOPE_GLYPHS[option] }} size="size-4" />
                 {SCOPE_PICKER_LABELS[option]}
               </button>
             ))}
+            </span>
             <span className="ml-2">Seen by</span>
+            <span data-pill-group="" role="group" aria-label="Seen by" className="inline-flex flex-wrap items-center gap-1.5">
             {(["private", "table"] as const).map((option) => (
               <Tooltip
                 key={option}
@@ -246,21 +250,18 @@ function AskDockInner({
                     : "The whole table sees the question and the answer."
                 }
               >
-                <button
+                <button data-on={visibility === option ? "" : undefined}
                   type="button"
+                  aria-pressed={visibility === option}
                   onClick={() => setVisibility(option)}
-                  className={cn(
-                    "rounded-full border px-2 py-1 transition-colors sm:py-0.5",
-                    visibility === option
-                      ? "border-amber-700 bg-amber-950/40 text-amber-200"
-                      : "border-stone-700 text-stone-400 hover:text-stone-200",
-                  )}
+                  className="pk-pill pk-tap motion-press"
                 >
                   {option === "private" ? "Just me" : "The table"}
                 </button>
               </Tooltip>
             ))}
-            <span className="ml-auto italic text-stone-600">The story does not move.</span>
+            </span>
+            <span className="ml-auto italic text-stone-500">The story does not move.</span>
           </div>
           <div className="flex items-end gap-2">
             <textarea
@@ -274,22 +275,23 @@ function AskDockInner({
               }}
               rows={2}
               placeholder="Ask the DM about the story, the world, the rules, or your sheet"
+              aria-label="Ask the DM about the story, the world, the rules, or your sheet"
               className={cn(ui.input, "resize-none text-xs leading-5")}
             />
             <button
               type="submit"
               disabled={!question.trim() || sending}
-              className={cn(ui.btnSmall, "shrink-0 px-2 py-1 text-[11px]")}
+              className={cn(ui.btnPrimary, "pk-tap pk-display h-9 shrink-0 px-3 text-[12px]")}
             >
               {sending ? (
-                <Loader2 className="size-3 animate-spin" />
+                <Loader2 className="size-3.5 animate-spin" />
               ) : (
-                <Send className="size-3" />
+                <Send className="size-3.5" />
               )}
               Ask
             </button>
           </div>
-          {error ? <p className="mt-1.5 text-[11px] text-red-400">{error}</p> : null}
+          {error ? <PanelError className="mt-1.5">{error}</PanelError> : null}
         </form>
       </div>
     </div>

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { ChevronDown, ChevronRight, Lightbulb } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { GameIcon } from "@/components/ui/GameIcon";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { BEAT_LABELS, type BeatKind, type Suggestion } from "@/lib/workshop/board";
@@ -35,7 +36,7 @@ function AsideCard({
         type="button"
         onClick={() => setOpen((current) => !current)}
         aria-expanded={open}
-        className="flex w-full items-center gap-1.5 text-left text-sm text-amber-100"
+        className="flex min-h-10 w-full items-center gap-2 text-left font-display text-sm tracking-wide text-amber-100"
       >
         {icon}
         {title}
@@ -45,7 +46,7 @@ function AsideCard({
           <ChevronRight className="ml-auto size-4 text-stone-500" />
         )}
       </button>
-      {open ? <div className="mt-2 flex flex-col gap-1.5">{children}</div> : null}
+      {open ? <div className="reveal mt-2 flex flex-col gap-1.5">{children}</div> : null}
     </section>
   );
 }
@@ -63,18 +64,18 @@ export function SuggestionsCard({
     return null;
   }
   return (
-    <AsideCard title="What this board is missing" icon={<Lightbulb className="size-4" />} tour="storyboard-missing">
-      <p className="text-[10px] text-stone-600">
+    <AsideCard title="What this board is missing" icon={<GameIcon icon={{ kind: "glyph", key: "rest-inspiration" }} size="size-7" />} tour="storyboard-missing">
+      <p className="text-[11px] text-stone-500">
         Counted, not guessed. Nothing here asked a model what your story needs.
       </p>
       {suggestions.map((suggestion) => (
-        <div key={suggestion.id} className="flex flex-wrap items-center gap-2">
-          <span className="flex-1 text-[11px] text-stone-400">{suggestion.reason}</span>
+        <div key={suggestion.id} className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="flex-1 text-xs text-stone-400">{suggestion.reason}</span>
           <button
             type="button"
             disabled={busy}
             onClick={() => onAdd(suggestion.kind, suggestion.title)}
-            className="rounded-md border border-stone-700 px-1.5 py-0.5 text-[10px] text-stone-400 hover:text-amber-100 disabled:opacity-40"
+            className={cn(ui.btnSmall, "px-2 py-1.5")}
           >
             + {BEAT_LABELS[suggestion.kind]}
           </button>
@@ -86,14 +87,14 @@ export function SuggestionsCard({
 
 export function CompileCard({ summary }: { summary: CompileSummary }) {
   return (
-    <AsideCard title="What this becomes" tour="storyboard-compile">
-      <p className="text-[11px] text-stone-500">
+    <AsideCard title="What this becomes" icon={<GameIcon icon={{ kind: "glyph", key: "tab-campaigns" }} size="size-7" />} tour="storyboard-compile">
+      <p className="text-xs text-stone-400">
         {summary.lines.length
           ? `Imported into a campaign, this board becomes ${summary.lines.join(", ")}.`
           : "Nothing yet. Cards become lore, quests, prepared fights, DM notes and the story arc."}
       </p>
       {summary.arcRefusal ? (
-        <p className="text-[10px] text-amber-300/70">{summary.arcRefusal}</p>
+        <p className="reveal text-[11px] text-amber-300/70">{summary.arcRefusal}</p>
       ) : null}
     </AsideCard>
   );

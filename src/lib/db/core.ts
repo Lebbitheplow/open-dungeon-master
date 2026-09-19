@@ -1550,6 +1550,13 @@ function ensureSchema(db: SqliteDatabase) {
     ["drawings_json", `TEXT NOT NULL DEFAULT '[]'`],
   ]);
 
+  // The skin a map is painted with: a named skin and per-character material
+  // overrides (src/lib/battlemap/skins.ts normalizeMapSkin). '{}' is "the
+  // default for the setting and theme". On battle_maps too, because a deployed
+  // map keeps the look it was drawn with.
+  addColumns("prepared_maps", [["skin_json", `TEXT NOT NULL DEFAULT '{}'`]]);
+  addColumns("battle_maps", [["skin_json", `TEXT NOT NULL DEFAULT '{}'`]]);
+
   addColumns("locations", [
     // The prepared map this place stands on, so arriving offers the DM a
     // one-tap deploy, and the sound the place makes.
@@ -1567,6 +1574,9 @@ function ensureSchema(db: SqliteDatabase) {
     // lit, for the bar. 0 means the light does not burn down.
     ["burns_until", `INTEGER NOT NULL DEFAULT 0`],
     ["light_minutes", `INTEGER NOT NULL DEFAULT 0`],
+    // The painted object a prop or bystander token is drawn as: a catalogue id
+    // from a prepared map's MapProp.stamp (src/lib/battlemap/scene.ts), or ''.
+    ["stamp", `TEXT NOT NULL DEFAULT ''`],
   ]);
 
   // Shops (docs/vtt-parity-implementation-plan.md 11.1): a market at a
@@ -1646,6 +1656,10 @@ function ensureSchema(db: SqliteDatabase) {
     // [targetRef]}}, so every client can draw the same hairlines. Read only
     // while the round matches, so it never needs clearing.
     ["targets_json", `TEXT NOT NULL DEFAULT '{}'`],
+    // What each enemy has been declared to do next, as {round, byActor:
+    // {enemyId: {verb, targetRef, expected}}} (docs/visual-overhaul-plan.md
+    // 5.6). Read only while the round matches, so it never needs clearing.
+    ["intents_json", `TEXT NOT NULL DEFAULT '{}'`],
     // The action economy of whichever combatant is currently acting: action,
     // bonus action, reaction, attacks made, and movement spent. Rebuilt from
     // scratch whenever the initiative pointer moves, so it never needs a

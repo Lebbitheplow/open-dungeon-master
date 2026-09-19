@@ -1,12 +1,19 @@
 "use client";
 
-import { CircleHelp, Copy, Hammer, Loader2, Plus, Trash2 } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
+import { CircleHelp, Copy, Loader2, Plus, Trash2 } from "lucide-react";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { NumberStepper } from "@/components/ui/NumberStepper";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { headIcon } from "@/app/workshop/kit";
+import { PageSkeleton } from "@/components/PageSkeleton";
 import { appConfirm } from "@/components/ui/ConfirmDialog";
 import Link from "next/link";
 import { type FormEvent, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
-import { IconChip, ui } from "@/lib/ui";
-import { workshopPlaceholder } from "@/lib/placeholders";
+import { ui } from "@/lib/ui";
+import { workshopPlate } from "@/app/workshop/plates";
+import { ContextMenu } from "@/components/ui/ContextMenu";
 import { AppHeader } from "@/components/AppHeader";
 import { DEFAULT_TARGET_PARTY } from "@/lib/workshop/kind";
 import { ImportBundleButton } from "@/app/workshop/ImportBundleButton";
@@ -135,9 +142,9 @@ export default function WorkshopListPage() {
       <AppHeader />
       <header className="mb-6">
         <div className="flex items-center gap-3">
-          <IconChip icon={Hammer} size="size-10" iconSize="size-5" />
+          <GameIcon icon={{ kind: "glyph", key: "system-homebrew" }} size="size-12" />
           <div>
-            <h1 className="font-display text-xl tracking-wide text-amber-50">Workshop</h1>
+            <h1 className="gold-title animate-fade-up font-display text-2xl">Workshop</h1>
             <p className="text-sm text-stone-500">
               Build maps, NPCs, monsters, story and rules before the table exists. Import any of
               it when you start a campaign.
@@ -149,7 +156,7 @@ export default function WorkshopListPage() {
             title="Guides and tours"
             onClick={() => setHelpOpen(true)}
             data-tour="shelf-help"
-            className="ml-auto self-start rounded-md border border-stone-700 p-1.5 text-stone-500 hover:text-stone-300"
+            className={cn(ui.iconAction, headIcon, "ml-auto self-start")}
           >
             <CircleHelp className="size-4" />
           </button>
@@ -170,10 +177,10 @@ export default function WorkshopListPage() {
 
       <section className="mb-6">
         {creating ? (
-          <form onSubmit={create} className={`${ui.card} ornate space-y-3 p-4`}>
-            <p className="font-display tracking-wide text-amber-50">New workshop</p>
+          <form onSubmit={create} className={`${ui.card} reveal ornate space-y-3 p-4`}>
+            <SectionHead title="New workshop" glyph="system-storyboard" />
             <label className="block">
-              <span className="mb-1 block text-xs text-stone-400">Name</span>
+              <span className="mb-1 block font-display text-[11px] tracking-[0.1em] text-amber-300/85">Name</span>
               <input
                 autoFocus
                 value={title}
@@ -184,32 +191,18 @@ export default function WorkshopListPage() {
               />
             </label>
             <div>
-              <span className="mb-1 block text-xs text-stone-400">Building for a party of</span>
+              <span className="mb-1 block font-display text-[11px] tracking-[0.1em] text-amber-300/85">Building for a party of</span>
               <div className="flex flex-wrap items-center gap-2">
-                <input
-                  type="number"
-                  min={1}
-                  max={8}
-                  value={size}
-                  onChange={(event) => setSize(Number(event.target.value))}
-                  className={`${ui.input} w-20`}
-                />
+                <NumberStepper label="Party size" min={1} max={8} value={size} onChange={setSize} />
                 <span className="text-sm text-stone-400">heroes at level</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={20}
-                  value={level}
-                  onChange={(event) => setLevel(Number(event.target.value))}
-                  className={`${ui.input} w-20`}
-                />
+                <NumberStepper label="Party level" min={1} max={20} value={level} onChange={setLevel} />
               </div>
               <span className="mt-1 block text-xs text-stone-500">
                 The encounter calculator and the odds preview budget against this. Change it
                 anytime.
               </span>
             </div>
-            {error ? <p className="text-sm text-red-400">{error}</p> : null}
+            {error ? <p className="motion-shake text-sm text-red-400">{error}</p> : null}
             <div className="flex gap-2">
               <button type="submit" disabled={busy || !title.trim()} className={ui.btnPrimary}>
                 {busy ? <Loader2 className="size-4 animate-spin" /> : null} Create
@@ -244,13 +237,22 @@ export default function WorkshopListPage() {
       </section>
 
       {loading ? (
-        <div className="flex justify-center py-10">
-          <Loader2 className="size-5 animate-spin text-stone-500" />
-        </div>
+        <PageSkeleton kind="shelf" className="px-0 py-2" />
       ) : workshops.length ? (
-        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4" data-tour="shelf-list">
+        <ul className="stagger-up grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4" data-tour="shelf-list">
           {workshops.map((workshop) => (
-            <li key={workshop.id} className="group relative">
+            <ContextMenu
+              as="li"
+              key={workshop.id}
+              className="group relative"
+              label={workshop.title}
+              // The tile's link and its two buttons again; both stay on the tile.
+              items={[
+                { id: "open", label: "Open", glyph: "system-storyboard", onSelect: () => navigateTo(`/workshop/${workshop.id}`) },
+                { id: "duplicate", label: "Duplicate", glyph: "tab-notes", disabled: cloningId === workshop.id, onSelect: () => void clone(workshop) },
+                { id: "delete", label: "Delete", glyph: "quest-failed", tone: "danger", separated: true, onSelect: () => void remove(workshop) },
+              ]}
+            >
               <Link
                 href={`/workshop/${workshop.id}`}
                 className={cn(
@@ -261,12 +263,12 @@ export default function WorkshopListPage() {
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={workshopPlaceholder("workshop")}
+                  src={workshopPlate(workshop.id)}
                   alt=""
                   loading="lazy"
                   className="aspect-video w-full rounded-lg border border-amber-400/20 object-cover"
                 />
-                <span className="line-clamp-2 font-display text-[13px] font-semibold uppercase tracking-[0.12em] text-stone-200">
+                <span className="line-clamp-2 font-display text-[13px] font-semibold tracking-[0.12em] text-amber-50">
                   {workshop.title}
                 </span>
                 <span className="text-xs text-stone-500">
@@ -298,16 +300,12 @@ export default function WorkshopListPage() {
                   <Trash2 className="size-4" />
                 </button>
               </div>
-            </li>
+            </ContextMenu>
           ))}
         </ul>
       ) : (
-        <div className={`${ui.card} ornate p-8 text-center`}>
-          <IconChip icon={Hammer} className="mx-auto mb-3" />
-          <p className="font-display tracking-wide text-amber-50">No workshops yet.</p>
-          <p className="mt-1 text-sm text-stone-500">
-            A workshop is yours alone. Nothing in it reaches a table until you import it.
-          </p>
+        <div className={`${ui.card} ornate p-4`}>
+          <EmptyState art="map" title="No workshops yet." hint="A workshop is yours alone. Nothing in it reaches a table until you import it." />
         </div>
       )}
     </main>

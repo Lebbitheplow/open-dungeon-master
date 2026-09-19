@@ -172,4 +172,21 @@ test("heavy armor below its Strength requirement costs 10 feet", () => {
   assert.equal(speedFor({ ...weakling, abilities: { ...weakling.abilities, str: 15 } }), 30);
 });
 
+test("a pack race gets its ability bumps whether they come as a list or a map", async () => {
+  const { raceMechanics } = await import("../src/lib/content/mechanics.ts");
+  // Open5e's shape, and the expanded pack's shape (Hill Dwarf, High Elf and
+  // the rest), which used to be read as no bumps at all.
+  assert.deepEqual(raceMechanics({ asi: [{ attributes: ["Dexterity"], value: 2 }] }).asi, { dex: 2 });
+  assert.deepEqual(raceMechanics({ asi: { con: 2, wis: 1 } }).asi, { con: 2, wis: 1 });
+  assert.deepEqual(raceMechanics({ asi: { Strength: 2 } }).asi, { str: 2 });
+});
+
+test("a trait name keeps the abbreviation inside its brackets", async () => {
+  const { raceMechanics } = await import("../src/lib/content/mechanics.ts");
+  const pack = raceMechanics({ traits: "Darkvision 60 ft\nDwarven Resilience (adv. vs poison)\nStonecunning" });
+  assert.equal(pack.traitsSummary, "Darkvision 60 ft · Dwarven Resilience (adv. vs poison) · Stonecunning");
+  const srd = raceMechanics({ traits: "**Keen Senses.** You have proficiency in the Perception skill." });
+  assert.equal(srd.traitsSummary, "Keen Senses");
+});
+
 console.log(`\ntest-character-grants: ${passed} tests passed.`);

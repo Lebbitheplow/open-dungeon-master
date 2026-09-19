@@ -3,6 +3,7 @@
 import { Bluetooth, Dices, Loader2, Sparkles, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { Dialog } from "@/components/ui/Dialog";
+import { Select } from "@/components/ui/Select";
 import { cn } from "@/lib/cn";
 import {
   DIE_SIDES,
@@ -110,7 +111,7 @@ export function DiceSourcesPanel() {
   return (
     <div className="space-y-4 text-sm">
       {!supported ? (
-        <p className="rounded-md border border-amber-900/60 bg-amber-950/20 px-3 py-2 text-xs text-amber-200/90">
+        <p className="reveal rounded-md border border-amber-900/60 bg-amber-950/20 px-3 py-2 text-xs text-amber-200/90">
           Bluetooth dice need a Chromium browser (Chrome, Edge, or Opera). You
           can still choose typed or digital sources below. On Linux, enable
           <span className="font-mono"> chrome://flags/#enable-web-bluetooth</span>.
@@ -136,7 +137,7 @@ export function DiceSourcesPanel() {
             </button>
           </div>
           {pixels.length ? (
-            <ul className="space-y-1.5">
+            <ul className="stagger space-y-1.5">
               {pixels.map((pixel) => (
                 <li
                   key={pixel.systemId}
@@ -176,7 +177,7 @@ export function DiceSourcesPanel() {
               No dice connected. Connect one to assign it below.
             </p>
           )}
-          {error ? <p className="mt-1.5 text-xs text-red-400">{error}</p> : null}
+          {error ? <p className="motion-shake mt-1.5 text-xs text-red-400">{error}</p> : null}
         </div>
       )}
 
@@ -184,7 +185,7 @@ export function DiceSourcesPanel() {
         <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-stone-400">
           Roll each die with
         </span>
-        <div className="space-y-1.5">
+        <div className="stagger space-y-1.5">
           {DIE_SIDES.map((sides) => (
             <SourceRow
               key={sides}
@@ -222,22 +223,19 @@ function SourceRow({
   return (
     <label className="flex items-center justify-between gap-3">
       <span className="w-10 font-mono text-xs text-amber-200/90">d{sides}</span>
-      <select
+      <Select
         value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="flex-1 rounded-md border border-stone-700 bg-stone-900 px-2 py-1.5 text-xs text-stone-200 outline-none focus:border-amber-500"
-      >
-        <option value={SOURCE_MANUAL}>Type it (tabletop die)</option>
-        <option value={SOURCE_DIGITAL}>Digital roll</option>
-        {pixels.map((pixel) => (
-          <option key={pixel.systemId} value={pixelSource(pixel.systemId)}>
-            {pixel.name}
-          </option>
-        ))}
-        {assignedOffline ? (
-          <option value={value}>Assigned Pixels die (offline)</option>
-        ) : null}
-      </select>
+        onChange={onChange}
+        label={`Where the d${sides} comes from`}
+        size="sm"
+        className="min-w-0 flex-1"
+        options={[
+          { value: SOURCE_MANUAL as string, label: "Type it (tabletop die)" },
+          { value: SOURCE_DIGITAL as string, label: "Digital roll" },
+          ...pixels.map((pixel) => ({ value: pixelSource(pixel.systemId) as string, label: pixel.name })),
+          ...(assignedOffline ? [{ value, label: "Assigned Pixels die (offline)" }] : []),
+        ]}
+      />
     </label>
   );
 }

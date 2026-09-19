@@ -321,85 +321,88 @@ export function SidePanelRouter({
         {partySubTabs.length > 1 ? (
           <SubTabs tabs={partySubTabs} value={partySection} onChange={setPartySection} />
         ) : null}
-        {partySection === "bonds" ? (
-          <BondsPanel campaignId={campaignId} refreshKey={relationshipsVersion} />
-        ) : partySection === "factions" ? (
-          <FactionsPanel campaignId={campaignId} steersStory={steersStory} refreshKey={factionsVersion} />
-        ) : partySection === "market" ? (
-          <MarketPanel
-            campaignId={campaignId}
-            steersStory={steersStory}
-            mySheet={sheets.find((sheet) => sheet.id === activeSheetId) ?? sheets.find((sheet) => sheet.userId === meUserId && !sheet.isCompanion) ?? null}
-            refreshKey={shopsVersion}
-            coins={coins}
-          />
-        ) : (
-          <>
-            {encounter ? (
-              <div className="mb-3">
-                <EncounterPanel
-                  campaignId={campaignId}
-                  encounter={encounter}
-                  steersStory={steersStory}
-                  canEditOrder={adjudicates}
-                  embedded
-                  genre={campaign?.gameSettings?.genre}
-                />
-              </div>
-            ) : null}
-            <PartyPanel
-              sheets={sheets}
-              meUserId={meUserId}
-              spotlightUserIds={spotlightUserIds}
-              onlineUserIds={onlineUserIds}
-              steersStory={steersStory}
-              leadUserId={leadUserId}
-              canTransferLead={canTransferLead}
-              notes={notes}
-              members={members}
-              refreshNotes={refreshNotes}
-              onMessageUser={onMessageUser}
-              realDiceAllowed={campaign?.gameSettings?.dicePolicy === "real_allowed"}
-              encumbranceRule={Boolean(campaign?.gameSettings?.variantRules?.encumbrance)}
-              inCombat={Boolean(encounter)}
+        <div key={partySection} className="motion-tab">
+          {partySection === "bonds" ? (
+            <BondsPanel campaignId={campaignId} refreshKey={relationshipsVersion} />
+          ) : partySection === "factions" ? (
+            <FactionsPanel campaignId={campaignId} steersStory={steersStory} refreshKey={factionsVersion} />
+          ) : partySection === "market" ? (
+            <MarketPanel
               campaignId={campaignId}
-              worldPack={campaign?.gameSettings?.worldPack ?? ""}
-              lights={Object.fromEntries((battleMap?.tokens ?? []).filter((token) => token.kind === "pc" && token.light).map((token) => [token.refId, token.light!]))}
-              activeSheetId={activeSheetId}
-              multiCharacter={campaign?.gameSettings?.multiCharacter ?? "off"}
-              companionsAvailable={
-                campaign?.gameSettings
-                  ? companionSlotsFree(
-                      campaign.gameSettings,
-                      partySize,
-                      sheets
-                        .filter((sheet) => sheet.isCompanion)
-                        .map((sheet) => (sheet.companionKind === "guest" ? "guest" : "party")),
-                      humanDmTable,
-                    )
-                  : false
-              }
-              companionBuildAvailable={
-                campaign?.gameSettings
-                  ? resolveCompanionMode(campaign.gameSettings, partySize, humanDmTable) === "full" &&
-                    sheets.filter((sheet) => sheet.isCompanion && sheet.companionKind !== "guest")
-                      .length < campaign.gameSettings.maxCompanions
-                  : false
-              }
-              humanDmTable={humanDmTable}
-              companionGenre={campaign?.gameSettings?.genre}
-              companionLevel={(() => {
-                const levels = sheets
-                  .filter((sheet) => !sheet.isCompanion)
-                  .map((sheet) => sheet.level);
-                return levels.length
-                  ? Math.max(1, Math.round(levels.reduce((sum, n) => sum + n, 0) / levels.length))
-                  : (campaign?.startingLevel ?? 1);
-              })()}
-              embedded
+              steersStory={steersStory}
+              mySheet={sheets.find((sheet) => sheet.id === activeSheetId) ?? sheets.find((sheet) => sheet.userId === meUserId && !sheet.isCompanion) ?? null}
+              refreshKey={shopsVersion}
+              coins={coins}
             />
-          </>
-        )}
+          ) : (
+            <>
+              {encounter ? (
+                <div className="reveal mb-3">
+                  <EncounterPanel
+                    campaignId={campaignId}
+                    encounter={encounter}
+                    steersStory={steersStory}
+                    canEditOrder={adjudicates}
+                    embedded
+                    genre={campaign?.gameSettings?.genre}
+                    sheets={sheets}
+                  />
+                </div>
+              ) : null}
+              <PartyPanel
+                sheets={sheets}
+                meUserId={meUserId}
+                spotlightUserIds={spotlightUserIds}
+                onlineUserIds={onlineUserIds}
+                steersStory={steersStory}
+                leadUserId={leadUserId}
+                canTransferLead={canTransferLead}
+                notes={notes}
+                members={members}
+                refreshNotes={refreshNotes}
+                onMessageUser={onMessageUser}
+                realDiceAllowed={campaign?.gameSettings?.dicePolicy === "real_allowed"}
+                encumbranceRule={Boolean(campaign?.gameSettings?.variantRules?.encumbrance)}
+                inCombat={Boolean(encounter)}
+                campaignId={campaignId}
+                worldPack={campaign?.gameSettings?.worldPack ?? ""}
+                lights={Object.fromEntries((battleMap?.tokens ?? []).filter((token) => token.kind === "pc" && token.light).map((token) => [token.refId, token.light!]))}
+                activeSheetId={activeSheetId}
+                multiCharacter={campaign?.gameSettings?.multiCharacter ?? "off"}
+                companionsAvailable={
+                  campaign?.gameSettings
+                    ? companionSlotsFree(
+                        campaign.gameSettings,
+                        partySize,
+                        sheets
+                          .filter((sheet) => sheet.isCompanion)
+                          .map((sheet) => (sheet.companionKind === "guest" ? "guest" : "party")),
+                        humanDmTable,
+                      )
+                    : false
+                }
+                companionBuildAvailable={
+                  campaign?.gameSettings
+                    ? resolveCompanionMode(campaign.gameSettings, partySize, humanDmTable) === "full" &&
+                      sheets.filter((sheet) => sheet.isCompanion && sheet.companionKind !== "guest")
+                        .length < campaign.gameSettings.maxCompanions
+                    : false
+                }
+                humanDmTable={humanDmTable}
+                companionGenre={campaign?.gameSettings?.genre}
+                companionLevel={(() => {
+                  const levels = sheets
+                    .filter((sheet) => !sheet.isCompanion)
+                    .map((sheet) => sheet.level);
+                  return levels.length
+                    ? Math.max(1, Math.round(levels.reduce((sum, n) => sum + n, 0) / levels.length))
+                    : (campaign?.startingLevel ?? 1);
+                })()}
+                embedded
+              />
+            </>
+          )}
+        </div>
       </>
     );
   }
@@ -408,7 +411,13 @@ export function SidePanelRouter({
       <BattleMapPanel
         campaignId={campaignId}
         view={battleMap}
+        intents={battleMap.intents}
         genre={campaign?.gameSettings?.genre ?? null}
+        turnBudget={
+          encounter?.turn && sheets.some((sheet) => sheet.id === encounter.turn?.ownerId && sheet.userId === meUserId)
+            ? { action: !encounter.turn.actionUsed, bonus: !encounter.turn.bonusUsed, reaction: !encounter.turn.reactionUsed }
+            : null
+        }
         canDirect={adjudicates}
         canFocusPing={steersStory}
         ping={mapPing ?? null}
@@ -450,32 +459,34 @@ export function SidePanelRouter({
     return (
       <>
         <SubTabs tabs={storySubTabs} value={storySection} onChange={setStorySection} />
-        {storySection === "facts" ? (
-          <div className="space-y-3">
-            <PinsPanel campaignId={campaignId} version={pinsVersion} />
-            <FactsPanel
+        <div key={storySection} className="motion-tab">
+          {storySection === "facts" ? (
+            <div className="reveal space-y-3">
+              <PinsPanel campaignId={campaignId} version={pinsVersion} />
+              <FactsPanel
+                campaignId={campaignId}
+                facts={facts}
+                steersStory={steersStory}
+                refreshFacts={refreshFacts}
+              />
+              <LorePanel campaignId={campaignId} steersStory={steersStory} members={members} />
+            </div>
+          ) : storySection === "quests" ? (
+            <QuestsPanel campaignId={campaignId} steersStory={steersStory} refreshKey={questsVersion} />
+          ) : storySection === "timeline" ? (
+            <TimelinePanel campaignId={campaignId} refreshKey={chapters.length} />
+          ) : storySection === "log" ? (
+            <EventLog
               campaignId={campaignId}
-              facts={facts}
+              auditLog={auditLog}
+              sheets={sheets}
+              characterEvents={characterEvents}
               steersStory={steersStory}
-              refreshFacts={refreshFacts}
             />
-            <LorePanel campaignId={campaignId} steersStory={steersStory} members={members} />
-          </div>
-        ) : storySection === "quests" ? (
-          <QuestsPanel campaignId={campaignId} steersStory={steersStory} refreshKey={questsVersion} />
-        ) : storySection === "timeline" ? (
-          <TimelinePanel campaignId={campaignId} refreshKey={chapters.length} />
-        ) : storySection === "log" ? (
-          <EventLog
-            campaignId={campaignId}
-            auditLog={auditLog}
-            sheets={sheets}
-            characterEvents={characterEvents}
-            steersStory={steersStory}
-          />
-        ) : (
-          <StoryPanel campaignId={campaignId} chapters={chapters} steersStory={steersStory} />
-        )}
+          ) : (
+            <StoryPanel campaignId={campaignId} chapters={chapters} steersStory={steersStory} />
+          )}
+        </div>
       </>
     );
   }

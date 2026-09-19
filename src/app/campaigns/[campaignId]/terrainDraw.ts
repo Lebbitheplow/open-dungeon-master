@@ -46,6 +46,10 @@ const ZONE_TINT: Record<LightZone["ambient"], string> = {
   dark: "rgba(2, 6, 23, 0.55)",
 };
 
+// The layers the editor's eye toggles can hide (MapLayersPanel.tsx).
+export type MapLayer = "labels" | "props" | "lights" | "zones" | "doors" | "terrain" | "backdrop" | "overlay" | "drawings";
+export type HiddenLayers = Partial<Record<MapLayer, boolean>>;
+
 export type Scene = {
   labels?: MapLabel[];
   props?: MapProp[];
@@ -63,6 +67,8 @@ export function drawGround(
     tile: number;
     backdrop: Backdrop | null | undefined;
     image: HTMLImageElement | null;
+    // False hides the terrain layer: the picture alone, or the bare well.
+    showTerrain?: boolean;
   },
 ) {
   const { terrain, width, height, tile, backdrop, image } = input;
@@ -72,6 +78,9 @@ export function drawGround(
     context.globalAlpha = backdrop.transform.opacity;
     context.drawImage(image, rect.x, rect.y, rect.width, rect.height);
     context.globalAlpha = 1;
+  }
+  if (input.showTerrain === false) {
+    return;
   }
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
@@ -91,6 +100,146 @@ export function drawGround(
       context.fillRect(x * tile, y * tile, tile, tile);
     }
   }
+}
+
+// The renderer's picture as the ground (docs/visual-overhaul-plan.md 4.2).
+// It is repainted a beat after the terrain changes, so any square that
+// differs from the string it was painted from is filled flat until the
+// picture catches up: a stroke shows under the brush at once, then turns to
+// paint.
+export function drawPaintedGround(
+  context: CanvasRenderingContext2D,
+  input: { terrain: string; width: number; height: number; tile: number; picture: CanvasImageSource; paintedFrom: string },
+) {
+  const { terrain, width, height, tile, picture, paintedFrom } = input;
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.drawImage(picture, 0, 0, width * tile, height * tile);
+  if (paintedFrom === terrain) {
+    return;
+  }
+  for (let index = 0; index < terrain.length; index += 1) {
+    if (terrain[index] === paintedFrom[index]) {
+      continue;
+    }
+    const x = index % width;
+    const y = Math.floor(index / width);
+    context.fillStyle = TILE_FILL[terrain[index]] ?? "#2a2724";
+    context.fillRect(x * tile, y * tile, tile, tile);
+  }
+}
+
+// The edge the painter never opens, drawn so a refused stroke is no surprise.
+export function drawBorderGuard(context: CanvasRenderingContext2D, width: number, height: number, tile: number) {
+  context.save();
+  context.setLineDash([5, 4]);
+  context.strokeStyle = "rgba(255, 157, 92, 0.55)";
+  context.lineWidth = 1;
+  context.strokeRect(tile + 0.5, tile + 0.5, (width - 2) * tile - 1, (height - 2) * tile - 1);
+  context.restore();
+}
+
+// The backdrop tool's frame: the picture's edge, its two grips, and how many
+// pixels of picture one square is showing.
+export function drawBackdropHandles(
+  context: CanvasRenderingContext2D,
+  rect: { x: number; y: number; width: number; height: number },
+  width: number,
+) {
+  context.setLineDash([4, 4]);
+  context.strokeStyle = "#d4ab3a";
+  context.lineWidth = 1.5;
+  context.strokeRect(rect.x, rect.y, rect.width, rect.height);
+  context.setLineDash([]);
+  for (const corner of [
+    { x: rect.x, y: rect.y },
+    { x: rect.x + rect.width, y: rect.y + rect.height },
+  ]) {
+    context.fillStyle = "#0c0a09";
+    context.beginPath();
+    context.arc(corner.x, corner.y, 7, 0, Math.PI * 2);
+    context.fill();
+    context.strokeStyle = "#d4ab3a";
+    context.lineWidth = 2;
+    context.stroke();
+  }
+  context.fillStyle = "rgba(12, 10, 9, 0.85)";
+  context.fillRect(4, 4, 150, 18);
+  context.fillStyle = "#fde68a";
+  context.font = "11px sans-serif";
+  context.textAlign = "left";
+  context.textBaseline = "alphabetic";
+  context.fillText(`one square is ${Math.round((rect.width / width) * 10) / 10} px of picture`, 8, 17);
+}
+
+export function drawSelection(
+  context: CanvasRenderingContext2D,
+  boxes: Array<{ x0: number; y0: number; x1: number; y1: number }>,
+  tile: number,
+) {
+  for (const box of boxes) {
+    const x = box.x0 * tile + 1;
+    const y = box.y0 * tile + 1;
+    const w = (box.x1 - box.x0 + 1) * tile - 2;
+    const h = (box.y1 - box.y0 + 1) * tile - 2;
+    // The halo and the wash only: the line itself is the marching ants laid
+    // over the canvas (SelectionAnts in terrainCanvasParts.tsx).
+    context.setLineDash([]);
+    context.fillStyle = "rgba(212, 171, 58, 0.1)";
+    context.fillRect(x, y, w, h);
+    context.strokeStyle = "rgba(212, 171, 58, 0.35)";
+    context.lineWidth = 6;
+    context.strokeRect(x, y, w, h);
+  }
+}
+
+// ---- a placed thing pops in ----
+// The mockup's pop-in keyframes, computed here because the things are paint on
+// a canvas, not nodes: half size, past full at 60%, settled at the end.
+export const POP_MS = 260;
+export function popScale(t: number): number {
+  if (t >= 1) {
+    return 1;
+  }
+  if (t <= 0) {
+    return 0.5;
+  }
+  return t < 0.6 ? 0.5 + (0.65 * t) / 0.6 : 1.15 - (0.15 * (t - 0.6)) / 0.4;
+}
+
+export type Births = { known: Set<string>; born: Map<string, number> };
+
+// Notes which keys are new since the last draw and forgets the ones whose pop
+// has finished. True while anything is still popping, so the caller draws again.
+export function trackBirths(births: Births, keys: string[], now: number, still: boolean): boolean {
+  for (const [key, at] of births.born) {
+    if (now - at >= POP_MS) {
+      births.born.delete(key);
+    }
+  }
+  if (!still) {
+    for (const key of keys) {
+      if (!births.known.has(key)) {
+        births.born.set(key, now);
+      }
+    }
+  }
+  births.known = new Set(keys);
+  for (const key of births.born.keys()) {
+    if (!births.known.has(key)) {
+      births.born.delete(key);
+    }
+  }
+  return births.born.size > 0;
+}
+
+export function withPop(context: CanvasRenderingContext2D, cx: number, cy: number, scale: number, paint: () => void) {
+  context.save();
+  context.translate(cx, cy);
+  context.scale(scale, scale);
+  context.translate(-cx, -cy);
+  paint();
+  context.restore();
 }
 
 export function drawLights(context: CanvasRenderingContext2D, lights: MapLight[], tile: number) {
@@ -138,7 +287,15 @@ export function drawGrid(context: CanvasRenderingContext2D, width: number, heigh
 export function drawScene(
   context: CanvasRenderingContext2D,
   scene: Scene,
-  input: { width: number; height: number; tile: number; backdrop: Backdrop | null | undefined },
+  input: {
+    width: number;
+    height: number;
+    tile: number;
+    backdrop: Backdrop | null | undefined;
+    // "x,y" squares whose prop the renderer already painted as a stamp; the
+    // marker is skipped there and only the name is written.
+    stamped?: ReadonlySet<string>;
+  },
 ) {
   const { width, height, tile } = input;
   for (const zone of scene.zones ?? []) {
@@ -178,6 +335,10 @@ export function drawScene(
     context.fillStyle = prop.kind === "npc" ? "#3b6d4a" : "#221d18";
     context.strokeStyle = prop.kind === "npc" ? "#86efac" : "#d6d3d1";
     context.lineWidth = 1.5;
+    if (input.stamped?.has(`${prop.x},${prop.y}`)) {
+      drawText(context, prop.name, cx, prop.y * tile + tile + 2, tile, "top");
+      continue;
+    }
     if (prop.kind === "npc") {
       context.beginPath();
       context.arc(cx, cy, tile * 0.38, 0, Math.PI * 2);
@@ -326,4 +487,67 @@ export function drawToolPreview(
         context.strokeRect(hover.x * tile, hover.y * tile, tile, tile);
       }
   }
+}
+
+// The placed things of a map, drawn with the new ones popping. What was there
+// last draw is drawn as ever; a newcomer is drawn alone, scaled about its own
+// centre. True while anything is still popping.
+export function drawPlaced(
+  context: CanvasRenderingContext2D,
+  births: Births,
+  placed: {
+    lights: MapLight[];
+    labels: MapLabel[];
+    props: MapProp[];
+    zones: LightZone[];
+    doors: Scene["doors"];
+    overlay: Scene["overlay"];
+    input: Parameters<typeof drawScene>[2];
+    still: boolean;
+  },
+): boolean {
+  const { lights, labels, props, zones, input } = placed;
+  const tile = input.tile;
+  const at = (kind: string, spot: XY) => `${kind}:${spot.x},${spot.y}`;
+  const zoneKey = (zone: LightZone) => `zone:${zone.x0},${zone.y0},${zone.x1},${zone.y1}`;
+  const now = performance.now();
+  const popping = trackBirths(
+    births,
+    [...lights.map((light) => at("light", light)), ...labels.map((label) => at("label", label)), ...props.map((prop) => at("prop", prop)), ...zones.map(zoneKey)],
+    now,
+    placed.still,
+  );
+  const settled = (key: string) => !births.born.has(key);
+  drawLights(context, popping ? lights.filter((light) => settled(at("light", light))) : lights, tile);
+  drawScene(
+    context,
+    {
+      labels: popping ? labels.filter((label) => settled(at("label", label))) : labels,
+      props: popping ? props.filter((prop) => settled(at("prop", prop))) : props,
+      doors: placed.doors,
+      zones: popping ? zones.filter((zone) => settled(zoneKey(zone))) : zones,
+      overlay: placed.overlay,
+    },
+    input,
+  );
+  if (!popping) {
+    return false;
+  }
+  const centre = (spot: XY) => [(spot.x + 0.5) * tile, (spot.y + 0.5) * tile] as const;
+  const scaleOf = (key: string) => popScale((now - (births.born.get(key) ?? now)) / POP_MS);
+  for (const zone of zones.filter((entry) => !settled(zoneKey(entry)))) {
+    withPop(context, ((zone.x0 + zone.x1 + 1) / 2) * tile, ((zone.y0 + zone.y1 + 1) / 2) * tile, scaleOf(zoneKey(zone)), () =>
+      drawScene(context, { zones: [zone] }, input),
+    );
+  }
+  for (const light of lights.filter((entry) => !settled(at("light", entry)))) {
+    withPop(context, ...centre(light), scaleOf(at("light", light)), () => drawLights(context, [light], tile));
+  }
+  for (const prop of props.filter((entry) => !settled(at("prop", entry)))) {
+    withPop(context, ...centre(prop), scaleOf(at("prop", prop)), () => drawScene(context, { props: [prop] }, input));
+  }
+  for (const label of labels.filter((entry) => !settled(at("label", entry)))) {
+    withPop(context, ...centre(label), scaleOf(at("label", label)), () => drawScene(context, { labels: [label] }, input));
+  }
+  return true;
 }

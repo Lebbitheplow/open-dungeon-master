@@ -34,7 +34,8 @@ import { usePickerGroups } from "./usePickerGroups";
 export type { BuilderResult } from "./submit";
 
 // Full character creation flow as a six-step wizard: identity, ancestry,
-// calling, abilities, spells and gear, finishing touches. Open5e
+// calling, abilities, spells and gear, finishing touches, paced by the diamond
+// stepper and the gold step wipe (docs/visual-overhaul-plan.md 7). Open5e
 // races/classes/subclasses/backgrounds (SRD fallback), three ability-score
 // methods, spell/equipment/feat pickers, live derived stats. Used by
 // /characters/new, the campaign join/edit/replace page and the companion
@@ -143,7 +144,7 @@ export default function CharacterBuilder({
     identity: identityBlocker(state),
     ancestry: ancestryBlocker(state, race, background),
     calling: callingBlocker(klass, state, derived),
-    abilities: abilitiesBlocker(derived),
+    abilities: abilitiesBlocker(derived, state),
     spells: spellsBlocker(state, derived, klass),
   };
   const casts = derived.casts;
@@ -151,6 +152,7 @@ export default function CharacterBuilder({
   const steps: WizardStep[] = [
     {
       key: "identity",
+      label: "Identity",
       title: "Who is this?",
       canContinue: !blockers.identity,
       content: (
@@ -172,15 +174,18 @@ export default function CharacterBuilder({
     },
     {
       key: "ancestry",
+      label: "Ancestry",
       title: "Ancestry",
       blurb: "Where are they from, and what does that grant?",
       canContinue: !blockers.ancestry,
+      continueLabel: race ? `Continue as ${race.name}` : undefined,
       content: (
         <>
           <AncestryStep
             state={state}
             race={race}
             background={background}
+            races={races}
             raceGroups={pickers.raceGroups}
           />
           <StepBlocker message={blockers.ancestry} />
@@ -189,6 +194,7 @@ export default function CharacterBuilder({
     },
     {
       key: "calling",
+      label: "Calling",
       title: "Calling",
       blurb: "The class decides how this character plays.",
       canContinue: !blockers.calling,
@@ -201,6 +207,7 @@ export default function CharacterBuilder({
             klass={klass}
             background={background}
             pack={pack}
+            classes={classes}
             classGroups={pickers.classGroups}
             subclassGroups={pickers.subclassGroups}
             offersSubclass={pickers.offersSubclass}
@@ -212,18 +219,20 @@ export default function CharacterBuilder({
     },
     {
       key: "abilities",
+      label: "Ability scores",
       title: "Ability scores",
       blurb: "How do you roll?",
       canContinue: !blockers.abilities,
       content: (
         <>
-          <AbilitiesStep state={state} derived={derived} race={race} />
+          <AbilitiesStep state={state} derived={derived} race={race} klass={klass} />
           <StepBlocker message={blockers.abilities} />
         </>
       ),
     },
     {
       key: "spells-gear",
+      label: casts ? "Spells and gear" : "Gear",
       title: casts ? "Spells and gear" : "Gear",
       blurb: casts ? "Pick what they can cast, then arm your hero." : "Arm your hero.",
       canContinue: !blockers.spells,
@@ -242,6 +251,7 @@ export default function CharacterBuilder({
     },
     {
       key: "finish",
+      label: "Finishing touches",
       title: "Finishing touches",
       blurb: "Who have you made?",
       canContinue: !busy,
@@ -250,6 +260,7 @@ export default function CharacterBuilder({
           state={state}
           derived={derived}
           race={race}
+          klass={klass}
           initial={initial}
           paintsPortraits={paintsPortraits}
           onUploadPortrait={() => setCropping(true)}
@@ -265,6 +276,14 @@ export default function CharacterBuilder({
     <div className={cn("flex h-[max(30rem,calc(100dvh-14rem))] flex-col text-sm", className)}>
       <Wizard
         title={state.name.trim() || "New character"}
+        variant="diamonds"
+        wipe
+        goldTitles
+        aside={
+          race && klass
+            ? `${race.name} ${klass.name} · level ${derived.effectiveLevel} · d${klass.hitDie}`
+            : undefined
+        }
         steps={steps}
         onDone={submit}
         doneLabel={

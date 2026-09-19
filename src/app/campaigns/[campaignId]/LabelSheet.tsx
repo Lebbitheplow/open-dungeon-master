@@ -74,11 +74,11 @@ export function LabelSheet({
       <div className="space-y-2 text-sm text-stone-200">
         {ref?.kind === "lore" ? (
           loading ? (
-            <p className="text-xs text-stone-500">Opening the entry...</p>
+            <p className="reveal text-xs text-stone-500">Opening the entry...</p>
           ) : entry ? (
             <Markdown source={entry.body} className="prose-sm" />
           ) : missing ? (
-            <p className="text-xs text-stone-500">
+            <p className="reveal text-xs text-stone-500">
               That entry is not one you can read, or it has been removed.
             </p>
           ) : null

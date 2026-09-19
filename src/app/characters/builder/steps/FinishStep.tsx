@@ -1,6 +1,7 @@
 "use client";
 
 import { Camera, UserRound } from "lucide-react";
+import { NumberStepper } from "@/components/ui/NumberStepper";
 import { cn } from "@/lib/cn";
 import { contentSlug } from "@/lib/help";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
@@ -8,9 +9,11 @@ import { formatModifier, proficiencyBonus } from "@/lib/srd";
 import { ui } from "@/lib/ui";
 import CatalogBrowser from "../CatalogBrowser";
 import ContentPicker from "../ContentPicker";
-import type { RaceOption } from "../useBuilderOptions";
+import { HpExplainerButton } from "../AbilityExplainers";
+import type { ClassOption, RaceOption } from "../useBuilderOptions";
 import type { BuilderDerived } from "../useBuilderDerived";
 import type { BuilderState } from "../useBuilderState";
+import { hpExplainerInput } from "./AbilitiesStep";
 import { Chip, Field, StepPanel, inputClass } from "./shared";
 
 // Step 6: the portrait, how they look, their story, extra feats, and the
@@ -19,6 +22,7 @@ export function FinishStep({
   state,
   derived,
   race,
+  klass,
   initial,
   paintsPortraits,
   onUploadPortrait,
@@ -27,6 +31,7 @@ export function FinishStep({
   state: BuilderState;
   derived: BuilderDerived;
   race: RaceOption | undefined;
+  klass: ClassOption | undefined;
   initial?: CreateSheetInput;
   // Whether this server can paint a portrait at all. Without an image
   // backend the section offers the upload alone and stops promising a
@@ -38,6 +43,7 @@ export function FinishStep({
   const { portrait, setPortrait, acOverride, setAcOverride, setHpOverride } = state;
   const { preview, acInfo, ac, effectiveLevel, asiSlotLevels } = derived;
   const keptSaved = Boolean(initial?.portrait && portrait?.url === initial.portrait.url);
+  const hp = hpExplainerInput(state, derived, race, klass);
   return (
     <div className="space-y-4">
       <StepPanel title="Portrait (optional)" ornate>
@@ -162,25 +168,18 @@ export function FinishStep({
       {preview && race ? (
         <StepPanel title="Derived stats" ornate className="border-amber-500/30">
           <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm text-stone-300 sm:grid-cols-4">
-            <Field label="Max HP">
-              <input
-                type="number"
-                min={1}
-                max={500}
-                value={preview.maxHp}
-                onChange={(event) => setHpOverride(Number(event.target.value) || 1)}
-                className={cn(inputClass, "w-20")}
-              />
+            <Field
+              label={
+                <span className="flex items-center gap-0.5">
+                  Max HP
+                  {hp ? <HpExplainerButton hp={hp} compact /> : null}
+                </span>
+              }
+            >
+              <NumberStepper min={1} max={500} value={preview.maxHp} onChange={(next) => setHpOverride(next || 1)} label="Max HP" size="sm" />
             </Field>
             <Field label={`AC${acOverride === null ? "" : " (pinned)"}`}>
-              <input
-                type="number"
-                min={1}
-                max={30}
-                value={ac}
-                onChange={(event) => setAcOverride(Number(event.target.value) || 10)}
-                className={cn(inputClass, "w-20")}
-              />
+              <NumberStepper min={1} max={30} value={ac} onChange={(next) => setAcOverride(next || 10)} label="AC" size="sm" />
               <span className="mt-1 block text-[11px] text-stone-500">
                 {acOverride === null
                   ? (acInfo?.parts.join(" + ") ?? "")
@@ -209,7 +208,7 @@ export function FinishStep({
       ) : null}
 
       {error ? (
-        <p className="text-sm text-red-400" role="alert">
+        <p className="motion-shake text-sm text-red-400" role="alert">
           {error}
         </p>
       ) : null}

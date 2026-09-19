@@ -2,6 +2,7 @@
 
 import { Loader2, Quote, Send } from "lucide-react";
 import { useEffect, useState } from "react";
+import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { DESK_QUESTION_MAX, type DeskAnswer } from "@/lib/reference/desk-logic";
 
@@ -113,7 +114,8 @@ export function DeskPanel() {
             }
           }}
           placeholder="Does a readied spell need concentration?"
-          className="flex-1 rounded-lg border border-stone-800 bg-stone-950 px-3 py-2 text-sm text-stone-200 outline-none focus:border-amber-300"
+          aria-label="Your rules question"
+          className={cn(ui.input, "h-10 min-w-0 flex-1")}
         />
         <button
           type="button"
@@ -127,22 +129,22 @@ export function DeskPanel() {
       </div>
 
       {question.trim() ? (
-        <div className="mb-4 rounded-lg border border-stone-800 bg-stone-950/40 p-3">
-          <p className="mb-2 text-xs uppercase tracking-wide text-stone-500">
+        <div className="reveal mb-4 rounded-lg border border-amber-500/15 bg-stone-950/40 p-3">
+          <p className="section-head-title mb-2 whitespace-normal">
             {sources.length
               ? `${sources.length} source${sources.length === 1 ? "" : "s"} the desk would read`
               : "Nothing on file bears on this yet"}
           </p>
           {sources.length ? (
-            <ul className="flex flex-wrap gap-1.5">
+            <ul className="stagger flex flex-wrap gap-1.5">
               {sources.map((source) => (
                 <li
                   key={source.ref}
-                  className="rounded-full border border-stone-700 px-2.5 py-0.5 text-xs text-stone-400"
+                  className="rounded-full border border-amber-500/25 bg-amber-400/5 px-2.5 py-0.5 text-xs text-stone-400"
                   title={source.origin}
                 >
                   <span className="text-stone-300">{source.name}</span>
-                  <span className="ml-1.5 text-stone-600">
+                  <span className="ml-1.5 text-stone-500">
                     {KIND_LABELS[source.kind] ?? source.kind}
                   </span>
                 </li>
@@ -156,21 +158,21 @@ export function DeskPanel() {
         </div>
       ) : null}
 
-      {error ? <p className="text-sm text-red-300">{error}</p> : null}
+      {error ? <p role="alert" className="motion-shake text-sm text-red-300">{error}</p> : null}
 
       {answer ? (
-        <div className="rounded-xl border border-stone-800 bg-stone-950/60 p-4">
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-stone-200">
+        <div className="reveal panel ornate rounded-xl p-4">
+          <p className="whitespace-pre-wrap font-serif text-sm leading-relaxed text-stone-200">
             {answer.answer}
           </p>
           {answer.citations.length ? (
-            <ul className="mt-4 space-y-2 border-t border-stone-800 pt-3">
+            <ul className="stagger mt-4 space-y-2 border-t border-amber-500/15 pt-3">
               {answer.citations.map((citation) => (
                 <li key={citation.ref} className="text-xs">
                   <span className="flex items-center gap-1.5 text-stone-400">
                     <Quote className="size-3 shrink-0 text-amber-600/70" />
                     {citation.name}
-                    <span className="text-stone-600">{citation.origin}</span>
+                    <span className="text-stone-500">{citation.origin}</span>
                   </span>
                   <span className="mt-0.5 block border-l border-stone-800 pl-3 text-stone-500">
                     {citation.quote}
@@ -179,7 +181,7 @@ export function DeskPanel() {
               ))}
             </ul>
           ) : (
-            <p className="mt-4 border-t border-stone-800 pt-3 text-xs text-amber-200/80">
+            <p className="mt-4 border-t border-amber-500/15 pt-3 text-xs text-amber-200/80">
               This answer cites nothing on file. Treat it as a starting point and check it against
               a book before it settles anything at the table.
             </p>

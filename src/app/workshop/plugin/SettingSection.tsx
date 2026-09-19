@@ -1,5 +1,6 @@
 "use client";
 
+import { SectionHead } from "@/components/ui/SectionHead";
 import { ui } from "@/lib/ui";
 import { ChipList, LineList, PairList } from "@/app/workshop/plugin/fields";
 import type { SectionProps } from "@/app/workshop/plugin/types";
@@ -14,7 +15,7 @@ export function SettingSection({ draft, onDraft }: SectionProps) {
   return (
     <div className="space-y-4">
       <section className={ui.card + " p-4"}>
-        <h3 className="font-display text-base tracking-wide text-amber-200">Factions</h3>
+        <SectionHead title="Factions" glyph="system-factions" className="mb-0" />
         <p className="mb-3 text-[11px] text-stone-500">Who holds power and what they want. Lore filed under &quot;factions&quot; lands here when you pull from the workshop.</p>
         <PairList
           items={draft.factions}
@@ -26,7 +27,7 @@ export function SettingSection({ draft, onDraft }: SectionProps) {
         />
       </section>
       <section className={ui.card + " p-4"}>
-        <h3 className="font-display text-base tracking-wide text-amber-200">Places</h3>
+        <SectionHead title="Places" glyph="system-region" className="mb-0" />
         <p className="mb-3 text-[11px] text-stone-500">The places a campaign can start in or travel to.</p>
         <PairList
           items={draft.locations}
@@ -38,7 +39,7 @@ export function SettingSection({ draft, onDraft }: SectionProps) {
         />
       </section>
       <section className={ui.card + " p-4"}>
-        <h3 className="font-display text-base tracking-wide text-amber-200">Hooks</h3>
+        <SectionHead title="Hooks" glyph="quest-active" className="mb-0" />
         <p className="mb-3 text-[11px] text-stone-500">Adventure hooks, one line each. Storyboard hook cards land here when you pull.</p>
         <LineList
           items={draft.hooks}
@@ -50,7 +51,7 @@ export function SettingSection({ draft, onDraft }: SectionProps) {
         />
       </section>
       <section className={ui.card + " p-4"}>
-        <h3 className="font-display text-base tracking-wide text-amber-200">Glossary</h3>
+        <SectionHead title="Glossary" glyph="tab-reference" className="mb-0" />
         <p className="mb-3 text-[11px] text-stone-500">Words the world uses and what they mean, so the narrator uses them the same way you do.</p>
         <PairList
           items={draft.glossary}
@@ -62,11 +63,11 @@ export function SettingSection({ draft, onDraft }: SectionProps) {
         />
       </section>
       <section className={ui.card + " p-4"}>
-        <h3 className="font-display text-base tracking-wide text-amber-200">Name seeds</h3>
+        <SectionHead title="Name seeds" glyph="tab-characters" className="mb-0" />
         <p className="mb-3 text-[11px] text-stone-500">Names offered as one-tap suggestions in the character builder. Six or more of each reads as a world with a sound of its own.</p>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <span className="mb-1 block text-xs uppercase tracking-wide text-stone-500">People</span>
+            <span className="mb-1 block font-display text-[11px] tracking-[0.1em] text-amber-300/85">People</span>
             <ChipList
               items={draft.nameSeeds.people}
               onChange={(people) => onDraft({ ...draft, nameSeeds: { ...draft.nameSeeds, people } })}
@@ -74,7 +75,7 @@ export function SettingSection({ draft, onDraft }: SectionProps) {
             />
           </div>
           <div>
-            <span className="mb-1 block text-xs uppercase tracking-wide text-stone-500">Places</span>
+            <span className="mb-1 block font-display text-[11px] tracking-[0.1em] text-amber-300/85">Places</span>
             <ChipList
               items={draft.nameSeeds.places}
               onChange={(places) => onDraft({ ...draft, nameSeeds: { ...draft.nameSeeds, places } })}

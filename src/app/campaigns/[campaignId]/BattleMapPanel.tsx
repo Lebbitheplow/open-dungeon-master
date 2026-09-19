@@ -5,16 +5,11 @@ import {
   Eraser,
   Footprints,
   Lock,
-  LocateFixed,
   Maximize2,
   MapPin,
   Pencil,
   Swords,
-  Unlock,
-  Users,
   X,
-  ZoomIn,
-  ZoomOut,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BattleMapGrid, type MapOverlay } from "@/app/campaigns/[campaignId]/BattleMapGrid";
@@ -54,8 +49,23 @@ import type { PublicEncounter } from "@/lib/db/encounter-view";
 import type { CameraEvent, SceneState } from "@/lib/scene/state";
 import { SkyLayer } from "@/components/SkyLayer";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { characterPlaceholder, monsterPlaceholder } from "@/lib/placeholders";
+import { characterPlaceholder, monsterPlaceholder, npcPlaceholder } from "@/lib/placeholders";
 import { usePaintedMap } from "@/app/campaigns/[campaignId]/usePaintedMap";
+import {
+  FieldDie,
+  InitiativeRail,
+  TargetChips,
+  TokenFace,
+  TokenPlate,
+  TurnBanner,
+  TurnHud,
+  type TurnHudBudget,
+} from "@/app/campaigns/[campaignId]/BoardChrome";
+import { IntentLayer } from "@/app/campaigns/[campaignId]/BoardIntent";
+import { BoardCameraControls, BoardOrderDialog } from "@/app/campaigns/[campaignId]/BoardPanelParts";
+import type { StageToken } from "@/app/campaigns/[campaignId]/BoardStage";
+import type { TokenIntent } from "@/lib/battlemap/intent";
+import { familyIconPath } from "@/lib/icons";
 
 // The tactical battle map tab.
 //
@@ -102,6 +112,9 @@ export function BattleMapPanel({
   canDraw = true,
   onOpenLabel,
   genre = null,
+  intents = null,
+  turnBudget = null,
+  fieldRoll = null,
 }: {
   campaignId: string;
   // The campaign's setting: it picks the skin the board is painted in and the
@@ -132,6 +145,13 @@ export function BattleMapPanel({
   canDraw?: boolean;
   // A pinned label was tapped: open what it points at.
   onOpenLabel?: (label: MapLabel) => void;
+  // What the enemies mean to do, as the projection sends it for this seat
+  // (src/lib/battlemap/intent.ts). The engine does not send any yet.
+  intents?: TokenIntent[] | null;
+  // The viewer's action economy this turn, when the projection carries it.
+  turnBudget?: TurnHudBudget | null;
+  // A roll in the air for a commit made from the board: the die on the field.
+  fieldRoll?: { label: string } | null;
 }) {
   // The board's picture, painted on this device from the terrain it was sent.
   const painted = usePaintedMap(view, genre);
@@ -146,8 +166,34 @@ export function BattleMapPanel({
     for (const enemy of encounter?.enemies ?? []) {
       byRef.set(enemy.id, monsterPlaceholder(enemy.type, { cr: enemy.cr, genre, seed: enemy.name }));
     }
+    // Somebody the DM put down by hand has no sheet and no stat block: they
+    // draw one of the neutral faces by their name, and keep it.
+    for (const token of view.tokens) {
+      if (token.kind === "npc" && !byRef.has(token.refId)) {
+        byRef.set(token.refId, npcPlaceholder(null, token.name));
+      }
+    }
     return byRef;
-  }, [sheets, encounter?.enemies, genre]);
+  }, [sheets, encounter?.enemies, genre, view.tokens]);
+  const sheetsById = useMemo(() => new Map(sheets.map((sheet) => [sheet.id, sheet])), [sheets]);
+  // The pictures to try for one combatant, best first: their own portrait,
+  // their plate, then the class emblem; the initial is what is left.
+  const faceOfRef = useCallback(
+    (refId: string): Array<string | null | undefined> => {
+      const sheet = sheetsById.get(refId);
+      return [sheet?.portrait?.url, faces.get(refId), sheet ? familyIconPath(`class-${sheet.class}`) : null];
+    },
+    [sheetsById, faces],
+  );
+  const faceOfToken = useCallback((token: StageToken) => faceOfRef(token.refId), [faceOfRef]);
+  // A slot the DM added to the order has no token to borrow a face from.
+  const faceOfEntry = useCallback(
+    (entry: { id: string; kind: string; name: string }) => [
+      ...faceOfRef(entry.id),
+      entry.kind === "npc" ? npcPlaceholder(null, entry.name) : null,
+    ],
+    [faceOfRef],
+  );
   const [enlarged, setEnlarged] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -181,6 +227,23 @@ export function BattleMapPanel({
   const [teleporting, setTeleporting] = useState<string | null>(null);
   const [prompt, setPrompt] = useState<Prompt | null>(null);
   const [followTurn, setFollowTurn] = useState(true);
+
+  // The stage: the figure the pointer rests on (the hover plate), the target
+  // the aim is on, the order dialog, and the banner for a new turn.
+  const [plateTokenId, setPlateTokenId] = useState<string | null>(null);
+  const [aimHoverId, setAimHoverId] = useState<string | null>(null);
+  const [orderOpen, setOrderOpen] = useState(false);
+  const [endingTurn, setEndingTurn] = useState(false);
+  const turnKey = view.turn ? `${view.turn.tokenId}:${view.turn.round}` : "";
+  const [seenTurn, setSeenTurn] = useState(turnKey);
+  const [bannerKey, setBannerKey] = useState<string | null>(null);
+  // Adjusted while rendering because the prop changed: the banner plays for a
+  // turn that arrives while the board is up, never for the one already on it
+  // when the tab opens.
+  if (turnKey !== seenTurn) {
+    setSeenTurn(turnKey);
+    setBannerKey(turnKey || null);
+  }
 
   // Drawing on the board: a player's pencil toggle (the DM has the tool),
   // the shape and tone in hand, and the stroke being laid down.
@@ -355,6 +418,33 @@ export function BattleMapPanel({
     };
   }, [hover, held, view]);
 
+  // Who may be aimed at while a target is being chosen, nearest first, with
+  // the distance the table would count (a diagonal is one square).
+  const myToken = view.myTokenId ? tokensById.get(view.myTokenId) : undefined;
+  const aimTargets = useMemo(() => {
+    if (!targeting || !myToken) {
+      return [];
+    }
+    return view.tokens
+      .filter((token) => (token.kind === "enemy" || token.kind === "npc") && token.id !== myToken.id)
+      .map((token) => ({
+        token,
+        feet: Math.max(Math.abs(token.x - myToken.x), Math.abs(token.y - myToken.y)) * TILE_FEET,
+      }))
+      .sort((a, b) => a.feet - b.feet);
+  }, [targeting, myToken, view.tokens]);
+  const aim = useMemo(() => {
+    if (!targeting || !myToken) {
+      return null;
+    }
+    return {
+      fromTokenId: myToken.id,
+      targetIds: aimTargets.map((entry) => entry.token.id),
+      hoverId: aimHoverId,
+      labels: Object.fromEntries(aimTargets.map((entry) => [entry.token.id, `${entry.feet} ft`])),
+    };
+  }, [targeting, myToken, aimTargets, aimHoverId]);
+
   const overlay = useMemo<MapOverlay>(
     () => ({
       template: liveMeasure?.tiles,
@@ -362,9 +452,22 @@ export function BattleMapPanel({
       pings,
       selectedTokenId: held ?? teleporting,
       sketch: sketch ? { kind: drawKind, points: sketch, tone: drawTone } : null,
+      aim,
     }),
-    [liveMeasure, ruler, pings, held, teleporting, sketch, drawKind, drawTone],
+    [liveMeasure, ruler, pings, held, teleporting, sketch, drawKind, drawTone, aim],
   );
+
+  async function endTurn() {
+    if (endingTurn) {
+      return;
+    }
+    setEndingTurn(true);
+    try {
+      await fetch(`/api/campaigns/${campaignId}/encounter/end-turn`, { method: "POST" });
+    } finally {
+      setEndingTurn(false);
+    }
+  }
 
   // Pointer to tile: through the frame's box and the camera's transform.
   const tileAtPointer = useCallback(
@@ -502,6 +605,8 @@ export function BattleMapPanel({
       if (event.key === "Escape") {
         tokenDragRef.current = null;
         setTokenGhost(null);
+        setTargeting(null);
+        setAimHoverId(null);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -656,6 +761,7 @@ export function BattleMapPanel({
           : `I cast  at ${token.name}.`,
       );
       setTargeting(null);
+      setAimHoverId(null);
       setHudTokenId(null);
       return;
     }
@@ -665,7 +771,10 @@ export function BattleMapPanel({
     }
     if (tokenId === view.myTokenId && onCompose) {
       setHudTokenId((current) => (current === tokenId ? null : tokenId));
+      return;
     }
+    // Anybody else's figure: a tap is the phone's hover, and shows its plate.
+    setPlateTokenId((current) => (current === tokenId ? null : tokenId));
   }
 
   // Every tile takes a tap when the DM is placing something, when anyone is
@@ -676,6 +785,9 @@ export function BattleMapPanel({
     pointing || (canDirect && (tool !== "handle" || held !== null || teleporting !== null));
 
   const hudToken = hudTokenId ? tokensById.get(hudTokenId) : undefined;
+  const plateToken = plateTokenId ? tokensById.get(plateTokenId) : undefined;
+  const myTurn = Boolean(view.turn && view.myTokenId && view.turn.tokenId === view.myTokenId);
+  const mySheet = myToken ? sheetsById.get(myToken.refId) : undefined;
   const hudActions: HudAction[] = useMemo(() => {
     if (!hudToken) {
       return [];
@@ -751,7 +863,9 @@ export function BattleMapPanel({
       ref={frameRef}
       tabIndex={0}
       aria-label="Board view. Scroll or pinch to zoom, arrow keys to pan."
-      className="relative overflow-hidden rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50"
+      // A container, so the stage chrome sizes to the board it sits on (the
+      // side panel, a phone, the enlarged dialog) and not to the window.
+      className="@container relative overflow-hidden rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50"
       {...cam.frameProps}
       onPointerDownCapture={onFramePointerDownCapture}
       onPointerMove={(event) => {
@@ -787,7 +901,13 @@ export function BattleMapPanel({
               ? (x, y) => setHover(y === null ? null : { x, y })
               : undefined
           }
-          onTokenClick={canDirect || (view.myTokenId && onCompose) ? handleToken : undefined}
+          onTokenClick={handleToken}
+          onTokenHover={(tokenId) => {
+            setPlateTokenId(tokenId);
+            if (targeting) {
+              setAimHoverId(tokenId && aimTargets.some((entry) => entry.token.id === tokenId) ? tokenId : null);
+            }
+          }}
           everyTileClickable={everyTileClickable}
           overlay={overlay}
           fx={fx}
@@ -796,7 +916,7 @@ export function BattleMapPanel({
         />
         {tokenGhost ? (
           <div
-            className="pointer-events-none absolute z-20 flex items-center justify-center rounded-full border-2 border-amber-300 bg-stone-950/70 text-[10px] text-amber-100 shadow-glow-gold"
+            className="pointer-events-none absolute z-20 overflow-hidden rounded-full border-2 border-amber-300 bg-stone-950/70 shadow-glow-gold"
             style={{
               left: `${(tokenGhost.x / view.width) * 100}%`,
               top: `${(tokenGhost.y / view.height) * 100}%`,
@@ -805,7 +925,12 @@ export function BattleMapPanel({
               opacity: 0.7,
             }}
           >
-            {tokensById.get(tokenGhost.tokenId)?.name.charAt(0).toUpperCase() ?? ""}
+            {/* The ghost wears the figure's face, like the figure does. */}
+            <TokenFace
+              candidates={faceOfRef(tokensById.get(tokenGhost.tokenId)?.refId ?? "")}
+              name={tokensById.get(tokenGhost.tokenId)?.name ?? ""}
+              className="size-full text-[10px]"
+            />
           </div>
         ) : null}
         {drawActive ? (
@@ -837,98 +962,117 @@ export function BattleMapPanel({
             onClose={() => {
               setHudTokenId(null);
               setTargeting(null);
+              setAimHoverId(null);
               setTeleporting(null);
             }}
           />
         ) : null}
+        {/* What the enemies mean to do. Only while the board is quiet: an aim
+            or an effect in flight already owns the same space. */}
+        {!scene && !targeting && !hudToken && fx.length === 0 ? (
+          <IntentLayer
+            intents={intents}
+            tokens={view.tokens}
+            footprints={view.tokenFootprint}
+            boardWidth={view.width}
+            boardHeight={view.height}
+            round={view.round}
+            faceOf={faceOfToken}
+          />
+        ) : null}
+        {plateToken && !hudToken && !tokenGhost && !drawActive ? (
+          <TokenPlate
+            token={plateToken}
+            boardWidth={view.width}
+            boardHeight={view.height}
+            footprint={view.tokenFootprint[plateToken.id] ?? 1}
+            face={faceOfToken(plateToken)}
+            health={view.tokenHealth[plateToken.id]}
+            conditions={view.tokenConditions[plateToken.id]}
+          />
+        ) : null}
       </div>
-      {/* Camera controls: corner buttons for everyone, the DM's pull and
-          lock, and the escape hatch when a lock has held too long. */}
-      <div className="absolute bottom-2 right-2 z-10 flex flex-col gap-1">
-        <button
-          type="button"
-          onClick={cam.zoomIn}
-          aria-label="Zoom in"
-          className="rounded-md border border-stone-700/80 bg-stone-950/85 p-1 text-stone-300 hover:text-stone-100"
-        >
-          <ZoomIn className="size-4" />
-        </button>
-        <button
-          type="button"
-          onClick={cam.zoomOut}
-          aria-label="Zoom out"
-          className="rounded-md border border-stone-700/80 bg-stone-950/85 p-1 text-stone-300 hover:text-stone-100"
-        >
-          <ZoomOut className="size-4" />
-        </button>
-        <button
-          type="button"
-          onClick={cam.reset}
-          aria-label="Fit the board"
-          className="rounded-md border border-stone-700/80 bg-stone-950/85 p-1 text-stone-300 hover:text-stone-100"
-        >
-          <Maximize2 className="size-4" />
-        </button>
-        {!canDirect && !scene ? (
+      {/* The chrome of the stage (BoardChrome.tsx), fixed to the frame so it
+          stays put while the camera moves under it. */}
+      {!scene && encounter ? (
+        <InitiativeRail
+          encounter={encounter}
+          round={view.round}
+          faceOf={faceOfEntry}
+          onOpen={() => setOrderOpen(true)}
+        />
+      ) : null}
+      {!scene ? (
+        <TurnHud
+          actorName={view.currentTurnName}
+          mine={myTurn}
+          budget={turnBudget}
+          speedLeftFeet={myTurn ? view.budgetLeft * TILE_FEET : null}
+          ac={mySheet?.ac ?? null}
+          hp={mySheet ? { current: mySheet.currentHp, max: mySheet.maxHp } : null}
+        />
+      ) : null}
+      {!scene && bannerKey ? (
+        <TurnBanner key={bannerKey} text={myTurn ? "Your turn" : view.currentTurnName} mine={myTurn} />
+      ) : null}
+      {fieldRoll ? <FieldDie label={fieldRoll.label} /> : null}
+      {targeting ? (
+        <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2.5 rounded-[10px] border border-[rgba(224,112,58,0.5)] bg-[rgba(13,11,28,0.94)] px-3 py-1.5 shadow-elev-2">
+          <span className="whitespace-nowrap font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-[#ffbe8f]">
+            {targeting === "attack" ? "Attack" : "Cast"} · pick a target
+          </span>
           <button
             type="button"
-            onClick={() => setFollowTurn((current) => !current)}
-            aria-pressed={followTurn}
-            title="Follow the turn"
-            className={cn(
-              "rounded-md border p-1",
-              followTurn
-                ? "border-amber-600/80 bg-amber-950/70 text-amber-200"
-                : "border-stone-700/80 bg-stone-950/85 text-stone-400 hover:text-stone-100",
-            )}
+            onClick={() => {
+              setTargeting(null);
+              setAimHoverId(null);
+            }}
+            aria-label="Cancel aiming"
+            className="motion-press rounded-md border border-[rgba(107,99,148,0.5)] bg-[rgba(21,18,41,0.8)] px-2 py-0.5 text-[#aeaac6] hover:text-[#e9e6f4]"
           >
-            <LocateFixed className="size-4" />
+            {/* The size sits on a span: globals.css resets a button's own font. */}
+            <span className="font-mono text-[11px]">esc</span>
           </button>
-        ) : null}
-        {canDirect ? (
-          <>
-            <button
-              type="button"
-              title="Pull everyone here"
-              aria-label="Pull everyone to this view"
-              onClick={() => {
+        </div>
+      ) : null}
+      {myTurn && !scene && !targeting ? (
+        <button
+          type="button"
+          onClick={() => void endTurn()}
+          disabled={endingTurn}
+          className="motion-press absolute bottom-2 right-11 z-10 rounded-lg border border-[rgba(107,99,148,0.5)] bg-[rgba(13,11,28,0.9)] px-3 py-1.5 text-[#e9e6f4] shadow-elev-1 hover:border-[rgba(212,171,58,0.6)] hover:text-[#f9ecc8] disabled:opacity-50"
+        >
+          <span className="block font-display text-[10px] font-semibold uppercase tracking-[0.16em]">End turn</span>
+        </button>
+      ) : null}
+      <span className="sr-only" aria-live="polite">
+        {!scene && view.currentTurnName ? (myTurn ? "Your turn." : `${view.currentTurnName}'s turn.`) : ""}
+      </span>
+      {/* Camera controls: corner buttons for everyone, the DM's pull and
+          lock, and the escape hatch when a lock has held too long. */}
+      <BoardCameraControls
+        onZoomIn={cam.zoomIn}
+        onZoomOut={cam.zoomOut}
+        onFit={cam.reset}
+        followTurn={!canDirect && !scene ? followTurn : null}
+        onFollowTurn={() => setFollowTurn((current) => !current)}
+        onDirect={
+          canDirect
+            ? (mode) => {
+                if (mode === "free") {
+                  void post("/dm/board", { do: "camera", mode: "free" });
+                  return;
+                }
                 const here = cam.describe();
                 if (here) {
-                  void post("/dm/board", { do: "camera", mode: "pull", ...here });
+                  void post("/dm/board", { do: "camera", mode, ...here });
                 }
-              }}
-              className="rounded-md border border-amber-700/70 bg-stone-950/85 p-1 text-amber-200 hover:bg-amber-950/60"
-            >
-              <Users className="size-4" />
-            </button>
-            <button
-              type="button"
-              title="Lock everyone to my view"
-              aria-label="Lock everyone to this view"
-              onClick={() => {
-                const here = cam.describe();
-                if (here) {
-                  void post("/dm/board", { do: "camera", mode: "lock", ...here });
-                }
-              }}
-              className="rounded-md border border-stone-700/80 bg-stone-950/85 p-1 text-stone-300 hover:text-stone-100"
-            >
-              <Lock className="size-4" />
-            </button>
-            <button
-              type="button"
-              title="Free everyone's view"
-              aria-label="Free everyone's view"
-              onClick={() => void post("/dm/board", { do: "camera", mode: "free" })}
-              className="rounded-md border border-stone-700/80 bg-stone-950/85 p-1 text-stone-300 hover:text-stone-100"
-            >
-              <Unlock className="size-4" />
-            </button>
-          </>
-        ) : null}
-      </div>
+              }
+            : undefined
+        }
+      />
       {cam.locked ? (
-        <div className="absolute left-2 top-2 z-10 flex items-center gap-2 rounded-md border border-amber-800/60 bg-stone-950/90 px-2 py-1 text-[11px] text-amber-200 shadow-elev-1">
+        <div className="absolute bottom-2 left-2 z-10 flex items-center gap-2 rounded-md border border-amber-800/60 bg-stone-950/90 px-2 py-1 text-[11px] text-amber-200 shadow-elev-1">
           <Lock className="size-3" />
           The DM is steering the view
           {cam.canRelease ? (
@@ -1023,9 +1167,9 @@ export function BattleMapPanel({
         />
       ) : null}
       {drawActive ? (
-        <div className="flex flex-wrap items-center gap-1">
+        <div data-pill-group="" className="flex flex-wrap items-center gap-1">
           {DRAWING_KINDS.map((kind) => (
-            <button
+            <button data-on={drawKind === kind ? "" : undefined}
               key={kind}
               type="button"
               aria-pressed={drawKind === kind}
@@ -1113,17 +1257,37 @@ export function BattleMapPanel({
                   : "You have no token on this field."}
       </p>
       {error ? <p className="text-[11px] text-red-400">{error}</p> : null}
+      {targeting ? (
+        <TargetChips
+          targets={aimTargets.map((entry) => ({
+            token: entry.token,
+            face: faceOfToken(entry.token),
+            health: view.tokenHealth[entry.token.id],
+            feet: entry.feet,
+          }))}
+          onPick={handleToken}
+          onHover={setAimHoverId}
+        />
+      ) : null}
       {encounter?.orderReady ? (
         <ol className="flex flex-wrap gap-1 text-[11px] text-stone-400">
           {encounter.order.map((entry, index) => (
             <li
               key={`${entry.id}-${index}`}
-              className={
-                index === encounter.turnIndex
-                  ? "rounded bg-amber-950/60 px-1.5 py-0.5 font-medium text-amber-300"
-                  : "rounded bg-stone-900 px-1.5 py-0.5"
-              }
+              className={cn(
+                "flex items-center gap-1 rounded-full py-0.5 pl-0.5 pr-2",
+                index === encounter.turnIndex ? "bg-amber-950/60 font-medium text-amber-300" : "bg-stone-900",
+              )}
             >
+              <TokenFace
+                candidates={faceOfEntry(entry)}
+                name={entry.name}
+                enemy={entry.kind === "enemy"}
+                className={cn(
+                  "size-5 rounded-full border",
+                  index === encounter.turnIndex ? "border-amber-500" : "border-stone-700",
+                )}
+              />
               {entry.name}
               {entry.hidden ? " (hidden)" : ""}
             </li>
@@ -1148,6 +1312,15 @@ export function BattleMapPanel({
             setPrompt(null);
           }
         }}
+      />
+      <BoardOrderDialog
+        open={orderOpen}
+        onOpenChange={setOrderOpen}
+        campaignId={campaignId}
+        encounter={encounter}
+        round={view.round}
+        canDirect={canDirect}
+        faceOf={faceOfEntry}
       />
       <Dialog.Root open={enlarged} onOpenChange={setEnlarged}>
         <Dialog.Portal>

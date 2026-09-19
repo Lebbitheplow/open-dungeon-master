@@ -1,10 +1,13 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { Check, Loader2, ShieldQuestion, X } from "lucide-react";
+import { Check, Loader2, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { KitButton, PanelError } from "./PanelKit";
 import type { CampaignMessage } from "@/lib/db/messages";
 import {
   LORE_CATEGORY_LABELS,
@@ -116,7 +119,7 @@ export function LoreCheckDialog({
   return (
     <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/70" />
+        <Dialog.Overlay className="dialog-overlay fixed inset-0 z-50 bg-[#05030d]/70 backdrop-blur-sm" />
         <Dialog.Content
           className={cn(
             ui.dialog,
@@ -124,45 +127,42 @@ export function LoreCheckDialog({
           )}
         >
           <div className="mb-3 flex items-center justify-between">
-            <Dialog.Title className="flex items-center gap-2 font-display text-lg tracking-wide text-amber-50">
-              <ShieldQuestion className="size-4 text-amber-300" /> Lore check
+            <Dialog.Title className="flex items-center gap-2 font-display text-lg tracking-wide">
+              <GameIcon icon={{ kind: "glyph", key: "system-lore" }} size="size-7" />
+              <span className="gold-title">Lore check</span>
             </Dialog.Title>
-            <Dialog.Close className="text-stone-500 hover:text-stone-300">
+            <Dialog.Close aria-label="Close" className="pk-tap rounded p-1 text-stone-500 hover:text-amber-200 motion-nudge">
               <X className="size-4" />
             </Dialog.Close>
           </div>
 
-          <blockquote className="mb-3 max-h-32 overflow-y-auto rounded-lg border border-stone-800 bg-stone-950/40 p-2.5 font-serif text-xs italic leading-5 text-stone-400">
+          <blockquote className="panel mb-3 max-h-32 overflow-y-auto rounded-lg p-2.5 font-serif text-xs italic leading-5 text-stone-400">
             {excerpt.slice(0, 600)}
             {excerpt.length > 600 ? "..." : ""}
           </blockquote>
 
           {!result ? (
-            <div className="space-y-2">
+            <div className="reveal space-y-2">
               <p className="text-xs text-stone-400">
                 What seems off? The server checks the passage against everything on
                 record: facts, chapter archives, past scenes, and NPC states.
               </p>
-              <div className="flex flex-wrap gap-1.5">
+              <div data-pill-group="" role="group" aria-label="What seems off" className="flex flex-wrap gap-1.5">
                 {LORE_CHECK_CATEGORIES.map((value) => (
-                  <button
+                  <button data-on={category === value ? "" : undefined}
                     key={value}
                     type="button"
                     disabled={running}
                     onClick={() => run(value)}
-                    className={cn(
-                      "rounded-full border px-2.5 py-1 text-[11px]",
-                      category === value
-                        ? "border-amber-700 bg-amber-950/40 text-amber-200"
-                        : "border-stone-700 text-stone-400 hover:text-stone-200",
-                    )}
+                    aria-pressed={category === value}
+                    className="pk-pill pk-tap motion-press"
                   >
                     {LORE_CATEGORY_LABELS[value]}
                   </button>
                 ))}
               </div>
               {running ? (
-                <p className="flex items-center gap-2 text-xs text-stone-500">
+                <p role="status" className="reveal flex items-center gap-2 text-xs text-stone-500">
                   <Loader2 className="size-3.5 animate-spin" />
                   Cross-referencing the record (queued behind the DM)...
                 </p>
@@ -172,26 +172,24 @@ export function LoreCheckDialog({
             <div className="space-y-3">
               <p
                 className={cn(
-                  "rounded-lg border px-2.5 py-1.5 text-xs font-medium",
+                  "motion-pop rounded-lg border px-2.5 py-1.5 text-xs font-medium",
                   VERDICT_STYLES[result.verdict],
                 )}
               >
                 {VERDICT_LABELS[result.verdict]}
               </p>
               {result.explanation ? (
-                <p className="text-xs leading-5 text-stone-300">{result.explanation}</p>
+                <p className="reveal text-xs leading-5 text-stone-300">{result.explanation}</p>
               ) : null}
               {result.citations.length ? (
-                <div className="space-y-1">
-                  <p className="text-[10px] font-medium uppercase tracking-wide text-stone-500">
-                    Evidence
-                  </p>
+                <div className="reveal space-y-1">
+                  <SectionHead title="Evidence" glyph="tab-log" level="h4" aside={result.citations.length} />
                   {result.citations.map((citation, index) => (
                     <p
                       key={index}
-                      className="rounded border border-stone-800 bg-stone-950/40 p-2 text-[11px] leading-4 text-stone-400"
+                      className="panel rounded-md p-2 text-[11px] leading-4 text-stone-400"
                     >
-                      <span className="mr-1 rounded bg-stone-800 px-1 text-[9px] uppercase text-stone-500">
+                      <span className="eyebrow mr-1 rounded bg-stone-800 px-1 text-[9px] text-amber-300/80">
                         {citation.kind}
                         {citation.ref ? ` ${citation.ref}` : ""}
                       </span>
@@ -201,33 +199,22 @@ export function LoreCheckDialog({
                 </div>
               ) : null}
               {result.rewrite ? (
-                <div className="space-y-1.5">
-                  <p className="text-[10px] font-medium uppercase tracking-wide text-stone-500">
-                    Suggested rewrite
-                  </p>
-                  <p className="whitespace-pre-wrap rounded-lg border border-stone-800 bg-stone-950/40 p-2.5 font-serif text-xs leading-5 text-stone-200">
+                <div className="reveal space-y-1.5">
+                  <SectionHead title="Suggested rewrite" glyph="tab-notes" level="h4" />
+                  <p className="panel whitespace-pre-wrap rounded-lg p-2.5 font-serif text-xs leading-5 text-stone-200">
                     {result.rewrite}
                   </p>
                   {accepted ? (
-                    <p className="flex items-center gap-1.5 text-xs text-emerald-400">
+                    <p className="reveal flex items-center gap-1.5 text-xs text-emerald-400">
                       <Check className="size-3.5" /> Applied; the message has been updated.
                     </p>
                   ) : steersStory && message.authorType === "dm" ? (
-                    <button
-                      type="button"
-                      disabled={accepting}
-                      onClick={accept}
-                      className="flex items-center gap-1.5 rounded border border-emerald-900 px-2.5 py-1 text-xs text-emerald-400 hover:bg-emerald-950/50 disabled:opacity-50"
-                    >
-                      {accepting ? (
-                        <Loader2 className="size-3.5 animate-spin" />
-                      ) : (
-                        <Check className="size-3.5" />
-                      )}
+                    <KitButton tone="primary" disabled={accepting} busy={accepting} onClick={accept}>
+                      {accepting ? null : <Check className="size-3.5" />}
                       Accept rewrite
-                    </button>
+                    </KitButton>
                   ) : (
-                    <p className="text-[11px] text-stone-600">
+                    <p className="text-xs text-stone-500">
                       {message.authorType === "dm"
                         ? "The party lead can accept this rewrite."
                         : "Only DM narration can be rewritten."}
@@ -235,20 +222,19 @@ export function LoreCheckDialog({
                   )}
                 </div>
               ) : null}
-              <button
-                type="button"
+              <KitButton
+                tone="link"
                 onClick={() => {
                   setResult(null);
                   setAccepted(false);
                   setCategory(null);
                 }}
-                className="text-[11px] text-stone-500 hover:text-stone-300"
               >
                 Check a different category
-              </button>
+              </KitButton>
             </div>
           )}
-          {error ? <p className="mt-2 text-xs text-red-400">{error}</p> : null}
+          {error ? <PanelError className="mt-2">{error}</PanelError> : null}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

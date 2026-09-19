@@ -1,6 +1,7 @@
 "use client";
 
 import { Trash2 } from "lucide-react";
+import { Slider } from "@/components/ui/Slider";
 import { PERSONALITY_AXES } from "@/lib/dm/npc-logic";
 import {
   AXIS_LABELS,
@@ -37,19 +38,19 @@ export function PersonalitySliders({
       {PERSONALITY_AXES.map((axis) => (
         <label key={axis} className="flex items-center gap-2 text-[11px] text-stone-500">
           <span className="w-16 shrink-0">{AXIS_LABELS[axis].name}</span>
-          <input
-            type="range"
+          <Slider
             min={-3}
             max={3}
             step={1}
             value={personality[axis] ?? 0}
-            onChange={(event) =>
+            onChange={(next) =>
               onChange({
                 ...draft,
-                personality: { ...personality, [axis]: Number(event.target.value) },
+                personality: { ...personality, [axis]: next },
               })
             }
-            className="flex-1 accent-amber-500"
+            label={AXIS_LABELS[axis].name}
+            className="min-w-0 flex-1"
           />
           <span className="w-24 shrink-0 text-right text-stone-400">
             {describeAxis(axis, personality[axis] ?? 0)}
@@ -135,24 +136,19 @@ export function RelationEditor({
             <span className="w-24 shrink-0 truncate text-xs text-stone-300">
               {relation.npcName}
             </span>
-            <input
-              type="range"
+            <Slider
               min={-3}
               max={3}
               step={1}
               value={relation.score}
-              onChange={(event) =>
+              onChange={(next) =>
                 onChange({
                   ...draft,
-                  relations: setRelation(
-                    draft.relations,
-                    relation.npcName,
-                    Number(event.target.value),
-                    relation.note,
-                  ),
+                  relations: setRelation(draft.relations, relation.npcName, next, relation.note),
                 })
               }
-              className="w-24 accent-amber-500"
+              label={`How they stand with ${relation.npcName}`}
+              className="w-24 shrink-0"
             />
             <span className="w-20 shrink-0 text-[11px] text-stone-400">
               {describeRelation(relation.score)}

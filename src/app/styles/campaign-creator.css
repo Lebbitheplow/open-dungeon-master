@@ -1,0 +1,695 @@
+/* The campaign creator (docs/visual-overhaul-plan.md section 8): world
+   portals, the table sheet and the cover. Everything is prefixed cc- and
+   lives in the components layer so a utility on the same element still wins.
+
+   Entrances are scoped under .cc-live, which a step wears only while it is
+   the one on screen: the wizard mounts every step at once, and a stagger
+   that plays off screen is a stagger nobody saw. */
+
+@keyframes cc-card-rise {
+  from { opacity: 0; translate: 0 14px; scale: 0.96; }
+  to { opacity: 1; translate: 0 0; scale: 1; }
+}
+@keyframes cc-pill-pop {
+  0% { opacity: 0; scale: 0.4; rotate: -12deg; }
+  60% { opacity: 1; scale: 1.15; }
+  100% { opacity: 1; scale: 1; rotate: -6deg; }
+}
+@keyframes cc-typeline {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+@keyframes cc-caret-walk {
+  from { left: 0; }
+  to { left: 100%; }
+}
+@keyframes cc-caret {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+@keyframes cc-sweep {
+  0% { opacity: 0; transform: translateX(-110%); }
+  30% { opacity: 0.85; }
+  100% { opacity: 0; transform: translateX(110%); }
+}
+@keyframes cc-premise-in {
+  from { opacity: 0; translate: 0 6px; }
+  to { opacity: 1; translate: 0 0; }
+}
+@keyframes cc-line-in {
+  from { opacity: 0; translate: -8px 0; }
+  to { opacity: 1; translate: 0 0; }
+}
+@keyframes cc-count-pop {
+  0% { scale: 1; }
+  40% { scale: 1.28; }
+  100% { scale: 1; }
+}
+@keyframes cc-row-reveal {
+  from { opacity: 0; translate: 0 -6px; scale: 0.97; }
+  to { opacity: 1; translate: 0 0; scale: 1; }
+}
+@keyframes cc-tick-in {
+  0% { opacity: 0; scale: 0.2; rotate: -20deg; }
+  60% { opacity: 1; scale: 1.2; }
+  100% { opacity: 1; scale: 1; rotate: 0deg; }
+}
+@keyframes cc-cover-assemble {
+  0% { opacity: 0; scale: 0.9; rotate: -1.5deg; }
+  60% { opacity: 1; }
+  100% { opacity: 1; scale: 1; rotate: 0deg; }
+}
+@keyframes cc-stamp-down {
+  0% { opacity: 0; scale: 2.4; rotate: -14deg; }
+  55% { opacity: 1; }
+  100% { opacity: 1; scale: 1; rotate: -7deg; }
+}
+
+@layer components {
+  /* The wizard's step wipe swaps the step at 300 ms and the pane is dark
+     until about 500, so an entrance waits that long or nobody sees it start.
+     Fill is backwards throughout: a lingering translate or scale would make
+     the element a containing block for anything fixed inside it. */
+  .cc-live { --cc-wipe: 200ms; }
+
+  /* ---- shared furniture ---- */
+  .cc-eyebrow {
+    font-family: var(--font-display), Georgia, serif;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    font-size: 9px;
+    font-weight: 600;
+    color: color-mix(in srgb, var(--color-amber-500) 80%, transparent);
+  }
+  .cc-note {
+    font-family: var(--font-mono), monospace;
+    font-size: 9.5px;
+    color: var(--color-stone-500);
+  }
+  .cc-prose {
+    font-family: var(--font-serif);
+  }
+  .cc-field {
+    position: relative;
+    overflow: hidden;
+    padding: 12px 13px;
+    border: 1px solid color-mix(in srgb, var(--color-stone-700) 60%, transparent);
+    border-radius: 11px;
+    background: color-mix(in srgb, var(--color-stone-950) 60%, transparent);
+    transition: border-color var(--dur-move) var(--ease-snap);
+  }
+  .cc-field[data-written="true"],
+  .cc-field:focus-within {
+    border-color: color-mix(in srgb, var(--color-amber-500) 45%, transparent);
+  }
+  .cc-field-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+  /* A field inside a cc-field card: the card is the frame, so the control
+     itself goes bare. globals.css makes every input inherit its font, so the
+     face is set on the wrapper and the control picks it up from there. */
+  .cc-serif {
+    font-family: var(--font-serif);
+    font-size: 14px;
+    line-height: 1.4;
+  }
+  @media (max-width: 767px) {
+    /* Inputs are 16px on a phone so iOS does not zoom; the type-in overlay
+       has to match the input it covers. */
+    .cc-serif { font-size: 16px; }
+  }
+  .cc-bare {
+    display: block;
+    width: 100%;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    outline: none;
+    resize: vertical;
+    color: var(--color-stone-100);
+  }
+  .cc-bare::placeholder { color: var(--color-stone-500); }
+
+  /* ---- world portals ---- */
+  .cc-portal-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    /* Room for the Chosen badge, the hover lift and the chosen card's
+       growth, all of which would otherwise be clipped by the step scroller. */
+    padding: 10px 8px 4px;
+  }
+  @media (min-width: 640px) {
+    .cc-portal-grid {
+      grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+      gap: 11px;
+    }
+  }
+  .cc-portal-slot { position: relative; min-width: 0; }
+  .cc-live .cc-portal-slot { animation: cc-card-rise var(--dur-move) var(--ease-settle) backwards; animation-delay: calc(var(--cc-wipe) + var(--cc-delay, 0ms)); }
+
+  .cc-portal {
+    position: relative;
+    display: flex;
+    width: 100%;
+    height: 100%;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
+    border: 1px solid color-mix(in srgb, var(--color-stone-600) 45%, transparent);
+    border-radius: 12px;
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-stone-700) 42%, transparent),
+      color-mix(in srgb, var(--color-stone-950) 90%, transparent)
+    );
+    box-shadow: 0 2px 6px rgba(4, 2, 12, 0.3), 0 10px 26px rgba(4, 2, 12, 0.25);
+  }
+  /* motion-card promotes itself for the tilt; here that would rasterise the
+     chosen card once and then stretch it, which blurs its text. Two classes
+     so it outranks the rule in globals.css wherever this file is imported. */
+  .cc-portal.motion-card { will-change: auto; }
+  .cc-portal:focus-visible {
+    outline: 2px solid var(--color-amber-400);
+    outline-offset: 2px;
+  }
+  /* The mockup also grows the chosen card by 2%. A resting scale resamples
+     the card's text and leaves it softer than its neighbours, so the choice
+     is carried by the frame, the glow and the badge instead. */
+  .cc-portal.motion-card[aria-pressed="true"] {
+    border: 2px solid #f4d47a;
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-amber-500) 20%, transparent),
+      color-mix(in srgb, var(--color-stone-950) 90%, transparent)
+    );
+    box-shadow:
+      0 0 16px rgba(212, 171, 58, 0.4),
+      0 0 44px rgba(212, 171, 58, 0.14),
+      0 14px 34px rgba(4, 2, 12, 0.35);
+  }
+
+  /* The plate is painted dark in both themes, so what sits on it keeps its
+     night colours under the parchment theme too. */
+  .cc-plate {
+    position: relative;
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    background-color: #12101f;
+    background-size: cover;
+    background-position: center;
+  }
+  .cc-plate::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, transparent 40%, rgba(10, 8, 23, 0.9));
+  }
+  /* The light that follows the cursor, from the pointer module's variables. */
+  .cc-plate::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background: radial-gradient(180px circle at var(--mx, 50%) var(--my, 0%), rgba(244, 224, 166, 0.22), transparent 62%);
+    opacity: var(--sheen, 0);
+    transition: opacity var(--dur-quick) var(--ease-snap);
+  }
+  .cc-plate-name {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2;
+    padding: 8px 10px;
+    font-family: var(--font-display), Georgia, serif;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.15;
+    color: #f9ecc8;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+  }
+  .cc-humans {
+    position: absolute;
+    right: 7px;
+    top: 7px;
+    z-index: 2;
+    border-radius: 999px;
+    border: 1px solid rgba(127, 184, 230, 0.5);
+    background: rgba(8, 6, 18, 0.82);
+    padding: 1px 7px;
+    font-family: var(--font-mono), monospace;
+    font-size: 8.5px;
+    color: #9fe3f5;
+  }
+  .cc-portal-body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 5px;
+    padding: 9px 10px 10px;
+  }
+  .cc-portal-blurb {
+    font-family: var(--font-serif);
+    font-size: 12.5px;
+    line-height: 1.4;
+    color: var(--color-stone-300);
+  }
+  .cc-portal-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px 6px;
+  }
+  .cc-chip {
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--color-stone-600) 50%, transparent);
+    background: color-mix(in srgb, var(--color-stone-950) 60%, transparent);
+    padding: 1px 6px;
+    font-family: var(--font-mono), monospace;
+    font-size: 8.5px;
+    text-transform: capitalize;
+    color: var(--color-stone-400);
+  }
+  .cc-cta {
+    font-family: var(--font-mono), monospace;
+    font-size: 8px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-stone-500);
+  }
+  .cc-portal[aria-pressed="true"] .cc-cta { color: var(--color-amber-300); }
+  .cc-chosen {
+    position: absolute;
+    left: -7px;
+    top: -8px;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px 2px 5px;
+    border: 1px solid #f4d47a;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #f9ecc8, #e3c15c);
+    box-shadow: 0 2px 10px rgba(212, 171, 58, 0.5);
+    font-family: var(--font-display), Georgia, serif;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-size: 8px;
+    font-weight: 700;
+    white-space: nowrap;
+    color: #2b2008;
+    rotate: -6deg;
+    pointer-events: none;
+    animation: cc-pill-pop var(--dur-beat) var(--ease-spring) backwards;
+  }
+
+  /* ---- the theme that types itself ---- */
+  .cc-type-row { position: relative; min-height: 20px; }
+  .cc-typing .cc-bare { color: transparent; caret-color: transparent; }
+  .cc-typed {
+    position: absolute;
+    left: 0;
+    top: 0;
+    max-width: 100%;
+    pointer-events: none;
+    color: var(--color-stone-100);
+  }
+  /* A clip over text that is already there, not a render per character, so
+     the reveal costs nothing. --cc-type-ms and --cc-type-steps come from
+     typeInPlan() at 22 ms a character. */
+  .cc-typed > span {
+    display: block;
+    overflow: hidden;
+    white-space: nowrap;
+    animation: cc-typeline var(--cc-type-ms, 1ms) steps(var(--cc-type-steps, 1), end) both;
+  }
+  .cc-typed::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 100%;
+    width: 1.5px;
+    height: 15px;
+    background: var(--color-amber-300);
+    animation:
+      cc-caret-walk var(--cc-type-ms, 1ms) steps(var(--cc-type-steps, 1), end) both,
+      cc-caret 900ms steps(1, end) infinite;
+  }
+  [data-effects="low"] .cc-typed::after {
+    animation: cc-caret-walk var(--cc-type-ms, 1ms) steps(var(--cc-type-steps, 1), end) both;
+  }
+  .cc-sweep {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    background: linear-gradient(105deg, transparent, rgba(249, 236, 200, 0.16), transparent);
+  }
+  .cc-typing .cc-sweep { animation: cc-sweep var(--cc-sweep-ms, 1ms) var(--ease-drift) both; }
+  .cc-flavor { animation: cc-premise-in var(--dur-move) var(--ease-snap) backwards; }
+  .cc-facts { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+  .cc-fact {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 5px;
+    min-width: 0;
+    border-radius: 8px;
+    border: 1px solid color-mix(in srgb, var(--color-stone-700) 55%, transparent);
+    background: color-mix(in srgb, var(--color-stone-950) 50%, transparent);
+    padding: 3px 8px;
+    animation: cc-line-in var(--dur-move) var(--ease-snap) backwards;
+  }
+  .cc-fact-key {
+    font-family: var(--font-display), Georgia, serif;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-size: 8px;
+    font-weight: 600;
+    color: var(--color-stone-500);
+  }
+  .cc-fact-value {
+    font-family: var(--font-mono), monospace;
+    font-size: 10px;
+    color: var(--color-stone-200);
+  }
+  .cc-custom {
+    padding: 12px 13px;
+    border: 1px dashed color-mix(in srgb, var(--color-amber-500) 40%, transparent);
+    border-radius: 11px;
+    background: color-mix(in srgb, var(--color-amber-950) 18%, transparent);
+    animation: cc-row-reveal var(--dur-move) var(--ease-spring) backwards;
+  }
+
+  /* ---- the table sheet ---- */
+  .cc-counter {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 12px;
+    border: 1px solid color-mix(in srgb, var(--color-amber-500) 40%, transparent);
+    border-radius: 11px;
+    background: color-mix(in srgb, var(--color-amber-950) 28%, transparent);
+  }
+  .cc-count {
+    display: inline-block;
+    min-width: 1.2em;
+    text-align: center;
+    font-family: var(--font-display), Georgia, serif;
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--color-amber-100);
+  }
+  .cc-group-head { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+  .cc-group-rule {
+    height: 1px;
+    flex: 1 1 auto;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--color-amber-500) 28%, transparent), transparent);
+  }
+  .cc-sheet-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  @media (min-width: 640px) {
+    .cc-sheet-grid { grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr)); }
+  }
+  .cc-row-slot { position: relative; display: flex; min-width: 0; }
+  .cc-row-slot[data-dependent="true"] { animation: cc-row-reveal var(--dur-move) var(--ease-spring) backwards; }
+  .cc-row {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: flex-start;
+    gap: 9px;
+    min-width: 0;
+    padding: 9px 11px;
+    text-align: left;
+    cursor: pointer;
+    border: 1px solid color-mix(in srgb, var(--color-stone-700) 60%, transparent);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--color-stone-950) 55%, transparent);
+    color: var(--color-amber-500);
+  }
+  .cc-row:hover:not(:disabled) { --lift: -2px; }
+  .cc-row:focus-visible { outline: 2px solid var(--color-amber-400); outline-offset: 2px; }
+  .cc-row[aria-pressed="true"] {
+    border-color: color-mix(in srgb, var(--color-amber-500) 45%, transparent);
+    background: color-mix(in srgb, var(--color-amber-500) 10%, transparent);
+    color: var(--color-stone-500);
+  }
+  .cc-row:disabled { cursor: not-allowed; opacity: 0.5; }
+  /* The ripple is painted in currentColor; this keeps it a tint, not a flood. */
+  .cc-row.motion-press::after { opacity: 0; filter: opacity(0.35); }
+  .cc-row-label {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 500;
+    line-height: 1.25;
+    color: var(--color-stone-400);
+  }
+  .cc-row-hint {
+    display: block;
+    margin-top: 1px;
+    font-family: var(--font-serif);
+    font-size: 11.5px;
+    line-height: 1.35;
+    color: var(--color-stone-500);
+  }
+  .cc-row[aria-pressed="true"] .cc-row-label { color: var(--color-amber-200); }
+  .cc-row[aria-pressed="true"] .cc-row-hint { color: var(--color-stone-300); }
+
+  /* The 30 by 17 switch. --knob is 0, 0.5 or 1; the middle is the tri-state. */
+  .cc-switch {
+    position: relative;
+    display: block;
+    flex: none;
+    width: 30px;
+    height: 17px;
+    margin-top: 1px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--color-stone-600) 60%, transparent);
+    background: color-mix(in srgb, var(--color-stone-950) 90%, transparent);
+    transition:
+      background var(--dur-move) var(--ease-snap),
+      border-color var(--dur-move) var(--ease-snap);
+  }
+  .cc-switch::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 11px;
+    height: 11px;
+    border-radius: 999px;
+    background: var(--color-stone-600);
+    box-shadow: 0 1px 3px rgba(4, 2, 12, 0.7);
+    translate: calc(var(--knob, 0) * 13px) 0;
+    transition:
+      translate 320ms var(--ease-spring),
+      background var(--dur-move) var(--ease-snap);
+  }
+  .cc-row[aria-pressed="true"] .cc-switch {
+    border-color: color-mix(in srgb, var(--color-amber-500) 65%, transparent);
+    background: color-mix(in srgb, var(--color-amber-950) 95%, transparent);
+  }
+  .cc-row[aria-pressed="true"] .cc-switch::after { background: linear-gradient(180deg, #f9ecc8, #e3c15c); }
+  .cc-dot {
+    position: absolute;
+    right: 7px;
+    top: 7px;
+    width: 5px;
+    height: 5px;
+    border-radius: 999px;
+    pointer-events: none;
+    background: var(--color-amber-500);
+    box-shadow: 0 0 7px rgba(212, 171, 58, 0.8);
+    animation: cc-tick-in var(--dur-quick) var(--ease-spring) backwards;
+  }
+  /* A row with an explainer keeps its corner for the button. */
+  .cc-row-slot[data-info="true"] .cc-dot { right: 30px; top: 9px; }
+  .cc-row-slot[data-info="true"] .cc-row { padding-right: 38px; }
+
+  /* ---- the cover ---- */
+  .cc-review { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px; padding-top: 12px; }
+  .cc-cover {
+    position: relative;
+    flex: 0 1 300px;
+    min-width: min(100%, 240px);
+    margin-right: 10px;
+    padding: 10px;
+    border-radius: 14px;
+    border: 1px solid color-mix(in srgb, var(--color-amber-600) 40%, transparent);
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-stone-700) 42%, transparent),
+      color-mix(in srgb, var(--color-stone-950) 85%, transparent)
+    );
+    box-shadow: 0 14px 36px rgba(4, 2, 12, 0.3);
+  }
+  .cc-live .cc-cover { animation: cc-cover-assemble var(--dur-scene) var(--ease-spring) var(--cc-wipe) backwards; }
+  .cc-cover-art { position: relative; }
+  .cc-cover-art::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(180deg, transparent 45%, rgba(10, 8, 23, 0.9));
+  }
+  .cc-cover-caption {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 11px;
+  }
+  .cc-cover-genre {
+    font-family: var(--font-display), Georgia, serif;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    font-size: 8px;
+    font-weight: 600;
+    color: rgba(227, 193, 92, 0.85);
+  }
+  .cc-cover-title {
+    overflow-wrap: anywhere;
+    font-family: var(--font-display), Georgia, serif;
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1.15;
+    color: #f9ecc8;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
+  }
+  .cc-stamp {
+    position: absolute;
+    right: -10px;
+    top: -12px;
+    z-index: 2;
+    display: flex;
+    width: 62px;
+    height: 62px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    border: 2px solid rgba(224, 112, 58, 0.75);
+    background: rgba(69, 20, 6, 0.78);
+    box-shadow: 0 6px 18px rgba(4, 2, 12, 0.6);
+    rotate: -7deg;
+  }
+  .cc-live .cc-stamp { animation: cc-stamp-down var(--dur-beat) var(--ease-spring) calc(var(--cc-wipe) + 420ms) backwards; }
+  .cc-stamp-top {
+    font-family: var(--font-display), Georgia, serif;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 7.5px;
+    font-weight: 700;
+    color: #ffd0ad;
+  }
+  .cc-stamp-sub { font-family: var(--font-mono), monospace; font-size: 8px; color: #ffbe8f; }
+  .cc-readback {
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--color-stone-700) 70%, transparent);
+    border-radius: 11px;
+    background: color-mix(in srgb, var(--color-stone-950) 50%, transparent);
+  }
+  .cc-readback-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 9px 12px;
+  }
+  .cc-readback-row + .cc-readback-row {
+    border-top: 1px solid color-mix(in srgb, var(--color-stone-700) 70%, transparent);
+  }
+  .cc-readback-row dt {
+    flex: none;
+    font-family: var(--font-display), Georgia, serif;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    font-size: 8.5px;
+    font-weight: 600;
+    color: var(--color-stone-500);
+  }
+  .cc-readback-row dd {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: right;
+    font-family: var(--font-mono), monospace;
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--color-stone-200);
+  }
+  .cc-readback-row dd[data-ink="gold"] { color: var(--color-amber-200); }
+  .cc-live .cc-readback-row,
+  .cc-live .cc-review-chip {
+    animation: cc-line-in var(--dur-move) var(--ease-snap) backwards;
+    animation-delay: calc(var(--cc-wipe) + var(--cc-delay, 0ms));
+  }
+  .cc-review-chip {
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--color-stone-700) 60%, transparent);
+    background: color-mix(in srgb, var(--color-stone-950) 60%, transparent);
+    padding: 2px 9px;
+    font-family: var(--font-mono), monospace;
+    font-size: 9.5px;
+    color: var(--color-stone-400);
+  }
+}
+
+/* The parchment panel is translucent by design, which suits a card on the
+   page and not a sheet with forty fields on it: the wizard sits on paper. */
+html[data-theme="light"] .cc-shell.panel {
+  background: linear-gradient(180deg, rgba(255, 253, 247, 0.97), rgba(247, 240, 226, 0.98));
+}
+
+/* On parchment the amber ramp runs dark to light the other way, so the "on"
+   track needs a fill of its own to read as lit. */
+html[data-theme="light"] .cc-row[aria-pressed="true"] .cc-switch { background: #e6c877; border-color: #a6842a; }
+
+/* The stamp is ink on the cover card, so on parchment it reads as red ink
+   on paper rather than a dark seal. */
+html[data-theme="light"] .cc-stamp { background: rgba(255, 238, 224, 0.92); box-shadow: 0 4px 12px rgba(60, 30, 10, 0.25); }
+html[data-theme="light"] .cc-stamp-top,
+html[data-theme="light"] .cc-stamp-sub { color: #a2441a; }
+html[data-theme="light"] .cc-portal.motion-card[aria-pressed="true"] { border-color: #b8922a; }
+
+/* Reduced motion keeps every animation but ends it at once, so the
+   animationend that finishes the type-in still fires. */
+@media (prefers-reduced-motion: reduce) {
+  .cc-live .cc-portal-slot,
+  .cc-live .cc-cover,
+  .cc-live .cc-stamp,
+  .cc-live .cc-readback-row,
+  .cc-live .cc-review-chip,
+  .cc-chosen,
+  .cc-flavor,
+  .cc-fact,
+  .cc-custom,
+  .cc-dot,
+  .cc-row-slot[data-dependent="true"],
+  .cc-typed > span,
+  .cc-typed::after,
+  .cc-sweep {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

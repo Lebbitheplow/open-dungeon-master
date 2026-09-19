@@ -1,7 +1,9 @@
 "use client";
 
+import { EmptyState } from "@/components/EmptyState";
 import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { SectionHead } from "@/components/ui/SectionHead";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import type { BlockKind, ContextTrace } from "@/lib/dm/context-budget";
@@ -97,33 +99,23 @@ export function ContextPanel({ campaignId }: { campaignId: string }) {
 
   return (
     <div className="space-y-3 p-3">
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <h3 className="text-[10px] font-medium uppercase tracking-wide text-stone-500">
-            What the DM was sent
-          </h3>
-          <p className="text-[11px] text-stone-500">
-            Last turn{at ? `, ${new Date(at).toLocaleTimeString()}` : ""}. Token counts are
-            estimates.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={load}
-          className={cn(ui.iconAction, "-my-1")}
-          aria-label="Refresh"
-        >
-          <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
-        </button>
-      </div>
+      <SectionHead
+        title="What the DM was sent"
+        glyph="tab-context"
+        aside={
+          <button type="button" onClick={load} className={cn(ui.iconAction, "pk-tap pk-always -my-1 inline-flex items-center justify-center")} aria-label="Refresh">
+            <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+          </button>
+        }
+      />
+      <p className="-mt-1 text-xs text-stone-500">
+        Last turn{at ? `, ${new Date(at).toLocaleTimeString()}` : ""}. Token counts are estimates.
+      </p>
 
-      {error ? <p className="text-xs text-red-400">{error}</p> : null}
+      {error ? <p className="motion-shake text-xs text-red-400">{error}</p> : null}
 
       {!error && !loading && !trace ? (
-        <p className="text-xs text-stone-500">
-          No turn has been taken yet. Play a round and this will show every block the DM
-          received, what it cost, and anything the budget cut.
-        </p>
+        <EmptyState size="sm" art="scrolls" title="No turn has been taken yet. Play a round and this will show every block the DM received, what it cost, and anything the budget cut." />
       ) : null}
 
       {trace ? (
@@ -137,21 +129,19 @@ export function ContextPanel({ campaignId }: { campaignId: string }) {
             </div>
             <div className="h-1.5 overflow-hidden rounded-full bg-stone-800">
               <div
-                className={cn("h-full rounded-full", over ? "bg-red-500" : "bg-amber-500/70")}
+                className={cn("bar-ease h-full rounded-full", over ? "bg-red-500" : "bg-amber-500/70")}
                 style={{ width: `${Math.max(2, pct)}%` }}
               />
             </div>
           </div>
 
-          <ul className="space-y-1">
+          <ul className="stagger space-y-1">
             {trace.blocks.map((block) => (
               <li
                 key={`${block.position}-${block.id}`}
                 className={cn(
-                  "rounded-lg border px-2 py-1.5 text-xs shadow-elev-1",
-                  block.included
-                    ? "border-stone-700/60 bg-stone-900/50"
-                    : "border-red-900/50 bg-red-950/20",
+                  "panel rounded-lg px-2.5 py-1.5 text-xs",
+                  !block.included && "border-red-900/50 bg-red-950/20",
                 )}
               >
                 <div className="flex items-baseline justify-between gap-2">

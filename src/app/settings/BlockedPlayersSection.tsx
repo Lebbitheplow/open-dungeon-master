@@ -1,8 +1,9 @@
 "use client";
 
-import { Loader2, ShieldBan, UserRound } from "lucide-react";
+import { ShieldBan } from "lucide-react";
 import { useEffect, useState } from "react";
-import { ui } from "@/lib/ui";
+import { UserAvatar, ui } from "@/lib/ui";
+import { EmptyState } from "@/components/EmptyState";
 import { PageSection } from "@/components/PageShell";
 
 type Blocked = {
@@ -43,28 +44,20 @@ export function BlockedPlayersSection() {
   return (
     <PageSection
       heading="Blocked players"
+      glyph="attitude-hostile"
       intro="Blocked players' table messages are hidden from you, and neither of you can open a private chat or send a friend request. Block someone from their message or from the party list."
     >
       {blocked === null ? (
-        <Loader2 className="size-4 animate-spin text-stone-500" />
+        <div className="skeleton-block h-12 rounded-xl" aria-label="Loading blocked players" />
       ) : blocked.length === 0 ? (
-        <p className="text-sm text-stone-500">Nobody blocked.</p>
+        <EmptyState art="board" size="sm" title="Nobody blocked." />
       ) : (
-        <ul className="divide-y divide-stone-800/70">
+        <ul className="stagger space-y-2">
           {blocked.map((entry) => (
-            <li key={entry.userId} className="flex items-center gap-3 py-2">
-              {entry.avatar ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={entry.avatar.url}
-                  alt=""
-                  className="size-7 rounded-full border border-stone-700 object-cover"
-                />
-              ) : (
-                <span className="flex size-7 items-center justify-center rounded-full border border-stone-700 bg-stone-900">
-                  <UserRound className="size-3.5 text-stone-600" />
-                </span>
-              )}
+            <li key={entry.userId} className="plate-row">
+              <span className="medallion">
+                <UserAvatar url={entry.avatar?.url} userId={entry.userId} size="size-9" />
+              </span>
               <span className="min-w-0 flex-1 truncate text-sm text-stone-200">
                 {entry.username}
               </span>

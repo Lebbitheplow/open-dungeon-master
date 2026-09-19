@@ -1,0 +1,485 @@
+/* The board as a stage, the skill-check card, the delivery shapes and enemy
+   intent (docs/visual-overhaul-plan.md sections 5.1, 5.4, 5.5, 5.6).
+
+   Plain, unlayered CSS so it can be imported from anywhere. Every duration is
+   a motion token from globals.css or a beat from src/lib/battlemap/beats.ts
+   handed down as a custom property. The global reduced-motion block in
+   globals.css collapses every animation here to its final frame, so each
+   keyframe is written to END in the state that should be read; the block at
+   the bottom of this file stops the loops under [data-effects="low"]. */
+
+/* ---- 5.1 the stage ---- */
+
+@keyframes board-spot-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes board-mote-drift {
+  0% { transform: translate(0, 0); opacity: 0; }
+  18% { opacity: 0.55; }
+  100% { transform: translate(var(--dx, 6px), var(--dy, -40px)); opacity: 0; }
+}
+@keyframes board-torch-flicker {
+  0%, 100% { opacity: 0.85; }
+  30% { opacity: 1; }
+  55% { opacity: 0.72; }
+  75% { opacity: 0.95; }
+}
+@keyframes board-banner-wipe {
+  0% { opacity: 0; transform: translateX(-40px) skewX(-14deg); }
+  18% { opacity: 1; transform: translateX(0) skewX(-14deg); }
+  78% { opacity: 1; transform: translateX(0) skewX(-14deg); }
+  100% { opacity: 0; transform: translateX(34px) skewX(-14deg); }
+}
+@keyframes board-banner-rule {
+  0% { opacity: 0; transform: scaleX(0); }
+  18% { opacity: 1; transform: scaleX(1); }
+  78% { opacity: 1; transform: scaleX(1); }
+  100% { opacity: 0; transform: scaleX(1); }
+}
+@keyframes board-plate-sweep {
+  0% { opacity: 0; transform: translateX(-24px) skewX(-12deg); }
+  30% { opacity: 1; transform: translateX(0) skewX(-12deg); }
+  100% { opacity: 1; transform: translateX(0) skewX(0deg); }
+}
+@keyframes board-plate-breathe {
+  0%, 100% { box-shadow: 0 0 10px rgba(212, 171, 58, 0.25), 0 0 40px rgba(212, 171, 58, 0.1) inset; }
+  50% { box-shadow: 0 0 18px rgba(212, 171, 58, 0.5), 0 0 40px rgba(212, 171, 58, 0.16) inset; }
+}
+@keyframes board-miss-pop {
+  0% { opacity: 0; transform: scale(0.5) rotate(-6deg); }
+  60% { opacity: 1; transform: scale(1.15) rotate(-3deg); }
+  100% { opacity: 1; transform: scale(1) rotate(-3deg); }
+}
+
+.board-spot {
+  animation: board-spot-in var(--dur-move) var(--ease-snap) both;
+  transition: transform var(--dur-scene) var(--ease-drift);
+}
+.board-mote {
+  animation: board-mote-drift linear infinite;
+}
+.board-torch {
+  animation: board-torch-flicker 4.1s ease-in-out infinite;
+}
+/* The figure whose turn it is stands a little taller. The fill-box origin is
+   for the recoil (BattleMapGrid.tsx), which turns the figure about itself. */
+.token-lift {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform var(--dur-move) var(--ease-settle);
+}
+/* A figure fades to its new weight (down, hidden, passed over while aiming)
+   instead of blinking to it. Two classes so it outranks `.token-move`. */
+.token-move.token-figure {
+  transition:
+    transform var(--dur-move) var(--ease-settle),
+    opacity var(--dur-move) var(--ease-settle);
+}
+/* Aiming: the cone of attention, the flowing arc and the turning reticle. The
+   loops travel a whole number of dash periods so they never visibly skip, at
+   the mockup's pace (40 px in 700 ms, 24 px in 1200 ms). */
+@keyframes board-cone-in {
+  from { opacity: 0; }
+  to { opacity: 0.16; }
+}
+@keyframes board-arrow-flow {
+  to { stroke-dashoffset: -48; }
+}
+@keyframes board-reticle-turn {
+  to { stroke-dashoffset: -27; }
+}
+.board-cone {
+  animation: board-cone-in var(--dur-move) var(--ease-snap) both;
+}
+.board-arrow {
+  animation: board-arrow-flow 840ms linear infinite;
+}
+.board-reticle {
+  animation: board-reticle-turn 1350ms linear infinite;
+}
+.board-banner {
+  animation: board-banner-wipe var(--dur-linger) var(--ease-snap) both;
+}
+.board-banner-rule {
+  transform-origin: center;
+  animation: board-banner-rule var(--dur-linger) var(--ease-snap) both;
+}
+.board-plate {
+  animation: board-plate-sweep var(--dur-beat) var(--ease-snap) both;
+}
+.board-plate-current {
+  animation: board-plate-breathe 2.6s var(--ease-drift) infinite;
+}
+.board-miss {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: board-miss-pop var(--dur-beat) var(--ease-spring) both;
+}
+
+/* The chrome sits over painted, lit terrain, which is dark in both themes,
+   so its plates are fixed dark glass rather than theme surfaces. */
+.board-glass {
+  border: 1px solid rgba(107, 99, 148, 0.3);
+  background: rgba(13, 11, 28, 0.85);
+  color: #aeaac6;
+}
+.board-eyebrow {
+  font-family: var(--font-display), Georgia, serif;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 9px;
+  font-weight: 600;
+  color: rgba(212, 171, 58, 0.85);
+  text-shadow: 0 1px 3px rgba(4, 2, 12, 0.9);
+}
+
+/* The tap-a-figure menu wears the Dial's sigil styling. */
+.token-sigil {
+  background: radial-gradient(circle at 50% 30%, #2b2450, #0d0b1c 72%);
+  transition:
+    box-shadow var(--dur-quick) var(--ease-snap),
+    scale 120ms var(--ease-snap);
+}
+.token-sigil:hover,
+.token-sigil:focus-visible {
+  box-shadow: 0 0 14px rgba(212, 171, 58, 0.4);
+  scale: 1.16;
+}
+.token-sigil:active {
+  scale: 0.94;
+}
+
+/* ---- 5.5 delivery shapes (SVG, inside the board) ---- */
+
+@keyframes fx-proj-lob {
+  0% { opacity: 0; transform: translate(0, 0); }
+  8% { opacity: 1; }
+  50% { transform: translate(calc(var(--px) * 0.5), calc(var(--py) * 0.5 - var(--arc, 14px))); }
+  86% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--px), var(--py)); }
+}
+@keyframes fx-proj-straight {
+  0% { opacity: 0; transform: translate(0, 0); }
+  10% { opacity: 1; }
+  86% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--px), var(--py)); }
+}
+@keyframes fx-bolt-strike {
+  0% { opacity: 0; }
+  10% { opacity: 1; }
+  30% { opacity: 0.35; }
+  45% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes fx-beam-drop {
+  0% { opacity: 0; transform: scaleY(0); }
+  25% { opacity: 1; transform: scaleY(1); }
+  75% { opacity: 1; transform: scaleY(1); }
+  100% { opacity: 0; transform: scaleY(1); }
+}
+@keyframes fx-swing-arc {
+  0% { opacity: 0; transform: rotate(-42deg) scale(0.9); }
+  25% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(42deg) scale(1.05); }
+}
+@keyframes fx-atom-ring {
+  0% { opacity: 0; transform: scale(0.2); }
+  25% { opacity: 0.85; }
+  100% { opacity: 0; transform: scale(1); }
+}
+@keyframes fx-hit-flash {
+  0% { opacity: 0; }
+  25% { opacity: 0.45; }
+  100% { opacity: 0; }
+}
+@keyframes fx-frozen-tint {
+  0% { opacity: 0; }
+  20% { opacity: 0.5; }
+  80% { opacity: 0.28; }
+  100% { opacity: 0; }
+}
+@keyframes fx-dmg-rise {
+  0% { opacity: 0; transform: translateY(6px) scale(0.7); }
+  25% { opacity: 1; transform: translateY(0) scale(1.15); }
+  100% { opacity: 0; transform: translateY(-30px) scale(1); }
+}
+
+.fx-proj {
+  animation: fx-proj-straight var(--fx-delay, 200ms) var(--ease-snap) both;
+}
+.fx-proj[data-mode="lob"] {
+  animation: fx-proj-lob var(--fx-delay, 420ms) var(--ease-drift) both;
+}
+.fx-bolt {
+  animation: fx-bolt-strike var(--dur-beat) steps(1, end) both;
+}
+.fx-beam {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: fx-beam-drop var(--dur-scene) var(--ease-snap) both;
+}
+.fx-swing {
+  animation: fx-swing-arc 220ms var(--ease-snap) both;
+}
+.fx-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: fx-atom-ring 620ms var(--ease-drift) both;
+}
+.fx-hit-flash {
+  animation: fx-hit-flash var(--dur-beat) var(--ease-snap) both;
+}
+.fx-frost {
+  animation: fx-frozen-tint 1.4s var(--ease-drift) both;
+}
+.fx-dmg-rise {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: fx-dmg-rise var(--fx-rise, 1100ms) var(--ease-settle) both;
+}
+
+/* ---- 5.6 enemy intent ---- */
+
+@keyframes intent-breathe {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, -50%) scale(1.07); }
+}
+@keyframes intent-scale-lit {
+  0% { opacity: 0; transform: scale(0.4); }
+  35% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0.85; transform: scale(1); }
+}
+@keyframes intent-toast-in {
+  0% { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+  100% { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.intent-badge {
+  transform: translate(-50%, -50%);
+  animation: intent-breathe 2.6s var(--ease-drift) infinite;
+  transition: border-color var(--dur-quick) var(--ease-snap);
+}
+.intent-badge[data-lit="true"] {
+  animation: none;
+  transform: translate(-50%, -50%) scale(1.14);
+}
+.intent-scale {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: intent-scale-lit var(--dur-move) var(--ease-snap) both;
+}
+.intent-toast {
+  animation: intent-toast-in var(--dur-quick) var(--ease-snap) both;
+}
+
+/* ---- 5.4 the skill-check card ---- */
+
+@keyframes check-halo-breathe {
+  0%, 100% { transform: scale(0.97); opacity: 0.45; }
+  50% { transform: scale(1.04); opacity: 0.95; }
+}
+@keyframes check-d20-roll {
+  0%, 13% { transform: rotate(0); }
+  16.6%, 30% { transform: rotate(60deg); }
+  33.3%, 46.6% { transform: rotate(120deg); }
+  50%, 63.3% { transform: rotate(180deg); }
+  66.6%, 80% { transform: rotate(240deg); }
+  83.3%, 96.6% { transform: rotate(300deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes check-d20-face {
+  0% { opacity: 1; }
+  15% { opacity: 1; }
+  17% { opacity: 0; }
+  100% { opacity: 0; }
+}
+@keyframes check-face-out {
+  0%, 72% { opacity: 1; }
+  78%, 100% { opacity: 0; }
+}
+@keyframes check-result-in {
+  0%, 72% { opacity: 0; transform: translateY(18%) scale(0.6); }
+  86% { opacity: 1; transform: translateY(0) scale(1.35); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes check-mod-fly {
+  0% { opacity: 0; transform: translate(120%, -50%) scale(1.3); }
+  30% { opacity: 1; transform: translate(60%, -50%) scale(1.1); }
+  72% { opacity: 1; transform: translate(0, -50%) scale(0.9); }
+  88% { opacity: 0; transform: translate(0, -50%) scale(0.5); }
+  100% { opacity: 0; transform: translate(0, -50%) scale(0.5); }
+}
+@keyframes check-verdict-pop {
+  0% { opacity: 0; transform: scale(0.5) rotate(-8deg); }
+  60% { opacity: 1; transform: scale(1.2) rotate(-4deg); }
+  100% { opacity: 1; transform: scale(1) rotate(-4deg); }
+}
+@keyframes check-glow-burst {
+  0% { opacity: 0.55; transform: scale(0.6); }
+  100% { opacity: 0; transform: scale(1.25); }
+}
+@keyframes check-log-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.check-card {
+  --check-edge: rgba(167, 139, 250, 0.5);
+  --check-glow: rgba(167, 139, 250, 0.22);
+  --check-bg-a: rgba(38, 26, 66, 0.94);
+  --check-bg-b: rgba(13, 11, 28, 0.97);
+  --check-well: rgba(0, 0, 0, 0.4);
+  --check-ink: #e9e6f4;
+  --check-dim: #c9c6db;
+  --check-vine: rgba(167, 139, 250, 0.7);
+  --check-die: #0b0917;
+  --check-die-edge: rgba(167, 139, 250, 0.55);
+  --check-face: #ede9fe;
+  --check-pass: #7ed6a4;
+  --check-fail: #f87171;
+  --check-run: 1500ms;
+  --check-verdict-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+  position: relative;
+  border: 1px solid var(--check-edge);
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--check-bg-a), var(--check-bg-b));
+  box-shadow: 0 0 24px var(--check-glow), 0 14px 36px rgba(4, 2, 12, 0.35);
+  color: var(--check-ink);
+}
+html[data-theme="light"] .check-card {
+  --check-edge: rgba(109, 78, 196, 0.55);
+  --check-glow: rgba(109, 78, 196, 0.18);
+  --check-bg-a: #f3eefc;
+  --check-bg-b: #e7dff7;
+  --check-well: rgba(76, 52, 140, 0.1);
+  --check-ink: #2a1d4d;
+  --check-dim: #4c3d73;
+  --check-vine: rgba(109, 78, 196, 0.7);
+  --check-die: #fbf8ff;
+  --check-die-edge: rgba(109, 78, 196, 0.7);
+  --check-face: #3b2a73;
+  --check-pass: #17703f;
+  --check-fail: #b42318;
+  --check-verdict-shadow: 0 1px 2px rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 18px var(--check-glow), 0 8px 22px rgba(60, 40, 110, 0.18);
+}
+/* A natural 20 is gold, a natural 1 is ember: the frame says so before the
+   number does. */
+.check-card[data-crit="nat20"] {
+  --check-edge: rgba(212, 171, 58, 0.75);
+  --check-glow: rgba(212, 171, 58, 0.35);
+  --check-vine: rgba(227, 193, 92, 0.85);
+  --check-die-edge: rgba(227, 193, 92, 0.8);
+  --check-pass: #ecd287;
+}
+html[data-theme="light"] .check-card[data-crit="nat20"] {
+  --check-pass: #7a5c10;
+}
+.check-card[data-crit="nat1"] {
+  --check-edge: rgba(224, 112, 58, 0.7);
+  --check-glow: rgba(224, 112, 58, 0.3);
+  --check-vine: rgba(255, 190, 143, 0.8);
+  --check-die-edge: rgba(224, 112, 58, 0.8);
+}
+.check-well {
+  border-radius: 6px;
+  background: var(--check-well);
+}
+.check-dim {
+  color: var(--check-dim);
+}
+.check-vine {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  color: var(--check-vine);
+  pointer-events: none;
+}
+.check-halo {
+  position: absolute;
+  inset: -18px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(167, 139, 250, 0.35), transparent 65%);
+  pointer-events: none;
+  animation: check-halo-breathe 1.8s var(--ease-drift) infinite;
+}
+.check-die-body {
+  transform-origin: center;
+  transform-box: fill-box;
+}
+.check-die-body[data-rolling="true"] {
+  animation: check-d20-roll var(--check-run) var(--ease-drift) both;
+}
+/* Waiting on the server: the die keeps tumbling until the answer is in. */
+.check-die-body[data-rolling="loop"] {
+  animation: check-d20-roll var(--check-run) var(--ease-drift) infinite;
+}
+.check-face {
+  animation: check-d20-face 110ms linear infinite;
+}
+.check-faces[data-landing="true"] {
+  animation: check-face-out var(--check-run) linear both;
+}
+.check-result {
+  animation: check-result-in var(--check-run) var(--ease-settle) both;
+}
+.check-result[data-beat="short"] {
+  animation: pop-in var(--dur-move) var(--ease-spring) both;
+}
+.check-mod {
+  animation: check-mod-fly var(--check-run) var(--ease-snap) both;
+}
+.check-glow {
+  animation: check-glow-burst 850ms var(--ease-drift) both;
+  animation-delay: var(--check-total-at, 1080ms);
+}
+.check-verdict {
+  transform-origin: center;
+  animation: check-verdict-pop var(--dur-beat) var(--ease-spring) both;
+  animation-delay: var(--check-verdict-at, 1180ms);
+}
+.check-log {
+  animation: check-log-in var(--dur-move) var(--ease-snap) both;
+}
+
+/* ---- low effects: every loop stops, every flourish is dropped ---- */
+
+[data-effects="low"] .board-mote,
+[data-effects="low"] .board-torch,
+[data-effects="low"] .board-arrow,
+[data-effects="low"] .board-reticle,
+[data-effects="low"] .board-plate-current,
+[data-effects="low"] .intent-badge,
+[data-effects="low"] .check-halo,
+[data-effects="low"] .check-face,
+[data-effects="low"] .check-die-body[data-rolling="loop"] {
+  animation: none;
+}
+[data-effects="low"] .board-mote,
+[data-effects="low"] .check-glow,
+[data-effects="low"] .check-mod {
+  display: none;
+}
+[data-effects="low"] .token-lift,
+[data-effects="low"] .token-move.token-figure,
+[data-effects="low"] .board-spot {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-mote,
+  .check-glow,
+  .check-mod,
+  .board-banner,
+  .board-banner-rule {
+    display: none;
+  }
+  .board-torch,
+  .board-plate-current,
+  .intent-badge,
+  .check-halo,
+  .check-face,
+  .check-die-body {
+    animation: none !important;
+  }
+}

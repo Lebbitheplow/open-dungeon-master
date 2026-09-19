@@ -50,12 +50,13 @@ export function AppHeader({
       <div className="flex min-h-9 items-center justify-between gap-3">
       <AppBrand>
         <PixelTile src={PIXEL_ICONS.story} size="size-8" />
-        <span className="text-balance font-display text-base leading-tight tracking-wide text-amber-50 sm:text-lg">
+        <span className="gold-title text-balance font-display text-base leading-tight tracking-wide sm:text-lg">
           Open Dungeon Master
         </span>
       </AppBrand>
+      {/* The cluster fades into a slot the row already reserves (min-h-9). */}
       {resolved ? (
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="reveal flex shrink-0 items-center gap-2">
           <AppHomeButton />
           <NotificationBell />
           <AccountMenu user={resolved} />

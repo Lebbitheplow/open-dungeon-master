@@ -1,14 +1,15 @@
 "use client";
 
-import * as AlertDialog from "@radix-ui/react-alert-dialog";
-import { Check, Link2, Loader2, ShieldCheck, Trash2, Undo2, UserRound } from "lucide-react";
+import { Check, Link2, Loader2, Trash2, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
-import { PIXEL_ICONS, ui } from "@/lib/ui";
+import { PIXEL_ICONS, UserAvatar, ui } from "@/lib/ui";
 import { DiceLookEditor } from "@/components/DiceLookEditor";
 import { PageLoading, PageNotice, PageSection, PageShell } from "@/components/PageShell";
+import { GameIcon } from "@/components/ui/GameIcon";
 import { ImageLightbox } from "@/components/ui/ImageLightbox";
+import { DeleteAccountDialog } from "@/app/settings/DeleteAccountDialog";
 import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
 import { AppearanceSection } from "@/app/settings/AppearanceSection";
 import { BlockedPlayersSection } from "@/app/settings/BlockedPlayersSection";
@@ -200,30 +201,33 @@ export default function SettingsPage() {
       user={me}
       width="narrow"
       icon={PIXEL_ICONS.characters}
+      glyph="tab-settings"
       title="Account settings"
       blurb={`Signed in as ${me.username}`}
       actions={
         me.isAdmin ? (
           <Link href="/admin" className={ui.btnSecondary}>
-            <ShieldCheck className="size-4" /> Admin panel
+            <GameIcon icon={{ kind: "glyph", key: "tab-admin" }} size="size-6" /> Admin panel
           </Link>
         ) : null
       }
     >
-      <PageSection heading="Profile picture">
+      <PageSection heading="Profile picture" glyph="tab-characters">
         <div className="flex items-center gap-5">
-          {me.avatar ? (
-            <ImageLightbox
-              src={me.avatar.url}
-              alt="Your avatar"
-              caption="Your avatar"
-              className="size-24 rounded-full border-2 border-amber-500/40 object-cover shadow-glow-gold"
-            />
-          ) : (
-            <div className="flex size-24 items-center justify-center rounded-full border border-stone-700 bg-stone-900">
-              <UserRound className="size-10 text-stone-600" />
-            </div>
-          )}
+          <span className="medallion">
+            {me.avatar ? (
+              <ImageLightbox
+                src={me.avatar.url}
+                alt="Your avatar"
+                caption="Your avatar"
+                className="size-24 rounded-full object-cover"
+              />
+            ) : (
+              // Nobody chose a picture: the sigil this account hashes to, the
+              // same one the lobby and the table already show for them.
+              <UserAvatar userId={me.id} size="size-24" />
+            )}
+          </span>
           <div className="space-y-2">
             <button
               type="button"
@@ -238,7 +242,7 @@ export default function SettingsPage() {
                 type="button"
                 onClick={() => setAvatar(null)}
                 disabled={saving}
-                className="flex items-center gap-1.5 text-xs text-stone-500 hover:text-red-400"
+                className={cn(ui.btnSmall, "text-xs hover:border-red-500/50 hover:text-red-400")}
               >
                 <Trash2 className="size-3.5" /> Remove
               </button>
@@ -253,13 +257,14 @@ export default function SettingsPage() {
 
       <PageSection
         heading="Your dice"
+        glyph="die-d20"
         intro="The virtual dice that tumble across every table you sit at. Pick a set to start from, then change the colours, pattern and finish; the preview rolls as you go."
       >
         <DiceLookEditor />
       </PageSection>
 
       {deviceWorld && !me.isAdmin ? null : (
-      <PageSection heading={me.hasPassword === false ? "Set a password" : "Password"}>
+      <PageSection heading={me.hasPassword === false ? "Set a password" : "Password"} glyph="tab-admin">
         {me.hasPassword === false ? (
           <>
             <p className="mb-3 text-sm text-stone-400">
@@ -282,7 +287,7 @@ export default function SettingsPage() {
           <ChangePasswordForm onChanged={flashPasswordSaved} />
         )}
         {passwordChanged ? (
-          <p className="mt-2 inline-flex items-center gap-1 text-sm text-emerald-400">
+          <p className="reveal mt-2 inline-flex items-center gap-1 text-sm text-emerald-400">
             <Check className="size-4" /> Password saved. Other devices were signed out.
           </p>
         ) : null}
@@ -290,9 +295,9 @@ export default function SettingsPage() {
       )}
 
       {me.discordAvailable || me.discordLinked ? (
-        <PageSection heading="Discord">
+        <PageSection heading="Discord" glyph="system-share">
           {me.discordLinked ? (
-            <p className="text-sm text-stone-400">
+            <p className="reveal text-sm text-stone-400">
               <Check className="mr-1 inline size-4 text-emerald-400" />
               Linked. You can sign in with Discord.
             </p>
@@ -301,7 +306,7 @@ export default function SettingsPage() {
               <Link2 className="size-3.5" /> Link Discord account
             </a>
           )}
-          {discordNotice ? <p className="mt-2 text-sm text-amber-300">{discordNotice}</p> : null}
+          {discordNotice ? <p className="live-in mt-2 text-sm text-amber-300">{discordNotice}</p> : null}
         </PageSection>
       ) : null}
 
@@ -311,6 +316,7 @@ export default function SettingsPage() {
       {me.deletionDueAt ? (
         <PageSection
           heading="Deletion scheduled"
+          glyph="quest-failed"
           ribbon="Pending"
           ribbonTone="ember"
           tone="danger"
@@ -329,6 +335,7 @@ export default function SettingsPage() {
       ) : (
         <PageSection
           heading="Delete account"
+          glyph="quest-failed"
           ribbon="Irreversible"
           ribbonTone="ember"
           tone="danger"
@@ -348,32 +355,32 @@ export default function SettingsPage() {
         </PageSection>
       )}
 
-      <PageSection heading="About">
+      <PageSection heading="About" glyph="system-lore">
         {about ? (
-          <p className="text-sm text-stone-300">
+          <p className="reveal text-sm text-stone-300">
             {about.serverName} <span className="text-stone-500">v{about.version}</span>
           </p>
         ) : (
           <p className="text-sm text-stone-500">Open Dungeon Master</p>
         )}
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
-          <Link href="/reference" className="text-xs text-stone-500 hover:text-amber-200">
+          <Link href="/reference" className={ui.btnSmall}>
             Rules reference
           </Link>
-          <Link href="/terms" className="text-xs text-stone-500 hover:text-amber-200">
+          <Link href="/terms" className={ui.btnSmall}>
             Terms of service
           </Link>
-          <Link href="/privacy" className="text-xs text-stone-500 hover:text-amber-200">
+          <Link href="/privacy" className={ui.btnSmall}>
             Privacy policy
           </Link>
-          <Link href="/licenses" className="text-xs text-stone-500 hover:text-amber-200">
+          <Link href="/licenses" className={ui.btnSmall}>
             Licenses and attribution
           </Link>
           <a
             href="https://github.com/Lebbitheplow/open-dungeon-master"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-stone-500 hover:text-amber-200"
+            className={ui.btnSmall}
           >
             GitHub
           </a>
@@ -389,71 +396,18 @@ export default function SettingsPage() {
       ) : null}
 
       {confirmingDelete ? (
-        <AlertDialog.Root
-          open
-          onOpenChange={(open) => {
-            if (!open && !deleting) setConfirmingDelete(false);
-          }}
-        >
-          <AlertDialog.Portal>
-            <AlertDialog.Overlay className="fixed inset-0 z-50 bg-black/70" />
-            <AlertDialog.Content
-              className={cn(
-                ui.dialog,
-                "fixed left-1/2 top-1/2 z-50 max-h-[85vh] w-[min(92vw,24rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto",
-              )}
-            >
-              <AlertDialog.Title className="font-display text-lg tracking-wide text-amber-50">
-                Delete your account?
-              </AlertDialog.Title>
-              <AlertDialog.Description className="mt-2 text-xs text-stone-400">
-                {graceCopy} Messages you wrote in other people&apos;s campaigns stay in those
-                transcripts without your name on them. Once the account is erased it cannot be
-                brought back.
-              </AlertDialog.Description>
-              <div className="mt-4">
-                {me.hasPassword ? (
-                  <label className="block text-xs text-stone-400">
-                    Enter your password to confirm
-                    <input
-                      type="password"
-                      autoFocus
-                      value={deleteConfirm}
-                      onChange={(event) => setDeleteConfirm(event.target.value)}
-                      className={cn(ui.input, "mt-1")}
-                    />
-                  </label>
-                ) : (
-                  <label className="block text-xs text-stone-400">
-                    Type DELETE to confirm
-                    <input
-                      type="text"
-                      autoFocus
-                      value={deleteConfirm}
-                      onChange={(event) => setDeleteConfirm(event.target.value)}
-                      className={cn(ui.input, "mt-1")}
-                    />
-                  </label>
-                )}
-                {deleteError ? <p className="mt-2 text-xs text-red-400">{deleteError}</p> : null}
-              </div>
-              <div className="mt-4 flex justify-end gap-2">
-                <AlertDialog.Cancel className={ui.btnSmall} disabled={deleting}>
-                  Cancel
-                </AlertDialog.Cancel>
-                <button
-                  type="button"
-                  onClick={deleteAccount}
-                  disabled={!deleteReady || deleting}
-                  className={cn(ui.btnPrimary, "from-red-200 via-red-300 to-red-500 text-red-950")}
-                >
-                  {deleting ? <Loader2 className="size-4 animate-spin" /> : null}
-                  {graceDays === 0 ? "Delete forever" : "Delete my account"}
-                </button>
-              </div>
-            </AlertDialog.Content>
-          </AlertDialog.Portal>
-        </AlertDialog.Root>
+        <DeleteAccountDialog
+          hasPassword={Boolean(me.hasPassword)}
+          graceCopy={graceCopy}
+          graceDays={graceDays}
+          value={deleteConfirm}
+          onValue={setDeleteConfirm}
+          error={deleteError}
+          deleting={deleting}
+          ready={deleteReady}
+          onConfirm={deleteAccount}
+          onClose={() => setConfirmingDelete(false)}
+        />
       ) : null}
     </PageShell>
   );

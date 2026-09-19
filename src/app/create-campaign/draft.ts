@@ -42,6 +42,8 @@ export type CampaignDraft = {
   ambienceAuto: boolean;
   // Players may draw on the live board (the DM always may).
   boardDrawing: boolean;
+  // The board shows what enemies look likely to do next.
+  enemyIntent: boolean;
   // Theatre inserts: the speaking NPC's face over the scene art.
   presentation: "plain" | "theatre";
   // Several characters per player: off, one at a time, or all at once.
@@ -90,6 +92,7 @@ export const DEFAULT_DRAFT: CampaignDraft = {
   ambienceEnabled: true,
   ambienceAuto: true,
   boardDrawing: true,
+  enemyIntent: true,
   presentation: "plain",
   multiCharacter: "off",
   multiclassingEnabled: true,

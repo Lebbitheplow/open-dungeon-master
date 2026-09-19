@@ -1,9 +1,12 @@
 "use client";
 
-import { Bot, Check, Crown, Dices, Heart, ImagePlus, PawPrint, Save, Shield, StickyNote, UserPlus } from "lucide-react";
+import { Bot, Check, Crown, Heart, ImagePlus, PawPrint, Save, UserPlus } from "lucide-react";
 import { GameIcon } from "@/components/ui/GameIcon";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { KitButton, SettingToggle } from "./PanelKit";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
+import { CountPop } from "@/components/ui/Reveal";
 import { CharacterPortrait } from "@/lib/ui";
 import { CharacterMenu } from "@/app/campaigns/[campaignId]/CharacterMenu";
 import { CharacterNotesDialog } from "@/app/campaigns/[campaignId]/CharacterNotesDialog";
@@ -45,25 +48,22 @@ function RealDiceToggle({
     }
   }
   return (
-    <button
-      type="button"
-      onClick={toggle}
+    <SettingToggle
+      on={member.useRealDice}
+      onToggle={() => void toggle()}
       disabled={busy}
+      aria-busy={busy}
+      label="Physical dice"
       title={
         member.useRealDice
           ? "The game pauses on your rolls and asks for your real dice results. Click to switch back to automatic digital rolls."
           : "Roll your own physical dice: the game will tell you what to roll and wait for your result. Click to opt in."
       }
-      className={cn(
-        "flex w-full items-center justify-center gap-1 rounded border py-1 text-xs disabled:opacity-50",
-        member.useRealDice
-          ? "border-amber-700 bg-amber-950/40 text-amber-200 hover:bg-amber-950/60"
-          : "border-stone-700 text-stone-400 hover:bg-stone-900",
-      )}
+      className="w-full text-xs"
     >
-      <Dices className="size-3" />
+      <GameIcon icon={{ kind: "glyph", key: "die-d20" }} size="size-4" className="mr-1 inline-block align-middle" />
       {member.useRealDice ? "Physical dice: ON" : "Physical dice: off"}
-    </button>
+    </SettingToggle>
   );
 }
 
@@ -86,16 +86,17 @@ function RequestCompanionButton({ campaignId }: { campaignId: string }) {
     }
   }
   return (
-    <button
-      type="button"
+    <KitButton
+      tone="secondary"
       onClick={request}
       disabled={state !== "idle"}
+      busy={state === "sending"}
       title="Ask the DM to write an ally with a real character sheet into the story"
-      className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-stone-700 py-2 text-xs text-stone-400 hover:bg-stone-900 hover:text-sky-200 disabled:opacity-60"
+      className="w-full disabled:opacity-60"
     >
-      <Bot className="size-3.5" />
+      {state === "sending" ? null : <GameIcon icon={{ kind: "glyph", key: "system-party" }} size="size-5" />}
       {state === "sent" ? "The DM has been asked" : "Request a companion"}
-    </button>
+    </KitButton>
   );
 }
 
@@ -116,23 +117,19 @@ function SaveToLibraryButton({ campaignId }: { campaignId: string }) {
     }
   }
   return (
-    <button
-      type="button"
-      onClick={save}
-      disabled={state === "saving"}
-      title="Save level, gear, and spells back to your character library"
-      className="flex w-full items-center justify-center gap-1 rounded border border-stone-700 py-1 text-xs text-stone-400 hover:bg-stone-900 disabled:opacity-50"
-    >
+    <KitButton onClick={save} disabled={state === "saving"} busy={state === "saving"} title="Save level, gear, and spells back to your character library" className="w-full justify-center">
       {state === "saved" ? (
         <>
-          <Check className="size-3 text-emerald-400" /> Saved
+          <Check className="motion-pop size-3.5 text-emerald-400" /> Saved
         </>
+      ) : state === "saving" ? (
+        "Save to library"
       ) : (
         <>
-          <Save className="size-3" /> Save to library
+          <Save className="size-3.5" /> Save to library
         </>
       )}
-    </button>
+    </KitButton>
   );
 }
 
@@ -260,12 +257,12 @@ export function PartyPanel({
     <Wrapper
       className={cn(
         embedded
-          ? "space-y-3"
-          : "hidden w-64 shrink-0 space-y-3 overflow-y-auto border-l border-stone-800 p-3 lg:block",
+          ? "stagger-up space-y-3"
+          : "stagger-up hidden w-64 shrink-0 space-y-3 overflow-y-auto border-l border-stone-800 p-3 lg:block",
       )}
     >
       {embedded ? null : (
-        <h2 className="px-1 text-xs font-medium uppercase tracking-wide text-stone-500">Party</h2>
+        <SectionHead title="Party" glyph="tab-party" level="h2" aside={sheets.length} />
       )}
       {sheets.map((sheet) => {
         const derived = computeSheetDerived(sheet);
@@ -302,7 +299,7 @@ export function PartyPanel({
                 type="button"
                 onClick={() => setViewingSheetId(sheet.id)}
                 title="View full character sheet"
-                className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40 motion-press"
               >
               <CharacterPortrait
                 url={sheet.portrait?.url}
@@ -318,16 +315,28 @@ export function PartyPanel({
                   {lights[sheet.id] ? <LightBar light={lights[sheet.id]} /> : null}
                   {mine && multiCharacter !== "off" && myOwn.length > 1 ? (
                     mySheet?.id === sheet.id ? (
-                      <span className="rounded-sm border border-amber-700/60 px-1 text-[9px] uppercase tracking-wider text-amber-300">playing</span>
+                      <span className="eyebrow rounded-sm border border-amber-500/50 bg-amber-400/10 px-1 text-[9px] text-amber-300">playing</span>
                     ) : (
-                      <button
-                        type="button"
-                        disabled={switching === sheet.id}
-                        onClick={() => void playAs(sheet.id)}
-                        className="rounded-sm border border-stone-700 px-1 text-[9px] uppercase tracking-wider text-stone-400 transition-colors duration-[var(--dur-quick,150ms)] hover:border-amber-700 hover:text-amber-200 disabled:opacity-50"
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        aria-disabled={switching === sheet.id}
+                        // The chip sits inside the card's own button; its press is
+                        // its own, or taking a seat would also open the sheet.
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (switching !== sheet.id) void playAs(sheet.id);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key !== "Enter" && event.key !== " ") return;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          if (switching !== sheet.id) void playAs(sheet.id);
+                        }}
+                        className="eyebrow inline-flex cursor-pointer items-center rounded-sm border border-stone-600 px-1 text-[9px] text-stone-300 transition-colors duration-[var(--dur-quick,150ms)] hover:border-amber-500/60 hover:text-amber-200 aria-disabled:opacity-50 motion-press"
                       >
                         Play as
-                      </button>
+                      </span>
                     )
                   ) : null}
                   {!sheet.isCompanion && onlineUserIds.includes(sheet.userId) ? (
@@ -355,14 +364,13 @@ export function PartyPanel({
               </span>
               </button>
               {publicNoteCount ? (
-                <button
-                  type="button"
+                <KitButton
                   onClick={() => setNotesSheetId(sheet.id)}
                   title={`${publicNoteCount} party ${publicNoteCount === 1 ? "note" : "notes"} on ${sheet.name}`}
-                  className="flex shrink-0 items-center gap-0.5 rounded-full border border-stone-800 px-1.5 py-0.5 text-[10px] text-stone-500 hover:text-amber-300"
+                  className="shrink-0 gap-0.5 rounded-full px-1.5 py-0.5 text-[11px]"
                 >
-                  <StickyNote className="size-3" /> {publicNoteCount}
-                </button>
+                  <GameIcon icon={{ kind: "glyph", key: "tab-notes" }} size="size-4" /> {publicNoteCount}
+                </KitButton>
               ) : null}
               <CharacterMenu
                 sheet={sheet}
@@ -398,7 +406,15 @@ export function PartyPanel({
 
             <div className="mt-2 flex items-center gap-2 text-sm">
               <Heart className={cn("size-4", shape ? "text-lime-400" : "text-red-400")} />
-              <div className="h-2 flex-1 overflow-hidden rounded-full bg-stone-800/80 shadow-[0_1px_2px_rgba(4,2,12,0.6)_inset]">
+              <div className="relative h-2.5 flex-1 overflow-hidden rounded-full bg-stone-800/80 shadow-[0_1px_2px_rgba(4,2,12,0.6)_inset]">
+                {/* The shine is its own keyed layer, so it replays on a change
+                    while the fill below stays mounted and eases to its width. */}
+                <span
+                  key={`hp-${sheet.currentHp}`}
+                  data-changed=""
+                  aria-hidden="true"
+                  className="motion-bar pointer-events-none absolute inset-0 z-[1] rounded-full"
+                />
                 <div
                   className={cn(
                     "h-full rounded-full transition-[width] duration-500 ease-snap",
@@ -422,15 +438,15 @@ export function PartyPanel({
                   {sheet.tempHp ? `+${sheet.tempHp}` : ""}/{shape.beastMaxHp}
                 </span>
               ) : (
-                <span className="font-mono text-xs">
+                <CountPop value={`${sheet.currentHp}+${sheet.tempHp}`} className="font-mono text-xs">
                   {sheet.currentHp}
                   {sheet.tempHp ? `+${sheet.tempHp}` : ""}/{sheet.maxHp}
-                </span>
+                </CountPop>
               )}
             </div>
 
             {shape ? (
-              <div className="mt-1 text-right font-mono text-[10px] text-stone-500">
+              <div className="reveal mt-1 text-right font-mono text-[10px] text-stone-500">
                 own {sheet.currentHp}/{sheet.maxHp}
               </div>
             ) : null}
@@ -453,7 +469,17 @@ export function PartyPanel({
             ))}
 
             {sheet.deathSaves ? (
-              <div className="mt-1.5 flex items-center gap-2">
+              <div
+                className={cn(
+                  "mt-1.5 flex items-center gap-2 rounded-lg border px-2 py-1.5",
+                  sheet.deathSaves.dead
+                    ? "border-stone-700/60 bg-stone-950/60"
+                    : sheet.deathSaves.stable
+                      ? "border-amber-700/50 bg-amber-950/20"
+                      : "death-beat border-red-700/60 bg-red-950/30",
+                )}
+              >
+                <GameIcon icon={{ kind: "glyph", key: "rest-death-save" }} size="size-6" className="border-red-800/60" />
                 <span
                   className={cn(
                     "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
@@ -468,27 +494,27 @@ export function PartyPanel({
                 </span>
                 {!sheet.deathSaves.dead && !sheet.deathSaves.stable ? (
                   <span className="flex items-center gap-1.5" title="Death saves: successes and failures">
-                    <span className="flex gap-0.5">
+                    <span className="flex gap-1.5">
                       {[0, 1, 2].map((pip) => (
                         <span
                           key={`s${pip}`}
                           className={cn(
-                            "size-2 rounded-full border",
+                            "size-3 rotate-45 rounded-[3px] border transition-colors duration-300",
                             pip < sheet.deathSaves!.successes
-                              ? "border-emerald-400 bg-emerald-500"
+                              ? "motion-pop border-amber-300 bg-gradient-to-br from-amber-100 to-amber-500 shadow-[0_0_8px_rgba(212,171,58,0.6)]"
                               : "border-stone-600 bg-transparent",
                           )}
                         />
                       ))}
                     </span>
-                    <span className="flex gap-0.5">
+                    <span className="flex gap-1.5">
                       {[0, 1, 2].map((pip) => (
                         <span
                           key={`f${pip}`}
                           className={cn(
-                            "size-2 rounded-full border",
+                            "size-3 rotate-45 rounded-[3px] border transition-colors duration-300",
                             pip < sheet.deathSaves!.failures
-                              ? "border-red-400 bg-red-500"
+                              ? "motion-pop border-red-400 bg-gradient-to-br from-red-500 to-stone-950 shadow-[0_0_8px_rgba(220,38,38,0.55)]"
                               : "border-stone-600 bg-transparent",
                           )}
                         />
@@ -520,9 +546,11 @@ export function PartyPanel({
                   }
                 >
                   <span className="eyebrow block text-[8px] text-stone-500">
-                    {statLabel === "AC" ? (
-                      <Shield className="mr-0.5 inline size-2.5 -translate-y-px" />
-                    ) : null}
+                    <GameIcon
+                      icon={{ kind: "glyph", key: statLabel === "AC" ? "rest-ac" : statLabel === "PP" ? "sense-passive-perception" : "rest-initiative" }}
+                      size="size-3.5"
+                      className="mr-0.5 inline-block -translate-y-px align-middle"
+                    />
                     {statLabel}
                   </span>
                   <span className="font-mono text-xs text-stone-200">{statValue}</span>
@@ -531,7 +559,7 @@ export function PartyPanel({
             </div>
 
             {Object.keys(sheet.resources ?? {}).length ? (
-              <div className="mt-1.5 flex flex-wrap gap-1">
+              <div className="stagger-pop mt-1.5 flex flex-wrap gap-1">
                 {Object.entries(sheet.resources).map(([id, state]) => (
                   <span
                     key={id}
@@ -545,12 +573,13 @@ export function PartyPanel({
             ) : null}
 
             {sheet.conditions.length || sheet.concentratingOn || (sheet.exhaustion ?? 0) > 0 ? (
-              <div className="mt-1.5 flex flex-wrap gap-1">
+              <div className="stagger-pop mt-1.5 flex flex-wrap gap-1">
                 {(sheet.exhaustion ?? 0) > 0 ? (
                   <span
-                    className="rounded-full bg-orange-950 px-2 py-0.5 text-xs text-orange-300"
+                    className="inline-flex items-center gap-1 rounded-full bg-orange-950 px-2 py-0.5 text-xs text-orange-300"
                     title="Exhaustion level (a long rest reduces it by one)"
                   >
+                    <GameIcon icon={{ kind: "glyph", key: "rest-exhaustion" }} size="size-4" />
                     exhaustion {sheet.exhaustion}
                   </span>
                 ) : null}
@@ -568,28 +597,25 @@ export function PartyPanel({
                 ))}
                 {sheet.concentratingOn ? (
                   <span
-                    className="rounded-full bg-sky-950 px-2 py-0.5 text-xs text-sky-300"
+                    className="inline-flex items-center gap-1 rounded-full bg-sky-950 px-2 py-0.5 text-xs text-sky-300"
                     title="Concentrating on this spell"
                   >
-                    ◎ {sheet.concentratingOn}
+                    <GameIcon icon={{ kind: "spell", key: sheet.concentratingOn }} size="size-4" />
+                    {sheet.concentratingOn}
                   </span>
                 ) : null}
               </div>
             ) : null}
 
             {setsPortrait ? (
-              <div className="mt-2 space-y-1.5">
+              <div className="reveal mt-2 space-y-1.5">
                 {/* Hit points are driven by the server rules engines now, so
                     there is no manual HP stepper here; the lead's Adjust
                     dialog remains for corrections. */}
-                <button
-                  type="button"
-                  onClick={() => setCroppingSheetId(sheet.id)}
-                  className="flex w-full items-center justify-center gap-1 rounded border border-stone-700 py-1 text-xs text-stone-400 hover:bg-stone-900"
-                >
-                  <ImagePlus className="size-3" />
+                <KitButton onClick={() => setCroppingSheetId(sheet.id)} className="w-full justify-center">
+                  <ImagePlus className="size-3.5" />
                   {sheet.portrait ? "Change portrait" : "Add portrait"}
-                </button>
+                </KitButton>
                 {mine ? <DiceLookButton /> : null}
                 {mine && realDiceAllowed && myMember ? (
                   <>
@@ -608,18 +634,13 @@ export function PartyPanel({
       })}
 
       {campaignId && companionsAvailable && steersStory ? (
-        <div className="space-y-1.5">
+        <div className="reveal space-y-1.5">
           {humanDmTable ? null : <RequestCompanionButton campaignId={campaignId} />}
           {companionBuildAvailable ? (
-            <button
-              type="button"
-              onClick={() => setBuildingCompanion(true)}
-              title="Build a companion yourself with the character creator"
-              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-stone-700 py-2 text-xs text-stone-400 hover:bg-stone-900 hover:text-sky-200"
-            >
+            <KitButton tone="secondary" onClick={() => setBuildingCompanion(true)} title="Build a companion yourself with the character creator" className="w-full">
               <UserPlus className="size-3.5" />
               Build a companion
-            </button>
+            </KitButton>
           ) : null}
         </div>
       ) : null}

@@ -1,5 +1,6 @@
 "use client";
 
+import { LevelUpMoment, LootMoment, MomentVeil, RestMoment, TravelBanner } from "@/app/campaigns/[campaignId]/Moments";
 import { haptic, useEffectsRoot, useTurnChime } from "@/lib/effects-mode";
 import { SceneTitle } from "@/components/SceneTitle";
 import { HandoutStage } from "@/components/HandoutStage";
@@ -140,6 +141,8 @@ export function SessionView({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [dismissedLevelUp, setDismissedLevelUp] = useState("");
+  // The level-up flourish plays once per level, then hands over to the dialog.
+  const [celebratedLevelUp, setCelebratedLevelUp] = useState("");
   const [dismissedJoinNotice, setDismissedJoinNotice] = useState("");
   // "Message" on a party card: SidePanel switches to the chat tab and opens
   // the 1:1 thread with this user.
@@ -543,6 +546,7 @@ export function SessionView({
           ) : (
             <Composer
               campaignId={campaign.id}
+              trackAmmo={campaign.gameSettings?.variantRules?.ammunition ?? false}
               sheets={sheets}
               meUserId={me.id}
               steersStory={steersStory}
@@ -731,8 +735,19 @@ export function SessionView({
         />
       ) : null}
 
+      <RestMoment auditLog={auditLog} sheets={sheets} />
+      <LootMoment sheet={mySheet} />
+      <TravelBanner locations={locations} />
+
       {myLevelUp && mySheet && dismissedLevelUp !== `${myLevelUp.characterId}:${myLevelUp.level}` ? (
-        <Suspense fallback={null}>
+        celebratedLevelUp !== `${myLevelUp.characterId}:${myLevelUp.level}` ? (
+          <LevelUpMoment
+            sheet={mySheet}
+            level={myLevelUp.level}
+            onDone={() => setCelebratedLevelUp(`${myLevelUp.characterId}:${myLevelUp.level}`)}
+          />
+        ) : (
+        <Suspense fallback={<MomentVeil />}>
           <LevelUpDialog
             campaignId={campaign.id}
             sheet={mySheet}
@@ -741,6 +756,7 @@ export function SessionView({
             onDone={() => setDismissedLevelUp(`${myLevelUp.characterId}:${myLevelUp.level}`)}
           />
         </Suspense>
+        )
       ) : null}
     </main>
   );

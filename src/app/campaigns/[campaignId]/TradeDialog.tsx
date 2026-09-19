@@ -3,6 +3,7 @@
 import { ArrowLeftRight, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { Dialog } from "@/components/ui/Dialog";
+import { NumberStepper } from "@/components/ui/NumberStepper";
 import { cn } from "@/lib/cn";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -17,7 +18,7 @@ function ItemPicker({ sheet, picked, onChange, title }: { sheet: CharacterSheet;
     <div className="space-y-1">
       <p className="text-[10px] uppercase tracking-wide text-stone-500">{title}</p>
       {sheet.equipment.length ? (
-        <ul className="max-h-48 space-y-0.5 overflow-y-auto pr-1">
+        <ul className="reveal max-h-48 space-y-0.5 overflow-y-auto pr-1">
           {sheet.equipment.map((item) => {
             const qty = picked[item.name] ?? 0;
             return (
@@ -32,13 +33,13 @@ function ItemPicker({ sheet, picked, onChange, title }: { sheet: CharacterSheet;
                   {item.qty > 1 ? <span className="text-stone-500"> x{item.qty}</span> : null}
                 </button>
                 {qty > 0 && item.qty > 1 ? (
-                  <input
-                    type="number"
+                  <NumberStepper
                     min={1}
                     max={item.qty}
                     value={qty}
-                    onChange={(event) => onChange({ ...picked, [item.name]: Math.max(1, Math.min(item.qty, Number(event.target.value) || 1)) })}
-                    className="w-12 rounded border border-stone-700 bg-stone-900 px-1 py-0.5 text-[11px]"
+                    onChange={(next) => onChange({ ...picked, [item.name]: Math.max(1, Math.min(item.qty, next || 1)) })}
+                    label={`How many ${item.name}`}
+                    size="sm"
                   />
                 ) : null}
               </li>
@@ -54,11 +55,11 @@ function ItemPicker({ sheet, picked, onChange, title }: { sheet: CharacterSheet;
 
 function CoinField({ label, max, value, onChange }: { label: string; max: number; value: number; onChange: (gold: number) => void }) {
   return (
-    <label className="flex items-center gap-1 text-[11px] text-stone-400">
+    <div className="flex flex-wrap items-center gap-1 text-[11px] text-stone-400">
       {label}
-      <input type="number" min={0} max={max} value={value} onChange={(event) => onChange(Math.max(0, Math.min(max, Number(event.target.value) || 0)))} className="w-16 rounded border border-stone-700 bg-stone-900 px-1 py-0.5 text-[11px] text-amber-100" />
+      <NumberStepper min={0} max={max} value={value} onChange={(next) => onChange(Math.max(0, Math.min(max, next || 0)))} label={label} size="sm" />
       <span className="text-stone-500">gp of {max}</span>
-    </label>
+    </div>
   );
 }
 
@@ -106,7 +107,7 @@ export function TradeDialog({ campaignId, me, them, onClose }: { campaignId: str
           <CoinField label="Coin" max={them.gold} value={wantGold} onChange={setWantGold} />
         </div>
       </div>
-      {error ? <p className="mt-2 text-[11px] text-red-400">{error}</p> : null}
+      {error ? <p className="motion-shake mt-2 text-[11px] text-red-400">{error}</p> : null}
       <div className="mt-3 flex justify-end gap-2">
         <button type="button" onClick={onClose} className="rounded border border-stone-700 px-3 py-1 text-xs text-stone-400 hover:bg-stone-900">
           Never mind

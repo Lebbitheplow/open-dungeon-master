@@ -1,4 +1,4 @@
-import type { Ability } from "@/lib/schemas/sheet";
+import { ABILITIES, type Ability } from "@/lib/schemas/sheet";
 
 // Parses Open5e's prose-ish mechanics fields (race asi arrays, class
 // proficiency strings) into the same shapes the bundled SRD data uses, so
@@ -111,6 +111,17 @@ export function raceMechanics(data: Record<string, unknown>): RaceMechanics {
         }
       }
     }
+  } else if (data.asi && typeof data.asi === "object") {
+    // The expanded pack writes the bumps as a plain map, {"con":2,"wis":1},
+    // keyed by the short or the long ability name.
+    for (const [name, raw] of Object.entries(data.asi as Record<string, unknown>)) {
+      const key = normalizeText(name);
+      const ability = ABILITY_BY_NAME[key] ?? ((ABILITIES as readonly string[]).includes(key) ? (key as Ability) : undefined);
+      const value = Number(raw);
+      if (ability && Number.isFinite(value) && value !== 0) {
+        asi[ability] = (asi[ability] ?? 0) + value;
+      }
+    }
   }
   const speedRaw = (data.speed as { walk?: unknown } | undefined)?.walk;
   const speed = Number.isFinite(Number(speedRaw)) && Number(speedRaw) > 0 ? Number(speedRaw) : 30;
@@ -129,7 +140,9 @@ export function raceMechanics(data: Record<string, unknown>): RaceMechanics {
   const traitsSummary = String(data.traits ?? "")
     .replace(/\*\*_?|_?\*\*/g, "")
     .split(/\n+/)
-    .map((line) => line.split(".")[0])
+    // The name ends at the first full stop that closes a sentence; the one
+    // inside "(adv. vs poison)" is an abbreviation, not an ending.
+    .map((line) => line.split(/\.(?=\s+[A-Z]|$)/)[0].trim())
     .filter(Boolean)
     .slice(0, 6)
     .join(" · ");

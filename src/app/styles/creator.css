@@ -1,0 +1,742 @@
+/* The character creator (docs/visual-overhaul-plan.md section 7): the diamond
+   stepper, the step wipe, the dice grid and the lineage cards. Plain CSS on
+   the palette variables from globals.css, so the day theme follows without a
+   second set of rules except where a colour is stated outright. Every loop
+   stops under [data-effects="low"], and every beat has a reduced-motion rest
+   state at the end of this file. */
+
+/* ---- keyframes ---- */
+@keyframes diamond-ping {
+  0% { opacity: 0.6; scale: 1; }
+  70%, 100% { opacity: 0; scale: 1.55; }
+}
+@keyframes wipe-dim {
+  0% { opacity: 0; }
+  18%, 72% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes wipe-beam {
+  0% { opacity: 0; transform: translateX(-60%) scaleX(0.2); }
+  22% { opacity: 1; }
+  50% { opacity: 1; transform: translateX(0) scaleX(1); }
+  100% { opacity: 0; transform: translateX(60%) scaleX(0.2); }
+}
+@keyframes wipe-ring {
+  0% { opacity: 0; scale: 0.2; }
+  30% { opacity: 1; scale: 1; }
+  70% { opacity: 1; scale: 1.1; }
+  100% { opacity: 0; scale: 1.6; }
+}
+@keyframes creator-card-rise {
+  from { opacity: 0; translate: 0 14px; scale: 0.96; }
+  to { opacity: 1; translate: 0 0; scale: 1; }
+}
+@keyframes creator-cascade-in {
+  from { opacity: 0; translate: 0 10px; }
+  to { opacity: 1; translate: 0 0; }
+}
+@keyframes creator-pill-pop {
+  0% { opacity: 0; scale: 0.4; rotate: -12deg; }
+  60% { opacity: 1; scale: 1.15; }
+  100% { opacity: 1; scale: 1; rotate: -6deg; }
+}
+@keyframes creator-row-open {
+  from { opacity: 0; max-height: 0; }
+  to { opacity: 1; max-height: 12rem; }
+}
+/* One animation per die does the whole throw: shake, then rest at the die's
+   own random offset. Its duration is set per die, which staggers the settle
+   left to right without a timer per die. */
+@keyframes die-toss {
+  0% { translate: 0 0; rotate: 0deg; }
+  9% { translate: -7px 5px; rotate: 42deg; }
+  18% { translate: 6px -8px; rotate: 97deg; }
+  27% { translate: -5px -4px; rotate: 151deg; }
+  36% { translate: 9px 6px; rotate: 208deg; }
+  45% { translate: -8px 3px; rotate: 262deg; }
+  54% { translate: 4px -7px; rotate: 315deg; }
+  63% { translate: -6px 8px; rotate: 372deg; }
+  72% { translate: 7px 2px; rotate: 424deg; }
+  81% { translate: -3px -6px; rotate: 478deg; }
+  90%, 100% { translate: var(--dx) var(--dy); rotate: var(--dr); }
+}
+@keyframes die-wobble {
+  0%, 100% { scale: 0.975; }
+  50% { scale: 1.045; }
+}
+@keyframes d6-face {
+  0%, 15% { opacity: 1; }
+  17%, 100% { opacity: 0; }
+}
+@keyframes flicker-out {
+  0%, 86% { opacity: 1; }
+  90%, 100% { opacity: 0; }
+}
+@keyframes value-in {
+  0%, 86% { opacity: 0; }
+  90%, 100% { opacity: 1; }
+}
+@keyframes drop-in {
+  0%, 88% { opacity: 0; scale: 0.4; }
+  100% { opacity: 1; scale: 1; }
+}
+@keyframes total-pop {
+  0%, 88% { opacity: 0; scale: 0.6; }
+  96% { opacity: 1; scale: 1.18; }
+  100% { opacity: 1; scale: 1; }
+}
+@keyframes row-settle {
+  0% { border-color: rgba(212, 171, 58, 0.7); background-color: rgba(212, 171, 58, 0.1); }
+}
+
+/* ---- the diamond stepper ---- */
+.diamond-stepper {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.diamond-step {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+}
+.diamond-step[data-last] { flex: 0 0 auto; }
+.diamond-button {
+  position: relative;
+  display: flex;
+  /* 26 px of diamond inside a 36 px tap target. */
+  width: 36px;
+  height: 36px;
+  margin: -5px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  border-radius: 9999px;
+  transition: transform 220ms var(--ease-spring);
+}
+.diamond-button:not(:disabled) { cursor: pointer; }
+@media (hover: hover) {
+  .diamond-button:not(:disabled):hover { transform: scale(1.18); }
+}
+.diamond-button:not(:disabled):active { transform: scale(0.9); }
+.diamond-button:focus-visible { outline: 2px solid var(--color-amber-400); outline-offset: -4px; }
+.diamond-core {
+  position: absolute;
+  width: 13px;
+  height: 13px;
+  rotate: 45deg;
+  border: 1px solid color-mix(in srgb, var(--color-stone-600) 80%, transparent);
+  background: transparent;
+  transition:
+    background-color 500ms var(--ease-snap),
+    border-color 500ms var(--ease-snap),
+    box-shadow 500ms var(--ease-snap),
+    scale 500ms var(--ease-spring);
+}
+.diamond-step[data-state="done"] .diamond-core {
+  border: 2px solid var(--color-amber-300);
+  background: var(--color-amber-400);
+}
+.diamond-step[data-state="current"] .diamond-core {
+  border: 2px solid var(--color-amber-300);
+  background: var(--color-amber-500);
+  scale: 1.12;
+  box-shadow: 0 0 14px 3px rgba(212, 164, 74, 0.5), 0 0 8px rgba(255, 220, 100, 0.6) inset;
+}
+.diamond-ping {
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  rotate: 45deg;
+  border: 1px solid color-mix(in srgb, var(--color-amber-500) 40%, transparent);
+  animation: diamond-ping 2.5s var(--ease-drift) infinite;
+}
+.diamond-rule {
+  height: 1px;
+  flex: 1 1 auto;
+  min-width: 8px;
+  background: color-mix(in srgb, var(--color-stone-600) 60%, transparent);
+  transition: background-color 500ms var(--ease-snap);
+}
+.diamond-step[data-state="done"] .diamond-rule {
+  background: linear-gradient(90deg, var(--color-amber-400), color-mix(in srgb, var(--color-amber-400) 60%, transparent));
+}
+[data-effects="low"] .diamond-ping { animation: none; opacity: 0; }
+
+/* ---- the step wipe ---- */
+.step-wipe {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  pointer-events: none;
+}
+.step-wipe-dim {
+  position: absolute;
+  inset: 0;
+  background: var(--background);
+  animation: wipe-dim 700ms var(--ease-drift) both;
+}
+.step-wipe-beam {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  transform-origin: center;
+  background: linear-gradient(90deg, transparent, rgba(249, 236, 200, 0.2) 20%, #f9ecc8 50%, rgba(249, 236, 200, 0.2) 80%, transparent);
+  box-shadow: 0 0 22px rgba(212, 171, 58, 0.8);
+  animation: wipe-beam 700ms var(--ease-snap) both;
+}
+.step-wipe-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 110px;
+  height: 110px;
+  margin: -55px 0 0 -55px;
+  border-radius: 9999px;
+  border: 1.5px solid rgba(244, 224, 166, 0.9);
+  box-shadow: 0 0 30px rgba(212, 171, 58, 0.6), 0 0 60px rgba(212, 171, 58, 0.25) inset;
+  animation: wipe-ring 700ms var(--ease-snap) both;
+}
+html[data-theme="light"] .step-wipe-beam {
+  background: linear-gradient(90deg, transparent, rgba(138, 107, 28, 0.25) 20%, #8a6b1c 50%, rgba(138, 107, 28, 0.25) 80%, transparent);
+  box-shadow: 0 0 22px rgba(166, 132, 42, 0.6);
+}
+html[data-theme="light"] .step-wipe-ring {
+  border-color: rgba(138, 107, 28, 0.9);
+  box-shadow: 0 0 30px rgba(166, 132, 42, 0.45), 0 0 60px rgba(166, 132, 42, 0.2) inset;
+}
+
+/* A step's entrance plays when it becomes the active one, not when the
+   wizard mounts every step off screen. Fill is backwards only: a lingering
+   translate would make each block a containing block for anything fixed. */
+.wizard-step[data-active] > * { animation: creator-cascade-in var(--dur-move) var(--ease-snap) backwards; }
+.wizard-step[data-active] .creator-rise {
+  animation: creator-card-rise var(--dur-move) var(--ease-settle) backwards;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+.creator-cascade {
+  animation: creator-cascade-in var(--dur-move) var(--ease-snap) backwards;
+  animation-delay: calc(var(--i, 0) * var(--stagger, 120ms));
+}
+
+/* The scores panel and the health chips spring in (the mockup's scale-in on
+   --ease-spring, which the shared 180 ms snap version is not). */
+@keyframes creator-scale-in {
+  from { opacity: 0; scale: 0.96; }
+  to { opacity: 1; scale: 1; }
+}
+.creator-panel-in { animation: creator-scale-in var(--dur-move) var(--ease-spring) backwards; }
+.creator-chip-in {
+  animation: creator-scale-in var(--dur-move) var(--ease-spring) backwards;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+/* The carousel's trait rows rise like the cards do, 45 ms apart. */
+.creator-trait-rise {
+  animation: creator-card-rise var(--dur-move) var(--ease-settle) backwards;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+/* Stepping the carousel: the new lineage comes in from the side it was
+   asked for. Opening the dialog sets no direction, so nothing slides then. */
+@keyframes creator-slide-in {
+  from { opacity: 0; translate: var(--slide-from, 18px) 0; }
+  to { opacity: 1; translate: 0 0; }
+}
+.creator-slide[data-dir] { animation: creator-slide-in var(--dur-move) var(--ease-snap) backwards; }
+.creator-slide[data-dir="prev"] { --slide-from: -18px; }
+/* The gold corners an explainer draws out once its panel has landed. */
+@keyframes creator-diamond-in {
+  from { opacity: 0; scale: 0; }
+  to { opacity: 1; scale: 1; }
+}
+.creator-bracket {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+  border: 0 solid color-mix(in srgb, var(--color-amber-500) 60%, transparent);
+  animation: creator-diamond-in var(--dur-move) var(--ease-spring) 120ms backwards;
+}
+.creator-bracket[data-corner="tl"] { top: 8px; left: 8px; border-top-width: 1px; border-left-width: 1px; }
+.creator-bracket[data-corner="br"] { bottom: 8px; right: 8px; border-bottom-width: 1px; border-right-width: 1px; animation-delay: 180ms; }
+/* Continue eases between asleep and awake instead of blinking. The rest of
+   the list restates what motion-magnet sets, which this rule replaces. */
+.wizard-continue {
+  transition:
+    transform 220ms var(--ease-spring),
+    box-shadow var(--dur-quick) var(--ease-snap),
+    border-color var(--dur-quick) var(--ease-snap),
+    background-color var(--dur-quick) var(--ease-snap),
+    color var(--dur-quick) var(--ease-snap),
+    filter var(--dur-quick) var(--ease-snap),
+    opacity var(--dur-move) var(--ease-snap);
+}
+
+/* ---- lineage and class cards ---- */
+.creator-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(140px, 46%), 1fr));
+  gap: 10px;
+}
+.creator-grid[data-compact] { grid-template-columns: repeat(auto-fill, minmax(min(122px, 46%), 1fr)); }
+.creator-card-wrap { position: relative; }
+.creator-card {
+  position: relative;
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--color-stone-600) 50%, transparent);
+  border-radius: 12px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-stone-700) 42%, transparent), color-mix(in srgb, var(--color-stone-950) 90%, transparent));
+  box-shadow: var(--shadow-elev-1);
+  cursor: pointer;
+  text-align: left;
+}
+.creator-card:hover { border-color: color-mix(in srgb, var(--color-amber-500) 50%, transparent); }
+.creator-card:focus-visible { outline: 2px solid var(--color-amber-400); outline-offset: 2px; }
+.creator-card[aria-pressed="true"] {
+  border: 2px solid var(--color-amber-300);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-amber-500) 22%, transparent), color-mix(in srgb, var(--color-stone-950) 90%, transparent));
+  box-shadow: var(--shadow-glow-gold-strong), var(--shadow-elev-2);
+  --grow: 1.02;
+}
+.creator-plate {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  /* The plates are night paintings in both themes, so the ground under them
+     and the type over them stay night colours by design. */
+  background: #12101f;
+}
+.creator-plate[data-short] { aspect-ratio: 4 / 5; }
+/* In the carousel the plate shares a row with the facts on a phone and heads
+   its own column from 640 px. Stated here, not as utilities: this file is
+   unlayered, so its width would win over a utility class. */
+.creator-plate[data-detail] { width: 38%; flex: none; align-self: flex-start; }
+@media (min-width: 640px) {
+  .creator-plate[data-detail] { width: 100%; }
+}
+.creator-plate img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+}
+.creator-plate::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 45%, rgba(10, 8, 23, 0.88));
+}
+.creator-plate-text {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 9px;
+}
+/* Keeps the name clear of the class emblem in the plate's corner. */
+.creator-plate-text[data-icon] { padding-right: 38px; }
+.creator-plate-name {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: #f9ecc8;
+}
+.creator-plate-tag {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8.5px;
+  letter-spacing: 0.04em;
+  color: #aeaac6;
+}
+.creator-plate-tag,
+.creator-plate-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.creator-plate-tag { white-space: nowrap; }
+.creator-card[aria-pressed="true"] .creator-plate-tag { color: #ecd287; }
+.creator-card-foot {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 9px;
+  border-top: 1px solid color-mix(in srgb, var(--color-stone-700) 50%, transparent);
+}
+.creator-chip {
+  border-radius: 9999px;
+  border: 1px solid color-mix(in srgb, var(--color-amber-500) 35%, transparent);
+  background: color-mix(in srgb, var(--color-amber-950) 35%, transparent);
+  padding: 1px 5px;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8.5px;
+  white-space: nowrap;
+  color: var(--color-amber-300);
+}
+.creator-chip[data-size="md"] { padding: 2px 8px; font-size: 10px; }
+.creator-cta {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--color-stone-500);
+}
+/* A narrow class card has no room for two chips and the prompt. */
+.creator-grid[data-compact] .creator-card-foot:has(.creator-chip + .creator-chip) .creator-cta { display: none; }
+.creator-help {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  z-index: 4;
+  display: flex;
+  /* 22 px of button drawn inside a 32 px tap target. */
+  width: 32px;
+  height: 32px;
+  margin: -5px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  transition: transform 200ms var(--ease-spring);
+}
+.creator-help > span {
+  display: flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(212, 171, 58, 0.4);
+  border-radius: 9999px;
+  background: rgba(8, 6, 18, 0.82);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  color: #ecd287;
+  transition: border-color var(--dur-quick) var(--ease-snap);
+}
+.creator-help:hover > span,
+.creator-help:focus-visible > span { border-color: rgba(212, 171, 58, 0.9); }
+.creator-help:active { transform: scale(0.86); }
+.creator-selected {
+  position: absolute;
+  left: -7px;
+  top: -8px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 2px 5px;
+  border: 1px solid #f4d47a;
+  border-radius: 9999px;
+  background: linear-gradient(180deg, #f9ecc8, #e3c15c);
+  box-shadow: 0 2px 10px rgba(212, 171, 58, 0.5);
+  font-family: var(--font-display), Georgia, serif;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 8px;
+  font-weight: 700;
+  color: #2b2008;
+  rotate: -6deg;
+  pointer-events: none;
+  animation: creator-pill-pop var(--dur-beat) var(--ease-spring) both;
+}
+/* The setting's pick: a quiet seal on the plate, under the help button's row
+   so the two never fight for the corner. */
+.creator-recommended {
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px 2px 4px;
+  border: 1px solid rgba(244, 212, 122, 0.55);
+  border-radius: 9999px;
+  background: rgba(8, 6, 18, 0.82);
+  font-family: var(--font-display), Georgia, serif;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 7.5px;
+  font-weight: 700;
+  color: #f4e0a6;
+  pointer-events: none;
+}
+.creator-card-wrap[data-chosen] .creator-recommended { top: 16px; }
+/* A narrow class card: the badge tightens so it clears the help button. */
+.creator-grid[data-compact] .creator-recommended {
+  padding: 2px 5px 2px 3px;
+  letter-spacing: 0.04em;
+  font-size: 7px;
+}
+.creator-emblem {
+  position: absolute;
+  right: 7px;
+  bottom: 7px;
+  z-index: 2;
+}
+
+/* The carousel's trait rows. */
+.creator-trait {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--color-stone-700) 55%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--color-stone-950) 60%, transparent);
+  text-align: left;
+  transition:
+    transform 200ms var(--ease-spring),
+    border-color var(--dur-quick) var(--ease-snap),
+    background-color var(--dur-quick) var(--ease-snap);
+}
+.creator-trait:not(:disabled) { cursor: pointer; }
+/* Hover only where a pointer can hover: on touch it would stick after a tap. */
+@media (hover: hover) {
+  .creator-trait:not(:disabled):hover { transform: translateX(3px); background: color-mix(in srgb, var(--color-amber-950) 26%, transparent); }
+}
+.creator-trait:not(:disabled):active { transform: scale(0.99); }
+.creator-trait[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--color-amber-500) 50%, transparent);
+  background: color-mix(in srgb, var(--color-amber-950) 30%, transparent);
+}
+.creator-trait-body {
+  display: block;
+  overflow: hidden;
+  animation: creator-row-open var(--dur-move) var(--ease-snap) both;
+}
+.creator-chevron { transition: rotate var(--dur-move) var(--ease-spring); }
+.creator-trait[aria-expanded="true"] .creator-chevron { rotate: 180deg; }
+
+/* ---- the dice grid ---- */
+.dice-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--color-stone-700) 50%, transparent);
+  background-color: color-mix(in srgb, var(--color-stone-950) 60%, transparent);
+  transition:
+    border-color var(--dur-move) var(--ease-snap),
+    background-color var(--dur-move) var(--ease-snap);
+}
+.dice-row[data-phase="rolling"] {
+  border-color: color-mix(in srgb, var(--color-amber-500) 70%, transparent);
+  background-color: color-mix(in srgb, var(--color-amber-500) 10%, transparent);
+}
+.dice-row[data-phase="settled"] { animation: row-settle var(--dur-beat) var(--ease-snap) both; }
+.dice-abbr {
+  display: flex;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--color-amber-500) 28%, transparent);
+  background: color-mix(in srgb, var(--color-stone-950) 80%, transparent);
+  box-shadow: var(--shadow-glow-gold);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  color: var(--color-amber-300);
+}
+.die {
+  position: relative;
+  display: block;
+  width: 42px;
+  height: 42px;
+  flex: none;
+}
+.die[data-phase="settled"] { translate: var(--dx) var(--dy); rotate: var(--dr); }
+.die[data-phase="rolling"] { animation: die-toss var(--toss) var(--ease-settle) var(--delay, 0ms) both; }
+.die-inner { position: absolute; inset: 0; }
+.die[data-phase="rolling"] .die-inner { animation: die-wobble 190ms var(--ease-drift) infinite; }
+.die svg { position: absolute; inset: 0; width: 42px; height: 42px; }
+.die-body { filter: drop-shadow(0 2px 3px rgba(4, 2, 12, 0.7)); }
+.die-flicker { position: absolute; inset: 0; animation: flicker-out var(--toss) linear var(--delay, 0ms) both; }
+.die-flicker svg { opacity: 0; animation: d6-face 100ms linear infinite; }
+.die[data-phase="rolling"] .die-face { animation: value-in var(--toss) linear var(--delay, 0ms) both; }
+.die-idle {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* An unrolled die shows a drawn dash, not a glyph. */
+.die-idle::before {
+  content: "";
+  width: 11px;
+  height: 2px;
+  border-radius: 1px;
+  background: #3d3757;
+}
+.die-dropped {
+  position: absolute;
+  right: -2px;
+  top: -2px;
+  display: flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: rgba(8, 6, 18, 0.94);
+  border: 1px solid rgba(220, 38, 38, 0.6);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9px;
+  line-height: 1;
+  color: #f87171;
+}
+.die[data-phase="rolling"] .die-dropped { animation: drop-in var(--toss) linear var(--delay, 0ms) both; }
+.dice-total {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 23px;
+  font-weight: 700;
+  line-height: 1;
+}
+.dice-total[data-phase="rolling"] { animation: total-pop var(--pop) var(--ease-spring) var(--delay, 0ms) both; }
+/* Totals by tier: grim, poor, fair, good, heroic. */
+.roll-tier-1 { color: #f87171; text-shadow: 0 0 10px rgba(248, 113, 113, 0.45); }
+.roll-tier-2 { color: #ff9d5c; text-shadow: 0 0 10px rgba(255, 157, 92, 0.4); }
+.roll-tier-3 { color: #e3c15c; text-shadow: 0 0 10px rgba(227, 193, 92, 0.35); }
+.roll-tier-4 { color: #4ade80; text-shadow: 0 0 10px rgba(74, 222, 128, 0.4); }
+.roll-tier-5 { color: #a78bfa; text-shadow: 0 0 10px rgba(167, 139, 250, 0.6); }
+html[data-theme="light"] .roll-tier-1 { color: #b91c1c; text-shadow: none; }
+html[data-theme="light"] .roll-tier-2 { color: #c2410c; text-shadow: none; }
+html[data-theme="light"] .roll-tier-3 { color: #8a6b1c; text-shadow: none; }
+html[data-theme="light"] .roll-tier-4 { color: #15803d; text-shadow: none; }
+html[data-theme="light"] .roll-tier-5 { color: #6d28d9; text-shadow: none; }
+
+/* The method switch: a gold pill that springs under the chosen way. */
+.method-switch {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px;
+  border-radius: 11px;
+  border: 1px solid color-mix(in srgb, var(--color-stone-600) 45%, transparent);
+  background: color-mix(in srgb, var(--color-stone-950) 70%, transparent);
+}
+.method-option {
+  position: relative;
+  min-width: 0;
+  height: 30px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--color-stone-500);
+  cursor: pointer;
+  transition: color var(--dur-quick) var(--ease-snap), transform 200ms var(--ease-spring);
+}
+.method-option:active { transform: scale(0.94); }
+.method-option::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #f9ecc8, #e3c15c);
+  box-shadow: 0 0 18px rgba(212, 171, 58, 0.3);
+  opacity: 0;
+  scale: 0.86;
+  transition: opacity var(--dur-move) var(--ease-snap), scale 320ms var(--ease-spring);
+}
+.method-option[aria-pressed="true"] { color: #2b2008; }
+.method-option[aria-pressed="true"]::before { opacity: 1; scale: 1; }
+.method-option > span { position: relative; }
+
+.slot-button,
+.step-button {
+  display: flex;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--color-stone-600) 50%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--color-stone-950) 60%, transparent);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  color: var(--color-stone-400);
+  cursor: pointer;
+  transition:
+    transform 200ms var(--ease-spring),
+    border-color var(--dur-quick) var(--ease-snap),
+    background-color var(--dur-quick) var(--ease-snap),
+    color var(--dur-quick) var(--ease-snap);
+}
+.slot-button { flex: 1 1 0; min-width: 0; }
+.step-button { width: 34px; height: 34px; flex: none; font-size: 14px; }
+.slot-button:active,
+.step-button:not(:disabled):active { transform: scale(0.9); }
+.slot-button:hover,
+.step-button:not(:disabled):hover { color: var(--color-amber-200); border-color: color-mix(in srgb, var(--color-amber-500) 50%, transparent); }
+.slot-button[data-taken] { border-color: color-mix(in srgb, var(--color-stone-700) 40%, transparent); color: var(--color-stone-600); opacity: 0.6; }
+.slot-button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--color-amber-500) 70%, transparent);
+  background: color-mix(in srgb, var(--color-amber-500) 16%, transparent);
+  color: var(--color-amber-100);
+  opacity: 1;
+}
+.step-button:disabled { opacity: 0.35; cursor: default; }
+
+/* ---- rest states ---- */
+@media (prefers-reduced-motion: reduce) {
+  .diamond-ping { display: none; }
+  .diamond-button,
+  .creator-help,
+  .creator-trait,
+  .method-option,
+  .slot-button,
+  .step-button { transform: none !important; }
+  .wizard-step[data-active] > *,
+  .wizard-step[data-active] .creator-rise,
+  .creator-cascade,
+  .creator-panel-in,
+  .creator-chip-in,
+  .creator-trait-rise,
+  .creator-slide[data-dir],
+  .creator-bracket,
+  .creator-selected,
+  .creator-trait-body,
+  .dice-row[data-phase="settled"],
+  .die,
+  .die-inner,
+  .die-face,
+  .die-dropped,
+  .dice-total { animation: none !important; }
+  .die-flicker { display: none; }
+  .wizard-continue { transition: none; }
+}

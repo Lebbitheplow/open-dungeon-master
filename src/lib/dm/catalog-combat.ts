@@ -431,6 +431,19 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
     ],
   },
   {
+    name: "declare_intent",
+    label: "Declare intent",
+    category: "combat",
+    summary: "Telegraph what an enemy is about to do; the board shows it over that enemy for the rest of the round.",
+    needsEncounter: true,
+    fields: [
+      { name: "actor", label: "Enemy", kind: "enemy", required: true },
+      { name: "verb", label: "Plans to", kind: "text", required: true, placeholder: "Longsword" },
+      { name: "target", label: "Mark", kind: "character", help: "Leave empty when there is no single mark." },
+      { name: "expected", label: "Expected damage", kind: "number", min: 0, max: 9999, help: "Empty uses the named attack's average. Only seats that see enemy numbers are shown it." },
+    ],
+  },
+  {
     name: "legendary_resist",
     label: "Legendary resistance",
     category: "combat",

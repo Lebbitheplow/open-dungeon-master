@@ -19,7 +19,9 @@ import {
   setLibraryBackdrop,
   setLibraryLights,
   setLibraryScene,
+  setLibrarySkin,
 } from "@/lib/dm/map-library";
+import { SKIN_CHARS, isMaterialId, skinById } from "@/lib/battlemap/skins";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,6 +32,26 @@ export const dynamic = "force-dynamic";
 // Painting a stored map runs through exactly the painter the live board uses
 // (src/lib/battlemap/paint.ts), so a prepared map can never be a picture
 // that only turns out to be illegal at the moment it is deployed.
+
+// The whole skin at once: "" for the id is the default, and an empty bind
+// clears every override. Strict, so a character that is not terrain is a bad
+// request rather than something silently dropped.
+const skinSchema = z.object({
+  id: z
+    .string()
+    .max(64)
+    .refine((value) => value === "" || Boolean(skinById(value)), "Not a skin."),
+  bind: z
+    .record(z.string(), z.string())
+    .refine(
+      (bind) =>
+        Object.entries(bind).every(
+          ([char, material]) => (SKIN_CHARS as readonly string[]).includes(char) && isMaterialId(material),
+        ),
+      "Not a material.",
+    )
+    .default({}),
+});
 
 const patchSchema = paintRequestSchema
   .extend(lightsRequestSchema.shape)
@@ -53,6 +75,7 @@ const patchSchema = paintRequestSchema
       opacity: z.number().min(0).max(1),
     })
     .optional(),
+  skin: skinSchema.optional(),
 });
 
 const postSchema = z.object({
@@ -135,6 +158,13 @@ export async function PATCH(
       body.backdropPath ?? current.backdrop?.path ?? "",
       body.backdropTransform ?? current.backdrop?.transform ?? null,
     );
+    if ("error" in outcome) {
+      return Response.json({ error: outcome.error }, { status: 404 });
+    }
+  }
+
+  if (body.skin !== undefined) {
+    const outcome = setLibrarySkin(context.campaign, mapId, body.skin);
     if ("error" in outcome) {
       return Response.json({ error: outcome.error }, { status: 404 });
     }

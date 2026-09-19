@@ -316,6 +316,9 @@ export function studioState(campaign: Campaign) {
   return {
     board: board ? board.kind : null,
     enemyCount: board && board.kind === "fight" ? listEnemies(board.id).length : 0,
+    // The setting, so the studio paints its preview in the skin the table
+    // will see (src/lib/battlemap/skins.ts).
+    genre: campaign.gameSettings.genre,
     map: map
       ? {
           seed: map.seed,
@@ -333,6 +336,7 @@ export function studioState(campaign: Campaign) {
           labels: map.labels,
           zones: map.zones,
           overlayPath: map.overlayPath,
+          skin: map.skin,
         }
       : null,
   };

@@ -1,7 +1,9 @@
+import os from "node:os";
 import packageJson from "../../../../../package.json";
 import { getGlobalConfig, getInstanceId } from "@/lib/db/app-settings";
 import { discordCredentials } from "@/lib/discord-oauth";
 import { resolveSignupMode } from "@/lib/schemas/global-config";
+import { livePublicUrl } from "@/lib/server-address";
 import { isDeviceWorld } from "@/lib/server-env";
 
 export const runtime = "nodejs";
@@ -31,7 +33,9 @@ export async function GET() {
     // The address OTHER people reach this server on, when it differs from
     // the one the current visitor used (e.g. a host playing on 127.0.0.1
     // while a tunnel shares the world). Share dialogs prefer it.
-    publicUrl: (config.publicUrl || "").replace(/\/+$/, ""),
+    // A saved private address this machine no longer holds is dropped
+    // (livePublicUrl), so an invite never carries a dead link.
+    publicUrl: livePublicUrl(config.publicUrl, os.networkInterfaces()),
     // Stable across restarts and address changes. Client apps use it to
     // recognize a world they already have a session on when it comes back
     // at a new tunnel hostname, and rebind their saved entry to it.

@@ -7,32 +7,29 @@ import { fxTone, type FxEvent, type FxOutcome } from "@/lib/battlemap/fx-plan";
 import { haptic, prefersReducedMotion, useLowEffects } from "@/lib/effects-mode";
 import type { ParticleHandle } from "@/components/ParticleCanvas";
 import type { XY } from "@/lib/battlemap/types";
-import { flipbookFor } from "@/lib/battlemap/flipbooks";
 import { Flipbook } from "@/app/campaigns/[campaignId]/BoardFlipbook";
+import { deliveryImpact, deliveryTravel, MissChip } from "@/app/campaigns/[campaignId]/BoardDelivery";
+import { beatSheet, effectHold, numberRise, type BeatSheet } from "@/lib/battlemap/beats";
+import { presentationFor, seedOf, type Presentation, type Shake } from "@/lib/battlemap/delivery";
 
 // The effect player (docs/vtt-parity-implementation-plan.md section 1.3).
 // Effects arrive planned from the server; this component queues them, plays
 // at most one per target token at a time, draws the SVG half (arcs, bolts,
 // beams, rings, captions, floating numbers) and asks the particle canvas
-// for the rest. Every timing is a token from globals.css; on reduced
-// motion only the caption and the number play, and only for their hold.
+// for the rest. How a damage type arrives is one row of the delivery table
+// (src/lib/battlemap/delivery.ts) and how long anything holds the stage is
+// the beat sheet (src/lib/battlemap/beats.ts): the full set at the table's
+// pace, the quick set under low effects or when effects are queueing, and on
+// reduced motion only the caption and the number, for their 320 ms hold.
 
-// How long each kind stays on screen, in milliseconds. Matches the CSS
-// durations of the classes each piece uses.
-const HOLD: Record<string, number> = {
-  attack: 620,
-  spell: 760,
-  heal: 700,
-  condition: 480,
-  death: 1000,
-  door: 520,
-  hazard: 700,
-  template: 1100,
-  teleport: 760,
-  ping: 400,
-};
+type Active = { fx: FxEvent; startedAt: number; hold: number; quick: boolean };
 
-type Active = { fx: FxEvent; startedAt: number };
+function planOf(fx: FxEvent, low: boolean): Presentation {
+  return presentationFor(
+    { kind: fx.kind, damageType: fx.damageType, outcome: fx.outcome, ranged: fx.ranged, amount: fx.amount },
+    { low },
+  );
+}
 
 function targetsOf(fx: FxEvent): XY[] {
   if (!fx.to) {
@@ -71,14 +68,20 @@ export function useFxPlayer(
   onPlayed: (ids: string[]) => void,
   particles: React.RefObject<ParticleHandle | null>,
   toCanvas: (svgX: number, svgY: number) => { x: number; y: number },
+  // Shakes the stage: translate only, after `delay`, never under reduced
+  // motion or low effects (the caller owns the element). The effect comes
+  // along so the caller can kick the struck figures on the same beat.
+  onShake?: (shake: Shake, delay: number, fx: FxEvent) => void,
 ) {
   const [active, setActive] = useState<Active[]>([]);
   const seenRef = useRef<Set<string>>(new Set());
   const pendingRef = useRef<FxEvent[]>([]);
   const low = useLowEffects();
   const onPlayedRef = useRef(onPlayed);
+  const onShakeRef = useRef(onShake);
   useEffect(() => {
     onPlayedRef.current = onPlayed;
+    onShakeRef.current = onShake;
   });
 
   // Move whatever may start from the queue into the active list. The
@@ -93,10 +96,20 @@ export function useFxPlayer(
           break;
         }
         pendingRef.current = pendingRef.current.filter((entry) => entry.id !== fx.id);
-        next = [...next, { fx, startedAt: performance.now() }];
+        const reduced = prefersReducedMotion();
+        // A queue behind this one means the table is waiting: play it quick.
+        const quick = low || pendingRef.current.length > 0;
+        const plan = planOf(fx, low);
+        const sheet = beatSheet({ quick, reduced });
+        next = [...next, { fx, startedAt: performance.now(), hold: effectHold(fx.kind, sheet, plan.row.delay), quick }];
         started = true;
-        if (!prefersReducedMotion() && particles.current) {
-          emitParticles(fx, particles.current, toCanvas, low);
+        if (!reduced && particles.current) {
+          const handle = particles.current;
+          // A delayed burst must not land on a canvas that has since gone.
+          emitParticles(fx, plan, handle, toCanvas, low, () => particles.current === handle);
+        }
+        if (!reduced && !low && plan.shake) {
+          onShakeRef.current?.(plan.shake, plan.row.delay, fx);
         }
         if (fx.kind === "attack" || fx.kind === "spell") {
           if (fx.outcome === "crit") {
@@ -139,11 +152,8 @@ export function useFxPlayer(
     }
     const timer = window.setInterval(() => {
       const now = performance.now();
-      const reduced = prefersReducedMotion();
       setActive((current) => {
-        const done = current.filter(
-          (entry) => now - entry.startedAt >= (reduced ? 320 : (HOLD[entry.fx.kind] ?? 600)),
-        );
+        const done = current.filter((entry) => now - entry.startedAt >= entry.hold);
         if (!done.length) {
           return current;
         }
@@ -160,38 +170,56 @@ export function useFxPlayer(
   return active;
 }
 
+// The particle half, read off the delivery table: the family and the count
+// come from the row (halved on the low tier), and the burst waits for the
+// impact beat so an ember bursts when it lands, not when it is thrown.
 function emitParticles(
   fx: FxEvent,
+  plan: Presentation,
   handle: ParticleHandle,
   toCanvas: (x: number, y: number) => { x: number; y: number },
   low: boolean,
+  alive: () => boolean,
 ) {
   const tone = damageTone(fx.damageType);
   const color = fxTone(fx);
   const targets = targetsOf(fx);
-  const count = low ? 4 : 12;
-  if (fx.kind === "attack") {
-    if (fx.outcome === "crit") {
-      for (const tile of targets) {
-        const p = toCanvas(centre(tile).x, centre(tile).y);
-        handle.burst(p.x, p.y, "#d4ab3a", "shard", low ? 4 : 8);
-      }
-    } else if (fx.outcome === "hit") {
-      for (const tile of targets) {
-        const p = toCanvas(centre(tile).x, centre(tile).y);
-        handle.burst(p.x, p.y, tone.color, "spark", low ? 3 : 6);
-      }
+  const burst = plan.particles;
+  const count = burst?.count ?? (low ? 4 : 12);
+  const at = (fn: () => void, delay: number) => {
+    if (delay <= 0) {
+      fn();
+    } else {
+      window.setTimeout(() => {
+        if (alive()) {
+          fn();
+        }
+      }, delay);
     }
+  };
+  if (fx.kind === "attack") {
+    if (!burst) {
+      return;
+    }
+    at(() => {
+      for (const tile of targets) {
+        const p = toCanvas(centre(tile).x, centre(tile).y);
+        // A blade throws fewer, finer pieces than a spell of the same family.
+        handle.burst(p.x, p.y, burst.color, fx.outcome === "crit" ? "shard" : burst.family, Math.ceil(burst.count * 0.6));
+      }
+    }, burst.at);
     return;
   }
   if (fx.kind === "spell" || fx.kind === "hazard") {
-    if (fx.outcome === "miss" || fx.outcome === "save") {
+    if (!burst) {
       return;
     }
-    for (const tile of targets) {
-      const p = toCanvas(centre(tile).x, centre(tile).y);
-      handle.burst(p.x, p.y, tone.color, tone.burst, count);
-    }
+    at(() => {
+      for (const tile of targets) {
+        const p = toCanvas(centre(tile).x, centre(tile).y);
+        handle.burst(p.x, p.y, burst.color, burst.family, burst.count);
+      }
+    }, burst.at);
     return;
   }
   if (fx.kind === "template") {
@@ -206,11 +234,13 @@ function emitParticles(
     return;
   }
   if (fx.kind === "heal") {
-    for (const tile of targets) {
-      const c = centre(tile);
-      const p = toCanvas(c.x, c.y + TILE / 2 - 4);
-      handle.burst(p.x, p.y, "#7ed6a4", "bloom", count);
-    }
+    at(() => {
+      for (const tile of targets) {
+        const c = centre(tile);
+        const p = toCanvas(c.x, c.y + TILE / 2 - 4);
+        handle.burst(p.x, p.y, "#7ed6a4", "bloom", count);
+      }
+    }, plan.row.delay);
     return;
   }
   if (fx.kind === "teleport") {
@@ -227,16 +257,17 @@ function emitParticles(
   if (fx.kind === "death") {
     for (const tile of targets) {
       const p = toCanvas(centre(tile).x, centre(tile).y);
-      handle.burst(p.x, p.y, "#5b3a8a", "mist", count);
+      handle.burst(p.x, p.y, "#5b3a8a", "mist", low ? 4 : 9);
     }
   }
   // A torch guttering out: a last flare of ember, then a curl of smoke
   // (docs/vtt-parity-implementation-plan.md 7.3).
   if (fx.kind === "gutter") {
+    const embers = low ? 4 : 12;
     for (const tile of targets) {
       const p = toCanvas(centre(tile).x, centre(tile).y);
-      handle.burst(p.x, p.y, "#e0a040", "spark", Math.max(4, Math.floor(count / 2)));
-      handle.burst(p.x, p.y, "#6b6b6b", "mist", count);
+      handle.burst(p.x, p.y, "#e0a040", "spark", Math.max(4, Math.floor(embers / 2)));
+      handle.burst(p.x, p.y, "#6b6b6b", "mist", embers);
     }
   }
 }
@@ -250,7 +281,21 @@ const CAPTION: Partial<Record<FxOutcome, string>> = {
   crit: "critical",
 };
 
-function Caption({ at, text, color }: { at: XY; text: string; color: string }) {
+function Caption({
+  at,
+  text,
+  color,
+  hold,
+  delay = 0,
+}: {
+  at: XY;
+  text: string;
+  color: string;
+  // How long the word stays up; the status beat for a condition.
+  hold: number;
+  delay?: number;
+}) {
+  const reduced = prefersReducedMotion();
   return (
     <text
       x={at.x}
@@ -262,8 +307,15 @@ function Caption({ at, text, color }: { at: XY; text: string; color: string }) {
       stroke="#0c0a09"
       strokeWidth={2.5}
       paintOrder="stroke"
-      className="fx-rise"
-      style={{ fontFamily: "sans-serif", letterSpacing: "0.04em", textTransform: "uppercase" }}
+      // Reduced motion shows the word still: the collapsed keyframe would
+      // end on its faded-out frame and show nothing at all.
+      className={reduced ? undefined : "fx-rise"}
+      style={{
+        fontFamily: "sans-serif",
+        letterSpacing: "0.04em",
+        textTransform: "uppercase",
+        ...(reduced ? {} : { animationDuration: `${hold}ms`, animationDelay: `${delay}ms` }),
+      }}
     >
       {text}
     </text>
@@ -273,105 +325,65 @@ function Caption({ at, text, color }: { at: XY; text: string; color: string }) {
 function FloatingNumber({
   at,
   amount,
-  color,
-  big,
+  plan,
+  rise,
 }: {
   at: XY;
   amount: number;
-  color: string;
-  big: boolean;
+  plan: Presentation;
+  rise: number;
 }) {
+  const reduced = prefersReducedMotion();
+  const style = plan.number ?? { color: "#ff9d5c", size: 13, variant: "damage" as const };
   return (
     <text
       x={at.x}
       y={at.y - 4}
       textAnchor="middle"
-      fontSize={big ? 18 : 13}
+      fontSize={style.size}
       fontWeight={700}
-      fill={color}
+      fill={style.color}
       stroke="#0c0a09"
       strokeWidth={3}
       paintOrder="stroke"
-      className="fx-rise"
-      style={{ fontFamily: "var(--font-display), serif" }}
+      className={reduced ? undefined : "fx-dmg-rise"}
+      style={
+        {
+          fontFamily: "var(--font-display), serif",
+          ...(reduced ? {} : { "--fx-rise": `${rise}ms`, animationDelay: `${plan.row.delay}ms` }),
+        } as React.CSSProperties
+      }
     >
-      {amount}
+      {style.variant === "heal" ? `+${amount}` : amount}
     </text>
   );
 }
 
 // The SVG half of one effect.
-function EffectShape({ fx }: { fx: FxEvent }) {
+function EffectShape({ fx, sheet }: { fx: FxEvent; sheet: BeatSheet }) {
   const reduced = prefersReducedMotion();
+  const low = lowEffectsNow();
   const color = fxTone(fx);
   const targets = targetsOf(fx);
   const from = fx.from ? centre(fx.from) : null;
   const first = targets[0] ? centre(targets[0]) : null;
-  const numberColor =
-    fx.kind === "heal" ? "#7ed6a4" : fx.outcome === "crit" ? "#d4ab3a" : "#ff9d5c";
+  const plan = planOf(fx, low);
+  const rise = numberRise(sheet);
+  const seed = seedOf(fx.id);
 
   const nodes: React.ReactNode[] = [];
 
   if (fx.kind === "attack" && first) {
-    const landed = fx.outcome === "hit" || fx.outcome === "crit";
-    if (!reduced && from) {
-      if (fx.ranged) {
-        nodes.push(
-          <line
-            key="bolt"
-            x1={from.x}
-            y1={from.y}
-            x2={first.x}
-            y2={first.y}
-            stroke={color}
-            strokeWidth={1.5}
-            strokeLinecap="round"
-            className="fx-flash"
-            style={{ animationDuration: "var(--dur-quick)" }}
-          />,
-        );
-      } else {
-        // An arc swing at the target's near edge, in the attacker's tone.
-        const angle = Math.atan2(first.y - from.y, first.x - from.x);
-        const r = TILE * 0.55;
-        const a0 = angle - 0.9;
-        const a1 = angle + 0.9;
-        const sx = first.x - Math.cos(a0) * r;
-        const sy = first.y - Math.sin(a0) * r;
-        const ex = first.x - Math.cos(a1) * r;
-        const ey = first.y - Math.sin(a1) * r;
-        nodes.push(
-          <path
-            key="arc"
-            d={`M ${sx} ${sy} A ${r} ${r} 0 0 1 ${ex} ${ey}`}
-            fill="none"
-            stroke={landed ? color : "#d6cfc2"}
-            strokeOpacity={landed ? 0.9 : 0.5}
-            strokeWidth={landed ? 3 : 2}
-            strokeLinecap="round"
-            className="fx-sweep"
-            style={{ transformOrigin: `${first.x}px ${first.y}px` }}
-          />,
-        );
-      }
-    }
-    if (landed && !reduced) {
-      nodes.push(
-        <circle
-          key="rim"
-          cx={first.x}
-          cy={first.y}
-          r={TILE / 2 - 2}
-          fill="none"
-          stroke={fx.outcome === "crit" ? "#d4ab3a" : "#e0703a"}
-          strokeWidth={2.5}
-          className="fx-flash"
-        />,
-      );
+    if (!reduced) {
+      nodes.push(...deliveryTravel({ plan, from, to: first, seed }), ...deliveryImpact({ plan, to: first }));
     }
     if (fx.outcome === "crit" && !reduced) {
       nodes.push(
-        <g key="shards" className="fx-bloom" style={{ transformOrigin: `${first.x}px ${first.y}px` }}>
+        <g
+          key="shards"
+          className="fx-bloom"
+          style={{ transformOrigin: `${first.x}px ${first.y}px`, animationDelay: `${plan.row.delay}ms` }}
+        >
           {Array.from({ length: 8 }, (_, i) => {
             const a = (i / 8) * Math.PI * 2;
             const r0 = TILE / 2;
@@ -390,40 +402,34 @@ function EffectShape({ fx }: { fx: FxEvent }) {
     }
     const caption = fx.outcome ? CAPTION[fx.outcome] : "";
     if (caption) {
-      nodes.push(
-        <Caption
-          key="cap"
-          at={fx.outcome === "fumble" && from ? from : first}
-          text={caption}
-          color={fx.outcome === "crit" ? "#d4ab3a" : "#d6cfc2"}
-        />,
-      );
+      const at = fx.outcome === "fumble" && from ? from : first;
+      if ((fx.outcome === "miss" || fx.outcome === "fumble") && !reduced) {
+        nodes.push(<MissChip key="cap" at={at} text={caption} delay={plan.row.delay} />);
+      } else {
+        nodes.push(
+          <Caption
+            key="cap"
+            at={at}
+            text={caption}
+            color={fx.outcome === "crit" ? "#d4ab3a" : "#d6cfc2"}
+            hold={rise}
+            delay={plan.row.delay}
+          />,
+        );
+      }
     }
     if (typeof fx.amount === "number") {
-      nodes.push(
-        <FloatingNumber key="num" at={first} amount={fx.amount} color={numberColor} big={fx.outcome === "crit"} />,
-      );
+      nodes.push(<FloatingNumber key="num" at={first} amount={fx.amount} plan={plan} rise={rise} />);
     }
   } else if ((fx.kind === "spell" || fx.kind === "hazard") && first) {
-    const landed = fx.outcome !== "miss" && fx.outcome !== "save";
-    if (!reduced && from && fx.kind === "spell") {
+    if (!reduced) {
+      // A hazard has no caster: it opens where it is.
       nodes.push(
-        <line
-          key="beam"
-          x1={from.x}
-          y1={from.y}
-          x2={first.x}
-          y2={first.y}
-          stroke={color}
-          strokeWidth={3}
-          strokeOpacity={0.85}
-          strokeLinecap="round"
-          className="fx-flash"
-          filter="url(#fx-soft)"
-        />,
+        ...deliveryTravel({ plan, from: fx.kind === "spell" ? from : null, to: first, seed }),
+        ...deliveryImpact({ plan, to: first }),
       );
     }
-    if (landed && !reduced) {
+    if (plan.landing !== "none" && !reduced) {
       nodes.push(
         <circle
           key="burst"
@@ -435,16 +441,20 @@ function EffectShape({ fx }: { fx: FxEvent }) {
           stroke={damageTone(fx.damageType).edge}
           strokeOpacity={0.8}
           className="fx-bloom"
-          style={{ transformOrigin: `${first.x}px ${first.y}px` }}
+          style={{ transformOrigin: `${first.x}px ${first.y}px`, animationDelay: `${plan.row.delay}ms` }}
         />,
       );
     }
     const caption = fx.outcome ? CAPTION[fx.outcome] : "";
     if (caption) {
-      nodes.push(<Caption key="cap" at={first} text={caption} color="#d6cfc2" />);
+      if (fx.outcome === "miss" && !reduced) {
+        nodes.push(<MissChip key="cap" at={first} text={caption} delay={plan.row.delay} />);
+      } else {
+        nodes.push(<Caption key="cap" at={first} text={caption} color="#d6cfc2" hold={rise} delay={plan.row.delay} />);
+      }
     }
     if (typeof fx.amount === "number") {
-      nodes.push(<FloatingNumber key="num" at={first} amount={fx.amount} color={numberColor} big={false} />);
+      nodes.push(<FloatingNumber key="num" at={first} amount={fx.amount} plan={plan} rise={rise} />);
     }
   } else if (fx.kind === "template" && fx.shape) {
     const outcomes = fx.outcomes ?? [];
@@ -471,7 +481,7 @@ function EffectShape({ fx }: { fx: FxEvent }) {
       const outcome = outcomes[index];
       const caption = outcome ? CAPTION[outcome] : "";
       if (caption) {
-        nodes.push(<Caption key={`c-${index}`} at={centre(tile)} text={caption} color="#d6cfc2" />);
+        nodes.push(<Caption key={`c-${index}`} at={centre(tile)} text={caption} color="#d6cfc2" hold={rise} />);
       }
     });
   } else if (fx.kind === "heal" && first) {
@@ -492,7 +502,7 @@ function EffectShape({ fx }: { fx: FxEvent }) {
       );
     }
     if (typeof fx.amount === "number") {
-      nodes.push(<FloatingNumber key="num" at={first} amount={fx.amount} color="#7ed6a4" big={false} />);
+      nodes.push(<FloatingNumber key="num" at={first} amount={fx.amount} plan={plan} rise={rise} />);
     }
   } else if (fx.kind === "condition" && first) {
     nodes.push(
@@ -501,6 +511,7 @@ function EffectShape({ fx }: { fx: FxEvent }) {
         at={first}
         text={fx.outcome === "save" ? `${fx.label ?? ""} ends` : fx.label ?? ""}
         color={fx.outcome === "save" ? "#d6cfc2" : "#ff9d5c"}
+        hold={sheet.status}
       />,
     );
     if (!reduced) {
@@ -534,7 +545,7 @@ function EffectShape({ fx }: { fx: FxEvent }) {
         />,
       );
     }
-    nodes.push(<Caption key="cap" at={first} text="slain" color="#a985d9" />);
+    nodes.push(<Caption key="cap" at={first} text="slain" color="#a985d9" hold={sheet.status} />);
   } else if (fx.kind === "door" && first) {
     const tile = targets[0];
     if (!reduced && (fx.state === "open" || fx.state === "closed")) {
@@ -585,6 +596,7 @@ function EffectShape({ fx }: { fx: FxEvent }) {
         at={first}
         text={fx.state === "found" ? "a door" : fx.state ?? ""}
         color="#d4ab3a"
+        hold={sheet.impact + sheet.clear}
       />,
     );
   } else if (fx.kind === "teleport" && first) {
@@ -623,10 +635,12 @@ function EffectShape({ fx }: { fx: FxEvent }) {
   // The painted flipbook over each target, on top of the drawn effect, which
   // stays as the fallback when this host has no sheets. Skipped under reduced
   // motion and low effects, like every other loop and flourish.
-  const sheetId = reduced || lowEffectsNow() ? null : flipbookFor(fx);
+  // The table names the sheet, and the sheet waits for the impact beat like
+  // everything else that happens at the target.
+  const sheetId = reduced || low ? null : plan.flipbook;
   if (sheetId) {
     for (const [index, target] of targets.entries()) {
-      nodes.push(<Flipbook key={`book-${index}`} sheetId={sheetId} at={centre(target)} />);
+      nodes.push(<Flipbook key={`book-${index}`} sheetId={sheetId} at={centre(target)} delay={plan.row.delay} />);
     }
   }
 
@@ -640,7 +654,14 @@ function lowEffectsNow(): boolean {
 // Rendered inside the board's <svg>, above every other layer.
 export function FxLayer({ active }: { active: Active[] }) {
   const nodes = useMemo(
-    () => active.map((entry) => <EffectShape key={entry.fx.id} fx={entry.fx} />),
+    () =>
+      active.map((entry) => (
+        <EffectShape
+          key={entry.fx.id}
+          fx={entry.fx}
+          sheet={beatSheet({ quick: entry.quick, reduced: prefersReducedMotion() })}
+        />
+      )),
     [active],
   );
   return nodes.length ? <g data-layer="fx">{nodes}</g> : null;

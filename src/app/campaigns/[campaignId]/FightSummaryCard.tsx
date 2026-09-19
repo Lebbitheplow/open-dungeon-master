@@ -43,13 +43,13 @@ export function FightSummaryCard({ summary, onDismiss, className }: { summary: E
           <X className="size-3.5" />
         </button>
       </div>
-      <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-8">
+      <div className="stagger-up grid grid-cols-4 gap-1.5 sm:grid-cols-8">
         {tiles.map(([label, value], index) => (
           <Tile key={label} label={label} value={value} index={index} />
         ))}
       </div>
       {top && top.dealt > 0 ? (
-        <p className="mt-2 text-[11px] text-stone-400">
+        <p className="reveal mt-2 text-[11px] text-stone-400">
           {top.name} struck hardest with {top.dealt} damage
           {summary.fighters.length > 1 ? `; ${summary.fighters.map((line) => `${line.name} ${line.dealt}/${line.taken}`).join(", ")} (dealt/taken)` : ""}.
         </p>

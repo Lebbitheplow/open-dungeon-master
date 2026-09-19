@@ -2,19 +2,18 @@
 
 import Link from "next/link";
 import { appConfirm } from "@/components/ui/ConfirmDialog";
-import { ArrowLeft, Dices, Pencil } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { useShellShare } from "@/lib/use-shell-share";
-import { CampaignCover } from "@/components/CampaignCover";
 import { ScheduleSection } from "@/components/ScheduleSection";
-import { Tooltip } from "@/components/ui/Tooltip";
 import { ui } from "@/lib/ui";
 import { CompanionBuilderDialog } from "@/app/campaigns/[campaignId]/CompanionBuilderDialog";
 import { EditCampaignDialog } from "@/app/campaigns/[campaignId]/EditCampaignDialog";
 import { GameSettingsPanel } from "@/app/campaigns/[campaignId]/GameSettingsPanel";
 import { LobbyActions } from "@/app/campaigns/[campaignId]/LobbyActions";
 import { LobbyParty } from "@/app/campaigns/[campaignId]/LobbyParty";
+import { LobbyGroupHead, LobbyHero, LobbyRealDice, enter } from "@/app/campaigns/[campaignId]/LobbyPieces";
 import { LobbyRoomCode } from "@/app/campaigns/[campaignId]/LobbyRoomCode";
 import { LorePanel } from "@/app/campaigns/[campaignId]/LorePanel";
 import { RulesPanel } from "@/app/campaigns/[campaignId]/RulesPanel";
@@ -29,10 +28,13 @@ import {
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
 import { navigateTo } from "@/lib/navigation";
 
-// The lobby: where the table gathers before the adventure opens. The cover
-// art and title lead, then the room code, the game's settings and prep,
-// the call, the schedule, the party and finally the block of actions that
-// belongs to this viewer's seat (LobbyActions).
+// The lobby: where the table gathers before the adventure opens. On a desktop
+// it is a table with two sides: the campaign, its party and this viewer's
+// actions (LobbyActions) on the left with the story's prep under them; the
+// room code, the schedule, the call and the game's settings on the right. On
+// a phone the two sides fold into one column, ordered so the code, the party
+// and the Begin button come before the long settings (the order-* classes:
+// both columns are display: contents below lg, so their children interleave).
 export function Lobby({ state, refresh }: { state: CampaignState; refresh: () => void }) {
   const { campaign, me, members, sheets } = state;
   const [busy, setBusy] = useState(false);
@@ -316,190 +318,168 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
   }
 
   return (
-    <main className="mx-auto w-full max-w-2xl flex-1 p-4 sm:p-6">
-      <header className="mb-6">
-        <Link
-          href="/"
-          className="mb-3 inline-flex items-center gap-1.5 text-sm text-stone-500 transition-colors hover:text-amber-200"
-        >
-          <ArrowLeft className="size-4" /> All campaigns
-        </Link>
-        <div className={cn(ui.card, "ornate texture-noise flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:p-5")}>
-          <CampaignCover
-            cover={campaign.cover}
-            title={campaign.title}
-            genre={campaign.gameSettings.genre}
-            seed={campaign.id}
-            className="w-full shrink-0 sm:w-44"
+    <main className="mx-auto w-full max-w-2xl flex-1 p-4 sm:p-6 lg:max-w-6xl">
+      <Link
+        href="/"
+        className="mb-3 inline-flex items-center gap-1.5 text-sm text-stone-500 transition-colors hover:text-amber-200"
+      >
+        <ArrowLeft className="size-4" /> All campaigns
+      </Link>
+
+      <div className="flex flex-col lg:grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:items-start lg:gap-x-8">
+        <div className="contents lg:flex lg:min-w-0 lg:flex-col">
+          <LobbyHero
+            campaign={campaign}
+            canEdit={isLead}
+            onEdit={() => setEditing(true)}
+            className="lobby-enter order-1"
+            style={enter(0)}
           />
-          <div className="min-w-0 flex-1">
-            <p className={ui.sectionEyebrow}>Waiting in the lobby</p>
-            <h1 className="mt-1 flex items-center gap-2 font-display text-2xl tracking-wide text-amber-50">
-              <span className="truncate">{campaign.title}</span>
-              {isLead ? (
-                <Tooltip content="Edit campaign settings">
-                  <button
-                    type="button"
-                    onClick={() => setEditing(true)}
-                    aria-label="Edit campaign settings"
-                    className="shrink-0 rounded-md border border-stone-700/70 p-1.5 text-stone-400 transition-colors hover:border-amber-500/40 hover:text-amber-100"
-                  >
-                    <Pencil className="size-3.5" />
-                  </button>
-                </Tooltip>
-              ) : null}
-            </h1>
-            <p className="mt-1 text-sm text-stone-400">
-              Level {campaign.startingLevel} start · {campaign.difficulty}
-              {campaign.theme ? ` · ${campaign.theme}` : ""}
-            </p>
-            {campaign.description ? (
-              <p className="mt-2 text-sm text-stone-300">{campaign.description}</p>
-            ) : null}
-          </div>
-        </div>
-      </header>
 
-      {!isSolo ? (
-        <LobbyRoomCode
-          campaignId={campaign.id}
-          campaignTitle={campaign.title}
-          inviteCode={campaign.inviteCode}
-          canRegenerate={isLead}
-          shareUrl={shareUrl}
-        />
-      ) : null}
+          {!isSolo || showCompanions ? (
+            <LobbyParty
+              campaign={campaign}
+              members={members}
+              sheets={sheets}
+              canMakeLead={isLead || isOwner}
+              humanDmTable={humanDmTable}
+              canAssignSeats={canAssignSeats}
+              seatError={seatError}
+              onMakeLead={makeLead}
+              onAssignSeat={assignSeat}
+              canMute={isLead || isOwner}
+              onMute={muteMember}
+              showParty={!isSolo}
+              showCompanions={showCompanions}
+              partyCompanions={partyCompanions}
+              canBuildCompanion={canBuildCompanion}
+              onBuildCompanion={() => setBuildingCompanion(true)}
+              onDismissCompanion={dismissCompanion}
+              className="lobby-enter order-3"
+              style={enter(2)}
+            />
+          ) : null}
 
-      {/* Settings, rules and lore are story authority (the lead at an AI table,
-          the DM once a person runs it), which is what their routes check.
-          Handing them to the lead alone drew editable panels for a player-lead
-          the server would refuse and read-only ones for the DM it allows. */}
-      <GameSettingsPanel
-        campaignId={campaign.id}
-        settings={campaign.gameSettings}
-        steersStory={steersStory}
-      />
-
-      <section className="mb-6 space-y-3">
-        <RulesPanel
-          campaignId={campaign.id}
-          settings={campaign.gameSettings}
-          steersStory={steersStory}
-        />
-        <LorePanel campaignId={campaign.id} steersStory={steersStory} />
-        {/* Prep keeps happening after session one, so the import is not only
-            a creation-time step. Gated on story authority rather than on the
-            lead, because in a human-DM campaign the lead is a player and the
-            lore, places and prepared fights are the DM's to bring in. */}
-        {steersStory ? (
-          <div className={cn(ui.card, "p-3")}>
-            <h2 className={cn(ui.sectionEyebrow, "mb-2")}>Bring in prep</h2>
-            <ContentImportPicker
-              campaignId={campaign.id}
-              selection={contentImport}
-              onChange={setContentImport}
-              onImported={refresh}
+          <div className="lobby-enter order-4 mb-8" style={enter(3)}>
+            <LobbyActions
+              campaign={campaign}
+              myMember={myMember}
+              mySheet={mySheet}
+              isDm={isDm}
+              isSolo={isSolo}
+              isOwner={isOwner}
+              canStart={isOwner || isPrimaryDm(seats, me.id)}
+              busy={busy}
+              error={error}
+              startBlocker={startBlocker}
+              onToggleReady={() => void setReady(!myMember?.ready)}
+              onStart={() => void activate("Could not start the campaign.")}
+              onBeginSolo={() => void beginSolo()}
+              onRemoveCharacter={() => void removeCharacter()}
+              onDelete={() => void deleteCampaign()}
             />
           </div>
-        ) : null}
-      </section>
 
-      {campaign.gameSettings.dicePolicy === "real_allowed" && mySheet ? (
-        <section className={cn(ui.card, "mb-6 flex items-center justify-between gap-3 px-4 py-3")}>
-          <div>
-            <p className="text-sm text-stone-200">I roll physical dice</p>
-            <p className="text-xs text-stone-500">
-              The game pauses for you to enter your real rolls instead of rolling digitally.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={toggleRealDice}
-            className={cn(
-              ui.btnSmall,
-              myMember?.useRealDice && "border-amber-500/40 bg-amber-400/10 text-amber-200",
-            )}
-          >
-            <Dices className="size-4" />
-            {myMember?.useRealDice ? "Real dice" : "Digital"}
-          </button>
-        </section>
-      ) : null}
+          {/* Settings, rules and lore are story authority (the lead at an AI
+              table, the DM once a person runs it), which is what their routes
+              check. Handing them to the lead alone drew editable panels for a
+              player-lead the server would refuse and read-only ones for the DM. */}
+          <section className="lobby-enter order-9 mb-6 space-y-3" style={enter(5)}>
+            <LobbyGroupHead glyph="tab-story" title="Rules and lore" />
+            <RulesPanel
+              campaignId={campaign.id}
+              settings={campaign.gameSettings}
+              steersStory={steersStory}
+            />
+            <LorePanel campaignId={campaign.id} steersStory={steersStory} />
+            {/* Prep keeps happening after session one, so the import is not only
+                a creation-time step. Gated on story authority rather than on the
+                lead, because in a human-DM campaign the lead is a player and the
+                lore, places and prepared fights are the DM's to bring in. */}
+            {steersStory ? (
+              <div className={cn(ui.card, "p-3")}>
+                <h2 className={cn(ui.sectionEyebrow, "mb-2")}>Bring in prep</h2>
+                <ContentImportPicker
+                  campaignId={campaign.id}
+                  selection={contentImport}
+                  onChange={setContentImport}
+                  onImported={refresh}
+                />
+              </div>
+            ) : null}
+          </section>
+        </div>
 
-      {/* The call is open in the lobby, so the table can talk while people
-          are still building characters. Pointless in a solo campaign, which
-          is the same reason the party list is hidden there. No floor to
-          show: the game has not started, so everyone can talk. */}
-      {!isSolo ? (
-        <section className="mb-6">
-          <VoicePanel
-            campaignId={campaign.id}
-            meUserId={me.id}
-            roster={state.voiceRoster}
-            speaking={state.voiceSpeaking}
-            audibilityVersion={state.voiceAudibilityVersion}
-            meshSignal={state.voiceMeshSignal}
-            adjudicates={steersStory}
-            transcribe={campaign.gameSettings.voice.transcribe}
-          />
-          {campaign.gameSettings.voice.transcribe ? (
-            <p className="mt-2 text-xs text-amber-300/80">
-              This table is transcribed: while voice is on, what each person says is written down with their name for the story log. Turn it off in campaign settings.
-            </p>
+        <div className="contents lg:flex lg:min-w-0 lg:flex-col">
+          {!isSolo ? (
+            <LobbyRoomCode
+              campaignId={campaign.id}
+              campaignTitle={campaign.title}
+              inviteCode={campaign.inviteCode}
+              canRegenerate={isLead}
+              shareUrl={shareUrl}
+              className="lobby-enter order-2"
+              style={enter(1)}
+            />
           ) : null}
-        </section>
-      ) : null}
 
-      {/* When the humans actually meet. Solo campaigns schedule nothing. */}
-      {!isSolo ? (
-        <ScheduleSection
-          campaignId={campaign.id}
-          meUserId={me.id}
-          isLead={isLead}
-          usernames={Object.fromEntries(members.map((member) => [member.userId, member.username]))}
-          version={state.scheduleVersion}
-        />
-      ) : null}
+          {/* When the humans actually meet. Solo campaigns schedule nothing. */}
+          {!isSolo ? (
+            <ScheduleSection
+              campaignId={campaign.id}
+              meUserId={me.id}
+              isLead={isLead}
+              usernames={Object.fromEntries(members.map((member) => [member.userId, member.username]))}
+              avatars={Object.fromEntries(members.map((member) => [member.userId, member.avatar?.url]))}
+              version={state.scheduleVersion}
+              className="lobby-enter order-5"
+              style={enter(2)}
+            />
+          ) : null}
 
-      {!isSolo || showCompanions ? (
-        <LobbyParty
-          campaign={campaign}
-          members={members}
-          sheets={sheets}
-          canMakeLead={isLead || isOwner}
-          humanDmTable={humanDmTable}
-          canAssignSeats={canAssignSeats}
-          seatError={seatError}
-          onMakeLead={makeLead}
-          onAssignSeat={assignSeat}
-          canMute={isLead || isOwner}
-          onMute={muteMember}
-          showParty={!isSolo}
-          showCompanions={showCompanions}
-          partyCompanions={partyCompanions}
-          canBuildCompanion={canBuildCompanion}
-          onBuildCompanion={() => setBuildingCompanion(true)}
-          onDismissCompanion={dismissCompanion}
-        />
-      ) : null}
+          {campaign.gameSettings.dicePolicy === "real_allowed" && mySheet ? (
+            <LobbyRealDice
+              on={Boolean(myMember?.useRealDice)}
+              onToggle={() => void toggleRealDice()}
+              className="lobby-enter order-6"
+              style={enter(3)}
+            />
+          ) : null}
 
-      <LobbyActions
-        campaign={campaign}
-        myMember={myMember}
-        mySheet={mySheet}
-        isDm={isDm}
-        isSolo={isSolo}
-        isOwner={isOwner}
-        canStart={isOwner || isPrimaryDm(seats, me.id)}
-        busy={busy}
-        error={error}
-        startBlocker={startBlocker}
-        onToggleReady={() => void setReady(!myMember?.ready)}
-        onStart={() => void activate("Could not start the campaign.")}
-        onBeginSolo={() => void beginSolo()}
-        onRemoveCharacter={() => void removeCharacter()}
-        onDelete={() => void deleteCampaign()}
-      />
+          {/* The call is open in the lobby, so the table can talk while people
+              are still building characters. Pointless in a solo campaign, which
+              is the same reason the party list is hidden there. No floor to
+              show: the game has not started, so everyone can talk. */}
+          {!isSolo ? (
+            <section className="reveal lobby-enter order-7 mb-6" style={enter(3)}>
+              <VoicePanel
+                campaignId={campaign.id}
+                meUserId={me.id}
+                roster={state.voiceRoster}
+                speaking={state.voiceSpeaking}
+                audibilityVersion={state.voiceAudibilityVersion}
+                meshSignal={state.voiceMeshSignal}
+                adjudicates={steersStory}
+                transcribe={campaign.gameSettings.voice.transcribe}
+              />
+              {campaign.gameSettings.voice.transcribe ? (
+                <p className="reveal mt-2 text-xs text-amber-300/80">
+                  This table is transcribed: while voice is on, what each person says is written down with their name for the story log. Turn it off in campaign settings.
+                </p>
+              ) : null}
+            </section>
+          ) : null}
+
+          <div className="lobby-enter order-8" style={enter(4)}>
+            <LobbyGroupHead glyph="tab-settings" title="Table settings" />
+            <GameSettingsPanel
+              campaignId={campaign.id}
+              settings={campaign.gameSettings}
+              steersStory={steersStory}
+            />
+          </div>
+        </div>
+      </div>
 
       {editing ? (
         <EditCampaignDialog campaign={campaign} onClose={() => setEditing(false)} />

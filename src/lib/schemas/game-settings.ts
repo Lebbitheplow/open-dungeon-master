@@ -99,6 +99,10 @@ export const gameSettingsSchema = z.object({
   // Players may draw on the live board (a plan of attack, a circle round a
   // door); the DM always may (src/lib/battlemap/scene.ts drawings).
   boardDrawing: z.boolean().default(true),
+  // The board shows what each enemy looks likely to do next: the DM's
+  // declaration, else the engine's guess (src/lib/dm/intent.ts). Off drops
+  // the projection entirely, so a client is never sent what it would hide.
+  enemyIntent: z.boolean().default(true),
   mapsEnabled: z.boolean().default(true),
   // Whether characters may take levels in a second (or third) class at
   // level-up. On by default; turning it off keeps the level-up flow

@@ -32,6 +32,13 @@ export const PLAYER_TOUR: TourStep[] = [
     prepare: "show-chat",
   },
   {
+    id: "battle-hand",
+    title: "Your hand, in a fight",
+    body: "On your turn in combat your options arrive as cards: each weapon, each prepared spell, your class features and the basic actions, with the numbers from your sheet. Pick a card, pick who it lands on, then press the gold button. A dimmed card is spent; press it to hear why. Or type your move below, as ever.",
+    anchors: ["battle-hand"],
+    prepare: "show-chat",
+  },
+  {
     id: "talk",
     title: "Hold to talk",
     body: "Hold the microphone and dictate instead of typing; the words land in the box for you to check before sending.",
@@ -48,21 +55,21 @@ export const PLAYER_TOUR: TourStep[] = [
   {
     id: "party",
     title: "The party",
-    body: "Your sheet, everyone's hit points and conditions, and the fight order during combat. The room code lives in the lead's tab.",
+    body: "Everyone's hit points and conditions, and the fight order during combat. Select a card to open the full sheet: every spell, item and feature has a painted icon, and the mark beside it opens its description. The room code lives in the lead's tab.",
     anchors: ["tab-party"],
     prepare: "open-party",
   },
   {
     id: "story",
     title: "The story so far",
-    body: "Chapters, the facts the table has pinned, and the log of every roll and stat change the Dungeon Master made.",
+    body: "Chapters, the facts the table has pinned, and the log of every roll and stat change the Dungeon Master made. Once a chapter closes, Open the chronicle turns the closed chapters like the pages of a book.",
     anchors: ["tab-story"],
     prepare: "open-story",
   },
   {
     id: "map",
     title: "Maps",
-    body: "The scene map, the overworld and the places the party has found. A battle map opens in its own tab while a fight with a map is running.",
+    body: "The scene map, the overworld and the places the party has found. A battle map opens in its own tab while a fight with a map is running: the portraits along its top are the turn order, and on your turn the pips beside them show the action, bonus action and reaction you have left.",
     anchors: ["tab-map", "tab-battle"],
     prepare: "open-map",
   },

@@ -21,7 +21,13 @@ import {
 } from "@/app/workshop/homebrew/fields";
 import { describeSkill } from "@/lib/help";
 import type { GlossaryEntry } from "@/lib/help/terms";
-import { CLASS_IDS, input, type EditorKind } from "@/app/workshop/homebrew/types";
+import { CLASS_IDS, type EditorKind } from "@/app/workshop/homebrew/types";
+import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
+import { NumberStepper } from "@/components/ui/NumberStepper";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { Select } from "@/components/ui/Select";
+import { addChip, rowIcon } from "@/app/workshop/kit";
 import type { Data } from "@/app/workshop/homebrew/draft";
 
 // The character-option forms: feat, background, species, subclass. Each
@@ -75,7 +81,7 @@ function ListField({
           placeholder={placeholder}
           aria-label={label}
           onChange={(event) => onChange(event.target.value)}
-          className={`${input} min-w-32 flex-1`}
+          className={cn(ui.input, "min-w-32 flex-1")}
         />
         <AddFromList prompt={prompt} options={options} onPick={(term) => onChange(appendTerm(value, term))} />
       </div>
@@ -135,7 +141,7 @@ function BackgroundFields({ data, set }: { data: Data; set: (patch: Data) => voi
             placeholder="A set of fine clothes, 15 gp"
             aria-label="Equipment"
             onChange={(event) => set({ equipment: event.target.value })}
-            className={`${input} min-w-32 flex-1`}
+            className={cn(ui.input, "min-w-32 flex-1")}
           />
           <ContentPick
             kind="items"
@@ -182,42 +188,36 @@ function RaceFields({ data, set }: { data: Data; set: (patch: Data) => void }) {
           prompt="Add a language"
         />
       </div>
-      <div className="space-y-1">
-        <span className="text-[10px] uppercase tracking-wide text-stone-500">Ability score increases</span>
+      <div className="space-y-1.5 text-sm">
+        <SectionHead title="Ability score increases" glyph="ability-str" className="mb-1" />
         {asi.map((row, index) => (
           <div key={index} className="flex flex-wrap items-center gap-1.5">
-            <select
-              value={row.attributes[0] ?? "Strength"}
-              aria-label="Ability"
-              onChange={(event) =>
-                updateAsi(asi.map((entry, at) => (at === index ? { ...entry, attributes: [event.target.value] } : entry)))
-              }
-              className={input}
-            >
-              {ABILITY_NAMES.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-            <input
-              type="number"
-              aria-label="Increase"
+            <span className="w-44">
+              <Select
+                value={row.attributes[0] ?? "Strength"}
+                label="Ability"
+                options={ABILITY_NAMES.map((name) => ({
+                  value: name as string,
+                  label: name,
+                  icon: { kind: "glyph" as const, key: `ability-${name.slice(0, 3).toLowerCase()}` },
+                }))}
+                onChange={(name) => updateAsi(asi.map((entry, at) => (at === index ? { ...entry, attributes: [name] } : entry)))}
+              />
+            </span>
+            <NumberStepper
+              label="Increase"
               value={row.value}
               min={-2}
               max={3}
-              onChange={(event) =>
-                updateAsi(asi.map((entry, at) => (at === index ? { ...entry, value: Number(event.target.value) } : entry)))
-              }
-              className={`${input} w-16`}
+              onChange={(value) => updateAsi(asi.map((entry, at) => (at === index ? { ...entry, value } : entry)))}
             />
             <button
               type="button"
               aria-label="Remove increase"
               onClick={() => updateAsi(asi.filter((_, at) => at !== index))}
-              className="rounded-md border border-stone-700 p-1 text-stone-500 hover:text-red-300"
+              className={cn(ui.iconAction, rowIcon, "hover:text-red-300")}
             >
-              <X className="size-3" />
+              <X className="size-3.5" />
             </button>
           </div>
         ))}
@@ -225,7 +225,7 @@ function RaceFields({ data, set }: { data: Data; set: (patch: Data) => void }) {
           <button
             type="button"
             onClick={() => updateAsi([...asi, { attributes: ["Dexterity"], value: 1 }])}
-            className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-[11px] text-stone-300 hover:bg-stone-900"
+            className={cn(ui.btnSmall, addChip)}
           >
             <Plus className="size-3" /> Add an increase
           </button>
@@ -270,23 +270,19 @@ function ArchetypeFields({ data, set }: { data: Data; set: (patch: Data) => void
           label: value.charAt(0).toUpperCase() + value.slice(1),
         }))}
         onChange={(classSlug) => set({ classSlug })}
-        className="w-48"
+        className="w-56"
         hint="The builder offers it under this class."
       />
-      <div className="space-y-1">
-        <span className="text-[10px] uppercase tracking-wide text-stone-500">Features by level</span>
+      <div className="space-y-1.5 text-sm">
+        <SectionHead title="Features by level" glyph="rest-level-up" className="mb-1" />
         {flat.map((row, index) => (
           <div key={index} className="flex flex-wrap items-center gap-1.5">
-            <input
-              type="number"
-              aria-label="Level"
+            <NumberStepper
+              label="Level"
               value={row.level}
               min={1}
               max={20}
-              onChange={(event) =>
-                write(flat.map((entry, at) => (at === index ? { ...entry, level: Number(event.target.value) || 1 } : entry)))
-              }
-              className={`${input} w-16`}
+              onChange={(level) => write(flat.map((entry, at) => (at === index ? { ...entry, level: level || 1 } : entry)))}
             />
             <input
               value={row.feature.n}
@@ -296,7 +292,7 @@ function ArchetypeFields({ data, set }: { data: Data; set: (patch: Data) => void
               onChange={(event) =>
                 write(flat.map((entry, at) => (at === index ? { ...entry, feature: { ...entry.feature, n: event.target.value } } : entry)))
               }
-              className={`${input} w-40`}
+              className={cn(ui.input, "w-full text-sm sm:w-44")}
             />
             <input
               value={row.feature.d}
@@ -306,26 +302,26 @@ function ArchetypeFields({ data, set }: { data: Data; set: (patch: Data) => void
               onChange={(event) =>
                 write(flat.map((entry, at) => (at === index ? { ...entry, feature: { ...entry.feature, d: event.target.value } } : entry)))
               }
-              className={`${input} min-w-48 flex-1`}
+              className={cn(ui.input, "min-w-48 flex-1 text-sm")}
             />
             <button
               type="button"
               aria-label="Remove feature"
               onClick={() => write(flat.filter((_, at) => at !== index))}
-              className="rounded-md border border-stone-700 p-1 text-stone-500 hover:text-red-300"
+              className={cn(ui.iconAction, rowIcon, "hover:text-red-300")}
             >
-              <X className="size-3" />
+              <X className="size-3.5" />
             </button>
           </div>
         ))}
         <button
           type="button"
           onClick={() => write([...flat, { level: flat.length ? Math.min(20, flat[flat.length - 1].level + 3) : 3, feature: { n: "", d: "" } }])}
-          className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-[11px] text-stone-300 hover:bg-stone-900"
+          className={cn(ui.btnSmall, addChip)}
         >
           <Plus className="size-3" /> Add a feature
         </button>
-        <p className="text-[10px] text-stone-600">
+        <p className="text-[11px] text-stone-500">
           The DM prompt reads each line as rules text. Features are granted by name when a character takes this subclass.
         </p>
       </div>

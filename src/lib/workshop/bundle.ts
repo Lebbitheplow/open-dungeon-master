@@ -213,6 +213,9 @@ const mapSchema = z.object({
   // How the backdrop sits on the grid (scale and offset). Meaningless
   // without the art, so it travels and lands only alongside it.
   backdropTransform: z.record(z.string(), z.unknown()).default({}),
+  // What the map is painted with (src/lib/battlemap/skins.ts). Optional, so
+  // a bundle written before skins existed still reads; normalised on import.
+  skin: z.record(z.string(), z.unknown()).default({}),
 });
 
 const beatSchema = z.object({

@@ -3,6 +3,7 @@ import { isErrorResponse, requireDm } from "@/lib/campaign-api";
 import { MAP_SIZE, MAP_THEMES } from "@/lib/battlemap/generate";
 import { UVTT_SIZE } from "@/lib/battlemap/uvtt";
 import { isBackdropPath } from "@/lib/battlemap/backdrop";
+import { skinById } from "@/lib/battlemap/skins";
 import {
   BLANK_FILLS,
   captureBoardIntoLibrary,
@@ -33,6 +34,10 @@ const createSchema = z.object({
   hint: z.string().trim().max(200).optional(),
   seed: z.number().int().min(0).max(0xffffffff).optional(),
   blank: z.enum(BLANK_FILLS as unknown as [string, ...string[]]).optional(),
+  // A named skin to start in. Material overrides come later, from the editor.
+  skin: z
+    .object({ id: z.string().max(64).refine((value) => value === "" || Boolean(skinById(value)), "Not a skin.") })
+    .optional(),
 });
 
 const captureSchema = z.object({
@@ -139,6 +144,7 @@ export async function POST(
     hint: body.hint,
     seed: body.seed,
     blank: body.blank as Parameters<typeof createLibraryMap>[1]["blank"],
+    skin: body.skin ? { id: body.skin.id, bind: {} } : undefined,
   });
   return "error" in outcome
     ? Response.json({ error: outcome.error }, { status: 400 })

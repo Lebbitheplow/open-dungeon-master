@@ -1,10 +1,13 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { Loader2, RefreshCw, X } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { Slider } from "@/components/ui/Slider";
 import type { CampaignMessage } from "@/lib/db/messages";
 import {
   MAX_GUIDANCE_LENGTH,
@@ -66,7 +69,7 @@ export function RenarrateDialog({
   return (
     <Dialog.Root open onOpenChange={(open) => !open && !running && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/70" />
+        <Dialog.Overlay className="dialog-overlay fixed inset-0 z-50 bg-[#05030d]/70 backdrop-blur-sm" />
         <Dialog.Content
           className={cn(
             ui.dialog,
@@ -74,10 +77,11 @@ export function RenarrateDialog({
           )}
         >
           <div className="mb-3 flex items-center justify-between">
-            <Dialog.Title className="flex items-center gap-2 font-display text-lg tracking-wide text-amber-50">
-              <RefreshCw className="size-4 text-amber-300" /> Reroll the narration
+            <Dialog.Title className="flex items-center gap-2.5 font-display text-lg">
+              <GameIcon icon={{ kind: "glyph", key: "die-d20" }} size="size-8" />
+              <span className="gold-title">Reroll the narration</span>
             </Dialog.Title>
-            <Dialog.Close className="text-stone-500 hover:text-stone-300">
+            <Dialog.Close aria-label="Close" className={cn(ui.iconAction, "opacity-100")}>
               <X className="size-4" />
             </Dialog.Close>
           </div>
@@ -89,28 +93,31 @@ export function RenarrateDialog({
             {capped ? " That is every take; browse them and pick one." : ""}
           </p>
 
-          <label className="mb-1 flex items-center justify-between text-[10px] font-medium uppercase tracking-wide text-stone-500">
-            <span>Variation</span>
-            <span className="font-mono normal-case tracking-normal text-stone-400">
-              +{tempOffset.toFixed(2)}
-            </span>
-          </label>
-          <input
-            type="range"
+          <SectionHead
+            title="Variation"
+            glyph="sky-wind"
+            level="h4"
+            aside={
+              <span key={tempOffset} className="count-pop font-mono text-xs text-amber-200">
+                +{tempOffset.toFixed(2)}
+              </span>
+            }
+          />
+          <Slider
             min={0}
             max={0.6}
             step={0.05}
             value={tempOffset}
             disabled={running}
-            onChange={(event) => setTempOffset(Number(event.target.value))}
-            className="mb-3 w-full accent-amber-500"
-            aria-label="How far this take may drift from the last"
+            onChange={setTempOffset}
+            label="How far this take may drift from the last"
+            bubble={(value) => `+${value.toFixed(2)}`}
+            className="mb-4 w-full"
           />
 
-          <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-stone-500">
-            Guidance for this take (optional)
-          </label>
+          <SectionHead title="Guidance for this take (optional)" glyph="tab-log" level="h4" />
           <input
+            aria-label="Guidance for this take (optional)"
             value={guidance}
             onChange={(event) => setGuidance(event.target.value)}
             maxLength={MAX_GUIDANCE_LENGTH}
@@ -118,26 +125,21 @@ export function RenarrateDialog({
             placeholder="darker, more dialogue, shorter..."
             className={ui.input}
           />
-          <div className="mt-2 flex flex-wrap gap-1.5">
+          <div data-pill-group="" className="mt-2 flex flex-wrap gap-1.5">
             {GUIDANCE_PRESETS.map((preset) => (
-              <button
+              <button data-on={guidance === preset ? "" : undefined}
                 key={preset}
                 type="button"
                 disabled={running}
                 onClick={() => setGuidance(preset)}
-                className={cn(
-                  "rounded-full border px-2.5 py-1 text-[11px]",
-                  guidance === preset
-                    ? "border-amber-700 bg-amber-950/40 text-amber-200"
-                    : "border-stone-700 text-stone-400 hover:text-stone-200",
-                )}
+                className="session-subtab session-subtab-plain motion-press"
               >
                 {preset}
               </button>
             ))}
           </div>
 
-          {error ? <p className="mt-3 text-xs text-red-400">{error}</p> : null}
+          {error ? <p className="motion-shake mt-3 text-xs text-red-400">{error}</p> : null}
 
           <div className="mt-4 flex justify-end gap-2">
             <button type="button" onClick={onClose} disabled={running} className={ui.btnSmall}>

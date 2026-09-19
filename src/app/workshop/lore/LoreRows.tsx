@@ -1,9 +1,13 @@
 "use client";
 
+import { EmptyState } from "@/components/EmptyState";
 import { useState } from "react";
 import { EyeOff, Image as ImageIcon, Pin, Plus, Search } from "lucide-react";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { GlyphPlate } from "@/app/workshop/kit";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
+import { ListTally, sortRows, type RowSort } from "@/app/workshop/ListHead";
 import { CATEGORY_LABELS, type LoreEntryView } from "@/app/workshop/lore/types";
 
 // The workshop's world lore as full-width rows: the title, whether it is
@@ -42,7 +46,8 @@ export function LoreRows({
   onNew: () => void;
 }) {
   const [query, setQuery] = useState("");
-  const shown = entries.filter((entry) => matches(entry, query));
+  const [sort, setSort] = useState<RowSort>("made");
+  const shown = sortRows(entries.filter((entry) => matches(entry, query)), sort, (entry) => entry.title);
 
   return (
     <div className="space-y-2">
@@ -56,20 +61,28 @@ export function LoreRows({
           className={`${ui.input} pl-9`}
         />
       </label>
+      <ListTally shown={shown.length} total={entries.length} noun={["entry", "entries"]} sort={sort} onSort={setSort} />
 
-      <ul className="grid gap-2 lg:grid-cols-2">
+      <ul className="stagger-up grid gap-2 lg:grid-cols-2">
         {shown.map((entry) => {
           const line = firstLine(entry.body);
           return (
-            <li key={entry.id}>
+            <li key={entry.id} className="min-w-0">
               <button
                 type="button"
                 onClick={() => onOpen(entry)}
                 className={cn(
                   ui.cardHover,
-                  "flex h-full w-full flex-col gap-1 p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40",
+                  "flex h-full w-full items-start gap-3 p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40",
                 )}
               >
+                {entry.imagePath && entry.visibility !== "dm" ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={entry.imagePath} alt="" className="size-12 shrink-0 rounded-lg border border-amber-500/25 object-cover" />
+                ) : (
+                  <GlyphPlate glyph={entry.visibility === "dm" ? "quest-hidden" : "system-lore"} />
+                )}
+                <span className="flex min-w-0 flex-1 flex-col gap-1">
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   {entry.pinned ? (
                     <Pin
@@ -78,15 +91,15 @@ export function LoreRows({
                     />
                   ) : null}
                   <span className="font-display tracking-wide text-amber-50">{entry.title}</span>
-                  <span className="rounded-sm border border-stone-600/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-stone-400">
+                  <span className="rounded-sm border border-stone-600/60 px-1.5 py-0.5 font-display text-[10px] tracking-wider text-stone-400">
                     {CATEGORY_LABELS[entry.category]}
                   </span>
                   {entry.visibility === "dm" ? (
-                    <span className="flex items-center gap-1 rounded-sm border border-violet-500/40 bg-violet-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-violet-300">
+                    <span className="flex items-center gap-1 rounded-sm border border-violet-500/40 bg-violet-500/10 px-1.5 py-0.5 font-display text-[10px] tracking-wider text-violet-300">
                       <EyeOff className="size-3" /> Secret
                     </span>
                   ) : entry.imagePath ? (
-                    <span className="flex items-center gap-1 rounded-sm border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-emerald-300">
+                    <span className="flex items-center gap-1 rounded-sm border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 font-display text-[10px] tracking-wider text-emerald-300">
                       <ImageIcon className="size-3" /> Handout
                     </span>
                   ) : null}
@@ -104,6 +117,7 @@ export function LoreRows({
                     ))}
                   </span>
                 ) : null}
+                </span>
               </button>
             </li>
           );
@@ -119,8 +133,9 @@ export function LoreRows({
                 "flex h-full w-full items-center gap-3 border-dashed p-3 text-left text-stone-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40",
               )}
             >
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-full border border-dashed border-stone-600">
-                <Plus className="size-4" />
+              <span className="relative shrink-0">
+                <GameIcon icon={{ kind: "glyph", key: "system-lore" }} size="size-10" />
+                <Plus className="absolute -bottom-1 -right-1 size-4 rounded-full bg-stone-900 text-amber-300" aria-hidden="true" />
               </span>
               <span className="font-display tracking-wide">New entry</span>
             </button>
@@ -129,13 +144,9 @@ export function LoreRows({
       </ul>
 
       {entries.length === 0 ? (
-        <p className="text-[11px] italic text-stone-600">
-          {steersStory
-            ? "No lore yet. Write your world's places, factions, and history; the DM treats it as canon."
-            : "The party lead has not written any world lore yet."}
-        </p>
+        <EmptyState size="md" art="scrolls" title={steersStory ? "No lore yet. Write your world's places, factions, and history; the DM treats it as canon." : "The party lead has not written any world lore yet."} />
       ) : shown.length === 0 ? (
-        <p className="text-[11px] text-stone-500">Nothing by that title, body or tag.</p>
+        <p className="live-in text-xs text-stone-500">Nothing by that title, body or tag.</p>
       ) : null}
     </div>
   );

@@ -1,6 +1,9 @@
 "use client";
 
-import { FileUp, Loader2 } from "lucide-react";
+import { Check, FileUp, Loader2 } from "lucide-react";
+import { cn } from "@/lib/cn";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { chip, chipOn, chipRow } from "@/app/workshop/kit";
 import { useRef, useState } from "react";
 import { ui } from "@/lib/ui";
 import { UnofficialPackNotice } from "@/components/UnofficialPackNotice";
@@ -121,46 +124,37 @@ export function ImportBundleButton({
         {label}
       </button>
 
-      {error ? <p className="mt-2 text-sm text-red-300">{error}</p> : null}
+      {error ? <p className="motion-shake mt-2 text-sm text-red-300">{error}</p> : null}
 
       {preview ? (
         <div className={`${ui.card} mt-3 p-4`}>
-          <p className="font-display tracking-wide text-amber-50">{preview.manifest.name}</p>
+          <SectionHead title={preview.manifest.name} glyph="system-share" />
           <p className="text-sm text-stone-400">{preview.manifest.blurb}</p>
           {preview.manifest.author ? (
-            <p className="mt-0.5 text-xs text-stone-500">by {preview.manifest.author}</p>
+            <p className="reveal mt-0.5 text-xs text-stone-500">by {preview.manifest.author}</p>
           ) : null}
 
           {/* Each kind is a tick: a DM who only wants the monsters takes the
               monsters. Unticking every one leaves an empty workshop, which
               the button below says out loud. */}
-          <ul className="mt-3 flex flex-wrap gap-1.5">
+          <ul className={cn("stagger mt-3", chipRow)}>
             {kindsOf(preview).map((kind) => {
               const ticked = kinds.includes(kind);
               return (
                 <li key={kind}>
-                  <label
-                    className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs ${
-                      ticked
-                        ? "border-amber-700 bg-amber-950/40 text-amber-100"
-                        : "border-stone-700 text-stone-500"
-                    }`}
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={ticked}
+                    onClick={() =>
+                      setKinds((current) => (ticked ? current.filter((entry) => entry !== kind) : [...current, kind]))
+                    }
+                    className={cn(ui.btnSmall, chip, "rounded-full normal-case", ticked ? chipOn : "text-stone-500")}
                   >
-                    <input
-                      type="checkbox"
-                      checked={ticked}
-                      onChange={(event) =>
-                        setKinds((current) =>
-                          event.target.checked
-                            ? [...current, kind]
-                            : current.filter((entry) => entry !== kind),
-                        )
-                      }
-                      className="accent-amber-500"
-                    />
+                    <Check className={cn("size-3.5", ticked ? "text-amber-300" : "opacity-20")} aria-hidden="true" />
                     {kind === "rules" ? "" : `${preview.counts[kind]} `}
                     {BUNDLE_KIND_LABELS[kind] ?? kind}
-                  </label>
+                  </button>
                 </li>
               );
             })}
@@ -173,7 +167,7 @@ export function ImportBundleButton({
           />
 
           {preview.warnings.length ? (
-            <ul className="mt-3 space-y-1">
+            <ul className="stagger mt-3 space-y-1">
               {preview.warnings.map((warning) => (
                 <li key={warning} className="text-xs text-amber-200/80">
                   {warning}

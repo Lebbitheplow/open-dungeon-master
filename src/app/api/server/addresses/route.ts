@@ -1,7 +1,7 @@
 import os from "node:os";
 import { currentUser, unauthorized } from "@/lib/auth";
 import { getGlobalConfig } from "@/lib/db/app-settings";
-import { lanOrigins } from "@/lib/server-address";
+import { lanOrigins, livePublicUrl } from "@/lib/server-address";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   const config = getGlobalConfig();
   return Response.json({
     serverName: config.serverName || "Open Dungeon Master",
-    publicUrl: (config.publicUrl || "").replace(/\/+$/, ""),
+    publicUrl: livePublicUrl(config.publicUrl, os.networkInterfaces()),
     lanUrls: lanOrigins(os.networkInterfaces(), protocol, url.port),
   });
 }

@@ -33,7 +33,7 @@ function UtilityCallStripInner({ calls }: { calls: UtilityCall[] }) {
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 px-3 py-1.5">
+    <div className="stagger flex flex-wrap items-center gap-1.5 px-3 py-1.5">
       {calls.map((call) => {
         const elapsed = formatElapsed(call.startedAt, now);
         return (

@@ -11,12 +11,23 @@
 // already route to the host with the session token, so the same code paints
 // in a browser tab and in the apps' native screens.
 import { ODMRender, type RenderAssets } from "@/lib/battlemap/render/renderer.js";
-import { skinFor, type Skin } from "@/lib/battlemap/skins";
+import { mapSkinKey, resolveSkin, type MapSkin, type Skin } from "@/lib/battlemap/skins";
 
-type TileEntry = { id: string; src: string; variants?: string[] };
-type ObjectEntry = { id: string; src: string; sets: string[]; kind: string };
+export type TileEntry = {
+  id: string;
+  src: string;
+  variants?: string[];
+  category?: string;
+  label?: string;
+  genre?: string | null;
+  themes?: string[];
+};
+export type ObjectEntry = { id: string; src: string; sets: string[]; kind: string; label?: string; span?: number };
 type DecalEntry = { id: string; src: string };
-type Manifests = { tiles: Map<string, TileEntry>; objects: ObjectEntry[]; decals: DecalEntry[] };
+type Manifests = { tiles: Map<string, TileEntry>; objects: ObjectEntry[]; decals: DecalEntry[]; categories: Map<string, string> };
+
+// A placed stamp: a painted object at a square (MapProp.stamp, scene.ts).
+export type PaintStamp = { x: number; y: number; id: string };
 
 export type PaintQuality = "full" | "low";
 export type PaintRequest = {
@@ -29,6 +40,14 @@ export type PaintRequest = {
   // Anything stable per map; the same seed always dresses a room the same way.
   seedKey: string;
   quality: PaintQuality;
+  // The map's own skin, laid over the default the setting and theme give.
+  skin?: MapSkin | null;
+  // The automatic dressing; off for a thumbnail, where it is only noise.
+  dressing?: boolean;
+  // Pixels per square, overriding the quality's own; a thumbnail asks for 8.
+  cell?: number;
+  // Stamps the DM placed, drawn at full size over the dressing.
+  stamps?: PaintStamp[];
 };
 
 let manifests: Promise<Manifests | null> | null = null;
@@ -55,9 +74,21 @@ function loadManifests(): Promise<Manifests | null> {
       manifests = null;
       return null;
     }
-    return { tiles: new Map(tiles.tiles.map((t) => [t.id, t])), objects: props.objects, decals: props.decals };
+    return {
+      tiles: new Map(tiles.tiles.map((t) => [t.id, t])),
+      objects: props.objects,
+      decals: props.decals,
+      categories: new Map(tiles.tiles.map((t) => [t.id, t.category ?? ""])),
+    };
   })();
   return manifests;
+}
+
+// The catalogue for the pickers (the tileset panel and the stamp picker), or
+// null on a host without the painted sets. Same cached fetch the painter uses.
+export async function loadCatalogue(): Promise<{ tiles: TileEntry[]; objects: ObjectEntry[] } | null> {
+  const all = await loadManifests();
+  return all ? { tiles: [...all.tiles.values()], objects: all.objects } : null;
 }
 
 function picture(src: string): Promise<ImageBitmap | null> {
@@ -76,7 +107,7 @@ function picture(src: string): Promise<ImageBitmap | null> {
   return pending;
 }
 
-async function assetsFor(skin: Skin, all: Manifests): Promise<RenderAssets> {
+async function assetsFor(skin: Skin, all: Manifests, stamps: PaintStamp[] = []): Promise<RenderAssets> {
   const assets: RenderAssets = { tiles: {}, objects: {}, decals: {}, catalogue: { objects: all.objects, decals: all.decals } };
   const tileIds = new Set<string>(Object.values(skin.bind));
   if (skin.patch) tileIds.add(skin.patch.id);
@@ -91,8 +122,9 @@ async function assetsFor(skin: Skin, all: Manifests): Promise<RenderAssets> {
       }),
     );
   }
+  const stamped = new Set(stamps.map((stamp) => stamp.id));
   for (const object of all.objects) {
-    if (!object.sets.some((set) => skin.sets.includes(set))) continue;
+    if (!stamped.has(object.id) && !object.sets.some((set) => skin.sets.includes(set))) continue;
     jobs.push(picture(object.src).then((p) => void (p && (assets.objects[object.id] = p as unknown as HTMLImageElement))));
   }
   for (const decal of all.decals) {
@@ -119,17 +151,30 @@ export function cellSizeFor(width: number, height: number, quality: PaintQuality
 }
 
 export function paintKey(request: PaintRequest): string {
-  return [request.seedKey, request.width, request.height, request.theme, request.genre ?? "", request.quality, request.terrain].join("|");
+  return [
+    request.seedKey,
+    request.width,
+    request.height,
+    request.theme,
+    request.genre ?? "",
+    request.quality,
+    mapSkinKey(request.skin),
+    request.dressing === false ? "bare" : "",
+    request.cell ?? "",
+    (request.stamps ?? []).map((stamp) => `${stamp.x},${stamp.y},${stamp.id}`).join(";"),
+    request.terrain,
+  ].join("|");
 }
 
-// Paints the board and returns an object URL for it, or null when the painted
-// sets are not on this host. The caller owns the URL and revokes it.
-export async function paintMap(request: PaintRequest): Promise<string | null> {
+// Paints the board onto a fresh canvas, or null when the painted sets are not
+// on this host. The map editor draws this canvas under its own overlays.
+export async function paintCanvas(request: PaintRequest): Promise<HTMLCanvasElement | null> {
   if (typeof document === "undefined" || request.width < 1 || request.height < 1) return null;
   const all = await loadManifests();
   if (!all) return null;
-  const skin = skinFor(request.genre, request.theme);
-  const assets = await assetsFor(skin, all);
+  const skin = resolveSkin(request.genre, request.theme, request.skin, all.categories);
+  const stamps = (request.stamps ?? []).filter((stamp) => all.objects.some((object) => object.id === stamp.id));
+  const assets = await assetsFor(skin, all, stamps);
   if (!Object.keys(assets.tiles).length) return null;
   const rows: string[] = [];
   for (let y = 0; y < request.height; y++) {
@@ -141,13 +186,70 @@ export async function paintMap(request: PaintRequest): Promise<string | null> {
       rows,
       skin,
       seed: seedOf(request.seedKey),
-      cell: cellSizeFor(request.width, request.height, request.quality),
+      cell: request.cell ?? cellSizeFor(request.width, request.height, request.quality),
       assets,
       // The board draws its own grid, light, darkness and fog over this.
-      options: { grid: false, dressing: true, decals: true, quality: request.quality, ambient: "bright" },
+      options: {
+        grid: false,
+        dressing: request.dressing !== false,
+        decals: true,
+        quality: request.quality,
+        ambient: "bright",
+        props: stamps,
+      },
     },
     canvas,
   );
+  return canvas;
+}
+
+// Paints the board and returns an object URL for it, or null when the painted
+// sets are not on this host. The caller owns the URL and revokes it.
+export async function paintMap(request: PaintRequest): Promise<string | null> {
+  const canvas = await paintCanvas(request);
+  if (!canvas) return null;
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.9));
   return blob ? URL.createObjectURL(blob) : null;
+}
+
+// Thumbnails (docs/visual-overhaul-plan.md 3.7): the same renderer at 8 px a
+// square with the dressing off, kept as a data URL per paint key. In memory
+// only and bounded, oldest out first; a saved PNG is not worth a column when
+// the renderer takes a few milliseconds at this size.
+export const THUMB_CELL = 8;
+const THUMB_LIMIT = 120;
+const thumbs = new Map<string, Promise<string | null>>();
+
+export type ThumbRequest = Omit<PaintRequest, "quality" | "cell" | "dressing">;
+
+// `cell` is 8 for a strip of small tiles; a gallery card asks for more so the
+// picture is not soft at the size it is shown.
+export function thumbRequest(request: ThumbRequest, cell: number = THUMB_CELL): PaintRequest {
+  return { ...request, quality: "low", cell: Math.max(4, Math.min(24, Math.round(cell))), dressing: false };
+}
+
+export function paintThumb(request: ThumbRequest, cell: number = THUMB_CELL): Promise<string | null> {
+  const full = thumbRequest(request, cell);
+  const key = paintKey(full);
+  const cached = thumbs.get(key);
+  if (cached) {
+    // Touched: move to the young end.
+    thumbs.delete(key);
+    thumbs.set(key, cached);
+    return cached;
+  }
+  const pending = paintCanvas(full)
+    .then((canvas) => (canvas ? canvas.toDataURL("image/webp", 0.85) : null))
+    .catch(() => null);
+  thumbs.set(key, pending);
+  // A miss (no painted sets yet) is forgotten so a later gallery retries.
+  void pending.then((url) => {
+    if (!url) thumbs.delete(key);
+  });
+  while (thumbs.size > THUMB_LIMIT) {
+    const oldest = thumbs.keys().next().value;
+    if (oldest === undefined) break;
+    thumbs.delete(oldest);
+  }
+  return pending;
 }

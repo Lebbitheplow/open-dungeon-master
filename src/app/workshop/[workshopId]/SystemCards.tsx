@@ -1,7 +1,8 @@
 "use client";
 
+import { GameIcon } from "@/components/ui/GameIcon";
 import { cn } from "@/lib/cn";
-import { IconChip, ui } from "@/lib/ui";
+import { ui } from "@/lib/ui";
 import { miscPlaceholder, workshopPlaceholder } from "@/lib/placeholders";
 import { Ribbon } from "@/components/ui/Ribbon";
 import {
@@ -59,7 +60,7 @@ export function SystemCards({
           {total} {total === 1 ? "piece" : "pieces"} of prep
         </span>
       </div>
-      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" data-tour="hub-systems">
+      <ul className="stagger-up grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" data-tour="hub-systems">
         {WORKSHOP_SYSTEMS.map((system) => {
           const count = systemCount(system.id, workshop, bestiary, homebrew, pregens, plugin);
           const empty = count.figure === "0" || count.figure === "none";
@@ -75,7 +76,7 @@ export function SystemCards({
                 )}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <IconChip icon={system.icon} size="size-9" iconSize="size-4" />
+                  <GameIcon icon={{ kind: "glyph", key: `system-${system.id}` }} size="size-10" />
                   {count.figure !== null ? (
                     <span
                       className={cn(
@@ -98,7 +99,7 @@ export function SystemCards({
                   )}
                 />
                 <div className="mt-auto">
-                  <p className="font-display text-[13px] font-semibold uppercase tracking-[0.12em] text-stone-200">
+                  <p className="font-display text-[13px] font-semibold tracking-[0.12em] text-amber-50">
                     {system.label}
                   </p>
                   <p className="text-xs text-stone-500">{system.blurb}</p>

@@ -4,6 +4,11 @@ import { Download, Loader2, Trash2, Upload } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
+import { EmptyState } from "@/components/EmptyState";
+import { PageSkeleton } from "@/components/PageSkeleton";
+import { appConfirm } from "@/components/ui/ConfirmDialog";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { SectionHead } from "@/components/ui/SectionHead";
 import { UnofficialPackNotice } from "@/components/UnofficialPackNotice";
 import type { RegistryBundle, RegistryEntry, WorldPackSummary } from "@/lib/worlds/types";
 import { forgetPackArt } from "@/lib/worlds/use-pack-art";
@@ -154,6 +159,12 @@ export function AdminWorldsPanel() {
   }
 
   async function remove(pack: WorldPackSummary) {
+    const sure = await appConfirm(`Remove ${pack.name}? Campaigns that used it fall back to their plain setting.`, {
+      title: "Remove this world pack?",
+      actionLabel: "Remove",
+      tone: "danger",
+    });
+    if (!sure) return;
     setBusyId(pack.id);
     setError("");
     setNotice("");
@@ -192,11 +203,7 @@ export function AdminWorldsPanel() {
   }
 
   if (!state) {
-    return (
-      <div className="flex justify-center py-10">
-        <Loader2 className="size-5 animate-spin text-stone-500" />
-      </div>
-    );
+    return <PageSkeleton kind="flat" className="px-0 py-2" />;
   }
 
   const installedIds = new Map(state.installed.map((pack) => [pack.id, pack]));
@@ -207,10 +214,10 @@ export function AdminWorldsPanel() {
   const available = state.packs.filter((entry) => !installedIds.has(entry.id));
 
   return (
-    <div className="space-y-6 text-sm">
-      <section className={cn(ui.card, "texture-noise p-5")}>
-        <h2 className={ui.sectionEyebrow}>Campaign plugins</h2>
-        <p className="mt-2 text-xs leading-5 text-stone-400">
+    <div className="space-y-4 text-sm">
+      <section className={cn(ui.card, "ornate texture-noise p-5")}>
+        <SectionHead level="h2" title="Campaign plugins" glyph="system-plugin" />
+        <p className="text-xs leading-5 text-stone-400">
           A world pack renames the rules into a setting: its own races, classes, spells, gear,
           monsters, factions and lore, plus a brief telling the DM how that world sounds. Every
           mechanic stays 5e, so a character built in one still works anywhere.
@@ -223,18 +230,18 @@ export function AdminWorldsPanel() {
         </p>
       </section>
 
-      {error ? <p className="text-xs text-red-400">{error}</p> : null}
-      {notice ? <p className="text-xs text-amber-200">{notice}</p> : null}
+      {error ? <p role="alert" className="motion-shake text-xs text-red-400">{error}</p> : null}
+      {notice ? <p role="status" className="live-in text-xs text-amber-200">{notice}</p> : null}
 
       {state.bundles?.length ? (
-        <section>
-          <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-stone-400">Prepared worlds</h3>
+        <section className={cn(ui.card, "texture-noise p-5")}>
+          <SectionHead title="Prepared worlds" glyph="system-region" aside={<span className="tabular-nums">{state.bundles.length}</span>} />
           <p className="mb-2 text-[11px] text-stone-500">
             A workshop someone else built: cast, places, maps, encounters and lore, ready to run. Installing one creates a workshop of your own from it.
           </p>
-          <ul className="grid gap-2 sm:grid-cols-2">
+          <ul className="stagger-up grid gap-2 sm:grid-cols-2">
             {state.bundles.map((bundle) => (
-              <li key={bundle.id} className={cn(ui.card, "space-y-1.5 p-3")}>
+              <li key={bundle.id} className="plate-row" data-layout="stack">
                 <p className="font-display text-sm text-amber-100">{bundle.name}</p>
                 <p className="text-[11px] leading-4 text-stone-400">{bundle.blurb}</p>
                 <p className="text-[10px] text-stone-500">
@@ -257,12 +264,8 @@ export function AdminWorldsPanel() {
         </section>
       ) : null}
 
-      <section>
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <h3 className="text-xs font-medium uppercase tracking-wide text-stone-400">
-            Install from a file
-          </h3>
-        </div>
+      <section className={cn(ui.card, "texture-noise p-5")}>
+        <SectionHead title="Install from a file" glyph="tab-handout" />
         <input
           ref={fileInput}
           type="file"
@@ -296,16 +299,15 @@ export function AdminWorldsPanel() {
         </p>
       </section>
 
-      <section>
-        <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-stone-400">
-          Registry
-        </h3>
+      <section className={cn(ui.card, "texture-noise p-5")}>
+        <SectionHead title="Registry" glyph="tab-facts" />
         <div className="flex flex-wrap items-center gap-2">
           <input
             key={state.url ?? ""}
             ref={registryInput}
             defaultValue={state.url ?? ""}
             placeholder="Blank uses the built-in registry"
+            aria-label="Registry URL"
             className={cn(ui.input, "min-w-0 flex-1 text-xs")}
           />
           <button
@@ -329,33 +331,32 @@ export function AdminWorldsPanel() {
         </p>
       </section>
 
-      <section>
-        <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-stone-400">
-          Available to download
-        </h3>
+      <section className={cn(ui.card, "texture-noise p-5")}>
+        <SectionHead title="Available to download" glyph="system-share" aside={available.length ? <span className="tabular-nums">{available.length}</span> : undefined} />
         {!state.configured ? (
-          <p className="rounded-md border border-stone-800 p-3 text-xs leading-5 text-stone-500">
-            This server&apos;s registry is turned off. Clear the field above to go back to the
-            built-in one, point it at your own, or install a pack from a file.
-          </p>
+          <EmptyState
+            art="scrolls"
+            size="sm"
+            title="This server's registry is turned off."
+            hint="Clear the field above to go back to the built-in one, point it at your own, or install a pack from a file."
+          />
         ) : state.error ? (
-          <p className="rounded-md border border-stone-800 p-3 text-xs text-red-400">
+          <p role="alert" className="motion-shake rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">
             {state.error}
           </p>
         ) : !state.packs.length ? (
-          <p className="rounded-md border border-stone-800 p-3 text-xs text-stone-500">
-            That registry lists no campaigns.
-          </p>
+          <EmptyState art="scrolls" size="sm" title="That registry lists no campaigns." />
         ) : !available.length ? (
-          <p className="rounded-md border border-stone-800 p-3 text-xs text-stone-500">
-            Everything this registry offers is already installed.
-          </p>
+          <EmptyState art="chest" size="sm" title="Everything this registry offers is already installed." />
         ) : (
-          <ul className="space-y-2">
+          <ul className="stagger space-y-2">
             {available.map((entry) => (
-              <li key={entry.id} className="rounded-lg border border-stone-800 p-3">
+              <li key={entry.id} className="plate-row" data-layout="stack">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <span className="text-stone-100">{entry.name}</span>
+                  <span className="flex min-w-0 items-center gap-2 font-display text-amber-100">
+                    <GameIcon icon={{ kind: "glyph", key: "system-plugin" }} size="size-6" />
+                    {entry.name}
+                  </span>
                   <span className="text-[11px] text-stone-500">
                     v{entry.version}
                     {entry.author ? ` · ${entry.author}` : ""}
@@ -389,31 +390,30 @@ export function AdminWorldsPanel() {
         )}
       </section>
 
-      <section>
-        <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-stone-400">
-          Installed
-        </h3>
+      <section className={cn(ui.card, "texture-noise p-5")}>
+        <SectionHead title="Installed" glyph="system-homebrew" aside={<span className="tabular-nums">{state.installed.length}</span>} />
         {!state.installed.length ? (
-          <p className="rounded-md border border-stone-800 p-3 text-xs text-stone-500">
-            No world packs yet. Campaigns run on the built-in settings.
-          </p>
+          <EmptyState art="map" size="sm" title="No world packs yet. Campaigns run on the built-in settings." />
         ) : (
-          <ul className="space-y-2">
+          <ul className="stagger space-y-2">
             {state.installed.map((pack) => {
               const update = registryById.get(pack.id);
               const outdated = Boolean(update && update.version !== pack.version);
               return (
-                <li key={pack.id} className="rounded-lg border border-stone-800 p-3">
+                <li key={pack.id} className="plate-row" data-layout="stack">
                   {pack.cover ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={pack.cover}
                       alt=""
-                      className="mb-2 h-24 w-full rounded-md border border-stone-800 object-cover"
+                      className="mb-2 h-24 w-full rounded-md border border-amber-500/20 object-cover"
                     />
                   ) : null}
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <span className="text-stone-100">{pack.name}</span>
+                    <span className="flex min-w-0 items-center gap-2 font-display text-amber-100">
+                      <GameIcon icon={{ kind: "glyph", key: "system-plugin" }} size="size-6" />
+                      {pack.name}
+                    </span>
                     <span className="text-[11px] text-stone-500">
                       v{pack.version}
                       {pack.author ? ` · ${pack.author}` : ""}
@@ -448,7 +448,7 @@ export function AdminWorldsPanel() {
                         type="button"
                         onClick={() => remove(pack)}
                         disabled={busyId === pack.id}
-                        className={cn(ui.btnSmall, "text-xs")}
+                        className={cn(ui.btnSmall, "text-xs hover:border-red-500/50 hover:text-red-400")}
                       >
                         {busyId === pack.id ? (
                           <Loader2 className="size-3.5 animate-spin" />
@@ -458,7 +458,7 @@ export function AdminWorldsPanel() {
                         Remove
                       </button>
                     ) : outdated ? null : (
-                      <p className="text-[11px] text-stone-600">
+                      <p className="text-[11px] text-stone-500">
                         Ships with the app and cannot be removed.
                       </p>
                     )}

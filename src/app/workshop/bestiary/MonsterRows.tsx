@@ -1,10 +1,14 @@
 "use client";
 
-import { Copy, Trash2 } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
 import { cn } from "@/lib/cn";
 import { MonsterTile, ui } from "@/lib/ui";
 import { crLabel } from "@/lib/bestiary/derive-cr";
 import { RatingLine } from "@/app/campaigns/[campaignId]/MonsterFields";
+import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { RowMenu } from "@/app/workshop/kit";
+import { ListHead, useListHead } from "@/app/workshop/ListHead";
 import type { Monster } from "@/app/workshop/bestiary/types";
 
 // The workshop's bestiary list: one full-width row per built monster with
@@ -20,6 +24,8 @@ import type { Monster } from "@/app/workshop/bestiary/types";
 function signed(value: number): string {
   return value >= 0 ? `+${value}` : String(value);
 }
+
+const readMonster = (monster: Monster) => ({ name: monster.draft.name, tags: monster.draft.stats.type ? [monster.draft.stats.type] : [] });
 
 export function MonsterRows({
   monsters,
@@ -37,20 +43,34 @@ export function MonsterRows({
   onDuplicate: (monster: Monster) => void;
   onDelete: (monster: Monster) => void;
 }) {
+  const head = useListHead(monsters, readMonster);
   if (!monsters.length) {
     return (
-      <p className="text-xs text-stone-500">
-        Nothing built yet. A monster made here answers to its name wherever a fight starts.
-      </p>
+      <EmptyState size="md" art="chest" title="Nothing built yet. A monster made here answers to its name wherever a fight starts." />
     );
   }
   return (
-    <ul className="space-y-2">
-      {monsters.map((monster) => {
+    <>
+    <ListHead head={head} noun={["monster", "monsters"]} placeholder="Find a monster" />
+    <ul className="stagger space-y-2">
+      {head.shown.map((monster) => {
         const { stats } = monster.draft;
         const swings = stats.attacksPerTurn ?? 1;
+        // One list for both doors: the kebab on the row and the right-click
+        // or long-press menu. Opening stays the row itself.
+        const items: ContextMenuItem[] = [
+          { id: "open", label: "Open", glyph: "system-bestiary", onSelect: () => onOpen(monster) },
+          { id: "duplicate", label: "Duplicate", glyph: "tab-notes", disabled: busy, onSelect: () => onDuplicate(monster) },
+          { id: "delete", label: "Delete", glyph: "quest-failed", tone: "danger", separated: true, onSelect: () => onDelete(monster) },
+        ];
         return (
-          <li key={monster.id} className={cn(ui.cardHover, "flex items-start gap-3 p-3")}>
+          <ContextMenu
+            as="li"
+            key={monster.id}
+            className={cn(ui.cardHover, "flex items-start gap-3 p-3")}
+            label={monster.draft.name}
+            items={items}
+          >
             <MonsterTile
               type={stats.type}
               cr={stats.cr}
@@ -67,12 +87,17 @@ export function MonsterRows({
                 <span className="font-display tracking-wide text-amber-50">
                   {monster.draft.name}
                 </span>
-                <span className="rounded-sm border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-amber-300">
+                <span className="rounded-sm border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 font-display text-[10px] tracking-wider text-amber-300">
                   CR {crLabel(stats.cr)}
                 </span>
               </div>
-              <p className="mt-1 text-sm text-stone-300">
-                AC {stats.ac} · {stats.maxHp} hp
+              <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-stone-300">
+                <span className="inline-flex items-center gap-1">
+                  <GameIcon icon={{ kind: "glyph", key: "rest-ac" }} size="size-5" /> AC {stats.ac}
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <GameIcon icon={{ kind: "glyph", key: "rest-hp" }} size="size-5" /> {stats.maxHp} hp
+                </span>
               </p>
               <p className="text-xs text-stone-500">
                 {swings} swing{swings === 1 ? "" : "s"} a turn · Dex {signed(stats.dexMod)}
@@ -81,28 +106,11 @@ export function MonsterRows({
                 <RatingLine readout={monster.readout} />
               </div>
             </button>
-            <div className="flex shrink-0 items-center gap-1">
-              <button
-                type="button"
-                disabled={busy}
-                aria-label={`Duplicate ${monster.draft.name}`}
-                onClick={() => onDuplicate(monster)}
-                className="rounded-md p-1.5 text-stone-500 hover:text-stone-200 disabled:opacity-40"
-              >
-                <Copy className="size-4" />
-              </button>
-              <button
-                type="button"
-                aria-label={`Delete ${monster.draft.name}`}
-                onClick={() => onDelete(monster)}
-                className="rounded-md p-1.5 text-stone-500 hover:text-red-300"
-              >
-                <Trash2 className="size-4" />
-              </button>
-            </div>
-          </li>
+            <RowMenu items={items} label={monster.draft.name} />
+          </ContextMenu>
         );
       })}
     </ul>
+    </>
   );
 }

@@ -66,7 +66,43 @@ export type PublicEncounter = {
   }>;
   // Whether the lair acts on initiative 20, and whether it has this round.
   lair?: { active: boolean; usedThisRound: boolean };
+  // What the character whose turn it is has spent (src/lib/dm/action-budget.ts),
+  // so the Hand and the board's turn pips show the engine's count rather than
+  // a guess. Only ever a player character's: nothing here is hidden from the
+  // table, and an enemy's economy stays the DM's.
+  turn?: PublicTurn;
 };
+
+export type PublicTurn = {
+  ownerId: string;
+  actionUsed: boolean;
+  bonusUsed: boolean;
+  reactionUsed: boolean;
+  attacksMade: number;
+  attacksAllowed: number;
+  extraActions?: number;
+};
+
+function turnView(encounter: Encounter): { turn?: PublicTurn } {
+  const budget = encounter.turnBudget;
+  if (!budget || budget.round !== encounter.round) {
+    return {};
+  }
+  if (!encounter.order.some((entry) => entry.kind === "pc" && entry.characterId === budget.ownerId)) {
+    return {};
+  }
+  return {
+    turn: {
+      ownerId: budget.ownerId,
+      actionUsed: budget.actionUsed,
+      bonusUsed: budget.bonusUsed,
+      reactionUsed: budget.reactionUsed,
+      attacksMade: budget.attacksMade,
+      attacksAllowed: budget.attacksAllowed,
+      ...(budget.extraActions ? { extraActions: budget.extraActions } : {}),
+    },
+  };
+}
 
 export function publicEncounter(
   encounter: Encounter,
@@ -133,6 +169,7 @@ export function publicEncounter(
     ...(encounter.legendary.lair
       ? { lair: { active: true, usedThisRound: encounter.legendary.lairUsedRound === encounter.round } }
       : {}),
+    ...turnView(encounter),
   };
 }
 

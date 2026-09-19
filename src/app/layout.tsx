@@ -65,6 +65,8 @@ export default function RootLayout({
         {/* The reader's theme and scale, applied to <html> before anything
             else paints (docs/vtt-parity-implementation-plan.md section 14). */}
         <ThemeApplier />
+        {/* Dust motes first, so the contour canvas is drawn over them. */}
+        <div className="ambient-dust" aria-hidden="true" />
         <TopoBackground />
         {children}
         {/* Every page: the QR and address a friend scans to add this server

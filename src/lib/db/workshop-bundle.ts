@@ -11,6 +11,7 @@ import { createSheetSchema } from "@/lib/schemas/sheet";
 import { normalizeHomebrewData } from "@/lib/homebrew/gear";
 import { draftFromData } from "@/lib/bestiary/monster-draft";
 import { isUploadedImagePath } from "@/lib/uploads";
+import { normalizeMapSkin } from "@/lib/battlemap/skins";
 import {
   bundleManifestSchema,
   decodeBundleImage,
@@ -187,7 +188,7 @@ export function exportWorkshopBundle(
     })),
     maps: allRows(
       `SELECT name, notes, tags_json, width, height, terrain, ambient, theme, lights_json, seed,
-              backdrop_path, backdrop_transform_json
+              backdrop_path, backdrop_transform_json, skin_json
          FROM prepared_maps WHERE campaign_id = ? ORDER BY name COLLATE NOCASE`,
       workshopId,
     ).map((row) => {
@@ -209,6 +210,7 @@ export function exportWorkshopBundle(
         backdropTransform: backdrop
           ? parseJson<Record<string, unknown>>(str(row.backdrop_transform_json, "{}"), {})
           : {},
+        skin: { ...normalizeMapSkin(parseJson<unknown>(str(row.skin_json, "{}"), {})) },
       };
     }),
     storyboard: [],
@@ -466,8 +468,8 @@ export function importWorkshopBundle(
       db.prepare(
         `INSERT INTO prepared_maps
            (id, campaign_id, name, notes, tags_json, width, height, terrain, ambient,
-            theme, lights_json, seed, backdrop_path, backdrop_transform_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            theme, lights_json, seed, backdrop_path, backdrop_transform_json, skin_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         crypto.randomUUID(),
         workshop.id,
@@ -484,6 +486,7 @@ export function importWorkshopBundle(
         backdropPath,
         // The transform only means something over its art.
         backdropPath ? JSON.stringify(map.backdropTransform) : "{}",
+        JSON.stringify(normalizeMapSkin(map.skin)),
         now,
         now,
       );

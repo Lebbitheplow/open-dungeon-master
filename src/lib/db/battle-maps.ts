@@ -16,6 +16,7 @@ import {
 } from "@/lib/battlemap/backdrop";
 import {
   effectiveTerrain,
+  isStampId,
   normalizeDoors,
   normalizeLabels,
   normalizeZones,
@@ -25,6 +26,7 @@ import {
   normalizeDrawings,
   type MapDrawing,
 } from "@/lib/battlemap/scene";
+import { isEmptyMapSkin, normalizeMapSkin, type MapSkin } from "@/lib/battlemap/skins";
 import { isUploadedImagePath } from "@/lib/uploads";
 
 // Persistence for tactical battle maps. One map per encounter; the active
@@ -63,6 +65,9 @@ export type BattleMap = {
   // A second picture over the grid that only the DM's projection carries:
   // the annotated version of the same map. Same transform as the backdrop.
   overlayPath: string;
+  // What the board is painted with; empty means the setting and theme decide
+  // (src/lib/battlemap/skins.ts). Cosmetic: no rule reads it.
+  skin: MapSkin;
 };
 
 type MapRow = {
@@ -85,6 +90,7 @@ type MapRow = {
   overlay_path: string | null;
   outdoors: number | null;
   drawings_json: string | null;
+  skin_json: string | null;
 };
 
 export type SceneExtras = {
@@ -108,11 +114,12 @@ type TokenRow = {
   light_minutes: number;
   hidden: number;
   movement: string | null;
+  stamp: string | null;
 };
 
 // Every token read selects the same columns, in one place, so adding one
 // cannot leave a projection quietly missing it.
-const TOKEN_COLUMNS = `id, kind, ref_id, name, x, y, moved_this_round, light_radius, burns_until, light_minutes, hidden, movement`;
+const TOKEN_COLUMNS = `id, kind, ref_id, name, x, y, moved_this_round, light_radius, burns_until, light_minutes, hidden, movement, stamp`;
 
 function mapRow(row: MapRow): BattleMap {
   const doors = normalizeDoors(parseJson<unknown>(row.doors_json ?? "{}", {}), row.terrain, row.width, row.height);
@@ -142,6 +149,7 @@ function mapRow(row: MapRow): BattleMap {
     zones: normalizeZones(parseJson<unknown>(row.zones_json ?? "[]", []), row.width, row.height),
     overlayPath: overlay && isUploadedImagePath(overlay) ? overlay : "",
     drawings: normalizeDrawings(parseJson<unknown>(row.drawings_json ?? "[]", []), row.width, row.height),
+    skin: normalizeMapSkin(parseJson<unknown>(row.skin_json ?? "{}", {})),
   };
 }
 
@@ -169,6 +177,8 @@ function mapToken(row: TokenRow): BattleToken {
     lightMinutes: row.light_minutes ?? 0,
     hidden: row.hidden === 1,
     movement: row.movement === "fly" || row.movement === "burrow" ? row.movement : "walk",
+    // Read back through the same guard it was written through.
+    stamp: isStampId(row.stamp) ? row.stamp : "",
   };
 }
 
@@ -188,6 +198,8 @@ export function createBattleMap(input: {
   scene?: SceneExtras;
   // Under the sky or a roof; absent means the theme decides.
   outdoors?: boolean | null;
+  // The look a prepared map was drawn with, carried onto the table.
+  skin?: MapSkin | null;
 }): BattleMap {
   const id = crypto.randomUUID();
   const now = nowIso();
@@ -223,6 +235,9 @@ export function createBattleMap(input: {
   }
   if (scene.drawings !== "[]") {
     getDatabase().prepare(`UPDATE battle_maps SET drawings_json = ? WHERE id = ?`).run(scene.drawings, id);
+  }
+  if (!isEmptyMapSkin(input.skin)) {
+    setBattleMapSkin(id, input.skin);
   }
   return getBattleMap(id) as BattleMap;
 }
@@ -288,6 +303,8 @@ export function replaceBattleMapTerrain(
     // board's labels and door states are cleared with the ground they
     // described.
     scene?: SceneExtras;
+    // Absent clears it too: new ground wears its own default until told otherwise.
+    skin?: MapSkin | null;
   },
 ) {
   const scene = sceneColumns(input.scene, input.terrain, input.width, input.height);
@@ -312,6 +329,15 @@ export function replaceBattleMapTerrain(
       nowIso(),
       mapId,
     );
+  setBattleMapSkin(mapId, input.skin ?? null);
+}
+
+// The skin a board is painted with, normalised on the way in like every
+// other JSON column here.
+export function setBattleMapSkin(mapId: string, skin: unknown) {
+  getDatabase()
+    .prepare(`UPDATE battle_maps SET skin_json = ? WHERE id = ?`)
+    .run(JSON.stringify(normalizeMapSkin(skin)), mapId);
 }
 
 // The picture under the grid. Passing an empty path takes it away, which is
@@ -362,12 +388,13 @@ export function insertToken(input: {
   burnsUntil?: number;
   lightMinutes?: number;
   hidden?: boolean;
+  stamp?: string;
 }): BattleToken {
   const id = crypto.randomUUID();
   getDatabase()
     .prepare(
-      `INSERT INTO battle_tokens (id, map_id, campaign_id, kind, ref_id, name, x, y, moved_this_round, light_radius, burns_until, light_minutes, hidden, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)
+      `INSERT INTO battle_tokens (id, map_id, campaign_id, kind, ref_id, name, x, y, moved_this_round, light_radius, burns_until, light_minutes, hidden, stamp, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (map_id, ref_id) DO UPDATE SET x = excluded.x, y = excluded.y, updated_at = excluded.updated_at`,
     )
     .run(
@@ -383,6 +410,7 @@ export function insertToken(input: {
       input.burnsUntil ?? 0,
       input.lightMinutes ?? 0,
       input.hidden ? 1 : 0,
+      isStampId(input.stamp) ? input.stamp : "",
       nowIso(),
     );
   return getTokenByRef(input.mapId, input.refId) as BattleToken;
@@ -545,7 +573,7 @@ export function mergeExplored(
 export function placeTokens(
   mapId: string,
   campaignId: string,
-  tokens: Array<{ kind: TokenKind; refId: string; name: string; spot: XY; lightRadius?: number; burnsUntil?: number; lightMinutes?: number }>,
+  tokens: Array<{ kind: TokenKind; refId: string; name: string; spot: XY; lightRadius?: number; burnsUntil?: number; lightMinutes?: number; stamp?: string }>,
 ) {
   const db = getDatabase();
   db.transaction(() => {
@@ -561,6 +589,7 @@ export function placeTokens(
         lightRadius: token.lightRadius,
         burnsUntil: token.burnsUntil,
         lightMinutes: token.lightMinutes,
+        stamp: token.stamp,
       });
     }
   })();

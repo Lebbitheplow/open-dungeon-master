@@ -47,7 +47,7 @@ export function SafetyPause({
             : "Someone raised the X-card. Nothing more needs saying. The story waits."}
         </p>
         {steersStory ? (
-          <div className="mt-4 flex flex-wrap justify-center gap-2">
+          <div className="reveal mt-4 flex flex-wrap justify-center gap-2">
             {(
               [
                 ["rewind", "Withdraw the last passage"],

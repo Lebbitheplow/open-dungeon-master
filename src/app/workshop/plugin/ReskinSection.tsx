@@ -1,5 +1,7 @@
 "use client";
 
+import { rowIcon } from "@/app/workshop/kit";
+import { SectionHead } from "@/components/ui/SectionHead";
 import { Plus, X } from "lucide-react";
 import { useState } from "react";
 import { AddFromList, Suggestions } from "@/components/ui/AddFromList";
@@ -57,9 +59,9 @@ export function IdReskinList({ draft, onDraft, kind }: SectionProps & { kind: Id
   const set = (next: WorldPackDraft[IdKind]) => onDraft({ ...draft, [kind]: next } as WorldPackDraft);
   return (
     <section className={ui.card + " p-4"}>
-      <h3 className="font-display text-base tracking-wide text-amber-200">{copy.title}</h3>
+      <SectionHead title={copy.title} glyph="system-plugin" className="mb-0" />
       <p className="mb-3 text-[11px] text-stone-500">{copy.blurb}</p>
-      <div className="space-y-1.5">
+      <div className="stagger space-y-1.5">
         {list.map((entry, index) => (
           <div key={`${entry.id}-${index}`} className="flex flex-wrap items-start gap-1.5 rounded-lg border border-stone-800 p-2">
             <span className="w-full text-[11px] text-stone-400 sm:w-36 sm:pt-1.5">
@@ -102,7 +104,7 @@ export function IdReskinList({ draft, onDraft, kind }: SectionProps & { kind: Id
               type="button"
               onClick={() => set(removeAt(list, index) as typeof list)}
               aria-label={`Remove ${catalogLabel(copy.catalog, entry.id)}`}
-              className="rounded-md p-1 text-stone-600 hover:text-red-300"
+              className={cn(ui.iconAction, rowIcon, "hover:text-red-300")}
             >
               <X className="size-3.5" />
             </button>
@@ -146,9 +148,9 @@ export function NameReskinList({ draft, onDraft, kind }: SectionProps & { kind: 
   };
   return (
     <section className={ui.card + " p-4"}>
-      <h3 className="font-display text-base tracking-wide text-amber-200">{copy.title}</h3>
+      <SectionHead title={copy.title} glyph="system-plugin" className="mb-0" />
       <p className="mb-3 text-[11px] text-stone-500">{copy.blurb}</p>
-      <div className="space-y-1.5">
+      <div className="stagger space-y-1.5">
         {list.map((entry, index) => (
           <div key={`${entry.from}-${index}`} className="flex flex-wrap items-start gap-1.5 rounded-lg border border-stone-800 p-2">
             <span className="w-full text-[11px] text-stone-400 sm:w-36 sm:pt-1.5">{entry.from}</span>
@@ -172,7 +174,7 @@ export function NameReskinList({ draft, onDraft, kind }: SectionProps & { kind: 
               type="button"
               onClick={() => set(removeAt(list, index))}
               aria-label={`Remove ${entry.from}`}
-              className="rounded-md p-1 text-stone-600 hover:text-red-300"
+              className={cn(ui.iconAction, rowIcon, "hover:text-red-300")}
             >
               <X className="size-3.5" />
             </button>
@@ -181,7 +183,7 @@ export function NameReskinList({ draft, onDraft, kind }: SectionProps & { kind: 
       </div>
       <div className="mt-2">
         {kind === "features" ? (
-          <div className="flex gap-1.5">
+          <div className="reveal flex gap-1.5">
             <input
               value={feature}
               list="plugin-feature-options"

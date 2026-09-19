@@ -522,7 +522,7 @@ export function LevelUpDialog({
   return (
     <Dialog.Root open onOpenChange={(open) => !open && onDone()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-black/60" />
+        <Dialog.Overlay className="dialog-overlay fixed inset-0 z-50 bg-[#05030d]/70 backdrop-blur-sm" />
         <Dialog.Content
           className={cn(
             "fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 panel ornate rounded-xl border-amber-500/40 p-6",
@@ -552,7 +552,7 @@ export function LevelUpDialog({
                 {conMod ? ` ${conMod > 0 ? "+" : ""}${conMod} CON each` : ""}):
               </p>
               {newFeatureNames.length ? (
-                <div className="mb-4 rounded-md border border-amber-900/50 bg-stone-950/60 px-3 py-2">
+                <div className="reveal mb-4 rounded-md border border-amber-900/50 bg-stone-950/60 px-3 py-2">
                   <p className="mb-1 text-xs text-amber-200">New at level {targetLevel}:</p>
                   <InfoChipList
                     items={newFeatureNames.map((name) => ({
@@ -566,7 +566,7 @@ export function LevelUpDialog({
               <div className="space-y-2">
                 <button
                   type="button"
-                  disabled={busy}
+                  disabled={busy} aria-busy={busy}
                   onClick={() => pickHp(averageGain)}
                   className="flex w-full items-center justify-between rounded-md border border-stone-700 px-4 py-2.5 text-sm hover:border-amber-700 hover:bg-stone-900 disabled:opacity-50"
                 >
@@ -576,7 +576,7 @@ export function LevelUpDialog({
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    disabled={busy}
+                    disabled={busy} aria-busy={busy}
                     onClick={rollHp}
                     className="flex flex-1 items-center justify-center gap-2 rounded-md border border-stone-700 px-4 py-2.5 text-sm hover:border-amber-700 hover:bg-stone-900 disabled:opacity-50"
                   >
@@ -586,7 +586,7 @@ export function LevelUpDialog({
                   {rolledGain !== null ? (
                     <button
                       type="button"
-                      disabled={busy}
+                      disabled={busy} aria-busy={busy}
                       onClick={() => pickHp(rolledGain)}
                       className={cn(
                         "rounded-lg bg-amber-200 px-4 py-2.5 text-sm font-medium text-stone-950",
@@ -607,7 +607,7 @@ export function LevelUpDialog({
                     Which class takes level {targetLevel}? Advance one {sheet.name} already has,
                     or multiclass into a new one.
                   </p>
-                  <div className="space-y-1.5">
+                  <div className="stagger space-y-1.5">
                     {classList.map((entry) => {
                       const held = findClass(entry.id);
                       const picked = classChoice.toLowerCase() === entry.id.toLowerCase();
@@ -695,7 +695,7 @@ export function LevelUpDialog({
                       <p className="text-stone-300">
                         {chosenKlass?.name ?? classChoice} grants one new skill. Pick it:
                       </p>
-                      <div className="flex flex-wrap gap-1.5">
+                      <div className="stagger-pop flex flex-wrap gap-1.5">
                         {skillOptions.map((skillId) => {
                           const picked = skillPick === skillId;
                           const name = findSkill(skillId)?.name ?? skillId;
@@ -747,7 +747,7 @@ export function LevelUpDialog({
                     Expertise: pick {Math.min(expertiseToPick, expertiseOptions.length)} of{" "}
                     {sheet.name}&apos;s proficient skills to DOUBLE their proficiency bonus in:
                   </p>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="stagger-pop flex flex-wrap gap-1.5">
                     {expertiseOptions.map((skillId) => {
                       const picked = expertisePicks.includes(skillId);
                       const name = findSkill(skillId)?.name ?? skillId;
@@ -849,7 +849,7 @@ export function LevelUpDialog({
                     Fighting Style: pick {stylesToPick} for {sheet.name}. The server applies it
                     to every attack from here on.
                   </p>
-                  <div className="space-y-1.5">
+                  <div className="stagger space-y-1.5">
                     {styleOptions.map((style) => {
                       const picked = stylePicks.includes(style.id);
                       return (
@@ -931,7 +931,7 @@ export function LevelUpDialog({
                       );
                     })}
                     {!subclassOptions.length ? (
-                      <p className="text-xs text-stone-500">
+                      <p className="reveal text-xs text-stone-500">
                         No known specializations for this class; the party lead can set one on
                         the sheet later.
                       </p>
@@ -1002,7 +1002,7 @@ export function LevelUpDialog({
                             </div>
                           ))}
                         {!spellOptions.length ? (
-                          <p className="px-1 py-2 text-xs text-stone-500">No matching spells.</p>
+                          <p className="reveal px-1 py-2 text-xs text-stone-500">No matching spells.</p>
                         ) : null}
                       </div>
                     </>
@@ -1028,7 +1028,7 @@ export function LevelUpDialog({
                     </div>
                   )}
                   {spellPicks.length ? (
-                    <p className="text-xs text-stone-400">
+                    <p className="reveal text-xs text-stone-400">
                       Learning: <span className="text-amber-200">{spellPicks.join(", ")}</span>
                       {remainingPicks !== null && spellPicks.length >= remainingPicks ? (
                         <span className="text-stone-500">
@@ -1044,7 +1044,7 @@ export function LevelUpDialog({
               <div className="flex gap-2">
                 <button
                   type="button"
-                  disabled={busy}
+                  disabled={busy} aria-busy={busy}
                   onClick={() => setStepIndex(Math.max(0, stepIndex - 1))}
                   className="rounded-md border border-stone-700 px-4 py-2.5 text-sm text-stone-300 hover:bg-stone-900 disabled:opacity-50"
                 >
@@ -1067,7 +1067,7 @@ export function LevelUpDialog({
               </div>
             </div>
           )}
-          {error ? <p className="mt-3 text-sm text-red-400">{error}</p> : null}
+          {error ? <p className="motion-shake mt-3 text-sm text-red-400">{error}</p> : null}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

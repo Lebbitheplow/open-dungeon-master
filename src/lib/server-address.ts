@@ -18,6 +18,42 @@ export type InterfaceAddress = {
 // arrived at. Link-local 169.254.x.x is left out because nothing routes to
 // it, and Docker-style bridge subnets are kept because a friend on the same
 // Wi-Fi cannot reach them either way and the picker lets the host choose.
+const VIRTUAL_INTERFACE = /^(docker\d*|br-[0-9a-f]+|veth|virbr|cni|flannel|podman)/i;
+
+const PRIVATE_V4 = /^(10\.|127\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.)/;
+
+// The public URL an admin (or the desktop app, when it opens a tunnel) saved,
+// or "" when it can no longer be true. A private address is only a way in on
+// the network it was written on: once this machine no longer holds it (a new
+// router, a copied data folder, the app that set it gone), it points at
+// nothing, and the QR button and every invite link would carry it. A real
+// hostname or a public address is taken at its word.
+export function livePublicUrl(
+  publicUrl: string | null | undefined,
+  interfaces: Record<string, InterfaceAddress[] | undefined>,
+): string {
+  const clean = (publicUrl ?? "").trim().replace(/\/+$/, "");
+  if (!clean) {
+    return "";
+  }
+  let host = "";
+  try {
+    host = new URL(clean).hostname;
+  } catch {
+    return "";
+  }
+  if (!PRIVATE_V4.test(host)) {
+    return clean;
+  }
+  const mine = new Set<string>();
+  for (const entries of Object.values(interfaces)) {
+    for (const entry of entries ?? []) {
+      mine.add(entry.address);
+    }
+  }
+  return mine.has(host) ? clean : "";
+}
+
 export function lanOrigins(
   interfaces: Record<string, InterfaceAddress[] | undefined>,
   protocol: string,
@@ -27,7 +63,12 @@ export function lanOrigins(
   const suffix = port ? `:${port}` : "";
   const seen = new Set<string>();
   const out: string[] = [];
-  for (const entries of Object.values(interfaces)) {
+  for (const [name, entries] of Object.entries(interfaces)) {
+    // A container bridge or a virtual pair is an address only this machine
+    // can reach; offering it as a way in sends a guest nowhere.
+    if (VIRTUAL_INTERFACE.test(name)) {
+      continue;
+    }
     for (const entry of entries ?? []) {
       const isV4 = entry.family === "IPv4" || entry.family === 4;
       if (!isV4 || entry.internal || entry.address.startsWith("169.254.")) {

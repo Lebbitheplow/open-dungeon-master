@@ -1,0 +1,223 @@
+/* Interactive menus (docs/visual-overhaul-plan.md 8c.7): the context menu on
+   cards (src/components/ui/ContextMenu.tsx), the command palette
+   (src/components/CommandPalette.tsx), its "/" hint chip, and the travelling
+   mark under a row of chips (the reference categories). Motion comes from the
+   tokens in globals.css; every animation here has a still fallback. */
+
+/* ---- context menu host ---- */
+
+/* iOS would raise its own link preview on a long press; the card has a menu. */
+.ctx-host {
+  -webkit-touch-callout: none;
+}
+/* While a finger is held down the card answers, so the wait reads as a wait
+   and not as a dead press. Set from a ref, never from React state. */
+.ctx-host[data-pressing] {
+  border-radius: 0.75rem;
+  outline: 2px solid rgba(212, 171, 58, 0.6);
+  outline-offset: 3px;
+  transition: outline-offset 480ms var(--ease-settle), outline-color 480ms var(--ease-settle);
+}
+.ctx-anchor {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+  opacity: 0;
+}
+.ctx-menu-label {
+  display: block;
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 0.25rem;
+  padding: 0.35rem 0.6rem 0.5rem;
+  border-bottom: 1px solid rgba(212, 171, 58, 0.15);
+  font-family: var(--font-display, serif);
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+}
+/* The day theme's panel is a wash meant for cards on the page; over a card it
+   lets the card's own text read through, so floating menus get a solid sheet. */
+html[data-theme="light"] .ctx-menu,
+html[data-theme="light"] .palette-panel {
+  background: linear-gradient(180deg, #fffdf7, #f3ead6);
+  border-color: rgba(120, 96, 50, 0.35);
+  box-shadow: 0 18px 44px rgba(74, 58, 28, 0.28), 0 1px 0 rgba(255, 255, 255, 0.7) inset;
+}
+.ctx-item-danger {
+  color: #fca5a5;
+}
+.ctx-item-danger[data-highlighted] {
+  background: rgba(127, 29, 29, 0.5);
+  color: #fecaca;
+}
+html[data-theme="light"] .ctx-item-danger {
+  color: #b42318;
+}
+html[data-theme="light"] .ctx-item-danger[data-highlighted] {
+  background: rgba(180, 35, 24, 0.12);
+  color: #8f1d14;
+}
+
+/* ---- the "/" hint chip ---- */
+
+.kbd-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(107, 99, 148, 0.4);
+  padding: 0.2rem 0.6rem 0.2rem 0.3rem;
+  font-size: 0.72rem;
+  line-height: 1;
+  color: rgba(214, 208, 235, 0.75);
+  background: rgba(16, 13, 32, 0.55);
+  transition:
+    border-color var(--dur-quick) var(--ease-snap),
+    color var(--dur-quick) var(--ease-snap),
+    transform var(--dur-quick) var(--ease-spring);
+}
+.kbd-chip:hover,
+.kbd-chip:focus-visible {
+  border-color: rgba(212, 171, 58, 0.55);
+  color: #f4e0a6;
+  outline: none;
+}
+.kbd-chip:active {
+  transform: scale(0.96);
+}
+.kbd-key {
+  display: inline-flex;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.3rem;
+  border: 1px solid rgba(212, 171, 58, 0.4);
+  border-bottom-width: 2px;
+  padding: 0 0.25rem;
+  font-family: var(--font-geist-mono, ui-monospace, monospace);
+  font-size: 0.68rem;
+  color: #f4e0a6;
+  background: rgba(212, 171, 58, 0.08);
+}
+html[data-theme="light"] .kbd-chip {
+  border-color: rgba(120, 96, 50, 0.35);
+  color: rgba(74, 58, 28, 0.85);
+  background: rgba(255, 253, 247, 0.7);
+}
+html[data-theme="light"] .kbd-chip:hover,
+html[data-theme="light"] .kbd-chip:focus-visible {
+  border-color: rgba(150, 110, 30, 0.7);
+  color: #5a420f;
+}
+html[data-theme="light"] .kbd-key {
+  border-color: rgba(150, 110, 30, 0.5);
+  color: #6b4e12;
+  background: rgba(212, 171, 58, 0.16);
+}
+
+/* ---- command palette ---- */
+
+@keyframes palette-in {
+  0% { opacity: 0; transform: translateY(-14px) scale(0.94); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+/* Three attribute hooks so this outranks the shared dialog scale-in. */
+.palette-panel[role="dialog"][data-state="open"] {
+  animation: palette-in var(--dur-beat) var(--ease-spring) both;
+}
+.palette-list > [role="option"]:nth-of-type(2) { animation-delay: 22ms; }
+.palette-list > [role="option"]:nth-of-type(3) { animation-delay: 44ms; }
+.palette-list > [role="option"]:nth-of-type(4) { animation-delay: 66ms; }
+.palette-list > [role="option"]:nth-of-type(5) { animation-delay: 88ms; }
+.palette-list > [role="option"]:nth-of-type(n + 6) { animation-delay: 110ms; }
+.palette-option {
+  display: flex;
+  width: 100%;
+  cursor: pointer;
+  align-items: center;
+  gap: 0.6rem;
+  border-radius: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+  font-size: 0.875rem;
+}
+.palette-option[aria-selected="true"] {
+  background: rgba(212, 171, 58, 0.12);
+  box-shadow: inset 2px 0 0 #d4ab3a;
+  padding-left: 0.85rem;
+}
+html[data-theme="light"] .palette-option[aria-selected="true"] {
+  background: rgba(212, 171, 58, 0.2);
+  box-shadow: inset 2px 0 0 #a87c1a;
+}
+.palette-group {
+  padding: 0.55rem 0.6rem 0.2rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.55;
+}
+
+/* ---- a row of chips with one travelling mark ---- */
+
+.chip-rail {
+  position: relative;
+  padding-bottom: 5px;
+}
+/* The shared mark only travels sideways; this row wraps, so it follows the
+   chosen chip down a line as well. */
+.chip-rail > .rail-mark-h {
+  top: 0;
+  bottom: auto;
+  transform: translate(calc(var(--ix, 0px) + 8px), calc(var(--iy, 0px) + var(--ih, 0px) + 2px));
+}
+
+/* ---- reference result badges ---- */
+
+.ref-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(107, 99, 148, 0.4);
+  padding: 0.05rem 0.45rem;
+  font-size: 0.68rem;
+  line-height: 1.1rem;
+  white-space: nowrap;
+  color: rgba(214, 208, 235, 0.8);
+  background: rgba(16, 13, 32, 0.5);
+}
+.ref-badge[data-tone="gold"] { border-color: rgba(212, 171, 58, 0.45); color: #f4e0a6; background: rgba(212, 171, 58, 0.08); }
+.ref-badge[data-tone="green"] { border-color: rgba(74, 222, 128, 0.4); color: #86efac; background: rgba(22, 101, 52, 0.18); }
+.ref-badge[data-tone="blue"] { border-color: rgba(96, 165, 250, 0.45); color: #93c5fd; background: rgba(30, 64, 175, 0.18); }
+.ref-badge[data-tone="violet"] { border-color: rgba(167, 139, 250, 0.45); color: #c4b5fd; background: rgba(91, 33, 182, 0.18); }
+.ref-badge[data-tone="orange"] { border-color: rgba(251, 146, 60, 0.5); color: #fdba74; background: rgba(154, 52, 18, 0.2); }
+.ref-badge[data-tone="red"] { border-color: rgba(248, 113, 113, 0.45); color: #fca5a5; background: rgba(127, 29, 29, 0.2); }
+html[data-theme="light"] .ref-badge { border-color: rgba(120, 96, 50, 0.3); color: #4a3a1c; background: rgba(255, 253, 247, 0.7); }
+html[data-theme="light"] .ref-badge[data-tone="gold"] { border-color: rgba(150, 110, 30, 0.5); color: #6b4e12; background: rgba(212, 171, 58, 0.16); }
+html[data-theme="light"] .ref-badge[data-tone="green"] { border-color: rgba(21, 128, 61, 0.4); color: #166534; background: rgba(34, 197, 94, 0.1); }
+html[data-theme="light"] .ref-badge[data-tone="blue"] { border-color: rgba(29, 78, 216, 0.35); color: #1e40af; background: rgba(59, 130, 246, 0.1); }
+html[data-theme="light"] .ref-badge[data-tone="violet"] { border-color: rgba(109, 40, 217, 0.35); color: #5b21b6; background: rgba(139, 92, 246, 0.1); }
+html[data-theme="light"] .ref-badge[data-tone="orange"] { border-color: rgba(194, 65, 12, 0.4); color: #9a3412; background: rgba(249, 115, 22, 0.1); }
+html[data-theme="light"] .ref-badge[data-tone="red"] { border-color: rgba(185, 28, 28, 0.35); color: #991b1b; background: rgba(239, 68, 68, 0.08); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ctx-host[data-pressing],
+  .kbd-chip {
+    transition: none;
+  }
+  .palette-panel[role="dialog"][data-state="open"] {
+    animation: none;
+  }
+  .palette-list > [role="option"] {
+    animation: none;
+  }
+}
+[data-effects="low"] .palette-panel[role="dialog"][data-state="open"],
+[data-effects="low"] .palette-list > [role="option"] {
+  animation: none;
+}

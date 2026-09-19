@@ -1,16 +1,28 @@
 "use client";
 
-import { Check, EyeOff, Loader2, Plus, ScrollText, Trash2, X } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
+import { Check, EyeOff, Plus, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { appConfirm } from "@/components/ui/ConfirmDialog";
+import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { Select } from "@/components/ui/Select";
 import type { Quest, QuestStatus } from "@/lib/dm/quest-logic";
+import { GlyphChip, KitButton, PanelLoading, Tick, TickMark, panelField, panelRow } from "./PanelKit";
 
 // The quest log (docs/vtt-parity-implementation-plan.md 5.7): what the
 // arc compiled and what the DM wrote, with objectives the DM ticks by
 // hand. Players read the party's; the DM's own rows are marked.
 
 const STATUS_LABEL: Record<QuestStatus, string> = { active: "Active", done: "Done", failed: "Failed", hidden: "Hidden" };
+const STATUS_GLYPH: Record<QuestStatus, string> = { active: "quest-active", done: "quest-done", failed: "quest-failed", hidden: "quest-hidden" };
+const STATUS_OPTIONS = (Object.keys(STATUS_LABEL) as QuestStatus[]).map((status) => ({
+  value: status,
+  label: STATUS_LABEL[status],
+  icon: { kind: "glyph" as const, key: STATUS_GLYPH[status] },
+}));
 
 export function QuestsPanel({ campaignId, steersStory, refreshKey }: { campaignId: string; steersStory: boolean; refreshKey: number }) {
   const [quests, setQuests] = useState<Quest[] | null>(null);
@@ -85,63 +97,55 @@ export function QuestsPanel({ campaignId, steersStory, refreshKey }: { campaignI
   }
 
   if (quests === null) {
-    return (
-      <p className="flex items-center gap-1 text-[11px] text-stone-500">
-        <Loader2 className="size-3 animate-spin" /> Opening the log...
-      </p>
-    );
+    return <PanelLoading label="Opening the log..." />;
   }
   const active = quests.filter((quest) => quest.status === "active");
   const settled = quests.filter((quest) => quest.status !== "active");
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <p className="flex items-center gap-1.5 text-xs font-medium text-stone-300">
-          <ScrollText className="size-3.5 text-amber-600" /> Quest log
-        </p>
-        {steersStory && !adding ? (
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="flex items-center gap-1 rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-400 hover:bg-stone-900"
-          >
-            <Plus className="size-3" /> Write one
-          </button>
-        ) : null}
-      </div>
+      <SectionHead
+        title="Quest log"
+        glyph="tab-quests"
+        aside={
+          steersStory && !adding ? (
+            <KitButton onClick={() => setAdding(true)}>
+              <Plus className="size-3.5" /> Write one
+            </KitButton>
+          ) : quests.length ? (
+            <span className="text-[11px] text-stone-500">{active.length} active</span>
+          ) : null
+        }
+      />
       {adding ? (
-        <div className="space-y-1.5 rounded border border-stone-800 bg-stone-950/60 p-2">
+        <div className="panel reveal space-y-1.5 rounded-lg p-2.5">
           <input
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             maxLength={120}
             placeholder="Find the miller's daughter"
-            className="w-full rounded border border-stone-700 bg-stone-900 px-2 py-1 text-[11px] outline-none focus:border-amber-600"
+            aria-label="Quest title"
+            className={panelField}
           />
           <textarea
             value={lines}
             onChange={(event) => setLines(event.target.value)}
             rows={3}
             placeholder={"Objectives, one per line:\nAsk at the mill\nSearch the weir"}
-            className="w-full rounded border border-stone-700 bg-stone-900 px-2 py-1 text-[11px] leading-4 outline-none focus:border-amber-600"
+            aria-label="Objectives, one per line"
+            className={cn(panelField, "leading-5")}
           />
           <div className="flex gap-1.5">
-            <button
-              type="button"
-              disabled={busy || !title.trim()}
-              onClick={() => void add()}
-              className="flex items-center gap-1 rounded border border-amber-700 bg-amber-950/50 px-2 py-0.5 text-[11px] text-amber-100 disabled:opacity-50"
-            >
-              {busy ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />} Add
-            </button>
-            <button type="button" onClick={() => setAdding(false)} className="flex items-center gap-1 rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-500">
-              <X className="size-3" /> Cancel
-            </button>
+            <KitButton tone="primary" disabled={busy || !title.trim()} busy={busy} onClick={() => void add()}>
+              {busy ? null : <Check className="size-3.5" />} Add
+            </KitButton>
+            <KitButton onClick={() => setAdding(false)}>
+              <X className="size-3.5" /> Cancel
+            </KitButton>
           </div>
         </div>
       ) : null}
-      {!quests.length ? <p className="text-[11px] italic text-stone-600">Nothing on the log yet.</p> : null}
-      <ul className="space-y-1.5">
+      {!quests.length ? <EmptyState size="sm" art="scrolls" title="Nothing on the log yet." /> : null}
+      <ul className="stagger space-y-1.5">
         {[...active, ...settled].map((quest) => (
           <QuestRow key={quest.id} quest={quest} steersStory={steersStory} onPatch={(body) => void patch(quest.id, body)} onRemove={() => void remove(quest)} />
         ))}
@@ -162,63 +166,74 @@ function QuestRow({
   onRemove: () => void;
 }) {
   const done = quest.objectives.filter((objective) => objective.done).length;
+  // The same doors as the row's own controls, for a right-click or a long press.
+  const items: ContextMenuItem[] = steersStory
+    ? [
+        ...(Object.keys(STATUS_LABEL) as QuestStatus[]).map((status) => ({
+          id: status,
+          label: `Mark ${STATUS_LABEL[status].toLowerCase()}`,
+          glyph: STATUS_GLYPH[status],
+          disabled: quest.status === status,
+          onSelect: () => onPatch({ status }),
+        })),
+        ...(quest.source === "dm"
+          ? [{ id: "remove", label: "Take it off the log", glyph: "quest-failed", tone: "danger" as const, separated: true, onSelect: onRemove }]
+          : []),
+      ]
+    : [];
   return (
-    <li className={cn("rounded border border-stone-800/70 bg-stone-950/40 p-2", quest.status !== "active" && "opacity-70")}>
-      <div className="flex items-center gap-1.5">
-        {quest.visibility === "dm" ? <EyeOff className="size-3 shrink-0 text-violet-300" /> : null}
-        <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-stone-200">{quest.title}</span>
+    <ContextMenu as="li" items={items} label={quest.title} className={cn(panelRow, quest.status !== "active" && "opacity-70")}>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <GameIcon icon={{ kind: "glyph", key: STATUS_GLYPH[quest.status] }} size="size-6" className="shrink-0" />
+        {quest.visibility === "dm" ? <EyeOff className="size-3.5 shrink-0 text-violet-300" aria-label="DM only" /> : null}
+        <span className="min-w-[9rem] flex-1 text-sm font-medium leading-5 text-stone-100">{quest.title}</span>
         {quest.objectives.length ? (
-          <span className="text-[10px] text-stone-500">
+          <span key={done} className="count-pop text-[11px] tabular-nums text-stone-400">
             {done}/{quest.objectives.length}
           </span>
         ) : null}
         {steersStory ? (
-          <select
+          <Select<QuestStatus>
             value={quest.status}
-            onChange={(event) => onPatch({ status: event.target.value })}
-            aria-label="Status"
-            className="rounded border border-stone-700 bg-stone-900 px-1 py-0.5 text-[10px] text-stone-300"
-          >
-            {(Object.keys(STATUS_LABEL) as QuestStatus[]).map((status) => (
-              <option key={status} value={status}>
-                {STATUS_LABEL[status]}
-              </option>
-            ))}
-          </select>
+            onChange={(status) => onPatch({ status })}
+            options={STATUS_OPTIONS}
+            label="Status"
+            size="sm"
+            align="end"
+            className="pk-w-26"
+          />
         ) : (
-          <span className="text-[10px] uppercase tracking-wide text-stone-500">{STATUS_LABEL[quest.status]}</span>
+          <GlyphChip glyph={STATUS_GLYPH[quest.status]}>{STATUS_LABEL[quest.status]}</GlyphChip>
         )}
         {steersStory && quest.source === "dm" ? (
-          <button type="button" onClick={onRemove} aria-label="Take it off the log" className="rounded p-1 text-stone-600 hover:text-red-300">
-            <Trash2 className="size-3" />
-          </button>
+          <KitButton tone="iconDanger" always onClick={onRemove} aria-label="Take it off the log">
+            <Trash2 className="size-3.5" />
+          </KitButton>
         ) : null}
       </div>
       {quest.objectives.length ? (
-        <ul className="mt-1 space-y-0.5">
+        <ul className="reveal mt-1.5 space-y-1">
           {quest.objectives.map((objective) => (
-            <li key={objective.id} className="flex items-center gap-1.5 text-[11px]">
+            <li key={objective.id} className="flex items-center gap-2 text-xs">
               {steersStory ? (
-                <input
-                  type="checkbox"
+                <Tick
                   checked={objective.done}
-                  aria-label={`Done: ${objective.text}`}
-                  onChange={(event) =>
+                  label={`Done: ${objective.text}`}
+                  onChange={(checked) =>
                     onPatch({
-                      objectives: quest.objectives.map((entry) => (entry.id === objective.id ? { ...entry, done: event.target.checked } : entry)),
+                      objectives: quest.objectives.map((entry) => (entry.id === objective.id ? { ...entry, done: checked } : entry)),
                     })
                   }
-                  className="accent-amber-400"
                 />
               ) : (
-                <span className={cn("size-3 rounded-sm border", objective.done ? "border-amber-500 bg-amber-500/70" : "border-stone-600")} />
+                <TickMark checked={objective.done} />
               )}
               <span className={cn(objective.done ? "text-stone-500 line-through" : "text-stone-300")}>{objective.text}</span>
             </li>
           ))}
         </ul>
       ) : null}
-      {quest.source === "arc" ? <p className="mt-0.5 text-[10px] text-stone-600">From the story</p> : null}
-    </li>
+      {quest.source === "arc" ? <p className="reveal mt-1 text-[11px] text-stone-500">From the story</p> : null}
+    </ContextMenu>
   );
 }

@@ -1,8 +1,10 @@
 "use client";
 
 import { AlertTriangle, Hammer, Loader2 } from "lucide-react";
+import { Select } from "@/components/ui/Select";
+import { Switch } from "@/components/ui/Switch";
+import { FieldLabel } from "@/app/workshop/kit";
 import { useCallback, useEffect, useState } from "react";
-import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import {
   IMPORT_KINDS,
@@ -180,78 +182,62 @@ export function ContentImportPicker({
 
   return (
     <div className="space-y-3">
-      <label className="block">
-        <span className="mb-1 block text-xs text-stone-400">Start from</span>
-        <select
+      <div className="block">
+        <FieldLabel className="mb-1 block">Start from</FieldLabel>
+        <Select
+          label="Start from"
           value={selection.sourceId}
-          onChange={(event) =>
-            choose(offered.find((source) => source.id === event.target.value) ?? null)
-          }
-          className={ui.input}
-        >
-          <option value="">None</option>
-          {workshops.length ? (
-            <optgroup label="Workshops">
-              {workshops.map((source) => (
-                <option key={source.id} value={source.id}>
-                  {source.title}
-                </option>
-              ))}
-            </optgroup>
-          ) : null}
-          {campaigns.length ? (
-            <optgroup label="Campaigns">
-              {campaigns.map((source) => (
-                <option key={source.id} value={source.id}>
-                  {source.title}
-                </option>
-              ))}
-            </optgroup>
-          ) : null}
-        </select>
-      </label>
+          onChange={(id) => choose(offered.find((source) => source.id === id) ?? null)}
+          options={[
+            { value: "", label: "None" },
+            ...workshops.map((source) => ({
+              value: source.id,
+              label: source.title,
+              group: "Workshops",
+              icon: { kind: "glyph" as const, key: "system-storyboard" },
+            })),
+            ...campaigns.map((source) => ({
+              value: source.id,
+              label: source.title,
+              group: "Campaigns",
+              icon: { kind: "glyph" as const, key: "tab-campaigns" },
+            })),
+          ]}
+        />
+      </div>
 
       {chosen ? (
         available.length ? (
           <>
-            <div className="space-y-1">
+            <div className="stagger space-y-1">
               {available.map((kind) => (
-                <label key={kind} className="flex items-center gap-2 text-sm text-stone-300">
-                  <input
-                    type="checkbox"
-                    checked={selection.select.includes(kind)}
-                    onChange={() => toggle(kind)}
-                    className="accent-amber-400"
-                  />
+                <div key={kind} className="flex min-h-9 items-center gap-2 text-sm text-stone-300">
+                  <Switch on={selection.select.includes(kind)} onChange={() => toggle(kind)} label={IMPORT_KIND_LABELS[kind]} />
                   <span>{IMPORT_KIND_LABELS[kind]}</span>
                   {SINGULAR_KINDS.has(kind) ? null : (
                     <span className="text-xs text-stone-500">({chosen.contents[kind]})</span>
                   )}
-                </label>
+                </div>
               ))}
             </div>
 
             {selection.select.includes("houseRules") ? (
-              <label className="block">
-                <span className="mb-1 block text-xs text-stone-400">Existing house rules</span>
-                <select
+              <div className="block">
+                <FieldLabel className="mb-1 block">Existing house rules</FieldLabel>
+                <Select<"replace" | "append">
+                  label="Existing house rules"
                   value={selection.houseRules}
-                  onChange={(event) =>
-                    onChange({
-                      ...selection,
-                      houseRules: event.target.value as "replace" | "append",
-                    })
-                  }
-                  className={cn(ui.input, "py-1 text-xs")}
-                >
-                  <option value="replace">Replace them</option>
-                  <option value="append">Keep them and add these</option>
-                </select>
-              </label>
+                  onChange={(houseRules) => onChange({ ...selection, houseRules })}
+                  options={[
+                    { value: "replace", label: "Replace them" },
+                    { value: "append", label: "Keep them and add these" },
+                  ]}
+                />
+              </div>
             ) : null}
 
             {plan?.warnings.length ? (
-              <ul className="space-y-1">
+              <ul className="stagger space-y-1">
                 {plan.warnings.map((warning, index) => (
                   <li
                     key={index}
@@ -265,7 +251,7 @@ export function ContentImportPicker({
             ) : null}
 
             {campaignId ? (
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="reveal flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={importNow}
@@ -275,7 +261,7 @@ export function ContentImportPicker({
                   {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Hammer className="size-3.5" />}
                   Bring it in
                 </button>
-                {note ? <span className="text-xs text-emerald-400">{note}</span> : null}
+                {note ? <span className="live-in text-xs text-emerald-400">{note}</span> : null}
               </div>
             ) : (
               <p className="text-xs text-stone-500">

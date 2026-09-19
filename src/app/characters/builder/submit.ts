@@ -2,6 +2,7 @@ import type { Ability, AsiChoice, CreateSheetInput } from "@/lib/schemas/sheet";
 import { SRD_CLASSES, spellSlotsFor } from "@/lib/srd";
 import { expertiseSlotsFor, subclassLevelFor, subclassSpellsFor } from "@/lib/srd/features";
 import { fightingStyleFeatureName } from "@/lib/srd/feature-effects";
+import { POINT_BUY_BUDGET, POINT_BUY_MIN, pointBuyRemaining } from "@/lib/srd/point-buy";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
 import type { BuilderDerived } from "./useBuilderDerived";
 import type { BuilderState } from "./useBuilderState";
@@ -133,9 +134,22 @@ export function spellsBlocker(
   return null;
 }
 
-export function abilitiesBlocker(derived: BuilderDerived): string | null {
+// `state` is optional so the rule about the scores themselves can still be
+// asked without it; with it, point buy is held to its budget.
+export function abilitiesBlocker(
+  derived: BuilderDerived,
+  state?: Pick<BuilderState, "method" | "scores">,
+): string | null {
   if (!derived.abilities) {
     return "Assign all six ability scores first.";
+  }
+  if (state?.method === "pointbuy") {
+    const over = -pointBuyRemaining(
+      Object.values(state.scores).map((score) => score ?? POINT_BUY_MIN),
+    );
+    if (over > 0) {
+      return `Point buy is ${over} ${over === 1 ? "point" : "points"} over its ${POINT_BUY_BUDGET}. Lower a score first.`;
+    }
   }
   const unresolvedSlot = derived.activeAsiChoices.findIndex((choice) => choice === null);
   if (unresolvedSlot !== -1) {
@@ -157,7 +171,7 @@ export function validateBuilder(
   }
   const message =
     identityBlocker(state) ??
-    abilitiesBlocker(derived) ??
+    abilitiesBlocker(derived, state) ??
     ancestryBlocker(state, race, background) ??
     callingBlocker(klass, state, derived) ??
     spellsBlocker(state, derived, klass);

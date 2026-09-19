@@ -1,15 +1,22 @@
 "use client";
 
+import { EmptyState } from "@/components/EmptyState";
 import { BookOpen } from "lucide-react";
-import { GameIcon } from "@/components/ui/GameIcon";
 import type { ReactNode } from "react";
 import { GameTerm } from "@/components/ui/GameTerm";
-import { InfoChipList } from "@/components/ui/InfoDialog";
+import {
+  AbilityTiles,
+  EquipmentChips,
+  FeatChips,
+  FeatureChips,
+  SkillRows,
+  SpellChips,
+  VitalTiles,
+} from "@/components/sheet/SheetParts";
 import { Ribbon } from "@/components/ui/Ribbon";
 import { cn } from "@/lib/cn";
-import { contentSlug, describeFeature } from "@/lib/help";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
-import { abilityMod, formatModifier } from "@/lib/srd";
+import { computeSheetDerived, formatModifier, type DerivedPart } from "@/lib/srd";
 import { ui } from "@/lib/ui";
 
 export type CharacterEvent = {
@@ -52,87 +59,87 @@ function SheetPanel({
 // The six scores, the vitals line, and the lists a library sheet carries:
 // spells, equipment, features, feats, backstory. Read-only; editing happens
 // through the builder in a campaign lobby.
-export function SheetSections({ sheet }: { sheet: CreateSheetInput }) {
-  const abilities = sheet.abilities;
+export function SheetSections({ sheet, level = 1 }: { sheet: CreateSheetInput; level?: number }) {
+  // The same working the session sheet shows, from the same function, so a
+  // library character reads its saves and skills before it ever sits down.
+  const derived = computeSheetDerived({
+    abilities: sheet.abilities,
+    level,
+    proficiencies: sheet.proficiencies,
+    spellcasting: sheet.spellcasting ?? null,
+    class: sheet.class,
+    features: sheet.features,
+    feats: sheet.feats,
+    equipment: sheet.equipment,
+  });
+  const explain = (parts: DerivedPart[]) => parts.map((part) => `${formatModifier(part.value)} ${part.label}`).join(", ");
   return (
     <div className="space-y-4">
       <SheetPanel title="Abilities" className="ornate">
-        <div className="grid grid-cols-3 gap-2 text-center sm:grid-cols-6">
-          {(Object.entries(abilities) as Array<[string, number]>).map(([ability, score]) => (
-            <div
-              key={ability}
-              className="rounded-lg border border-stone-700/60 bg-stone-950/60 p-2 shadow-[0_2px_6px_rgba(4,2,12,0.45)_inset]"
-            >
-              <p className="eyebrow text-[10px] text-stone-500">{ability}</p>
-              <p className="font-display text-xl text-amber-50">{score}</p>
-              <p className="text-xs text-amber-200/80">{formatModifier(abilityMod(score))}</p>
-            </div>
-          ))}
+        <AbilityTiles
+          abilities={sheet.abilities}
+          mods={derived.abilityMods}
+          saves={derived.saves}
+          saveProficiencies={sheet.proficiencies.saves}
+          explainSave={(ability) => explain(derived.parts.saves[ability])}
+        />
+        <div className="mt-3">
+          <VitalTiles
+            vitals={[
+              { glyph: "rest-hp", label: <GameTerm id="hit_points">Hit points</GameTerm>, value: sheet.maxHp },
+              { glyph: "rest-ac", label: <GameTerm id="armor_class">Armor class</GameTerm>, value: sheet.ac },
+              { glyph: "rest-speed", label: "Speed", value: `${sheet.speed} ft` },
+              { glyph: "coin-gp", label: "Gold", value: `${sheet.gold} gp` },
+              {
+                glyph: "rest-initiative",
+                label: <GameTerm id="initiative">Initiative</GameTerm>,
+                value: formatModifier(derived.initiative),
+                title: explain(derived.parts.initiative),
+              },
+              {
+                glyph: "sense-passive-perception",
+                label: <GameTerm id="passive_perception">Passive perception</GameTerm>,
+                value: derived.passivePerception,
+                title: explain(derived.parts.passivePerception),
+              },
+              { glyph: "rest-proficiency", label: "Proficiency", value: formatModifier(derived.proficiencyBonus) },
+              ...(derived.spellSaveDc
+                ? [{ glyph: "rest-spell-slot", label: "Spell save DC", value: derived.spellSaveDc, title: explain(derived.parts.spellSaveDc) }]
+                : []),
+            ]}
+          />
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-sm text-stone-300 sm:grid-cols-4">
-          <span>
-            <GameTerm id="hit_points">HP</GameTerm> {sheet.maxHp}
-          </span>
-          <span>
-            <GameTerm id="armor_class">AC</GameTerm> {sheet.ac}
-          </span>
-          <span>Speed {sheet.speed} ft</span>
-          <span>Gold {sheet.gold}</span>
-        </div>
+      </SheetPanel>
+
+      <SheetPanel title={<GameTerm id="skill">Skills</GameTerm>}>
+        <SkillRows
+          skills={derived.skills}
+          proficient={sheet.proficiencies.skills}
+          explain={(skillId) => explain(derived.parts.skills[skillId])}
+        />
       </SheetPanel>
 
       {sheet.spellcasting ? (
         <SheetPanel title="Spells">
-          <InfoChipList
-            items={[
-              ...new Set([...sheet.spellcasting.known, ...sheet.spellcasting.prepared]),
-            ].map((spell) => ({
-              name: spell,
-                      icon: { kind: "spell" as const, key: spell },
-              reference: { kind: "spells", slug: contentSlug(spell), name: spell },
-            }))}
-            emptyText="None chosen."
-          />
+          <SpellChips spells={[...sheet.spellcasting.known, ...sheet.spellcasting.prepared]} emptyText="None chosen." />
         </SheetPanel>
       ) : null}
 
       {sheet.equipment.length ? (
         <SheetPanel title="Equipment">
-          <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-stone-300">
-                {sheet.equipment.map((item, index) => (
-                  <li key={`${item.name}-${index}`} className="flex items-center gap-1">
-                    <GameIcon icon={{ kind: "item", key: item.name, family: "item-gear" }} size="size-8" />
-                    {item.qty > 1 ? `${item.name} x${item.qty}` : item.name}
-                  </li>
-                ))}
-              </ul>
+          <EquipmentChips equipment={sheet.equipment} />
         </SheetPanel>
       ) : null}
 
       {sheet.features?.length ? (
         <SheetPanel title="Features and traits">
-          <InfoChipList
-            items={sheet.features.map((feature) => ({
-              name: feature.name,
-                  icon: { kind: "feature" as const, key: feature.name, family: `class-${sheet.class.toLowerCase()}` },
-              note: feature.source === "story" ? "(story)" : undefined,
-              meta: feature.level ? `Level ${feature.level}` : undefined,
-              text: describeFeature(sheet.class, sheet.subclass, feature.name),
-            }))}
-          />
+          <FeatureChips features={sheet.features} classId={sheet.class} subclass={sheet.subclass} />
         </SheetPanel>
       ) : null}
 
       {sheet.feats.length ? (
         <SheetPanel title="Feats">
-          <InfoChipList
-            items={sheet.feats.map((feat) => ({
-              name: feat,
-                  icon: { kind: "feat" as const, key: feat },
-              text: describeFeature(sheet.class, sheet.subclass, feat),
-              reference: { kind: "feats", slug: contentSlug(feat), name: feat },
-            }))}
-          />
+          <FeatChips feats={sheet.feats} classId={sheet.class} subclass={sheet.subclass} />
         </SheetPanel>
       ) : null}
 
@@ -159,12 +166,9 @@ export function StorySoFar({ events }: { events: CharacterEvent[] }) {
       }
     >
       {events.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-stone-700/60 p-5 text-center text-sm text-stone-500">
-          Nothing recorded yet. Milestones from campaigns land here: victories, treasures,
-          bonds, and worse.
-        </p>
+        <EmptyState size="md" art="scrolls" title="Nothing recorded yet. Milestones from campaigns land here: victories, treasures, bonds, and worse." />
       ) : (
-        <ol className="relative ml-2 space-y-3 border-l border-amber-400/20 pl-5">
+        <ol className="stagger relative ml-2 space-y-3 border-l border-amber-400/20 pl-5">
           {events.map((event) => (
             <li key={event.id} className="relative text-sm">
               <span

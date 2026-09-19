@@ -39,7 +39,7 @@ function Strip({
   return (
     <div className="flex flex-wrap items-start gap-2 text-xs">
       <span className="w-16 pt-1 text-stone-500">{label}</span>
-      <ul className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1">
+      <ul className="stagger flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1">
         {entries.map((entry) => (
           <li key={entry.name} className="shrink-0" title={entry.name}>
             {/* eslint-disable-next-line @next/next/no-img-element */}

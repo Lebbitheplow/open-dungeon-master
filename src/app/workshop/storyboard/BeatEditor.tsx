@@ -2,6 +2,10 @@
 
 import { Loader2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { Select } from "@/components/ui/Select";
+import { Field, chip, chipOn, chipRow } from "@/app/workshop/kit";
 import {
   BEAT_KINDS,
   BEAT_LABELS,
@@ -11,7 +15,7 @@ import {
   type BoardInventory,
   type BoardNode,
 } from "@/lib/workshop/board";
-import { LINK_FIELDS, beatInput } from "@/app/workshop/storyboard/beat-fields";
+import { KIND_GLYPH, LINK_FIELDS, LINK_GLYPH } from "@/app/workshop/storyboard/beat-fields";
 
 // One card, open for editing: its kind and title, what happens, who and
 // where it involves, and which cards it leads to. Split out of
@@ -45,7 +49,7 @@ export function BeatEditor({
       type="button"
       disabled={busy}
       onClick={onSave}
-      className="inline-flex w-fit items-center gap-1.5 rounded-md border border-amber-500/40 px-3 py-1 text-xs text-amber-100 hover:bg-stone-800 disabled:opacity-40"
+      className={cn(ui.btnPrimary, "w-fit")}
     >
       {busy ? <Loader2 className="size-3.5 animate-spin" /> : null}
       Save the card
@@ -54,24 +58,23 @@ export function BeatEditor({
 
   return (
     <>
+      <SectionHead title="The card" glyph={KIND_GLYPH[edit.kind]} className="mb-0" />
       <div className="flex flex-wrap gap-2">
-        <select
-          value={edit.kind}
-          onChange={(event) => onChange({ ...edit, kind: event.target.value as BeatKind })}
-          className={cn(beatInput, "w-44")}
-        >
-          {BEAT_KINDS.map((kind) => (
-            <option key={kind} value={kind}>
-              {BEAT_LABELS[kind]}
-            </option>
-          ))}
-        </select>
+        <span className="w-full sm:w-52">
+          <Select<BeatKind>
+            label="Kind of card"
+            value={edit.kind}
+            onChange={(kind) => onChange({ ...edit, kind })}
+            options={BEAT_KINDS.map((kind) => ({ value: kind, label: BEAT_LABELS[kind], icon: { kind: "glyph" as const, key: KIND_GLYPH[kind] } }))}
+          />
+        </span>
         <input
           value={edit.title}
+          aria-label="Title"
           onChange={(event) =>
             onChange({ ...edit, title: event.target.value.slice(0, TITLE_MAX) })
           }
-          className={cn(beatInput, "flex-1")}
+          className={cn(ui.input, "min-w-40 flex-1")}
         />
       </div>
       <textarea
@@ -79,43 +82,46 @@ export function BeatEditor({
         onChange={(event) => onChange({ ...edit, body: event.target.value })}
         rows={3}
         placeholder="What actually happens, and what it means if the party is not there."
-        className={cn(beatInput, "w-full resize-y")}
+        aria-label="What happens"
+        className={cn(ui.input, "resize-y")}
       />
 
-      <div className="grid gap-1.5 sm:grid-cols-2">
+      <SectionHead title="Who and where" glyph="system-cast" className="mb-0 pt-1" />
+      <div className="stagger-up grid gap-2 sm:grid-cols-2">
         {LINK_FIELDS.map(([field, bucket, label]) => (
-          <label key={field} className="flex flex-col gap-0.5">
-            <span className="text-[10px] uppercase tracking-wide text-stone-500">{label}</span>
-            <select
+          <Field key={field} label={label}>
+            <Select
+              label={label}
               value={edit.links[field] ?? ""}
-              onChange={(event) =>
+              onChange={(next) =>
                 onChange({
                   ...edit,
-                  links: { ...edit.links, [field]: event.target.value || undefined },
+                  links: { ...edit.links, [field]: next || undefined },
                 })
               }
-              className={cn(beatInput, "w-full")}
-            >
-              <option value="">nobody in particular</option>
-              {inventory[bucket].map((entry) => (
-                <option key={entry.id} value={entry.id}>
-                  {entry.name}
-                </option>
-              ))}
-            </select>
-          </label>
+              options={[
+                { value: "", label: "nobody in particular" },
+                ...inventory[bucket].map((entry) => ({
+                  value: entry.id,
+                  label: entry.name,
+                  icon: { kind: "glyph" as const, key: LINK_GLYPH[field] },
+                })),
+              ]}
+            />
+          </Field>
         ))}
       </div>
 
       <div className="flex flex-col gap-1">
-        <span className="text-[10px] uppercase tracking-wide text-stone-500">Leads to</span>
-        <div className="flex flex-wrap gap-1">
+        <SectionHead title="Leads to" glyph="pace-normal" className="mb-1 pt-1" />
+        <div className={cn("stagger-pop", chipRow)}>
           {others.map((other) => {
             const on = edit.edges.includes(other.id);
             return (
               <button
                 key={other.id}
                 type="button"
+                aria-pressed={on}
                 onClick={() =>
                   onChange({
                     ...edit,
@@ -124,12 +130,7 @@ export function BeatEditor({
                       : [...edit.edges, other.id],
                   })
                 }
-                className={cn(
-                  "rounded-md border px-1.5 py-0.5 text-[10px]",
-                  on
-                    ? "border-amber-500/50 text-amber-100"
-                    : "border-stone-700 text-stone-500 hover:text-stone-300",
-                )}
+                className={cn(ui.btnSmall, chip, "normal-case", on && chipOn)}
               >
                 {other.title}
               </button>
@@ -139,16 +140,16 @@ export function BeatEditor({
       </div>
 
       {onDelete ? (
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="reveal flex flex-wrap items-center gap-2 text-sm">
           {saveButton}
           <button
             type="button"
             disabled={busy}
             onClick={onDelete}
             aria-label={`Delete ${edit.title}`}
-            className="ml-auto inline-flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-500 hover:text-red-300 disabled:opacity-40"
+            className={cn(ui.btnSmall, "ml-auto hover:border-red-500/50 hover:text-red-300")}
           >
-            <Trash2 className="size-3" /> Delete
+            <Trash2 className="size-3.5" /> Delete
           </button>
         </div>
       ) : (

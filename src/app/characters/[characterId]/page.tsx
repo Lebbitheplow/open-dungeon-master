@@ -1,20 +1,14 @@
 "use client";
 
-import {
-  Camera,
-  Copy,
-  FileDown,
-  FileJson,
-  Hammer,
-  ImageOff,
-  Loader2,
-  Sparkles,
-  Swords,
-} from "lucide-react";
+import { PageSkeleton } from "@/components/PageSkeleton";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { use, useEffect, useRef, useState } from "react";
 import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
 import { AppHeader } from "@/components/AppHeader";
+import { KebabMenu, type KebabItem } from "@/components/KebabMenu";
+import { ContextMenu } from "@/components/ui/ContextMenu";
+import { GameIcon } from "@/components/ui/GameIcon";
 import { ImageLightbox } from "@/components/ui/ImageLightbox";
 import { cn } from "@/lib/cn";
 import { downloadBlob, filenameSlug } from "@/lib/download";
@@ -24,6 +18,7 @@ import { CharacterPortrait, ui } from "@/lib/ui";
 import { offersImages, useCapabilities } from "@/lib/use-capabilities";
 import { SheetSections, StorySoFar, type CharacterEvent } from "./SheetSections";
 import { navigateTo } from "@/lib/navigation";
+import { UseInCampaignDialog } from "./UseInCampaignDialog";
 
 // Where this character is playing; see src/lib/db/characters.ts.
 type CharacterAssignment = {
@@ -70,6 +65,7 @@ export default function CharacterDetailPage({
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
   const [cropping, setCropping] = useState(false);
+  const [seating, setSeating] = useState(false);
   const [painting, setPainting] = useState(false);
   const [portraitError, setPortraitError] = useState("");
   // "Paint one" only where the server has an image model to paint with.
@@ -225,9 +221,7 @@ export default function CharacterDetailPage({
     return (
       <main className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
         <AppHeader />
-        <div className="flex justify-center py-10">
-          <Loader2 className="size-5 animate-spin text-stone-500" />
-        </div>
+        <PageSkeleton kind="sheet" className="px-0 py-2" />
       </main>
     );
   }
@@ -236,55 +230,127 @@ export default function CharacterDetailPage({
     return (
       <main className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
         <AppHeader />
-        <p className={cn(ui.card, "p-6 text-center text-stone-400")}>
-          Character not found.{" "}
-          <Link href="/characters" className="text-amber-200 hover:text-amber-400">
+        <div className={cn(ui.card, "ornate texture-noise flex flex-col items-center gap-3 px-6 py-8 text-center")}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/assets/ui/empty-notice-board.webp" alt="" className="h-24 w-32 object-contain opacity-90" />
+          <p className="font-serif text-sm text-stone-300">Character not found.</p>
+          <Link href="/characters" className={ui.btnSecondary}>
             Back to your library
           </Link>
-        </p>
+        </div>
       </main>
     );
   }
 
   const sheet = character.sheet;
 
+  // Everything but the primary action, once, for the kebab and for the
+  // right-click or long press on the header. Each hint is the sentence the
+  // old button carried as its tooltip.
+  const actions: KebabItem[] = [
+    {
+      id: "pdf",
+      label: pdfBusy ? "Preparing..." : "Download PDF",
+      hint: "Download this character sheet as a fillable PDF",
+      glyph: "tab-journal",
+      disabled: pdfBusy,
+      onSelect: () => void handleDownloadPdf(),
+    },
+    {
+      id: "export",
+      label: exporting ? "Exporting..." : "Export",
+      hint: "Save this character as a file you can import on another device or server",
+      glyph: "system-share",
+      disabled: exporting,
+      onSelect: () => void handleExport(),
+    },
+    {
+      id: "duplicate",
+      label: cloning ? "Copying..." : "Duplicate",
+      hint: "Save a second copy of this character to your library",
+      glyph: "tab-notes",
+      disabled: cloning,
+      onSelect: () => void handleDuplicate(),
+    },
+    {
+      id: "portrait",
+      label: sheet.portrait ? "Replace portrait" : "Upload portrait",
+      hint: sheet.portrait ? "Replace the portrait with a photo" : "Upload a portrait",
+      glyph: "tab-handout",
+      separated: true,
+      onSelect: () => setCropping(true),
+    },
+    ...(canPaint
+      ? [
+          {
+            id: "paint",
+            label: portraitPending ? "Painting..." : "Paint one",
+            hint: "Paint a new portrait on this server's image model",
+            glyph: "sense-truesight",
+            disabled: painting || portraitPending,
+            onSelect: () => void paintPortrait(),
+          },
+        ]
+      : []),
+    ...(sheet.portrait
+      ? [
+          {
+            id: "placeholder",
+            label: "Use placeholder",
+            hint: "Take the picture away and show the stand-in for this class or race",
+            glyph: "quest-hidden",
+            onSelect: () => void clearToPlaceholder(),
+          },
+        ]
+      : []),
+  ];
+  const working = pdfBusy || exporting || cloning || painting;
+
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
       <AppHeader />
-      <header className={cn(ui.card, "ornate mb-4 p-4 sm:p-5")}>
-        <Link href="/characters" className="text-sm text-stone-500 hover:text-stone-300">
-          &larr; Back to your characters
+      <ContextMenu items={actions} label={character.name} className={cn(ui.card, "ornate texture-noise mb-4 p-4 sm:p-5")}>
+        <Link href="/characters" className="-my-1 inline-flex min-h-10 items-center gap-1.5 text-sm text-stone-400 hover:text-amber-200">
+          <ArrowLeft className="size-4" /> Back to your characters
         </Link>
-        <div className="mt-3 flex items-start gap-4">
-          {sheet.portrait?.url ? (
-            <ImageLightbox
-              src={sheet.portrait.url}
-              alt={character.name}
-              caption={character.name}
-              className="size-20 shrink-0 rounded-xl border border-amber-500/30 object-cover shadow-glow-gold sm:size-24"
+        <div className="mt-2 flex items-start gap-4">
+          <span className="relative shrink-0">
+            {sheet.portrait?.url ? (
+              <ImageLightbox
+                src={sheet.portrait.url}
+                alt={character.name}
+                caption={character.name}
+                className="size-20 shrink-0 rounded-xl border border-amber-500/30 object-cover shadow-glow-gold sm:size-24"
+              />
+            ) : portraitPending ? (
+              <span
+                title="Painting portrait..."
+                className="flex size-20 shrink-0 items-center justify-center rounded-xl border border-amber-500/30 bg-stone-900 sm:size-24"
+              >
+                <Loader2 className="size-5 animate-spin text-amber-200" />
+              </span>
+            ) : (
+              <CharacterPortrait
+                look={{ race: character.race, class: character.class, gender: sheet.gender }}
+                alt={character.name}
+                size="size-20 sm:size-24"
+                rounded="rounded-xl"
+                className="border-amber-500/30 shadow-glow-gold"
+              />
+            )}
+            <GameIcon
+              icon={{ kind: "family", key: `class-${character.class}` }}
+              size="size-8"
+              className="pointer-events-none absolute -bottom-2 -right-2"
             />
-          ) : portraitPending ? (
-            <span
-              title="Painting portrait..."
-              className="flex size-20 shrink-0 items-center justify-center rounded-xl border border-amber-500/30 bg-stone-900 sm:size-24"
-            >
-              <Loader2 className="size-5 animate-spin text-amber-200" />
-            </span>
-          ) : (
-            <CharacterPortrait
-              look={{ race: character.race, class: character.class, gender: sheet.gender }}
-              alt={character.name}
-              size="size-20 sm:size-24"
-              rounded="rounded-xl"
-              className="border-amber-500/30 shadow-glow-gold"
-            />
-          )}
+          </span>
           <div className="min-w-0 flex-1">
-            <h1 className="font-display text-2xl tracking-wide text-amber-50 sm:text-3xl">
+            <h1 className="gold-title font-display text-2xl tracking-wide sm:text-3xl">
               {character.name}
             </h1>
             <p className="mt-1 text-sm text-stone-400">
-              <span className="mr-1.5 inline-flex rounded-full border border-amber-500/30 bg-amber-400/10 px-2 py-0.5 text-[11px] text-amber-200">
+              <span className="mr-1.5 inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-400/10 py-0.5 pl-0.5 pr-2 text-[11px] text-amber-200">
+                <GameIcon icon={{ kind: "glyph", key: "rest-level-up" }} size="size-5" />
                 Level {character.level}
               </span>
               {titleCase(character.race)} {titleCase(character.class)}
@@ -292,7 +358,7 @@ export default function CharacterDetailPage({
               {character.background ? ` · ${titleCase(character.background)}` : ""}
             </p>
             {!sheet.portrait && character.portraitStatus === "failed" ? (
-              <p className="mt-1 text-xs text-stone-500">Portrait couldn&apos;t be generated.</p>
+              <p className="reveal mt-1 text-xs text-stone-500">Portrait couldn&apos;t be generated.</p>
             ) : null}
             {/* Each campaign holds its own copy of this sheet, so one library
                 entry can be at several tables at once. Naming them is what
@@ -307,88 +373,60 @@ export default function CharacterDetailPage({
                         ? `/workshop/${assignment.campaignId}`
                         : `/campaigns/${assignment.campaignId}`
                     }
-                    className="inline-flex max-w-full items-center gap-1 rounded-full border border-stone-600/60 bg-stone-900/60 px-2.5 py-1 text-xs text-stone-300 transition-colors hover:border-amber-500/40 hover:text-amber-100"
+                    className="motion-press inline-flex min-h-8 max-w-full items-center gap-1 rounded-full border border-stone-600/60 bg-stone-900/60 py-0.5 pl-1 pr-2.5 text-xs text-stone-300 transition-colors hover:border-amber-500/40 hover:text-amber-100"
                   >
-                    {assignment.kind === "workshop" ? (
-                      <Hammer className="size-3.5 shrink-0 text-amber-300/70" />
-                    ) : (
-                      <Swords className="size-3.5 shrink-0 text-amber-300/70" />
-                    )}
+                    <GameIcon
+                      icon={{ kind: "glyph", key: assignment.kind === "workshop" ? "system-storyboard" : "tab-campaigns" }}
+                      size="size-6"
+                    />
                     <span className="truncate">{assignment.title}</span>
                   </Link>
                 ))
               ) : (
-                <span className="text-xs text-stone-600">Not in a campaign yet.</span>
+                <span className="text-xs text-stone-500">Not in a campaign yet.</span>
               )}
             </div>
           </div>
         </div>
-        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-stone-700/40 pt-3">
-          <button
-            type="button"
-            onClick={handleDownloadPdf}
-            disabled={pdfBusy}
-            className={cn(ui.btnSmall, "border-amber-500/40 text-amber-100")}
-            title="Download this character sheet as a fillable PDF"
-          >
-            <FileDown className="size-4" /> {pdfBusy ? "Preparing..." : "Download PDF"}
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-amber-500/15 pt-3">
+          <button type="button" onClick={() => setSeating(true)} className={cn(ui.btnPrimary, "min-w-0 flex-1 sm:flex-none")}>
+            <GameIcon icon={{ kind: "glyph", key: "tab-campaigns" }} size="size-6" /> Use in a campaign
           </button>
-          <button
-            type="button"
-            onClick={handleExport}
-            disabled={exporting}
-            className={ui.btnSmall}
-            title="Save this character as a file you can import on another device or server"
-          >
-            <FileJson className="size-4" /> {exporting ? "Exporting..." : "Export"}
-          </button>
-          <button
-            type="button"
-            onClick={handleDuplicate}
-            disabled={cloning}
-            className={ui.btnSmall}
-            title="Save a second copy of this character to your library"
-          >
-            <Copy className="size-4" /> {cloning ? "Copying..." : "Duplicate"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setCropping(true)}
-            className={ui.btnSmall}
-            title={sheet.portrait ? "Replace the portrait with a photo" : "Upload a portrait"}
-          >
-            <Camera className="size-4" /> {sheet.portrait ? "Replace portrait" : "Upload portrait"}
-          </button>
-          {canPaint ? (
-            <button
-              type="button"
-              onClick={() => void paintPortrait()}
-              disabled={painting || portraitPending}
-              className={ui.btnSmall}
-              title="Paint a new portrait on this server's image model"
-            >
-              <Sparkles className="size-4" /> {portraitPending ? "Painting..." : "Paint one"}
-            </button>
-          ) : null}
-          {sheet.portrait ? (
-            <button
-              type="button"
-              onClick={() => void clearToPlaceholder()}
-              className={ui.btnSmall}
-              title="Take the picture away and show the stand-in for this class or race"
-            >
-              <ImageOff className="size-4" /> Use placeholder
-            </button>
+          <KebabMenu
+            items={actions}
+            label={`More actions for ${character.name}`}
+            heading={character.name}
+            busy={working}
+          />
+          {working || portraitPending ? (
+            <span role="status" className="live-in text-xs text-stone-400">
+              {pdfBusy
+                ? "Preparing the PDF..."
+                : exporting
+                  ? "Exporting..."
+                  : cloning
+                    ? "Copying..."
+                    : "Painting the portrait..."}
+            </span>
           ) : null}
         </div>
-        {exportError ? <p className="mt-2 text-sm text-red-400">{exportError}</p> : null}
-        {portraitError ? <p className="mt-2 text-sm text-red-400">{portraitError}</p> : null}
-      </header>
+        {exportError ? <p role="alert" className="motion-shake mt-2 text-sm text-red-400">{exportError}</p> : null}
+        {portraitError ? <p role="alert" className="motion-shake mt-2 text-sm text-red-400">{portraitError}</p> : null}
+      </ContextMenu>
 
-      <SheetSections sheet={sheet} />
+      <SheetSections sheet={sheet} level={character.level} />
       <div className="mt-4">
         <StorySoFar events={events} />
       </div>
+
+      {seating ? (
+        <UseInCampaignDialog
+          characterId={characterId}
+          characterName={character.name}
+          seatedIn={(character.campaigns ?? []).map((assignment) => assignment.campaignId)}
+          onClose={() => setSeating(false)}
+        />
+      ) : null}
 
       {cropping ? (
         <AvatarCropDialog

@@ -1,6 +1,7 @@
 import type { MapTheme } from "@/lib/battlemap/generate";
 import type { Backdrop } from "@/lib/battlemap/backdrop";
-import type { DoorStates, LightZone, MapLabel, MapProp, SceneAmbience } from "@/lib/battlemap/scene";
+import type { DoorStates, LightZone, MapDrawing, MapLabel, MapProp, SceneAmbience } from "@/lib/battlemap/scene";
+import type { MapSkin } from "@/lib/battlemap/skins";
 import type { AmbientLight, MapLight } from "@/lib/battlemap/types";
 
 // What /api/campaigns/:id/dm/maps hands the client. Shared by the map
@@ -35,6 +36,10 @@ export type PreparedMap = {
   zones: LightZone[];
   overlayPath: string;
   ambience: SceneAmbience;
+  // Marks made at the table that came back with a captured board.
+  drawings?: MapDrawing[];
+  // What it is painted with; empty means the setting and theme decide.
+  skin?: MapSkin;
 };
 
 export type LibraryState = {
@@ -44,4 +49,6 @@ export type LibraryState = {
   // True in a workshop, where a scene can never open (there is no party and
   // never will be), so the control is hidden rather than forever disabled.
   workshop: boolean;
+  // The campaign's setting, which picks the skin a map wears by default.
+  genre?: string;
 };

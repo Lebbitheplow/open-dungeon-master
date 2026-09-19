@@ -1,0 +1,530 @@
+/* The beats (pips, target chips, the committed card, folding away) live in a
+   sibling so neither file outgrows a screenful of scrolling. */
+@import "./hand-motion.css";
+
+/* The Hand: the combat action cards above the composer
+   (src/app/campaigns/[campaignId]/Hand.tsx, docs/visual-overhaul-plan.md 5.2).
+   Sizes, colours and timings follow the "The Hand" mockup. A card is a painted
+   object with its own face, so it keeps its night colours unless the day theme
+   restates them at the foot of this file. Every loop stops under low effects
+   and every animation has a reduced-motion rest state. */
+
+.hand {
+  --card-w: 156px;
+  --card-h: 234px;
+  --slot-w: 136px;
+  --hand-face: linear-gradient(180deg, rgba(48, 40, 83, 0.58), rgba(13, 11, 28, 0.95)),
+    radial-gradient(ellipse 120% 60% at 50% -20%, rgba(107, 99, 148, 0.18), transparent 60%), #0d0b1c;
+  --hand-edge: rgba(107, 99, 148, 0.32);
+  --hand-edge-quiet: rgba(107, 99, 148, 0.22);
+  --hand-corner: rgba(212, 171, 58, 0.55);
+  --hand-art-edge: rgba(212, 171, 58, 0.22);
+  --hand-panel: linear-gradient(180deg, rgba(41, 34, 71, 0.97), rgba(13, 11, 28, 0.98));
+  --hand-panel-ink: #f9ecc8;
+  --hand-panel-mute: #8f8aab;
+  --hand-panel-rule: rgba(48, 40, 83, 0.45);
+  --hand-ink: #f9ecc8;
+  --hand-ink-soft: #aeaac6;
+  --hand-ink-mute: #8f8aab;
+  --hand-gold: #ecd287;
+  --hand-art: #12101f;
+  position: relative;
+  margin-bottom: 8px;
+}
+
+/* ---- the fan ---- */
+
+.hand-fan {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  /* Room above for the lift, below for the droop of the outer cards. */
+  height: calc(var(--card-h) + 86px);
+  /* Half a card each side, plus what the lean carries the outer cards out. */
+  padding: 44px calc(var(--card-w) / 2 + 44px) 0;
+  perspective: 1400px;
+}
+.hand-fan[data-more="true"] { padding-right: calc(var(--card-w) / 2 + 84px); }
+
+.hand-slot {
+  position: relative;
+  flex: 0 1 var(--slot-w);
+  min-width: 34px;
+  height: 0;
+  transform: rotate(var(--rot, 0deg)) translateY(var(--ty, 0px)) translateX(var(--spread, 0px));
+  transform-origin: 50% 470px;
+  transition: transform var(--dur-move) var(--ease-settle);
+  /* Backwards only: a fill that held the last frame would outrank the
+     transition above, and the neighbours would snap apart instead of easing. */
+  animation: hand-fan-in var(--dur-beat) var(--ease-settle) backwards;
+  animation-delay: calc(var(--i, 0) * 38ms);
+}
+
+/* The hand opens around the card under the cursor. Pure CSS, so the pointer
+   never touches React state. */
+.hand-slot:has(~ .hand-slot > .hand-card:is(:hover, :focus-visible)) { --spread: -18px; }
+.hand-slot:has(> .hand-card:is(:hover, :focus-visible)) ~ .hand-slot { --spread: 18px; }
+.hand-slot:has(> .hand-card:is(:hover, :focus-visible)) { z-index: 9; }
+.hand-slot:has(> .hand-card[data-picked="true"]) { z-index: 8; }
+
+@keyframes hand-fan-in {
+  from { opacity: 0; transform: rotate(0deg) translateY(86px) scale(0.9); }
+  to { opacity: 1; transform: rotate(var(--rot, 0deg)) translateY(var(--ty, 0px)) translateX(var(--spread, 0px)); }
+}
+
+/* ---- a card ---- */
+
+.hand-card {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: var(--card-w);
+  height: var(--card-h);
+  margin-left: calc(var(--card-w) / -2);
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--hand-ink);
+  text-align: left;
+  cursor: pointer;
+  transform-style: preserve-3d;
+  -webkit-tap-highlight-color: transparent;
+}
+/* motion-card owns the transform; the hand only feeds it bigger numbers. */
+.hand-card.motion-card { transition: transform 160ms var(--ease-snap), opacity var(--dur-quick) var(--ease-snap), filter var(--dur-quick) var(--ease-snap); }
+.hand-card.motion-card:is(:hover, :focus-visible) { --lift: -40px; --grow: 1.08; }
+.hand-card.motion-card:active { --lift: -34px; --grow: 1.04; }
+.hand-card.motion-card[data-picked="true"] { --lift: -14px; --grow: 1; }
+.hand-card.motion-card[data-picked="true"]:is(:hover, :focus-visible) { --lift: -40px; --grow: 1.08; }
+.hand-card:focus-visible { outline: none; }
+
+.hand-card-frame {
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  background: var(--hand-face);
+  border: 1px solid var(--hand-edge);
+  box-shadow: 0 2px 6px rgba(4, 2, 12, 0.55), 0 12px 32px rgba(4, 2, 12, 0.45);
+  transition: border-color var(--dur-quick) var(--ease-snap), box-shadow var(--dur-quick) var(--ease-snap);
+}
+.hand-card:focus-visible .hand-card-frame { border-color: rgba(244, 224, 166, 0.9); }
+.hand-card[data-picked="true"] .hand-card-frame,
+.hand-card[aria-pressed="true"] .hand-card-frame {
+  border-color: rgba(212, 171, 58, 0.85);
+  box-shadow: 0 0 14px rgba(212, 171, 58, 0.35), 0 0 40px rgba(212, 171, 58, 0.12), 0 18px 44px rgba(4, 2, 12, 0.62);
+}
+
+/* The gold foil travelling across the face, and the light that follows the
+   cursor (the pointer module writes --mx, --my and --sheen). */
+.hand-card-foil { position: absolute; inset: 0; border-radius: 14px; overflow: hidden; pointer-events: none; transition: opacity var(--dur-beat) var(--ease-snap); }
+.hand-card-foil::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 38%, rgba(249, 236, 200, 0.12) 48%, transparent 58%);
+  background-size: 220% 100%;
+  animation: hand-edge-shimmer 5.5s linear infinite;
+}
+@keyframes hand-edge-shimmer {
+  from { background-position: 180% 0; }
+  to { background-position: -80% 0; }
+}
+.hand-card-sheen {
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  pointer-events: none;
+  background: radial-gradient(170px circle at var(--mx, 50%) var(--my, 110%), rgba(249, 236, 200, 0.16), transparent 62%);
+  opacity: var(--sheen, 0);
+  transition: opacity 200ms var(--ease-snap);
+}
+
+.hand-card-ribbon {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 18px;
+  border-radius: 14px 14px 0 0;
+  background: var(--ribbon-bg);
+  border-bottom: 1px solid var(--ribbon-edge);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 7.5px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ribbon-ink);
+  transition: filter var(--dur-beat) var(--ease-snap);
+}
+.hand-card-corner { position: absolute; width: 15px; height: 15px; pointer-events: none; transition: opacity var(--dur-beat) var(--ease-snap); }
+.hand-card-corner[data-at="tl"] { top: 24px; left: 7px; border-top: 1px solid var(--hand-corner); border-left: 1px solid var(--hand-corner); }
+.hand-card-corner[data-at="br"] { bottom: 7px; right: 7px; border-bottom: 1px solid var(--hand-corner); border-right: 1px solid var(--hand-corner); }
+
+.hand-card-body {
+  position: absolute;
+  inset: 18px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 11px 10px;
+  min-width: 0;
+}
+.hand-card-top { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 6px; }
+.hand-cost {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #ecd287;
+  border: 1px solid rgba(212, 171, 58, 0.45);
+  background: rgba(43, 32, 8, 0.3);
+  border-radius: 999px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+.hand-cost[data-cost="bonus"] { color: #ffbe8f; border-color: rgba(198, 90, 36, 0.5); background: rgba(69, 20, 6, 0.3); }
+.hand-cost[data-cost="reaction"] { color: #9fe3f5; border-color: rgba(127, 184, 230, 0.4); background: rgba(12, 26, 36, 0.4); }
+.hand-cost[data-cost="free"] { color: #d6cfc2; border-color: rgba(214, 207, 194, 0.35); background: rgba(20, 16, 12, 0.4); }
+.hand-range { font-family: var(--font-geist-mono), monospace; font-size: 9px; color: var(--hand-ink-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.hand-art {
+  position: relative;
+  display: flex;
+  flex: 0 0 58px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--hand-art-edge);
+  background: radial-gradient(circle at 50% 40%, rgba(var(--tone-rgb, 212, 171, 58), 0.2), transparent 70%), var(--hand-art);
+  box-shadow: 0 0 22px rgba(212, 171, 58, 0.14) inset;
+  transition: filter var(--dur-beat) var(--ease-snap), box-shadow var(--dur-beat) var(--ease-snap);
+}
+/* The painting parallaxes against the tilt: it slides the way the card leans. */
+.hand-art-icon {
+  transform: translate(calc((50% - var(--mx, 50%)) * 0.3), calc((50% - var(--my, 50%)) * 0.22));
+  transition: transform 200ms var(--ease-settle);
+}
+
+.hand-name {
+  display: block;
+  flex: none;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.18;
+  color: var(--hand-ink);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.hand-numbers { display: flex; flex: none; flex-direction: column; gap: 1px; min-width: 0; }
+.hand-dice, .hand-roll {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9.5px;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hand-dice { color: #ffbe8f; }
+.hand-dice[data-heals="true"] { color: #7ed6a4; }
+.hand-roll { color: var(--hand-ink-mute); }
+.hand-rules {
+  display: block;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  font-family: var(--font-source-serif), Georgia, serif;
+  font-size: 10px;
+  line-height: 1.32;
+  color: var(--hand-ink-soft);
+}
+.hand-foot { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 4px; min-width: 0; }
+.hand-resource { font-family: var(--font-geist-mono), monospace; font-size: 9px; color: var(--hand-gold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hand-cond { font-family: var(--font-geist-mono), monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: #ff9d5c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Card types, the mockup's ribbon table. */
+.hand-card[data-type="attack"] { --ribbon-bg: linear-gradient(180deg, rgba(198, 90, 36, 0.5), rgba(69, 20, 6, 0.35)); --ribbon-edge: rgba(224, 112, 58, 0.45); --ribbon-ink: #ffd0ad; --tone: #ff9d5c; --tone-rgb: 255, 157, 92; }
+.hand-card[data-type="rider"], .hand-card[data-type="feature"] { --ribbon-bg: linear-gradient(180deg, rgba(212, 171, 58, 0.45), rgba(43, 32, 8, 0.4)); --ribbon-edge: rgba(212, 171, 58, 0.45); --ribbon-ink: #f9ecc8; --tone: #f4d47a; --tone-rgb: 244, 212, 122; }
+.hand-card[data-type="spell"], .hand-card[data-type="control"] { --ribbon-bg: linear-gradient(180deg, rgba(139, 111, 214, 0.45), rgba(38, 26, 66, 0.4)); --ribbon-edge: rgba(184, 166, 245, 0.45); --ribbon-ink: #e6dcff; --tone: #b8a6f5; --tone-rgb: 184, 166, 245; }
+.hand-card[data-type="mend"] { --ribbon-bg: linear-gradient(180deg, rgba(22, 101, 52, 0.5), rgba(5, 46, 22, 0.4)); --ribbon-edge: rgba(126, 214, 164, 0.4); --ribbon-ink: #c8f0d8; --tone: #7ed6a4; --tone-rgb: 126, 214, 164; }
+.hand-card[data-type="ward"] { --ribbon-bg: linear-gradient(180deg, rgba(56, 109, 168, 0.45), rgba(12, 26, 36, 0.4)); --ribbon-edge: rgba(127, 184, 230, 0.4); --ribbon-ink: #d6ecff; --tone: #9fe3f5; --tone-rgb: 159, 227, 245; }
+.hand-card[data-type="basic"] { --ribbon-bg: linear-gradient(180deg, rgba(63, 58, 45, 0.6), rgba(20, 16, 12, 0.5)); --ribbon-edge: rgba(214, 207, 194, 0.35); --ribbon-ink: #e7e2d6; --tone: #d6cfc2; --tone-rgb: 214, 207, 194; }
+
+/* While one card is raised the rest step back; a spent card dims; a card
+   that is only waiting (somebody else's turn, a condition) keeps its ink and
+   loses its glow. None of this uses opacity: the cards overlap, and a
+   see-through card shows its neighbour's text through its own. */
+.hand-fan[data-aiming="true"] .hand-card:not([data-picked="true"]):not([aria-pressed="true"]) { filter: brightness(0.55) saturate(0.7); }
+.hand-card[aria-disabled="true"] { cursor: not-allowed; }
+.hand-card[aria-disabled="true"] .hand-card-foil { opacity: 0; }
+.hand-card[aria-disabled="true"] .hand-card-foil::after { animation-play-state: paused; }
+.hand-card[aria-disabled="true"] .hand-card-sheen { opacity: 0; }
+.hand-card[aria-disabled="true"] .hand-card-frame { box-shadow: 0 2px 6px rgba(4, 2, 12, 0.5); border-color: var(--hand-edge-quiet); }
+.hand-card[aria-disabled="true"] .hand-art { filter: saturate(0.55) brightness(0.85); box-shadow: none; }
+.hand-card[aria-disabled="true"] .hand-card-ribbon { filter: saturate(0.45); }
+.hand-card[aria-disabled="true"] .hand-card-corner { opacity: 0.35; }
+.hand-card[aria-disabled="true"][data-spent="true"] { filter: brightness(0.62) saturate(0.45); }
+.hand-card.motion-card[aria-disabled="true"]:is(:hover, :focus-visible) { --lift: -16px; --grow: 1.02; }
+.hand-card[aria-disabled="true"][data-spent="true"]:is(:hover, :focus-visible) { filter: brightness(0.85) saturate(0.7); }
+
+/* The committed card leaves the hand, stays away while its copy plays on the
+   table (hand-motion.css), then takes its seat again, spent. */
+.hand-card[data-played="true"] {
+  animation: hand-card-play var(--dur-beat) var(--ease-settle) both, hand-card-home var(--dur-move) var(--ease-settle) 980ms forwards;
+  pointer-events: none;
+}
+@keyframes hand-card-play {
+  0% { opacity: 1; }
+  45% { opacity: 1; }
+  100% { opacity: 0; transform: perspective(900px) translateY(-96px) scale(1.12); }
+}
+@keyframes hand-card-home {
+  from { opacity: 0; transform: perspective(900px) translateY(22px) scale(0.94); }
+  to { opacity: 1; }
+}
+
+/* ---- the outcome preview, over the card under the cursor ---- */
+
+.hand-preview {
+  position: absolute;
+  left: 50%;
+  bottom: 62px;
+  width: 226px;
+  margin-left: -113px;
+  padding: 11px 12px;
+  border: 1px solid rgba(212, 171, 58, 0.45);
+  border-radius: 11px;
+  background: var(--hand-panel);
+  box-shadow: 0 12px 32px rgba(4, 2, 12, 0.6);
+  pointer-events: none;
+  z-index: 12;
+  opacity: 0;
+  visibility: hidden;
+  /* Stays level while the slot under it leans. */
+  transform: rotate(calc(var(--rot, 0deg) * -1)) translateY(6px) scale(0.97);
+  transform-origin: 50% 100%;
+  transition: opacity var(--dur-quick) var(--ease-snap), transform var(--dur-quick) var(--ease-snap), visibility 0s linear var(--dur-quick);
+}
+.hand-slot:has(> .hand-card:is(:hover, :focus-visible)) > .hand-preview {
+  opacity: 1;
+  visibility: visible;
+  transform: rotate(calc(var(--rot, 0deg) * -1)) translateY(0) scale(1);
+  transition-delay: 0s;
+}
+.hand-rows { display: flex; flex-direction: column; }
+.hand-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 3px 0; border-top: 1px solid var(--hand-panel-rule); }
+.hand-row:first-child { border-top: 0; }
+.hand-rows-box { border-radius: 8px; border: 1px solid var(--hand-panel-rule); background: var(--hand-panel); padding: 4px 10px; }
+.hand-row-key { flex: none; font-family: var(--font-display); text-transform: uppercase; letter-spacing: 0.12em; font-size: 8px; font-weight: 600; color: var(--hand-panel-mute); }
+.hand-row-value { min-width: 0; text-align: right; font-family: var(--font-geist-mono), monospace; font-size: 10px; line-height: 1.4; color: var(--hand-panel-ink); }
+.hand-row-value[data-tone="damage"] { color: #ffbe8f; }
+.hand-row-value[data-tone="heal"] { color: #7ed6a4; }
+.hand-row-value[data-tone="save"] { color: #b8a6f5; }
+.hand-row-value[data-tone="muted"] { color: #aeaac6; }
+.hand-row-value[data-tone="applies"] { color: #ff9d5c; }
+.hand-row-value[data-tone="cost"] { color: #ecd287; }
+.hand-preview-head { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; min-width: 0; }
+.hand-type-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  border-radius: 3px;
+  border: 1px solid var(--chip-tone, #f4d47a);
+  padding: 1px 5px;
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 8px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--chip-tone, #f4d47a);
+}
+.hand-preview-name { min-width: 0; font-family: var(--font-display); font-size: 12.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--hand-panel-ink); }
+
+/* ---- the "more" spine ---- */
+
+.hand-more {
+  position: absolute;
+  right: 0;
+  top: 58px;
+  width: 30px;
+  height: calc(var(--card-h) - 28px);
+  border-radius: 9px;
+  border: 1px solid rgba(212, 171, 58, 0.4);
+  background: linear-gradient(180deg, rgba(48, 40, 83, 0.7), rgba(13, 11, 28, 0.95));
+  color: #ecd287;
+  font-family: var(--font-display);
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  writing-mode: vertical-rl;
+  cursor: pointer;
+  box-shadow: 0 8px 22px rgba(4, 2, 12, 0.5);
+  z-index: 7;
+  transition: transform 240ms var(--ease-spring), border-color var(--dur-quick) var(--ease-snap);
+}
+.hand-more:is(:hover, :focus-visible) { transform: translateY(-3px); border-color: rgba(244, 224, 166, 0.9); outline: none; }
+
+/* ---- the aim bar ---- */
+
+.hand-aim { animation: fade-up var(--dur-move) var(--ease-settle) both; }
+.hand-target[aria-pressed="true"] {
+  border-color: rgba(212, 171, 58, 0.85);
+  box-shadow: 0 0 14px rgba(212, 171, 58, 0.28);
+}
+
+/* ---- the phone: a snapping rail ---- */
+
+@media (max-width: 639px) {
+  .hand { --card-w: 132px; --card-h: 186px; }
+  .hand-fan {
+    justify-content: flex-start;
+    gap: 9px;
+    height: auto;
+    padding: 10px 12px 12px;
+    margin-inline: -12px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 12px;
+    scrollbar-width: none;
+    perspective: none;
+  }
+  .hand-fan::-webkit-scrollbar { display: none; }
+  /* A phone has room for the rail or for the aim bar, not both above a
+     keyboard: the raised card is named in the bar, and Back brings the rail
+     home. The same goes for the first-fight tutorial. The cap is the safety
+     net, so the message box is never pushed under the tab bar. */
+  .hand { max-height: calc(100dvh - 21rem); overflow-y: auto; overscroll-behavior: contain; }
+  .hand-fan[data-aiming="true"],
+  .hand[data-tutorial="true"] .hand-fan { display: none; }
+  .hand-slot {
+    flex: 0 0 var(--card-w);
+    height: var(--card-h);
+    transform: none;
+    scroll-snap-align: center;
+    animation-name: hand-rail-in;
+  }
+  .hand-slot:has(~ .hand-slot > .hand-card:is(:hover, :focus-visible)),
+  .hand-slot:has(> .hand-card:is(:hover, :focus-visible)) ~ .hand-slot { --spread: 0px; }
+  .hand-card { left: 0; margin-left: 0; border-radius: 12px; }
+  .hand-card.motion-card:is(:hover, :focus-visible),
+  .hand-card.motion-card:active { --lift: 0px; --grow: 1; }
+  .hand-card.motion-card:active { --grow: 0.97; }
+  .hand-card.motion-card[data-picked="true"],
+  .hand-card.motion-card[data-picked="true"]:is(:hover, :focus-visible) { --lift: -6px; --grow: 1; }
+  .hand-card-frame, .hand-card-foil, .hand-card-sheen { border-radius: 12px; }
+  .hand-card-ribbon { height: 16px; border-radius: 12px 12px 0 0; font-size: 7px; }
+  .hand-card-corner[data-at="tl"] { top: 21px; }
+  .hand-card-body { inset: 16px 0 0; gap: 4px; padding: 7px 9px 8px; }
+  .hand-cost, .hand-range { font-size: 8px; }
+  .hand-art { flex-basis: 40px; border-radius: 7px; }
+  .hand-name { font-size: 11.5px; line-height: 1.15; }
+  .hand-dice, .hand-roll { font-size: 8.5px; }
+  .hand-rules { font-size: 9px; line-height: 1.28; }
+  .hand-resource, .hand-cond { font-size: 8px; }
+  .hand-preview { display: none; }
+  .hand-fan[data-more="true"] { padding-right: 12px; }
+  .hand-more {
+    position: static;
+    flex: 0 0 44px;
+    width: 44px;
+    height: var(--card-h);
+    scroll-snap-align: center;
+  }
+}
+@keyframes hand-rail-in {
+  from { opacity: 0; transform: translateX(28px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ---- quieter tables ---- */
+
+[data-effects="low"] .hand-card-foil::after { animation: none; opacity: 0; }
+[data-effects="low"] .hand-slot { animation: none; }
+[data-effects="low"] .hand-art-icon { transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hand-slot { animation: none; transition: none; --spread: 0px !important; }
+  .hand-more { transition: none; }
+  .hand-more:is(:hover, :focus-visible) { transform: none; }
+  .hand-card-foil::after { animation: none; opacity: 0; }
+  .hand-card[data-played="true"] { animation: none; opacity: 0.3; }
+  .hand-preview, .hand-art-icon, .hand-art, .hand-card-foil, .hand-card-corner, .hand-card-ribbon { transition: none; }
+  .hand-aim { animation: none; }
+  /* globals.css flattens motion-card here, so the raised card is told apart
+     by its gold rim alone. */
+}
+
+/* ---- parchment day ----
+   A proper parchment card: warm vellum, a bronze rim, ink for text, and the
+   type ribbons kept as dyed cloth so the hand still reads by colour. */
+
+html[data-theme="light"] .hand {
+  --hand-face: radial-gradient(ellipse 120% 70% at 50% 0%, rgba(255, 252, 240, 0.9), transparent 70%),
+    linear-gradient(180deg, #fbf5e4 0%, #f3e8cd 58%, #e9dbb8 100%);
+  --hand-edge: rgba(122, 96, 40, 0.6);
+  --hand-edge-quiet: rgba(122, 96, 40, 0.35);
+  --hand-corner: rgba(138, 107, 28, 0.75);
+  --hand-art-edge: rgba(122, 96, 40, 0.4);
+  --hand-ink: #2a2014;
+  --hand-ink-soft: #4a3e2d;
+  --hand-ink-mute: #6d6350;
+  --hand-gold: #6b4f0e;
+  --hand-art: #e2d4b0;
+  --hand-panel: linear-gradient(180deg, #fdf9ee, #f1e7cf);
+  --hand-panel-ink: #2a2014;
+  --hand-panel-mute: #6d6350;
+  --hand-panel-rule: rgba(122, 96, 40, 0.28);
+}
+html[data-theme="light"] .hand-card-frame {
+  box-shadow: 0 1px 0 rgba(255, 252, 240, 0.9) inset, 0 0 0 3px rgba(233, 219, 184, 0.35) inset, 0 2px 5px rgba(60, 40, 10, 0.22), 0 12px 26px rgba(60, 40, 10, 0.2);
+}
+html[data-theme="light"] .hand-card[aria-disabled="true"] .hand-card-frame { box-shadow: 0 1px 0 rgba(255, 252, 240, 0.9) inset, 0 2px 5px rgba(60, 40, 10, 0.18); }
+html[data-theme="light"] .hand-card[data-picked="true"] .hand-card-frame,
+html[data-theme="light"] .hand-card[aria-pressed="true"] .hand-card-frame {
+  border-color: #a6842a;
+  box-shadow: 0 0 0 2px rgba(201, 164, 68, 0.55), 0 0 22px rgba(166, 132, 42, 0.35), 0 16px 34px rgba(60, 40, 10, 0.28);
+}
+html[data-theme="light"] .hand-art { box-shadow: 0 2px 8px rgba(60, 40, 10, 0.25) inset; }
+html[data-theme="light"] .hand-card[aria-disabled="true"] .hand-art { filter: none; box-shadow: 0 1px 4px rgba(60, 40, 10, 0.18) inset; }
+html[data-theme="light"] .hand-card-foil::after { background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.5) 48%, transparent 58%); background-size: 220% 100%; }
+html[data-theme="light"] .hand-card-sheen { background: radial-gradient(170px circle at var(--mx, 50%) var(--my, 110%), rgba(255, 255, 255, 0.55), transparent 62%); }
+html[data-theme="light"] .hand-dice { color: #a3461a; }
+html[data-theme="light"] .hand-dice[data-heals="true"] { color: #166534; }
+html[data-theme="light"] .hand-cond { color: #b4530f; }
+html[data-theme="light"] .hand-cost { color: #6b4f0e; border-color: rgba(138, 107, 28, 0.55); background: rgba(212, 171, 58, 0.2); }
+html[data-theme="light"] .hand-cost[data-cost="bonus"] { color: #8f3a12; border-color: rgba(163, 70, 26, 0.5); background: rgba(198, 90, 36, 0.14); }
+html[data-theme="light"] .hand-cost[data-cost="reaction"] { color: #1f5a86; border-color: rgba(31, 90, 134, 0.45); background: rgba(56, 109, 168, 0.12); }
+html[data-theme="light"] .hand-cost[data-cost="free"] { color: #4a3e2d; border-color: rgba(109, 99, 80, 0.5); background: rgba(109, 99, 80, 0.12); }
+html[data-theme="light"] .hand-card[data-type="attack"] { --ribbon-bg: linear-gradient(180deg, #d9763f, #b9531f); --ribbon-edge: rgba(122, 50, 14, 0.5); }
+html[data-theme="light"] .hand-card[data-type="rider"], html[data-theme="light"] .hand-card[data-type="feature"] { --ribbon-bg: linear-gradient(180deg, #e0bd57, #b8922a); --ribbon-edge: rgba(122, 96, 40, 0.55); }
+html[data-theme="light"] .hand-card[data-type="spell"], html[data-theme="light"] .hand-card[data-type="control"] { --ribbon-bg: linear-gradient(180deg, #8d74d6, #6a4fb8); --ribbon-edge: rgba(62, 40, 130, 0.5); }
+html[data-theme="light"] .hand-card[data-type="mend"] { --ribbon-bg: linear-gradient(180deg, #3f9a62, #24733f); --ribbon-edge: rgba(16, 80, 40, 0.5); }
+html[data-theme="light"] .hand-card[data-type="ward"] { --ribbon-bg: linear-gradient(180deg, #4f86c2, #2f65a0); --ribbon-edge: rgba(24, 66, 110, 0.5); }
+html[data-theme="light"] .hand-card[data-type="basic"] { --ribbon-bg: linear-gradient(180deg, #8f8468, #6d6350); --ribbon-edge: rgba(60, 50, 30, 0.5); }
+html[data-theme="light"] .hand-card[data-type] { --ribbon-ink: #fffaf0; }
+html[data-theme="light"] .hand-card[data-type="rider"], html[data-theme="light"] .hand-card[data-type="feature"] { --ribbon-ink: #2a2014; }
+/* Parchment steps back by going tan, never grey. */
+html[data-theme="light"] .hand-fan[data-aiming="true"] .hand-card:not([data-picked="true"]):not([aria-pressed="true"]) { filter: brightness(0.84) contrast(0.94); }
+html[data-theme="light"] .hand-card[aria-disabled="true"][data-spent="true"] { filter: brightness(0.8) contrast(0.9) saturate(0.8); }
+html[data-theme="light"] .hand-card[aria-disabled="true"][data-spent="true"]:is(:hover, :focus-visible) { filter: brightness(0.92); }
+html[data-theme="light"] .hand-card[aria-disabled="true"] .hand-card-ribbon { filter: saturate(0.7); }
+html[data-theme="light"] .hand-preview { border-color: rgba(138, 107, 28, 0.6); box-shadow: 0 12px 30px rgba(60, 40, 10, 0.3); }
+html[data-theme="light"] .hand-row-value[data-tone="damage"] { color: #a3461a; }
+html[data-theme="light"] .hand-row-value[data-tone="heal"] { color: #166534; }
+html[data-theme="light"] .hand-row-value[data-tone="save"] { color: #5b3fb0; }
+html[data-theme="light"] .hand-row-value[data-tone="muted"] { color: #4a3e2d; }
+html[data-theme="light"] .hand-row-value[data-tone="applies"] { color: #b4530f; }
+html[data-theme="light"] .hand-row-value[data-tone="cost"] { color: #6b4f0e; }
+html[data-theme="light"] .hand-type-chip { filter: brightness(0.55) saturate(1.4); }
+html[data-theme="light"] .hand-more { background: linear-gradient(180deg, #fbf5e4, #e6dcc3); color: #6b4f0e; border-color: rgba(138, 107, 28, 0.6); box-shadow: 0 8px 20px rgba(60, 40, 10, 0.25); }

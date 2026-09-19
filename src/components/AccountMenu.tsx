@@ -2,17 +2,10 @@
 
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
-  Moon,
-  Sun,
   AppWindow,
   CircleHelp,
-  DoorOpen,
-  HeartHandshake,
   LogOut,
-  Settings,
-  ShieldCheck,
   UserRound,
-  Users,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -21,6 +14,7 @@ import type { ReactNode } from "react";
 import { HelpDialog } from "@/components/HelpDialog";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { headerButtonClass } from "@/app/campaigns/[campaignId]/headerButton";
+import { GameIcon } from "@/components/ui/GameIcon";
 import { cn } from "@/lib/cn";
 import { shellHost, type ShellHost } from "@/lib/shell-host";
 import { useThemePrefs, writeThemeChoice } from "@/lib/theme-mode";
@@ -159,23 +153,38 @@ export function AccountMenu({
             align="end"
             sideOffset={6}
             collisionPadding={12}
-            className="min-w-44 rounded-lg border border-stone-600/60 bg-stone-950 p-1 shadow-elev-2"
+            className="panel z-[60] min-w-56 p-1.5"
           >
+            {/* Who is signed in, above what they can do. */}
+            <div className="mb-1 flex items-center gap-2.5 border-b border-amber-400/15 px-2 pb-2 pt-1">
+              {user.avatar ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={user.avatar.url} alt="" className="size-10 rounded-full border border-amber-500/50 object-cover shadow-glow-gold" />
+              ) : (
+                <span className="flex size-10 items-center justify-center rounded-full border border-amber-500/30 bg-stone-900">
+                  <UserRound className="size-5 text-amber-200/70" />
+                </span>
+              )}
+              <span className="min-w-0">
+                <span className="gold-title block truncate font-display text-sm tracking-wide">{user.username}</span>
+                <span className="eyebrow block text-[9px] text-stone-500">{user.isAdmin ? "Keeper of this server" : "Adventurer"}</span>
+              </span>
+            </div>
             {pathname !== "/" ? (
               <DropdownMenu.Item asChild>
                 <Link href="/" className={itemClass}>
-                  <DoorOpen className="size-4" /> All campaigns
+                  <GameIcon icon={{ kind: "glyph", key: "tab-campaigns" }} size="size-6" /> All campaigns
                 </Link>
               </DropdownMenu.Item>
             ) : null}
             <DropdownMenu.Item asChild>
               <Link href="/characters" className={itemClass}>
-                <Users className="size-4" /> Characters
+                <GameIcon icon={{ kind: "glyph", key: "tab-characters" }} size="size-6" /> Characters
               </Link>
             </DropdownMenu.Item>
             <DropdownMenu.Item asChild>
               <Link href="/friends" className={itemClass}>
-                <HeartHandshake className="size-4" /> Friends
+                <GameIcon icon={{ kind: "glyph", key: "tab-friends" }} size="size-6" /> Friends
               </Link>
             </DropdownMenu.Item>
             <DropdownMenu.Item
@@ -186,18 +195,21 @@ export function AccountMenu({
                 writeThemeChoice(theme.mode === "light" ? "dark" : "light");
               }}
             >
-              {theme.mode === "light" ? <Moon className="size-4" /> : <Sun className="size-4" />}
-              {theme.mode === "light" ? "Arcane night" : "Parchment day"}
+              <GameIcon icon={{ kind: "glyph", key: theme.mode === "light" ? "daypart-night" : "daypart-day" }} size="size-6" />
+              <span className="grow">{theme.mode === "light" ? "Arcane night" : "Parchment day"}</span>
+              <span className="kit-switch pointer-events-none" aria-checked={theme.mode === "light"} aria-hidden="true">
+                <span className="kit-switch-knob" />
+              </span>
             </DropdownMenu.Item>
             <DropdownMenu.Item asChild>
               <Link href="/settings" className={itemClass}>
-                <Settings className="size-4" /> Settings
+                <GameIcon icon={{ kind: "glyph", key: "tab-settings" }} size="size-6" /> Settings
               </Link>
             </DropdownMenu.Item>
             {user.isAdmin ? (
               <DropdownMenu.Item asChild>
                 <Link href="/admin" className={itemClass}>
-                  <ShieldCheck className="size-4" /> Admin panel
+                  <GameIcon icon={{ kind: "glyph", key: "tab-admin" }} size="size-6" /> Admin panel
                 </Link>
               </DropdownMenu.Item>
             ) : null}

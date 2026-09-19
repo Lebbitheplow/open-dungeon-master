@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { EyeOff, Flag, Plus, X } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { Field, OptionalStepper, addChip, chip, chipOn, rowIcon } from "@/app/workshop/kit";
 import {
   EXTRAS_LIMITS,
   expandRoster,
@@ -20,8 +23,7 @@ import { RefPicker } from "@/app/workshop/tables/RefPicker";
 // is indexed by slot into the expanded roster, so retyping the roster in
 // the same order keeps the plan.
 
-const field =
-  "rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:border-amber-500/50 focus:outline-none";
+const field = ui.input;
 
 export function EncounterExtras({
   campaignId,
@@ -80,29 +82,24 @@ export function EncounterExtras({
   const props = value.entry ? [{ x: value.entry.x, y: value.entry.y, name: "Party enters", kind: "npc" as const }] : [];
 
   return (
-    <div className="space-y-3 rounded-lg border border-stone-800 bg-stone-950/40 px-2.5 py-2">
-      <p className="text-[11px] uppercase tracking-wide text-stone-500">The plan</p>
+    <div className="panel space-y-3 rounded-xl p-3">
+      <SectionHead title="The plan" glyph="tab-battle" className="mb-0" />
 
       {slots.length ? (
-        <ul className="space-y-1">
+        <ul className="stagger space-y-1">
           {slots.map((slot) => {
             const override = overrideFor(slot.slot);
             const placed = value.placements.find((entry) => entry.slot === slot.slot);
             const hidden = value.hidden.includes(slot.slot);
             return (
-              <li key={slot.slot} className="flex flex-wrap items-center gap-1.5">
+              <li key={slot.slot} className="flex flex-wrap items-center gap-1.5 text-xs">
                 <button
                   type="button"
                   disabled={!canPlace}
                   aria-pressed={placing === slot.slot}
                   title={canPlace ? "Then tap the map where it starts" : "Link a prepared map to place it"}
                   onClick={() => setPlacing(placing === slot.slot ? null : slot.slot)}
-                  className={cn(
-                    "min-w-28 rounded-md border px-2 py-0.5 text-left text-[11px] capitalize disabled:opacity-50",
-                    placing === slot.slot
-                      ? "border-amber-700 bg-amber-950/50 text-amber-100"
-                      : "border-stone-700 text-stone-300 hover:bg-stone-900",
-                  )}
+                  className={cn(ui.btnSmall, chip, "min-w-28 text-left", placing === slot.slot && chipOn)}
                 >
                   {slot.label}
                   {placed ? <span className="ml-1 text-stone-500">({placed.x},{placed.y})</span> : null}
@@ -113,19 +110,16 @@ export function EncounterExtras({
                   maxLength={EXTRAS_LIMITS.name}
                   aria-label={`${slot.label} name`}
                   onChange={(event) => setOverride(slot.slot, { name: event.target.value })}
-                  className={cn(field, "w-28")}
+                  className={cn(field, "w-32 py-1.5")}
                 />
-                <input
-                  type="number"
-                  value={override?.hp ?? ""}
-                  placeholder="hp"
+                <OptionalStepper
+                  value={override?.hp}
+                  fallback={1}
                   min={1}
                   max={EXTRAS_LIMITS.hp}
-                  aria-label={`${slot.label} hit points`}
-                  onChange={(event) =>
-                    setOverride(slot.slot, { hp: event.target.value === "" ? undefined : Number(event.target.value) })
-                  }
-                  className={cn(field, "w-16")}
+                  suffix="hp"
+                  label={`${slot.label} hit points`}
+                  onChange={(next) => setOverride(slot.slot, { hp: next === "" ? undefined : next })}
                 />
                 <button
                   type="button"
@@ -134,26 +128,20 @@ export function EncounterExtras({
                   onClick={() =>
                     set({ hidden: hidden ? value.hidden.filter((entry) => entry !== slot.slot) : [...value.hidden, slot.slot] })
                   }
-                  className={cn(
-                    "flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px]",
-                    hidden ? "border-violet-700 bg-violet-950/40 text-violet-200" : "border-stone-700 text-stone-500",
-                  )}
+                  className={cn(ui.btnSmall, addChip, hidden && "border-violet-700 bg-violet-950/40 text-violet-200")}
                 >
                   <EyeOff className="size-3" /> {hidden ? "Hidden" : "Seen"}
                 </button>
               </li>
             );
           })}
-          <li className="flex flex-wrap items-center gap-1.5">
+          <li className="flex flex-wrap items-center gap-1.5 text-xs">
             <button
               type="button"
               disabled={!canPlace}
               aria-pressed={placing === -1}
               onClick={() => setPlacing(placing === -1 ? null : -1)}
-              className={cn(
-                "flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] disabled:opacity-50",
-                placing === -1 ? "border-amber-700 bg-amber-950/50 text-amber-100" : "border-stone-700 text-stone-300 hover:bg-stone-900",
-              )}
+              className={cn(ui.btnSmall, addChip, placing === -1 && chipOn)}
             >
               <Flag className="size-3" /> Where the party comes in
               {value.entry ? <span className="text-stone-500">({value.entry.x},{value.entry.y})</span> : null}
@@ -176,29 +164,29 @@ export function EncounterExtras({
             zoomable
             onLabel={place}
           />
-          <p className="text-[10px] text-stone-600">
+          <p className="text-[11px] text-stone-500">
             {placing === null
               ? "Pick a creature above, then tap where it starts. The party goes where the flag says."
               : "Tap the tile. Tap the same tile again to clear it."}
           </p>
         </>
       ) : (
-        <p className="text-[10px] text-stone-600">
+        <p className="text-[11px] text-stone-500">
           Link a prepared map above to place each creature on it. Without one the generator seats them.
         </p>
       )}
 
-      <label className="block">
-        <span className="text-[10px] uppercase tracking-wide text-stone-500">What the fight is worth</span>
+      <SectionHead title="What the fight is worth" glyph="coin-purse" className="mb-0" />
+      <Field as="label" label="Rewards">
         <textarea
           value={value.rewards}
           maxLength={EXTRAS_LIMITS.rewards}
           rows={2}
           placeholder="120 gp in a locked chest, the captain's signet ring, roll once on Marsh treasure."
           onChange={(event) => set({ rewards: event.target.value })}
-          className={cn(field, "mt-0.5 w-full")}
+          className={field}
         />
-      </label>
+      </Field>
       {/* Pick the loot rather than spell it: a roll on one of this world's
           tables or an item from the catalogue lands as a line the deploy
           step resolves, the same @table: and @item: rows the tables use. */}
@@ -212,8 +200,8 @@ export function EncounterExtras({
         }
       />
 
-      <div className="space-y-1">
-        <span className="text-[10px] uppercase tracking-wide text-stone-500">What happens when</span>
+      <div className="space-y-1.5 text-sm">
+        <SectionHead title="What happens when" glyph="tab-timeline" className="mb-1" />
         {value.phases.map((phase, index) => (
           <div key={index} className="flex items-center gap-1.5">
             <input
@@ -230,9 +218,9 @@ export function EncounterExtras({
               type="button"
               aria-label="Remove phase"
               onClick={() => set({ phases: value.phases.filter((_, at) => at !== index) })}
-              className="rounded-md border border-stone-700 p-1 text-stone-500 hover:text-red-300"
+              className={cn(ui.iconAction, rowIcon, "hover:text-red-300")}
             >
-              <X className="size-3" />
+              <X className="size-3.5" />
             </button>
           </div>
         ))}
@@ -240,12 +228,12 @@ export function EncounterExtras({
           <button
             type="button"
             onClick={() => set({ phases: [...value.phases, ""] })}
-            className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-[11px] text-stone-300 hover:bg-stone-900"
+            className={cn(ui.btnSmall, addChip)}
           >
             <Plus className="size-3" /> Add a phase
           </button>
         ) : null}
-        <p className="text-[10px] text-stone-600">
+        <p className="text-[11px] text-stone-500">
           Rewards and phases land as a note only you can read when the fight is deployed.
         </p>
       </div>

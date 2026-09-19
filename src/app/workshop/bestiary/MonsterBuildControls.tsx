@@ -1,12 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Skull } from "lucide-react";
+import { Search } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { MonsterTile } from "@/lib/ui";
+import { MonsterTile, ui } from "@/lib/ui";
+import { Select } from "@/components/ui/Select";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { Field } from "@/app/workshop/kit";
 import { MONSTER_NAME_MAX } from "@/lib/bestiary/monster-draft";
 import { crLabel } from "@/lib/bestiary/derive-cr";
-import { CR_CHOICES, input, type Found } from "@/app/workshop/bestiary/types";
+import { CR_CHOICES, type Found } from "@/app/workshop/bestiary/types";
+
+const CR_OPTIONS = CR_CHOICES.map((cr) => ({ value: String(cr), label: crLabel(cr) }));
 
 // The top of the bestiary: name a monster and start it at a challenge
 // rating, or search the content pack for something to start from. Split out
@@ -54,54 +59,37 @@ export function MonsterBuildControls({
     <div
       data-tour="bestiary-build-controls"
       className={cn(
-        "flex flex-col gap-2",
-        variant === "card" && "rounded-lg border border-stone-800 bg-stone-900/40 p-3",
+        "flex flex-col gap-3",
+        variant === "card" && "panel rounded-xl p-3",
       )}
     >
       {variant === "card" ? (
-        <h3 className="flex items-center gap-1.5 text-sm text-amber-100">
-          <Skull className="size-4" /> Build a monster
-        </h3>
+        <SectionHead title="Build a monster" glyph="system-bestiary" className="mb-0" />
       ) : null}
       <div className="flex flex-wrap items-end gap-2">
-        <label className="flex flex-col gap-0.5">
-          <span className="text-[10px] uppercase tracking-wide text-stone-500">Name</span>
+        <Field as="label" label="Name" className="min-w-40 flex-1 sm:max-w-64">
           <input
             value={newName}
             onChange={(event) => setNewName(event.target.value.slice(0, MONSTER_NAME_MAX))}
             placeholder="Bone Tyrant"
-            className={cn(input, "w-48")}
+            className={ui.input}
           />
-        </label>
-        <label className="flex flex-col gap-0.5">
-          <span className="text-[10px] uppercase tracking-wide text-stone-500">Starting CR</span>
-          <select
-            value={newCr}
-            onChange={(event) => setNewCr(Number(event.target.value))}
-            className={cn(input, "w-24")}
-          >
-            {CR_CHOICES.map((cr) => (
-              <option key={cr} value={cr}>
-                {crLabel(cr)}
-              </option>
-            ))}
-          </select>
-        </label>
+        </Field>
+        <Field label="Starting CR" className="w-24">
+          <Select label="Starting CR" value={String(newCr)} onChange={(next) => setNewCr(Number(next))} options={CR_OPTIONS} />
+        </Field>
         <button
           type="button"
           disabled={busy || !newName.trim()}
           onClick={() => void create({ from: "cr", name: newName.trim(), cr: newCr })}
-          className="rounded-md border border-amber-500/40 px-3 py-1 text-xs text-amber-100 hover:bg-stone-800 disabled:opacity-40"
+          className={ui.btnPrimary}
         >
           Start from the baseline
         </button>
       </div>
 
       <div className="flex flex-wrap items-end gap-2">
-        <label className="flex flex-1 flex-col gap-0.5">
-          <span className="text-[10px] uppercase tracking-wide text-stone-500">
-            Or start from something that exists
-          </span>
+        <Field as="label" label="Or start from something that exists" className="flex-1">
           <div className="flex gap-1.5">
             <input
               value={query}
@@ -112,20 +100,16 @@ export function MonsterBuildControls({
                 }
               }}
               placeholder="owlbear"
-              className={cn(input, "flex-1")}
+              className={cn(ui.input, "flex-1")}
             />
-            <button
-              type="button"
-              onClick={onFind}
-              className="inline-flex items-center gap-1 rounded-md border border-stone-700 px-2 text-xs text-stone-300 hover:text-amber-100"
-            >
+            <button type="button" onClick={onFind} className={ui.btnSecondary}>
               <Search className="size-3.5" /> Find
             </button>
           </div>
-        </label>
+        </Field>
       </div>
       {found.length ? (
-        <div className="flex flex-wrap gap-1">
+        <div className="reveal flex flex-wrap gap-1.5 text-xs">
           {found.map((entry) => (
             <button
               key={entry.slug}
@@ -138,21 +122,21 @@ export function MonsterBuildControls({
                   name: newName.trim() || undefined,
                 })
               }
-              className="flex items-center gap-1 rounded-md border border-stone-700 px-1.5 py-0.5 text-[11px] text-stone-400 hover:text-amber-100 disabled:opacity-40"
+              className={cn(ui.btnSmall, "px-2 py-1")}
             >
               <MonsterTile
                 type={entry.type}
                 cr={entry.cr}
                 genre={genre}
                 seed={entry.slug}
-                size="size-5"
+                size="size-7"
               />
               {entry.name} <span className="text-stone-600">CR {crLabel(entry.cr)}</span>
             </button>
           ))}
         </div>
       ) : null}
-      {error ? <p className="text-[11px] text-red-400">{error}</p> : null}
+      {error ? <p className="motion-shake text-xs text-red-400">{error}</p> : null}
     </div>
   );
 }

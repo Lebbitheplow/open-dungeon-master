@@ -1,8 +1,11 @@
 "use client";
 
-import { BookOpen, CalendarDays, Flag, Loader2, MapPin, Sparkles } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
 import { useEffect, useState } from "react";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { SectionHead } from "@/components/ui/SectionHead";
 import { cn } from "@/lib/cn";
+import { PanelLoading } from "./PanelKit";
 import type { TimelineKind, TimelineRow } from "@/lib/dm/timeline-logic";
 
 // The campaign on one axis (docs/vtt-parity-implementation-plan.md 5.5):
@@ -19,13 +22,13 @@ const KIND_LABEL: Record<TimelineKind, string> = {
   now: "Now",
 };
 
-const KIND_ICON: Record<TimelineKind, typeof BookOpen> = {
-  chapter: BookOpen,
-  fact: Sparkles,
-  session: CalendarDays,
-  arc: Flag,
-  event: CalendarDays,
-  now: MapPin,
+const KIND_GLYPH: Record<TimelineKind, string> = {
+  chapter: "tab-story",
+  fact: "tab-facts",
+  session: "tab-session",
+  arc: "system-storyboard",
+  event: "daypart-day",
+  now: "tab-map",
 };
 
 const KIND_TONE: Record<TimelineKind, string> = {
@@ -61,18 +64,15 @@ export function TimelinePanel({ campaignId, refreshKey }: { campaignId: string; 
   }, [campaignId, refreshKey]);
 
   if (rows === null) {
-    return (
-      <p className="flex items-center gap-1 text-[11px] text-stone-500">
-        <Loader2 className="size-3 animate-spin" /> Laying out the years...
-      </p>
-    );
+    return <PanelLoading label="Laying out the years..." />;
   }
   const kinds = (Object.keys(KIND_LABEL) as TimelineKind[]).filter((kind) => kind !== "now" && rows.some((row) => row.kind === kind));
   const shown = rows.filter((row) => !hidden.has(row.kind));
   return (
     <div className="space-y-3">
+      <SectionHead title="Timeline" glyph="tab-timeline" aside={shown.length > 1 ? shown.length - 1 : null} />
       {kinds.length ? (
-        <div className="flex flex-wrap items-center gap-1">
+        <div role="group" aria-label="Show on the line" className="reveal flex flex-wrap items-center gap-1">
           {kinds.map((kind) => {
             const on = !hidden.has(kind);
             return (
@@ -91,11 +91,10 @@ export function TimelinePanel({ campaignId, refreshKey }: { campaignId: string; 
                     return next;
                   })
                 }
-                className={cn(
-                  "rounded-md border px-2 py-0.5 text-[11px]",
-                  on ? "border-amber-700 bg-amber-950/40 text-amber-100" : "border-stone-800 text-stone-500",
-                )}
+                data-on={on ? "" : undefined}
+                className="pk-pill pk-tap motion-press"
               >
+                <GameIcon icon={{ kind: "glyph", key: KIND_GLYPH[kind] }} size="size-4" />
                 {KIND_LABEL[kind]}
               </button>
             );
@@ -103,28 +102,27 @@ export function TimelinePanel({ campaignId, refreshKey }: { campaignId: string; 
         </div>
       ) : null}
       {shown.length <= 1 ? (
-        <p className="text-[11px] italic text-stone-600">Nothing has happened yet. The first closed chapter starts the line.</p>
+        <EmptyState size="sm" art="scrolls" title="Nothing has happened yet. The first closed chapter starts the line." />
       ) : null}
-      <ol className="relative space-y-2 lg:before:absolute lg:before:bottom-0 lg:before:left-1/2 lg:before:top-0 lg:before:w-px lg:before:bg-gradient-to-b lg:before:from-amber-700/0 lg:before:via-amber-600/70 lg:before:to-amber-700/0">
+      <ol className="stagger relative space-y-2 lg:before:absolute lg:before:bottom-0 lg:before:left-1/2 lg:before:top-0 lg:before:w-px lg:before:bg-gradient-to-b lg:before:from-amber-700/0 lg:before:via-amber-600/70 lg:before:to-amber-700/0">
         {shown.map((row, index) => {
-          const Icon = KIND_ICON[row.kind];
           const left = index % 2 === 0;
           return (
             <li key={row.id} className={cn("lg:flex", left ? "lg:justify-start lg:pr-[52%]" : "lg:justify-end lg:pl-[52%]")}>
               <article
                 className={cn(
-                  "w-full rounded-lg border bg-stone-950/50 px-2.5 py-1.5",
+                  "panel w-full rounded-lg px-2.5 py-2",
                   KIND_TONE[row.kind],
                   row.kind === "now" && "lg:w-auto lg:mx-auto",
                 )}
               >
-                <p className="flex items-center gap-1.5 text-[11px] font-medium">
-                  <Icon className="size-3 shrink-0" />
+                <p className="flex items-center gap-1.5 text-xs font-medium">
+                  <GameIcon icon={{ kind: "glyph", key: KIND_GLYPH[row.kind] }} size="size-5" className="shrink-0" />
                   <span className="min-w-0 flex-1 truncate">{row.title}</span>
-                  {row.when ? <span className="text-[10px] font-normal text-stone-500">{row.when}</span> : null}
-                  {row.secret ? <span className="text-[10px] font-normal text-violet-300">DM</span> : null}
+                  {row.when ? <span className="text-[11px] font-normal text-stone-500">{row.when}</span> : null}
+                  {row.secret ? <span className="text-[11px] font-normal text-violet-300">DM</span> : null}
                 </p>
-                {row.detail ? <p className="mt-0.5 text-[11px] leading-4 text-stone-400">{row.detail}</p> : null}
+                {row.detail ? <p className="reveal mt-0.5 text-xs leading-5 text-stone-400">{row.detail}</p> : null}
               </article>
             </li>
           );

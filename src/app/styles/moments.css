@@ -1,0 +1,254 @@
+/* The table's set pieces (campaigns/[campaignId]/Moments.tsx): the level-up
+   flourish and the rest by the fire. One stage above the table, below the
+   dialogs that follow it. */
+
+.moment-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 58;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  text-align: center;
+  background: radial-gradient(80% 70% at 50% 45%, rgba(20, 12, 40, 0.82), rgba(5, 3, 13, 0.94));
+  backdrop-filter: blur(3px);
+  animation: overlay-soft 380ms ease-out both;
+  cursor: pointer;
+}
+.moment-sigil {
+  width: 6rem;
+  height: 6rem;
+  mix-blend-mode: screen;
+  animation: spin 3.2s linear infinite;
+}
+.moment-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-display, serif);
+  font-size: 0.8rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--color-amber-300);
+  animation: item-in 520ms var(--ease-spring, ease-out) 200ms both;
+}
+.moment-title {
+  margin-top: 0.4rem;
+  font-family: var(--font-display, serif);
+  font-size: clamp(1.4rem, 4vw, 2.2rem);
+  letter-spacing: 0.04em;
+  animation: item-in 620ms var(--ease-spring, ease-out) 420ms both;
+}
+
+/* ---- level up ---- */
+.moment-levelup {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(22rem, 70vw);
+  height: min(22rem, 70vw);
+  margin-bottom: 0.5rem;
+}
+/* The sheets are painted on near-black, not pure black: a soft round mask
+   takes the frame's square edge away under the screen blend. */
+.moment-levelup-burst,
+.moment-rest-fire {
+  -webkit-mask-image: radial-gradient(closest-side, #000 62%, transparent 100%);
+  mask-image: radial-gradient(closest-side, #000 62%, transparent 100%);
+}
+.moment-levelup-burst {
+  position: absolute;
+  inset: 0;
+}
+.moment-levelup-medallion {
+  width: 8.5rem;
+  height: 8.5rem;
+  animation: pop-in 620ms var(--ease-spring, ease-out) both;
+}
+.moment-levelup-medallion .sheet-medallion-emblem { width: 2.8rem; height: 2.8rem; }
+.moment-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 9.5rem;
+  height: 9.5rem;
+  border-radius: 9999px;
+  border: 2px solid rgba(236, 210, 135, 0.9);
+  box-shadow: 0 0 24px rgba(212, 171, 58, 0.55), inset 0 0 18px rgba(212, 171, 58, 0.35);
+  animation: level-ring 1500ms var(--ease-settle, ease-out) 250ms both;
+}
+.moment-ring-late { animation-delay: 800ms; }
+
+/* ---- rest ---- */
+.moment-rest {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(15rem, 56vw);
+  height: min(15rem, 56vw);
+}
+.moment-rest-fire { position: absolute; inset: 0; }
+.moment-rest-glow {
+  position: absolute;
+  inset: 18% 8% -6%;
+  border-radius: 9999px;
+  background: radial-gradient(closest-side, rgba(255, 150, 50, 0.28), transparent);
+  animation: fire-breathe 2.6s ease-in-out infinite;
+}
+@keyframes fire-breathe {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+.moment-rest-party {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1rem 1.5rem;
+  margin-top: 0.75rem;
+  max-width: 44rem;
+}
+.moment-rest-seat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  animation: item-in 520ms var(--ease-spring, ease-out) both;
+}
+.moment-rest-medallion { width: 4.25rem; height: 4.25rem; margin-bottom: 0.3rem; }
+.moment-rest-medallion .sheet-medallion-emblem { width: 1.7rem; height: 1.7rem; }
+
+/* ---- travel banner ---- */
+.moment-travel {
+  position: fixed;
+  left: 50%;
+  top: 4.5rem;
+  z-index: 56;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: min(92vw, 30rem);
+  padding: 0.55rem 1.4rem 0.55rem 0.6rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(212, 171, 58, 0.55);
+  background: linear-gradient(180deg, rgba(33, 27, 58, 0.96), rgba(12, 8, 24, 0.96));
+  box-shadow: var(--shadow-glow-gold), 0 14px 34px rgba(4, 2, 12, 0.6);
+  pointer-events: none;
+  animation: travel-ride 3400ms var(--ease-settle, ease-out) both;
+}
+.moment-travel-rose {
+  width: 2.75rem;
+  height: 2.75rem;
+  mix-blend-mode: screen;
+  animation: travel-rose 3400ms var(--ease-settle, ease-out) both;
+}
+.moment-travel-kicker {
+  display: block;
+  font-family: var(--font-display, serif);
+  font-size: 0.6rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--color-stone-400);
+}
+.moment-travel-name {
+  display: block;
+  overflow: hidden;
+  font-family: var(--font-display, serif);
+  font-size: 1.15rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+@keyframes travel-ride {
+  0% { opacity: 0; transform: translate(-50%, -24px) scale(0.94); }
+  12%, 86% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -12px) scale(0.98); }
+}
+@keyframes travel-rose {
+  0% { transform: rotate(-120deg); }
+  30%, 100% { transform: rotate(0deg); }
+}
+html[data-theme="light"] .moment-travel { background: linear-gradient(180deg, #fffdf7, #f1e7cf); }
+html[data-theme="light"] .moment-travel-rose { mix-blend-mode: multiply; filter: invert(1) hue-rotate(180deg); }
+
+/* ---- loot reveal ---- */
+.moment-loot {
+  position: fixed;
+  left: 50%;
+  bottom: 22%;
+  z-index: 57;
+  transform: translateX(-50%);
+  cursor: pointer;
+  --loot: 190, 180, 215;
+}
+.moment-loot[data-tier="rare"] { --loot: 96, 165, 250; }
+.moment-loot[data-tier="epic"] { --loot: 236, 190, 80; }
+.moment-loot-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  min-width: 13rem;
+  padding: 1.1rem 1.5rem 1rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(var(--loot), 0.65);
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(var(--loot), 0.22), transparent 70%),
+    rgba(10, 7, 20, 0.94);
+  box-shadow: 0 0 34px rgba(var(--loot), 0.35), 0 18px 40px rgba(4, 2, 12, 0.7);
+  animation: loot-flip 3600ms var(--ease-settle, ease-out) both;
+  transform-style: preserve-3d;
+}
+.moment-loot-plate {
+  display: grid;
+  place-items: center;
+  border-radius: 9999px;
+  box-shadow: 0 0 0 2px rgba(var(--loot), 0.8), 0 0 22px rgba(var(--loot), 0.5);
+}
+.moment-loot-kicker {
+  margin-top: 0.5rem;
+  font-family: var(--font-display, serif);
+  font-size: 0.62rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgb(var(--loot));
+}
+.moment-loot-name {
+  font-family: var(--font-display, serif);
+  font-size: 1.05rem;
+  letter-spacing: 0.03em;
+  color: var(--color-amber-50);
+}
+.moment-loot-rays {
+  position: absolute;
+  inset: -55%;
+  z-index: -1;
+  border-radius: 9999px;
+  background: repeating-conic-gradient(from 0deg, rgba(var(--loot), 0.2) 0deg 8deg, transparent 8deg 20deg);
+  -webkit-mask-image: radial-gradient(closest-side, #000 25%, transparent 78%);
+  mask-image: radial-gradient(closest-side, #000 25%, transparent 78%);
+  animation: spin 14s linear infinite;
+}
+@keyframes loot-flip {
+  0% { opacity: 0; transform: perspective(900px) translateY(36px) rotateY(-95deg) scale(0.8); }
+  16% { opacity: 1; transform: perspective(900px) translateY(0) rotateY(8deg) scale(1.04); }
+  24%, 86% { opacity: 1; transform: perspective(900px) translateY(0) rotateY(0) scale(1); }
+  100% { opacity: 0; transform: perspective(900px) translateY(-22px) rotateY(0) scale(0.96); }
+}
+[data-effects="low"] .moment-loot-rays { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .moment-loot-card { animation: overlay-soft 300ms ease-out both; }
+  .moment-travel { animation: none; transform: translateX(-50%); }
+  .moment-travel-rose { animation: none; }
+  .moment-loot-rays { display: none; }
+  .moment-stage,
+  .moment-kicker,
+  .moment-title,
+  .moment-levelup-medallion,
+  .moment-rest-seat,
+  .moment-rest-glow,
+  .moment-sigil { animation: none; }
+  .moment-ring { display: none; }
+}

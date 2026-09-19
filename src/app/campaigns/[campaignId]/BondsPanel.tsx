@@ -1,8 +1,12 @@
 "use client";
 
-import { Heart, HeartCrack, Loader2, Users } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
+import { Heart, HeartCrack } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { SectionHead } from "@/components/ui/SectionHead";
 import { cn } from "@/lib/cn";
+import { PanelLoading } from "./PanelKit";
 import type { FriendshipTier, RomanceStage } from "@/lib/dm/relationship-logic";
 
 // Where each character stands with the people they have dealt with. The
@@ -37,6 +41,18 @@ const TIER_STYLES: Record<FriendshipTier, string> = {
   devoted: "border-emerald-700 bg-emerald-950/40 text-emerald-100",
 };
 
+// Eight tiers, five painted faces: each tier borrows the nearest one.
+const TIER_GLYPH: Record<FriendshipTier, string> = {
+  hostile: "attitude-hostile",
+  disliked: "attitude-hostile",
+  wary: "attitude-wary",
+  neutral: "attitude-neutral",
+  cordial: "attitude-friendly",
+  friendly: "attitude-friendly",
+  close: "attitude-allied",
+  devoted: "attitude-allied",
+};
+
 const TIER_WORD: Record<FriendshipTier, string> = {
   hostile: "Hostile",
   disliked: "Dislikes",
@@ -59,25 +75,26 @@ const ROMANCE_WORD: Record<RomanceStage, string> = {
 
 function BondRow({ bond }: { bond: RelationshipView }) {
   return (
-    <li className="rounded-md border border-stone-800 bg-stone-950/40 px-2.5 py-1.5">
-      <div className="flex items-start gap-2">
-        <span className="min-w-0 flex-1 text-xs text-stone-300">
+    <li className="panel rounded-lg px-2.5 py-2">
+      <div className="flex items-center gap-2">
+        <GameIcon icon={{ kind: "glyph", key: TIER_GLYPH[bond.tier] }} size="size-6" className="shrink-0" />
+        <span className="min-w-0 flex-1 text-sm text-stone-200">
           {bond.subjectName}
-          <span className="ml-1.5 text-[10px] uppercase tracking-wide text-stone-600">
+          <span className="eyebrow ml-1.5 text-[10px] text-amber-400/70">
             {bond.subjectKind === "companion" ? "companion" : "npc"}
           </span>
           {bond.status === "parted" ? (
-            <span className="ml-1.5 text-[10px] text-stone-500">
+            <span className="ml-1.5 text-[11px] text-stone-500">
               away{bond.apartChapters > 0 ? ` ${bond.apartChapters}ch` : ""}
             </span>
           ) : null}
           {bond.status === "ended" ? (
-            <span className="ml-1.5 text-[10px] text-stone-600">ended</span>
+            <span className="ml-1.5 text-[11px] text-stone-500">ended</span>
           ) : null}
         </span>
         <span
           className={cn(
-            "shrink-0 rounded-full border px-1.5 py-0.5 text-[10px]",
+            "shrink-0 rounded-full border px-2 py-0.5 text-[11px]",
             TIER_STYLES[bond.tier],
           )}
           title={bond.tierLabel}
@@ -87,7 +104,7 @@ function BondRow({ bond }: { bond: RelationshipView }) {
         </span>
         {bond.romance !== "none" ? (
           <span
-            className="flex shrink-0 items-center gap-1 rounded-full border border-rose-900/60 bg-rose-950/30 px-1.5 py-0.5 text-[10px] text-rose-200"
+            className="flex shrink-0 items-center gap-1 rounded-full border border-rose-900/60 bg-rose-950/30 px-2 py-0.5 text-[11px] text-rose-200"
             title={`Romance: ${ROMANCE_WORD[bond.romance]}`}
           >
             {bond.status === "ended" ? (
@@ -100,7 +117,7 @@ function BondRow({ bond }: { bond: RelationshipView }) {
         ) : null}
       </div>
       {bond.history.length ? (
-        <p className="mt-0.5 text-[11px] leading-4 text-stone-500">
+        <p className="reveal mt-1 text-xs leading-5 text-stone-400">
           {bond.history[bond.history.length - 1]}
         </p>
       ) : null}
@@ -134,25 +151,16 @@ export function BondsPanel({ campaignId, refreshKey }: { campaignId: string; ref
   }, [load, refreshKey]);
 
   if (loading) {
-    return (
-      <p className="flex justify-center px-1 py-6 text-stone-600">
-        <Loader2 className="size-4 animate-spin" />
-      </p>
-    );
+    return <PanelLoading label="Reading the room..." />;
   }
   if (!enabled) {
     return (
-      <p className="px-1 py-6 text-center text-xs text-stone-600">
-        Relationship tracking is off for this campaign. The party lead can turn it on in Setup.
-      </p>
+      <EmptyState size="sm" art="board" title="Relationship tracking is off for this campaign. The party lead can turn it on in Setup." />
     );
   }
   if (!bonds.length) {
     return (
-      <p className="px-1 py-6 text-center text-xs text-stone-600">
-        Nobody has an opinion yet. How NPCs and companions feel about each character builds as you
-        deal with them, and shows up here.
-      </p>
+      <EmptyState size="sm" art="board" title="Nobody has an opinion yet. How NPCs and companions feel about each character builds as you deal with them, and shows up here." />
     );
   }
 
@@ -163,14 +171,11 @@ export function BondsPanel({ campaignId, refreshKey }: { campaignId: string; ref
   }
 
   return (
-    <div className="space-y-3">
+    <div className="stagger space-y-3">
       {[...byCharacter.values()].map((group) => (
         <section key={group[0].characterId}>
-          <h3 className="mb-1 flex items-center gap-1.5 text-xs font-medium text-stone-400">
-            <Users className="size-3 text-amber-600" />
-            {group[0].characterName}
-          </h3>
-          <ul className="space-y-1">
+          <SectionHead title={group[0].characterName} glyph="tab-bonds" aside={group.length} />
+          <ul className="stagger space-y-1">
             {group.map((bond) => (
               <BondRow key={bond.id} bond={bond} />
             ))}

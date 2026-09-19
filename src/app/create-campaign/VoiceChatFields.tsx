@@ -1,7 +1,8 @@
 "use client";
 
+import { Select } from "@/components/ui/Select";
 import type { GameSettings } from "@/lib/schemas/game-settings";
-import { FieldLabel, inputClass, ToggleCard } from "@/app/create-campaign/fields";
+import { FieldLabel, ToggleCard } from "@/app/create-campaign/fields";
 
 type VoiceSettings = GameSettings["voice"];
 
@@ -31,20 +32,17 @@ export function VoiceChatFields({
           <>
             <label className="block">
               <span className="mb-1 block text-xs text-stone-500">Turn floor</span>
-              <select
+              <Select<VoiceSettings["turnEnforcement"]>
                 value={value.turnEnforcement}
-                onChange={(event) =>
-                  onChange({
-                    ...value,
-                    turnEnforcement: event.target.value as VoiceSettings["turnEnforcement"],
-                  })
-                }
-                className={inputClass}
-              >
-                <option value="off">Turns: ignored</option>
-                <option value="soft">Turns: shown</option>
-                <option value="strict">Turns: enforced</option>
-              </select>
+                onChange={(turnEnforcement) => onChange({ ...value, turnEnforcement })}
+                label="Turn floor"
+                className="w-full"
+                options={[
+                  { value: "off", label: "Turns: ignored" },
+                  { value: "soft", label: "Turns: shown" },
+                  { value: "strict", label: "Turns: enforced" },
+                ]}
+              />
             </label>
             <ToggleCard
               active={value.rules.proximity}
@@ -56,19 +54,13 @@ export function VoiceChatFields({
               <>
                 <label className="block">
                   <span className="mb-1 block text-xs text-stone-500">Hearing range</span>
-                  <select
-                    value={value.rules.hearingRangeFeet}
-                    onChange={(event) =>
-                      setRule({ hearingRangeFeet: Number(event.target.value) })
-                    }
-                    className={inputClass}
-                  >
-                    {[15, 30, 60, 120].map((feet) => (
-                      <option key={feet} value={feet}>
-                        {feet} ft
-                      </option>
-                    ))}
-                  </select>
+                  <Select<string>
+                    value={String(value.rules.hearingRangeFeet)}
+                    onChange={(feet) => setRule({ hearingRangeFeet: Number(feet) })}
+                    label="Hearing range"
+                    className="w-full"
+                    options={[15, 30, 60, 120].map((feet) => ({ value: String(feet), label: `${feet} ft` }))}
+                  />
                 </label>
                 <ToggleCard
                   active={value.rules.sayRange}

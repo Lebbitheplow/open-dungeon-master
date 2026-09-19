@@ -1,7 +1,9 @@
 "use client";
 
-import { Check, Loader2, Users } from "lucide-react";
-import { useState } from "react";
+import { Check, Loader2 } from "lucide-react";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { Select } from "@/components/ui/Select";
+import { useState, type ReactNode } from "react";
 import { ui } from "@/lib/ui";
 import { thresholdsForParty } from "@/lib/srd/encounter-math";
 import { TARGET_PARTY_LIMITS, targetPartyLevels, type TargetParty } from "@/lib/workshop/kind";
@@ -23,16 +25,22 @@ function range(limits: { min: number; max: number }): number[] {
 const SIZES = range(TARGET_PARTY_LIMITS.size);
 const LEVELS = range(TARGET_PARTY_LIMITS.level);
 
-const select = `${ui.input} w-auto py-1 pr-7`;
+// The shared input is full width; here the two pickers sit inline in a
+// sentence, so the width utility is dropped rather than fought.
+const SIZE_OPTIONS = SIZES.map((option) => ({ value: String(option), label: String(option) }));
+const LEVEL_OPTIONS = LEVELS.map((option) => ({ value: String(option), label: String(option) }));
 
 export function TargetPartyBar({
   workshopId,
   targetParty,
   onSaved,
+  aside,
 }: {
   workshopId: string;
   targetParty: TargetParty;
   onSaved: (targetParty: TargetParty) => void;
+  // Something small for the far end of the row (the command palette's chip).
+  aside?: ReactNode;
 }) {
   const [size, setSize] = useState(targetParty.size);
   const [level, setLevel] = useState(targetParty.level);
@@ -64,48 +72,43 @@ export function TargetPartyBar({
   return (
     <div className={`${ui.card} p-3`}>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
-        <Users className="size-4 shrink-0 text-amber-200/70" />
+        <GameIcon icon={{ kind: "glyph", key: "system-party" }} size="size-8" />
         <span className="text-sm text-stone-400">Building for</span>
-        <select
-          value={size}
-          onChange={(event) => {
-            setSize(Number(event.target.value));
-            setSaved(false);
-          }}
-          aria-label="Party size"
-          className={select}
-        >
-          {SIZES.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
+        <span className="w-20">
+          <Select
+            value={String(size)}
+            onChange={(next) => {
+              setSize(Number(next));
+              setSaved(false);
+            }}
+            label="Party size"
+            options={SIZE_OPTIONS}
+            size="sm"
+          />
+        </span>
         <span className="text-sm text-stone-400">{size === 1 ? "hero" : "heroes"} at level</span>
-        <select
-          value={level}
-          onChange={(event) => {
-            setLevel(Number(event.target.value));
-            setSaved(false);
-          }}
-          aria-label="Party level"
-          className={select}
-        >
-          {LEVELS.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
+        <span className="w-20">
+          <Select
+            value={String(level)}
+            onChange={(next) => {
+              setLevel(Number(next));
+              setSaved(false);
+            }}
+            label="Party level"
+            options={LEVEL_OPTIONS}
+            size="sm"
+          />
+        </span>
         {dirty ? (
           <button type="button" onClick={save} disabled={busy} className={ui.btnSmall}>
             {busy ? <Loader2 className="size-3.5 animate-spin" /> : null} Save
           </button>
         ) : saved ? (
-          <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
+          <span className="live-in inline-flex items-center gap-1 text-xs text-emerald-400">
             <Check className="size-3.5" /> Saved
           </span>
         ) : null}
+        {aside ? <span className="ml-auto flex items-center">{aside}</span> : null}
       </div>
       <p className="mt-2 text-xs text-stone-500">
         One fight is easy up to {budget.easy.toLocaleString()} XP, medium to{" "}

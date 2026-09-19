@@ -1,191 +1,123 @@
 "use client";
 
+import { useRef, type CSSProperties } from "react";
 import { cn } from "@/lib/cn";
 import { InfoButton } from "@/components/ui/InfoDialog";
+import { replayAnimation } from "@/lib/motion/replay";
 import {
   BONDS_INFO,
   LIVING_WORLD_INFO,
   NARRATION_GUARD_INFO,
   ROMANCE_INFO,
 } from "@/app/campaigns/[campaignId]/GameSettingsPanel";
-import { ToggleCard } from "@/app/create-campaign/fields";
 import { NarratorFields } from "@/app/create-campaign/NarratorFields";
 import { SafetyFields } from "@/app/create-campaign/SafetyFields";
-import type { CampaignDraft, StepProps, WizardGates } from "@/app/create-campaign/draft";
+import type { StepProps } from "@/app/create-campaign/draft";
+import {
+  countableRows,
+  featuresOn,
+  flipRow,
+  tableSheet,
+  type SheetInfo,
+  type SheetRow,
+} from "@/app/create-campaign/table-sheet";
 
-// Which of the table features are switched on, counting only the ones the
-// wizard actually showed: a hidden toggle is not a choice the table made.
-// The review step reads this so its "n on" agrees with the grid.
-export function featuresOn(draft: CampaignDraft, gates: WizardGates): number {
-  const { aiNarrates, solo } = gates;
-  const bonds = draft.relationships !== "off";
-  return [
-    aiNarrates && draft.aiStorySetup,
-    draft.ttsEnabled,
-    draft.mapsEnabled,
-    draft.ambienceEnabled,
-    draft.ambienceEnabled && draft.ambienceAuto,
-    draft.multiclassingEnabled,
-    aiNarrates && draft.worldSimulation,
-    draft.inventoryApprovals,
-    bonds,
-    bonds && draft.romance !== "off",
-    aiNarrates && draft.narrationGuard,
-    !solo && draft.midGameJoinOpen,
-    !solo && draft.holdSubmissions,
-  ].filter(Boolean).length;
-}
+// The count lives with the rows it counts; the review step still finds it here.
+export { featuresOn };
 
-// Step 4: the toggle grid, then the AI allies and narrator voice. Voice
+const INFO: Record<SheetInfo, { label: string; text: string }> = {
+  livingWorld: { label: "What does Living World do?", text: LIVING_WORLD_INFO },
+  bonds: { label: "What are Bonds?", text: BONDS_INFO },
+  romance: { label: "How does Romance work?", text: ROMANCE_INFO },
+  narrationGuard: { label: "What is the outcome check?", text: NARRATION_GUARD_INFO },
+};
+
+// Step 4, the table sheet: the switches in four groups with a running total,
+// then the AI allies, the narrator voice, and safety and tone. Voice
 // narration and maps stay visible but disabled when the server lacks the
 // backend, because they are one server switch away rather than a feature
 // this install can never have; the AI-only rows hide when a human narrates.
-export function FeelStep(props: StepProps) {
-  const { draft, patch, gates } = props;
-  const { aiNarrates, solo, ttsAvailable, mapsAvailable } = gates;
-  const bonds = draft.relationships !== "off";
+// Which rows exist, and what a press does, is table-sheet.ts.
+export function FeelStep(props: StepProps & { active: boolean }) {
+  const { draft, patch, gates, active } = props;
+  const counter = useRef<HTMLSpanElement>(null);
+  const groups = tableSheet(draft, gates);
+
+  const flip = (row: SheetRow) => {
+    patch(flipRow(draft, row.key));
+    // The total answers every press, including one that does not move it.
+    replayAnimation(counter.current, "cc-count-pop var(--dur-beat) var(--ease-spring)");
+  };
+
   return (
-    <div className="space-y-4 text-sm">
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        {aiNarrates ? (
-          <ToggleCard
-            active={draft.aiStorySetup}
-            onClick={() => patch({ aiStorySetup: !draft.aiStorySetup })}
-            label="AI story setup"
-            hint="The DM invents the plot"
-          />
-        ) : null}
-        <ToggleCard
-          active={draft.ttsEnabled}
-          disabled={!ttsAvailable}
-          onClick={() => patch({ ttsEnabled: !draft.ttsEnabled })}
-          label="Voice narration"
-          hint={ttsAvailable ? "Spoken DM narration" : "No speech service on this server"}
-        />
-        <ToggleCard
-          active={draft.mapsEnabled}
-          disabled={!mapsAvailable}
-          onClick={() => patch({ mapsEnabled: !draft.mapsEnabled })}
-          label="Maps"
-          hint={mapsAvailable ? "AI-drawn area maps" : "No image service on this server"}
-        />
-        <ToggleCard
-          active={draft.ambienceEnabled}
-          onClick={() => patch({ ambienceEnabled: !draft.ambienceEnabled })}
-          label="Ambience"
-          hint="Room tone, music and stings"
-        />
-        {draft.ambienceEnabled ? (
-          <ToggleCard
-            active={draft.ambienceAuto}
-            onClick={() => patch({ ambienceAuto: !draft.ambienceAuto })}
-            label="Sound follows the scene"
-            hint="Off leaves it to the DM"
-          />
-        ) : null}
-        <ToggleCard
-          active={draft.multiclassingEnabled}
-          onClick={() => patch({ multiclassingEnabled: !draft.multiclassingEnabled })}
-          label="Multiclassing"
-          hint="Second classes at level-up"
-        />
-        <ToggleCard
-          active={draft.boardDrawing}
-          onClick={() => patch({ boardDrawing: !draft.boardDrawing })}
-          label="Players draw on the board"
-          hint="Plans and circles on the battle map; the DM always may"
-        />
-        <ToggleCard
-          active={draft.multiCharacter !== "off"}
-          onClick={() => patch({ multiCharacter: draft.multiCharacter === "off" ? "one_active" : draft.multiCharacter === "one_active" ? "all_active" : "off" })}
-          label={draft.multiCharacter === "all_active" ? "Several characters each, all fielded" : draft.multiCharacter === "one_active" ? "Several characters each, one at a time" : "One character each"}
-          hint="A player may build more than one; press again to field them all at once (solo tables)"
-        />
-        <ToggleCard
-          active={draft.presentation === "theatre"}
-          onClick={() => patch({ presentation: draft.presentation === "theatre" ? "plain" : "theatre" })}
-          label="Theatre inserts"
-          hint="A speaking NPC's face over the scene art while their lines play"
-        />
-        {aiNarrates ? (
-          <div className="relative flex">
-            <ToggleCard
-              active={draft.worldSimulation}
-              onClick={() => patch({ worldSimulation: !draft.worldSimulation })}
-              label="Living world"
-              hint="Off-screen schemes and rumors advance on their own"
-            />
-            <InfoButton
-              label="What does Living World do?"
-              text={LIVING_WORLD_INFO}
-              className="absolute right-1.5 top-1.5"
-            />
-          </div>
-        ) : null}
-        <ToggleCard
-          active={draft.inventoryApprovals}
-          onClick={() => patch({ inventoryApprovals: !draft.inventoryApprovals })}
-          label="Item offers"
-          hint="Players confirm DM loot and gold changes"
-        />
-        <div className="relative flex">
-          <ToggleCard
-            active={bonds}
-            onClick={() => patch({ relationships: bonds ? "off" : "on" })}
-            label="Bonds"
-            hint="NPCs remember how each character treated them"
-          />
-          <InfoButton label="What are Bonds?" text={BONDS_INFO} className="absolute right-1.5 top-1.5" />
+    <div className={cn("space-y-4 text-sm", active && "cc-live")}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="cc-note min-w-0 flex-1 basis-32 leading-relaxed">
+          The gold dot marks a switch the total counts.
+        </p>
+        <div className="cc-counter" aria-live="polite">
+          <span ref={counter} className="cc-count">
+            {featuresOn(draft, gates)}
+          </span>
+          <span className="flex flex-col">
+            <span className="cc-eyebrow text-amber-300">features on</span>
+            <span className="cc-note">of {countableRows(gates)} counted</span>
+          </span>
         </div>
-        {bonds ? (
-          <div className="relative flex">
-            <ToggleCard
-              active={draft.romance !== "off"}
-              onClick={() => patch({ romance: draft.romance === "off" ? "on" : "off" })}
-              label="Romance"
-              hint="Bonds can grow into a relationship"
-            />
-            <InfoButton
-              label="How does Romance work?"
-              text={ROMANCE_INFO}
-              className="absolute right-1.5 top-1.5"
-            />
-          </div>
-        ) : null}
-        {aiNarrates ? (
-          <div className="relative flex">
-            <ToggleCard
-              active={draft.narrationGuard}
-              onClick={() => patch({ narrationGuard: !draft.narrationGuard })}
-              label="Outcome check"
-              hint="Narration that contradicts the dice is rewritten"
-            />
-            <InfoButton
-              label="What is the outcome check?"
-              text={NARRATION_GUARD_INFO}
-              className="absolute right-1.5 top-1.5"
-            />
-          </div>
-        ) : null}
-        {!solo ? (
-          <ToggleCard
-            active={draft.midGameJoinOpen}
-            onClick={() => patch({ midGameJoinOpen: !draft.midGameJoinOpen })}
-            label="Mid-game joining"
-            hint="New players can use the invite code after the start"
-          />
-        ) : null}
-        {!solo ? (
-          <ToggleCard
-            active={draft.holdSubmissions}
-            onClick={() => patch({ holdSubmissions: !draft.holdSubmissions })}
-            label="Held responses"
-            hint="Nobody acts until the party lead opens the floor"
-          />
-        ) : null}
       </div>
 
-      <NarratorFields {...props} className={cn(!aiNarrates && !draft.ttsEnabled && "hidden")} />
+      {groups.map((group) => (
+        <section key={group.id}>
+          <div className="cc-group-head">
+            <span className="cc-eyebrow">{group.label}</span>
+            <span className="cc-group-rule" aria-hidden="true" />
+            {group.note ? <span className="cc-note">{group.note}</span> : null}
+          </div>
+          <div className="cc-sheet-grid">
+            {group.rows.map((row) => (
+              <div
+                key={row.key}
+                className="cc-row-slot"
+                data-dependent={row.dependent ? "true" : "false"}
+                data-info={row.info ? "true" : "false"}
+              >
+                <button
+                  type="button"
+                  disabled={row.disabled}
+                  aria-pressed={row.on}
+                  onClick={() => flip(row)}
+                  className="cc-row motion-press"
+                >
+                  <span
+                    className="cc-switch"
+                    style={{ "--knob": row.knob } as CSSProperties}
+                    aria-hidden="true"
+                  />
+                  <span className="min-w-0">
+                    <span className="cc-row-label">{row.label}</span>
+                    <span className="cc-row-hint">{row.hint}</span>
+                  </span>
+                </button>
+                {row.counted && row.on ? <span className="cc-dot" aria-hidden="true" /> : null}
+                {row.info ? (
+                  <InfoButton
+                    label={INFO[row.info].label}
+                    text={INFO[row.info].text}
+                    className="absolute right-1.5 top-1.5"
+                  />
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </section>
+      ))}
+
+      <p className="cc-note leading-relaxed">
+        Theatre inserts, drawing on the board, enemy intent and characters per player are choices
+        too, but they are left out of the total.
+      </p>
+
+      <NarratorFields {...props} className={cn(!gates.aiNarrates && !draft.ttsEnabled && "hidden")} />
       <SafetyFields {...props} />
     </div>
   );

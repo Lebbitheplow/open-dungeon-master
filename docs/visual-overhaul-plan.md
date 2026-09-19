@@ -1560,6 +1560,42 @@ painted maps. Everything else in the phase table is still to build. The
 renderer lives in `src/lib/battlemap/render/renderer.js` and the preview page
 inlines that same file, so there is one renderer, not a reference and a port.
 
+### 9.0b What shipped in 0.21.0 (client 0.12.0)
+
+The redesign the mockups drew, and its carry-through to the screens they did
+not draw. It was reviewed on the local service before it was published, which
+is the rule for every slice of this plan.
+
+| Area | What is built | Ledger |
+| --- | --- | --- |
+| Motion kit (4) | one delegated pointer listener (`src/lib/motion/pointer.ts`) driving magnet, tilt, sheen, ripple and nudge on the shared `ui.*` classes; spring dialogs, menus and tooltips; `GoldTitle`; travelling indicators on the session rail and `SegmentedControl`; busy sweep on `aria-busy` buttons; all still under reduced motion, loops off under low effects | no control changed |
+| Character creator (7) | diamond stepper, gold step wipe, the 4d6 dice grid with the dropped die, standard array slots, point buy steppers, lineage and class card grids with the detail carousel, method and hit point explainers | every row of 1.3 kept; setting and pack recommendations now lead their grid with a starred heading and a badge on each card; descriptions behind the card's "?" and the chosen line's info button |
+| Campaign creator (8) | six-step wizard on the diamonds, world portals with climate and "humans only" chips, the typed theme, the table sheet with its running total, the cover read-back | every row of 1.4 kept; all 30 settings still sent |
+| The Hand (5.2, 5.3) | fanned cards for weapons, prepared spells, class features and the basic actions, aim bar with target chips and the outcome preview, two-step commit, "+n more" sheet, tutorial, phone layout | composer, modes, banners, token HUD untouched; typing a move still works |
+| Board stage, rolls, delivery (5.1, 5.4, 5.5) | turn spotlight, initiative rail of portraits, turn HUD with action pips from the engine's budget, turn banner, aim scrim and reticles, violet roll cards with the landing animation, delivery shapes per damage type, faces on every token and row | every row of 1.2 kept; 3D dice untouched |
+| Enemy intent (5.6) | likely and declared intent projected with redaction, the `declare_intent` tool, a table setting to turn it off | new; off hides it entirely |
+| Map Forge and Editor (3, 4) | see the workstream report | every tool kept |
+| Character sheet (8b.5) | one implementation (`src/components/sheet/SheetParts.tsx`) for the session dialog and the character page: medallion, painted ability tiles with tiered numbers and saves, hit point bar, vitals medallions, skill rows with icons, icon chips that preview on hover and open their entry; carried items now open their library description | every field kept; the library sheet gained saves, skills, initiative, passive perception and spell DC |
+| Furniture (8e) | the painted scroll unrolls parchment handouts; the chronicle book turns pages through closed chapters from the Story tab; drifting dust under every page | handout stamp, seal, download, take down and fold kept; chapter list, edit, rewind kept |
+| Moments (8c.5, 8c.6) | level-up flourish before the dialog, rest by the campfire, loot reveal in three tiers, travel banner on a new place, death-save strip with painted studs | pictures over what the engine already did |
+| Rest of the app (8c) | page skeletons in place of spinners on every route, painted empty states in every panel, kit switch, notification bell and account menu on the kit, lobby, schedule, invite and campaign editor restyle, context menus, command palette, workshop shelf and lists, reference badges | every control kept; menu actions stay reachable inline |
+| Motion on everything (6) | `src/lib/motion/answer.ts` gives every button, chip, tab, link tile and menu row a hover lift, a press that sinks and springs back, and a pop when it turns on, with no class needed; `src/lib/motion/pill.ts` slides one highlight between the choices of any row marked `data-pill-group` and every `role="tablist"` (the composer's Do, Say, OOC, Direct and some 25 other rows); each mockup was then audited control by control and the gaps built | elements with kit physics or their own `translate` and `scale` are left alone; nothing runs under reduced motion |
+| Kit controls (8c.4) | `Select`, `NumberStepper` (hold to repeat, typing held as a draft until it is inside the limits), `Slider`, `DateTimePicker`, `Switch`, `SectionHead`, `ContextMenu`, `Reveal` and `CountPop`; the browser's own select, number, range and date controls are replaced across the app | same values, limits, handlers and accessible names |
+| Design carry-over (8c.2) | session panels (`panels.css`, `PanelKit.tsx`), the DM console (`dm-console.css`, `DmConsoleParts.tsx`), the workshop systems (`workshop/kit.tsx`), account, help and admin (`account.css`), the session frame (`session.css`: painted rail, glyph headings, message medallions, mode pills) | invite revoke and world pack removal now confirm first; every other action as before |
+| Icon plate | the disc behind every painted icon is lit from its centre and the painting carries a thin warm rim light, so the dark paintings (hooded, petrified, hidden) read on the night theme; the party glyph was re-rendered in colour | none |
+| Guided tours | the table tour (13 steps), the workshop shelf tour (4) and the in-workshop tour (6) were walked in a browser after the redesign; every step finds its anchor | anchors kept through every restyle (`scripts/test-tours.mjs`) |
+| Front door (8c.2) | two panels on a desk (`AuthScreen` in `src/app/page.tsx`, styles in `account.css`): a portrait crop of one genre painting per visit from `public/assets/ui/door/`, a slow drift, fourteen CSS fireflies, a caption pinned to the screen; the form alone below 1024 px | every login option, the Discord button, How to play and the legal links kept |
+| Day theme | glass surfaces (table header, composer) were unreadable in daylight; fixed | none |
+| Client apps (10) | `build-renderer.mjs` inlines the stylesheets `globals.css` imports and ships `public/assets/ui` beside the game sheet so CSS backgrounds resolve; the game router shows the server's page skeletons, keeps a page mounted across a query change, warms a route on hover or touch, and lays the dust layer | both shells build from the same components |
+
+Found and fixed on the way: 25 of the pack's 81 races (Hill Dwarf, High Elf
+and the rest of the expanded set) wrote their ability bumps as a map, which
+`raceMechanics` read as none; trait names were cut at the full stop inside
+"(adv. vs poison)". Both are covered in `scripts/test-character-grants.mjs`.
+
+Not built: the NPC conversation panel (section 6.1 item 8), which is a new
+play mode with its own model calls rather than a restyle.
+
 ### 9.1 Where the art stands (2026-09-18)
 
 | Set | Count | State |

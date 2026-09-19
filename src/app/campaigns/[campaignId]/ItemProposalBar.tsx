@@ -1,8 +1,10 @@
 "use client";
 
-import { ArrowLeftRight, Check, Loader2, Package, X } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { KitButton, PanelError } from "./PanelKit";
 import type { ItemProposal } from "@/app/campaigns/[campaignId]/useCampaignStream";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -51,8 +53,8 @@ export function ItemProposalBar({
   }
 
   return (
-    <div className="mx-3 mb-2 space-y-1.5">
-      {error ? <p className="text-[11px] text-red-400">{error}</p> : null}
+    <div className="stagger mx-3 mb-2 space-y-1.5">
+      {error ? <PanelError>{error}</PanelError> : null}
       {proposals.map((proposal) => {
         const trade = proposal.toolName === "trade";
         // A trade is "mine" to answer when it is made to my character; the
@@ -67,13 +69,11 @@ export function ItemProposalBar({
           <div
             key={proposal.id}
             className={cn(
-              "flex flex-wrap items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs",
-              mine
-                ? "border-amber-700/70 bg-amber-950/40 text-amber-100"
-                : "border-stone-800 bg-stone-950/60 text-stone-400",
+              "panel live-in flex flex-wrap items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs",
+              mine ? "ornate border-amber-500/50 text-amber-100" : "text-stone-400",
             )}
           >
-            {trade ? <ArrowLeftRight className="size-3.5 shrink-0 text-amber-400" /> : <Package className="size-3.5 shrink-0 text-amber-400" />}
+            <GameIcon icon={{ kind: "glyph", key: trade ? "tab-trade" : "tab-loot" }} size="size-6" className="shrink-0" />
             <span className="min-w-0 flex-1">
               {proposal.summary}
               {proposal.reason ? (
@@ -81,36 +81,21 @@ export function ItemProposalBar({
               ) : null}
             </span>
             {trade && proposer && !mine && !steersStory ? (
-              <button
-                type="button"
-                onClick={() => resolve(proposal.id, "cancel")}
-                disabled={busy}
-                className="flex items-center gap-1 rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-400 hover:bg-stone-900 disabled:opacity-50"
-              >
-                <X className="size-3" /> Withdraw
-              </button>
+              <KitButton onClick={() => resolve(proposal.id, "cancel")} disabled={busy} busy={busy}>
+                {busy ? null : <X className="size-3.5" />} Withdraw
+              </KitButton>
             ) : mine || steersStory ? (
               <span className="flex shrink-0 items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => resolve(proposal.id, "approve")}
-                  disabled={busy}
-                  className="flex items-center gap-1 rounded border border-emerald-800 px-2 py-0.5 text-[11px] text-emerald-300 hover:bg-emerald-950/50 disabled:opacity-50"
-                >
-                  {busy ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
+                <KitButton tone="primary" onClick={() => resolve(proposal.id, "approve")} disabled={busy} busy={busy}>
+                  {busy ? null : <Check className="size-3.5" />}
                   Accept
-                </button>
-                <button
-                  type="button"
-                  onClick={() => resolve(proposal.id, mine ? "decline" : "cancel")}
-                  disabled={busy}
-                  className="flex items-center gap-1 rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-400 hover:bg-stone-900 disabled:opacity-50"
-                >
-                  <X className="size-3" /> {mine ? "Decline" : "Withdraw"}
-                </button>
+                </KitButton>
+                <KitButton onClick={() => resolve(proposal.id, mine ? "decline" : "cancel")} disabled={busy}>
+                  <X className="size-3.5" /> {mine ? "Decline" : "Withdraw"}
+                </KitButton>
               </span>
             ) : (
-              <span className="shrink-0 text-[11px] text-stone-600">
+              <span className="shrink-0 text-[11px] italic text-stone-500">
                 waiting on {characterName}
               </span>
             )}

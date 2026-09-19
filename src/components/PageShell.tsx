@@ -1,15 +1,18 @@
-import { Loader2 } from "lucide-react";
+
+import { PageSkeleton } from "@/components/PageSkeleton";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { PixelTile, ui } from "@/lib/ui";
 import type { AccountMenuUser } from "@/components/AccountMenu";
 import { AppHeader } from "@/components/AppHeader";
+import { GameIcon } from "@/components/ui/GameIcon";
 import { Ribbon } from "@/components/ui/Ribbon";
+import { SectionHead } from "@/components/ui/SectionHead";
 
 // The shared frame for the flat signed-in pages (settings, admin, friends,
 // reference, the legal pages): AppHeader on top, one centred column, a page
-// header with a pixel tile, a Cinzel title and a one-line blurb, then
-// PageSection cards. Pages own their state and controls; this owns the
+// header with a painted glyph (or the older pixel tile), a gold title and a
+// one-line blurb, then PageSection cards headed by the kit SectionHead. Pages own their state and controls; this owns the
 // spacing so they all line up with each other and with the home screen.
 //
 //   <PageShell user={me} icon={PIXEL_ICONS.characters} title="Account settings" blurb="...">
@@ -48,6 +51,7 @@ export function PageShell({
   user,
   width = "wide",
   icon,
+  glyph,
   title,
   blurb,
   actions,
@@ -60,6 +64,10 @@ export function PageShell({
   width?: PageWidth;
   // A PIXEL_ICONS path for the tile beside the title.
   icon: string;
+  // A painted glyph (a file name under public/assets/icons/glyph) that takes
+  // the tile's place when given; the pixel tile stays the fallback so pages
+  // that never chose one look as they did.
+  glyph?: string;
   title: ReactNode;
   blurb?: ReactNode;
   // Right-side controls on the header row (a shortcut link, a back link).
@@ -72,9 +80,13 @@ export function PageShell({
       <AppHeader user={user} />
       <header className="mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         <div className="flex min-w-0 items-center gap-3">
-          <PixelTile src={icon} />
+          {glyph ? (
+            <GameIcon icon={{ kind: "glyph", key: glyph }} size="size-12" className="page-glyph" />
+          ) : (
+            <PixelTile src={icon} />
+          )}
           <div className="min-w-0">
-            <h1 className="text-balance font-display text-2xl leading-tight tracking-wide text-amber-50">
+            <h1 className="gold-title animate-fade-up text-balance font-display text-2xl leading-tight sm:text-3xl">
               {title}
             </h1>
             {blurb ? <p className="mt-0.5 text-pretty text-sm text-stone-500">{blurb}</p> : null}
@@ -82,16 +94,19 @@ export function PageShell({
         </div>
         {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
       </header>
-      <div className="space-y-4">{children}</div>
+      <div className="stagger-up space-y-4">{children}</div>
     </Column>
   );
 }
 
-// One card in the column. The heading is an engraved eyebrow; a Ribbon can
-// sit above it to mark who the section is for ("Admin only", "Irreversible").
+// One card in the column. The heading is the kit SectionHead (painted glyph,
+// small-caps gold title, wiping rule) with the section's controls at its far
+// end; a Ribbon can sit above it to mark who the section is for ("Admin only", "Irreversible").
 // tone="danger" reddens the frame for destructive sections.
 export function PageSection({
+  id,
   heading,
+  glyph,
   ribbon,
   ribbonTone = "gold",
   tone = "default",
@@ -102,7 +117,11 @@ export function PageSection({
   bodyClassName,
   children,
 }: {
+  // An anchor a contents rail can scroll to.
+  id?: string;
   heading?: ReactNode;
+  // The painted glyph that leads the heading.
+  glyph?: string;
   ribbon?: ReactNode;
   ribbonTone?: "gold" | "ember";
   tone?: "default" | "danger";
@@ -120,23 +139,30 @@ export function PageSection({
   const hasHead = heading || ribbon || actions;
   return (
     <section
+      id={id}
       className={cn(
         ui.card,
+        id && "scroll-mt-16",
         "texture-noise",
         padded && "p-5",
-        danger && "border-red-900/50",
+        danger && "danger-zone",
         className,
       )}
     >
       {hasHead ? (
-        <div className={cn("flex flex-wrap items-start justify-between gap-x-4 gap-y-2", !padded && "px-5 pt-5")}>
-          <div className="min-w-0 space-y-1.5">
-            {ribbon ? <Ribbon tone={ribbonTone}>{ribbon}</Ribbon> : null}
-            {heading ? (
-              <h2 className={cn(ui.sectionEyebrow, danger && "text-red-300/80")}>{heading}</h2>
-            ) : null}
-          </div>
-          {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
+        <div className={cn("space-y-2", !padded && "px-5 pt-5")}>
+          {ribbon ? <Ribbon tone={ribbonTone}>{ribbon}</Ribbon> : null}
+          {heading ? (
+            <SectionHead
+              level="h2"
+              title={heading}
+              glyph={glyph}
+              aside={actions}
+              className={cn("mb-0", danger && "section-head-danger")}
+            />
+          ) : actions ? (
+            <div className="flex flex-wrap items-center justify-end gap-2">{actions}</div>
+          ) : null}
         </div>
       ) : null}
       {intro ? (
@@ -151,9 +177,7 @@ export function PageSection({
 export function PageLoading({ width = "wide" }: { width?: PageWidth }) {
   return (
     <Column width={width}>
-      <div className="flex justify-center py-10">
-        <Loader2 className="size-5 animate-spin text-stone-500" aria-label="Loading" />
-      </div>
+      <PageSkeleton kind="flat" className="px-0 py-2" />
     </Column>
   );
 }
@@ -173,7 +197,11 @@ export function PageNotice({
   return (
     <Column width={width}>
       <AppHeader user={user} />
-      <p className={cn(ui.card, "p-6 text-center text-stone-400")}>{children}</p>
+      <div className={cn(ui.card, "ornate texture-noise flex flex-col items-center gap-3 px-6 py-8 text-center")}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/assets/ui/empty-notice-board.webp" alt="" className="h-24 w-32 object-contain opacity-90" />
+        <p className="max-w-prose text-pretty font-serif text-sm leading-6 text-stone-300">{children}</p>
+      </div>
     </Column>
   );
 }

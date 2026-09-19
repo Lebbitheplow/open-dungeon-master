@@ -1,0 +1,359 @@
+/* State-change motion for everything outside the board, the Hand, the creators
+   and the map tools (Motion Kit: "everything answers the hand"). Hover, press,
+   toggle pop and sliding highlights are global already (src/lib/motion); this
+   file covers what changes on its own: things that arrive or leave, rows that
+   join a list, values that move, a thinking state that breathes.
+
+   Every class reuses the kit's keyframes (fade-up, item-in, pop-in, scale-in)
+   and tokens from globals.css. Transform and opacity only, except
+   .reveal-height, which is for ONE inline block and never for list rows.
+   All of it sits in @layer components so a Tailwind utility or a kit class on
+   the same element still wins. */
+
+@keyframes app-count-pop {
+  0% { transform: scale(0.82); opacity: 0.5; }
+  55% { transform: scale(1.16); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes app-reveal-rows {
+  from { grid-template-rows: 0fr; opacity: 0; }
+  to { grid-template-rows: 1fr; opacity: 1; }
+}
+@keyframes app-conceal-rows {
+  from { grid-template-rows: 1fr; opacity: 1; }
+  to { grid-template-rows: 0fr; opacity: 0; }
+}
+/* Holds the clip for the length of the reveal and then lets go, so a picker
+   or a focus ring inside an opened form is never cut off afterwards. */
+@keyframes app-reveal-clip {
+  from { overflow: hidden; }
+  to { overflow: hidden; }
+}
+@keyframes app-leave {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-4px); }
+}
+@keyframes app-breathe {
+  0%, 100% { opacity: 0.62; }
+  50% { opacity: 1; }
+}
+@keyframes app-banner-in {
+  from { opacity: 0; transform: translateY(-10px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes app-tick-draw {
+  0% { opacity: 0; transform: scale(0.4) rotate(-20deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0); }
+}
+@keyframes app-flash {
+  0% { background-color: rgba(212, 171, 58, 0.22); }
+  100% { background-color: transparent; }
+}
+
+@layer components {
+  /* A block that appears: an opened editor, a panel section, a notice card. */
+  .reveal { animation: fade-up var(--dur-move) var(--ease-settle) backwards; }
+  /* A banner drops from above, the way the travel ribbon does. */
+  .reveal-banner { animation: app-banner-in var(--dur-beat) var(--ease-settle) backwards; }
+  /* A small thing that lands: a badge, a chip, a status pill, a popover. */
+  .reveal-pop { animation: pop-in var(--dur-quick) var(--ease-spring) backwards; }
+  .reveal-scale { transform-origin: top center; animation: scale-in var(--dur-quick) var(--ease-snap) backwards; }
+  /* A row or a line that joins what is already there: a new message, a new
+     fact, an error under a field. */
+  .live-in { animation: item-in var(--dur-quick) var(--ease-snap) backwards; }
+  /* The leaving half, set by Reveal while it holds the content a beat longer. */
+  .reveal-leave { animation: app-leave var(--dur-quick) var(--ease-snap) both; pointer-events: none; }
+
+  /* Height reveal (grid rows 0fr to 1fr). The wrapper is the grid, its only
+     child collapses. For a single inline form or detail block. */
+  .reveal-height {
+    display: grid;
+    grid-template-rows: 1fr;
+    animation: app-reveal-rows var(--dur-move) var(--ease-settle) backwards;
+  }
+  .reveal-height > * {
+    min-height: 0;
+    min-width: 0;
+    animation: app-reveal-clip var(--dur-move) step-end;
+  }
+  .reveal-height[data-leaving] { animation: app-conceal-rows var(--dur-quick) var(--ease-snap) both; pointer-events: none; }
+  .reveal-height[data-leaving] > * { overflow: hidden; }
+
+  /* Rows arriving on first paint, staggered, capped at ten: the eleventh row
+     onward comes in with no delay, so a long list never queues. A row that is
+     added later animates by the same rule, because it is a new element. */
+  .stagger > * { animation: item-in var(--dur-quick) var(--ease-snap) backwards; }
+  .stagger-up > * { animation: fade-up var(--dur-move) var(--ease-settle) backwards; }
+  .stagger > :nth-child(2), .stagger-up > :nth-child(2) { animation-delay: 35ms; }
+  .stagger > :nth-child(3), .stagger-up > :nth-child(3) { animation-delay: 70ms; }
+  .stagger > :nth-child(4), .stagger-up > :nth-child(4) { animation-delay: 105ms; }
+  .stagger > :nth-child(5), .stagger-up > :nth-child(5) { animation-delay: 140ms; }
+  .stagger > :nth-child(6), .stagger-up > :nth-child(6) { animation-delay: 175ms; }
+  .stagger > :nth-child(7), .stagger-up > :nth-child(7) { animation-delay: 210ms; }
+  .stagger > :nth-child(8), .stagger-up > :nth-child(8) { animation-delay: 245ms; }
+  .stagger > :nth-child(9), .stagger-up > :nth-child(9) { animation-delay: 280ms; }
+  .stagger > :nth-child(10), .stagger-up > :nth-child(10) { animation-delay: 315ms; }
+  /* Table bodies stagger the same way; a transform on a row is safe, the
+     cells keep their columns. */
+  tbody.stagger > tr { transform-origin: left center; }
+
+  /* A number that changed. Put a key on it, or use CountPop, which skips the
+     first paint. */
+  .count-pop { display: inline-block; animation: app-count-pop var(--dur-move) var(--ease-spring) backwards; }
+  /* The row behind a value that changed warms for a beat. */
+  .flash-changed { animation: app-flash var(--dur-scene) var(--ease-drift) backwards; }
+  /* A saved tick draws itself in. */
+  .tick-in { display: inline-block; animation: app-tick-draw var(--dur-move) var(--ease-spring) backwards; }
+
+  /* Bars ease to their new width (Motion Kit: 500ms, snap). */
+  .bar-ease { transition: width 500ms var(--ease-snap), background-color 500ms var(--ease-snap); }
+
+  /* A hand-drawn switch: the knob slides on the spring, the track eases. */
+  .switch-track { transition: background-color var(--dur-quick) var(--ease-snap), border-color var(--dur-quick) var(--ease-snap), box-shadow var(--dur-quick) var(--ease-snap); }
+  .switch-knob { transition: transform 340ms var(--ease-spring), translate 340ms var(--ease-spring), background-color var(--dur-quick) var(--ease-snap); }
+
+  /* A disclosure chevron turns rather than swapping. */
+  .chevron-turn { transition: transform var(--dur-move) var(--ease-spring), rotate var(--dur-move) var(--ease-spring); }
+
+  /* "The DM is thinking": a waiting state breathes. A loop, so it rests under
+     low effects as well as reduced motion. */
+  .breathe { animation: app-breathe 2.4s var(--ease-drift) infinite; }
+
+  /* Semantics the app already writes. Zero specificity, so any class with an
+     animation of its own (a toast, a kit class) keeps it. */
+  :where([role="alert"]) { animation: item-in var(--dur-quick) var(--ease-snap) backwards; }
+  :where([role="status"]:not(.sr-only):not(:empty)) { animation: fade-up var(--dur-quick) var(--ease-snap) backwards; }
+  :where(details[open] > :not(summary)) { animation: fade-up var(--dur-move) var(--ease-settle) backwards; }
+  :where(details > summary svg) { transition: transform var(--dur-move) var(--ease-spring); }
+}
+
+[data-effects="low"] .breathe { animation: none; opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal, .reveal-banner, .reveal-pop, .reveal-scale, .live-in, .reveal-leave, .reveal-height, .reveal-height > *,
+  .stagger > *, .stagger-up > *, .count-pop, .flash-changed, .tick-in, .breathe,
+  [role="alert"], [role="status"], details[open] > :not(summary) {
+    animation: none !important;
+  }
+  .bar-ease, .switch-track, .switch-knob, .chevron-turn { transition: none !important; }
+}
+
+/* ------------------------------------------------------------------------
+   The battle announce ("Rolls and Effects" mockup 5a), worn by the title card
+   (src/components/SceneTitle.tsx, ExtrudedTitle in ui/GoldTitle.tsx). The
+   title is carved: eight bronze copies step back under a gradient face. The
+   stack flies in from far away and below the plane on the spring; the shock
+   ring and the sparks wait 620ms, so they fire on the LANDING. Reduced motion
+   never reaches this markup (the card shows its plain toast instead).
+   ------------------------------------------------------------------------ */
+@keyframes announce-fly {
+  0% { opacity: 0; transform: perspective(1400px) rotateX(70deg) scale(2.2) translateZ(400px); }
+  55% { opacity: 1; }
+  100% { opacity: 1; transform: perspective(1400px) rotateX(0deg) scale(1) translateZ(0); }
+}
+@keyframes announce-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes announce-brightness { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.2); } }
+@keyframes shock-ring { 0% { opacity: 0; scale: 0.4; } 22% { opacity: 0.9; } 100% { opacity: 0; scale: 2.6; } }
+/* Starts unseen, unlike the mockup's, so the sparks do not sit in the middle
+   of the title for the 620ms they wait. */
+@keyframes spark-out {
+  0% { opacity: 0; translate: 0 0; scale: 1; }
+  6% { opacity: 1; }
+  100% { opacity: 0; translate: var(--tx) var(--ty); scale: 0.2; }
+}
+@keyframes rule-grow { from { width: 0; opacity: 0; } to { width: 100px; opacity: 1; } }
+@keyframes diamond-in { from { opacity: 0; scale: 0; } to { opacity: 1; scale: 1; } }
+@keyframes sub-in { from { opacity: 0; translate: 0 8px; } to { opacity: 1; translate: 0 0; } }
+
+.announce,
+.announce-title {
+  --announce-face: linear-gradient(180deg, #ffe9b0 0%, #ecc673 45%, #cf9a33 100%);
+  --announce-glow: rgba(212, 164, 74, 0.4);
+  --announce-rule: rgba(212, 171, 58, 0.7);
+  --announce-spark: #e3c15c;
+  --announce-sub: rgba(227, 193, 92, 0.75);
+}
+.announce[data-tone="ember"],
+.announce-title[data-tone="ember"] {
+  --announce-face: linear-gradient(180deg, #ffd9b8 0%, #ff9d5c 45%, #c65a24 100%);
+  --announce-glow: rgba(224, 112, 58, 0.45);
+  --announce-rule: rgba(224, 112, 58, 0.8);
+  --announce-spark: #ff9d5c;
+  --announce-sub: rgba(255, 157, 92, 0.8);
+}
+.announce[data-tone="dawn"],
+.announce-title[data-tone="dawn"] {
+  --announce-face: linear-gradient(180deg, #fff6da 0%, #f4e0a6 45%, #e0a890 100%);
+  --announce-glow: rgba(244, 200, 166, 0.4);
+  --announce-rule: rgba(244, 224, 166, 0.75);
+  --announce-spark: #f4e0a6;
+  --announce-sub: rgba(255, 246, 218, 0.8);
+}
+.announce[data-tone="plain"],
+.announce-title[data-tone="plain"] {
+  --announce-face: linear-gradient(180deg, #fafaf9 0%, #d6d3d1 50%, #a8a29e 100%);
+  --announce-glow: rgba(168, 162, 158, 0.3);
+  --announce-rule: rgba(168, 162, 158, 0.7);
+  --announce-spark: #d6d3d1;
+  --announce-sub: rgba(214, 211, 209, 0.8);
+}
+
+.announce-title {
+  position: relative;
+  display: block;
+  margin: 0;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+@media (min-width: 640px) {
+  .announce-title { letter-spacing: 0.14em; }
+}
+/* Same box, same words, so a wrapped title extrudes line for line. */
+.announce-depth {
+  position: absolute;
+  inset: 0;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+}
+.announce-face {
+  position: relative;
+  display: block;
+  background: var(--announce-face);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-stroke: 1px rgba(0, 0, 0, 0.35);
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.7)) drop-shadow(0 0 22px var(--announce-glow));
+}
+.announce-fly { transform-style: preserve-3d; animation: announce-fly 900ms var(--ease-spring) both; }
+.announce-breathe { position: relative; animation: announce-brightness 2.4s var(--ease-drift) infinite; }
+.announce-rules { display: flex; height: 8px; align-items: center; justify-content: center; gap: 10px; margin-bottom: 14px; }
+.announce-rule {
+  height: 1px;
+  width: 100px;
+  background: linear-gradient(90deg, transparent, var(--announce-rule));
+  animation: rule-grow 1s var(--ease-snap) 600ms both;
+}
+.announce-rule-end { background: linear-gradient(90deg, var(--announce-rule), transparent); }
+.announce-diamond {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  rotate: 45deg;
+  border: 1px solid var(--announce-rule);
+  animation: diamond-in var(--dur-beat) var(--ease-spring) 800ms both;
+}
+.announce-sub {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  color: var(--announce-sub);
+  animation: sub-in 900ms var(--ease-snap) 300ms both;
+}
+.announce-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 220px;
+  height: 220px;
+  margin: -110px 0 0 -110px;
+  border-radius: 999px;
+  border: 2px solid rgba(244, 224, 166, 0.8);
+  pointer-events: none;
+  animation: shock-ring 700ms var(--ease-drift) 620ms both;
+}
+/* Each spark carries its own --tx, --ty, size and life inline. */
+.announce-spark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 999px;
+  background: var(--announce-spark);
+  box-shadow: 0 0 8px var(--announce-spark);
+  pointer-events: none;
+  animation-name: spark-out;
+  animation-timing-function: var(--ease-drift);
+  animation-delay: 620ms;
+  animation-fill-mode: both;
+}
+.announce-spark-hot { background: #fff8e1; box-shadow: 0 0 8px #fff8e1; }
+
+/* Low effects: one layer, a plain fade, nothing that loops or bursts. */
+[data-effects="low"] .announce-fly { animation: announce-fade 900ms var(--ease-drift) both; }
+[data-effects="low"] .announce-breathe { animation: none; }
+[data-effects="low"] .announce-depth:not(:nth-last-child(2)),
+[data-effects="low"] .announce-ring,
+[data-effects="low"] .announce-spark { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .announce-fly, .announce-breathe, .announce-rule, .announce-diamond, .announce-sub { animation: none !important; }
+  .announce-ring, .announce-spark { display: none; }
+}
+
+/* Past sixty rows nothing animates on arrival: a very long list paints at
+   once rather than promoting hundreds of rows for one beat. */
+@layer components {
+  .stagger > :nth-child(n + 61),
+  .stagger-up > :nth-child(n + 61) { animation: none; }
+}
+
+/* Native sliders (volume, zoom, denoise). globals.css already springs the
+   thumb; the track itself sat still, so it warms under the pointer and
+   brightens while it is held. */
+@layer components {
+  input[type="range"] { transition: filter var(--dur-quick) var(--ease-snap); }
+  input[type="range"]:hover { filter: brightness(1.12) saturate(1.1); }
+  input[type="range"]:active { filter: brightness(1.22) saturate(1.15); }
+}
+@media (prefers-reduced-motion: reduce) {
+  input[type="range"] { transition: none !important; }
+}
+
+/* The "something is waiting" dot on a rail tab (Motion Kit 3d): it lands with
+   a pop and then wiggles. The wiggle is a loop, so it rests under low effects. */
+@layer components {
+  .dot-wiggle { animation: pop-in var(--dur-quick) var(--ease-spring) backwards, wiggle 1.8s ease-in-out 400ms infinite; }
+}
+[data-effects="low"] .dot-wiggle { animation: pop-in var(--dur-quick) var(--ease-spring) backwards; }
+@media (prefers-reduced-motion: reduce) {
+  .dot-wiggle { animation: none !important; }
+}
+
+/* Status pills land one after another with a pop (Motion Kit 3c: fx-pop on
+   the spring, 40ms apart). A pill added later pops by the same rule. */
+@layer components {
+  .stagger-pop > * { animation: pop-in var(--dur-quick) var(--ease-spring) backwards; }
+  .stagger-pop > :nth-child(2) { animation-delay: 40ms; }
+  .stagger-pop > :nth-child(3) { animation-delay: 80ms; }
+  .stagger-pop > :nth-child(4) { animation-delay: 120ms; }
+  .stagger-pop > :nth-child(5) { animation-delay: 160ms; }
+  .stagger-pop > :nth-child(n + 6) { animation-delay: 200ms; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stagger-pop > * { animation: none !important; }
+}
+
+/* The DM is writing: a caret rides the end of the streamed text. A loop, so
+   it holds still under low effects and reduced motion. */
+@keyframes app-caret { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+@layer components {
+  .stream-caret {
+    display: inline-block;
+    width: 0.45ch;
+    height: 1em;
+    margin-left: 2px;
+    vertical-align: -0.12em;
+    border-radius: 1px;
+    background: var(--color-amber-400);
+    box-shadow: 0 0 8px rgba(212, 171, 58, 0.5);
+    animation: app-caret 1s linear infinite;
+  }
+}
+[data-effects="low"] .stream-caret { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .stream-caret { animation: none !important; }
+}

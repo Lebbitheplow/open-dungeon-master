@@ -2,6 +2,10 @@
 
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
+import { Select } from "@/components/ui/Select";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { Field } from "@/app/workshop/kit";
 import { MONSTER_NAME_MAX, type MonsterDraft, type MonsterReadout } from "@/lib/bestiary/monster-draft";
 import { crLabel } from "@/lib/bestiary/derive-cr";
 import {
@@ -19,7 +23,9 @@ import {
   SectionedTraitEditor,
   SkillsAndSenses,
 } from "@/app/workshop/bestiary/StatBlockFields";
-import { CR_CHOICES, input } from "@/app/workshop/bestiary/types";
+import { CR_CHOICES } from "@/app/workshop/bestiary/types";
+
+const CR_OPTIONS = CR_CHOICES.map((cr) => ({ value: String(cr), label: crLabel(cr) }));
 
 // One built monster, open for editing: the block's numbers, the catalogue
 // over them, its attacks, saves, traits and defences, what it is, and the
@@ -66,30 +72,25 @@ export function MonsterEditor({
         sheet ? "grid grid-cols-2 gap-2 sm:grid-cols-3" : "flex flex-wrap items-end gap-2",
       )}
     >
-      <label className={cn("flex flex-col gap-0.5", sheet && "col-span-2 sm:col-span-3")}>
-        <span className="text-[10px] uppercase tracking-wide text-stone-500">Name</span>
+      <Field as="label" label="Name" className={cn(sheet && "col-span-2 sm:col-span-3")}>
         <input
           value={draft.name}
           onChange={(event) =>
             onDraft({ ...draft, name: event.target.value.slice(0, MONSTER_NAME_MAX) })
           }
-          className={cn(input, sheet ? "w-full" : "w-48")}
+          className={cn(ui.input, sheet ? "w-full" : "w-48")}
         />
-      </label>
-      <label className="flex flex-col gap-0.5">
-        <span className="text-[10px] uppercase tracking-wide text-stone-500">Challenge</span>
-        <select
-          value={draft.stats.cr}
-          onChange={(event) => setStats({ cr: Number(event.target.value) })}
-          className={cn(input, sheet ? "w-full" : "w-24")}
-        >
-          {CR_CHOICES.map((cr) => (
-            <option key={cr} value={cr}>
-              {crLabel(cr)}
-            </option>
-          ))}
-        </select>
-      </label>
+      </Field>
+      <Field label="Challenge">
+        <span className={cn("block", !sheet && "w-24")}>
+          <Select
+            label="Challenge"
+            value={String(draft.stats.cr)}
+            onChange={(next) => setStats({ cr: Number(next) })}
+            options={CR_OPTIONS}
+          />
+        </span>
+      </Field>
       <NumberField label="AC" value={draft.stats.ac} min={1} max={30} onChange={(ac) => setStats({ ac })} />
       <NumberField
         label="Hit points"
@@ -127,23 +128,23 @@ export function MonsterEditor({
   );
 
   const description = (
-    <label className="flex flex-col gap-0.5">
-      <span className="text-[10px] uppercase tracking-wide text-stone-500">What it is</span>
+    <Field as="label" label="What it is">
       <textarea
         value={desc}
         onChange={(event) => onDesc(event.target.value)}
         rows={2}
         placeholder="A knight's armour walking with nobody inside it."
-        className={cn(input, "w-full resize-y")}
+        className={cn(ui.input, "resize-y")}
       />
-    </label>
+    </Field>
   );
 
   const rating = readout ? (
     <>
+      <SectionHead title="The rating the numbers support" glyph="rest-xp" className="mb-0" />
       <RatingLine readout={readout} />
       <Working parts={readout.derived.parts} notes={readout.derived.notes} />
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
+      <div className="stagger-pop flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
         {readout.against.map((row) => (
           <span key={row.label} className="text-stone-500">
             {row.label}{" "}
@@ -163,18 +164,18 @@ export function MonsterEditor({
 
   const footer = (
     <>
-      {error ? <p className="text-[11px] text-red-400">{error}</p> : null}
-      <div className="flex items-center gap-2">
+      {error ? <p className="motion-shake text-[11px] text-red-400">{error}</p> : null}
+      <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
           disabled={busy}
           onClick={onSave}
-          className="inline-flex items-center gap-1.5 rounded-md border border-amber-500/40 px-3 py-1 text-xs text-amber-100 hover:bg-stone-800 disabled:opacity-40"
+          className={ui.btnPrimary}
         >
           {busy ? <Loader2 className="size-3.5 animate-spin" /> : null}
           Save the block
         </button>
-        <span className="text-[10px] text-stone-600">
+        <span className="text-[11px] text-stone-500">
           Saving recalculates the rating from what is on screen.
         </span>
       </div>
@@ -186,6 +187,7 @@ export function MonsterEditor({
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-4 lg:grid lg:grid-cols-2 lg:gap-6">
           <div className="flex flex-col gap-3">
+            <SectionHead title="The block" glyph="system-bestiary" className="mb-0" />
             {coreStats}
             <AbilityScores draft={draft} onChange={onDraft} />
             <AttackEditor draft={draft} onChange={onDraft} />
@@ -193,6 +195,7 @@ export function MonsterEditor({
             <SectionedTraitEditor draft={draft} onChange={onDraft} />
           </div>
           <div className="flex flex-col gap-3">
+            <SectionHead title="Catalogue and defences" glyph="rest-ac" className="mb-0" />
             <MonsterKitPanel draft={draft} onChange={onDraft} />
             <SizeAndDefences draft={draft} onChange={onDraft} />
             <SkillsAndSenses draft={draft} onChange={onDraft} />
@@ -209,6 +212,7 @@ export function MonsterEditor({
 
   return (
     <div className="flex flex-col gap-3 border-t border-stone-800 p-3">
+      <SectionHead title="The block" glyph="system-bestiary" className="mb-0" />
       {coreStats}
       <AbilityScores draft={draft} onChange={onDraft} />
       <MonsterKitPanel draft={draft} onChange={onDraft} />

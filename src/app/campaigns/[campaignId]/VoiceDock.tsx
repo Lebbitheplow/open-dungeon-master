@@ -1,11 +1,11 @@
 "use client";
 
-import { Headphones } from "lucide-react";
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";
 import { VoicePanel } from "@/app/campaigns/[campaignId]/VoicePanel";
 import { headerButtonClass } from "@/app/campaigns/[campaignId]/headerButton";
+import { HeaderGlyph } from "@/app/campaigns/[campaignId]/SessionGlyph";
 import { Tooltip } from "@/components/ui/Tooltip";
 import type { TurnEnforcement, VoiceFloorMode } from "@/lib/voice/turn-logic";
 import type { VoiceRosterEntry } from "@/lib/voice/types";
@@ -89,12 +89,18 @@ export function VoiceDock({
     }
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node;
+      // The panel's pickers open in their own portal; a choice made there is
+      // still a press inside the voice menu.
+      if (target instanceof Element && target.closest("[data-radix-popper-content-wrapper]")) {
+        return;
+      }
       if (!buttonRef.current?.contains(target) && !panelRef.current?.contains(target)) {
         setOpen(false);
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      // A picker that just closed on this Escape has claimed it.
+      if (event.key === "Escape" && !event.defaultPrevented) {
         setOpen(false);
       }
     };
@@ -133,17 +139,18 @@ export function VoiceDock({
           aria-expanded={open}
           data-tour="header-voice"
           className={cn(
-            headerButtonClass(open, "relative flex items-center gap-1.5 md:px-2.5"),
+            headerButtonClass(open, "md:pl-1 md:pr-2.5"),
             // Emerald while on the call so the header says so at a glance,
             // without stealing the gold that marks an open menu.
-            !open && onCall && "border-emerald-700/60 bg-emerald-950/40 text-emerald-300",
+            !open && onCall && "session-hbtn-call",
           )}
         >
-          <Headphones className={cn("size-4", onCall && someoneSpeaking && "animate-pulse")} />
+          <HeaderGlyph glyph="cue-turn" className={cn(onCall && someoneSpeaking && "animate-pulse")} />
           <span className="hidden text-sm md:inline">Voice</span>
           {count ? (
             <span
-              className="absolute -right-1 -top-1 rounded-full bg-gradient-to-b from-amber-300 to-amber-500 px-1 text-[9px] font-semibold leading-3 text-amber-950 shadow-glow-gold md:static md:ml-0.5 md:px-1.5 md:text-[10px] md:leading-4"
+              key={count}
+              className="count-pop absolute -right-1 -top-1 rounded-full bg-gradient-to-b from-amber-300 to-amber-500 px-1 text-[9px] font-semibold leading-3 text-amber-950 shadow-glow-gold md:static md:ml-0.5 md:px-1.5 md:text-[10px] md:leading-4"
               aria-label={`${count} on the call`}
             >
               {count}
@@ -171,11 +178,11 @@ export function VoiceDock({
                 className={cn(
                   open ? "block" : "hidden",
                   // Below lg: a bottom sheet, same shape as src/components/ui/Sheet.tsx.
-                  "texture-noise fixed inset-x-0 bottom-0 z-[60] max-h-[85vh] overflow-y-auto rounded-t-2xl border border-stone-600/50 bg-stone-950 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-2 shadow-elev-2",
+                  "texture-noise fixed inset-x-0 bottom-0 z-[60] max-h-[85vh] overflow-y-auto rounded-t-2xl border border-amber-500/25 bg-stone-950 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-2 shadow-elev-2",
                   // From lg: a dropdown hanging from the button. Solid backdrop
                   // under the panel's translucent background, so it never
                   // reads as chat showing through it.
-                  "lg:inset-x-auto lg:bottom-auto lg:right-[var(--dock-right)] lg:top-[var(--dock-top)] lg:max-h-[calc(100vh-5rem)] lg:w-80 lg:max-w-[calc(100vw-1.5rem)] lg:rounded-lg lg:border-0 lg:p-0 lg:shadow-xl lg:shadow-black/50",
+                  "lg:inset-x-auto lg:bottom-auto lg:right-[var(--dock-right)] lg:top-[var(--dock-top)] lg:max-h-[calc(100vh-5rem)] lg:w-80 lg:max-w-[calc(100vw-1.5rem)] lg:rounded-xl lg:border-0 lg:p-0 lg:shadow-xl lg:shadow-black/50",
                 )}
               >
                 <div

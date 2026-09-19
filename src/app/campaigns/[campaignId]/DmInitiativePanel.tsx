@@ -3,9 +3,11 @@
 import { ChevronDown, ChevronUp, Clock, ListRestart, Plus, SkipBack, SkipForward, Trash2 } from "lucide-react";
 import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { useState } from "react";
+import { NumberStepper } from "@/components/ui/NumberStepper";
 import { cn } from "@/lib/cn";
 import { ENTRY_NAME_MAX, MAX_INITIATIVE, MIN_INITIATIVE } from "@/lib/dm/initiative-edit";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
+import { TokenFace, type FaceLookup } from "@/app/campaigns/[campaignId]/BoardChrome";
 
 // The DM's hands on the turn order: reorder it, insert a slot for somebody
 // the engine has no stat block for, delay, remove, hand the turn to a
@@ -25,9 +27,13 @@ const KIND_LABELS: Record<string, string> = {
 export function DmInitiativePanel({
   campaignId,
   encounter,
+  faceOf,
 }: {
   campaignId: string;
   encounter: PublicEncounter;
+  // The pictures to try for an entry, best first. A row shows a face, not a
+  // letter, wherever the caller knows one (docs/visual-overhaul-plan.md 5.1).
+  faceOf?: FaceLookup;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -121,15 +127,26 @@ export function DmInitiativePanel({
           <li
             key={`${entry.id}-${index}`}
             className={cn(
-              "flex items-center gap-1 rounded-md border px-2 py-1",
+              // The turn passes as a glow that moves, not one that blinks.
+              "flex items-center gap-1 rounded-md border px-2 py-1 transition-[color,background-color,border-color,box-shadow] duration-[260ms] ease-settle",
               index === encounter.turnIndex
-                ? "border-amber-700 bg-amber-950/40"
+                ? "border-amber-700 bg-amber-950/40 shadow-glow-gold"
                 : "border-stone-800",
             )}
           >
-            <span className="w-8 shrink-0 text-right font-mono text-[10px] text-stone-500">
+            <span className="w-6 shrink-0 text-right font-mono text-[10px] text-stone-500">
               {entry.initiative ?? ""}
             </span>
+            <TokenFace
+              candidates={faceOf?.(entry) ?? []}
+              name={entry.name}
+              enemy={entry.kind === "enemy"}
+              className={cn(
+                "size-6 rounded-full border",
+                index === encounter.turnIndex ? "border-amber-500" : "border-stone-700",
+                entry.hidden && "opacity-60",
+              )}
+            />
             <button
               type="button"
               disabled={busy || entry.kind !== "pc" || index === encounter.turnIndex}
@@ -199,13 +216,13 @@ export function DmInitiativePanel({
             placeholder="Captain Vell"
             className="min-w-0 flex-1 rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 placeholder:text-stone-600"
           />
-          <input
-            type="number"
+          <NumberStepper
             value={initiative}
             min={MIN_INITIATIVE}
             max={MAX_INITIATIVE}
-            onChange={(event) => setInitiative(Number(event.target.value))}
-            className="w-16 rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200"
+            onChange={setInitiative}
+            label="Initiative"
+            size="sm"
           />
           <button
             type="button"

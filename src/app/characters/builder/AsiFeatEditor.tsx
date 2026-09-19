@@ -3,6 +3,7 @@
 import { X } from "lucide-react";
 import { GameTerm } from "@/components/ui/GameTerm";
 import { InfoButton } from "@/components/ui/InfoDialog";
+import { Select } from "@/components/ui/Select";
 import { cn } from "@/lib/cn";
 import { contentSlug } from "@/lib/help";
 import { abilityMod, formatModifier } from "@/lib/srd";
@@ -38,9 +39,6 @@ export default function AsiFeatEditor({
   choices: Array<AsiChoice | null>;
   onChange: (choices: Array<AsiChoice | null>) => void;
 }) {
-  const inputClass =
-    "w-full rounded-lg border border-stone-800 bg-stone-950 px-3 py-2 text-sm text-stone-200 outline-none focus:border-amber-300";
-
   function setChoice(index: number, choice: AsiChoice | null) {
     const next = slotLevels.map((_, slot) => choices[slot] ?? null);
     next[index] = choice;
@@ -125,24 +123,17 @@ export default function AsiFeatEditor({
                 {choice?.mode === "plus2" ? (
                   <label className="block sm:w-64">
                     <span className="mb-1 block text-xs text-stone-500">+2 to</span>
-                    <select
+                    <Select<Ability>
                       value={choice.ability}
-                      onChange={(event) =>
-                        setChoice(index, { mode: "plus2", ability: event.target.value as Ability })
-                      }
-                      className={inputClass}
-                    >
-                      {ABILITY_KEYS.map((ability) => (
-                        <option
-                          key={ability}
-                          value={ability}
-                          disabled={current[ability] >= ABILITY_SCORE_CAP && ability !== choice.ability}
-                        >
-                          {ABILITY_LABELS[ability]} ({current[ability]}
-                          {current[ability] >= ABILITY_SCORE_CAP ? ", at cap" : ""})
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(ability) => setChoice(index, { mode: "plus2", ability })}
+                      label="+2 to"
+                      className="w-full"
+                      options={ABILITY_KEYS.map((ability) => ({
+                        value: ability,
+                        label: `${ABILITY_LABELS[ability]} (${current[ability]}${current[ability] >= ABILITY_SCORE_CAP ? ", at cap" : ""})`,
+                        disabled: current[ability] >= ABILITY_SCORE_CAP && ability !== choice.ability,
+                      }))}
+                    />
                   </label>
                 ) : null}
 
@@ -153,30 +144,23 @@ export default function AsiFeatEditor({
                         <span className="mb-1 block text-xs text-stone-500">
                           {half === 0 ? "First +1" : "Second +1"}
                         </span>
-                        <select
+                        <Select<Ability>
                           value={choice.abilities[half]}
-                          onChange={(event) => {
+                          onChange={(picked) => {
                             const abilities = [...choice.abilities] as [Ability, Ability];
-                            abilities[half] = event.target.value as Ability;
+                            abilities[half] = picked;
                             setChoice(index, { mode: "plus1x2", abilities });
                           }}
-                          className={inputClass}
-                        >
-                          {ABILITY_KEYS.map((ability) => (
-                            <option
-                              key={ability}
-                              value={ability}
-                              disabled={
-                                (current[ability] >= ABILITY_SCORE_CAP &&
-                                  ability !== choice.abilities[half]) ||
-                                ability === choice.abilities[half === 0 ? 1 : 0]
-                              }
-                            >
-                              {ABILITY_LABELS[ability]} ({current[ability]}
-                              {current[ability] >= ABILITY_SCORE_CAP ? ", at cap" : ""})
-                            </option>
-                          ))}
-                        </select>
+                          label={half === 0 ? "First +1" : "Second +1"}
+                          className="w-full"
+                          options={ABILITY_KEYS.map((ability) => ({
+                            value: ability,
+                            label: `${ABILITY_LABELS[ability]} (${current[ability]}${current[ability] >= ABILITY_SCORE_CAP ? ", at cap" : ""})`,
+                            disabled:
+                              (current[ability] >= ABILITY_SCORE_CAP && ability !== choice.abilities[half]) ||
+                              ability === choice.abilities[half === 0 ? 1 : 0],
+                          }))}
+                        />
                       </label>
                     ))}
                   </div>

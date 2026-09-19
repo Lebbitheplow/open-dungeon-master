@@ -17,6 +17,7 @@ import {
   normalizeDrawings,
   type MapDrawing,
 } from "@/lib/battlemap/scene";
+import { isEmptyMapSkin, normalizeMapSkin, type MapSkin } from "@/lib/battlemap/skins";
 import { isUploadedImagePath } from "@/lib/uploads";
 import { dedupeName } from "@/lib/workshop/import";
 
@@ -64,6 +65,9 @@ export type PreparedMap = {
   overlayPath: string;
   ambience: SceneAmbience;
   drawings: MapDrawing[];
+  // What it is painted with (src/lib/battlemap/skins.ts). Empty means the
+  // default for the campaign's setting and this map's theme.
+  skin: MapSkin;
   updatedAt: string;
 };
 
@@ -90,6 +94,7 @@ type Row = {
   ambience_json: string | null;
   outdoors: number | null;
   drawings_json: string | null;
+  skin_json: string | null;
   updated_at: string;
 };
 
@@ -120,6 +125,7 @@ function mapRow(row: Row): PreparedMap {
     overlayPath: overlay && isUploadedImagePath(overlay) ? overlay : "",
     ambience: normalizeAmbience(parseJson<unknown>(row.ambience_json ?? "{}", {})),
     drawings: normalizeDrawings(parseJson<unknown>(row.drawings_json ?? "[]", []), row.width, row.height),
+    skin: normalizeMapSkin(parseJson<unknown>(row.skin_json ?? "{}", {})),
     updatedAt: row.updated_at,
   };
 }
@@ -163,6 +169,7 @@ export type PreparedMapInput = {
   backdrop?: Backdrop | null;
   scene?: PreparedScene;
   outdoors?: boolean | null;
+  skin?: MapSkin | null;
 };
 
 // Every scene column written through one normalizer, so a prepared map can
@@ -182,6 +189,14 @@ function sceneColumns(scene: PreparedScene | undefined, terrain: string, width: 
 
 function setPreparedMapDrawings(mapId: string, drawings: string) {
   getDatabase().prepare(`UPDATE prepared_maps SET drawings_json = ? WHERE id = ?`).run(drawings, mapId);
+}
+
+// Normalised here as well as on read, so the column never holds what a
+// caller happened to hand over.
+function setPreparedMapSkin(mapId: string, skin: unknown) {
+  getDatabase()
+    .prepare(`UPDATE prepared_maps SET skin_json = ? WHERE id = ?`)
+    .run(JSON.stringify(normalizeMapSkin(skin)), mapId);
 }
 
 // Names are unique per campaign so the library can be scanned by eye, and a
@@ -235,6 +250,9 @@ export function createPreparedMap(input: PreparedMapInput): PreparedMap {
   if (scene.drawings !== "[]") {
     setPreparedMapDrawings(id, scene.drawings);
   }
+  if (!isEmptyMapSkin(input.skin)) {
+    setPreparedMapSkin(id, input.skin);
+  }
   return getPreparedMap(input.campaignId, id) as PreparedMap;
 }
 
@@ -270,6 +288,8 @@ export type PreparedMapPatch = {
   backdropTransform?: BackdropTransform | null;
   scene?: PreparedScene;
   outdoors?: boolean | null;
+  // Replaces the whole skin; an empty one returns the map to its default.
+  skin?: MapSkin;
 };
 
 function setPreparedMapOutdoors(mapId: string, outdoors: boolean | null) {
@@ -367,6 +387,9 @@ export function updatePreparedMap(
   if (patch.scene?.drawings !== undefined) {
     setPreparedMapDrawings(mapId, scene.drawings);
   }
+  if (patch.skin !== undefined) {
+    setPreparedMapSkin(mapId, patch.skin);
+  }
   return getPreparedMap(campaignId, mapId);
 }
 
@@ -431,6 +454,9 @@ export function copyPreparedMaps(fromCampaignId: string, toCampaignId: string): 
       }
       if (map.drawings.length) {
         setPreparedMapDrawings(copyId, JSON.stringify(map.drawings));
+      }
+      if (!isEmptyMapSkin(map.skin)) {
+        setPreparedMapSkin(copyId, map.skin);
       }
       copied += 1;
     }

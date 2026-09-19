@@ -1,5 +1,6 @@
 "use client";
 
+import { EmptyState } from "@/components/EmptyState";
 import { useCallback, useEffect, useState } from "react";
 import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { Plus, Search } from "lucide-react";
@@ -10,7 +11,10 @@ import type { VariantRules } from "@/lib/rulesets/logic";
 import { Sheet } from "@/components/ui/Sheet";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { useTourPrepare } from "@/lib/tours/prepare";
+import { ListTally, sortRows, type RowSort } from "@/app/workshop/ListHead";
+import { GameIcon } from "@/components/ui/GameIcon";
 import { HomebrewEditor } from "@/app/workshop/homebrew/HomebrewEditor";
+import { HomebrewPlate } from "@/app/workshop/homebrew/HomebrewIcon";
 import { blankDraft, type HomebrewDraft } from "@/app/workshop/homebrew/draft";
 import {
   HOMEBREW_EDITOR_KINDS,
@@ -36,6 +40,7 @@ export function HomebrewPanel({
   const [entries, setEntries] = useState<HomebrewEntryView[]>([]);
   const [kind, setKind] = useState<EditorKind>("item");
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<RowSort>("made");
   const [editing, setEditing] = useState<{ id: string | null; draft: HomebrewDraft } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -69,13 +74,17 @@ export function HomebrewPanel({
 
   const ofKind = entries.filter((entry) => entry.kind === kind);
   const needle = query.trim().toLowerCase();
-  const shown = needle
-    ? ofKind.filter((entry) =>
-        [entry.name, String(entry.data.desc ?? ""), describeHomebrew(entry.kind, entry.data)].some((text) =>
-          text.toLowerCase().includes(needle),
-        ),
-      )
-    : ofKind;
+  const shown = sortRows(
+    needle
+      ? ofKind.filter((entry) =>
+          [entry.name, String(entry.data.desc ?? ""), describeHomebrew(entry.kind, entry.data)].some((text) =>
+            text.toLowerCase().includes(needle),
+          ),
+        )
+      : ofKind,
+    sort,
+    (entry) => entry.name,
+  );
 
   function open(entry: HomebrewEntryView) {
     setError("");
@@ -173,7 +182,7 @@ export function HomebrewPanel({
         />
       </div>
 
-      <p className="text-[11px] text-stone-500">{KIND_BLURB[kind]}</p>
+      <p className="text-xs text-stone-400">{KIND_BLURB[kind]}</p>
 
       <label className="relative block" data-tour="homebrew-search">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-500" />
@@ -185,23 +194,27 @@ export function HomebrewPanel({
           className={`${ui.input} pl-9`}
         />
       </label>
+      <ListTally shown={shown.length} total={ofKind.length} noun={["piece", "pieces"]} sort={sort} onSort={setSort} />
 
-      <ul className="grid gap-2 lg:grid-cols-2">
+      <ul className="stagger-up grid gap-2 lg:grid-cols-2">
         {shown.map((entry) => (
-          <li key={entry.id}>
+          <li key={entry.id} className="min-w-0">
             <button
               type="button"
               onClick={() => open(entry)}
               className={cn(
                 ui.cardHover,
-                "flex h-full w-full flex-col gap-1 p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40",
+                "flex h-full w-full items-start gap-3 p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40",
               )}
             >
-              <span className="font-display tracking-wide text-amber-50">{entry.name}</span>
-              <span className="line-clamp-1 text-[11px] text-stone-400">{describeHomebrew(entry.kind, entry.data)}</span>
-              {entry.data.desc ? (
-                <span className="line-clamp-1 text-sm text-stone-300">{String(entry.data.desc)}</span>
-              ) : null}
+              <HomebrewPlate kind={entry.kind} name={entry.name} data={entry.data} />
+              <span className="flex min-w-0 flex-1 flex-col gap-1">
+                <span className="font-display tracking-wide text-amber-50">{entry.name}</span>
+                <span className="line-clamp-1 text-[11px] text-stone-400">{describeHomebrew(entry.kind, entry.data)}</span>
+                {entry.data.desc ? (
+                  <span className="line-clamp-1 text-sm text-stone-300">{String(entry.data.desc)}</span>
+                ) : null}
+              </span>
             </button>
           </li>
         ))}
@@ -218,8 +231,9 @@ export function HomebrewPanel({
               "flex h-full w-full items-center gap-3 border-dashed p-3 text-left text-stone-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40",
             )}
           >
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-full border border-dashed border-stone-600">
-              <Plus className="size-4" />
+            <span className="relative shrink-0">
+              <GameIcon icon={{ kind: "glyph", key: "system-homebrew" }} size="size-10" />
+              <Plus className="absolute -bottom-1 -right-1 size-4 rounded-full bg-stone-900 text-amber-300" aria-hidden="true" />
             </span>
             <span className="font-display tracking-wide">New {KIND_SINGULAR[kind]}</span>
           </button>
@@ -227,11 +241,9 @@ export function HomebrewPanel({
       </ul>
 
       {ofKind.length === 0 ? (
-        <p className="text-[11px] italic text-stone-600">
-          Nothing of your own yet. Start from something in the books and change what you like.
-        </p>
+        <EmptyState art="chest" title="Nothing of your own yet. Start from something in the books and change what you like." />
       ) : shown.length === 0 ? (
-        <p className="text-[11px] text-stone-500">Nothing by that name.</p>
+        <p className="live-in text-xs text-stone-500">Nothing by that name.</p>
       ) : null}
 
       <Sheet
@@ -245,7 +257,7 @@ export function HomebrewPanel({
         className="top-0 h-dvh max-h-none rounded-none lg:top-1/2 lg:h-auto lg:max-h-[92vh] lg:w-[min(96vw,56rem)] lg:rounded-xl"
       >
         {editing ? (
-          <div className="overflow-y-auto pb-2">
+          <div className="reveal overflow-y-auto pb-2">
             <HomebrewEditor
               draft={editing.draft}
               isNew={editing.id === null}

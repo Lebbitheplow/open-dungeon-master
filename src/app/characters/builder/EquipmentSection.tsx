@@ -1,6 +1,7 @@
 "use client";
 
 import { InfoButton } from "@/components/ui/InfoDialog";
+import { NumberStepper } from "@/components/ui/NumberStepper";
 import { contentSlug } from "@/lib/help";
 import { gearFromHomebrewData, type HomebrewGear } from "@/lib/homebrew/gear";
 import CatalogBrowser from "./CatalogBrowser";
@@ -33,7 +34,6 @@ export default function EquipmentSection({
   onRemove,
   gold,
   setGold,
-  inputClass,
 }: {
   equipment: Array<{ name: string; qty: number; slug?: string }>;
   // Name plus a one-word stat to show beside it ("1d8 slashing", "AC 14").
@@ -173,17 +173,19 @@ export default function EquipmentSection({
           />
         ))}
       </div>
-      <label className="mt-3 block w-40">
+      <div className="mt-3 block w-fit">
         <span className="mb-1 block text-xs text-stone-400">Starting gold</span>
-        <input
-          type="number"
+        {/* Six figures have to fit: the figure is widened past the kit's three. */}
+        <NumberStepper
           min={0}
           max={100000}
           value={gold}
-          onChange={(event) => setGold(Math.max(0, Number(event.target.value) || 0))}
-          className={inputClass}
+          onChange={(next) => setGold(Math.max(0, next || 0))}
+          label="Starting gold"
+          suffix="gp"
+          className="[&_.kit-stepper-figure]:w-20!"
         />
-      </label>
+      </div>
     </section>
   );
 }

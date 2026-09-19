@@ -1,4 +1,20 @@
 @import "tailwindcss";
+@import "./styles/furniture.css";
+@import "./styles/kit.css";
+@import "./styles/motion-app.css";
+@import "./styles/menus.css";
+@import "./styles/sheet.css";
+@import "./styles/moments.css";
+@import "./styles/account.css";
+@import "./styles/panels.css";
+@import "./styles/lobby.css";
+@import "./styles/hand.css";
+@import "./styles/maps.css";
+@import "./styles/board.css";
+@import "./styles/campaign-creator.css";
+@import "./styles/creator.css";
+@import "./styles/session.css";
+@import "./styles/dm-console.css";
 
 /*
   Arcane night theme. The neutral ramp (stone-*) is redefined as deep
@@ -354,6 +370,12 @@ body::before {
 }
 [data-theme="light"] .bg-starfield {
   background-image: none;
+}
+/* Glass in daylight is frosted vellum: the night gradient under ink-dark text
+   left the table header and the composer bar unreadable. */
+[data-theme="light"] .glass {
+  background: linear-gradient(180deg, rgba(255, 253, 247, 0.82), rgba(244, 236, 218, 0.88));
+  border-color: rgba(120, 96, 50, 0.24);
 }
 [data-theme="light"] .panel {
   background:
@@ -798,10 +820,16 @@ body::before {
   color: #fdf7e7;
 }
 
-button,
-textarea,
-input {
-  font: inherit;
+/* Form controls take the page's font by default. In the base layer, where
+   Tailwind's own reset already says the same, so a size, weight or typeface
+   utility on a button applies: outside a layer this rule outranked every
+   utility, and no button ever wore the kit's display face or its own size. */
+@layer base {
+  button,
+  textarea,
+  input {
+    font: inherit;
+  }
 }
 
 /* Native select popups are drawn by the browser, so utilities on the <select>
@@ -878,5 +906,799 @@ optgroup {
   ::view-transition-old(.page-exit),
   ::view-transition-new(.page-enter) {
     animation: none;
+  }
+}
+
+/* ------------------------------------------------------------------------
+   The motion kit (docs/visual-overhaul-plan.md 2.1 and 6). Pointer physics
+   are CSS custom properties written by src/lib/motion/pointer.ts; everything
+   a finger or cursor pushes releases on the spring, colour and light on the
+   snap. In the components layer so a utility at a call site (absolute,
+   hidden, a width) still wins.
+   ------------------------------------------------------------------------ */
+:root {
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes ripple {
+  0% { opacity: 0.45; transform: translate(-50%, -50%) scale(0); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes item-in {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes bracket-in {
+  from { opacity: 0; transform: scale(0.4); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes toast-in {
+  0% { opacity: 0; transform: translateY(14px) scale(0.97); }
+  60% { opacity: 1; }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes rule-wipe {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@keyframes bar-shine {
+  0% { opacity: 0; transform: translateX(-60%); }
+  40% { opacity: 0.8; }
+  100% { opacity: 0; transform: translateX(120%); }
+}
+@keyframes shake-x {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-5px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(2px); }
+}
+@keyframes foil {
+  from { background-position: 180% 0; }
+  to { background-position: -80% 0; }
+}
+@keyframes level-ring {
+  0% { opacity: 0.9; transform: translate(-50%, -50%) scale(0.6); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.7); }
+}
+@keyframes pop-in {
+  0% { opacity: 0; transform: scale(0.6); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@layer components {
+  /* Primary and secondary buttons: magnet pull, cursor sheen, ripple, lift. */
+  .motion-magnet,
+  .motion-press {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    transform: translate(var(--mgx, 0px), var(--mgy, 0px)) translateY(var(--lift, 0px)) scale(var(--press, 1));
+    transition:
+      transform 220ms var(--ease-spring),
+      box-shadow var(--dur-quick) var(--ease-snap),
+      border-color var(--dur-quick) var(--ease-snap),
+      background-color var(--dur-quick) var(--ease-snap),
+      color var(--dur-quick) var(--ease-snap),
+      filter var(--dur-quick) var(--ease-snap);
+  }
+  .motion-magnet:hover { --lift: -2px; }
+  .motion-magnet:active,
+  .motion-press:active { --press: 0.97; --lift: 0px; }
+  .motion-magnet:disabled,
+  .motion-press:disabled { --lift: 0px; --press: 1; }
+  .motion-magnet::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    background: radial-gradient(110px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, 0.55), transparent 65%);
+    mix-blend-mode: soft-light;
+    opacity: var(--sheen, 0);
+    transition: opacity var(--dur-quick) var(--ease-snap);
+  }
+  .motion-magnet::after,
+  .motion-press::after {
+    content: "";
+    position: absolute;
+    left: var(--rpx, 50%);
+    top: var(--rpy, 50%);
+    width: 240%;
+    aspect-ratio: 1;
+    border-radius: 9999px;
+    pointer-events: none;
+    background: currentColor;
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0);
+  }
+  .motion-magnet[data-rippling]::after,
+  .motion-press[data-rippling]::after {
+    animation: ripple 620ms var(--ease-settle) both;
+  }
+
+  /* Icon actions nudge up and press small. */
+  .motion-nudge {
+    transition:
+      transform 200ms var(--ease-spring),
+      color var(--dur-quick) var(--ease-snap),
+      opacity var(--dur-quick) var(--ease-snap);
+  }
+  .motion-nudge:hover { transform: translateY(-2px); }
+  .motion-nudge:active { transform: scale(0.9); }
+
+  /* Cards and tiles: tilt toward the cursor, lift, a light that follows it,
+     and the gold corner brackets drawing out. */
+  .motion-card {
+    transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateY(var(--lift, 0px)) scale(var(--grow, 1));
+    transition:
+      transform 320ms var(--ease-spring),
+      box-shadow var(--dur-move) var(--ease-snap),
+      border-color var(--dur-move) var(--ease-snap);
+    will-change: transform;
+  }
+  .motion-card:hover { --lift: -5px; --grow: 1.015; }
+  .motion-card:active { --lift: -1px; --grow: 0.99; }
+  .panel.motion-card {
+    background:
+      radial-gradient(260px circle at var(--mx, 50%) var(--my, 0%), rgba(244, 224, 166, calc(var(--sheen, 0) * 0.13)), transparent 62%),
+      linear-gradient(180deg, rgba(48, 40, 83, 0.42), rgba(16, 13, 32, 0.85)),
+      radial-gradient(ellipse 120% 60% at 50% -20%, rgba(107, 99, 148, 0.12), transparent 60%);
+  }
+  .ornate.motion-card::before,
+  .ornate.motion-card::after {
+    transition:
+      width 260ms var(--ease-spring),
+      height 260ms var(--ease-spring),
+      border-color var(--dur-quick) var(--ease-snap);
+  }
+  .ornate.motion-card:hover::before,
+  .ornate.motion-card:hover::after {
+    width: 22px;
+    height: 22px;
+    border-color: rgba(244, 224, 166, 0.95);
+  }
+
+  /* Rail cells lift; the active one sits proud. */
+  .motion-rail {
+    transition:
+      transform 240ms var(--ease-spring),
+      background-color var(--dur-quick) var(--ease-snap),
+      color var(--dur-quick) var(--ease-snap),
+      box-shadow var(--dur-quick) var(--ease-snap);
+  }
+  .motion-rail:hover { transform: translateY(-3px); }
+  .motion-rail:active { transform: translateY(0) scale(0.96); }
+
+  /* Fields bloom on focus; a refused submit shakes the row (replayAnimation). */
+  .motion-input:focus,
+  .motion-input:focus-visible {
+    box-shadow:
+      0 2px 6px rgba(4, 2, 12, 0.45) inset,
+      0 0 0 3px rgba(212, 171, 58, 0.16),
+      0 0 22px rgba(212, 171, 58, 0.12);
+  }
+  .motion-shake { animation: shake-x var(--dur-beat) var(--ease-snap) both; }
+
+  /* Menus: the panel springs open and its rows arrive one after another. */
+  [role="menu"] > [role="menuitem"],
+  [role="menu"] > [role="menuitemcheckbox"],
+  [role="menu"] > [role="menuitemradio"],
+  [role="listbox"] > [role="option"] {
+    animation: item-in var(--dur-move) var(--ease-settle) both;
+    transition:
+      background-color var(--dur-instant) var(--ease-snap),
+      color var(--dur-instant) var(--ease-snap),
+      padding-left var(--dur-quick) var(--ease-spring);
+  }
+  [role="menu"] > [role^="menuitem"]:nth-child(2) { animation-delay: 26ms; }
+  [role="menu"] > [role^="menuitem"]:nth-child(3) { animation-delay: 52ms; }
+  [role="menu"] > [role^="menuitem"]:nth-child(4) { animation-delay: 78ms; }
+  [role="menu"] > [role^="menuitem"]:nth-child(5) { animation-delay: 104ms; }
+  [role="menu"] > [role^="menuitem"]:nth-child(6) { animation-delay: 130ms; }
+  [role="menu"] > [role^="menuitem"]:nth-child(7) { animation-delay: 156ms; }
+  [role="menu"] > [role^="menuitem"]:nth-child(n + 8) { animation-delay: 182ms; }
+  [role="menu"] > [role^="menuitem"][data-highlighted] { padding-left: 0.85rem; }
+
+  /* Switches: a knob that springs across its track. */
+  [role="switch"] {
+    transition:
+      background-color var(--dur-move) var(--ease-snap),
+      border-color var(--dur-move) var(--ease-snap),
+      color var(--dur-quick) var(--ease-snap),
+      transform 220ms var(--ease-spring);
+  }
+  [role="switch"]:active { transform: scale(0.95); }
+
+  /* Anything that appears as a result (a chip, a badge, a verdict) pops. */
+  .motion-pop { animation: pop-in var(--dur-move) var(--ease-spring) both; }
+  .motion-toast { animation: toast-in var(--dur-move) var(--ease-spring) both; }
+  .motion-rule { transform-origin: left center; animation: rule-wipe var(--dur-beat) var(--ease-settle) both; }
+
+  /* Foil: a band of light that travels across a featured surface. A loop, so
+     it stops under low effects. */
+  .motion-foil { position: relative; overflow: hidden; }
+  .motion-foil::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(105deg, transparent 40%, rgba(255, 244, 214, 0.22) 50%, transparent 60%);
+    background-size: 260% 100%;
+    animation: foil 3.6s var(--ease-drift) infinite;
+    mix-blend-mode: screen;
+  }
+  [data-effects="low"] .motion-foil::after { animation: none; opacity: 0; }
+
+  /* A bar that changed gets a pass of light (HP, progress, budget). */
+  .motion-bar { position: relative; overflow: hidden; }
+  .motion-bar::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    width: 45%;
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+    opacity: 0;
+  }
+  .motion-bar[data-changed]::after { animation: bar-shine 700ms var(--ease-settle) both; }
+}
+
+/* Radix popovers, dialogs and tooltips open on the spring. */
+[data-radix-popper-content-wrapper] > [data-state="open"],
+[data-radix-popper-content-wrapper] > [data-state="delayed-open"],
+[data-radix-popper-content-wrapper] > [data-state="instant-open"] {
+  animation: scale-in 240ms var(--ease-spring) both;
+  transform-origin: var(--radix-popper-transform-origin, center);
+}
+[role="dialog"]:not(.sheet):not(.drawer-left):not(.drawer-right)[data-state="open"],
+[role="alertdialog"][data-state="open"] {
+  animation: scale-in 320ms var(--ease-spring) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-magnet,
+  .motion-press,
+  .motion-card,
+  .motion-rail,
+  .motion-nudge {
+    transform: none !important;
+  }
+  .motion-magnet::before,
+  .motion-magnet::after,
+  .motion-press::after,
+  .motion-foil::after,
+  .motion-bar::after {
+    display: none;
+  }
+}
+
+/* GoldTitle (src/components/ui/GoldTitle.tsx): a gold gradient clipped to the
+   letters over a bronze edge, the mockups' page and step title. */
+.gold-title {
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  line-height: 1.15;
+  background: linear-gradient(180deg, #fff6da 0%, #f4e0a6 28%, #e3c15c 58%, #b8922a 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 1px 0 rgba(92, 64, 12, 0.9)) drop-shadow(0 2px 0 rgba(58, 40, 8, 0.7)) drop-shadow(0 8px 18px rgba(212, 171, 58, 0.22));
+}
+html[data-theme="light"] .gold-title {
+  background: linear-gradient(180deg, #8a6514 0%, #6f500f 60%, #4a3408 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 1px 0 rgba(255, 246, 218, 0.8));
+}
+
+/* PageSkeleton blocks: a parchment shimmer in the page's own shape. */
+@keyframes skeleton-sweep {
+  from { background-position: 180% 0; }
+  to { background-position: -80% 0; }
+}
+@keyframes overlay-soft {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-overlay-soft { animation: overlay-soft 320ms var(--ease-snap) both; }
+.skeleton-block {
+  background:
+    linear-gradient(100deg, transparent 35%, rgba(244, 224, 166, 0.09) 50%, transparent 65%) 0 0 / 260% 100%,
+    rgba(107, 99, 148, 0.13);
+  border: 1px solid rgba(107, 99, 148, 0.16);
+  animation: skeleton-sweep 1.8s var(--ease-drift) infinite;
+}
+html[data-theme="light"] .skeleton-block {
+  background:
+    linear-gradient(100deg, transparent 35%, rgba(255, 255, 255, 0.55) 50%, transparent 65%) 0 0 / 260% 100%,
+    rgba(120, 96, 52, 0.12);
+  border-color: rgba(120, 96, 52, 0.16);
+}
+[data-effects="low"] .skeleton-block,
+.skeleton-block:where([data-still]) { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-block { animation: none; }
+}
+
+/* ------------------------------------------------------------------------
+   Native controls in the kit's skin (docs/visual-overhaul-plan.md 8c.4).
+   A dropdown, a slider, a number field, a date picker and a checkbox keep
+   their own element, so forms, keyboards and screen readers work exactly as
+   before, but none of them shows browser chrome. In the base layer so a
+   utility at a call site still decides size and spacing.
+   ------------------------------------------------------------------------ */
+@layer base {
+  :root { color-scheme: dark; }
+  html[data-theme="light"] { color-scheme: light; }
+
+  select {
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%23d4ab3a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 8l5 5 5-5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.55rem center;
+    background-size: 0.95rem;
+    padding-right: 2rem;
+    cursor: pointer;
+    transition:
+      border-color var(--dur-quick) var(--ease-snap),
+      box-shadow var(--dur-quick) var(--ease-snap);
+  }
+  select:hover { border-color: rgba(212, 171, 58, 0.45); }
+  select:focus-visible {
+    outline: none;
+    border-color: rgba(212, 171, 58, 0.6);
+    box-shadow: 0 0 0 3px rgba(212, 171, 58, 0.16), 0 0 22px rgba(212, 171, 58, 0.1);
+  }
+  select option,
+  select optgroup {
+    background: #15112b;
+    color: #e9e6f4;
+  }
+  html[data-theme="light"] select option,
+  html[data-theme="light"] select optgroup {
+    background: #f6efdf;
+    color: #3a2d14;
+  }
+
+  /* Sliders: a dark channel with a gold fill and a polished brass knob. */
+  input[type="range"] {
+    appearance: none;
+    -webkit-appearance: none;
+    height: 1.25rem;
+    background: transparent;
+    cursor: pointer;
+    accent-color: #d4ab3a;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 0.375rem;
+    border-radius: 9999px;
+    background: linear-gradient(180deg, rgba(4, 2, 12, 0.85), rgba(41, 34, 71, 0.85));
+    border: 1px solid rgba(107, 99, 148, 0.35);
+    box-shadow: 0 1px 0 rgba(233, 230, 244, 0.06);
+  }
+  input[type="range"]::-moz-range-track {
+    height: 0.375rem;
+    border-radius: 9999px;
+    background: linear-gradient(180deg, rgba(4, 2, 12, 0.85), rgba(41, 34, 71, 0.85));
+    border: 1px solid rgba(107, 99, 148, 0.35);
+  }
+  input[type="range"]::-moz-range-progress {
+    height: 0.375rem;
+    border-radius: 9999px;
+    background: linear-gradient(90deg, #8a6514, #e3c15c);
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 1.1rem;
+    height: 1.1rem;
+    margin-top: -0.42rem;
+    border-radius: 9999px;
+    border: 1px solid #6f500f;
+    background: radial-gradient(circle at 35% 30%, #fff6da, #e3c15c 45%, #8a6514 100%);
+    box-shadow: 0 2px 6px rgba(4, 2, 12, 0.6), 0 0 0 0 rgba(212, 171, 58, 0);
+    transition: transform 200ms var(--ease-spring), box-shadow var(--dur-quick) var(--ease-snap);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 1.1rem;
+    height: 1.1rem;
+    border-radius: 9999px;
+    border: 1px solid #6f500f;
+    background: radial-gradient(circle at 35% 30%, #fff6da, #e3c15c 45%, #8a6514 100%);
+    box-shadow: 0 2px 6px rgba(4, 2, 12, 0.6);
+    transition: transform 200ms var(--ease-spring);
+  }
+  input[type="range"]:hover::-webkit-slider-thumb { transform: scale(1.15); box-shadow: 0 2px 6px rgba(4, 2, 12, 0.6), 0 0 0 5px rgba(212, 171, 58, 0.14); }
+  input[type="range"]:active::-webkit-slider-thumb { transform: scale(0.95); }
+  input[type="range"]:hover::-moz-range-thumb { transform: scale(1.15); }
+  input[type="range"]:focus-visible { outline: none; }
+  input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px rgba(212, 171, 58, 0.3); }
+
+  /* Number fields lose the browser's spinner; the arrows on the keyboard and
+     typing still change the value. */
+  input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+  /* Date and time pickers take the theme's scheme, so the popup matches. */
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="time"]::-webkit-calendar-picker-indicator,
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.75;
+    filter: sepia(1) saturate(4) hue-rotate(5deg);
+    transition: opacity var(--dur-quick) var(--ease-snap), transform 200ms var(--ease-spring);
+  }
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover { opacity: 1; transform: scale(1.15); }
+
+  input[type="checkbox"],
+  input[type="radio"] { accent-color: #d4ab3a; cursor: pointer; }
+}
+
+/* Switch (src/components/ui/Switch.tsx): knob on the spring, track on the snap. */
+.kit-switch {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 2.75rem;
+  height: 1.5rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(107, 99, 148, 0.4);
+  background: linear-gradient(180deg, rgba(4, 2, 12, 0.9), rgba(22, 18, 44, 0.9));
+  box-shadow: 0 1px 0 rgba(233, 230, 244, 0.06), 0 2px 5px rgba(4, 2, 12, 0.6) inset;
+  cursor: pointer;
+}
+.kit-switch[aria-checked="true"] {
+  border-color: rgba(212, 171, 58, 0.6);
+  background: linear-gradient(180deg, rgba(74, 52, 8, 0.95), rgba(138, 101, 20, 0.85));
+  box-shadow: 0 0 14px rgba(212, 171, 58, 0.22), 0 2px 5px rgba(4, 2, 12, 0.5) inset;
+}
+.kit-switch:disabled { opacity: 0.5; cursor: not-allowed; }
+.kit-switch:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(212, 171, 58, 0.3); }
+.kit-switch-knob {
+  position: absolute;
+  top: 50%;
+  left: 0.15rem;
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 9999px;
+  background: #575170;
+  border: 1px solid rgba(4, 2, 12, 0.6);
+  box-shadow: 0 1px 3px rgba(4, 2, 12, 0.7);
+  transform: translate(0, -50%);
+  transition: transform 340ms var(--ease-spring), background var(--dur-move) var(--ease-snap);
+}
+.kit-switch[aria-checked="true"] .kit-switch-knob {
+  transform: translate(1.25rem, -50%);
+  background: radial-gradient(circle at 35% 30%, #fff6da, #e3c15c 50%, #8a6514 100%);
+  border-color: #6f500f;
+}
+.kit-switch:active .kit-switch-knob { width: 1.3rem; }
+.kit-switch[aria-checked="true"]:active .kit-switch-knob { transform: translate(1.05rem, -50%); }
+html[data-theme="light"] .kit-switch { background: linear-gradient(180deg, #d9ccae, #e9dfc6); border-color: rgba(120, 96, 52, 0.4); }
+html[data-theme="light"] .kit-switch .kit-switch-knob { background: #a59877; }
+@media (prefers-reduced-motion: reduce) {
+  .kit-switch-knob { transition: none; }
+}
+
+/* A panel that replaces another (a session tab, a sub-tab, a workshop tool)
+   rises in rather than cutting. */
+@keyframes tab-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.motion-tab { animation: tab-in var(--dur-move) var(--ease-settle) both; }
+@media (prefers-reduced-motion: reduce) {
+  .motion-tab { animation: none; }
+}
+
+/* IconRail's travelling indicator: a gold bar that slides to the active cell. */
+.rail-mark {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 9999px;
+  background: linear-gradient(180deg, #f4e0a6, #d4ab3a);
+  box-shadow: 0 0 12px rgba(212, 171, 58, 0.55);
+  opacity: 0;
+  transition:
+    transform 340ms var(--ease-spring),
+    width 340ms var(--ease-spring),
+    height 340ms var(--ease-spring),
+    opacity var(--dur-quick) var(--ease-snap);
+}
+.rail-mark-v {
+  top: 0;
+  right: -2px;
+  width: 3px;
+  height: calc(var(--ih, 0px) - 16px);
+  transform: translateY(calc(var(--iy, 0px) + 8px));
+}
+.rail-mark-h {
+  left: 0;
+  bottom: -1px;
+  height: 3px;
+  width: calc(var(--iw, 0px) - 16px);
+  transform: translateX(calc(var(--ix, 0px) + 8px));
+}
+@media (prefers-reduced-motion: reduce) {
+  .rail-mark { transition: none; }
+}
+
+/* SegmentedControl's travelling pill: the gold foil slides to the chosen
+   option on a spring, and the option underneath gives up its own foil. */
+.seg-pill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 0.375rem;
+  background: linear-gradient(180deg, #fdf7e7, #ecd287 45%, #d4ab3a);
+  box-shadow: 0 1px 0 rgba(253, 247, 231, 0.6) inset, 0 2px 8px rgba(4, 2, 12, 0.5);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 360ms var(--ease-spring),
+    width 360ms var(--ease-spring),
+    opacity var(--dur-quick) var(--ease-snap);
+}
+/* Daylight turns the amber scale over (dark foil, cream lettering), and the
+   pill has to turn with it or the chosen label is cream on gold. */
+[data-theme="light"] .seg-pill {
+  background: linear-gradient(180deg, var(--color-amber-400), var(--color-amber-300) 45%, var(--color-amber-100));
+  box-shadow: 0 1px 0 rgba(253, 247, 231, 0.25) inset, 0 2px 6px rgba(60, 40, 8, 0.35);
+}
+.seg-control[data-pill] .seg-pill { opacity: 1; }
+.seg-control[data-pill] [aria-checked="true"] { background: none; box-shadow: none; }
+@media (prefers-reduced-motion: reduce) {
+  .seg-pill { transition: none; }
+}
+
+/* The lobby's start button glows while it can be pressed; a dying character's
+   death save strip beats like a pulse. Loops, so both rest under low effects. */
+@keyframes begin-glow {
+  0%, 100% { box-shadow: 0 0 0 rgba(212, 171, 58, 0), 0 6px 22px rgba(212, 171, 58, 0.25); }
+  50% { box-shadow: 0 0 0 4px rgba(212, 171, 58, 0.12), 0 8px 34px rgba(212, 171, 58, 0.45); }
+}
+.begin-glow { animation: begin-glow 2.6s var(--ease-drift) infinite; }
+@keyframes death-beat {
+  0%, 100% { box-shadow: 0 0 0 rgba(220, 38, 38, 0); }
+  12% { box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.28); }
+  24% { box-shadow: 0 0 0 rgba(220, 38, 38, 0); }
+  36% { box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.2); }
+}
+.death-beat { animation: death-beat 1.4s ease-in-out infinite; }
+[data-effects="low"] .begin-glow,
+[data-effects="low"] .death-beat { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .begin-glow, .death-beat { animation: none; }
+}
+
+/* InfoChipList: a named thing with its painted icon, as a plated chip that
+   lifts under the pointer. Hovering previews it; the mark opens the entry. */
+.info-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: 100%;
+  padding: 0.15rem 0.45rem 0.15rem 0.2rem;
+  border-radius: 0.55rem;
+  border: 1px solid rgba(120, 100, 160, 0.25);
+  background: rgba(10, 7, 20, 0.55);
+  font-size: 0.75rem;
+  color: var(--color-stone-300);
+  transition:
+    transform 220ms var(--ease-spring),
+    border-color 160ms var(--ease-snap),
+    background-color 160ms var(--ease-snap);
+}
+.info-chip:hover {
+  transform: translateY(-1px);
+  border-color: rgba(212, 171, 58, 0.45);
+  background: rgba(212, 171, 58, 0.07);
+}
+html[data-theme="light"] .info-chip { background: rgba(255, 252, 244, 0.75); border-color: rgba(120, 96, 40, 0.3); }
+@media (prefers-reduced-motion: reduce) {
+  .info-chip { transition: none; }
+  .info-chip:hover { transform: none; }
+}
+
+/* The notification bell: the panel springs from its corner, its rows arrive
+   in turn, and the bell swings once when the unread count changes. */
+.bell-panel {
+  transform-origin: top right;
+  animation: pop-in 260ms var(--ease-spring) both;
+}
+.bell-item { animation: item-in 320ms var(--ease-spring) both; }
+@keyframes bell-ring {
+  0%, 100% { transform: rotate(0); }
+  15% { transform: rotate(16deg); }
+  35% { transform: rotate(-13deg); }
+  55% { transform: rotate(8deg); }
+  75% { transform: rotate(-4deg); }
+}
+.bell-ring { animation: bell-ring 900ms var(--ease-settle) both; }
+@media (prefers-reduced-motion: reduce) {
+  .bell-panel, .bell-item, .bell-ring { animation: none; }
+}
+
+/* A button that is working: set aria-busy (or data-busy) and a band of light
+   sweeps across it while the label says what it is doing. */
+button[aria-busy="true"],
+button[data-busy="true"] {
+  position: relative;
+  overflow: hidden;
+  cursor: progress;
+}
+button[aria-busy="true"]::after,
+button[data-busy="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 246, 218, 0.35) 50%, transparent 70%);
+  background-size: 250% 100%;
+  background-repeat: no-repeat;
+  animation: skeleton-sweep 1.4s var(--ease-drift) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  button[aria-busy="true"]::after,
+  button[data-busy="true"]::after { animation: none; opacity: 0; }
+}
+
+/* A panel that floats over the page (a dropdown, the bell's list, a context
+   menu) sits on a solid sheet. The resting panel is glass, which is right on
+   the page background and wrong over a card: the card's text reads through. */
+[role="menu"].panel,
+.panel[data-radix-menu-content],
+.bell-panel {
+  background-color: #151029;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+html[data-theme="light"] [role="menu"].panel,
+html[data-theme="light"] .panel[data-radix-menu-content],
+html[data-theme="light"] .bell-panel {
+  background-color: #fbf6e9;
+}
+
+/* ---------------------------------------------------------------------------
+   The small motions the Motion Kit puts on everything, for the controls that
+   are plain HTML rather than a kit component. Press and hover lift come from
+   src/lib/motion/answer.ts; these are the ones CSS can carry alone.
+   --------------------------------------------------------------------------- */
+
+/* The card's holographic band: a faint spectrum that rides the cursor's
+   horizontal position across a tilting card, and is simply absent at rest. */
+@media (hover: hover) and (pointer: fine) {
+  .panel.motion-card {
+    background-image:
+      linear-gradient(
+        105deg,
+        transparent calc(var(--mx, 50%) - 22%),
+        rgba(125, 211, 252, calc(var(--sheen, 0) * 0.07)) calc(var(--mx, 50%) - 9%),
+        rgba(244, 224, 166, calc(var(--sheen, 0) * 0.11)) var(--mx, 50%),
+        rgba(216, 180, 254, calc(var(--sheen, 0) * 0.07)) calc(var(--mx, 50%) + 9%),
+        transparent calc(var(--mx, 50%) + 22%)
+      ),
+      radial-gradient(260px circle at var(--mx, 50%) var(--my, 0%), rgba(244, 224, 166, calc(var(--sheen, 0) * 0.13)), transparent 62%),
+      linear-gradient(180deg, rgba(48, 40, 83, 0.42), rgba(16, 13, 32, 0.85)),
+      radial-gradient(ellipse 120% 60% at 50% -20%, rgba(107, 99, 148, 0.12), transparent 60%);
+  }
+  html[data-theme="light"] .panel.motion-card {
+    background-image:
+      linear-gradient(
+        105deg,
+        transparent calc(var(--mx, 50%) - 22%),
+        rgba(212, 171, 58, calc(var(--sheen, 0) * 0.16)) var(--mx, 50%),
+        transparent calc(var(--mx, 50%) + 22%)
+      ),
+      linear-gradient(180deg, rgba(255, 253, 247, 0.6), rgba(247, 240, 226, 0.6)),
+      radial-gradient(ellipse 120% 60% at 50% -20%, rgba(214, 190, 120, 0.12), transparent 60%);
+  }
+}
+@keyframes holo {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 140% 50%; }
+}
+/* An epic find wears the moving spectrum outright. */
+.moment-loot[data-tier="epic"] .moment-loot-card {
+  background-image:
+    linear-gradient(115deg, transparent 20%, rgba(125, 211, 252, 0.14) 38%, rgba(244, 224, 166, 0.22) 50%, rgba(216, 180, 254, 0.14) 62%, transparent 80%),
+    radial-gradient(120% 80% at 50% 0%, rgba(var(--loot), 0.22), transparent 70%);
+  background-color: rgba(10, 7, 20, 0.94);
+  background-size: 240% 100%, 100% 100%;
+  animation:
+    loot-flip 3600ms var(--ease-settle, ease-out) both,
+    holo 2.4s linear infinite;
+}
+
+/* A dialog's gold corners draw in after it lands, top left then bottom right. */
+[role="dialog"].ornate[data-state="open"]::before,
+[role="alertdialog"].ornate[data-state="open"]::before {
+  animation: bracket-in var(--dur-move, 260ms) var(--ease-spring) 120ms both;
+}
+[role="dialog"].ornate[data-state="open"]::after,
+[role="alertdialog"].ornate[data-state="open"]::after {
+  animation: bracket-in var(--dur-move, 260ms) var(--ease-spring) 180ms both;
+}
+
+/* Range: the brass knob swells under the pointer and again while dragged. */
+input[type="range"]::-webkit-slider-thumb { transition: scale 220ms var(--ease-spring), box-shadow 160ms var(--ease-snap); }
+input[type="range"]::-moz-range-thumb { transition: scale 220ms var(--ease-spring), box-shadow 160ms var(--ease-snap); }
+input[type="range"]:hover::-webkit-slider-thumb { scale: 1.18; box-shadow: 0 0 12px rgba(212, 171, 58, 0.55); }
+input[type="range"]:hover::-moz-range-thumb { scale: 1.18; box-shadow: 0 0 12px rgba(212, 171, 58, 0.55); }
+input[type="range"]:active::-webkit-slider-thumb { scale: 1.32; }
+input[type="range"]:active::-moz-range-thumb { scale: 1.32; }
+
+/* A disclosure row: its marker turns, and what it reveals arrives. */
+details > summary { cursor: pointer; transition: color var(--dur-quick, 160ms) var(--ease-snap); }
+details > summary:hover { color: var(--color-amber-200); }
+details[open] > :not(summary) { animation: item-in 320ms var(--ease-spring) both; }
+
+/* Any field, not only the kit's, blooms when it takes focus. */
+input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):focus-visible,
+textarea:focus-visible {
+  box-shadow: 0 0 0 3px rgba(212, 171, 58, 0.16), 0 0 22px rgba(212, 171, 58, 0.1);
+  transition: box-shadow 220ms var(--ease-spring), border-color var(--dur-quick, 160ms) var(--ease-snap);
+}
+
+[data-effects="low"] .moment-loot[data-tier="epic"] .moment-loot-card { animation: loot-flip 3600ms var(--ease-settle, ease-out) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  details[open] > :not(summary),
+  [role="dialog"].ornate[data-state="open"]::before,
+  [role="dialog"].ornate[data-state="open"]::after { animation: none; }
+}
+
+/* No dialog may sit under the page. A dialog that forgets its own layer used
+   to be saved by coming last in the document; a raised header (the home page's,
+   so its menus clear the hero) is enough to paint over one. This is the floor:
+   in the base layer, so any z utility on the element still decides. */
+@layer base {
+  .dialog-overlay,
+  [role="dialog"][data-state],
+  [role="alertdialog"][data-state] {
+    z-index: 50;
+  }
+}
+
+/* The travelling pill (src/lib/motion/pill.ts): in a row where one of several
+   is chosen, the highlight is one element sliding to the choice. It wears the
+   chosen button's own fill and glow, and while it stands in, the button gives
+   its fill up. Without the script, or under reduced motion, no pill exists and
+   the button keeps its highlight, so the choice always shows. */
+.motion-pill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 0;
+  box-sizing: border-box;
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    translate 380ms var(--ease-spring),
+    width 380ms var(--ease-spring),
+    height 380ms var(--ease-spring),
+    background-color 220ms var(--ease-snap),
+    box-shadow 220ms var(--ease-snap),
+    opacity 160ms var(--ease-snap);
+}
+[data-pill-ready] > [data-on],
+[data-pill-ready] [data-on],
+[data-pill-ready] [role="tab"][aria-selected="true"] {
+  background-image: none !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+/* Labels ride above the pill. In the base layer, so a button that positions
+   itself some other way keeps its own rule. */
+@layer base {
+  [data-pill-group] button,
+  [data-pill-group] a,
+  [role="tablist"] [role="tab"] {
+    position: relative;
+    z-index: 1;
   }
 }

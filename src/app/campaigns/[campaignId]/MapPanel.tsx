@@ -1,9 +1,14 @@
 "use client";
 
+import { EmptyState } from "@/components/EmptyState";
 import * as Dialog from "@radix-ui/react-dialog";
-import { Compass, ImageOff, ImagePlus, Loader2, Map as MapIcon, RefreshCw, Users, X } from "lucide-react";
+import { ImageOff, ImagePlus, Loader2, RefreshCw, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { cn } from "@/lib/cn";
+import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { KitButton, PanelError, RowMenu } from "./PanelKit";
 import { SkyLayer } from "@/components/SkyLayer";
 import { TheatreInserts } from "@/app/campaigns/[campaignId]/TheatreInserts";
 import type { CastMember } from "@/lib/dm/cast";
@@ -156,97 +161,98 @@ export function MapPanel({
 
   if (!locations.length) {
     return (
-      <p className="px-1 py-6 text-center text-xs text-stone-600">
-        {canPaint
-          ? "No areas charted yet. Maps appear as the party explores."
-          : "No areas charted yet. Areas appear as the party explores, and the DM can upload a map for each."}
-      </p>
+      <EmptyState size="sm" art="map" title={canPaint ? "No areas charted yet. Maps appear as the party explores." : "No areas charted yet. Areas appear as the party explores, and the DM can upload a map for each."} />
     );
   }
+
+  // Everything the header's buttons do, for the kebab and a right-click.
+  const mapItems: ContextMenuItem[] =
+    shown && steersStory
+      ? [
+          { id: "upload", label: shown.mapImage ? "Replace map with your own picture" : "Upload a map", glyph: "tab-handout", disabled: uploading || regenerating, onSelect: () => fileRef.current?.click() },
+          ...(canPaint ? [{ id: "redraw", label: "Redraw this map", glyph: "system-maps", disabled: regenerating || uploading, onSelect: () => void regenerate() }] : []),
+          ...(shown.mapImage ? [{ id: "clear", label: "Use the placeholder instead", glyph: "quest-hidden", disabled: uploading || regenerating, onSelect: () => void clearToPlaceholder() }] : []),
+          { id: "populate", label: "Populate", glyph: "system-party", separated: true, disabled: populating, onSelect: () => void populate(shown.id) },
+        ]
+      : shown?.mapImage
+        ? [{ id: "enlarge", label: "Enlarge the map", glyph: "tab-map", onSelect: () => setEnlarged(true) }]
+        : [];
 
   return (
     <div className="space-y-3">
       {shown ? (
-        <div>
-          <div className="mb-1.5 flex items-center justify-between">
-            <h3 className="flex items-center gap-1.5 text-sm font-medium text-stone-200">
-              <Compass className="size-4 text-amber-200" />
-              {shown.name}
-              {shown.isCurrent ? (
-                <span className="rounded-full bg-emerald-950 px-1.5 py-0.5 text-[10px] text-emerald-300">
-                  here
-                </span>
-              ) : null}
-            </h3>
-            {steersStory ? (
-              <span className="flex items-center gap-2">
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  className="hidden"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) {
-                      void upload(file);
-                    }
-                    event.target.value = "";
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => fileRef.current?.click()}
-                  disabled={uploading || regenerating}
-                  title={shown.mapImage ? "Replace map with your own picture" : "Upload a map"}
-                  aria-label={shown.mapImage ? "Replace map" : "Upload a map"}
-                  className="text-stone-500 hover:text-amber-400 disabled:opacity-50"
-                >
-                  {uploading ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <ImagePlus className="size-3.5" />
-                  )}
-                </button>
-                {canPaint ? (
-                  <button
-                    type="button"
-                    onClick={regenerate}
-                    disabled={regenerating || uploading}
-                    title="Redraw this map"
-                    aria-label="Redraw this map"
-                    className="text-stone-500 hover:text-amber-400 disabled:opacity-50"
-                  >
-                    {regenerating ? (
-                      <Loader2 className="size-3.5 animate-spin" />
-                    ) : (
-                      <RefreshCw className="size-3.5" />
-                    )}
-                  </button>
+        <ContextMenu items={mapItems} label={shown.name}>
+          <SectionHead
+            title={
+              <>
+                {shown.name}
+                {shown.isCurrent ? (
+                  <span className="ml-1.5 rounded-full border border-emerald-500/40 bg-emerald-950 px-1.5 py-0.5 align-middle font-sans text-[10px] normal-case tracking-normal text-emerald-300">
+                    here
+                  </span>
                 ) : null}
-                {shown.mapImage ? (
-                  <button
-                    type="button"
-                    onClick={() => void clearToPlaceholder()}
+              </>
+            }
+            glyph="tab-map"
+            aside={
+              steersStory ? (
+                <span className="flex items-center gap-0.5">
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) {
+                        void upload(file);
+                      }
+                      event.target.value = "";
+                    }}
+                  />
+                  <KitButton
+                    tone="icon"
+                    always
+                    onClick={() => fileRef.current?.click()}
                     disabled={uploading || regenerating}
-                    title="Take the map away and show the stand-in for this kind of place"
-                    aria-label="Use the placeholder instead"
-                    className="text-stone-500 hover:text-amber-400 disabled:opacity-50"
+                    busy={uploading}
+                    title={shown.mapImage ? "Replace map with your own picture" : "Upload a map"}
+                    aria-label={shown.mapImage ? "Replace map" : "Upload a map"}
+                    className="disabled:opacity-50"
                   >
-                    <ImageOff className="size-3.5" />
-                  </button>
-                ) : null}
-              </span>
-            ) : null}
-          </div>
-          {regenerateError ? (
-            <p className="mb-1.5 text-xs text-red-400">{regenerateError}</p>
-          ) : null}
+                    {uploading ? null : <ImagePlus className="size-3.5" />}
+                  </KitButton>
+                  {canPaint ? (
+                    <KitButton tone="icon" always onClick={regenerate} disabled={regenerating || uploading} busy={regenerating} title="Redraw this map" aria-label="Redraw this map" className="disabled:opacity-50">
+                      {regenerating ? null : <RefreshCw className="size-3.5" />}
+                    </KitButton>
+                  ) : null}
+                  {shown.mapImage ? (
+                    <KitButton
+                      tone="icon"
+                      always
+                      onClick={() => void clearToPlaceholder()}
+                      disabled={uploading || regenerating}
+                      title="Take the map away and show the stand-in for this kind of place"
+                      aria-label="Use the placeholder instead"
+                      className="disabled:opacity-50"
+                    >
+                      <ImageOff className="size-3.5" />
+                    </KitButton>
+                  ) : null}
+                  <RowMenu items={mapItems} label={shown.name} />
+                </span>
+              ) : null
+            }
+          />
+          {regenerateError ? <PanelError className="mb-1.5">{regenerateError}</PanelError> : null}
 
           {shown.mapImage ? (
             <button
               type="button"
               onClick={() => setEnlarged(true)}
-              className="relative block w-full overflow-hidden rounded-md border border-stone-800"
+              aria-label={`Enlarge the map of ${shown.name}`}
+              className="panel motion-card relative block w-full overflow-hidden rounded-lg"
             >
               {/* The slow drift and the sky's tint over the scene art: the
                   animated scene without a video asset. */}
@@ -260,8 +266,8 @@ export function MapPanel({
               {inserts ? <TheatreInserts speakers={inserts.speakers} cast={inserts.cast} messageId={inserts.messageId} /> : null}
             </button>
           ) : mediaStatus[shown.id] && mediaStatus[shown.id].state !== "failed" ? (
-            <div className="flex aspect-[4/3] flex-col items-center justify-center gap-1.5 rounded-md border border-dashed border-stone-800 text-xs text-stone-500">
-              <Loader2 className="size-4 animate-spin text-amber-700" />
+            <div role="status" className="skeleton-block flex aspect-[4/3] flex-col items-center justify-center gap-1.5 rounded-lg text-xs text-stone-400">
+              <Loader2 className="size-4 animate-spin text-amber-400" />
               {mediaStatus[shown.id].state === "queued"
                 ? "Waiting for the render queue..."
                 : "Drawing the map..."}
@@ -270,7 +276,7 @@ export function MapPanel({
             // The stand-in plate for the kind of place this is, with the
             // status written over it; a real map replaces it the moment one
             // is drawn or uploaded.
-            <div className="relative overflow-hidden rounded-md border border-stone-800">
+            <div className="panel relative overflow-hidden rounded-lg">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={mapPlaceholder(
@@ -282,7 +288,7 @@ export function MapPanel({
                 className="aspect-[16/9] w-full object-cover opacity-80"
               />
               <p className="absolute inset-x-0 bottom-0 flex items-center gap-1.5 bg-gradient-to-t from-stone-950/90 to-transparent px-2 pb-1.5 pt-4 text-xs text-stone-300">
-                <MapIcon className="size-3.5 shrink-0" />
+                <GameIcon icon={{ kind: "glyph", key: "system-maps" }} size="size-5" className="shrink-0" />
                 {mediaStatus[shown.id]?.state === "failed"
                   ? "Map render failed"
                   : !canPaint && steersStory
@@ -296,30 +302,23 @@ export function MapPanel({
             <p className="mt-1.5 text-xs leading-5 text-stone-400">{shown.layoutDescription}</p>
           ) : null}
           {steersStory ? (
-            <button
-              type="button"
-              disabled={populating}
-              onClick={() => void populate(shown.id)}
-              title="Invent this place's people, shops, rumours and a hook"
-              className="mt-1.5 flex items-center gap-1 rounded border border-stone-700 px-2 py-0.5 text-[11px] text-stone-400 hover:border-amber-700 hover:text-amber-200 disabled:opacity-50"
-            >
-              {populating ? <Loader2 className="size-3 animate-spin" /> : <Users className="size-3" />} Populate
-            </button>
+            <KitButton disabled={populating} busy={populating} onClick={() => void populate(shown.id)} title="Invent this place's people, shops, rumours and a hook" className="mt-1.5">
+              {populating ? null : <GameIcon icon={{ kind: "glyph", key: "system-party" }} size="size-4" />} Populate
+            </KitButton>
           ) : null}
-          {populateNote ? <p className="mt-1 text-[11px] text-amber-300/80">{populateNote}</p> : null}
+          {populateNote ? <p role="status" className="live-in mt-1 text-xs text-amber-300/80">{populateNote}</p> : null}
           {shown.connections.length ? (
-            <p className="mt-1 text-xs text-stone-500">
-              Routes: {shown.connections.join(", ")}
+            <p className="mt-1 flex items-start gap-1 text-xs text-stone-500">
+              <GameIcon icon={{ kind: "glyph", key: "pace-normal" }} size="size-4" className="mt-0.5 shrink-0" />
+              <span>Routes: {shown.connections.join(", ")}</span>
             </p>
           ) : null}
-        </div>
+        </ContextMenu>
       ) : null}
 
       {locations.length > 1 ? (
         <div>
-          <h4 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
-            Charted areas
-          </h4>
+          <SectionHead title="Charted areas" glyph="system-region" level="h4" aside={locations.length} />
           <ul className="space-y-1">
             {locations.map((location) => (
               <li key={location.id}>
@@ -328,13 +327,15 @@ export function MapPanel({
                   onClick={() =>
                     setSelectedId(location.id === shown?.id ? null : location.id)
                   }
+                  aria-pressed={location.id === shown?.id}
                   className={cn(
-                    "w-full rounded px-2 py-1 text-left text-xs",
+                    "pk-tap flex w-full items-center gap-1.5 rounded-md border border-transparent px-2 py-1.5 text-left text-xs motion-press",
                     location.id === shown?.id
-                      ? "bg-amber-950/40 text-amber-200"
-                      : "text-stone-400 hover:bg-stone-900",
+                      ? "border-amber-500/40 bg-amber-400/10 text-amber-200"
+                      : "text-stone-400 hover:bg-stone-900/70 hover:text-stone-200",
                   )}
                 >
+                  <GameIcon icon={{ kind: "glyph", key: location.mapImage ? "tab-map" : "quest-hidden" }} size="size-4" className="shrink-0" />
                   {location.name}
                   {location.isCurrent ? " (here)" : ""}
                   {location.mapImage ? "" : " · unmapped"}
@@ -348,11 +349,11 @@ export function MapPanel({
       {shown?.mapImage ? (
         <Dialog.Root open={enlarged} onOpenChange={setEnlarged}>
           <Dialog.Portal>
-            <Dialog.Overlay className="fixed inset-0 z-40 bg-black/80" />
+            <Dialog.Overlay className="dialog-overlay fixed inset-0 z-50 bg-[#05030d]/70 backdrop-blur-sm" />
             <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[92vh] w-[min(94vw,64rem)] -translate-x-1/2 -translate-y-1/2 overflow-auto panel rounded-xl p-4">
               <div className="mb-2 flex items-center justify-between">
-                <Dialog.Title className="font-serif text-stone-100">{shown.name}</Dialog.Title>
-                <Dialog.Close className="rounded p-1 text-stone-400 hover:bg-stone-900">
+                <Dialog.Title className="gold-title font-display text-lg">{shown.name}</Dialog.Title>
+                <Dialog.Close aria-label="Close" className="pk-tap rounded p-1 text-stone-400 hover:bg-stone-900 hover:text-amber-200 motion-nudge">
                   <X className="size-4" />
                 </Dialog.Close>
               </div>

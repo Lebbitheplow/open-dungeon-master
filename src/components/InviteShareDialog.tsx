@@ -22,6 +22,87 @@ import { ui } from "@/lib/ui";
 import { useShellShare } from "@/lib/use-shell-share";
 import { Dialog } from "@/components/ui/Dialog";
 
+// The QR for an invite link in a box that exists before the code does: the
+// slot is a fixed square with the skeleton shimmer, so neither the dialog nor
+// the lobby card moves when the picture lands. Dark ink on a clear ground; the
+// parchment tile behind it comes from .lobby-qr (src/app/styles/lobby.css).
+// The QR carries the /j interstitial so a phone camera lands on a page that
+// can open the app or fall back to the browser.
+export function InviteQr({
+  url,
+  size = "8.5rem",
+  className,
+}: {
+  url: string;
+  // A CSS length; the dialog asks for 12rem (192 px), the lobby card less.
+  size?: string;
+  className?: string;
+}) {
+  const [made, setMade] = useState<{ url: string; data: string } | null>(null);
+  useEffect(() => {
+    if (!url) {
+      return;
+    }
+    let cancelled = false;
+    QRCode.toDataURL(url, { width: 480, margin: 2, color: { dark: "#1b1208ff", light: "#00000000" } })
+      .then((data) => {
+        if (!cancelled) setMade({ url, data });
+      })
+      .catch(() => {
+        if (!cancelled) setMade(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [url]);
+  // A picture made for an older link (the code was rotated, the tunnel came
+  // up) is not shown for the new one.
+  const data = made && made.url === url ? made.data : "";
+  return (
+    <div
+      className={cn("lobby-qr", className)}
+      style={{ "--qr": size } as React.CSSProperties}
+      data-ready={data ? "" : undefined}
+    >
+      {data ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={data} alt={`QR code for invite link ${url}`} />
+      ) : (
+        <div className="skeleton-block" role="status" aria-label="Drawing the QR code" />
+      )}
+    </div>
+  );
+}
+
+// The room code in sigil lettering: one plate a character, arriving in turn.
+// The whole code is still one selectable, readable string for a screen reader.
+export function RoomCodeSigils({ code, size = "md" }: { code: string; size?: "md" | "lg" }) {
+  return (
+    <p className="lobby-sigils" data-size={size} aria-label={`Room code ${code.split("").join(" ")}`}>
+      {code.split("").map((char, index) => (
+        <span
+          // The index is the identity here: a rotated code replays the plates.
+          key={`${code}-${index}`}
+          aria-hidden="true"
+          className="lobby-sigil"
+          style={{ "--i": index } as React.CSSProperties}
+        >
+          {char}
+        </span>
+      ))}
+    </p>
+  );
+}
+
+// The tick a copy button swaps to: it pops and lets go of a gold ring.
+export function CopyTick() {
+  return (
+    <span className="lobby-tick">
+      <Check className="size-4" />
+    </span>
+  );
+}
+
 // One place to hand an invite to someone: QR for a phone camera, the link
 // for chat apps, the bare code for typing, and the OS share sheet where the
 // browser has one (that covers "share to social media" on every phone).
@@ -44,7 +125,6 @@ export function InviteShareDialog({
   inviteCode: string;
   canRegenerate: boolean;
 }) {
-  const [qrDataUrl, setQrDataUrl] = useState("");
   const [copied, setCopied] = useState<"link" | "code" | null>(null);
   const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState("");
@@ -80,19 +160,6 @@ export function InviteShareDialog({
   }, [open, shareState, shareUrl]);
 
   const { joinUrl, appUrl } = buildShareLinks({ publicOrigin, inviteCode });
-
-  useEffect(() => {
-    if (!open || !appUrl) {
-      return;
-    }
-    // Dark-on-light keeps the code scannable; a stone border comes from the
-    // wrapper, not the image. The QR carries the /j interstitial so a phone
-    // camera lands on a page that can open the app or fall back to the
-    // browser.
-    QRCode.toDataURL(appUrl, { width: 480, margin: 2 })
-      .then(setQrDataUrl)
-      .catch(() => setQrDataUrl(""));
-  }, [open, appUrl]);
 
   async function copy(kind: "link" | "code") {
     const worked = await copyText(kind === "link" ? appUrl : inviteCode);
@@ -151,39 +218,42 @@ export function InviteShareDialog({
       icon={<QrCode className="size-4 text-amber-300" />}
       width="w-[min(92vw,26rem)]"
     >
+      {/* Scan this first, the words second, the ways to send it third, and
+          the one destructive act last and quiet. */}
       <div className="flex flex-col items-center gap-4">
         {hosting.supported && hosting.status ? (
           <ShareOnlineRow status={hosting.status} onStart={hosting.start} onStop={hosting.stop} />
         ) : null}
-        {qrDataUrl ? (
-          <div className="rounded-xl border border-stone-700/60 bg-white p-2">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={qrDataUrl} alt={`QR code for invite link ${appUrl}`} className="size-48" />
-          </div>
-        ) : null}
-        <div className="w-full text-center">
-          <p className="eyebrow text-[10px] text-amber-200/70">Room code</p>
-          <p className="font-mono text-2xl tracking-[0.3em] text-amber-100">{inviteCode}</p>
-          <p className="mt-1 text-xs text-stone-400">
+        <div className="flex flex-col items-center gap-1.5">
+          <InviteQr url={open ? appUrl : ""} size="12rem" />
+          <p className="eyebrow text-[10px] text-stone-400">Scan to join</p>
+        </div>
+        <div className="flex w-full flex-col items-center text-center">
+          <p className="eyebrow mb-1.5 text-[10px] text-amber-200/70">Room code</p>
+          <RoomCodeSigils code={inviteCode} size="lg" />
+          <p className="mt-2 text-xs text-stone-400">
             While you are sharing, a friend can type this code into the app and land here.
           </p>
           <p className="mt-1 break-all font-mono text-xs text-stone-500">{joinUrl}</p>
         </div>
+        <span className="h-px w-full bg-gradient-to-r from-transparent via-amber-400/40 to-transparent motion-rule" aria-hidden="true" />
         <div className="flex w-full flex-wrap justify-center gap-2">
-          <button type="button" onClick={() => copy("link")} className={ui.btnSmall}>
-            {copied === "link" ? (
-              <Check className="size-4 text-emerald-400" />
-            ) : (
-              <LinkIcon className="size-4" />
-            )}
+          <button
+            type="button"
+            onClick={() => copy("link")}
+            data-copied={copied === "link" ? "" : undefined}
+            className={cn(ui.btnSmall, "lobby-copy")}
+          >
+            {copied === "link" ? <CopyTick /> : <LinkIcon className="size-4" />}
             {copied === "link" ? "Copied" : "Copy link"}
           </button>
-          <button type="button" onClick={() => copy("code")} className={ui.btnSmall}>
-            {copied === "code" ? (
-              <Check className="size-4 text-emerald-400" />
-            ) : (
-              <Copy className="size-4" />
-            )}
+          <button
+            type="button"
+            onClick={() => copy("code")}
+            data-copied={copied === "code" ? "" : undefined}
+            className={cn(ui.btnSmall, "lobby-copy")}
+          >
+            {copied === "code" ? <CopyTick /> : <Copy className="size-4" />}
             {copied === "code" ? "Copied" : "Copy code"}
           </button>
           {sheet ? (
@@ -192,7 +262,11 @@ export function InviteShareDialog({
             </button>
           ) : null}
         </div>
-        {error ? <p className="text-sm text-red-400">{error}</p> : null}
+        {/* A polite region, so the confirmation is heard as well as seen. */}
+        <p role="status" className="sr-only">
+          {copied === "link" ? "Invite link copied." : copied === "code" ? "Room code copied." : ""}
+        </p>
+        {error ? <p className="motion-shake text-sm text-red-400">{error}</p> : null}
         {canRegenerate ? (
           <button
             type="button"
@@ -225,7 +299,7 @@ function ShareOnlineRow({
 }) {
   if (status.state === "starting") {
     return (
-      <div className="flex w-full items-center gap-2 rounded-lg border border-stone-700/60 bg-stone-900/60 px-3 py-2 text-sm text-stone-300">
+      <div className="flex w-full animate-fade-up items-center gap-2 rounded-lg border border-stone-700/60 bg-stone-900/60 px-3 py-2 text-sm text-stone-300">
         <Loader2 className="size-4 shrink-0 animate-spin text-amber-300" />
         <span>Opening a public address so friends anywhere can join...</span>
       </div>

@@ -1,10 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Flag, Search, UserPlus, Users } from "lucide-react";
+import { Search, UserPlus } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { npcPlaceholder, npcRoleLabel } from "@/lib/placeholders";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { ListTally, sortRows, type RowSort } from "@/app/workshop/ListHead";
 import { describeNpc, draftFrom } from "@/lib/npcs/forge";
 
 // The cast, two ways. CastChips is the DM console's compact row of names,
@@ -44,21 +47,13 @@ type ListProps = {
 
 export function CastChips({ npcs, selectedId, onOpen }: ListProps) {
   return (
-    <section className="space-y-2 rounded-lg border border-stone-800 bg-stone-950/40 px-2.5 py-2">
-      <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
-        <Users className="size-3.5" />
-        The cast
-      </p>
-      <div className="flex flex-wrap gap-1">
+    <section className="panel space-y-2 rounded-xl p-3">
+      <SectionHead title="The cast" glyph="system-cast" className="mb-0" />
+      <div className="flex flex-wrap gap-1.5 text-xs">
         <button
           type="button"
           onClick={() => onOpen(null)}
-          className={cn(
-            "flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px]",
-            selectedId === ""
-              ? "border-amber-700 bg-amber-950/50 text-amber-100"
-              : "border-stone-700 text-stone-400 hover:text-stone-200",
-          )}
+          className={cn(ui.btnSmall, "px-2 py-1", selectedId === "" && "border-amber-500/60 bg-amber-400/10 text-amber-100")}
         >
           <UserPlus className="size-3" /> Someone new
         </button>
@@ -69,10 +64,9 @@ export function CastChips({ npcs, selectedId, onOpen }: ListProps) {
             title={describeNpc(draftFrom(npc as Parameters<typeof draftFrom>[0]))}
             onClick={() => onOpen(npc)}
             className={cn(
-              "flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px]",
-              npc.id === selectedId
-                ? "border-amber-700 bg-amber-950/50 text-amber-100"
-                : "border-stone-700 text-stone-400 hover:text-stone-200",
+              ui.btnSmall,
+              "px-2 py-1",
+              npc.id === selectedId && "border-amber-500/60 bg-amber-400/10 text-amber-100",
               npc.archived && "opacity-50",
             )}
           >
@@ -80,20 +74,28 @@ export function CastChips({ npcs, selectedId, onOpen }: ListProps) {
             <img
               src={npc.portraitUrl || npcPlaceholder(npc.role, npc.name)}
               alt=""
-              className="size-4 rounded-full object-cover"
+              className="size-5 rounded-full object-cover"
             />
             {npc.name}
           </button>
         ))}
       </div>
       {npcs.length === 0 ? (
-        <p className="text-[11px] text-stone-500">
+        <p className="reveal text-[11px] text-stone-500">
           Nobody written yet. Everything here also fills itself in as the party meets people.
         </p>
       ) : null}
     </section>
   );
 }
+
+// The painted face of an attitude; "indifferent" is the engine's word for
+// what the glyph set calls neutral.
+const ATTITUDE_GLYPH: Record<string, string> = {
+  friendly: "attitude-friendly",
+  hostile: "attitude-hostile",
+  indifferent: "attitude-neutral",
+};
 
 const ATTITUDE_TAG: Record<string, string> = {
   friendly: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300",
@@ -118,7 +120,8 @@ function matches(npc: Npc, query: string): boolean {
 
 export function CastRows({ npcs, onOpen, factionNames }: Omit<ListProps, "selectedId">) {
   const [query, setQuery] = useState("");
-  const shown = npcs.filter((npc) => matches(npc, query));
+  const [sort, setSort] = useState<RowSort>("made");
+  const shown = sortRows(npcs.filter((npc) => matches(npc, query)), sort, (npc) => npc.name);
 
   return (
     <div className="space-y-2">
@@ -132,8 +135,9 @@ export function CastRows({ npcs, onOpen, factionNames }: Omit<ListProps, "select
           className={`${ui.input} pl-9`}
         />
       </label>
+      <ListTally shown={shown.length} total={npcs.length} noun={["person", "people"]} sort={sort} onSort={setSort} />
 
-      <ul className="space-y-2">
+      <ul className="stagger space-y-2">
         {shown.map((npc) => {
           const goal = wants(npc);
           const relations = npc.agency.relations.length;
@@ -162,28 +166,29 @@ export function CastRows({ npcs, onOpen, factionNames }: Omit<ListProps, "select
                     ) : null}
                     <span
                       className={cn(
-                        "rounded-sm border px-1.5 py-0.5 text-[10px] uppercase tracking-wider",
+                        "inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 font-display text-[10px] capitalize tracking-wider",
                         ATTITUDE_TAG[npc.attitude] ?? ATTITUDE_TAG.indifferent,
                       )}
                     >
+                      <GameIcon icon={{ kind: "glyph", key: ATTITUDE_GLYPH[npc.attitude] ?? "attitude-neutral" }} size="size-4" />
                       {npc.attitude}
                     </span>
                     {npc.factionId && factionNames?.get(npc.factionId) ? (
                       <span className="flex items-center gap-0.5 rounded-sm border border-amber-800/60 bg-amber-950/30 px-1.5 py-0.5 text-[10px] tracking-wide text-amber-200/90">
-                        <Flag className="size-2.5" /> {factionNames.get(npc.factionId)}
+                        <GameIcon icon={{ kind: "glyph", key: "system-factions" }} size="size-4" /> {factionNames.get(npc.factionId)}
                       </span>
                     ) : null}
                     {npc.archived ? (
-                      <span className="rounded-sm border border-stone-600/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-stone-500">
+                      <span className="rounded-sm border border-stone-600/60 px-1.5 py-0.5 font-display text-[10px] capitalize tracking-wider text-stone-500">
                         set aside
                       </span>
                     ) : null}
                   </div>
                   {npc.location ? (
-                    <p className="truncate text-xs text-stone-500">{npc.location}</p>
+                    <p className="reveal truncate text-xs text-stone-500">{npc.location}</p>
                   ) : null}
                   {npc.trait ? (
-                    <p className="mt-1 line-clamp-2 text-sm text-stone-300">{npc.trait}</p>
+                    <p className="reveal mt-1 line-clamp-2 text-sm text-stone-300">{npc.trait}</p>
                   ) : null}
                   <p className="mt-1 truncate text-[11px] text-stone-500">
                     {relations} {relations === 1 ? "relationship" : "relationships"}
@@ -204,8 +209,9 @@ export function CastRows({ npcs, onOpen, factionNames }: Omit<ListProps, "select
               "flex w-full items-center gap-3 border-dashed p-3 text-left text-stone-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40",
             )}
           >
-            <span className="flex size-11 shrink-0 items-center justify-center rounded-full border border-dashed border-stone-600">
-              <UserPlus className="size-4" />
+            <span className="relative shrink-0">
+              <GameIcon icon={{ kind: "glyph", key: "system-cast" }} size="size-11" />
+              <UserPlus className="absolute -bottom-1 -right-1 size-4 rounded-full bg-stone-900 p-0.5 text-amber-300" aria-hidden="true" />
             </span>
             <span className="font-display tracking-wide">Someone new</span>
           </button>
@@ -213,11 +219,11 @@ export function CastRows({ npcs, onOpen, factionNames }: Omit<ListProps, "select
       </ul>
 
       {npcs.length === 0 ? (
-        <p className="text-[11px] text-stone-500">
+        <p className="reveal text-[11px] text-stone-500">
           Nobody written yet. Everything here also fills itself in as the party meets people.
         </p>
       ) : shown.length === 0 ? (
-        <p className="text-[11px] text-stone-500">Nobody by that name or alias.</p>
+        <p className="live-in text-xs text-stone-500">Nobody by that name or alias.</p>
       ) : null}
     </div>
   );

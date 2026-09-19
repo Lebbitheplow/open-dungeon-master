@@ -45,7 +45,7 @@ export default function LicensesPage() {
           is listed below.
         </p>
         {!installed ? (
-          <p className="rounded border border-stone-700 bg-stone-900 p-3 text-stone-400">
+          <p className="reveal rounded border border-stone-700 bg-stone-900 p-3 text-stone-400">
             The Open5e content pack is not installed on this server. Run
             <span className="font-mono"> node scripts/import-open5e.mjs</span> to download
             it; until then the app uses only the bundled SRD 5.1 data.
@@ -66,7 +66,7 @@ export default function LicensesPage() {
                   <span className="text-xs text-amber-200">{document.license}</span>
                 </div>
                 {document.author ? (
-                  <p className="mt-1 text-xs text-stone-400">by {document.author}</p>
+                  <p className="reveal mt-1 text-xs text-stone-400">by {document.author}</p>
                 ) : null}
                 {document.url ? (
                   <a

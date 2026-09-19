@@ -1,0 +1,36 @@
+/* The DM console (src/app/campaigns/[campaignId]/Dm*.tsx). Layout comes from
+   utilities in the components; this file holds only what a utility cannot
+   say: the plate's gold spine, the desk card's wrapping head, the readout
+   rules, and the day theme's ink. */
+
+/* A desk card sits in a 20rem side panel: the kit section head must not push
+   it wider, so a long title may wrap instead of forcing a scroll. */
+.dm-card .section-head-title { white-space: normal; line-height: 1.25; }
+.dm-card .section-head { margin-bottom: 0.5rem; }
+
+/* An action plate: a thin gold spine that lights when the row is aimed at. */
+.dm-plate { position: relative; overflow: hidden; }
+.dm-plate::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2px;
+  background: linear-gradient(180deg, transparent, rgba(212, 171, 58, 0.75), transparent);
+  opacity: 0;
+  transition: opacity var(--dur-quick, 180ms) var(--ease-settle, ease-out);
+}
+.dm-plate:hover::before,
+.dm-plate:focus-visible::before,
+.dm-plate:active::before { opacity: 1; }
+
+/* A readout row in the odds card. */
+.dm-readout { border-bottom: 1px dashed rgba(120, 113, 108, 0.25); }
+.dm-readout:last-child { border-bottom: 0; }
+
+/* Day: parchment wants ink, not pale gold, on the small captions. */
+html[data-theme="light"] .dm-label { color: #7a5a12; }
+html[data-theme="light"] .dm-readout { border-bottom-color: rgba(120, 95, 40, 0.3); }
+
+@media (prefers-reduced-motion: reduce) {
+  .dm-plate::before { transition: none; }
+}

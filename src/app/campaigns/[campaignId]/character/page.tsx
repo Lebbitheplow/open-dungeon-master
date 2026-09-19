@@ -1,9 +1,11 @@
 "use client";
 
-import { Loader2, Plus, UserRound } from "lucide-react";
+import { ChevronLeft, Plus, UserRound } from "lucide-react";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { PageSkeleton } from "@/components/PageSkeleton";
 import { useSearchParams } from "next/navigation";
 import { Suspense, use, useEffect, useState } from "react";
-import { Ribbon } from "@/components/ui/Ribbon";
 import { cn } from "@/lib/cn";
 import { IconChip, PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
 import CharacterBuilder, {
@@ -123,9 +125,7 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
   if (level === null) {
     return (
       <main className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
-        <div className="flex justify-center py-10">
-          <Loader2 className="size-5 animate-spin text-stone-500" />
-        </div>
+        <PageSkeleton kind="flat" className="px-0 py-2" />
       </main>
     );
   }
@@ -133,13 +133,13 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
       <header className="mb-5">
-        <a href={`/campaigns/${campaignId}`} className="text-sm text-stone-500 hover:text-stone-300">
-          &larr; Back to the lobby
+        <a href={`/campaigns/${campaignId}`} className={cn(ui.btnSmall, "text-xs")}>
+          <ChevronLeft className="size-3.5" /> Back to the lobby
         </a>
         <div className="mt-2 flex items-center gap-3">
           <PixelTile src={PIXEL_ICONS.characters} />
           <div>
-            <h1 className="font-display text-2xl tracking-wide text-amber-50">
+            <h1 className="gold-title font-display text-2xl">
               {flow === "edit"
                 ? "Edit your character"
                 : flow === "replace"
@@ -157,14 +157,14 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
       </header>
 
       {mode === "choose" ? (
-        <section className="space-y-4">
-          <Ribbon>From your library</Ribbon>
-          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <section className="reveal space-y-4">
+          <SectionHead title="From your library" glyph="tab-characters" level="h2" aside={<span className="text-xs text-stone-400">{library.length}</span>} />
+          <ul className="stagger-up grid grid-cols-1 gap-3 sm:grid-cols-2">
             {library.map((character) => (
               <li key={character.id}>
                 <button
                   type="button"
-                  disabled={busy}
+                  disabled={busy} aria-busy={busy}
                   onClick={() => pickFromLibrary(character.id)}
                   className={cn(ui.cardHover, "w-full p-4 text-left disabled:opacity-50")}
                 >
@@ -179,7 +179,8 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
                     ) : (
                       <IconChip icon={UserRound} size="size-8" iconSize="size-4" />
                     )}
-                    <span className="font-medium text-stone-100">{character.name}</span>
+                    <span className="min-w-0 truncate font-display tracking-wide text-stone-100">{character.name}</span>
+                    <GameIcon icon={{ kind: "family", key: `class-${character.class.toLowerCase()}` }} size="size-7" className="ml-auto" />
                     {character.id === currentLibraryId ? (
                       <span className="rounded-full border border-amber-500/30 bg-amber-400/10 px-2 py-0.5 text-[11px] text-amber-200">
                         current
@@ -192,7 +193,7 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
                     {character.subclass ? ` (${character.subclass})` : ""}
                   </p>
                   {character.level !== level ? (
-                    <p className="mt-1 text-xs text-amber-200">
+                    <p className="reveal mt-1 text-xs text-amber-200">
                       Will be adapted to level {level}
                     </p>
                   ) : null}
@@ -207,7 +208,7 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
           >
             <Plus className="size-4" /> Create a new character instead
           </button>
-          {error ? <p className="text-sm text-red-400">{error}</p> : null}
+          {error ? <p className="motion-shake text-sm text-red-400">{error}</p> : null}
         </section>
       ) : (
         <>
@@ -215,9 +216,9 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
             <button
               type="button"
               onClick={() => setMode("choose")}
-              className="mb-4 text-sm text-amber-200 hover:text-amber-400"
+              className={cn(ui.btnSmall, "mb-4")}
             >
-              &larr; Or pick one from your library
+              <ChevronLeft className="size-3.5" /> Or pick one from your library
             </button>
           ) : null}
           <CharacterBuilder
@@ -253,9 +254,7 @@ export default function CampaignCharacterPage({
     <Suspense
       fallback={
         <main className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
-          <div className="flex justify-center py-10">
-            <Loader2 className="size-5 animate-spin text-stone-500" />
-          </div>
+          <PageSkeleton kind="flat" className="px-0 py-2" />
         </main>
       }
     >

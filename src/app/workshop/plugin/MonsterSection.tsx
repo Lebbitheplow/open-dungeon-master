@@ -1,5 +1,7 @@
 "use client";
 
+import { rowIcon } from "@/app/workshop/kit";
+import { SectionHead } from "@/components/ui/SectionHead";
 import { X } from "lucide-react";
 import { ContentPick } from "@/components/ui/ContentPick";
 import { normalizeCreatureType } from "@/lib/bestiary/statblock";
@@ -27,11 +29,11 @@ export function MonsterSection({ draft, onDraft }: SectionProps) {
   const set = (next: typeof list) => onDraft({ ...draft, monsters: next });
   return (
     <section className={ui.card + " p-4"}>
-      <h3 className="font-display text-base tracking-wide text-amber-200">Monsters</h3>
+      <SectionHead title="Monsters" glyph="system-bestiary" className="mb-0" />
       <p className="mb-3 text-[11px] text-stone-500">
         Pick a creature from the content pack and give it the world&apos;s name. The stat block, rating and type come with it. Upload a picture for it under Pictures.
       </p>
-      <div className="space-y-1.5">
+      <div className="stagger space-y-1.5">
         {list.map((entry, index) => (
           <div key={`${entry.slug}-${index}`} className="flex flex-wrap items-center gap-1.5 rounded-lg border border-stone-800 p-2">
             <MonsterTile
@@ -69,7 +71,7 @@ export function MonsterSection({ draft, onDraft }: SectionProps) {
               type="button"
               onClick={() => set(removeAt(list, index))}
               aria-label={`Remove ${entry.slug}`}
-              className="rounded-md p-1 text-stone-600 hover:text-red-300"
+              className={cn(ui.iconAction, rowIcon, "hover:text-red-300")}
             >
               <X className="size-3.5" />
             </button>

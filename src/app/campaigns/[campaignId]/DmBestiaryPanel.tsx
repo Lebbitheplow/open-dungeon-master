@@ -1,8 +1,13 @@
 "use client";
 
+import { EmptyState } from "@/components/EmptyState";
 import { useCallback, useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, Copy, Skull, Trash2 } from "lucide-react";
+import { cn } from "@/lib/cn";
 import { MonsterTile, ui } from "@/lib/ui";
+import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { RowMenu } from "@/app/campaigns/[campaignId]/PanelKit";
+import { DisclosureHead, quietRow } from "@/app/campaigns/[campaignId]/DmConsoleParts";
 import { MONSTER_NAME_MAX, type MonsterDraft, type MonsterReadout } from "@/lib/bestiary/monster-draft";
 import { Sheet } from "@/components/ui/Sheet";
 import { useTourPrepare } from "@/lib/tours/prepare";
@@ -195,23 +200,15 @@ export function DmBestiaryPanel({
     return (
       <div className="space-y-3">
         <section className={`${ui.card} p-3`}>
-          <button
-            type="button"
-            onClick={() => setBuilding((current) => !current)}
-            aria-expanded={building}
-            data-tour="bestiary-build"
-            className="flex w-full items-center gap-2 text-left font-display text-sm tracking-wide text-amber-100"
-          >
-            <Skull className="size-4 text-amber-300" />
-            Build a monster
-            {building ? (
-              <ChevronDown className="ml-auto size-4 text-stone-500" />
-            ) : (
-              <ChevronRight className="ml-auto size-4 text-stone-500" />
-            )}
-          </button>
+          <DisclosureHead
+            open={building}
+            onToggle={() => setBuilding((current) => !current)}
+            glyph="system-bestiary"
+            title="Build a monster"
+            tour="bestiary-build"
+          />
           {building ? (
-            <div className="mt-3">
+            <div className="reveal mt-3">
               <MonsterBuildControls
                 busy={busy}
                 found={found}
@@ -264,51 +261,44 @@ export function DmBestiaryPanel({
       />
 
       <div className="flex flex-col gap-1.5">
+        <SectionHead
+          title="Your monsters"
+          glyph="system-bestiary"
+          aside={monsters.length ? <span key={monsters.length} className="count-pop">{monsters.length}</span> : undefined}
+        />
         {monsters.length === 0 ? (
-          <p className="text-xs text-stone-500">
-            Nothing built yet. A monster made here answers to its name wherever a fight starts.
-          </p>
+          <EmptyState size="sm" art="chest" title="Nothing built yet. A monster made here answers to its name wherever a fight starts." />
         ) : null}
-        {monsters.map((monster) => (
-          <div key={monster.id} className="rounded-lg border border-stone-800 bg-stone-900/40">
-            <div className="flex items-center gap-2 p-2">
-              <MonsterTile
-                type={monster.draft.stats.type}
-                cr={monster.draft.stats.cr}
-                genre={genre}
-                seed={monster.draft.name}
-                size="size-8"
-              />
-              <button
-                type="button"
-                onClick={() => (openId === monster.id ? setOpenId(null) : open(monster))}
-                className="flex-1 text-left"
-              >
-                <span className="text-sm text-stone-200">{monster.draft.name}</span>
-                <span className="ml-2 text-[11px] text-stone-500">{monster.summary}</span>
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                aria-label={`Duplicate ${monster.draft.name}`}
-                onClick={() => void duplicate(monster)}
-                className="text-stone-600 hover:text-stone-300 disabled:opacity-40"
-              >
-                <Copy className="size-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => void remove(monster.id)}
-                className="text-stone-600 hover:text-red-300"
-                aria-label={`Delete ${monster.draft.name}`}
-              >
-                <Trash2 className="size-3.5" />
-              </button>
-            </div>
+        {monsters.map((monster) => {
+          const isOpen = openId === monster.id;
+          const toggle = () => (isOpen ? setOpenId(null) : open(monster));
+          // The labels are the names the two icon buttons always announced.
+          const items: ContextMenuItem[] = [
+            { id: "open", label: isOpen ? "Close the stat block" : "Open the stat block", glyph: "system-bestiary", onSelect: toggle },
+            { id: "duplicate", label: `Duplicate ${monster.draft.name}`, glyph: "system-homebrew", disabled: busy, onSelect: () => void duplicate(monster) },
+            { id: "delete", label: `Delete ${monster.draft.name}`, glyph: "quest-failed", tone: "danger", separated: true, onSelect: () => void remove(monster.id) },
+          ];
+          return (
+            <ContextMenu key={monster.id} items={items} label={monster.draft.name} className={cn(ui.card, "rounded-lg")}>
+              <div className="flex items-center gap-2 p-2">
+                <MonsterTile
+                  type={monster.draft.stats.type}
+                  cr={monster.draft.stats.cr}
+                  genre={genre}
+                  seed={monster.draft.name}
+                  size="size-9"
+                />
+                <button type="button" onClick={toggle} aria-expanded={isOpen} className={cn(ui.btnSmall, quietRow, "flex-1 flex-wrap gap-x-2 gap-y-0")}>
+                  <span className="text-sm text-stone-100">{monster.draft.name}</span>
+                  <span className="text-[11px] text-stone-400">{monster.summary}</span>
+                </button>
+                <RowMenu items={items} label={monster.draft.name} />
+              </div>
 
-            {openId === monster.id ? editor : null}
-          </div>
-        ))}
+              {isOpen ? editor : null}
+            </ContextMenu>
+          );
+        })}
       </div>
     </div>
   );

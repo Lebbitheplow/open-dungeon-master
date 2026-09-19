@@ -1,14 +1,20 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { InfoButton } from "@/components/ui/InfoDialog";
+import { Select } from "@/components/ui/Select";
 import { STANDARD_LANGUAGES } from "@/lib/content/mechanics";
 import { describeRace } from "@/lib/help";
-import OptionPicker, { type PickerGroup } from "../OptionPicker";
+import type { Reskinned } from "@/lib/worlds/reskin-logic";
+import { LineageCarousel, type LineageSlide } from "../LineageCarousel";
+import { asiChips, flattenGroups, lineageArt, lineageTagline } from "../lineage";
+import { OptionCardGrid, type OptionCardGroup } from "../OptionCardGrid";
+import type { PickerGroup } from "../OptionPicker";
 import { RacialChoicesSection } from "../RacialChoicesSection";
 import type { BackgroundOption, RaceOption } from "../useBuilderOptions";
 import type { BuilderState } from "../useBuilderState";
 import { bonusLanguageCount } from "../submit";
-import { Field, StepPanel, inputClass } from "./shared";
+import { StepPanel, inputClass } from "./shared";
 
 function languageHelp(race: RaceOption, background: BackgroundOption | undefined): string {
   const parts = [`${race.name} speaks ${race.languages.join(" and ")}`];
@@ -23,43 +29,120 @@ function languageHelp(race: RaceOption, background: BackgroundOption | undefined
   return `${parts.join(" ")}.`;
 }
 
-// Step 2: where they are from. The race picker, then every choice the race
-// leaves to the player: bonus languages, ability bumps, skills, tool, cantrip.
+// Step 2: where they are from. The lineage grid (every race the picker
+// offered, in the picker's groups and order, the setting's peoples first and
+// badged), the detail carousel behind each card's "?", then every choice the
+// race leaves to the player: bonus languages, ability bumps, skills, tool,
+// cantrip.
 export function AncestryStep({
   state,
   race,
   background,
+  races,
   raceGroups,
 }: {
   state: BuilderState;
   race: RaceOption | undefined;
   background: BackgroundOption | undefined;
+  races: Array<Reskinned<RaceOption>>;
   raceGroups: PickerGroup[];
 }) {
   // The race's bonus languages plus the background's (an acolyte or a sage
   // learns two more), which used to be loaded and never asked for.
   const languageCount = bonusLanguageCount(race, background);
+  const [detailIndex, setDetailIndex] = useState<number | null>(null);
+  const { gender } = state;
+
+  // One slide per picker row, in the picker's order, so the carousel walks
+  // exactly what the grid shows.
+  const slides = useMemo<LineageSlide[]>(
+    () =>
+      flattenGroups(raceGroups).flatMap(({ option, group, recommended }) => {
+        const entry = races.find((candidate) => candidate.id === option.id);
+        if (!entry) {
+          return [];
+        }
+        return [
+          {
+            ...entry,
+            art: lineageArt(entry.id, `${option.meta ?? ""} ${entry.name}`, gender),
+            canonical: option.meta,
+            group,
+            recommended,
+            info: { text: option.infoText, reference: option.reference },
+          },
+        ];
+      }),
+    [raceGroups, races, gender],
+  );
+
+  const cardGroups = useMemo<OptionCardGroup[]>(
+    () =>
+      raceGroups.map((group) => ({
+        label: group.label,
+        recommended: group.recommended,
+        options: group.options.flatMap((option) => {
+          const slide = slides.find((candidate) => candidate.id === option.id);
+          if (!slide) {
+            return [];
+          }
+          return [
+            {
+              id: slide.id,
+              name: slide.name,
+              meta: slide.canonical,
+              art: slide.art,
+              // Under a reskin the canonical name leads, so a player always
+              // knows which SRD race they are actually taking.
+              tagline: [slide.canonical, lineageTagline(slide)].filter(Boolean).join(" · "),
+              chips: asiChips(slide.asi)
+                .slice(0, 2)
+                .map((chip) => chip.label),
+            },
+          ];
+        }),
+      })),
+    [raceGroups, slides],
+  );
+
   return (
     <div className="space-y-4">
-      <StepPanel title="Where are they from?" ornate>
-        <Field label="Race">
-          <OptionPicker
-            value={race?.id ?? ""}
-            groups={raceGroups}
-            className={inputClass}
-            onChange={state.changeRace}
-          />
-          {race?.note ? (
-            <span className="mt-1 flex items-start gap-1 text-xs text-stone-500">
-              <span className="line-clamp-2 grow">{race.note}</span>
-              <InfoButton
-                label={race.name}
-                text={describeRace(race.id) ?? race.note}
-                reference={{ kind: "races", slug: race.id }}
-              />
+      <StepPanel
+        title="Where are they from?"
+        ornate
+        help={
+          race
+            ? `${race.name} is chosen. Every lineage grants its own ability bumps, senses and tongues: tap a card to choose it, or its ? to read what it hands you first.`
+            : "Tap a card to choose a lineage, or its ? to read what it hands you first."
+        }
+      >
+        {race?.note ? (
+          <span className="mb-3 flex items-start gap-1 text-xs text-stone-500">
+            <span className="line-clamp-2 grow">
+              <span className="text-amber-200">{race.name}: </span>
+              {race.note}
             </span>
-          ) : null}
-        </Field>
+            <InfoButton
+              label={race.name}
+              text={describeRace(race.id) ?? race.note}
+              reference={{ kind: "races", slug: race.id }}
+            />
+          </span>
+        ) : null}
+        <OptionCardGrid
+          groups={cardGroups}
+          value={race?.id ?? ""}
+          onChoose={state.changeRace}
+          onDetails={(id) => setDetailIndex(slides.findIndex((slide) => slide.id === id))}
+          noun="lineage"
+        />
+        <LineageCarousel
+          slides={slides}
+          index={detailIndex !== null && detailIndex >= 0 ? detailIndex : null}
+          onIndexChange={setDetailIndex}
+          chosenId={race?.id ?? ""}
+          onChoose={state.changeRace}
+        />
       </StepPanel>
 
       {race && languageCount > 0 ? (
@@ -79,29 +162,28 @@ export function AncestryStep({
         >
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {Array.from({ length: languageCount }, (_, index) => (
-              <select
+              <Select<string>
                 key={index}
                 value={state.bonusLanguages[index] ?? ""}
-                onChange={(event) =>
+                onChange={(picked) =>
                   state.setBonusLanguages((current) => {
                     const next = [...current];
-                    next[index] = event.target.value;
+                    next[index] = picked;
                     return next;
                   })
                 }
-                className={inputClass}
-                aria-label={`Bonus language ${index + 1}`}
-              >
-                <option value="">Choose a language...</option>
-                {STANDARD_LANGUAGES.filter(
-                  (language) =>
-                    !race.languages.includes(language) &&
-                    (state.bonusLanguages[index] === language ||
-                      !state.bonusLanguages.includes(language)),
-                ).map((language) => (
-                  <option key={language} value={language}>{language}</option>
-                ))}
-              </select>
+                className="w-full"
+                label={`Bonus language ${index + 1}`}
+                placeholder="Choose a language..."
+                options={[
+                  { value: "", label: "Choose a language..." },
+                  ...STANDARD_LANGUAGES.filter(
+                    (language) =>
+                      !race.languages.includes(language) &&
+                      (state.bonusLanguages[index] === language || !state.bonusLanguages.includes(language)),
+                  ).map((language) => ({ value: language as string, label: language as string })),
+                ]}
+              />
             ))}
           </div>
         </StepPanel>

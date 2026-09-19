@@ -3,6 +3,7 @@
 import { ChevronsLeft, ChevronsRight } from "lucide-react";
 import { memo, useMemo, useSyncExternalStore } from "react";
 import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
 import { IconRail, type IconRailItem } from "@/components/ui/IconRail";
 import { Tooltip } from "@/components/ui/Tooltip";
 import {
@@ -94,20 +95,21 @@ function SidePanelInner({
       )}
     >
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-3">
-        <div className="mx-auto w-full max-w-2xl lg:max-w-none">
+        {/* Keyed by tab so the incoming panel rises in instead of cutting. */}
+        <div key={tab} className="motion-tab mx-auto w-full max-w-2xl lg:max-w-none">
           <SidePanelRouter {...content} />
         </div>
       </div>
       {/* The rail sits on the outer edge, away from the chat, so the eye
           reads chat, context, then the switch between contexts. It scrolls
           on a short window rather than clipping the last tabs. */}
-      <div className="hidden w-16 shrink-0 flex-col items-stretch gap-1 overflow-y-auto border-l border-stone-700/40 px-1.5 py-2 [scrollbar-width:none] lg:flex">
+      <div className="hidden w-16 shrink-0 flex-col items-stretch gap-1 overflow-y-auto border-l border-amber-500/15 bg-gradient-to-b from-stone-950/60 to-transparent px-1.5 py-2 [scrollbar-width:none] lg:flex">
         <Tooltip content={wide ? "Narrow the panel" : "Widen the panel"} side="left">
           <button
             type="button"
             onClick={() => setWide(!wide)}
             aria-label={wide ? "Narrow the panel" : "Widen the panel"}
-            className="flex h-8 items-center justify-center rounded-lg text-stone-500 transition-colors hover:bg-stone-900/60 hover:text-stone-300"
+            className={cn(ui.railCell, "h-8 shrink-0 justify-center py-0")}
           >
             {wide ? <ChevronsRight className="size-4" /> : <ChevronsLeft className="size-4" />}
           </button>

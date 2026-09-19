@@ -1,0 +1,156 @@
+/* The Hand's beats (imported by hand.css, which holds the cards themselves).
+   Each one is a motion the "The Hand" mockup draws, on its own timing: the
+   pips spending, the target buttons popping in 40 ms apart, the committed card
+   arriving face up and spending itself, the rows filing in like its log, the
+   hand folding away. Nothing here loops, so low effects keeps all of it; the
+   reduced-motion block at the foot rests every one.
+
+   Buttons that already move through `transform` (motion-press, the spine's
+   hover) are animated on the individual `scale` and `translate` properties,
+   and only fill backwards, so the two never fight over one property. */
+
+/* ---- the action economy (mockup: opacity over --dur-beat, edge over --dur-quick) ---- */
+
+.hand-pip {
+  /* The strike is always there and only its ink arrives, because a
+     decoration line cannot ease in but its colour can. */
+  text-decoration-line: line-through;
+  text-decoration-color: transparent;
+  transition:
+    color var(--dur-beat) var(--ease-snap),
+    background-color var(--dur-beat) var(--ease-snap),
+    text-decoration-color var(--dur-beat) var(--ease-snap),
+    border-color var(--dur-quick) var(--ease-snap);
+}
+.hand-pip[data-used="true"] { text-decoration-color: currentColor; }
+
+/* Whose turn it is changes like a line arriving in the mockup's log. */
+.hand-label { animation: hand-file-in var(--dur-move) var(--ease-settle) both; }
+@keyframes hand-file-in {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* ---- the aim bar ---- */
+
+/* The mockup's pop-centred on each target, 40 ms apart. */
+.hand-target,
+.hand-rider {
+  animation: hand-chip-pop var(--dur-quick) var(--ease-settle) backwards;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+/* The first name stays in the list so choosing a target never replays the
+   arrival; the second is the answer to the press. */
+.hand-target[aria-pressed="true"] {
+  animation: hand-chip-pop var(--dur-quick) var(--ease-settle) backwards, hand-chip-on 280ms var(--ease-spring);
+  animation-delay: calc(var(--i, 0) * 40ms), 0s;
+}
+@keyframes hand-chip-pop {
+  from { opacity: 0; scale: 0.6; }
+}
+@keyframes hand-chip-on {
+  0% { scale: 0.94; }
+  60% { scale: 1.04; }
+  100% { scale: 1; }
+}
+
+/* What the card will do files in row by row, and a number that changes with
+   the target (the odds, the expected damage) ticks over instead of cutting. */
+.hand-aim .hand-row {
+  animation: hand-file-in var(--dur-move) var(--ease-settle) backwards;
+  animation-delay: calc(60ms + var(--i, 0) * 30ms);
+}
+.hand-aim .hand-row-value { animation: hand-value-in var(--dur-quick) var(--ease-snap) backwards; }
+@keyframes hand-value-in {
+  from { opacity: 0; transform: translateY(4px); }
+}
+
+/* ---- the committed card, face up over the hand ----
+   The mockup's card-play, then its card-spend after the 820 ms the die takes.
+   translate(-50%) sits inside both keyframes or the card drifts off centre. */
+
+.hand-played {
+  position: absolute;
+  left: 50%;
+  top: 112px;
+  width: 190px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(212, 171, 58, 0.6);
+  background: var(--hand-face);
+  box-shadow: 0 0 14px rgba(212, 171, 58, 0.35), 0 16px 40px rgba(4, 2, 12, 0.6);
+  pointer-events: none;
+  z-index: 20;
+  transform: translate(-50%, 0);
+  animation:
+    hand-commit-play var(--dur-beat) var(--ease-settle) both,
+    hand-commit-spend var(--dur-beat) var(--ease-snap) 820ms forwards;
+}
+.hand-played-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 6px; }
+.hand-played-name { display: block; font-family: var(--font-display); font-size: 15px; font-weight: 700; line-height: 1.2; color: var(--hand-ink); }
+.hand-played .hand-dice { display: block; margin-top: 4px; font-size: 10px; }
+@keyframes hand-commit-play {
+  0% { opacity: 0; transform: translate(-50%, 40px) scale(0.7) rotate(-6deg); }
+  45% { opacity: 1; }
+  100% { opacity: 1; transform: translate(-50%, 0) scale(1) rotate(0deg); }
+}
+@keyframes hand-commit-spend {
+  0% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -26px) scale(1.06); }
+}
+html[data-theme="light"] .hand-played { border-color: #a6842a; box-shadow: 0 0 0 2px rgba(201, 164, 68, 0.45), 0 16px 34px rgba(60, 40, 10, 0.3); }
+
+/* ---- the spine, and the sheet behind it ---- */
+
+.hand-more {
+  animation: hand-more-in var(--dur-beat) var(--ease-settle) backwards;
+  animation-delay: calc(var(--i, 9) * 38ms);
+}
+@keyframes hand-more-in {
+  from { opacity: 0; translate: 0 40px; }
+}
+.hand-more-row {
+  animation: hand-file-in var(--dur-move) var(--ease-settle) backwards;
+  animation-delay: calc(120ms + min(var(--i, 0), 12) * 30ms);
+}
+
+/* ---- putting the hand away: the fan-in, run backwards ---- */
+
+.hand-fan[data-folding="true"] { pointer-events: none; }
+.hand-fan[data-folding="true"] .hand-slot {
+  animation: hand-fan-out var(--dur-move) var(--ease-snap) both;
+  animation-delay: calc(var(--i, 0) * 20ms);
+}
+.hand-fan[data-folding="true"] .hand-more {
+  animation: hand-more-out var(--dur-move) var(--ease-snap) both;
+  animation-delay: 0s;
+}
+@keyframes hand-fan-out {
+  to { opacity: 0; transform: rotate(0deg) translateY(86px) scale(0.9); }
+}
+@keyframes hand-rail-out {
+  to { opacity: 0; transform: translateX(28px); }
+}
+@keyframes hand-more-out {
+  to { opacity: 0; translate: 0 40px; }
+}
+
+@media (max-width: 639px) {
+  .hand-played { top: 34px; }
+  .hand-fan[data-folding="true"] .hand-slot { animation-name: hand-rail-out; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hand-pip { transition: none; }
+  .hand-label,
+  .hand-target,
+  .hand-target[aria-pressed="true"],
+  .hand-rider,
+  .hand-aim .hand-row,
+  .hand-aim .hand-row-value,
+  .hand-played,
+  .hand-more,
+  .hand-more-row,
+  .hand-fan[data-folding="true"] .hand-slot,
+  .hand-fan[data-folding="true"] .hand-more { animation: none; }
+}

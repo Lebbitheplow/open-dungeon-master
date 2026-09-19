@@ -2,126 +2,39 @@
 
 import { Check, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { cn } from "@/lib/cn";
 import { shellHost } from "@/lib/shell-host";
 import { ui } from "@/lib/ui";
 import { PageSection } from "@/components/PageShell";
+import { PageSkeleton } from "@/components/PageSkeleton";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { NumberStepper } from "@/components/ui/NumberStepper";
 import { AdminInvitesSection } from "@/app/admin/AdminInvitesSection";
+import { AdminNetworkSections } from "@/app/admin/AdminNetworkSections";
+import {
+  Field,
+  SECRET_KEPT,
+  SecretField,
+  SelectField,
+  type EnvDefaults,
+  type MaskedConfig,
+} from "@/app/admin/AdminSettingsFields";
 
-type MaskedConfig = {
-  signupsEnabled: boolean;
-  signupMode: "open" | "invite" | "closed";
-  serverName: string;
-  accountDeletionGraceDays: number;
-  publicUrl: string;
-  text: {
-    provider: "" | "local" | "custom";
-    localTextModel: string;
-    customBaseUrl: string;
-    customModel: string;
-    hasCustomApiKey: boolean;
-    utilityProvider: "" | "local" | "custom";
-    utilityModel: string;
-    utilityBaseUrl: string;
-    hasUtilityApiKey: boolean;
-  };
-  images: {
-    defaultBackend: "" | "comfyui" | "openai" | "mflux-hs" | "sdnq-hs";
-    comfyUrl: string;
-    comfyCheckpoint: string;
-    fluxWorkerUrl: string;
-    openaiBaseUrl: string;
-    openaiModel: string;
-    hasOpenaiApiKey: boolean;
-  };
-  speech: { kokoroUrl: string; sttUrl: string };
-  voiceChat: {
-    enabled: "" | "on" | "off";
-    mode: "" | "sfu" | "mesh";
-    announcedIp: string;
-    domain: string;
-    rtcPort: string;
-  };
-  discord: { clientId: string; hasClientSecret: boolean };
-};
+// The sticky contents rail: one stop per section, left out where a device
+// world hides the section itself.
+const STOPS: Array<{ id: string; label: string; glyph: string; server?: boolean }> = [
+  { id: "admin-server", label: "Server", glyph: "tab-settings", server: true },
+  { id: "admin-accounts", label: "Accounts", glyph: "tab-characters", server: true },
+  { id: "admin-text", label: "Text model", glyph: "system-lore" },
+  { id: "admin-utility", label: "Utility model", glyph: "tab-log" },
+  { id: "admin-images", label: "Images", glyph: "sense-truesight" },
+  { id: "admin-speech", label: "Speech", glyph: "tab-ambience" },
+  { id: "admin-voice", label: "Voice chat", glyph: "cue-horn", server: true },
+  { id: "admin-discord", label: "Discord", glyph: "system-share", server: true },
+];
 
-type EnvDefaults = {
-  customBaseUrl: string;
-  customModel: string;
-  hasCustomApiKey: boolean;
-  comfyUrl: string;
-  fluxWorkerUrl: string;
-  imageBackend: string;
-  hasOpenaiImageApiKey: boolean;
-  kokoroUrl: string;
-  sttUrl: string;
-  discordClientId: string;
-  hasDiscordClientSecret: boolean;
-  publicUrl: string;
-  voiceEnabled: boolean;
-  voiceAnnouncedIp: string;
-  voiceDomain: string;
-  voiceRtcPort: string;
-};
-
-// A secret field never receives its stored value; SECRET_KEPT means "leave it
-// as is" and is stripped from the patch before sending.
-const SECRET_KEPT = "\u0000keep";
-
-function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-xs font-medium text-stone-400">{label}</span>
-      {children}
-      {hint ? <span className="mt-1 block text-[11px] text-stone-600">{hint}</span> : null}
-    </label>
-  );
-}
-
-function SecretField({
-  label,
-  isSet,
-  value,
-  onChange,
-  hint,
-}: {
-  label: string;
-  isSet: boolean;
-  value: string;
-  onChange: (value: string) => void;
-  hint?: string;
-}) {
-  const kept = value === SECRET_KEPT;
-  return (
-    <Field label={label} hint={hint}>
-      <div className="flex gap-2">
-        <input
-          type="password"
-          className={ui.input}
-          placeholder={isSet && kept ? "•••••••• (set)" : "Not set"}
-          value={kept ? "" : value}
-          onChange={(event) => onChange(event.target.value)}
-        />
-        {isSet && kept ? (
-          <button
-            type="button"
-            onClick={() => onChange("")}
-            className={cn(ui.btnSmall, "shrink-0 hover:text-red-400")}
-          >
-            Clear
-          </button>
-        ) : null}
-      </div>
-    </Field>
-  );
+function jumpTo(id: string) {
+  const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  document.getElementById(id)?.scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "start" });
 }
 
 // Global server settings. Each string setting overrides its env var; a blank
@@ -161,11 +74,7 @@ export function AdminSettingsPanel() {
   }, []);
 
   if (!config || !env) {
-    return (
-      <div className="flex justify-center py-10">
-        <Loader2 className="size-5 animate-spin text-stone-500" />
-      </div>
-    );
+    return <PageSkeleton kind="flat" className="px-0 py-2" />;
   }
 
   async function save() {
@@ -238,8 +147,15 @@ export function AdminSettingsPanel() {
 
   return (
     <div className="space-y-4">
+      <nav aria-label="Settings sections" className="contents-rail panel">
+        {STOPS.filter((stop) => !(deviceWorld && stop.server)).map((stop) => (
+          <button key={stop.id} type="button" onClick={() => jumpTo(stop.id)} className="motion-press">
+            <GameIcon icon={{ kind: "glyph", key: stop.glyph }} size="size-7" /> {stop.label}
+          </button>
+        ))}
+      </nav>
       {deviceWorld ? (
-        <p className="text-xs text-stone-500">
+        <p className="reveal text-xs text-stone-500">
           This world runs inside the app, which manages its address, sharing
           and voice chat for you. There are no passwords or sign-up rules to
           set: anyone you give a live room code to can join, and nobody else
@@ -247,7 +163,7 @@ export function AdminSettingsPanel() {
         </p>
       ) : null}
       {deviceWorld ? null : (
-        <PageSection heading="Server">
+        <PageSection id="admin-server" heading="Server" glyph="tab-settings">
           <div className="mb-3">
             <Field
               label="Server name"
@@ -281,23 +197,17 @@ export function AdminSettingsPanel() {
       )}
 
       {deviceWorld ? null : (
-        <PageSection heading="Accounts">
-          <Field label="New account sign-ups">
-            <select
-              className={ui.input}
-              value={config.signupMode}
-              onChange={(event) =>
-                setConfig({
-                  ...config,
-                  signupMode: event.target.value as MaskedConfig["signupMode"],
-                })
-              }
-            >
-              <option value="open">Open: anyone with the address can register</option>
-              <option value="invite">Invite-only: registering needs a code from below</option>
-              <option value="closed">Closed: no new accounts</option>
-            </select>
-          </Field>
+        <PageSection id="admin-accounts" heading="Accounts" glyph="tab-characters">
+          <SelectField
+            label="New account sign-ups"
+            value={config.signupMode}
+            onChange={(signupMode) => setConfig({ ...config, signupMode })}
+            options={[
+              { value: "open", label: "Open: anyone with the address can register" },
+              { value: "invite", label: "Invite-only: registering needs a code from below" },
+              { value: "closed", label: "Closed: no new accounts" },
+            ]}
+          />
           <p className="mt-2 text-xs text-stone-500">
             Applies to registration and to first-time Discord sign-ins alike. Existing users always
             keep their access.
@@ -305,23 +215,22 @@ export function AdminSettingsPanel() {
           {config.signupMode === "invite" ? <AdminInvitesSection /> : null}
           <div className="mt-4">
             <Field
+              group
               label="Account deletion grace period (days)"
               hint="When someone deletes their account it is signed out at once and erased after this many days; signing in before then keeps it. 0 erases immediately. Deleting a user from the Users tab always erases at once."
             >
-              <input
-                type="number"
+              <NumberStepper
+                label="Account deletion grace period (days)"
                 min={0}
                 max={90}
                 step={1}
-                className={cn(ui.input, "max-w-32")}
+                suffix="days"
                 value={config.accountDeletionGraceDays}
-                onChange={(event) => {
-                  const days = Math.round(Number(event.target.value));
+                onChange={(next) => {
+                  const days = Math.round(Number(next));
                   setConfig({
                     ...config,
-                    accountDeletionGraceDays: Number.isFinite(days)
-                      ? Math.min(90, Math.max(0, days))
-                      : 0,
+                    accountDeletionGraceDays: Number.isFinite(days) ? Math.min(90, Math.max(0, days)) : 0,
                   });
                 }}
               />
@@ -330,28 +239,22 @@ export function AdminSettingsPanel() {
         </PageSection>
       )}
 
-      <PageSection heading="Text model defaults">
+      <PageSection id="admin-text" heading="Text model defaults" glyph="system-lore">
         <p className="mb-3 text-xs text-stone-500">
           Defaults for new campaigns and fallbacks when a campaign leaves a field empty. Each
           campaign&apos;s own Text Model settings still win.
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Default provider">
-            <select
-              className={ui.input}
-              value={config.text.provider}
-              onChange={(event) =>
-                setConfig({
-                  ...config,
-                  text: { ...config.text, provider: event.target.value as "" | "local" | "custom" },
-                })
-              }
-            >
-              <option value="">Auto (env or built-in)</option>
-              <option value="custom">OpenAI-compatible server</option>
-              {phoneWorld ? null : <option value="local">Ollama (native)</option>}
-            </select>
-          </Field>
+          <SelectField
+            label="Default provider"
+            value={config.text.provider}
+            onChange={(provider) => setConfig({ ...config, text: { ...config.text, provider } })}
+            options={[
+              { value: "" as const, label: "Auto (env or built-in)" },
+              { value: "custom" as const, label: "OpenAI-compatible server" },
+              ...(phoneWorld ? [] : [{ value: "local" as const, label: "Ollama (native)" }]),
+            ]}
+          />
           {phoneWorld ? null : (
             <Field label="Local model (Ollama native)">
               <input
@@ -403,7 +306,7 @@ export function AdminSettingsPanel() {
         </div>
       </PageSection>
 
-      <PageSection heading="Utility model (optional)">
+      <PageSection id="admin-utility" heading="Utility model (optional)" glyph="tab-log">
         <p className="mb-3 text-xs text-stone-500">
           A second, smaller model for the mechanical work: history compaction, chapter summaries
           and fact extraction, world-arc ticks, lore checks, and Ask answers. None of it is
@@ -413,25 +316,16 @@ export function AdminSettingsPanel() {
           the story model picks the job up anyway.
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Provider">
-            <select
-              className={ui.input}
-              value={config.text.utilityProvider}
-              onChange={(event) =>
-                setConfig({
-                  ...config,
-                  text: {
-                    ...config.text,
-                    utilityProvider: event.target.value as "" | "local" | "custom",
-                  },
-                })
-              }
-            >
-              <option value="">Auto (Ollama)</option>
-              {phoneWorld ? null : <option value="local">Ollama (native)</option>}
-              <option value="custom">OpenAI-compatible server</option>
-            </select>
-          </Field>
+          <SelectField
+            label="Provider"
+            value={config.text.utilityProvider}
+            onChange={(utilityProvider) => setConfig({ ...config, text: { ...config.text, utilityProvider } })}
+            options={[
+              { value: "" as const, label: "Auto (Ollama)" },
+              ...(phoneWorld ? [] : [{ value: "local" as const, label: "Ollama (native)" }]),
+              { value: "custom" as const, label: "OpenAI-compatible server" },
+            ]}
+          />
           <Field
             label="Model name"
             hint="Blank = off. Anything in the 4B-8B class is plenty; e.g. gemma4:e4b-it-qat."
@@ -471,40 +365,29 @@ export function AdminSettingsPanel() {
         </div>
       </PageSection>
 
-      <PageSection heading="Image generation">
+      <PageSection id="admin-images" heading="Image generation" glyph="sense-truesight">
         <div className="mb-3">
-          <Field
+          <SelectField<MaskedConfig["images"]["defaultBackend"]>
             label="Default backend"
             hint={
               phoneWorld
                 ? "For new campaigns. The OpenAI API renders in the cloud with the key below and needs no GPU."
                 : "For new campaigns. ComfyUI and the FLUX workers run on this machine; the OpenAI API renders in the cloud with the key below and needs no GPU."
             }
-          >
-            <select
-              className={ui.input}
-              value={config.images.defaultBackend}
-              onChange={(event) =>
-                setConfig({
-                  ...config,
-                  images: {
-                    ...config.images,
-                    defaultBackend: event.target.value as MaskedConfig["images"]["defaultBackend"],
-                  },
-                })
-              }
-            >
-              <option value="">Auto ({env.imageBackend || "ComfyUI"})</option>
-              {phoneWorld ? null : <option value="comfyui">ComfyUI (local)</option>}
-              <option value="openai">OpenAI API (cloud, needs key)</option>
-              {phoneWorld ? null : (
-                <option value="mflux-hs">FLUX worker: mflux (Apple Silicon)</option>
-              )}
-              {phoneWorld ? null : (
-                <option value="sdnq-hs">FLUX worker: sdnq (CUDA/ROCm)</option>
-              )}
-            </select>
-          </Field>
+            value={config.images.defaultBackend}
+            onChange={(defaultBackend) => setConfig({ ...config, images: { ...config.images, defaultBackend } })}
+            options={[
+              { value: "", label: `Auto (${env.imageBackend || "ComfyUI"})` },
+              ...(phoneWorld ? [] : [{ value: "comfyui" as const, label: "ComfyUI (local)" }]),
+              { value: "openai", label: "OpenAI API (cloud, needs key)" },
+              ...(phoneWorld
+                ? []
+                : [
+                    { value: "mflux-hs" as const, label: "FLUX worker: mflux (Apple Silicon)" },
+                    { value: "sdnq-hs" as const, label: "FLUX worker: sdnq (CUDA/ROCm)" },
+                  ]),
+            ]}
+          />
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           {phoneWorld ? null : (
@@ -594,7 +477,7 @@ export function AdminSettingsPanel() {
 
       {/* Narration and speech-to-text. Named "Speech" so it is not confused
           with the Voice chat section below, which is a different feature. */}
-      <PageSection heading="Speech">
+      <PageSection id="admin-speech" heading="Speech" glyph="tab-ambience">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Kokoro TTS URL" hint={`Env: ${env.kokoroUrl}`}>
             <input
@@ -621,172 +504,26 @@ export function AdminSettingsPanel() {
 
 
       {deviceWorld ? null : (
-        <PageSection heading="Voice chat">
-          <p className="mb-3 text-xs text-stone-500">
-            Lets a table talk over live audio. Needs two things beyond this switch:
-            the app reached over <strong>https</strong> (browsers block microphone
-            access on plain http, except on localhost), and{" "}
-            <strong>one open port</strong> for both UDP and TCP. That port carries the
-            audio itself, which is not HTTP and cannot go through a reverse proxy, so
-            open it on your firewall pointing straight at this host.
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field
-              label="Voice chat"
-              hint={
-                config.voiceChat.enabled === ""
-                  ? `Following the server config: ${env.voiceEnabled ? "on" : "off"}`
-                  : "Overrides the server config."
-              }
-            >
-              <select
-                className={ui.input}
-                value={config.voiceChat.enabled}
-                onChange={(event) =>
-                  setConfig({
-                    ...config,
-                    voiceChat: {
-                      ...config.voiceChat,
-                      enabled: event.target.value as "" | "on" | "off",
-                    },
-                  })
-                }
-              >
-                <option value="">Use server config ({env.voiceEnabled ? "on" : "off"})</option>
-                <option value="on">On</option>
-                <option value="off">Off</option>
-              </select>
-            </Field>
-            <Field
-              label="Transport"
-              hint="The voice server needs the media port below open. Peer-to-peer needs no port and works through tunnels, but suits small tables: every player sends audio to every other player."
-            >
-              <select
-                className={ui.input}
-                value={config.voiceChat.mode}
-                onChange={(event) =>
-                  setConfig({
-                    ...config,
-                    voiceChat: {
-                      ...config.voiceChat,
-                      mode: event.target.value as "" | "sfu" | "mesh",
-                    },
-                  })
-                }
-              >
-                <option value="">Voice server (default)</option>
-                <option value="mesh">Peer-to-peer (mesh)</option>
-              </select>
-            </Field>
-            <Field
-              label="Media port"
-              hint={`Open for UDP and TCP. Env: ${env.voiceRtcPort}`}
-            >
-              <input
-                className={ui.input}
-                value={config.voiceChat.rtcPort}
-                onChange={(event) =>
-                  setConfig({
-                    ...config,
-                    voiceChat: { ...config.voiceChat, rtcPort: event.target.value },
-                  })
-                }
-                placeholder={env.voiceRtcPort}
-              />
-            </Field>
-            <Field
-              label="Announced address"
-              hint="The address a player's BROWSER can reach this host on, normally your public IP. Leave blank only for a localhost-only install."
-            >
-              <input
-                className={ui.input}
-                value={config.voiceChat.announcedIp}
-                onChange={(event) =>
-                  setConfig({
-                    ...config,
-                    voiceChat: { ...config.voiceChat, announcedIp: event.target.value },
-                  })
-                }
-                placeholder={env.voiceAnnouncedIp || "203.0.113.10"}
-              />
-            </Field>
-            <Field
-              label="Voice domain (optional)"
-              hint="Announce a hostname instead of the IP. It must resolve straight here: a Cloudflare-proxied name does not carry UDP, so calls would connect and stay silent."
-            >
-              <input
-                className={ui.input}
-                value={config.voiceChat.domain}
-                onChange={(event) =>
-                  setConfig({
-                    ...config,
-                    voiceChat: { ...config.voiceChat, domain: event.target.value },
-                  })
-                }
-                placeholder={env.voiceDomain || "voice.example.com"}
-              />
-            </Field>
-          </div>
-          {/* Hidden as soon as mesh is picked, even before saving: the warning
-              is about what the voice server announces, and mesh announces
-              nothing. */}
-          {voiceUnroutable && config.voiceChat.mode !== "mesh" ? (
-            <p className="mt-3 text-xs text-amber-400">
-              Voice will connect but stay silent for remote players: set an announced
-              address or domain.
-            </p>
-          ) : null}
-          <p className="mt-3 text-[11px] text-stone-600">
-            Port and address changes apply the next time somebody joins a call, once
-            nobody is connected. No server restart needed.
-          </p>
-        </PageSection>
-      )}
-
-      {deviceWorld ? null : (
-        <PageSection heading="Discord sign-in">
-          <p className="mb-3 text-xs text-stone-500">
-            Optional. Create an application at discord.com/developers, add the redirect URI
-            {" "}<code className="text-stone-400">&lt;public URL&gt;/api/auth/discord/callback</code>{" "}
-            (the exact address players use, e.g. https://your.domain or http://lan-host:3005),
-            then paste the client ID and secret. The login button appears once both are set.
-            Behind a reverse proxy, also set the Public URL in the Server section above.
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field
-              label="Client ID"
-              hint={env.discordClientId ? `Env: ${env.discordClientId}` : undefined}
-            >
-              <input
-                className={ui.input}
-                value={config.discord.clientId}
-                onChange={(event) =>
-                  setConfig({ ...config, discord: { ...config.discord, clientId: event.target.value } })
-                }
-                placeholder={env.discordClientId || "Not set"}
-              />
-            </Field>
-            <SecretField
-              label="Client secret"
-              isSet={config.discord.hasClientSecret}
-              value={discordSecret}
-              onChange={setDiscordSecret}
-              hint={env.hasDiscordClientSecret ? "An env-var secret is also set." : undefined}
-            />
-          </div>
-        </PageSection>
+        <AdminNetworkSections
+          config={config}
+          env={env}
+          setConfig={setConfig}
+          voiceUnroutable={voiceUnroutable}
+          discordSecret={discordSecret}
+          setDiscordSecret={setDiscordSecret}
+        />
       )}
 
       <div className="flex flex-wrap items-center gap-3">
-        <button type="button" onClick={save} disabled={saving} className={ui.btnPrimary}>
+        <button type="button" onClick={save} disabled={saving} aria-busy={saving} className={ui.btnPrimary}>
           {saving ? <Loader2 className="size-4 animate-spin" /> : null} Save settings
         </button>
         {saved ? (
-          <span className="inline-flex items-center gap-1 text-sm text-emerald-400">
+          <span role="status" className="live-in inline-flex items-center gap-1 text-sm text-emerald-400">
             <Check className="size-4" /> Saved
           </span>
         ) : null}
-        {error ? <span className="text-sm text-red-400">{error}</span> : null}
+        {error ? <span role="alert" className="motion-shake inline-block text-sm text-red-400">{error}</span> : null}
       </div>
     </div>
   );

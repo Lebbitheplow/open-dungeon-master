@@ -2,7 +2,10 @@
 
 import { useId, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
-import { input } from "@/app/workshop/homebrew/types";
+import { ui } from "@/lib/ui";
+import { Select } from "@/components/ui/Select";
+import { Switch } from "@/components/ui/Switch";
+import { FieldLabel, OptionalStepper, chip, chipOn, chipRow } from "@/app/workshop/kit";
 import { AddFromList, Suggestions, type AddOption } from "@/components/ui/AddFromList";
 import { OptionGlossary } from "@/components/ui/OptionGlossary";
 import type { GlossaryEntry } from "@/lib/help/terms";
@@ -20,25 +23,30 @@ export function Field({
   children,
   className,
   glossary,
+  plain = false,
 }: {
   label: string;
   hint?: string;
   children: ReactNode;
   className?: string;
   glossary?: FieldGlossary;
+  // A kit control (a select, a stepper) holds several buttons and names
+  // itself, so it sits in a div; see below.
+  plain?: boolean;
 }) {
-  // A div rather than a <label> when a glossary button sits in the caption:
-  // a label forwards clicks on its text to the first control inside, which
-  // would open the dialog from the caption and the list from the ⓘ.
-  const Wrap = glossary ? "div" : "label";
+  // A div rather than a <label> when a glossary button sits in the caption or
+  // a kit control is inside: a label forwards clicks on its text to the first
+  // control inside, which would open the dialog from the caption and the list
+  // from the ⓘ, or step a number down from its caption.
+  const Wrap = glossary || plain ? "div" : "label";
   return (
-    <Wrap className={cn("flex flex-col gap-0.5", className)}>
-      <span className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-stone-500">
-        {label}
+    <Wrap className={cn("flex min-w-0 flex-col gap-1", className)}>
+      <span className="flex items-center gap-1">
+        <FieldLabel>{label}</FieldLabel>
         {glossary ? <OptionGlossary title={glossary.title} entries={glossary.entries} /> : null}
       </span>
       {children}
-      {hint ? <span className="text-[10px] text-stone-600">{hint}</span> : null}
+      {hint ? <span className="text-[11px] leading-snug text-stone-500">{hint}</span> : null}
     </Wrap>
   );
 }
@@ -77,7 +85,7 @@ export function TextField({
           placeholder={placeholder}
           list={suggestions ? listId : undefined}
           onChange={(event) => onChange(event.target.value)}
-          className={cn(input, "min-w-32 flex-1")}
+          className={cn(ui.input, "min-w-32 flex-1")}
         />
         {suggestions ? <AddFromList prompt="Pick" options={suggestions} onPick={onChange} /> : null}
       </div>
@@ -106,17 +114,16 @@ export function NumberField({
   className?: string;
 }) {
   return (
-    <Field label={label} hint={hint} className={className}>
-      <input
-        type="number"
-        value={value}
+    <Field label={label} hint={hint} className={className} plain>
+      <OptionalStepper
+        label={label}
+        value={value === "" ? undefined : value}
+        fallback={min ?? 0}
         min={min}
         max={max}
         step={step}
-        onChange={(event) =>
-          onChange(event.target.value === "" ? "" : Number(event.target.value))
-        }
-        className={cn(input, "w-full")}
+        size="md"
+        onChange={onChange}
       />
     </Field>
   );
@@ -140,18 +147,8 @@ export function SelectField<T extends string>({
   glossary?: FieldGlossary;
 }) {
   return (
-    <Field label={label} hint={hint} className={className} glossary={glossary}>
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value as T)}
-        className={cn(input, "w-full")}
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+    <Field label={label} hint={hint} className={className} glossary={glossary} plain>
+      <Select<T> label={label} value={value} onChange={onChange} options={options.map((option) => ({ ...option }))} />
     </Field>
   );
 }
@@ -168,16 +165,11 @@ export function CheckField({
   hint?: string;
 }) {
   return (
-    <label className="flex items-center gap-2 text-xs text-stone-300">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-        className="accent-amber-500"
-      />
+    <div className="flex min-h-10 flex-wrap items-center gap-2 text-sm text-stone-300">
+      <Switch on={checked} onChange={onChange} label={label} />
       {label}
-      {hint ? <span className="text-[10px] text-stone-600">{hint}</span> : null}
-    </label>
+      {hint ? <span className="text-[11px] text-stone-500">{hint}</span> : null}
+    </div>
   );
 }
 
@@ -206,7 +198,7 @@ export function TextArea({
         maxLength={maxLength}
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
-        className={cn(input, "w-full")}
+        className={ui.input}
       />
     </Field>
   );
@@ -225,7 +217,7 @@ export function ToggleChips<T extends string>({
   labels?: Partial<Record<T, string>>;
 }) {
   return (
-    <div className="flex flex-wrap gap-1">
+    <div className={cn("stagger-pop", chipRow)}>
       {options.map((option) => {
         const on = selected.includes(option);
         return (
@@ -240,12 +232,7 @@ export function ToggleChips<T extends string>({
                   : ([...selected, option] as T[]),
               )
             }
-            className={cn(
-              "rounded-md border px-2 py-0.5 text-[11px]",
-              on
-                ? "border-amber-700 bg-amber-950/50 text-amber-100"
-                : "border-stone-700 text-stone-400 hover:text-stone-200",
-            )}
+            className={cn(ui.btnSmall, chip, "normal-case", on && chipOn)}
           >
             {labels?.[option] ?? option}
           </button>

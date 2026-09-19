@@ -6,6 +6,7 @@ import { useCallback, useRef, useState } from "react";
 import Cropper, { type Area } from "react-easy-crop";
 import { ui } from "@/lib/ui";
 import { cn } from "@/lib/cn";
+import { Slider } from "@/components/ui/Slider";
 
 // The familiar profile-picture flow: pick a file, pan/zoom a square crop,
 // export 512x512, upload through the existing /api/upload route.
@@ -119,13 +120,13 @@ export function AvatarCropDialog({
   return (
     <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/70" />
+        <Dialog.Overlay className="dialog-overlay fixed inset-0 z-50 bg-[#05030d]/70 backdrop-blur-sm" />
         <Dialog.Content
           className={cn(ui.dialog, "fixed left-1/2 top-1/2 z-50 max-h-[85vh] w-[min(92vw,22rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto")}
         >
           <div className="mb-3 flex items-center justify-between">
-            <Dialog.Title className="font-display text-lg tracking-wide text-amber-50">{title}</Dialog.Title>
-            <Dialog.Close className="text-stone-500 hover:text-stone-300">
+            <Dialog.Title className="gold-title font-display text-lg tracking-wide">{title}</Dialog.Title>
+            <Dialog.Close aria-label="Close" className="rounded-md p-1.5 text-stone-500 hover:bg-stone-800 hover:text-stone-300">
               <X className="size-4" />
             </Dialog.Close>
           </div>
@@ -155,14 +156,15 @@ export function AvatarCropDialog({
               </div>
               <div className="mt-3 flex items-center gap-2">
                 <ZoomIn className="size-4 text-stone-500" />
-                <input
-                  type="range"
+                <Slider
+                  label="Zoom"
                   min={1}
                   max={4}
                   step={0.05}
                   value={zoom}
-                  onChange={(event) => setZoom(Number(event.target.value))}
-                  className="flex-1 accent-amber-600"
+                  onChange={setZoom}
+                  bubble={(value) => `${value.toFixed(1)}x`}
+                  className="flex-1"
                 />
               </div>
             </>
@@ -170,14 +172,14 @@ export function AvatarCropDialog({
             <button
               type="button"
               onClick={() => fileInput.current?.click()}
-              className="flex h-40 w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-stone-700 text-sm text-stone-400 hover:border-amber-800 hover:text-stone-200"
+              className="motion-press flex h-40 w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-amber-500/30 bg-stone-950/40 text-sm text-stone-400 hover:border-amber-500/60 hover:text-amber-100"
             >
               <Upload className="size-5" />
               Choose an image
             </button>
           )}
 
-          {error ? <p className="mt-2 text-xs text-red-400">{error}</p> : null}
+          {error ? <p className="motion-shake mt-2 text-xs text-red-400">{error}</p> : null}
 
           <div className="mt-4 flex justify-between gap-2">
             {source ? (

@@ -1,7 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -50,14 +50,37 @@ export function IconRail<T extends string>({
 }) {
   const vertical = orientation === "vertical";
   const side = tipSide ?? (vertical ? "right" : "bottom");
+  // One indicator that travels to the active cell on the spring, instead of
+  // a glow that blinks off one cell and on another. Measured from the DOM, so
+  // it follows a scrolled or resized rail; written as CSS variables, so a tab
+  // change costs no extra render.
+  const navRef = useRef<HTMLElement | null>(null);
+  const markRef = useRef<HTMLSpanElement | null>(null);
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    const mark = markRef.current;
+    const cell = nav?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!nav || !mark) return;
+    if (!cell) {
+      mark.style.opacity = "0";
+      return;
+    }
+    mark.style.opacity = "1";
+    mark.style.setProperty("--ix", `${cell.offsetLeft}px`);
+    mark.style.setProperty("--iy", `${cell.offsetTop}px`);
+    mark.style.setProperty("--iw", `${cell.offsetWidth}px`);
+    mark.style.setProperty("--ih", `${cell.offsetHeight}px`);
+  }, [value, items.length, vertical]);
   return (
     <nav
+      ref={navRef}
       className={cn(
-        "flex gap-1",
+        "relative flex gap-1",
         vertical ? "flex-col" : "flex-row overflow-x-auto no-scrollbar",
         className,
       )}
     >
+      <span ref={markRef} aria-hidden="true" className={cn("rail-mark", vertical ? "rail-mark-v" : "rail-mark-h")} />
       {items.map((item) => {
         const Icon = item.icon;
         const active = item.value === value;
@@ -86,7 +109,7 @@ export function IconRail<T extends string>({
             {item.dot ? (
               <span
                 className={cn(
-                  "absolute left-1.5 top-1 size-1.5 rounded-full",
+                  "dot-wiggle absolute left-1.5 top-1 size-1.5 rounded-full",
                   item.dot === "red" ? "bg-red-500" : "bg-amber-400",
                 )}
                 aria-hidden="true"
@@ -94,8 +117,10 @@ export function IconRail<T extends string>({
             ) : null}
             {item.badge ? (
               <span
+                // Keyed by the count so a new number lands with a pop.
+                key={item.badge}
                 className={cn(
-                  "absolute right-1.5 top-1 rounded-full px-1 text-[9px] font-semibold",
+                  "count-pop absolute right-1.5 top-1 rounded-full px-1 text-[9px] font-semibold",
                   ember
                     ? "bg-gradient-to-b from-ember-300 to-ember-500 text-stone-950 shadow-glow-ember"
                     : "bg-gradient-to-b from-amber-300 to-amber-500 text-amber-950 shadow-glow-gold",

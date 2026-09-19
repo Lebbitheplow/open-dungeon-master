@@ -4,6 +4,7 @@ import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import type { EnemyStats } from "@/lib/bestiary/statblock";
 import type { ConditionMetaMap } from "@/lib/schemas/sheet";
 import type { TurnBudget } from "@/lib/dm/action-budget";
+import { normalizeIntents, type EncounterIntents } from "@/lib/db/encounter-intents";
 
 // Server-authoritative combat state. Enemy HP lives here and changes ONLY
 // through the encounter tools; the AI DM narrates from tool results, never
@@ -69,6 +70,10 @@ export type Encounter = {
   // every client draws the same hairlines. Only meaningful while `round`
   // matches the encounter's; written by recordEncounterTarget.
   targets: { round: number; pairs: Record<string, string[]> };
+  // What the DM has declared each enemy is about to do (enemy id to the
+  // declared intent). Only meaningful while `round` matches the encounter's;
+  // written by recordEncounterIntent (src/lib/dm/intent.ts reads it).
+  intents: EncounterIntents;
   // Legendary action and resistance pools per enemy, and whether this
   // fight is in a lair (src/lib/dm/legendary-logic.ts).
   legendary: LegendaryState;
@@ -118,6 +123,7 @@ type EncounterRow = {
   reactions_used_json: string | null;
   ammo_spent_json: string | null;
   targets_json: string | null;
+  intents_json: string | null;
   outcome: string;
   summary: string;
   legendary_json: string | null;
@@ -207,6 +213,7 @@ function mapEncounter(row: EncounterRow): Encounter {
     reactionsUsed: parseJson<string[]>(row.reactions_used_json, []),
     ammoSpent: parseJson<Record<string, number>>(row.ammo_spent_json, {}),
     targets: normalizeTargets(parseJson<unknown>(row.targets_json ?? "{}", {})),
+    intents: normalizeIntents(parseJson<unknown>(row.intents_json ?? "{}", {})),
     legendary: normalizeLegendaryState(parseJson<unknown>(row.legendary_json ?? "{}", {})),
     outcome: row.outcome,
     summary: row.summary,

@@ -1,5 +1,6 @@
 "use client";
 
+import { Switch } from "@/components/ui/Switch";
 import { useState } from "react";
 import { Wizard } from "@/components/ui/Wizard";
 import type { WorldPackDraft } from "@/lib/worlds/draft";
@@ -66,20 +67,15 @@ export function PluginWizard({
           title: "Fill it from the workshop?",
           blurb: "The lore, places, hook cards and cast already built in this workshop can become the pack's factions, places, hooks, glossary and name seeds.",
           content: (
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-stone-800 p-3 text-sm text-stone-300">
-              <input
-                type="checkbox"
-                checked={pull}
-                onChange={(event) => setPull(event.target.checked)}
-                className="mt-0.5 accent-amber-400"
-              />
+            <div className="panel flex items-start gap-3 rounded-lg p-3 text-sm text-stone-300">
+              <Switch on={pull} onChange={setPull} label="Pull from this workshop now" className="mt-0.5" />
               <span>
                 Pull from this workshop now.
                 <span className="mt-1 block text-[11px] text-stone-500">
                   It adds to the pack and never overwrites; you can run it again from the header any time.
                 </span>
               </span>
-            </label>
+            </div>
           ),
         },
       ]}

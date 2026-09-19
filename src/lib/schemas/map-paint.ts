@@ -89,6 +89,9 @@ const drawingSchema = z.object({
 const propSchema = xy.extend({
   name: z.string().trim().min(1).max(SCENE_LIMITS.propName),
   kind: z.enum(PROP_KINDS).default("prop"),
+  // The painted object it is drawn as; the scene normaliser drops anything
+  // that is not shaped like a catalogue id.
+  stamp: z.string().max(64).optional(),
 });
 const zoneSchema = z.object({
   x0: z.number().int().min(0).max(255),

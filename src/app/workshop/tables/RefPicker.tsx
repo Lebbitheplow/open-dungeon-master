@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Link2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ROLL_REF_KINDS, type RollRefKind } from "@/lib/dm/roll-table-logic";
 import type { RollTable } from "@/lib/db/roll-tables";
 import { AddFromList } from "@/components/ui/AddFromList";
 import { ContentPick } from "@/components/ui/ContentPick";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { Select } from "@/components/ui/Select";
 
 // A row that IS a thing: "@monster: wolf", "@table: Gems". The table body
 // takes them typed, which means knowing the exact name of everything in the
@@ -23,8 +24,18 @@ const KIND_LABELS: Record<RollRefKind, string> = {
   lore: "A lore entry",
 };
 
-const select =
-  "rounded-md border border-stone-700 bg-stone-950 px-1.5 py-1 text-xs text-stone-300 focus:border-amber-500/50 focus:outline-none";
+const KIND_GLYPHS: Record<RollRefKind, string> = {
+  table: "system-tables",
+  monster: "system-bestiary",
+  item: "tab-loot",
+  npc: "system-cast",
+  lore: "system-lore",
+};
+const KIND_OPTIONS = ROLL_REF_KINDS.map((option) => ({
+  value: option,
+  label: KIND_LABELS[option],
+  icon: { kind: "glyph" as const, key: KIND_GLYPHS[option] },
+}));
 
 type Named = { name: string };
 
@@ -101,19 +112,10 @@ export function RefPicker({
 
   return (
     <div className="flex flex-wrap items-center gap-1.5" data-tour="tables-ref">
-      <Link2 className="size-3.5 text-stone-500" aria-hidden="true" />
-      <select
-        value={kind}
-        aria-label="What kind of thing the row is"
-        onChange={(event) => setKind(event.target.value as RollRefKind)}
-        className={select}
-      >
-        {ROLL_REF_KINDS.map((option) => (
-          <option key={option} value={option}>
-            {KIND_LABELS[option]}
-          </option>
-        ))}
-      </select>
+      <GameIcon icon={{ kind: "glyph", key: "tab-reference" }} size="size-6" />
+      <span className="w-56">
+        <Select<RollRefKind> value={kind} label="What kind of thing the row is" onChange={setKind} options={KIND_OPTIONS} size="sm" />
+      </span>
       {kind === "item" ? (
         <ContentPick
           kind="items"
@@ -145,7 +147,7 @@ export function RefPicker({
           className={cn("min-w-44")}
         />
       ) : (
-        <span className="text-[11px] text-stone-600">
+        <span className="text-xs text-stone-500">
           {list === null ? "Reading..." : `Nothing of that kind in this workshop yet.`}
         </span>
       )}

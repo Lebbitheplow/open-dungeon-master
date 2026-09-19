@@ -2,6 +2,8 @@
 
 import { Bell } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { EmptyState } from "@/components/EmptyState";
+import { GameIcon } from "@/components/ui/GameIcon";
 import { cn } from "@/lib/cn";
 
 // The bell: out-of-game news (sessions planned, moved, called off; someone
@@ -19,6 +21,17 @@ type BellNotification = {
   createdAt: string;
   readAt: string | null;
 };
+
+// The glyph a notification leads with, read off its kind. Kinds are free
+// strings on the server, so this matches on what the word says.
+function glyphFor(kind: string): string {
+  if (/friend|invite/.test(kind)) return "tab-friends";
+  if (/remind|soon|starts/.test(kind)) return "daypart-dusk";
+  if (/cancel|called_off|absent|cant/.test(kind)) return "quest-failed";
+  if (/session|schedule|moved|planned/.test(kind)) return "tab-session";
+  if (/idle|nudge|turn/.test(kind)) return "cue-turn";
+  return "tab-journal";
+}
 
 function ago(iso: string): string {
   const minutes = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60_000));
@@ -180,31 +193,42 @@ export function NotificationBell() {
         type="button"
         onClick={toggle}
         aria-label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"}
-        className="relative rounded-lg border border-stone-800 bg-stone-900/60 p-2 text-stone-300 transition-colors hover:text-amber-200"
+        aria-expanded={open}
+        className="motion-nudge relative rounded-lg border border-stone-800 bg-stone-900/60 p-2 text-stone-300 transition-colors hover:border-amber-500/40 hover:text-amber-200"
       >
-        <Bell className="size-4" />
+        {/* The bell swings once each time the unread count changes. */}
+        <Bell key={unread} className={cn("size-4 origin-top", unread > 0 && "bell-ring")} />
         {unread > 0 ? (
-          <span className="absolute -right-1 -top-1 rounded-full bg-amber-400 px-1.5 text-[10px] font-bold text-stone-950">
+          <span
+            key={`count-${unread}`}
+            className="motion-pop absolute -right-1 -top-1 rounded-full bg-gradient-to-b from-amber-200 to-amber-400 px-1.5 text-[10px] font-bold text-stone-950 shadow-glow-gold"
+          >
             {unread > 9 ? "9+" : unread}
           </span>
         ) : null}
       </button>
       {open ? (
-        <div className="absolute right-0 z-40 mt-2 w-80 rounded-xl border border-stone-800 bg-stone-950/95 p-2 shadow-xl backdrop-blur">
+        <div role="menu" className="reveal-scale panel bell-panel absolute right-0 z-40 mt-2 w-80 p-2">
+          <p className="eyebrow px-2 pb-1.5 pt-1 text-[10px] text-amber-300/80">News from your tables</p>
           {items.length === 0 ? (
-            <p className="p-3 text-sm text-stone-500">Nothing yet. Quiet week.</p>
+            <EmptyState art="board" size="sm" title="Nothing yet" hint="Quiet week. Session plans and reminders land here." />
           ) : (
-            <ul className="max-h-96 space-y-1 overflow-y-auto">
-              {items.map((item) => (
+            <ul className="stagger max-h-96 space-y-1 overflow-y-auto">
+              {items.map((item, index) => (
                 <li
                   key={item.id}
+                  role="menuitem"
+                  style={{ animationDelay: `${Math.min(index, 8) * 35}ms` }}
                   className={cn(
-                    "rounded-lg p-2 text-sm text-stone-300",
-                    !item.readAt && "bg-stone-900/80",
+                    "bell-item flex items-start gap-2 rounded-lg p-2 text-sm text-stone-300",
+                    !item.readAt && "bg-amber-400/[0.06] ring-1 ring-inset ring-amber-400/20",
                   )}
                 >
-                  <p>{item.body}</p>
-                  <p className="text-xs text-stone-600">{ago(item.createdAt)}</p>
+                  <GameIcon icon={{ kind: "glyph", key: glyphFor(item.kind) }} size="size-8" className="shrink-0" />
+                  <span className="min-w-0">
+                    <span className="block">{item.body}</span>
+                    <span className="block text-xs text-stone-600">{ago(item.createdAt)}</span>
+                  </span>
                 </li>
               ))}
             </ul>

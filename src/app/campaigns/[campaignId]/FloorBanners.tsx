@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Hand, Swords } from "lucide-react";
+import { Check } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { SessionBanner, bannerButtonClass } from "@/app/campaigns/[campaignId]/SessionBanner";
 import type { Floor } from "@/lib/db/campaigns";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -46,21 +47,48 @@ export function FloorBanners({
   return (
     <>
       {floor.mode === "initiative" ? (
-        <div className="mb-2 flex items-center justify-between rounded-md border border-red-900/60 bg-red-950/30 px-3 py-1.5 text-xs">
-          <span className="flex min-w-0 items-center gap-1.5 text-red-200">
-            <Swords className="size-3.5 shrink-0" />
-            <span className="truncate">
-              Round {floor.round}
+        <SessionBanner
+          glyph="attitude-hostile"
+          tone="blood"
+          title={<>Round {floor.round}</>}
+          actions={
+            myInitiativeTurn || steersStory ? (
+              <>
+                {myInitiativeTurn ? (
+                  <button
+                    type="button"
+                    onClick={endTurn}
+                    disabled={endingTurn}
+                    className={bannerButtonClass(true)}
+                    title="Done with your action, movement, and bonus action? End your combat turn."
+                  >
+                    End turn
+                  </button>
+                ) : null}
+                {steersStory ? (
+                  <button
+                    type="button"
+                    onClick={onRelease}
+                    className={bannerButtonClass()}
+                    title="Skip the current player's turn"
+                  >
+                    Skip turn
+                  </button>
+                ) : null}
+              </>
+            ) : null
+          }
+        >
+          <span className="block truncate">
               {encounter?.orderReady && encounter.order.length ? (
                 <>
-                  {" · "}
                   {encounter.order.map((entry, index) => {
                     const current = index === encounter.turnIndex;
                     return (
                       <span
                         key={entry.id}
                         className={cn(
-                          current ? "font-semibold text-red-100" : "text-red-200/60",
+                          current ? "font-semibold" : "opacity-60",
                         )}
                       >
                         {index > 0 ? " > " : ""}
@@ -70,61 +98,49 @@ export function FloorBanners({
                   })}
                 </>
               ) : (
-                <> · {floor.currentName}&apos;s turn</>
+                <>{floor.currentName}&apos;s turn</>
               )}
-            </span>
           </span>
-          <span className="ml-3 flex shrink-0 items-center gap-3">
-            {myInitiativeTurn ? (
-              <button
-                type="button"
-                onClick={endTurn}
-                disabled={endingTurn}
-                className="rounded border border-red-800 bg-red-950/60 px-2 py-0.5 font-medium text-red-100 hover:bg-red-900/60 disabled:opacity-50"
-                title="Done with your action, movement, and bonus action? End your combat turn."
-              >
-                End turn
-              </button>
-            ) : null}
-            {steersStory ? (
-              <button
-                type="button"
-                onClick={onRelease}
-                className="text-red-200 hover:text-red-300"
-                title="Skip the current player's turn"
-              >
-                Skip turn
-              </button>
-            ) : null}
-          </span>
-        </div>
+        </SessionBanner>
       ) : null}
       {floor.mode === "spotlight" ? (
-        <div className="mb-2 flex items-center justify-between rounded-md border border-amber-900/60 bg-amber-950/30 px-3 py-1.5 text-xs">
-          <span className="flex items-center gap-1.5 text-amber-200">
-            <span className="flex -space-x-1.5">
-              {spotlighted
-                .filter((sheet) => sheet.portrait)
-                .slice(0, 4)
-                .map((sheet) => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    key={sheet.id}
-                    src={sheet.portrait!.url}
-                    alt=""
-                    className="size-5 rounded-full border border-amber-900 object-cover"
-                  />
-                ))}
-            </span>
+        <SessionBanner
+          glyph="sense-truesight"
+          title={floor.respondedUserIds.length ? "Spotlight, waiting on" : "Spotlight"}
+          lead={
+            spotlighted.some((sheet) => sheet.portrait) ? (
+              <span className="flex shrink-0 -space-x-2">
+                {spotlighted
+                  .filter((sheet) => sheet.portrait)
+                  .slice(0, 4)
+                  .map((sheet) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      key={sheet.id}
+                      src={sheet.portrait!.url}
+                      alt=""
+                      className="size-8 rounded-full border border-amber-500/60 object-cover shadow-glow-gold"
+                    />
+                  ))}
+              </span>
+            ) : undefined
+          }
+          actions={
+            steersStory ? (
+              <button type="button" onClick={onRelease} className={bannerButtonClass(true)}>
+                Release
+              </button>
+            ) : null
+          }
+        >
             <span>
-              {floor.respondedUserIds.length ? "Spotlight, waiting on: " : "Spotlight: "}
               {spotlighted.length
                 ? spotlighted.map((sheet, index) => {
                     const responded = floor.respondedUserIds.includes(sheet.userId);
                     return (
                       <span
                         key={sheet.id}
-                        className={responded ? "text-amber-200/50" : undefined}
+                        className={responded ? "opacity-50" : undefined}
                       >
                         {index > 0 ? ", " : ""}
                         {sheet.name}
@@ -134,45 +150,33 @@ export function FloorBanners({
                   })
                 : "someone"}
               {floor.prompt ? (
-                <span className="text-amber-200/80"> · {floor.prompt}</span>
+                <span className="opacity-80"> · {floor.prompt}</span>
               ) : null}
             </span>
-          </span>
-          {steersStory ? (
-            <button
-              type="button"
-              onClick={onRelease}
-              className="ml-3 shrink-0 text-amber-200 hover:text-amber-300"
-            >
-              Release
-            </button>
-          ) : null}
-        </div>
+        </SessionBanner>
       ) : null}
       {floor.mode === "hold" ? (
-        <div className="mb-2 flex items-center justify-between rounded-md border border-amber-900/60 bg-amber-950/30 px-3 py-1.5 text-xs">
-          <span className="flex items-center gap-1.5 text-amber-200">
-            <Hand className="size-3.5" />
-            <span>
-              Responses held. Talk it over; the lead opens the floor.
-              {heldSpotlightNames.length ? (
-                <span className="text-amber-200/80">
-                  {" "}
-                  Next: spotlight on {heldSpotlightNames.join(", ")}
-                </span>
-              ) : null}
-            </span>
+        <SessionBanner
+          glyph="rest-inspiration"
+          title="Responses held"
+          actions={
+            steersStory ? (
+              <button type="button" onClick={onRelease} className={bannerButtonClass(true)}>
+                Allow responses
+              </button>
+            ) : null
+          }
+        >
+          <span>
+            Talk it over; the lead opens the floor.
+            {heldSpotlightNames.length ? (
+              <span className="opacity-80">
+                {" "}
+                Next: spotlight on {heldSpotlightNames.join(", ")}
+              </span>
+            ) : null}
           </span>
-          {steersStory ? (
-            <button
-              type="button"
-              onClick={onRelease}
-              className="ml-3 shrink-0 text-amber-200 hover:text-amber-300"
-            >
-              Allow responses
-            </button>
-          ) : null}
-        </div>
+        </SessionBanner>
       ) : null}
     </>
   );

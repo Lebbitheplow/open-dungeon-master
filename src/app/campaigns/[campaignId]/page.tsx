@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { Loader2 } from "lucide-react";
+import { PageSkeleton } from "@/components/PageSkeleton";
+import { EmptyState } from "@/components/EmptyState";
+import { ui } from "@/lib/ui";
+
 import { use } from "react";
 import { Lobby } from "@/app/campaigns/[campaignId]/Lobby";
 import { SessionView } from "@/app/campaigns/[campaignId]/SessionView";
@@ -30,22 +33,23 @@ export default function CampaignPage({
 
   if (state.loading) {
     return (
-      <main className="flex flex-1 items-center justify-center">
-        <Loader2 className="size-6 animate-spin text-stone-500" />
-      </main>
+      <PageSkeleton kind="table" />
     );
   }
 
   if (state.error || !state.campaign || !state.me) {
     return (
       <main className="flex flex-1 flex-col items-center justify-center gap-3 p-6">
-        <p className="text-stone-400">{state.error || "Campaign not found."}</p>
-        {state.answeredBy ? (
-          <p className="text-xs text-stone-500">Answered by {state.answeredBy}</p>
-        ) : null}
-        <Link href="/" className="text-sm text-amber-200 hover:underline">
-          Back to campaigns
-        </Link>
+        <EmptyState
+          art="map"
+          title={state.error || "Campaign not found."}
+          hint={state.answeredBy ? `Answered by ${state.answeredBy}` : undefined}
+          action={
+            <Link href="/" className={ui.btnSecondary}>
+              Back to campaigns
+            </Link>
+          }
+        />
       </main>
     );
   }

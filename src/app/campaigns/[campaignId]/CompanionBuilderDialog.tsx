@@ -87,7 +87,7 @@ export function CompanionBuilderDialog({
   return (
     <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/70" />
+        <Dialog.Overlay className="dialog-overlay fixed inset-0 z-50 bg-[#05030d]/70 backdrop-blur-sm" />
         <Dialog.Content
           className={cn(
             ui.dialog,
@@ -114,16 +114,16 @@ export function CompanionBuilderDialog({
           </p>
 
           {library.length ? (
-            <div className="mb-4 space-y-1.5 rounded-lg border border-stone-800 bg-stone-950/40 px-2.5 py-2">
+            <div className="reveal mb-4 space-y-1.5 rounded-lg border border-stone-800 bg-stone-950/40 px-2.5 py-2">
               <p className="text-[11px] uppercase tracking-wide text-stone-500">
                 From your library
               </p>
-              <div className="flex flex-wrap gap-1">
+              <div className="stagger-pop flex flex-wrap gap-1">
                 {library.map((companion) => (
                   <button
                     key={companion.id}
                     type="button"
-                    disabled={busy}
+                    disabled={busy} aria-busy={busy}
                     onClick={() => void post({ libraryCharacterId: companion.id })}
                     className="rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-50"
                   >

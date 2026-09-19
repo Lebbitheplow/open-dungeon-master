@@ -1,10 +1,14 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { Loader2, Trash2, Wrench, X } from "lucide-react";
+import { Trash2, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { NumberStepper } from "@/components/ui/NumberStepper";
+import { SectionHead } from "@/components/ui/SectionHead";
+import { KitButton, PanelError } from "./PanelKit";
 import { spellClassFor } from "@/lib/classes";
 import { spellSlotsFor } from "@/lib/srd";
 import MultiContentPicker from "@/app/characters/builder/MultiContentPicker";
@@ -29,21 +33,16 @@ function ChipList({ values, onRemove }: { values: string[]; onRemove: (value: st
     return null;
   }
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="stagger-pop flex flex-wrap gap-1.5">
       {values.map((value) => (
         <span
           key={value}
-          className="flex items-center gap-1 rounded-full bg-stone-800 px-2 py-0.5 text-xs text-stone-200"
+          className="pk-chip gap-0.5 py-0 pl-2 pr-0.5 text-xs text-stone-200"
         >
           {value}
-          <button
-            type="button"
-            onClick={() => onRemove(value)}
-            aria-label={`Remove ${value}`}
-            className="text-stone-500 hover:text-red-400"
-          >
+          <KitButton tone="iconDanger" always onClick={() => onRemove(value)} aria-label={`Remove ${value}`} className="p-1">
             <X className="size-3" />
-          </button>
+          </KitButton>
         </span>
       ))}
     </div>
@@ -173,12 +172,12 @@ export function LeadEditDialog({
   }
 
   const field =
-    "w-full rounded-md border border-stone-700 bg-stone-900 px-2 py-1 text-sm outline-none focus:border-amber-600";
+    cn(ui.input, "px-2.5 py-1.5");
 
   return (
     <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/70" />
+        <Dialog.Overlay className="dialog-overlay fixed inset-0 z-50 bg-[#05030d]/70 backdrop-blur-sm" />
         <Dialog.Content
           className={cn(
             ui.dialog,
@@ -186,10 +185,11 @@ export function LeadEditDialog({
           )}
         >
           <div className="mb-3 flex items-center justify-between">
-            <Dialog.Title className="flex items-center gap-2 font-display text-lg tracking-wide text-amber-50">
-              <Wrench className="size-4 text-amber-300" /> Adjust {sheet.name}
+            <Dialog.Title className="flex items-center gap-2 font-display text-lg tracking-wide">
+              <GameIcon icon={{ kind: "glyph", key: "tab-lead" }} size="size-7" />
+              <span className="gold-title">Adjust {sheet.name}</span>
             </Dialog.Title>
-            <Dialog.Close className="text-stone-500 hover:text-stone-300">
+            <Dialog.Close aria-label="Close" className="pk-tap rounded p-1 text-stone-500 hover:text-amber-200 motion-nudge">
               <X className="size-4" />
             </Dialog.Close>
           </div>
@@ -197,30 +197,28 @@ export function LeadEditDialog({
             Party lead correction of stats, items, and spells. Changes are logged to the session
             event log.
           </p>
-          <div className="grid grid-cols-3 gap-2 text-xs">
+          <SectionHead title="Numbers" glyph="rest-hp" level="h3" />
+          <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
             {(
               [
-                ["HP", currentHp, setCurrentHp],
-                ["Temp HP", tempHp, setTempHp],
-                ["Max HP", maxHp, setMaxHp],
-                ["AC", ac, setAc],
-                ["Gold", gold, setGold],
-                ["XP", xp, setXp],
-              ] as Array<[string, string, (value: string) => void]>
-            ).map(([label, value, setter]) => (
-              <label key={label} className="space-y-1">
-                <span className="text-stone-500">{label}</span>
-                <input
-                  type="number"
-                  value={value}
-                  onChange={(event) => setter(event.target.value)}
-                  className={field}
-                />
-              </label>
+                ["HP", currentHp, setCurrentHp, "rest-hp"],
+                ["Temp HP", tempHp, setTempHp, "rest-temp-hp"],
+                ["Max HP", maxHp, setMaxHp, "rest-hp"],
+                ["AC", ac, setAc, "rest-ac"],
+                ["Gold", gold, setGold, "coin-gp"],
+                ["XP", xp, setXp, "rest-xp"],
+              ] as Array<[string, string, (value: string) => void, string]>
+            ).map(([label, value, setter, glyph]) => (
+              <div key={label} className="space-y-1">
+                <span className="flex items-center gap-1 text-stone-400">
+                  <GameIcon icon={{ kind: "glyph", key: glyph }} size="size-4" /> {label}
+                </span>
+                <NumberStepper size="sm" value={Number(value) || 0} onChange={(next) => setter(String(next))} label={label} />
+              </div>
             ))}
           </div>
           <label className="mt-2 block space-y-1 text-xs">
-            <span className="text-stone-500">Conditions (comma separated)</span>
+            <span className="text-stone-400">Conditions (comma separated)</span>
             <input
               value={conditions}
               onChange={(event) => setConditions(event.target.value)}
@@ -230,9 +228,10 @@ export function LeadEditDialog({
           </label>
 
           <div className="mt-3 space-y-1 text-xs">
-            <span className="text-stone-500">Items</span>
+            <SectionHead title="Items" glyph="tab-loot" level="h3" aside={items.length || null} />
             {items.map((row, index) => (
               <div key={index} className="flex items-center gap-2">
+                <GameIcon icon={{ kind: "item", key: row.name, family: "item-gear" }} size="size-6" className="shrink-0" />
                 {row.slug ? (
                   <span className={cn(field, "truncate")}>{row.name}</span>
                 ) : (
@@ -243,21 +242,10 @@ export function LeadEditDialog({
                     className={field}
                   />
                 )}
-                <input
-                  type="number"
-                  min={1}
-                  value={row.qty}
-                  onChange={(event) => setItem(index, { qty: event.target.value })}
-                  className={cn(field, "w-16 shrink-0")}
-                />
-                <button
-                  type="button"
-                  onClick={() => setItems((rows) => rows.filter((_, i) => i !== index))}
-                  className="shrink-0 text-stone-500 hover:text-red-400"
-                  aria-label="Remove item"
-                >
+                <NumberStepper size="sm" min={1} value={Number(row.qty) || 1} onChange={(next) => setItem(index, { qty: String(next) })} label={`Quantity of ${row.name || "item"}`} className="shrink-0" />
+                <KitButton tone="iconDanger" always onClick={() => setItems((rows) => rows.filter((_, i) => i !== index))} className="shrink-0" aria-label="Remove item">
                   <Trash2 className="size-4" />
-                </button>
+                </KitButton>
               </div>
             ))}
             <div className="mt-1">
@@ -283,10 +271,10 @@ export function LeadEditDialog({
           </div>
 
           {sheet.spellcasting ? (
-            <div className="mt-3 space-y-2 text-xs">
-              <span className="text-stone-500">Spells</span>
+            <div className="reveal mt-3 space-y-2 text-xs">
+              <SectionHead title="Spells" glyph="rest-spell-slot" level="h3" />
               <div className="space-y-1">
-                <span className="text-stone-600">Known</span>
+                <span className="eyebrow text-[10px] text-amber-400/80">Known</span>
                 <ChipList
                   values={known}
                   onRemove={(value) => setKnown((list) => list.filter((entry) => entry !== value))}
@@ -312,7 +300,7 @@ export function LeadEditDialog({
                 />
               </div>
               <div className="space-y-1">
-                <span className="text-stone-600">Prepared</span>
+                <span className="eyebrow text-[10px] text-amber-400/80">Prepared</span>
                 <ChipList
                   values={prepared}
                   onRemove={(value) =>
@@ -339,45 +327,45 @@ export function LeadEditDialog({
                   }
                 />
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="stagger-pop flex flex-wrap gap-2">
                 {Object.entries(sheet.spellcasting.slots).map(([level]) => (
-                  <label key={level} className="space-y-1">
-                    <span className="text-stone-600">L{level} used/max</span>
+                  <div key={level} className="space-y-1">
+                    <span className="text-stone-400">L{level} used/max</span>
                     <div className="flex items-center gap-1">
-                      <input
-                        type="number"
+                      <NumberStepper
+                        size="sm"
                         min={0}
-                        value={slots[level]?.used ?? "0"}
-                        onChange={(event) =>
+                        value={Number(slots[level]?.used ?? "0") || 0}
+                        label={`Level ${level} slots used`}
+                        onChange={(next) =>
                           setSlots((prev) => ({
                             ...prev,
-                            [level]: { max: prev[level]?.max ?? "0", used: event.target.value },
+                            [level]: { max: prev[level]?.max ?? "0", used: String(next) },
                           }))
                         }
-                        className={cn(field, "w-14")}
                       />
-                      <span className="text-stone-600">/</span>
-                      <input
-                        type="number"
+                      <span className="text-stone-500">/</span>
+                      <NumberStepper
+                        size="sm"
                         min={0}
-                        value={slots[level]?.max ?? "0"}
-                        onChange={(event) =>
+                        value={Number(slots[level]?.max ?? "0") || 0}
+                        label={`Level ${level} slots max`}
+                        onChange={(next) =>
                           setSlots((prev) => ({
                             ...prev,
-                            [level]: { used: prev[level]?.used ?? "0", max: event.target.value },
+                            [level]: { used: prev[level]?.used ?? "0", max: String(next) },
                           }))
                         }
-                        className={cn(field, "w-14")}
                       />
                     </div>
-                  </label>
+                  </div>
                 ))}
               </div>
             </div>
           ) : null}
 
           <div className="mt-3 space-y-1 text-xs">
-            <span className="text-stone-500">Feats</span>
+            <SectionHead title="Feats" glyph="rest-level-up" level="h3" aside={feats.length || null} />
             <ChipList
               values={feats}
               onRemove={(value) => setFeats((list) => list.filter((entry) => entry !== value))}
@@ -392,7 +380,7 @@ export function LeadEditDialog({
             />
           </div>
           <label className="mt-2 block space-y-1 text-xs">
-            <span className="text-stone-500">Reason (shown in the log)</span>
+            <span className="text-stone-400">Reason (shown in the log)</span>
             <input
               value={reason}
               onChange={(event) => setReason(event.target.value)}
@@ -401,14 +389,14 @@ export function LeadEditDialog({
               className={field}
             />
           </label>
-          {error ? <p className="mt-2 text-xs text-red-400">{error}</p> : null}
+          {error ? <PanelError className="mt-2">{error}</PanelError> : null}
           <div className="mt-4 flex justify-end gap-2">
             <button type="button" onClick={onClose} className={ui.btnSmall}>
               Cancel
             </button>
-            <button type="button" onClick={save} disabled={busy} className={ui.btnPrimary}>
-              {busy ? <Loader2 className="size-4 animate-spin" /> : null} Save
-            </button>
+            <KitButton tone="primary" onClick={save} disabled={busy} busy={busy} className="h-10 px-4 text-[13px]">
+              Save
+            </KitButton>
           </div>
         </Dialog.Content>
       </Dialog.Portal>

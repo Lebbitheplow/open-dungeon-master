@@ -1,21 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { GameIcon } from "@/components/ui/GameIcon";
 import * as Dialog from "@radix-ui/react-dialog";
-import { FileDown, Heart, Minus, Plus, PawPrint, Shield, Wrench, X } from "lucide-react";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { FileDown, Minus, Plus, PawPrint, Wrench, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { CharacterPortrait, ui } from "@/lib/ui";
 import { downloadCharacterSheetPdf } from "@/lib/pdf/download";
 import { ImageLightbox } from "@/components/ui/ImageLightbox";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { ABILITIES } from "@/lib/schemas/sheet";
 import {
   acBreakdownFor,
   computeSheetDerived,
   formatModifier,
   speedFor,
-  SRD_SKILLS,
   type DerivedPart,
 } from "@/lib/srd";
 import { ATTUNEMENT_SLOTS, matchArmor } from "@/lib/srd/armor";
@@ -23,8 +21,20 @@ import { encumbranceFor } from "@/lib/srd/encumbrance";
 import { matchMagicItem, magicItemRiders } from "@/lib/srd/magic-items";
 import { RESOURCE_DEFS } from "@/lib/srd/class-resources";
 import { GameTerm } from "@/components/ui/GameTerm";
-import { InfoButton, InfoChipList } from "@/components/ui/InfoDialog";
-import { contentSlug, describeFeature } from "@/lib/help";
+import { InfoButton } from "@/components/ui/InfoDialog";
+import {
+  AbilityTiles,
+  ConditionChips,
+  EquipmentChips,
+  FeatChips,
+  FeatureChips,
+  HpBar,
+  PortraitMedallion,
+  SheetBlock,
+  SkillRows,
+  SpellChips,
+  VitalTiles,
+} from "@/components/sheet/SheetParts";
 
 function titleCase(value: string) {
   return value.replace(/[-_]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -134,32 +144,34 @@ export function CharacterSheetDialog({
   return (
     <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/70" />
+        <Dialog.Overlay className="dialog-overlay fixed inset-0 z-50 bg-[#05030d]/70 backdrop-blur-sm" />
         <Dialog.Content
           className={cn(
             ui.dialog,
-            "fixed left-1/2 top-1/2 z-50 max-h-[85dvh] w-[min(34rem,92vw)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto",
+            "fixed left-1/2 top-1/2 z-50 max-h-[88dvh] w-[min(52rem,94vw)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto",
           )}
         >
-          <div className="mb-3 flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3">
-              {sheet.portrait ? (
-                <ImageLightbox
-                  src={sheet.portrait.url}
-                  alt={sheet.name}
-                  caption={sheet.name}
-                  className="size-14 rounded-lg border border-stone-700 object-cover"
-                />
-              ) : (
-                <CharacterPortrait
-                  fallback={portraitFallback}
-                  look={{ race: sheet.race, class: sheet.class, gender: sheet.gender }}
-                  alt={sheet.name}
-                  size="size-14"
-                />
-              )}
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div className="flex items-center gap-4">
+              <PortraitMedallion classId={sheet.class} level={sheet.level}>
+                {sheet.portrait ? (
+                  <ImageLightbox
+                    src={sheet.portrait.url}
+                    alt={sheet.name}
+                    caption={sheet.name}
+                    className="size-full object-cover"
+                  />
+                ) : (
+                  <CharacterPortrait
+                    fallback={portraitFallback}
+                    look={{ race: sheet.race, class: sheet.class, gender: sheet.gender }}
+                    alt={sheet.name}
+                    size="size-full"
+                  />
+                )}
+              </PortraitMedallion>
               <div>
-                <Dialog.Title className="font-display text-xl tracking-wide text-amber-50">
+                <Dialog.Title className="gold-title font-display text-2xl tracking-wide">
                   {sheet.name}
                 </Dialog.Title>
                 <p className="text-xs text-stone-400">
@@ -179,54 +191,52 @@ export function CharacterSheetDialog({
             </Dialog.Close>
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-stone-300">
-            <span className="flex items-center gap-1">
-              <Heart className="size-4 text-red-400" />
-              {sheet.currentHp}
-              {sheet.tempHp ? `+${sheet.tempHp}` : ""}/{sheet.maxHp} HP
-            </span>
-            <span
-              className="flex items-center gap-1"
-              title={
-                sheet.acOverride
-                  ? "Set by hand; armor does not change it."
-                  : armor.parts.join(" + ")
-              }
-            >
-              <Shield className="size-4 text-stone-400" />{" "}
-              <GameTerm id="armor_class">AC</GameTerm> {sheet.ac}
-            </span>
-            <span title={speedNote}>Speed {speed} ft</span>
-            <span
-              className={cn(
-                encumbranceRule && load.tier !== "unencumbered" && "text-amber-300",
-              )}
-              title={
-                encumbranceRule
-                  ? `${load.note ?? "Not encumbered"}. Capacity ${load.capacityLb} lb.${load.unweighed ? ` ${load.unweighed} item${load.unweighed === 1 ? "" : "s"} of unknown weight are not counted.` : ""}`
-                  : `Carrying capacity ${load.capacityLb} lb. Encumbrance is off for this table, so the weight costs nothing.${load.unweighed ? ` ${load.unweighed} item${load.unweighed === 1 ? "" : "s"} of unknown weight are not counted.` : ""}`
-              }
-            >
-              {load.carriedLb}
-              {load.unweighed ? "+" : ""}/{load.capacityLb} lb
-            </span>
-            <span title={explainParts(derived.parts.initiative)}>
-              <GameTerm id="initiative">Init</GameTerm> {formatModifier(derived.initiative)}
-            </span>
-            <span title={explainParts(derived.parts.passivePerception)}>
-              <GameTerm id="passive_perception">PP</GameTerm> {derived.passivePerception}
-            </span>
-            <span>PB {formatModifier(derived.proficiencyBonus)}</span>
-            <span>{sheet.gold} gp</span>
-            <span>
-              {sheet.xp} XP · Hit dice {sheet.hitDice.total - sheet.hitDice.spent}/
-              {sheet.hitDice.total}
-              {sheet.hitDice.die}
-            </span>
+          <div className="space-y-1.5">
+            <HpBar current={sheet.currentHp} max={sheet.maxHp} temp={sheet.tempHp ?? 0} />
+            <VitalTiles
+              vitals={[
+                {
+                  glyph: "rest-ac",
+                  label: <GameTerm id="armor_class">Armor class</GameTerm>,
+                  value: sheet.ac,
+                  title: sheet.acOverride ? "Set by hand; armor does not change it." : armor.parts.join(" + "),
+                },
+                { glyph: "rest-speed", label: "Speed", value: `${speed} ft`, title: speedNote },
+                {
+                  glyph: "rest-initiative",
+                  label: <GameTerm id="initiative">Initiative</GameTerm>,
+                  value: formatModifier(derived.initiative),
+                  title: explainParts(derived.parts.initiative),
+                },
+                {
+                  glyph: "sense-passive-perception",
+                  label: <GameTerm id="passive_perception">Passive perception</GameTerm>,
+                  value: derived.passivePerception,
+                  title: explainParts(derived.parts.passivePerception),
+                },
+                { glyph: "rest-proficiency", label: "Proficiency", value: formatModifier(derived.proficiencyBonus) },
+                { glyph: "coin-gp", label: "Gold", value: `${sheet.gold} gp` },
+                { glyph: "rest-xp", label: "Experience", value: `${sheet.xp} XP` },
+                {
+                  glyph: `die-${sheet.hitDice.die}`,
+                  label: <GameTerm id="hit_dice">Hit dice</GameTerm>,
+                  value: `${sheet.hitDice.total - sheet.hitDice.spent}/${sheet.hitDice.total}${sheet.hitDice.die}`,
+                },
+                {
+                  glyph: "coin-purse",
+                  label: "Carried",
+                  value: `${load.carriedLb}${load.unweighed ? "+" : ""}/${load.capacityLb} lb`,
+                  tone: encumbranceRule && load.tier !== "unencumbered" ? "warn" : "plain",
+                  title: encumbranceRule
+                    ? `${load.note ?? "Not encumbered"}. Capacity ${load.capacityLb} lb.${load.unweighed ? ` ${load.unweighed} item${load.unweighed === 1 ? "" : "s"} of unknown weight are not counted.` : ""}`
+                    : `Carrying capacity ${load.capacityLb} lb. Encumbrance is off for this table, so the weight costs nothing.${load.unweighed ? ` ${load.unweighed} item${load.unweighed === 1 ? "" : "s"} of unknown weight are not counted.` : ""}`,
+                },
+              ]}
+            />
           </div>
 
           {sheet.wildShape ? (
-            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-lime-800/60 bg-lime-950/40 px-3 py-2 text-sm text-lime-200">
+            <div className="reveal mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-lime-800/60 bg-lime-950/40 px-3 py-2 text-sm text-lime-200">
               <span className="flex items-center gap-1.5 font-medium capitalize">
                 <PawPrint className="size-4" /> Wild Shaped: {sheet.wildShape.form}
               </span>
@@ -242,93 +252,59 @@ export function CharacterSheetDialog({
           ) : null}
 
           {sheet.conditions.length ? (
-            <div className="mt-2 flex flex-wrap gap-1">
-              {sheet.conditions.map((condition) => (
-                <span
-                  key={condition}
-                  className="rounded-full bg-red-950 px-2 py-0.5 text-xs text-red-300"
-                >
-                  {condition}
-                  {sheet.conditionMeta?.[condition]?.rounds
-                    ? ` (${sheet.conditionMeta[condition].rounds} rd)`
-                    : ""}
-                </span>
-              ))}
+            <div className="reveal mt-2">
+              <ConditionChips conditions={sheet.conditions} rounds={sheet.conditionMeta} />
             </div>
           ) : null}
 
-          <div className="mt-4 grid grid-cols-3 gap-2 text-center sm:grid-cols-6">
-            {ABILITIES.map((ability) => (
-              <div key={ability} className="rounded-lg border border-stone-800 p-2">
-                <p className="text-xs uppercase text-stone-500">{ability}</p>
-                <p className="text-lg text-stone-100">{sheet.abilities[ability]}</p>
-                <p className="text-xs text-stone-400">
-                  {formatModifier(derived.abilityMods[ability])}
-                </p>
-              </div>
-            ))}
-          </div>
+          <SheetBlock
+            className="mt-4"
+            title="Abilities"
+            aside={
+              <>
+                <GameTerm id="saving_throw">Saving throws</GameTerm> ride each tile
+              </>
+            }
+          >
+            <AbilityTiles
+              abilities={sheet.abilities}
+              mods={derived.abilityMods}
+              saves={derived.saves}
+              saveProficiencies={sheet.proficiencies.saves}
+              explainSave={(ability) => explainParts(derived.parts.saves[ability])}
+            />
+          </SheetBlock>
 
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <section>
-              <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
-                <GameTerm id="saving_throw">Saving throws</GameTerm>
-              </h3>
-              <div className="grid grid-cols-3 gap-x-2 gap-y-1 text-xs text-stone-300">
-                {ABILITIES.map((ability) => (
-                  <span
-                    key={ability}
-                    title={explainParts(derived.parts.saves[ability])}
-                    className={cn(
-                      sheet.proficiencies.saves.includes(ability) && "text-amber-200",
-                    )}
-                  >
-                    {ability.toUpperCase()} {formatModifier(derived.saves[ability])}
-                  </span>
-                ))}
-              </div>
-            </section>
-            <section>
-              <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
-                <GameTerm id="skill">Skills</GameTerm>
-              </h3>
-              <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs text-stone-300">
-                {SRD_SKILLS.map((skill) => (
-                  <span
-                    key={skill.id}
-                    title={explainParts(derived.parts.skills[skill.id])}
-                    className={cn(
-                      sheet.proficiencies.skills.includes(skill.id) && "text-amber-200",
-                    )}
-                  >
-                    {skill.name} {formatModifier(derived.skills[skill.id])}
-                  </span>
-                ))}
-              </div>
-            </section>
-          </div>
+          <SheetBlock className="mt-4" title={<GameTerm id="skill">Skills</GameTerm>}>
+            <SkillRows
+              skills={derived.skills}
+              proficient={sheet.proficiencies.skills}
+              explain={(skillId) => explainParts(derived.parts.skills[skillId])}
+            />
+          </SheetBlock>
 
           {sheet.spellcasting ? (
-            <section className="mt-4">
-              <h3
-                className="mb-1.5 text-xs font-medium uppercase tracking-wide text-stone-500"
-                title={
-                  derived.parts.spellSaveDc.length
-                    ? `Save DC: ${explainParts(derived.parts.spellSaveDc)}. To hit: ${explainParts(derived.parts.spellAttack)}`
-                    : undefined
-                }
-              >
-                Spellcasting ({sheet.spellcasting.ability.toUpperCase()}
-                {derived.spellSaveDc ? ` · DC ${derived.spellSaveDc}` : ""}
-                {derived.spellAttack !== null
-                  ? ` · ${formatModifier(derived.spellAttack)} to hit`
-                  : ""}
-                )
-              </h3>
+            <SheetBlock
+              className="mt-4"
+              title="Spellcasting"
+              hint={
+                derived.parts.spellSaveDc.length
+                  ? `Save DC: ${explainParts(derived.parts.spellSaveDc)}. To hit: ${explainParts(derived.parts.spellAttack)}`
+                  : undefined
+              }
+              aside={
+                <>
+                  {sheet.spellcasting.ability.toUpperCase()}
+                  {derived.spellSaveDc ? ` · DC ${derived.spellSaveDc}` : ""}
+                  {derived.spellAttack !== null ? ` · ${formatModifier(derived.spellAttack)} to hit` : ""}
+                </>
+              }
+            >
               {Object.keys(sheet.spellcasting.slots).length ? (
-                <div className="flex flex-wrap items-center gap-1.5 text-xs text-stone-400">
-                  <span>
-                    <GameTerm id="spell_slot">Slots</GameTerm>:
+                <div className="reveal flex flex-wrap items-center gap-1.5 text-xs text-stone-400">
+                  <span className="flex items-center gap-1">
+                    <GameIcon icon={{ kind: "glyph", key: "rest-spell-slot" }} size="size-5" />
+                    <GameTerm id="spell_slot">Slots</GameTerm>
                   </span>
                   {Object.entries(sheet.spellcasting.slots).map(([slotLevel, slot]) => (
                     <span
@@ -365,26 +341,15 @@ export function CharacterSheetDialog({
                 </div>
               ) : null}
               {[...sheet.spellcasting.known, ...sheet.spellcasting.prepared].length ? (
-                <div className="mt-1">
-                  <InfoChipList
-                    items={[
-                      ...new Set([...sheet.spellcasting.known, ...sheet.spellcasting.prepared]),
-                    ].map((spell) => ({
-                      name: spell,
-                      icon: { kind: "spell" as const, key: spell },
-                      reference: { kind: "spells", slug: contentSlug(spell), name: spell },
-                    }))}
-                  />
+                <div className="reveal mt-2">
+                  <SpellChips spells={[...sheet.spellcasting.known, ...sheet.spellcasting.prepared]} />
                 </div>
               ) : null}
-            </section>
+            </SheetBlock>
           ) : null}
 
           {mine || Object.keys(sheet.resources).length ? (
-            <section className="mt-4">
-              <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
-                Hit Dice &amp; Resources
-              </h3>
+            <SheetBlock className="mt-4" title="Hit dice and resources">
               <div className="space-y-1.5 text-xs text-stone-300">
                 <div className="flex items-center gap-2">
                   <span className="w-36 shrink-0 text-stone-400">
@@ -458,36 +423,26 @@ export function CharacterSheetDialog({
                 ))}
               </div>
               {mine ? (
-                <p className="mt-1.5 text-[11px] text-stone-500">
+                <p className="reveal mt-1.5 text-[11px] text-stone-500">
                   Minus spends, plus recovers.
                   {inCombat ? " Recovery is locked during combat; rests refill automatically." : ""}{" "}
                   Changes are logged to the session event log.
                 </p>
               ) : null}
-            </section>
+            </SheetBlock>
           ) : null}
 
           {sheet.equipment.length ? (
-            <section className="mt-4">
-              <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
-                Equipment
-              </h3>
-              <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-stone-300">
-                {sheet.equipment.map((item, index) => (
-                  <li key={`${item.name}-${index}`} className="flex items-center gap-1">
-                    <GameIcon icon={{ kind: "item", key: item.name, family: "item-gear" }} size="size-8" />
-                    {item.qty > 1 ? `${item.name} x${item.qty}` : item.name}
-                  </li>
-                ))}
-              </ul>
+            <SheetBlock className="mt-4" title="Equipment" aside={`Attuned ${attunedCount}/${ATTUNEMENT_SLOTS}`}>
+              <EquipmentChips equipment={sheet.equipment} />
               {mine && wearable.length ? (
-                <div className="mt-2 space-y-1">
+                <div className="reveal mt-2 space-y-1">
                   <p className="text-[11px] text-stone-500">
                     Worn gear sets your AC ({sheet.acOverride ? "pinned by hand" : armor.parts.join(" + ")}
                     ). Attuned {attunedCount}/{ATTUNEMENT_SLOTS}.
                   </p>
                   {magic.sources.length ? (
-                    <p className="text-[11px] text-sky-400/80">
+                    <p className="reveal text-[11px] text-sky-400/80">
                       Active magic:{" "}
                       {[
                         magic.acBonus ? `+${magic.acBonus} AC` : null,
@@ -506,11 +461,12 @@ export function CharacterSheetDialog({
                     const worn = item.equipped ?? !anyEquipped;
                     return (
                       <div key={item.name} className="flex items-center gap-2 text-xs text-stone-300">
+                        <GameIcon icon={{ kind: "item", key: item.name, family: "item-gear" }} size="size-6" />
                         <span className="grow truncate">{item.name}</span>
                         {isArmor ? (
                           <button
                             type="button"
-                            disabled={busy}
+                            disabled={busy} aria-busy={busy}
                             onClick={() =>
                               adjustUsage({ gear: { [item.name]: { equipped: !worn } } })
                             }
@@ -544,58 +500,31 @@ export function CharacterSheetDialog({
                   })}
                 </div>
               ) : null}
-            </section>
+            </SheetBlock>
           ) : null}
 
           {sheet.features.length ? (
-            <section className="mt-4">
-              <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
-                Features &amp; Traits
-              </h3>
-              <InfoChipList
-                items={sheet.features.map((feature) => ({
-                  name: feature.name,
-                  icon: { kind: "feature" as const, key: feature.name, family: `class-${sheet.class.toLowerCase()}` },
-                  note: feature.source === "story" ? "(story)" : undefined,
-                  meta: feature.level ? `Level ${feature.level}` : undefined,
-                  text: describeFeature(sheet.class, sheet.subclass, feature.name),
-                }))}
-              />
-            </section>
+            <SheetBlock className="mt-4" title="Features and traits">
+              <FeatureChips features={sheet.features} classId={sheet.class} subclass={sheet.subclass} />
+            </SheetBlock>
           ) : null}
 
           {sheet.feats.length ? (
-            <section className="mt-4">
-              <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
-                Feats
-              </h3>
-              <InfoChipList
-                items={sheet.feats.map((feat) => ({
-                  name: feat,
-                  icon: { kind: "feat" as const, key: feat },
-                  text: describeFeature(sheet.class, sheet.subclass, feat),
-                  reference: { kind: "feats", slug: contentSlug(feat), name: feat },
-                }))}
-              />
-            </section>
+            <SheetBlock className="mt-4" title="Feats">
+              <FeatChips feats={sheet.feats} classId={sheet.class} subclass={sheet.subclass} />
+            </SheetBlock>
           ) : null}
 
           {sheet.backstory ? (
-            <section className="mt-4">
-              <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
-                Backstory
-              </h3>
-              <p className="whitespace-pre-wrap text-xs text-stone-300">{sheet.backstory}</p>
-            </section>
+            <SheetBlock className="mt-4" title="Backstory">
+              <p className="whitespace-pre-wrap font-serif text-sm leading-relaxed text-stone-300">{sheet.backstory}</p>
+            </SheetBlock>
           ) : null}
 
           {mine && sheet.notes ? (
-            <section className="mt-4">
-              <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
-                Notes (only you see these)
-              </h3>
+            <SheetBlock className="mt-4" title="Notes" aside="only you see these">
               <p className="whitespace-pre-wrap text-xs text-stone-300">{sheet.notes}</p>
-            </section>
+            </SheetBlock>
           ) : null}
 
           <div className="mt-4 flex justify-end gap-2">

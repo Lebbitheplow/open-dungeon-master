@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Dices } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { cn } from "@/lib/cn";
 import { MonsterTile, ui } from "@/lib/ui";
+import { GameIcon } from "@/components/ui/GameIcon";
+import { SectionHead } from "@/components/ui/SectionHead";
 
 // Monster lookup: the campaign's own genre catalog, then the exact numbers
 // start_encounter would spawn. A CR with no match falls back to the DMG's
@@ -12,8 +15,7 @@ import { MonsterTile, ui } from "@/lib/ui";
 // a card of its own. The DM console still gets the open section it always
 // had; the workshop passes collapsible and gets a header that opens it.
 
-export const inputClass =
-  "w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1.5 text-sm text-stone-100 placeholder:text-stone-600 focus:border-amber-700 focus:outline-none";
+export const inputClass = ui.input;
 
 type StatblockMatch = { slug: string; name: string; cr: number; type: string; blurb: string };
 
@@ -83,26 +85,26 @@ export function StatblockFinder({
           type="button"
           onClick={search}
           disabled={busy}
-          className="shrink-0 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:bg-stone-900 disabled:opacity-40"
+          className={cn(ui.btnSecondary, "shrink-0")}
         >
           Search
         </button>
       </div>
       {matches.length ? (
-        <ul className="mt-1.5 space-y-1">
+        <ul className="stagger mt-1.5 space-y-1">
           {matches.map((match) => (
             <li key={match.slug}>
               <button
                 type="button"
                 onClick={() => openStatblock(match.slug)}
-                className="flex w-full items-center gap-2 rounded-md border border-stone-800 px-2 py-1 text-left hover:border-stone-700"
+                className={cn(ui.btnSmall, "w-full text-left")}
               >
                 <MonsterTile
                   type={match.type}
                   cr={match.cr}
                   genre={genre}
                   seed={match.slug}
-                  size="size-7"
+                  size="size-8"
                 />
                 <span className="text-xs text-stone-200">
                   {match.name}
@@ -114,11 +116,11 @@ export function StatblockFinder({
         </ul>
       ) : null}
       {stats ? (
-        <div className="mt-1.5 rounded-md border border-stone-800 bg-stone-950/40 px-2 py-1.5 text-xs text-stone-300">
+        <div className="panel reveal mt-2 rounded-lg px-3 py-2 text-xs text-stone-300">
           <p className="text-stone-200">
             {String(detail?.name ?? "")}
             {detail?.synthesized ? (
-              <span className="ml-1.5 text-[10px] uppercase tracking-wide text-amber-300/80">
+              <span className="ml-1.5 font-display text-[10px] tracking-wide text-amber-300/80">
                 DMG baseline
               </span>
             ) : null}
@@ -143,9 +145,9 @@ export function StatblockFinder({
           type="button"
           onClick={() => setOpen((current) => !current)}
           aria-expanded={open}
-          className="flex w-full items-center gap-2 text-left font-display text-sm tracking-wide text-amber-100"
+          className="flex min-h-10 w-full items-center gap-2 text-left font-display text-sm tracking-wide text-amber-100"
         >
-          <Dices className="size-4 text-amber-300" />
+          <GameIcon icon={{ kind: "glyph", key: "system-bestiary" }} size="size-7" />
           Look up a monster
           {open ? (
             <ChevronDown className="ml-auto size-4 text-stone-500" />
@@ -153,17 +155,14 @@ export function StatblockFinder({
             <ChevronRight className="ml-auto size-4 text-stone-500" />
           )}
         </button>
-        {open ? <div className="mt-3">{controls}</div> : null}
+        {open ? <div className="reveal mt-3">{controls}</div> : null}
       </section>
     );
   }
 
   return (
-    <section className="rounded-lg border border-stone-800 bg-stone-950/60 px-2.5 py-2">
-      <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
-        <Dices className="size-3.5" />
-        Look up a monster
-      </p>
+    <section className="panel rounded-xl p-3">
+      <SectionHead title="Look up a monster" glyph="system-bestiary" />
       {controls}
     </section>
   );

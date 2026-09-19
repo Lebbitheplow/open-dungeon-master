@@ -64,9 +64,9 @@ export function ListControls({
         />
       </label>
       {tags.length ? (
-        <div className="flex flex-wrap items-center gap-1">
+        <div data-pill-group="" className="reveal flex flex-wrap items-center gap-1">
           {tags.slice(0, 8).map((entry) => (
-            <button
+            <button data-on={tag === entry ? "" : undefined}
               key={entry}
               type="button"
               aria-pressed={tag === entry}
@@ -81,8 +81,8 @@ export function ListControls({
           ))}
         </div>
       ) : null}
-      <div className="ml-auto flex items-center gap-1">
-        <button
+      <div data-pill-group="" className="ml-auto flex items-center gap-1">
+        <button data-on={sort === "recent" ? "" : undefined}
           type="button"
           aria-pressed={sort === "recent"}
           onClick={() => setSort("recent")}
@@ -91,7 +91,7 @@ export function ListControls({
         >
           <Clock className="size-3.5" />
         </button>
-        <button
+        <button data-on={sort === "name" ? "" : undefined}
           type="button"
           aria-pressed={sort === "name"}
           onClick={() => setSort("name")}

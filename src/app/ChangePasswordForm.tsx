@@ -96,8 +96,8 @@ export function ChangePasswordForm({
           className={ui.input}
         />
       </label>
-      {error ? <p className="text-sm text-red-400">{error}</p> : null}
-      <button type="submit" disabled={busy} className={cn(ui.btnPrimary, "w-full")}>
+      {error ? <p className="motion-shake text-sm text-red-400">{error}</p> : null}
+      <button type="submit" disabled={busy} aria-busy={busy} className={cn(ui.btnPrimary, "w-full")}>
         {busy ? <Loader2 className="size-4 animate-spin" /> : null}
         {submitLabel}
       </button>
