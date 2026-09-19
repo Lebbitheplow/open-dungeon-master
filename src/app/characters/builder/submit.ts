@@ -98,7 +98,11 @@ export function callingBlocker(
     return `Pick ${stylesLeft === 1 ? "a fighting style" : `${stylesLeft} fighting styles`}.`;
   }
   const expertiseSlots = expertiseSlotsFor(klass.id, derived.effectiveLevel);
-  const expertiseLeft = expertiseSlots - state.expertisePicks.length;
+  // Counted against the skills the character still has, the same list the
+  // panel draws: a pick in a dropped skill is not a pick.
+  const expertiseLeft =
+    expertiseSlots -
+    state.expertisePicks.filter((skillId) => derived.proficientSkills.includes(skillId)).length;
   if (expertiseLeft > 0) {
     return `Pick ${expertiseLeft} more expertise ${expertiseLeft === 1 ? "skill" : "skills"}.`;
   }

@@ -396,9 +396,12 @@
   .hand[data-tutorial="true"] .hand-fan { display: none; }
 }
 
-/* ---- the phone: a snapping rail ---- */
+/* ---- the phone: a snapping rail ----
+   Also any window too short for the fan, however wide: a 7-inch tablet on
+   its side is 960 by 600, where the fan alone is half the height and pushed
+   the message box under the tab bar. */
 
-@media (max-width: 639px) {
+@media (max-width: 639px), (max-height: 719px) {
   .hand { --card-w: 132px; --card-h: 186px; }
   .hand-fan {
     justify-content: flex-start;
@@ -455,6 +458,17 @@
     height: var(--card-h);
     scroll-snap-align: center;
   }
+}
+/* However short the window gets (a tablet on its side, a phone with its
+   keyboard up), the hand is what gives way and never the message box: the desk
+   may shrink inside its column, everything in it keeps its height, and the
+   hand scrolls in what is left. A guess at the height cannot promise that;
+   the layout can. */
+@media (max-height: 719px) {
+  .session-desk:has(.hand) { display: flex; flex: 0 1 auto; flex-direction: column; min-height: 0; }
+  .session-desk:has(.hand) > div { display: flex; flex: 0 1 auto; flex-direction: column; width: 100%; min-height: 0; }
+  .session-desk:has(.hand) > div > * { flex-shrink: 0; }
+  .session-desk:has(.hand) > div > .hand { flex: 0 1 auto; min-height: 0; max-height: none; overflow-y: auto; overscroll-behavior: contain; }
 }
 @keyframes hand-rail-in {
   from { opacity: 0; transform: translateX(28px); }

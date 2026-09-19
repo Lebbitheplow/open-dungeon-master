@@ -34,18 +34,26 @@ export function ClassChoices({
   actions: BuilderActions;
   klass: ClassOption | undefined;
 }) {
-  const { effectiveLevel, preview, styleSlots, optionSlots } = derived;
+  const { effectiveLevel, proficientSkills, styleSlots, optionSlots } = derived;
   const expertiseSlots = klass ? expertiseSlotsFor(klass.id, effectiveLevel) : 0;
+  // Only picks in a skill the character still has count: dropping a class
+  // skill takes its expertise with it, here and in the step's gate.
+  const expertiseChosen = state.expertisePicks.filter((skillId) =>
+    proficientSkills.includes(skillId),
+  );
   return (
     <>
-      {klass && expertiseSlots > 0 && preview ? (
+      {/* Drawn from the skills alone, never from the sheet preview: that waits
+          on ability scores, which are the NEXT step, and this step cannot be
+          left until its expertise is picked. */}
+      {klass && expertiseSlots > 0 ? (
         <StepPanel
           title={`Expertise (pick ${expertiseSlots})`}
           help={
             <>
-              {expertiseSlots - state.expertisePicks.length > 0 ? (
+              {expertiseSlots - expertiseChosen.length > 0 ? (
                 <span className="text-amber-300">
-                  {expertiseSlots - state.expertisePicks.length} still to choose.{" "}
+                  {expertiseSlots - expertiseChosen.length} still to choose.{" "}
                 </span>
               ) : null}
               <GameTerm id="expertise">Expertise</GameTerm> doubles your{" "}
@@ -54,9 +62,12 @@ export function ClassChoices({
           }
         >
           <div className="flex flex-wrap gap-2">
-            {preview.proficiencies.skills.map((skillId) => {
+            {proficientSkills.length === 0 ? (
+              <span className="text-xs text-stone-500">Pick your class skills above first.</span>
+            ) : null}
+            {proficientSkills.map((skillId) => {
               const skill = SRD_SKILLS.find((entry) => entry.id === skillId);
-              const selected = state.expertisePicks.includes(skillId);
+              const selected = expertiseChosen.includes(skillId);
               return (
                 <PickPill
                   key={skillId}
@@ -64,13 +75,16 @@ export function ClassChoices({
                   selected={selected}
                   info={{ text: describeSkill(skillId) }}
                   onClick={() =>
-                    state.setExpertisePicks((current) =>
-                      selected
-                        ? current.filter((entry) => entry !== skillId)
-                        : current.length < expertiseSlots
-                          ? [...current, skillId]
-                          : current,
-                    )
+                    state.setExpertisePicks((current) => {
+                      // Picks whose skill has since been dropped are swept
+                      // out here, so they never hold a slot they cannot use.
+                      const live = current.filter((entry) => proficientSkills.includes(entry));
+                      return selected
+                        ? live.filter((entry) => entry !== skillId)
+                        : live.length < expertiseSlots
+                          ? [...live, skillId]
+                          : live;
+                    })
                   }
                 >
                   {skill?.name ?? skillId}

@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { PanelError, PanelLoading, panelRow } from "./PanelKit";
+import { Prose } from "./Prose";
 import { Tooltip } from "@/components/ui/Tooltip";
 import type { CampaignAsk } from "@/lib/db/asks";
 import type { AskScope, AskVisibility } from "@/lib/dm/ask-logic";
@@ -68,7 +69,7 @@ function AskEntry({ ask, meUserId }: { ask: CampaignAsk; meUserId: string }) {
         <p className="live-in text-xs italic text-red-400">The DM could not answer this one.</p>
       ) : (
         <p className="whitespace-pre-wrap font-serif text-xs leading-5 text-stone-300">
-          {ask.answer}
+          <Prose text={ask.answer} />
         </p>
       )}
       {ask.citations.length ? (

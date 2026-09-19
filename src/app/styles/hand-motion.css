@@ -135,7 +135,7 @@ html[data-theme="light"] .hand-played { border-color: #a6842a; box-shadow: 0 0 0
   to { opacity: 0; translate: 0 40px; }
 }
 
-@media (max-width: 639px) {
+@media (max-width: 639px), (max-height: 719px) {
   .hand-played { top: 34px; }
   .hand-fan[data-folding="true"] .hand-slot { animation-name: hand-rail-out; }
 }

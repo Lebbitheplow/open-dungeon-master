@@ -80,21 +80,28 @@ export function useBuilderDerived({
     [baseAbilities, activeAsiChoices],
   );
 
+  // Skills come from four places, not two: the class picks, the
+  // background, the race's fixed grants (high elf Perception, half-orc
+  // Intimidation) and the race's choice grants (half-elf). Known before any
+  // ability score is, which the expertise picks on the class step rely on:
+  // a rogue or bard chooses them a step ahead of the scores.
+  const proficientSkills = useMemo(
+    () => [
+      ...new Set([
+        ...chosenSkills,
+        ...(background?.skills ?? []),
+        ...(race?.skills ?? []),
+        ...racialSkills.filter(Boolean),
+      ]),
+    ],
+    [chosenSkills, background, race, racialSkills],
+  );
+
   const preview = useMemo(() => {
     if (!abilities || !race || !klass || !background) {
       return null;
     }
-    // Skills come from four places, not two: the class picks, the
-    // background, the race's fixed grants (high elf Perception, half-orc
-    // Intimidation) and the race's choice grants (half-elf).
-    const skills = [
-      ...new Set([
-        ...chosenSkills,
-        ...background.skills,
-        ...(race.skills ?? []),
-        ...racialSkills.filter(Boolean),
-      ]),
-    ];
+    const skills = proficientSkills;
     const proficiencies = {
       saves: klass.saves,
       skills,
@@ -136,7 +143,7 @@ export function useBuilderDerived({
     const maxHp =
       hpOverride ?? suggestedStartingHp(klass.id, race.id, abilities.con, effectiveLevel);
     return { proficiencies, derived, maxHp };
-  }, [abilities, race, klass, background, chosenSkills, expertisePicks, bonusLanguages, racialSkills, racialTool, effectiveLevel, hpOverride]);
+  }, [abilities, race, klass, background, proficientSkills, expertisePicks, bonusLanguages, racialTool, effectiveLevel, hpOverride]);
 
   // Class-appropriate starting weapons ride along automatically (removable
   // chips) so no character begins the adventure unarmed. Weapons AND armor:
@@ -272,6 +279,7 @@ export function useBuilderDerived({
     activeAsiChoices,
     baseAbilities,
     abilities,
+    proficientSkills,
     preview,
     equipmentSuggestions,
     fullEquipment,

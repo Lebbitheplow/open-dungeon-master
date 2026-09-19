@@ -9,6 +9,7 @@ import type { CampaignMessage } from "@/lib/db/messages";
 import type { StoredRoll } from "@/lib/db/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { MessageItem } from "@/app/campaigns/[campaignId]/MessageItem";
+import { Prose } from "@/app/campaigns/[campaignId]/Prose";
 import { DM_STATUS_PHRASES } from "@/app/campaigns/[campaignId]/dmStatusPhrases";
 import type {
   CampaignLocation,
@@ -281,7 +282,7 @@ export function MessageList({
         <div className="session-dm animate-fade-up">
           <SectionHead title="Dungeon Master" glyph="tab-dm" level="h4" />
           <p className="session-dm-body whitespace-pre-wrap text-pretty font-serif text-base leading-relaxed text-stone-100">
-            {dmDraft}
+            <Prose text={dmDraft} />
             <span className="stream-caret" aria-hidden="true" />
           </p>
         </div>

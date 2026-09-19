@@ -6,6 +6,7 @@ import { stripToolText } from "@/lib/dm/tool-text";
 import { attributeSpeech, type Speaker } from "@/lib/dm/speech";
 import type { CastMember } from "@/lib/dm/cast";
 import { SpeechLine } from "@/app/campaigns/[campaignId]/SpeechLine";
+import { Prose } from "@/app/campaigns/[campaignId]/Prose";
 import { RollCard } from "@/app/campaigns/[campaignId]/RollCard";
 import type { StoredRoll } from "@/lib/db/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -101,7 +102,7 @@ export function DmContent({ content, rollsById, sheetsById, cast = [], speaker }
         {parts.map((part, index) =>
           part.kind === "text" ? (
             <SpeechLine key={index} speaker={speaker} cast={cast}>
-              {part.text.trim()}
+              <Prose text={part.text.trim()} />
             </SpeechLine>
           ) : (
             <RollCard key={index} roll={part.roll} characterName={part.roll.characterId ? sheetsById.get(part.roll.characterId)?.name : undefined} />
@@ -118,11 +119,11 @@ export function DmContent({ content, rollsById, sheetsById, cast = [], speaker }
             {attributeSpeech(part.text.trim(), speakers).map((segment, at) =>
               segment.kind === "speech" ? (
                 <SpeechLine key={at} speaker={segment.speaker} cast={cast}>
-                  {segment.text}
+                  <Prose text={segment.text} />
                 </SpeechLine>
               ) : (
                 <p key={at} className="whitespace-pre-wrap text-pretty font-serif text-base leading-relaxed text-stone-100">
-                  {segment.text.trim()}
+                  <Prose text={segment.text.trim()} />
                 </p>
               ),
             )}
