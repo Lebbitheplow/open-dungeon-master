@@ -108,7 +108,14 @@ try {
   const archive = path.join(targetDir, `odm-backup-${stamp}.tar.gz`);
   execFileSync("tar", ["-czf", archive, "-C", stage, "."], { stdio: "pipe" });
 
-  const sha = crypto.createHash("sha256").update(fs.readFileSync(archive)).digest("hex");
+  // Archives can pass 2 GiB, where readFileSync throws; hash over a stream.
+  const sha = await new Promise((resolve, reject) => {
+    const hash = crypto.createHash("sha256");
+    const stream = fs.createReadStream(archive);
+    stream.on("error", reject);
+    stream.on("data", (chunk) => hash.update(chunk));
+    stream.on("end", () => resolve(hash.digest("hex")));
+  });
   const sizeMb = (fs.statSync(archive).size / 2 ** 20).toFixed(1);
   console.log(`backup: ${archive} (${sizeMb} MB)`);
   console.log(`sha256: ${sha}`);
