@@ -27,11 +27,26 @@ a secret story arc it regenerates as the campaign moves.
 
 <div align="center">
 
-### The table, mid-combat
+### Your turn, in cards
 
-<img src="docs/screenshot-table.png" alt="A multiplayer campaign in progress: DM narration, a natural-20 attack, and the live party panel" width="960">
+<img src="docs/screenshot-table.png" alt="A fight in progress: the hand of action cards, a longsword card lifted with its targets, damage and to-hit odds, and the battle map on the right" width="960">
 
-<sub><i>A live session of <b>The Hollow Crown of Vael Ardûn</b> — DM narration and server-rolled dice on the left, the encounter tracker and the whole party's HP, conditions and resources on the right.</i></sub>
+<sub><i>A live session of <b>Embers of the Saltglass Coast</b> — your hand holds every action the sheet allows, each card says what it rolls and what it costs, and the server does the rolling. The battle map, the turn order and the party sit beside it.</i></sub>
+
+<table>
+<tr>
+<td width="50%" align="center"><img src="docs/screenshot-battle-map.png" alt="The battle map enlarged: painted terrain, portrait tokens, the initiative strip and the fog shroud" width="460"><br><sub>The battle map, fogged and in initiative</sub></td>
+<td width="50%" align="center"><img src="docs/screenshot-builder.png" alt="The character builder on the spells and gear step, picking cantrips and prepared spells" width="460"><br><sub>The character builder, picking spells</sub></td>
+</tr>
+<tr>
+<td width="50%" align="center"><img src="docs/screenshot-workshop.png" alt="The workshop hub: storyboard, party, battle maps, region, encounters, cast, factions, bestiary, homebrew, lore, tables, rules, plugin and share" width="460"><br><sub>The workshop, where prep lives</sub></td>
+<td width="50%" align="center"><img src="docs/screenshot-map-studio.png" alt="The map studio: a description typed in plain words, the words it recognised, and the map it rolled" width="460"><br><sub>The map studio: describe it, roll it</sub></td>
+</tr>
+</table>
+
+<img src="docs/screenshot-phone.png" alt="The same table on a phone: DM narration above the hand of cards, the turn order and the table's tab bar" width="240">
+
+<sub><i>The same table on a phone. The apps compile these pages into native screens.</i></sub>
 
 </div>
 
