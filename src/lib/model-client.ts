@@ -14,6 +14,7 @@ import {
 } from "@/lib/dm/context-probe-logic";
 import { serverEnv } from "@/lib/server-env";
 import { localModelContextWindow } from "@/lib/text-models";
+import { harnessContextTokens } from "@/lib/harness/status";
 
 // Shared chat-completion client for both providers:
 // - custom: any OpenAI-compatible /chat/completions (llama.cpp, LM Studio,
@@ -85,6 +86,15 @@ export type ChatRequestOptions = {
   // Set only by requestCustomMessage's own unsupported-parameter path; no
   // caller outside this module should populate it.
   dropParams?: readonly string[];
+  // Only read by the "harness" provider (src/lib/harness/bridge.ts). An agent
+  // program reads its tool list once, when it starts, so the DM loop hands
+  // over every tool the turn could offer; the bridge still refuses a call
+  // that is not offered at that moment.
+  harness?: {
+    campaignId?: string;
+    catalogue?: readonly unknown[];
+    turn?: boolean;
+  };
 };
 
 export function configuredMaxOutputTokens() {
@@ -145,6 +155,11 @@ export function storyContextTokens(settings: {
 }): number {
   if (settings.textProvider === "local") {
     return localContextTokens(settings.localTextModel);
+  }
+  // An agent program's model has a large window, but the table packs against
+  // 128K for the same reason OpenAI does (src/lib/harness/status.ts).
+  if (settings.textProvider === "harness") {
+    return harnessContextTokens();
   }
   // An explicit setting always wins: the operator knows their deployment
   // better than a probe does.

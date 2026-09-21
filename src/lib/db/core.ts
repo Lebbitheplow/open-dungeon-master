@@ -2021,6 +2021,42 @@ function ensureSchema(db: SqliteDatabase) {
       `INSERT INTO app_settings (key, value_json, updated_at) VALUES (?, ?, ?)`,
     ).run("sheet_portrait_backfill_done", "true", new Date().toISOString());
   }
+
+  // Connected agents (docs/harness-mcp-plan.md 7): a player's own agent
+  // session (Claude Code, Codex, any MCP client) acting as that player over
+  // /api/mcp. Only the token's hash is kept, the same rule as sessions.
+  // scopes_json is the list of tool groups the player ticked.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS agent_grants (
+      id TEXT PRIMARY KEY,
+      token_hash TEXT NOT NULL UNIQUE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      scopes_json TEXT NOT NULL DEFAULT '[]',
+      campaign_id TEXT REFERENCES campaigns(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      last_used_at TEXT,
+      revoked_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_agent_grants_user ON agent_grants(user_id);
+
+    -- Every call an agent made, from either door: a program narrating a turn
+    -- (grant_kind 'turn') or a player's connected session ('connection').
+    -- Pruned to the newest 5000 rows.
+    CREATE TABLE IF NOT EXISTS agent_activity (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      grant_kind TEXT NOT NULL CHECK (grant_kind IN ('turn','connection')),
+      grant_id TEXT NOT NULL,
+      user_id TEXT,
+      campaign_id TEXT,
+      tool TEXT NOT NULL,
+      ok INTEGER NOT NULL,
+      ms INTEGER NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_agent_activity_grant ON agent_activity(grant_id, id);
+  `);
 }
 
 // Widens battle_tokens.kind to accept the DM's own board furniture.

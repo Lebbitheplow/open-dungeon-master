@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { Select } from "@/components/ui/Select";
 import type { MaskedStorySettings } from "@/lib/db/settings";
+import type { HarnessOffer } from "@/lib/harness/policy";
 import { endpointKind } from "@/lib/dm/sampling-logic";
 import { shellHost } from "@/lib/shell-host";
 import type { TextProvider } from "@/lib/text-models";
@@ -23,6 +24,7 @@ const PROVIDER_LABELS: Record<TextProvider, string> = {
   local: "Local (Ollama)",
   custom: "Custom backend",
   none: "No AI storyteller",
+  harness: "The server's agent",
 };
 
 const BACKEND_LABELS: Record<ImageBackend, string> = {
@@ -30,6 +32,7 @@ const BACKEND_LABELS: Record<ImageBackend, string> = {
   openai: "OpenAI-compatible",
   "mflux-hs": "MFLUX (home server)",
   "sdnq-hs": "SDNQ (home server)",
+  harness: "The server's agent",
 };
 
 // Per-campaign AI settings for the Setup tab. The values render from the
@@ -61,6 +64,10 @@ export function StoryAiPanel({
   // campaign follows it, so this panel shows it instead of editing it. null
   // until the answer lands, so the editable rows never flash on a device.
   const [deviceManaged, setDeviceManaged] = useState<boolean | null>(null);
+  // Whether the server's agent program may narrate (and paint for) this
+  // campaign; the admin decides (src/lib/harness/policy.ts). Hidden until
+  // the answer lands, so the choice never flashes on and off.
+  const [harness, setHarness] = useState<HarnessOffer | null>(null);
   // Text fields commit on blur or Enter, so a half-typed URL never PATCHes.
   const [drafts, setDrafts] = useState({
     customBaseUrl: settings.customBaseUrl,
@@ -78,11 +85,14 @@ export function StoryAiPanel({
     let cancelled = false;
     void fetch(`/api/campaigns/${campaignId}/story-settings`)
       .then((response) => (response.ok ? response.json() : null))
-      .then((data: { settings?: MaskedStorySettings } | null) => {
+      .then((data: { settings?: MaskedStorySettings; harness?: HarnessOffer } | null) => {
         if (!cancelled && data?.settings) {
           setHasCustomKey(data.settings.hasCustomApiKey);
           setHasUtilityKey(data.settings.hasUtilityApiKey);
           setImagesReady(data.settings.imagesReady);
+        }
+        if (!cancelled && data?.harness) {
+          setHarness(data.harness);
         }
         if (!cancelled) {
           // A server older than this field, or a failed read, edits as before.
@@ -119,6 +129,7 @@ export function StoryAiPanel({
       const data = (await response.json().catch(() => ({}))) as {
         error?: string;
         settings?: MaskedStorySettings;
+        harness?: HarnessOffer;
       };
       if (!response.ok) {
         setError(data.error ?? "That change was not saved.");
@@ -128,6 +139,9 @@ export function StoryAiPanel({
         setHasCustomKey(data.settings.hasCustomApiKey);
         setHasUtilityKey(data.settings.hasUtilityApiKey);
         setImagesReady(data.settings.imagesReady);
+      }
+      if (data.harness) {
+        setHarness(data.harness);
       }
       if (update.customApiKey !== undefined) {
         setDrafts((prev) => ({ ...prev, customApiKey: SECRET_KEPT }));
@@ -156,10 +170,15 @@ export function StoryAiPanel({
     }
   }
 
+  const harnessName = harness?.label
+    ? `The server's ${harness.label}${harness.model ? ` (${harness.model})` : ""}`
+    : PROVIDER_LABELS.harness;
   const storytellerSummary =
     settings.textProvider === "custom"
       ? settings.customModel || "custom backend"
-      : PROVIDER_LABELS[settings.textProvider];
+      : settings.textProvider === "harness"
+        ? harnessName
+        : PROVIDER_LABELS[settings.textProvider];
   const imagesSummary = settings.imageGenerationEnabled
     ? `${BACKEND_LABELS[settings.imageBackend]}${settings.autoImages ? ", automatic" : ""}`
     : "off";
@@ -197,7 +216,14 @@ export function StoryAiPanel({
   const deviceStoryteller =
     settings.textProvider === "custom"
       ? `${settings.customModel || "custom backend"} (${backendName})`
-      : PROVIDER_LABELS[settings.textProvider];
+      : settings.textProvider === "harness"
+        ? harnessName
+        : PROVIDER_LABELS[settings.textProvider];
+  // The agent is offered only where the admin allows it, but a campaign that
+  // already chose it keeps seeing its own choice.
+  const providerChoices = (Object.keys(PROVIDER_LABELS) as TextProvider[]).filter(
+    (provider) => provider !== "harness" || harness?.offered || settings.textProvider === "harness",
+  );
 
   const selectClass =
     "rounded-md border border-stone-700 bg-stone-900 px-2 py-1 text-xs outline-none focus:border-amber-600";
@@ -249,11 +275,20 @@ export function StoryAiPanel({
               <Select
                 value={settings.textProvider}
                 onChange={(textProvider) => patch({ textProvider })}
-                options={(Object.keys(PROVIDER_LABELS) as TextProvider[]).map((provider) => ({ value: provider, label: PROVIDER_LABELS[provider] }))}
+                options={providerChoices.map((provider) => ({
+                  value: provider,
+                  label: provider === "harness" ? harnessName : PROVIDER_LABELS[provider],
+                }))}
                 label="Storyteller"
                 size="sm"
               />
             </div>
+            {settings.textProvider === "harness" ? (
+              <p className="reveal text-stone-500">
+                Narrated by an agent program on this server&apos;s own sign-in, turn by turn, under
+                the same rules and caps as the built-in storyteller. It has none of its own tools.
+              </p>
+            ) : null}
             {settings.textProvider === "custom" ? (
               <>
                 <div className="flex flex-wrap items-center gap-2">
@@ -379,7 +414,9 @@ export function StoryAiPanel({
               // are this campaign's to choose.
               ...(deviceManaged
                 ? [settings.imageBackend]
-                : (Object.keys(BACKEND_LABELS) as ImageBackend[])
+                : (Object.keys(BACKEND_LABELS) as ImageBackend[]).filter(
+                    (backend) => backend !== "harness" || harness?.pictures || settings.imageBackend === "harness",
+                  )
               ).map((backend) => ({ value: backend, label: BACKEND_LABELS[backend] })),
             ]}
             onChange={(value) => {

@@ -1,5 +1,6 @@
 import { generateComfyImage } from "@/lib/comfyui";
 import { generateOpenAiImage, openAiImagesConfigured } from "@/lib/openai-images";
+import { generateHarnessImage, harnessImagesReady } from "@/lib/harness/images";
 import type { AspectPreset, GeneratedImage, ImageMode, StorySettings } from "@/lib/types";
 
 // The one producer-side door for story images, so every enqueue site
@@ -23,6 +24,9 @@ export function imageProducerReady(
   if (settings.imageBackend === "openai") {
     return openAiImagesConfigured(settings);
   }
+  if (settings.imageBackend === "harness") {
+    return harnessImagesReady();
+  }
   return false;
 }
 
@@ -40,6 +44,9 @@ export function generateStoryImage(
 ): Promise<GeneratedImage> {
   if (settings.imageBackend === "openai") {
     return generateOpenAiImage(options, settings);
+  }
+  if (settings.imageBackend === "harness") {
+    return generateHarnessImage(options);
   }
   // Everything else lands on ComfyUI, which was the previous behavior for
   // every producer-side call regardless of the selected backend.

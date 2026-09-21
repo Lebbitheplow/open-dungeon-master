@@ -1,0 +1,195 @@
+/* The agent program picker (admin > Agent program) and the connected-agents
+   list (Settings). Motion follows the kit (motion-app.css): the chosen card
+   is carried by its frame and a small lift on the spring, never by a resting
+   scale that would soften its text; status pills cross-fade their colour; a
+   test stage's tick draws only when its real result lands; the test picture
+   develops out of blur; a failure shakes once. Reduced motion keeps every
+   change and drops the movement. */
+
+@keyframes hx-develop {
+  from { filter: blur(14px) saturate(0.2) brightness(0.7); opacity: 0.35; }
+  to { filter: none; opacity: 1; }
+}
+@keyframes hx-stage-wait {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
+@layer components {
+  .hx-cards {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr));
+  }
+
+  .hx-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.85rem 0.9rem 0.8rem;
+    text-align: left;
+    cursor: pointer;
+    border: 1px solid color-mix(in srgb, var(--color-stone-600) 45%, transparent);
+    border-radius: 12px;
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-stone-700) 38%, transparent),
+      color-mix(in srgb, var(--color-stone-950) 88%, transparent)
+    );
+    box-shadow: 0 2px 6px rgba(4, 2, 12, 0.3), 0 10px 24px rgba(4, 2, 12, 0.22);
+    translate: 0 0;
+    transition:
+      translate var(--dur-move) var(--ease-spring),
+      border-color var(--dur-quick) var(--ease-snap),
+      background-color var(--dur-quick) var(--ease-snap),
+      box-shadow var(--dur-move) var(--ease-snap),
+      opacity var(--dur-quick) var(--ease-snap);
+  }
+  .hx-card:hover { translate: 0 -2px; }
+  .hx-card:active { translate: 0 0; }
+  .hx-card:focus-visible { outline: 2px solid var(--color-amber-400); outline-offset: 2px; }
+  .hx-card[aria-checked="true"] {
+    translate: 0 -3px;
+    border: 1px solid #f4d47a;
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-amber-500) 18%, transparent),
+      color-mix(in srgb, var(--color-stone-950) 90%, transparent)
+    );
+    box-shadow:
+      0 0 0 1px rgba(244, 212, 122, 0.55),
+      0 0 18px rgba(212, 171, 58, 0.35),
+      0 14px 32px rgba(4, 2, 12, 0.35);
+  }
+  /* A program this machine cannot run stays readable but steps back. */
+  .hx-card[data-unavailable="true"] { opacity: 0.62; }
+  .hx-card[data-unavailable="true"][aria-checked="true"] { opacity: 1; }
+
+  .hx-mark {
+    display: inline-grid;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    flex: none;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.8rem;
+    letter-spacing: 0.02em;
+    color: #f4e7c3;
+    background: radial-gradient(circle at 30% 25%, rgba(244, 212, 122, 0.35), rgba(40, 30, 60, 0.9));
+    border: 1px solid rgba(244, 212, 122, 0.35);
+    transition: border-color var(--dur-quick) var(--ease-snap), box-shadow var(--dur-move) var(--ease-snap);
+  }
+  .hx-card[aria-checked="true"] .hx-mark {
+    border-color: #f4d47a;
+    box-shadow: 0 0 12px rgba(244, 212, 122, 0.45);
+  }
+
+  .hx-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+    transition:
+      background-color var(--dur-quick) var(--ease-snap),
+      color var(--dur-quick) var(--ease-snap),
+      border-color var(--dur-quick) var(--ease-snap);
+  }
+  .hx-pill[data-tone="ready"] { background: rgba(16, 185, 129, 0.16); color: #6ee7b7; border-color: rgba(110, 231, 183, 0.35); }
+  .hx-pill[data-tone="warn"] { background: rgba(245, 158, 11, 0.14); color: #fcd34d; border-color: rgba(252, 211, 77, 0.35); }
+  .hx-pill[data-tone="off"] { background: rgba(120, 113, 108, 0.16); color: #a8a29e; border-color: rgba(168, 162, 158, 0.28); }
+  .hx-pill[data-tone="bad"] { background: rgba(239, 68, 68, 0.14); color: #fca5a5; border-color: rgba(252, 165, 165, 0.32); }
+  .hx-pill[data-tone="wait"] { background: rgba(120, 113, 108, 0.14); color: #d6d3d1; animation: hx-stage-wait 1.6s var(--ease-drift) infinite; }
+
+  .hx-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.68rem;
+    color: var(--color-stone-400);
+  }
+
+  .hx-stages { display: grid; gap: 0.35rem; }
+  .hx-stage {
+    display: grid;
+    grid-template-columns: 1.25rem 1fr;
+    align-items: start;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+  }
+  .hx-stage[data-state="wait"] .hx-stage-mark { animation: hx-stage-wait 1.4s var(--ease-drift) infinite; }
+
+  .hx-picture {
+    width: 100%;
+    max-width: 16rem;
+    aspect-ratio: 1;
+    border-radius: 12px;
+    object-fit: cover;
+    border: 1px solid rgba(244, 212, 122, 0.35);
+    box-shadow: 0 10px 28px rgba(4, 2, 12, 0.4);
+    animation: hx-develop var(--dur-scene) var(--ease-settle) both;
+  }
+
+  .hx-meter {
+    height: 6px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: rgba(120, 113, 108, 0.25);
+  }
+  .hx-meter > span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #c9a24a, #f4d47a);
+  }
+  .hx-meter[data-high="true"] > span { background: linear-gradient(90deg, #d97706, #f87171); }
+
+  .hx-code {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.55rem;
+    border-radius: 8px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.75rem;
+    color: #e7e5e4;
+    background: rgba(12, 10, 24, 0.7);
+    border: 1px solid rgba(120, 113, 108, 0.3);
+    white-space: nowrap;
+  }
+  /* Only the text scrolls, so a long line never runs under the copy button. */
+  .hx-code > code { flex: 1; min-width: 0; overflow-x: auto; white-space: inherit; padding-bottom: 2px; }
+
+  /* The one-time token, shown once, lands with the pop the kit uses for a
+     badge, so the eye goes to it. */
+  .hx-token { animation: pop-in var(--dur-move) var(--ease-spring) backwards; }
+}
+
+html[data-theme="light"] .hx-card {
+  background: linear-gradient(180deg, rgba(255, 250, 238, 0.95), rgba(244, 233, 210, 0.95));
+  border-color: rgba(120, 90, 40, 0.3);
+  box-shadow: 0 2px 6px rgba(60, 30, 10, 0.12);
+}
+html[data-theme="light"] .hx-card[aria-checked="true"] {
+  border-color: #a6842a;
+  background: linear-gradient(180deg, rgba(255, 244, 214, 1), rgba(240, 221, 176, 1));
+  box-shadow: 0 0 0 1px rgba(166, 132, 42, 0.6), 0 8px 20px rgba(60, 30, 10, 0.18);
+}
+html[data-theme="light"] .hx-mark { color: #4a3510; background: radial-gradient(circle at 30% 25%, #fff3cf, #e6c877); }
+html[data-theme="light"] .hx-code { background: rgba(255, 250, 238, 0.9); color: #292524; }
+
+[data-effects="low"] .hx-pill[data-tone="wait"],
+[data-effects="low"] .hx-stage[data-state="wait"] .hx-stage-mark { animation: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hx-card, .hx-mark, .hx-pill { transition: none !important; }
+  .hx-card, .hx-card:hover, .hx-card[aria-checked="true"] { translate: none; }
+  .hx-picture, .hx-token, .hx-pill[data-tone="wait"], .hx-stage[data-state="wait"] .hx-stage-mark {
+    animation: none !important;
+  }
+}

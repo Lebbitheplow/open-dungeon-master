@@ -10,6 +10,9 @@ import { GameIcon } from "@/components/ui/GameIcon";
 import { NumberStepper } from "@/components/ui/NumberStepper";
 import { AdminInvitesSection } from "@/app/admin/AdminInvitesSection";
 import { AdminNetworkSections } from "@/app/admin/AdminNetworkSections";
+import { AdminBackupSection } from "@/app/admin/AdminBackupSection";
+import { BackendProbe } from "@/app/admin/BackendProbe";
+import { AdminHarnessSection } from "@/app/admin/AdminHarnessSection";
 import {
   Field,
   SECRET_KEPT,
@@ -25,11 +28,13 @@ const STOPS: Array<{ id: string; label: string; glyph: string; server?: boolean 
   { id: "admin-server", label: "Server", glyph: "tab-settings", server: true },
   { id: "admin-accounts", label: "Accounts", glyph: "tab-characters", server: true },
   { id: "admin-text", label: "Text model", glyph: "system-lore" },
+  { id: "admin-harness", label: "Agent", glyph: "system-lore" },
   { id: "admin-utility", label: "Utility model", glyph: "tab-log" },
   { id: "admin-images", label: "Images", glyph: "sense-truesight" },
   { id: "admin-speech", label: "Speech", glyph: "tab-ambience" },
   { id: "admin-voice", label: "Voice chat", glyph: "cue-horn", server: true },
   { id: "admin-discord", label: "Discord", glyph: "system-share", server: true },
+  { id: "admin-backup", label: "Backup", glyph: "tab-handout", server: true },
 ];
 
 function jumpTo(id: string) {
@@ -253,6 +258,8 @@ export function AdminSettingsPanel() {
               { value: "" as const, label: "Auto (env or built-in)" },
               { value: "custom" as const, label: "OpenAI-compatible server" },
               ...(phoneWorld ? [] : [{ value: "local" as const, label: "Ollama (native)" }]),
+              ...(phoneWorld ? [] : [{ value: "harness" as const, label: "The agent program (below)" }]),
+              { value: "none" as const, label: "No AI storyteller" },
             ]}
           />
           {phoneWorld ? null : (
@@ -304,7 +311,21 @@ export function AdminSettingsPanel() {
             }
           />
         </div>
+        {/* The CLI's capability probe: streaming, a real tool call, and a
+            continuation, so a backend is proven before a campaign learns it
+            the hard way. Uses the field values as typed, saved values and
+            env as fallbacks. */}
+        <BackendProbe
+          which="story"
+          baseUrl={config.text.customBaseUrl}
+          model={config.text.customModel}
+          apiKey={apiKey === SECRET_KEPT ? "" : apiKey}
+        />
       </PageSection>
+
+      {phoneWorld ? null : (
+        <AdminHarnessSection textProvider={config.text.provider} onConfig={setConfig} />
+      )}
 
       <PageSection id="admin-utility" heading="Utility model (optional)" glyph="tab-log">
         <p className="mb-3 text-xs text-stone-500">
@@ -363,6 +384,12 @@ export function AdminSettingsPanel() {
             hint="Most local servers need none."
           />
         </div>
+        <BackendProbe
+          which="utility"
+          baseUrl={config.text.utilityBaseUrl}
+          model={config.text.utilityModel}
+          apiKey={utilityApiKey === SECRET_KEPT ? "" : utilityApiKey}
+        />
       </PageSection>
 
       <PageSection id="admin-images" heading="Image generation" glyph="sense-truesight">
@@ -386,6 +413,10 @@ export function AdminSettingsPanel() {
                     { value: "mflux-hs" as const, label: "FLUX worker: mflux (Apple Silicon)" },
                     { value: "sdnq-hs" as const, label: "FLUX worker: sdnq (CUDA/ROCm)" },
                   ]),
+              // Only once the agent program has painted a real test picture.
+              ...(config.harness?.images === "native" && config.harness.imagesVerifiedAt
+                ? [{ value: "harness" as const, label: "The agent program's own pictures" }]
+                : []),
             ]}
           />
         </div>
@@ -512,6 +543,12 @@ export function AdminSettingsPanel() {
           discordSecret={discordSecret}
           setDiscordSecret={setDiscordSecret}
         />
+      )}
+
+      {deviceWorld ? null : (
+        <PageSection id="admin-backup" heading="Backup & restore" glyph="tab-handout">
+          <AdminBackupSection />
+        </PageSection>
       )}
 
       <div className="flex flex-wrap items-center gap-3">

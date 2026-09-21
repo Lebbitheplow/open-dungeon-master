@@ -3,6 +3,7 @@
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { Select, type SelectOption } from "@/components/ui/Select";
+import type { HarnessConfig } from "@/lib/harness/types";
 
 // The shapes and the field furniture the admin settings sections share.
 
@@ -13,18 +14,18 @@ export type MaskedConfig = {
   accountDeletionGraceDays: number;
   publicUrl: string;
   text: {
-    provider: "" | "local" | "custom";
+    provider: "" | "local" | "custom" | "none" | "harness";
     localTextModel: string;
     customBaseUrl: string;
     customModel: string;
     hasCustomApiKey: boolean;
-    utilityProvider: "" | "local" | "custom";
+    utilityProvider: "" | "local" | "custom" | "harness";
     utilityModel: string;
     utilityBaseUrl: string;
     hasUtilityApiKey: boolean;
   };
   images: {
-    defaultBackend: "" | "comfyui" | "openai" | "mflux-hs" | "sdnq-hs";
+    defaultBackend: "" | "comfyui" | "openai" | "mflux-hs" | "sdnq-hs" | "harness";
     comfyUrl: string;
     comfyCheckpoint: string;
     fluxWorkerUrl: string;
@@ -41,6 +42,7 @@ export type MaskedConfig = {
     rtcPort: string;
   };
   discord: { clientId: string; hasClientSecret: boolean };
+  harness: HarnessConfig;
 };
 
 export type EnvDefaults = {

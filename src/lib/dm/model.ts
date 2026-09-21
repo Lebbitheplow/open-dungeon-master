@@ -5,6 +5,7 @@ import {
   type ChatRequestOptions,
   type UpstreamResult,
 } from "@/lib/model-client";
+import { requestHarnessMessage } from "@/lib/harness/bridge";
 import type { StorySettings } from "@/lib/types";
 
 // Routes a DM-side model call through the campaign's configured provider.
@@ -13,6 +14,14 @@ export function requestDmMessage(
   messages: ChatMessage[],
   options: ChatRequestOptions,
 ): Promise<UpstreamResult> {
+  if (settings.textProvider === "harness") {
+    return requestHarnessMessage(messages, options, {
+      role: "story",
+      campaignId: options.harness?.campaignId,
+      catalogue: options.harness?.catalogue,
+      turn: options.harness?.turn,
+    });
+  }
   if (settings.textProvider === "local") {
     return requestLocalMessage(settings.localTextModel, messages, options);
   }
@@ -40,6 +49,15 @@ export async function requestUtilityMessage(
   options: ChatRequestOptions,
 ): Promise<UpstreamResult> {
   const model = (settings.utilityModel ?? "").trim();
+  // The server's agent program has its own utility model (chosen beside its
+  // story model in the admin panel), so a harness table does its bookkeeping
+  // there unless the campaign named a separate local or custom one.
+  if (
+    settings.utilityProvider === "harness" ||
+    (settings.textProvider === "harness" && !model)
+  ) {
+    return requestHarnessMessage(messages, options, { role: "utility" });
+  }
   if (!model) {
     return requestDmMessage(settings, messages, options);
   }

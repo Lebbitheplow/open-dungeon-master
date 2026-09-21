@@ -6,9 +6,14 @@
 // it, "no AI" and "the shipped 127.0.0.1:8001 default with nothing listening"
 // are indistinguishable, and the UI cannot warn anyone before a campaign
 // fails its first turn.
-export type TextProvider = "local" | "custom" | "none";
+//
+// "harness" hands the storyteller to an agent program the server's admin has
+// installed and signed into (Claude Code, Codex, opencode, Grok Build). Which
+// one, and on which model, is chosen once for the whole server in the admin
+// panel (src/lib/harness/); a campaign only says "use the server's agent".
+export type TextProvider = "local" | "custom" | "none" | "harness";
 
-export const TEXT_PROVIDERS: TextProvider[] = ["local", "custom", "none"];
+export const TEXT_PROVIDERS: TextProvider[] = ["local", "custom", "none", "harness"];
 
 // Gemma 4 QAT (quantization-aware trained, Q4_0) builds served by Ollama.
 // context = native context window in tokens. ram = resident memory measured
@@ -39,5 +44,5 @@ export function isLocalTextModelId(value: unknown): value is LocalTextModelId {
 }
 
 export function isTextProvider(value: unknown): value is TextProvider {
-  return value === "local" || value === "custom" || value === "none";
+  return value === "local" || value === "custom" || value === "none" || value === "harness";
 }

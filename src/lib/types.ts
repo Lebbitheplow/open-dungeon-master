@@ -6,9 +6,12 @@ export type AspectPreset = "square" | "portrait" | "landscape";
 
 export type ImageMode = "fast" | "slow";
 
-export type ImageBackend = "mflux-hs" | "sdnq-hs" | "comfyui" | "openai";
+// "harness" paints with the server's agent program's own image tool (Codex,
+// Grok Build), once the admin has seen it make a test picture
+// (src/lib/harness/images.ts).
+export type ImageBackend = "mflux-hs" | "sdnq-hs" | "comfyui" | "openai" | "harness";
 
-export const IMAGE_BACKENDS = ["mflux-hs", "sdnq-hs", "comfyui", "openai"] as const;
+export const IMAGE_BACKENDS = ["mflux-hs", "sdnq-hs", "comfyui", "openai", "harness"] as const;
 
 export function isImageBackend(value: unknown): value is ImageBackend {
   return typeof value === "string" && (IMAGE_BACKENDS as readonly string[]).includes(value);

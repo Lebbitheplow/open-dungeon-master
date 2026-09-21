@@ -67,6 +67,7 @@ export type GlobalConfigPatch = {
   speech?: Partial<GlobalConfig["speech"]>;
   voiceChat?: Partial<GlobalConfig["voiceChat"]>;
   discord?: Partial<GlobalConfig["discord"]>;
+  harness?: Partial<GlobalConfig["harness"]>;
 };
 
 // Merges a partial update over the stored config. Secret fields follow the
@@ -96,6 +97,7 @@ export function saveGlobalConfig(patch: GlobalConfigPatch): GlobalConfig {
     speech: { ...current.speech, ...patch.speech },
     voiceChat: { ...current.voiceChat, ...patch.voiceChat },
     discord: { ...current.discord, ...patch.discord },
+    harness: { ...current.harness, ...patch.harness },
   };
   const merged = globalConfigSchema.parse(input);
   setAppSetting(GLOBAL_CONFIG_KEY, merged);

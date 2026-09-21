@@ -13,6 +13,7 @@ import { DeleteAccountDialog } from "@/app/settings/DeleteAccountDialog";
 import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
 import { AppearanceSection } from "@/app/settings/AppearanceSection";
 import { BlockedPlayersSection } from "@/app/settings/BlockedPlayersSection";
+import { ConnectedAgentsSection } from "@/app/settings/ConnectedAgentsSection";
 import { ChangePasswordForm } from "@/app/ChangePasswordForm";
 import { currentPathname, currentQuery, replaceAddress } from "@/lib/navigation";
 
@@ -312,6 +313,7 @@ export default function SettingsPage() {
 
       <AppearanceSection />
       <BlockedPlayersSection />
+      <ConnectedAgentsSection />
 
       {me.deletionDueAt ? (
         <PageSection

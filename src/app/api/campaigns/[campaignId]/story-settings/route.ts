@@ -5,6 +5,7 @@ import { maskStorySettings, scrubStorySettings } from "@/lib/db/settings";
 import { publishPersisted } from "@/lib/events";
 import { LOCAL_TEXT_MODEL_IDS } from "@/lib/text-models";
 import { IMAGE_BACKENDS, PROSE_SIZE_VALUES } from "@/lib/types";
+import { harnessOfferFor } from "@/lib/harness/policy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,7 +26,10 @@ export async function GET(
   if (isErrorResponse(context)) {
     return context;
   }
-  return Response.json({ settings: maskStorySettings(context.campaign.settings) });
+  return Response.json({
+    settings: maskStorySettings(context.campaign.settings),
+    harness: harnessOfferFor(context.campaign),
+  });
 }
 
 // Enum values mirror the StorySettings type; strings get the same trim and
@@ -33,12 +37,12 @@ export async function GET(
 const patchSchema = z.object({
   world: z.string().trim().max(4000).optional(),
   style: z.string().trim().max(4000).optional(),
-  textProvider: z.enum(["local", "custom", "none"]).optional(),
+  textProvider: z.enum(["local", "custom", "none", "harness"]).optional(),
   localTextModel: z.enum(LOCAL_TEXT_MODEL_IDS).optional(),
   customBaseUrl: z.string().trim().max(500).optional(),
   customModel: z.string().trim().max(200).optional(),
   customApiKey: z.string().trim().max(400).optional(),
-  utilityProvider: z.enum(["local", "custom"]).optional(),
+  utilityProvider: z.enum(["local", "custom", "harness"]).optional(),
   utilityModel: z.string().trim().max(200).optional(),
   utilityBaseUrl: z.string().trim().max(500).optional(),
   utilityApiKey: z.string().trim().max(400).optional(),
@@ -71,6 +75,25 @@ export async function PATCH(
     );
   }
 
+  // The server's agent program runs on the admin's plan; the admin decides
+  // which campaigns may use it (src/lib/harness/policy.ts).
+  if (
+    parsed.data.textProvider === "harness" ||
+    parsed.data.utilityProvider === "harness" ||
+    parsed.data.imageBackend === "harness"
+  ) {
+    const offer = harnessOfferFor(context.campaign);
+    if (!offer.offered) {
+      return Response.json({ error: offer.reason ?? "The server's agent is not available." }, { status: 403 });
+    }
+    if (parsed.data.imageBackend === "harness" && !offer.pictures) {
+      return Response.json(
+        { error: "The server's agent has not been cleared to make pictures yet." },
+        { status: 403 },
+      );
+    }
+  }
+
   const settings = updateStorySettings(campaignId, parsed.data);
   if (!settings) {
     return Response.json({ error: "Campaign not found." }, { status: 404 });
@@ -80,5 +103,5 @@ export async function PATCH(
   // the whole room sees the change without a refetch; scrubbed because the
   // stream reaches players who must never see a key.
   publishPersisted(campaignId, "campaign_updated", { settings: scrubStorySettings(settings) });
-  return Response.json({ settings: maskStorySettings(settings) });
+  return Response.json({ settings: maskStorySettings(settings), harness: harnessOfferFor(context.campaign) });
 }

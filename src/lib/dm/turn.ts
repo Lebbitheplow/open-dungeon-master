@@ -35,6 +35,7 @@ import { fulfillMessageImage } from "@/lib/dm/images";
 import { imageProducerReady } from "@/lib/image-generate";
 import { enqueueNarrationAudio } from "@/lib/tts";
 import { requestDmMessage } from "@/lib/dm/model";
+import { releaseHarnessConversation } from "@/lib/harness/bridge";
 import { setDmStatus } from "@/lib/dm/status";
 import {
   extractToolCalls,
@@ -582,7 +583,81 @@ async function advance(context: TurnContext, turn: DmTurn) {
     } else {
       setDmStatus(context.campaign.id, "idle");
     }
+  } finally {
+    // An agent program narrating this turn is stopped the moment the turn
+    // is done, parked for dice or failed. A no-op for every other provider.
+    releaseHarnessConversation(turn.conversation);
   }
+}
+
+// The tools one DM model call is offered. Rebuilt on every call in the loop:
+// the moment start_encounter succeeds mid-turn, the combat tools must appear
+// on the very next call. Encounter tools ignore DM_LEAN_TOOLS; they are the
+// point of combat. Rest tools only exist outside combat.
+function dmTurnTools(
+  campaign: Campaign,
+  inEncounter: boolean,
+  imageEnabled: boolean,
+  leanTools: boolean,
+): unknown[] {
+  return [
+    requestRollTool,
+    requestPlayerInputTool,
+    movePartyTool,
+    updateLocationTool,
+    recordEventTool,
+    ...(isStageEnabled(campaign.gameSettings.stages, "recall") ? [recallStoryTool] : []),
+    searchLoreTool,
+    writeCampaignNoteTool,
+    sendWhisperTool,
+    ...(campaign.storyArc ? [completeBeatTool] : []),
+    ...checkTools,
+    ...hazardTools,
+    ...(inEncounter ? [splitDamageTool] : []),
+    ...petTools,
+    ...socialTools,
+    ...(inEncounter ? [] : relationshipTools(campaign)),
+    ...(inEncounter ? [] : worldTools),
+    // Handouts and the quest log are read at the table's pace, not mid-round.
+    ...(inEncounter ? [] : binderTools),
+    ...(inEncounter ? [] : factionTools),
+    ...(inEncounter ? [] : shopTools),
+    ...(inEncounter || !campaign.gameSettings.worldSimulation ? [] : settlementTools),
+    // The party's shared pack and common purse. Out of combat only, like
+    // the rest of the world tools: nobody rummages in the group kit while
+    // initiative is running.
+    ...(inEncounter ? [] : partyTools),
+    // Effects are offered in and out of combat: a blessing lands mid-fight
+    // as often as a curse lands in a throne room.
+    ...effectTools,
+    // Structured non-combat scenes and mounts are both out-of-combat
+    // business: a chase clock and an initiative order are two answers to
+    // the same question, and nobody saddles up mid-round.
+    ...(inEncounter ? [] : sceneTools),
+    // Sound is offered in and out of a fight: a sting lands mid-round as
+    // often as a bed changes between them. Silent for a table that has
+    // the library switched off, which is why it is gated here rather
+    // than left to the handler to refuse.
+    ...(campaign.gameSettings.ambienceEnabled ? ambienceTools : []),
+    ...(inEncounter ? [] : mountTools),
+    ...encounterTools(inEncounter),
+    castBuffTool,
+    ...(inEncounter ? [] : restTools),
+    ...companionTools(campaign),
+    ...(leanTools ? [] : mutationTools),
+    ...(imageEnabled ? [generateImageTool] : []),
+    ];
+}
+
+// Every tool a turn could offer at any point, in or out of a fight. An agent
+// program reads its tool list once, when it starts (src/lib/harness/bridge.ts),
+// so a turn that starts a fight must already have the combat tools on it; the
+// bridge refuses any call the loop is not offering at that moment.
+function dmTurnToolCatalogue(campaign: Campaign, imageEnabled: boolean, leanTools: boolean): unknown[] {
+  return [
+    ...dmTurnTools(campaign, false, imageEnabled, leanTools),
+    ...dmTurnTools(campaign, true, imageEnabled, leanTools),
+  ];
 }
 
 async function runAdvance(context: TurnContext, turn: DmTurn) {
@@ -612,58 +687,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
 
   while (turn.callIndex < MAX_MODEL_CALLS) {
     const finalCall = turn.callIndex === MAX_MODEL_CALLS - 1;
-    // Rebuilt each iteration: the moment start_encounter succeeds mid-turn,
-    // the combat tools must appear on the very next model call. Encounter
-    // tools ignore DM_LEAN_TOOLS; they are the point of combat. Rest tools
-    // only exist outside combat.
+    // Rebuilt each iteration (see dmTurnTools).
     const inEncounter = Boolean(getActiveEncounter(campaignId));
-    const tools = [
-      requestRollTool,
-      requestPlayerInputTool,
-      movePartyTool,
-      updateLocationTool,
-      recordEventTool,
-      ...(isStageEnabled(campaign.gameSettings.stages, "recall") ? [recallStoryTool] : []),
-      searchLoreTool,
-      writeCampaignNoteTool,
-      sendWhisperTool,
-      ...(campaign.storyArc ? [completeBeatTool] : []),
-      ...checkTools,
-      ...hazardTools,
-      ...(inEncounter ? [splitDamageTool] : []),
-      ...petTools,
-      ...socialTools,
-      ...(inEncounter ? [] : relationshipTools(campaign)),
-      ...(inEncounter ? [] : worldTools),
-      // Handouts and the quest log are read at the table's pace, not mid-round.
-      ...(inEncounter ? [] : binderTools),
-      ...(inEncounter ? [] : factionTools),
-      ...(inEncounter ? [] : shopTools),
-      ...(inEncounter || !campaign.gameSettings.worldSimulation ? [] : settlementTools),
-      // The party's shared pack and common purse. Out of combat only, like
-      // the rest of the world tools: nobody rummages in the group kit while
-      // initiative is running.
-      ...(inEncounter ? [] : partyTools),
-      // Effects are offered in and out of combat: a blessing lands mid-fight
-      // as often as a curse lands in a throne room.
-      ...effectTools,
-      // Structured non-combat scenes and mounts are both out-of-combat
-      // business: a chase clock and an initiative order are two answers to
-      // the same question, and nobody saddles up mid-round.
-      ...(inEncounter ? [] : sceneTools),
-      // Sound is offered in and out of a fight: a sting lands mid-round as
-      // often as a bed changes between them. Silent for a table that has
-      // the library switched off, which is why it is gated here rather
-      // than left to the handler to refuse.
-      ...(campaign.gameSettings.ambienceEnabled ? ambienceTools : []),
-      ...(inEncounter ? [] : mountTools),
-      ...encounterTools(inEncounter),
-      castBuffTool,
-      ...(inEncounter ? [] : restTools),
-      ...companionTools(campaign),
-      ...(leanTools ? [] : mutationTools),
-      ...(imageEnabled ? [generateImageTool] : []),
-    ];
+    const tools = dmTurnTools(campaign, inEncounter, imageEnabled, leanTools);
     // Fresh reasoning-artifact filter per model call; each call is its own
     // stream. Withheld trailing text is flushed after the call completes.
     const filter = createStreamingArtifactFilter();
@@ -672,6 +698,11 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     );
     const { message, error } = await requestDmMessage(campaign.settings, turn.conversation, {
       tools,
+      harness: {
+        campaignId,
+        catalogue: dmTurnToolCatalogue(campaign, imageEnabled, leanTools),
+        turn: true,
+      },
       // Force pure narration on the last permitted call so a tool-happy
       // model cannot loop forever.
       toolChoice: finalCall ? "none" : "auto",

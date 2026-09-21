@@ -323,9 +323,9 @@ check("the DM path refuses plainly when the provider is none", () => {
 
 check("the admin config accepts the none provider", () => {
   const globalConfig = readFileSync(path.join(root, "src/lib/schemas/global-config.ts"), "utf8");
-  assert.match(globalConfig, /z\.enum\(\["", "local", "custom", "none"\]\)/);
+  assert.match(globalConfig, /z\.enum\(\["", "local", "custom", "none"(, "harness")?\]\)/);
   const adminRoute = readFileSync(path.join(root, "src/app/api/admin/settings/route.ts"), "utf8");
-  assert.match(adminRoute, /z\.enum\(\["", "local", "custom", "none"\]\)/);
+  assert.match(adminRoute, /z\.enum\(\["", "local", "custom", "none"(, "harness")?\]\)/);
 });
 
 if (failures) {

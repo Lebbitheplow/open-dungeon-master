@@ -4,6 +4,7 @@ import { getGlobalConfig, saveGlobalConfig } from "@/lib/db/app-settings";
 import { isDeviceWorld, serverEnv } from "@/lib/server-env";
 import { resolveSignupMode, type GlobalConfig } from "@/lib/schemas/global-config";
 import { announcedAddressFor, isUnroutableAddress, voiceConfig } from "@/lib/voice/config";
+import { forgetHarnessStatus } from "@/lib/harness/status";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,6 +49,8 @@ function maskedConfig(config: GlobalConfig) {
       clientId: config.discord.clientId,
       hasClientSecret: config.discord.clientSecret !== "",
     },
+    // No secrets in here: the agent program uses its own sign-in.
+    harness: config.harness,
   };
 }
 
@@ -115,12 +118,12 @@ const patchSchema = z.object({
     .object({
       // "none" lets an admin (or the desktop shell) record that this server
       // has no AI DM, so the UI can say so instead of failing a first turn.
-      provider: z.enum(["", "local", "custom", "none"]).optional(),
+      provider: z.enum(["", "local", "custom", "none", "harness"]).optional(),
       localTextModel: z.string().trim().max(200).optional(),
       customBaseUrl: z.string().trim().max(500).optional(),
       customModel: z.string().trim().max(200).optional(),
       customApiKey: z.string().trim().max(400).optional(),
-      utilityProvider: z.enum(["", "local", "custom"]).optional(),
+      utilityProvider: z.enum(["", "local", "custom", "harness"]).optional(),
       utilityModel: z.string().trim().max(200).optional(),
       utilityBaseUrl: z.string().trim().max(500).optional(),
       utilityApiKey: z.string().trim().max(400).optional(),
@@ -128,7 +131,7 @@ const patchSchema = z.object({
     .optional(),
   images: z
     .object({
-      defaultBackend: z.enum(["", "comfyui", "openai", "mflux-hs", "sdnq-hs"]).optional(),
+      defaultBackend: z.enum(["", "comfyui", "openai", "mflux-hs", "sdnq-hs", "harness"]).optional(),
       comfyUrl: z.string().trim().max(500).optional(),
       comfyCheckpoint: z.string().trim().max(300).optional(),
       fluxWorkerUrl: z.string().trim().max(500).optional(),
@@ -158,6 +161,21 @@ const patchSchema = z.object({
       clientSecret: z.string().trim().max(200).optional(),
     })
     .optional(),
+  // imagesVerifiedAt is deliberately absent: only a real test picture
+  // (POST /api/admin/harness) may set it.
+  harness: z
+    .object({
+      id: z.enum(["", "claude", "codex", "opencode", "grok"]).optional(),
+      binaryPath: z.string().trim().max(500).optional(),
+      model: z.string().trim().max(200).optional(),
+      utilityModel: z.string().trim().max(200).optional(),
+      effort: z.enum(["", "low", "medium", "high", "xhigh", "max"]).optional(),
+      images: z.enum(["off", "native"]).optional(),
+      campaigns: z.enum(["all", "admins"]).optional(),
+      maxConcurrent: z.number().int().min(1).max(8).optional(),
+      turnTimeoutSec: z.number().int().min(60).max(900).optional(),
+    })
+    .optional(),
 });
 
 export async function PATCH(request: Request) {
@@ -173,7 +191,21 @@ export async function PATCH(request: Request) {
       { status: 400 },
     );
   }
-  const saved = saveGlobalConfig(parsed.data);
+  const before = getGlobalConfig().harness;
+  const harnessPatch = parsed.data.harness;
+  // A different program, or the same one somewhere else, has not painted a
+  // test picture yet.
+  const moved =
+    harnessPatch &&
+    ((harnessPatch.id !== undefined && harnessPatch.id !== before.id) ||
+      (harnessPatch.binaryPath !== undefined && harnessPatch.binaryPath !== before.binaryPath));
+  const saved = saveGlobalConfig({
+    ...parsed.data,
+    ...(harnessPatch ? { harness: { ...harnessPatch, ...(moved ? { imagesVerifiedAt: "", images: "off" as const } : {}) } } : {}),
+  });
+  if (moved) {
+    forgetHarnessStatus();
+  }
   return Response.json({
     config: maskedConfig(saved),
     envDefaults: envDefaults(),

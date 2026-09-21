@@ -62,7 +62,8 @@ export const globalConfigSchema = z.object({
       // "none" is an explicit "this server has no AI DM": campaigns default
       // to a human DM and the story path fails fast with a plain message
       // instead of dialing the shipped 127.0.0.1:8001 default.
-      provider: z.enum(["", "local", "custom", "none"]).default(""),
+      // "harness" = the agent program chosen in `harness` below.
+      provider: z.enum(["", "local", "custom", "none", "harness"]).default(""),
       localTextModel: z.string().trim().max(200).default(""),
       customBaseUrl: z.string().trim().max(500).default(""),
       customModel: z.string().trim().max(200).default(""),
@@ -70,7 +71,7 @@ export const globalConfigSchema = z.object({
       // Optional second model for mechanical work (compaction, chapter
       // summaries, world-arc ticks, lore checks, Ask). Blank utilityModel
       // means "off": those calls run on the story model, as they always did.
-      utilityProvider: z.enum(["", "local", "custom"]).default(""),
+      utilityProvider: z.enum(["", "local", "custom", "harness"]).default(""),
       utilityModel: z.string().trim().max(200).default(""),
       utilityBaseUrl: z.string().trim().max(500).default(""),
       utilityApiKey: z.string().trim().max(400).default(""),
@@ -81,7 +82,7 @@ export const globalConfigSchema = z.object({
       // Server-wide default backend for new campaigns. Blank = the
       // DEFAULT_IMAGE_BACKEND env var, then the built-in default (ComfyUI).
       defaultBackend: z
-        .enum(["", "comfyui", "openai", "mflux-hs", "sdnq-hs"])
+        .enum(["", "comfyui", "openai", "mflux-hs", "sdnq-hs", "harness"])
         .default(""),
       comfyUrl: z.string().trim().max(500).default(""),
       comfyCheckpoint: z.string().trim().max(300).default(""),
@@ -129,6 +130,32 @@ export const globalConfigSchema = z.object({
     .object({
       clientId: z.string().trim().max(100).default(""),
       clientSecret: z.string().trim().max(200).default(""),
+    })
+    .prefault({}),
+  // The agent program that narrates when text.provider (or a campaign) is
+  // "harness" (src/lib/harness/). No vendor credential is ever stored here:
+  // the program uses the sign-in it already has on this machine.
+  harness: z
+    .object({
+      id: z.enum(["", "claude", "codex", "opencode", "grok"]).default(""),
+      // Blank = find it (PATH, the login shell's PATH, the usual install
+      // folders). Set when it lives somewhere unusual.
+      binaryPath: z.string().trim().max(500).default(""),
+      // Blank = the program's own default model.
+      model: z.string().trim().max(200).default(""),
+      // The model for mechanical work (summaries, compaction, Ask). Blank =
+      // the story model.
+      utilityModel: z.string().trim().max(200).default(""),
+      effort: z.enum(["", "low", "medium", "high", "xhigh", "max"]).default(""),
+      // "native" lets the program paint with its own image tool, and is only
+      // honoured once a test picture has succeeded (imagesVerifiedAt).
+      images: z.enum(["off", "native"]).default("off"),
+      imagesVerifiedAt: z.string().trim().max(40).default(""),
+      // Which campaigns may spend the admin's plan. "all" is the whole
+      // server; "admins" limits it to campaigns an administrator leads.
+      campaigns: z.enum(["all", "admins"]).default("all"),
+      maxConcurrent: z.number().int().min(1).max(8).default(2),
+      turnTimeoutSec: z.number().int().min(60).max(900).default(240),
     })
     .prefault({}),
 });

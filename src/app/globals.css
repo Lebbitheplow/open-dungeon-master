@@ -15,6 +15,7 @@
 @import "./styles/creator.css";
 @import "./styles/session.css";
 @import "./styles/dm-console.css";
+@import "./styles/harness.css";
 
 /*
   Arcane night theme. The neutral ramp (stone-*) is redefined as deep

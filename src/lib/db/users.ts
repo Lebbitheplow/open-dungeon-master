@@ -276,6 +276,12 @@ export function deleteSession(tokenHash: string) {
 }
 
 export function deleteSessionsForUser(userId: string, exceptTokenHash?: string) {
+  // Signing a player out everywhere else (a password change, an admin reset)
+  // also disconnects every agent acting as them (src/lib/agents/grants.ts).
+  // Their short-lived web sessions are ordinary session rows, removed below.
+  getDatabase()
+    .prepare(`UPDATE agent_grants SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL`)
+    .run(nowIso(), userId);
   if (exceptTokenHash) {
     getDatabase()
       .prepare(`DELETE FROM sessions WHERE user_id = ? AND token_hash != ?`)

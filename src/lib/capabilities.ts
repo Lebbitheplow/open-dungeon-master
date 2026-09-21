@@ -3,6 +3,9 @@ import { openAiImagesConfigured } from "@/lib/openai-images";
 import { configuredDefaultStorySettings } from "@/lib/runtime-defaults";
 import { serverEnv } from "@/lib/server-env";
 import { voiceConfig, type VoiceMode } from "@/lib/voice/config";
+import { harnessConfig, probeHarness } from "@/lib/harness/status";
+import { isHarnessId } from "@/lib/harness/types";
+import { harnessImagesReady } from "@/lib/harness/images";
 import type { StorySettings } from "@/lib/types";
 
 // What this server can actually do, derived from the same resolution the DM
@@ -44,6 +47,11 @@ export function storyConfigured(
   if (settings.textProvider === "local") {
     return Boolean(settings.localTextModel.trim());
   }
+  // The agent program is configured in its own admin section; whether it is
+  // installed and signed in is the reachability half (harnessReady).
+  if (settings.textProvider === "harness") {
+    return true;
+  }
   return Boolean(settings.customBaseUrl.trim() && settings.customModel.trim());
 }
 
@@ -67,6 +75,10 @@ export function imagesConfigured(
 ): boolean {
   if (backend === "openai") {
     return hasOpenaiKey;
+  }
+  // The agent program's own pictures: ready means seen working here.
+  if (backend === "harness") {
+    return harnessImagesReady();
   }
   return Boolean(explicitUrl.trim()) || defaultReachable;
 }
@@ -97,7 +109,7 @@ export function storyProbeUrl(
   settings: Pick<StorySettings, "textProvider" | "customBaseUrl">,
   ollamaBaseUrl: string,
 ): string {
-  if (settings.textProvider === "none") {
+  if (settings.textProvider === "none" || settings.textProvider === "harness") {
     return "";
   }
   if (settings.textProvider === "local") {
@@ -129,7 +141,7 @@ export function storyProbeHeaders(
   settings: Pick<StorySettings, "textProvider" | "customBaseUrl">,
   keys: { configured: string; openaiCompat: string; openRouter: string },
 ): Record<string, string> {
-  if (settings.textProvider === "none" || settings.textProvider === "local") {
+  if (settings.textProvider === "none" || settings.textProvider === "local" || settings.textProvider === "harness") {
     return {};
   }
   const isOpenRouter = /(^|\.)openrouter\.ai$/i.test(probeHost(settings.customBaseUrl));
@@ -208,6 +220,22 @@ export async function imagesAvailable(
   }
 }
 
+// Whether the chosen agent program is installed, allowed to run here and
+// signed in. Uses the cached probe (five minutes), so a polling UI never
+// starts the program itself.
+export async function harnessReady(): Promise<boolean> {
+  const config = harnessConfig();
+  if (!isHarnessId(config.id)) {
+    return false;
+  }
+  try {
+    const status = await probeHarness(config.id);
+    return status.installed && status.availability === "ok" && status.auth.state !== "signed-out";
+  } catch {
+    return false;
+  }
+}
+
 export async function capabilitiesSnapshot(): Promise<Capabilities> {
   const settings = configuredDefaultStorySettings();
   const cfg = getGlobalConfig();
@@ -217,7 +245,9 @@ export async function capabilitiesSnapshot(): Promise<Capabilities> {
   const comfyBase = configValue(cfg.images.comfyUrl, "COMFYUI_URL", "http://127.0.0.1:8188");
   const fluxBase = serverEnv("FLUX_WORKER_URL", "http://127.0.0.1:7869");
   const [storyReachable, ttsReachable, imagesReachable] = await Promise.all([
-    configured
+    settings.textProvider === "harness"
+      ? harnessReady()
+      : configured
       ? probeReachable(
           storyProbeUrl(settings, ollamaBase),
           Date.now(),
@@ -251,7 +281,12 @@ export async function capabilitiesSnapshot(): Promise<Capabilities> {
         explicitImageUrl,
         imagesReachable,
       ),
-      reachable: settings.imageBackend === "openai" ? hasOpenaiImageKey : imagesReachable,
+      reachable:
+        settings.imageBackend === "openai"
+          ? hasOpenaiImageKey
+          : settings.imageBackend === "harness"
+            ? harnessImagesReady()
+            : imagesReachable,
       backend: settings.imageBackend,
     },
     tts: {
