@@ -15,30 +15,33 @@ const isWindows = process.platform === "win32";
 
 // Where the vendors' installers and the common package managers put binaries.
 export function knownInstallDirs(home: string, platform: string = process.platform): string[] {
+  // Joined with the separator of the platform asked about, not the host's,
+  // so the answer is the same wherever it is computed.
+  const p = platform === "win32" ? path.win32 : path.posix;
   if (platform === "win32") {
-    const appData = process.env.APPDATA || path.join(home, "AppData", "Roaming");
-    const localAppData = process.env.LOCALAPPDATA || path.join(home, "AppData", "Local");
+    const appData = process.env.APPDATA || p.join(home, "AppData", "Roaming");
+    const localAppData = process.env.LOCALAPPDATA || p.join(home, "AppData", "Local");
     return [
-      path.join(appData, "npm"),
-      path.join(localAppData, "Programs", "claude"),
-      path.join(home, ".local", "bin"),
-      path.join(home, ".bun", "bin"),
-      path.join(home, ".opencode", "bin"),
-      path.join(home, ".grok", "bin"),
-      path.join(localAppData, "Microsoft", "WinGet", "Links"),
-      path.join(home, "scoop", "shims"),
+      p.join(appData, "npm"),
+      p.join(localAppData, "Programs", "claude"),
+      p.join(home, ".local", "bin"),
+      p.join(home, ".bun", "bin"),
+      p.join(home, ".opencode", "bin"),
+      p.join(home, ".grok", "bin"),
+      p.join(localAppData, "Microsoft", "WinGet", "Links"),
+      p.join(home, "scoop", "shims"),
     ];
   }
   return [
-    path.join(home, ".local", "bin"),
-    path.join(home, ".claude", "local"),
-    path.join(home, ".npm-global", "bin"),
-    path.join(home, ".bun", "bin"),
-    path.join(home, ".opencode", "bin"),
-    path.join(home, ".grok", "bin"),
-    path.join(home, ".cargo", "bin"),
-    path.join(home, ".volta", "bin"),
-    path.join(home, "bin"),
+    p.join(home, ".local", "bin"),
+    p.join(home, ".claude", "local"),
+    p.join(home, ".npm-global", "bin"),
+    p.join(home, ".bun", "bin"),
+    p.join(home, ".opencode", "bin"),
+    p.join(home, ".grok", "bin"),
+    p.join(home, ".cargo", "bin"),
+    p.join(home, ".volta", "bin"),
+    p.join(home, "bin"),
     "/opt/homebrew/bin",
     "/usr/local/bin",
     "/usr/bin",
