@@ -131,7 +131,6 @@ export function closeChapterRow(
       JSON.stringify(input.highlights.slice(0, 6).map((entry) => entry.slice(0, 300))),
       input.seqEnd,
       (input.clockLabel ?? "").slice(0, 120),
-      input.seqEnd,
       now,
       chapterId,
     );
