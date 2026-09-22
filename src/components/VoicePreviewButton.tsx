@@ -2,7 +2,7 @@
 
 import { Loader2, Play, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { registerOutput } from "@/lib/audio-devices";
+import { registerOutput, releaseOutput } from "@/lib/audio-devices";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -16,11 +16,15 @@ export function VoicePreviewButton({ voice, className }: { voice: string; classN
   const [playing, setPlaying] = useState(false);
   const [failed, setFailed] = useState(false);
 
+  // Stops the clip and lets the output router forget it; the next play
+  // builds a fresh element, so nothing is kept between plays.
   function stop() {
     const audio = audioRef.current;
     if (audio) {
       audio.pause();
       audio.currentTime = 0;
+      releaseOutput(audio);
+      audioRef.current = null;
     }
     setPlaying(false);
     setLoading(false);
@@ -39,7 +43,12 @@ export function VoicePreviewButton({ voice, className }: { voice: string; classN
     // Built and configured before it reaches the ref: the clip element is
     // never mutated after the component holds on to it.
     const audio = registerOutput(new Audio(`/api/tts/preview?voice=${encodeURIComponent(voice)}`));
-    audio.onended = () => setPlaying(false);
+    const done = () => {
+      setPlaying(false);
+      releaseOutput(audio);
+    };
+    audio.onended = done;
+    audio.onerror = done;
     audioRef.current = audio;
     try {
       await audio.play();

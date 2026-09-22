@@ -2381,6 +2381,10 @@ export function getDatabase() {
     );
   }
   db.pragma("journal_mode = WAL");
+  // Under WAL, NORMAL only fsyncs at checkpoints, so a persisted event no
+  // longer waits on the disk. The file cannot corrupt; a power cut can lose
+  // the last moment of writes, which the table can live with.
+  db.pragma("synchronous = NORMAL");
   db.pragma("foreign_keys = ON");
   ensureSchema(db);
   schemaEnsured = true;

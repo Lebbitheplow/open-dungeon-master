@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { registerOutput } from "@/lib/audio-devices";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { registerOutput, releaseOutput } from "@/lib/audio-devices";
 import { AUDIO_PREF_FIELDS, hydrateAudioPrefs, writeAudioPref } from "@/lib/audio-prefs";
 
 // Plays DM narration audio (tts_ready events). Only events that arrive
@@ -68,6 +68,20 @@ export function useNarrationAudio(): NarrationAudio {
   // user touched a control first.
   useEffect(() => {
     hydrateAudioPrefs();
+  }, []);
+
+  // Unmount: the one element this hook owns stops and leaves the output
+  // router, which otherwise keeps it for the life of the page.
+  useEffect(() => {
+    return () => {
+      const audio = audioRef.current;
+      if (audio) {
+        audio.pause();
+        audio.src = "";
+        releaseOutput(audio);
+        audioRef.current = null;
+      }
+    };
   }, []);
 
   const setMuted = useCallback((next: boolean) => {
@@ -190,16 +204,21 @@ export function useNarrationAudio(): NarrationAudio {
     [audioByMessage, startPlayback],
   );
 
-  return {
-    muted,
-    volume,
-    unlocked,
-    playingMessageId,
-    setMuted,
-    setVolume,
-    unlock,
-    play,
-    audioByMessage,
-    onTtsReady,
-  };
+  // One object per real change, so the memoized header and the chat column
+  // are not handed a new narration prop on every table render.
+  return useMemo(
+    () => ({
+      muted,
+      volume,
+      unlocked,
+      playingMessageId,
+      setMuted,
+      setVolume,
+      unlock,
+      play,
+      audioByMessage,
+      onTtsReady,
+    }),
+    [muted, volume, unlocked, playingMessageId, setMuted, setVolume, unlock, play, audioByMessage, onTtsReady],
+  );
 }

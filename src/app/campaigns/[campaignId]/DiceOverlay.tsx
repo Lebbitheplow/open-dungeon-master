@@ -3,6 +3,12 @@
 import { useCallback, useEffect, useRef } from "react";
 import { rollToDiceBoxNotation } from "@/lib/dice-notation";
 import { diceLookKey, diceLookTheme } from "@/lib/dice/dice-look";
+import {
+  captureListeners,
+  DICE_IDLE_MS,
+  releaseListeners,
+  type CapturedListener,
+} from "@/lib/dice/dice-box-lifecycle";
 import { hydrateDiceLook, useDiceLook } from "@/lib/dice/dice-look-store";
 import type { StoredRoll } from "@/lib/db/rolls";
 
@@ -24,22 +30,29 @@ type DiceBoxInstance = {
   };
 };
 
+// A built tray: the box plus the window listener it registered during
+// initialize(), which the library never removes on its own.
+type Tray = { box: DiceBoxInstance; listeners: CapturedListener[] };
+
 // Firefox caps live WebGL contexts (~32) and loses the oldest past that, so
 // every orphaned context from an undisposed box brings the tab closer to a
-// wedge; tear the renderer down whenever the overlay unmounts.
-function disposeBox(box: DiceBoxInstance | null) {
-  if (!box) {
+// wedge; tear the renderer down whenever the overlay unmounts or the tray
+// has sat idle (DICE_IDLE_MS), and take the resize listener with it so a
+// later window resize never reaches a disposed renderer.
+function disposeTray(tray: Tray | null) {
+  if (!tray) {
     return;
   }
+  releaseListeners(window, tray.listeners);
   try {
-    box.clearDice();
+    tray.box.clearDice();
   } catch {
     // Disposal must never throw during unmount.
   }
   try {
-    box.renderer?.dispose();
-    box.renderer?.forceContextLoss();
-    box.renderer?.domElement.remove();
+    tray.box.renderer?.dispose();
+    tray.box.renderer?.forceContextLoss();
+    tray.box.renderer?.domElement.remove();
   } catch {
     // Same: a half-initialized renderer is fine to abandon.
   }
@@ -52,7 +65,8 @@ export function DiceOverlay({
   latestRoll: { roll: StoredRoll; source: string; seq: number } | null;
   enabled: boolean;
 }) {
-  const boxRef = useRef<DiceBoxInstance | null>(null);
+  const trayRef = useRef<Tray | null>(null);
+  const idleTimerRef = useRef(0);
   const initFailedRef = useRef(false);
   const queueRef = useRef<string[][]>([]);
   const animatingRef = useRef(false);
@@ -82,8 +96,10 @@ export function DiceOverlay({
     return () => {
       unmountedRef.current = true;
       queueRef.current = [];
-      disposeBox(boxRef.current);
-      boxRef.current = null;
+      window.clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = 0;
+      disposeTray(trayRef.current);
+      trayRef.current = null;
     };
   }, []);
 
@@ -96,6 +112,8 @@ export function DiceOverlay({
       return;
     }
     animatingRef.current = true;
+    window.clearTimeout(idleTimerRef.current);
+    idleTimerRef.current = 0;
     try {
       const box = await ensureBox();
       if (box) {
@@ -116,15 +134,30 @@ export function DiceOverlay({
       animatingRef.current = false;
       if (queueRef.current.length) {
         void pump();
+      } else if (trayRef.current && !unmountedRef.current) {
+        // Nothing left to show: let the context go after a quiet spell. The
+        // next roll rebuilds the tray (theme load plus WebGL init), which is
+        // the same path the very first roll takes.
+        idleTimerRef.current = window.setTimeout(() => {
+          idleTimerRef.current = 0;
+          if (animatingRef.current || queueRef.current.length) {
+            return;
+          }
+          disposeTray(trayRef.current);
+          trayRef.current = null;
+          themedRef.current = "";
+        }, DICE_IDLE_MS);
       }
     }
 
     async function ensureBox(): Promise<DiceBoxInstance | null> {
-      if (boxRef.current || initFailedRef.current) {
-        return boxRef.current;
+      if (trayRef.current || initFailedRef.current) {
+        return trayRef.current?.box ?? null;
       }
       try {
         const { default: DiceBox } = await import("@3d-dice/dice-box-threejs");
+        // Shadows stay on everywhere, phones included: Kaleb wants the full
+        // look on every device (decided 2026-09-22).
         const box = new DiceBox("#dice-overlay", {
           assetPath: "/dice-box/",
           sounds: false,
@@ -134,12 +167,21 @@ export function DiceOverlay({
           ...diceLookTheme(lookRef.current),
         }) as unknown as DiceBoxInstance;
         themedRef.current = diceLookKey(lookRef.current);
-        await box.initialize();
+        // The resize listener is added before initialize()'s first await,
+        // so the capture only spans that synchronous stretch.
+        const { result: ready, captured } = captureListeners(window, ["resize"], () => box.initialize());
+        const tray: Tray = { box, listeners: captured };
+        try {
+          await ready;
+        } catch (error) {
+          disposeTray(tray);
+          throw error;
+        }
         if (unmountedRef.current) {
-          disposeBox(box);
+          disposeTray(tray);
           return null;
         }
-        boxRef.current = box;
+        trayRef.current = tray;
         return box;
       } catch {
         initFailedRef.current = true;

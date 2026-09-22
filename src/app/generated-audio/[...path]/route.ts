@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 // {campaignId}/{messageId}.mp3, and narration can spoil a table's story, so
 // only that campaign's members (or an admin) may listen.
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ path: string[] }> },
 ) {
   const user = await currentUser();
@@ -22,5 +22,5 @@ export async function GET(
   if (!user.isAdmin && !isCampaignMember(campaignId, user.id)) {
     return Response.json({ error: "Not found." }, { status: 404 });
   }
-  return serveGeneratedFile("generated-audio", segments);
+  return serveGeneratedFile("generated-audio", segments, request);
 }

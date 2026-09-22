@@ -152,6 +152,10 @@ export type SidePanelRouterProps = {
   // buildPanelTabs; Bonds is a Party section now, so the flag has to reach
   // this component instead.
   relationshipsEnabled: boolean;
+  // Whether the panel is on screen. Below lg the panel stays mounted behind
+  // the chat, so the panels with animation loops (the region map's pulse,
+  // the board's weather) rest on this rather than on document.hidden alone.
+  visible?: boolean;
 };
 
 // Which panel the active tab shows. Every PanelTab has an explicit branch;
@@ -212,6 +216,7 @@ export function SidePanelRouter({
   activeSheetId = "",
   questsVersion,
   relationshipsEnabled,
+  visible = true,
   adjudicates,
   messages,
   dmIntents,
@@ -432,6 +437,7 @@ export function SidePanelRouter({
         encounter={encounter ?? null}
         sheets={sheets}
         refreshBattleMap={refreshBattleMap}
+        visible={visible}
       />
     );
   }
@@ -442,6 +448,7 @@ export function SidePanelRouter({
           campaignId={campaignId}
           genre={campaign?.gameSettings?.genre ?? "high_fantasy"}
           steersStory={steersStory}
+          visible={visible}
         />
         <MapPanel
           campaignId={campaignId}

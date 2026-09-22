@@ -7,6 +7,7 @@ import { cn } from "@/lib/cn";
 import { VoicePanel } from "@/app/campaigns/[campaignId]/VoicePanel";
 import { headerButtonClass } from "@/app/campaigns/[campaignId]/headerButton";
 import { HeaderGlyph } from "@/app/campaigns/[campaignId]/SessionGlyph";
+import { useVoiceSpeaking } from "@/app/campaigns/[campaignId]/liveStore";
 import { Tooltip } from "@/components/ui/Tooltip";
 import type { TurnEnforcement, VoiceFloorMode } from "@/lib/voice/turn-logic";
 import type { VoiceRosterEntry } from "@/lib/voice/types";
@@ -34,7 +35,6 @@ export function VoiceDock({
   campaignId,
   meUserId,
   roster,
-  speaking,
   floorMode,
   floorUserIds,
   turnEnforcement,
@@ -48,7 +48,6 @@ export function VoiceDock({
   campaignId: string;
   meUserId: string;
   roster: VoiceRosterEntry[] | null;
-  speaking: { userId: string; at: number } | null;
   floorMode: VoiceFloorMode;
   floorUserIds: string[];
   turnEnforcement: TurnEnforcement;
@@ -62,6 +61,9 @@ export function VoiceDock({
   transcribe?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  // Read here rather than handed down: who is talking ticks for as long as
+  // the call lasts, and the dock is the only header piece that cares.
+  const speaking = useVoiceSpeaking();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   // The portal needs a document; the server render has none and the call

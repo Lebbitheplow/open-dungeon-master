@@ -1,5 +1,6 @@
 "use client";
 
+import { loadImage } from "@/lib/image-encode";
 import { MAX_PACK_ART_BYTES, PACK_ART_ASPECT, type PackArtKind } from "@/lib/worlds/art";
 
 // A picture a person chose, made into pack art in the browser.
@@ -21,22 +22,6 @@ export const ART_SIZES: Record<"square" | "landscape", { width: number; height: 
   square: { width: 256, height: 256 },
   landscape: { width: 704, height: 400 },
 };
-
-function loadImage(file: File): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const image = new Image();
-    image.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve(image);
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("That file is not a picture this browser can read."));
-    };
-    image.src = url;
-  });
-}
 
 function dataUrlBytes(dataUrl: string): number {
   return Math.floor((dataUrl.length - dataUrl.indexOf(",") - 1) * 0.75);

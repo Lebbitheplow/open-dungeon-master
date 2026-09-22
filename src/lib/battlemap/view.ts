@@ -20,11 +20,11 @@ import {
 } from "@/lib/db/battle-maps";
 import {
   darkvisionTilesFromText,
-  litTiles,
   perceivesToken,
   visibleTiles,
   type Viewer,
 } from "@/lib/battlemap/los";
+import { cachedLitTiles } from "@/lib/battlemap/lit-cache";
 import { sensesFromText, type Senses } from "@/lib/srd/senses";
 import { reachableTiles, speedToTiles } from "@/lib/battlemap/movement";
 import {
@@ -250,7 +250,9 @@ export function buildPlayerMapView(
     zones: map.zones,
     obscureBeyond: map.outdoors ? weatherObscurementTiles(clock.weather) : Infinity,
   };
-  const lit = litTiles(vision, tokens, map.lights);
+  // Shared across every member's projection of this board; read only
+  // (src/lib/battlemap/lit-cache.ts).
+  const lit = cachedLitTiles({ ...vision, id: map.id }, tokens, map.lights);
   let visible = new Set<number>();
   let explored = new Set<number>();
   let viewer: Viewer | null = null;

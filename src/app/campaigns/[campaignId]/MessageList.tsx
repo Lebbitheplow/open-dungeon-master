@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef } from "react";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { D20Spinner } from "@/components/ui/D20Spinner";
 import type { CampaignMember } from "@/lib/campaign-types";
@@ -11,6 +11,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { MessageItem } from "@/app/campaigns/[campaignId]/MessageItem";
 import { Prose } from "@/app/campaigns/[campaignId]/Prose";
 import { DM_STATUS_PHRASES } from "@/app/campaigns/[campaignId]/dmStatusPhrases";
+import { useDmDraft } from "@/app/campaigns/[campaignId]/liveStore";
 import type {
   CampaignLocation,
   DmStatus,
@@ -47,6 +48,48 @@ function dmStatusPhrase(status: DmStatus, turnKey: string): string {
   return pool[hashString(turnKey + status) % pool.length];
 }
 
+// The DM's passage as it streams in, or the flavour line while the DM
+// works. The only part of the transcript that subscribes to the draft
+// store, so a narration flush repaints this and nothing above it. The
+// follow-scroll used to key on the draft from MessageList; it moved here
+// with the draft, through the parent's follow() so the two share one
+// coalesced scroll.
+const DmDraftBubble = memo(function DmDraftBubble({
+  dmStatus,
+  statusPhrase,
+  follow,
+}: {
+  dmStatus: DmStatus;
+  statusPhrase: string;
+  follow: (behavior: ScrollBehavior) => void;
+}) {
+  const dmDraft = useDmDraft();
+  useEffect(() => {
+    follow(dmDraft ? "auto" : "smooth");
+  }, [dmDraft, dmStatus, follow]);
+
+  if (dmDraft) {
+    return (
+      <div className="session-dm animate-fade-up">
+        <SectionHead title="Dungeon Master" glyph="tab-dm" level="h4" />
+        <p className="session-dm-body whitespace-pre-wrap text-pretty font-serif text-base leading-relaxed text-stone-100">
+          <Prose text={dmDraft} />
+          <span className="stream-caret" aria-hidden="true" />
+        </p>
+      </div>
+    );
+  }
+  if (dmStatus !== "idle") {
+    return (
+      <p className="live-in flex items-center gap-2.5 font-serif text-base italic text-stone-400">
+        <D20Spinner className="size-6 shrink-0 text-amber-500" />
+        <span className="breathe">{statusPhrase}</span>
+      </p>
+    );
+  }
+  return null;
+});
+
 export function MessageList({
   messages,
   cast = [],
@@ -58,7 +101,6 @@ export function MessageList({
   members = [],
   locations = [],
   dmStatus,
-  dmDraft,
   mediaStatus = {},
   onReplayAudio,
   onPinCanon,
@@ -92,7 +134,6 @@ export function MessageList({
   // Names and faces of the cast, for speech lines.
   cast?: CastMember[];
   dmStatus: DmStatus;
-  dmDraft: string;
   mediaStatus?: Record<string, MediaStatus>;
   onReplayAudio?: (messageId: string) => Promise<string | null>;
   onPinCanon?: (message: CampaignMessage) => void;
@@ -200,6 +241,28 @@ export function MessageList({
         : undefined,
     [hasSelectVariant],
   );
+  const reportRef = useRef(onReport);
+  useEffect(() => {
+    reportRef.current = onReport;
+  });
+  const hasReport = Boolean(onReport);
+  const stableReport = useMemo(
+    () => (hasReport ? (message: CampaignMessage) => reportRef.current?.(message) : undefined),
+    [hasReport],
+  );
+  const editSaveRef = useRef(onEditSave);
+  useEffect(() => {
+    editSaveRef.current = onEditSave;
+  });
+  const hasEditSave = Boolean(onEditSave);
+  const stableEditSave = useMemo(
+    () =>
+      hasEditSave
+        ? (message: CampaignMessage, content: string) =>
+            editSaveRef.current?.(message, content) ?? Promise.resolve<string | null>(null)
+        : undefined,
+    [hasEditSave],
+  );
   // Only the newest DM message can be rerolled; the server enforces the same
   // rule, this just keeps the button off every older passage.
   const latestDmMessageId = useMemo(() => {
@@ -213,20 +276,22 @@ export function MessageList({
 
   // Follow the conversation only while the reader is already at the bottom;
   // scrolling up to reread must not be yanked back. During narration
-  // streaming this effect fires per token, so scrolling is instant and
-  // coalesced through rAF instead of stacking smooth-scroll animations
-  // (a real jank source in Firefox).
-  useEffect(() => {
+  // streaming the draft bubble calls this per token, so scrolling is
+  // instant and coalesced through rAF instead of stacking smooth-scroll
+  // animations (a real jank source in Firefox).
+  const follow = useCallback((behavior: ScrollBehavior) => {
     if (!nearBottomRef.current || scrollPendingRef.current) {
       return;
     }
     scrollPendingRef.current = true;
-    const behavior: ScrollBehavior = dmDraft ? "auto" : "smooth";
     requestAnimationFrame(() => {
       scrollPendingRef.current = false;
       bottomRef.current?.scrollIntoView({ behavior });
     });
-  }, [messages.length, dmDraft, dmStatus]);
+  }, []);
+  useEffect(() => {
+    follow("smooth");
+  }, [messages.length, dmStatus, follow]);
 
   function handleScroll() {
     const el = containerRef.current;
@@ -243,7 +308,7 @@ export function MessageList({
           key={message.id}
           mine={Boolean(message.userId) && message.userId === meUserId}
           blocked={Boolean(message.userId && blockedSet.has(message.userId))}
-          onReport={onReport}
+          onReport={stableReport}
           message={message}
           campaignId={campaignId}
           canRetryTurn={canRetryTurn}
@@ -259,7 +324,7 @@ export function MessageList({
           onPinCanon={stablePin}
           onLoreCheck={stableLore}
           onPinMemory={stablePinMemory}
-          onEditSave={onEditSave}
+          onEditSave={stableEditSave}
           onRenarrate={
             // No turn link, no reroll: messages narrated before this feature
             // shipped have no stored conversation to replay.
@@ -278,20 +343,7 @@ export function MessageList({
         />
       ))}
 
-      {dmDraft ? (
-        <div className="session-dm animate-fade-up">
-          <SectionHead title="Dungeon Master" glyph="tab-dm" level="h4" />
-          <p className="session-dm-body whitespace-pre-wrap text-pretty font-serif text-base leading-relaxed text-stone-100">
-            <Prose text={dmDraft} />
-            <span className="stream-caret" aria-hidden="true" />
-          </p>
-        </div>
-      ) : dmStatus !== "idle" ? (
-        <p className="live-in flex items-center gap-2.5 font-serif text-base italic text-stone-400">
-          <D20Spinner className="size-6 shrink-0 text-amber-500" />
-          <span className="breathe">{statusPhrase}</span>
-        </p>
-      ) : null}
+      <DmDraftBubble dmStatus={dmStatus} statusPhrase={statusPhrase} follow={follow} />
 
       <div ref={bottomRef} />
       </div>

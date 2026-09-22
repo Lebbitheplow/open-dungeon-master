@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Plus } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { encodeImageForUpload } from "@/lib/image-encode";
 import { ui } from "@/lib/ui";
 import { backdropDataUrl, nameFromFilename } from "@/lib/battlemap/uvtt";
 import { Sheet } from "@/components/ui/Sheet";
@@ -286,10 +287,13 @@ export function DmMapLibraryPanel({
       const art = backdropDataUrl(parsed);
       let backdropPath: string | undefined;
       if (art) {
+        // UVTT exports carry the drawing as full-size PNG; sized and
+        // encoded here like any other picked picture.
+        const encoded = await encodeImageForUpload(art.dataUrl);
         const upload = await fetch("/api/upload", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ dataUrl: art.dataUrl, name: file.name, type: art.type }),
+          body: JSON.stringify({ dataUrl: encoded.dataUrl, name: file.name, type: encoded.type }),
         });
         const payload = await upload.json().catch(() => ({}));
         if (upload.ok) {

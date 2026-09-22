@@ -4,6 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { Download, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
+import { variantUrl } from "@/lib/image-format";
 
 // Build a friendly download filename: slugified caption/alt plus the file
 // extension parsed from the URL, so saved portraits read "my-hero.png" rather
@@ -48,8 +49,10 @@ export function ImageLightbox({
           aria-label={`Enlarge image: ${label}`}
           className={cn("block cursor-zoom-in transition-opacity hover:opacity-90", frameClassName)}
         >
+          {/* The row shows the 1024 px copy where the server has one; the
+              enlarged view and the download below keep the original. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={src} alt={alt} className={className} />
+          <img src={variantUrl(src, 1024)} alt={alt} loading="lazy" decoding="async" className={className} />
         </button>
       </Dialog.Trigger>
       <Dialog.Portal>

@@ -53,10 +53,14 @@ export function OverworldPanel({
   campaignId,
   genre,
   steersStory,
+  visible = true,
 }: {
   campaignId: string;
   genre: string;
   steersStory: boolean;
+  // On a phone the side panel stays mounted behind the chat; the pulse loop
+  // rests while it is off screen and picks up again when it is shown.
+  visible?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -176,12 +180,34 @@ export function OverworldPanel({
 
   useEffect(() => {
     draw();
-    const interval = setInterval(() => {
-      pulseRef.current += 1;
-      draw();
-    }, 90);
-    return () => clearInterval(interval);
-  }, [draw]);
+    if (!visible) {
+      return;
+    }
+    // The pulse is a real animation, so it needs a loop while the map is on
+    // screen; it pauses (rather than redrawing on change) while the panel is
+    // hidden or the tab is in the background.
+    let interval = 0;
+    const start = () => {
+      if (interval || document.hidden) {
+        return;
+      }
+      interval = window.setInterval(() => {
+        pulseRef.current += 1;
+        draw();
+      }, 90);
+    };
+    const stop = () => {
+      window.clearInterval(interval);
+      interval = 0;
+    };
+    const onVisibility = () => (document.hidden ? stop() : start());
+    start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [draw, visible]);
 
   // Size the canvas to its container; fit the map on first data and again
   // whenever the map changed size underneath the view.

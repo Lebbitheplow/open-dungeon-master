@@ -12,6 +12,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { encodeImageForUpload } from "@/lib/image-encode";
 import { ui } from "@/lib/ui";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { offersImages, offersStoryModel, useCapabilities } from "@/lib/use-capabilities";
@@ -293,16 +294,11 @@ export function DmNpcForgePanel({
     setBusy(true);
     setError("");
     try {
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result));
-        reader.onerror = () => reject(new Error("read failed"));
-        reader.readAsDataURL(file);
-      });
+      const { dataUrl, type } = await encodeImageForUpload(file);
       const upload = await fetch("/api/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dataUrl, name: file.name, type: file.type }),
+        body: JSON.stringify({ dataUrl, name: file.name, type }),
       });
       const payload = await upload.json().catch(() => ({}));
       if (!upload.ok) {

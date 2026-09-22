@@ -115,6 +115,7 @@ export function BattleMapPanel({
   intents = null,
   turnBudget = null,
   fieldRoll = null,
+  visible = true,
 }: {
   campaignId: string;
   // The campaign's setting: it picks the skin the board is painted in and the
@@ -152,6 +153,8 @@ export function BattleMapPanel({
   turnBudget?: TurnHudBudget | null;
   // A roll in the air for a commit made from the board: the die on the field.
   fieldRoll?: { label: string } | null;
+  // Whether the panel is on screen; the sky's weather rests while it is not.
+  visible?: boolean;
 }) {
   // The board's picture, painted on this device from the terrain it was sent.
   const painted = usePaintedMap(view, genre);
@@ -881,7 +884,7 @@ export function BattleMapPanel({
         onFramePointerCancel();
       }}
     >
-      {view.outdoors ? <SkyLayer scene={sky} mode="board" className="rounded-lg" /> : null}
+      {view.outdoors ? <SkyLayer scene={sky} mode="board" className="rounded-lg" visible={visible} /> : null}
       <div
         className={cn(cam.eased && "sky-wash", "relative", drawActive && "touch-none")}
         style={{

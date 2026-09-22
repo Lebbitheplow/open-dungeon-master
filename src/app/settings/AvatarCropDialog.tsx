@@ -6,6 +6,7 @@ import { useCallback, useRef, useState } from "react";
 import Cropper, { type Area } from "react-easy-crop";
 import { ui } from "@/lib/ui";
 import { cn } from "@/lib/cn";
+import { blobToDataUrl, exportCanvas } from "@/lib/image-encode";
 import { Slider } from "@/components/ui/Slider";
 
 // The familiar profile-picture flow: pick a file, pan/zoom a square crop,
@@ -17,15 +18,6 @@ export type UploadedImage = {
   type: string;
   url: string;
 };
-
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-}
 
 async function cropToSquare(imageSrc: string, area: Area): Promise<{ dataUrl: string; type: string }> {
   const image = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -42,11 +34,9 @@ async function cropToSquare(imageSrc: string, area: Area): Promise<{ dataUrl: st
     throw new Error("Canvas unavailable.");
   }
   context.drawImage(image, area.x, area.y, area.width, area.height, 0, 0, 512, 512);
-  const webp = canvas.toDataURL("image/webp", 0.9);
-  // Browsers without webp encoding return a png data URL instead.
-  return webp.startsWith("data:image/webp")
-    ? { dataUrl: webp, type: "image/webp" }
-    : { dataUrl: canvas.toDataURL("image/jpeg", 0.9), type: "image/jpeg" };
+  // WebP, or JPEG where the browser cannot write it (src/lib/image-encode.ts).
+  const { blob, type } = await exportCanvas(canvas, { quality: 0.9 });
+  return { dataUrl: await blobToDataUrl(blob), type };
 }
 
 export function AvatarCropDialog({
@@ -85,7 +75,7 @@ export function AvatarCropDialog({
     }
     setError("");
     setFileName(file.name);
-    setSource(await fileToDataUrl(file));
+    setSource(await blobToDataUrl(file));
     setCrop({ x: 0, y: 0 });
     setZoom(1);
   }

@@ -5,6 +5,7 @@
 // character export/import routes call.
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { scheduleImageVariants } from "@/lib/image-variants";
 import { isUploadedImagePath, isUploadedPdfPath } from "@/lib/uploads";
 
 // The one size cap for anything that lands in public/uploads, whether it
@@ -42,7 +43,12 @@ export async function writeUploadedImage(
   const filename = `${id}.${uploadExtension(type)}`;
   const dir = uploadsDir();
   await mkdir(dir, { recursive: true });
-  await writeFile(path.join(dir, filename), bytes);
+  const saved = path.join(dir, filename);
+  await writeFile(saved, bytes);
+  // Smaller WebP copies beside it, written after this returns and never
+  // fatal (src/lib/image-variants.ts); covers the upload route and the
+  // character bundle import alike.
+  scheduleImageVariants(saved);
   return { id, url: `/uploads/${filename}` };
 }
 

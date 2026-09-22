@@ -32,6 +32,21 @@ function setWide(wide: boolean) {
   window.dispatchEvent(new Event(WIDE_EVENT));
 }
 
+// Whether the aside is docked (Tailwind's lg, where `hidden` no longer
+// applies) or is the phone's full-screen panel. The panels' animation loops
+// key on this, so a board behind the chat on a phone costs no frames.
+const DOCKED_QUERY = "(min-width: 64rem)";
+
+function subscribeDocked(callback: () => void) {
+  const media = window.matchMedia(DOCKED_QUERY);
+  media.addEventListener("change", callback);
+  return () => media.removeEventListener("change", callback);
+}
+
+function readDocked() {
+  return window.matchMedia(DOCKED_QUERY).matches;
+}
+
 // The session's context column: party sheets, the current area map, story
 // chapters, table notes, and the stat-change log. From lg up it is docked
 // beside the chat with a vertical icon rail on its outer edge, so the story
@@ -58,6 +73,10 @@ function SidePanelInner({
   storyDue: boolean;
 }) {
   const wide = useSyncExternalStore(subscribeWide, readWide, () => false);
+  // The server snapshot says docked so the first client render matches the
+  // lg layout most desktops hydrate into; a phone corrects it at once.
+  const docked = useSyncExternalStore(subscribeDocked, readDocked, () => true);
+  const visible = docked || mobileVisible;
   const { tab, steersStory } = content;
 
   const items = useMemo<IconRailItem<PanelTab>[]>(
@@ -97,7 +116,7 @@ function SidePanelInner({
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-3">
         {/* Keyed by tab so the incoming panel rises in instead of cutting. */}
         <div key={tab} className="motion-tab mx-auto w-full max-w-2xl lg:max-w-none">
-          <SidePanelRouter {...content} />
+          <SidePanelRouter {...content} visible={visible} />
         </div>
       </div>
       {/* The rail sits on the outer edge, away from the chat, so the eye

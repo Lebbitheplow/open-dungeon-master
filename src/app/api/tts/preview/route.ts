@@ -24,5 +24,5 @@ export async function GET(request: Request) {
     console.error(`[tts] voice preview "${voice}" failed:`, error);
     return Response.json({ error: "Voice preview unavailable." }, { status: 502 });
   }
-  return serveGeneratedFile("generated-audio", ["previews", `${voice}.mp3`]);
+  return serveGeneratedFile("generated-audio", ["previews", `${voice}.mp3`], request);
 }

@@ -13,6 +13,9 @@ const NOOP = () => {};
 const NOOP_IDS: (ids: string[]) => void = () => {};
 const NOOP_ID: (id: string) => void = () => {};
 const NOOP_CUE: (cue: string) => void = () => {};
+// One shared empty list: a fresh [] per render would defeat the memo on
+// every panel that takes it.
+const EMPTY_IDS: string[] = [];
 
 import {
   type FormEvent,
@@ -72,19 +75,51 @@ const LevelUpDialog = lazy(() =>
   })),
 );
 
+// The localStorage-backed preferences below are read as external stores.
+// Each keeps its last answer and forgets it only when its own event says
+// something changed, so a render never touches localStorage; the events
+// subscribed to are the same ones as before, nothing more.
+const DICE3D_EVENT = "odm-dice3d-pref";
+let dice3dCache: boolean | null = null;
+
+function readDice3d(): boolean {
+  if (dice3dCache === null) {
+    dice3dCache = window.localStorage.getItem("odm:dice3d") !== "off";
+  }
+  return dice3dCache;
+}
+
 function subscribeDicePref(callback: () => void) {
-  window.addEventListener("odm-dice3d-pref", callback);
-  return () => window.removeEventListener("odm-dice3d-pref", callback);
+  const listener = () => {
+    dice3dCache = null;
+    callback();
+  };
+  window.addEventListener(DICE3D_EVENT, listener);
+  return () => window.removeEventListener(DICE3D_EVENT, listener);
 }
 
 // The once-only flag of each table tour, read the way the dice preference
 // is: from localStorage as an external store, so finishing a tour in one
 // tab is known to every other.
 const TOUR_SEEN_EVENT = "odm-tour-seen";
+const tourSeenCache = new Map<string, boolean>();
+
+function readTourSeen(tourId: string): boolean {
+  let seen = tourSeenCache.get(tourId);
+  if (seen === undefined) {
+    seen = tourSeen(window.localStorage, tourId);
+    tourSeenCache.set(tourId, seen);
+  }
+  return seen;
+}
 
 function subscribeTourSeen(callback: () => void) {
-  window.addEventListener(TOUR_SEEN_EVENT, callback);
-  return () => window.removeEventListener(TOUR_SEEN_EVENT, callback);
+  const listener = () => {
+    tourSeenCache.clear();
+    callback();
+  };
+  window.addEventListener(TOUR_SEEN_EVENT, listener);
+  return () => window.removeEventListener(TOUR_SEEN_EVENT, listener);
 }
 
 // The play table. Header, the story column, the docked context column and
@@ -156,20 +191,18 @@ export function SessionView({
   const [renarrate, setRenarrate] = useState<CampaignMessage | null>(null);
   // Bumped on pin/unpin so the pins panel refetches without a stream event.
   const [pinsVersion, setPinsVersion] = useState(0);
-  const [helpOpen, setHelpOpen] = useState(false);
   // The guided tour on screen, if any: the player's or the DM's.
   const [tour, setTour] = useState<"player" | "dm" | null>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
-  const dice3d = useSyncExternalStore(
-    subscribeDicePref,
-    () => window.localStorage.getItem("odm:dice3d") !== "off",
-    () => true,
-  );
+  const dice3d = useSyncExternalStore(subscribeDicePref, readDice3d, () => true);
   const toggleDice3d = useCallback(() => {
     window.localStorage.setItem("odm:dice3d", dice3d ? "off" : "on");
-    window.dispatchEvent(new Event("odm-dice3d-pref"));
+    window.dispatchEvent(new Event(DICE3D_EVENT));
   }, [dice3d]);
   const [diceLookOpen, setDiceLookOpen] = useState(false);
+  const openDiceLook = useCallback(() => setDiceLookOpen(true), []);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const openHelp = useCallback(() => setHelpOpen(true), []);
 
   // Shake to roll is a device preference; while it is on here, this
   // member's rolls are held at the campaign so the phone can release them.
@@ -184,6 +217,10 @@ export function SessionView({
     }
     void requestMotionAccess().then((granted) => writeShakeToRoll(granted));
   }, [shakeOn]);
+  const shake = useMemo(
+    () => ({ supported: canShake, on: shakeOn, onToggle: toggleShake }),
+    [canShake, shakeOn, toggleShake],
+  );
   const myHoldRolls =
     state.members.find((member) => member.userId === me?.id)?.holdRolls ?? null;
   const myHoldRollsRef = useRef<boolean | null>(null);
@@ -247,7 +284,7 @@ export function SessionView({
   const tourId = isDm ? DM_TOUR_ID : PLAYER_TOUR_ID;
   const tourAlreadySeen = useSyncExternalStore(
     subscribeTourSeen,
-    () => tourSeen(window.localStorage, tourId),
+    () => readTourSeen(tourId),
     () => true,
   );
   useEffect(() => {
@@ -302,6 +339,46 @@ export function SessionView({
   const raiseXCard = useCallback(() => {
     void fetch(`/api/campaigns/${campaignId}/safety/x-card`, { method: "POST" });
   }, [campaignId]);
+
+  // The voice dock's props as one object with a stable identity, so the
+  // memoized header only re-renders when the call itself changes. Who is
+  // speaking is not here: the dock reads it from the live store.
+  const voiceSettings = campaign?.gameSettings?.voice;
+  const turnEnforcement = voiceSettings?.turnEnforcement ?? "soft";
+  const sayRangeRule = Boolean(voiceSettings?.rules?.sayRange);
+  const transcribe = Boolean(voiceSettings?.transcribe);
+  const floorUserIds =
+    floor.mode === "spotlight" || floor.mode === "initiative" ? floor.userIds : EMPTY_IDS;
+  const voice = useMemo(
+    () => ({
+      campaignId: campaignId ?? "",
+      meUserId: meId,
+      roster: state.voiceRoster,
+      floorMode: floor.mode,
+      floorUserIds,
+      turnEnforcement,
+      adjudicates: caps.adjudicates,
+      steersStory,
+      sayRangeRule,
+      transcribe,
+      audibilityVersion: state.voiceAudibilityVersion,
+      meshSignal: state.voiceMeshSignal,
+    }),
+    [
+      campaignId,
+      meId,
+      state.voiceRoster,
+      floor.mode,
+      floorUserIds,
+      turnEnforcement,
+      caps.adjudicates,
+      steersStory,
+      sayRangeRule,
+      transcribe,
+      state.voiceAudibilityVersion,
+      state.voiceMeshSignal,
+    ],
+  );
 
   const releaseFloor = useCallback(async () => {
     await fetch(`/api/campaigns/${campaignId}/floor`, { method: "POST" });
@@ -467,6 +544,17 @@ export function SessionView({
     [selectPanelView, setMobileView, hasBattleMap],
   );
   const snoozeStory = useCallback(() => setBeatSnoozedUntil(snoozeUntil(Date.now())), []);
+  // The cadence memo above only reruns on new messages or rolls, so at a
+  // quiet table a snooze would outlive its own expiry. Clearing it when the
+  // clock passes it recomputes the reminder with a fresh now.
+  useEffect(() => {
+    if (!beatSnoozedUntil) {
+      return;
+    }
+    const remaining = Date.parse(beatSnoozedUntil) - Date.now();
+    const timer = window.setTimeout(() => setBeatSnoozedUntil(null), Math.max(0, remaining) + 50);
+    return () => window.clearTimeout(timer);
+  }, [beatSnoozedUntil]);
 
   const joinNoticeId = joinNotice?.id;
   const joinNoticeText = joinNotice?.content.slice(JOIN_NOTE_PREFIX.length);
@@ -497,31 +585,16 @@ export function SessionView({
         title={campaign.title}
         scene={campaign.scene}
         user={me}
-        voice={{
-          campaignId: campaign.id,
-          meUserId: me.id,
-          roster: state.voiceRoster,
-          speaking: state.voiceSpeaking,
-          floorMode: floor.mode,
-          floorUserIds:
-            floor.mode === "spotlight" || floor.mode === "initiative" ? floor.userIds : [],
-          turnEnforcement: campaign.gameSettings?.voice?.turnEnforcement ?? "soft",
-          adjudicates: caps.adjudicates,
-          steersStory,
-          sayRangeRule: Boolean(campaign.gameSettings?.voice?.rules?.sayRange),
-          transcribe: Boolean(campaign.gameSettings?.voice?.transcribe),
-          audibilityVersion: state.voiceAudibilityVersion,
-          meshSignal: state.voiceMeshSignal,
-        }}
+        voice={voice}
         dice3d={dice3d}
         onToggleDice3d={toggleDice3d}
-        onCustomizeDice={() => setDiceLookOpen(true)}
-        shake={{ supported: canShake, on: shakeOn, onToggle: toggleShake }}
+        onCustomizeDice={openDiceLook}
+        shake={shake}
         ttsEnabled={Boolean(campaign.gameSettings?.ttsEnabled)}
         narration={narration}
         ambienceEnabled={Boolean(campaign.gameSettings?.ambienceEnabled)}
         ambience={ambience}
-        onHelp={() => setHelpOpen(true)}
+        onHelp={openHelp}
       />
 
       <div className="flex min-h-0 flex-1">
@@ -601,7 +674,7 @@ export function SessionView({
           isLead={isLead}
           leadUserId={campaign.leadUserId}
           canTransferLead={isLead || campaign.ownerUserId === me.id}
-          spotlightUserIds={floor.mode === "spotlight" ? floor.userIds : []}
+          spotlightUserIds={floor.mode === "spotlight" ? floor.userIds : EMPTY_IDS}
           onlineUserIds={state.online}
           auditLog={auditLog}
           locations={locations}

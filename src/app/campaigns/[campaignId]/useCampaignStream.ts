@@ -1,7 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useReducer, useRef } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import type { CampaignMember, SessionUser } from "@/lib/campaign-types";
+import { coalesceRefresh } from "@/app/campaigns/[campaignId]/coalesce";
+import {
+  appendDmDraft,
+  clearDmDraft,
+  resetLiveStores,
+  setVoiceSpeaking,
+} from "@/app/campaigns/[campaignId]/liveStore";
 import type { CastMember } from "@/lib/dm/cast";
 import type { EncounterSummary } from "@/lib/dm/encounter-summary";
 import type { OneShotEventId } from "@/lib/dm/director-logic";
@@ -205,7 +212,8 @@ export type CampaignState = {
   // lore check, Ask). Separate from dmStatus, which describes the TURN: these
   // run outside one, several can overlap, and each carries its own label.
   utilityCalls: UtilityCall[];
-  dmDraft: string;
+  // The streaming draft itself lives in liveStore.ts (useDmDraft), read by
+  // the draft bubble alone, so a narration flush never repaints the table.
   // The one-turn director steer the party lead has armed, if any. Null until
   // the first director_armed event or the panel's own fetch lands.
   directorArm: {
@@ -229,10 +237,8 @@ export type CampaignState = {
   // the stream directly: the roster is small, identical for every seat, and
   // contains nothing private.
   voiceRoster: VoiceRosterEntry[] | null;
-  // Who mediasoup's dominant-speaker detection last named, and when. The
-  // timestamp is what lets the indicator fade: the event says who started
-  // talking, never who stopped.
-  voiceSpeaking: { userId: string; at: number } | null;
+  // Who is talking rides liveStore.ts (useVoiceSpeaking) for the same reason
+  // the draft does: it ticks constantly and only the voice dock cares.
   // Bumped by the contentless voice_audibility_changed ephemeral. Gains are
   // per-listener, so like the fogged battle map each client fetches its own
   // row rather than the stream carrying everyone's.
@@ -304,13 +310,11 @@ const initialState: CampaignState = {
   lastSeq: 0,
   dmStatus: "idle",
   utilityCalls: [],
-  dmDraft: "",
   directorArm: null,
   mediaStatus: {},
   beats: [],
   dmIntents: [],
   voiceRoster: null,
-  voiceSpeaking: null,
   voiceAudibilityVersion: 0,
   voiceMeshSignal: { to: "", version: 0 },
   online: [],
@@ -354,7 +358,9 @@ function upsertBy<T>(list: T[], item: T, key: (entry: T) => string): T[] {
   return next;
 }
 
-function reducer(state: CampaignState, action: Action): CampaignState {
+// Exported for the reducer tests (scripts/test-campaign-reducer.mjs); the
+// page only ever reaches it through useCampaignStream.
+export function campaignReducer(state: CampaignState, action: Action): CampaignState {
   switch (action.type) {
     case "snapshot":
       return { ...state, ...action.payload, loading: false, error: "" };
@@ -364,6 +370,9 @@ function reducer(state: CampaignState, action: Action): CampaignState {
       return { ...state, sideThreads: action.sideThreads, sideChatLoaded: true };
     case "encounter":
       return { ...state, encounter: action.encounter };
+    // The seat-visible list, whole, so a wholesale replace is right.
+    case "rolls":
+      return { ...state, rolls: action.rolls };
     case "asks":
       return { ...state, asks: action.asks, asksLoaded: true };
     case "whispers":
@@ -397,6 +406,12 @@ function reducer(state: CampaignState, action: Action): CampaignState {
       if (action.seq !== null && action.seq <= state.lastSeq) {
         return state;
       }
+      // The text itself went to the draft store before this dispatch; the
+      // table only learns that the turn is narrating, once. Every later
+      // delta returns the same state and nothing re-renders.
+      if (action.eventType === "dm_delta") {
+        return state.dmStatus === "narrating" ? state : { ...state, dmStatus: "narrating" };
+      }
       const next = action.seq !== null ? { ...state, lastSeq: action.seq } : { ...state };
       const payload = action.payload;
 
@@ -408,13 +423,10 @@ function reducer(state: CampaignState, action: Action): CampaignState {
           // reload window is 100, so 200 keeps scrollback beyond it).
           next.messages = upsertBy(state.messages, message, (entry) => entry.id).slice(-200);
           // A halted-turn notice (system, linked to its dm_turns row) ends the
-          // turn just like narration does. Without this the abandoned partial
-          // draft stays on screen and a retry streams on top of it.
-          if (
-            message.authorType === "dm" ||
-            (message.authorType === "system" && message.dmTurnId)
-          ) {
-            next.dmDraft = "";
+          // turn just like narration does. The stream handler clears the
+          // draft store on the same event (endsDmTurn), so an abandoned
+          // partial draft never stays on screen for a retry to stream over.
+          if (endsDmTurn(message)) {
             next.dmStatus = "idle";
             // A narration answers everything the party had said up to it, so
             // the queue clears with the same event that clears the draft.
@@ -797,10 +809,6 @@ function reducer(state: CampaignState, action: Action): CampaignState {
             absoluteCommand: String(payload.absoluteCommand ?? ""),
           };
           return next;
-        case "dm_delta":
-          next.dmDraft = state.dmDraft + String(payload.text ?? "");
-          next.dmStatus = "narrating";
-          return next;
         // The whole roster each time, so a dropped event self-heals on the
         // next one rather than leaving a ghost on the call.
         case "voice_roster":
@@ -810,9 +818,6 @@ function reducer(state: CampaignState, action: Action): CampaignState {
         // dropped event self-heals on the next join or leave.
         case "presence":
           next.online = (payload.online as string[]) ?? [];
-          return next;
-        case "voice_speaking":
-          next.voiceSpeaking = { userId: String(payload.userId ?? ""), at: Date.now() };
           return next;
         case "voice_audibility_changed":
           next.voiceAudibilityVersion = state.voiceAudibilityVersion + 1;
@@ -827,12 +832,22 @@ function reducer(state: CampaignState, action: Action): CampaignState {
           next.scheduleVersion = state.scheduleVersion + 1;
           return next;
         default:
-          return next;
+          // An event the reducer has no hand in (a contentless ping whose
+          // refetch the handler runs, or voice_speaking, which goes to the
+          // live store) changes nothing; returning the same state lets React
+          // skip the render. A persisted one still has to record its seq.
+          return action.seq === null ? state : next;
       }
     }
     default:
       return state;
   }
+}
+
+// A DM passage, or the system notice that a turn was halted, ends the turn
+// and with it the streaming draft.
+function endsDmTurn(message: CampaignMessage): boolean {
+  return message.authorType === "dm" || (message.authorType === "system" && Boolean(message.dmTurnId));
 }
 
 const PERSISTED_EVENTS = [
@@ -937,8 +952,24 @@ function answeringOrigin(url: string): string {
   }
 }
 
+// The raw body of a per-seat fetch, or null when the server refused it.
+// Raw rather than parsed so the coalescer can compare answers by text.
+async function fetchBody(url: string): Promise<string | null> {
+  const response = await fetch(url);
+  return response.ok ? response.text() : null;
+}
+
+// How long a dropped stream may stay down before the table asks the
+// snapshot route whether it is still welcome. A transient drop reconnects
+// well inside this; a stream refused for good (signed out, removed from
+// the table, campaign deleted) never reopens, and the snapshot's own error
+// is what the page then shows instead of a table frozen at its last event.
+const STREAM_PROBE_MS = 8_000;
+
+export const INITIAL_CAMPAIGN_STATE: CampaignState = initialState;
+
 export function useCampaignStream(campaignId: string) {
-  const [state, dispatch] = useReducer(reducer, initialState);
+  const [state, dispatch] = useReducer(campaignReducer, initialState);
   // The SSE handlers are registered once, so they cannot close over `state`.
   // Caps are set by the snapshot and never change for a mounted session, but
   // the handlers still need to read them after that first load.
@@ -948,8 +979,10 @@ export function useCampaignStream(campaignId: string) {
   }, [state.caps]);
 
   // Loads the snapshot and returns its latestSeq so the event stream can
-  // start exactly where the snapshot left off.
-  const refresh = useCallback(async (): Promise<number> => {
+  // start exactly where the snapshot left off. `quiet` is the stream probe:
+  // a server that cannot be reached is left alone (the stream is still
+  // retrying and the table keeps what it has), while a refusal still shows.
+  const loadSnapshot = useCallback(async (quiet: boolean): Promise<number> => {
     try {
       const response = await fetch(`/api/campaigns/${campaignId}`);
       const answeredBy = answeringOrigin(response.url);
@@ -994,15 +1027,27 @@ export function useCampaignStream(campaignId: string) {
           utilityCalls: sortCalls(data.utilityCalls ?? []),
           narrationAudio: data.narrationAudio ?? {},
           ambience: data.ambience ?? EMPTY_AMBIENCE,
+          // The sky, the character in play, and what a late joiner walks in
+          // on: the handout on the table, the X-card pause, the title card.
+          // Their events were published before this snapshot, so the stream
+          // never replays them; the snapshot is the only way in.
+          scene: data.scene ?? null,
+          activeSheetId: data.activeSheetId ?? "",
+          handout: data.handout ?? null,
+          safetyPause: data.safetyPause ?? null,
+          titleCard: data.titleCard ?? null,
           lastSeq,
         },
       });
       return lastSeq;
     } catch {
-      dispatch({ type: "error", error: "Could not reach the server." });
+      if (!quiet) {
+        dispatch({ type: "error", error: "Could not reach the server." });
+      }
       return 0;
     }
   }, [campaignId]);
+  const refresh = useCallback(() => loadSnapshot(false), [loadSnapshot]);
 
   // Re-fetches just the caller's visible notes. Suggestion events carry no
   // content (privacy), so clients pull their own filtered list instead.
@@ -1036,34 +1081,29 @@ export function useCampaignStream(campaignId: string) {
   }, [campaignId]);
 
   // The battle map is per-character fogged, so even token positions never
-  // ride the shared stream; the ping-and-self-fetch pattern applies.
-  const refreshBattleMap = useCallback(async () => {
-    try {
-      const response = await fetch(`/api/campaigns/${campaignId}/battle-map`);
-      if (!response.ok) {
-        return;
-      }
-      const data = await response.json();
-      dispatch({ type: "battleMap", view: data.view ?? null });
-    } catch {
-      // transient; the next battle_map_updated event retries
-    }
-  }, [campaignId]);
+  // ride the shared stream; the ping-and-self-fetch pattern applies. Pings
+  // come in bursts (every move, every reveal), so the fetch is coalesced:
+  // one in flight, one waiting, and an answer identical to the last one is
+  // dropped so the board keeps its view object (coalesce.ts).
+  const refreshBattleMap = useMemo(
+    () =>
+      coalesceRefresh(
+        () => fetchBody(`/api/campaigns/${campaignId}/battle-map`),
+        (body) => dispatch({ type: "battleMap", view: JSON.parse(body).view ?? null }),
+      ),
+    [campaignId],
+  );
 
   // Same pattern for the DM's encounter view: the shared stream is
   // player-safe, so the seat allowed real numbers pulls its own projection.
-  const refreshEncounter = useCallback(async () => {
-    try {
-      const response = await fetch(`/api/campaigns/${campaignId}/encounter`);
-      if (!response.ok) {
-        return;
-      }
-      const data = await response.json();
-      dispatch({ type: "encounter", encounter: data.encounter ?? null });
-    } catch {
-      // transient; the next encounter_updated event retries
-    }
-  }, [campaignId]);
+  const refreshEncounter = useMemo(
+    () =>
+      coalesceRefresh(
+        () => fetchBody(`/api/campaigns/${campaignId}/encounter`),
+        (body) => dispatch({ type: "encounter", encounter: JSON.parse(body).encounter ?? null }),
+      ),
+    [campaignId],
+  );
 
   // A blind or DM-only roll reaches the shared stream with its number
   // stripped, because the stream is one payload for every seat. Whoever is
@@ -1131,6 +1171,36 @@ export function useCampaignStream(campaignId: string) {
   useEffect(() => {
     let source: EventSource | null = null;
     let cancelled = false;
+    let probe: ReturnType<typeof setTimeout> | null = null;
+    // True from the first drop until the stream comes back, so the open
+    // that follows is known to be a reconnect.
+    let dropped = false;
+    // A fresh table never inherits the last one's half-streamed draft.
+    resetLiveStores();
+
+    // Everything the stream cannot express or replay: the snapshot, the
+    // per-seat pulls, and the fogged map. Used after a rewind and after a
+    // reconnect, since the replay caps out and ephemeral pings are gone.
+    const resync = () => {
+      void refresh();
+      void refreshNotes();
+      void refreshSideChat();
+      void refreshWhispers();
+      void refreshAsks();
+      void refreshFacts();
+      void refreshBattleMap();
+    };
+
+    // Asks the snapshot route whether this seat is still welcome: a refused
+    // seat shows the page's error state, a network blip keeps the table as
+    // it is and lets the stream keep retrying, and a reachable server's
+    // snapshot is applied, which keeps the table current while the stream
+    // is still on its way back.
+    const probeStream = () => {
+      if (!cancelled) {
+        void loadSnapshot(true);
+      }
+    };
 
     refresh().then((lastSeq) => {
       if (cancelled) {
@@ -1142,6 +1212,37 @@ export function useCampaignStream(campaignId: string) {
       void refreshFacts();
       void refreshBattleMap();
       source = new EventSource(`/api/campaigns/${campaignId}/events?lastSeq=${lastSeq}`);
+      // Both the browser's EventSource and the apps' fetch-backed one
+      // (client src/renderer/game/runtime.ts) dispatch open and error.
+      source.addEventListener("open", () => {
+        if (probe !== null) {
+          clearTimeout(probe);
+          probe = null;
+        }
+        if (dropped) {
+          dropped = false;
+          resync();
+        }
+      });
+      source.addEventListener("error", () => {
+        dropped = true;
+        // CLOSED means the browser gave up for good (a 401, 403 or 404, or
+        // a reply that was not an event stream) and will not retry. The
+        // apps' stream never reports CLOSED and backs off forever instead,
+        // so one still down after a while is probed the same way.
+        if (source?.readyState === EventSource.CLOSED) {
+          probeStream();
+          return;
+        }
+        if (probe === null) {
+          probe = setTimeout(() => {
+            probe = null;
+            if (source?.readyState !== EventSource.OPEN) {
+              probeStream();
+            }
+          }, STREAM_PROBE_MS);
+        }
+      });
       const handle = (eventType: string) => (event: MessageEvent) => {
         try {
           const payload = JSON.parse(event.data);
@@ -1152,6 +1253,15 @@ export function useCampaignStream(campaignId: string) {
             EPHEMERAL_EVENT_SET.has(eventType) || !event.lastEventId
               ? null
               : Number(event.lastEventId);
+          // The two values that tick fastest go to the live store, read by
+          // the draft bubble and the voice dock alone (liveStore.ts).
+          if (eventType === "dm_delta") {
+            appendDmDraft(String(payload.text ?? ""));
+          } else if (eventType === "voice_speaking") {
+            setVoiceSpeaking({ userId: String(payload.userId ?? ""), at: Date.now() });
+          } else if (eventType === "message_added" && endsDmTurn(payload.message as CampaignMessage)) {
+            clearDmDraft();
+          }
           dispatch({ type: "event", eventType, seq, payload });
           if (eventType === "note_suggested") {
             void refreshNotes();
@@ -1159,13 +1269,7 @@ export function useCampaignStream(campaignId: string) {
           // A rewind mass-deletes state that incremental events cannot
           // express; reload everything from the snapshot endpoint.
           if (eventType === "campaign_rewound") {
-            void refresh();
-            void refreshNotes();
-            void refreshSideChat();
-            void refreshWhispers();
-            void refreshAsks();
-            void refreshFacts();
-            void refreshBattleMap();
+            resync();
           }
           if (eventType === "side_activity") {
             void refreshSideChat();
@@ -1213,10 +1317,14 @@ export function useCampaignStream(campaignId: string) {
 
     return () => {
       cancelled = true;
+      if (probe !== null) {
+        clearTimeout(probe);
+      }
       source?.close();
     };
   }, [
     campaignId,
+    loadSnapshot,
     refresh,
     refreshNotes,
     refreshSideChat,

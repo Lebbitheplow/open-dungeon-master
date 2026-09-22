@@ -11,6 +11,7 @@ import {
 } from "@/lib/battlemap/condition-glyphs";
 import { HEALTH_LABEL, HEALTH_RING, type HealthWord } from "@/lib/battlemap/health-words";
 import { iconPath } from "@/lib/icons";
+import { variantUrl } from "@/lib/image-format";
 import type { Footprint } from "@/lib/battlemap/footprint";
 import type { MapDrawing } from "@/lib/battlemap/scene";
 import type { PlayerMapView } from "@/lib/battlemap/view";
@@ -372,9 +373,10 @@ export const TokenFigure = memo(function TokenFigure({
             {token.name.charAt(0).toUpperCase()}
           </text>
         ) : null}
+        {/* A face on a 24 px token wants the 256 px copy, not the full portrait. */}
         {portrait ? (
           <image
-            href={portrait}
+            href={variantUrl(portrait, 256)}
             x={4}
             y={4}
             width={size - 8}

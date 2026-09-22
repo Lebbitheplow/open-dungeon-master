@@ -37,11 +37,16 @@ const nextConfig: NextConfig = {
         // and mediasoup spawns a standalone worker executable that nothing
         // ever imports, so tracing has no reference to follow.
         // Only the linux/x64 binding is shipped; embeddings are CPU-only.
+        // The WASM picture codecs (src/lib/image-variants.ts) are loaded
+        // inside a worker thread from a code string, so nothing imports
+        // them statically and the tracer would miss them too.
         outputFileTracingIncludes: {
           "/*": [
             "node_modules/better-sqlite3-multiple-ciphers/**/*",
             "node_modules/onnxruntime-node/bin/napi-v6/linux/x64/**/*",
             "node_modules/mediasoup/worker/out/Release/**/*",
+            "node_modules/@jsquash/**/*",
+            "node_modules/wasm-feature-detect/**/*",
           ],
         },
       }

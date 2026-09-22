@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { configValue, getGlobalConfig } from "@/lib/app-config";
+import { scheduleImageVariants } from "@/lib/image-variants";
 import type { AspectPreset, GeneratedImage, ImageMode } from "@/lib/types";
 
 // First-party ComfyUI backend: the app submits a plain text-to-image workflow
@@ -291,7 +292,11 @@ export async function generateComfyImage(options: {
   const generatedDir = path.join(process.cwd(), "public", "generated");
   mkdirSync(generatedDir, { recursive: true });
   const filename = `${Date.now()}-${seed}-comfyui-${promptSlug(options.prompt)}.png`;
-  writeFileSync(path.join(generatedDir, filename), Buffer.from(bytes));
+  const saved = path.join(generatedDir, filename);
+  writeFileSync(saved, Buffer.from(bytes));
+  // The smaller WebP copies the table draws, written after the fact; the
+  // PNG is what the campaign stores and what a client without them gets.
+  scheduleImageVariants(saved);
 
   return {
     id: crypto.randomUUID(),

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { publishPersisted } from "@/lib/events";
 import { publishMediaStatus } from "@/lib/dm/images";
@@ -114,6 +114,7 @@ export function enqueueNarrationAudio(
       const file = narrationAudioPath(campaignId, messageId);
       mkdirSync(path.dirname(file), { recursive: true });
       writeFileSync(file, audio);
+      narrationLists.delete(campaignId);
       publishPersisted(campaignId, "tts_ready", {
         messageId,
         url: `/generated-audio/${campaignId}/${messageId}.mp3`,
@@ -127,10 +128,27 @@ export function enqueueNarrationAudio(
 // so a fresh page load knows which messages can actually be replayed: only
 // DM turns narrated while TTS was on have a file, and a replay button over a
 // message without one fails silently. tts_ready adds to it as takes land.
+//
+// The folder grows with every narrated turn, so the listing is kept in
+// memory per campaign and trusted while the directory's mtime is unchanged:
+// one stat per snapshot instead of a readdir. The directory mtime moves on
+// every entry added or removed, by this process or any other, so the cache
+// is only ever a hint that the file system confirms. The writer above also
+// drops it outright the moment a take lands.
+const narrationLists = new Map<string, { mtimeMs: number; audio: Record<string, string> }>();
+
 export function listNarrationAudio(campaignId: string): Record<string, string> {
   const directory = path.join(process.cwd(), "public", "generated-audio", campaignId);
-  if (!existsSync(directory)) {
+  let mtimeMs: number;
+  try {
+    mtimeMs = statSync(directory).mtimeMs;
+  } catch {
+    narrationLists.delete(campaignId);
     return {};
+  }
+  const cached = narrationLists.get(campaignId);
+  if (cached && cached.mtimeMs === mtimeMs) {
+    return { ...cached.audio };
   }
   const audio: Record<string, string> = {};
   for (const file of readdirSync(directory)) {
@@ -138,7 +156,8 @@ export function listNarrationAudio(campaignId: string): Record<string, string> {
       audio[file.slice(0, -".mp3".length)] = `/generated-audio/${campaignId}/${file}`;
     }
   }
-  return audio;
+  narrationLists.set(campaignId, { mtimeMs, audio });
+  return { ...audio };
 }
 
 // Voice previews: Kokoro ships no sample clips, but one short line renders in

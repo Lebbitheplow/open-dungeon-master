@@ -55,7 +55,7 @@ export function SessionChatColumn({
   onPinned: () => void;
   children: ReactNode;
 }) {
-  const { campaign, messages, rolls, sheets, locations, dmStatus, dmDraft, utilityCalls } = state;
+  const { campaign, messages, rolls, sheets, locations, dmStatus, utilityCalls } = state;
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
   // Blocks made from this table, hidden at once; the snapshot carries them
   // on the next load.
@@ -108,7 +108,6 @@ export function SessionChatColumn({
         }}
         locations={locations}
         dmStatus={dmStatus}
-        dmDraft={dmDraft}
         mediaStatus={state.mediaStatus}
         onReplayAudio={
           ttsEnabled

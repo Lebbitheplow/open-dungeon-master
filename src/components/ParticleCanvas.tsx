@@ -20,8 +20,9 @@ import {
 // frame loop, shared by bursts (an effect at a tile) and weather (a sky
 // that keeps falling). Callers get a handle through `onReady` and ask it to
 // burst; weather is a prop so the loop tops it up itself. Stops entirely
-// while the tab is hidden and on reduced motion, and never runs when there
-// is nothing to draw, so an idle board costs no frames.
+// while the tab is hidden, while the owner says the canvas is off screen
+// (`visible`, a side panel behind another tab) and on reduced motion, and
+// never runs when there is nothing to draw, so an idle board costs no frames.
 
 export type ParticleHandle = {
   burst: (
@@ -40,6 +41,7 @@ export function ParticleCanvas({
   density = 0,
   embers = false,
   motes = false,
+  visible = true,
   onReady,
 }: {
   className?: string;
@@ -51,17 +53,23 @@ export function ParticleCanvas({
   density?: number;
   embers?: boolean;
   motes?: boolean;
+  // Whether the canvas is on screen at all. A hidden side panel keeps its
+  // board mounted, so document.hidden alone cannot tell the loop to rest.
+  visible?: boolean;
   onReady?: (handle: ParticleHandle | null) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fieldRef = useRef<ParticleField | null>(null);
   const frameRef = useRef(0);
   const lastRef = useRef(0);
+  // The loop's wake call, so a visibility change can restart it without
+  // rebuilding the field.
+  const wakeRef = useRef<(() => void) | null>(null);
   const low = useLowEffects();
-  const weatherRef = useRef({ weather, windX, density, embers, motes, low });
+  const weatherRef = useRef({ weather, windX, density, embers, motes, low, visible });
   useEffect(() => {
-    weatherRef.current = { weather, windX, density, embers, motes, low };
-  }, [weather, windX, density, embers, motes, low]);
+    weatherRef.current = { weather, windX, density, embers, motes, low, visible };
+  }, [weather, windX, density, embers, motes, low, visible]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -92,7 +100,7 @@ export function ParticleCanvas({
     let running = false;
     const tick = (now: number) => {
       frameRef.current = 0;
-      if (!context || document.hidden || prefersReducedMotion()) {
+      if (!context || document.hidden || !weatherRef.current.visible || prefersReducedMotion()) {
         running = false;
         context?.clearRect(0, 0, field.width, field.height);
         return;
@@ -143,6 +151,7 @@ export function ParticleCanvas({
       },
     };
     onReady?.(handle);
+    wakeRef.current = wake;
     wake();
     const onVisibility = () => {
       if (!document.hidden) {
@@ -153,12 +162,17 @@ export function ParticleCanvas({
     // Weather prop changes must wake the loop when it went idle.
     const interval = window.setInterval(() => {
       const current = weatherRef.current;
-      if (current.weather && (current.weather !== "clear" || current.embers || current.motes)) {
+      if (
+        current.visible &&
+        current.weather &&
+        (current.weather !== "clear" || current.embers || current.motes)
+      ) {
         wake();
       }
     }, 1000);
     return () => {
       onReady?.(null);
+      wakeRef.current = null;
       document.removeEventListener("visibilitychange", onVisibility);
       window.clearInterval(interval);
       observer?.disconnect();
@@ -168,6 +182,14 @@ export function ParticleCanvas({
       fieldRef.current = null;
     };
   }, [low, onReady]);
+
+  // Shown again: the loop stopped itself while the canvas was off screen,
+  // so it needs a nudge; the tick reads the fresh flag from weatherRef.
+  useEffect(() => {
+    if (visible) {
+      wakeRef.current?.();
+    }
+  }, [visible]);
 
   return (
     <canvas

@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { cn } from "@/lib/cn";
+import { encodeImageForUpload } from "@/lib/image-encode";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { Select } from "@/components/ui/Select";
 import { Slider } from "@/components/ui/Slider";
@@ -365,15 +366,6 @@ export function LabelTools({ size, onSize }: { size: LabelSize; onSize: (size: L
   );
 }
 
-async function readAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error("read failed"));
-    reader.readAsDataURL(file);
-  });
-}
-
 // The map as a file, either way: a picture in place of the tiles, a map
 // drawn in Fantasy Map Generator read into the grid, or the map saved out as
 // a PNG to print or hand round.
@@ -406,11 +398,11 @@ export function FileTools({
     setUploading(true);
     setError("");
     try {
-      const dataUrl = await readAsDataUrl(file);
+      const { dataUrl, type } = await encodeImageForUpload(file);
       const response = await fetch("/api/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dataUrl, name: file.name, type: file.type }),
+        body: JSON.stringify({ dataUrl, name: file.name, type }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {

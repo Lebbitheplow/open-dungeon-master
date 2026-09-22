@@ -3,6 +3,7 @@
 import { useId, useRef, useState } from "react";
 import { Image as ImageIcon, Loader2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { encodeImageForUpload } from "@/lib/image-encode";
 import { Select } from "@/components/ui/Select";
 import { Switch } from "@/components/ui/Switch";
 import { cueOptions } from "@/lib/ambience/catalog";
@@ -299,16 +300,11 @@ export function OverlayControls({
     setUploading(true);
     setError("");
     try {
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result));
-        reader.onerror = () => reject(new Error("read failed"));
-        reader.readAsDataURL(file);
-      });
+      const { dataUrl, type } = await encodeImageForUpload(file);
       const response = await fetch("/api/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dataUrl, name: file.name, type: file.type }),
+        body: JSON.stringify({ dataUrl, name: file.name, type }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {

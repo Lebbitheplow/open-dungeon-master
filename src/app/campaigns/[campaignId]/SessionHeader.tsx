@@ -3,7 +3,7 @@
 import Link from "next/link";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Check } from "lucide-react";
-import type { ComponentProps } from "react";
+import { memo, type ComponentProps } from "react";
 import { HeaderGlyph } from "@/app/campaigns/[campaignId]/SessionGlyph";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { Slider } from "@/components/ui/Slider";
@@ -117,7 +117,11 @@ function HeaderAudioControl({
 // switches (see VoiceDock). The account menu is the same one every other
 // page carries, so settings, characters, log out and the app's home screen
 // are one tap away from the table too.
-export function SessionHeader({
+//
+// Memoized: the table re-renders on every stream event, and the header
+// changes on almost none of them. SessionView hands it stable callbacks and
+// memoized voice, shake, narration and ambience objects so the memo holds.
+export const SessionHeader = memo(function SessionHeader({
   title,
   scene,
   user,
@@ -278,4 +282,4 @@ export function SessionHeader({
       </div>
     </header>
   );
-}
+});

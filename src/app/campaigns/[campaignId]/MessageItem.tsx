@@ -18,6 +18,7 @@ import { ContextMenu } from "@/components/ui/ContextMenu";
 import { ImageLightbox } from "@/components/ui/ImageLightbox";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { cn } from "@/lib/cn";
+import { encodeImageForUpload } from "@/lib/image-encode";
 import { ui } from "@/lib/ui";
 import { DM_HALTED_PREFIX, type CampaignMember } from "@/lib/campaign-types";
 import type { CastMember } from "@/lib/dm/cast";
@@ -147,16 +148,11 @@ export const MessageItem = memo(function MessageItem({
   async function attachPicture(file: File) {
     setAttaching(true);
     try {
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result));
-        reader.onerror = () => reject(new Error("read failed"));
-        reader.readAsDataURL(file);
-      });
+      const { dataUrl, type } = await encodeImageForUpload(file);
       const upload = await fetch("/api/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dataUrl, name: file.name, type: file.type }),
+        body: JSON.stringify({ dataUrl, name: file.name, type }),
       });
       const uploaded = await upload.json().catch(() => ({}));
       if (!upload.ok) {

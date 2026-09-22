@@ -13,6 +13,7 @@
 
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
+import { StatementCache } from "@/lib/db/statement-cache";
 
 // Both engines load lazily and synchronously (the database opens inside
 // synchronous accessors), and the native one must be allowed to fail, so a
@@ -113,16 +114,25 @@ export function openDatabase(file: string, options: OpenOptions = {}): SqliteDat
 }
 
 function wrapNative(db: import("better-sqlite3-multiple-ciphers").Database): SqliteDatabase {
+  // One cache per open database: a statement belongs to the connection that
+  // prepared it and must never be handed to another. Schema changes only
+  // ever arrive through exec (ensureSchema's CREATE, ALTER and rebuilds), so
+  // exec also empties the cache: SQLite re-prepares a stale statement on its
+  // own, but node:sqlite reads the column count before the first step, and
+  // a SELECT * cached before an ADD COLUMN would miss the new column once.
+  const statements = new StatementCache<SqliteStatement>();
   return {
     engine: "native",
     encrypted: true,
-    prepare: (sql) => db.prepare(sql),
+    prepare: (sql) => statements.take(sql, (text) => db.prepare(text)),
     exec: (sql) => {
+      statements.clear();
       db.exec(sql);
     },
     pragma: (source) => db.pragma(source),
     transaction: (fn) => db.transaction(fn),
     close: () => {
+      statements.clear();
       db.close();
     },
   };
@@ -171,21 +181,26 @@ function openNode(file: string, options: OpenOptions): SqliteDatabase {
       }
     };
   };
+  const statements = new StatementCache<SqliteStatement>();
+  const prepare = (sql: string): SqliteStatement => {
+    const statement = db.prepare(sql);
+    return {
+      run: (...params) => {
+        const result = statement.run(...(params as never[]));
+        return { changes: Number(result.changes), lastInsertRowid: result.lastInsertRowid };
+      },
+      get: (...params) => statement.get(...(params as never[])),
+      all: (...params) => statement.all(...(params as never[])),
+    };
+  };
   return {
     engine: "node",
     encrypted: false,
-    prepare: (sql) => {
-      const statement = db.prepare(sql);
-      return {
-        run: (...params) => {
-          const result = statement.run(...(params as never[]));
-          return { changes: Number(result.changes), lastInsertRowid: result.lastInsertRowid };
-        },
-        get: (...params) => statement.get(...(params as never[])),
-        all: (...params) => statement.all(...(params as never[])),
-      };
-    },
+    prepare: (sql) => statements.take(sql, prepare),
+    // Cleared for the reason given in wrapNative. The transaction wrapper
+    // above talks to the raw handle, so BEGIN and COMMIT leave the cache be.
     exec: (sql) => {
+      statements.clear();
       db.exec(sql);
     },
     // Cipher and key pragmas are extensions of the native build; plain
@@ -193,6 +208,7 @@ function openNode(file: string, options: OpenOptions): SqliteDatabase {
     pragma: (source) => db.prepare(`PRAGMA ${source}`).all(),
     transaction,
     close: () => {
+      statements.clear();
       db.close();
     },
   };

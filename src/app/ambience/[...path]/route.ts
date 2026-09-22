@@ -8,12 +8,12 @@ export const dynamic = "force-dynamic";
 // build-time static serving: the files arrive when someone runs
 // scripts/fetch-ambience.mjs, which is usually long after the build.
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ path: string[] }> },
 ) {
   if (!(await currentUser())) {
     return unauthorized();
   }
   const { path: segments } = await params;
-  return serveGeneratedFile("ambience", segments);
+  return serveGeneratedFile("ambience", segments, request);
 }

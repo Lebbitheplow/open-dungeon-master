@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useRef } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { cn } from "@/lib/cn";
 import {
   buildCells,
@@ -86,10 +86,10 @@ export const BattleMapGrid = memo(
   }: {
     view: PlayerMapView;
     sheets: CharacterSheet[];
-    // The painted picture of this board, or null while the drawn terrain
-    // stands in for it (usePaintedMap.ts). Never set on a map that carries
-    // its own backdrop.
-    painted?: string | null;
+    // The painted picture of this board, the canvas it was painted on, or
+    // null while the drawn terrain stands in for it (usePaintedMap.ts).
+    // Never set on a map that carries its own backdrop.
+    painted?: HTMLCanvasElement | null;
     // A face for every token that has one, by the token's refId: a portrait,
     // a placeholder plate, a monster's art. A token without one falls back to
     // its initial (docs/visual-overhaul-plan.md 5.1).
@@ -117,6 +117,22 @@ export const BattleMapGrid = memo(
     const labelRef = useRef(onLabelClick);
     const tokenHoverRef = useRef(onTokenHover);
     const hoveredTokenRef = useRef<string | null>(null);
+    // The painted canvas is placed by hand: React never renders it, only the
+    // foreignObject slot it sits in, so a repaint is one element swap and no
+    // encode. The slot is sized in board units and the canvas fills it
+    // (usePaintedMap.ts styles it), which is exactly how the <image> that
+    // used to sit here was stretched.
+    const paintedSlotRef = useRef<HTMLDivElement | null>(null);
+    useLayoutEffect(() => {
+      const slot = paintedSlotRef.current;
+      if (!slot || slot.firstChild === painted) {
+        return;
+      }
+      slot.textContent = "";
+      if (painted) {
+        slot.appendChild(painted);
+      }
+    }, [painted]);
     useEffect(() => {
       clickRef.current = onTileClick;
       hoverRef.current = onTileHover;
@@ -422,17 +438,11 @@ export const BattleMapGrid = memo(
           />
         ) : painted ? (
           // The painted board: the same layer, drawn from the terrain itself,
-          // so it needs no register and no tint (render/painted.ts).
-          <image
-            href={painted}
-            x={0}
-            y={0}
-            width={width * TILE}
-            height={height * TILE}
-            preserveAspectRatio="none"
-            pointerEvents="none"
-            style={{ animation: "overlay-in 420ms ease-out both" }}
-          />
+          // so it needs no register and no tint (render/painted.ts). The
+          // canvas goes into the slot above, not through an image URL.
+          <foreignObject x={0} y={0} width={width * TILE} height={height * TILE} pointerEvents="none">
+            <div ref={paintedSlotRef} style={{ width: "100%", height: "100%" }} />
+          </foreignObject>
         ) : null}
         {cells}
         {/* The DM's overlay, the annotated picture, in the backdrop's

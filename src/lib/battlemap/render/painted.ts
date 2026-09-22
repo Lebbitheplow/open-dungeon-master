@@ -167,7 +167,9 @@ export function paintKey(request: PaintRequest): string {
 }
 
 // Paints the board onto a fresh canvas, or null when the painted sets are not
-// on this host. The map editor draws this canvas under its own overlays.
+// on this host. The map editor draws this canvas under its own overlays and
+// the play board shows the canvas itself (usePaintedMap.ts): no encode, no
+// object URL, the pixels the renderer wrote are the pixels on screen.
 export async function paintCanvas(request: PaintRequest): Promise<HTMLCanvasElement | null> {
   if (typeof document === "undefined" || request.width < 1 || request.height < 1) return null;
   const all = await loadManifests();
@@ -203,13 +205,11 @@ export async function paintCanvas(request: PaintRequest): Promise<HTMLCanvasElem
   return canvas;
 }
 
-// Paints the board and returns an object URL for it, or null when the painted
-// sets are not on this host. The caller owns the URL and revokes it.
-export async function paintMap(request: PaintRequest): Promise<string | null> {
-  const canvas = await paintCanvas(request);
-  if (!canvas) return null;
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.9));
-  return blob ? URL.createObjectURL(blob) : null;
+// Lets a painted canvas go: a zero-size canvas has no backing store, so the
+// memory returns without waiting for the element to be collected.
+export function releaseCanvas(canvas: HTMLCanvasElement): void {
+  canvas.width = 0;
+  canvas.height = 0;
 }
 
 // Thumbnails (docs/visual-overhaul-plan.md 3.7): the same renderer at 8 px a

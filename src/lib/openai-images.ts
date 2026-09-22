@@ -2,6 +2,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { configValue, getGlobalConfig } from "@/lib/app-config";
 import { endpointKind } from "@/lib/dm/sampling-logic";
+import { sniffImage } from "@/lib/image-format";
+import { scheduleImageVariants } from "@/lib/image-variants";
 import { serverEnv } from "@/lib/server-env";
 import type { AspectPreset, GeneratedImage, ImageMode, StorySettings } from "@/lib/types";
 
@@ -124,6 +126,11 @@ export async function generateOpenAiImage(
     // several times the price of "medium", which is exactly what the slow
     // switch is for.
     body.quality = options.mode === "slow" ? "high" : "medium";
+    // gpt-image models can hand back WebP directly, a fifth the bytes of
+    // the PNG they default to; dall-e knows neither field. A compatible
+    // proxy that rejects them gets one more try without (below).
+    body.output_format = "webp";
+    body.output_compression = 85;
   }
 
   const controller = new AbortController();
@@ -132,21 +139,33 @@ export async function generateOpenAiImage(
     data?: Array<{ b64_json?: string; url?: string }>;
     error?: { message?: string };
   };
-  try {
+  const post = async (request: Record<string, unknown>) => {
     const response = await fetch(`${baseUrl}/images/generations`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(request),
       signal: controller.signal,
     });
-    payload = (await response.json().catch(() => ({}))) as typeof payload;
-    if (!response.ok) {
+    const answer = (await response.json().catch(() => ({}))) as typeof payload;
+    return { ok: response.ok, status: response.status, answer };
+  };
+  try {
+    let result = await post(body);
+    if (!result.ok && "output_format" in body && /output_(format|compression)/i.test(result.answer.error?.message ?? "")) {
+      // The PNG path, for an endpoint that does not know the WebP fields.
+      const plain = { ...body };
+      delete plain.output_format;
+      delete plain.output_compression;
+      result = await post(plain);
+    }
+    payload = result.answer;
+    if (!result.ok) {
       // The upstream message names the real problem (bad key, no billing,
       // moderation refusal) far better than a status code would.
-      const detail = payload.error?.message || `the API answered ${response.status}`;
+      const detail = payload.error?.message || `the API answered ${result.status}`;
       throw new Error(`OpenAI image generation failed: ${detail}`);
     }
   } catch (error) {
@@ -175,8 +194,13 @@ export async function generateOpenAiImage(
 
   const generatedDir = path.join(process.cwd(), "public", "generated");
   mkdirSync(generatedDir, { recursive: true });
-  const filename = `${Date.now()}-openai-${promptSlug(options.prompt)}.png`;
-  writeFileSync(path.join(generatedDir, filename), bytes);
+  // Named by what came back, not what was asked for: a proxy may answer
+  // a WebP request with PNG, and the file must open under its own name.
+  const extension = sniffImage(bytes)?.ext ?? "png";
+  const filename = `${Date.now()}-openai-${promptSlug(options.prompt)}.${extension}`;
+  const saved = path.join(generatedDir, filename);
+  writeFileSync(saved, bytes);
+  scheduleImageVariants(saved);
 
   return {
     id: crypto.randomUUID(),

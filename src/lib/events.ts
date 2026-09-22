@@ -157,6 +157,54 @@ export function publishEphemeral(campaignId: string, type: string, payload: unkn
 
 export type StoredEvent = { seq: number; type: string; payload: unknown };
 
+// The newest persisted event of any of the given types, or null. The
+// snapshot route reads the handout, the X-card and the title card this way:
+// they are persisted as events alone, and a client that loads fresh opens
+// its stream at the snapshot's seq, so nothing before it is ever replayed.
+export function latestEventOfType(campaignId: string, types: string[]): StoredEvent | null {
+  if (!types.length) {
+    return null;
+  }
+  const row = getDatabase()
+    .prepare(
+      `
+        SELECT seq, type, payload_json FROM campaign_events
+        WHERE campaign_id = ? AND type IN (${types.map(() => "?").join(", ")})
+        ORDER BY seq DESC LIMIT 1
+      `,
+    )
+    .get(campaignId, ...types) as { seq: number; type: string; payload_json: string } | undefined;
+  return row
+    ? { seq: row.seq, type: row.type, payload: parseJson<unknown>(row.payload_json, null) }
+    : null;
+}
+
+// Every persisted event after `afterSeq`, oldest first, handed over one
+// batch at a time until a short batch says there are no more. The events
+// route replays with this so a long absence catches up whole instead of
+// stopping at one batch and leaving a gap the seq guard cannot see. Returns
+// how many were handed over.
+export function forEachEventSince(
+  campaignId: string,
+  afterSeq: number,
+  each: (event: StoredEvent) => void,
+  batch = 500,
+): number {
+  let cursor = afterSeq;
+  let count = 0;
+  for (;;) {
+    const events = listEventsSince(campaignId, cursor, batch);
+    for (const event of events) {
+      each(event);
+      cursor = event.seq;
+    }
+    count += events.length;
+    if (events.length < batch) {
+      return count;
+    }
+  }
+}
+
 export function listEventsSince(campaignId: string, afterSeq: number, limit = 500): StoredEvent[] {
   const rows = getDatabase()
     .prepare(

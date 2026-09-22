@@ -28,11 +28,14 @@ export function SkyLayer({
   scene,
   mode,
   className,
+  visible = true,
 }: {
   scene: SceneState | null;
   // Under the board (full strength) or over a picture (half density, a tint).
   mode: "board" | "art";
   className?: string;
+  // Off screen (a side panel behind another tab): the weather rests.
+  visible?: boolean;
 }) {
   const low = useLowEffects();
   const weather = scene?.weather ?? null;
@@ -74,6 +77,7 @@ export function SkyLayer({
         density={density}
         embers={embers}
         motes={motes}
+        visible={visible}
       />
       {stormFlash ? <div className="storm-flash absolute inset-0 bg-white" /> : null}
       {/* The vignette tightens at night. */}

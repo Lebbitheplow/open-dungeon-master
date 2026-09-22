@@ -47,15 +47,20 @@ function autoMode(): EffectsMode {
   return "full";
 }
 
+// The stored answer, kept between reads. Every hook below reads it on each
+// render, and localStorage is a synchronous call into the browser; the
+// cache is dropped whenever the setter or a storage event says it changed.
+let modeCache: EffectsMode | null = null;
+
 export function readEffectsMode(): EffectsMode {
   if (typeof window === "undefined") {
     return "full";
   }
-  const stored = window.localStorage.getItem(KEY);
-  if (stored === "full" || stored === "low") {
-    return stored;
+  if (modeCache === null) {
+    const stored = window.localStorage.getItem(KEY);
+    modeCache = stored === "full" || stored === "low" ? stored : autoMode();
   }
-  return autoMode();
+  return modeCache;
 }
 
 export function writeEffectsMode(mode: EffectsMode | "auto") {
@@ -64,6 +69,7 @@ export function writeEffectsMode(mode: EffectsMode | "auto") {
   } else {
     window.localStorage.setItem(KEY, mode);
   }
+  modeCache = null;
   window.dispatchEvent(new Event(EVENT));
 }
 
@@ -72,11 +78,15 @@ export function isEffectsAuto(): boolean {
 }
 
 function subscribe(listener: () => void) {
-  window.addEventListener(EVENT, listener);
-  window.addEventListener("storage", listener);
+  const changed = () => {
+    modeCache = null;
+    listener();
+  };
+  window.addEventListener(EVENT, changed);
+  window.addEventListener("storage", changed);
   return () => {
-    window.removeEventListener(EVENT, listener);
-    window.removeEventListener("storage", listener);
+    window.removeEventListener(EVENT, changed);
+    window.removeEventListener("storage", changed);
   };
 }
 
@@ -101,29 +111,39 @@ export function useEffectsRoot() {
 // section 4.3). On by default; a per-device preference like the rest.
 const CHIME_KEY = "odm:turnChime";
 const CHIME_EVENT = "odm-turn-chime-pref";
+let chimeCache: boolean | null = null;
 
 export function readTurnChime(): boolean {
-  return typeof window === "undefined" ? true : window.localStorage.getItem(CHIME_KEY) !== "off";
+  if (typeof window === "undefined") {
+    return true;
+  }
+  if (chimeCache === null) {
+    chimeCache = window.localStorage.getItem(CHIME_KEY) !== "off";
+  }
+  return chimeCache;
 }
 
 export function writeTurnChime(on: boolean) {
   window.localStorage.setItem(CHIME_KEY, on ? "on" : "off");
+  chimeCache = null;
   window.dispatchEvent(new Event(CHIME_EVENT));
 }
 
+function subscribeTurnChime(listener: () => void) {
+  const changed = () => {
+    chimeCache = null;
+    listener();
+  };
+  window.addEventListener(CHIME_EVENT, changed);
+  window.addEventListener("storage", changed);
+  return () => {
+    window.removeEventListener(CHIME_EVENT, changed);
+    window.removeEventListener("storage", changed);
+  };
+}
+
 export function useTurnChime(): boolean {
-  return useSyncExternalStore(
-    (listener) => {
-      window.addEventListener(CHIME_EVENT, listener);
-      window.addEventListener("storage", listener);
-      return () => {
-        window.removeEventListener(CHIME_EVENT, listener);
-        window.removeEventListener("storage", listener);
-      };
-    },
-    readTurnChime,
-    () => true,
-  );
+  return useSyncExternalStore(subscribeTurnChime, readTurnChime, () => true);
 }
 
 // Reduced motion is the master switch: when the OS asks for it, the board

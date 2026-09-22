@@ -1,5 +1,5 @@
 import { isErrorResponse, requireMember } from "@/lib/campaign-api";
-import { listEventsSince, sseChunk, subscribe } from "@/lib/events";
+import { forEachEventSince, sseChunk, subscribe } from "@/lib/events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,10 +37,13 @@ export async function GET(
         }
       };
 
-      // Replay persisted events missed while disconnected, then go live.
-      for (const event of listEventsSince(campaignId, lastSeq)) {
+      // Replay every persisted event missed while disconnected, batch after
+      // batch until none are left, then go live. Stopping at one batch left
+      // a gap after a long absence that the client's seq guard (which only
+      // rejects duplicates) could not see.
+      forEachEventSince(campaignId, lastSeq, (event) => {
         send(sseChunk(event.type, event.payload, event.seq));
-      }
+      });
 
       // The member's id rides along so the bus can keep the campaign's
       // online set and announce joins and leaves (presence ephemeral).

@@ -39,11 +39,43 @@ import { generateStoryArc } from "@/lib/dm/arc";
 import { getDmStatus } from "@/lib/dm/status";
 import { listUtilityCalls } from "@/lib/dm/call-tracker";
 import { listBlockedUserIds } from "@/lib/db/moderation";
-import { publishPersisted, publishWithSeq } from "@/lib/events";
+import { xCardRaised } from "@/lib/dm/safety";
+import { latestEventOfType, publishPersisted, publishWithSeq } from "@/lib/events";
+import type { HandoutShown, TitleCard } from "@/lib/scene/state";
 import { listNarrationAudio } from "@/lib/tts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+// The handout on the table right now: the newest one shown, unless a later
+// dismissal named it (or "*", which takes down whatever is up). Both live
+// only as persisted events (src/lib/dm/scene-state.ts), so the snapshot
+// reads them back from the log rather than keeping a second copy.
+function handoutOnTable(campaignId: string): HandoutShown | null {
+  const shown = latestEventOfType(campaignId, ["handout_shown"]);
+  if (!shown) {
+    return null;
+  }
+  const handout = shown.payload as HandoutShown;
+  const dismissed = latestEventOfType(campaignId, ["handout_dismissed"]);
+  const dismissedId = (dismissed?.payload as { id?: string } | null)?.id;
+  const takenDown =
+    dismissed !== null &&
+    dismissed.seq > shown.seq &&
+    (dismissedId === "*" || dismissedId === handout.id);
+  return takenDown ? null : handout;
+}
+
+// The X-card pause, if the table is under one. The DM queue's gate is the
+// truth of whether play is paused; the event only supplies when it began.
+function safetyPauseOnTable(campaignId: string): { at: number; reason: "x_card" } | null {
+  if (!xCardRaised(campaignId)) {
+    return null;
+  }
+  const raised = latestEventOfType(campaignId, ["x_card"]);
+  const at = Number((raised?.payload as { at?: number } | null)?.at);
+  return { at: Number.isFinite(at) ? at : Date.now(), reason: "x_card" };
+}
 
 export async function GET(
   _request: Request,
@@ -101,6 +133,13 @@ export async function GET(
     // The sky over the table: hour and weather, so the board and the scene
     // art are lit right from a fresh load (src/lib/dm/sky.ts).
     scene: currentScene(campaign),
+    // What a late joiner walks in on. These are persisted as events, but a
+    // fresh load opens its stream at latestSeq, so nothing earlier is ever
+    // replayed to it; the snapshot is the only way in. The title card
+    // carries its own stamp and the overlay skips one older than a minute.
+    handout: handoutOnTable(campaignId),
+    safetyPause: safetyPauseOnTable(campaignId),
+    titleCard: (latestEventOfType(campaignId, ["title_card"])?.payload as TitleCard | null) ?? null,
     // What this seat may see and do, so the client never re-derives it from
     // ids and never shows a control the server would refuse.
     caps,

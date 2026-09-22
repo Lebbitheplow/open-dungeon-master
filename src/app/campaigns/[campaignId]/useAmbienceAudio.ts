@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { cueById } from "@/lib/ambience/catalog";
 import type { AmbienceState } from "@/lib/ambience/logic";
-import { registerOutput } from "@/lib/audio-devices";
+import { registerOutput, releaseOutput } from "@/lib/audio-devices";
 import { AUDIO_PREF_FIELDS, hydrateAudioPrefs, writeAudioPref } from "@/lib/audio-prefs";
 
 // Plays what the table is hearing, in this browser, at this listener's own
@@ -29,6 +29,10 @@ const FADE_TICK_MS = 50;
 // How far ambience drops while the DM's narration is being read aloud. Not
 // silence: the room should still be there behind the voice.
 const DUCK = 0.3;
+// Stings reuse a few elements rather than making one per sound: an element
+// stays registered with the output router for as long as it exists, so a
+// long fight's worth of hits would otherwise pile up there.
+const STING_POOL = 3;
 
 function subscribePrefs(callback: () => void) {
   window.addEventListener(PREFS_EVENT, callback);
@@ -110,6 +114,7 @@ export function useAmbienceAudio(
   });
   // The last sting timestamp acted on, so a re-render never sounds it twice.
   const stingAtRef = useRef(0);
+  const stingPoolRef = useRef<HTMLAudioElement[]>([]);
 
   // What one layer should be playing at right now, before any fade.
   const targetVolume = useCallback(
@@ -201,6 +206,7 @@ export function useAmbienceAudio(
         ramp(outgoing, outgoing.volume, () => 0, () => {
           outgoing.pause();
           outgoing.src = "";
+          releaseOutput(outgoing);
         });
       }
       layer.cueId = cueId;
@@ -226,6 +232,7 @@ export function useAmbienceAudio(
           }
           layer.cueId = null;
           layer.audio = null;
+          releaseOutput(audio);
         }
       });
     }
@@ -272,37 +279,60 @@ export function useAmbienceAudio(
     if (!url) {
       return;
     }
-    const audio = registerOutput(new Audio(url));
+    // An idle element from the pool, a new one while the pool is short, or
+    // the oldest one cut short: a sting that lands on top of three others
+    // is not one anybody would miss.
+    const pool = stingPoolRef.current;
+    let audio = pool.find((entry) => entry.paused || entry.ended);
+    if (!audio) {
+      if (pool.length < STING_POOL) {
+        audio = registerOutput(new Audio());
+        pool.push(audio);
+      } else {
+        audio = pool[0];
+        pool.push(...pool.splice(0, 1));
+      }
+    }
+    audio.src = url;
     audio.volume = Math.min(1, volume * (cueById(sting.cue)?.gain ?? 0.7));
     void audio.play().catch(() => {});
   }, [sting, urls, enabled, muted, unlocked, volume]);
 
-  // Unmount: stop everything this hook started. Nothing here is shared, so
-  // a torn-down session never leaves a loop running behind the lobby.
+  // Unmount: stop everything this hook started and let the output router
+  // forget the elements. Nothing here is shared, so a torn-down session
+  // never leaves a loop running behind the lobby.
   useEffect(() => {
     const layers = layersRef.current;
+    const pool = stingPoolRef.current;
     return () => {
       for (const name of ["bed", "music"] as const) {
         const layer = layers[name];
         if (layer.fade) {
           clearInterval(layer.fade);
         }
-        layer.audio?.pause();
+        if (layer.audio) {
+          layer.audio.pause();
+          layer.audio.src = "";
+          releaseOutput(layer.audio);
+        }
         layer.cueId = null;
         layer.audio = null;
         layer.fade = null;
       }
+      for (const audio of pool) {
+        audio.pause();
+        audio.src = "";
+        releaseOutput(audio);
+      }
+      pool.length = 0;
     };
   }, []);
 
-  return {
-    muted,
-    volume,
-    unlocked,
-    installed: Boolean(urls && Object.keys(urls).length),
-    setMuted,
-    setVolume,
-    unlock,
-    setDucked,
-  };
+  const installed = Boolean(urls && Object.keys(urls).length);
+  // One object per real change, so the memoized header is not handed a new
+  // ambience prop on every table render.
+  return useMemo(
+    () => ({ muted, volume, unlocked, installed, setMuted, setVolume, unlock, setDucked }),
+    [muted, volume, unlocked, installed, setMuted, setVolume, unlock, setDucked],
+  );
 }

@@ -13,6 +13,8 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { imageSize, sniffImage as sniffImageFormat } from "@/lib/image-format";
+import { scheduleImageVariants } from "@/lib/image-variants";
 import type { AspectPreset, GeneratedImage, ImageMode } from "@/lib/types";
 import { buildChildEnv } from "./child-env.ts";
 import { childPath } from "./discover.ts";
@@ -23,52 +25,17 @@ export const MAX_HARNESS_IMAGE_BYTES = 8 * 1024 * 1024;
 const PICTURE_TIMEOUT_MS = 5 * 60_000;
 
 // Magic bytes, not a declared type: the program is not trusted to name what
-// it wrote. Pure, so scripts/test-harness-images.mjs can pin it.
+// it wrote. The sniffing itself lives in src/lib/image-format.ts, shared
+// with the OpenAI backend and the variant writer; this keeps the shape
+// scripts/test-harness-logic.mjs pins.
 export function sniffImage(bytes: Buffer): { mime: string; ext: string } | null {
-  if (bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
-    return { mime: "image/png", ext: "png" };
-  }
-  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
-    return { mime: "image/jpeg", ext: "jpg" };
-  }
-  if (bytes.length >= 12 && bytes.subarray(0, 4).toString("ascii") === "RIFF" && bytes.subarray(8, 12).toString("ascii") === "WEBP") {
-    return { mime: "image/webp", ext: "webp" };
-  }
-  return null;
+  const kind = sniffImageFormat(bytes);
+  return kind ? { mime: kind.mime, ext: kind.ext } : null;
 }
 
 // Width and height from the header, so the picture is sized honestly
 // without a decoder. Returns 0x0 when the header is not one we read.
-export function imageSize(bytes: Buffer): { width: number; height: number } {
-  const kind = sniffImage(bytes);
-  if (kind?.ext === "png" && bytes.length >= 24) {
-    return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
-  }
-  if (kind?.ext === "jpg") {
-    let offset = 2;
-    while (offset + 9 < bytes.length) {
-      if (bytes[offset] !== 0xff) {
-        break;
-      }
-      const marker = bytes[offset + 1];
-      const length = bytes.readUInt16BE(offset + 2);
-      if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
-        return { height: bytes.readUInt16BE(offset + 5), width: bytes.readUInt16BE(offset + 7) };
-      }
-      offset += 2 + length;
-    }
-  }
-  if (kind?.ext === "webp" && bytes.length >= 30) {
-    const chunk = bytes.subarray(12, 16).toString("ascii");
-    if (chunk === "VP8X") {
-      return { width: 1 + bytes.readUIntLE(24, 3), height: 1 + bytes.readUIntLE(27, 3) };
-    }
-    if (chunk === "VP8 ") {
-      return { width: bytes.readUInt16LE(26) & 0x3fff, height: bytes.readUInt16LE(28) & 0x3fff };
-    }
-  }
-  return { width: 0, height: 0 };
-}
+export { imageSize };
 
 export function acceptImage(bytes: Buffer | null | undefined): { bytes: Buffer; ext: string } | null {
   if (!bytes || bytes.length < 64 || bytes.length > MAX_HARNESS_IMAGE_BYTES) {
@@ -228,7 +195,9 @@ export async function generateHarnessImage(options: {
   const generatedDir = path.join(process.cwd(), "public", "generated");
   mkdirSync(generatedDir, { recursive: true });
   const filename = `${Date.now()}-harness-${slug(options.prompt)}.${accepted.ext}`;
-  writeFileSync(path.join(generatedDir, filename), accepted.bytes);
+  const saved = path.join(generatedDir, filename);
+  writeFileSync(saved, accepted.bytes);
+  scheduleImageVariants(saved);
   const size = imageSize(accepted.bytes);
   return {
     id: randomUUID(),

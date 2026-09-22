@@ -5,6 +5,8 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { ImageOff, ImagePlus, Loader2, RefreshCw, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { cn } from "@/lib/cn";
+import { encodeImageForUpload } from "@/lib/image-encode";
+import { variantUrl } from "@/lib/image-format";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
@@ -86,16 +88,11 @@ export function MapPanel({
     setUploading(true);
     setRegenerateError("");
     try {
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result));
-        reader.onerror = () => reject(new Error("read failed"));
-        reader.readAsDataURL(file);
-      });
+      const { dataUrl, type } = await encodeImageForUpload(file);
       const uploaded = await fetch("/api/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dataUrl, name: file.name, type: file.type }),
+        body: JSON.stringify({ dataUrl, name: file.name, type }),
       });
       const payload = await uploaded.json().catch(() => ({}));
       if (!uploaded.ok) {
@@ -258,8 +255,10 @@ export function MapPanel({
                   animated scene without a video asset. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={shown.mapImage.url}
+                src={variantUrl(shown.mapImage.url, 1024)}
                 alt={`Map of ${shown.name}`}
+                loading="lazy"
+                decoding="async"
                 className="ken-burns w-full"
               />
               <SkyLayer scene={scene} mode="art" />

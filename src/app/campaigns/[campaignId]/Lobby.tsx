@@ -18,6 +18,7 @@ import { LobbyRoomCode } from "@/app/campaigns/[campaignId]/LobbyRoomCode";
 import { LorePanel } from "@/app/campaigns/[campaignId]/LorePanel";
 import { RulesPanel } from "@/app/campaigns/[campaignId]/RulesPanel";
 import { VoicePanel } from "@/app/campaigns/[campaignId]/VoicePanel";
+import { useVoiceSpeaking } from "@/app/campaigns/[campaignId]/liveStore";
 import { resolveCompanionMode } from "@/lib/schemas/game-settings";
 import { isPrimaryDm, lobbyBlocker, partySlotCount, viewerCaps } from "@/lib/dm/viewer";
 import {
@@ -37,6 +38,7 @@ import { navigateTo } from "@/lib/navigation";
 // both columns are display: contents below lg, so their children interleave).
 export function Lobby({ state, refresh }: { state: CampaignState; refresh: () => void }) {
   const { campaign, me, members, sheets } = state;
+  const voiceSpeaking = useVoiceSpeaking();
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [buildingCompanion, setBuildingCompanion] = useState(false);
@@ -456,7 +458,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
                 campaignId={campaign.id}
                 meUserId={me.id}
                 roster={state.voiceRoster}
-                speaking={state.voiceSpeaking}
+                speaking={voiceSpeaking}
                 audibilityVersion={state.voiceAudibilityVersion}
                 meshSignal={state.voiceMeshSignal}
                 adjudicates={steersStory}
