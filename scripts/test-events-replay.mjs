@@ -7,6 +7,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { register } from "node:module";
+import { removeTempDir } from "./lib/remove-temp-dir.mjs";
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "odm-events-replay-"));
 process.env.SQLITE_DB_PATH = path.join(dir, "test.sqlite");
@@ -87,5 +88,8 @@ test("a dismissal lands after the handout it names", () => {
   assert.equal(dismissed.payload.id, "h1");
 });
 
-fs.rmSync(dir, { recursive: true, force: true });
+// Windows refuses to delete a database file that is still open, so the
+// connection goes first.
+globalThis.__localRoleplayDb?.close();
+removeTempDir(dir);
 console.log(`\n${passed} event replay tests passed.`);
