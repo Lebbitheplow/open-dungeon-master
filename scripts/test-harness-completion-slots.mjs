@@ -28,10 +28,12 @@ const messages = [
 ];
 
 const realRmSync = fs.rmSync;
-let refused = 0;
+// The run folders the bridge tried to remove; they are cleaned up at the end.
+const refusedFolders = [];
 fs.rmSync = (target, options) => {
-  if (String(target).includes("odm-harness-")) {
-    refused += 1;
+  const name = path.basename(String(target));
+  if (name.startsWith("odm-harness-") && !name.startsWith("odm-harness-slots-")) {
+    refusedFolders.push(String(target));
     const error = new Error(`EBUSY: resource busy or locked, rmdir '${target}'`);
     error.code = "EBUSY";
     throw error;
@@ -40,7 +42,6 @@ fs.rmSync = (target, options) => {
 };
 syncBuiltinESMExports();
 
-const leftovers = [];
 try {
   for (let call = 1; call <= 4; call += 1) {
     const started = Date.now();
@@ -50,17 +51,15 @@ try {
     assert.equal(result.message.content, "The fake Dungeon Master narrates.");
     assert.ok(took < 5_000, `call ${call} waited ${took} ms for a slot`);
   }
-  assert.ok(refused >= 4, "every run tried to remove its folder");
+  assert.ok(refusedFolders.length >= 4, "every run tried to remove its folder");
 } finally {
   fs.rmSync = realRmSync;
   syncBuiltinESMExports();
-  for (const entry of fs.readdirSync(os.tmpdir())) {
-    if (entry.startsWith("odm-harness-")) {
-      leftovers.push(path.join(os.tmpdir(), entry));
-    }
-  }
-  for (const folder of leftovers) {
-    fs.rmSync(folder, { recursive: true, force: true });
+  // Only the folders this test refused: the fake program holds nothing open,
+  // so they go quietly. The test's own folder (the open database) is not
+  // among them; removeTempDir handles that one on every platform.
+  for (const folder of new Set(refusedFolders)) {
+    removeTempDir(folder);
   }
 }
 removeTempDir(dir);
