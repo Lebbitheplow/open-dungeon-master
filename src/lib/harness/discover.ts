@@ -5,7 +5,7 @@
 // the admin's explicit path, then PATH, then the login shell's PATH, then the
 // folders the installers actually use.
 
-import { execFile } from "node:child_process";
+import { spawn } from "node:child_process";
 import { accessSync, constants, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -108,18 +108,37 @@ export async function loginShellPath(): Promise<string> {
   }
   const shell = process.env.SHELL || (existsSync("/bin/bash") ? "/bin/bash" : "/bin/sh");
   const value = await new Promise<string>((resolve) => {
-    execFile(
-      shell,
-      ["-ilc", 'printf "__ODM_PATH__%s__ODM_END__" "$PATH"'],
-      {
-        timeout: 3_000,
-        env: { HOME: os.homedir(), USER: process.env.USER ?? "", SHELL: shell, TERM: "dumb" } as unknown as NodeJS.ProcessEnv,
-      },
-      (_error: unknown, stdout: string | Buffer) => {
-        const match = /__ODM_PATH__([\s\S]*?)__ODM_END__/.exec(String(stdout ?? ""));
-        resolve(match ? match[1] : "");
-      },
-    );
+    // Its own session, with no terminal: an interactive shell takes the
+    // terminal it shares for job control, and a second one started meanwhile
+    // (every program is probed at once) stops the server with SIGTTIN.
+    const child = spawn(shell, ["-ilc", 'printf "__ODM_PATH__%s__ODM_END__" "$PATH"'], {
+      env: { HOME: os.homedir(), USER: process.env.USER ?? "", SHELL: shell, TERM: "dumb" } as unknown as NodeJS.ProcessEnv,
+      stdio: ["ignore", "pipe", "ignore"],
+      detached: true,
+    });
+    let stdout = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      stdout += chunk;
+    });
+    const answer = () => {
+      const match = /__ODM_PATH__([\s\S]*?)__ODM_END__/.exec(stdout);
+      resolve(match ? match[1] : "");
+    };
+    // Whatever arrived by then is the answer: something the profile started
+    // can hold the pipe open long after the shell is done.
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      answer();
+    }, 3_000);
+    child.on("close", () => {
+      clearTimeout(timer);
+      answer();
+    });
+    child.on("error", () => {
+      clearTimeout(timer);
+      resolve("");
+    });
   });
   globalThis.__odmLoginShellPath = { value, at: Date.now() };
   return value;
