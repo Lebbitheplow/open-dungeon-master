@@ -1038,6 +1038,16 @@ export function resolvePendingPcAttack(pending: PendingRoll, roll: StoredRoll): 
   if (!campaign || !turn) {
     return null;
   }
+  // A to-hit roll still parked when the turn moved on (the lead skipped it,
+  // the order was edited) must not land on a later turn as though nothing
+  // had happened: the player declared it on a turn that is over.
+  const fight = getActiveEncounter(pending.campaignId);
+  if (fight?.orderReady) {
+    const current = fight.order[fight.turnIndex];
+    if (!current || current.kind !== "pc" || current.characterId !== pending.characterId) {
+      return `${context.attacker}'s ${context.weapon} attack was still unrolled when their turn ended, so it does not land. No damage roll happens; narrate the moment passing.`;
+    }
+  }
   const adjudicated = adjudicateHit(roll.total, roll.breakdown.crit, context.targetAc, {
     natural: roll.breakdown.natural,
     critRange: context.critRange,

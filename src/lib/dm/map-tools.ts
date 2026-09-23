@@ -398,6 +398,17 @@ export function handleMoveToken(
       error: `${resolved.token.name} is a player character; players move their own tokens. Pass forced:true only when something pushes, drags, or carries them.`,
     };
   }
+  // On their own turn the player moves from the board; a "forced" move here
+  // is the model walking a character for them (issue 17: a token that moved
+  // with no input). Pushes and drags happen on somebody else's turn.
+  if (resolved.kind === "pc" && args.forced && encounter.orderReady) {
+    const current = encounter.order[encounter.turnIndex];
+    if (current?.kind === "pc" && current.characterId === resolved.token.refId) {
+      return {
+        error: `It is ${resolved.token.name}'s own turn; they move their own token from the board. Forced movement is for a push, drag or carry on someone else's turn. Ask what they do, or use teleport_token for a magical relocation.`,
+      };
+    }
+  }
   if (args.x < 0 || args.y < 0 || args.x >= map.width || args.y >= map.height) {
     return { error: `(${args.x},${args.y}) is outside the ${map.width}x${map.height} map.` };
   }
