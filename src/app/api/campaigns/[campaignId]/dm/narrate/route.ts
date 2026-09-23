@@ -3,7 +3,7 @@ import { isErrorResponse, requireDm } from "@/lib/campaign-api";
 import { allocateSeq, getFloor, setFloor } from "@/lib/db/campaigns";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { maybeCloseChapter } from "@/lib/dm/chapter-close";
-import { maybeCompactHistory } from "@/lib/dm/compaction";
+import { compactHistoryInBackground } from "@/lib/dm/compaction";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { enqueueNarrationAudio } from "@/lib/tts";
@@ -101,11 +101,12 @@ export async function POST(
     );
   }
 
-  // Chapter and compaction upkeep runs on the campaign queue, off the
-  // request, so a long summary never makes the DM wait to hit send.
+  // Chapter upkeep runs on the campaign queue, off the request, so a long
+  // summary never makes the DM wait to hit send; compaction runs beside the
+  // queue so it never makes the next turn wait either.
   enqueueDmJob(campaignId, async () => {
     await maybeCloseChapter(campaignId, { beatCompleted: false });
-    await maybeCompactHistory(campaignId);
+    compactHistoryInBackground(campaignId);
   });
 
   return Response.json({ messageId: message.id }, { status: 201 });

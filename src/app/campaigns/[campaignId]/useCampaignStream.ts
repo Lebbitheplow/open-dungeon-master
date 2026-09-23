@@ -1285,7 +1285,13 @@ export function useCampaignStream(campaignId: string) {
           }
           // encounter_updated too: the map exists the moment
           // start_encounter lands, before any battle_map_updated ping.
-          if (eventType === "battle_map_updated" || eventType === "encounter_updated") {
+          // floor_changed as well: the reachable tiles and "your turn" on
+          // the board follow the floor, and went stale without this.
+          if (
+            eventType === "battle_map_updated" ||
+            eventType === "encounter_updated" ||
+            eventType === "floor_changed"
+          ) {
             void refreshBattleMap();
           }
           if (eventType === "map_ping") {

@@ -135,6 +135,13 @@ export function canAct(floor: Floor, userId: string, kind: string): boolean {
   return floor.userIds.includes(userId);
 }
 
+// Whether a running fight owns the floor: initiative itself, or a hold that
+// opens back into it. Anything reshaping the floor while this is true must
+// derive the result from the initiative pointer instead of overwriting it.
+export function combatOwnsFloor(floor: Floor): boolean {
+  return floor.mode === "initiative" || (floor.mode === "hold" && floor.next.mode === "initiative");
+}
+
 function normalizeInitiative(raw: unknown): InitiativeFloor | null {
   const floor = raw as InitiativeFloor | null;
   if (

@@ -339,12 +339,20 @@ export class BridgeSession {
     } catch {
       // Already gone.
     }
-    try {
-      rmSync(this.cwd, { recursive: true, force: true });
-    } catch {
-      // Best effort; it is a temp folder.
-    }
+    removeRunDir(this.cwd);
     this.onClose(this);
+  }
+}
+
+// The run folder is the program's working directory. On Windows it cannot
+// be removed while the program is still going down, and a throw from here
+// must never carry a concurrency slot away with it (issue 16: two leaked
+// slots and every later summary waited out the whole timeout).
+function removeRunDir(cwd: string) {
+  try {
+    rmSync(cwd, { recursive: true, force: true });
+  } catch {
+    // Best effort; it is a temp folder.
   }
 }
 
@@ -543,7 +551,7 @@ async function prepareRun(context: HarnessRequestContext) {
   const env = buildChildEnv(process.env, config.id, await childPath(binary), { HOME: os.homedir() });
   const leak = leaksServerSecret(env, process.env);
   if (leak) {
-    rmSync(cwd, { recursive: true, force: true });
+    removeRunDir(cwd);
     return { error: harnessError(`Refused to start: ${leak} would have reached the program.`, "lockdown") } as const;
   }
   const model =
@@ -564,7 +572,7 @@ async function startSession(
   const { config, binary, cwd, env, model, adapter } = prepared;
   const kind = context.turn ? "turn" : "other";
   if (!(await acquireSlot(kind, config.maxConcurrent, timeoutMs))) {
-    rmSync(cwd, { recursive: true, force: true });
+    removeRunDir(cwd);
     return { error: harnessError("Every agent slot is busy with other tables; try again in a moment.", "timeout") };
   }
   const token = randomBytes(32).toString("base64url");
@@ -626,13 +634,15 @@ async function completeWithHarness(
   }
   const { config, binary, cwd, env, model, adapter } = prepared;
   if (!(await acquireSlot("other", config.maxConcurrent, timeoutMs))) {
-    rmSync(cwd, { recursive: true, force: true });
+    removeRunDir(cwd);
     return { error: harnessError("Every agent slot is busy; try again in a moment.", "timeout") };
   }
   const rendered = renderCompletion(messages);
   let program: HarnessSession | null = null;
   let text = "";
-  const outcome = await new Promise<UpstreamResult>((resolve) => {
+  let outcome: UpstreamResult;
+  try {
+    outcome = await new Promise<UpstreamResult>((resolve) => {
     let settled = false;
     const settle = (result: UpstreamResult) => {
       if (!settled) {
@@ -682,13 +692,17 @@ async function completeWithHarness(
           error: harnessError(error instanceof Error ? error.message : "The agent program could not start.", "crash"),
         }),
       );
-  });
-  try {
-    (program as HarnessSession | null)?.close();
-  } catch {
-    // Already gone.
+    });
+  } finally {
+    // The slot is released whatever happened above, or the pool shrinks by
+    // one for the rest of the server's life.
+    try {
+      (program as HarnessSession | null)?.close();
+    } catch {
+      // Already gone.
+    }
+    removeRunDir(cwd);
+    releaseSlot("other");
   }
-  rmSync(cwd, { recursive: true, force: true });
-  releaseSlot("other");
   return outcome;
 }

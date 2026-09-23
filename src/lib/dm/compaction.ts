@@ -82,15 +82,70 @@ function milestoneBlock(campaignId: string, coveredThroughSeq: number): string {
   return block.trimEnd();
 }
 
-export async function maybeCompactHistory(campaignId: string) {
+// Compaction is upkeep, not a turn: it runs beside the campaign's DM queue
+// rather than on it, so a slow or failing summary never keeps the next turn
+// waiting (issue 16: a table sat at "thinking" for the whole model timeout
+// after every message once the log passed the threshold). One run per
+// campaign at a time, and a run that failed is not tried again for
+// COMPACT_RETRY_MS, because every later turn would otherwise start it
+// afresh and pay the same wait.
+const COMPACT_RETRY_MS = Number(process.env.DM_COMPACT_RETRY_MS || 10 * 60_000);
+
+type CompactionState = { inFlight: boolean; failedAt: number };
+
+declare global {
+  var __odmCompaction: Map<string, CompactionState> | undefined;
+}
+
+function compactionState(campaignId: string): CompactionState {
+  const map = (globalThis.__odmCompaction ??= new Map<string, CompactionState>());
+  let state = map.get(campaignId);
+  if (!state) {
+    state = { inFlight: false, failedAt: 0 };
+    map.set(campaignId, state);
+  }
+  return state;
+}
+
+// Starts a compaction for the campaign unless one is running or the last
+// one failed too recently. Returns whether a run was started. `run` and
+// `now` are injectable for scripts/test-compaction-background.mjs.
+export function compactHistoryInBackground(
+  campaignId: string,
+  run: (campaignId: string) => Promise<boolean> = maybeCompactHistory,
+  now = Date.now(),
+): boolean {
+  const state = compactionState(campaignId);
+  if (state.inFlight || now - state.failedAt < COMPACT_RETRY_MS) {
+    return false;
+  }
+  state.inFlight = true;
+  void run(campaignId)
+    .then((ok) => {
+      state.failedAt = ok ? 0 : Date.now();
+    })
+    .catch((error) => {
+      console.error(`[compaction] failed for campaign ${campaignId}:`, error);
+      state.failedAt = Date.now();
+    })
+    .finally(() => {
+      state.inFlight = false;
+    });
+  return true;
+}
+
+// Folds the oldest uncovered passages into the summary when the log is
+// long enough. False only when the model gave nothing back; a log that is
+// still short is not a failure.
+export async function maybeCompactHistory(campaignId: string): Promise<boolean> {
   const campaign = getCampaignById(campaignId);
   const total = campaign ? countMessages(campaignId) : 0;
   if (!campaign || total < COMPACT_THRESHOLD) {
-    return;
+    return true;
   }
   const { summary, coveredCount } = getCampaignSummaryState(campaignId);
   if (total - coveredCount < COMPACT_THRESHOLD) {
-    return;
+    return true;
   }
 
   const batch = listMessagesPage(campaignId, coveredCount, COMPACT_BATCH);
@@ -137,7 +192,10 @@ export async function maybeCompactHistory(campaignId: string) {
   );
 
   const updated = extractStoryText(message?.content);
-  if (updated) {
+  if (!updated) {
+    return false;
+  }
+  {
     // Structural protection, not a request: the milestone block is appended
     // to the stored summary after the model has spoken, so a summarizer that
     // ignored the hint (or a small utility model that paraphrased a death
@@ -149,6 +207,7 @@ export async function maybeCompactHistory(campaignId: string) {
     setCampaignSummaryState(campaignId, `${body}${block}`, coveredCount + batch.length);
     await extractCharacterEvents(campaign, transcript);
   }
+  return true;
 }
 
 // Second pass: mine the compacted transcript for lasting per-character

@@ -5,7 +5,10 @@ import { breakDown } from "@/lib/dm/calendar";
 import { effectiveAmbient } from "@/lib/battlemap/daylight";
 import { weatherObscurementTiles } from "@/lib/srd/weather";
 import { listEffects } from "@/lib/db/active-effects";
-import { getActiveBoard, getActiveEncounter, listEnemies } from "@/lib/db/encounters";
+import { getActiveBoard, getActiveEncounter, listEnemies, type Encounter } from "@/lib/db/encounters";
+import { speedFor } from "@/lib/srd";
+import { effectiveSpeed, exhaustionSpeed } from "@/lib/dm/condition-logic";
+import { budgetApplies } from "@/lib/dm/action-budget";
 import { getSheetForUser, listSheets } from "@/lib/db/sheets";
 import { footprintForSize, footprintIndexes, type Footprint } from "@/lib/battlemap/footprint";
 import { healthWord, type HealthWord } from "@/lib/battlemap/health-words";
@@ -196,6 +199,33 @@ function canMoveNow(campaignId: string, characterId: string): boolean {
   return current?.kind === "pc" && current.characterId === characterId;
 }
 
+// Movement left this round for a player character, in tiles, and the speed
+// it comes from. The one computation the board's highlights and the move
+// route both use: conditions, exhaustion, armor and the Dash action all
+// count, so no lit tile is refused and no Dash tile goes unlit (issue 17).
+export function pcMoveBudget(
+  campaignId: string,
+  encounter: Encounter,
+  map: BattleMap,
+  sheet: CharacterSheet,
+  token: BattleToken,
+): { speed: number; tiles: number } {
+  const campaign = getCampaignById(campaignId);
+  const base = speedFor(sheet, {
+    encumbrance: campaign?.gameSettings.variantRules.encumbrance ?? false,
+  });
+  const speed = exhaustionSpeed(sheet.exhaustion ?? 0, effectiveSpeed(sheet.conditions, base));
+  // A scene has no rounds, so there is no per-round budget to spend: the
+  // party walks the board while the DM describes it.
+  if (encounter.kind === "scene") {
+    return { speed, tiles: map.width * map.height };
+  }
+  const dashed = budgetApplies(encounter.turnBudget, sheet.id, encounter.round)
+    ? Boolean(encounter.turnBudget?.dashed)
+    : false;
+  return { speed, tiles: Math.max(0, speedToTiles(speed) * (dashed ? 2 : 1) - token.movedThisRound) };
+}
+
 // The board on the table, fight or scene. Only the map layer asks this
 // question; everything that enforces a combat rule keeps asking
 // getActiveEncounter, which never answers with a scene.
@@ -336,10 +366,7 @@ export function buildPlayerMapView(
   let reachable: number[] = [];
   let budgetLeft = 0;
   if (!fullVision && sheet && myToken && sheet.currentHp > 0 && canMoveNow(campaignId, sheet.id)) {
-    budgetLeft =
-      encounter.kind === "scene"
-        ? tileCount
-        : Math.max(0, speedToTiles(sheet.speed) - myToken.movedThisRound);
+    budgetLeft = pcMoveBudget(campaignId, encounter, map, sheet, myToken).tiles;
     if (budgetLeft > 0) {
       const occupied = occupiedTiles(map, tokens, myToken, footprintLookup(enemiesById));
       reachable = [

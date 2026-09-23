@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { capsFor, isErrorResponse, requireMember } from "@/lib/campaign-api";
 import { getFloor } from "@/lib/db/campaigns";
-import { getActiveBoard } from "@/lib/db/encounters";
+import { getActiveBoard, listEnemies } from "@/lib/db/encounters";
 import { getSheetForUser } from "@/lib/db/sheets";
 import {
   getBattleMapForEncounter,
@@ -9,17 +9,15 @@ import {
   listTokens,
   moveToken,
 } from "@/lib/db/battle-maps";
-import { buildPlayerMapView, occupiedTiles } from "@/lib/battlemap/view";
-import { reachableTiles, speedToTiles } from "@/lib/battlemap/movement";
+import { buildPlayerMapView, footprintLookup, occupiedTiles, pcMoveBudget } from "@/lib/battlemap/view";
+import { reachableTiles } from "@/lib/battlemap/movement";
 import { tileIndex } from "@/lib/battlemap/types";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import { publishFx } from "@/lib/dm/fx";
 import { planDoorFx } from "@/lib/battlemap/fx-plan";
-import { effectiveSpeed, exhaustionSpeed } from "@/lib/dm/condition-logic";
 import { getCampaignById } from "@/lib/db/campaigns";
 import { budgetApplies } from "@/lib/dm/action-budget";
 import { resolveOpportunityAttacks } from "@/lib/dm/opportunity";
-import { speedFor } from "@/lib/srd";
 
 export const runtime = "nodejs";
 
@@ -105,11 +103,9 @@ export async function POST(
   // Grappled/restrained/paralyzed... = speed 0; exhaustion 2+ halves speed
   // and 5+ zeroes it. speedFor applies the class bonuses with their armor
   // gates and the heavy-armor Strength penalty, and the Dash action doubles
-  // whatever is left. The server refuses impossible moves.
-  const base = speedFor(sheet, {
-    encumbrance: campaign?.gameSettings.variantRules.encumbrance ?? false,
-  });
-  const speed = exhaustionSpeed(sheet.exhaustion ?? 0, effectiveSpeed(sheet.conditions, base));
+  // whatever is left. The same computation lights the board's reachable
+  // tiles, so a tile the player was shown is never refused here.
+  const { speed, tiles: budget } = pcMoveBudget(campaignId, encounter, map, sheet, token);
   if (speed <= 0) {
     const cause =
       sheet.conditions.join(", ") ||
@@ -124,13 +120,9 @@ export async function POST(
     !scene && budgetApplies(encounter.turnBudget, sheet.id, encounter.round)
       ? encounter.turnBudget
       : null;
-  const dashed = turnState?.dashed ?? false;
-  // A scene has no rounds, so there is no per-round budget to spend: the
-  // party walks the board while the DM describes it.
-  const budget = scene
-    ? map.width * map.height
-    : Math.max(0, speedToTiles(speed) * (dashed ? 2 : 1) - token.movedThisRound);
-  const occupied = occupiedTiles(map, listTokens(map.id), token);
+  // Large enemies hold every square of their footprint, as the board shows.
+  const enemiesById = new Map(listEnemies(encounter.id).map((enemy) => [enemy.id, enemy]));
+  const occupied = occupiedTiles(map, listTokens(map.id), token, footprintLookup(enemiesById));
   const reach = reachableTiles(
     map.terrain,
     map.width,

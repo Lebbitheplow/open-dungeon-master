@@ -24,9 +24,9 @@ export const CLAUDE_MODELS: HarnessModel[] = [
   { id: "claude-haiku-4-5", label: "Claude Haiku 4.5", contextTokens: 200_000, cheap: true },
 ];
 
-// Pure, so scripts/test-harness-args.mjs can pin every lockdown flag.
+// Pure, so scripts/test-harness-logic.mjs can pin every lockdown flag.
 export function claudeArgs(options: {
-  system: string;
+  systemPromptPath: string;
   model: string;
   effort: string;
   mcpConfigPath: string | null;
@@ -39,8 +39,8 @@ export function claudeArgs(options: {
     "stream-json",
     "--verbose",
     "--include-partial-messages",
-    "--system-prompt",
-    options.system,
+    "--system-prompt-file",
+    options.systemPromptPath,
     "--tools",
     "",
     "--strict-mcp-config",
@@ -100,8 +100,14 @@ async function start(options: HarnessStartOptions) {
       { mode: 0o600 },
     );
   }
+  // The system prompt goes by file as well. A campaign's prompt runs to
+  // tens of kilobytes, and Windows caps a whole command line at 32 K
+  // characters (Linux caps one argument at 128 K), so on argv the program
+  // could not start at all.
+  const systemPromptPath = path.join(options.cwd, "odm-system-prompt.md");
+  writeFileSync(systemPromptPath, options.system, { mode: 0o600 });
   const args = claudeArgs({
-    system: options.system,
+    systemPromptPath,
     model: options.model,
     effort: options.effort,
     mcpConfigPath,

@@ -105,7 +105,7 @@ import {
   updateCurrentLocationDetails,
   upsertCurrentLocation,
 } from "@/lib/db/locations";
-import { maybeCompactHistory } from "@/lib/dm/compaction";
+import { compactHistoryInBackground } from "@/lib/dm/compaction";
 import { createDeltaBatcher } from "@/lib/dm/delta-buffer";
 import {
   applyDmMutation,
@@ -117,6 +117,7 @@ import { describeBudget } from "@/lib/dm/action-budget";
 import { castBuffTool, handleCastBuff } from "@/lib/dm/cast-tools";
 import {
   advanceAfterTurn,
+  fightOwnsFloor,
   applyEncounterCall,
   ENCOUNTER_CAP_PER_TURN,
   ENCOUNTER_TOOL_NAMES,
@@ -929,8 +930,10 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       }
     }
 
-    // Spotlight: hand the floor to the named characters.
-    if (inputCalls.length && !spotlightSet) {
+    // Spotlight: hand the floor to the named characters. Not during a
+    // fight: the initiative order owns the floor there, and a spotlight
+    // would block the player whose turn it is (issue 17).
+    if (inputCalls.length && !spotlightSet && !fightOwnsFloor(campaignId)) {
       const floorUserIds = parseSpotlightUserIds(inputCalls[0].rawArguments, sheets, sheetsById);
       if (floorUserIds) {
         const floor = {
@@ -1607,7 +1610,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
   if (!failed) {
     await maybeCloseChapter(campaignId, { beatCompleted });
     if (isStageEnabled(context.campaign.gameSettings.stages, "compaction")) {
-      await maybeCompactHistory(campaignId);
+      compactHistoryInBackground(campaignId);
     }
     // The world-simulation heartbeat: pure dice, sparks land in the NEXT
     // turn's prompt, so background clocks never trigger model calls.
@@ -1714,7 +1717,7 @@ export function handleRequestPlayerInput(
 ): Record<string, unknown> {
   // Initiative owns the floor while a fight runs, exactly as the floor route
   // refuses there. Handing it to someone out of turn would break the order.
-  if (getFloor(campaign.id).mode === "initiative") {
+  if (fightOwnsFloor(campaign.id)) {
     return { error: "The initiative order has the floor while the fight runs." };
   }
   const parsed = parseSpotlightUserIds(rawArguments, sheets, sheetsById);

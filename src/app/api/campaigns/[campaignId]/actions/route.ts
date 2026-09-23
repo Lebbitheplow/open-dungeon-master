@@ -11,6 +11,7 @@ import {
 } from "@/lib/db/campaigns";
 import { countMessages, insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
 import { getSheetForUser, listSheets } from "@/lib/db/sheets";
+import { floorAfterRelease } from "@/lib/dm/encounter-tools";
 import { requestDmTurn } from "@/lib/dm/loop";
 import { coverInEffect } from "@/lib/dm/delegation";
 import { hasHumanDm } from "@/lib/dm/viewer";
@@ -106,8 +107,10 @@ export async function POST(
         ? [...floor.respondedUserIds, user.id]
         : floor.respondedUserIds;
     const allAnswered = floor.userIds.every((id) => responded.includes(id));
+    // Everyone answered: back to the fight's floor if one is running, else
+    // the open table.
     const nextFloor: Floor = allAnswered
-      ? { mode: "open" }
+      ? floorAfterRelease(campaignId)
       : { ...floor, respondedUserIds: responded };
     if (allAnswered || responded !== floor.respondedUserIds) {
       setFloor(campaignId, nextFloor);

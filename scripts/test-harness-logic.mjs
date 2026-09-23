@@ -134,7 +134,12 @@ test("the child environment is an allowlist: no server secret ever reaches a pro
 });
 
 test("Claude Code is started with no built-in tools and only ODM's MCP server", () => {
-  const args = claudeArgs({ system: "SYS", model: "sonnet", effort: "high", mcpConfigPath: "/tmp/run/odm-mcp.json" });
+  const args = claudeArgs({
+    systemPromptPath: "/tmp/run/odm-system-prompt.md",
+    model: "sonnet",
+    effort: "high",
+    mcpConfigPath: "/tmp/run/odm-mcp.json",
+  });
   const value = (flag) => args[args.indexOf(flag) + 1];
   assert.equal(value("--tools"), "", "every built-in tool removed");
   assert.ok(args.includes("--strict-mcp-config"), "the admin's own MCP servers ignored");
@@ -142,13 +147,14 @@ test("Claude Code is started with no built-in tools and only ODM's MCP server", 
   assert.equal(value("--permission-mode"), "dontAsk");
   assert.equal(value("--allowedTools"), `${CLAUDE_MCP_PREFIX}*`);
   assert.equal(value("--mcp-config"), "/tmp/run/odm-mcp.json");
-  assert.equal(value("--system-prompt"), "SYS", "the system prompt replaces the coding persona");
+  assert.equal(value("--system-prompt-file"), "/tmp/run/odm-system-prompt.md", "the system prompt replaces the coding persona");
+  assert.ok(!args.includes("--system-prompt"), "the prompt itself never rides on the command line (Windows caps it at 32 K)");
   assert.ok(args.includes("--no-session-persistence"), "no transcript of a secret story left on disk");
   assert.ok(args.includes("--disable-slash-commands"));
   assert.equal(JSON.parse(value("--settings")).disableAllHooks, true);
   assert.equal(CLAUDE_ENV.ENABLE_CLAUDEAI_MCP_SERVERS, "false");
   assert.ok(!args.some((arg) => arg.includes("Bearer")), "the token never appears on the command line");
-  const completion = claudeArgs({ system: "S", model: "", effort: "", mcpConfigPath: null });
+  const completion = claudeArgs({ systemPromptPath: "/tmp/run/odm-system-prompt.md", model: "", effort: "", mcpConfigPath: null });
   assert.ok(!completion.includes("--mcp-config"));
   assert.equal(completion[completion.indexOf("--tools") + 1], "");
 });

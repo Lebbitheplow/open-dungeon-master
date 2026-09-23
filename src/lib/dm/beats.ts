@@ -10,7 +10,7 @@ import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { arcTextTimeoutMs } from "@/lib/model-client";
 import { trackUtilityCall } from "@/lib/dm/call-tracker";
 import { maybeCloseChapter } from "@/lib/dm/chapter-close";
-import { maybeCompactHistory } from "@/lib/dm/compaction";
+import { compactHistoryInBackground } from "@/lib/dm/compaction";
 import { requestUtilityMessage } from "@/lib/dm/model";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import {
@@ -71,7 +71,7 @@ export function recordBeat(
   // word. Upkeep runs on the campaign queue so the DM never waits on it.
   enqueueDmJob(campaign.id, async () => {
     await maybeCloseChapter(campaign.id, { beatCompleted: true });
-    await maybeCompactHistory(campaign.id);
+    compactHistoryInBackground(campaign.id);
   });
 
   return { beat, messageId: message.id };

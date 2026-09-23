@@ -6,7 +6,9 @@ import {
   latestSeq,
   setFloor,
   getFloor,
+  combatOwnsFloor,
   type Campaign,
+  type Floor,
   type InitiativeFloor,
 } from "@/lib/db/campaigns";
 import {
@@ -531,8 +533,46 @@ export function setInitiativeFloor(campaign: Campaign | null, encounter: Encount
     currentName: current.name,
     round: encounter.round,
   };
-  setFloor(campaign.id, floor);
-  publishPersisted(campaign.id, "floor_changed", { floor });
+  // A hold (held responses) stays a hold: the pointer moved underneath it,
+  // and the lead's release opens into the new turn rather than the old one.
+  const next: Floor = getFloor(campaign.id).mode === "hold" ? { mode: "hold", next: floor } : floor;
+  setFloor(campaign.id, next);
+  publishPersisted(campaign.id, "floor_changed", { floor: next });
+}
+
+// The floor a running fight would have right now, read from the initiative
+// pointer. Null when no ready fight has a player character at the pointer.
+export function initiativeFloorFor(campaignId: string): InitiativeFloor | null {
+  const encounter = getActiveEncounter(campaignId);
+  if (!encounter || !encounter.orderReady) {
+    return null;
+  }
+  const current = encounter.order[encounter.turnIndex];
+  if (!current || current.kind !== "pc") {
+    return null;
+  }
+  return {
+    mode: "initiative",
+    encounterId: encounter.id,
+    userIds: [current.userId],
+    currentName: current.name,
+    round: encounter.round,
+  };
+}
+
+// What a release, or a spotlight everyone has answered, opens into: the
+// fight's floor while a fight runs, the open table otherwise. Opening the
+// table mid-fight (issue 17) let everyone post, stopped the order advancing
+// and had the End Turn button refused for whoever pressed it.
+export function floorAfterRelease(campaignId: string): Floor {
+  return initiativeFloorFor(campaignId) ?? { mode: "open" };
+}
+
+// Whether the initiative order owns the floor: the floor says so (directly
+// or under a hold), or a ready fight has a PC at the pointer whatever the
+// floor row says. Spotlights and lead overrides are refused while this holds.
+export function fightOwnsFloor(campaignId: string): boolean {
+  return combatOwnsFloor(getFloor(campaignId)) || initiativeFloorFor(campaignId) !== null;
 }
 
 function describeOrder(encounter: Encounter): string {
@@ -1334,11 +1374,18 @@ function autoActSkippedEnemies(
 // fallback.
 export function advanceAfterTurn(campaign: Campaign, turn?: DmTurn) {
   const floor = getFloor(campaign.id);
-  if (floor.mode !== "initiative") {
+  // A hold wrapping the fight's floor is still the fight's floor.
+  const combat =
+    floor.mode === "initiative"
+      ? floor
+      : floor.mode === "hold" && floor.next.mode === "initiative"
+        ? floor.next
+        : null;
+  if (!combat) {
     return;
   }
   const encounter = getActiveEncounter(campaign.id);
-  if (!encounter || !encounter.orderReady || encounter.id !== floor.encounterId) {
+  if (!encounter || !encounter.orderReady || encounter.id !== combat.encounterId) {
     return;
   }
   const current = encounter.order[encounter.turnIndex];

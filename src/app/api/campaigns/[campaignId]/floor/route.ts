@@ -2,7 +2,7 @@ import { z } from "zod";
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { getFloor, setFloor, type Floor } from "@/lib/db/campaigns";
 import { listSheets } from "@/lib/db/sheets";
-import { skipCurrentTurn } from "@/lib/dm/encounter-tools";
+import { fightOwnsFloor, floorAfterRelease, skipCurrentTurn } from "@/lib/dm/encounter-tools";
 import { requestDmTurn } from "@/lib/dm/loop";
 import { publishPersisted } from "@/lib/events";
 
@@ -39,8 +39,9 @@ export async function POST(
   const wanted = parsed.success ? parsed.data.set : undefined;
   if (wanted) {
     // Initiative is the encounter's to own; nothing sets the floor into or
-    // out of it but the combat engine.
-    if (floor.mode === "initiative") {
+    // out of it but the combat engine. That includes a hold that opens back
+    // into it, which "open floor" used to discard.
+    if (fightOwnsFloor(campaignId)) {
       return Response.json(
         { error: "The initiative order owns the floor while a fight is running." },
         { status: 409 },
@@ -86,7 +87,11 @@ export async function POST(
     }
     return Response.json({ ok: true });
   }
-  const next: Floor = floor.mode === "hold" ? floor.next : { mode: "open" };
+  // A hold opens into its stored spotlight; anything else opens into the
+  // fight's floor while a fight runs (read fresh from the pointer, which may
+  // have moved under the hold), and the open table otherwise.
+  const next: Floor =
+    floor.mode === "hold" && floor.next.mode === "spotlight" ? floor.next : floorAfterRelease(campaignId);
   setFloor(campaignId, next);
   publishPersisted(campaignId, "floor_changed", { floor: next });
   if (floor.mode === "spotlight" && floor.respondedUserIds.length) {
