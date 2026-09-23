@@ -3,8 +3,8 @@
 // shell sharing the server's terminal grabs it for job control: two of them
 // started together (the admin panel probes every program at once) stopped a
 // server run from a terminal with SIGTTIN. So the shell must run in its own
-// session, and the lookup must answer within its three seconds whatever the
-// profile does.
+// session, lookups started together share it, and the lookup must answer
+// within its three seconds whatever the profile does.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -67,17 +67,38 @@ function isRunning(id) {
   return true;
 }
 
-await test("lookups started together each run their shell in its own session", async () => {
+await test("lookups started together share one shell, run in its own session", async () => {
   // Answers with its pid and leaves a short sleep behind in its process
   // group, so the group can be looked up once the shell is gone.
   const shell = path.join(dir, "group-shell");
-  writeExecutable(shell, '#!/bin/sh\nsleep 5 >/dev/null 2>&1 &\nprintf "__ODM_PATH__%s__ODM_END__" "$$"\n');
+  const log = path.join(dir, "group-shell.log");
+  writeExecutable(shell, `#!/bin/sh\necho run >> "${log}"\nsleep 5 >/dev/null 2>&1 &\nprintf "__ODM_PATH__%s__ODM_END__" "$$"\n`);
   process.env.SHELL = shell;
-  const pids = await Promise.all([loginShellPath(), loginShellPath(), loginShellPath(), loginShellPath()]);
-  for (const pid of pids.map(Number)) {
-    assert.ok(isRunning(-pid), "the shell leads its own process group");
-    process.kill(-pid, "SIGKILL");
-  }
+  // As the admin panel probes every program at once.
+  const [first, second] = await Promise.all([
+    loginShellPath(),
+    loginShellPath(),
+    findBinary(["odm-missing-agent"]),
+    findBinary(["odm-missing-agent"]),
+  ]);
+  const pid = Number(first);
+  assert.ok(isRunning(-pid), "the shell leads its own process group");
+  process.kill(-pid, "SIGKILL");
+  assert.equal(fs.readFileSync(log, "utf8"), "run\n", "one shell for all four lookups");
+  assert.equal(second, first);
+});
+
+await test("a failed lookup is shared too, and retried once the ten minutes are up", async () => {
+  process.env.SHELL = path.join(dir, "no-such-shell");
+  assert.deepEqual(await Promise.all([loginShellPath(), loginShellPath()]), ["", ""]);
+  globalThis.__odmLoginShellPath.at -= 10 * 60_000;
+  const shell = path.join(dir, "retry-shell");
+  const log = path.join(dir, "retry-shell.log");
+  writeExecutable(shell, `#!/bin/sh\necho run >> "${log}"\nprintf "__ODM_PATH__/opt/agents/bin__ODM_END__"\n`);
+  process.env.SHELL = shell;
+  assert.equal(await loginShellPath(), "/opt/agents/bin");
+  assert.equal(await loginShellPath(), "/opt/agents/bin");
+  assert.equal(fs.readFileSync(log, "utf8"), "run\n", "the answer is reused while fresh");
 });
 
 await test(
@@ -117,13 +138,10 @@ await test(
   { needsBash: true },
 );
 
-await test("a shell that prints nothing, or cannot start, yields an empty PATH", async () => {
+await test("a shell that prints nothing yields an empty PATH", async () => {
   const silent = path.join(dir, "silent-shell");
   writeExecutable(silent, "#!/bin/sh\nexit 0\n");
   process.env.SHELL = silent;
-  assert.equal(await loginShellPath(), "");
-  delete globalThis.__odmLoginShellPath;
-  process.env.SHELL = path.join(dir, "no-such-shell");
   assert.equal(await loginShellPath(), "");
 });
 

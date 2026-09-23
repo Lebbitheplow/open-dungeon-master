@@ -91,23 +91,24 @@ function candidatesIn(dir: string, name: string): string[] {
   return [path.join(dir, name), ...exts.map((ext) => path.join(dir, name + ext.toLowerCase()))];
 }
 
-type LoginPathCache = { value: string; at: number };
+type LoginPathCache = { value: Promise<string>; at: number };
 declare global {
   var __odmLoginShellPath: LoginPathCache | undefined;
 }
 
 // The PATH an interactive login shell would have. Cached for ten minutes;
-// a shell that hangs on a prompt is cut off after three seconds.
-export async function loginShellPath(): Promise<string> {
+// a shell that hangs on a prompt is cut off after three seconds. The lookup
+// is cached while it runs, so the programs probed at once share one shell.
+export function loginShellPath(): Promise<string> {
   if (isWindows) {
-    return "";
+    return Promise.resolve("");
   }
   const cached = globalThis.__odmLoginShellPath;
   if (cached && Date.now() - cached.at < 10 * 60_000) {
     return cached.value;
   }
   const shell = process.env.SHELL || (existsSync("/bin/bash") ? "/bin/bash" : "/bin/sh");
-  const value = await new Promise<string>((resolve) => {
+  const value = new Promise<string>((resolve) => {
     // Its own session, with no terminal: an interactive shell takes the
     // terminal it shares for job control, and a second one started meanwhile
     // (every program is probed at once) stops the server with SIGTTIN.
