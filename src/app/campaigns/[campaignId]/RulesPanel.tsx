@@ -126,10 +126,14 @@ export function RulesPanel({
   campaignId,
   settings,
   steersStory,
+  isDm,
 }: {
   campaignId: string;
   settings: GameSettings;
   steersStory: boolean;
+  // Holds the DM seat. The calendar's routes are DM-only, so the AI
+  // campaign's lead steers the story but does not get the almanac.
+  isDm: boolean;
 }) {
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
@@ -314,7 +318,7 @@ export function RulesPanel({
         </div>
       ) : null}
 
-      {steersStory ? <CalendarSection campaignId={campaignId} /> : null}
+      {isDm ? <CalendarSection campaignId={campaignId} /> : null}
     </div>
   );
 }

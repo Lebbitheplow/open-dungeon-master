@@ -544,7 +544,7 @@ export function SidePanelRouter({
     return <ContextPanel campaignId={campaignId} />;
   }
   if (tab === "settings" && campaign) {
-    return <SessionSettings campaign={campaign} isLead={isLead} steersStory={steersStory} />;
+    return <SessionSettings campaign={campaign} isLead={isLead} steersStory={steersStory} isDm={adjudicates} />;
   }
   // Only reached when a tab's guard fails: battle with no map, or context
   // for a non-lead. Both are prevented upstream (useSessionTabs resets off

@@ -171,6 +171,7 @@ export function SystemView({
               campaignId={workshop.id}
               settings={workshop.gameSettings}
               steersStory
+              isDm
             />
           </>
         ) : null}
