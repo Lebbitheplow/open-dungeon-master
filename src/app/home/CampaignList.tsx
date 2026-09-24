@@ -1,68 +1,60 @@
 "use client";
 
-import { Copy, Loader2, Trash2, Users } from "lucide-react";
+import { Copy, Loader2, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
-import { PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
+import { ui } from "@/lib/ui";
 import { CampaignCover } from "@/components/CampaignCover";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { ExportMenu } from "@/app/campaigns/[campaignId]/ExportMenu";
-import { steersStory, type HomeCampaign } from "@/app/home/types";
+import { slotLine, steersStory, type HomeCampaign } from "@/app/home/types";
 
-// "Your campaigns": every table this account sits at, with the same three
-// actions the old tiles carried. Export is for anyone at the table,
-// Duplicate follows story authority, Delete is the owner's alone.
-export function CampaignList({
+// "Your other tables": every campaign this account sits at that is not the
+// one on the title screen, laid out as save slots along the bottom edge,
+// with the same three actions the old tiles carried. Export is for anyone
+// at the table, Duplicate follows story authority, Delete is the owner's
+// alone. A dashed slot at the end forges a new world.
+export function OtherTables({
   campaigns,
+  continueId,
   loading,
-  loadFailed,
   userId,
   cloningId,
   actionError,
-  onRetry,
   onClone,
   onDelete,
+  onNewCampaign,
 }: {
   campaigns: HomeCampaign[];
+  continueId: string | null;
   loading: boolean;
-  loadFailed: boolean;
   userId: string;
   cloningId: string;
   actionError: string;
-  onRetry: () => void;
   onClone: (id: string) => void;
   onDelete: (campaign: HomeCampaign) => void;
+  onNewCampaign: () => void;
 }) {
+  const others = campaigns.filter((campaign) => campaign.id !== continueId);
+  if (!loading && others.length === 0 && !actionError) {
+    return null;
+  }
   return (
-    <section className="mb-8">
-      <div className="mb-4 flex items-center gap-3">
-        <PixelTile src={PIXEL_ICONS.chats} size="size-9" />
-        <h2 className="eyebrow text-sm text-amber-200/90">Your campaigns</h2>
-      </div>
-
-      {actionError ? <p className="motion-shake mb-3 text-sm text-red-400">{actionError}</p> : null}
-
+    <section className="ts-slots ts-reveal" style={{ animationDelay: "900ms" }} aria-label="Your other tables">
+      <h2 className="ts-slots-eyebrow">{others.length === 1 ? "Your other table" : "Your other tables"}</h2>
+      {actionError ? <p className="motion-shake ts-error">{actionError}</p> : null}
       {loading ? (
-        <div className="reveal grid gap-4 sm:grid-cols-2" aria-busy="true">
-          <div className="skeleton-block h-72 rounded-xl" />
-          <div className="skeleton-block hidden h-72 rounded-xl sm:block" />
+        <div className="ts-slot-row" aria-busy="true">
+          <div className="skeleton-block ts-slot-skeleton" />
+          <div className="skeleton-block ts-slot-skeleton" />
         </div>
-      ) : loadFailed && campaigns.length === 0 ? (
-        // The list never arrived; a table full of campaigns may still
-        // exist, so the empty-table hero would be a lie here.
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-stone-800 bg-stone-950/40 px-6 py-10 text-center">
-          <p className="text-sm text-stone-400">Could not load your campaigns.</p>
-          <button type="button" onClick={onRetry} className={ui.btnSecondary}>
-            Try again
-          </button>
-        </div>
-      ) : campaigns.length === 0 ? null : ( // the hero above has already said "empty table"
-        <ul className="stagger-up grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {campaigns.map((campaign) => (
-            <li key={campaign.id}>
-              <CampaignTile
+      ) : (
+        <ul className="ts-slot-row">
+          {others.map((campaign) => (
+            <li key={campaign.id} className="ts-slot-cell">
+              <SaveSlot
                 campaign={campaign}
                 userId={userId}
                 cloning={cloningId === campaign.id}
@@ -71,13 +63,21 @@ export function CampaignList({
               />
             </li>
           ))}
+          <li className="ts-slot-cell">
+            <button type="button" onClick={onNewCampaign} className="ts-slot ts-slot-new motion-card">
+              <span className="ts-slot-new-plus" aria-hidden="true">
+                <Plus className="size-5" />
+              </span>
+              <span className="ts-slot-title">Forge a new world</span>
+            </button>
+          </li>
         </ul>
       )}
     </section>
   );
 }
 
-function CampaignTile({
+function SaveSlot({
   campaign,
   userId,
   cloning,
@@ -92,7 +92,7 @@ function CampaignTile({
 }) {
   const ended = campaign.status === "ended";
   const router = useRouter();
-  // The same doors as the tile and its three buttons, under a right-click or
+  // The same doors as the slot and its three buttons, under a right-click or
   // a long press. The buttons stay: the menu is a second way, not the only one.
   const menu: ContextMenuItem[] = [
     { id: "open", label: "Open", glyph: "tab-campaigns", onSelect: () => router.push(`/campaigns/${campaign.id}`) },
@@ -108,42 +108,35 @@ function CampaignTile({
   ];
   return (
     <ContextMenu items={menu} label={campaign.title} className="h-full">
-    <Link
-      href={`/campaigns/${campaign.id}`}
-      className={cn(ui.cardHover, "group relative block h-full p-4", ended && "opacity-80")}
-    >
-      <CampaignCover
-        cover={campaign.cover}
-        title={campaign.title}
-        className="mb-3 rounded-lg shadow-none"
-      />
-      <div className="mb-1 flex items-start justify-between gap-2">
-        <p className="min-w-0 truncate font-display text-lg tracking-wide text-amber-50">
-          {campaign.title}
-        </p>
-        <span
-          className={cn(
-            "eyebrow shrink-0 rounded-full border px-2 py-0.5 text-[9px]",
-            campaign.status === "lobby" && "border-sky-500/40 bg-sky-950/60 text-sky-300",
-            campaign.status === "active" &&
-              "border-emerald-500/40 bg-emerald-950/60 text-emerald-300",
-            ended && "border-stone-600/50 bg-stone-900 text-stone-400",
-          )}
-        >
-          {campaign.status}
-        </span>
-      </div>
-      <p className="text-sm text-stone-400">
-        Level {campaign.startingLevel} start · {campaign.difficulty}
-        {campaign.theme ? ` · ${campaign.theme}` : ""}
-      </p>
-      <div className="mt-3 flex items-center justify-between border-t border-stone-700/40 pt-2.5 text-sm text-stone-400">
-        <span className="flex items-center gap-1.5">
-          <Users className="size-4 text-amber-300/70" />
-          {campaign.playerCount}/{campaign.maxPlayers}
-          {campaign.maxPlayers === 1 ? " · solo" : ""}
-        </span>
-        <span className="flex items-center gap-1">
+      <div className={cn("ts-slot motion-card group", ended && "ts-slot-ended")}>
+        <Link href={`/campaigns/${campaign.id}`} className="ts-slot-door" data-no-motion>
+          <span className="ts-slot-art">
+            <CampaignCover
+              cover={campaign.cover}
+              title={campaign.title}
+              genre={campaign.genre}
+              seed={campaign.id}
+              className="h-full rounded-none border-0 shadow-none aspect-auto"
+            />
+            <span
+              className={cn(
+                "ts-slot-badge",
+                campaign.status === "lobby" && "ts-slot-badge-lobby",
+                campaign.status === "active" && "ts-slot-badge-active",
+                ended && "ts-slot-badge-ended",
+              )}
+            >
+              {campaign.status}
+            </span>
+          </span>
+          <span className="ts-slot-title">{campaign.title}</span>
+          <span className="ts-slot-line">{slotLine(campaign, userId)}</span>
+          <span className="ts-slot-meta">
+            Level {campaign.startingLevel} start · {campaign.difficulty}
+            {campaign.maxPlayers === 1 ? " · solo" : ""}
+          </span>
+        </Link>
+        <span className="ts-slot-actions">
           <ExportMenu campaignId={campaign.id} variant="tile-icon" />
           {steersStory(campaign, userId) ? (
             <Tooltip content="Copy the world into a new campaign, without the transcript">
@@ -158,11 +151,7 @@ function CampaignTile({
                 }}
                 className={cn(ui.iconAction, "hover:text-amber-300")}
               >
-                {cloning ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Copy className="size-4" />
-                )}
+                {cloning ? <Loader2 className="size-4 animate-spin" /> : <Copy className="size-4" />}
               </button>
             </Tooltip>
           ) : null}
@@ -184,7 +173,6 @@ function CampaignTile({
           ) : null}
         </span>
       </div>
-    </Link>
     </ContextMenu>
   );
 }

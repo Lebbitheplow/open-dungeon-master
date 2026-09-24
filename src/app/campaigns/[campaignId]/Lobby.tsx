@@ -28,6 +28,7 @@ import {
 } from "@/app/workshop/ContentImportPicker";
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
 import { navigateTo } from "@/lib/navigation";
+import { SceneBackdrop } from "@/app/campaigns/[campaignId]/CinematicParts";
 
 // The lobby: where the table gathers before the adventure opens. On a desktop
 // it is a table with two sides: the campaign, its party and this viewer's
@@ -36,6 +37,8 @@ import { navigateTo } from "@/lib/navigation";
 // a phone the two sides fold into one column, ordered so the code, the party
 // and the Begin button come before the long settings (the order-* classes:
 // both columns are display: contents below lg, so their children interleave).
+const EMPTY_MESSAGES: never[] = [];
+
 export function Lobby({ state, refresh }: { state: CampaignState; refresh: () => void }) {
   const { campaign, me, members, sheets } = state;
   const voiceSpeaking = useVoiceSpeaking();
@@ -320,7 +323,10 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
   }
 
   return (
-    <main className="mx-auto w-full max-w-2xl flex-1 p-4 sm:p-6 lg:max-w-6xl">
+    <main className="cine-stage cine-lobby mx-auto w-full max-w-2xl flex-1 p-4 sm:p-6 lg:max-w-6xl">
+      {/* The lobby under the same sky as the table: the cover art behind
+          the panels, dimmed, so the door and the room read as one place. */}
+      <SceneBackdrop messages={EMPTY_MESSAGES} cover={campaign.cover} genre={campaign.genre} seed={campaign.id} />
       <Link
         href="/"
         className="mb-3 inline-flex items-center gap-1.5 text-sm text-stone-500 transition-colors hover:text-amber-200"

@@ -107,8 +107,8 @@ export function Book({
                 <section className="kit-book-page kit-book-left" aria-hidden={false}>
                   {entry.kicker ? <p className="reveal kit-book-kicker">{entry.kicker}</p> : null}
                   <h2 className="kit-book-heading">{entry.heading}</h2>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/assets/ui/divider-rule.webp" alt="" className="kit-book-rule" />
+                  {/* A gold hairline drawn by furniture.css; the night storybook has no paper rule. */}
+                  <span className="kit-book-rule" aria-hidden="true" />
                   {entry.note ? <p className="reveal kit-book-note">{entry.note}</p> : null}
                 </section>
                 <section className="kit-book-page kit-book-right">
@@ -121,8 +121,7 @@ export function Book({
               </section>
             )}
             <span className="kit-book-leaf" aria-hidden="true" />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/assets/ui/ribbon-bookmark.webp" alt="" className="kit-book-ribbon" />
+            <span className="kit-book-ribbon" aria-hidden="true" />
           </div>
 
           <div className="mt-3 flex items-center justify-between gap-3 px-1 text-sm text-stone-300">

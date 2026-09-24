@@ -66,6 +66,7 @@ import { BoardCameraControls, BoardOrderDialog } from "@/app/campaigns/[campaign
 import type { StageToken } from "@/app/campaigns/[campaignId]/BoardStage";
 import type { TokenIntent } from "@/lib/battlemap/intent";
 import { familyIconPath } from "@/lib/icons";
+import { TabletopOrder } from "@/app/campaigns/[campaignId]/CinematicParts";
 
 // The tactical battle map tab.
 //
@@ -1327,17 +1328,22 @@ export function BattleMapPanel({
       />
       <Dialog.Root open={enlarged} onOpenChange={setEnlarged}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-40 bg-black/80" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[92vh] w-[min(94vw,64rem)] -translate-x-1/2 -translate-y-1/2 overflow-auto panel rounded-xl p-4">
-            <div className="mb-2 flex items-center justify-between">
-              <Dialog.Title className="font-serif text-stone-100">
+          <Dialog.Overlay className="cine-tabletop-veil fixed inset-0 z-40" />
+          {/* The tabletop ("ODM World Concepts" 3c): the board framed in gold
+              on a starfield table, the turn order down the right. */}
+          <Dialog.Content className="cine-tabletop fixed inset-0 z-50 flex flex-col outline-none">
+            <div className="cine-tabletop-head">
+              <Dialog.Title className="cine-tabletop-title">
                 {scene ? "The ground here" : `Battle map, round ${view.round}`}
               </Dialog.Title>
-              <Dialog.Close className="rounded p-1 text-stone-400 hover:bg-stone-900">
+              <Dialog.Close className="cine-tabletop-close" aria-label="Close the board">
                 <X className="size-4" />
               </Dialog.Close>
             </div>
-            {grid}
+            <div className="cine-tabletop-body">
+              <div className="cine-board-frame">{grid}</div>
+              {!scene ? <TabletopOrder encounter={encounter} faceOf={faceOfEntry} /> : null}
+            </div>
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>

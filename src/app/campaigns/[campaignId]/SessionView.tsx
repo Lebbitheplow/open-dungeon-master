@@ -65,6 +65,7 @@ import { SidePanel } from "@/app/campaigns/[campaignId]/SidePanel";
 import { useChatChime } from "@/app/campaigns/[campaignId]/useChatChime";
 import { useTableAudio } from "@/app/campaigns/[campaignId]/useTableAudio";
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
+import { InitiativeRibbon, PartyRail, QuestGlance, RollToast, SceneBackdrop } from "@/app/campaigns/[campaignId]/CinematicParts";
 
 // The level-up dialog carries the class feature and resource tables of the
 // whole SRD; it loads the first time a character actually levels rather
@@ -580,7 +581,17 @@ export function SessionView({
   const storyDue = storyCadence.level !== "quiet";
 
   return (
-    <main className="flex h-dvh flex-col">
+    <main className="cine-stage flex h-dvh flex-col">
+      {/* The cinematic frame ("ODM World Concepts" 3b): the scene's painting
+          behind everything, the party down the left, the turn order along
+          the top, the last roll as a pill. CinematicParts.tsx. */}
+      <SceneBackdrop
+        messages={messages}
+        cover={campaign.cover}
+        genre={campaign.genre}
+        seed={campaign.id}
+        dark={state.scene?.isDark}
+      />
       <SessionHeader
         title={campaign.title}
         scene={campaign.scene}
@@ -595,9 +606,26 @@ export function SessionView({
         ambienceEnabled={Boolean(campaign.gameSettings?.ambienceEnabled)}
         ambience={ambience}
         onHelp={openHelp}
+        ribbon={
+          state.encounter?.status === "active" ? (
+            <InitiativeRibbon
+              encounter={state.encounter}
+              sheets={sheets}
+              genre={campaign.genre}
+              onOpen={() => setPanelTab("party")}
+            />
+          ) : null
+        }
       />
 
-      <div className="flex min-h-0 flex-1">
+      <div className="cine-row flex min-h-0 flex-1">
+        <PartyRail
+          sheets={sheets}
+          meUserId={me.id}
+          encounter={state.encounter}
+          genre={campaign.genre}
+          onOpen={() => setPanelTab("party")}
+        />
         <SessionChatColumn
           state={state}
           campaignId={campaign.id}
@@ -724,8 +752,11 @@ export function SessionView({
           relationshipsEnabled={relationshipsEnabled}
           beats={state.beats}
           storyDue={storyDue}
+          glance={<QuestGlance quests={campaign.questLog ?? []} onOpen={() => setPanelTab("story")} />}
         />
       </div>
+
+      <RollToast latestRoll={state.latestRoll} sheets={sheets} />
 
       <BottomTabBar
         tabs={panelTabs}

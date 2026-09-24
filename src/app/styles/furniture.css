@@ -58,7 +58,10 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* ---- the book ---- */
+/* ---- the book ----
+   The night storybook ("ODM World Concepts" 3d): a violet cover with a
+   tooled gold border, deep indigo pages with gold ink, the drop cap lit, and
+   the leaf that turns cut from the same indigo. No paper anywhere. */
 .kit-book {
   position: relative;
   display: grid;
@@ -67,31 +70,66 @@
   max-height: 72vh;
   width: 100%;
   margin: 0 auto;
-  background: url("/assets/ui/book-spread.webp") center / 100% 100% no-repeat;
-  filter: drop-shadow(0 24px 50px rgba(4, 2, 12, 0.7));
+  padding: 1.6%;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #302853, #211b3a 50%, #151229);
+  box-shadow: 0 0 0 1px rgba(107, 99, 148, 0.4), 0 40px 80px rgba(4, 2, 12, 0.85), 0 0 60px rgba(76, 60, 130, 0.3);
   perspective: 2200px;
   animation: scale-in var(--dur-beat) var(--ease-spring) both;
 }
+/* The tooled border inside the cover, and the pages' shared ground. */
+.kit-book::before {
+  content: "";
+  position: absolute;
+  inset: 0.7%;
+  border-radius: 10px;
+  border: 1px solid rgba(212, 171, 58, 0.45);
+  pointer-events: none;
+  z-index: 3;
+}
+.kit-book::after {
+  content: "";
+  position: absolute;
+  inset: 1.6%;
+  border-radius: 4px;
+  background:
+    radial-gradient(1px 1px at 11% 24%, rgba(244, 224, 166, 0.35), transparent 60%),
+    radial-gradient(1px 1px at 38% 72%, rgba(233, 230, 244, 0.25), transparent 60%),
+    radial-gradient(1px 1px at 64% 18%, rgba(244, 224, 166, 0.3), transparent 60%),
+    radial-gradient(1px 1px at 88% 60%, rgba(233, 230, 244, 0.25), transparent 60%),
+    linear-gradient(90deg, transparent 44%, rgba(4, 2, 12, 0.45) 48%, rgba(4, 2, 12, 0.75) 50%, rgba(4, 2, 12, 0.45) 52%, transparent 56%),
+    linear-gradient(180deg, #1a1633, #0d0b1c);
+  box-shadow: inset 0 0 60px rgba(4, 2, 12, 0.6);
+  pointer-events: none;
+  z-index: 0;
+}
 .kit-book-page {
   position: relative;
+  z-index: 1;
   min-height: 0;
   overflow-y: auto;
-  /* The painted pages sit well inside the cover; percentages are of the
-     page's own width. */
-  padding: 25% 9% 18% 23%;
-  color: #2f220d;
+  padding: 9% 9% 8% 8%;
+  color: #dedbec;
   font-family: var(--font-serif, Georgia, serif);
-  transition: opacity 200ms var(--ease-snap);
+  transition: opacity var(--dur-quick) var(--ease-snap);
+  animation: kit-page-in var(--dur-beat) var(--ease-settle) 180ms backwards;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(107, 99, 148, 0.4) transparent;
 }
-.kit-book-right { padding: 25% 23% 18% 10%; }
+.kit-book-right { padding: 9% 8% 8% 9%; animation-delay: 280ms; }
+@keyframes kit-page-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
 .kit-book-forward .kit-book-right,
 .kit-book-back .kit-book-left { opacity: 0.15; }
 .kit-book-kicker {
   font-family: var(--font-display, serif);
   font-size: 0.7rem;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.3em;
   text-transform: uppercase;
-  color: #7a5a18;
+  text-align: center;
+  color: #e3c15c;
 }
 .kit-book-heading {
   margin-top: 0.4rem;
@@ -99,60 +137,138 @@
   font-size: clamp(1.15rem, 2.4vw, 1.9rem);
   line-height: 1.2;
   letter-spacing: 0.04em;
-  color: #3d2a08 !important;
-  -webkit-text-fill-color: #3d2a08;
+  text-align: center;
+  color: #f4e0a6 !important;
+  -webkit-text-fill-color: #f4e0a6;
+  text-shadow: 0 0 18px rgba(212, 171, 58, 0.25);
+  animation: kit-heading-lit var(--dur-scene) var(--ease-settle) 240ms backwards;
 }
-.kit-book-rule { width: 70%; margin: 1rem 0; opacity: 0.85; }
-.kit-book-note { white-space: pre-line; font-size: 0.85rem; font-style: italic; color: #5f4a23; }
-.kit-book-body { white-space: pre-wrap; font-size: clamp(0.85rem, 1.35vw, 1rem); line-height: 1.75; }
+@keyframes kit-heading-lit {
+  from { opacity: 0; text-shadow: 0 0 0 rgba(212, 171, 58, 0); }
+  60% { opacity: 1; text-shadow: 0 0 30px rgba(212, 171, 58, 0.6); }
+  to { opacity: 1; text-shadow: 0 0 18px rgba(212, 171, 58, 0.25); }
+}
+.kit-book-rule {
+  display: block;
+  width: 70%;
+  height: 1px;
+  margin: 1rem auto;
+  background: linear-gradient(90deg, transparent, rgba(212, 171, 58, 0.6), transparent);
+  /* The painted rule is a paper thing; the gold hairline stands in. */
+  content: "";
+  object-fit: none;
+  opacity: 1;
+  color: transparent;
+}
+.kit-book-note { white-space: pre-line; font-size: 0.85rem; font-style: italic; color: #aeaac6; }
+.kit-book-body { white-space: pre-wrap; font-size: clamp(0.85rem, 1.35vw, 1rem); line-height: 1.75; color: #dedbec; }
 .kit-book-body::first-letter {
   float: left;
   padding: 0.1em 0.12em 0 0;
   font-family: var(--font-display, serif);
   font-size: 3.1em;
   line-height: 0.85;
-  color: #8a2f14;
+  color: #ecd287;
+  text-shadow: 0 0 20px rgba(212, 171, 58, 0.45);
 }
+/* The ribbon: gold cloth, not a painted parchment bookmark. */
 .kit-book-ribbon {
   position: absolute;
   top: -2%;
   left: 49%;
-  width: 4.5%;
-  height: auto;
+  width: 3.2%;
+  height: 16%;
+  z-index: 4;
   pointer-events: none;
+  background: linear-gradient(180deg, #e3c15c, #95761f);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 86%, 0 100%);
   filter: drop-shadow(0 3px 4px rgba(4, 2, 12, 0.5));
+  opacity: 1;
+  /* Drops in on open; on a turn it flicks with the page (the rotate
+     property, so the drop never replays) and springs back. */
+  transform-origin: 50% 0;
+  rotate: 0deg;
+  transition: rotate var(--dur-scene) var(--ease-spring);
+  animation: kit-ribbon-drop 1300ms var(--ease-settle) 260ms backwards;
 }
-/* The leaf that turns: a painted page hinged on the spine. */
+.kit-book-forward .kit-book-ribbon { rotate: -7deg; transition: rotate 310ms var(--ease-snap); }
+.kit-book-back .kit-book-ribbon { rotate: 7deg; transition: rotate 310ms var(--ease-snap); }
+@keyframes kit-ribbon-drop {
+  0% { opacity: 0; transform: translateY(-55%); }
+  30% { opacity: 1; transform: rotate(6deg); }
+  55% { transform: rotate(-3deg); }
+  78% { transform: rotate(1.5deg); }
+  100% { opacity: 1; transform: none; }
+}
+/* The leaf that turns: an indigo page hinged on the spine. */
 .kit-book-leaf {
   position: absolute;
-  top: 5%;
-  bottom: 6%;
+  top: 3%;
+  bottom: 3%;
   left: 50%;
-  width: 44%;
+  width: 47%;
+  z-index: 2;
   transform-origin: left center;
-  background: url("/assets/ui/page-single.webp") center / 100% 100%;
-  box-shadow: -12px 0 24px rgba(4, 2, 12, 0.35);
+  background: linear-gradient(90deg, #211b3a, #151229 60%, #0d0b1c);
+  border: 1px solid rgba(212, 171, 58, 0.25);
+  box-shadow: -12px 0 24px rgba(4, 2, 12, 0.55);
   opacity: 0;
+  overflow: hidden;
   pointer-events: none;
   backface-visibility: visible;
 }
+/* The leaf shades as it goes edge-on and its gilt edge glints. */
+.kit-book-leaf::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(4, 2, 12, 0) 0%, rgba(4, 2, 12, 0.6) 100%);
+  opacity: 0;
+}
+.kit-book-leaf::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 2px;
+  background: linear-gradient(180deg, transparent, rgba(244, 224, 166, 0.85), transparent);
+  opacity: 0;
+}
 .kit-book-forward .kit-book-leaf { animation: leaf-forward 620ms var(--ease-drift) both; }
 .kit-book-back .kit-book-leaf { animation: leaf-back 620ms var(--ease-drift) both; }
+.kit-book-forward .kit-book-leaf::before,
+.kit-book-back .kit-book-leaf::before { animation: kit-leaf-shade 620ms var(--ease-drift) both; }
+.kit-book-forward .kit-book-leaf::after,
+.kit-book-back .kit-book-leaf::after { animation: kit-leaf-glint 620ms var(--ease-drift) both; }
+@keyframes kit-leaf-shade {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+@keyframes kit-leaf-glint {
+  0%, 100% { opacity: 0; }
+  35%, 65% { opacity: 1; }
+}
 @keyframes leaf-forward {
-  0% { opacity: 1; transform: rotateY(0deg); }
-  100% { opacity: 1; transform: rotateY(-180deg); }
+  0% { opacity: 1; transform: rotateY(0deg); box-shadow: -12px 0 24px rgba(4, 2, 12, 0.55); }
+  50% { box-shadow: 0 0 44px rgba(4, 2, 12, 0.75); }
+  100% { opacity: 1; transform: rotateY(-180deg); box-shadow: 12px 0 24px rgba(4, 2, 12, 0.55); }
 }
 @keyframes leaf-back {
-  0% { opacity: 1; transform: rotateY(-180deg); }
-  100% { opacity: 1; transform: rotateY(0deg); }
+  0% { opacity: 1; transform: rotateY(-180deg); box-shadow: 12px 0 24px rgba(4, 2, 12, 0.55); }
+  50% { box-shadow: 0 0 44px rgba(4, 2, 12, 0.75); }
+  100% { opacity: 1; transform: rotateY(0deg); box-shadow: -12px 0 24px rgba(4, 2, 12, 0.55); }
 }
 @media (max-width: 640px) {
-  .kit-book { grid-template-columns: 1fr; aspect-ratio: 3 / 4; background-image: url("/assets/ui/page-single.webp"); }
-  .kit-book-page, .kit-book-right { padding: 12% 11%; }
+  .kit-book { grid-template-columns: 1fr; aspect-ratio: 3 / 4; }
+  .kit-book::after { background: linear-gradient(180deg, #1a1633, #0d0b1c); }
+  .kit-book-page, .kit-book-right { padding: 10% 9%; }
   .kit-book-left { overflow: visible; padding-bottom: 0; }
-  .kit-book-leaf { left: 0; width: 100%; top: 0; bottom: 0; transform-origin: left center; }
-  .kit-book-ribbon { left: 84%; width: 8%; }
+  .kit-book-leaf { left: 1.6%; width: 96.8%; top: 1.6%; bottom: 1.6%; transform-origin: left center; }
+  .kit-book-ribbon { left: 84%; width: 7%; }
 }
+/* The day theme keeps the storybook: a night book on a day desk reads as a
+   book. Only the veil behind it lightens (Book.tsx). */
 
 /* ---- ambient dust ---- */
 /* A few motes drifting UNDER the animated contour lines (TopoBackground,
@@ -197,7 +313,18 @@ html[data-theme="light"] .ambient-dust { display: none; }
   .kit-scroll-text,
   .kit-book,
   .kit-book-leaf,
+  .kit-book-leaf::before,
+  .kit-book-leaf::after,
+  .kit-book-page,
+  .kit-book-heading,
+  .kit-book-ribbon,
   .ambient-dust {
     animation: none !important;
+  }
+  .kit-book-ribbon,
+  .kit-book-forward .kit-book-ribbon,
+  .kit-book-back .kit-book-ribbon {
+    rotate: 0deg;
+    transition: none;
   }
 }

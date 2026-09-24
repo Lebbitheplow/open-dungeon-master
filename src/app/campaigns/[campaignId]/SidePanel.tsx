@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronsLeft, ChevronsRight } from "lucide-react";
-import { memo, useMemo, useSyncExternalStore } from "react";
+import { memo, useMemo, useSyncExternalStore, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { IconRail, type IconRailItem } from "@/components/ui/IconRail";
@@ -35,7 +35,9 @@ function setWide(wide: boolean) {
 // Whether the aside is docked (Tailwind's lg, where `hidden` no longer
 // applies) or is the phone's full-screen panel. The panels' animation loops
 // key on this, so a board behind the chat on a phone costs no frames.
-const DOCKED_QUERY = "(min-width: 64rem)";
+// A book-style fold opened flat docks too, one column per leaf, however
+// narrow the whole is (world.css lays the columns on the leaves).
+const DOCKED_QUERY = "(min-width: 64rem), (horizontal-viewport-segments: 2)";
 
 function subscribeDocked(callback: () => void) {
   const media = window.matchMedia(DOCKED_QUERY);
@@ -61,6 +63,7 @@ function SidePanelInner({
   chatUnread,
   mobileVisible,
   storyDue,
+  glance,
   ...content
 }: SidePanelRouterProps & {
   tabs: PanelTabDef[];
@@ -71,6 +74,8 @@ function SidePanelInner({
   // The quiet half of the story-capture nudge: a dot on the DM tab. The loud
   // half is the banner above the composer (src/lib/dm/beat-cadence.ts).
   storyDue: boolean;
+  // The quest line above the panel (CinematicParts.tsx QuestGlance).
+  glance?: ReactNode;
 }) {
   const wide = useSyncExternalStore(subscribeWide, readWide, () => false);
   // The server snapshot says docked so the first client render matches the
@@ -107,13 +112,14 @@ function SidePanelInner({
   return (
     <aside
       className={cn(
-        "shrink-0 bg-gradient-to-b from-stone-950/70 to-stone-950/30 lg:flex lg:flex-row lg:border-l lg:border-stone-700/50 lg:transition-[width] lg:duration-200",
+        "cine-panel shrink-0 bg-gradient-to-b from-stone-950/70 to-stone-950/30 lg:flex lg:flex-row lg:border-l lg:border-stone-700/50 lg:transition-[width] lg:duration-200",
         mobileVisible ? "flex w-full min-w-0 flex-col" : "hidden",
         // The content keeps its old 20rem and 26rem; the rail adds 4rem.
         wide ? "lg:w-[30rem]" : "lg:w-[24rem]",
       )}
     >
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-3">
+        {glance}
         {/* Keyed by tab so the incoming panel rises in instead of cutting. */}
         <div key={tab} className="motion-tab mx-auto w-full max-w-2xl lg:max-w-none">
           <SidePanelRouter {...content} visible={visible} />
@@ -122,7 +128,7 @@ function SidePanelInner({
       {/* The rail sits on the outer edge, away from the chat, so the eye
           reads chat, context, then the switch between contexts. It scrolls
           on a short window rather than clipping the last tabs. */}
-      <div className="hidden w-16 shrink-0 flex-col items-stretch gap-1 overflow-y-auto border-l border-amber-500/15 bg-gradient-to-b from-stone-950/60 to-transparent px-1.5 py-2 [scrollbar-width:none] lg:flex">
+      <div className="cine-rail hidden w-16 shrink-0 flex-col items-stretch gap-1 overflow-y-auto border-l border-amber-500/15 bg-gradient-to-b from-stone-950/60 to-transparent px-1.5 py-2 [scrollbar-width:none] lg:flex">
         <Tooltip content={wide ? "Narrow the panel" : "Widen the panel"} side="left">
           <button
             type="button"

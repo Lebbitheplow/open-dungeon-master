@@ -2,6 +2,7 @@ import { z } from "zod";
 import { currentUser, unauthorized } from "@/lib/auth";
 import { createCampaign, listCampaignsForUser, publicCampaign, type Campaign } from "@/lib/db/campaigns";
 import { playingAsByCampaign } from "@/lib/db/sheets";
+import { homeGlanceFor, partyFacesByCampaign } from "@/lib/db/home-glance";
 import { gameSettingsSchema } from "@/lib/schemas/game-settings";
 import { CAMPAIGN_DIFFICULTIES } from "@/lib/campaign-types";
 
@@ -28,10 +29,18 @@ export async function GET() {
   // the caller plays there, so both ride here rather than costing a snapshot
   // fetch per campaign. One query covers every campaign's playingAs.
   const playingAs = playingAsByCampaign(user.id);
+  const campaigns = listCampaignsForUser(user.id);
+  // The title screen's glance (recap, chapter, scene painting, party faces)
+  // rides the same list for the same reason.
+  const faces = partyFacesByCampaign(
+    campaigns.map((campaign) => campaign.id),
+    new Map(campaigns.map((campaign) => [campaign.id, campaign.genre])),
+  );
   return Response.json({
-    campaigns: listCampaignsForUser(user.id).map((campaign) => ({
+    campaigns: campaigns.map((campaign) => ({
       ...publicCampaign(campaign as Campaign),
       playingAs: playingAs.get(campaign.id) ?? null,
+      glance: homeGlanceFor(campaign.id, faces.get(campaign.id) ?? []),
     })),
   });
 }

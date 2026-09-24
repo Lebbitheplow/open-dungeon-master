@@ -301,7 +301,7 @@ export function MessageList({
   }
 
   return (
-    <div ref={containerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
+    <div ref={containerRef} onScroll={handleScroll} className="session-transcript flex-1 overflow-y-auto">
       <div className="mx-auto max-w-3xl space-y-8 px-4 py-6 sm:px-6">
       {messages.map((message) => (
         <MessageItem

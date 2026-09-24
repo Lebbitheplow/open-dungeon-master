@@ -133,7 +133,7 @@ function ComposerInner({
   // The Hand outlives the fight by one beat so its fold-away can play.
   const hand = useLingeringEncounter(encounter);
   return (
-    <form onSubmit={onSubmit} className="glass session-desk border-t border-stone-700/40 px-3 pb-3 pt-2.5">
+    <form onSubmit={onSubmit} className="glass session-desk cine-desk border-t border-stone-700/40 px-3 pb-3 pt-2.5">
       <div className="mx-auto max-w-3xl sm:px-3">
         {pendingRolls.map((pending) => (
           <PendingRollCard
@@ -316,7 +316,7 @@ function ComposerInner({
             type="submit"
             disabled={sending || !input.trim() || inputBlocked}
             aria-label="Send"
-            className={cn(ui.btnPrimary, "session-deskbtn")}
+            className={cn(ui.btnPrimary, "session-deskbtn cine-send")}
           >
             {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
           </button>

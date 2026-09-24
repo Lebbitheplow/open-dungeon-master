@@ -72,7 +72,7 @@ export function SessionChatColumn({
   const visibleUtilityCalls = utilityCalls.filter((call) => call.kind !== "ask");
 
   return (
-    <div className={cn("min-w-0 flex-1 flex-col", visible ? "flex" : "hidden lg:flex")}>
+    <div className={cn("cine-chat min-w-0 flex-1 flex-col", visible ? "flex" : "hidden lg:flex")}>
       <ReportDialog
         campaignId={campaignId}
         target={reportTarget}

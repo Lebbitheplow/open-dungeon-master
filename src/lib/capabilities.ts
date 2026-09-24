@@ -19,7 +19,9 @@ import type { StorySettings } from "@/lib/types";
 // reloads, same pattern as src/lib/login-throttle.ts.
 
 export type Capabilities = {
-  story: { configured: boolean; reachable: boolean };
+  // `model` is the storyteller's name for the title screen's status line
+  // ("The DM is awake · qwen3.6-35b"); empty when nothing is configured.
+  story: { configured: boolean; reachable: boolean; model: string };
   utility: { configured: boolean };
   images: { configured: boolean; reachable: boolean; backend: string };
   tts: { configured: boolean; reachable: boolean };
@@ -28,6 +30,20 @@ export type Capabilities = {
 };
 
 export const PROBE_TIMEOUT_MS = 2_500;
+
+// The short name of whatever writes the story: the local tag, the custom
+// endpoint's model, or the connected agent's id.
+export function storyModelName(
+  settings: Pick<StorySettings, "textProvider" | "localTextModel" | "customModel">,
+): string {
+  const raw =
+    settings.textProvider === "local"
+      ? settings.localTextModel
+      : settings.textProvider === "harness"
+        ? settings.textProvider
+        : settings.customModel;
+  return (raw || "").trim().split("/").pop() || "";
+}
 // Long enough that a polling UI costs one upstream request per backend per
 // half minute, short enough that starting llama-server shows up promptly.
 export const PROBE_CACHE_MS = 30_000;
@@ -272,7 +288,7 @@ export async function capabilitiesSnapshot(): Promise<Capabilities> {
       : serverEnv("FLUX_WORKER_URL");
 
   return {
-    story: { configured, reachable: storyReachable },
+    story: { configured, reachable: storyReachable, model: configured ? storyModelName(settings) : "" },
     utility: { configured: utilityConfigured(settings) },
     images: {
       configured: imagesConfigured(

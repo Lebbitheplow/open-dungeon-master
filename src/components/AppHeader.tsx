@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
-import { PIXEL_ICONS, PixelTile } from "@/lib/ui";
 import { AccountMenu, AppBrand, AppHomeButton, type AccountMenuUser } from "@/components/AccountMenu";
 import { DeletionBanner } from "@/components/DeletionBanner";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -48,11 +47,13 @@ export function AppHeader({
     // user resolves, so the page header below never jumps.
     <header className={cn("mb-6", className)}>
       <div className="flex min-h-9 items-center justify-between gap-3">
-      <AppBrand>
-        <PixelTile src={PIXEL_ICONS.story} size="size-8" />
-        <span className="gold-title text-balance font-display text-base leading-tight tracking-wide sm:text-lg">
-          Open Dungeon Master
-        </span>
+      {/* The same mark the title screen wears: the closed book and the
+          spaced-caps wordmark, in the theme's gold here rather than the
+          painting's. */}
+      <AppBrand className="app-brand">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/assets/ui/book-closed.webp" alt="" className="app-brand-book" />
+        <span className="app-wordmark">Open Dungeon Master</span>
       </AppBrand>
       {/* The cluster fades into a slot the row already reserves (min-h-9). */}
       {resolved ? (

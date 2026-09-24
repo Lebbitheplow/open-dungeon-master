@@ -2,12 +2,12 @@
 
 import { type FormEvent, type RefObject, useState } from "react";
 import { cn } from "@/lib/cn";
-import { ui } from "@/lib/ui";
 import { navigateTo } from "@/lib/navigation";
 
-// Joining someone else's table by its invite code. The quick tile above
-// scrolls here and drops the cursor into the field through inputRef, so
-// the card stays where a friend's "type it in at the bottom" points.
+// Joining someone else's table by its invite code: "join by sigil". The
+// menu line above scrolls here and drops the cursor into the field through
+// inputRef, so the panel stays where a friend's "type it in at the bottom"
+// points.
 export function JoinCard({ inputRef }: { inputRef: RefObject<HTMLInputElement | null> }) {
   const [joinCode, setJoinCode] = useState("");
   const [joinError, setJoinError] = useState("");
@@ -38,18 +38,18 @@ export function JoinCard({ inputRef }: { inputRef: RefObject<HTMLInputElement | 
   }
 
   return (
-    <section id="join" className={cn(ui.card, "ornate scroll-mt-6 p-5")}>
-      <h2 className="eyebrow mb-1 text-sm text-amber-200/90">Join with a room code</h2>
-      <p className="mb-3 text-sm text-stone-500">
-        A friend running a table gives you an eight-letter sigil.
-      </p>
-      <form onSubmit={join} className="flex flex-wrap items-center gap-3">
+    <section id="join" className="ts-join ts-panel scroll-mt-6" aria-label="Join with a room code">
+      <span className="ts-bracket ts-bracket-tl" aria-hidden="true" />
+      <span className="ts-bracket ts-bracket-br" aria-hidden="true" />
+      <h2 className="ts-below-eyebrow">Join by sigil</h2>
+      <p className="ts-below-lede">A friend running a table gives you an eight-letter sigil.</p>
+      <form onSubmit={join} className="ts-join-form">
         {/* One real field does the typing, the pasting and the submitting; the
             boxes over it are only how the sigil is shown, so a keyboard, a
             paste and a password manager all behave as they always did. */}
         <label
           key={joinError ? `refused-${shakeKey}` : "calm"}
-          className={cn("relative flex cursor-text gap-1.5", joinError && "motion-shake")}
+          className={cn("ts-sigil", joinError && "motion-shake")}
           aria-label="Room code"
         >
           <input
@@ -70,28 +70,22 @@ export function JoinCard({ inputRef }: { inputRef: RefObject<HTMLInputElement | 
               <span
                 key={i}
                 aria-hidden="true"
-                className={cn(
-                  "flex h-11 w-8 items-center justify-center rounded-md border font-mono text-lg uppercase transition-[border-color,box-shadow,transform] duration-200 ease-snap sm:w-9",
-                  ch
-                    ? "border-amber-500/50 bg-amber-400/10 text-amber-100 shadow-[0_0_12px_rgba(212,171,58,0.15)]"
-                    : "border-stone-700/70 bg-stone-950/80 text-stone-600",
-                  next && "peer-focus:border-amber-400/80 peer-focus:shadow-[0_0_0_3px_rgba(212,171,58,0.18)]",
-                )}
+                className={cn("ts-sigil-box", ch && "ts-sigil-box-lit", next && "ts-sigil-box-next")}
               >
                 {ch ? <span className="motion-pop">{ch}</span> : null}
               </span>
             );
           })}
         </label>
-        <button type="submit" disabled={joining} className={ui.btnSecondary}>
+        <button type="submit" disabled={joining} className="ts-ghost motion-press">
           {joining ? "Joining..." : "Join"}
         </button>
         {joinCode.length >= 8 ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src="/assets/ui/wax-seal.webp" alt="" className="motion-pop size-10 object-contain drop-shadow-[0_3px_8px_rgba(4,2,12,0.6)]" />
+          <img src="/assets/ui/wax-seal.webp" alt="" className="motion-pop ts-seal" />
         ) : null}
       </form>
-      {joinError ? <p className="motion-shake mt-2 text-sm text-red-400">{joinError}</p> : null}
+      {joinError ? <p className="motion-shake ts-error">{joinError}</p> : null}
     </section>
   );
 }

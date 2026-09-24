@@ -8,13 +8,13 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ContextMenu } from "@/components/ui/ContextMenu";
 import { workshopPlate } from "@/app/workshop/plates";
-import { IconChip, ui } from "@/lib/ui";
+import { ui } from "@/lib/ui";
 import { Tooltip } from "@/components/ui/Tooltip";
 import type { WorkshopSummary } from "@/app/workshop/types";
 
-// The bench, alongside the tables. A workshop is not a game, so it gets its
-// own section rather than a row in the campaign list, but it is a first
-// thought rather than something buried in an account menu.
+// The bench, below the title screen. A workshop is not a game, so it gets
+// its own shelf rather than a save slot, but it is a first thought rather
+// than something buried in an account menu.
 export function WorkshopSection({
   workshops,
   cloningId,
@@ -48,34 +48,29 @@ export function WorkshopSection({
   }, [pending]);
   const waiting = !workshops.length && (pending ?? !probed);
   return (
-    <section className="mb-8">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <IconChip icon={Hammer} size="size-9" iconSize="size-4" />
-          <div>
-            <h2 className="eyebrow text-sm text-amber-200/90">Workshop</h2>
-            <p className="text-xs text-stone-500">
-              Build maps, NPCs, monsters, story and rules before a table exists.
-            </p>
-          </div>
+    <section className="ts-bench" aria-label="Workshop">
+      <div className="ts-bench-head">
+        <div className="min-w-0">
+          <h2 className="ts-below-eyebrow">The workshop</h2>
+          <p className="ts-below-lede">Build maps, NPCs, monsters, story and rules before a table exists.</p>
         </div>
-        <Link href="/workshop" className={ui.btnSecondary}>
+        <Link href="/workshop" className="ts-ghost motion-press">
           <Hammer className="size-4" /> Open workshop
         </Link>
       </div>
 
       {waiting ? (
-        <div className="reveal grid grid-cols-1 gap-3 sm:grid-cols-2" aria-busy="true">
-          <div className="skeleton-block h-[4.75rem] rounded-xl" />
-          <div className="skeleton-block hidden h-[4.75rem] rounded-xl sm:block" />
+        <div className="ts-bench-row reveal" aria-busy="true">
+          <div className="skeleton-block ts-bench-skeleton" />
+          <div className="skeleton-block ts-bench-skeleton hidden sm:block" />
         </div>
       ) : workshops.length ? (
-        <ul className="stagger-up grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <ul className="ts-bench-row stagger-up">
           {workshops.map((workshop) => (
             <ContextMenu
               as="li"
               key={workshop.id}
-              className={cn(ui.cardHover, "group relative px-4 py-3")}
+              className="ts-bench-item ts-panel motion-card group"
               label={workshop.title}
               // The row's link and its one button again; both stay on the row.
               items={[
@@ -83,19 +78,12 @@ export function WorkshopSection({
                 { id: "duplicate", label: "Duplicate", glyph: "tab-notes", disabled: cloningId === workshop.id, onSelect: () => onClone(workshop.id) },
               ]}
             >
-              <Link href={`/workshop/${workshop.id}`} className="flex items-center gap-3">
+              <Link href={`/workshop/${workshop.id}`} className="ts-bench-door" data-no-motion>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={workshopPlate(workshop.id)}
-                  alt=""
-                  loading="lazy"
-                  className="h-12 w-20 shrink-0 rounded-md border border-amber-400/20 object-cover"
-                />
+                <img src={workshopPlate(workshop.id)} alt="" loading="lazy" className="ts-bench-plate" />
                 <span className="min-w-0 pr-8">
-                  <span className="block truncate font-display text-lg tracking-wide text-amber-50">
-                    {workshop.title}
-                  </span>
-                  <span className="block text-sm text-stone-400">
+                  <span className="ts-slot-title block truncate">{workshop.title}</span>
+                  <span className="ts-slot-line block">
                     Party of {workshop.gameSettings.targetParty.size} at level{" "}
                     {workshop.gameSettings.targetParty.level}
                   </span>
