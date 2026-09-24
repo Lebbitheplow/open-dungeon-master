@@ -233,16 +233,19 @@ export async function installFromUrl(url: string, expectedId?: string): Promise<
   if (!fetched.ok) {
     return { ok: false, status: 502, error: fetched.error };
   }
-  const result = await installWorldPack(fetched.value);
-  if (result.ok && expectedId && result.pack.id !== expectedId) {
-    // The registry listed one world and the download turned out to be a
-    // different one. It is already written, so say plainly which id landed
-    // rather than pretending the install matched the listing.
-    return {
-      ok: false,
-      status: 409,
-      error: `The registry listed "${expectedId}" but the download contained "${result.pack.id}". It was installed under its own id.`,
-    };
+
+  // A registry entry is an integrity claim about the manifest it points at.
+  // Check that claim before installWorldPack gets any chance to write.
+  if (expectedId) {
+    const parsed = worldPackSchema.safeParse(fetched.value);
+    if (parsed.success && parsed.data.id !== expectedId) {
+      return {
+        ok: false,
+        status: 409,
+        error: `The registry listed "${expectedId}" but the download contained "${parsed.data.id}". Nothing was installed.`,
+      };
+    }
   }
-  return result;
+
+  return installWorldPack(fetched.value);
 }
