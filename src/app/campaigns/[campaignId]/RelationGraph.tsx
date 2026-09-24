@@ -1,7 +1,7 @@
 "use client";
 
 import { EmptyState } from "@/components/EmptyState";
-import { useMemo } from "react";
+import { useMemo, type KeyboardEvent } from "react";
 import { cn } from "@/lib/cn";
 import { layoutGraph } from "@/lib/npcs/graph-layout";
 import type { RelationGraph as Graph } from "@/lib/npcs/forge";
@@ -136,16 +136,20 @@ export function RelationGraph({
           <g
             key={node.name}
             transform={`translate(${at.x} ${at.y})`}
-            role="button"
-            tabIndex={0}
-            aria-label={`Open ${node.name}`}
-            onClick={() => (node.known ? onOpen(node.name) : undefined)}
-            onKeyDown={(event) => {
-              if ((event.key === "Enter" || event.key === " ") && node.known) {
-                event.preventDefault();
-                onOpen(node.name);
-              }
-            }}
+            {...(node.known
+              ? {
+                  role: "button",
+                  tabIndex: 0,
+                  "aria-label": `Open ${node.name}`,
+                  onClick: () => onOpen(node.name),
+                  onKeyDown: (event: KeyboardEvent<SVGGElement>) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onOpen(node.name);
+                    }
+                  },
+                }
+              : { "aria-label": `${node.name} (unwritten)` })}
             className={cn(node.known ? "cursor-pointer" : "cursor-default")}
           >
             <circle
