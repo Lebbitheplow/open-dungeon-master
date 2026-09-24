@@ -18,6 +18,7 @@ import { genreClassIds } from "@/lib/classes";
 import { renderArcForPrompt } from "@/lib/dm/arc-logic";
 import { renderWorldArcsForPrompt } from "@/lib/dm/world-arc-logic";
 import { renderFactsForPrompt, type FactLike } from "@/lib/dm/fact-logic";
+import { THIS_TURN_HEADING } from "@/lib/prompt-boundary";
 import { companionMode } from "@/lib/dm/companion-tools";
 import { breakDown, describeInstant, isDark, normalizeClock } from "@/lib/dm/calendar";
 import { describeWeather } from "@/lib/srd/weather";
@@ -115,6 +116,9 @@ export function buildDmSystem(campaign: Campaign): string {
   if (campaign.gameSettings.genre === "custom" && campaign.gameSettings.customGenreText) {
     parts.push(`Tone and world, set by the table: ${campaign.gameSettings.customGenreText}`);
   }
+  // Closes what changes only with the campaign's settings; the cover block's
+  // countdown below changes every turn (src/lib/prompt-boundary.ts).
+  parts.push(THIS_TURN_HEADING);
   // Assisted mode, DM stepped away: the model is standing in for a person for
   // a counted stretch, and is told so plainly rather than being left to run
   // someone else's campaign as if it were its own.

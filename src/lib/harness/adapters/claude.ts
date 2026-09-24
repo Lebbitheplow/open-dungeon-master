@@ -9,6 +9,7 @@
 
 import { writeFileSync } from "node:fs";
 import path from "node:path";
+import { THIS_TURN_HEADING } from "@/lib/prompt-boundary";
 import { parseJsonLine, runProgram, spawnProgram } from "../process.ts";
 import type { HarnessAdapter, HarnessModel, HarnessStartOptions } from "../types.ts";
 
@@ -76,6 +77,17 @@ export const CLAUDE_ENV = {
   MCP_TIMEOUT: "30000",
 };
 
+// Claude Code (2.1.275+) caches the system prompt file in two blocks, split
+// at a line holding only this marker, which it then removes: the part above
+// it, the campaign's static rules, is read from the cache on later turns
+// instead of written again. Only the first heading is ours: the DM rules
+// come before anything a player writes. Through Bedrock, Vertex or a gateway
+// Claude Code sends one block, as without the marker.
+// https://code.claude.com/docs/en/agent-sdk/modifying-system-prompts
+export function withCacheBoundary(system: string): string {
+  return system.replace(THIS_TURN_HEADING, "__SYSTEM_PROMPT_DYNAMIC_BOUNDARY__");
+}
+
 function textOf(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
@@ -105,7 +117,7 @@ async function start(options: HarnessStartOptions) {
   // characters (Linux caps one argument at 128 K), so on argv the program
   // could not start at all.
   const systemPromptPath = path.join(options.cwd, "odm-system-prompt.md");
-  writeFileSync(systemPromptPath, options.system, { mode: 0o600 });
+  writeFileSync(systemPromptPath, withCacheBoundary(options.system), { mode: 0o600 });
   const args = claudeArgs({
     systemPromptPath,
     model: options.model,
