@@ -12,8 +12,8 @@ import { ui } from "@/lib/ui";
 // The detail page's one primary action (docs/visual-overhaul-plan.md 8c.2):
 // take this library character to a table. It lists the campaigns the player
 // belongs to and sends the same request the campaign's own "pick from your
-// library" page sends, so the server's rules (one character per player, swaps
-// only in the lobby) are the ones that answer.
+// library" page sends, so the campaign's multi-character setting and the
+// server's lobby/gameplay rules are the ones that answer.
 
 type CampaignRow = {
   id: string;
