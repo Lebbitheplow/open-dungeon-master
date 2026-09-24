@@ -132,7 +132,7 @@ export function ServerAddressButton() {
 
   return (
     <div
-      className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-end px-4 pb-4"
+      className="server-address-dock pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-end px-4 pb-4"
       style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
     >
       <div className="pointer-events-auto flex flex-col items-end gap-2">

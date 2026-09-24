@@ -69,6 +69,19 @@ export type CampaignSummary = {
 
 export type CampaignCover = { id: string; url: string };
 
+// The title screen's glance at a table (src/lib/db/home-glance.ts): the last
+// narration, the open chapter, the newest painted scene and the party's
+// faces. Rides GET /api/campaigns so the home can draw a table without
+// opening it; the shells read the same list.
+export type HomeGlanceFace = { name: string; url: string };
+export type HomeGlance = {
+  chapter: { index: number; title: string } | null;
+  recap: string;
+  recapAt: string | null;
+  sceneImage: string | null;
+  faces: HomeGlanceFace[];
+};
+
 // What a player is doing when they hit send. Shared by the composer and the
 // routes on purpose: this used to live in Composer.tsx while the actions
 // route re-declared its own narrower enum, so the two could drift, and a

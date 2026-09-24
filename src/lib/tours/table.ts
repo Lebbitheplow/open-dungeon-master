@@ -4,7 +4,10 @@
 // side effects SessionView performs before a step (which tab to open,
 // which column a phone shows). Steps whose anchor is not on screen are
 // skipped, so one list serves every table: a tab that is off (maps,
-// voice, narration) simply never gets a step.
+// voice, narration) simply never gets a step, and the cinematic frame's
+// pieces (the party rail from a wide table up, the turn order in the top
+// bar during a fight, the quest line once there is a quest) only get one
+// where they are showing.
 import type { TourStep } from "@/lib/tours/logic";
 
 export const PLAYER_TOUR_ID = "table-player";
@@ -14,7 +17,7 @@ export const PLAYER_TOUR: TourStep[] = [
   {
     id: "welcome",
     title: "Welcome to the table",
-    body: "This is where the adventure is played. The story runs down the middle; your character, the party and the world sit in the side panel. A short tour shows the controls. Replay it any time from Help.",
+    body: "This is where the adventure is played. The story runs down the middle over a painting of the scene; on a wide screen the party stands down the left, and your character, the quests and the world sit in the side panel. When a fight with a map starts, a wide screen puts the board in the middle with the story on a scroll beside it. A short tour shows the controls. Replay it any time from Help.",
     anchors: [],
   },
   {
@@ -53,11 +56,30 @@ export const PLAYER_TOUR: TourStep[] = [
     prepare: "show-chat",
   },
   {
+    id: "party-rail",
+    title: "The party at a glance",
+    body: "Every hero's face, hit points and class, down the left of the table. A bar flashes when someone is hurt or healed, the hero whose turn it is glows, and yours is marked. Select a card to open the party.",
+    anchors: ["party-rail"],
+  },
+  {
+    id: "turn-order",
+    title: "Whose turn it is",
+    body: "During a fight the turn order runs along the top bar, with whoever is acting lit in gold. Select a face to open the party and the full order.",
+    anchors: ["initiative-ribbon"],
+  },
+  {
     id: "party",
     title: "The party",
     body: "Everyone's hit points and conditions, and the fight order during combat. Select a card to open the full sheet: every spell, item and feature has a painted icon, and the mark beside it opens its description. The room code lives in the lead's tab.",
     anchors: ["tab-party"],
     prepare: "open-party",
+  },
+  {
+    id: "quest",
+    title: "The quest at hand",
+    body: "The party's current quest sits above the side panel so it is never out of sight. Select it to open the story, where Quests holds the whole log.",
+    anchors: ["quest-glance"],
+    prepare: "open-story",
   },
   {
     id: "story",
@@ -69,9 +91,15 @@ export const PLAYER_TOUR: TourStep[] = [
   {
     id: "map",
     title: "Maps",
-    body: "The scene map, the overworld and the places the party has found. A battle map opens in its own tab while a fight with a map is running: the portraits along its top are the turn order, and on your turn the pips beside them show the action, bonus action and reaction you have left.",
+    body: "The scene map, the overworld and the places the party has found. While a fight with a map is running, the battle board takes the middle of a wide screen, or its own tab on a phone: the portraits along its top are the turn order, and on your turn the pips beside them show the action, bonus action and reaction you have left. Enlarge spreads the board across the whole screen, with the chronicle and a box to take your turn on its left and the turn order down its right.",
     anchors: ["tab-map", "tab-battle"],
     prepare: "open-map",
+  },
+  {
+    id: "stage",
+    title: "Board or story",
+    body: "While a fight with a map is on, this switch picks what fills the middle of the table: the board with the chronicle beside it, or the story as usual with the board in its tab. This browser remembers your choice.",
+    anchors: ["header-stage"],
   },
   {
     id: "chat",
@@ -83,7 +111,7 @@ export const PLAYER_TOUR: TourStep[] = [
   {
     id: "dice",
     title: "Dice",
-    body: "Every roll is made by the server, never invented. This menu turns the tumbling 3D dice on or off, opens the editor for your own dice colours, and on a phone lets you shake to roll.",
+    body: "Every roll is made by the server, never invented, and the latest one flashes up over the story with its total. This menu turns the tumbling 3D dice on or off, opens the editor for your own dice colours, and on a phone lets you shake to roll.",
     anchors: ["header-dice"],
   },
   {
@@ -157,11 +185,36 @@ export const DM_TOUR: TourStep[] = [
     prepare: "open-dm",
   },
   {
+    id: "party-rail",
+    title: "The party at a glance",
+    body: "Every hero's face, hit points and class, down the left of the table, the one whose turn it is glowing. Select a card to open the party.",
+    anchors: ["party-rail"],
+  },
+  {
+    id: "turn-order",
+    title: "Whose turn it is",
+    body: "During a fight the turn order runs along the top bar, with whoever is acting lit in gold. Select a face to open the party.",
+    anchors: ["initiative-ribbon"],
+  },
+  {
     id: "party",
     title: "The party",
     body: "Sheets, hit points and conditions for everyone, and during combat the initiative order you can reorder.",
     anchors: ["tab-party"],
     prepare: "open-party",
+  },
+  {
+    id: "map",
+    title: "Maps and the board",
+    body: "The scene map and the overworld. While a fight with a map is running, the battle board takes the middle of a wide screen with the chronicle beside it, or its own tab on a phone. Enlarge spreads the board across the whole screen with the chronicle and a box to keep narrating on its left, and the turn order down its right.",
+    anchors: ["tab-map", "tab-battle"],
+    prepare: "open-map",
+  },
+  {
+    id: "stage",
+    title: "Board or story",
+    body: "While a fight with a map is on, this switch picks what fills the middle of the table: the board with the chronicle beside it, or the story as usual with the board in its tab. This browser remembers your choice.",
+    anchors: ["header-stage"],
   },
   {
     id: "chat",

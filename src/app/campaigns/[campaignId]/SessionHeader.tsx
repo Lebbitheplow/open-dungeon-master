@@ -3,7 +3,7 @@
 import Link from "next/link";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Check } from "lucide-react";
-import { memo, type ComponentProps } from "react";
+import { memo, type ComponentProps, type ReactNode } from "react";
 import { HeaderGlyph } from "@/app/campaigns/[campaignId]/SessionGlyph";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { Slider } from "@/components/ui/Slider";
@@ -135,6 +135,8 @@ export const SessionHeader = memo(function SessionHeader({
   ambienceEnabled,
   ambience,
   onHelp,
+  ribbon,
+  stage,
 }: {
   title: string;
   scene: string;
@@ -154,16 +156,24 @@ export const SessionHeader = memo(function SessionHeader({
   ambienceEnabled: boolean;
   ambience: AmbienceAudio;
   onHelp: () => void;
+  // The initiative ribbon during a fight (CinematicParts.tsx), laid along
+  // the middle of the bar from md up; the phone keeps the banner above the
+  // composer instead.
+  ribbon?: ReactNode;
+  // The fight stage switch, shown while a board is on the table: the board
+  // in the main column or the story there, with the board in its tab.
+  stage?: { on: boolean; onToggle: () => void };
 }) {
   const diceItem = "session-menu-row";
   return (
-    <header className="glass session-header z-10 flex items-center gap-2 border-b border-stone-700/40 px-3 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top))] sm:gap-3 sm:px-4">
+    <header className="glass session-header cine-header z-10 flex items-center gap-2 border-b border-stone-700/40 px-3 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top))] sm:gap-3 sm:px-4">
       <div className="min-w-0 flex-1">
         <h1 className="gold-title session-title font-display">{title}</h1>
         <p key={scene} className="live-in truncate font-serif text-xs italic text-stone-400">
           {scene || "The adventure unfolds"}
         </p>
       </div>
+      {ribbon ? <div className="cine-ribbon-slot hidden lg:flex">{ribbon}</div> : null}
       <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">
         {/* Every table-wide control on one brass plate; the way out and the
             account menu stay beside it as the app's own furniture. */}
@@ -254,6 +264,20 @@ export const SessionHeader = memo(function SessionHeader({
             onVolume={(value) => ambience.setVolume(value)}
             glyph="tab-ambience"
           />
+        ) : null}
+        {stage ? (
+          <Tooltip content={stage.on ? "Show the story here, with the board in its tab" : "Show the board here, with the story beside it"} side="bottom">
+            <button
+              type="button"
+              onClick={stage.onToggle}
+              aria-label={stage.on ? "Show the story" : "Show the board"}
+              aria-pressed={stage.on}
+              data-tour="header-stage"
+              className={headerButtonClass(stage.on)}
+            >
+              <HeaderGlyph glyph={stage.on ? "tab-story" : "tab-battle"} />
+            </button>
+          </Tooltip>
         ) : null}
         <Tooltip content="How everything works, and the guided tours" side="bottom">
           <button

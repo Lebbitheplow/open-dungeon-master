@@ -3,7 +3,7 @@
 import { ChevronRight, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
-import { placeCard, resolveSteps, type ResolvedStep, type TourStep } from "@/lib/tours/logic";
+import { placeCard, resolveSteps, skipVanished, type ResolvedStep, type TourStep } from "@/lib/tours/logic";
 import { ui } from "@/lib/ui";
 
 // A spotlight walkthrough: dims the page, cuts a window around one control
@@ -44,6 +44,9 @@ export function GuidedTour({
   const [card, setCard] = useState<{ top: number; left: number }>({ top: -9999, left: -9999 });
   const cardRef = useRef<HTMLDivElement>(null);
   const nextRef = useRef<HTMLButtonElement>(null);
+  // Which way the reader last moved, so a step whose target has gone is
+  // skipped onward rather than bouncing them back.
+  const direction = useRef<1 | -1>(1);
 
   // Which steps apply is decided against the page a moment after the tour
   // opens, once the table has laid itself out; before that the page may
@@ -92,11 +95,20 @@ export function GuidedTour({
   // The step's side effect, then the target into view, then measure.
   // Positioning is asynchronous (a tab switch renders on the next frame,
   // a phone column may slide), so a few staggered measurements follow.
+  // The steps were chosen when the tour opened; if the page has changed
+  // since and the target is gone once the prepare has landed, the step is
+  // skipped rather than shown pointing at nothing.
   useEffect(() => {
     if (!current) return;
     if (current.step.prepare) onPrepare?.(current.step.prepare);
     const timers = [0, 80, 260, 600].map((delay) =>
       window.setTimeout(() => {
+        if (delay === 260 && current.anchor && !current.step.lazy && !findAnchor(current.anchor)) {
+          const next = skipVanished(index, direction.current, total);
+          if (next < 0) onClose();
+          else setIndex(next);
+          return;
+        }
         if (delay === 80) {
           const target = current.anchor ? findAnchor(current.anchor) : null;
           target?.scrollIntoView({ block: "center", inline: "nearest" });
@@ -106,7 +118,7 @@ export function GuidedTour({
       }, delay),
     );
     return () => timers.forEach((timer) => clearTimeout(timer));
-  }, [current, onPrepare, position]);
+  }, [current, onPrepare, position, index, total, onClose]);
 
   useEffect(() => {
     if (!current) return;
@@ -123,6 +135,7 @@ export function GuidedTour({
 
   const step = useCallback(
     (delta: number) => {
+      direction.current = delta < 0 ? -1 : 1;
       const next = index + delta;
       if (next >= total) {
         onClose();

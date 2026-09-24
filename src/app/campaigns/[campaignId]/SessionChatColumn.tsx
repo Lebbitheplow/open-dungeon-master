@@ -35,6 +35,7 @@ export function SessionChatColumn({
   onLoreCheck,
   onRenarrate,
   onPinned,
+  stage,
   children,
 }: {
   state: CampaignState;
@@ -53,6 +54,9 @@ export function SessionChatColumn({
   onRenarrate: (message: CampaignMessage) => void;
   // A memory pin landed, so the pins panel should refetch.
   onPinned: () => void;
+  // The fight stage (the board and the chronicle scroll) in place of the
+  // transcript while a board is on the table and the columns are docked.
+  stage?: ReactNode;
   children: ReactNode;
 }) {
   const { campaign, messages, rolls, sheets, locations, dmStatus, utilityCalls } = state;
@@ -72,13 +76,14 @@ export function SessionChatColumn({
   const visibleUtilityCalls = utilityCalls.filter((call) => call.kind !== "ask");
 
   return (
-    <div className={cn("min-w-0 flex-1 flex-col", visible ? "flex" : "hidden lg:flex")}>
+    <div className={cn("cine-chat min-w-0 flex-1 flex-col", visible ? "flex" : "hidden lg:flex", stage && "cine-chat-staged")}>
       <ReportDialog
         campaignId={campaignId}
         target={reportTarget}
         onClose={() => setReportTarget(null)}
         onBlocked={(userId) => setJustBlocked((current) => [...current, userId])}
       />
+      {stage ? stage : (
       <MessageList
         messages={messages}
         campaignId={campaignId}
@@ -251,6 +256,7 @@ export function SessionChatColumn({
             : undefined
         }
       />
+      )}
 
       <ItemProposalBar
         campaignId={campaignId}

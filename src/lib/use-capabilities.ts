@@ -12,7 +12,7 @@ import { useEffect, useState } from "react";
 // hide a working feature. Only a positive "not configured" hides a control.
 
 export type ClientCapabilities = {
-  story: { configured: boolean; reachable: boolean };
+  story: { configured: boolean; reachable: boolean; model?: string };
   utility: { configured: boolean };
   images: { configured: boolean; reachable: boolean; backend: string };
   tts: { configured: boolean; reachable: boolean };

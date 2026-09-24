@@ -3,7 +3,7 @@
 import { BookMarked, BookOpen, Flag, Heart, History, ListChecks, ScrollText, ShoppingBag, Users } from "lucide-react";
 import { FactionsPanel } from "@/app/campaigns/[campaignId]/FactionsPanel";
 import { MarketPanel } from "@/app/campaigns/[campaignId]/MarketPanel";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { DmConsolePanel } from "@/app/campaigns/[campaignId]/DmConsolePanel";
 import { LeadPanel } from "@/app/campaigns/[campaignId]/LeadPanel";
 import type { CampaignMessage } from "@/lib/db/messages";
@@ -139,6 +139,11 @@ export type SidePanelRouterProps = {
   // A pinned map label was tapped: open what it points at.
   onOpenLabel?: (label: MapLabel) => void;
   refreshBattleMap: () => Promise<void>;
+  // The chronicle scroll for the enlarged board (CinematicParts.tsx).
+  tabletopChronicle?: ReactNode;
+  // The board is on the table (the fight stage), so the Battle tab shows
+  // the party and the turn order instead of a second board.
+  stageBoard?: boolean;
   tab: PanelTab;
   // Bumped by the relationships_updated ephemeral; the Bonds panel refetches
   // its own scoped view when it changes.
@@ -208,7 +213,9 @@ export function SidePanelRouter({
   canDraw,
   onOpenLabel,
   refreshBattleMap,
-  tab,
+  tabletopChronicle,
+  stageBoard = false,
+  tab: rawTab,
   relationshipsVersion,
   factionsVersion = 0,
   shopsVersion = 0,
@@ -274,6 +281,7 @@ export function SidePanelRouter({
     members.map((member) => member.userId),
   );
 
+  const tab: PanelTab = stageBoard && rawTab === "battle" ? "party" : rawTab;
   if (tab === "dm" && adjudicates) {
     return (
       <DmConsolePanel
@@ -437,6 +445,7 @@ export function SidePanelRouter({
         encounter={encounter ?? null}
         sheets={sheets}
         refreshBattleMap={refreshBattleMap}
+        chronicle={tabletopChronicle}
         visible={visible}
       />
     );

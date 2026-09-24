@@ -217,7 +217,7 @@ function BottomTabBarInner({
   steersStory: boolean;
 }) {
   return (
-    <nav className="glass no-scrollbar flex items-stretch gap-1 overflow-x-auto border-t border-stone-700/40 px-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-1 lg:hidden">
+    <nav className="cine-bottombar glass no-scrollbar flex items-stretch gap-1 overflow-x-auto border-t border-stone-700/40 px-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-1 lg:hidden">
       <button
         type="button"
         onClick={onSelectChat}

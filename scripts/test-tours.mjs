@@ -5,7 +5,7 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { markTourSeen, placeCard, resolveSteps, tourSeen } = await import("../src/lib/tours/logic.ts");
+const { markTourSeen, placeCard, resolveSteps, skipVanished, tourSeen } = await import("../src/lib/tours/logic.ts");
 const { DM_TOUR, PLAYER_TOUR } = await import("../src/lib/tours/table.ts");
 const { HUB_TOUR, SHELF_TOUR, SYSTEM_TOURS, systemTourId, workshopTourAnchors } = await import(
   "../src/lib/tours/workshop.ts"
@@ -65,8 +65,9 @@ test("the DM tour walks the console top to bottom before the shared tabs", () =>
 test("every step points at a known anchor or none", () => {
   const known = new Set([
     "composer-modes", "composer-input", "composer-talk", "battle-hand", "ask-dm",
+    "party-rail", "initiative-ribbon", "quest-glance",
     "tab-party", "tab-story", "tab-map", "tab-battle", "tab-chat", "tab-dm",
-    "header-dice", "header-voice", "header-help",
+    "header-dice", "header-voice", "header-help", "header-stage",
     "dm-floor", "dm-beats", "dm-delegation", "dm-queue", "dm-console-tabs",
   ]);
   for (const step of [...PLAYER_TOUR, ...DM_TOUR]) {
@@ -98,6 +99,15 @@ test("tourSeen round-trips and a broken store counts as seen", () => {
   const broken = { getItem() { throw new Error("denied"); }, setItem() { throw new Error("denied"); } };
   assert.equal(tourSeen(broken, "x"), true);
   assert.doesNotThrow(() => markTourSeen(broken, "x"));
+});
+
+test("a step whose target vanished is skipped the way the reader was going", () => {
+  assert.equal(skipVanished(6, 1, 16), 7);
+  assert.equal(skipVanished(6, -1, 16), 5);
+  // Backing onto a vanished first step turns round; past the end closes.
+  assert.equal(skipVanished(0, -1, 16), 1);
+  assert.equal(skipVanished(15, 1, 16), -1);
+  assert.equal(skipVanished(0, -1, 1), -1);
 });
 
 test("a lazy step survives an absent anchor; a plain one does not", () => {
@@ -149,13 +159,26 @@ function sourceFiles(dir) {
   return out;
 }
 
+// fileURLToPath, not .pathname: on Windows the latter hands back
+// "/D:/a/..." and readdirSync then resolves it against the drive,
+// scanning "D:\\D:\\a\\..." and failing. That is what red the Windows
+// smoke run.
+const SOURCE = sourceFiles(fileURLToPath(new URL("../src", import.meta.url)))
+  .map((file) => readFileSync(file, "utf8"))
+  .join("\n");
+
+test("every table tour anchor exists in the source as data-tour", () => {
+  // The session tabs build theirs as data-tour={`tab-${value}`}.
+  for (const step of [...PLAYER_TOUR, ...DM_TOUR]) {
+    for (const anchor of step.anchors) {
+      const carried = SOURCE.includes(`data-tour="${anchor}"`) || anchor.startsWith("tab-");
+      assert.ok(carried, `${step.id}: no component carries data-tour="${anchor}"`);
+    }
+  }
+});
+
 test("every workshop tour anchor exists in the source as data-tour", () => {
-  // fileURLToPath, not .pathname: on Windows the latter hands back
-  // "/D:/a/..." and readdirSync then resolves it against the drive,
-  // scanning "D:\\D:\\a\\..." and failing. That is what red the Windows
-  // smoke run.
-  const root = fileURLToPath(new URL("../src", import.meta.url));
-  const source = sourceFiles(root).map((file) => readFileSync(file, "utf8")).join("\n");
+  const source = SOURCE;
   for (const anchor of workshopTourAnchors()) {
     const carried =
       source.includes(`data-tour="${anchor}"`) ||
