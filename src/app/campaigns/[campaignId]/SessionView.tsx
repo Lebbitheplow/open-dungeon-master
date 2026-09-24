@@ -66,6 +66,8 @@ import { useChatChime } from "@/app/campaigns/[campaignId]/useChatChime";
 import { useTableAudio } from "@/app/campaigns/[campaignId]/useTableAudio";
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
 import { InitiativeRibbon, PartyRail, QuestGlance, RollToast, SceneBackdrop, TabletopChronicle } from "@/app/campaigns/[campaignId]/CinematicParts";
+import { BattleMapPanel } from "@/app/campaigns/[campaignId]/BattleMapPanel";
+import { useDocked } from "@/app/campaigns/[campaignId]/SidePanel";
 
 // The level-up dialog carries the class feature and resource tables of the
 // whole SRD; it loads the first time a character actually levels rather
@@ -259,6 +261,22 @@ export function SessionView({
   // here because the tab hook needs it to fall off the lead tab when the
   // seat moves.
   const isLead = Boolean(campaign && me && campaign.leadUserId === me.id);
+  // The fight stage: while a board is on the table and the columns are
+  // docked, the board takes the main column with the chronicle scroll
+  // beside it, so a card is aimed at a board the size of the table rather
+  // than a map in the side panel. The header switch shows the story there
+  // instead; the choice is the reader's, kept per browser.
+  const docked = useDocked();
+  const [stageView, setStageView] = useState<"board" | "story">(() =>
+    typeof window !== "undefined" && window.localStorage.getItem("odm:stage-view") === "story" ? "story" : "board",
+  );
+  const toggleStage = useCallback(() => {
+    setStageView((current) => {
+      const next = current === "board" ? "story" : "board";
+      window.localStorage.setItem("odm:stage-view", next);
+      return next;
+    });
+  }, []);
   const { panelTab, setPanelTab, mobileView, setMobileView } = useSessionTabs({
     chatTarget,
     battleMap: state.battleMap,
@@ -288,11 +306,21 @@ export function SessionView({
     () => readTourSeen(tourId),
     () => true,
   );
+  // A phone starts the tour on the chat column: which steps apply is read
+  // off the page before any step's prepare runs, and a fight with a map
+  // opens the phone on the board, which would drop every composer step.
+  const startTour = useCallback(
+    (which: "player" | "dm") => {
+      setMobileView("chat");
+      setTour(which);
+    },
+    [setMobileView],
+  );
   useEffect(() => {
     if (tourAlreadySeen) return;
-    const timer = window.setTimeout(() => setTour(isDm ? "dm" : "player"), 1200);
+    const timer = window.setTimeout(() => startTour(isDm ? "dm" : "player"), 1200);
     return () => clearTimeout(timer);
-  }, [tourAlreadySeen, isDm]);
+  }, [tourAlreadySeen, isDm, startTour]);
   const closeTour = useCallback(() => {
     markTourSeen(window.localStorage, tourId);
     window.dispatchEvent(new Event(TOUR_SEEN_EVENT));
@@ -579,6 +607,31 @@ export function SessionView({
   }
 
   const storyDue = storyCadence.level !== "quiet";
+  const fightStaged = docked && stageView === "board" && Boolean(state.battleMap);
+  // Two copies of the scroll: the fight stage's has no composer (the desk
+  // is right under the board); the enlarged board's keeps it (the dialog
+  // covers the desk).
+  const chronicleFor = (composer: boolean) => needsCharacter ? null : (
+    <TabletopChronicle
+      messages={messages}
+      rolls={state.rolls}
+      sheets={sheets}
+      members={state.members}
+      isDm={isDm}
+      steersStory={steersStory}
+      kind={kind}
+      onKindChange={setKind}
+      input={input}
+      setInput={setInput}
+      sending={sending}
+      inputBlocked={gate.inputBlocked || muted}
+      placeholder={muted ? "The party lead has muted you at this table." : gate.placeholder}
+      onSubmit={submit}
+      composer={composer}
+    />
+  );
+  const chronicle = chronicleFor(false);
+  const chronicleDesk = chronicleFor(true);
 
   return (
     <main className="cine-stage flex h-dvh flex-col">
@@ -606,6 +659,7 @@ export function SessionView({
         ambienceEnabled={Boolean(campaign.gameSettings?.ambienceEnabled)}
         ambience={ambience}
         onHelp={openHelp}
+        stage={state.battleMap && docked ? { on: stageView === "board", onToggle: toggleStage } : undefined}
         ribbon={
           state.encounter?.status === "active" ? (
             <InitiativeRibbon
@@ -619,14 +673,52 @@ export function SessionView({
       />
 
       <div className="cine-row flex min-h-0 flex-1">
-        <PartyRail
-          sheets={sheets}
-          meUserId={me.id}
-          encounter={state.encounter}
-          genre={campaign.genre}
-          onOpen={() => setPanelTab("party")}
-        />
+        {fightStaged ? null : (
+          <PartyRail
+            sheets={sheets}
+            meUserId={me.id}
+            encounter={state.encounter}
+            genre={campaign.genre}
+            onOpen={() => setPanelTab("party")}
+          />
+        )}
         <SessionChatColumn
+          stage={
+            fightStaged && state.battleMap ? (
+              <div className="cine-fight">
+                {chronicle}
+                <div className="cine-fight-board cine-board-frame">
+                  <BattleMapPanel
+                    campaignId={campaign.id}
+                    view={state.battleMap}
+                    intents={state.battleMap.intents}
+                    genre={campaign.gameSettings?.genre ?? null}
+                    turnBudget={
+                      state.encounter?.turn && sheets.some((sheet) => sheet.id === state.encounter?.turn?.ownerId && sheet.userId === me.id)
+                        ? { action: !state.encounter.turn.actionUsed, bonus: !state.encounter.turn.bonusUsed, reaction: !state.encounter.turn.reactionUsed }
+                        : null
+                    }
+                    canDirect={caps.adjudicates}
+                    canFocusPing={steersStory}
+                    ping={state.mapPing ?? null}
+                    fx={state.fx}
+                    onFxPlayed={markFxPlayed}
+                    camera={state.camera ?? null}
+                    onCameraDone={markCameraDone}
+                    onCompose={composeFromBoard}
+                    sky={state.scene ?? null}
+                    canDraw={caps.adjudicates || campaign.gameSettings?.boardDrawing !== false}
+                    onOpenLabel={openLabel}
+                    encounter={state.encounter ?? null}
+                    sheets={sheets}
+                    refreshBattleMap={refreshBattleMap}
+                    chronicle={chronicleDesk}
+                    visible
+                  />
+                </div>
+              </div>
+            ) : undefined
+          }
           state={state}
           campaignId={campaign.id}
           meUserId={me.id}
@@ -753,26 +845,8 @@ export function SessionView({
           beats={state.beats}
           storyDue={storyDue}
           glance={<QuestGlance quests={campaign.questLog ?? []} onOpen={() => setPanelTab("story")} />}
-          tabletopChronicle={
-            needsCharacter ? undefined : (
-              <TabletopChronicle
-                messages={messages}
-                rolls={state.rolls}
-                sheets={sheets}
-                members={state.members}
-                isDm={isDm}
-                steersStory={steersStory}
-                kind={kind}
-                onKindChange={setKind}
-                input={input}
-                setInput={setInput}
-                sending={sending}
-                inputBlocked={gate.inputBlocked || muted}
-                placeholder={muted ? "The party lead has muted you at this table." : gate.placeholder}
-                onSubmit={submit}
-              />
-            )
-          }
+          tabletopChronicle={chronicleDesk ?? undefined}
+          stageBoard={fightStaged}
         />
       </div>
 
@@ -816,14 +890,14 @@ export function SessionView({
           {
             label: "Tour the table",
             detail: "How a player takes a turn, asks the DM, and finds the party, the story and the maps.",
-            onStart: () => setTour("player"),
+            onStart: () => startTour("player"),
           },
           ...(caps.adjudicates
             ? [
                 {
                   label: "Tour the DM console",
                   detail: "The floor, story beats, hand-over switches, the queue and the tools.",
-                  onStart: () => setTour("dm"),
+                  onStart: () => startTour("dm"),
                 },
               ]
             : []),

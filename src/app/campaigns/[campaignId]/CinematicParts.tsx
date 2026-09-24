@@ -128,7 +128,7 @@ export function InitiativeRibbon({
     return null;
   }
   return (
-    <div className="cine-ribbon" role="group" aria-label={`Round ${encounter.round}, turn order`}>
+    <div className="cine-ribbon" role="group" aria-label={`Round ${encounter.round}, turn order`} data-tour="initiative-ribbon">
       <span className="cine-ribbon-round">Round {encounter.round}</span>
       <ol
         ref={orderRef}
@@ -210,7 +210,7 @@ export function PartyRail({
   const currentId =
     encounter?.status === "active" && encounter.orderReady ? encounter.order[encounter.turnIndex]?.id : undefined;
   return (
-    <aside className="cine-party" aria-label="The party">
+    <aside className="cine-party" aria-label="The party" data-tour="party-rail">
       {party.map((sheet, index) => {
         const max = Math.max(1, sheet.maxHp ?? 1);
         const hp = Math.max(0, Math.min(max, sheet.currentHp ?? max));
@@ -336,7 +336,7 @@ export function QuestGlance({ quests, onOpen }: { quests: ReadonlyArray<string>;
   const title = colon > 0 && colon < 60 ? first.slice(0, colon).trim() : "";
   const body = colon > 0 && colon < 60 ? first.slice(colon + 1).trim() : first;
   return (
-    <button type="button" onClick={onOpen} className="cine-quest" aria-label={`Quest: ${title || body}. Open the quests.`} data-no-motion>
+    <button type="button" onClick={onOpen} className="cine-quest" aria-label={`Quest: ${title || body}. Open the quests.`} data-tour="quest-glance" data-no-motion>
       <span className="cine-quest-eyebrow">Quest{title ? ` · ${title}` : ""}</span>
       <span className="cine-quest-body">{body}</span>
     </button>
@@ -402,6 +402,7 @@ export function TabletopChronicle({
   inputBlocked,
   placeholder,
   onSubmit,
+  composer = true,
 }: {
   messages: ReadonlyArray<CampaignMessage>;
   rolls: ReadonlyArray<StoredRoll>;
@@ -417,6 +418,8 @@ export function TabletopChronicle({
   inputBlocked: boolean;
   placeholder: string;
   onSubmit: (event: FormEvent) => void;
+  // False on the fight stage, where the desk sits right under the board.
+  composer?: boolean;
 }) {
   const rollsById = useMemo(() => new Map(rolls.map((roll) => [roll.id, roll])), [rolls]);
   const recent = useMemo(
@@ -481,6 +484,7 @@ export function TabletopChronicle({
             );
           })}
         </div>
+        {composer ? (
         <form onSubmit={onSubmit} className="cine-chronicle-desk">
           <div className="cine-chronicle-modes" data-pill-group="" role="group" aria-label="How you speak">
             {modes.map((option) => (
@@ -518,6 +522,7 @@ export function TabletopChronicle({
             </button>
           </div>
         </form>
+        ) : null}
       </div>
       <span className="cine-chronicle-roller" aria-hidden="true" />
     </aside>

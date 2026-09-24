@@ -49,6 +49,12 @@ function readDocked() {
   return window.matchMedia(DOCKED_QUERY).matches;
 }
 
+// Whether the two columns are side by side (the fight stage only makes
+// sense then; a phone keeps its bottom bar and its Battle tab).
+export function useDocked(): boolean {
+  return useSyncExternalStore(subscribeDocked, readDocked, () => true);
+}
+
 // The session's context column: party sheets, the current area map, story
 // chapters, table notes, and the stat-change log. From lg up it is docked
 // beside the chat with a vertical icon rail on its outer edge, so the story

@@ -141,6 +141,9 @@ export type SidePanelRouterProps = {
   refreshBattleMap: () => Promise<void>;
   // The chronicle scroll for the enlarged board (CinematicParts.tsx).
   tabletopChronicle?: ReactNode;
+  // The board is on the table (the fight stage), so the Battle tab shows
+  // the party and the turn order instead of a second board.
+  stageBoard?: boolean;
   tab: PanelTab;
   // Bumped by the relationships_updated ephemeral; the Bonds panel refetches
   // its own scoped view when it changes.
@@ -211,7 +214,8 @@ export function SidePanelRouter({
   onOpenLabel,
   refreshBattleMap,
   tabletopChronicle,
-  tab,
+  stageBoard = false,
+  tab: rawTab,
   relationshipsVersion,
   factionsVersion = 0,
   shopsVersion = 0,
@@ -277,6 +281,7 @@ export function SidePanelRouter({
     members.map((member) => member.userId),
   );
 
+  const tab: PanelTab = stageBoard && rawTab === "battle" ? "party" : rawTab;
   if (tab === "dm" && adjudicates) {
     return (
       <DmConsolePanel

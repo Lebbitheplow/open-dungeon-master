@@ -2379,3 +2379,37 @@ html[data-effects="low"] .ts-title.ts-reveal { animation-name: ts-rise; }
   .cine-chronicle, .cine-chronicle-passage, .cine-chronicle-line, .cine-chronicle-roll { animation: none; }
   .cine-chronicle-send, .cine-chronicle-mode, .cine-chronicle-well { transition: none; }
 }
+
+/* ---- the fight stage: the board on the table, the scroll beside it ---- */
+
+.cine-fight { display: flex; flex: 1; min-height: 0; gap: 12px; padding: 12px 12px 4px; }
+.cine-fight .cine-chronicle { flex: 0 0 17rem; }
+.cine-fight .cine-chronicle-page { padding-bottom: 14px; }
+.cine-fight-board { flex: 1; min-width: 0; min-height: 0; }
+.cine-fight-board > * { padding: 0.65rem 0.75rem; }
+/* The desk under a staged board keeps the hand close to the fight. */
+.cine-chat-staged .cine-desk { border-top: 0; }
+@media (max-width: 1400px) {
+  .cine-fight .cine-chronicle { flex-basis: 15rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cine-fight-board { animation: none; }
+}
+/* With the board staged the fan runs smaller and closer, so the board keeps
+   most of the column; the cards grow again on hover as they always do. */
+.cine-chat-staged .hand { --card-w: 128px; --card-h: 188px; --slot-w: 112px; margin-bottom: 4px; }
+.cine-chat-staged .hand-fan { height: calc(var(--card-h) + 48px); padding-top: 26px; }
+.cine-chat-staged .hand-card-body { gap: 4px; padding: 7px 9px 8px; }
+.cine-chat-staged .hand-art { flex-basis: 46px; }
+.cine-chat-staged .hand-name { font-size: 12px; }
+.cine-chat-staged .hand-rules { font-size: 9.5px; }
+@media (min-height: 1000px) {
+  .cine-chat-staged .hand { --card-w: 150px; --card-h: 212px; --slot-w: 132px; }
+  .cine-chat-staged .hand-fan { height: calc(var(--card-h) + 64px); padding-top: 36px; }
+}
+/* Aiming on the stage: the fan folds behind the aim bar (the bar names the
+   card), so the desk never grows and the board keeps its height. The board
+   keeps a floor of its own and the desk scrolls before the board shrinks. */
+.cine-chat-staged .hand-fan[data-aiming="true"] { display: none; }
+.cine-fight-board { min-height: 280px; }
+.cine-chat-staged .cine-desk { max-height: 62dvh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(107, 99, 148, 0.4) transparent; }

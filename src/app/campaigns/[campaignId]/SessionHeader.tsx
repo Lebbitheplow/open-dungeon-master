@@ -136,6 +136,7 @@ export const SessionHeader = memo(function SessionHeader({
   ambience,
   onHelp,
   ribbon,
+  stage,
 }: {
   title: string;
   scene: string;
@@ -159,6 +160,9 @@ export const SessionHeader = memo(function SessionHeader({
   // the middle of the bar from md up; the phone keeps the banner above the
   // composer instead.
   ribbon?: ReactNode;
+  // The fight stage switch, shown while a board is on the table: the board
+  // in the main column or the story there, with the board in its tab.
+  stage?: { on: boolean; onToggle: () => void };
 }) {
   const diceItem = "session-menu-row";
   return (
@@ -260,6 +264,20 @@ export const SessionHeader = memo(function SessionHeader({
             onVolume={(value) => ambience.setVolume(value)}
             glyph="tab-ambience"
           />
+        ) : null}
+        {stage ? (
+          <Tooltip content={stage.on ? "Show the story here, with the board in its tab" : "Show the board here, with the story beside it"} side="bottom">
+            <button
+              type="button"
+              onClick={stage.onToggle}
+              aria-label={stage.on ? "Show the story" : "Show the board"}
+              aria-pressed={stage.on}
+              data-tour="header-stage"
+              className={headerButtonClass(stage.on)}
+            >
+              <HeaderGlyph glyph={stage.on ? "tab-story" : "tab-battle"} />
+            </button>
+          </Tooltip>
         ) : null}
         <Tooltip content="How everything works, and the guided tours" side="bottom">
           <button
