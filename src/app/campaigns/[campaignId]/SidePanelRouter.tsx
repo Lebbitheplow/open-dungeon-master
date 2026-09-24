@@ -3,7 +3,7 @@
 import { BookMarked, BookOpen, Flag, Heart, History, ListChecks, ScrollText, ShoppingBag, Users } from "lucide-react";
 import { FactionsPanel } from "@/app/campaigns/[campaignId]/FactionsPanel";
 import { MarketPanel } from "@/app/campaigns/[campaignId]/MarketPanel";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { DmConsolePanel } from "@/app/campaigns/[campaignId]/DmConsolePanel";
 import { LeadPanel } from "@/app/campaigns/[campaignId]/LeadPanel";
 import type { CampaignMessage } from "@/lib/db/messages";
@@ -139,6 +139,8 @@ export type SidePanelRouterProps = {
   // A pinned map label was tapped: open what it points at.
   onOpenLabel?: (label: MapLabel) => void;
   refreshBattleMap: () => Promise<void>;
+  // The chronicle scroll for the enlarged board (CinematicParts.tsx).
+  tabletopChronicle?: ReactNode;
   tab: PanelTab;
   // Bumped by the relationships_updated ephemeral; the Bonds panel refetches
   // its own scoped view when it changes.
@@ -208,6 +210,7 @@ export function SidePanelRouter({
   canDraw,
   onOpenLabel,
   refreshBattleMap,
+  tabletopChronicle,
   tab,
   relationshipsVersion,
   factionsVersion = 0,
@@ -437,6 +440,7 @@ export function SidePanelRouter({
         encounter={encounter ?? null}
         sheets={sheets}
         refreshBattleMap={refreshBattleMap}
+        chronicle={tabletopChronicle}
         visible={visible}
       />
     );

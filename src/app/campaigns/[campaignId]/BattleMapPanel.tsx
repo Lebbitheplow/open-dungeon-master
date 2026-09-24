@@ -11,7 +11,7 @@ import {
   Swords,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { BattleMapGrid, type MapOverlay } from "@/app/campaigns/[campaignId]/BattleMapGrid";
 import {
   BoardToolRail,
@@ -101,6 +101,7 @@ export function BattleMapPanel({
   encounter,
   sheets,
   refreshBattleMap,
+  chronicle,
   canDirect = false,
   canFocusPing = false,
   ping = null,
@@ -126,6 +127,9 @@ export function BattleMapPanel({
   encounter: PublicEncounter | null;
   sheets: CharacterSheet[];
   refreshBattleMap: () => Promise<void>;
+  // The chronicle scroll beside the enlarged board (CinematicParts.tsx),
+  // handed down from the session because the transcript lives there.
+  chronicle?: ReactNode;
   // The DM seat. Deliberately not derived from view.fullVision: that flag
   // says what the projection withheld, not what this person may do.
   canDirect?: boolean;
@@ -1341,6 +1345,7 @@ export function BattleMapPanel({
               </Dialog.Close>
             </div>
             <div className="cine-tabletop-body">
+              {chronicle}
               <div className="cine-board-frame">{grid}</div>
               {!scene ? <TabletopOrder encounter={encounter} faceOf={faceOfEntry} /> : null}
             </div>

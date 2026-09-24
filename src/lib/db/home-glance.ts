@@ -1,6 +1,13 @@
 import { getDatabase, parseJson } from "@/lib/db/core";
 import { getOpenChapter } from "@/lib/db/chapters";
 import { characterPlaceholder } from "@/lib/placeholders";
+import { clipRecap } from "@/lib/recap";
+
+// The clipper lives in src/lib/recap.ts so the table's chronicle can use it
+// without pulling the database layer into the browser bundle.
+export { clipRecap };
+
+const FACE_LIMIT = 6;
 import type { GeneratedImage } from "@/lib/types";
 import type { HomeGlance, HomeGlanceFace } from "@/lib/campaign-types";
 
@@ -9,42 +16,6 @@ import type { HomeGlance, HomeGlanceFace } from "@/lib/campaign-types";
 // is in, the newest painted scene to fill the screen with, and the faces of
 // the party. One small query per table; the home lists a handful.
 
-const RECAP_LIMIT = 360;
-const FACE_LIMIT = 6;
-
-// The first paragraph of a passage, trimmed at a sentence when it runs long,
-// with the Markdown emphasis the DM sometimes writes in stripped away.
-export function clipRecap(content: string, limit = RECAP_LIMIT): string {
-  const paragraph = content
-    .replace(/\r/g, "")
-    .split(/\n\s*\n/)
-    .map((part) =>
-      part
-        // Inline roll markers render as cards in the transcript; here they
-        // are noise (src/app/campaigns/[campaignId]/MessageContent.tsx).
-        .replace(/\[roll:[^\]]+\]/g, " ")
-        .replace(/[*_`#>]+/g, "")
-        .replace(/\s+/g, " ")
-        .trim(),
-    )
-    .find((part) => part.length > 0);
-  if (!paragraph) {
-    return "";
-  }
-  if (paragraph.length <= limit) {
-    return paragraph;
-  }
-  const window = paragraph.slice(0, limit);
-  const sentenceEnd = Math.max(window.lastIndexOf(". "), window.lastIndexOf("! "), window.lastIndexOf("? "));
-  if (sentenceEnd > limit * 0.45) {
-    return window.slice(0, sentenceEnd + 1);
-  }
-  const wordEnd = window.lastIndexOf(" ");
-  return `${window.slice(0, wordEnd > 0 ? wordEnd : limit).trimEnd()}…`;
-}
-
-// The newest passage that says something once the roll markers are gone; a
-// turn that was only dice is not a recap.
 function latestRecap(campaignId: string): { recap: string; at: string } | null {
   const rows = getDatabase()
     .prepare(

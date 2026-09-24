@@ -1,10 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { GameIcon } from "@/components/ui/GameIcon";
+import type { CampaignMember } from "@/lib/campaign-types";
+import type { InputKind } from "@/lib/campaign-types";
+import { MODE_GLYPHS } from "@/app/campaigns/[campaignId]/sessionGlyphs";
 import { cn } from "@/lib/cn";
 import { campaignPlaceholder, characterPlaceholder, monsterPlaceholder, npcPlaceholder } from "@/lib/placeholders";
 import type { CampaignCover } from "@/lib/campaign-types";
 import type { CampaignMessage } from "@/lib/db/messages";
+import { clipRecap } from "@/lib/recap";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
 import type { StoredRoll } from "@/lib/db/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -369,5 +374,172 @@ export function TabletopOrder({
       </ol>
       {children}
     </aside>
+  );
+}
+
+// ---- the chronicle scroll beside the tabletop (concept 3c) ----
+
+// The tale so far as a night scroll with gold rollers: the last passages,
+// the rolls noted in ember, the party's lines in italic, and the same
+// composer as the desk (it shares the desk's mode and text, so nothing
+// typed here is lost when the board closes). Roll markers in a passage
+// become notes when the roll is in hand and vanish otherwise.
+const ROLL_MARKER = /\[roll:([0-9a-f-]{36})\]/g;
+const CHRONICLE_ENTRIES = 14;
+
+export function TabletopChronicle({
+  messages,
+  rolls,
+  sheets,
+  members,
+  isDm,
+  steersStory,
+  kind,
+  onKindChange,
+  input,
+  setInput,
+  sending,
+  inputBlocked,
+  placeholder,
+  onSubmit,
+}: {
+  messages: ReadonlyArray<CampaignMessage>;
+  rolls: ReadonlyArray<StoredRoll>;
+  sheets: ReadonlyArray<CharacterSheet>;
+  members: ReadonlyArray<CampaignMember>;
+  isDm: boolean;
+  steersStory: boolean;
+  kind: InputKind;
+  onKindChange: (kind: InputKind) => void;
+  input: string;
+  setInput: (value: string) => void;
+  sending: boolean;
+  inputBlocked: boolean;
+  placeholder: string;
+  onSubmit: (event: FormEvent) => void;
+}) {
+  const rollsById = useMemo(() => new Map(rolls.map((roll) => [roll.id, roll])), [rolls]);
+  const recent = useMemo(
+    () => messages.filter((message) => message.authorType !== "system" || !message.dmTurnId).slice(-CHRONICLE_ENTRIES),
+    [messages],
+  );
+  const logRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const log = logRef.current;
+    if (log) log.scrollTop = log.scrollHeight;
+  }, [recent.length]);
+  const nameOf = (message: CampaignMessage) =>
+    sheets.find((sheet) => sheet.id === message.characterId)?.name ??
+    sheets.find((sheet) => sheet.userId === message.userId)?.name ??
+    members.find((member) => member.userId === message.userId)?.username ??
+    "Someone";
+  const modes: InputKind[] = isDm ? ["narrate", "ooc"] : ["do", "say", "ooc", ...(steersStory ? (["lead"] as InputKind[]) : [])];
+  const modeLabel: Record<string, string> = { do: "Do", say: "Say", ooc: "OOC", lead: "Direct", narrate: "Narrate" };
+  // The drop cap goes to the first passage on the scroll, like a page.
+  const firstPassageId = recent.find((message) => message.authorType === "dm")?.id;
+  return (
+    <aside className="cine-chronicle" aria-label="The chronicle">
+      <span className="cine-chronicle-roller" aria-hidden="true" />
+      <div className="cine-chronicle-page">
+        <span className="cine-chronicle-eyebrow">The chronicle</span>
+        <div ref={logRef} className="cine-chronicle-log">
+          {recent.length === 0 ? <p className="cine-chronicle-quiet">The tale has not begun.</p> : null}
+          {recent.map((message) => {
+            if (message.authorType === "dm") {
+              const parts = message.content.split(ROLL_MARKER);
+              const dropcap = message.id === firstPassageId;
+              return (
+                <div key={message.id} className="cine-chronicle-passage">
+                  {parts.map((part, index) => {
+                    if (index % 2 === 1) {
+                      const roll = rollsById.get(part);
+                      return roll ? <ChronicleRoll key={`${message.id}-${index}`} roll={roll} sheets={sheets} /> : null;
+                    }
+                    const text = clipRecap(part, 900);
+                    if (!text) return null;
+                    return (
+                      <p key={`${message.id}-${index}`} className="cine-chronicle-text">
+                        {dropcap && index === 0 ? <span className="cine-chronicle-cap">{text.charAt(0)}</span> : null}
+                        {dropcap && index === 0 ? text.slice(1) : text}
+                      </p>
+                    );
+                  })}
+                </div>
+              );
+            }
+            if (message.authorType === "player") {
+              return (
+                <p key={message.id} className="cine-chronicle-line">
+                  {nameOf(message)}: &ldquo;{message.content.trim()}&rdquo;
+                </p>
+              );
+            }
+            return (
+              <p key={message.id} className="cine-chronicle-system">
+                {clipRecap(message.content, 200)}
+              </p>
+            );
+          })}
+        </div>
+        <form onSubmit={onSubmit} className="cine-chronicle-desk">
+          <div className="cine-chronicle-modes" data-pill-group="" role="group" aria-label="How you speak">
+            {modes.map((option) => (
+              <button
+                key={option}
+                type="button"
+                data-on={kind === option ? "" : undefined}
+                data-mode={option}
+                onClick={() => onKindChange(option)}
+                className="cine-chronicle-mode"
+              >
+                <GameIcon icon={{ kind: "glyph", key: MODE_GLYPHS[option] }} size="size-5" />
+                {modeLabel[option] ?? option}
+              </button>
+            ))}
+          </div>
+          <div className="cine-chronicle-well">
+            <textarea
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  onSubmit(event);
+                }
+              }}
+              rows={2}
+              disabled={inputBlocked}
+              placeholder={placeholder}
+              aria-label="Your move"
+              className="cine-chronicle-input"
+            />
+            <button type="submit" disabled={sending || !input.trim() || inputBlocked} className="cine-chronicle-send" aria-label="Send">
+              Send <span aria-hidden="true">&#10230;</span>
+            </button>
+          </div>
+        </form>
+      </div>
+      <span className="cine-chronicle-roller" aria-hidden="true" />
+    </aside>
+  );
+}
+
+function ChronicleRoll({ roll, sheets }: { roll: StoredRoll; sheets: ReadonlyArray<CharacterSheet> }) {
+  const who = roll.characterId ? sheets.find((sheet) => sheet.id === roll.characterId)?.name : null;
+  const crit = roll.breakdown?.crit;
+  const label = ROLL_LABELS[roll.kind] || "Roll";
+  // The detail the engine writes already names the roller ("Sera: Fire Bolt
+  // vs Husk 1"), so the name is only added when there is no detail.
+  const detail = roll.detail?.trim();
+  const what = detail || (who ? `${who} · ${label}` : label);
+  const verdict =
+    crit === "nat20" ? "Natural 20" : crit === "nat1" ? "Natural 1" : roll.success === null ? label : roll.success ? (roll.kind === "attack" ? "Hit" : "Success") : roll.kind === "attack" ? "Miss" : "Failed";
+  return (
+    <span className="cine-chronicle-roll" data-crit={crit ?? undefined}>
+      <span className="cine-chronicle-roll-head">{verdict}</span>
+      <span className="cine-chronicle-roll-math">
+        {what} · {roll.expression} = {roll.total}
+      </span>
+    </span>
   );
 }

@@ -2229,3 +2229,153 @@ html[data-effects="low"] .cine-lobby .lobby-hero-art > * {
 }
 html[data-effects="low"] .cine-board-frame::before { opacity: 0.6; }
 html[data-effects="low"] .ts-title.ts-reveal { animation-name: ts-rise; }
+
+/* ---- the chronicle scroll beside the tabletop (3c) ---- */
+
+.cine-chronicle {
+  display: flex;
+  flex: 0 0 18rem;
+  flex-direction: column;
+  min-height: 0;
+  animation: cine-chronicle-in var(--dur-scene) var(--ease-settle) 120ms backwards;
+}
+.cine-chronicle-roller {
+  flex: none;
+  height: 14px;
+  margin: 0 -6px;
+  border-radius: 7px;
+  background: linear-gradient(180deg, #f4e0a6, #b8922a 50%, #6d5517);
+  box-shadow: 0 0 12px rgba(212, 171, 58, 0.35);
+}
+.cine-chronicle-page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 18px 16px 14px;
+  background: linear-gradient(180deg, rgba(48, 40, 83, 0.6), rgba(16, 13, 32, 0.94));
+  border-left: 1px solid rgba(107, 99, 148, 0.35);
+  border-right: 1px solid rgba(107, 99, 148, 0.35);
+}
+.cine-chronicle-eyebrow {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: #e3c15c;
+}
+.cine-chronicle-log {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(107, 99, 148, 0.4) transparent;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 12px);
+  mask-image: linear-gradient(180deg, transparent 0, #000 12px);
+}
+.cine-chronicle-passage { display: flex; flex-direction: column; gap: 8px; animation: ts-rise var(--dur-move) var(--ease-settle) backwards; }
+.cine-chronicle-text { margin: 0; font-family: var(--font-serif); font-size: 14px; line-height: 1.55; color: #dedbec; text-wrap: pretty; }
+.cine-chronicle-cap {
+  float: left;
+  padding: 4px 6px 0 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 40px;
+  line-height: 0.85;
+  color: #ecd287;
+  text-shadow: 0 0 20px rgba(212, 171, 58, 0.45);
+}
+.cine-chronicle-line { margin: 0; font-family: var(--font-serif); font-style: italic; font-size: 14px; line-height: 1.5; color: #aeaac6; animation: ts-rise var(--dur-move) var(--ease-settle) backwards; }
+.cine-chronicle-system { margin: 0; font-family: var(--font-serif); font-style: italic; font-size: 12.5px; color: #8f8aab; text-align: center; }
+.cine-chronicle-quiet { margin: 0; font-family: var(--font-serif); font-style: italic; color: #8f8aab; }
+.cine-chronicle-roll {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(212, 171, 58, 0.45);
+  background: rgba(212, 171, 58, 0.08);
+  animation: ts-rise var(--dur-move) var(--ease-settle) backwards;
+}
+.cine-chronicle-roll[data-crit="nat1"] { border-color: rgba(224, 112, 58, 0.5); background: rgba(224, 112, 58, 0.08); }
+.cine-chronicle-roll[data-crit="nat20"] { border-color: rgba(244, 224, 166, 0.8); background: rgba(212, 171, 58, 0.16); box-shadow: 0 0 14px rgba(212, 171, 58, 0.25); }
+.cine-chronicle-roll-head { font-family: var(--font-display); font-weight: 600; font-size: 9.5px; letter-spacing: 0.2em; text-transform: uppercase; color: #f4e0a6; }
+.cine-chronicle-roll[data-crit="nat1"] .cine-chronicle-roll-head { color: #ff9d5c; }
+.cine-chronicle-roll-math { font-family: var(--font-mono); font-size: 12px; color: #c9c6db; }
+.cine-chronicle-desk { display: flex; flex-direction: column; gap: 8px; margin-top: auto; padding-top: 12px; border-top: 1px solid rgba(212, 171, 58, 0.25); }
+.cine-chronicle-modes { display: flex; gap: 12px; }
+.cine-chronicle-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 0 4px;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: none;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #8f8aab;
+  cursor: pointer;
+  transition: color var(--dur-quick) var(--ease-snap), border-color var(--dur-quick) var(--ease-snap);
+}
+.cine-chronicle-mode:hover { color: #dedbec; }
+.cine-chronicle-mode[data-on] { color: #f4e0a6; border-bottom-color: #e3c15c; }
+.cine-chronicle-mode[data-on][data-mode="lead"] { color: #ffbe8f; border-bottom-color: #e0703a; }
+.cine-chronicle-mode:focus-visible { outline: 2px solid #f4e0a6; outline-offset: 2px; }
+.cine-chronicle-well { display: flex; align-items: flex-end; gap: 10px; padding-bottom: 6px; border-bottom: 1px dashed rgba(212, 171, 58, 0.35); transition: border-color var(--dur-quick) var(--ease-snap); }
+.cine-chronicle-well:focus-within { border-bottom-color: rgba(244, 224, 166, 0.9); border-bottom-style: solid; }
+.cine-chronicle-input {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  background: transparent;
+  border: 0;
+  outline: none;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 15px;
+  line-height: 1.4;
+  color: #f1eefb;
+}
+.cine-chronicle-input::placeholder { color: #8f8aab; }
+.cine-chronicle-input:disabled { opacity: 0.55; }
+.cine-chronicle-send {
+  flex: none;
+  padding: 4px 2px;
+  border: 0;
+  background: none;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #e3c15c;
+  cursor: pointer;
+  transition: color var(--dur-quick) var(--ease-snap), transform 220ms var(--ease-spring), opacity var(--dur-quick) var(--ease-snap);
+}
+.cine-chronicle-send:hover:not(:disabled) { color: #fff6da; transform: translateX(3px); }
+.cine-chronicle-send:disabled { opacity: 0.4; cursor: default; }
+@keyframes cine-chronicle-in {
+  from { opacity: 0; transform: translateX(-24px); }
+  to { opacity: 1; transform: none; }
+}
+@media (max-width: 900px) {
+  /* Stacked: the board keeps a real height, the order follows, the scroll
+     comes last and scrolls within itself. */
+  .cine-tabletop-body .cine-board-frame { flex: none; height: min(70vh, 110vw); }
+  .cine-chronicle { flex: none; order: 3; height: 24rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cine-chronicle, .cine-chronicle-passage, .cine-chronicle-line, .cine-chronicle-roll { animation: none; }
+  .cine-chronicle-send, .cine-chronicle-mode, .cine-chronicle-well { transition: none; }
+}

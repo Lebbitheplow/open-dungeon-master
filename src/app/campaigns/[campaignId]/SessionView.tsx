@@ -65,7 +65,7 @@ import { SidePanel } from "@/app/campaigns/[campaignId]/SidePanel";
 import { useChatChime } from "@/app/campaigns/[campaignId]/useChatChime";
 import { useTableAudio } from "@/app/campaigns/[campaignId]/useTableAudio";
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
-import { InitiativeRibbon, PartyRail, QuestGlance, RollToast, SceneBackdrop } from "@/app/campaigns/[campaignId]/CinematicParts";
+import { InitiativeRibbon, PartyRail, QuestGlance, RollToast, SceneBackdrop, TabletopChronicle } from "@/app/campaigns/[campaignId]/CinematicParts";
 
 // The level-up dialog carries the class feature and resource tables of the
 // whole SRD; it loads the first time a character actually levels rather
@@ -753,6 +753,26 @@ export function SessionView({
           beats={state.beats}
           storyDue={storyDue}
           glance={<QuestGlance quests={campaign.questLog ?? []} onOpen={() => setPanelTab("story")} />}
+          tabletopChronicle={
+            needsCharacter ? undefined : (
+              <TabletopChronicle
+                messages={messages}
+                rolls={state.rolls}
+                sheets={sheets}
+                members={state.members}
+                isDm={isDm}
+                steersStory={steersStory}
+                kind={kind}
+                onKindChange={setKind}
+                input={input}
+                setInput={setInput}
+                sending={sending}
+                inputBlocked={gate.inputBlocked || muted}
+                placeholder={muted ? "The party lead has muted you at this table." : gate.placeholder}
+                onSubmit={submit}
+              />
+            )
+          }
         />
       </div>
 
