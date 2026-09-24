@@ -151,8 +151,8 @@ export function SystemView({
         ) : null}
         {system === "lore" ? (
           <>
-            <LorePanel campaignId={workshop.id} steersStory layout="rows" />
-            <MarketPanel campaignId={workshop.id} steersStory mySheet={null} />
+            <LorePanel campaignId={workshop.id} steersStory isDm layout="rows" />
+            <MarketPanel campaignId={workshop.id} steersStory isDm mySheet={null} />
           </>
         ) : null}
         {system === "factions" ? <FactionsPanel campaignId={workshop.id} steersStory /> : null}

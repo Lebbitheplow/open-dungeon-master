@@ -343,6 +343,7 @@ export function SidePanelRouter({
             <MarketPanel
               campaignId={campaignId}
               steersStory={steersStory}
+              isDm={adjudicates}
               mySheet={sheets.find((sheet) => sheet.id === activeSheetId) ?? sheets.find((sheet) => sheet.userId === meUserId && !sheet.isCompanion) ?? null}
               refreshKey={shopsVersion}
               coins={coins}
@@ -485,7 +486,7 @@ export function SidePanelRouter({
                 steersStory={steersStory}
                 refreshFacts={refreshFacts}
               />
-              <LorePanel campaignId={campaignId} steersStory={steersStory} members={members} />
+              <LorePanel campaignId={campaignId} steersStory={steersStory} isDm={adjudicates} members={members} />
             </div>
           ) : storySection === "quests" ? (
             <QuestsPanel campaignId={campaignId} steersStory={steersStory} refreshKey={questsVersion} />

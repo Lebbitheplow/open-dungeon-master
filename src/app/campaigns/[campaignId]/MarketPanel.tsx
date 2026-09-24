@@ -47,12 +47,17 @@ function coinGlyph(copper: number): string {
 export function MarketPanel({
   campaignId,
   steersStory,
+  isDm = false,
   mySheet,
   refreshKey = 0,
   coins,
 }: {
   campaignId: string;
+  // Story authority sees every shop and where it stands.
   steersStory: boolean;
+  // Holds the DM seat: opening and closing shops are DM-only routes, so an
+  // AI campaign's lead browses the market without them.
+  isDm?: boolean;
   mySheet: CharacterSheet | null;
   refreshKey?: number;
   coins?: { characterId: string; direction: "in" | "out"; at: number } | null;
@@ -151,7 +156,7 @@ export function MarketPanel({
       />
       {here ? <p className="-mt-1 text-xs text-stone-500">at {here.name}</p> : null}
       {error ? <p role="status" className="live-in text-xs text-amber-300/90">{error}</p> : null}
-      {steersStory ? (
+      {isDm ? (
         opening ? (
           <div className="panel reveal flex flex-wrap items-center gap-1.5 rounded-lg p-2.5">
             <input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} maxLength={80} placeholder="Marla's Sundries" aria-label="Shop name" className={cn(panelField, "min-w-[9rem] flex-1")} />
@@ -173,7 +178,7 @@ export function MarketPanel({
         const canHaggle = Boolean(mySheet && !shop.haggledBy.includes(mySheet.id));
         const shopItems: ContextMenuItem[] = [
           ...(canHaggle ? [{ id: "haggle", label: "Haggle", glyph: "skill-persuasion", disabled: Boolean(busy), onSelect: () => void counter(shop, "haggle") }] : []),
-          ...(steersStory ? [{ id: "close", label: `Close ${shop.name}`, glyph: "quest-failed", tone: "danger" as const, separated: canHaggle, onSelect: () => void close(shop) }] : []),
+          ...(isDm ? [{ id: "close", label: `Close ${shop.name}`, glyph: "quest-failed", tone: "danger" as const, separated: canHaggle, onSelect: () => void close(shop) }] : []),
         ];
         return (
           <section key={shop.id} className="panel space-y-2 rounded-lg p-2.5">
@@ -200,7 +205,7 @@ export function MarketPanel({
                   Haggle
                 </KitButton>
               ) : null}
-              {steersStory ? (
+              {isDm ? (
                 <KitButton tone="iconDanger" always aria-label={`Close ${shop.name}`} onClick={() => void close(shop)}>
                   <Trash2 className="size-3.5" />
                 </KitButton>

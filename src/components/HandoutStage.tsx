@@ -19,12 +19,17 @@ export function HandoutStage({
   handout,
   userId,
   steersStory,
+  canTakeDown,
   onDismiss,
 }: {
   campaignId: string;
   handout: HandoutShown | null;
   userId: string;
+  // Story authority sees every handout, whoever it was shown to.
   steersStory: boolean;
+  // Holds the DM seat. The take-down runs through the DM's engine route,
+  // so an AI campaign's lead sees the handout but cannot take it down.
+  canTakeDown: boolean;
   // The DM's take-down; players fold locally.
   onDismiss: (id: string) => Promise<void>;
 }) {
@@ -149,7 +154,7 @@ export function HandoutStage({
             <Download className="size-4" />
           </a>
         ) : null}
-        {steersStory ? (
+        {canTakeDown ? (
           <button
             type="button"
             onClick={() => void onDismiss(handout.id)}

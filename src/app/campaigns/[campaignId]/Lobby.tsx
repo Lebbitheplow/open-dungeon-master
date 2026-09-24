@@ -114,7 +114,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
   // campaign, the DM once a person runs it. Decided by src/lib/dm/viewer.ts
   // rather than by comparing ids here, which is the rule that module exists
   // to enforce.
-  const { steersStory } = viewerCaps(seats, me.id);
+  const { steersStory, adjudicates } = viewerCaps(seats, me.id);
   // One-player campaigns skip the invite/party ceremony entirely. A table with
   // a person in the DM seat is never solo, however small: the DM holds no
   // party slot, so maxPlayers 1 there still means two people who need the room
@@ -398,9 +398,9 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
               campaignId={campaign.id}
               settings={campaign.gameSettings}
               steersStory={steersStory}
-              isDm={viewerCaps(seats, me.id).adjudicates}
+              isDm={adjudicates}
             />
-            <LorePanel campaignId={campaign.id} steersStory={steersStory} />
+            <LorePanel campaignId={campaign.id} steersStory={steersStory} isDm={adjudicates} />
             {/* Prep keeps happening after session one, so the import is not only
                 a creation-time step. Gated on story authority rather than on the
                 lead, because in a human-DM campaign the lead is a player and the
@@ -468,7 +468,8 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
                 speaking={voiceSpeaking}
                 audibilityVersion={state.voiceAudibilityVersion}
                 meshSignal={state.voiceMeshSignal}
-                adjudicates={steersStory}
+                adjudicates={adjudicates}
+                steersStory={steersStory}
                 transcribe={campaign.gameSettings.voice.transcribe}
               />
               {campaign.gameSettings.voice.transcribe ? (

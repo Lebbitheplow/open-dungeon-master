@@ -875,6 +875,7 @@ export function SessionView({
         handout={state.handout}
         userId={me?.id ?? ""}
         steersStory={steersStory}
+        canTakeDown={caps.adjudicates}
         onDismiss={async (id) => {
           await fetch(`/api/campaigns/${campaign.id}/dm/invoke`, {
             method: "POST",

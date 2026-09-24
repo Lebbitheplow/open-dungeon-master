@@ -61,7 +61,7 @@ export default function TablePage({ params }: { params: Promise<{ campaignId: st
         )}
       </div>
       <SceneTitle card={state.titleCard} onShown={markTitleCardShown} />
-      <HandoutStage campaignId={campaignId} handout={state.handout} userId={state.me.id} steersStory={false} onDismiss={async () => {}} />
+      <HandoutStage campaignId={campaignId} handout={state.handout} userId={state.me.id} steersStory={false} canTakeDown={false} onDismiss={async () => {}} />
     </main>
   );
 }

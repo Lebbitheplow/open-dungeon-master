@@ -27,11 +27,16 @@ import { blankLoreDraft, CATEGORY_LABELS, draftFromEntry, type LoreDraft, type L
 export function LorePanel({
   campaignId,
   steersStory,
+  isDm = false,
   layout = "list",
   members,
 }: {
   campaignId: string;
   steersStory: boolean;
+  // Holds the DM seat. "Show this now" and the cast and bestiary link
+  // lists go through DM-only routes, so an AI campaign's lead edits the
+  // binder without them.
+  isDm?: boolean;
   layout?: "list" | "rows";
   // The table, for the "some players" audience. Absent in the workshop.
   members?: Array<{ userId: string; username: string }>;
@@ -223,7 +228,8 @@ export function LorePanel({
   // resolves, not only other lore. The cast and the DM's own monsters are
   // read once the editor opens, since they are only needed for this list.
   useEffect(() => {
-    if (!editorOpen || linkTargets !== null) {
+    // Not the DM: the lists stay empty and no DM route is asked.
+    if (!editorOpen || linkTargets !== null || !isDm) {
       return;
     }
     let cancelled = false;
@@ -248,7 +254,7 @@ export function LorePanel({
     return () => {
       cancelled = true;
     };
-  }, [editorOpen, linkTargets, campaignId]);
+  }, [editorOpen, linkTargets, campaignId, isDm]);
   const linkable = [
     ...entries
       .filter((entry) => entry.id !== editingId)
@@ -385,7 +391,7 @@ export function LorePanel({
                   targets={targets}
                   onLink={followLink}
                   campaignId={campaignId}
-                  onShow={steersStory && entry.visibility === "party" ? () => void showNow(entry) : undefined}
+                  onShow={isDm && entry.visibility === "party" ? () => void showNow(entry) : undefined}
                   onEdit={() => startEdit(entry)}
                   onPin={() => void togglePin(entry)}
                   onDuplicate={() => void duplicate(entry)}
