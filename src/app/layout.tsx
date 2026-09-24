@@ -1,33 +1,40 @@
 import { ThemeApplier } from "@/lib/theme-mode";
 import type { Metadata, Viewport } from "next";
-import { Cinzel, Geist, Geist_Mono, Source_Serif_4 } from "next/font/google";
+import localFont from "next/font/local";
 import TopoBackground from "./TopoBackground";
 import { ServerAddressButton } from "@/components/ServerAddressButton";
 import { ConfirmHost } from "@/components/ui/ConfirmDialog";
 import "./globals.css";
 
-const geistSans = Geist({
+// The faces ship in the repo (Google Fonts' latin subsets) so a build
+// never fetches from fonts.gstatic.com: a failed download there broke CI
+// builds and made offline builds impossible.
+const geistSans = localFont({
+  src: "./fonts/geist.woff2",
   variable: "--font-geist-sans",
-  subsets: ["latin"],
+  weight: "100 900",
 });
 
-const geistMono = Geist_Mono({
+const geistMono = localFont({
+  src: "./fonts/geist-mono.woff2",
   variable: "--font-geist-mono",
-  subsets: ["latin"],
+  weight: "100 900",
 });
 
-const sourceSerif = Source_Serif_4({
+const sourceSerif = localFont({
+  src: [
+    { path: "./fonts/source-serif-4.woff2", weight: "200 900", style: "normal" },
+    { path: "./fonts/source-serif-4-italic.woff2", weight: "200 900", style: "italic" },
+  ],
   variable: "--font-source-serif",
-  subsets: ["latin"],
-  style: ["normal", "italic"],
 });
 
 // Engraved-capitals display face for wordmarks, screen titles, and
 // campaign names; body text stays on Geist/Source Serif.
-const cinzel = Cinzel({
+const cinzel = localFont({
+  src: "./fonts/cinzel.woff2",
   variable: "--font-display",
-  subsets: ["latin"],
-  weight: ["400", "600", "700"],
+  weight: "400 900",
 });
 
 export const metadata: Metadata = {
