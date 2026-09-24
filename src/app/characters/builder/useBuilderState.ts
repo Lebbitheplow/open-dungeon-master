@@ -11,6 +11,7 @@ import { removeAsiChoices } from "@/lib/srd/asi";
 import { findOptionByFeatureName } from "@/lib/srd/options";
 import type { FightingStyleId } from "@/lib/srd/feature-effects";
 import type { AbilityMethod, AbilityState } from "./AbilityEditor";
+import type { PoolEntry, PoolSlots } from "./abilityDice";
 import type { BackgroundOption, RaceOption } from "./useBuilderOptions";
 
 export type EquipmentItem = { name: string; qty: number; slug?: string };
@@ -39,6 +40,13 @@ export function useBuilderState({
   const [backgroundId, setBackgroundId] = useState(initial?.background ?? "");
   const [method, setMethod] = useState<AbilityMethod>(initial ? "roll" : "standard");
   const [scores, setScores] = useState<AbilityState>({
+    str: null, dex: null, con: null, int: null, wis: null, cha: null,
+  });
+  // The six 4d6 totals and which ability holds each. Kept here rather than
+  // in the editor so leaving the step, or trying another method and coming
+  // back, does not hand the player a free reroll.
+  const [rollPool, setRollPool] = useState<PoolEntry[] | null>(null);
+  const [rollSlots, setRollSlots] = useState<PoolSlots<Ability>>({
     str: null, dex: null, con: null, int: null, wis: null, cha: null,
   });
   const [chosenSkills, setChosenSkills] = useState<string[]>([]);
@@ -135,6 +143,12 @@ export function useBuilderState({
       }
     }
     setScores(base);
+    // A saved sheet opens on the roll method: its six scores become the
+    // pool, already placed, so they can be moved around but not rerolled
+    // into something better.
+    const keys = Object.keys(base) as Ability[];
+    setRollPool(keys.map((key) => ({ total: base[key], roll: null })));
+    setRollSlots(Object.fromEntries(keys.map((key, index) => [key, index])) as PoolSlots<Ability>);
     // Skills granted by background or race are not class picks; the racial
     // ones are restored from racialChoices instead.
     const grantedSkills = new Set([
@@ -183,6 +197,8 @@ export function useBuilderState({
     backgroundId, setBackgroundId,
     method, setMethod,
     scores, setScores,
+    rollPool, setRollPool,
+    rollSlots, setRollSlots,
     chosenSkills, setChosenSkills,
     expertisePicks, setExpertisePicks,
     stylePicks, setStylePicks,

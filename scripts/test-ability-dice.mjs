@@ -10,8 +10,14 @@ const {
   FLICKER_FACES,
   ROW_SETTLE_MS,
   TOTAL_POP_MS,
+  REROLL_BELOW,
   assignStandard,
+  canRerollPool,
   hpBreakdown,
+  placeFromPool,
+  poolSum,
+  rollPool,
+  scoresFromSlots,
   pipsFor,
   restOffsets,
   rollFourDice,
@@ -100,6 +106,33 @@ test("standard array: taking a value clears its holder, taking your own hands it
   assert.equal(moved.dex, 15);
   const back = assignStandard(moved, "dex", 15);
   assert.equal(back.dex, null);
+  assert.equal(empty.str, null, "the input is not mutated");
+});
+
+test("the pool is six 4d6 throws, rerollable only under 70", () => {
+  const pool = rollPool(deal(6, 6, 6, 1));
+  assert.equal(pool.length, 6);
+  for (const entry of pool) assert.equal(entry.total, entry.roll.total);
+  assert.equal(REROLL_BELOW, 70);
+  assert.equal(canRerollPool(null), true, "the first throw is always allowed");
+  const at = (totals) => totals.map((total) => ({ total, roll: null }));
+  assert.equal(poolSum(at([18, 18, 18, 18, 10, 10])), 92);
+  assert.equal(canRerollPool(at([18, 18, 18, 18, 10, 10])), false);
+  assert.equal(canRerollPool(at([12, 12, 12, 12, 11, 11])), false, "exactly 70 is not under 70");
+  assert.equal(canRerollPool(at([12, 12, 12, 12, 11, 10])), true);
+});
+
+test("placing a throw moves it, swaps with its holder, and a second tap sends it back", () => {
+  const empty = { str: null, dex: null, con: null };
+  const pool = [{ total: 18, roll: null }, { total: 10, roll: null }, { total: 13, roll: null }];
+  const first = placeFromPool(empty, "str", 0);
+  assert.deepEqual(scoresFromSlots(first, pool), { str: 18, dex: null, con: null });
+  const second = placeFromPool(first, "dex", 1);
+  const swapped = placeFromPool(second, "str", 1);
+  assert.deepEqual(swapped, { str: 1, dex: 0, con: null }, "str and dex trade throws");
+  const moved = placeFromPool(swapped, "con", 1);
+  assert.deepEqual(moved, { str: null, dex: 0, con: 1 }, "onto an empty ability, the old one is left empty");
+  assert.deepEqual(placeFromPool(moved, "con", 1), { str: null, dex: 0, con: null });
   assert.equal(empty.str, null, "the input is not mutated");
 });
 
