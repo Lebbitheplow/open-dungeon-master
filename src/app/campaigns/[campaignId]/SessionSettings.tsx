@@ -18,6 +18,7 @@ export function SessionSettings({
   campaign,
   isLead,
   steersStory,
+  isDm,
 }: {
   campaign: {
     id: string;
@@ -34,6 +35,7 @@ export function SessionSettings({
   };
   isLead: boolean;
   steersStory: boolean;
+  isDm: boolean;
 }) {
   const [editing, setEditing] = useState(false);
 
@@ -85,6 +87,7 @@ export function SessionSettings({
             campaignId={campaign.id}
             settings={campaign.gameSettings}
             steersStory={steersStory}
+            isDm={isDm}
           />
         </div>
       ) : null}

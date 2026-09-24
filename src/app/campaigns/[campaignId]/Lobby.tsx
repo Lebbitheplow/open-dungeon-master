@@ -392,6 +392,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
               campaignId={campaign.id}
               settings={campaign.gameSettings}
               steersStory={steersStory}
+              isDm={viewerCaps(seats, me.id).adjudicates}
             />
             <LorePanel campaignId={campaign.id} steersStory={steersStory} />
             {/* Prep keeps happening after session one, so the import is not only
