@@ -370,7 +370,6 @@ version gate. See `docs/vtt-parity-implementation-plan.md` sections 11 to
 - Dice-source choices (including Pixels pairings) are per device, and the
   server cannot distinguish a typed physical roll from a typed lie; real-dice
   mode remains a trust feature, as tabletop dice always have been.
-- One character per player per campaign
 - The Ollama "local" provider (Gemma) calls tools less reliably than the
   OpenAI-compatible path; the default DM model is qwen3.6-dm via Ollama's
   OpenAI endpoint
