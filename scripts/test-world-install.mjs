@@ -364,9 +364,6 @@ await test("a published index.json in the installed directory is not read as a p
   }
 });
 
-removeTempDir(scratch);
-console.log(`test-world-install: ${passed} passed`);
-
 await test("the registry may list prepared worlds beside packs, under the same https rule", () => {
   // docs/vtt-parity-implementation-plan.md 12.3: bundles ride in the same
   // index; an absent list reads as none, and a plain http download is refused.
@@ -381,3 +378,6 @@ await test("the registry may list prepared worlds beside packs, under the same h
     !registryIndexSchema.safeParse({ packs: [], bundles: [{ id: "x1", name: "X", blurb: "b", downloadUrl: "http://example.com/x.json" }] }).success,
   );
 });
+
+removeTempDir(scratch);
+console.log(`test-world-install: ${passed} passed`);
