@@ -111,6 +111,74 @@ export function assignStandard<K extends string>(
   return next;
 }
 
+// ---- the 4d6 pool ----
+
+// Rolling hands the player six totals up front; they are then placed on the
+// abilities like the standard array. A fresh six is only allowed when the
+// whole pool adds up to less than this.
+export const REROLL_BELOW = 70;
+export const POOL_SIZE = 6;
+
+export type PoolRoll = FourDice & { rest: DieRest[] };
+
+// One entry in the pool. `roll` is null for a pool rebuilt from a saved
+// sheet, where only the totals survive.
+export type PoolEntry = { total: number; roll: PoolRoll | null };
+
+export function rollPool(rng: Rng = Math.random): PoolEntry[] {
+  return Array.from({ length: POOL_SIZE }, () => {
+    const four = rollFourDice(rng);
+    return { total: four.total, roll: { ...four, rest: restOffsets(rng) } };
+  });
+}
+
+export function poolSum(pool: PoolEntry[]): number {
+  return pool.reduce((sum, entry) => sum + entry.total, 0);
+}
+
+export function canRerollPool(pool: PoolEntry[] | null): boolean {
+  return !pool || poolSum(pool) < REROLL_BELOW;
+}
+
+// Which pool entry each ability holds, by index.
+export type PoolSlots<K extends string> = Record<K, number | null>;
+
+// Placing an entry on an ability: if another ability held that entry, the
+// two trade (the other one gets whatever this ability had, possibly
+// nothing); if the ability already held this entry, it goes back.
+export function placeFromPool<K extends string>(
+  slots: PoolSlots<K>,
+  ability: K,
+  index: number,
+): PoolSlots<K> {
+  const next = { ...slots };
+  if (next[ability] === index) {
+    next[ability] = null;
+    return next;
+  }
+  const displaced = next[ability];
+  for (const key of Object.keys(next) as K[]) {
+    if (next[key] === index) {
+      next[key] = displaced;
+    }
+  }
+  next[ability] = index;
+  return next;
+}
+
+// The scores a set of slots stands for.
+export function scoresFromSlots<K extends string>(
+  slots: PoolSlots<K>,
+  pool: PoolEntry[],
+): Record<K, number | null> {
+  const scores = {} as Record<K, number | null>;
+  for (const key of Object.keys(slots) as K[]) {
+    const index = slots[key];
+    scores[key] = index === null ? null : (pool[index]?.total ?? null);
+  }
+  return scores;
+}
+
 // The one sentence over the summary table: the standout score, named plainly.
 export function summaryLine({
   method,
@@ -123,7 +191,7 @@ export function summaryLine({
 }): string {
   const lead =
     method === "roll"
-      ? "Four dice an ability, the lowest set aside."
+      ? "Six throws of four dice, the lowest set aside, placed your way."
       : method === "pointbuy"
         ? "Twenty-seven points, spent your way."
         : "The same six numbers every hero starts from, placed your way.";

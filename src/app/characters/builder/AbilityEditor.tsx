@@ -1,8 +1,7 @@
 "use client";
 
 import { Dices } from "lucide-react";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { OptionalStepper } from "@/app/workshop/kit";
+import { useEffect, useRef, useState, type CSSProperties, type DragEvent } from "react";
 import { GameTerm } from "@/components/ui/GameTerm";
 import { cn } from "@/lib/cn";
 import { abilityMod, formatModifier } from "@/lib/srd";
@@ -10,14 +9,19 @@ import { POINT_BUY_MAX, POINT_BUY_MIN, pointBuyCost, pointBuyRemaining } from "@
 import type { Ability } from "@/lib/schemas/sheet";
 import { ui } from "@/lib/ui";
 import {
+  REROLL_BELOW,
   ROW_SETTLE_MS,
   ROW_STAGGER_MS,
   TOTAL_POP_MS,
   assignStandard,
-  restOffsets,
-  rollFourDice,
+  canRerollPool,
+  placeFromPool,
+  poolSum,
+  rollPool,
   rollTier,
-  type AbilityRoll,
+  scoresFromSlots,
+  type PoolEntry,
+  type PoolSlots,
 } from "./abilityDice";
 import { HelpDot, MethodInfoDialog, type HpExplainerInput } from "./AbilityExplainers";
 import { AbilitySummary } from "./AbilitySummary";
@@ -57,27 +61,30 @@ const METHODS: Array<{ id: AbilityMethod; label: string; info: string }> = [
     id: "roll",
     label: "Roll 4d6",
     info:
-      "Roll four six-sided dice for each ability and drop the lowest. It can hand you a hero far above the standard array, or well below it. Some tables love the swing; ask yours before choosing it.",
+      `Roll four six-sided dice six times, dropping the lowest each time, then place the six totals on the abilities you choose. It can hand you a hero far above the standard array, or well below it. The six are yours to keep: you may throw again only if they add up to less than ${REROLL_BELOW}. Some tables love the swing; ask yours before choosing it.`,
   },
 ];
 
 export type AbilityState = Record<Ability, number | null>;
 
-export function rollFourDropLowest() {
-  return rollFourDice().total;
-}
+const EMPTY_SLOTS: PoolSlots<Ability> = { str: null, dex: null, con: null, int: null, wis: null, cha: null };
 
-type RowRoll = AbilityRoll & { id: number; delay: number };
+const DRAG_TYPE = "application/x-odm-pool";
 
 // Method-aware ability score editor: standard array slots, 27-point buy
-// steppers, or 4d6-drop-lowest on the dice grid with a number field beside
-// each total so a score rolled at a real table can still be typed in. Racial
-// bonuses are displayed but applied by the parent.
+// steppers, or 4d6-drop-lowest, where all six throws land in a tray at once
+// and are then placed on the abilities by tap or drag. There is no rolling a
+// single ability and no typing a score in. Racial bonuses are displayed but
+// applied by the parent.
 export default function AbilityEditor({
   method,
   onMethodChange,
   scores,
   onScoresChange,
+  pool,
+  onPoolChange,
+  slots,
+  onSlotsChange,
   racialBonus,
   asiCount = 0,
   who = "",
@@ -87,6 +94,11 @@ export default function AbilityEditor({
   onMethodChange: (method: AbilityMethod) => void;
   scores: AbilityState;
   onScoresChange: (scores: AbilityState) => void;
+  // The six 4d6 totals (null until thrown) and which ability holds each.
+  pool: PoolEntry[] | null;
+  onPoolChange: (pool: PoolEntry[] | null) => void;
+  slots: PoolSlots<Ability>;
+  onSlotsChange: (slots: PoolSlots<Ability>) => void;
   racialBonus: Partial<Record<Ability, number>>;
   // Ability score improvements the chosen level has earned; > 0 adds a hint
   // that base scores are level-1 rules and the bonuses are picked below.
@@ -96,89 +108,125 @@ export default function AbilityEditor({
   // What the health explainer under the summary works from.
   hp?: HpExplainerInput | null;
 }) {
-  // The dice on the table. Display only: the score itself is committed to the
-  // builder the moment the dice leave the hand, so nothing is lost if the
-  // player moves on mid-toss.
-  const [rolls, setRolls] = useState<Partial<Record<Ability, RowRoll>>>({});
+  // The toss in the air. Display only: the pool itself is committed the
+  // moment the dice leave the hand, so nothing is lost if the player moves
+  // on mid-toss.
+  const [phases, setPhases] = useState<Array<"rolling" | "settled">>([]);
+  const [tossId, setTossId] = useState(0);
+  // The throw in hand, waiting for an ability to land on.
+  const [held, setHeld] = useState<number | null>(null);
+  const [dropTarget, setDropTarget] = useState<Ability | "tray" | null>(null);
   const [methodInfoOpen, setMethodInfoOpen] = useState(false);
-  const timers = useRef<Partial<Record<Ability, number>>>({});
-  const rollSeq = useRef(0);
+  const timers = useRef<number[]>([]);
 
   useEffect(() => {
     const pending = timers.current;
     return () => {
-      for (const id of Object.values(pending)) window.clearTimeout(id);
+      for (const id of pending) window.clearTimeout(id);
     };
   }, []);
 
   const pointBuyScores = ABILITY_KEYS.map((key) => scores[key] ?? POINT_BUY_MIN);
   const remaining = method === "pointbuy" ? pointBuyRemaining(pointBuyScores) : 0;
-  const anyRolling = ABILITY_KEYS.some((key) => rolls[key]?.phase === "rolling");
-  const rolledCount = ABILITY_KEYS.filter((key) => scores[key] !== null).length;
+  const anyRolling = method === "roll" && phases.some((phase) => phase === "rolling");
+  const placedCount = ABILITY_KEYS.filter((key) => slots[key] !== null).length;
   const complete = ABILITY_KEYS.every((key) => scores[key] !== null);
-
-  function clearRoll(abilities: Ability[]) {
-    for (const ability of abilities) {
-      window.clearTimeout(timers.current[ability]);
-      delete timers.current[ability];
-    }
-    setRolls((current) => {
-      const next = { ...current };
-      for (const ability of abilities) delete next[ability];
-      return next;
-    });
-  }
+  const total = pool ? poolSum(pool) : 0;
+  const rerollOpen = canRerollPool(pool);
+  const ownerOf = (index: number) => ABILITY_KEYS.find((key) => slots[key] === index) ?? null;
 
   function switchMethod(next: AbilityMethod) {
-    clearRoll(ABILITY_KEYS);
+    setHeld(null);
     onMethodChange(next);
     onScoresChange(
       next === "pointbuy"
         ? { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 }
-        : { str: null, dex: null, con: null, int: null, wis: null, cha: null },
+        : next === "roll" && pool
+          ? scoresFromSlots(slots, pool)
+          : { str: null, dex: null, con: null, int: null, wis: null, cha: null },
     );
   }
 
-  function roll(abilities: Ability[]) {
+  function throwPool() {
+    if (!rerollOpen || anyRolling) {
+      return;
+    }
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const nextScores = { ...scores };
-    const thrown: Partial<Record<Ability, RowRoll>> = {};
-    abilities.forEach((ability, index) => {
-      const four = rollFourDice();
-      const delay = still ? 0 : index * ROW_STAGGER_MS;
-      rollSeq.current += 1;
-      nextScores[ability] = four.total;
-      thrown[ability] = {
-        ...four,
-        rest: restOffsets(),
-        phase: still ? "settled" : "rolling",
-        id: rollSeq.current,
-        delay,
-      };
-      window.clearTimeout(timers.current[ability]);
-      if (!still) {
-        timers.current[ability] = window.setTimeout(() => {
-          setRolls((current) => {
-            const landed = current[ability];
-            return landed ? { ...current, [ability]: { ...landed, phase: "settled" } } : current;
-          });
-        }, ROW_SETTLE_MS + delay);
-      }
-    });
-    setRolls((current) => ({ ...current, ...thrown }));
-    onScoresChange(nextScores);
+    const thrown = rollPool();
+    for (const id of timers.current) window.clearTimeout(id);
+    timers.current = [];
+    setHeld(null);
+    setTossId((id) => id + 1);
+    setPhases(thrown.map(() => (still ? "settled" : "rolling")));
+    if (!still) {
+      thrown.forEach((_, index) => {
+        timers.current.push(
+          window.setTimeout(() => {
+            setPhases((current) => current.map((phase, at) => (at === index ? "settled" : phase)));
+          }, ROW_SETTLE_MS + index * ROW_STAGGER_MS),
+        );
+      });
+    }
+    onPoolChange(thrown);
+    onSlotsChange(EMPTY_SLOTS);
+    onScoresChange(scoresFromSlots(EMPTY_SLOTS, thrown));
   }
 
-  function typeScore(ability: Ability, value: number | null) {
-    // A typed number replaces the dice: they would otherwise show a roll
-    // that no longer adds up to the score beside them.
-    clearRoll([ability]);
-    onScoresChange({ ...scores, [ability]: value });
+  function commitSlots(next: PoolSlots<Ability>) {
+    if (!pool) return;
+    onSlotsChange(next);
+    onScoresChange(scoresFromSlots(next, pool));
+  }
+
+  function place(ability: Ability, index: number) {
+    commitSlots(placeFromPool(slots, ability, index));
+    setHeld(null);
+  }
+
+  function returnToTray(index: number) {
+    const owner = ownerOf(index);
+    if (owner) commitSlots({ ...slots, [owner]: null });
+    setHeld(null);
+  }
+
+  // A tap on a socket: with a throw in hand it lands there (its own throw
+  // goes back to the tray); with an empty hand it picks up what the socket
+  // holds, so it can be moved on to another ability.
+  function tapSocket(ability: Ability) {
+    const mine = slots[ability];
+    if (held !== null) {
+      place(ability, held);
+    } else if (mine !== null) {
+      setHeld(mine);
+    }
   }
 
   function nudgeBuy(ability: Ability, delta: number) {
     const value = Math.max(POINT_BUY_MIN, Math.min(POINT_BUY_MAX, (scores[ability] ?? POINT_BUY_MIN) + delta));
     onScoresChange({ ...scores, [ability]: value });
+  }
+
+  function startDrag(event: DragEvent, index: number) {
+    event.dataTransfer.setData(DRAG_TYPE, String(index));
+    event.dataTransfer.effectAllowed = "move";
+    setHeld(index);
+  }
+
+  function dragInto(event: DragEvent, target: Ability | "tray") {
+    if (!event.dataTransfer.types.includes(DRAG_TYPE)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    if (dropTarget !== target) setDropTarget(target);
+  }
+
+  function dropInto(event: DragEvent, target: Ability | "tray") {
+    const raw = event.dataTransfer.getData(DRAG_TYPE);
+    setDropTarget(null);
+    if (raw === "") return;
+    event.preventDefault();
+    const index = Number(raw);
+    if (target === "tray") returnToTray(index);
+    else place(target, index);
   }
 
   return (
@@ -217,18 +265,27 @@ export default function AbilityEditor({
           <>
             <span className="inline-flex items-center gap-2">
               <span className="eyebrow text-[10px] tracking-[0.18em] text-amber-500/80">4d6 drop lowest</span>
-              <span className="font-mono text-[10.5px] text-stone-500" aria-live="polite">
-                {rolledCount} / 6 set
-              </span>
+              {pool ? (
+                <span className="font-mono text-[10.5px] text-stone-500" aria-live="polite">
+                  {placedCount} / 6 placed
+                </span>
+              ) : null}
             </span>
-            <button
-              type="button"
-              onClick={() => roll(ABILITY_KEYS)}
-              disabled={anyRolling}
-              className={cn(ui.btnSmall, "ml-auto px-2.5 py-1 text-xs")}
-            >
-              <Dices className="size-3.5" /> {rolledCount ? "Reroll all" : "Roll all"}
-            </button>
+            {pool ? (
+              <button
+                type="button"
+                onClick={throwPool}
+                disabled={anyRolling || !rerollOpen}
+                title={
+                  rerollOpen
+                    ? `These add up to less than ${REROLL_BELOW}, so you may throw again`
+                    : `A reroll opens only when the six add up to less than ${REROLL_BELOW}`
+                }
+                className={cn(ui.btnSmall, "ml-auto px-2.5 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-40")}
+              >
+                <Dices className="size-3.5" /> Reroll
+              </button>
+            ) : null}
           </>
         ) : null}
       </div>
@@ -242,22 +299,115 @@ export default function AbilityEditor({
         </p>
       ) : null}
 
+      {method === "roll" ? (
+        <div
+          className="pool-tray mb-3"
+          data-empty={!pool || undefined}
+          data-drop={dropTarget === "tray" || undefined}
+          onDragOver={(event) => dragInto(event, "tray")}
+          onDragLeave={() => setDropTarget(null)}
+          onDrop={(event) => dropInto(event, "tray")}
+        >
+          {pool ? (
+            <>
+              <div className="pool-grid" role="group" aria-label="Your six throws">
+                {pool.map((entry, index) => {
+                  const phase = phases[index] ?? "settled";
+                  const rolling = anyRolling && phase === "rolling";
+                  const owner = ownerOf(index);
+                  const inHand = held === index;
+                  return (
+                    <button
+                      key={`${tossId}-${index}`}
+                      type="button"
+                      className="pool-token"
+                      data-phase={anyRolling ? phase : undefined}
+                      data-held={inHand || undefined}
+                      data-placed={owner ? true : undefined}
+                      draggable={!anyRolling}
+                      disabled={anyRolling}
+                      aria-pressed={inHand}
+                      aria-label={`Throw of ${entry.total}${owner ? `, on ${ABILITY_LABELS[owner]}` : ", not placed"}`}
+                      onClick={() => setHeld(inHand ? null : index)}
+                      onDragStart={(event) => startDrag(event, index)}
+                      onDragEnd={() => {
+                        setDropTarget(null);
+                        setHeld(null);
+                      }}
+                      style={
+                        {
+                          "--delay": `${anyRolling ? index * ROW_STAGGER_MS : 0}ms`,
+                          "--pop": `${TOTAL_POP_MS}ms`,
+                        } as CSSProperties
+                      }
+                    >
+                      {entry.roll ? (
+                        <span className="pool-dice">
+                          <DiceRow roll={{ ...entry.roll, phase: anyRolling ? phase : "settled" }} />
+                        </span>
+                      ) : (
+                        <span className="pool-saved">from your sheet</span>
+                      )}
+                      <span className={cn("dice-total", `roll-tier-${rollTier(entry.total)}`)} data-phase={rolling ? "rolling" : undefined}>
+                        {entry.total}
+                      </span>
+                      <span className="pool-tag">{owner ? owner.toUpperCase() : inHand ? "in hand" : "free"}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="pool-note" aria-live="polite">
+                {anyRolling ? (
+                  "The dice are in the air…"
+                ) : (
+                  <>
+                    <span className="font-mono text-amber-200">Total {total}</span>
+                    <span className="text-stone-600"> · </span>
+                    {rerollOpen
+                      ? `Under ${REROLL_BELOW}: you may throw all six again.`
+                      : `A reroll opens only under ${REROLL_BELOW}. These six are yours.`}
+                    <span className="block text-stone-500">
+                      {held !== null
+                        ? "Now tap the ability that should get it."
+                        : placedCount < 6
+                          ? "Tap a throw, then an ability, or drag it into place."
+                          : "Tap or drag a placed score to swap it with another."}
+                    </span>
+                  </>
+                )}
+              </p>
+            </>
+          ) : (
+            <div className="pool-empty">
+              <p className="font-display text-[15px] font-semibold text-stone-100">Six throws of four dice</p>
+              <p className="max-w-sm text-xs text-stone-400">
+                Each throw keeps its best three. All six land at once, then you decide which ability gets which.
+              </p>
+              <button type="button" onClick={throwPool} className="pool-throw motion-press">
+                <Dices className="size-4" /> Roll the dice
+              </button>
+            </div>
+          )}
+        </div>
+      ) : null}
+
       <div className="flex flex-col gap-1.5">
         {ABILITY_KEYS.map((ability) => {
           const bonus = racialBonus[ability] ?? 0;
           const assigned = scores[ability];
-          const thrown = method === "roll" ? (rolls[ability] ?? null) : null;
-          const rolling = thrown?.phase === "rolling";
-          // Held back while the dice are in the air, so the answer lands
-          // with them instead of ahead of them.
-          const finalScore = assigned !== null && !rolling ? assigned + bonus : null;
+          const finalScore = assigned !== null ? assigned + bonus : null;
           const label = ABILITY_LABELS[ability];
+          const slot = method === "roll" ? slots[ability] : null;
+          const armed = method === "roll" && held !== null && !anyRolling;
           return (
             <div
               key={ability}
               className="dice-row"
-              data-phase={thrown?.phase}
-              style={{ "--delay": `${thrown?.delay ?? 0}ms`, "--pop": `${TOTAL_POP_MS}ms` } as CSSProperties}
+              data-armed={armed || undefined}
+              data-drop={dropTarget === ability || undefined}
+              onDragOver={method === "roll" && pool ? (event) => dragInto(event, ability) : undefined}
+              onDragLeave={method === "roll" ? () => setDropTarget(null) : undefined}
+              onDrop={method === "roll" && pool ? (event) => dropInto(event, ability) : undefined}
             >
               <span className="dice-abbr" aria-hidden="true">
                 {ability.toUpperCase()}
@@ -279,38 +429,35 @@ export default function AbilityEditor({
               </span>
 
               {method === "roll" ? (
-                <>
-                  <DiceRow key={thrown?.id ?? "idle"} roll={thrown} />
-                  <span className="flex w-[52px] flex-none items-center justify-center">
-                    {thrown ? (
-                      <span
-                        key={thrown.id}
-                        className={cn("dice-total", `roll-tier-${rollTier(thrown.total)}`)}
-                        data-phase={thrown.phase}
-                      >
-                        {thrown.total}
-                      </span>
-                    ) : (
-                      <span className="h-0.5 w-3 rounded-full bg-stone-700" aria-hidden="true" />
-                    )}
-                  </span>
-                  <span className="flex-none" title="3 to 18">
-                    <OptionalStepper
-                      min={3}
-                      max={18}
-                      fallback={3}
-                      // Blank while the dice are in the air, or the field would
-                      // give the total away before they land.
-                      value={rolling ? undefined : assigned}
-                      onChange={(next) => typeScore(ability, next === "" ? null : next)}
-                      label={`${label} score, typed`}
-                      size="sm"
-                      // Two digits at most: the narrower figure pays for the
-                      // clear cross, so the Roll button stays on this line.
-                      className="[&_.kit-stepper-figure]:w-8!"
-                    />
-                  </span>
-                </>
+                <button
+                  type="button"
+                  className="pool-socket"
+                  data-filled={slot !== null || undefined}
+                  data-held={slot !== null && held === slot ? true : undefined}
+                  disabled={!pool || anyRolling || (slot === null && held === null)}
+                  draggable={slot !== null && !anyRolling}
+                  onClick={() => tapSocket(ability)}
+                  onDragStart={slot !== null ? (event) => startDrag(event, slot) : undefined}
+                  onDragEnd={() => {
+                    setDropTarget(null);
+                    setHeld(null);
+                  }}
+                  aria-label={
+                    slot !== null
+                      ? `${label} holds ${assigned}. ${held === slot ? "Tap again to send it back to the tray" : held !== null ? "Tap to swap" : "Tap to pick it up"}`
+                      : held !== null
+                        ? `Place the held throw on ${label}`
+                        : `${label} is empty`
+                  }
+                >
+                  {slot !== null && assigned !== null ? (
+                    <span key={`${tossId}-${slot}`} className={cn("pool-socket-value", `roll-tier-${rollTier(assigned)}`)}>
+                      {assigned}
+                    </span>
+                  ) : (
+                    <span className="pool-socket-hint">{armed ? "Place" : "—"}</span>
+                  )}
+                </button>
               ) : null}
 
               {method === "standard" ? (
@@ -364,21 +511,6 @@ export default function AbilityEditor({
                 </span>
               ) : null}
 
-              {method === "roll" ? (
-                <button
-                  type="button"
-                  onClick={() => roll([ability])}
-                  disabled={Boolean(thrown)}
-                  className={cn(
-                    "motion-press h-8 w-[86px] flex-none rounded-lg border font-display text-[9.5px] font-semibold uppercase tracking-[0.14em]",
-                    thrown
-                      ? "border-stone-700/60 bg-stone-950/50 text-stone-600"
-                      : "border-amber-500/50 bg-amber-500/10 text-amber-200 hover:shadow-glow-gold",
-                  )}
-                >
-                  {rolling ? "Rolling" : thrown ? "Rolled" : "Roll"}
-                </button>
-              ) : null}
             </div>
           );
         })}

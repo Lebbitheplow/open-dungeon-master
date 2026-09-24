@@ -712,6 +712,188 @@ html[data-theme="light"] .roll-tier-5 { color: #6d28d9; text-shadow: none; }
 }
 .step-button:disabled { opacity: 0.35; cursor: default; }
 
+/* ---- the 4d6 pool: six throws in a tray, placed on the abilities ---- */
+@keyframes pool-socket-breathe {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(212, 171, 58, 0); }
+  50% { box-shadow: 0 0 0 3px rgba(212, 171, 58, 0.16), 0 0 16px rgba(212, 171, 58, 0.22); }
+}
+@keyframes pool-socket-land {
+  0% { opacity: 0; scale: 0.4; translate: 0 -6px; }
+  70% { opacity: 1; scale: 1.2; translate: 0 0; }
+  100% { scale: 1; }
+}
+.pool-tray {
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--color-amber-500) 22%, transparent);
+  background:
+    radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--color-amber-500) 7%, transparent), transparent 70%),
+    color-mix(in srgb, var(--color-stone-950) 65%, transparent);
+  padding: 10px;
+  transition: border-color var(--dur-quick) var(--ease-snap), box-shadow var(--dur-quick) var(--ease-snap);
+}
+.pool-tray[data-drop] {
+  border-color: color-mix(in srgb, var(--color-amber-500) 60%, transparent);
+  box-shadow: var(--shadow-glow-gold);
+}
+.pool-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 8px 12px;
+  text-align: center;
+}
+.pool-throw {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 4px;
+  height: 38px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #f9ecc8, #e3c15c);
+  box-shadow: 0 0 18px rgba(212, 171, 58, 0.3);
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #2b2008;
+  cursor: pointer;
+}
+.pool-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+@media (min-width: 640px) {
+  .pool-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+.pool-token {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 9px 6px 7px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--color-stone-700) 55%, transparent);
+  background: color-mix(in srgb, var(--color-stone-950) 70%, transparent);
+  cursor: grab;
+  transition:
+    transform 220ms var(--ease-spring),
+    opacity var(--dur-quick) var(--ease-snap),
+    border-color var(--dur-quick) var(--ease-snap),
+    background-color var(--dur-quick) var(--ease-snap),
+    box-shadow var(--dur-quick) var(--ease-snap);
+}
+.pool-token:disabled { cursor: default; }
+.pool-token:active:not(:disabled) { cursor: grabbing; transform: scale(0.96); }
+@media (hover: hover) {
+  .pool-token:not(:disabled):hover {
+    transform: translateY(-2px);
+    border-color: color-mix(in srgb, var(--color-amber-500) 50%, transparent);
+  }
+}
+.pool-token[data-phase="rolling"] {
+  border-color: color-mix(in srgb, var(--color-amber-500) 70%, transparent);
+  background-color: color-mix(in srgb, var(--color-amber-500) 10%, transparent);
+}
+.pool-token[data-placed] { opacity: 0.45; }
+.pool-token[data-held] {
+  opacity: 1;
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--color-amber-500) 85%, transparent);
+  background-color: color-mix(in srgb, var(--color-amber-500) 14%, transparent);
+  box-shadow: var(--shadow-glow-gold-strong);
+}
+/* The four dice at a little over half size; flex row so the dice row's
+   192px basis runs across, not down. */
+.pool-dice { display: flex; flex: none; justify-content: center; zoom: 0.58; }
+.pool-saved {
+  display: flex;
+  height: 24px;
+  align-items: center;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-stone-500);
+}
+.pool-token .dice-total { font-size: 25px; }
+.pool-tag {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-stone-500);
+}
+.pool-token[data-placed] .pool-tag { color: var(--color-amber-300); }
+.pool-token[data-held] .pool-tag { color: var(--color-amber-200); }
+.pool-note {
+  margin-top: 9px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-stone-400);
+}
+.dice-row[data-drop] {
+  border-color: color-mix(in srgb, var(--color-amber-500) 70%, transparent);
+  background-color: color-mix(in srgb, var(--color-amber-500) 10%, transparent);
+}
+.pool-socket {
+  display: flex;
+  width: 66px;
+  height: 42px;
+  flex: none;
+  margin-left: auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 1px dashed color-mix(in srgb, var(--color-stone-600) 70%, transparent);
+  background: color-mix(in srgb, var(--color-stone-950) 70%, transparent);
+  cursor: pointer;
+  transition:
+    transform 200ms var(--ease-spring),
+    border-color var(--dur-quick) var(--ease-snap),
+    background-color var(--dur-quick) var(--ease-snap),
+    box-shadow var(--dur-quick) var(--ease-snap);
+}
+.pool-socket:disabled { cursor: default; }
+.pool-socket[data-filled] {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--color-amber-500) 40%, transparent);
+  background: color-mix(in srgb, var(--color-amber-950) 30%, transparent);
+  box-shadow: inset 0 1px 0 rgba(249, 236, 200, 0.06);
+  cursor: grab;
+}
+.pool-socket:not(:disabled):active { transform: scale(0.92); }
+.dice-row[data-armed] .pool-socket:not([data-held]) {
+  border-color: color-mix(in srgb, var(--color-amber-500) 75%, transparent);
+  animation: pool-socket-breathe 1.6s var(--ease-drift) infinite;
+}
+.pool-socket[data-held] {
+  border-color: color-mix(in srgb, var(--color-amber-500) 90%, transparent);
+  box-shadow: var(--shadow-glow-gold-strong);
+}
+.pool-socket-value {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  animation: pool-socket-land 380ms var(--ease-spring) both;
+}
+.pool-socket-hint {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-stone-600);
+}
+.dice-row[data-armed] .pool-socket-hint { color: var(--color-amber-200); }
+
 /* ---- rest states ---- */
 @media (prefers-reduced-motion: reduce) {
   .diamond-ping { display: none; }
@@ -720,7 +902,9 @@ html[data-theme="light"] .roll-tier-5 { color: #6d28d9; text-shadow: none; }
   .creator-trait,
   .method-option,
   .slot-button,
-  .step-button { transform: none !important; }
+  .step-button,
+  .pool-token,
+  .pool-socket { transform: none !important; }
   .wizard-step[data-active] > *,
   .wizard-step[data-active] .creator-rise,
   .creator-cascade,
@@ -736,7 +920,9 @@ html[data-theme="light"] .roll-tier-5 { color: #6d28d9; text-shadow: none; }
   .die-inner,
   .die-face,
   .die-dropped,
-  .dice-total { animation: none !important; }
+  .dice-total,
+  .pool-socket,
+  .pool-socket-value { animation: none !important; }
   .die-flicker { display: none; }
   .wizard-continue { transition: none; }
 }

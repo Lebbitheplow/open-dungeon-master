@@ -63,6 +63,10 @@ export function AbilitiesStep({
         onMethodChange={state.setMethod}
         scores={state.scores}
         onScoresChange={state.setScores}
+        pool={state.rollPool}
+        onPoolChange={state.setRollPool}
+        slots={state.rollSlots}
+        onSlotsChange={state.setRollSlots}
         racialBonus={racialBonus}
         asiCount={asiSlotLevels.length}
         who={race && klass ? `${race.name} ${klass.name}`.toLowerCase() : ""}
