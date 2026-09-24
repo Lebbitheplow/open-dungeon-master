@@ -545,8 +545,11 @@ export function SessionView({
   );
   const openStoryCapture = useCallback(() => selectPanelView("dm"), [selectPanelView]);
   // What a tour step needs on screen before it can point at anything: the
-  // right side-panel tab, or on a phone the chat column.
+  // right side-panel tab, or on a phone the chat column. While the fight
+  // stage holds the board, the Battle tab shows the party, so the maps
+  // step opens the Map tab instead.
   const hasBattleMap = Boolean(state.battleMap);
+  const boardInTab = hasBattleMap && !(docked && stageView === "board");
   const prepareTourStep = useCallback(
     (name: string) => {
       switch (name) {
@@ -563,14 +566,14 @@ export function SessionView({
           selectPanelView("story");
           break;
         case "open-map":
-          selectPanelView(hasBattleMap ? "battle" : "map");
+          selectPanelView(boardInTab ? "battle" : "map");
           break;
         case "open-chat":
           selectPanelView("chat");
           break;
       }
     },
-    [selectPanelView, setMobileView, hasBattleMap],
+    [selectPanelView, setMobileView, boardInTab],
   );
   const snoozeStory = useCallback(() => setBeatSnoozedUntil(snoozeUntil(Date.now())), []);
   // The cadence memo above only reruns on new messages or rolls, so at a

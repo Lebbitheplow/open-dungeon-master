@@ -17,7 +17,7 @@ export const PLAYER_TOUR: TourStep[] = [
   {
     id: "welcome",
     title: "Welcome to the table",
-    body: "This is where the adventure is played. The story runs down the middle over a painting of the scene; on a wide screen the party stands down the left, and your character, the quests and the world sit in the side panel. A short tour shows the controls. Replay it any time from Help.",
+    body: "This is where the adventure is played. The story runs down the middle over a painting of the scene; on a wide screen the party stands down the left, and your character, the quests and the world sit in the side panel. When a fight with a map starts, a wide screen puts the board in the middle with the story on a scroll beside it. A short tour shows the controls. Replay it any time from Help.",
     anchors: [],
   },
   {
@@ -91,9 +91,15 @@ export const PLAYER_TOUR: TourStep[] = [
   {
     id: "map",
     title: "Maps",
-    body: "The scene map, the overworld and the places the party has found. A battle map opens in its own tab while a fight with a map is running: the portraits along its top are the turn order, and on your turn the pips beside them show the action, bonus action and reaction you have left. Enlarge spreads the board across the whole screen: the chronicle on its left carries the tale and a box to take your turn without closing it, and the turn order runs down its right.",
+    body: "The scene map, the overworld and the places the party has found. While a fight with a map is running, the battle board takes the middle of a wide screen, or its own tab on a phone: the portraits along its top are the turn order, and on your turn the pips beside them show the action, bonus action and reaction you have left. Enlarge spreads the board across the whole screen, with the chronicle and a box to take your turn on its left and the turn order down its right.",
     anchors: ["tab-map", "tab-battle"],
     prepare: "open-map",
+  },
+  {
+    id: "stage",
+    title: "Board or story",
+    body: "While a fight with a map is on, this switch picks what fills the middle of the table: the board with the chronicle beside it, or the story as usual with the board in its tab. This browser remembers your choice.",
+    anchors: ["header-stage"],
   },
   {
     id: "chat",
@@ -200,9 +206,15 @@ export const DM_TOUR: TourStep[] = [
   {
     id: "map",
     title: "Maps and the board",
-    body: "The scene map, the overworld and, while a fight with a map is running, the battle board. Enlarge spreads the board across the whole screen with the chronicle on its left, where you can keep narrating without closing it, and the turn order down its right.",
-    anchors: ["tab-battle", "tab-map"],
+    body: "The scene map and the overworld. While a fight with a map is running, the battle board takes the middle of a wide screen with the chronicle beside it, or its own tab on a phone. Enlarge spreads the board across the whole screen with the chronicle and a box to keep narrating on its left, and the turn order down its right.",
+    anchors: ["tab-map", "tab-battle"],
     prepare: "open-map",
+  },
+  {
+    id: "stage",
+    title: "Board or story",
+    body: "While a fight with a map is on, this switch picks what fills the middle of the table: the board with the chronicle beside it, or the story as usual with the board in its tab. This browser remembers your choice.",
+    anchors: ["header-stage"],
   },
   {
     id: "chat",

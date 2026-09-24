@@ -51,6 +51,17 @@ export function resolveSteps(
   return out;
 }
 
+// Where to go when the step about to show has lost its target since the
+// tour opened (the layout changed under it: a fight moved the board into
+// the middle and the party rail went away). Onward in the direction the
+// reader was moving; backing past the first step turns round; -1 when
+// there is nothing left to show and the tour should close.
+export function skipVanished(index: number, direction: 1 | -1, total: number): number {
+  const next = index + direction;
+  if (next < 0) return index + 1 < total ? index + 1 : -1;
+  return next < total ? next : -1;
+}
+
 export interface Rect {
   top: number;
   left: number;
