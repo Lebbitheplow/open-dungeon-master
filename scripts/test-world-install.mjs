@@ -29,6 +29,7 @@ const {
 } = await import("../src/lib/worlds/index.ts");
 const {
   installWorldPack,
+  installFromUrl,
   removeWorldPack,
   pickRegistryUrl,
   DEFAULT_WORLD_REGISTRY_URL,
@@ -276,6 +277,31 @@ await test("a registry index only accepts https download URLs", () => {
       !registryIndexSchema.safeParse({ packs: [{ ...entry, downloadUrl: url }] }).success,
       `${url} was accepted as a download URL`,
     );
+  }
+});
+
+await test("a registry id mismatch is rejected before any pack is written", async () => {
+  const realFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify(manifest({ id: "different_world" })), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+
+    const result = await installFromUrl(
+      "https://example.invalid/expected_world.json",
+      "expected_world",
+    );
+
+    assert.ok(!result.ok);
+    assert.equal(result.status, 409);
+    assert.match(result.error, /Nothing was installed/);
+    assert.equal(worldPack("different_world"), null);
+    assert.ok(!fs.existsSync(path.join(scratch, "different_world.json")));
+  } finally {
+    globalThis.fetch = realFetch;
+    await removeWorldPack("different_world");
   }
 });
 
