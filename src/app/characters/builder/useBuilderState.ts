@@ -26,11 +26,14 @@ export type EquipmentItem = { name: string; qty: number; slug?: string };
 // submit payload (submit.ts) reads these unchanged.
 export function useBuilderState({
   initial,
+  initialLevel,
   fixedLevel,
   races,
   backgrounds,
 }: {
   initial?: CreateSheetInput;
+  // The level the stored character reached (its library row's level).
+  initialLevel?: number;
   fixedLevel?: number;
   races: RaceOption[];
   backgrounds: BackgroundOption[];
@@ -208,11 +211,19 @@ export function useBuilderState({
   // loadout and background kit are added to a new character only; for a
   // stored one they would bring back what was sold or lost in play. A class
   // or background changed in the edit hands over its kit as creation does.
+  // Improvements the stored character took at the table, which its scores
+  // already carry (asiSlotsTakenInPlay). A sheet never levelled in play
+  // recorded a pick for every slot it earned, so none are marked.
+  const asiRecorded = initial?.asiChoices?.length ?? 0;
+  const asiReachedLevel = initial ? (initialLevel ?? initial.hitDice?.total ?? 0) : 0;
+
   const keepsStoredGear =
     Boolean(initial) && classId === initial?.class && backgroundId === initial?.background;
 
   return {
     keepsStoredGear,
+    asiRecorded,
+    asiReachedLevel,
     name, setName,
     alignment, setAlignment,
     level, setLevel,

@@ -29,6 +29,7 @@ export default function AsiFeatEditor({
   slotLevels,
   baseScores,
   choices,
+  takenInPlay = [],
   onChange,
 }: {
   // Character level for the builder's "Level N: X earned" heading; absent in
@@ -37,6 +38,9 @@ export default function AsiFeatEditor({
   slotLevels: number[];
   baseScores: AbilityScores | null;
   choices: Array<AsiChoice | null>;
+  // Slots an edited character took at the table: already in the scores, so
+  // shown as settled rather than asked for again (asiSlotsTakenInPlay).
+  takenInPlay?: boolean[];
   onChange: (choices: Array<AsiChoice | null>) => void;
 }) {
   function setChoice(index: number, choice: AsiChoice | null) {
@@ -45,7 +49,7 @@ export default function AsiFeatEditor({
     onChange(next);
   }
 
-  const unresolved = slotLevels.filter((_, index) => !choices[index]).length;
+  const unresolved = slotLevels.filter((_, index) => !choices[index] && !takenInPlay[index]).length;
 
   return (
     <section className="panel ornate rounded-xl border-amber-500/30 p-4">
@@ -83,6 +87,25 @@ export default function AsiFeatEditor({
             // Scores as they stand entering this slot: base plus all
             // earlier choices.
             const current = applyAsiChoices(baseScores, choices.slice(0, index));
+            if (takenInPlay[index]) {
+              return (
+                <div
+                  key={slotLevel}
+                  className="reveal rounded-lg border border-stone-800 bg-stone-950/60 p-3"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-stone-300">Level {slotLevel} improvement</span>
+                    <span className="rounded-full border border-stone-700 bg-stone-900 px-2 py-0.5 text-[11px] text-stone-400">
+                      Taken in play
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-stone-500">
+                    Chosen at the table when this character levelled up, so it is already in
+                    the scores above. A feat taken with it stays in the feats list.
+                  </p>
+                </div>
+              );
+            }
             return (
               <div
                 key={slotLevel}

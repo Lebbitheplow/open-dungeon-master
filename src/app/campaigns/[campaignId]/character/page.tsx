@@ -235,6 +235,7 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
             genre={genre}
             worldPackId={worldPackId}
             initial={flow === "edit" ? editCharacter?.sheet : undefined}
+            initialLevel={flow === "edit" ? editCharacter?.level : undefined}
             submitLabel={
               flow === "edit"
                 ? "Save changes"

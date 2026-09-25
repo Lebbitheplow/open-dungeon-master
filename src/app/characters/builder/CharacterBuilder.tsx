@@ -46,6 +46,7 @@ export default function CharacterBuilder({
   genre,
   worldPackId,
   initial,
+  initialLevel,
   submitLabel,
   onSubmit,
   busy,
@@ -64,6 +65,10 @@ export default function CharacterBuilder({
   // Edit mode: prefill every field from an existing stored sheet (the
   // library copy, which owns builder-only fields like ASI picks).
   initial?: CreateSheetInput;
+  // The level the stored character reached (its library row's). Improvements
+  // it earned up to there with no recorded pick were taken in play and are
+  // already in its scores.
+  initialLevel?: number;
   submitLabel: string;
   onSubmit: (result: BuilderResult) => void;
   busy: boolean;
@@ -90,7 +95,7 @@ export default function CharacterBuilder({
     [rawBackgrounds, pack],
   );
 
-  const state = useBuilderState({ initial, fixedLevel, races, backgrounds });
+  const state = useBuilderState({ initial, initialLevel, fixedLevel, races, backgrounds });
   const race = races.find((entry) => entry.id === state.raceId) ?? races[0];
   const klass = classes.find((entry) => entry.id === state.classId) ?? classes[0];
   const background =

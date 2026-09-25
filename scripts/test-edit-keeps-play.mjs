@@ -6,7 +6,8 @@
 // boons, feats, the background's feature, an item's attunement); "save this
 // table's rules" saved an empty ruleset; one bad field blanked a plugin
 // draft; a rename cleared a roll table's drawn results; the prep panel's
-// save cleared a fight's map seed.
+// save cleared a fight's map seed; and an edit asked again for the ability
+// score improvements a hero took in play, which its scores already carry.
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
@@ -42,7 +43,8 @@ const { getPackDraft, savePackDraft } = await import("../src/lib/db/world-pack-d
 const { worldPackDraftSchema } = await import("../src/lib/worlds/draft.ts");
 const { layOver, parseKeepingValid } = await import("../src/lib/schemas/parse-keeping-valid.ts");
 const { createSheetSchema } = await import("../src/lib/schemas/sheet.ts");
-const { buildBuilderResult } = await import("../src/app/characters/builder/submit.ts");
+const { abilitiesBlocker, buildBuilderResult } = await import("../src/app/characters/builder/submit.ts");
+const { asiSlotsTakenInPlay } = await import("../src/lib/srd/asi.ts");
 
 const route = (name) => import(`../src/app/api/${name}/route.ts`);
 const campaignsRoute = await route("campaigns");
@@ -370,6 +372,33 @@ await test("editing a library sheet saved before multiclassing does not throw", 
   delete legacy.equipment;
   const sheet = builderEdit(legacy, 8).sheet;
   assert.equal(sheet.notes, PLAYED.notes);
+});
+
+await test("improvements a hero took in play are not asked for again", () => {
+  // Created at 1, levelled to 8 at the table: two slots earned, none recorded.
+  assert.deepEqual(asiSlotsTakenInPlay([4, 8], 0, 8), [true, true]);
+  // Built at 4 with its pick recorded, then levelled to 8 in play.
+  assert.deepEqual(asiSlotsTakenInPlay([4, 8], 1, 8), [false, true]);
+  // At a table above the level it reached, the new slot is still a pick.
+  assert.deepEqual(asiSlotsTakenInPlay([4, 8], 0, 5), [true, false]);
+  // A new character took nothing in play.
+  assert.deepEqual(asiSlotsTakenInPlay([4, 8], 0, 0), [false, false]);
+
+  const derived = {
+    abilities: PLAYED.abilities,
+    asiSlotLevels: [4, 8],
+    activeAsiChoices: [null, null],
+    asiTakenInPlay: [true, true],
+  };
+  assert.equal(abilitiesBlocker(derived), null);
+  assert.equal(
+    abilitiesBlocker({ ...derived, asiTakenInPlay: [true, false] }),
+    "Resolve your level 8 ability score improvement first.",
+  );
+  // Nothing is added for them: the scores that already carry them are kept.
+  const sheet = builderEdit(PLAYED, 8).sheet;
+  assert.deepEqual(sheet.abilities, PLAYED.abilities);
+  assert.deepEqual(sheet.asiChoices, []);
 });
 
 // ---- the library copy ----

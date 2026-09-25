@@ -10,6 +10,20 @@ export function earnedAsiCount(level: number): number {
   return ASI_LEVELS.filter((threshold) => level >= threshold).length;
 }
 
+// Which of these slots were taken in play. The table's level-up folds an
+// improvement straight into the scores and records no choice, so a stored
+// sheet can reach a level with fewer picks than it earned. The recorded
+// picks are the earliest slots (the builder's own); the ones after them, up
+// to the level the character reached, are already in its scores, and asking
+// for them again would count them twice.
+export function asiSlotsTakenInPlay(
+  slotLevels: number[],
+  recordedCount: number,
+  reachedLevel: number,
+): boolean[] {
+  return slotLevels.map((threshold, index) => index >= recordedCount && threshold <= reachedLevel);
+}
+
 // The ASI thresholds crossed when advancing from one level to another.
 export function crossedAsiLevels(fromLevel: number, toLevel: number): number[] {
   return ASI_LEVELS.filter((threshold) => threshold > fromLevel && threshold <= toLevel);

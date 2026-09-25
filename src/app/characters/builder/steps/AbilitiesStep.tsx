@@ -45,7 +45,8 @@ export function AbilitiesStep({
   race: RaceOption | undefined;
   klass: ClassOption | undefined;
 }) {
-  const { asiSlotLevels, activeAsiChoices, baseAbilities, effectiveLevel } = derived;
+  const { asiSlotLevels, activeAsiChoices, asiTakenInPlay, baseAbilities, effectiveLevel } = derived;
+  const asiToPick = asiTakenInPlay.filter((taken) => !taken).length;
   // The fixed bumps plus the ones the player chose on the ancestry step
   // (half-elf), so "Final" here is the number the sheet will carry.
   const racialBonus: Partial<Record<Ability, number>> = { ...(race?.asi ?? {}) };
@@ -68,7 +69,7 @@ export function AbilitiesStep({
         slots={state.rollSlots}
         onSlotsChange={state.setRollSlots}
         racialBonus={racialBonus}
-        asiCount={asiSlotLevels.length}
+        asiCount={asiToPick}
         who={race && klass ? `${race.name} ${klass.name}`.toLowerCase() : ""}
         hp={hpExplainerInput(state, derived, race, klass)}
       />
@@ -78,6 +79,7 @@ export function AbilitiesStep({
           slotLevels={asiSlotLevels}
           baseScores={baseAbilities}
           choices={activeAsiChoices}
+          takenInPlay={asiTakenInPlay}
           onChange={(next) =>
             state.setAsiChoices((current) => {
               const merged = [...current];

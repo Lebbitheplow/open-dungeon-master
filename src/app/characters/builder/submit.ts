@@ -158,7 +158,9 @@ export function abilitiesBlocker(
       return `Point buy is ${over} ${over === 1 ? "point" : "points"} over its ${POINT_BUY_BUDGET}. Lower a score first.`;
     }
   }
-  const unresolvedSlot = derived.activeAsiChoices.findIndex((choice) => choice === null);
+  const unresolvedSlot = derived.activeAsiChoices.findIndex(
+    (choice, index) => choice === null && !derived.asiTakenInPlay[index],
+  );
   if (unresolvedSlot !== -1) {
     return `Resolve your level ${derived.asiSlotLevels[unresolvedSlot]} ability score improvement first.`;
   }

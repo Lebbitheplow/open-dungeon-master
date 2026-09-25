@@ -12,7 +12,7 @@ import {
   spellSlotsFor,
   suggestedStartingHp,
 } from "@/lib/srd";
-import { ASI_LEVELS, applyAsiChoices } from "@/lib/srd/asi";
+import { ASI_LEVELS, applyAsiChoices, asiSlotsTakenInPlay } from "@/lib/srd/asi";
 import { defaultArmor, suggestArmor } from "@/lib/srd/armor";
 import { classFeaturesFor, subclassSpellsFor } from "@/lib/srd/features";
 import { fightingStyleSlots } from "@/lib/srd/feature-effects";
@@ -41,7 +41,7 @@ export function useBuilderDerived({
   const {
     level, scores, racialAsi, asiChoices, chosenSkills, expertisePicks, bonusLanguages,
     racialSkills, racialTool, hpOverride, acOverride, equipment, removedAutoNames,
-    subclass, optionPicks, spells, cantripNames, keepsStoredGear,
+    subclass, optionPicks, spells, cantripNames, keepsStoredGear, asiRecorded, asiReachedLevel,
   } = state;
 
   const effectiveLevel = fixedLevel ?? level;
@@ -52,6 +52,12 @@ export function useBuilderDerived({
   const activeAsiChoices = useMemo(
     () => asiSlotLevels.map((_, index) => asiChoices[index] ?? null),
     [asiSlotLevels, asiChoices],
+  );
+  // Slots an edited character took in play: resolved, and worth nothing
+  // here, since the stored scores already include them.
+  const asiTakenInPlay = useMemo(
+    () => asiSlotsTakenInPlay(asiSlotLevels, asiRecorded, asiReachedLevel),
+    [asiSlotLevels, asiRecorded, asiReachedLevel],
   );
 
   // Base scores after racial bonuses, before level ASIs; what the ASI cards
@@ -280,6 +286,7 @@ export function useBuilderDerived({
     effectiveLevel,
     asiSlotLevels,
     activeAsiChoices,
+    asiTakenInPlay,
     baseAbilities,
     abilities,
     proficientSkills,
