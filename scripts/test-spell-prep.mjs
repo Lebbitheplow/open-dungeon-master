@@ -148,6 +148,14 @@ test("cantrips, known casters and subclass spells are refused", () => {
   assert.ok("error" in domain, "domain spell stays prepared");
 });
 
+test("the life domain grants its spells, always prepared and free", () => {
+  const [view] = casterViewsOf({ ...cleric({ prepared: ["Guiding Bolt"] }), subclass: "life" });
+  assert.ok("error" in changePreparation(view, "unprepare", "Bless", { abilities: ABILITIES, inClassList: true }));
+  assert.equal(preparedCount(view), 1, "granted domain spells never count against the allowance");
+  const [byName] = casterViewsOf({ ...cleric({ prepared: [] }), subclass: "Life Domain", level: 3 });
+  assert.ok("error" in changePreparation(byName, "prepare", "Spiritual Weapon", { abilities: ABILITIES, inClassList: true }), "a granted spell is already prepared");
+});
+
 test("a wizard prepares only from the spellbook, and unpreparing keeps it written", () => {
   const sheet = wizard();
   const [view] = casterViewsOf(sheet);

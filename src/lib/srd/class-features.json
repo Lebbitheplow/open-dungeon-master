@@ -228,6 +228,32 @@
             "17": [
               "Supreme Healing"
             ]
+          },
+          "aliases": [
+            "life",
+            "life-domain"
+          ],
+          "spells": {
+            "1": [
+              "Bless",
+              "Cure Wounds"
+            ],
+            "3": [
+              "Lesser Restoration",
+              "Spiritual Weapon"
+            ],
+            "5": [
+              "Beacon of Hope",
+              "Revivify"
+            ],
+            "7": [
+              "Death Ward",
+              "Guardian of Faith"
+            ],
+            "9": [
+              "Mass Cure Wounds",
+              "Raise Dead"
+            ]
           }
         }
       ]
@@ -460,6 +486,32 @@
             ],
             "20": [
               "Holy Nimbus"
+            ]
+          },
+          "aliases": [
+            "devotion",
+            "oath-of-devotion"
+          ],
+          "spells": {
+            "3": [
+              "Protection from Evil and Good",
+              "Sanctuary"
+            ],
+            "5": [
+              "Lesser Restoration",
+              "Zone of Truth"
+            ],
+            "9": [
+              "Beacon of Hope",
+              "Dispel Magic"
+            ],
+            "13": [
+              "Freedom of Movement",
+              "Guardian of Faith"
+            ],
+            "17": [
+              "Commune",
+              "Flame Strike"
             ]
           }
         }

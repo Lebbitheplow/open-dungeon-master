@@ -13,7 +13,6 @@ import EquipmentSection from "../EquipmentSection";
 import type { ClassOption } from "../useBuilderOptions";
 import type { BuilderActions, BuilderDerived } from "../useBuilderDerived";
 import type { BuilderState } from "../useBuilderState";
-import { srdClass } from "../submit";
 import { StepPanel, inputClass } from "./shared";
 
 const noSubscribe = () => () => {};
@@ -83,12 +82,12 @@ function SpellsSection({
     spellStyle,
     spellbookAdvice,
   } = derived;
-  // SRD classes hold to the 5e tables; setting classes keep their counts as
-  // advice, the way the rest of the builder treats them.
-  const enforce = srdClass(klass);
-  const cantripCap = enforce ? cantripAdvice : null;
-  const spellCap = enforce ? (spellAdvice?.count ?? null) : null;
-  const bookCap = enforce ? spellbookAdvice : null;
+  // Every class holds to the 5e tables: a setting class borrows an SRD
+  // class's spell list and its counts with it, the same counts the server
+  // enforces on a level-up and at the sheet.
+  const cantripCap = cantripAdvice;
+  const spellCap = spellAdvice?.count ?? null;
+  const bookCap = spellbookAdvice;
   const wizard = spellStyle === "spellbook";
   // A wizard fills the book first, then prepares from it.
   const [phase, setPhase] = useState<"book" | "prepare">("book");
@@ -333,7 +332,7 @@ function SpellsSection({
         }
         header={
           klass.genres ? (
-            <span className="text-stone-500">Suggestions, not limits; homebrew varies.</span>
+            <span className="text-stone-500">Counts follow the {spellSearchClass} list this class borrows.</span>
           ) : null
         }
       />

@@ -158,7 +158,13 @@ test("an exact name wins over a loose match on another subclass", () => {
 });
 
 test("subclass spell lists arrive at the levels the table names", () => {
-  assert.deepEqual(subclassSpellsFor("cleric", "Life Domain", 5), []);
+  assert.deepEqual(subclassSpellsFor("cleric", "Life Domain", 5), [
+    "Bless", "Cure Wounds", "Lesser Restoration", "Spiritual Weapon", "Beacon of Hope", "Revivify",
+  ]);
+  assert.deepEqual(subclassSpellsFor("cleric", "life", 1), ["Bless", "Cure Wounds"]);
+  assert.deepEqual(subclassSpellsFor("paladin", "Oath of Devotion", 3), ["Protection from Evil and Good", "Sanctuary"]);
+  assert.deepEqual(subclassSpellsFor("paladin", "devotion", 2), [], "oath spells wait for the oath");
+  assert.deepEqual(subclassSpellsFor("druid", "Circle of the Land", 3), [], "circle spells follow a terrain the sheet does not record");
   const war = subclassSpellsFor("cleric", "War Domain", 5);
   assert.ok(war.includes("Divine Favor"));
   assert.ok(war.includes("Spirit Guardians"));

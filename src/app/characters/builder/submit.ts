@@ -116,15 +116,15 @@ export function callingBlocker(
   return null;
 }
 
-// The spells step: an SRD caster leaves with every cantrip and spell the
-// rules give them at this level. Setting classes keep the old soft rule
-// (validateBuilder's one-press warning) because their counts are advice.
+// The spells step: a caster leaves with every cantrip and spell the rules
+// give them at this level. A setting class borrows an SRD class's list and
+// its counts with it, the same counts the server holds a level-up to.
 export function spellsBlocker(
   state: BuilderState,
   derived: BuilderDerived,
   klass: ClassOption | undefined,
 ): string | null {
-  if (!klass || !derived.casts || !srdClass(klass)) {
+  if (!klass || !derived.casts) {
     return null;
   }
   const cantripsLeft = (derived.cantripAdvice ?? 0) - derived.chosenCantrips.length;
