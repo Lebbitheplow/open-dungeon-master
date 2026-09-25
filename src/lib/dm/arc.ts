@@ -1,11 +1,12 @@
 import {
   getCampaignById,
+  latestSeq,
   setQuestLog,
   setStoryArc,
 } from "@/lib/db/campaigns";
 import { listChapters } from "@/lib/db/chapters";
 import { narratorIsAi } from "@/lib/dm/viewer";
-import { listRecentMessages } from "@/lib/db/messages";
+import { listMessagesInSeqRange } from "@/lib/db/messages";
 import { listSheets } from "@/lib/db/sheets";
 import { presetFor, packWorldHints } from "@/lib/worlds/preset";
 import {
@@ -165,6 +166,12 @@ const EVENT_RULES = `Two rules for every event you write. trigger is something t
 
 const BOSS_SHAPE = '{"name": string, "detail": string}';
 
+// Chapter pacing credits one beat per stretch of play (chapter-close.ts),
+// so beats that are really one scene ("reach the village", then "speak to
+// its elder") burn an act in a single evening. Every prompt that writes
+// main beats carries this rule.
+const BEAT_RULE = `Each beat is a turning point that takes a stretch of play to reach: a different place, confrontation, or discovery from the beat before it, never the next small step of the same scene (do not follow "reach the village" with "speak to its elder"; fold those into one beat). Leave room between beats for the travel, investigation, and trouble the DM improvises.`;
+
 // The full saga JSON shape, shared by initial generation and sequel
 // chaining (the chain adds one extra field in front).
 const SAGA_SHAPE = `{"title": string, "premise": string, "stakes": string, "antagonist": string, "actPlan": [{"milestone": string, "boss": ${BOSS_SHAPE}, "allies": string[], "hooks": string[]}], "act1Beats": string[], "finale": string, "finaleBoss": ${BOSS_SHAPE}, "cast": [{"name": string, "role": string, "agenda": string}], "events": [${EVENT_SHAPE}], "subArcs": [{"name": string, "goal": string, "hook": string, "beats": string[]}]}`;
@@ -172,7 +179,7 @@ const SAGA_SHAPE = `{"title": string, "premise": string, "stakes": string, "anta
 function sagaFieldRules(profile: LengthProfile): string {
   return `title: a name for the whole saga.
 actPlan: ${profile.actsText} acts, ordered, escalating to the finale. Each entry is a SKETCH of one act: milestone is one sentence saying what the act accomplishes; boss names the major set-piece fight the act builds toward, with one sentence of detail; allies is 0 to 2 planned companion or temporary-ally encounters for the act; hooks is 0 to 2 ways the act touches a specific party member's abilities, pets, or backstory. Later acts stay sketches on purpose; they are detailed one act at a time when the party reaches them, so keep them broad enough to survive whatever the table does first.
-act1Beats: 3 to 5 ordered beats for act 1 ONLY, one short sentence each. Never number them yourself, and do not write beats for any later act.
+act1Beats: 3 to 5 ordered beats for act 1 ONLY, one short sentence each. ${BEAT_RULE} Never number them yourself, and do not write beats for any later act.
 finaleBoss: the last act's boss is the saga's final boss; repeat them here.
 cast: 2 to 4 recurring NPCs the campaign returns to, each with a concrete name and something they personally want. The antagonist may be one of them.
 events: 4 to 6 planned special moments, most of them placed in the first two acts (actHint); later acts get their events when they are detailed. Use the kinds: a recurring NPC turning up (npc_encounter), a temporary ally or companion joining the party (ally), a revelation that reframes what came before (twist), someone the party trusted turning on them (betrayal), a clock that forces a choice (deadline), a find that opens a new road (discovery), or a memorable staged scene (setpiece). actHint is a soft placement only.
@@ -345,7 +352,10 @@ You are given the beat and the most recent play. Reply with ONLY the word YES if
 // asking a single yes/no question, and only when a chapter is already long
 // enough to close, so a short chapter never pays for it. Any failure is a
 // silent NO: the chapter simply stays open until the next check or the cap.
-export async function judgeBeatCompleted(campaignId: string): Promise<boolean> {
+// `sinceSeq` bounds what the judge may read: play after the previous beat
+// landed, inside the open chapter. Reading further back let the scene that
+// finished one beat be credited for the next (issue #31).
+export async function judgeBeatCompleted(campaignId: string, sinceSeq: number): Promise<boolean> {
   try {
     const campaign = getCampaignById(campaignId);
     if (!campaign?.storyArc) {
@@ -356,8 +366,9 @@ export async function judgeBeatCompleted(campaignId: string): Promise<boolean> {
       return false;
     }
     const beat = campaign.storyArc.beats[active - 1];
-    const recent = listRecentMessages(campaignId, 8)
+    const recent = listMessagesInSeqRange(campaignId, sinceSeq, latestSeq(campaignId))
       .filter((message) => message.authorType !== "system")
+      .slice(-8)
       .map((message) => `${message.authorType === "dm" ? "DM" : "Player"}: ${message.content}`)
       .join("\n\n")
       .slice(-6_000);
@@ -421,7 +432,7 @@ const ACT_DETAIL_SYSTEM = `The party of a D&D 5e campaign has finished the curre
 
 Reply with ONLY a strict JSON object, no code fences, shaped exactly: {"beats": string[], "milestone": string, "finale": string, "bossEvent": ${EVENT_SHAPE}|null, "newEvents": [${EVENT_SHAPE}], "newCast": [{"name": string, "role": string, "agenda": string}]}
 
-beats: 3 to 5 ordered beats for the new act, one short sentence each, escalating from where play actually stands. Never restate, renumber, or rewrite existing beats.
+beats: 3 to 5 ordered beats for the new act, one short sentence each, escalating from where play actually stands. ${BEAT_RULE} Never restate, renumber, or rewrite existing beats.
 milestone: the sketch's milestone, revised only if play has changed what this act must accomplish; otherwise repeat it.
 bossEvent: the act's planned boss as a set-piece event with a trigger the DM can recognise in the fiction. If play already killed or dissolved the planned boss, name who or what fills that role now; null only if this act genuinely no longer has a boss.
 finale: what this act escalates toward.
@@ -462,7 +473,7 @@ const EXTEND_SYSTEM = `The party has played through every beat of an AI DM's sec
 
 Reply with ONLY a strict JSON object, no code fences, shaped exactly: {"beats": string[], "finale": string, "antagonist": string, "newEvents": [${EVENT_SHAPE}]}
 
-beats: 3 to 4 ordered beats for the new act, one short sentence each, growing out of what the party actually did rather than repeating the old plot. finale: what this act escalates toward. antagonist: keep the existing one if they survived and still matter, otherwise name who steps into the role now (an escalation of the old threat, a survivor with a grudge, or something the party's own victory unleashed). newEvents: at most 2 planned special moments for the new act.
+beats: 3 to 4 ordered beats for the new act, one short sentence each, growing out of what the party actually did rather than repeating the old plot. ${BEAT_RULE} finale: what this act escalates toward. antagonist: keep the existing one if they survived and still matter, otherwise name who steps into the role now (an escalation of the old threat, a survivor with a grudge, or something the party's own victory unleashed). newEvents: at most 2 planned special moments for the new act.
 
 ${EVENT_RULES}
 
@@ -739,44 +750,81 @@ export async function refreshStoryArc(
         .join("\n\n"),
       "arc refresh",
     );
-    if (raw === null) {
-      // The enrichment pass may still have produced something worth keeping.
-      if (arc !== campaign.storyArc) {
-        setStoryArc(campaignId, arc);
-      }
-      return;
+    const delta = raw === null ? null : parseArcDeltaJson(raw);
+    if (raw !== null && !delta && process.env.DM_DEBUG) {
+      console.log("[dm-debug] arc refresh: unparseable reply:", raw.slice(0, 500));
     }
-    const delta = parseArcDeltaJson(raw);
-    if (!delta) {
-      if (process.env.DM_DEBUG) {
-        console.log("[dm-debug] arc refresh: unparseable reply:", raw.slice(0, 500));
-      }
-      if (arc !== campaign.storyArc) {
-        setStoryArc(campaignId, arc);
-      }
-      return;
+    let next = delta ? applyArcDelta(arc, delta) : arc;
+    // Planning the next act never waits on the refresh delta: an
+    // unparseable delta on a finished act used to leave the arc exhausted,
+    // and every chapter after that closed at the floor as a retry.
+    next = await planNextAct(campaignId, next);
+    if (delta) {
+      // Replenish the off-screen clocks only when none are live (so at most
+      // once per act in practice); no-op while any world arc still ticks.
+      next = await ensureWorldArcs(campaignId, next);
     }
-    let next = applyArcDelta(arc, delta);
-    if (arcExhausted(next)) {
-      if (sagaComplete(next)) {
-        next = await chainSaga(campaignId, next);
-      } else if (nextSketchAct(next)) {
-        next = await detailNextAct(campaignId, next);
-      } else if (needsSagaUpgrade(next)) {
-        // The saga upgrade has not landed yet; the old whole-act extension
-        // keeps a saga-less arc moving in the meantime.
-        next = await extendStoryArc(campaignId, next);
-      }
+    if (next !== campaign.storyArc) {
+      setStoryArc(campaignId, next);
+      setQuestLog(campaignId, activeQuestLines(next));
     }
-    // Replenish the off-screen clocks only when none are live (so at most
-    // once per act in practice); no-op while any world arc still ticks.
-    next = await ensureWorldArcs(campaignId, next);
-    setStoryArc(campaignId, next);
-    setQuestLog(campaignId, activeQuestLines(next));
   } catch (error) {
     if (process.env.DM_DEBUG) {
       console.log("[dm-debug] arc refresh threw:", error);
     }
+  } finally {
+    setDmStatus(campaignId, "idle");
+  }
+}
+
+// An exhausted arc gets its next stretch of plot: the sequel saga when the
+// whole saga is played out, the next sketched act when one is waiting, or
+// a whole-act extension for a saga-less arc whose upgrade has not landed.
+// Returns the arc unchanged when it still has open beats or planning fails.
+async function planNextAct(campaignId: string, arc: StoryArc): Promise<StoryArc> {
+  if (!arcExhausted(arc)) {
+    return arc;
+  }
+  if (sagaComplete(arc)) {
+    return chainSaga(campaignId, arc);
+  }
+  if (nextSketchAct(arc)) {
+    return detailNextAct(campaignId, arc);
+  }
+  if (needsSagaUpgrade(arc)) {
+    return extendStoryArc(campaignId, arc);
+  }
+  return arc;
+}
+
+// Mid-chapter retry of the planning that failed at the last chapter close
+// (chapter-close.ts). A chapter that opens on an exhausted arc plans in
+// place rather than closing again to reach refreshStoryArc, so a flaky arc
+// model no longer produces a run of stub chapters. Returns true when the
+// arc has a [NOW] beat again.
+export async function planExhaustedArc(campaignId: string): Promise<boolean> {
+  try {
+    const campaign = getCampaignById(campaignId);
+    if (
+      !campaign?.storyArc ||
+      !narratorIsAi(campaign.gameSettings.dmMode) ||
+      !arcExhausted(campaign.storyArc)
+    ) {
+      return false;
+    }
+    setDmStatus(campaignId, "plotting_arc");
+    const next = await planNextAct(campaignId, campaign.storyArc);
+    if (next === campaign.storyArc || arcExhausted(next)) {
+      return false;
+    }
+    setStoryArc(campaignId, next);
+    setQuestLog(campaignId, activeQuestLines(next));
+    return true;
+  } catch (error) {
+    if (process.env.DM_DEBUG) {
+      console.log("[dm-debug] exhausted-arc planning threw:", error);
+    }
+    return false;
   } finally {
     setDmStatus(campaignId, "idle");
   }

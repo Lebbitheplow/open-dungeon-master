@@ -18,7 +18,12 @@ import {
   listMessagesInSeqRange,
 } from "@/lib/db/messages";
 import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
-import { parseChapterJson, shouldCloseChapter } from "@/lib/dm/chapter-logic";
+import {
+  beatCountsToward,
+  parseChapterJson,
+  shouldCloseChapter,
+  shouldJudgeBeat,
+} from "@/lib/dm/chapter-logic";
 import { recordExtractedFacts } from "@/lib/db/facts";
 import { listNpcs } from "@/lib/db/npcs";
 import { detectWitnesses } from "@/lib/dm/witness-logic";
@@ -28,7 +33,7 @@ import { advanceRelationships } from "@/lib/dm/relationship-tick";
 import { captureBoundarySnapshot } from "@/lib/db/snapshots";
 import { indexChapter } from "@/lib/dm/memory-index";
 import { arcExhausted } from "@/lib/dm/arc-logic";
-import { judgeBeatCompleted, refreshStoryArc } from "@/lib/dm/arc";
+import { judgeBeatCompleted, planExhaustedArc, refreshStoryArc } from "@/lib/dm/arc";
 import { arcTextTimeoutMs } from "@/lib/model-client";
 import { requestUtilityMessage } from "@/lib/dm/model";
 import { trackUtilityCall } from "@/lib/dm/call-tracker";
@@ -86,31 +91,46 @@ function awardChapterMilestoneXp(campaignId: string, chapterIndex: number) {
 
 // Floor under the beat signal, not a target: a beat wrapped up in a few
 // exchanges keeps the chapter open until there is enough to summarize.
-const CHAPTER_MIN = Number(process.env.DM_CHAPTER_MIN || 8);
+// Sixteen messages is eight exchanges, the least that reads as a chapter
+// with a title card and three to six highlights; the old floor of eight
+// let a chapter close on a single arrival scene (issue #31).
+const CHAPTER_MIN = Number(process.env.DM_CHAPTER_MIN || 16);
 // Completed beats required before a chapter may close (below the cap). Two
 // by default, so a chapter reads as a real episode of the saga rather than
 // one scene, and the campaign-spanning arc stretches across many chapters.
 const CHAPTER_BEATS = Math.max(1, Number(process.env.DM_CHAPTER_BEATS || 2));
-// Finished beats are STICKY counts for the chapter they happened in.
-// Without this a beat completed below the floor (a beat the party wrapped
-// up in three exchanges) would be thrown away as a close trigger and the
-// chapter would wait for the NEXT beat, drifting the chapter index out of
-// step with the story. In memory rather than a column: losing it to a
-// restart only means the chapter closes on a later beat or the hard cap,
-// never a wrong close.
-declare global {
-  var __odmChapterBeatCount: Map<string, number> | undefined;
-}
-const beatCounts = (globalThis.__odmChapterBeatCount ??= new Map<string, number>());
-
+// Messages that must separate two beats for both to count toward the
+// chapter (chapter-logic.ts beatCountsToward). Adjacent arc beats often
+// share a place or a person, so without this the party's arrival somewhere
+// landed two beats in two replies and the chapter closed on the spot.
+const BEAT_SPACING = Math.max(0, Number(process.env.DM_BEAT_SPACING || 8));
 // How many messages may pass between beat-judge checks. The judge only runs
 // once a chapter is already past the floor (so it could actually close),
 // which keeps it to roughly one small call every few turns.
 const JUDGE_EVERY = Number(process.env.DM_BEAT_JUDGE_EVERY || 6);
+
+// Per-campaign pacing memory for the open chapter. Finished beats are
+// STICKY counts for the chapter they happened in: without this a beat
+// completed below the floor (a beat the party wrapped up in three
+// exchanges) would be thrown away as a close trigger and the chapter would
+// wait for the NEXT beat, drifting the chapter index out of step with the
+// story. lastBeatSeq is where the arc last advanced (tool or judge), so the
+// spacing rule and the judge's reading window both start after it. In
+// memory rather than columns: losing it to a restart only means the chapter
+// closes on a later beat or the hard cap, never a wrong close.
+type ChapterPacing = { beats: number; lastBeatSeq: number | null; lastJudgedAt: number };
 declare global {
-  var __odmChapterBeatJudged: Map<string, number> | undefined;
+  var __odmChapterPacing: Map<string, ChapterPacing> | undefined;
 }
-const lastJudged = (globalThis.__odmChapterBeatJudged ??= new Map<string, number>());
+const pacingByCampaign = (globalThis.__odmChapterPacing ??= new Map<string, ChapterPacing>());
+function pacingFor(campaignId: string): ChapterPacing {
+  let pacing = pacingByCampaign.get(campaignId);
+  if (!pacing) {
+    pacing = { beats: 0, lastBeatSeq: null, lastJudgedAt: 0 };
+    pacingByCampaign.set(campaignId, pacing);
+  }
+  return pacing;
+}
 
 const CHAPTER_MAX = Number(process.env.DM_CHAPTER_MAX || 80);
 const MANUAL_MIN = 5;
@@ -136,7 +156,12 @@ function chapterTranscript(campaignId: string, chapter: Chapter, seqEnd: number)
 }
 
 function countChapterMessages(campaignId: string, chapter: Chapter): number {
-  return listMessagesInSeqRange(campaignId, chapter.seqStart, latestSeq(campaignId)).filter(
+  return countPlayMessages(campaignId, chapter.seqStart);
+}
+
+// Non-system messages from seqFrom to the latest, inclusive.
+function countPlayMessages(campaignId: string, seqFrom: number): number {
+  return listMessagesInSeqRange(campaignId, seqFrom, latestSeq(campaignId)).filter(
     (message) => message.authorType !== "system",
   ).length;
 }
@@ -153,43 +178,74 @@ export async function maybeCloseChapter(
   }
   const chapter = ensureOpenChapter(campaignId);
   const messageCount = countChapterMessages(campaignId, chapter);
+  const pacing = pacingFor(campaignId);
+  // Play since the arc last advanced in this chapter; null before the
+  // first beat (or after a restart, which only widens the window).
+  const sinceLastBeat = (): number | null =>
+    pacing.lastBeatSeq === null ? null : countPlayMessages(campaignId, pacing.lastBeatSeq + 1);
+  // A beat landing (tool or judge) restarts the spacing window and, when
+  // it is far enough from the previous one, counts toward the chapter.
+  const recordBeat = () => {
+    if (beatCountsToward(sinceLastBeat(), BEAT_SPACING)) {
+      pacing.beats += 1;
+    }
+    pacing.lastBeatSeq = latestSeq(campaignId);
+    pacing.lastJudgedAt = messageCount;
+  };
   if (signals.beatCompleted) {
-    beatCounts.set(campaignId, (beatCounts.get(campaignId) ?? 0) + 1);
+    recordBeat();
   }
-  let beatsDone = beatCounts.get(campaignId) ?? 0;
   const exhausted = campaign.storyArc ? arcExhausted(campaign.storyArc) : false;
   const limits = { min: CHAPTER_MIN, max: CHAPTER_MAX, beatsRequired: CHAPTER_BEATS };
   if (process.env.DM_DEBUG) {
     console.log(
-      `[dm-debug] chapter ${chapter.index}: messages=${messageCount} beatCompleted=${signals.beatCompleted} beatsDone=${beatsDone}/${CHAPTER_BEATS} exhausted=${exhausted} manual=${Boolean(signals.manual)} floor=${CHAPTER_MIN} cap=${CHAPTER_MAX}`,
+      `[dm-debug] chapter ${chapter.index}: messages=${messageCount} beatCompleted=${signals.beatCompleted} beatsDone=${pacing.beats}/${CHAPTER_BEATS} sinceBeat=${sinceLastBeat() ?? "-"} exhausted=${exhausted} manual=${Boolean(signals.manual)} floor=${CHAPTER_MIN} cap=${CHAPTER_MAX}`,
     );
   }
   if (signals.manual) {
     if (messageCount < MANUAL_MIN) {
       return;
     }
-  } else if (!shouldCloseChapter(messageCount, beatsDone, exhausted, limits)) {
+  } else if (!shouldCloseChapter(messageCount, pacing.beats, exhausted, limits)) {
+    if (exhausted && pacing.beats === 0) {
+      // The chapter opened on an exhausted arc: the next act was not
+      // planned at the last close (model timeout, bad JSON). Plan it here,
+      // on the queue, instead of closing a stub chapter per attempt; the
+      // judge cadence throttles the retries.
+      if (messageCount - pacing.lastJudgedAt >= JUDGE_EVERY) {
+        pacing.lastJudgedAt = messageCount;
+        await planExhaustedArc(campaignId);
+      }
+      return;
+    }
     // The DM narrates a beat landing far more reliably than it calls
     // complete_beat, so a chapter that is long enough to close but is still
     // short on beat signals gets a cheap yes/no check instead of drifting
     // to the cap.
     if (
-      beatsDone >= CHAPTER_BEATS ||
-      messageCount < CHAPTER_MIN ||
-      messageCount - (lastJudged.get(campaignId) ?? 0) < JUDGE_EVERY
+      !shouldJudgeBeat({
+        messageCount,
+        beatsDone: pacing.beats,
+        beatCompletedThisTurn: signals.beatCompleted,
+        messagesSinceLastBeat: sinceLastBeat(),
+        messagesSinceLastJudge: messageCount - pacing.lastJudgedAt,
+        options: { ...limits, judgeEvery: JUDGE_EVERY, spacing: BEAT_SPACING },
+      })
     ) {
       return;
     }
-    lastJudged.set(campaignId, messageCount);
-    if (!(await judgeBeatCompleted(campaignId))) {
+    pacing.lastJudgedAt = messageCount;
+    // The judge reads only this chapter's play after the last beat, so the
+    // scene that landed the previous beat can never be credited twice.
+    const judgeFrom = Math.max(chapter.seqStart, (pacing.lastBeatSeq ?? 0) + 1);
+    if (!(await judgeBeatCompleted(campaignId, judgeFrom))) {
       return;
     }
-    beatsDone += 1;
-    beatCounts.set(campaignId, beatsDone);
+    recordBeat();
     // The judge advanced the arc, so recompute exhaustion before deciding.
     const refreshed = getCampaignById(campaignId);
     const nowExhausted = refreshed?.storyArc ? arcExhausted(refreshed.storyArc) : false;
-    if (!shouldCloseChapter(messageCount, beatsDone, nowExhausted, limits)) {
+    if (!shouldCloseChapter(messageCount, pacing.beats, nowExhausted, limits)) {
       return;
     }
   }
@@ -278,8 +334,7 @@ export async function maybeCloseChapter(
     }
   }
 
-  beatCounts.delete(campaignId);
-  lastJudged.delete(campaignId);
+  pacingByCampaign.delete(campaignId);
 
   // The rolling summary now only covers the new open chapter.
   setCampaignSummaryState(campaignId, "", countMessagesUpToSeq(campaignId, seqEnd));
@@ -352,12 +407,11 @@ export async function maybeCloseChapter(
   void indexChapter(campaignId, result.closed.id);
 }
 
-// Chapter rewind (src/lib/dm/rollback.ts) clears the in-memory beat
-// counters; stale counts would close the reopened chapter on beats from the
+// Chapter rewind (src/lib/dm/rollback.ts) clears the in-memory pacing
+// record; stale counts would close the reopened chapter on beats from the
 // timeline that no longer happened.
 export function resetChapterMemory(campaignId: string) {
-  beatCounts.delete(campaignId);
-  lastJudged.delete(campaignId);
+  pacingByCampaign.delete(campaignId);
 }
 
 function previousChapterLines(campaignId: string, beforeIndex: number): string {

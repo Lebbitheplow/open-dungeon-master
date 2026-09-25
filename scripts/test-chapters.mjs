@@ -1,6 +1,12 @@
-// Chapter trigger thresholds and the never-wedge JSON parse fallback.
+// Chapter trigger thresholds, beat spacing, the judge gate, and the
+// never-wedge JSON parse fallback.
 import assert from "node:assert/strict";
-import { parseChapterJson, shouldCloseChapter } from "../src/lib/dm/chapter-logic.ts";
+import {
+  beatCountsToward,
+  parseChapterJson,
+  shouldCloseChapter,
+  shouldJudgeBeat,
+} from "../src/lib/dm/chapter-logic.ts";
 
 let passed = 0;
 function test(name, fn) {
@@ -39,17 +45,73 @@ test("hard cap closes even when no beat ever finished", () => {
   assert.equal(shouldCloseChapter(80, 0, false, limits), true);
 });
 
-// An exhausted act must close promptly: the next act (or sequel saga) is
-// only planned at chapter close, even when the beat count is short, and
-// even at zero beats (a chapter can open exhausted after a failed planning
-// pass; closing again is the retry).
-test("an exhausted arc past the floor closes regardless of beat count", () => {
+// An act this chapter finished must close promptly: the next act (or sequel
+// saga) is planned at chapter close, even when the beat count is short.
+test("an exhausted arc past the floor closes on a single beat", () => {
   assert.equal(shouldCloseChapter(8, 1, true, limits), true);
-  assert.equal(shouldCloseChapter(8, 0, true, limits), true);
+});
+
+// Issue #31: a chapter that OPENS exhausted (planning failed at the last
+// close) must not close again as its retry, or a flaky arc model yields a
+// run of eight-message stub chapters. chapter-close.ts plans in place.
+test("an exhausted arc with no beat this chapter stays open under the cap", () => {
+  assert.equal(shouldCloseChapter(8, 0, true, limits), false);
+  assert.equal(shouldCloseChapter(79, 0, true, limits), false);
+  assert.equal(shouldCloseChapter(80, 0, true, limits), true);
 });
 
 test("an exhausted arc below the floor still waits for the floor", () => {
   assert.equal(shouldCloseChapter(5, 1, true, limits), false);
+});
+
+// Two beats inside one stretch of play are one moment ("reach the
+// village", then "speak to its elder") and count once.
+test("a beat counts when it is the chapter's first or far enough from the last", () => {
+  assert.equal(beatCountsToward(null, 8), true);
+  assert.equal(beatCountsToward(8, 8), true);
+  assert.equal(beatCountsToward(20, 8), true);
+});
+
+test("a beat landing within the spacing of the last one does not count", () => {
+  assert.equal(beatCountsToward(0, 8), false);
+  assert.equal(beatCountsToward(2, 8), false);
+  assert.equal(beatCountsToward(7, 8), false);
+});
+
+test("zero spacing restores one chapter beat per arc beat", () => {
+  assert.equal(beatCountsToward(0, 0), true);
+});
+
+const judgeOptions = { min: 16, beatsRequired: 2, judgeEvery: 6, spacing: 8 };
+const readyToJudge = {
+  messageCount: 24,
+  beatsDone: 1,
+  beatCompletedThisTurn: false,
+  messagesSinceLastBeat: 10,
+  messagesSinceLastJudge: 6,
+  options: judgeOptions,
+};
+
+test("the judge runs past the floor, past the spacing, on its cadence", () => {
+  assert.equal(shouldJudgeBeat(readyToJudge), true);
+  assert.equal(shouldJudgeBeat({ ...readyToJudge, messagesSinceLastBeat: null }), true);
+});
+
+// The core of issue #31: complete_beat moved [NOW] to the next beat, and the
+// judge was asked about that one against the very same messages.
+test("the judge never runs in the turn a beat was just completed", () => {
+  assert.equal(shouldJudgeBeat({ ...readyToJudge, beatCompletedThisTurn: true }), false);
+});
+
+test("the judge waits out the spacing after the last beat", () => {
+  assert.equal(shouldJudgeBeat({ ...readyToJudge, messagesSinceLastBeat: 7 }), false);
+  assert.equal(shouldJudgeBeat({ ...readyToJudge, messagesSinceLastBeat: 8 }), true);
+});
+
+test("the judge is idle below the floor, on its cadence, and once the quota is met", () => {
+  assert.equal(shouldJudgeBeat({ ...readyToJudge, messageCount: 15 }), false);
+  assert.equal(shouldJudgeBeat({ ...readyToJudge, messagesSinceLastJudge: 5 }), false);
+  assert.equal(shouldJudgeBeat({ ...readyToJudge, beatsDone: 2 }), false);
 });
 
 test("clean JSON parses fully", () => {

@@ -40,6 +40,11 @@ falls through to the env var.
 | `DM_DEBUG` | — | `1` logs DM model content and tool calls |
 | `DM_LEAN_TOOLS` | — | `1` removes the stat-mutation tools if the model's tool fidelity suffers |
 | `DM_COMPACT_THRESHOLD` | `120` | Messages before history compaction begins (lower to test) |
+| `DM_CHAPTER_MIN` | `16` | Non-system messages (players included) a chapter must hold before beats can close it |
+| `DM_CHAPTER_BEATS` | `2` | Finished story-arc beats that close a chapter once it is past the floor |
+| `DM_BEAT_SPACING` | `8` | Messages that must separate two beats for both to count toward the chapter; closer ones are the same moment of play |
+| `DM_BEAT_JUDGE_EVERY` | `6` | Messages between backstop checks that ask a small model whether the `[NOW]` beat happened |
+| `DM_CHAPTER_MAX` | `80` | Hard cap: a chapter this long closes even with no finished beat |
 | `DB_ENCRYPTION_KEY` | required | Encrypts `data/local-roleplay.sqlite` at rest (chacha20). Belongs in `.env.server` |
 | `DISCORD_CLIENT_ID` | — | Discord OAuth application id for "Sign in with Discord" (or set in `/admin`) |
 | `DISCORD_CLIENT_SECRET` | — | Discord OAuth client secret. Belongs in `.env.server` (or set in `/admin`) |

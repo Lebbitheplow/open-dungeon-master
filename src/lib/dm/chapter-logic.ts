@@ -14,12 +14,14 @@ import { normalizeCandidate, type FactCandidate } from "./fact-logic.ts";
 // twenty messages searching one room completes no beat and therefore stays
 // in the same chapter.
 //
-// The arcExhausted clause closes promptly on a finished act even when the
-// beat count is short: the next act (or sequel saga) is only planned at
-// chapter close, so an exhausted arc coasting toward the cap would leave
-// the DM steering by nothing. It applies even at zero completed beats,
-// because a chapter can OPEN with an exhausted arc (the planning pass
-// failed at the previous close) and closing again is precisely the retry.
+// The arcExhausted clause closes promptly on an act this chapter finished
+// even when the beat count is short: the next act (or sequel saga) is
+// planned at chapter close, so an exhausted arc coasting toward the cap
+// would leave the DM steering by nothing. It needs at least one beat from
+// this chapter. A chapter that OPENS exhausted (the planning pass failed at
+// the previous close) must not close again as its retry: that produced a
+// string of eight-message stub chapters whenever the arc model was flaky
+// (issue #31). chapter-close.ts plans the next act in place instead.
 export function shouldCloseChapter(
   messageCount: number,
   beatsCompleted: number,
@@ -32,10 +34,50 @@ export function shouldCloseChapter(
   if (messageCount < options.min) {
     return false;
   }
-  if (arcExhausted) {
+  if (arcExhausted && beatsCompleted >= 1) {
     return true;
   }
   return beatsCompleted >= options.beatsRequired;
+}
+
+// Whether a beat that just landed counts toward the chapter's quota. Two
+// beats that land within `spacing` messages of each other are one moment of
+// play ("reach the village", then "speak to its elder" in the next reply),
+// and one moment is one chapter beat no matter how the arc was sliced. The
+// arc itself still advances; only the chapter's count holds. A null
+// distance means no beat has landed in this chapter yet.
+export function beatCountsToward(
+  messagesSinceLastBeat: number | null,
+  spacing: number,
+): boolean {
+  return messagesSinceLastBeat === null || messagesSinceLastBeat >= spacing;
+}
+
+// Whether this turn spends the backstop beat judge (arc.ts
+// judgeBeatCompleted). It never runs in the turn a beat was just reported:
+// the tool has already moved [NOW] to the next beat, and asking the judge
+// about that one against the same messages is how one arrival used to close
+// a whole chapter. It also waits out the spacing after any beat, so the
+// scene that landed the last beat can never be read as landing the next.
+export function shouldJudgeBeat(input: {
+  messageCount: number;
+  beatsDone: number;
+  beatCompletedThisTurn: boolean;
+  messagesSinceLastBeat: number | null;
+  messagesSinceLastJudge: number;
+  options: { min: number; beatsRequired: number; judgeEvery: number; spacing: number };
+}): boolean {
+  const { options } = input;
+  if (input.beatCompletedThisTurn || input.beatsDone >= options.beatsRequired) {
+    return false;
+  }
+  if (input.messageCount < options.min) {
+    return false;
+  }
+  if (input.messagesSinceLastBeat !== null && input.messagesSinceLastBeat < options.spacing) {
+    return false;
+  }
+  return input.messagesSinceLastJudge >= options.judgeEvery;
 }
 
 // Parse the model's chapter JSON with a never-wedge fallback: any failure
