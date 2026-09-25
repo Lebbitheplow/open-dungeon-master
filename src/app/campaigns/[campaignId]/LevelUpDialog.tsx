@@ -310,6 +310,20 @@ export function LevelUpDialog({
     }
     return sheet.spellcasting ? listOf(sheet.spellcasting) : [];
   }, [sheet.spellcasting, isMulticlassPath, casterEntry, isNewClass, bookStyle]);
+  // Spells chosen for preparation that wait for the long rest. They already
+  // hold a place in the allowance (the sheet's counter counts them), so the
+  // picks offered here must leave room for them too.
+  const pendingList = useMemo(() => {
+    if (isMulticlassPath) {
+      if (casterEntry) {
+        return casterEntry.pending ?? [];
+      }
+      return sheet.spellcasting && !sheet.spellcasting.casters?.length && !isNewClass
+        ? (sheet.spellcasting.pending ?? [])
+        : [];
+    }
+    return sheet.spellcasting?.pending ?? [];
+  }, [sheet.spellcasting, isMulticlassPath, casterEntry, isNewClass]);
   const cantripList = useMemo(() => {
     if (isMulticlassPath) {
       if (casterEntry) {
@@ -322,8 +336,8 @@ export function LevelUpDialog({
     return sheet.spellcasting?.cantrips ?? [];
   }, [sheet.spellcasting, isMulticlassPath, casterEntry, isNewClass]);
   const alreadyKnown = useMemo(
-    () => new Set([...knownList, ...cantripList].map((name) => name.toLowerCase())),
-    [knownList, cantripList],
+    () => new Set([...knownList, ...pendingList, ...cantripList].map((name) => name.toLowerCase())),
+    [knownList, pendingList, cantripList],
   );
   const allowanceAbility = isMulticlassPath
     ? (casterEntry?.ability ?? chosenKlass?.spellAbility ?? null)
@@ -346,7 +360,9 @@ export function LevelUpDialog({
       ),
     [classChoice, effectiveSubclass, classLevelAfter],
   );
-  const heldSpells = knownList.filter((name) => !grantedFree.has(name.toLowerCase())).length;
+  const heldSpells = [...new Set([...knownList, ...pendingList].map((name) => name.toLowerCase()))].filter(
+    (name) => !grantedFree.has(name),
+  ).length;
   const bookGain = bookStyle
     ? isNewClass
       ? spellbookAllowance(classLevelAfter)
@@ -512,7 +528,14 @@ export function LevelUpDialog({
           // far as the allowance has room: a level-up is a chance to
           // prepare, like the long rest before it.
           const room = allowance
-            ? Math.max(0, allowance.count - spellsAgainstLimit(sheet.spellcasting.prepared, [...grantedFree]))
+            ? Math.max(
+                0,
+                allowance.count -
+                  spellsAgainstLimit(
+                    [...sheet.spellcasting.prepared, ...(sheet.spellcasting.pending ?? [])],
+                    [...grantedFree],
+                  ),
+              )
             : additions.length;
           spellcastingPatch = {
             ...sheet.spellcasting,

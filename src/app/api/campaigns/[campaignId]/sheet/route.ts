@@ -263,10 +263,13 @@ function buildMulticlassLevelUp(
           };
         }
       } else if (allowance) {
-        // A subclass spell picked by hand is still free.
+        // A subclass spell picked by hand is still free; spells waiting for
+        // the long rest already hold their place.
         const held =
-          spellsAgainstLimit(intoKnown ? mine.known : mine.prepared, grantedAll) +
-          spellsAgainstLimit(picks, grantedAll);
+          spellsAgainstLimit(
+            intoKnown ? mine.known : [...mine.prepared, ...(mine.pending ?? [])],
+            grantedAll,
+          ) + spellsAgainstLimit(picks, grantedAll);
         if (held > allowance.count) {
           return {
             error: `A ${klass.name} ${leveled.level} may hold ${allowance.count} ${allowance.label}; that list would have ${held}.`,
@@ -284,7 +287,10 @@ function buildMulticlassLevelUp(
       } else if (intoBook) {
         // Written in the book, and prepared as far as the allowance has room.
         const room = allowance
-          ? Math.max(0, allowance.count - spellsAgainstLimit(mine.prepared, grantedAll))
+          ? Math.max(
+              0,
+              allowance.count - spellsAgainstLimit([...mine.prepared, ...(mine.pending ?? [])], grantedAll),
+            )
           : picks.length;
         mine.spellbook = [...new Set([...(mine.spellbook ?? []), ...mine.prepared, ...picks])];
         mine.prepared.push(...picks.slice(0, room), ...granted);
@@ -727,7 +733,7 @@ export async function PATCH(
     // Cantrips and the subclass's always-prepared spells are free.
     const next = parsed.data.spellcasting;
     const held = spellsAgainstLimit(
-      next.known.length > 0 ? next.known : next.prepared,
+      next.known.length > 0 ? next.known : [...next.prepared, ...(next.pending ?? [])],
       subclassSpellsFor(sheet.class, parsed.data.subclass ?? sheet.subclass, parsed.data.level ?? sheet.level),
     );
     if (allowance && held > allowance.count) {
