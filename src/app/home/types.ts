@@ -107,15 +107,19 @@ export function seatLine(campaign: HomeCampaign, userId: string): string {
   return `No character yet · ${party}`;
 }
 
-// The chapter line: "Chapter III · The Drowned Lantern", or the scene when
-// the chapter has no name yet, or the campaign's own description.
+// The chapter line: "Act II, Chapter III · The Drowned Lantern" (the act
+// only once the arc has one), the act's name when the chapter has none yet,
+// the scene after that, or the campaign's own description.
 export function chapterLine(campaign: HomeCampaign): string {
   const chapter = campaign.glance?.chapter;
   const scene = (campaign as HomeCampaign & { scene?: string }).scene?.trim() || "";
   if (chapter) {
-    const head = `Chapter ${romanNumeral(chapter.index)}`;
+    const act = chapter.act ? `Act ${romanNumeral(chapter.act)}, ` : "";
+    const head = `${act}Chapter ${romanNumeral(chapter.index)}`;
     const title = chapter.title.trim();
     if (title) return `${head} · ${title}`;
+    const actTitle = chapter.actTitle?.trim() || "";
+    if (actTitle) return `${head} · ${actTitle}`;
     if (scene) return `${head} · ${scene}`;
     return head;
   }

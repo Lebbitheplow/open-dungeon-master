@@ -130,6 +130,10 @@ test("seatLine says who you are at the table", () => {
 test("chapterLine reads the chapter, then the scene, then the description", () => {
   assert.equal(chapterLine(base({ glance: { chapter: { index: 3, title: "The Drowned Lantern" } } })), "Chapter III · The Drowned Lantern");
   assert.equal(chapterLine(base({ scene: "Halvord's Reach", glance: { chapter: { index: 1, title: "" } } })), "Chapter I · Halvord's Reach");
+  // With an act (issue #31) the act leads, and an unnamed chapter borrows the act's name before the scene.
+  assert.equal(chapterLine(base({ glance: { chapter: { index: 3, title: "The Drowned Lantern", act: 2, actTitle: "The Drowned Hymn" } } })), "Act II, Chapter III · The Drowned Lantern");
+  assert.equal(chapterLine(base({ scene: "Halvord's Reach", glance: { chapter: { index: 3, title: "", act: 2, actTitle: "The Drowned Hymn" } } })), "Act II, Chapter III · The Drowned Hymn");
+  assert.equal(chapterLine(base({ glance: { chapter: { index: 3, title: "", act: 2, actTitle: "" } } })), "Act II, Chapter III");
   assert.equal(chapterLine(base({ scene: "Halvord's Reach" })), "Halvord's Reach");
   assert.equal(chapterLine(base({})), "A drowned coast turned to black glass.");
 });
