@@ -72,6 +72,11 @@ services:
       VOICE_ANNOUNCED_IP: ${VOICE_ANNOUNCED_IP:-}
       VOICE_DOMAIN: ${VOICE_DOMAIN:-}
 
+      # Embedding model for story recall. Empty = MiniLM, baked into the image.
+      # Any other must be 384-dim; changing it needs a fresh database.
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
+      EMBEDDING_DTYPE: ${EMBEDDING_DTYPE:-}
+
       # Verbose DM turn logging.
       DM_DEBUG: ${DM_DEBUG:-}
     volumes:

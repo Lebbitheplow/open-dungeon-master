@@ -1,13 +1,20 @@
-// Local CPU embeddings: MiniLM (384-dim) via @huggingface/transformers ONNX,
-// weights cached under models/embeddings so the app stays fully on-device.
-// CPU-only by design: the iGPU belongs to the DM model. The pipeline loads
-// lazily on first use and all embed calls run through one serial queue so
-// background indexing never fans out across every core mid-turn.
+// Local CPU embeddings: MiniLM by default (384-dim) via
+// @huggingface/transformers ONNX, weights cached under models/embeddings so
+// the app stays fully on-device. CPU-only by design: the iGPU belongs to the
+// DM model. The pipeline loads lazily on first use and all embed calls run
+// through one serial queue so background indexing never fans out across
+// every core mid-turn.
 
 import path from "node:path";
+import type { DataType } from "@huggingface/transformers";
+import { serverEnv } from "./server-env.ts";
 
 export const EMBEDDING_DIM = 384;
-const MODEL_ID = "Xenova/all-MiniLM-L6-v2";
+// Vectors from two models compare without error but rank at random, so
+// changing the model (or its dtype) means starting from a fresh database.
+export const MODEL_ID = serverEnv("EMBEDDING_MODEL", "Xenova/all-MiniLM-L6-v2");
+// transformers.js falls back to fp32 for a dtype it does not know.
+const DTYPE = serverEnv("EMBEDDING_DTYPE", "fp32") as DataType;
 
 type Embedder = (
   texts: string[],
@@ -20,11 +27,23 @@ declare global {
   var __odmEmbedQueue: Promise<unknown> | undefined;
 }
 
+// bufferToVector reads a stored vector of any other size as "not indexed
+// yet", so a wrong-size model would switch semantic search off without error.
+export function checkEmbeddingDim(modelId: string, size: number): void {
+  if (size !== EMBEDDING_DIM) {
+    throw new Error(
+      `Embedding model ${modelId} produces ${size}-dim vectors; only ${EMBEDDING_DIM}-dim models are supported.`,
+    );
+  }
+}
+
 async function loadEmbedder(): Promise<Embedder> {
   const { pipeline, env } = await import("@huggingface/transformers");
   env.cacheDir = path.join(process.cwd(), "models", "embeddings");
-  const pipe = await pipeline("feature-extraction", MODEL_ID);
-  return pipe as unknown as Embedder;
+  const pipe = (await pipeline("feature-extraction", MODEL_ID, { dtype: DTYPE })) as unknown as Embedder;
+  const probe = await pipe(["probe"], { pooling: "mean", normalize: true });
+  checkEmbeddingDim(MODEL_ID, probe.tolist()[0].length);
+  return pipe;
 }
 
 function embedderPromise(): Promise<Embedder> {

@@ -213,7 +213,7 @@ and clamped by code.
 
 ### Memory and retrieval (RAG)
 
-- **Semantic recall and memory index** - MiniLM (384-dim) two-phase recall over chapter summaries then verbatim scene chunks, behind the `recall_story` tool.
+- **Semantic recall and memory index** - MiniLM by default (384-dim) two-phase recall over chapter summaries then verbatim scene chunks, behind the `recall_story` tool.
 - **World lore builder** - lead-authored, embedded canon retrieved per turn, with `search_lore` searching lore, facts, notes, and chapter memory at once.
 - **House rules and rules manager** - embedded house-rules text plus structured variant toggles, retrieved into the prompt's variant and house-rules blocks.
 - **Per-turn context retrieval** - embeds the current moment once and rides only the most relevant lore and rule chunks into the prompt.
@@ -303,7 +303,7 @@ echo "DB_ENCRYPTION_KEY=$(openssl rand -hex 32)" > .env.server
 # Downloads from api.open5e.com once, then caches for offline re-runs.
 node scripts/import-open5e.mjs
 
-# Warm the local embedding model (MiniLM, ~86MB) into models/embeddings.
+# Warm the local embedding model (MiniLM by default, ~86MB) into models/embeddings.
 # Optional: the app auto-downloads it on first use, but this pulls it now
 # so an offline machine has it ready.
 npm run fetch-model
@@ -312,10 +312,23 @@ npm run dev        # http://localhost:3000, or:
 npm run dev:lan    # 0.0.0.0:3005 so your party can reach it on the LAN
 ```
 
-The **embedding model** (MiniLM, used for semantic story recall and lore search) is no
+The **embedding model** (used for semantic story recall and lore search) is no
 longer bundled in the repo. transformers.js downloads it from HuggingFace into
 `models/embeddings/` the first time the app needs it, so first use requires network;
 `npm run fetch-model` fetches it ahead of time.
+
+The default, `Xenova/all-MiniLM-L6-v2`, understands English only. For a table that
+plays in another language, set a multilingual model in `.env.server` before the
+first game:
+
+```bash
+EMBEDDING_MODEL=Xenova/paraphrase-multilingual-MiniLM-L12-v2
+EMBEDDING_DTYPE=q8
+```
+
+Only 384-dim models are supported; any other fails with an error naming it.
+The model is fixed for the life of the database: see
+[Changing the embedding model](#changing-the-embedding-model).
 
 Then start the DM model with llama.cpp's `llama-server`. See
 [The default DM model](#the-default-dm-model-qwen36-35b-on-llamacpp) below for the
@@ -349,8 +362,9 @@ npm run start:lan   # 0.0.0.0:3005
 ## Run with Docker
 
 The image is the whole install. It carries the built app, the Open5e content pack and
-the MiniLM embedding model, so a fresh container needs no network and no setup steps.
-Only the AI services stay outside, on the host.
+the default embedding model, so a fresh container needs no network and no setup steps.
+Only the AI services stay outside, on the host. A non-default `EMBEDDING_MODEL` is not
+baked in: each new container downloads it on first use, so it needs internet then.
 
 Every GitHub release is published to both registries as linux/amd64:
 
@@ -682,6 +696,35 @@ DM turn queue, and the voice-chat rooms are all in-process state. Running two
 instances behind a load balancer would split the table across processes, and a
 restart ends any voice call in progress (players simply rejoin). One instance is
 the supported shape.
+
+### Changing the embedding model
+
+Story recall and lore search compare new embeddings with the ones already stored,
+and embeddings from two different models compare without an error but rank at
+random. So set `EMBEDDING_MODEL` and `EMBEDDING_DTYPE` before the first game and
+keep them for the life of the database; restoring a backup onto a server set to a
+different model breaks recall the same way.
+
+To change either later, start from a fresh database:
+
+- Stop the server and delete the database file together with the two files SQLite
+  keeps beside it: `data/local-roleplay.sqlite`, `data/local-roleplay.sqlite-wal`
+  and `data/local-roleplay.sqlite-shm` (with `SQLITE_DB_PATH` set: that file, plus
+  `-wal` and `-shm` appended to its name). Keep the rest of `data/`: it holds the
+  Open5e content pack and installed world packs.
+- Optionally delete `public/uploads/` and `public/generated*`, which only hold
+  pictures and audio the old database pointed at.
+- Under Docker the same three files are in the `odm-data` volume, beside the
+  generated key and the world packs; delete just them with the container stopped:
+
+  ```bash
+  docker compose stop
+  docker compose run --rm --entrypoint sh open-dungeon-master -c \
+    'rm -f /app/data/local-roleplay.sqlite /app/data/local-roleplay.sqlite-wal /app/data/local-roleplay.sqlite-shm'
+  docker compose start
+  ```
+
+  The optional part is the `odm-uploads`, `odm-generated` and `odm-audio` volumes.
 
 ## Campaign plugins
 

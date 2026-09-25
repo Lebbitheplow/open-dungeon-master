@@ -1,6 +1,6 @@
 // Backfills the semantic memory index for chapters closed before the index
 // existed: chunks each closed chapter's transcript into verbatim scenes,
-// embeds them with the local MiniLM model (CPU; first run downloads ~90MB
+// embeds them with the local embedding model (CPU; first run downloads it
 // into models/embeddings), and embeds chapter summaries for recall's
 // phase-1 chapter picking. Idempotent: indexed chapters are skipped.
 // Usage: node scripts/backfill-embeddings.mjs [campaignId]
@@ -9,7 +9,7 @@
 import Database from "better-sqlite3-multiple-ciphers";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { pipeline, env } from "@huggingface/transformers";
+import { embed as embedVectors, vectorToBuffer } from "../src/lib/embeddings.ts";
 import { serverEnv } from "../src/lib/server-env.ts";
 import { chunkScenes } from "../src/lib/dm/scene-logic.ts";
 
@@ -47,15 +47,10 @@ if (!hasSceneChunks) {
   fail("No scene_chunks table yet. Start the app once to migrate, then rerun.");
 }
 
-env.cacheDir = path.join(process.cwd(), "models", "embeddings");
-console.log("[backfill-embeddings] loading MiniLM (first run downloads the model)...");
-const embedder = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2");
+console.log("[backfill-embeddings] loading the embedding model (first run downloads it)...");
+await embedVectors(["warm-up"]);
 async function embed(texts) {
-  const output = await embedder(texts, { pooling: "mean", normalize: true });
-  return output.tolist().map((vector) => {
-    const array = Float32Array.from(vector);
-    return Buffer.from(array.buffer, array.byteOffset, array.byteLength);
-  });
+  return (await embedVectors(texts)).map(vectorToBuffer);
 }
 
 const campaignFilter = process.argv[2];
