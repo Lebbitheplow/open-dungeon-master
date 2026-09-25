@@ -182,12 +182,46 @@ export function rollDerivation(
   return { advantage: mergeAdvantage(sources), autoFail: false, notes };
 }
 
-// One round-wrap tick: decrements timed conditions (0 = expired and
-// removed) and lists the save-ends conditions due a new save. The caller
-// rolls those saves and removes successes via removeConditions.
+// A round is six seconds, so in-world minutes convert to the one duration
+// unit conditions are stored in. Combat ticks one round at a time; the
+// clock outside combat ticks minutes * 10 (issue #30).
+export const ROUNDS_PER_MINUTE = 10;
+export const MAX_CONDITION_ROUNDS = 24 * 60 * ROUNDS_PER_MINUTE;
+
+export function conditionRoundsFrom(input: {
+  rounds?: number;
+  minutes?: number;
+  hours?: number;
+}): number | undefined {
+  const total =
+    (input.rounds ?? 0) +
+    (input.minutes ?? 0) * ROUNDS_PER_MINUTE +
+    (input.hours ?? 0) * 60 * ROUNDS_PER_MINUTE;
+  return total > 0 ? Math.min(MAX_CONDITION_ROUNDS, Math.round(total)) : undefined;
+}
+
+// Rounds left as people say them: "3 rounds", "45 min", "2 h 30 min".
+export function describeConditionDuration(rounds: number): string {
+  if (rounds < ROUNDS_PER_MINUTE) {
+    return `${rounds} round${rounds === 1 ? "" : "s"}`;
+  }
+  const minutes = Math.ceil(rounds / ROUNDS_PER_MINUTE);
+  if (minutes < 60) {
+    return `${minutes} min`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest ? `${hours} h ${rest} min` : `${hours} h`;
+}
+
+// One tick of `by` rounds (a round wrap in combat, or the in-world clock
+// moving outside it): decrements timed conditions (0 = expired and removed)
+// and lists the save-ends conditions due a new save. The caller rolls those
+// saves and removes successes via removeConditions.
 export function tickConditions(
   conditions: string[],
   meta: ConditionMetaMap | undefined,
+  by = 1,
 ): {
   conditions: string[];
   meta: ConditionMetaMap;
@@ -203,7 +237,7 @@ export function tickConditions(
       continue;
     }
     if (typeof entry.rounds === "number") {
-      const left = entry.rounds - 1;
+      const left = entry.rounds - by;
       if (left <= 0) {
         expired.push(name);
         continue;

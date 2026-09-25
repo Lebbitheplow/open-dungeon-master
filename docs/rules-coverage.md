@@ -64,7 +64,7 @@ table can switch it off with the `narrationGuard` game setting.
 | Opportunity attacks, both sides | enforced | `dm/opportunity.ts` |
 | Cover (half / three-quarters) and long-range disadvantage | enforced | `battlemap/los.ts coverBetween`, `dm/map-tools.ts` |
 | Surprise round | enforced | `dm/encounter-tools.ts` |
-| Conditions (durations, save-ends, advantage, auto-crit) | enforced | `dm/condition-logic.ts` |
+| Conditions (durations, save-ends, advantage, auto-crit); timed conditions count down by round in combat and against the in-world clock outside it (travel, rests, pass_time), and set_condition takes rounds, minutes or hours | enforced | `dm/condition-logic.ts`, `dm/condition-tick.ts`, `db/clock.ts` |
 | Exhaustion (1–6 table) | enforced | `dm/condition-logic.ts` |
 | Death saves (incl. massive damage, crit-at-zero) | enforced | `dm/death-logic.ts` |
 | Concentration (damage CON save) | enforced | `dm/concentration.ts` |

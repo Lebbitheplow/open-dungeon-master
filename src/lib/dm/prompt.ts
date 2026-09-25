@@ -9,7 +9,7 @@ import { encumbranceFor } from "@/lib/srd/encumbrance";
 import { classFeatureDescription, findCustomClass } from "@/lib/classes";
 import { resourceDef } from "@/lib/srd/class-resources";
 import { subclassFeatureDescription } from "@/lib/srd/features";
-import { describeExhaustion } from "@/lib/dm/condition-logic";
+import { describeConditionDuration, describeExhaustion } from "@/lib/dm/condition-logic";
 import { describeConditionEffects } from "@/lib/srd/condition-effects";
 import { presetFor, packFor } from "@/lib/worlds/preset";
 import { renderWorldPrimer } from "@/lib/worlds/primer-logic";
@@ -491,7 +491,7 @@ export function describeSheet(
     const described = sheet.conditions.map((condition) => {
       const meta = sheet.conditionMeta?.[condition];
       if (meta?.rounds) {
-        return `${condition} (${meta.rounds} more round${meta.rounds === 1 ? "" : "s"})`;
+        return `${condition} (${describeConditionDuration(meta.rounds)} left)`;
       }
       if (meta?.saveEnds) {
         return `${condition} (save ends: ${meta.saveEnds.ability.toUpperCase()} DC ${meta.saveEnds.dc})`;

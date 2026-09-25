@@ -6,6 +6,7 @@ import { GameTerm } from "@/components/ui/GameTerm";
 import { InfoChipList } from "@/components/ui/InfoDialog";
 import { CountPop } from "@/components/ui/Reveal";
 import { cn } from "@/lib/cn";
+import { describeConditionDuration } from "@/lib/dm/condition-logic";
 import { contentSlug, describeFeature } from "@/lib/help";
 import { ABILITIES } from "@/lib/schemas/sheet";
 import { formatModifier, SRD_SKILLS } from "@/lib/srd";
@@ -303,7 +304,9 @@ export function ConditionChips({
         <span key={condition} className="sheet-condition motion-pop">
           <GameIcon icon={{ kind: "condition", key: condition }} size="size-5" />
           {condition}
-          {rounds?.[condition]?.rounds ? ` (${rounds[condition]?.rounds} rd)` : ""}
+          {rounds?.[condition]?.rounds
+            ? ` (${describeConditionDuration(rounds[condition]?.rounds ?? 0)})`
+            : ""}
         </span>
       ))}
     </div>

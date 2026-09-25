@@ -7,7 +7,9 @@ register("./lib/register-alias.mjs", import.meta.url);
 
 const {
   attackContext,
+  conditionRoundsFrom,
   damageAdjust,
+  describeConditionDuration,
   effectiveSpeed,
   incapacitatedBy,
   isIncapacitated,
@@ -144,6 +146,39 @@ test("tickConditions: save-ends surfaces due saves each round", () => {
   const tick = tickConditions(["paralyzed"], meta);
   assert.deepEqual(tick.savesDue, [{ name: "paralyzed", ability: "wis", dc: 14 }]);
   assert.deepEqual(tick.conditions, ["paralyzed"]);
+});
+
+// Issue #30: the in-world clock ticks many rounds at once outside combat.
+test("tickConditions: a multi-round tick spends the elapsed time in one go", () => {
+  const meta = { poisoned: { rounds: 600 }, blessed: { rounds: 30 }, prone: {} };
+  const tick = tickConditions(["poisoned", "blessed", "prone"], meta, 100);
+  assert.deepEqual(tick.conditions, ["poisoned", "prone"]);
+  assert.deepEqual(tick.expired, ["blessed"]);
+  assert.equal(tick.meta.poisoned.rounds, 500);
+  // An exact landing on zero expires too, and overshoot never goes negative.
+  assert.deepEqual(tickConditions(["poisoned"], { poisoned: { rounds: 100 } }, 100).expired, ["poisoned"]);
+  assert.deepEqual(tickConditions(["poisoned"], { poisoned: { rounds: 5 } }, 4800).expired, ["poisoned"]);
+});
+
+test("conditionRoundsFrom folds minutes and hours into rounds", () => {
+  assert.equal(conditionRoundsFrom({ rounds: 3 }), 3);
+  assert.equal(conditionRoundsFrom({ minutes: 1 }), 10);
+  assert.equal(conditionRoundsFrom({ hours: 1 }), 600);
+  assert.equal(conditionRoundsFrom({ hours: 1, minutes: 30 }), 900);
+  assert.equal(conditionRoundsFrom({}), undefined);
+  assert.equal(conditionRoundsFrom({ hours: 24 }), 14_400);
+  // A day is the ceiling: nothing stored can outlast a long rest by weeks.
+  assert.equal(conditionRoundsFrom({ hours: 24, minutes: 60 }), 14_400);
+});
+
+test("describeConditionDuration speaks rounds, minutes, then hours", () => {
+  assert.equal(describeConditionDuration(1), "1 round");
+  assert.equal(describeConditionDuration(9), "9 rounds");
+  assert.equal(describeConditionDuration(10), "1 min");
+  assert.equal(describeConditionDuration(455), "46 min");
+  assert.equal(describeConditionDuration(600), "1 h");
+  assert.equal(describeConditionDuration(900), "1 h 30 min");
+  assert.equal(describeConditionDuration(14_400), "24 h");
 });
 
 test("removeConditions strips names and metadata together", () => {

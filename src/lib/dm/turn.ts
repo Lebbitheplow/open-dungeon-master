@@ -24,7 +24,7 @@ import { normalizeEventKind } from "@/lib/dm/arg-coerce";
 import { insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
 import { getRoll, insertRoll, listRecentRolls } from "@/lib/db/rolls";
 import { listSheets, patchSheet } from "@/lib/db/sheets";
-import { removeConditions } from "@/lib/dm/condition-logic";
+import { describeConditionDuration, removeConditions } from "@/lib/dm/condition-logic";
 import { rollExpression } from "@/lib/dice";
 import { heldRollUserIds } from "@/lib/dice/held-rolls";
 import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
@@ -297,7 +297,7 @@ function buildEncounterState(campaignId: string, sheets: CharacterSheet[]) {
       conditions: enemy.conditions.map((condition) => {
         const meta = enemy.conditionMeta[condition];
         if (meta?.rounds) {
-          return `${condition} (${meta.rounds} more round${meta.rounds === 1 ? "" : "s"})`;
+          return `${condition} (${describeConditionDuration(meta.rounds)} left)`;
         }
         if (meta?.saveEnds) {
           return `${condition} (save ends: ${meta.saveEnds.ability.toUpperCase()} DC ${meta.saveEnds.dc})`;

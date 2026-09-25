@@ -1,6 +1,9 @@
 import { tickEffectMinutes } from "@/lib/db/active-effects";
+import { getCampaignById } from "@/lib/db/campaigns";
+import { getActiveEncounter } from "@/lib/db/encounters";
 import { gutterBurntLights } from "@/lib/dm/light-timers";
 import { fireCalendarEvents } from "@/lib/dm/calendar-fire";
+import { tickClockConditions } from "@/lib/dm/condition-tick";
 import { getDatabase, parseJson } from "@/lib/db/core";
 import {
   advance,
@@ -52,6 +55,16 @@ export function advanceClock(
   // rather than in each caller means travel, a rest and pass_time all expire
   // the same things, which is the point of having one clock.
   tickEffectMinutes(campaignId, moved.minutes);
+  // Timed conditions run on the same clock outside combat (issue #30): a
+  // poison that outlasted the fight wears off on the road or over a night's
+  // rest. Inside an encounter the round wrap owns them (condition-tick.ts),
+  // so a DM nudging the clock mid-fight does not count the same time twice.
+  if (!getActiveEncounter(campaignId)) {
+    const campaign = getCampaignById(campaignId);
+    if (campaign) {
+      tickClockConditions(campaign, moved.minutes);
+    }
+  }
   // The same clock burns torches down and brings the calendar's days round
   // (docs/vtt-parity-implementation-plan.md 7.2 and 7.3).
   gutterBurntLights(campaignId, moved.instant);

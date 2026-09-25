@@ -1,6 +1,7 @@
 "use client";
 
 import { Bot, Check, Crown, Heart, ImagePlus, PawPrint, Save, UserPlus } from "lucide-react";
+import { describeConditionDuration } from "@/lib/dm/condition-logic";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { KitButton, SettingToggle } from "./PanelKit";
@@ -591,7 +592,7 @@ export function PartyPanel({
                     <GameIcon icon={{ kind: "condition", key: condition }} size="size-4" className="border-red-800/60" />
                     {condition}
                     {sheet.conditionMeta?.[condition]?.rounds
-                      ? ` (${sheet.conditionMeta[condition].rounds} rd)`
+                      ? ` (${describeConditionDuration(sheet.conditionMeta[condition].rounds)})`
                       : ""}
                   </span>
                 ))}
