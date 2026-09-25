@@ -1,7 +1,7 @@
 "use client";
 
 import { BookOpen, Check, Hourglass, Lock, Star } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { InfoButton } from "@/components/ui/InfoDialog";
 import { cn } from "@/lib/cn";
@@ -52,6 +52,7 @@ const STATE_TEXT: Record<SpellTileState, string> = {
 };
 
 const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"];
+const noSubscribe = () => () => {};
 const levelKey = (level: number | null) => (level === null ? "other" : String(level));
 const levelLabel = (key: string) =>
   key === "0"
@@ -90,6 +91,12 @@ export function SpellBook({
 }) {
   const [filter, setFilter] = useState("");
   const needle = filter.trim().toLowerCase();
+  // The tab strip says which tab is chosen only once mounted. The travelling
+  // pill (src/lib/motion/pill.ts) decorates every tablist that has a chosen
+  // tab as soon as the page loads, and a pill appended to server-rendered
+  // markup before React hydrates it is a hydration mismatch (the builder
+  // renders this book on the server, inside a hidden step).
+  const mounted = useSyncExternalStore(noSubscribe, () => true, () => false);
 
   const byLevel = useMemo(() => {
     const map = new Map<string, SpellTile[]>();
@@ -171,7 +178,7 @@ export function SpellBook({
                 key={key}
                 type="button"
                 role="tab"
-                aria-selected={selected}
+                aria-selected={mounted && selected}
                 title={levelLabel(key)}
                 onClick={() => {
                   setTab(key);

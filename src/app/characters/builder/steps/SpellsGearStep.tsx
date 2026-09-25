@@ -1,7 +1,7 @@
 "use client";
 
 import { Star } from "lucide-react";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { SpellBook, type SpellTile } from "@/components/sheet/SpellBook";
 import { useSpellLookups, useSpellPool } from "@/components/sheet/useSpellPool";
 import { GameTerm } from "@/components/ui/GameTerm";
@@ -15,6 +15,8 @@ import type { BuilderActions, BuilderDerived } from "../useBuilderDerived";
 import type { BuilderState } from "../useBuilderState";
 import { srdClass } from "../submit";
 import { StepPanel, inputClass } from "./shared";
+
+const noSubscribe = () => () => {};
 
 // Step 5: spells for a caster who has something to cast at this level (the
 // section is absent for everyone else, a level 1 paladin included) and the
@@ -91,6 +93,9 @@ function SpellsSection({
   // A wizard fills the book first, then prepares from it.
   const [phase, setPhase] = useState<"book" | "prepare">("book");
   const [limitNote, setLimitNote] = useState("");
+  // See SpellBook: the chosen tab is announced after mount so the travelling
+  // pill never lands on server-rendered markup before hydration.
+  const mounted = useSyncExternalStore(noSubscribe, () => true, () => false);
   const { pool, loading } = useSpellPool(spellSearchClass, maxSpellLevel);
   // A chosen spell the class list lacks (an edited sheet, a pack spell)
   // still finds its level.
@@ -278,7 +283,7 @@ function SpellsSection({
               key={key}
               type="button"
               role="tab"
-              aria-selected={phase === key}
+              aria-selected={mounted && phase === key}
               onClick={() => {
                 setPhase(key);
                 setLimitNote("");
