@@ -38,11 +38,15 @@ export const SPELL_SCHOOL_BLURBS: Record<string, string> = {
 
 export const WEAPON_PROPERTY_BLURBS: Record<string, string> = {
   ammunition: "Needs arrows, bolts or stones to attack at range; the ammunition is spent as it is fired.",
+  "double-headed": "A weapon with a striking end at each side; the second end can make the extra light-weapon attack, doing the die in brackets.",
   finesse: "Attack and damage may use Dexterity instead of Strength, whichever is better.",
+  gunpowder: "Fires with black powder, which it consumes along with the shot; wet or missing powder means it cannot fire.",
   heavy: "Too big for Small creatures to use well: they attack with disadvantage.",
   light: "Small enough to fight with one in each hand (two-weapon fighting).",
   loading: "Slow to reload: only one shot per action, bonus action or reaction, however many attacks you have.",
+  magazine: "Holds the number of shots in brackets; once they are spent, an action reloads it.",
   reach: "Strikes 5 feet further than usual, so 10 feet away instead of 5.",
+  special: "Has its own rules beyond the usual attack; the DM applies them when it is used.",
   thrown: "Can be thrown to make a ranged attack, using the same ability as a melee swing with it.",
   "two-handed": "Needs both hands to attack with, so no shield or second weapon.",
   versatile: "Usable in one hand or two; the two-handed grip does the larger damage die in brackets.",
