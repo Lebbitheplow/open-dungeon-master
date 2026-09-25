@@ -10,6 +10,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { register } from "node:module";
+import { removeTempDir } from "./lib/remove-temp-dir.mjs";
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "odm-harness-logic-"));
 process.env.SQLITE_DB_PATH = path.join(dir, "test.sqlite");
@@ -345,5 +346,5 @@ test("discovery looks where the installers put programs, not only on PATH", () =
   assert.ok(dirs.includes("/home/dm/.opencode/bin"));
 });
 
-fs.rmSync(dir, { recursive: true, force: true });
+removeTempDir(dir);
 console.log(`harness logic: ${passed} checks passed`);
