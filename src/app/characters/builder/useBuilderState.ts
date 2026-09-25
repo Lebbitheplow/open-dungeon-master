@@ -9,7 +9,11 @@ import type {
 } from "@/lib/schemas/sheet";
 import { removeAsiChoices } from "@/lib/srd/asi";
 import { findOptionByFeatureName } from "@/lib/srd/options";
-import type { FightingStyleId } from "@/lib/srd/feature-effects";
+import {
+  FIGHTING_STYLES,
+  fightingStyleFeatureName,
+  type FightingStyleId,
+} from "@/lib/srd/feature-effects";
 import type { AbilityMethod, AbilityState } from "./AbilityEditor";
 import type { PoolEntry, PoolSlots } from "./abilityDice";
 import type { BackgroundOption, RaceOption } from "./useBuilderOptions";
@@ -51,7 +55,15 @@ export function useBuilderState({
   });
   const [chosenSkills, setChosenSkills] = useState<string[]>([]);
   const [expertisePicks, setExpertisePicks] = useState<string[]>([]);
-  const [stylePicks, setStylePicks] = useState<FightingStyleId[]>([]);
+  // A stored fighting style rides as a "choice" feature; an edit reopens
+  // with it picked rather than asking for it again.
+  const [stylePicks, setStylePicks] = useState<FightingStyleId[]>(() =>
+    FIGHTING_STYLES.filter((style) =>
+      (initial?.features ?? []).some(
+        (feature) => feature.source === "choice" && feature.name === fightingStyleFeatureName(style.id),
+      ),
+    ).map((style) => style.id),
+  );
   const [spells, setSpells] = useState<string[]>(() =>
     initial?.spellcasting
       ? [...new Set([...initial.spellcasting.known, ...initial.spellcasting.prepared])]
@@ -116,7 +128,12 @@ export function useBuilderState({
   const [portrait, setPortrait] = useState<SheetAttachment | null>(initial?.portrait ?? null);
   const [gold, setGold] = useState(initial?.gold ?? 15);
   const [hpOverride, setHpOverride] = useState<number | null>(initial?.maxHp ?? null);
-  const [acOverride, setAcOverride] = useState<number | null>(initial?.ac ?? null);
+  // Only a pinned AC comes back pinned. A derived one re-derives from the
+  // gear, or saving an edit would pin it and armour changed in play would
+  // stop moving it.
+  const [acOverride, setAcOverride] = useState<number | null>(
+    initial?.acOverride ? initial.ac : null,
+  );
   const [localError, setLocalError] = useState("");
 
   // Prefill pieces that need the async option lists: base ability scores
@@ -187,7 +204,15 @@ export function useBuilderState({
     setOptionPicks([]);
   }
 
+  // An edit keeps the gear the character actually carries. The class
+  // loadout and background kit are added to a new character only; for a
+  // stored one they would bring back what was sold or lost in play. A class
+  // or background changed in the edit hands over its kit as creation does.
+  const keepsStoredGear =
+    Boolean(initial) && classId === initial?.class && backgroundId === initial?.background;
+
   return {
+    keepsStoredGear,
     name, setName,
     alignment, setAlignment,
     level, setLevel,

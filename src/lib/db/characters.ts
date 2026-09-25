@@ -1,7 +1,7 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { createSheet, getSheetById, getSheetForUser } from "@/lib/db/sheets";
 import { adaptSheetToLevel } from "@/lib/characters/adapt";
-import { populateFeatures } from "@/lib/srd/features";
+import { populateFeaturesForClasses } from "@/lib/srd/features";
 import { dedupeName } from "@/lib/workshop/import";
 import { normalizeCampaignKind, type CampaignKind } from "@/lib/workshop/kind";
 import type { CampaignStatus } from "@/lib/campaign-types";
@@ -81,6 +81,17 @@ function mapCharacter(row: LibraryRow): LibraryCharacter {
   };
 }
 
+// SRD class features and racial traits for a stored sheet, granted per class
+// for a multiclassed one exactly as createSheet grants them, so a fighter 3 /
+// wizard 2 is not stored with a fighter 5's features.
+function libraryFeatures(input: CreateSheetInput, level: number) {
+  const classList =
+    (input.classes ?? []).length > 1
+      ? input.classes
+      : [{ id: input.class, subclass: input.subclass, level }];
+  return populateFeaturesForClasses(input.features ?? [], classList, input.race);
+}
+
 export function createCharacter(
   userId: string,
   level: number,
@@ -93,7 +104,7 @@ export function createCharacter(
   const now = nowIso();
   const stored: CreateSheetInput = {
     ...input,
-    features: populateFeatures(input.features ?? [], input.class, input.subclass, input.race, level),
+    features: libraryFeatures(input, level),
   };
   db.prepare(
     `
@@ -190,7 +201,7 @@ export function updateCharacter(
   }
   const stored: CreateSheetInput = {
     ...input,
-    features: populateFeatures(input.features ?? [], input.class, input.subclass, input.race, level),
+    features: libraryFeatures(input, level),
   };
   getDatabase()
     .prepare(
@@ -285,6 +296,7 @@ export function syncProgressToLibrary(sheetId: string): LibraryCharacter | null 
       sheet.hitDicePools?.map((pool) => ({ ...pool, spent: 0 })) ?? null,
     equipment: sheet.equipment,
     gold: sheet.gold,
+    copper: sheet.copper,
     feats: sheet.feats,
     features: sheet.features,
     // Level-up ASIs land here as raw scores; the campaign records no

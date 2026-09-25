@@ -13,13 +13,16 @@ export const dynamic = "force-dynamic";
 // DM more often arrives at their table's rules by tinkering at a table than
 // by filling in a form.
 
+// The capture comes first: a union takes the first option that parses, and
+// createRulesetSchema defaults everything but the name, so it would accept a
+// capture body, strip captureFrom and save an empty ruleset instead.
 const postSchema = z.union([
-  createRulesetSchema,
   z.object({
     name: z.string().trim().min(1).max(80),
     description: z.string().trim().max(300).default(""),
     captureFrom: z.string().trim().min(1).max(80),
   }),
+  createRulesetSchema,
 ]);
 
 export async function GET() {

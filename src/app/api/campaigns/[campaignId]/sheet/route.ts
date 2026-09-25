@@ -345,7 +345,14 @@ export async function GET(
     return context;
   }
 
-  return Response.json({ sheet: getSheetForUser(campaignId, context.user.id) });
+  // libraryLevel is the linked library character's level. When it is not the
+  // table's, the lobby's edit changes this table's copy only (PUT below), and
+  // the edit page says so; a host without this field saved it to the library.
+  const sheet = getSheetForUser(campaignId, context.user.id);
+  const linked = sheet?.libraryCharacterId
+    ? getCharacterForUser(context.user.id, sheet.libraryCharacterId)
+    : null;
+  return Response.json({ sheet, libraryLevel: linked?.level ?? null });
 }
 
 export async function POST(
@@ -474,14 +481,35 @@ export async function PUT(
     return Response.json({ sheet: result });
   }
 
-  // Shape 2: edit the current character in place. The library copy updates
-  // first (it owns builder-only fields like ASI picks and appearance), then
-  // the campaign copy re-instantiates from it.
+  // Shape 2: edit the current character in place. The builder rebuilds it
+  // at the table's level. When the library character is at that level too,
+  // the library copy updates first (it owns builder-only fields like ASI
+  // picks and appearance), then the campaign copy re-instantiates from it.
+  // When it is not, the edit is this table's alone, the way joining adapts a
+  // character without touching the library: a level 3 table's rebuild saved
+  // over a level 8 hero would de-level it in every later campaign. The link
+  // stays, so "save progress" and the campaign's end still sync back.
   const edit = editSchema.safeParse(raw);
   if (edit.success) {
     const character = getCharacterForUser(context.user.id, edit.data.editLibraryCharacterId);
     if (!character) {
       return Response.json({ error: "Character not found in your library." }, { status: 404 });
+    }
+    if (character.level !== context.campaign.startingLevel) {
+      deleteSheetForUser(campaignId, context.user.id);
+      const sheet = createSheet(
+        campaignId,
+        context.user.id,
+        context.campaign.startingLevel,
+        edit.data.sheet,
+        character.id,
+      );
+      // A portrait cleared to be redrawn is drawn from the edited sheet.
+      if (!edit.data.sheet.portrait) {
+        queueLibraryPortrait({ ...character, sheet: edit.data.sheet });
+      }
+      publishReplacement(context, existing, sheet);
+      return Response.json({ sheet });
     }
     const updated = updateCharacter(
       context.user.id,

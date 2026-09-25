@@ -8,6 +8,7 @@ import {
   getRulesetForUser,
   updateRuleset,
 } from "@/lib/db/rulesets";
+import { layOver } from "@/lib/schemas/parse-keeping-valid";
 import { createRulesetSchema } from "@/lib/schemas/ruleset";
 import { rulesetChanges } from "@/lib/rulesets/logic";
 
@@ -76,9 +77,10 @@ export async function PATCH(
     return resolved.error;
   }
   // The edit is laid over the stored ruleset and checked as a whole, so a
-  // field it leaves out keeps its value instead of taking the create default.
-  const raw = await request.json().catch(() => ({}));
-  const parsed = createRulesetSchema.safeParse({ ...resolved.ruleset, ...raw });
+  // field it leaves out keeps its value instead of taking the create default,
+  // and a variantRules sent in part keeps the rules it did not name.
+  const raw: unknown = await request.json().catch(() => ({}));
+  const parsed = createRulesetSchema.safeParse(layOver(resolved.ruleset, raw));
   if (!parsed.success) {
     return Response.json({ error: "Invalid change." }, { status: 400 });
   }

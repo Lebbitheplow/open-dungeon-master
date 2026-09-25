@@ -91,7 +91,8 @@ export function insertRollTable(input: {
 }
 
 // Rewriting the rows forgets what was drawn: the numbers no longer mean
-// the same results.
+// the same results. Rows sent back unchanged are not a rewrite: the editor
+// always resends its text, and a rename must not put drawn results back in.
 export function updateRollTable(
   tableId: string,
   patch: { name?: string; entries?: RollTableEntry[]; noReplacement?: boolean; resetDrawn?: boolean },
@@ -100,7 +101,9 @@ export function updateRollTable(
   if (!table) {
     return null;
   }
-  const drawn = patch.entries || patch.resetDrawn ? [] : table.drawn;
+  const rewritten =
+    patch.entries !== undefined && JSON.stringify(patch.entries) !== JSON.stringify(table.entries);
+  const drawn = rewritten || patch.resetDrawn ? [] : table.drawn;
   getDatabase()
     .prepare(
       `UPDATE roll_tables SET name = ?, entries_json = ?, drawn_json = ?, no_replacement = ?, updated_at = ?

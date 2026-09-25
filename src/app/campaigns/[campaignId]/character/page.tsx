@@ -49,6 +49,9 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
     flow === "edit" ? "create" : "choose",
   );
   const [currentLibraryId, setCurrentLibraryId] = useState<string | null>(null);
+  // The linked library character's level, from a host that keeps an edit at
+  // a table of another level to that table; null from one that does not.
+  const [libraryLevel, setLibraryLevel] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -73,6 +76,7 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
         const characters = charactersData?.characters ?? [];
         setLibrary(characters);
         setCurrentLibraryId(sheetData?.sheet?.libraryCharacterId ?? null);
+        setLibraryLevel(typeof sheetData?.libraryLevel === "number" ? sheetData.libraryLevel : null);
         if (!characters.length) {
           setMode("create");
         }
@@ -152,6 +156,11 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
               This campaign starts at level {level}.
               {flow !== "join" ? " Changing your character clears your ready status." : ""}
             </p>
+            {flow === "edit" && editCharacter && libraryLevel !== null && libraryLevel !== level ? (
+              <p className="reveal mt-1 text-xs text-amber-200">
+                {editCharacter.name} stays level {libraryLevel} in your library; these changes are for this table.
+              </p>
+            ) : null}
           </div>
         </div>
       </header>

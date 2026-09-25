@@ -238,7 +238,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_update_game_settings",
     scope: "campaigns",
-    description: "Change a campaign's game rules and table settings (party lead only). Story backend and keys cannot be changed here.",
+    description: "Change a campaign's game rules and table settings (party lead only). Send only what changes: settings left out keep their values, and a group such as variantRules or safety may be sent in part. Story backend and keys cannot be changed here.",
     properties: { ...campaignIdProp },
     required: ["campaignId"],
     open: true,

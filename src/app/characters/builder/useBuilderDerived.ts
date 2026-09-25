@@ -41,7 +41,7 @@ export function useBuilderDerived({
   const {
     level, scores, racialAsi, asiChoices, chosenSkills, expertisePicks, bonusLanguages,
     racialSkills, racialTool, hpOverride, acOverride, equipment, removedAutoNames,
-    subclass, optionPicks, spells, cantripNames,
+    subclass, optionPicks, spells, cantripNames, keepsStoredGear,
   } = state;
 
   const effectiveLevel = fixedLevel ?? level;
@@ -167,6 +167,9 @@ export function useBuilderDerived({
     ];
   }, [klass]);
   const fullEquipment = useMemo(() => {
+    if (keepsStoredGear) {
+      return equipment;
+    }
     const manualNames = new Set(equipment.map((item) => item.name));
     const auto = autoLoadout
       .filter((weapon) => !removedAutoNames.includes(weapon.name) && !manualNames.has(weapon.name))
@@ -176,7 +179,7 @@ export function useBuilderDerived({
       .filter((itemName) => !removedAutoNames.includes(itemName) && !manualNames.has(itemName))
       .map((itemName) => ({ name: itemName, qty: 1 }));
     return [...auto, ...backgroundGear, ...equipment];
-  }, [equipment, autoLoadout, removedAutoNames, background]);
+  }, [equipment, autoLoadout, removedAutoNames, background, keepsStoredGear]);
 
   // AC is derived from the gear above, not typed: equipping a breastplate
   // moves the number here and on the sheet. The player can still pin a value

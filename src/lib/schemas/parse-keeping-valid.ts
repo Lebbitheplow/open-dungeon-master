@@ -9,8 +9,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-// zod reports every issue in one pass, so one prune is enough; a second
-// failure is a schema member with no default, which is a bug and throws.
+// zod reports every issue in one pass, so one prune is enough. A second
+// failure is a member with no default, which pruning cannot heal; the whole
+// default is what these reads returned before, and a read that throws would
+// take down every page that loads the value.
 export function parseKeepingValid<T extends z.ZodType>(schema: T, raw: unknown): z.output<T> {
   const parsed = schema.safeParse(raw);
   if (parsed.success) {
@@ -33,5 +35,27 @@ export function parseKeepingValid<T extends z.ZodType>(schema: T, raw: unknown):
       delete parent[path[path.length - 1]];
     }
   }
-  return schema.parse(pruned);
+  const healed = schema.safeParse(pruned);
+  return healed.success ? healed.data : schema.parse({});
+}
+
+// An edit laid over the stored value before it is parsed whole: a member the
+// edit leaves out keeps its stored value, at every depth, so an agent that
+// sends { variantRules: { ammunition: true } } changes that one rule rather
+// than resetting the group's others to their defaults. Arrays are values and
+// replace whole; so does anything the stored side holds as a non-object.
+export function layOver(stored: unknown, edit: unknown): unknown {
+  if (!isRecord(stored) || !isRecord(edit)) {
+    return edit;
+  }
+  const merged: Record<string, unknown> = { ...stored };
+  for (const [key, value] of Object.entries(edit)) {
+    // JSON.parse makes "__proto__" an own key; assigning it would swap the
+    // merged object's prototype and let the body plant inherited members.
+    if (key === "__proto__" || key === "constructor" || key === "prototype") {
+      continue;
+    }
+    merged[key] = layOver(stored[key], value);
+  }
+  return merged;
 }

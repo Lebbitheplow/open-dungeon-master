@@ -6,8 +6,8 @@
 // progress synced back from play. Each case seeds non-default values first,
 // then calls the real route handler (register-routes.mjs) against a real
 // encrypted throwaway database. Also pinned: creates still fill defaults,
-// and whole values (a nested settings object, a shop's stock, a library
-// sheet) still replace whole. And one bad stored field now falls back alone
+// and whole values (a shop's stock, a library sheet, a homebrew body)
+// still replace whole. And one bad stored field now falls back alone
 // rather than taking every stored setting with it.
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
@@ -35,6 +35,7 @@ const { mintSession } = await import("../src/lib/auth.ts");
 const { getCampaignById } = await import("../src/lib/db/campaigns.ts");
 const { getGlobalConfig, saveGlobalConfig } = await import("../src/lib/db/app-settings.ts");
 const { createCharacter, getCharacter } = await import("../src/lib/db/characters.ts");
+const { getSheetForUser } = await import("../src/lib/db/sheets.ts");
 const { gameSettingsSchema, normalizeGameSettings } = await import(
   "../src/lib/schemas/game-settings.ts"
 );
@@ -354,9 +355,11 @@ function builderEdit(level, klass) {
 const FIGHTER = { id: "fighter", hitDie: 10, spellAbility: null };
 const WIZARD = { id: "wizard", hitDie: 6, spellAbility: "int" };
 
+let lastCampaignId = null;
 async function editInLobby(startingLevel, sheet) {
   const library = createCharacter(player.id, 5, SYNCED);
   const campaignId = await newCampaign({}, startingLevel);
+  lastCampaignId = campaignId;
   await joinAs(player, campaignId);
   const joined = await call(sheetRoute, "POST", { libraryCharacterId: library.id }, { campaignId });
   succeeded(joined);
@@ -377,13 +380,21 @@ await test("a lobby edit keeps the progress the builder does not edit", async ()
   assert.deepEqual(after.spellcasting, SYNCED.spellcasting);
 });
 
+// A table of another level gets its own copy, shed as joining sheds it;
+// the library character keeps its level 5 split.
 await test("a lobby edit at a lower level sheds multiclass levels as joining would", async () => {
-  const after = await editInLobby(3, builderEdit(3, FIGHTER));
+  const library = await editInLobby(3, builderEdit(3, FIGHTER));
+  assert.deepEqual(library.classes, SYNCED.classes);
+  const table = getSheetForUser(lastCampaignId, player.id);
   const adapted = adaptSheetToLevel(SYNCED, 5, 3);
-  assert.deepEqual(after.classes, [{ id: "fighter", subclass: "battle-master", level: 3 }]);
-  assert.deepEqual(after.hitDicePools, adapted.hitDicePools);
-  assert.deepEqual(after.spellcasting.casters, []);
-  assert.equal(after.notes, SYNCED.notes);
+  // Shed to one class, which a campaign sheet stores as no class list.
+  assert.deepEqual(table.classes, []);
+  assert.equal(table.class, "fighter");
+  assert.equal(table.subclass, "battle-master");
+  assert.equal(table.level, 3);
+  assert.deepEqual(table.hitDicePools, adapted.hitDicePools);
+  assert.deepEqual(table.spellcasting.casters, []);
+  assert.equal(table.notes, SYNCED.notes);
 });
 
 await test("a lobby edit to another class starts over single-class", async () => {
@@ -410,16 +421,17 @@ await test("an empty edit changes nothing", async () => {
 
 // ---- whole-value replacements, by contract ----
 
-// A nested object is one value, the way every panel sends it: the members
-// it leaves out take their defaults, not the stored ones.
-await test("a nested settings object sent in part still replaces the whole object", async () => {
+// A group sent in part keeps the members it leaves out, the way an agent
+// through the MCP bridge sends one rule; the panels send the whole group,
+// which lands the same.
+await test("a nested settings group sent in part keeps its other members", async () => {
   const campaignId = await newCampaign(CUSTOM_SETTINGS);
   const before = getCampaignById(campaignId).gameSettings;
   const patch = { dmAssist: { monsters: true } };
   succeeded(await call(settingsRoute, "PATCH", patch, { campaignId }));
   assert.deepEqual(getCampaignById(campaignId).gameSettings, {
     ...before,
-    dmAssist: gameSettingsSchema.parse(patch).dmAssist,
+    dmAssist: { ...before.dmAssist, monsters: true },
   });
 });
 

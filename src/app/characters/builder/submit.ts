@@ -307,11 +307,14 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
 
 // An edit rebuilds the whole sheet from the builder's fields and the server
 // stores it whole, so what the builder has no field for comes from the
-// stored sheet: the notes and small change synced back from play, and a
-// multiclass split. The split survives only under the same primary class,
-// adapted to the edited level exactly as joining a campaign at that level
-// adapts it (src/lib/characters/adapt.ts); a new primary class starts over
-// single-class, since re-splitting levels is not something the builder does.
+// stored sheet: the notes and small change synced back from play, what play
+// granted (story boons, feats, the background's feature, an item's
+// attunement), and a multiclass split. The split survives only under the
+// same primary class, adapted to the edited level exactly as joining a
+// campaign at that level adapts it (src/lib/characters/adapt.ts); a new
+// primary class starts over single-class, since re-splitting levels is not
+// something the builder does. A library sheet is stored as it was written,
+// so one from before multiclassing has no classes array at all.
 function keepUnedited(
   initial: CreateSheetInput | undefined,
   built: CreateSheetInput,
@@ -320,11 +323,18 @@ function keepUnedited(
   if (!initial) {
     return built;
   }
-  const kept = { ...built, notes: initial.notes, copper: initial.copper };
-  if (initial.classes.length < 2 || initial.class !== built.class) {
+  const kept = {
+    ...built,
+    notes: initial.notes,
+    copper: initial.copper,
+    features: [...built.features, ...grantedInPlay(initial, built)],
+    equipment: keptItemDetails(initial.equipment ?? [], built.equipment),
+  };
+  const storedClasses = initial.classes ?? [];
+  if (storedClasses.length < 2 || initial.class !== built.class) {
     return kept;
   }
-  const storedLevel = initial.classes.reduce((sum, entry) => sum + entry.level, 0);
+  const storedLevel = storedClasses.reduce((sum, entry) => sum + entry.level, 0);
   const adapted = adaptSheetToLevel(initial, storedLevel, level);
   const [primary, ...others] = adapted.classes;
   return {
@@ -333,6 +343,50 @@ function keepUnedited(
     hitDicePools: adapted.hitDicePools,
     spellcasting: keptSpellcasting(adapted.spellcasting, built.spellcasting, built.class),
   };
+}
+
+// Features the builder has no step for. The server re-grants class and race
+// features from the SRD, and "choice" ones are the builder's own picks, so
+// what is left came from play: a story boon, a feat granted at the table,
+// the background's feature (kept only while the background is). A feat
+// feature goes when the edit took its feat off the sheet.
+function grantedInPlay(initial: CreateSheetInput, built: CreateSheetInput) {
+  const lower = (text: string) => text.toLowerCase();
+  const builtNames = new Set(built.features.map((feature) => lower(feature.name)));
+  const keptFeats = new Set(built.feats.map(lower));
+  const droppedFeats = new Set((initial.feats ?? []).map(lower).filter((feat) => !keptFeats.has(feat)));
+  return (initial.features ?? []).filter((feature) => {
+    if (builtNames.has(lower(feature.name))) {
+      return false;
+    }
+    if (feature.source === "background") {
+      return initial.background === built.background;
+    }
+    if (feature.source === "feat") {
+      return !droppedFeats.has(lower(feature.name));
+    }
+    return feature.source === "story";
+  });
+}
+
+// The builder edits an item's name and count only. Whatever else play set
+// on it (equipped, attuned, identified, charges, a typed weight) rides back
+// on the item of the same name, one stored item per built one.
+function keptItemDetails(
+  stored: CreateSheetInput["equipment"],
+  built: CreateSheetInput["equipment"],
+): CreateSheetInput["equipment"] {
+  const unused = [...stored];
+  return built.map((item) => {
+    const index = unused.findIndex(
+      (candidate) => candidate.name === item.name && (candidate.slug ?? "") === (item.slug ?? ""),
+    );
+    if (index === -1) {
+      return item;
+    }
+    const [match] = unused.splice(index, 1);
+    return { ...match, ...item };
+  });
 }
 
 // The builder only knows the primary class's spells: they replace its lists

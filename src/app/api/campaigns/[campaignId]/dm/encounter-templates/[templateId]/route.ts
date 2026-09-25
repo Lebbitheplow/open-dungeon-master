@@ -18,6 +18,7 @@ import {
 import { templateDifficulty } from "@/lib/dm/encounter-templates";
 import { getPreparedMap } from "@/lib/db/prepared-maps";
 import { MAP_THEMES } from "@/lib/battlemap/generate";
+import { layOver } from "@/lib/schemas/parse-keeping-valid";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -58,10 +59,13 @@ export async function PATCH(
     }
     enemies = roster.rows;
   }
+  // A map sent in part is laid over the stored one: the prep panel edits
+  // only the prepared map's id, and a theme, seed or size set another way
+  // (the API, an import) is not the panel's to clear. A null clears it all.
   const map =
     parsed.data.map === undefined
       ? template.map
-      : normalizeTemplateMap(parsed.data.map, {
+      : normalizeTemplateMap(layOver(template.map, parsed.data.map), {
           themes: MAP_THEMES,
           ambients: ["bright", "dim", "dark"],
         });

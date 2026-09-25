@@ -222,7 +222,10 @@ export const createSheetSchema = z.object({
   // pieces so every module that already reads it is untouched; the true purse
   // is gold * 100 + copper (src/lib/srd/currency.ts).
   copper: z.number().int().min(0).max(99).default(0),
-  feats: z.array(z.string().trim().min(1).max(60)).max(20).default([]),
+  // The same caps play allows (patchSheetSchema): a feat granted in play
+  // syncs back to the library, and a stricter cap here would then refuse
+  // that character's lobby edit and drop it from a bundle export.
+  feats: z.array(z.string().trim().min(1).max(80)).max(30).default([]),
   features: z.array(sheetFeatureSchema).max(80).default([]),
   // The ASI choices baked into `abilities`, in threshold order. Stored so
   // instantiating at a lower campaign level can reverse the extra ones.

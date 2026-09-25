@@ -1,4 +1,5 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
+import { parseKeepingValid } from "@/lib/schemas/parse-keeping-valid";
 import { blankDraft, worldPackDraftSchema, type WorldPackDraft } from "@/lib/worlds/draft";
 
 // The one world pack draft a workshop holds, as a JSON column keyed by the
@@ -11,9 +12,11 @@ type DraftRow = { draft_json: string; updated_at: string };
 
 export type StoredDraft = { draft: WorldPackDraft; updatedAt: string | null };
 
-// A draft that fails its own schema (an older build's column, a hand edit)
-// is replaced with a blank one rather than crashing the panel; the person
-// sees an empty creator, which is honest about what could be read.
+// A draft with a field its schema no longer accepts (an older build's
+// column, a genre since retired, a hand edit) loses that field alone. It
+// used to come back blank, and the panel's next autosave or a Pull from
+// workshop then wrote the blank over every race, hook and picture in it.
+// Only a column that is not a draft object at all reads as a blank one.
 export function getPackDraft(campaignId: string, genre?: WorldPackDraft["baseGenre"]): StoredDraft {
   const row = getDatabase()
     .prepare(`SELECT draft_json, updated_at FROM world_pack_drafts WHERE campaign_id = ?`)
@@ -21,8 +24,12 @@ export function getPackDraft(campaignId: string, genre?: WorldPackDraft["baseGen
   if (!row) {
     return { draft: blankDraft(genre), updatedAt: null };
   }
-  const parsed = worldPackDraftSchema.safeParse(parseJson<unknown>(row.draft_json, {}));
-  return { draft: parsed.success ? parsed.data : blankDraft(genre), updatedAt: row.updated_at };
+  const raw = parseJson<unknown>(row.draft_json, null);
+  const draft =
+    raw && typeof raw === "object" && !Array.isArray(raw)
+      ? parseKeepingValid(worldPackDraftSchema, raw)
+      : blankDraft(genre);
+  return { draft, updatedAt: row.updated_at };
 }
 
 export function hasPackDraft(campaignId: string): boolean {
