@@ -6,6 +6,7 @@ import {
   DM_MODES,
   GENRES,
 } from "@/lib/schemas/game-settings-options";
+import { parseKeepingValid } from "@/lib/schemas/parse-keeping-valid";
 
 // The option lists and their labels live in ./game-settings-options (no
 // zod) so the campaign wizard can draw them without the validator; they
@@ -321,6 +322,5 @@ export function companionSlotsFree(
 }
 
 export function normalizeGameSettings(raw: unknown): GameSettings {
-  const parsed = gameSettingsSchema.safeParse(raw ?? {});
-  return parsed.success ? parsed.data : gameSettingsSchema.parse({});
+  return parseKeepingValid(gameSettingsSchema, raw ?? {});
 }

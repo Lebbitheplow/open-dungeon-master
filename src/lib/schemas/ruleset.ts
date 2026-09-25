@@ -17,6 +17,4 @@ export const createRulesetSchema = z.object({
   homebrewIds: z.array(z.string().trim().max(60)).max(500).default([]),
 });
 
-export const patchRulesetSchema = createRulesetSchema.partial();
-
 export type CreateRulesetInput = z.infer<typeof createRulesetSchema>;

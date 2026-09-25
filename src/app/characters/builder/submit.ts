@@ -1,4 +1,5 @@
-import type { Ability, AsiChoice, CreateSheetInput } from "@/lib/schemas/sheet";
+import { adaptSheetToLevel } from "@/lib/characters/adapt";
+import type { Ability, AsiChoice, CreateSheetInput, Spellcasting } from "@/lib/schemas/sheet";
 import { SRD_CLASSES, spellSlotsFor } from "@/lib/srd";
 import { expertiseSlotsFor, subclassLevelFor, subclassSpellsFor } from "@/lib/srd/features";
 import { fightingStyleFeatureName } from "@/lib/srd/feature-effects";
@@ -15,6 +16,8 @@ type SubmitInput = {
   race: RaceOption | undefined;
   klass: ClassOption | undefined;
   background: BackgroundOption | undefined;
+  // The stored sheet an edit starts from; absent when creating.
+  initial?: CreateSheetInput;
 };
 
 // Everything the wizard's per-step Continue buttons gate on, so a player
@@ -237,7 +240,7 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
 
   return {
     level: effectiveLevel,
-    sheet: {
+    sheet: keepUnedited(input.initial, {
       name: state.name.trim(),
       race: race.id,
       class: klass.id,
@@ -298,6 +301,60 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
         : null,
       notes: "",
       backstory: state.backstory.trim(),
-    },
+    }, effectiveLevel),
+  };
+}
+
+// An edit rebuilds the whole sheet from the builder's fields and the server
+// stores it whole, so what the builder has no field for comes from the
+// stored sheet: the notes and small change synced back from play, and a
+// multiclass split. The split survives only under the same primary class,
+// adapted to the edited level exactly as joining a campaign at that level
+// adapts it (src/lib/characters/adapt.ts); a new primary class starts over
+// single-class, since re-splitting levels is not something the builder does.
+function keepUnedited(
+  initial: CreateSheetInput | undefined,
+  built: CreateSheetInput,
+  level: number,
+): CreateSheetInput {
+  if (!initial) {
+    return built;
+  }
+  const kept = { ...built, notes: initial.notes, copper: initial.copper };
+  if (initial.classes.length < 2 || initial.class !== built.class) {
+    return kept;
+  }
+  const storedLevel = initial.classes.reduce((sum, entry) => sum + entry.level, 0);
+  const adapted = adaptSheetToLevel(initial, storedLevel, level);
+  const [primary, ...others] = adapted.classes;
+  return {
+    ...kept,
+    classes: [{ ...primary, subclass: built.subclass }, ...others],
+    hitDicePools: adapted.hitDicePools,
+    spellcasting: keptSpellcasting(adapted.spellcasting, built.spellcasting, built.class),
+  };
+}
+
+// The builder only knows the primary class's spells: they replace its lists
+// (and its per-class entry), while the shared slot pool, the other classes'
+// casting and pact magic stay as stored. A non-caster primary has no spell
+// step, so the stored casting is kept whole.
+function keptSpellcasting(
+  stored: Spellcasting,
+  built: Spellcasting,
+  primaryClass: string,
+): Spellcasting {
+  if (!stored || !built) {
+    return stored ?? built;
+  }
+  const primaryLists = { ability: built.ability, known: built.known, prepared: built.prepared };
+  return {
+    ...stored,
+    ...primaryLists,
+    casters: stored.casters?.map((caster) =>
+      caster.classId.toLowerCase() === primaryClass.toLowerCase()
+        ? { ...caster, ...primaryLists }
+        : caster,
+    ),
   };
 }

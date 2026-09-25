@@ -17,8 +17,10 @@ export async function PATCH(
     return context;
   }
 
+  // Laid over the stored settings before parsing: zod 4 fills a .default()
+  // even under .partial(), so a partial parse would reset every unsent field.
   const raw = await request.json().catch(() => ({}));
-  const parsed = gameSettingsSchema.partial().safeParse(raw);
+  const parsed = gameSettingsSchema.safeParse({ ...context.campaign.gameSettings, ...raw });
   if (!parsed.success) {
     return Response.json({ error: "Invalid game settings." }, { status: 400 });
   }
@@ -27,18 +29,14 @@ export async function PATCH(
   // of the mode (setDmMode keeps them in step), and a seat change is news the
   // table is owed, same as the seat route publishes it.
   const { dmMode, ...rest } = parsed.data;
-  let gameSettings = null;
-  if (dmMode !== undefined && dmMode !== context.campaign.gameSettings.dmMode) {
+  if (dmMode !== context.campaign.gameSettings.dmMode) {
     const changed = setDmMode(campaignId, dmMode, context.user.id);
     if (!changed) {
       return Response.json({ error: "Campaign not found." }, { status: 404 });
     }
-    gameSettings = changed.gameSettings;
     publishPersisted(campaignId, "dm_seat_changed", { seat: "dm", userId: changed.dmUserId });
   }
-  if (Object.keys(rest).length > 0 || !gameSettings) {
-    gameSettings = updateGameSettings(campaignId, rest);
-  }
+  const gameSettings = updateGameSettings(campaignId, rest);
   if (!gameSettings) {
     return Response.json({ error: "Campaign not found." }, { status: 404 });
   }
