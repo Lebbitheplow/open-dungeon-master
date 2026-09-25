@@ -75,7 +75,9 @@ export type CampaignCover = { id: string; url: string };
 // opening it; the shells read the same list.
 export type HomeGlanceFace = { name: string; url: string };
 export type HomeGlance = {
-  chapter: { index: number; title: string } | null;
+  // The chapter in play, and the act it belongs to when the arc has one
+  // (issue #31); actTitle is the act's player-safe name, "" when unnamed.
+  chapter: { index: number; title: string; act: number | null; actTitle: string } | null;
   recap: string;
   recapAt: string | null;
   sceneImage: string | null;

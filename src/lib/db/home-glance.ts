@@ -1,5 +1,7 @@
 import { getDatabase, parseJson } from "@/lib/db/core";
 import { getOpenChapter } from "@/lib/db/chapters";
+import { getCampaignById } from "@/lib/db/campaigns";
+import { actTitle, currentAct } from "@/lib/dm/arc-logic";
 import { characterPlaceholder } from "@/lib/placeholders";
 import { clipRecap } from "@/lib/recap";
 
@@ -95,8 +97,15 @@ export function partyFacesByCampaign(campaignIds: string[], genreById: Map<strin
 export function homeGlanceFor(campaignId: string, faces: HomeGlanceFace[]): HomeGlance {
   const chapter = getOpenChapter(campaignId);
   const latest = latestRecap(campaignId);
+  // The act comes from the chapter's stamp, or from the arc while the
+  // chapter is still unstamped (it opened before the refresh that plans
+  // the act). Only the player-safe act name ever leaves here.
+  const arc = chapter ? (getCampaignById(campaignId)?.storyArc ?? null) : null;
+  const act = chapter ? (chapter.act ?? (arc ? currentAct(arc) : null)) : null;
   return {
-    chapter: chapter ? { index: chapter.index, title: chapter.title } : null,
+    chapter: chapter
+      ? { index: chapter.index, title: chapter.title, act, actTitle: arc && act ? actTitle(arc, act) : "" }
+      : null,
     recap: latest?.recap ?? "",
     recapAt: latest?.at ?? null,
     sceneImage: latestSceneImage(campaignId),

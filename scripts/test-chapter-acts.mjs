@@ -23,6 +23,7 @@ const { insertCampaignMessage } = await import("../src/lib/db/messages.ts");
 const { normalizeStoryArc, recordActRecap } = await import("../src/lib/dm/arc-logic.ts");
 const { buildStoryDocument } = await import("../src/lib/export/story-document.ts");
 const { renderStoryHtml } = await import("../src/lib/export/html.ts");
+const { homeGlanceFor } = await import("../src/lib/db/home-glance.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -144,6 +145,14 @@ try {
     // The DM's milestones never reach the document.
     assert.ok(!html.includes("drowned city"));
     assert.ok(!html.includes("Find the tomb"));
+  });
+
+  test("the title screen's glance names the act the open chapter is in", () => {
+    // The open chapter is unstamped, so the act comes from the arc.
+    const glance = homeGlanceFor(campaign.id, []);
+    assert.equal(glance.chapter.act, 2);
+    assert.equal(glance.chapter.actTitle, "Beneath the Reliquary");
+    assert.ok(!JSON.stringify(glance).includes("Find the tomb"));
   });
 } finally {
   removeTempDir(dir);
