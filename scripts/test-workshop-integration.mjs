@@ -32,7 +32,7 @@ process.env.DB_ENCRYPTION_KEY = dbKey;
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-// Stub the MiniLM embedder before anything can trigger it. src/lib/
+// Stub the local embedder before anything can trigger it. src/lib/
 // embeddings.ts caches the pipeline on this global (for dev HMR), which
 // makes it the natural seam: without it this suite would either download a
 // model or spend its run logging caught failures, and neither says anything

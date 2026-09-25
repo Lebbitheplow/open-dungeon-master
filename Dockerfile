@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Open Dungeon Master as a single image. Everything the app needs is baked in:
-# the Next.js build, the Open5e content pack, and the MiniLM embedding model.
+# the Next.js build, the Open5e content pack, and the embedding model.
 # Only the AI services stay outside (llama.cpp, ComfyUI, Kokoro TTS, STT).
 #
 # Built on glibc rather than Alpine: better-sqlite3-multiple-ciphers and
@@ -40,12 +40,19 @@ COPY . .
 RUN node scripts/copy-dice-assets.mjs
 
 # Bake the content pack (spells, monsters, items, feats, subclasses) and the
-# MiniLM embedding model, so a running container never needs the internet to
+# embedding model, so a running container never needs the internet to
 # answer a rules lookup or a semantic story recall. The pack comes from this
 # version's GitHub release asset; only an unreleased build rebuilds it from
 # api.open5e.com, which goes down often enough to have failed a publish.
 RUN node scripts/fetch-content-pack.mjs
-RUN npm run fetch-model
+# The default model is always baked. A table that plays in another language
+# can bake its model too with --build-arg EMBEDDING_MODEL=... (and
+# EMBEDDING_DTYPE), so its containers never download it; the runtime
+# EMBEDDING_MODEL setting still picks which one is used.
+ARG EMBEDDING_MODEL=
+ARG EMBEDDING_DTYPE=
+RUN env -u EMBEDDING_MODEL -u EMBEDDING_DTYPE npm run fetch-model \
+  && if [ -n "$EMBEDDING_MODEL" ]; then npm run fetch-model; fi
 
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN DOCKER_BUILD=1 npm run build

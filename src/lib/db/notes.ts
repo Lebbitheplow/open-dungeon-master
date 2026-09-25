@@ -140,8 +140,20 @@ export function updateNote(
   return getNoteById(noteId);
 }
 
-// Fire-and-forget MiniLM embedding for search_lore; NULL just means the
-// note only matches by keyword.
+// Background pass over every note in a campaign that still has no vector:
+// one whose save-time embed failed, or every note after the embedding model
+// changed (src/lib/dm/embedding-reindex.ts).
+export async function embedPendingNotes(campaignId: string) {
+  const pending = getDatabase()
+    .prepare(`SELECT id FROM campaign_notes WHERE campaign_id = ? AND embedding IS NULL`)
+    .all(campaignId) as Array<{ id: string }>;
+  for (const row of pending) {
+    await embedNote(row.id);
+  }
+}
+
+// Fire-and-forget embedding for search_lore; NULL just means the note only
+// matches by keyword.
 async function embedNote(noteId: string) {
   try {
     const note = getNoteById(noteId);

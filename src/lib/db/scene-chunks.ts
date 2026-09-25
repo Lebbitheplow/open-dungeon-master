@@ -1,4 +1,5 @@
 import { getDatabase, nowIso } from "@/lib/db/core";
+import { EMBEDDING_DIM } from "@/lib/embeddings";
 import { parseWitnesses, serializeWitnesses } from "@/lib/dm/witness-logic";
 
 // Verbatim transcript spans with embeddings: the storage half of the
@@ -78,6 +79,28 @@ export function insertSceneChunks(
     }
   });
   run(chunks);
+}
+
+// Chunks whose vector is not a current one. embedding is NOT NULL, so an
+// embedding-model change blanks it to a zero-length BLOB instead
+// (src/lib/dm/embedding-reindex.ts); bufferToVector reads any wrong-size
+// BLOB as "not indexed yet", and so does this query.
+export function listSceneChunksMissingVectors(
+  campaignId: string,
+): Array<{ id: string; text: string }> {
+  return getDatabase()
+    .prepare(
+      `SELECT id, text FROM scene_chunks
+       WHERE campaign_id = ? AND length(embedding) != ?
+       ORDER BY seq_start ASC`,
+    )
+    .all(campaignId, EMBEDDING_DIM * 4) as Array<{ id: string; text: string }>;
+}
+
+export function setSceneChunkEmbedding(chunkId: string, embedding: Buffer): void {
+  getDatabase()
+    .prepare(`UPDATE scene_chunks SET embedding = ? WHERE id = ?`)
+    .run(embedding, chunkId);
 }
 
 export function listSceneChunksForChapters(

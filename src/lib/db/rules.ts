@@ -162,8 +162,8 @@ export function setRuleChunkFlags(
   return mapChunk(updated);
 }
 
-// Background MiniLM pass over any chunks still missing a vector.
-async function embedRuleChunks(campaignId: string) {
+// Background embedding pass over any chunks still missing a vector.
+export async function embedRuleChunks(campaignId: string) {
   try {
     const db = getDatabase();
     const pending = db

@@ -9,7 +9,13 @@
 import Database from "better-sqlite3-multiple-ciphers";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { embed as embedVectors, vectorToBuffer } from "../src/lib/embeddings.ts";
+import {
+  EMBEDDING_KEY,
+  LEGACY_EMBEDDING_KEY,
+  embed as embedVectors,
+  embeddingIndexStale,
+  vectorToBuffer,
+} from "../src/lib/embeddings.ts";
 import { serverEnv } from "../src/lib/server-env.ts";
 import { chunkScenes } from "../src/lib/dm/scene-logic.ts";
 
@@ -45,6 +51,22 @@ const hasSceneChunks = db
 if (!hasSceneChunks) {
   db.close();
   fail("No scene_chunks table yet. Start the app once to migrate, then rerun.");
+}
+
+// Never write one model's vectors into an index built by another: they would
+// compare without error and rank at random. The server re-embeds the whole
+// database at its next start after a model change (app_settings.embedding_model,
+// src/lib/dm/embedding-reindex.ts); this script only fills gaps.
+const stampRow = db
+  .prepare(`SELECT value_json FROM app_settings WHERE key = 'embedding_model'`)
+  .get();
+const stamp = stampRow ? JSON.parse(stampRow.value_json) : null;
+if (embeddingIndexStale(stamp)) {
+  db.close();
+  fail(
+    `This database was indexed with ${stamp ?? LEGACY_EMBEDDING_KEY}, but the configured model is ` +
+      `${EMBEDDING_KEY}. Start the server once: it re-embeds everything with the configured model.`,
+  );
 }
 
 console.log("[backfill-embeddings] loading the embedding model (first run downloads it)...");

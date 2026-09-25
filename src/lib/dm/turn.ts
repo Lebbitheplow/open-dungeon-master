@@ -389,7 +389,7 @@ export async function startDmTurn(campaignId: string) {
   const { summary } = getCampaignSummaryState(campaignId);
   const currentLocation = getCurrentLocation(campaignId);
   // Variant rules always ride; house rules and world lore are retrieved
-  // against the current moment (one MiniLM embed, keyword fallback).
+  // against the current moment (one local embed, keyword fallback).
   // Naming an archived NPC brings them back before the prompt is built, so
   // the DM sees them on the very turn the party asks after them rather than
   // one turn late.

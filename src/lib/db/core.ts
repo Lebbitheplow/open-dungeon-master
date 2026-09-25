@@ -757,7 +757,7 @@ function ensureSchema(db: SqliteDatabase) {
       ON world_facts(campaign_id, status, category);
 
     -- Semantic memory index: verbatim transcript spans ("scenes") from
-    -- closed chapters with local MiniLM embeddings (384-dim Float32 BLOBs),
+    -- closed chapters with local embeddings (384-dim Float32 BLOBs),
     -- built at chapter close by src/lib/dm/memory-index.ts. Two-phase
     -- recall: cosine over chapter-summary embeddings picks chapters, then
     -- cosine over their scenes returns verbatim text. Brute-force JS math;
@@ -1790,7 +1790,7 @@ function ensureSchema(db: SqliteDatabase) {
     // on author_user_id forces those rows to carry the campaign owner's id,
     // so this flag is what distinguishes them in the UI.
     ["author_kind", `TEXT NOT NULL DEFAULT 'user'`],
-    // MiniLM embedding of title+body for search_lore; NULL until indexed.
+    // Embedding of title+body for search_lore; NULL until indexed.
     ["embedding", `BLOB`],
   ]);
 
@@ -1816,7 +1816,7 @@ function ensureSchema(db: SqliteDatabase) {
   ]);
 
   addColumns("chapters", [
-    // MiniLM embedding of the chapter summary, for phase-1 chapter picking
+    // Embedding of the chapter summary, for phase-1 chapter picking
     // in semantic recall. NULL until the chapter is indexed.
     ["embedding", `BLOB`],
     // The in-world date the chapter closed on, for the timeline.

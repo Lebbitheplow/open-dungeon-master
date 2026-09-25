@@ -204,7 +204,7 @@ export async function embedPendingLore(campaignId: string) {
   }
 }
 
-// Fire-and-forget MiniLM embedding of title+body; failures leave the
+// Fire-and-forget embedding of title+body; failures leave the
 // embedding NULL, which retrieval treats as keyword-only.
 async function embedLoreEntry(entryId: string) {
   try {

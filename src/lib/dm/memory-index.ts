@@ -9,6 +9,8 @@ import {
   chapterHasChunks,
   insertSceneChunks,
   listSceneChunksForChapters,
+  listSceneChunksMissingVectors,
+  setSceneChunkEmbedding,
 } from "@/lib/db/scene-chunks";
 import { getDatabase, nowIso } from "@/lib/db/core";
 import { bufferToVector, cosine, embed, similarityOf, vectorToBuffer } from "@/lib/embeddings";
@@ -160,8 +162,8 @@ export async function indexChapter(campaignId: string, chapterId: string): Promi
         );
       }
     }
-    const summaryText = `${chapter.title}. ${chapter.summary}`.trim();
-    if (summaryText.length > 1) {
+    const summaryText = chapterSummaryText(chapter);
+    if (summaryText) {
       const [vector] = await embed([summaryText]);
       setChapterEmbedding(chapterId, vectorToBuffer(vector));
     }
@@ -169,6 +171,54 @@ export async function indexChapter(campaignId: string, chapterId: string): Promi
   } catch (error) {
     console.error("[memory-index] indexing failed", error);
   }
+}
+
+// What phase-1 recall embeds for a chapter; "" when there is nothing to embed.
+function chapterSummaryText(chapter: { title: string; summary: string }): string {
+  const text = `${chapter.title}. ${chapter.summary}`.trim();
+  return text.length > 1 ? text : "";
+}
+
+// Scene chunks per embed call on a re-embed pass. A long campaign holds
+// thousands of them; batching keeps each turn on the shared embed queue
+// short, so a live table never waits behind the whole backlog.
+const REEMBED_BATCH = 16;
+
+// Re-embeds the chunks of already indexed chapters whose vector is missing,
+// in place: text, importance and witnesses stay as indexing wrote them. This
+// is how an embedding-model change catches up (src/lib/dm/embedding-reindex.ts).
+export async function reembedSceneChunks(campaignId: string): Promise<number> {
+  const pending = listSceneChunksMissingVectors(campaignId);
+  for (let start = 0; start < pending.length; start += REEMBED_BATCH) {
+    const batch = pending.slice(start, start + REEMBED_BATCH);
+    const vectors = await embed(batch.map((chunk) => chunk.text));
+    batch.forEach((chunk, index) => {
+      setSceneChunkEmbedding(chunk.id, vectorToBuffer(vectors[index]));
+    });
+  }
+  return pending.length;
+}
+
+// Closed chapters whose summary has no vector yet, the phase-1 half of the
+// same catch-up.
+export async function embedPendingChapterSummaries(campaignId: string): Promise<number> {
+  const pending = getDatabase()
+    .prepare(
+      `SELECT id, COALESCE(title, '') AS title, COALESCE(summary, '') AS summary FROM chapters
+       WHERE campaign_id = ? AND status = 'closed' AND embedding IS NULL`,
+    )
+    .all(campaignId) as Array<{ id: string; title: string; summary: string }>;
+  let embedded = 0;
+  for (const chapter of pending) {
+    const text = chapterSummaryText(chapter);
+    if (!text) {
+      continue;
+    }
+    const [vector] = await embed([text]);
+    setChapterEmbedding(chapter.id, vectorToBuffer(vector));
+    embedded += 1;
+  }
+  return embedded;
 }
 
 export type RecalledScene = {
@@ -297,11 +347,36 @@ export async function indexClosedChapters(campaignId: string, chapters: Chapter[
 
 const FACT_DUP_SIMILARITY = 0.92;
 
+// Embeds every active fact that lacks a vector. Facts are written without
+// one; this runs from the dedup below and from the re-embed pass.
+export async function embedPendingFacts(campaignId: string): Promise<number> {
+  const db = getDatabase();
+  const missing = (
+    db
+      .prepare(
+        `SELECT id, fact, embedding FROM world_facts
+         WHERE campaign_id = ? AND status = 'active'
+         ORDER BY created_at ASC, id ASC`,
+      )
+      .all(campaignId) as Array<{ id: string; fact: string; embedding: Buffer | null }>
+  ).filter((row) => !bufferToVector(row.embedding));
+  if (!missing.length) {
+    return 0;
+  }
+  const vectors = await embed(missing.map((row) => row.fact));
+  const update = db.prepare(`UPDATE world_facts SET embedding = ? WHERE id = ?`);
+  missing.forEach((row, index) => {
+    update.run(vectorToBuffer(vectors[index]), row.id);
+  });
+  return missing.length;
+}
+
 // Semantic upgrade over the token-overlap dedup that runs at insert time:
 // embeds facts that lack a vector, then retires an unpinned active fact
 // whose wording near-duplicates an older one in the same category. Runs on
 // the chapter-close heartbeat, so drift never accumulates for long.
 export async function dedupFactsSemantically(campaignId: string): Promise<void> {
+  await embedPendingFacts(campaignId);
   const db = getDatabase();
   const rows = db
     .prepare(
@@ -319,15 +394,6 @@ export async function dedupFactsSemantically(campaignId: string): Promise<void> 
   }>;
   if (!rows.length) {
     return;
-  }
-  const missing = rows.filter((row) => !bufferToVector(row.embedding));
-  if (missing.length) {
-    const vectors = await embed(missing.map((row) => row.fact));
-    const update = db.prepare(`UPDATE world_facts SET embedding = ? WHERE id = ?`);
-    missing.forEach((row, index) => {
-      row.embedding = vectorToBuffer(vectors[index]);
-      update.run(row.embedding, row.id);
-    });
   }
   const retire = db.prepare(
     `UPDATE world_facts SET status = 'superseded', updated_at = ? WHERE id = ?`,

@@ -10,7 +10,7 @@ import { selectRuleChunks } from "@/lib/dm/rules-activation-logic";
 import { renderHouseRules, renderVariantRules } from "@/lib/dm/rules-logic";
 import { computeIdf, fuseRanked, lexicalScore } from "@/lib/dm/fusion-logic";
 
-// Per-turn retrieval for the DM prompt: one MiniLM embed of the current
+// Per-turn retrieval for the DM prompt: one local embed of the current
 // moment (latest player messages + scene) is fused with IDF-weighted lexical
 // scoring over the enabled house-rule chunks and world-lore entries; only the
 // most relevant few ride the prompt. Pinned items skip retrieval entirely.

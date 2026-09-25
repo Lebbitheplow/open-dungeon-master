@@ -1,20 +1,55 @@
-// Local CPU embeddings: MiniLM by default (384-dim) via
-// @huggingface/transformers ONNX, weights cached under models/embeddings so
-// the app stays fully on-device. CPU-only by design: the iGPU belongs to the
-// DM model. The pipeline loads lazily on first use and all embed calls run
-// through one serial queue so background indexing never fans out across
-// every core mid-turn.
+// Local CPU embeddings: MiniLM by default (384-dim, EMBEDDING_MODEL picks
+// another) via @huggingface/transformers ONNX, weights cached under
+// models/embeddings so the app stays fully on-device. CPU-only by design:
+// the iGPU belongs to the DM model. The pipeline loads lazily on first use
+// and all embed calls run through one serial queue so background indexing
+// never fans out across every core mid-turn.
 
 import path from "node:path";
 import type { DataType } from "@huggingface/transformers";
 import { serverEnv } from "./server-env.ts";
 
 export const EMBEDDING_DIM = 384;
-// Vectors from two models compare without error but rank at random, so
-// changing the model (or its dtype) means starting from a fresh database.
-export const MODEL_ID = serverEnv("EMBEDDING_MODEL", "Xenova/all-MiniLM-L6-v2");
-// transformers.js falls back to fp32 for a dtype it does not know.
-const DTYPE = serverEnv("EMBEDDING_DTYPE", "fp32") as DataType;
+
+// The weight files transformers.js can select for CPU. "auto" is left out on
+// purpose: it resolves from the model's own config, so the same setting could
+// name different weights after a model update.
+const KNOWN_DTYPES: ReadonlySet<string> = new Set([
+  "fp32", "fp16", "int8", "uint8", "q8", "q4", "q2", "q1", "q4f16", "q2f16", "q1f16", "bnb4",
+]);
+
+// transformers.js would quietly load fp32 for a dtype it does not know. That
+// is fine for loading but not for the index key below: "Q8" and "q8" must not
+// read as two different models, and a typo must not trigger a full re-embed
+// while fp32 weights are what actually run.
+export function resolveEmbeddingDtype(raw: string): DataType {
+  const value = raw.trim().toLowerCase();
+  if (!value) {
+    return "fp32";
+  }
+  if (KNOWN_DTYPES.has(value)) {
+    return value as DataType;
+  }
+  console.warn(`[embeddings] Unknown EMBEDDING_DTYPE "${raw}"; using fp32.`);
+  return "fp32";
+}
+
+export const MODEL_ID = serverEnv("EMBEDDING_MODEL", "Xenova/all-MiniLM-L6-v2").trim();
+const DTYPE = resolveEmbeddingDtype(serverEnv("EMBEDDING_DTYPE", "fp32"));
+
+// Vectors from two models compare without error but rank at random, so the
+// database records which model and dtype built its vectors (src/lib/dm/
+// embedding-reindex.ts) and re-embeds everything when this key changes.
+export const EMBEDDING_KEY = `${MODEL_ID}@${DTYPE}`;
+// Every database indexed before the key was recorded was built by the
+// original hard-coded model at its default fp32 weights.
+export const LEGACY_EMBEDDING_KEY = "Xenova/all-MiniLM-L6-v2@fp32";
+
+// Whether vectors stored under `stored` (null: never recorded) are unusable
+// with the configured model.
+export function embeddingIndexStale(stored: string | null, current = EMBEDDING_KEY): boolean {
+  return (stored ?? LEGACY_EMBEDDING_KEY) !== current;
+}
 
 type Embedder = (
   texts: string[],

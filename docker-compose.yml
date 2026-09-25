@@ -18,6 +18,11 @@ services:
     image: ${ODM_IMAGE:-lebbi/open-dungeon-master}:${ODM_IMAGE_TAG:-latest}
     build:
       context: .
+      # `--build` also bakes EMBEDDING_MODEL into the image, if set, so its
+      # containers never download it.
+      args:
+        EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
+        EMBEDDING_DTYPE: ${EMBEDDING_DTYPE:-}
     container_name: open-dungeon-master
     restart: unless-stopped
     ports:
@@ -73,7 +78,8 @@ services:
       VOICE_DOMAIN: ${VOICE_DOMAIN:-}
 
       # Embedding model for story recall. Empty = MiniLM, baked into the image.
-      # Any other must be 384-dim; changing it needs a fresh database.
+      # Any other must be 384-dim. After a change the server re-embeds the
+      # stored story in the background at its next start.
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
       EMBEDDING_DTYPE: ${EMBEDDING_DTYPE:-}
 

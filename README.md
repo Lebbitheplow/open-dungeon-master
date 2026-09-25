@@ -318,8 +318,7 @@ longer bundled in the repo. transformers.js downloads it from HuggingFace into
 `npm run fetch-model` fetches it ahead of time.
 
 The default, `Xenova/all-MiniLM-L6-v2`, understands English only. For a table that
-plays in another language, set a multilingual model in `.env.server` before the
-first game:
+plays in another language, set a multilingual model in `.env.server`:
 
 ```bash
 EMBEDDING_MODEL=Xenova/paraphrase-multilingual-MiniLM-L12-v2
@@ -327,7 +326,7 @@ EMBEDDING_DTYPE=q8
 ```
 
 Only 384-dim models are supported; any other fails with an error naming it.
-The model is fixed for the life of the database: see
+You can switch on an existing install: see
 [Changing the embedding model](#changing-the-embedding-model).
 
 Then start the DM model with llama.cpp's `llama-server`. See
@@ -363,8 +362,10 @@ npm run start:lan   # 0.0.0.0:3005
 
 The image is the whole install. It carries the built app, the Open5e content pack and
 the default embedding model, so a fresh container needs no network and no setup steps.
-Only the AI services stay outside, on the host. A non-default `EMBEDDING_MODEL` is not
-baked in: each new container downloads it on first use, so it needs internet then.
+Only the AI services stay outside, on the host. The published image carries only the
+default embedding model: with another `EMBEDDING_MODEL`, each new container downloads it
+on first use (so it needs internet then), unless you build the image yourself with
+`docker compose up -d --build`, which bakes the model set in `.env` into it.
 
 Every GitHub release is published to both registries as linux/amd64:
 
@@ -701,30 +702,20 @@ the supported shape.
 
 Story recall and lore search compare new embeddings with the ones already stored,
 and embeddings from two different models compare without an error but rank at
-random. So set `EMBEDDING_MODEL` and `EMBEDDING_DTYPE` before the first game and
-keep them for the life of the database; restoring a backup onto a server set to a
-different model breaks recall the same way.
+random. So the database records which model and dtype built its vectors, and you
+can change `EMBEDDING_MODEL` or `EMBEDDING_DTYPE` at any time: set the new values and
+restart the server.
 
-To change either later, start from a fresh database:
+At its next start the server sees the change before it serves anything, clears the
+old vectors and re-embeds the whole story (lore, notes, house rules, facts, chapter
+summaries and every scene) in the background, logging a line when it starts and when
+it is done (a campaign with 600 scenes takes about 15 seconds on a desktop CPU).
+Nothing else in the database is touched. Until a given entry is re-embedded, search
+finds it by keyword only, so a table can keep playing meanwhile. Restoring a backup
+made under another model is handled the same way.
 
-- Stop the server and delete the database file together with the two files SQLite
-  keeps beside it: `data/local-roleplay.sqlite`, `data/local-roleplay.sqlite-wal`
-  and `data/local-roleplay.sqlite-shm` (with `SQLITE_DB_PATH` set: that file, plus
-  `-wal` and `-shm` appended to its name). Keep the rest of `data/`: it holds the
-  Open5e content pack and installed world packs.
-- Optionally delete `public/uploads/` and `public/generated*`, which only hold
-  pictures and audio the old database pointed at.
-- Under Docker the same three files are in the `odm-data` volume, beside the
-  generated key and the world packs; delete just them with the container stopped:
-
-  ```bash
-  docker compose stop
-  docker compose run --rm --entrypoint sh open-dungeon-master -c \
-    'rm -f /app/data/local-roleplay.sqlite /app/data/local-roleplay.sqlite-wal /app/data/local-roleplay.sqlite-shm'
-  docker compose start
-  ```
-
-  The optional part is the `odm-uploads`, `odm-generated` and `odm-audio` volumes.
+`node scripts/backfill-embeddings.mjs` refuses to run against a database indexed with
+another model; start the server once first.
 
 ## Campaign plugins
 

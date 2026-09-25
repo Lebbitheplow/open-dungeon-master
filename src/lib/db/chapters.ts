@@ -174,7 +174,7 @@ export function setChapterAct(chapterId: string, act: number | null, saga: numbe
   return getChapter(chapterId);
 }
 
-// Semantic-index support: the chapter summary's MiniLM embedding, used for
+// Semantic-index support: the chapter summary's embedding, used for
 // phase-1 chapter picking in recall (src/lib/dm/memory-index.ts).
 export function setChapterEmbedding(chapterId: string, embedding: Buffer) {
   getDatabase()
