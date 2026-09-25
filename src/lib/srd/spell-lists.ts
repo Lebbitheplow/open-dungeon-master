@@ -23,9 +23,46 @@ export function isCantripName(name: string): boolean {
   return CANTRIP_NAMES.has(name.trim().toLowerCase());
 }
 
+const SPELL_LEVELS = new Map(
+  (spellManifest as { spells: ManifestSpell[] }).spells.flatMap((spell) =>
+    [spell.n, ...(spell.a ?? [])].map((name) => [name.trim().toLowerCase(), spell.l] as const),
+  ),
+);
+
+// A spell's level by name from the checklist, or null for a homebrew name it
+// does not carry. Lets a sheet file its spells under level tabs without a
+// fetch.
+export function spellLevelOf(name: string): number | null {
+  return SPELL_LEVELS.get(name.trim().toLowerCase()) ?? null;
+}
+
+const CHECKLIST = new Map(
+  (spellManifest as { spells: Array<ManifestSpell & { c?: string }> }).spells.flatMap((spell) =>
+    [spell.n, ...(spell.a ?? [])].map((name) => [name.trim().toLowerCase(), spell] as const),
+  ),
+);
+
+// Whether the checklist puts `name` on `classSlug`'s list at a level from 1
+// to `maxLevel`, answered with the spell's canonical name. The fallback when
+// the content pack is not installed.
+export function checklistClassSpell(
+  name: string,
+  classSlug: string,
+  maxLevel: number,
+): string | null {
+  const spell = CHECKLIST.get(name.trim().toLowerCase());
+  if (!spell || spell.l < 1 || spell.l > maxLevel) {
+    return null;
+  }
+  const classes = (spell.c ?? "").split(",").map((entry) => entry.trim().toLowerCase());
+  return classes.includes(classSlug.toLowerCase()) ? spell.n : null;
+}
+
 type SpellLists = { known: string[]; prepared: string[]; cantrips?: string[] };
 
-// Every spell a caster can reach for: cantrips, known and prepared.
+// Every spell a caster can reach for: cantrips, known and prepared. A
+// wizard's unprepared spellbook and the spells waiting for a long rest are
+// deliberately absent: neither can be cast.
 export function allSpellNames(lists: SpellLists | null | undefined): string[] {
   if (!lists) {
     return [];

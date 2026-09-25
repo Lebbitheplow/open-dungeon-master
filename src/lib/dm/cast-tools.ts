@@ -1,3 +1,4 @@
+import { notReadyReason } from "@/lib/srd/spell-prep";
 import { z } from "zod";
 import { autoLegendaryResistance } from "@/lib/dm/legendary-tools";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
@@ -317,7 +318,11 @@ export function handleCastAtEnemy(
         args.spell.toLowerCase().includes(entry.toLowerCase()),
     );
     if (!onList) {
-      return { error: `${args.spell} is not on ${sheet.name}'s spell list; they cannot cast it.` };
+      return {
+        error:
+          notReadyReason(sheet.spellcasting, args.spell) ??
+          `${args.spell} is not on ${sheet.name}'s spell list; they cannot cast it.`,
+      };
     }
   }
 
@@ -579,7 +584,11 @@ export function handleCastBuff(
         args.spell.toLowerCase().includes(entry.toLowerCase()),
     );
     if (!onList) {
-      return { error: `${args.spell} is not on ${sheet.name}'s spell list; they cannot cast it.` };
+      return {
+        error:
+          notReadyReason(sheet.spellcasting, args.spell) ??
+          `${args.spell} is not on ${sheet.name}'s spell list; they cannot cast it.`,
+      };
     }
     // Cantrip concentration effects (Guidance, True Strike) never touch a
     // slot, so concentration is set here instead.

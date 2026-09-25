@@ -342,12 +342,27 @@ export const REAL_DICE_RULE = `Physical dice at this table: some players roll th
 // the DM sees, rather than growing a second, drifting description of a
 // character.
 // Cantrips first and labeled, so the model never spends a slot on one.
-function spellListLabel(lists: { known: string[]; prepared: string[]; cantrips?: string[] }): string {
+// A wizard's unprepared book and the spells waiting for a long rest are
+// listed apart and marked, so the model never lets either be cast.
+function spellListLabel(lists: {
+  known: string[];
+  prepared: string[];
+  cantrips?: string[];
+  pending?: string[];
+  spellbook?: string[];
+}): string {
   const cantrips = lists.cantrips ?? [];
   const spells = [...lists.known, ...lists.prepared];
+  const ready = new Set([...spells, ...cantrips].map((name) => name.toLowerCase()));
+  const pending = lists.pending ?? [];
+  const bookOnly = (lists.spellbook ?? []).filter(
+    (name) => !ready.has(name.toLowerCase()) && !pending.some((entry) => entry.toLowerCase() === name.toLowerCase()),
+  );
   const parts = [
     cantrips.length ? `cantrips (no slot): ${cantrips.join(", ")}` : "",
     spells.length ? `spells: ${spells.join(", ")}` : "",
+    pending.length ? `prepared after the next long rest (NOT castable yet): ${pending.join(", ")}` : "",
+    bookOnly.length ? `in spellbook, not prepared (NOT castable): ${bookOnly.join(", ")}` : "",
   ].filter(Boolean);
   return parts.join("; ") || "none";
 }

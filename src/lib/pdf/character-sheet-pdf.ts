@@ -561,6 +561,8 @@ function drawSpellPage(ctx: Ctx, c: PdfCharacter, derived: ReturnType<typeof com
     sc.cantrips?.length ? `Cantrips:\n${sc.cantrips.join(", ")}` : "",
     sc.prepared.length ? `Prepared:\n${sc.prepared.join(", ")}` : "",
     sc.known.length ? `Known:\n${sc.known.join(", ")}` : "",
+    sc.pending?.length ? `Prepared after the next long rest:\n${sc.pending.join(", ")}` : "",
+    sc.spellbook?.length ? `Spellbook:\n${sc.spellbook.join(", ")}` : "",
   ]
     .filter(Boolean)
     .join("\n\n");

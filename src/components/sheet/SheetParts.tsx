@@ -222,52 +222,6 @@ export function SkillRows({
   );
 }
 
-export function SpellChips({ spells, emptyText }: { spells: string[]; emptyText?: string }) {
-  return (
-    <InfoChipList
-      items={[...new Set(spells)].map((spell) => ({
-        name: spell,
-        icon: { kind: "spell" as const, key: spell },
-        reference: { kind: "spells", slug: contentSlug(spell), name: spell },
-      }))}
-      emptyText={emptyText}
-    />
-  );
-}
-
-// Cantrips and levelled spells as two labeled rows, so a sheet never reads
-// Fire Bolt as one of a cleric's prepared spells.
-export function SpellGroups({
-  spellcasting,
-  emptyText,
-}: {
-  spellcasting: { known: string[]; prepared: string[]; cantrips?: string[] };
-  emptyText?: string;
-}) {
-  const cantrips = spellcasting.cantrips ?? [];
-  const spells = [...spellcasting.known, ...spellcasting.prepared];
-  if (!cantrips.length && !spells.length) {
-    return <SpellChips spells={[]} emptyText={emptyText} />;
-  }
-  const label = spellcasting.known.length ? "Spells known" : "Spells prepared";
-  return (
-    <div className="space-y-2">
-      {cantrips.length ? (
-        <div>
-          <p className="eyebrow mb-1 text-[10px] text-stone-500">Cantrips</p>
-          <SpellChips spells={cantrips} />
-        </div>
-      ) : null}
-      {spells.length ? (
-        <div>
-          <p className="eyebrow mb-1 text-[10px] text-stone-500">{label}</p>
-          <SpellChips spells={spells} />
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 // Every carried thing as an icon chip that opens its entry in the library,
 // so a rope and a Flame Tongue both say what they are. Worn and attuned gear
 // is marked on the chip.

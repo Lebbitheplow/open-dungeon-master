@@ -1,21 +1,20 @@
 "use client";
 
+import { Star } from "lucide-react";
 import { useState } from "react";
+import { SpellBook, type SpellTile } from "@/components/sheet/SpellBook";
+import { useSpellLookups, useSpellPool } from "@/components/sheet/useSpellPool";
 import { GameTerm } from "@/components/ui/GameTerm";
-import { InfoButton } from "@/components/ui/InfoDialog";
 import { cn } from "@/lib/cn";
-import { contentSlug } from "@/lib/help";
+import { spellLevelOf } from "@/lib/srd/spell-lists";
 import { displayName } from "@/lib/worlds/reskin-logic";
 import type { WorldPack } from "@/lib/worlds/types";
-import CatalogBrowser from "../CatalogBrowser";
-import ContentPicker from "../ContentPicker";
 import EquipmentSection from "../EquipmentSection";
 import type { ClassOption } from "../useBuilderOptions";
 import type { BuilderActions, BuilderDerived } from "../useBuilderDerived";
 import type { BuilderState } from "../useBuilderState";
 import { srdClass } from "../submit";
-import type { PickerEntry } from "../useContentSearch";
-import { Chip, StepPanel, inputClass } from "./shared";
+import { StepPanel, inputClass } from "./shared";
 
 // Step 5: spells for a caster who has something to cast at this level (the
 // section is absent for everyone else, a level 1 paladin included) and the
@@ -52,6 +51,11 @@ export function SpellsGearStep({
   );
 }
 
+// The same spell book the sheet draws (src/components/sheet/SpellBook.tsx):
+// a tab per spell level, every spell on the class list a tile, the chosen
+// ones lit, the suggested ones starred, the subclass's free ones locked. One
+// place to choose, instead of suggestions, a catalog and a search box that
+// each said something slightly different.
 function SpellsSection({
   state,
   derived,
@@ -63,66 +67,98 @@ function SpellsSection({
   klass: ClassOption;
   pack: WorldPack | null;
 }) {
-  const { spells, setSpells, cantrips, setCantrips } = state;
+  const { spells, setSpells, cantrips, setCantrips, bookPrepared, setBookPrepared } = state;
   const {
     spellAdvice,
     cantripAdvice,
     chosenCantrips,
     chosenSpells,
+    chosenPrepared,
     maxSpellLevel,
     starters,
     subclassSpells,
     spellSearchClass,
+    spellStyle,
+    spellbookAdvice,
   } = derived;
   // SRD classes hold to the 5e tables; setting classes keep their counts as
   // advice, the way the rest of the builder treats them.
   const enforce = srdClass(klass);
   const cantripCap = enforce ? cantripAdvice : null;
   const spellCap = enforce ? (spellAdvice?.count ?? null) : null;
-  const cantripsLeft = Math.max(0, (cantripAdvice ?? 0) - chosenCantrips.length);
-  const spellsLeft = Math.max(0, (spellAdvice?.count ?? 0) - chosenSpells.length);
+  const bookCap = enforce ? spellbookAdvice : null;
+  const wizard = spellStyle === "spellbook";
+  // A wizard fills the book first, then prepares from it.
+  const [phase, setPhase] = useState<"book" | "prepare">("book");
   const [limitNote, setLimitNote] = useState("");
+  const { pool, loading } = useSpellPool(spellSearchClass, maxSpellLevel);
+  // A chosen spell the class list lacks (an edited sheet, a pack spell)
+  // still finds its level.
+  const lookups = useSpellLookups([...cantrips, ...spells]);
 
   const lower = (name: string) => name.toLowerCase();
-  const isGranted = (name: string) => subclassSpells.some((spell) => lower(spell) === lower(name));
   const has = (list: string[], name: string) => list.some((entry) => lower(entry) === lower(name));
+  const isGranted = (name: string) => has(subclassSpells, name);
+  const suggested = new Set(
+    [...(starters?.cantrips ?? []), ...(starters?.spells ?? [])].map((entry) => lower(entry.n)),
+  );
 
-  const pick = (entry: PickerEntry) => {
-    if (entry.level === 0) {
-      if (has(cantrips, entry.name)) {
-        return;
-      }
-      if (cantripCap !== null && cantrips.length >= cantripCap) {
-        setLimitNote(
-          `You already know ${cantripCap} ${cantripCap === 1 ? "cantrip" : "cantrips"}. Remove one to choose ${entry.name}.`,
-        );
-        return;
-      }
-      setLimitNote("");
-      setCantrips((current) => [...current, entry.name]);
+  function toggleCantrip(name: string) {
+    if (has(cantrips, name)) {
+      setCantrips((current) => current.filter((entry) => lower(entry) !== lower(name)));
       return;
     }
-    // Subclass spells are granted on top of the allowance; nothing to pick.
-    if (isGranted(entry.name) || has(spells, entry.name)) {
-      return;
-    }
-    if (spellCap !== null && chosenSpells.length >= spellCap) {
+    if (cantripCap !== null && cantrips.length >= cantripCap) {
       setLimitNote(
-        `You already have ${spellCap} ${spellAdvice?.label ?? "spells"}. Remove one to choose ${entry.name}.`,
+        `You already know ${cantripCap} ${cantripCap === 1 ? "cantrip" : "cantrips"}. Remove one to choose ${name}.`,
       );
       return;
     }
-    setLimitNote("");
-    setSpells((current) => [...current, entry.name]);
-  };
-  const unpick = (spellName: string) => {
-    setLimitNote("");
-    setCantrips((current) => current.filter((entry) => lower(entry) !== lower(spellName)));
-    setSpells((current) => current.filter((entry) => lower(entry) !== lower(spellName)));
-  };
+    setCantrips((current) => [...current, name]);
+  }
+  function toggleSpell(name: string) {
+    if (has(spells, name)) {
+      setSpells((current) => current.filter((entry) => lower(entry) !== lower(name)));
+      setBookPrepared((current) => current.filter((entry) => lower(entry) !== lower(name)));
+      return;
+    }
+    const cap = wizard ? bookCap : spellCap;
+    if (cap !== null && chosenSpells.length >= cap) {
+      setLimitNote(
+        wizard
+          ? `Your spellbook starts with ${cap} spells. Remove one to write in ${name}.`
+          : `You already have ${cap} ${spellAdvice?.label ?? "spells"}. Remove one to choose ${name}.`,
+      );
+      return;
+    }
+    setSpells((current) => [...current, name]);
+  }
+  function togglePrepared(name: string) {
+    if (has(bookPrepared, name)) {
+      setBookPrepared((current) => current.filter((entry) => lower(entry) !== lower(name)));
+      return;
+    }
+    if (spellCap !== null && chosenPrepared.length >= spellCap) {
+      setLimitNote(`You can prepare ${spellCap} spells. Unprepare one to prepare ${name}.`);
+      return;
+    }
+    setBookPrepared((current) => [...current, name]);
+  }
 
-  // Fills whatever room is left, recommended cantrips and spells in order.
-  const addAllRecommended = () => {
+  function onTile(tile: SpellTile) {
+    setLimitNote("");
+    if (tile.level === 0) {
+      toggleCantrip(tile.name);
+    } else if (wizard && phase === "prepare") {
+      togglePrepared(tile.name);
+    } else {
+      toggleSpell(tile.name);
+    }
+  }
+
+  // Fills whatever room is left with the suggested picks, in order. A
+  // wizard's suggestions go in the book and are prepared as far as they fit.
+  function addSuggested() {
     if (!starters) {
       return;
     }
@@ -131,7 +167,8 @@ function SpellsSection({
       .map((entry) => entry.n)
       .filter((name) => !has(cantrips, name))
       .slice(0, Math.max(0, cantripRoom));
-    const spellRoom = spellCap === null ? Infinity : spellCap - chosenSpells.length;
+    const cap = wizard ? bookCap : spellCap;
+    const spellRoom = cap === null ? Infinity : cap - chosenSpells.length;
     const newSpells = starters.spells
       .map((entry) => entry.n)
       .filter((name) => !has(spells, name) && !isGranted(name))
@@ -139,191 +176,162 @@ function SpellsSection({
     setLimitNote("");
     setCantrips((current) => [...current, ...newCantrips]);
     setSpells((current) => [...current, ...newSpells]);
-  };
+    if (wizard) {
+      const book = [...spells, ...newSpells];
+      const prepareRoom = spellCap === null ? Infinity : spellCap - chosenPrepared.length;
+      setBookPrepared((current) => [
+        ...current,
+        ...book.filter((name) => !has(current, name)).slice(0, Math.max(0, prepareRoom)),
+      ]);
+    }
+  }
 
-  // The recommended tier: the class's starter picks, then whatever the
-  // subclass grants for free (domain, circle, oath, patron spells).
-  const recommendedEntries = [
-    ...(starters?.cantrips.map((entry) => ({ name: entry.n, note: "cantrip", level: 0 })) ?? []),
-    ...(starters?.spells.map((entry) => ({ name: entry.n })) ?? []),
-    ...subclassSpells
-      .filter(
-        (spellName) =>
-          !starters?.spells.some((entry) => entry.n.toLowerCase() === spellName.toLowerCase()),
-      )
-      .map((spellName) => ({ name: spellName, note: "always prepared, free" })),
+  // Every tile: the class list from the pack, plus anything chosen or
+  // suggested the list lacks (a starter from a book the pack does not carry).
+  const poolByName = new Map(pool.map((row) => [lower(row.name), row]));
+  const names = [
+    ...pool.map((row) => row.name),
+    ...cantrips,
+    ...spells,
+    ...subclassSpells,
+    ...(starters?.cantrips ?? []).map((entry) => entry.n),
+    ...(starters?.spells ?? []).map((entry) => entry.n),
+  ].filter((name, index, all) => all.findIndex((other) => lower(other) === lower(name)) === index);
+  const tiles: SpellTile[] = names.flatMap((name): SpellTile[] => {
+    const row = poolByName.get(lower(name)) ?? lookups.get(lower(name));
+    const level = row?.level ?? spellLevelOf(name) ?? (has(cantrips, name) ? 0 : null);
+    if ((level === 0 && cantripAdvice === null) || (level !== null && level > maxSpellLevel)) {
+      return [];
+    }
+    let tileState: SpellTile["state"];
+    if (level === 0) {
+      tileState = has(cantrips, name) ? "ready" : "available";
+    } else if (isGranted(name)) {
+      tileState = "granted";
+    } else if (wizard) {
+      if (phase === "prepare" && !has(spells, name)) {
+        return [];
+      }
+      tileState = !has(spells, name) ? "available" : has(bookPrepared, name) ? "ready" : "inBook";
+    } else {
+      tileState = has(spells, name) ? "ready" : "available";
+    }
+    return [
+      {
+        name,
+        level,
+        state: tileState,
+        suggested: suggested.has(lower(name)),
+        label: displayName(pack, "spells", name),
+        data: row?.data,
+        slug: row?.slug,
+        homebrew: row?.source === "homebrew",
+      },
+    ];
+  });
+
+  const counters = [
+    ...(cantripAdvice !== null
+      ? [{ label: "Cantrips", value: chosenCantrips.length, max: cantripAdvice }]
+      : []),
+    ...(wizard && spellbookAdvice !== null
+      ? [{ label: "Spellbook", value: chosenSpells.length, max: spellbookAdvice }]
+      : []),
+    ...(spellAdvice
+      ? [
+          {
+            label: spellStyle === "known" ? "Known" : "Prepared",
+            value: wizard ? chosenPrepared.length : chosenSpells.length,
+            max: spellAdvice.count,
+          },
+        ]
+      : []),
   ];
-  // Granted spells read as chosen, so nobody spends a pick on one.
-  const selectedNames = [...cantrips, ...spells, ...subclassSpells];
-  const levelledChips = spells.filter((spell) => !isGranted(spell));
 
+  const className = klass.name.toLowerCase();
   return (
     <StepPanel
       title="Spells"
       ornate
       help={
         <>
-          A <GameTerm id="cantrip">cantrip</GameTerm> is a small spell you can cast as often as
-          you like. The rest use your spell slots. The whole list is below with the recommended
-          picks first; tap ⓘ on any row to read what it does before choosing.
+          <GameTerm id="cantrip">Cantrips</GameTerm> are small spells you know for good and cast as
+          often as you like.{" "}
+          {spellStyle === "known"
+            ? `A ${className} knows a fixed set of spells, always ready to cast with a spell slot. You can swap one each time you level up.`
+            : wizard
+              ? "A wizard writes spells in a spellbook, then prepares some of them to cast. Fill the book first, then choose what is prepared. In play you change what is prepared after a long rest."
+              : `A ${className} can prepare any spell on the ${className} list. Choose what you start with prepared; in play you change them after a long rest.`}{" "}
+          Tap a spell to choose it; ⓘ reads it first.
         </>
       }
     >
-      {/* Counts, so nobody leaves picks unspent without noticing. Cantrips
-          and levelled spells are separate lists with separate limits. */}
-      <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-        {cantripAdvice ? (
-          <span className={cn(cantripsLeft === 0 ? "text-stone-500" : "text-amber-300")}>
-            Cantrips {chosenCantrips.length}/{cantripAdvice}
-            {cantripsLeft > 0 ? ` (${cantripsLeft} still to choose)` : ""}
-          </span>
-        ) : null}
-        {spellAdvice ? (
-          <span className={cn(spellsLeft === 0 ? "text-stone-500" : "text-amber-300")}>
-            {spellAdvice.label} {chosenSpells.length}/{spellAdvice.count}
-            {spellsLeft > 0 ? ` (${spellsLeft} still to choose)` : ""}
-          </span>
-        ) : null}
-        <span className="text-stone-500">
-          Up to level {maxSpellLevel}.{klass.genres ? " Suggestions, not limits; homebrew varies." : ""}
-        </span>
-      </div>
+      {wizard ? (
+        <div role="tablist" aria-label="Spellbook step" className="mb-3 grid grid-cols-2 gap-1.5">
+          {(
+            [
+              ["book", "1. Write your spellbook", `${chosenSpells.length}/${spellbookAdvice ?? "?"}`],
+              ["prepare", "2. Prepare from it", `${chosenPrepared.length}/${spellAdvice?.count ?? "?"}`],
+            ] as const
+          ).map(([key, label, count]) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={phase === key}
+              onClick={() => {
+                setPhase(key);
+                setLimitNote("");
+              }}
+              className={cn(
+                "rounded-lg border px-3 py-2 text-left text-xs transition-colors",
+                phase === key
+                  ? "border-amber-400/70 bg-amber-400/10 text-amber-100"
+                  : "border-stone-700/70 text-stone-400 hover:border-amber-500/40",
+              )}
+            >
+              <span className="block font-display tracking-wide">{label}</span>
+              <span className="font-mono text-[11px] text-stone-500">{count}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {starters ? (
+        <p className="mb-2 text-xs text-stone-400">
+          <Star className="mr-1 inline size-3 fill-amber-300 text-amber-300" aria-hidden="true" />
+          {starters.why}{" "}
+          <button
+            type="button"
+            onClick={addSuggested}
+            className="text-amber-300 underline-offset-2 hover:underline"
+          >
+            Fill with the suggested spells
+          </button>
+        </p>
+      ) : null}
       {limitNote ? (
         <p role="status" className="reveal mb-2 text-xs text-amber-300">
           {limitNote}
         </p>
       ) : null}
-      {starters ? (
-        <div className="mb-3 rounded-lg border border-stone-700/60 bg-stone-950/60 p-3">
-          <p className="text-xs text-stone-400">{starters.why}</p>
-          <p className="eyebrow mt-2 mb-1.5 text-[10px] text-amber-400/80">Good picks if you are new</p>
-          {[
-            { label: "Cantrips", entries: starters.cantrips, isCantrip: true },
-            { label: "Spells", entries: starters.spells, isCantrip: false },
-          ].map((group) =>
-            group.entries.length ? (
-              <div key={group.label} className="mb-1.5">
-                <p className="mb-1 text-[10px] text-stone-500">{group.label}</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {group.entries.map((entry) => {
-                    const chosen = selectedNames.some((spell) => lower(spell) === lower(entry.n));
-                    return (
-                      <span key={entry.n} className="flex items-center">
-                        <button
-                          type="button"
-                          aria-pressed={chosen}
-                          onClick={() =>
-                            chosen
-                              ? unpick(entry.n)
-                              : pick({
-                                  slug: contentSlug(entry.n),
-                                  name: entry.n,
-                                  source: "open5e",
-                                  data: {},
-                                  level: group.isCantrip ? 0 : undefined,
-                                })
-                          }
-                          className={cn(
-                            "rounded-l-full border py-0.5 pl-2.5 pr-1.5 text-xs transition-colors",
-                            chosen
-                              ? "border-amber-500/60 bg-amber-400/10 text-amber-100"
-                              : "border-stone-600/60 text-stone-300 hover:border-amber-500/40",
-                          )}
-                        >
-                          {chosen ? "✓ " : "+ "}
-                          {entry.n}
-                        </button>
-                        <span
-                          className={cn(
-                            "rounded-r-full border border-l-0 py-0.5 pl-1 pr-2",
-                            chosen ? "border-amber-500/60 bg-amber-400/10" : "border-stone-600/60",
-                          )}
-                        >
-                          <InfoButton label={entry.n} text={entry.d} />
-                        </span>
-                      </span>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : null,
-          )}
-          <button
-            type="button"
-            onClick={addAllRecommended}
-            className="mt-2 text-xs text-amber-300 underline-offset-2 hover:underline"
-          >
-            Add all recommended
-          </button>
-        </div>
-      ) : null}
-      {/* The whole list, open from the start: every spell this class may
-          take, the recommended ones first, cantrips before levelled spells,
-          each readable before it is chosen. A player who has never read a
-          spell list cannot search for a spell they have never heard of. */}
-      <CatalogBrowser
-        kind="spells"
-        buttonLabel={`Every ${klass.name.toLowerCase()} spell you can take`}
-        defaultOpen
-        openSections={[`spells:${spellSearchClass}:${maxSpellLevel}`]}
-        selectedNames={selectedNames}
-        onPick={pick}
-        onUnpick={unpick}
-        recommended={
-          recommendedEntries.length
-            ? { label: `Recommended for a ${klass.name.toLowerCase()}`, entries: recommendedEntries }
-            : undefined
+      <SpellBook
+        tiles={tiles}
+        maxLevel={maxSpellLevel}
+        counters={counters}
+        onTile={onTile}
+        emptyText={
+          loading
+            ? "Loading the spell list..."
+            : wizard && phase === "prepare"
+              ? "Nothing in your spellbook at this level."
+              : "No spells at this level."
         }
-        sections={[
-          {
-            key: `spells:${spellSearchClass}:${maxSpellLevel}`,
-            label: `Every spell up to level ${maxSpellLevel}`,
-            params: { class: spellSearchClass, level: String(maxSpellLevel) },
-          },
-        ]}
-        bucketOf={(entry) =>
-          entry.level === 0
-            ? { key: "cantrips", label: "Cantrips", order: 0 }
-            : {
-                key: `level-${entry.level}`,
-                label: `Level ${entry.level}`,
-                order: entry.level ?? 99,
-              }
+        header={
+          klass.genres ? (
+            <span className="text-stone-500">Suggestions, not limits; homebrew varies.</span>
+          ) : null
         }
-        metaOf={(entry) => entry.school ?? ""}
       />
-      <p className="mt-3 mb-1 text-xs text-stone-500">Or search by name:</p>
-      <ContentPicker
-        kind="spells"
-        extraParams={{ class: spellSearchClass, level: String(maxSpellLevel) }}
-        placeholder="Search spells (e.g. cure wounds)"
-        onPick={pick}
-        renderMeta={(entry) => (entry.level === 0 ? "cantrip" : `level ${entry.level}`)}
-      />
-      {/* The chip shows the world's name; the value in state stays the
-          canonical one the sheet and the rules engine need. The ⓘ reads the
-          canonical name, which is what the pack rows are filed under. */}
-      {[
-        { label: "Cantrips", names: cantrips, removable: true },
-        { label: spellAdvice?.label ?? "Spells", names: levelledChips, removable: true },
-        { label: "Granted by your subclass (free)", names: subclassSpells, removable: false },
-      ].map((group) =>
-        group.names.length ? (
-          <div key={group.label} className="mt-2">
-            <p className="mb-1 text-[10px] uppercase tracking-wide text-stone-500">{group.label}</p>
-            <div className="flex flex-wrap gap-1.5">
-              {group.names.map((spell) => (
-                <Chip
-                  key={spell}
-                  label={displayName(pack, "spells", spell)}
-                  info={{ reference: { kind: "spells", slug: contentSlug(spell), name: spell } }}
-                  {...(group.removable ? { onRemove: () => unpick(spell) } : {})}
-                />
-              ))}
-            </div>
-          </div>
-        ) : null,
-      )}
     </StepPanel>
   );
 }

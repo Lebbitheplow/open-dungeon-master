@@ -44,7 +44,7 @@ export function computeRerollTemperature(baseTemp: number | undefined, offset: n
   return Math.max(0, Math.min(2, base + offset));
 }
 
-// Duplicated from finalize() in src/lib/dm/turn.ts rather than imported: this
+// Duplicated from EMPTY_TURN_LINE in src/lib/dm/empty-turn.ts rather than imported: this
 // module stays alias-free. If that fallback line changes, change it here too.
 export const EMPTY_NARRATION_FALLBACK =
   "The moment hangs there, waiting on the party's next move.";

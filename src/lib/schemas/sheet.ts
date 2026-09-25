@@ -112,7 +112,15 @@ export type EquipmentItem = z.infer<typeof equipmentItemSchema>;
 // is stored (a fighting style: "Fighting Style: Archery"), which is why it
 // survives the regrant that wipes the plain "Fighting Style" entry.
 export const sheetFeatureSchema = z.object({
-  name: z.string().trim().min(1).max(80),
+  // Clipped rather than refused: server-made names (a content-pack
+  // background feature with its background in brackets) can run long, and
+  // every level-up sends the whole list back.
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .max(300)
+    .transform((value) => value.slice(0, 80)),
   source: z.enum(["class", "race", "background", "feat", "choice", "story"]).default("story"),
   level: z.number().int().min(1).max(20).optional(),
   // Which class granted a "class"-sourced feature; absent = the primary
@@ -149,6 +157,13 @@ export const spellcastingSchema = z
     // counted against spells known. Older sheets carried them inside
     // prepared/known; the row reader moves them here (spell-lists.ts).
     cantrips: z.array(z.string().trim().min(1).max(80)).max(40).default([]),
+    // Spells a prepared caster chose to prepare since their last long rest:
+    // not castable until the rest moves them into `prepared`
+    // (src/lib/srd/spell-prep.ts). Unpreparing takes effect at once.
+    pending: z.array(z.string().trim().min(1).max(80)).max(60).optional(),
+    // A wizard's spellbook: every spell written in it, prepared or not. The
+    // prepared list is drawn from it. Other classes leave it absent.
+    spellbook: z.array(z.string().trim().min(1).max(80)).max(120).optional(),
     // Per-class casting for multiclassed characters: each caster class
     // keeps its own ability and lists while `slots` becomes the SHARED
     // multiclass pool. Absent = single-class; the legacy fields above stay
@@ -162,6 +177,8 @@ export const spellcastingSchema = z
           known: z.array(z.string().trim().min(1).max(80)).max(80).default([]),
           prepared: z.array(z.string().trim().min(1).max(80)).max(60).default([]),
           cantrips: z.array(z.string().trim().min(1).max(80)).max(40).default([]),
+          pending: z.array(z.string().trim().min(1).max(80)).max(60).optional(),
+          spellbook: z.array(z.string().trim().min(1).max(80)).max(120).optional(),
         }),
       )
       .max(3)

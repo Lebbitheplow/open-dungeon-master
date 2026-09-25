@@ -1,3 +1,7 @@
+import { emptyTurnLine, type EmptyTurnPlayer } from "@/lib/dm/empty-turn";
+import { findSpellByName } from "@/lib/content";
+import { allSpellNames, spellLevelOf } from "@/lib/srd/spell-lists";
+import { notReadyReason } from "@/lib/srd/spell-prep";
 import {
   allocateSeq,
   getCampaignById,
@@ -1911,6 +1915,28 @@ function parseSpotlightUserIds(
   }
 }
 
+// The last thing a player said and what their sheet can cast, so an empty
+// turn can tell them what their message was missing (src/lib/dm/empty-turn.ts).
+function emptyTurnPlayer(context: TurnContext): EmptyTurnPlayer | null {
+  const last = [...listRecentMessages(context.campaign.id, 20)]
+    .reverse()
+    .find((message) => message.authorType === "player");
+  if (!last) {
+    return null;
+  }
+  const sheet = last.characterId ? context.sheetsById.get(last.characterId) : undefined;
+  const casting = sheet?.spellcasting ?? null;
+  return {
+    text: last.content,
+    spells: casting
+      ? [...allSpellNames(casting), ...(casting.pending ?? []), ...(casting.spellbook ?? [])]
+      : [],
+    levelOf: (spell) =>
+      spellLevelOf(spell) ?? findSpellByName(spell, sheet?.userId)?.level ?? null,
+    notReady: (spell) => notReadyReason(casting, spell),
+  };
+}
+
 function finalize(context: TurnContext, turn: DmTurn, failed: string) {
   const campaignId = context.campaign.id;
 
@@ -1965,7 +1991,8 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string) {
   const narrationParts = turn.narrationParts;
   let content = narrationParts.join("\n\n").trim();
   if (!content) {
-    content = "The moment hangs there, waiting on the party's next move.";
+    // A refused player action says why instead of the bare fallback line.
+    content = emptyTurnLine(turn.conversation, emptyTurnPlayer(context));
   }
   if (turn.rollIds.length && narrationParts.length > 1) {
     const lastPart = narrationParts[narrationParts.length - 1];

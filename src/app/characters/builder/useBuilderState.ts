@@ -53,10 +53,21 @@ export function useBuilderState({
   const [expertisePicks, setExpertisePicks] = useState<string[]>([]);
   const [stylePicks, setStylePicks] = useState<FightingStyleId[]>([]);
   // Levelled spells and cantrips are two lists, the way the sheet keeps them.
+  // For a wizard `spells` is the spellbook and `bookPrepared` the part of it
+  // prepared; every other class leaves `bookPrepared` alone.
   const [spells, setSpells] = useState<string[]>(() =>
     initial?.spellcasting
-      ? [...new Set([...initial.spellcasting.known, ...initial.spellcasting.prepared])]
+      ? [
+          ...new Set([
+            ...(initial.spellcasting.spellbook ?? []),
+            ...initial.spellcasting.known,
+            ...initial.spellcasting.prepared,
+          ]),
+        ]
       : [],
+  );
+  const [bookPrepared, setBookPrepared] = useState<string[]>(
+    () => initial?.spellcasting?.prepared ?? [],
   );
   const [cantrips, setCantrips] = useState<string[]>(() =>
     initial?.spellcasting ? [...new Set(initial.spellcasting.cantrips ?? [])] : [],
@@ -186,6 +197,7 @@ export function useBuilderState({
     setChosenSkills([]);
     setSubclass("");
     setSpells([]);
+    setBookPrepared([]);
     setCantrips([]);
     setRemovedAutoNames([]);
     setOptionPicks([]);
@@ -207,6 +219,7 @@ export function useBuilderState({
     expertisePicks, setExpertisePicks,
     stylePicks, setStylePicks,
     spells, setSpells,
+    bookPrepared, setBookPrepared,
     cantrips, setCantrips,
     equipment, setEquipment,
     removedAutoNames, setRemovedAutoNames,

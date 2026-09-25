@@ -131,10 +131,27 @@ export function spellsBlocker(
   if (derived.cantripAdvice !== null && cantripsLeft < 0) {
     return `Remove ${-cantripsLeft} ${cantripsLeft === -1 ? "cantrip" : "cantrips"}: a ${klass.name.toLowerCase()} knows ${derived.cantripAdvice ?? 0} at this level.`;
   }
+  if (derived.spellbookAdvice !== null) {
+    // A wizard fills the book first, then prepares from it.
+    const bookLeft = derived.spellbookAdvice - derived.chosenSpells.length;
+    if (bookLeft > 0) {
+      return `Write ${bookLeft} more ${bookLeft === 1 ? "spell" : "spells"} in your spellbook.`;
+    }
+    if (bookLeft < 0) {
+      return `Remove ${-bookLeft} ${bookLeft === -1 ? "spell" : "spells"} from your spellbook: a level ${derived.effectiveLevel} wizard starts with ${derived.spellbookAdvice}.`;
+    }
+  }
   if (derived.spellAdvice) {
-    const spellsLeft = derived.spellAdvice.count - derived.chosenSpells.length;
+    // Never more prepared than the book holds.
+    const target =
+      derived.spellbookAdvice !== null
+        ? Math.min(derived.spellAdvice.count, derived.chosenSpells.length)
+        : derived.spellAdvice.count;
+    const spellsLeft = target - derived.chosenPrepared.length;
     if (spellsLeft > 0) {
-      return `Pick ${spellsLeft} more ${spellsLeft === 1 ? "spell" : "spells"} (${derived.spellAdvice.label}).`;
+      return derived.spellbookAdvice !== null
+        ? `Prepare ${spellsLeft} more ${spellsLeft === 1 ? "spell" : "spells"} from your spellbook.`
+        : `Pick ${spellsLeft} more ${spellsLeft === 1 ? "spell" : "spells"} (${derived.spellAdvice.label}).`;
     }
     if (spellsLeft < 0) {
       return `Remove ${-spellsLeft} ${spellsLeft === -1 ? "spell" : "spells"}: the limit is ${derived.spellAdvice.count} ${derived.spellAdvice.label}.`;
@@ -221,8 +238,8 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
       { max, used: 0 },
     ]),
   );
-  const isKnownCaster =
-    klass.knownCaster ?? ["bard", "sorcerer", "warlock", "ranger"].includes(klass.id);
+  const isKnownCaster = derived.spellStyle === "known";
+  const isWizard = derived.spellStyle === "spellbook";
   // A racial cantrip (high elf) joins the cantrip list for casters. A
   // non-caster has nowhere to put it, so it rides along as a feature
   // instead, which populateFeatures keeps and the DM prompt can see.
@@ -297,9 +314,10 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
         ? {
             ability: klass.spellAbility,
             slots,
-            prepared: isKnownCaster ? [] : finalSpells,
+            prepared: isKnownCaster ? [] : isWizard ? derived.chosenPrepared : finalSpells,
             known: isKnownCaster ? finalSpells : [],
             cantrips: finalCantrips,
+            ...(isWizard ? { spellbook: finalSpells } : {}),
           }
         : null,
       notes: "",

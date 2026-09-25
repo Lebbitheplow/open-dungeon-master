@@ -178,7 +178,8 @@ function withBackgroundFeature(
   if (!granted) {
     return list;
   }
-  const label = `${granted.name} (${granted.background})`;
+  // The sheet schema holds feature names to 80 characters.
+  const label = `${granted.name} (${granted.background})`.slice(0, 80);
   if (list.some((feature) => feature.name.toLowerCase() === label.toLowerCase())) {
     return list;
   }

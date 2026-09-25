@@ -62,6 +62,7 @@ import { publishWithSeq } from "@/lib/events";
 import { planConditionFx, planHealFx } from "@/lib/battlemap/fx-plan";
 import { publishFx, tokenPosition } from "@/lib/dm/fx";
 import { allSpellNames, isCantripName, spellsAgainstLimit } from "@/lib/srd/spell-lists";
+import { casterViewsOf, notReadyReason, spellbookOf, withCasterViews } from "@/lib/srd/spell-prep";
 import { subclassSpellsFor } from "@/lib/srd/features";
 
 // DM stat authority: the model changes sheets ONLY through these tools.
@@ -239,7 +240,7 @@ export const mutationTools: ToolDef[] = [
   }, ["level", "spell"]),
   tool(
     "learn_spell",
-    "Permanently add or remove ONE spell on a character's spell list, only when the story genuinely teaches or strips it: a scroll copied into a spellbook, a mentor's training, a granted boon, a curse. Never use this to let a character cast something in the moment; casting requires the spell to already be on their sheet.",
+    "Permanently add or remove ONE spell on a character's spell list, only when the story genuinely teaches or strips it: a scroll copied into a spellbook, a mentor's training, a granted boon, a curse. For a wizard the spell is written in the spellbook and can be prepared after a long rest. Players choose their own prepared spells from their sheet; never use this to swap what is prepared. Never use this to let a character cast something in the moment; casting requires the spell to already be on their sheet.",
     {
       action: { type: "string", enum: ["add", "remove"] },
       spell: { type: "string", description: "Exact spell name." },
@@ -1340,7 +1341,9 @@ export function applyDmMutation(
         if (!knows) {
           return {
             result: {
-              error: `${sheet.name} cannot cast "${spell}". Their spells: ${spellList.join(", ") || "none"}.`,
+              error:
+                notReadyReason(sheet.spellcasting, spell) ??
+                `${sheet.name} cannot cast "${spell}". Their spells: ${spellList.join(", ") || "none"}.`,
             },
           };
         }
@@ -1473,9 +1476,11 @@ export function applyDmMutation(
       const known = sheet.spellcasting.known;
       const prepared = sheet.spellcasting.prepared;
       const cantrips = sheet.spellcasting.cantrips ?? [];
+      const book = sheet.spellcasting.spellbook ?? [];
+      const pending = sheet.spellcasting.pending ?? [];
       const matches = (entry: string) => entry.trim().toLowerCase() === spell.toLowerCase();
       if (action === "add") {
-        if (known.some(matches) || prepared.some(matches) || cantrips.some(matches)) {
+        if (known.some(matches) || prepared.some(matches) || cantrips.some(matches) || book.some(matches) || pending.some(matches)) {
           return { result: { ok: true, note: `${sheet.name} already knows ${spell}.` } };
         }
         // Known-casters track spells in `known`; prepared casters keep the
@@ -1523,6 +1528,39 @@ export function applyDmMutation(
             summary: `Learned the cantrip ${spell}.`,
           });
           return { result: { ok: true, learned: spell, cantrip: true } };
+        }
+        // A wizard copies a new spell into the spellbook: no ceiling, and it
+        // is prepared like any other, after a long rest (spell-prep.ts).
+        const views = casterViewsOf(sheet);
+        const bookView = views.find((view) => view.style === "spellbook");
+        if (bookView) {
+          const nextSpellcasting = withCasterViews(
+            sheet.spellcasting,
+            views.map((view) =>
+              view === bookView ? { ...view, spellbook: [...spellbookOf(view), spell] } : view,
+            ),
+          );
+          patchSheet(sheet.id, { spellcasting: nextSpellcasting });
+          audit(campaign, turnId, sheet, "learn_spell", { action, spell }, reason, {
+            spellcasting: nextSpellcasting,
+          });
+          publishSheet(campaign, sheet.id);
+          insertCharacterEvent({
+            libraryCharacterId: sheet.libraryCharacterId,
+            campaignCharacterId: sheet.id,
+            campaignId: campaign.id,
+            seq: allocateSeq(campaign.id),
+            kind: "achievement",
+            summary: `Copied ${spell} into the spellbook.`,
+          });
+          return {
+            result: {
+              ok: true,
+              learned: spell,
+              spellbook: true,
+              note: `${spell} is written in the spellbook. ${sheet.name} can prepare it after a long rest.`,
+            },
+          };
         }
         let targetCaster: (typeof casters)[number] | null = null;
         if (casters.length) {
@@ -1604,7 +1642,7 @@ export function applyDmMutation(
         });
         return { result: { ok: true, learned: spell } };
       }
-      if (!known.some(matches) && !prepared.some(matches) && !cantrips.some(matches)) {
+      if (!known.some(matches) && !prepared.some(matches) && !cantrips.some(matches) && !book.some(matches) && !pending.some(matches)) {
         return { result: { error: `${sheet.name} does not know "${spell}".` } };
       }
       const nextSpellcasting = {
@@ -1612,6 +1650,8 @@ export function applyDmMutation(
         known: known.filter((entry) => !matches(entry)),
         prepared: prepared.filter((entry) => !matches(entry)),
         cantrips: cantrips.filter((entry) => !matches(entry)),
+        ...(sheet.spellcasting.spellbook ? { spellbook: book.filter((entry) => !matches(entry)) } : {}),
+        ...(sheet.spellcasting.pending ? { pending: pending.filter((entry) => !matches(entry)) } : {}),
         // A removal comes off every caster entry that lists it, keeping the
         // per-class lists and the union mirror agreeing.
         ...(sheet.spellcasting.casters?.length
@@ -1621,6 +1661,8 @@ export function applyDmMutation(
                 known: caster.known.filter((entry) => !matches(entry)),
                 prepared: caster.prepared.filter((entry) => !matches(entry)),
                 cantrips: (caster.cantrips ?? []).filter((entry) => !matches(entry)),
+                ...(caster.spellbook ? { spellbook: caster.spellbook.filter((entry) => !matches(entry)) } : {}),
+                ...(caster.pending ? { pending: caster.pending.filter((entry) => !matches(entry)) } : {}),
               })),
             }
           : {}),

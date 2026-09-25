@@ -7,7 +7,9 @@ import { InfoButton } from "@/components/ui/InfoDialog";
 import { describeContentEntry, spellSummary } from "@/lib/help";
 import { useContentSearch, type PickerEntry } from "./useContentSearch";
 
-export type MultiPick = { name: string; slug?: string };
+// `level` rides along for spells, so a cantrip picked here lands in the
+// cantrip list rather than among the levelled spells.
+export type MultiPick = { name: string; slug?: string; level?: number };
 
 // Searchable multi-select against /api/content/[kind]: result rows toggle
 // into a pending chip strip and one "Add" commits them all, so nobody has
@@ -57,7 +59,7 @@ export default function MultiContentPicker({
     setPending((picks) =>
       picks.some((pick) => pick.name.trim().toLowerCase() === key)
         ? picks.filter((pick) => pick.name.trim().toLowerCase() !== key)
-        : [...picks, { name: entry.name, slug: entry.slug }],
+        : [...picks, { name: entry.name, slug: entry.slug, level: entry.level }],
     );
   }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, Check, Crown, Heart, ImagePlus, PawPrint, Save, UserPlus } from "lucide-react";
+import { Bot, Check, Crown, Heart, ImagePlus, PawPrint, Save, Sparkles, UserPlus } from "lucide-react";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { KitButton, SettingToggle } from "./PanelKit";
@@ -159,9 +159,15 @@ export function PartyPanel({
   lights = {},
   activeSheetId = "",
   multiCharacter = "off",
+  levelUpLevel = null,
+  onLevelUp,
 }: {
   sheets: CharacterSheet[];
   meUserId: string;
+  // A level-up the experience has earned and nobody has taken yet: the
+  // owner's card offers it.
+  levelUpLevel?: number | null;
+  onLevelUp?: () => void;
   // The table's optional encumbrance rule; the sheet only warns about a
   // heavy pack when the rule that penalizes it is actually on.
   encumbranceRule?: boolean;
@@ -605,6 +611,17 @@ export function PartyPanel({
                   </span>
                 ) : null}
               </div>
+            ) : null}
+
+            {mine && !sheet.isCompanion && levelUpLevel && onLevelUp && levelUpLevel > sheet.level ? (
+              <KitButton
+                tone="primary"
+                onClick={onLevelUp}
+                title="You have the experience for a new level"
+                className="reveal mt-2 w-full justify-center"
+              >
+                <Sparkles className="size-3.5" /> Level up to {levelUpLevel}
+              </KitButton>
             ) : null}
 
             {setsPortrait ? (

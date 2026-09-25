@@ -21,16 +21,20 @@ type CampaignRow = {
   status?: string;
   kind?: string;
   isWorkshop?: boolean;
+  // The level every character plays at on this table.
+  startingLevel?: number;
 };
 
 export function UseInCampaignDialog({
   characterId,
   characterName,
+  characterLevel,
   seatedIn,
   onClose,
 }: {
   characterId: string;
   characterName: string;
+  characterLevel?: number;
   // Campaign ids that already hold a copy of this character.
   seatedIn: string[];
   onClose: () => void;
@@ -121,7 +125,19 @@ export function UseInCampaignDialog({
                   <span className="block truncate font-display text-sm tracking-wide text-amber-100">{campaign.title}</span>
                   <span className="block text-[11px] text-stone-500">
                     {seated ? "Already at this table" : campaign.status === "lobby" ? "In the lobby" : "In play"}
+                    {campaign.startingLevel ? ` · plays at level ${campaign.startingLevel}` : ""}
                   </span>
+                  {!seated &&
+                  characterLevel !== undefined &&
+                  campaign.startingLevel &&
+                  campaign.startingLevel !== characterLevel ? (
+                    <span className="block text-[11px] text-amber-300">
+                      {characterName} joins as level {campaign.startingLevel}, not {characterLevel}:
+                      {campaign.startingLevel < characterLevel
+                        ? " hit points, slots, improvements and spells above that level are left behind."
+                        : " the sheet is raised to that level; choose the extra spells from the sheet."}
+                    </span>
+                  ) : null}
                 </span>
                 {seated ? (
                   <Link href={`/campaigns/${campaign.id}`} className={ui.btnSmall}>

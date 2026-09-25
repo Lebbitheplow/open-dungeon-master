@@ -218,7 +218,7 @@ export function handleTakeRest(
       ...(skipped.length ? { unaffected: `${skipped.join(", ")} (dead)` } : {}),
       restedFor,
       ...(nowReads ? { now: nowReads } : {}),
-      note: `HP and spell slots are fully restored and half the hit dice returned. ${restedFor} passed. Narrate it.`,
+      note: `HP and spell slots are fully restored, half the hit dice returned, and any spells a caster chose to prepare are now prepared. ${restedFor} passed. Narrate it.`,
     };
   }
 

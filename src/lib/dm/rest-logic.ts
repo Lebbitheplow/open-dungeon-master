@@ -2,6 +2,7 @@ import { pruneMeta, removeConditions } from "@/lib/dm/condition-logic";
 import { RAGING, refillResources } from "@/lib/srd/class-resources";
 import { findClass, spellSlotsFor } from "@/lib/srd";
 import { isMulticlass, slotTableFor } from "@/lib/srd/multiclass";
+import { settlePreparation } from "@/lib/srd/spell-prep";
 import type { CharacterSheet, FullPatchSheetInput, HitDicePool } from "@/lib/schemas/sheet";
 
 // Pure 5e rest math, database-free so scripts/test-rest-logic.mjs can
@@ -25,7 +26,7 @@ function recoverPools(pools: HitDicePool[], count: number): HitDicePool[] {
 }
 
 // Long rest: full HP, temp HP gone, dying/concentration cleared, all spell
-// slots back, half the total hit dice (minimum 1) recovered, and the
+// slots back, spells chosen for preparation now prepared, half the total hit dice (minimum 1) recovered, and the
 // exhaustion condition removed. Dead characters get nothing.
 export function longRestPatch(sheet: CharacterSheet): FullPatchSheetInput {
   const recovered = Math.max(1, Math.floor(sheet.hitDice.total / 2));
@@ -65,8 +66,10 @@ export function longRestPatch(sheet: CharacterSheet): FullPatchSheetInput {
       ? slotTableFor(sheet)
       : spellSlotsFor(sheet.class, sheet.level);
     const hasTable = Object.keys(table).length > 0;
+    // The night is also when a prepared caster's new choices take hold:
+    // spells waiting in `pending` become prepared (spell-prep.ts).
     patch.spellcasting = {
-      ...sheet.spellcasting,
+      ...settlePreparation(sheet.spellcasting),
       slots: Object.fromEntries(
         Object.entries(sheet.spellcasting.slots)
           .map(([level, slot]): [string, { max: number; used: number }] => {
