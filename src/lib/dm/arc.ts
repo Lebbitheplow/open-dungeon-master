@@ -38,9 +38,13 @@ import {
   parseActRecapJson,
   recordActRecap,
   romanNumeral,
+  applyWaypointFill,
+  needsWaypoints,
+  parseWaypointFillJson,
   type LengthProfile,
   type StoryArc,
 } from "@/lib/dm/arc-logic";
+import { activeBeat, beatGated, openWaypoints } from "@/lib/dm/waypoint-logic";
 import { publishTitleCard } from "@/lib/dm/scene-state";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { publishWithSeq } from "@/lib/events";
@@ -183,9 +187,16 @@ const BOSS_SHAPE = '{"name": string, "detail": string}';
 // main beats carries this rule.
 const BEAT_RULE = `Each beat is a turning point that takes a stretch of play to reach: a different place, confrontation, or discovery from the beat before it, never the next small step of the same scene (do not follow "reach the village" with "speak to its elder"; fold those into one beat). Leave room between beats for the travel, investigation, and trouble the DM improvises.`;
 
+// A beat with its checklist (issue #31). The steps are what the chapter
+// engine gates the beat on: the server ticks them from the DM's tool calls
+// or its own check of play, and complete_beat is refused until all are
+// done, so a beat can no longer land in the reply that reaches its place.
+const BEAT_PLAN_SHAPE = `{"text": string, "waypoints": [{"kind": "place"|"npc"|"item"|"objective"|"fight"|"narrative", "text": string}]}`;
+const WAYPOINT_RULE = `Each beat carries 2 to 4 waypoints: concrete steps the party must take before the beat can land, each one short line with a kind. place is a named location reached, npc a named person spoken with, item a named thing obtained, objective a quest objective completed, fight a named foe defeated, narrative anything else. Name places, people, items and foes exactly as the arc and cast name them, and make the steps different places or people from the beat before, so a beat takes a stretch of play to reach.`;
+
 // The full saga JSON shape, shared by initial generation and sequel
 // chaining (the chain adds one extra field in front).
-const SAGA_SHAPE = `{"title": string, "premise": string, "stakes": string, "antagonist": string, "actPlan": [{"title": string, "milestone": string, "boss": ${BOSS_SHAPE}, "allies": string[], "hooks": string[]}], "act1Beats": string[], "finale": string, "finaleBoss": ${BOSS_SHAPE}, "cast": [{"name": string, "role": string, "agenda": string}], "events": [${EVENT_SHAPE}], "subArcs": [{"name": string, "goal": string, "hook": string, "beats": string[]}]}`;
+const SAGA_SHAPE = `{"title": string, "premise": string, "stakes": string, "antagonist": string, "actPlan": [{"title": string, "milestone": string, "boss": ${BOSS_SHAPE}, "allies": string[], "hooks": string[]}], "act1Beats": [${BEAT_PLAN_SHAPE}], "finale": string, "finaleBoss": ${BOSS_SHAPE}, "cast": [{"name": string, "role": string, "agenda": string}], "events": [${EVENT_SHAPE}], "subArcs": [{"name": string, "goal": string, "hook": string, "beats": string[]}]}`;
 
 // Acts are announced to the players on title cards (issue #31), so every
 // act carries a name that is safe to show them, separate from the
@@ -195,7 +206,7 @@ const ACT_TITLE_RULE = `title is a short, evocative, spoiler-free name for the a
 function sagaFieldRules(profile: LengthProfile): string {
   return `title: a name for the whole saga.
 actPlan: ${profile.actsText} acts, ordered, escalating to the finale. Each entry is a SKETCH of one act: ${ACT_TITLE_RULE} milestone is one sentence saying what the act accomplishes; boss names the major set-piece fight the act builds toward, with one sentence of detail; allies is 0 to 2 planned companion or temporary-ally encounters for the act; hooks is 0 to 2 ways the act touches a specific party member's abilities, pets, or backstory. Later acts stay sketches on purpose; they are detailed one act at a time when the party reaches them, so keep them broad enough to survive whatever the table does first.
-act1Beats: 3 to 5 ordered beats for act 1 ONLY, one short sentence each. ${BEAT_RULE} Never number them yourself, and do not write beats for any later act.
+act1Beats: 3 to 5 ordered beats for act 1 ONLY, one short sentence each as text. ${BEAT_RULE} ${WAYPOINT_RULE} Never number them yourself, and do not write beats for any later act.
 finaleBoss: the last act's boss is the saga's final boss; repeat them here.
 cast: 2 to 4 recurring NPCs the campaign returns to, each with a concrete name and something they personally want. The antagonist may be one of them.
 events: 4 to 6 planned special moments, most of them placed in the first two acts (actHint); later acts get their events when they are detailed. Use the kinds: a recurring NPC turning up (npc_encounter), a temporary ally or companion joining the party (ally), a revelation that reframes what came before (twist), someone the party trusted turning on them (betrayal), a clock that forces a choice (deadline), a find that opens a new road (discovery), or a memorable staged scene (setpiece). actHint is a soft placement only.
@@ -301,22 +312,23 @@ export function handleCompleteBeat(
   campaignId: string,
   rawArguments: string,
   alreadyCompleted: boolean,
-): { result: Record<string, unknown>; completed: boolean } {
+): { result: Record<string, unknown>; completed: boolean; gated: boolean } {
   const campaign = getCampaignById(campaignId);
   if (!campaign?.storyArc) {
-    return { result: { error: "This campaign has no story arc yet." }, completed: false };
+    return { result: { error: "This campaign has no story arc yet." }, completed: false, gated: false };
   }
   if (alreadyCompleted) {
     return {
       result: { error: "A beat was already completed this turn; let the story breathe." },
       completed: false,
+      gated: false,
     };
   }
   let args: { beat?: unknown };
   try {
     args = JSON.parse(rawArguments || "{}");
   } catch {
-    return { result: { error: "Invalid arguments." }, completed: false };
+    return { result: { error: "Invalid arguments." }, completed: false, gated: false };
   }
   const arc = campaign.storyArc;
   const active = activeBeatNumber(arc);
@@ -328,6 +340,23 @@ export function handleCompleteBeat(
     return {
       result: { error: "Every beat of the arc is already finished." },
       completed: false,
+      gated: false,
+    };
+  }
+  // The checklist is the gate (issue #31): a beat whose steps are still
+  // open is refused with the steps named, so the DM keeps steering rather
+  // than closing a chapter on the party's arrival.
+  const target = arc.beats[beatNumber - 1];
+  if (target && beatGated(target)) {
+    return {
+      result: {
+        error: `Beat ${beatNumber} still has open waypoints: ${openWaypoints(target)
+          .map((waypoint) => waypoint.text)
+          .join("; ")}. Steer the party through them first. They tick from your own tool calls (move_party, set_npc, grant_item, tick_objective, end_encounter) or from the server's check of play, and the beat completes once every one is done.`,
+        openWaypoints: openWaypoints(target).map((waypoint) => waypoint.text),
+      },
+      completed: false,
+      gated: true,
     };
   }
   const advanced = completeBeat(arc, beatNumber);
@@ -338,6 +367,7 @@ export function handleCompleteBeat(
         ...(active === null ? {} : { activeBeat: active }),
       },
       completed: false,
+      gated: false,
     };
   }
   setStoryArc(campaignId, advanced.arc);
@@ -355,7 +385,59 @@ export function handleCompleteBeat(
         : { nextBeat: advanced.arc.beats[nextActive - 1].text }),
     },
     completed: true,
+    gated: Boolean(target?.waypoints?.length),
   };
+}
+
+// The DM claimed the [NOW] beat while its waypoints were open, and the
+// server's own check has since ticked the last of them: the claim stands.
+// chapter-close.ts calls this instead of waiting for the next complete_beat.
+export function completeActiveBeat(campaignId: string): { completed: boolean; gated: boolean } {
+  const campaign = getCampaignById(campaignId);
+  if (!campaign?.storyArc) {
+    return { completed: false, gated: false };
+  }
+  const active = activeBeat(campaign.storyArc);
+  if (!active || beatGated(active.beat)) {
+    return { completed: false, gated: false };
+  }
+  const advanced = completeBeat(campaign.storyArc, active.number);
+  if (!advanced) {
+    return { completed: false, gated: false };
+  }
+  setStoryArc(campaignId, advanced.arc);
+  return { completed: true, gated: Boolean(active.beat.waypoints?.length) };
+}
+
+const WAYPOINT_FILL_SYSTEM = `You are adding waypoints to the beats of an AI DM's secret story arc for a D&D 5e campaign already in progress. Keep it brief and answer quickly.
+
+Reply with ONLY a strict JSON object, no code fences, shaped exactly: {"beats": [{"beat": int, "waypoints": [{"kind": "place"|"npc"|"item"|"objective"|"fight"|"narrative", "text": string}]}]}
+
+beat is the 1-based number of a beat listed as [NOW] or [ahead] in the current act. ${WAYPOINT_RULE} Write nothing for beats marked [done] or [skipped] or for other acts. Every string under 120 characters. Players never see this.`;
+
+// Arcs written before beats carried steps get them once, for the act in
+// play, the way v1 arcs got their cast and event layers. Returns the arc
+// unchanged on any failure; the next chapter close tries again.
+async function fillWaypoints(campaignId: string, arc: StoryArc): Promise<StoryArc> {
+  const raw = await arcModelCall(
+    campaignId,
+    WAYPOINT_FILL_SYSTEM,
+    [`Current arc:\n${renderArcForPrompt(arc)}`, partyCapabilityContext(campaignId)]
+      .filter(Boolean)
+      .join("\n\n"),
+    "waypoint fill",
+  );
+  if (raw === null) {
+    return arc;
+  }
+  const fills = parseWaypointFillJson(raw);
+  if (!fills.length) {
+    if (process.env.DM_DEBUG) {
+      console.log("[dm-debug] waypoint fill: unparseable reply:", raw.slice(0, 500));
+    }
+    return arc;
+  }
+  return applyWaypointFill(arc, fills);
 }
 
 const JUDGE_SYSTEM = `You are checking whether one specific story beat of a D&D campaign has actually happened yet. Answer in one word.
@@ -446,9 +528,9 @@ If the story has drifted from the arc, do not rewrite the arc; annotate the beat
 
 const ACT_DETAIL_SYSTEM = `The party of a D&D 5e campaign has finished the current act of the AI DM's secret story arc, and the next act exists only as a sketch. Write that act's real beats now, growing out of what the table actually did. Keep it brief and answer quickly.
 
-Reply with ONLY a strict JSON object, no code fences, shaped exactly: {"beats": string[], "title": string, "milestone": string, "finale": string, "bossEvent": ${EVENT_SHAPE}|null, "newEvents": [${EVENT_SHAPE}], "newCast": [{"name": string, "role": string, "agenda": string}]}
+Reply with ONLY a strict JSON object, no code fences, shaped exactly: {"beats": [${BEAT_PLAN_SHAPE}], "title": string, "milestone": string, "finale": string, "bossEvent": ${EVENT_SHAPE}|null, "newEvents": [${EVENT_SHAPE}], "newCast": [{"name": string, "role": string, "agenda": string}]}
 
-beats: 3 to 5 ordered beats for the new act, one short sentence each, escalating from where play actually stands. ${BEAT_RULE} Never restate, renumber, or rewrite existing beats.
+beats: 3 to 5 ordered beats for the new act, one short sentence each as text, escalating from where play actually stands. ${BEAT_RULE} ${WAYPOINT_RULE} Never restate, renumber, or rewrite existing beats.
 milestone: the sketch's milestone, revised only if play has changed what this act must accomplish; otherwise repeat it. ${ACT_TITLE_RULE}
 bossEvent: the act's planned boss as a set-piece event with a trigger the DM can recognise in the fiction. If play already killed or dissolved the planned boss, name who or what fills that role now; null only if this act genuinely no longer has a boss.
 finale: what this act escalates toward.
@@ -487,9 +569,9 @@ Sequel rules: grow the new premise and stakes out of the concluded saga's conseq
 
 const EXTEND_SYSTEM = `The party has played through every beat of an AI DM's secret story arc for a D&D 5e campaign, and the campaign is still running. Write the next act. Keep it brief and answer quickly.
 
-Reply with ONLY a strict JSON object, no code fences, shaped exactly: {"beats": string[], "finale": string, "antagonist": string, "newEvents": [${EVENT_SHAPE}]}
+Reply with ONLY a strict JSON object, no code fences, shaped exactly: {"beats": [${BEAT_PLAN_SHAPE}], "finale": string, "antagonist": string, "newEvents": [${EVENT_SHAPE}]}
 
-beats: 3 to 4 ordered beats for the new act, one short sentence each, growing out of what the party actually did rather than repeating the old plot. ${BEAT_RULE} finale: what this act escalates toward. antagonist: keep the existing one if they survived and still matter, otherwise name who steps into the role now (an escalation of the old threat, a survivor with a grudge, or something the party's own victory unleashed). newEvents: at most 2 planned special moments for the new act.
+beats: 3 to 4 ordered beats for the new act, one short sentence each as text, growing out of what the party actually did rather than repeating the old plot. ${BEAT_RULE} ${WAYPOINT_RULE} finale: what this act escalates toward. antagonist: keep the existing one if they survived and still matter, otherwise name who steps into the role now (an escalation of the old threat, a survivor with a grudge, or something the party's own victory unleashed). newEvents: at most 2 planned special moments for the new act.
 
 ${EVENT_RULES}
 
@@ -748,6 +830,9 @@ export async function refreshStoryArc(
     }
     if (needsSagaUpgrade(arc)) {
       arc = await upgradeToSaga(campaignId, arc);
+    }
+    if (needsWaypoints(arc)) {
+      arc = await fillWaypoints(campaignId, arc);
     }
 
     const chapterLines = [

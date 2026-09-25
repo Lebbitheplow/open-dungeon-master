@@ -44,7 +44,7 @@ falls through to the env var.
 | `DM_CHAPTER_BEATS` | `2` | Finished story-arc beats that close a chapter once it is past the floor |
 | `DM_BEAT_SPACING` | `8` | Messages that must separate two beats for both to count toward the chapter; closer ones are the same moment of play |
 | `DM_BEAT_JUDGE_EVERY` | `6` | Messages between backstop checks that ask a small model whether the `[NOW]` beat happened |
-| `DM_CHAPTER_MAX` | `80` | Hard cap: a chapter this long closes even with no finished beat |
+| `DM_CHAPTER_MAX` | `120` | Hard cap: a chapter this long closes even with no finished beat |
 | `DB_ENCRYPTION_KEY` | required | Encrypts `data/local-roleplay.sqlite` at rest (chacha20). Belongs in `.env.server` |
 | `DISCORD_CLIENT_ID` | — | Discord OAuth application id for "Sign in with Discord" (or set in `/admin`) |
 | `DISCORD_CLIENT_SECRET` | — | Discord OAuth client secret. Belongs in `.env.server` (or set in `/admin`) |

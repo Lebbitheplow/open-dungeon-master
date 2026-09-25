@@ -32,7 +32,10 @@ export type BeatEdit =
   | { op: "move"; beat: number; direction: "up" | "down" }
   | { op: "skip"; beat: number }
   | { op: "setNow"; beat: number }
-  | { op: "add"; act: number; text: string };
+  | { op: "add"; act: number; text: string }
+  // The lead's hand on a beat's checklist (issue #31): tick a waypoint the
+  // server missed, or clear one it credited wrongly.
+  | { op: "waypoint"; beat: number; index: number; done: boolean };
 
 export type EditResult = { arc: StoryArc } | { error: string };
 
@@ -94,6 +97,24 @@ export function applyBeatEdit(arc: StoryArc, edit: BeatEdit): EditResult {
   const target = arc.beats[index];
   if (!target) {
     return { error: "That beat does not exist." };
+  }
+
+  if (edit.op === "waypoint") {
+    if (settled(target)) {
+      return { error: "That beat already played; its waypoints are part of the record." };
+    }
+    const waypoint = target.waypoints?.[edit.index];
+    if (!waypoint) {
+      return { error: "That waypoint does not exist." };
+    }
+    const beats = copyBeats(arc);
+    beats[index] = {
+      ...beats[index],
+      waypoints: (target.waypoints ?? []).map((entry, at) =>
+        at === edit.index ? { ...entry, done: edit.done } : { ...entry },
+      ),
+    };
+    return { arc: withBeats(arc, beats) };
   }
 
   if (edit.op === "rename") {

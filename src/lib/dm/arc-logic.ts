@@ -30,7 +30,22 @@ export type ArcBeat = {
   act: number;
   // Accreted from play: what the table actually did around this beat.
   detail?: string;
+  // The steps the party must take before this beat can land (issue #31):
+  // written with the beat, ticked by the server from the DM's own tool
+  // calls (waypoint-tick.ts) or by the judge, and shown to the DM as a
+  // checklist under [NOW]. A beat without them is gated by nothing and
+  // completes the old way.
+  waypoints?: Waypoint[];
 };
+
+// What kind of thing a waypoint waits for, which decides which tool call
+// can tick it: a place reached (move_party, update_location), a person
+// spoken with (set_npc, npc_reaction, social_check), a thing obtained
+// (grant_item, buy_item), a quest objective (tick_objective), a foe beaten
+// (end_encounter), or anything else, which only the judge can settle.
+export const WAYPOINT_KINDS = ["place", "npc", "item", "objective", "fight", "narrative"] as const;
+export type WaypointKind = (typeof WAYPOINT_KINDS)[number];
+export type Waypoint = { kind: WaypointKind; text: string; done: boolean };
 
 export type SubArc = {
   // Server-allocated ("sa1", "sa2", ...); the refresh delta targets these.
@@ -218,6 +233,8 @@ export type ArcDelta = {
 // A whole new act, appended when the party plays past the current finale.
 export type ArcExtension = {
   beats: string[];
+  // Index-aligned with beats; missing or empty means an ungated beat.
+  beatWaypoints?: Waypoint[][];
   finale: string;
   antagonist?: string;
   newEvents: Array<Omit<ArcEvent, "id" | "status">>;
@@ -235,6 +252,8 @@ export type ArcEnrichment = {
 // out of what the table actually did on the way here.
 export type ActDetail = {
   beats: string[];
+  // Index-aligned with beats; missing or empty means an ungated beat.
+  beatWaypoints?: Waypoint[][];
   // Optionally revised sketch milestone, when play changed the act's shape.
   milestone?: string;
   // The act's player-safe name for its title card.
@@ -296,6 +315,57 @@ const RENDER_FUTURE_SKETCHES = 3;
 
 function str(value: unknown, cap = FIELD_CAP): string {
   return String(value ?? "").trim().slice(0, cap);
+}
+
+// A beat as the planner writes it: a bare sentence, or a sentence with the
+// waypoints the party must reach first. Both shapes parse, so a model that
+// ignores the waypoint field still yields a working act.
+type BeatPlan = { text: string; waypoints: Waypoint[] };
+
+export const MAX_WAYPOINTS_PER_BEAT = 4;
+const WAYPOINT_CAP = 120;
+
+export function normalizeWaypoints(raw: unknown): Waypoint[] {
+  const out: Waypoint[] = [];
+  for (const entry of Array.isArray(raw) ? raw : []) {
+    const fields =
+      typeof entry === "string"
+        ? { text: entry }
+        : typeof entry === "object" && entry !== null
+          ? (entry as Record<string, unknown>)
+          : null;
+    const text = str(fields?.text, WAYPOINT_CAP);
+    if (!text) {
+      continue;
+    }
+    const kind = String(fields?.kind ?? "").trim().toLowerCase();
+    out.push({
+      kind: (WAYPOINT_KINDS as readonly string[]).includes(kind) ? (kind as WaypointKind) : "narrative",
+      text,
+      done: fields?.done === true,
+    });
+    if (out.length >= MAX_WAYPOINTS_PER_BEAT) {
+      break;
+    }
+  }
+  return out;
+}
+
+function beatPlans(value: unknown, max: number): BeatPlan[] {
+  const out: BeatPlan[] = [];
+  for (const entry of Array.isArray(value) ? value : []) {
+    const fields =
+      typeof entry === "object" && entry !== null ? (entry as Record<string, unknown>) : null;
+    const text = typeof entry === "string" ? str(entry, BEAT_CAP) : str(fields?.text, BEAT_CAP);
+    if (!text) {
+      continue;
+    }
+    out.push({ text, waypoints: normalizeWaypoints(fields?.waypoints) });
+    if (out.length >= max) {
+      break;
+    }
+  }
+  return out;
 }
 
 function strList(value: unknown, max: number, cap = FIELD_CAP): string[] {
@@ -521,6 +591,10 @@ export function normalizeStoryArc(raw: unknown): StoryArc | null {
     if (detail) {
       beat.detail = detail;
     }
+    const waypoints = normalizeWaypoints(fields?.waypoints);
+    if (waypoints.length) {
+      beat.waypoints = waypoints;
+    }
     beats.push(beat);
   }
   if (!premise || beats.length < 2) {
@@ -736,6 +810,57 @@ export function parseActRecapJson(raw: string): { title: string; recap: string }
   return { title: "", recap: prose.includes("{") || prose.length < 20 ? "" : str(prose, ACT_RECAP_CAP) };
 }
 
+// The one-time waypoint pass for arcs written before beats had steps
+// (arc.ts fillWaypoints): {"beats": [{"beat": int, "waypoints": [...]}]}.
+export function parseWaypointFillJson(raw: string): Array<{ beat: number; waypoints: Waypoint[] }> {
+  const record = extractJsonObject(raw) as Record<string, unknown> | null;
+  const entries = Array.isArray(record?.beats) ? record!.beats : [];
+  const out: Array<{ beat: number; waypoints: Waypoint[] }> = [];
+  for (const entry of entries) {
+    const fields = entry as Record<string, unknown> | null;
+    const beat = posInt(fields?.beat);
+    const waypoints = normalizeWaypoints(fields?.waypoints);
+    if (beat !== null && waypoints.length) {
+      out.push({ beat, waypoints });
+    }
+  }
+  return out;
+}
+
+// Which arcs need that pass: the act in play has unsettled beats and none
+// of them carries a checklist yet.
+export function needsWaypoints(arc: StoryArc): boolean {
+  const act = currentAct(arc);
+  const open = arc.beats.filter(
+    (beat) => beat.act === act && (beat.status === "active" || beat.status === "pending"),
+  );
+  return open.length > 0 && open.every((beat) => !beat.waypoints?.length);
+}
+
+// Applies the fill to unsettled beats of the act in play only; settled
+// beats are a record, and other acts get their steps when they are detailed.
+export function applyWaypointFill(
+  arc: StoryArc,
+  fills: Array<{ beat: number; waypoints: Waypoint[] }>,
+): StoryArc {
+  const act = currentAct(arc);
+  const next = cloneArc(arc);
+  let changed = false;
+  for (const fill of fills) {
+    const beat = next.beats[fill.beat - 1];
+    if (!beat || beat.act !== act || beat.status === "done" || beat.status === "skipped" || beat.waypoints?.length) {
+      continue;
+    }
+    beat.waypoints = fill.waypoints.map((waypoint) => ({ ...waypoint, done: false }));
+    changed = true;
+  }
+  if (!changed) {
+    return arc;
+  }
+  next.updatedAt = new Date().toISOString();
+  return next;
+}
+
 // "Act IV" on a card, in a heading, in the log.
 export function romanNumeral(value: number): string {
   if (!Number.isFinite(value) || value < 1) {
@@ -881,12 +1006,12 @@ export function parseSagaJson(raw: string, profile: LengthProfile): StoryArc | n
   if (!record || typeof record !== "object") {
     return null;
   }
-  const act1Beats = strList(record.act1Beats, MAX_ACT_BEATS, BEAT_CAP);
+  const act1Beats = beatPlans(record.act1Beats, MAX_ACT_BEATS);
   // A model that ignored the saga shape and answered with the old nested
   // acts (or flat beats) still yields a working arc.
   const beats: unknown[] =
     act1Beats.length >= 2
-      ? act1Beats.map((text) => ({ text, act: 1 }))
+      ? act1Beats.map((plan) => ({ text: plan.text, act: 1, waypoints: plan.waypoints }))
       : beatsFromActs(record);
   const plan = Array.isArray(record.actPlan)
     ? record.actPlan.slice(0, Math.min(profile.maxActs, MAX_ACTS))
@@ -1159,12 +1284,14 @@ export function parseArcExtensionJson(raw: string): ArcExtension | null {
   if (!record || typeof record !== "object") {
     return null;
   }
-  const beats = strList(record.beats, MAX_ACT_BEATS, BEAT_CAP);
+  const plans = beatPlans(record.beats, MAX_ACT_BEATS);
+  const beats = plans.map((plan) => plan.text);
   if (beats.length < 2) {
     return null;
   }
   const extension: ArcExtension = {
     beats,
+    beatWaypoints: plans.map((plan) => plan.waypoints),
     finale: str(record.finale, 400),
     newEvents: parsePlannedEvents(record.newEvents, MAX_NEW_EVENTS),
   };
@@ -1205,7 +1332,8 @@ export function parseActDetailJson(raw: string): ActDetail | null {
   if (!record || typeof record !== "object") {
     return null;
   }
-  const beats = strList(record.beats, MAX_ACT_BEATS, BEAT_CAP);
+  const plans = beatPlans(record.beats, MAX_ACT_BEATS);
+  const beats = plans.map((plan) => plan.text);
   if (beats.length < 2) {
     return null;
   }
@@ -1215,6 +1343,7 @@ export function parseActDetailJson(raw: string): ActDetail | null {
       : parsePlannedEvents([record.bossEvent], 1);
   const detail: ActDetail = {
     beats,
+    beatWaypoints: plans.map((plan) => plan.waypoints),
     finale: str(record.finale, 400),
     bossEvent: bossEvents[0] ?? null,
     newEvents: parsePlannedEvents(record.newEvents, MAX_NEW_EVENTS),
@@ -1310,7 +1439,10 @@ function cloneSaga(saga: Saga | null): Saga | null {
 function cloneArc(arc: StoryArc): StoryArc {
   return {
     ...arc,
-    beats: arc.beats.map((beat) => ({ ...beat })),
+    beats: arc.beats.map((beat) => ({
+      ...beat,
+      ...(beat.waypoints ? { waypoints: beat.waypoints.map((waypoint) => ({ ...waypoint })) } : {}),
+    })),
     cast: arc.cast.map((npc) => ({ ...npc })),
     events: arc.events.map((event) => ({ ...event })),
     subArcs: arc.subArcs.map((subArc) => ({ ...subArc })),
@@ -1492,12 +1624,13 @@ export function applyArcExtension(arc: StoryArc, extension: ArcExtension): Story
   }
   const next = cloneArc(arc);
   const act = next.acts + 1;
-  for (const text of extension.beats.slice(0, MAX_ACT_BEATS)) {
+  extension.beats.slice(0, MAX_ACT_BEATS).forEach((text, index) => {
     if (next.beats.length >= MAX_BEATS) {
-      break;
+      return;
     }
-    next.beats.push({ text, status: "pending", act });
-  }
+    const waypoints = extension.beatWaypoints?.[index] ?? [];
+    next.beats.push({ text, status: "pending", act, ...(waypoints.length ? { waypoints } : {}) });
+  });
   next.acts = act;
   if (extension.finale) {
     next.finale = extension.finale;
@@ -1540,12 +1673,13 @@ export function applyActDetail(arc: StoryArc, detail: ActDetail): StoryArc {
   }
   const next = cloneArc(arc);
   const act = next.acts + 1;
-  for (const text of detail.beats.slice(0, MAX_ACT_BEATS)) {
+  detail.beats.slice(0, MAX_ACT_BEATS).forEach((text, index) => {
     if (next.beats.length >= MAX_BEATS) {
-      break;
+      return;
     }
-    next.beats.push({ text, status: "pending", act });
-  }
+    const waypoints = detail.beatWaypoints?.[index] ?? [];
+    next.beats.push({ text, status: "pending", act, ...(waypoints.length ? { waypoints } : {}) });
+  });
   next.acts = act;
   if (next.saga) {
     for (const entry of next.saga.sketches) {
@@ -1747,7 +1881,7 @@ const EVENT_LABELS: Record<ArcEventKind, string> = {
 // aim scenes at the [NOW] beat, improvise the path, never dump the plot.
 export function renderArcForPrompt(arc: StoryArc): string {
   const lines = [
-    "DM story arc (secret; steer scenes toward the [NOW] beat while improvising freely on the way there; never reveal, quote, or rush it). When your narration actually accomplishes the [NOW] beat, call complete_beat in that same reply:",
+    "DM story arc (secret; steer scenes toward the [NOW] beat while improvising freely on the way there; never reveal, quote, or rush it). When your narration actually accomplishes the [NOW] beat, call complete_beat in that same reply. A beat listed with waypoints cannot complete until every one is ticked; the server ticks them from your move_party, update_location, set_npc, npc_reaction, social_check, grant_item, buy_item, tick_objective and end_encounter calls, so use those tools when the party reaches a place, meets a person, gains a thing, finishes an objective or wins a fight:",
     `Premise: ${arc.premise}`,
   ];
   if (arc.stakes) {
@@ -1797,6 +1931,15 @@ export function renderArcForPrompt(arc: StoryArc): string {
     }
     const detail = beat.detail ? ` | table: ${beat.detail}` : "";
     lines.push(`${index + 1}. ${BEAT_MARKERS[beat.status]} ${beat.text}${detail}`);
+    // Only the beat in play shows its checklist: the others' steps are
+    // tokens spent on a road the party is not on yet.
+    if (beat.status === "active" && beat.waypoints?.length) {
+      lines.push(
+        `   waypoints: ${beat.waypoints
+          .map((waypoint) => `[${waypoint.done ? "x" : " "}] ${waypoint.text} (${waypoint.kind})`)
+          .join(" | ")}`,
+      );
+    }
   });
 
   // Future acts render as their sketches: the next one in full (its planned

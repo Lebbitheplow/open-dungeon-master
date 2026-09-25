@@ -34,7 +34,15 @@ import { advanceRelationships } from "@/lib/dm/relationship-tick";
 import { captureBoundarySnapshot } from "@/lib/db/snapshots";
 import { indexChapter } from "@/lib/dm/memory-index";
 import { actRecapFor, actTitle, arcExhausted, currentAct, sagaIndexOf } from "@/lib/dm/arc-logic";
-import { judgeBeatCompleted, planExhaustedArc, publishActEndCard, refreshStoryArc } from "@/lib/dm/arc";
+import {
+  completeActiveBeat,
+  judgeBeatCompleted,
+  planExhaustedArc,
+  publishActEndCard,
+  refreshStoryArc,
+} from "@/lib/dm/arc";
+import { activeBeat, beatGated } from "@/lib/dm/waypoint-logic";
+import { judgeWaypoints } from "@/lib/dm/waypoint-tick";
 import { narratorIsAi } from "@/lib/dm/viewer";
 import { arcTextTimeoutMs } from "@/lib/model-client";
 import { requestUtilityMessage } from "@/lib/dm/model";
@@ -134,7 +142,11 @@ function pacingFor(campaignId: string): ChapterPacing {
   return pacing;
 }
 
-const CHAPTER_MAX = Number(process.env.DM_CHAPTER_MAX || 80);
+// The hard cap only bites on a table with no arc, or one whose beat the
+// party walked away from; with waypoints gating beats (issue #31) it sits
+// higher, since the refresh at that close already skips or rewrites the
+// beat the story left behind.
+const CHAPTER_MAX = Number(process.env.DM_CHAPTER_MAX || 120);
 const MANUAL_MIN = 5;
 const TRANSCRIPT_CHAR_BUDGET = 24_000;
 
@@ -172,7 +184,14 @@ function countPlayMessages(campaignId: string, seqFrom: number): number {
 // the party lead's explicit close, which skips the automatic thresholds.
 export async function maybeCloseChapter(
   campaignId: string,
-  signals: { beatCompleted: boolean; manual?: boolean },
+  signals: {
+    beatCompleted: boolean;
+    // The completed beat carried waypoints: it counts as a whole chapter.
+    beatGated?: boolean;
+    // The DM called complete_beat on a beat whose waypoints were open.
+    beatClaimed?: boolean;
+    manual?: boolean;
+  },
 ) {
   const campaign = getCampaignById(campaignId);
   if (!campaign) {
@@ -186,16 +205,18 @@ export async function maybeCloseChapter(
   const sinceLastBeat = (): number | null =>
     pacing.lastBeatSeq === null ? null : countPlayMessages(campaignId, pacing.lastBeatSeq + 1);
   // A beat landing (tool or judge) restarts the spacing window and, when
-  // it is far enough from the previous one, counts toward the chapter.
-  const recordBeat = () => {
+  // it is far enough from the previous one, counts toward the chapter. A
+  // beat that carried waypoints took a stretch of play to reach by
+  // construction, so it counts as the whole quota (issue #31).
+  const recordBeat = (gated: boolean) => {
     if (beatCountsToward(sinceLastBeat(), BEAT_SPACING)) {
-      pacing.beats += 1;
+      pacing.beats += gated ? CHAPTER_BEATS : 1;
     }
     pacing.lastBeatSeq = latestSeq(campaignId);
     pacing.lastJudgedAt = messageCount;
   };
   if (signals.beatCompleted) {
-    recordBeat();
+    recordBeat(Boolean(signals.beatGated));
   }
   const exhausted = campaign.storyArc ? arcExhausted(campaign.storyArc) : false;
   const limits = { min: CHAPTER_MIN, max: CHAPTER_MAX, beatsRequired: CHAPTER_BEATS };
@@ -222,28 +243,45 @@ export async function maybeCloseChapter(
     }
     // The DM narrates a beat landing far more reliably than it calls
     // complete_beat, so a chapter that is long enough to close but is still
-    // short on beat signals gets a cheap yes/no check instead of drifting
-    // to the cap.
-    if (
-      !shouldJudgeBeat({
-        messageCount,
-        beatsDone: pacing.beats,
-        beatCompletedThisTurn: signals.beatCompleted,
-        messagesSinceLastBeat: sinceLastBeat(),
-        messagesSinceLastJudge: messageCount - pacing.lastJudgedAt,
-        options: { ...limits, judgeEvery: JUDGE_EVERY, spacing: BEAT_SPACING },
-      })
-    ) {
+    // short on beat signals gets a cheap check instead of drifting to the
+    // cap. A gated beat gets its waypoints checked against play (the DM
+    // claiming it earns the check at once); an ungated one gets the yes/no
+    // beat judge.
+    const due = shouldJudgeBeat({
+      messageCount,
+      beatsDone: pacing.beats,
+      beatCompletedThisTurn: signals.beatCompleted,
+      messagesSinceLastBeat: sinceLastBeat(),
+      messagesSinceLastJudge: messageCount - pacing.lastJudgedAt,
+      options: { ...limits, judgeEvery: JUDGE_EVERY, spacing: BEAT_SPACING },
+    });
+    const current = campaign.storyArc ? activeBeat(campaign.storyArc) : null;
+    const gated = Boolean(current && beatGated(current.beat));
+    if (!due && !(gated && signals.beatClaimed)) {
       return;
     }
     pacing.lastJudgedAt = messageCount;
     // The judge reads only this chapter's play after the last beat, so the
     // scene that landed the previous beat can never be credited twice.
     const judgeFrom = Math.max(chapter.seqStart, (pacing.lastBeatSeq ?? 0) + 1);
-    if (!(await judgeBeatCompleted(campaignId, judgeFrom))) {
-      return;
+    if (gated) {
+      await judgeWaypoints(campaignId, judgeFrom);
+      // Only a claim the DM made closes the beat here; otherwise the DM
+      // calls complete_beat itself now that the checklist is clear.
+      if (!signals.beatClaimed) {
+        return;
+      }
+      const landed = completeActiveBeat(campaignId);
+      if (!landed.completed) {
+        return;
+      }
+      recordBeat(landed.gated);
+    } else {
+      if (!(await judgeBeatCompleted(campaignId, judgeFrom))) {
+        return;
+      }
+      recordBeat(Boolean(current?.beat.waypoints?.length));
     }
-    recordBeat();
     // The judge advanced the arc, so recompute exhaustion before deciding.
     const refreshed = getCampaignById(campaignId);
     const nowExhausted = refreshed?.storyArc ? arcExhausted(refreshed.storyArc) : false;

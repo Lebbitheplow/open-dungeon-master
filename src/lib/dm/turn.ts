@@ -50,6 +50,7 @@ import {
 import { fakeRollMarkerRegex } from "@/lib/dm/tool-text";
 import { announcesEncounterStart, FAKE_ENCOUNTER_PROMPT } from "@/lib/dm/engine-boundary";
 import { handleCompleteBeat } from "@/lib/dm/arc";
+import { tickWaypointsFromCalls } from "@/lib/dm/waypoint-tick";
 import { enforceEngineBoundary } from "@/lib/dm/narration-guard";
 import {
   buildDmMessages,
@@ -676,6 +677,12 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
   // finished beat with complete_beat and that ends the chapter. One per
   // advance() run, so a single reply can never burn several beats.
   let beatCompleted = false;
+  // Whether the beat that completed carried waypoints (a whole chapter's
+  // worth of story, chapter-close.ts weighs it so), and whether the DM
+  // claimed a beat the checklist refused (chapter-close.ts checks the
+  // checklist against play right away instead of on its cadence).
+  let beatGated = false;
+  let beatClaimed = false;
   // Whisper cap is per advance() run, not persisted: a resumed turn simply
   // gets a fresh allowance, which the bounded call loop keeps small.
   let whisperCount = 0;
@@ -769,6 +776,12 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         ]
       : message?.tool_calls;
     const toolCalls = [...extractToolCalls(message?.tool_calls), ...salvagedCalls];
+    // The foes as they stand before the calls run: end_encounter names
+    // none of its own, and a fight waypoint needs them (waypoint-tick.ts).
+    const foesBefore = (() => {
+      const standing = getActiveEncounter(campaignId);
+      return standing ? listEnemies(standing.id).map((enemy) => enemy.displayName) : [];
+    })();
     // Text streamed alongside an attack-resolving tool call is the model
     // guessing the outcome before the dice exist ("the blade bites deep" on
     // what turns out to be a miss). Drop it from the persisted narration;
@@ -895,10 +908,16 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         handleRecordEvent(campaign, eventCall.rawArguments, sheets, sheetsById),
       );
     }
+    // Waypoints tick before the beat is judged, so an arrival and the beat
+    // it lands in the same reply resolve in order (issue #31). The location
+    // calls above already ran; the rest of the tools tick again below.
+    await tickWaypointsFromCalls(campaignId, toolCalls, { enemyNames: foesBefore });
     const beatResults = new Map<string, Record<string, unknown>>();
     for (const beatCall of beatCalls) {
       const outcome = handleCompleteBeat(campaignId, beatCall.rawArguments, beatCompleted);
       beatCompleted = beatCompleted || outcome.completed;
+      beatGated = beatGated || (outcome.completed && outcome.gated);
+      beatClaimed = beatClaimed || (!outcome.completed && outcome.gated);
       beatResults.set(beatCall.id ?? "complete_beat", outcome.result);
     }
     // Whispers deliver immediately (like events); recipients are notified
@@ -1587,6 +1606,11 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       }
     }
 
+    // The NPC, item, objective and combat tools ran after the beat check:
+    // their waypoints tick now, for the next reply's checklist, and before
+    // a park so a resumed turn does not lose them.
+    await tickWaypointsFromCalls(campaignId, toolCalls, { enemyNames: foesBefore });
+
     if (parkedAny) {
       // Park: the queue job ends here. Submissions resume the turn.
       turn.status = "awaiting_rolls";
@@ -1608,7 +1632,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
   }
   finalize(context, turn, failed);
   if (!failed) {
-    await maybeCloseChapter(campaignId, { beatCompleted });
+    await maybeCloseChapter(campaignId, { beatCompleted, beatGated, beatClaimed });
     if (isStageEnabled(context.campaign.gameSettings.stages, "compaction")) {
       compactHistoryInBackground(campaignId);
     }

@@ -494,6 +494,30 @@ function ArcCard({ campaignId }: { campaignId: string }) {
                             {beat.detail ? (
                               <span className="text-stone-500"> [{beat.detail}]</span>
                             ) : null}
+                            {/* The beat's checklist: the server ticks these from the DM's tools; the lead corrects it by hand. */}
+                            {!settled && beat.waypoints?.length ? (
+                              <ul className="stagger mt-1 space-y-0.5">
+                                {beat.waypoints.map((waypoint, at) => (
+                                  <li key={at}>
+                                    <label className="flex cursor-pointer items-start gap-1.5 text-[11px] leading-4 text-stone-400">
+                                      <input
+                                        type="checkbox"
+                                        className="mt-0.5 size-3 shrink-0 accent-amber-400"
+                                        checked={waypoint.done}
+                                        disabled={beatBusy}
+                                        aria-label={`Waypoint: ${waypoint.text}`}
+                                        onChange={(event) =>
+                                          void editBeat({ op: "waypoint", beat: number, index: at, done: event.target.checked })
+                                        }
+                                      />
+                                      <span className={waypoint.done ? "text-stone-600 line-through" : ""}>
+                                        {waypoint.text} <span className="text-stone-600">({waypoint.kind})</span>
+                                      </span>
+                                    </label>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : null}
                           </span>
                           {settled ? null : (
                             <span className="flex shrink-0 items-center">
