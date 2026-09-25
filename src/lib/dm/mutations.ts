@@ -63,7 +63,7 @@ import { rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
 import { planConditionFx, planHealFx } from "@/lib/battlemap/fx-plan";
 import { publishFx, tokenPosition } from "@/lib/dm/fx";
-import { allSpellNames, isCantripName, spellsAgainstLimit } from "@/lib/srd/spell-lists";
+import { allSpellNames, checklistClassSpell, isCantripName, spellsAgainstLimit } from "@/lib/srd/spell-lists";
 import { casterViewsOf, notReadyReason, spellbookOf, withCasterViews } from "@/lib/srd/spell-prep";
 import { subclassSpellsFor } from "@/lib/srd/features";
 
@@ -1514,9 +1514,10 @@ export function applyDmMutation(
         // Multiclass: the spell joins a caster entry with allowance headroom
         // at ITS class level (the first that has room); the legacy fields
         // stay the union mirror.
-        const spellLevel = searchSpells({ q: spell, userId: sheet.userId, limit: 10 }).find(
-          (entry) => spellNameMatches(entry, spell),
-        )?.level;
+        const packRow = searchSpells({ q: spell, userId: sheet.userId, limit: 10 }).find((entry) =>
+          spellNameMatches(entry, spell),
+        );
+        const spellLevel = packRow?.level;
         const casters = sheet.spellcasting.casters ?? [];
         // Cantrips have their own list and never touch the spell allowance.
         if (spellLevel === 0 || (spellLevel === undefined && isCantripName(spell))) {
@@ -1550,9 +1551,16 @@ export function applyDmMutation(
           return { result: { ok: true, learned: spell, cantrip: true } };
         }
         // A wizard copies a new spell into the spellbook: no ceiling, and it
-        // is prepared like any other, after a long rest (spell-prep.ts).
+        // is prepared like any other, after a long rest (spell-prep.ts). On a
+        // multiclass sheet the book takes only spells on the wizard list;
+        // a cleric spell taught by the story joins the cleric's list below.
         const views = casterViewsOf(sheet);
-        const bookView = views.find((view) => view.style === "spellbook");
+        const onWizardList =
+          views.length < 2 ||
+          (packRow
+            ? packRow.classes.some((entry) => entry.toLowerCase() === "wizard")
+            : checklistClassSpell(spell, "wizard", 9) !== null);
+        const bookView = onWizardList ? views.find((view) => view.style === "spellbook") : undefined;
         if (bookView) {
           const nextSpellcasting = withCasterViews(
             sheet.spellcasting,

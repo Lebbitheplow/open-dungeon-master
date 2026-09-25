@@ -3,6 +3,7 @@ import { allocateSeq } from "@/lib/db/campaigns";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
 import { fullPatchSheetSchema } from "@/lib/schemas/sheet";
+import { layOver } from "@/lib/schemas/parse-keeping-valid";
 import { publishPersisted } from "@/lib/events";
 
 export const runtime = "nodejs";
@@ -28,6 +29,12 @@ export async function PATCH(
 
   const raw = await request.json().catch(() => ({}));
   const reason = typeof raw?.reason === "string" ? raw.reason.slice(0, 300) : "";
+  // The spell lists an edit leaves out keep their stored value: a client
+  // built before the cantrip, pending and spellbook lists (or the per-class
+  // casters) sends only prepared and known, and must not wipe the rest.
+  if (raw && typeof raw === "object" && raw.spellcasting && typeof raw.spellcasting === "object") {
+    raw.spellcasting = layOver(sheet.spellcasting ?? {}, raw.spellcasting);
+  }
   const parsed = fullPatchSheetSchema.safeParse(raw);
   if (!parsed.success) {
     return Response.json(

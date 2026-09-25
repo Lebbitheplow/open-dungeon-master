@@ -427,14 +427,58 @@ function keptSpellcasting(
   if (!stored || !built) {
     return stored ?? built;
   }
-  const primaryLists = { ability: built.ability, known: built.known, prepared: built.prepared };
-  return {
+  const primaryLists = {
+    ability: built.ability,
+    known: built.known,
+    prepared: built.prepared,
+    cantrips: built.cantrips ?? [],
+    ...(built.spellbook ? { spellbook: built.spellbook } : {}),
+  };
+  if (!stored.casters?.length) {
+    const next = { ...stored, ...primaryLists };
+    // The edit chose the prepared list afresh; nothing waits for a rest.
+    delete next.pending;
+    return next;
+  }
+  const casters = stored.casters.map((caster) => {
+    if (caster.classId.toLowerCase() !== primaryClass.toLowerCase()) {
+      return caster;
+    }
+    const next = { ...caster, ...primaryLists };
+    delete next.pending;
+    if (!built.spellbook) {
+      delete next.spellbook;
+    }
+    return next;
+  });
+  // The top-level lists stay the union of the per-class ones, the mirror
+  // every other reader uses.
+  const union = (pick: (caster: (typeof casters)[number]) => string[] | undefined) => {
+    const seen = new Set<string>();
+    return casters.flatMap((caster) => pick(caster) ?? []).filter((name) => {
+      const key = name.trim().toLowerCase();
+      if (!key || seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+  };
+  const pending = union((caster) => caster.pending);
+  const spellbook = union((caster) => caster.spellbook);
+  const merged = {
     ...stored,
-    ...primaryLists,
-    casters: stored.casters?.map((caster) =>
-      caster.classId.toLowerCase() === primaryClass.toLowerCase()
-        ? { ...caster, ...primaryLists }
-        : caster,
-    ),
+    ability: built.ability,
+    known: union((caster) => caster.known),
+    prepared: union((caster) => caster.prepared),
+    cantrips: union((caster) => caster.cantrips),
+    casters,
+  };
+  delete merged.pending;
+  delete merged.spellbook;
+  return {
+    ...merged,
+    ...(pending.length ? { pending } : {}),
+    ...(casters.some((caster) => caster.spellbook) ? { spellbook } : {}),
   };
 }

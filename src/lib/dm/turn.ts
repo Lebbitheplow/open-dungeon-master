@@ -1944,8 +1944,8 @@ function parseSpotlightUserIds(
 function emptyTurnPlayer(context: TurnContext): EmptyTurnPlayer | null {
   const last = [...listRecentMessages(context.campaign.id, 20)]
     .reverse()
-    .find((message) => message.authorType === "player");
-  if (!last) {
+    .find((message) => message.authorType !== "system");
+  if (!last || last.authorType !== "player") {
     return null;
   }
   const sheet = last.characterId ? context.sheetsById.get(last.characterId) : undefined;

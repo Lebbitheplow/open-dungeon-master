@@ -3,7 +3,7 @@ import { isErrorResponse, requireMember } from "@/lib/campaign-api";
 import { spellClassFor } from "@/lib/classes";
 import { searchSpells, spellNameMatches } from "@/lib/content";
 import { allocateSeq } from "@/lib/db/campaigns";
-import { getSheetForUser, patchSheet } from "@/lib/db/sheets";
+import { getSheetById, getSheetForUser, patchSheet } from "@/lib/db/sheets";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
 import { publishPersisted } from "@/lib/events";
 import type { FullPatchSheetInput } from "@/lib/schemas/sheet";
@@ -29,6 +29,9 @@ const spellsSchema = z.object({
   // Which caster class, on a multiclass sheet. Defaults to the first one
   // that prepares spells.
   classId: z.string().trim().max(60).optional(),
+  // Which of the caller's characters, at a table where a player runs more
+  // than one. Defaults to the active seat.
+  sheetId: z.string().trim().max(80).optional(),
 });
 
 // Always answers in JSON, so the sheet can say what went wrong instead of a
@@ -57,13 +60,6 @@ async function changeSpell(
   if (isErrorResponse(context)) {
     return context;
   }
-  const sheet = getSheetForUser(campaignId, context.user.id);
-  if (!sheet) {
-    return Response.json({ error: "You have no character in this campaign." }, { status: 404 });
-  }
-  if (!sheet.spellcasting) {
-    return Response.json({ error: `${sheet.name} does not cast spells.` }, { status: 403 });
-  }
   const parsed = spellsSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
     return Response.json(
@@ -71,7 +67,19 @@ async function changeSpell(
       { status: 400 },
     );
   }
-  const { action, classId } = parsed.data;
+  const { action, classId, sheetId } = parsed.data;
+  // The sheet on screen when one was named; only the caller's own.
+  const named = sheetId ? getSheetById(sheetId) : null;
+  const sheet =
+    named && named.campaignId === campaignId && named.userId === context.user.id
+      ? named
+      : getSheetForUser(campaignId, context.user.id);
+  if (!sheet) {
+    return Response.json({ error: "You have no character in this campaign." }, { status: 404 });
+  }
+  if (!sheet.spellcasting) {
+    return Response.json({ error: `${sheet.name} does not cast spells.` }, { status: 403 });
+  }
 
   const views = casterViewsOf(sheet);
   const view = classId
