@@ -1315,6 +1315,15 @@ function ensureSchema(db: SqliteDatabase) {
     db.exec(`ALTER TABLE users ADD COLUMN avatar_json TEXT`);
   }
 
+  addColumns("chapters", [
+    // The act (and the saga it counts from) a chapter belongs to, stamped
+    // at close from the story arc so the story tab, timeline and exports
+    // can group chapters under acts (issue #31). NULL on chapters closed
+    // before acts were tracked and on campaigns with no arc.
+    ["act", `INTEGER`],
+    ["saga", `INTEGER`],
+  ]);
+
   addColumns("users", [
     // Global admin: may manage users and app-wide settings at /admin.
     ["is_admin", `INTEGER NOT NULL DEFAULT 0`],

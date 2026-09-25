@@ -50,4 +50,22 @@ test("a player's timeline has no world arcs and no cancelled sessions", () => {
   assert.ok(!rows.some((row) => row.secret));
 });
 
+// Issue #31: an act's end sits right after the chapter that ended it.
+test("an act that ended lands after its last chapter, named and recapped", () => {
+  const rows = buildTimeline(
+    {
+      ...sources,
+      acts: [{ act: 1, sagaIndex: 1, title: "The Drowned Road", recap: "You crossed the marsh. Then more.", endedSeq: 40, clockLabel: "Greening 3" }],
+    },
+    false,
+  );
+  const chapterAt = rows.findIndex((row) => row.id === "chapter-c1");
+  const actAt = rows.findIndex((row) => row.id === "act-1-1");
+  assert.equal(actAt, chapterAt + 1);
+  assert.equal(rows[actAt].kind, "act");
+  assert.equal(rows[actAt].title, "End of Act I: The Drowned Road");
+  assert.equal(rows[actAt].detail, "You crossed the marsh.");
+  assert.equal(rows[actAt].when, "Greening 3");
+});
+
 console.log(`test-timeline: ${passed} passed`);

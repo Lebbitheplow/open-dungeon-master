@@ -3,7 +3,9 @@
 // sessions on the real calendar, and the world's arcs as they climbed.
 // Pure: the route gathers, this orders and labels, the panel draws.
 
-export type TimelineKind = "chapter" | "fact" | "session" | "arc" | "event" | "now";
+import { romanNumeral } from "@/lib/dm/arc-logic";
+
+export type TimelineKind = "chapter" | "act" | "fact" | "session" | "arc" | "event" | "now";
 
 export type TimelineRow = {
   id: string;
@@ -21,6 +23,9 @@ export type TimelineRow = {
 
 export type TimelineSources = {
   chapters: Array<{ id: string; index: number; title: string; summary: string; seqEnd: number | null; clockLabel: string; status: string }>;
+  // Acts that ended (issue #31): the name the table saw and its recap, at
+  // the close of the act's last chapter.
+  acts?: Array<{ act: number; sagaIndex: number; title: string; recap: string; endedSeq: number; clockLabel: string }>;
   facts: Array<{ id: string; subject: string; fact: string; sourceSeq: number | null; createdAt: string; knownBy?: unknown }>;
   sessions: Array<{ id: string; title: string; startsAt: string; status?: string }>;
   arcs: Array<{ id: string; name: string; rung: number; rungs: string[]; status: string }>;
@@ -45,6 +50,16 @@ export function buildTimeline(sources: TimelineSources, steersStory: boolean): T
       detail: firstSentence(chapter.summary),
       when: chapter.clockLabel,
       order: chapter.seqEnd ?? 0,
+    });
+  }
+  for (const act of sources.acts ?? []) {
+    rows.push({
+      id: `act-${act.sagaIndex}-${act.act}`,
+      kind: "act",
+      title: `End of Act ${romanNumeral(act.act)}${act.title ? `: ${act.title}` : ""}`,
+      detail: firstSentence(act.recap),
+      when: act.clockLabel,
+      order: act.endedSeq,
     });
   }
   for (const fact of sources.facts.slice(-FACT_CAP)) {
@@ -114,8 +129,9 @@ export function buildTimeline(sources: TimelineSources, steersStory: boolean): T
   return rows.sort((a, b) => a.order - b.order || rank(a.kind) - rank(b.kind));
 }
 
+// An act's end sits right after the chapter that ended it.
 function rank(kind: TimelineKind): number {
-  return kind === "chapter" ? 0 : kind === "fact" ? 1 : kind === "event" ? 2 : kind === "arc" ? 3 : kind === "now" ? 4 : 5;
+  return kind === "chapter" ? 0 : kind === "act" ? 1 : kind === "fact" ? 2 : kind === "event" ? 3 : kind === "arc" ? 4 : kind === "now" ? 5 : 6;
 }
 
 function firstSentence(text: string): string {

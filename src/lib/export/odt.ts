@@ -1,5 +1,5 @@
 import JSZip from "jszip";
-import { escapeXml, type StoryChapter, type StoryDocument } from "./story-document";
+import { escapeXml, type StoryChapter, type StoryDocument } from "@/lib/export/story-document";
 
 // Renders a StoryDocument as an .odt (OpenDocument Text): a ZIP of ODF XML
 // parts. Chapters are outline-level headings, so LibreOffice indexes them into
@@ -60,7 +60,12 @@ function chapterBody(chapter: StoryChapter): string {
         )
         .join("")
     : "";
+  const act = chapter.actHeading
+    ? `<text:h text:style-name="Heading_20_1" text:outline-level="1">${escapeXml(chapter.actHeading)}</text:h>` +
+      (chapter.actRecap ? summaryParagraphs(chapter.actRecap) : "")
+    : "";
   return (
+    act +
     `<text:h text:style-name="Heading_20_1" text:outline-level="1">${escapeXml(chapter.heading)}</text:h>` +
     highlights +
     summary +
@@ -70,7 +75,11 @@ function chapterBody(chapter: StoryChapter): string {
 
 function tableOfContents(chapters: StoryChapter[]): string {
   const entries = chapters
-    .map((chapter) => paragraph("Contents_20_1", chapter.heading))
+    .map(
+      (chapter) =>
+        (chapter.actHeading ? paragraph("Contents_20_1", chapter.actHeading) : "") +
+        paragraph("Contents_20_1", chapter.heading),
+    )
     .join("");
   return `<text:table-of-content text:style-name="Sect1" text:protected="true" text:name="Table of Contents">
     <text:table-of-content-source text:outline-level="10" text:use-outline-level="true">

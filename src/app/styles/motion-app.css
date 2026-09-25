@@ -197,6 +197,20 @@
   --announce-spark: #d6d3d1;
   --announce-sub: rgba(214, 211, 209, 0.8);
 }
+/* An act ending or beginning: ivory gold with a wider, brighter glow and
+   longer rules, so it reads as the story's own punctuation rather than one
+   more chapter card. Same spring, same sparks; only the metal and the hold
+   change (SceneTitle.tsx holds it longer). */
+.announce[data-tone="act"],
+.announce-title[data-tone="act"] {
+  --announce-face: linear-gradient(180deg, #fff8e6 0%, #f3dc9a 40%, #d6a94a 100%);
+  --announce-glow: rgba(243, 220, 154, 0.5);
+  --announce-rule: rgba(243, 220, 154, 0.85);
+  --announce-spark: #f7e3a6;
+  --announce-sub: rgba(255, 248, 230, 0.85);
+}
+.announce[data-tone="act"] .announce-rule { width: 120px; }
+.announce[data-tone="act"] .announce-sub { font-size: 1.05em; letter-spacing: 0.22em; }
 
 .announce-title {
   position: relative;

@@ -1,4 +1,4 @@
-import { escapeXml, type StoryDocument } from "./story-document";
+import { escapeXml, type StoryDocument } from "@/lib/export/story-document";
 
 // Renders a StoryDocument as a self-contained, stylized HTML page: an indexed
 // table of contents that jumps to each chapter, chapter summaries with
@@ -28,7 +28,7 @@ export function renderStoryHtml(doc: StoryDocument): string {
   const toc = doc.chapters
     .map(
       (chapter) =>
-        `<li><a href="#${chapterAnchor(chapter.index)}">${escapeXml(chapter.heading)}</a></li>`,
+        `${chapter.actHeading ? `<li class="act">${escapeXml(chapter.actHeading)}</li>` : ""}<li><a href="#${chapterAnchor(chapter.index)}">${escapeXml(chapter.heading)}</a></li>`,
     )
     .join("\n");
 
@@ -56,7 +56,12 @@ export function renderStoryHtml(doc: StoryDocument): string {
             )
             .join("\n")}</div>`
         : "";
-      return `<section class="chapter" id="${chapterAnchor(chapter.index)}">
+      const act = chapter.actHeading
+        ? `<section class="act"><h2 class="act-heading">${escapeXml(chapter.actHeading)}</h2>${
+            chapter.actRecap ? paragraphs(chapter.actRecap) : ""
+          }</section>\n`
+        : "";
+      return `${act}<section class="chapter" id="${chapterAnchor(chapter.index)}">
   <h2>${escapeXml(chapter.heading)}</h2>
   ${highlights}
   ${summary}
@@ -97,6 +102,9 @@ export function renderStoryHtml(doc: StoryDocument): string {
   nav.toc li { margin: .2rem 0; }
   .quests ul { padding-left: 1.35rem; }
   .chapter { scroll-margin-top: 1rem; }
+  .act { margin-top: 2.5rem; text-align: center; }
+  .act-heading { font-variant: small-caps; letter-spacing: 0.08em; }
+  li.act { list-style: none; margin-top: 0.75rem; font-variant: small-caps; }
   ul.highlights { padding-left: 1.35rem; color: #fde68a; }
   ul.highlights li { margin: .2rem 0; }
   .transcript { margin-top: 1.25rem; padding-top: .5rem; border-top: 1px dashed #292524; }

@@ -1,5 +1,6 @@
 import { getCampaignById, listMembers } from "@/lib/db/campaigns";
 import { listChapters } from "@/lib/db/chapters";
+import { actRecapFor, actTitle, romanNumeral, sagaIndexOf } from "@/lib/dm/arc-logic";
 import { listAllMessages } from "@/lib/db/messages";
 import { listSheets } from "@/lib/db/sheets";
 
@@ -15,6 +16,11 @@ export type TranscriptLine = {
 
 export type StoryChapter = {
   index: number;
+  // Set on the first chapter of each act (issue #31): "Act II: The Drowned
+  // Road" and the spoiler-free recap recorded when that act ended, so the
+  // document carries the saga's shape, not a flat run of chapters.
+  actHeading?: string;
+  actRecap?: string;
   // Full heading text, e.g. "Chapter 1: The Sunless Road" or the in-progress
   // label for the open chapter.
   heading: string;
@@ -53,8 +59,21 @@ export function buildStoryDocument(campaignId: string): StoryDocument | null {
   const memberNames = new Map(listMembers(campaignId).map((m) => [m.userId, m.username]));
   const sheetNames = new Map(listSheets(campaignId).map((s) => [s.id, s.name]));
 
+  const arc = campaign.storyArc;
+  let lastActKey = "";
   const storyChapters: StoryChapter[] = chapters.map((chapter) => {
     const seqEnd = chapter.seqEnd ?? Number.MAX_SAFE_INTEGER;
+    // The act heading rides on the first chapter that belongs to each act.
+    const actKey = chapter.act ? `${chapter.saga ?? 1}:${chapter.act}` : "";
+    let actHeading: string | undefined;
+    let actRecap: string | undefined;
+    if (actKey && actKey !== lastActKey) {
+      lastActKey = actKey;
+      const recap = arc ? actRecapFor(arc, chapter.act!, chapter.saga ?? 1) : null;
+      const title = recap?.title || (arc && (chapter.saga ?? 1) === sagaIndexOf(arc) ? actTitle(arc, chapter.act!) : "");
+      actHeading = `Act ${romanNumeral(chapter.act!)}${title ? `: ${title}` : ""}`;
+      actRecap = recap?.recap || undefined;
+    }
     const transcript: TranscriptLine[] = messages
       .filter(
         (message) =>
@@ -82,6 +101,8 @@ export function buildStoryDocument(campaignId: string): StoryDocument | null {
 
     return {
       index: chapter.index,
+      ...(actHeading ? { actHeading } : {}),
+      ...(actRecap ? { actRecap } : {}),
       heading,
       status: chapter.status,
       summary: chapter.summary ?? "",

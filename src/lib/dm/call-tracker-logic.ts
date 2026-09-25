@@ -23,6 +23,8 @@ export type UtilityCallKind =
   | "ask"
   | "beat"
   | "map"
+  // The spoiler-free recap written once when an act ends (issue #31).
+  | "act"
   // Assisted mode: one decision call for one monster's turn.
   | "monster";
 
@@ -36,6 +38,7 @@ export const UTILITY_CALL_LABELS: Record<UtilityCallKind, string> = {
   ask: "Answering a question",
   beat: "Writing up what just happened",
   map: "Reading the lay of the land",
+  act: "Recounting the act",
   monster: "Taking the monsters' turn",
 };
 

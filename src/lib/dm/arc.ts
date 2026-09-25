@@ -1,4 +1,5 @@
 import {
+  allocateSeq,
   getCampaignById,
   latestSeq,
   setQuestLog,
@@ -33,9 +34,19 @@ import {
   parseSagaUpgradeJson,
   renderArcForPrompt,
   sagaComplete,
+  actTransition,
+  parseActRecapJson,
+  recordActRecap,
+  romanNumeral,
   type LengthProfile,
   type StoryArc,
 } from "@/lib/dm/arc-logic";
+import { publishTitleCard } from "@/lib/dm/scene-state";
+import { insertCampaignMessage } from "@/lib/db/messages";
+import { publishWithSeq } from "@/lib/events";
+import { requestUtilityMessage } from "@/lib/dm/model";
+import { trackUtilityCall } from "@/lib/dm/call-tracker";
+import { isStageEnabled } from "@/lib/dm/stages";
 import { arcTextTimeoutMs } from "@/lib/model-client";
 import { requestDmMessage } from "@/lib/dm/model";
 import { stripReasoningArtifacts } from "@/lib/story-prompt";
@@ -174,11 +185,16 @@ const BEAT_RULE = `Each beat is a turning point that takes a stretch of play to 
 
 // The full saga JSON shape, shared by initial generation and sequel
 // chaining (the chain adds one extra field in front).
-const SAGA_SHAPE = `{"title": string, "premise": string, "stakes": string, "antagonist": string, "actPlan": [{"milestone": string, "boss": ${BOSS_SHAPE}, "allies": string[], "hooks": string[]}], "act1Beats": string[], "finale": string, "finaleBoss": ${BOSS_SHAPE}, "cast": [{"name": string, "role": string, "agenda": string}], "events": [${EVENT_SHAPE}], "subArcs": [{"name": string, "goal": string, "hook": string, "beats": string[]}]}`;
+const SAGA_SHAPE = `{"title": string, "premise": string, "stakes": string, "antagonist": string, "actPlan": [{"title": string, "milestone": string, "boss": ${BOSS_SHAPE}, "allies": string[], "hooks": string[]}], "act1Beats": string[], "finale": string, "finaleBoss": ${BOSS_SHAPE}, "cast": [{"name": string, "role": string, "agenda": string}], "events": [${EVENT_SHAPE}], "subArcs": [{"name": string, "goal": string, "hook": string, "beats": string[]}]}`;
+
+// Acts are announced to the players on title cards (issue #31), so every
+// act carries a name that is safe to show them, separate from the
+// milestone that states the plan.
+const ACT_TITLE_RULE = `title is a short, evocative, spoiler-free name for the act, two to five words, fit to show the players on a title card ("The Drowned Road"); never a plan, a reveal, or a villain's name.`;
 
 function sagaFieldRules(profile: LengthProfile): string {
   return `title: a name for the whole saga.
-actPlan: ${profile.actsText} acts, ordered, escalating to the finale. Each entry is a SKETCH of one act: milestone is one sentence saying what the act accomplishes; boss names the major set-piece fight the act builds toward, with one sentence of detail; allies is 0 to 2 planned companion or temporary-ally encounters for the act; hooks is 0 to 2 ways the act touches a specific party member's abilities, pets, or backstory. Later acts stay sketches on purpose; they are detailed one act at a time when the party reaches them, so keep them broad enough to survive whatever the table does first.
+actPlan: ${profile.actsText} acts, ordered, escalating to the finale. Each entry is a SKETCH of one act: ${ACT_TITLE_RULE} milestone is one sentence saying what the act accomplishes; boss names the major set-piece fight the act builds toward, with one sentence of detail; allies is 0 to 2 planned companion or temporary-ally encounters for the act; hooks is 0 to 2 ways the act touches a specific party member's abilities, pets, or backstory. Later acts stay sketches on purpose; they are detailed one act at a time when the party reaches them, so keep them broad enough to survive whatever the table does first.
 act1Beats: 3 to 5 ordered beats for act 1 ONLY, one short sentence each. ${BEAT_RULE} Never number them yourself, and do not write beats for any later act.
 finaleBoss: the last act's boss is the saga's final boss; repeat them here.
 cast: 2 to 4 recurring NPCs the campaign returns to, each with a concrete name and something they personally want. The antagonist may be one of them.
@@ -430,10 +446,10 @@ If the story has drifted from the arc, do not rewrite the arc; annotate the beat
 
 const ACT_DETAIL_SYSTEM = `The party of a D&D 5e campaign has finished the current act of the AI DM's secret story arc, and the next act exists only as a sketch. Write that act's real beats now, growing out of what the table actually did. Keep it brief and answer quickly.
 
-Reply with ONLY a strict JSON object, no code fences, shaped exactly: {"beats": string[], "milestone": string, "finale": string, "bossEvent": ${EVENT_SHAPE}|null, "newEvents": [${EVENT_SHAPE}], "newCast": [{"name": string, "role": string, "agenda": string}]}
+Reply with ONLY a strict JSON object, no code fences, shaped exactly: {"beats": string[], "title": string, "milestone": string, "finale": string, "bossEvent": ${EVENT_SHAPE}|null, "newEvents": [${EVENT_SHAPE}], "newCast": [{"name": string, "role": string, "agenda": string}]}
 
 beats: 3 to 5 ordered beats for the new act, one short sentence each, escalating from where play actually stands. ${BEAT_RULE} Never restate, renumber, or rewrite existing beats.
-milestone: the sketch's milestone, revised only if play has changed what this act must accomplish; otherwise repeat it.
+milestone: the sketch's milestone, revised only if play has changed what this act must accomplish; otherwise repeat it. ${ACT_TITLE_RULE}
 bossEvent: the act's planned boss as a set-piece event with a trigger the DM can recognise in the fiction. If play already killed or dissolved the planned boss, name who or what fills that role now; null only if this act genuinely no longer has a boss.
 finale: what this act escalates toward.
 newEvents: at most 2 additional planned moments for the act; include one ally event if the sketch planned allies. newCast: at most 2.
@@ -446,9 +462,9 @@ If play has invalidated parts of the sketch (a dead boss, a betrayed ally), adap
 
 const UPGRADE_SYSTEM = `An ongoing D&D 5e campaign has a story arc but no saga plan above it. Wrap the existing arc into a longer saga: treat the acts already written as the saga's opening acts and sketch ONLY the acts still ahead. Keep it brief and answer quickly.
 
-Reply with ONLY a strict JSON object, no code fences, shaped exactly: {"title": string, "plannedActs": int, "sketches": [{"milestone": string, "boss": ${BOSS_SHAPE}, "allies": string[], "hooks": string[]}], "finaleBoss": ${BOSS_SHAPE}}
+Reply with ONLY a strict JSON object, no code fences, shaped exactly: {"title": string, "plannedActs": int, "sketches": [{"title": string, "milestone": string, "boss": ${BOSS_SHAPE}, "allies": string[], "hooks": string[]}], "finaleBoss": ${BOSS_SHAPE}}
 
-title: a name for the whole saga, existing acts included. sketches: one entry per FUTURE act, in order, escalating toward a new larger finale beyond the arc's current one; each has a one-sentence milestone, a named boss the act builds toward (with one sentence of detail), 0 to 2 planned companion or ally encounters, and 0 to 2 hooks into a specific party member's abilities, pets, or backstory. finaleBoss: the last act's boss. plannedActs: the total number of acts including the ones already written.
+title: a name for the whole saga, existing acts included. sketches: one entry per FUTURE act, in order, escalating toward a new larger finale beyond the arc's current one; each has its own ${ACT_TITLE_RULE} Each also has a one-sentence milestone, a named boss the act builds toward (with one sentence of detail), 0 to 2 planned companion or ally encounters, and 0 to 2 hooks into a specific party member's abilities, pets, or backstory. finaleBoss: the last act's boss. plannedActs: the total number of acts including the ones already written.
 
 ${SOLVABLE_RULE}
 
@@ -704,6 +720,9 @@ async function chainSaga(campaignId: string, arc: StoryArc): Promise<StoryArc> {
 export async function refreshStoryArc(
   campaignId: string,
   closedChapter: { index: number; title: string; summary: string; highlights: string[] },
+  // chapter-close.ts already showed the "End of Act" card when the arc was
+  // visibly exhausted at the close; the recap is still written here.
+  options: { endAnnounced?: boolean } = {},
 ) {
   try {
     const campaign = getCampaignById(campaignId);
@@ -759,6 +778,7 @@ export async function refreshStoryArc(
     // unparseable delta on a finished act used to leave the arc exhausted,
     // and every chapter after that closed at the floor as a retry.
     next = await planNextAct(campaignId, next);
+    next = await announceActs(campaignId, campaign.storyArc, next, Boolean(options.endAnnounced));
     if (delta) {
       // Replenish the off-screen clocks only when none are live (so at most
       // once per act in practice); no-op while any world arc still ticks.
@@ -813,10 +833,11 @@ export async function planExhaustedArc(campaignId: string): Promise<boolean> {
       return false;
     }
     setDmStatus(campaignId, "plotting_arc");
-    const next = await planNextAct(campaignId, campaign.storyArc);
+    let next = await planNextAct(campaignId, campaign.storyArc);
     if (next === campaign.storyArc || arcExhausted(next)) {
       return false;
     }
+    next = await announceActs(campaignId, campaign.storyArc, next, true);
     setStoryArc(campaignId, next);
     setQuestLog(campaignId, activeQuestLines(next));
     return true;
@@ -828,4 +849,147 @@ export async function planExhaustedArc(campaignId: string): Promise<boolean> {
   } finally {
     setDmStatus(campaignId, "idle");
   }
+}
+
+// ---- Acts, as the table hears them (issue #31) ----
+
+// The players never saw acts change: only "Chapter N" cards, while the
+// act structure lived in the DM's secret arc. When a refresh or a
+// mid-chapter plan finishes an act, the table gets an "End of Act" card and
+// a spoiler-free recap in the log; when the next act has beats, an "Act N"
+// card names it. Returns the arc with the recap recorded so the story tab,
+// timeline and exports can show the saga's shape. `endAnnounced` means
+// chapter-close.ts already put the end card up (the arc was exhausted at
+// the close, so it knew before any model call).
+async function announceActs(
+  campaignId: string,
+  before: StoryArc,
+  after: StoryArc,
+  endAnnounced: boolean,
+): Promise<StoryArc> {
+  const transition = actTransition(before, after);
+  let next = after;
+  if (transition.ended) {
+    const ended = transition.ended;
+    const written = await writeActRecap(campaignId, ended);
+    next = recordActRecap(next, {
+      act: ended.act,
+      sagaIndex: ended.sagaIndex,
+      title: written.title,
+      recap: written.recap,
+    });
+    if (!endAnnounced) {
+      publishActEndCard(campaignId, ended.act, written.title);
+    }
+    const numeral = romanNumeral(ended.act);
+    const named = written.title ? `, "${written.title}",` : "";
+    noteAtTable(
+      campaignId,
+      ended.sagaEnded && ended.sagaTitle
+        ? `Act ${numeral}${named} comes to a close, and with it the saga of "${ended.sagaTitle}". ${written.recap}`
+        : `Act ${numeral}${named} comes to a close. ${written.recap}`,
+    );
+  }
+  if (transition.began) {
+    const began = transition.began;
+    publishTitleCard(campaignId, {
+      title: `Act ${romanNumeral(began.act)}`,
+      ...(began.title ? { subtitle: began.title } : {}),
+      tone: "act",
+    });
+    noteAtTable(
+      campaignId,
+      `Act ${romanNumeral(began.act)}${began.title ? `, "${began.title}",` : ""} begins${
+        began.act === 1 && began.sagaTitle ? `: the saga of "${began.sagaTitle}"` : ""
+      }.`,
+    );
+  }
+  return next;
+}
+
+// The "End of Act" card. Exported for chapter-close.ts, which shows it
+// before the refresh when the arc is already exhausted at the close.
+export function publishActEndCard(campaignId: string, act: number, title: string) {
+  publishTitleCard(campaignId, {
+    title: `End of Act ${romanNumeral(act)}`,
+    ...(title ? { subtitle: title } : {}),
+    tone: "act",
+  });
+}
+
+const ACT_RECAP_SYSTEM = `You are closing an act of an ongoing D&D 5e campaign for the PLAYERS. Return STRICT JSON only, no code fences, shaped: {"title": string, "recap": string}. title: an evocative, spoiler-free name for the act that just ended, two to five words, no surrounding quotes. recap: two to four sentences in the past tense, addressed to the party as "you", covering only what the party witnessed and did: never hidden plans, secret motives, or what lies ahead.`;
+
+// One small call per act. Any failure falls back to the chapters' own
+// highlights so the card and the log never wait on the model.
+async function writeActRecap(
+  campaignId: string,
+  ended: { act: number; sagaIndex: number; title: string; resolution: string },
+): Promise<{ title: string; recap: string }> {
+  const campaign = getCampaignById(campaignId);
+  const closed = listChapters(campaignId).filter((chapter) => chapter.status === "closed");
+  const own = closed.filter(
+    (chapter) => chapter.act === ended.act && (chapter.saga ?? 1) === ended.sagaIndex,
+  );
+  // Chapters sealed before acts were stamped carry no act: the last few
+  // closed chapters stand in for them.
+  const pool = own.length ? own : closed.slice(-6);
+  const fallback = {
+    title: ended.title || "",
+    recap:
+      ended.resolution ||
+      pool
+        .map((chapter) => chapter.highlights[0])
+        .filter(Boolean)
+        .slice(-4)
+        .join(" ") ||
+      "The act came to a close.",
+  };
+  if (
+    !campaign ||
+    !pool.length ||
+    !isStageEnabled(campaign.gameSettings.stages, "chapterSummary")
+  ) {
+    return fallback;
+  }
+  const source = pool
+    .map(
+      (chapter) =>
+        `Chapter ${chapter.index}: ${chapter.title || "Untitled"}\n${
+          chapter.summary || chapter.highlights.join(" ")
+        }`,
+    )
+    .join("\n\n")
+    .slice(-12_000);
+  try {
+    const { message, error } = await trackUtilityCall(campaignId, "act", () =>
+      requestUtilityMessage(
+        campaign.settings,
+        [
+          { role: "system", content: ACT_RECAP_SYSTEM },
+          {
+            role: "user",
+            content: `Act ${romanNumeral(ended.act)}${ended.title ? ` ("${ended.title}")` : ""} has just ended.${
+              ended.resolution ? ` How it ended: ${ended.resolution}` : ""
+            }\n\nIts chapters:\n${source}`,
+          },
+        ],
+        { timeoutMs: arcTextTimeoutMs() },
+      ),
+    );
+    if (error) {
+      return fallback;
+    }
+    const parsed = parseActRecapJson(
+      stripReasoningArtifacts(typeof message?.content === "string" ? message.content : ""),
+    );
+    return { title: parsed.title || fallback.title, recap: parsed.recap || fallback.recap };
+  } catch {
+    return fallback;
+  }
+}
+
+function noteAtTable(campaignId: string, content: string) {
+  const seq = allocateSeq(campaignId);
+  const message = insertCampaignMessage({ campaignId, seq, authorType: "system", content });
+  publishWithSeq(campaignId, seq, "message_added", { message });
 }

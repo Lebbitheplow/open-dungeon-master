@@ -52,8 +52,9 @@ export type TitleCard = {
   id: string;
   title: string;
   subtitle?: string;
-  // Gold for chapters, ember for a fight, dawn for a rest, plain for the DM's own.
-  tone: "gold" | "ember" | "dawn" | "plain";
+  // Gold for chapters, ember for a fight, dawn for a rest, plain for the
+  // DM's own, act for the ends and beginnings of acts (a longer hold).
+  tone: "gold" | "ember" | "dawn" | "plain" | "act";
   sting?: string;
   at: number;
 };

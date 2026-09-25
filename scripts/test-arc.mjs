@@ -577,4 +577,189 @@ test("re-proposed events and cast are not duplicated", () => {
   assert.equal(extended.events.filter((e) => e.name === "Ivry seals them in").length, 1);
 });
 
+// ---- Acts as the table hears them (issue #31) ----
+
+import {
+  actTransition,
+  currentAct,
+  parseActDetailJson,
+  parseActRecapJson,
+  publicActs,
+  recordActRecap,
+  romanNumeral,
+} from "../src/lib/dm/arc-logic.ts";
+
+// A v3 arc: act 1 written, acts 2 and 3 sketched, the second sketch named.
+function sagaArc(beats) {
+  return normalizeStoryArc({
+    premise: "The heart wakes.",
+    beats,
+    saga: {
+      title: "The Sunken Crown",
+      plannedActs: 3,
+      sketches: [
+        { act: 1, milestone: "Reach the drowned city.", status: "detailed", title: "The Drowned Road" },
+        { act: 2, milestone: "Find the vicar's tomb.", status: "sketch", title: "Beneath the Reliquary" },
+        { act: 3, milestone: "Stop the heart.", status: "sketch" },
+      ],
+      finaleBoss: null,
+      sagaIndex: 1,
+      priorSagas: [],
+    },
+  });
+}
+
+test("normalize keeps sketch titles and act recaps, and defaults recaps to none", () => {
+  const arc = sagaArc([
+    { text: "Leave the village.", status: "done", act: 1 },
+    { text: "Cross the marsh.", status: "active", act: 1 },
+  ]);
+  assert.equal(arc.saga.sketches[0].title, "The Drowned Road");
+  assert.equal(arc.saga.sketches[2].title, undefined);
+  assert.deepEqual(arc.actRecaps, []);
+  const kept = normalizeStoryArc({ ...arc, actRecaps: [{ act: 1, sagaIndex: 1, title: "T", recap: "R" }] });
+  assert.deepEqual(kept.actRecaps, [{ act: 1, sagaIndex: 1, title: "T", recap: "R" }]);
+});
+
+test("currentAct is the [NOW] beat's act, or the last written act when exhausted", () => {
+  const live = sagaArc([
+    { text: "a", status: "done", act: 1 },
+    { text: "b", status: "active", act: 2 },
+  ]);
+  assert.equal(currentAct(live), 2);
+  const spent = sagaArc([
+    { text: "a", status: "done", act: 1 },
+    { text: "b", status: "skipped", act: 1 },
+  ]);
+  assert.equal(currentAct(spent), 1);
+});
+
+test("a mid-act refresh announces nothing", () => {
+  const before = sagaArc([
+    { text: "a", status: "done", act: 1 },
+    { text: "b", status: "active", act: 1 },
+  ]);
+  assert.deepEqual(actTransition(before, before), { ended: null, began: null });
+});
+
+test("finishing the act and detailing the next ends one act and begins the other", () => {
+  const before = sagaArc([
+    { text: "a", status: "done", act: 1 },
+    { text: "b", status: "active", act: 1 },
+  ]);
+  const after = sagaArc([
+    { text: "a", status: "done", act: 1 },
+    { text: "b", status: "done", act: 1 },
+    { text: "c", status: "active", act: 2 },
+  ]);
+  const transition = actTransition(before, after);
+  assert.equal(transition.ended.act, 1);
+  assert.equal(transition.ended.title, "The Drowned Road");
+  assert.equal(transition.ended.sagaEnded, false);
+  assert.equal(transition.began.act, 2);
+  assert.equal(transition.began.title, "Beneath the Reliquary");
+});
+
+test("an act that finished with no next act planned still ends, and never ends twice", () => {
+  const before = sagaArc([{ text: "a", status: "done", act: 1 }, { text: "b", status: "active", act: 1 }]);
+  const spent = sagaArc([{ text: "a", status: "done", act: 1 }, { text: "b", status: "done", act: 1 }]);
+  const first = actTransition(before, spent);
+  assert.equal(first.ended.act, 1);
+  assert.equal(first.began, null);
+  const recapped = recordActRecap(spent, { act: 1, sagaIndex: 1, title: "The Drowned Road", recap: "You crossed the marsh." });
+  // The next close (or a mid-chapter plan) finds the recap on file.
+  const again = actTransition(recapped, recapped);
+  assert.equal(again.ended, null);
+  const planned = sagaArc([
+    { text: "a", status: "done", act: 1 },
+    { text: "b", status: "done", act: 1 },
+    { text: "c", status: "active", act: 2 },
+  ]);
+  const later = actTransition(recapped, { ...planned, actRecaps: recapped.actRecaps });
+  assert.equal(later.ended, null);
+  assert.equal(later.began.act, 2);
+});
+
+test("a sequel saga ends the last act with the saga and begins act one of the next", () => {
+  const before = sagaArc([{ text: "a", status: "done", act: 1 }, { text: "b", status: "active", act: 1 }]);
+  const sequel = normalizeStoryArc({
+    premise: "The vacuum.",
+    beats: [
+      { text: "x", status: "active", act: 1 },
+      { text: "y", status: "pending", act: 1 },
+    ],
+    saga: {
+      title: "The Hollow Throne",
+      plannedActs: 2,
+      sketches: [
+        { act: 1, milestone: "m", status: "detailed", title: "Ash and Salt" },
+        { act: 2, milestone: "m2", status: "sketch" },
+      ],
+      finaleBoss: null,
+      sagaIndex: 2,
+      priorSagas: [{ title: "The Sunken Crown", resolution: "The heart was stilled." }],
+    },
+  });
+  const transition = actTransition(before, sequel);
+  assert.equal(transition.ended.sagaEnded, true);
+  assert.equal(transition.ended.sagaTitle, "The Sunken Crown");
+  assert.equal(transition.ended.resolution, "The heart was stilled.");
+  assert.equal(transition.began.act, 1);
+  assert.equal(transition.began.sagaIndex, 2);
+  assert.equal(transition.began.title, "Ash and Salt");
+});
+
+test("recordActRecap names an unnamed sketch and replaces an earlier recap of the same act", () => {
+  const arc = sagaArc([
+    { text: "a", status: "done", act: 1 },
+    { text: "b", status: "active", act: 1 },
+  ]);
+  const once = recordActRecap(arc, { act: 3, sagaIndex: 1, title: "The Still Heart", recap: "one" });
+  assert.equal(once.saga.sketches[2].title, "The Still Heart");
+  const twice = recordActRecap(once, { act: 3, sagaIndex: 1, title: "The Still Heart", recap: "two" });
+  assert.equal(twice.actRecaps.length, 1);
+  assert.equal(twice.actRecaps[0].recap, "two");
+});
+
+test("publicActs carries names and recaps and never a milestone", () => {
+  const arc = recordActRecap(
+    sagaArc([{ text: "a", status: "done", act: 1 }, { text: "b", status: "active", act: 2 }]),
+    { act: 1, sagaIndex: 1, title: "The Drowned Road", recap: "You crossed the marsh." },
+  );
+  const acts = publicActs(arc);
+  assert.deepEqual(
+    acts.map((act) => [act.act, act.title, act.status]),
+    [[1, "The Drowned Road", "done"], [2, "Beneath the Reliquary", "current"], [3, "", "ahead"]],
+  );
+  assert.equal(acts[0].recap, "You crossed the marsh.");
+  assert.ok(!JSON.stringify(acts).includes("milestone"));
+  assert.ok(!JSON.stringify(acts).includes("tomb"));
+});
+
+test("a finished act that no close has announced yet still reads as current", () => {
+  const spent = sagaArc([{ text: "a", status: "done", act: 1 }, { text: "b", status: "skipped", act: 1 }]);
+  assert.deepEqual(publicActs(spent).map((act) => act.status), ["current", "ahead", "ahead"]);
+});
+
+test("the act-detail pass may name the act", () => {
+  const detail = parseActDetailJson('{"beats":["one","two","three"],"title":"Beneath the Reliquary","finale":"f","bossEvent":null,"newEvents":[],"newCast":[]}');
+  assert.equal(detail.title, "Beneath the Reliquary");
+});
+
+test("the act recap parses JSON, and takes prose as the recap when there is none", () => {
+  assert.deepEqual(parseActRecapJson('```json\n{"title":"The Drowned Road","recap":"You crossed the marsh and met the ferryman."}\n```'), {
+    title: "The Drowned Road",
+    recap: "You crossed the marsh and met the ferryman.",
+  });
+  assert.deepEqual(parseActRecapJson("You crossed the marsh and met the ferryman at last."), {
+    title: "",
+    recap: "You crossed the marsh and met the ferryman at last.",
+  });
+  assert.deepEqual(parseActRecapJson("ok"), { title: "", recap: "" });
+});
+
+test("roman numerals", () => {
+  assert.deepEqual([1, 2, 4, 5, 9, 14, 40].map(romanNumeral), ["I", "II", "IV", "V", "IX", "XIV", "XL"]);
+});
+
 console.log(`${passed} arc tests passed`);

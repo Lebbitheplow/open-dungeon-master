@@ -8,11 +8,11 @@ import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { KitButton, PanelError, PanelLoading, RowMenu, panelField } from "./PanelKit";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import type { Chapter } from "@/lib/db/chapters";
-import type { StoryArc } from "@/lib/dm/arc-logic";
+import { romanNumeral, type PublicAct, type StoryArc } from "@/lib/dm/arc-logic";
 import { MAX_BEAT_TEXT, type BeatEdit } from "@/lib/dm/arc-edit-logic";
 import { offersStoryModel, useCapabilities } from "@/lib/use-capabilities";
 import { ExportMenu } from "./ExportMenu";
@@ -67,6 +67,25 @@ function ConfirmRewindDialog({
         </AlertDialog.Content>
       </AlertDialog.Portal>
     </AlertDialog.Root>
+  );
+}
+
+// The rule between acts in the chapter list: the act's number in small
+// caps on a gold hairline, its name, and the recap the table heard when
+// it ended. Reveals with the list's stagger.
+function ActHeading({ act, title, recap }: { act: number; title: string; recap: string }) {
+  return (
+    <li className="reveal pt-2">
+      <div className="flex items-center gap-2">
+        <span className="h-px flex-1 bg-gradient-to-r from-transparent to-amber-500/60" aria-hidden="true" />
+        <span className="font-display text-[11px] uppercase tracking-[0.22em] text-amber-300">
+          Act {romanNumeral(act)}
+        </span>
+        <span className="h-px flex-1 bg-gradient-to-l from-transparent to-amber-500/60" aria-hidden="true" />
+      </div>
+      {title ? <p className="mt-1 text-center font-display text-base text-amber-100">{title}</p> : null}
+      {recap ? <p className="mt-1 text-center text-xs leading-5 text-stone-400">{recap}</p> : null}
+    </li>
   );
 }
 
@@ -733,19 +752,26 @@ export function StoryPanel({
   } | null>(null);
   const [rewindBusy, setRewindBusy] = useState(false);
   const [reading, setReading] = useState(false);
+  // The acts the table has been told about: names and recaps for the
+  // headings between chapters (issue #31). Player-safe by construction.
+  const [acts, setActs] = useState<PublicAct[]>([]);
   const closed = chapters.filter((chapter) => chapter.status === "closed");
   const open = chapters.find((chapter) => chapter.status === "open");
 
-  // Which chapters have a boundary snapshot to rewind to; lead-only UI.
+  // The acts for everyone; which chapters have a boundary snapshot to
+  // rewind to is lead-only UI and only arrives for the lead.
   useEffect(() => {
-    if (!steersStory) {
-      return;
-    }
     let cancelled = false;
     fetch(`/api/campaigns/${campaignId}/chapters`)
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => {
-        if (!cancelled && data && Array.isArray(data.rewindableChapters)) {
+        if (cancelled || !data) {
+          return;
+        }
+        if (Array.isArray(data.acts)) {
+          setActs(data.acts as PublicAct[]);
+        }
+        if (steersStory && Array.isArray(data.rewindableChapters)) {
           setRewindable(data.rewindableChapters as number[]);
         }
       })
@@ -811,7 +837,11 @@ export function StoryPanel({
         </KitButton>
       ) : null}
       <div className="panel rounded-lg p-2.5">
-        <SectionHead title={`Chapter ${open?.index ?? closed.length + 1} in progress`} glyph="tab-journal" className="mb-0" />
+        <SectionHead
+          title={`${open?.act ? `Act ${romanNumeral(open.act)}, ` : ""}Chapter ${open?.index ?? closed.length + 1} in progress`}
+          glyph="tab-journal"
+          className="mb-0"
+        />
         {steersStory ? (
           <KitButton onClick={closeChapter} disabled={closing} title="Seal this chapter; the DM writes its title and summary" className="mt-2 w-full justify-center">
             {closing ? (
@@ -832,19 +862,35 @@ export function StoryPanel({
         ) : null}
       </div>
       <ol className="stagger space-y-2">
-        {[...closed].reverse().map((chapter) => (
-          <ChapterCard
-            key={chapter.id}
-            campaignId={campaignId}
-            chapter={chapter}
-            steersStory={steersStory}
-            onRewind={
-              steersStory && rewindable.includes(chapter.index)
-                ? () => void postRewind(chapter.index, false)
-                : undefined
-            }
-          />
-        ))}
+        {[...closed].reverse().map((chapter, index, list) => {
+          // Newest first, so an act's heading sits above the newest chapter
+          // of that act. Chapters sealed before acts were stamped have none
+          // and run on without a heading.
+          const previous = index > 0 ? list[index - 1] : null;
+          const boundary =
+            chapter.act !== null &&
+            (!previous || previous.act !== chapter.act || (previous.saga ?? 1) !== (chapter.saga ?? 1));
+          const act = boundary
+            ? acts.find((entry) => entry.act === chapter.act && entry.sagaIndex === (chapter.saga ?? 1))
+            : undefined;
+          return (
+            <Fragment key={chapter.id}>
+              {boundary && chapter.act !== null ? (
+                <ActHeading act={chapter.act} title={act?.title ?? ""} recap={act?.recap ?? ""} />
+              ) : null}
+              <ChapterCard
+                campaignId={campaignId}
+                chapter={chapter}
+                steersStory={steersStory}
+                onRewind={
+                  steersStory && rewindable.includes(chapter.index)
+                    ? () => void postRewind(chapter.index, false)
+                    : undefined
+                }
+              />
+            </Fragment>
+          );
+        })}
       </ol>
       <Book
         open={reading}
@@ -853,7 +899,7 @@ export function StoryPanel({
         startAt={closed.length - 1}
         entries={closed.map((chapter) => ({
           id: chapter.id,
-          kicker: `Chapter ${chapter.index}`,
+          kicker: `${chapter.act ? `Act ${romanNumeral(chapter.act)}, ` : ""}Chapter ${chapter.index}`,
           heading: chapter.title || `Chapter ${chapter.index}`,
           body: chapter.summary || "No summary was recorded for this chapter.",
           note: chapter.highlights.length ? chapter.highlights.join("\n") : undefined,

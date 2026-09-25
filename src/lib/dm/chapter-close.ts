@@ -10,6 +10,7 @@ import {
   closeChapterRow,
   ensureOpenChapter,
   listChapters,
+  setChapterAct,
   type Chapter,
 } from "@/lib/db/chapters";
 import {
@@ -32,8 +33,9 @@ import { advanceNpcAgency } from "@/lib/dm/npc-agency";
 import { advanceRelationships } from "@/lib/dm/relationship-tick";
 import { captureBoundarySnapshot } from "@/lib/db/snapshots";
 import { indexChapter } from "@/lib/dm/memory-index";
-import { arcExhausted } from "@/lib/dm/arc-logic";
-import { judgeBeatCompleted, planExhaustedArc, refreshStoryArc } from "@/lib/dm/arc";
+import { actRecapFor, actTitle, arcExhausted, currentAct, sagaIndexOf } from "@/lib/dm/arc-logic";
+import { judgeBeatCompleted, planExhaustedArc, publishActEndCard, refreshStoryArc } from "@/lib/dm/arc";
+import { narratorIsAi } from "@/lib/dm/viewer";
 import { arcTextTimeoutMs } from "@/lib/model-client";
 import { requestUtilityMessage } from "@/lib/dm/model";
 import { trackUtilityCall } from "@/lib/dm/call-tracker";
@@ -253,6 +255,23 @@ export async function maybeCloseChapter(
   const seqEnd = latestSeq(campaignId);
   const transcript = chapterTranscript(campaignId, chapter, seqEnd);
   const previous = previousChapterLines(campaignId, chapter.index);
+  // The act this chapter belongs to, read before the refresh moves the arc
+  // on; stamped on the row so the story tab and exports can group by act.
+  const arcAtClose = getCampaignById(campaignId)?.storyArc ?? null;
+  const actAtClose = arcAtClose ? currentAct(arcAtClose) : null;
+  const sagaAtClose = arcAtClose ? sagaIndexOf(arcAtClose) : null;
+  // The arc is already exhausted at the close: the act has ended and the
+  // table can hear it now, before the refresh spends its model calls on
+  // the recap and the next act. The refresh announces every other case
+  // (issue #31; arc.ts announceActs), and human-DM tables get no cards
+  // since their arc is notes the engine never refreshes.
+  const endsAct = Boolean(
+    arcAtClose &&
+      actAtClose !== null &&
+      narratorIsAi(campaign.gameSettings.dmMode) &&
+      arcExhausted(arcAtClose) &&
+      !actRecapFor(arcAtClose, actAtClose, sagaAtClose ?? undefined),
+  );
   setDmStatus(campaignId, "writing_chapter");
 
   let parsed = {
@@ -302,6 +321,8 @@ export async function maybeCloseChapter(
     highlights: parsed.highlights,
     seqEnd,
     clockLabel: describeInstant(campaign.clock.calendar, campaign.clock.instant),
+    act: actAtClose,
+    saga: sagaAtClose,
   });
   if (!result) {
     setDmStatus(campaignId, "idle");
@@ -343,12 +364,20 @@ export async function maybeCloseChapter(
     chapter: result.closed,
     opened: result.opened,
   });
-  // The new chapter's card on every screen (SceneTitle.tsx).
-  publishTitleCard(campaignId, {
-    title: result.opened.title || `Chapter ${result.opened.index}`,
-    subtitle: result.opened.title ? `Chapter ${result.opened.index}` : undefined,
-    tone: "gold",
-  });
+  // The new chapter's card on every screen (SceneTitle.tsx). At an act's
+  // end it waits for the refresh so the cards read End of Act, Act N,
+  // Chapter N rather than the chapter first.
+  const publishChapterCard = () =>
+    publishTitleCard(campaignId, {
+      title: result.opened.title || `Chapter ${result.opened.index}`,
+      subtitle: result.opened.title ? `Chapter ${result.opened.index}` : undefined,
+      tone: "gold",
+    });
+  if (endsAct && arcAtClose && actAtClose !== null) {
+    publishActEndCard(campaignId, actAtClose, actTitle(arcAtClose, actAtClose));
+  } else {
+    publishChapterCard();
+  }
   const seq = allocateSeq(campaignId);
   const divider = insertCampaignMessage({
     campaignId,
@@ -365,7 +394,18 @@ export async function maybeCloseChapter(
 
   // Chapter boundaries are the arc's heartbeat: mark beats the chapter
   // accomplished, settle or open sub-arcs. Never throws (arc.ts swallows).
-  await refreshStoryArc(campaignId, result.closed);
+  await refreshStoryArc(campaignId, result.closed, { endAnnounced: endsAct });
+  // The opened chapter starts in whatever act the refreshed arc is in.
+  const arcAfter = getCampaignById(campaignId)?.storyArc ?? null;
+  if (arcAfter) {
+    const stamped = setChapterAct(result.opened.id, currentAct(arcAfter), sagaIndexOf(arcAfter));
+    if (stamped) {
+      publishPersisted(campaignId, "chapter_updated", { chapter: stamped });
+    }
+  }
+  if (endsAct) {
+    publishChapterCard();
+  }
 
   // NPC lives move on between chapters: pressure counters, background goal
   // dice, and goal collisions, all deterministic. Never blocks a close.

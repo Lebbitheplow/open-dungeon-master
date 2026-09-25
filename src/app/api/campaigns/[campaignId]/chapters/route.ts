@@ -5,6 +5,7 @@ import { countMessagesUpToSeq } from "@/lib/db/messages";
 import { latestSeq } from "@/lib/db/campaigns";
 import { maybeCloseChapter } from "@/lib/dm/chapter-close";
 import { enqueueDmJob } from "@/lib/dm/queue";
+import { publicActs } from "@/lib/dm/arc-logic";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,6 +26,9 @@ export async function GET(
     (open.seqStart > 0 ? countMessagesUpToSeq(campaignId, open.seqStart - 1) : 0);
   return Response.json({
     chapters: listChapters(campaignId),
+    // The saga's shape with nothing secret in it: act numbers, the names
+    // the table was shown, and the recaps of the acts that ended.
+    acts: context.campaign.storyArc ? publicActs(context.campaign.storyArc) : [],
     openMessageCount,
     // Chapters the lead may rewind to (a boundary snapshot exists).
     rewindableChapters: listRewindableChapters(campaignId),

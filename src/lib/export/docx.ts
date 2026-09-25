@@ -6,7 +6,7 @@ import {
   TableOfContents,
   TextRun,
 } from "docx";
-import type { StoryDocument } from "./story-document";
+import type { StoryDocument } from "@/lib/export/story-document";
 
 // Renders a StoryDocument as a .docx (OOXML). Chapter headings use the
 // Heading 1 style, which docx turns into bookmarks that the TableOfContents
@@ -85,6 +85,14 @@ export async function renderStoryDocx(doc: StoryDocument): Promise<Uint8Array> {
   }
 
   for (const chapter of doc.chapters) {
+    if (chapter.actHeading) {
+      children.push(
+        new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun(chapter.actHeading)] }),
+      );
+      for (const paragraph of textParagraphs(chapter.actRecap ?? "")) {
+        children.push(paragraph);
+      }
+    }
     children.push(
       new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun(chapter.heading)] }),
     );

@@ -118,8 +118,12 @@ export function lengthProfile(length: CampaignLength): LengthProfile {
 export type ActSketch = {
   // Aligns with ArcBeat.act once the act is detailed.
   act: number;
-  // One line: what this act accomplishes.
+  // One line: what this act accomplishes. DM-only: it names the plan.
   milestone: string;
+  // A short, spoiler-free name for the act, fit for the players' title card
+  // ("The Drowned Road"). Optional: arcs written before acts were announced
+  // have none, and their cards read "Act II" alone.
+  title?: string;
   // The major set-piece fight the act builds toward.
   boss: { name: string; detail: string } | null;
   // 0-2 planned companion/ally encounters for the act.
@@ -163,7 +167,19 @@ export type StoryArc = {
   // Off-screen clocks advancing on background dice (world-arc-logic.ts).
   // Additive: [] on every arc that predates the world-simulation engine.
   worldArcs: WorldArc[];
+  // What the table was told when each act ended (issue #31): the name on
+  // the card and the spoiler-free recap, kept so the story tab, timeline
+  // and exports can show the saga's shape. Additive: [] on older arcs.
+  actRecaps: ActRecap[];
   updatedAt: string;
+};
+
+export type ActRecap = {
+  act: number;
+  // Acts renumber from 1 in each sequel saga, so the pair is the key.
+  sagaIndex: number;
+  title: string;
+  recap: string;
 };
 
 export type ArcDelta = {
@@ -221,6 +237,8 @@ export type ActDetail = {
   beats: string[];
   // Optionally revised sketch milestone, when play changed the act's shape.
   milestone?: string;
+  // The act's player-safe name for its title card.
+  title?: string;
   finale: string;
   // The act's planned boss as a set-piece event the DM steers toward.
   bossEvent: Omit<ArcEvent, "id" | "status"> | null;
@@ -233,7 +251,7 @@ export type ActDetail = {
 export type SagaUpgrade = {
   title: string;
   plannedActs: number;
-  sketches: Array<Pick<ActSketch, "act" | "milestone" | "boss" | "allies" | "hooks">>;
+  sketches: Array<Pick<ActSketch, "act" | "milestone" | "title" | "boss" | "allies" | "hooks">>;
   finaleBoss: { name: string; detail: string } | null;
 };
 
@@ -254,6 +272,9 @@ const MAX_ANNOTATIONS = 3;
 const FIELD_CAP = 300;
 const BEAT_CAP = 220;
 const DETAIL_CAP = 200;
+const ACT_TITLE_CAP = 60;
+const ACT_RECAP_CAP = 1_200;
+const MAX_ACT_RECAPS = 40;
 const QUEST_LINE_CAP = 140;
 const SUB_ARC_STATUSES: SubArc["status"][] = ["pending", "active", "resolved", "abandoned"];
 const EVENT_KINDS: ArcEventKind[] = [
@@ -408,9 +429,11 @@ function normalizeSketch(raw: unknown): ActSketch | null {
   if (!milestone || act === null || act > MAX_ACTS) {
     return null;
   }
+  const title = str(record.title, ACT_TITLE_CAP);
   return {
     act,
     milestone,
+    ...(title ? { title } : {}),
     boss: normalizeBoss(record.boss),
     allies: strList(record.allies, MAX_SKETCH_EXTRAS, DETAIL_CAP),
     hooks: strList(record.hooks, MAX_SKETCH_EXTRAS, DETAIL_CAP),
@@ -548,6 +571,23 @@ export function normalizeStoryArc(raw: unknown): StoryArc | null {
   if (saga && saga.plannedActs < acts) {
     saga.plannedActs = acts;
   }
+  const actRecaps: ActRecap[] = [];
+  for (const entry of Array.isArray(record.actRecaps) ? record.actRecaps : []) {
+    const fields = entry as Record<string, unknown> | null;
+    const act = posInt(fields?.act);
+    if (act === null) {
+      continue;
+    }
+    actRecaps.push({
+      act,
+      sagaIndex: posInt(fields?.sagaIndex) ?? 1,
+      title: str(fields?.title, ACT_TITLE_CAP),
+      recap: str(fields?.recap, ACT_RECAP_CAP),
+    });
+    if (actRecaps.length >= MAX_ACT_RECAPS) {
+      break;
+    }
+  }
   return {
     version: 3,
     premise,
@@ -561,8 +601,196 @@ export function normalizeStoryArc(raw: unknown): StoryArc | null {
     events,
     subArcs,
     worldArcs: normalizeWorldArcs(record.worldArcs),
+    actRecaps,
     updatedAt: str(record.updatedAt, 40) || new Date().toISOString(),
   };
+}
+
+// ---- Acts as the table sees them (issue #31, "declare act endings") ----
+
+export function sagaIndexOf(arc: StoryArc): number {
+  return arc.saga?.sagaIndex ?? 1;
+}
+
+// The act the story is in: the [NOW] beat's act, or the last written act
+// when every beat is settled and the next act is still to be planned.
+export function currentAct(arc: StoryArc): number {
+  const active = arc.beats.find((beat) => beat.status === "active");
+  return active ? active.act : arc.acts;
+}
+
+export function actFinished(arc: StoryArc, act: number): boolean {
+  const beats = arc.beats.filter((beat) => beat.act === act);
+  return (
+    beats.length > 0 && beats.every((beat) => beat.status === "done" || beat.status === "skipped")
+  );
+}
+
+export function actRecapFor(
+  arc: StoryArc,
+  act: number,
+  sagaIndex = sagaIndexOf(arc),
+): ActRecap | null {
+  return (
+    arc.actRecaps.find((entry) => entry.act === act && entry.sagaIndex === sagaIndex) ?? null
+  );
+}
+
+// The player-safe name of an act: what its close recorded, else the name
+// the planner gave its sketch. Never the milestone, which states the plan.
+export function actTitle(arc: StoryArc, act: number): string {
+  return (
+    actRecapFor(arc, act)?.title ||
+    arc.saga?.sketches.find((sketch) => sketch.act === act)?.title ||
+    ""
+  );
+}
+
+export function recordActRecap(arc: StoryArc, entry: ActRecap): StoryArc {
+  const next = cloneArc(arc);
+  next.actRecaps = [
+    ...next.actRecaps.filter(
+      (existing) => !(existing.act === entry.act && existing.sagaIndex === entry.sagaIndex),
+    ),
+    {
+      act: entry.act,
+      sagaIndex: entry.sagaIndex,
+      title: str(entry.title, ACT_TITLE_CAP),
+      recap: str(entry.recap, ACT_RECAP_CAP),
+    },
+  ].slice(-MAX_ACT_RECAPS);
+  const sketch = next.saga?.sketches.find((candidate) => candidate.act === entry.act);
+  if (sketch && !sketch.title && entry.title && entry.sagaIndex === sagaIndexOf(next)) {
+    sketch.title = str(entry.title, ACT_TITLE_CAP);
+  }
+  next.updatedAt = new Date().toISOString();
+  return next;
+}
+
+export type ActTransition = {
+  // An act the story just finished and has not yet told the table about.
+  ended: {
+    act: number;
+    sagaIndex: number;
+    title: string;
+    // The whole saga concluded with it; resolution is the chain's one line.
+    sagaEnded: boolean;
+    sagaTitle: string;
+    resolution: string;
+  } | null;
+  // An act the story just entered.
+  began: { act: number; sagaIndex: number; title: string; sagaTitle: string } | null;
+};
+
+// What changed between the arc a refresh started from and the arc it
+// produced, in the terms the table hears: "End of Act II", "Act III". Pure,
+// so the announcement path can be tested without a model. An act that
+// finished in an earlier pass and was announced then (its recap is on
+// file) never ends twice; an act begins when [NOW] moves into a higher act
+// or a sequel saga replaces the finished one.
+export function actTransition(before: StoryArc, after: StoryArc): ActTransition {
+  const beforeSaga = sagaIndexOf(before);
+  const afterSaga = sagaIndexOf(after);
+  const act = currentAct(before);
+  let ended: ActTransition["ended"] = null;
+  if (afterSaga > beforeSaga) {
+    if (!actRecapFor(before, act, beforeSaga)) {
+      ended = {
+        act,
+        sagaIndex: beforeSaga,
+        title: actTitle(before, act),
+        sagaEnded: true,
+        sagaTitle: before.saga?.title ?? "",
+        resolution: after.saga?.priorSagas[after.saga.priorSagas.length - 1]?.resolution ?? "",
+      };
+    }
+  } else if (actFinished(after, act) && !actRecapFor(after, act, afterSaga)) {
+    ended = {
+      act,
+      sagaIndex: afterSaga,
+      title: actTitle(after, act),
+      sagaEnded: false,
+      sagaTitle: after.saga?.title ?? "",
+      resolution: "",
+    };
+  }
+  let began: ActTransition["began"] = null;
+  if (afterSaga > beforeSaga) {
+    began = { act: 1, sagaIndex: afterSaga, title: actTitle(after, 1), sagaTitle: after.saga?.title ?? "" };
+  } else if (currentAct(after) > act && !arcExhausted(after)) {
+    const next = currentAct(after);
+    began = { act: next, sagaIndex: afterSaga, title: actTitle(after, next), sagaTitle: after.saga?.title ?? "" };
+  }
+  return { ended, began };
+}
+
+// The act-recap reply: strict JSON when the model manages it, and plain
+// prose taken as the recap when it does not, so the card and the log never
+// wait on a parse.
+export function parseActRecapJson(raw: string): { title: string; recap: string } {
+  const record = extractJsonObject(raw) as Record<string, unknown> | null;
+  if (record && typeof record === "object") {
+    return { title: str(record.title, ACT_TITLE_CAP), recap: str(record.recap, ACT_RECAP_CAP) };
+  }
+  const prose = raw.replace(/```[a-z]*/gi, "").trim();
+  return { title: "", recap: prose.includes("{") || prose.length < 20 ? "" : str(prose, ACT_RECAP_CAP) };
+}
+
+// "Act IV" on a card, in a heading, in the log.
+export function romanNumeral(value: number): string {
+  if (!Number.isFinite(value) || value < 1) {
+    return String(value);
+  }
+  const table: Array<[number, string]> = [
+    [1000, "M"], [900, "CM"], [500, "D"], [400, "CD"], [100, "C"], [90, "XC"],
+    [50, "L"], [40, "XL"], [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"],
+  ];
+  let rest = Math.floor(value);
+  let out = "";
+  for (const [amount, glyph] of table) {
+    while (rest >= amount) {
+      out += glyph;
+      rest -= amount;
+    }
+  }
+  return out;
+}
+
+export type PublicAct = {
+  act: number;
+  sagaIndex: number;
+  title: string;
+  recap: string;
+  status: "done" | "current" | "ahead";
+};
+
+// The saga's shape with nothing secret in it: act numbers, the names the
+// players were shown, and the recaps of the acts that ended. Milestones,
+// bosses and hooks never leave the DM seat.
+export function publicActs(arc: StoryArc): PublicAct[] {
+  const out: PublicAct[] = [];
+  const sagaIndex = sagaIndexOf(arc);
+  for (const recap of arc.actRecaps) {
+    if (recap.sagaIndex < sagaIndex) {
+      out.push({ ...recap, status: "done" });
+    }
+  }
+  const now = currentAct(arc);
+  const planned = Math.max(arc.acts, arc.saga?.plannedActs ?? 0);
+  for (let act = 1; act <= planned; act += 1) {
+    const recap = actRecapFor(arc, act, sagaIndex);
+    out.push({
+      act,
+      sagaIndex,
+      title: actTitle(arc, act),
+      recap: recap?.recap ?? "",
+      // A finished act stays "current" until its close announces it: the
+      // table is still playing its breather, and the timeline draws only
+      // announced ends.
+      status: recap ? "done" : act < now ? "done" : act === now ? "current" : "ahead",
+    });
+  }
+  return out;
 }
 
 // True for an arc that predates the v2 layers, so refreshStoryArc knows to
@@ -996,6 +1224,10 @@ export function parseActDetailJson(raw: string): ActDetail | null {
   if (milestone) {
     detail.milestone = milestone;
   }
+  const title = str(record.title, ACT_TITLE_CAP);
+  if (title) {
+    detail.title = title;
+  }
   return detail;
 }
 
@@ -1017,6 +1249,7 @@ export function parseSagaUpgradeJson(raw: string): SagaUpgrade | null {
       sketches.push({
         act: sketch.act,
         milestone: sketch.milestone,
+        ...(sketch.title ? { title: sketch.title } : {}),
         boss: sketch.boss,
         allies: sketch.allies,
         hooks: sketch.hooks,
@@ -1087,6 +1320,7 @@ function cloneArc(arc: StoryArc): StoryArc {
       rungs: [...worldArc.rungs],
       consequences: [...worldArc.consequences],
     })),
+    actRecaps: arc.actRecaps.map((recap) => ({ ...recap })),
   };
 }
 
@@ -1327,6 +1561,9 @@ export function applyActDetail(arc: StoryArc, detail: ActDetail): StoryArc {
       if (detail.milestone) {
         target.milestone = detail.milestone;
       }
+      if (detail.title) {
+        target.title = detail.title;
+      }
       if (detail.bossEvent) {
         target.boss = { name: detail.bossEvent.name, detail: detail.bossEvent.detail };
       }
@@ -1363,6 +1600,7 @@ export function applyArcUpgrade(arc: StoryArc, upgrade: SagaUpgrade): StoryArc {
     .map((sketch, index) => ({
       act: arc.acts + 1 + index,
       milestone: sketch.milestone,
+      ...(sketch.title ? { title: sketch.title } : {}),
       boss: sketch.boss,
       allies: sketch.allies,
       hooks: sketch.hooks,

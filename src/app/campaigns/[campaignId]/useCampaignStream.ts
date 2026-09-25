@@ -194,8 +194,12 @@ export type CampaignState = {
   // Persisted so a late joiner sees the same weather.
   scene: SceneState | null;
   // A chapter, encounter or DM title card. Persisted so it lands in the
-  // log; the overlay shows the newest once.
+  // log; the overlay shows each once, in order.
   titleCard: TitleCard | null;
+  // Cards that arrived while one was playing (an act's end, the new act,
+  // then the chapter, all from one close): shown one after another rather
+  // than the newest replacing the rest mid-flight.
+  titleCardQueue: TitleCard[];
   // The DM steering the board. Ephemeral, like a ping.
   camera: CameraEvent | null;
   // The handout the DM put in front of everyone. Persisted so a late joiner
@@ -301,6 +305,7 @@ const initialState: CampaignState = {
   fx: [],
   scene: null,
   titleCard: null,
+  titleCardQueue: [],
   camera: null,
   handout: null,
   safetyPause: null,
@@ -394,8 +399,13 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
       const played = new Set(action.ids);
       return { ...state, fx: state.fx.filter((entry) => !played.has(entry.id)) };
     }
-    case "titleCardShown":
-      return state.titleCard?.id === action.id ? { ...state, titleCard: null } : state;
+    case "titleCardShown": {
+      if (state.titleCard?.id !== action.id) {
+        return state;
+      }
+      const [following, ...rest] = state.titleCardQueue;
+      return { ...state, titleCard: following ?? null, titleCardQueue: rest };
+    }
     case "cameraDone":
       return state.camera ? { ...state, camera: null } : state;
     case "error":
@@ -543,7 +553,13 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
           return next;
         case "title_card": {
           const card = payload as unknown as TitleCard;
-          next.titleCard = card;
+          if (next.titleCard && next.titleCard.id !== card.id) {
+            if (!next.titleCardQueue.some((queued) => queued.id === card.id)) {
+              next.titleCardQueue = [...next.titleCardQueue, card];
+            }
+          } else {
+            next.titleCard = card;
+          }
           if (card.sting) {
             next.ambienceSting = { cue: card.sting, at: card.at };
           }
@@ -1036,6 +1052,7 @@ export function useCampaignStream(campaignId: string) {
           handout: data.handout ?? null,
           safetyPause: data.safetyPause ?? null,
           titleCard: data.titleCard ?? null,
+          titleCardQueue: [],
           lastSeq,
         },
       });

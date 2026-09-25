@@ -7,6 +7,7 @@ import { listSheets } from "@/lib/db/sheets";
 import { listCalendarEvents } from "@/lib/db/calendar-events";
 import { describeInstant, formatDate } from "@/lib/dm/calendar";
 import { buildTimeline } from "@/lib/dm/timeline-logic";
+import { publicActs } from "@/lib/dm/arc-logic";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,9 +27,24 @@ export async function GET(
     .filter((sheet) => sheet.userId === context.user.id)
     .map((sheet) => sheet.id);
   const { campaign } = context;
+  const chapters = listChapters(campaignId);
+  // Acts that ended, placed at the close of their last chapter. Chapters
+  // sealed before acts were stamped carry none and draw no act rows.
+  const acts = campaign.storyArc
+    ? publicActs(campaign.storyArc)
+        .filter((act) => act.status === "done")
+        .map((act) => {
+          const last = chapters
+            .filter((chapter) => chapter.status === "closed" && chapter.act === act.act && (chapter.saga ?? 1) === act.sagaIndex)
+            .at(-1);
+          return { ...act, endedSeq: last?.seqEnd ?? 0, clockLabel: last?.clockLabel ?? "" };
+        })
+        .filter((act) => act.endedSeq > 0)
+    : [];
   const rows = buildTimeline(
     {
-      chapters: listChapters(campaignId),
+      chapters,
+      acts,
       facts: listFactsVisibleTo(campaignId, owned, dm),
       sessions: listScheduledSessions(campaignId),
       arcs: dm ? (campaign.storyArc?.worldArcs ?? []) : [],

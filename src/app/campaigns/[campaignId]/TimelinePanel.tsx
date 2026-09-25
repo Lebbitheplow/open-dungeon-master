@@ -15,6 +15,7 @@ import type { TimelineKind, TimelineRow } from "@/lib/dm/timeline-logic";
 
 const KIND_LABEL: Record<TimelineKind, string> = {
   chapter: "Chapters",
+  act: "Acts",
   fact: "Facts",
   session: "Sessions",
   arc: "World arcs",
@@ -24,6 +25,7 @@ const KIND_LABEL: Record<TimelineKind, string> = {
 
 const KIND_GLYPH: Record<TimelineKind, string> = {
   chapter: "tab-story",
+  act: "tab-story",
   fact: "tab-facts",
   session: "tab-session",
   arc: "system-storyboard",
@@ -33,6 +35,7 @@ const KIND_GLYPH: Record<TimelineKind, string> = {
 
 const KIND_TONE: Record<TimelineKind, string> = {
   chapter: "border-amber-700/60 text-amber-200",
+  act: "border-amber-400/70 bg-amber-950/40 text-amber-100 shadow-glow-gold",
   fact: "border-stone-700 text-stone-300",
   session: "border-sky-800/60 text-sky-200",
   arc: "border-violet-800/60 text-violet-200",

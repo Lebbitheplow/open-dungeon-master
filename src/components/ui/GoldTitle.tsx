@@ -36,9 +36,12 @@ const BRONZE: Record<ExtrudedTone, [number, number, number]> = {
   ember: [1.6, 0.7, 0.4],
   dawn: [1.5, 1.05, 0.85],
   plain: [1.05, 1.02, 1.0],
+  // Acts: paler, ivory-leaning gold so the card reads as a bigger moment
+  // than a chapter's without changing its metal.
+  act: [1.55, 1.3, 0.8],
 };
 
-export type ExtrudedTone = "gold" | "ember" | "dawn" | "plain";
+export type ExtrudedTone = "gold" | "ember" | "dawn" | "plain" | "act";
 
 // The carved title: the face is gradient-clipped text, the layers behind it
 // repeat the same words so they wrap exactly as the face does. The layers are

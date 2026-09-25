@@ -21,6 +21,9 @@ import type { TitleCard } from "@/lib/scene/state";
 
 const IN_MS = 900;
 const HOLD_MS = 1600;
+// An act's end or beginning is the story's biggest punctuation: it holds
+// longer than a chapter card so the subtitle (the act's name) can be read.
+const HOLD_ACT_MS = 2800;
 const OUT_MS = 900;
 
 // Eighteen sparks on a ring, fixed so every client draws the same burst.
@@ -44,6 +47,7 @@ const SCRIM: Record<TitleCard["tone"], string> = {
   ember: "bg-[rgba(30,8,4,0.72)]",
   dawn: "bg-[linear-gradient(180deg,rgba(40,28,60,0.75),rgba(212,140,110,0.55))]",
   plain: "bg-[rgba(12,10,9,0.74)]",
+  act: "bg-[radial-gradient(ellipse_at_center,rgba(28,20,44,0.78),rgba(6,4,12,0.9))]",
 };
 
 export function SceneTitle({
@@ -68,6 +72,7 @@ export function SceneTitle({
   // the hold and out timers: the card arrived and never left.
   const cardId = card?.id ?? null;
   const cardAt = card?.at ?? 0;
+  const holdMs = card?.tone === "act" ? HOLD_ACT_MS : HOLD_MS;
   useEffect(() => {
     if (!cardId) {
       return;
@@ -82,14 +87,14 @@ export function SceneTitle({
     timers.push(window.setTimeout(() => setShownId(cardId), 0));
     timers.push(window.setTimeout(() => setPhase("in"), 0));
     timers.push(window.setTimeout(() => setPhase("hold"), reduced ? 10 : IN_MS));
-    timers.push(window.setTimeout(() => setPhase("out"), IN_MS + HOLD_MS));
+    timers.push(window.setTimeout(() => setPhase("out"), IN_MS + holdMs));
     timers.push(
       window.setTimeout(
         () => {
           setPhase(null);
           shown.current(cardId);
         },
-        IN_MS + HOLD_MS + (reduced ? 10 : OUT_MS),
+        IN_MS + holdMs + (reduced ? 10 : OUT_MS),
       ),
     );
     return () => {
@@ -97,7 +102,7 @@ export function SceneTitle({
         window.clearTimeout(timer);
       }
     };
-  }, [cardId, cardAt, reduced]);
+  }, [cardId, cardAt, holdMs, reduced]);
 
   if (!card || !phase || card.id !== shownId) {
     return null;
