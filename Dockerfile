@@ -111,6 +111,14 @@ RUN mkdir -p data public/uploads public/generated public/generated-audio logs \
   && chown node:node data public/uploads public/generated public/generated-audio logs
 
 USER node
+
+# Embed once with only what this image ships, as the user that runs it. The
+# standalone tracer once dropped the embedding runtime's JavaScript (see
+# next.config.ts) and nothing failed: every container quietly fell back to
+# keyword search. A missing module now fails the build here instead. The
+# default model is already baked, so nothing is downloaded.
+RUN node scripts/fetch-embedding-model.mjs
+
 EXPOSE 3005
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \

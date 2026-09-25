@@ -36,6 +36,12 @@ const nextConfig: NextConfig = {
         // embedding runtime) resolves its .node binding by a computed path,
         // and mediasoup spawns a standalone worker executable that nothing
         // ever imports, so tracing has no reference to follow.
+        // onnxruntime-node's own JavaScript is missed too: transformers.js
+        // loads it through createRequire, which the tracer cannot follow, so
+        // without dist/ and package.json the image carried the binding alone
+        // and every embed failed with "Cannot find module 'onnxruntime-node'".
+        // It then requires onnxruntime-common's CommonJS build, while the
+        // tracer only saw transformers.js import the ESM one (1.2 MB whole).
         // Only the linux/x64 binding is shipped; embeddings are CPU-only.
         // The WASM picture codecs (src/lib/image-variants.ts) are loaded
         // inside a worker thread from a code string, so nothing imports
@@ -43,6 +49,9 @@ const nextConfig: NextConfig = {
         outputFileTracingIncludes: {
           "/*": [
             "node_modules/better-sqlite3-multiple-ciphers/**/*",
+            "node_modules/onnxruntime-node/package.json",
+            "node_modules/onnxruntime-node/dist/**/*",
+            "node_modules/onnxruntime-common/**/*",
             "node_modules/onnxruntime-node/bin/napi-v6/linux/x64/**/*",
             "node_modules/mediasoup/worker/out/Release/**/*",
             "node_modules/@jsquash/**/*",
