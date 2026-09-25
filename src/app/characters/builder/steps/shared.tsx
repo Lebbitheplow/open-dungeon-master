@@ -71,7 +71,8 @@ export function Chip({
   info,
 }: {
   label: string;
-  onRemove: () => void;
+  // Absent for chips the player cannot drop (granted subclass spells).
+  onRemove?: () => void;
   homebrew?: boolean;
   info?: InfoSource;
 }) {
@@ -88,14 +89,16 @@ export function Chip({
       {info ? (
         <InfoButton label={label} text={info.text} meta={info.meta} reference={info.reference} />
       ) : null}
-      <button
-        type="button"
-        onClick={onRemove}
-        className="text-stone-500 hover:text-red-400"
-        aria-label={`Remove ${label}`}
-      >
-        <X className="size-3" />
-      </button>
+      {onRemove ? (
+        <button
+          type="button"
+          onClick={onRemove}
+          className="text-stone-500 hover:text-red-400"
+          aria-label={`Remove ${label}`}
+        >
+          <X className="size-3" />
+        </button>
+      ) : null}
     </span>
   );
 }

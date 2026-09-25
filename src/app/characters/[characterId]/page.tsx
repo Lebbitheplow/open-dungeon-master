@@ -423,6 +423,7 @@ export default function CharacterDetailPage({
         <UseInCampaignDialog
           characterId={characterId}
           characterName={character.name}
+          characterLevel={character.level}
           seatedIn={(character.campaigns ?? []).map((assignment) => assignment.campaignId)}
           onClose={() => setSeating(false)}
         />

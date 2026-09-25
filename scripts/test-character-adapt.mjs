@@ -222,4 +222,36 @@ test("a level outside 1 to 20 is clamped rather than trusted", () => {
   assert.equal(adaptSheetToLevel(sheet(), 9, 99).hitDice.total, 20);
 });
 
+// ---- spells follow the level ----
+
+test("a level 4 wizard joining a level 1 table gives back the spells it has not earned", () => {
+  const wizard = sheet({
+    class: "wizard",
+    subclass: "",
+    abilities: { str: 8, dex: 14, con: 14, int: 16, wis: 12, cha: 10 },
+    spellcasting: {
+      ability: "int",
+      slots: { 1: { max: 4, used: 0 }, 2: { max: 3, used: 0 } },
+      known: [],
+      cantrips: ["Fire Bolt", "Light", "Mage Hand", "Minor Illusion"],
+      prepared: ["Magic Missile", "Shield", "Misty Step", "Sleep", "Mage Armor", "Scorching Ray", "Detect Magic"],
+      spellbook: [
+        "Magic Missile", "Shield", "Misty Step", "Sleep", "Mage Armor", "Scorching Ray",
+        "Detect Magic", "Find Familiar", "Identify", "Web", "Burning Hands", "Comprehend Languages",
+      ],
+    },
+  });
+  const adapted = adaptSheetToLevel(wizard, 4, 1).spellcasting;
+  assert.deepEqual(Object.keys(adapted.slots), ["1"]);
+  assert.equal(adapted.cantrips.length, 3, "a level 1 wizard knows three cantrips");
+  assert.ok(!adapted.prepared.includes("Misty Step"), "no 2nd-level spell stays prepared");
+  // INT 16 at level 1: 3 + 1 = 4 prepared.
+  assert.deepEqual(adapted.prepared, ["Magic Missile", "Shield", "Sleep", "Mage Armor"]);
+  assert.equal(adapted.spellbook.length, 6);
+  assert.ok(!adapted.spellbook.includes("Web"));
+  // The library copy is untouched, and joining at the same level keeps everything.
+  assert.equal(wizard.spellcasting.prepared.length, 7);
+  assert.equal(adaptSheetToLevel(wizard, 4, 4).spellcasting.prepared.length, 7);
+});
+
 console.log(`character adapt: ${passed} assertions passed.`);

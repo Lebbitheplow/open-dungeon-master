@@ -11,6 +11,8 @@ import { SectionHead } from "@/components/ui/SectionHead";
 import { KitButton, PanelError } from "./PanelKit";
 import { spellClassFor } from "@/lib/classes";
 import { spellSlotsFor } from "@/lib/srd";
+import { isCantripName } from "@/lib/srd/spell-lists";
+import { casterViewsOf, spellStyleFor, withCasterViews } from "@/lib/srd/spell-prep";
 import MultiContentPicker from "@/app/characters/builder/MultiContentPicker";
 
 // The highest spell level this character has a slot for, so the pickers
@@ -49,6 +51,46 @@ function ChipList({ values, onRemove }: { values: string[]; onRemove: (value: st
   );
 }
 
+// Carries a lead's edit of the top-level spell lists into the per-class
+// lists: whatever was removed leaves every class, whatever was added joins
+// the class that holds that kind of list (the first one, failing that).
+function syncCasterLists(
+  before: NonNullable<CharacterSheet["spellcasting"]>,
+  after: NonNullable<CharacterSheet["spellcasting"]>,
+  sheet: CharacterSheet,
+): NonNullable<CharacterSheet["spellcasting"]> {
+  const lower = (list: string[] = []) => new Set(list.map((name) => name.toLowerCase()));
+  const keys = ["known", "prepared", "cantrips", "pending", "spellbook"] as const;
+  const views = casterViewsOf(sheet);
+  for (const key of keys) {
+    const was = lower(before[key]);
+    const now = lower(after[key]);
+    const removed = (before[key] ?? []).filter((name) => !now.has(name.toLowerCase()));
+    const added = (after[key] ?? []).filter((name) => !was.has(name.toLowerCase()));
+    for (const view of views) {
+      view[key] = view[key].filter((name) => !removed.some((gone) => gone.toLowerCase() === name.toLowerCase()));
+    }
+    if (added.length && views.length) {
+      const home =
+        views.find((view) =>
+          key === "known"
+            ? view.style === "known"
+            : key === "spellbook"
+              ? view.style === "spellbook"
+              : key === "cantrips"
+                ? true
+                : view.style !== "known",
+        ) ?? views[0];
+      home[key] = [...home[key], ...added];
+    }
+  }
+  return withCasterViews(after, views);
+}
+
+function levelMeta(entry: { level?: number }): string {
+  return entry.level !== undefined ? (entry.level === 0 ? "cantrip" : `level ${entry.level}`) : "";
+}
+
 // Party lead correction of any character's numbers, items, and spells, for
 // when the AI DM gets something wrong. Server clamps values and writes an
 // audit entry.
@@ -73,6 +115,33 @@ export function LeadEditDialog({
   );
   const [prepared, setPrepared] = useState<string[]>(sheet.spellcasting?.prepared ?? []);
   const [known, setKnown] = useState<string[]>(sheet.spellcasting?.known ?? []);
+  const [cantrips, setCantrips] = useState<string[]>(sheet.spellcasting?.cantrips ?? []);
+  const [pending, setPending] = useState<string[]>(sheet.spellcasting?.pending ?? []);
+  // Which lists this class actually uses (src/lib/srd/spell-prep.ts), so the
+  // dialog never offers a cleric a "known" list or a bard a "prepared" one.
+  // Anything already on the sheet stays editable whatever the class says.
+  const style = spellStyleFor(sheet.class);
+  // A wizard's prepared spells are in the book even on a sheet written
+  // before the book was kept.
+  const [spellbook, setSpellbook] = useState<string[]>(() =>
+    style === "spellbook" && sheet.spellcasting
+      ? [...new Set([...(sheet.spellcasting.spellbook ?? []), ...sheet.spellcasting.prepared])]
+      : (sheet.spellcasting?.spellbook ?? []),
+  );
+  // A cantrip is recognised by the level its search row carries, or by name
+  // for one typed in by hand.
+  const isCantrip = (entry: { name: string; level?: number }) =>
+    entry.level === 0 || (entry.level === undefined && isCantripName(entry.name));
+  // A cantrip picked from any levelled search still lands in the cantrip
+  // list; the other lists hold levelled spells only.
+  const addCantrips = (entries: Array<{ name: string; level?: number }>) => {
+    const picked = entries.filter(isCantrip).map((entry) => entry.name);
+    if (picked.length) {
+      setCantrips((list) => [...list, ...picked.filter((name) => !list.includes(name))]);
+    }
+  };
+  const spellNamesOf = (entries: Array<{ name: string; level?: number }>) =>
+    entries.filter((entry) => !isCantrip(entry)).map((entry) => entry.name);
   const [slots, setSlots] = useState<Record<string, { max: string; used: string }>>(() =>
     Object.fromEntries(
       Object.entries(sheet.spellcasting?.slots ?? {}).map(([level, slot]) => [
@@ -130,7 +199,8 @@ export function LeadEditDialog({
       patch.equipment = nextEquipment;
     }
     if (sheet.spellcasting) {
-      const nextSpellcasting = {
+      const nextSpellcasting: NonNullable<CharacterSheet["spellcasting"]> = {
+        ...sheet.spellcasting,
         ability: sheet.spellcasting.ability,
         slots: Object.fromEntries(
           Object.entries(sheet.spellcasting.slots).map(([level, slot]) => {
@@ -142,7 +212,26 @@ export function LeadEditDialog({
         ),
         prepared,
         known,
+        cantrips,
       };
+      // The optional lists stay off a sheet that never had them.
+      if (pending.length) {
+        nextSpellcasting.pending = pending;
+      } else {
+        delete nextSpellcasting.pending;
+      }
+      if (spellbook.length || sheet.spellcasting.spellbook) {
+        nextSpellcasting.spellbook = spellbook;
+      }
+      // A sheet that keeps per-class lists (casters) is read from them by the
+      // spell book; editing only the top-level lists left the two telling
+      // different stories. The edit goes into the class lists too.
+      if (sheet.spellcasting.casters?.length) {
+        Object.assign(
+          nextSpellcasting,
+          syncCasterLists(sheet.spellcasting, nextSpellcasting, sheet),
+        );
+      }
       if (JSON.stringify(nextSpellcasting) !== JSON.stringify(sheet.spellcasting)) {
         patch.spellcasting = nextSpellcasting;
       }
@@ -274,6 +363,24 @@ export function LeadEditDialog({
             <div className="reveal mt-3 space-y-2 text-xs">
               <SectionHead title="Spells" glyph="rest-spell-slot" level="h3" />
               <div className="space-y-1">
+                <span className="eyebrow text-[10px] text-amber-400/80">Cantrips</span>
+                <ChipList
+                  values={cantrips}
+                  onRemove={(value) =>
+                    setCantrips((list) => list.filter((entry) => entry !== value))
+                  }
+                />
+                <MultiContentPicker
+                  kind="spells"
+                  extraParams={{ class: spellClassFor(sheet.class), level: "0" }}
+                  placeholder="Search cantrips to add"
+                  selectedNames={cantrips}
+                  onAdd={(entries) => addCantrips(entries)}
+                  renderMeta={() => "cantrip"}
+                />
+              </div>
+              {style === "known" || known.length ? (
+              <div className="space-y-1">
                 <span className="eyebrow text-[10px] text-amber-400/80">Known</span>
                 <ChipList
                   values={known}
@@ -287,18 +394,41 @@ export function LeadEditDialog({
                   }}
                   placeholder="Search spells to add as known"
                   selectedNames={known}
-                  onAdd={(entries) =>
-                    setKnown((list) => [...list, ...entries.map((entry) => entry.name)])
-                  }
-                  renderMeta={(entry) =>
-                    entry.level !== undefined
-                      ? entry.level === 0
-                        ? "cantrip"
-                        : `level ${entry.level}`
-                      : ""
-                  }
+                  onAdd={(entries) => {
+                    addCantrips(entries);
+                    setKnown((list) => [...list, ...spellNamesOf(entries)]);
+                  }}
+                  renderMeta={levelMeta}
                 />
               </div>
+              ) : null}
+              {style === "spellbook" || spellbook.length ? (
+                <div className="space-y-1">
+                  <span className="eyebrow text-[10px] text-amber-400/80">Spellbook</span>
+                  <ChipList
+                    values={spellbook}
+                    onRemove={(value) => {
+                      setSpellbook((list) => list.filter((entry) => entry !== value));
+                      setPrepared((list) => list.filter((entry) => entry !== value));
+                    }}
+                  />
+                  <MultiContentPicker
+                    kind="spells"
+                    extraParams={{
+                      class: spellClassFor(sheet.class),
+                      level: String(highestSlotLevel(sheet.class, sheet.level)),
+                    }}
+                    placeholder="Search spells to write in the spellbook"
+                    selectedNames={spellbook}
+                    onAdd={(entries) => {
+                      addCantrips(entries);
+                      setSpellbook((list) => [...list, ...spellNamesOf(entries)]);
+                    }}
+                    renderMeta={levelMeta}
+                  />
+                </div>
+              ) : null}
+              {style !== "known" || prepared.length ? (
               <div className="space-y-1">
                 <span className="eyebrow text-[10px] text-amber-400/80">Prepared</span>
                 <ChipList
@@ -315,18 +445,28 @@ export function LeadEditDialog({
                   }}
                   placeholder="Search spells to add as prepared"
                   selectedNames={prepared}
-                  onAdd={(entries) =>
-                    setPrepared((list) => [...list, ...entries.map((entry) => entry.name)])
-                  }
-                  renderMeta={(entry) =>
-                    entry.level !== undefined
-                      ? entry.level === 0
-                        ? "cantrip"
-                        : `level ${entry.level}`
-                      : ""
-                  }
+                  onAdd={(entries) => {
+                    addCantrips(entries);
+                    const names = spellNamesOf(entries);
+                    setPrepared((list) => [...list, ...names]);
+                    // A wizard's prepared spell is written in the book too.
+                    if (style === "spellbook") {
+                      setSpellbook((list) => [...list, ...names.filter((name) => !list.includes(name))]);
+                    }
+                  }}
+                  renderMeta={levelMeta}
                 />
               </div>
+              ) : null}
+              {pending.length ? (
+                <div className="space-y-1">
+                  <span className="eyebrow text-[10px] text-sky-300/80">Prepared at the next long rest</span>
+                  <ChipList
+                    values={pending}
+                    onRemove={(value) => setPending((list) => list.filter((entry) => entry !== value))}
+                  />
+                </div>
+              ) : null}
               <div className="stagger-pop flex flex-wrap gap-2">
                 {Object.entries(sheet.spellcasting.slots).map(([level]) => (
                   <div key={level} className="space-y-1">

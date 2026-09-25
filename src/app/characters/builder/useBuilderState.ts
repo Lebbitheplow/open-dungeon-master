@@ -67,10 +67,25 @@ export function useBuilderState({
       ),
     ).map((style) => style.id),
   );
+  // Levelled spells and cantrips are two lists, the way the sheet keeps them.
+  // For a wizard `spells` is the spellbook and `bookPrepared` the part of it
+  // prepared; every other class leaves `bookPrepared` alone.
   const [spells, setSpells] = useState<string[]>(() =>
     initial?.spellcasting
-      ? [...new Set([...initial.spellcasting.known, ...initial.spellcasting.prepared])]
+      ? [
+          ...new Set([
+            ...(initial.spellcasting.spellbook ?? []),
+            ...initial.spellcasting.known,
+            ...initial.spellcasting.prepared,
+          ]),
+        ]
       : [],
+  );
+  const [bookPrepared, setBookPrepared] = useState<string[]>(
+    () => initial?.spellcasting?.prepared ?? [],
+  );
+  const [cantrips, setCantrips] = useState<string[]>(() =>
+    initial?.spellcasting ? [...new Set(initial.spellcasting.cantrips ?? [])] : [],
   );
   const [equipment, setEquipment] = useState<EquipmentItem[]>(() =>
     (initial?.equipment ?? []).map((item) => ({
@@ -112,7 +127,6 @@ export function useBuilderState({
   );
   const [racialCantrip, setRacialCantrip] = useState(initial?.racialChoices?.cantrip ?? "");
   const [racialTool, setRacialTool] = useState(initial?.racialChoices?.tool ?? "");
-  const [cantripNames, setCantripNames] = useState<string[]>([]);
   // Prefixed feature names, e.g. "Invocation: Agonizing Blast".
   const [optionPicks, setOptionPicks] = useState<string[]>(() =>
     (initial?.features ?? [])
@@ -203,6 +217,8 @@ export function useBuilderState({
     setChosenSkills([]);
     setSubclass("");
     setSpells([]);
+    setBookPrepared([]);
+    setCantrips([]);
     setRemovedAutoNames([]);
     setOptionPicks([]);
   }
@@ -239,6 +255,8 @@ export function useBuilderState({
     expertisePicks, setExpertisePicks,
     stylePicks, setStylePicks,
     spells, setSpells,
+    bookPrepared, setBookPrepared,
+    cantrips, setCantrips,
     equipment, setEquipment,
     removedAutoNames, setRemovedAutoNames,
     feats, setFeats,
@@ -248,7 +266,6 @@ export function useBuilderState({
     racialSkills, setRacialSkills,
     racialCantrip, setRacialCantrip,
     racialTool, setRacialTool,
-    cantripNames, setCantripNames,
     optionPicks, setOptionPicks,
     spellWarningAck, setSpellWarningAck,
     backstory, setBackstory,

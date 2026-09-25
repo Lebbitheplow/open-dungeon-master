@@ -3,6 +3,7 @@ import { touchCampaign } from "@/lib/db/campaigns";
 import { populateFeaturesForClasses } from "@/lib/srd/features";
 import { populateResources } from "@/lib/srd/class-resources";
 import { deriveAc } from "@/lib/srd";
+import { normalizeSpellcasting } from "@/lib/srd/spell-lists";
 import { ATTUNEMENT_SLOTS } from "@/lib/srd/armor";
 import { itemWeightByName } from "@/lib/content";
 import { hydrateHomebrewGear } from "@/lib/db/homebrew";
@@ -74,10 +75,12 @@ const EMPTY_PROFICIENCIES = {
 
 function mapSheet(row: SheetRow): CharacterSheet {
   // Sheets created before the `known` spell list existed lack the field.
-  const spellcasting = parseJson<CharacterSheet["spellcasting"]>(row.spellcasting_json, null);
-  if (spellcasting && !Array.isArray(spellcasting.known)) {
-    spellcasting.known = [];
+  const parsedCasting = parseJson<CharacterSheet["spellcasting"]>(row.spellcasting_json, null);
+  if (parsedCasting && !Array.isArray(parsedCasting.known)) {
+    parsedCasting.known = [];
   }
+  // Sheets from before the cantrip list kept cantrips in prepared/known.
+  const spellcasting = normalizeSpellcasting(parsedCasting);
   return {
     id: row.id,
     campaignId: row.campaign_id,
@@ -175,7 +178,8 @@ function withBackgroundFeature(
   if (!granted) {
     return list;
   }
-  const label = `${granted.name} (${granted.background})`;
+  // The sheet schema holds feature names to 80 characters.
+  const label = `${granted.name} (${granted.background})`.slice(0, 80);
   if (list.some((feature) => feature.name.toLowerCase() === label.toLowerCase())) {
     return list;
   }
@@ -310,7 +314,7 @@ export function createSheet(
     JSON.stringify(input.feats),
     JSON.stringify(features),
     JSON.stringify(resources),
-    JSON.stringify(input.spellcasting),
+    JSON.stringify(normalizeSpellcasting(input.spellcasting)),
     input.portrait ? JSON.stringify(input.portrait) : null,
     input.notes,
     // Older library sheet_json blobs predate the field.
@@ -642,7 +646,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
       JSON.stringify(next.resources),
       JSON.stringify(next.equipment),
       JSON.stringify(next.hitDice),
-      JSON.stringify(next.spellcasting),
+      JSON.stringify(normalizeSpellcasting(next.spellcasting)),
       next.wildShape ? JSON.stringify(next.wildShape) : null,
       next.pets.length ? JSON.stringify(next.pets) : null,
       next.exhaustion,

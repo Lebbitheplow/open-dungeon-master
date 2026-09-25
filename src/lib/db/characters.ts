@@ -2,6 +2,7 @@ import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { createSheet, getSheetById, getSheetForUser } from "@/lib/db/sheets";
 import { adaptSheetToLevel } from "@/lib/characters/adapt";
 import { populateFeaturesForClasses } from "@/lib/srd/features";
+import { normalizeSpellcasting } from "@/lib/srd/spell-lists";
 import { dedupeName } from "@/lib/workshop/import";
 import { normalizeCampaignKind, type CampaignKind } from "@/lib/workshop/kind";
 import type { CampaignStatus } from "@/lib/campaign-types";
@@ -62,6 +63,14 @@ type LibraryRow = {
   updated_at: string;
 };
 
+// Library sheets saved before the cantrip list kept cantrips in
+// prepared/known; heal them on read the same way campaign sheets are.
+function withSplitCantrips(sheet: CreateSheetInput): CreateSheetInput {
+  return sheet.spellcasting
+    ? { ...sheet, spellcasting: normalizeSpellcasting(sheet.spellcasting) }
+    : sheet;
+}
+
 function mapCharacter(row: LibraryRow): LibraryCharacter {
   return {
     id: row.id,
@@ -74,7 +83,7 @@ function mapCharacter(row: LibraryRow): LibraryCharacter {
     background: row.background,
     level: row.level,
     xp: row.xp,
-    sheet: parseJson(row.sheet_json, {} as CreateSheetInput),
+    sheet: withSplitCantrips(parseJson(row.sheet_json, {} as CreateSheetInput)),
     workshopId: row.workshop_id ?? "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,

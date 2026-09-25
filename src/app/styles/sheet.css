@@ -259,3 +259,97 @@ html[data-theme="light"] .sheet-medallion-emblem { background: #f6efdc; }
   .sheet-ability { animation: none; }
   .sheet-hp-fill { transition: none; }
 }
+
+/* ---- spell book (src/components/sheet/SpellBook.tsx) ----
+   One tile per spell; its state reads from the frame: gold and lit when
+   ready, dashed sky blue while it waits for a long rest, a quiet ember lock
+   when the subclass grants it, violet when only written in the spellbook,
+   dim when merely available. */
+@layer components {
+  .spell-tile {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    padding: 0.35rem 1.4rem 0.35rem 0.35rem;
+    border-radius: 0.6rem;
+    border: 1px solid rgba(120, 100, 160, 0.25);
+    background: rgba(10, 7, 20, 0.55);
+    color: var(--color-stone-400);
+    transition:
+      transform 200ms var(--ease-spring),
+      border-color 160ms var(--ease-snap),
+      background-color 160ms var(--ease-snap),
+      opacity 160ms var(--ease-snap);
+  }
+  .spell-tile:has(button:not(:disabled)):hover {
+    transform: translateY(-1px);
+    border-color: rgba(212, 171, 58, 0.5);
+  }
+  .spell-tile[data-state="available"] { opacity: 0.72; }
+  .spell-tile[data-state="available"]:hover { opacity: 1; }
+  .spell-tile[data-state="ready"] {
+    color: var(--color-amber-100);
+    border-color: rgba(212, 171, 58, 0.7);
+    background: rgba(212, 171, 58, 0.1);
+    box-shadow: 0 0 12px rgba(212, 171, 58, 0.15);
+  }
+  .spell-tile[data-state="pending"] {
+    color: var(--color-sky-100);
+    border: 1px dashed rgba(125, 211, 252, 0.7);
+    background: rgba(56, 189, 248, 0.07);
+  }
+  .spell-tile[data-state="granted"] {
+    color: var(--color-amber-100);
+    border-color: rgba(224, 112, 58, 0.55);
+    background: rgba(224, 112, 58, 0.08);
+  }
+  .spell-tile[data-state="inBook"] {
+    color: var(--color-stone-200);
+    border-color: rgba(167, 139, 250, 0.45);
+    background: rgba(139, 92, 246, 0.07);
+  }
+  .spell-tile-state { color: var(--color-stone-500); }
+  .spell-tile[data-state="ready"] .spell-tile-state { color: rgba(244, 224, 166, 0.75); }
+  .spell-tile[data-state="pending"] .spell-tile-state { color: rgba(125, 211, 252, 0.85); }
+  .spell-tile[data-state="granted"] .spell-tile-state { color: rgba(255, 190, 143, 0.8); }
+  .spell-tile[data-state="inBook"] .spell-tile-state { color: rgba(196, 181, 253, 0.8); }
+
+  .spell-tile-mark {
+    position: absolute;
+    right: -0.25rem;
+    bottom: -0.25rem;
+    display: grid;
+    place-items: center;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 9999px;
+    color: #1c1408;
+    background: #d4ab3a;
+    box-shadow: 0 0 0 2px rgba(10, 7, 20, 0.9);
+  }
+  .spell-tile-mark[data-state="pending"] { background: #7dd3fc; }
+  .spell-tile-mark[data-state="granted"] { background: #ffbe8f; }
+  .spell-tile-mark[data-state="inBook"] { background: #c4b5fd; }
+
+  .spell-tile-dot {
+    display: inline-block;
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 0.15rem;
+    border: 1px solid rgba(120, 100, 160, 0.5);
+  }
+  .spell-tile-dot[data-state="ready"] { border-color: #d4ab3a; background: rgba(212, 171, 58, 0.35); }
+  .spell-tile-dot[data-state="pending"] { border: 1px dashed #7dd3fc; }
+  .spell-tile-dot[data-state="granted"] { border-color: #e0703a; background: rgba(224, 112, 58, 0.3); }
+  .spell-tile-dot[data-state="inBook"] { border-color: #a78bfa; background: rgba(139, 92, 246, 0.25); }
+}
+
+html[data-theme="light"] .spell-tile { background: rgba(255, 252, 244, 0.75); border-color: rgba(120, 96, 40, 0.3); color: var(--color-stone-600); }
+html[data-theme="light"] .spell-tile[data-state="ready"],
+html[data-theme="light"] .spell-tile[data-state="granted"] { color: var(--color-stone-900); }
+
+@media (prefers-reduced-motion: reduce) {
+  .spell-tile { transition: none; }
+  .spell-tile:has(button:not(:disabled)):hover { transform: none; }
+}

@@ -1,8 +1,8 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { Dices, Loader2, Search, Sparkles, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Dices, Loader2, Sparkles, X } from "lucide-react";
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import { InfoButton, InfoChipList } from "@/components/ui/InfoDialog";
 import { describeFeature, describeSkill } from "@/lib/help";
@@ -36,12 +36,15 @@ import {
   type FightingStyleId,
 } from "@/lib/srd/feature-effects";
 import { spellClassFor } from "@/lib/classes";
-import { suggestedSpellCount } from "@/lib/content/mechanics";
+import { spellsAgainstLimit } from "@/lib/srd/spell-lists";
+import { spellStyleFor, spellbookAllowance } from "@/lib/srd/spell-prep";
+import { SpellBook, type SpellTile } from "@/components/sheet/SpellBook";
+import { useSpellPool } from "@/components/sheet/useSpellPool";
+import { suggestedCantripCount, suggestedSpellCount } from "@/lib/content/mechanics";
 import AsiFeatEditor from "@/app/characters/builder/AsiFeatEditor";
 import { useArchetypes } from "@/app/characters/builder/useBuilderOptions";
 import type { AsiChoice, CharacterSheet } from "@/lib/schemas/sheet";
 
-type SpellRow = { slug: string; name: string; level: number };
 
 // Guided level-up: pick average or rolled HP, resolve any Ability Score
 // Improvements, choose a subclass when the class reaches its subclass level,
@@ -69,11 +72,10 @@ export function LevelUpDialog({
   const [subclassChoice, setSubclassChoice] = useState("");
   const [expertisePicks, setExpertisePicks] = useState<string[]>([]);
   const [spellPicks, setSpellPicks] = useState<string[]>([]);
+  // Cantrips picked this level, kept apart: they have their own allowance.
+  const [cantripPicks, setCantripPicks] = useState<string[]>([]);
   const [stylePicks, setStylePicks] = useState<FightingStyleId[]>([]);
-  const [spellQuery, setSpellQuery] = useState("");
-  const [spellOptions, setSpellOptions] = useState<SpellRow[]>([]);
-  const [packInstalled, setPackInstalled] = useState(true);
-  const [manualSpell, setManualSpell] = useState("");
+  const [spellNote, setSpellNote] = useState("");
   const [stepIndex, setStepIndex] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -134,6 +136,7 @@ export function LevelUpDialog({
     setSubclassChoice("");
     setExpertisePicks([]);
     setSpellPicks([]);
+    setCantripPicks([]);
     setStylePicks([]);
     setOptionPicks([]);
     setSkillPick("");
@@ -274,37 +277,25 @@ export function LevelUpDialog({
     return slotLevels.length ? Math.max(...slotLevels) : null;
   }, [classChoice, classLevelAfter]);
 
-  useEffect(() => {
-    if (step !== "spells") {
-      return;
-    }
-    let cancelled = false;
-    const params = new URLSearchParams({ q: spellQuery, limit: "60" });
-    // Catalog casters borrow an SRD class's spell list.
-    params.set("class", spellClassFor(classChoice));
-    if (maxCastable !== null) {
-      params.set("level", String(maxCastable));
-    }
-    fetch(`/api/content/spells?${params}`)
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => {
-        if (cancelled || !data) {
-          return;
-        }
-        setPackInstalled(Boolean(data.packInstalled));
-        setSpellOptions(
-          ((data.results ?? []) as Array<{ slug: string; name: string; level: number }>).map(
-            (row) => ({ slug: row.slug, name: row.name, level: row.level }),
-          ),
-        );
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [step, spellQuery, classChoice, maxCastable]);
+  // The class's whole list up to what it can now cast (the old search
+  // stopped at sixty rows, cantrips first, which could leave a wizard with
+  // nothing but cantrips to look at).
+  const { pool: spellPool, loading: poolLoading } = useSpellPool(
+    spellClassFor(classChoice),
+    maxCastable ?? 0,
+    step === "spells",
+  );
 
+  // A wizard learns into the spellbook: two spells a level (a whole starting
+  // book for a first wizard level), whatever they have prepared.
+  const bookStyle = spellStyleFor(classChoice) === "spellbook";
   const knownList = useMemo(() => {
+    const listOf = (entry: { known: string[]; prepared: string[]; spellbook?: string[] }) =>
+      entry.known.length
+        ? entry.known
+        : bookStyle
+          ? [...new Set([...(entry.spellbook ?? []), ...entry.prepared])]
+          : entry.prepared;
     if (isMulticlassPath) {
       // The chosen class's own list; a caster class being started fresh
       // knows nothing yet. Lead-built multiclass sheets without a casters
@@ -315,17 +306,38 @@ export function LevelUpDialog({
         (sheet.spellcasting && !sheet.spellcasting.casters?.length && !isNewClass
           ? sheet.spellcasting
           : null);
-      return entry ? (entry.known.length ? entry.known : entry.prepared) : [];
+      return entry ? listOf(entry) : [];
     }
-    return sheet.spellcasting
-      ? sheet.spellcasting.known.length
-        ? sheet.spellcasting.known
-        : sheet.spellcasting.prepared
-      : [];
+    return sheet.spellcasting ? listOf(sheet.spellcasting) : [];
+  }, [sheet.spellcasting, isMulticlassPath, casterEntry, isNewClass, bookStyle]);
+  // Spells chosen for preparation that wait for the long rest. They already
+  // hold a place in the allowance (the sheet's counter counts them), so the
+  // picks offered here must leave room for them too.
+  const pendingList = useMemo(() => {
+    if (isMulticlassPath) {
+      if (casterEntry) {
+        return casterEntry.pending ?? [];
+      }
+      return sheet.spellcasting && !sheet.spellcasting.casters?.length && !isNewClass
+        ? (sheet.spellcasting.pending ?? [])
+        : [];
+    }
+    return sheet.spellcasting?.pending ?? [];
+  }, [sheet.spellcasting, isMulticlassPath, casterEntry, isNewClass]);
+  const cantripList = useMemo(() => {
+    if (isMulticlassPath) {
+      if (casterEntry) {
+        return casterEntry.cantrips ?? [];
+      }
+      return sheet.spellcasting && !sheet.spellcasting.casters?.length && !isNewClass
+        ? (sheet.spellcasting.cantrips ?? [])
+        : [];
+    }
+    return sheet.spellcasting?.cantrips ?? [];
   }, [sheet.spellcasting, isMulticlassPath, casterEntry, isNewClass]);
   const alreadyKnown = useMemo(
-    () => new Set(knownList.map((name) => name.toLowerCase())),
-    [knownList],
+    () => new Set([...knownList, ...pendingList, ...cantripList].map((name) => name.toLowerCase())),
+    [knownList, pendingList, cantripList],
   );
   const allowanceAbility = isMulticlassPath
     ? (casterEntry?.ability ?? chosenKlass?.spellAbility ?? null)
@@ -338,7 +350,57 @@ export function LevelUpDialog({
           abilityMod(sheet.abilities[allowanceAbility]),
         )
       : null;
-  const remainingPicks = allowance ? Math.max(0, allowance.count - knownList.length) : null;
+  // The subclass's always-prepared spells never count against the allowance.
+  const grantedFree = useMemo(
+    () =>
+      new Set(
+        subclassSpellsFor(classChoice, effectiveSubclass, classLevelAfter).map((name) =>
+          name.toLowerCase(),
+        ),
+      ),
+    [classChoice, effectiveSubclass, classLevelAfter],
+  );
+  const heldSpells = [...new Set([...knownList, ...pendingList].map((name) => name.toLowerCase()))].filter(
+    (name) => !grantedFree.has(name),
+  ).length;
+  const bookGain = bookStyle
+    ? isNewClass
+      ? spellbookAllowance(classLevelAfter)
+      : 2 * levelsGained
+    : null;
+  const remainingPicks =
+    bookGain ?? (allowance ? Math.max(0, allowance.count - heldSpells) : null);
+  const cantripAllowance = showSpells
+    ? suggestedCantripCount(
+        spellClassFor(classChoice),
+        classLevelAfter,
+        (chosenKlass ?? findClass(sheet.class))?.casterType,
+      )
+    : null;
+  const remainingCantrips =
+    cantripAllowance !== null ? Math.max(0, cantripAllowance - cantripList.length) : null;
+  const levelStyle = spellStyleFor(classChoice);
+  // What can still be learned: the class list minus what is already held,
+  // cantrips only while there is a cantrip to choose.
+  const levelUpTiles: SpellTile[] = spellPool
+    .filter((spell) => !alreadyKnown.has(spell.name.toLowerCase()))
+    .filter((spell) => spell.level > 0 || Boolean(remainingCantrips))
+    .map((spell) => {
+      const picked =
+        spell.level === 0 ? cantripPicks.includes(spell.name) : spellPicks.includes(spell.name);
+      // Domain, oath and circle spells arrive on their own and cost nothing:
+      // shown, locked, never a pick that eats the allowance.
+      const granted = grantedFree.has(spell.name.toLowerCase());
+      return {
+        name: spell.name,
+        level: spell.level,
+        state: granted ? ("granted" as const) : picked ? ("ready" as const) : ("available" as const),
+        note: granted ? "Free with your subclass" : picked ? "New" : undefined,
+        data: spell.data,
+        slug: spell.slug,
+        homebrew: spell.source === "homebrew",
+      };
+    });
 
   function rollHp() {
     let total = 0;
@@ -357,7 +419,13 @@ export function LevelUpDialog({
     }
   }
 
-  function toggleSpell(name: string) {
+  function toggleSpell(name: string, level?: number) {
+    if (level === 0) {
+      setCantripPicks((current) =>
+        current.includes(name) ? current.filter((pick) => pick !== name) : [...current, name],
+      );
+      return;
+    }
     setSpellPicks((current) =>
       current.includes(name) ? current.filter((pick) => pick !== name) : [...current, name],
     );
@@ -385,7 +453,9 @@ export function LevelUpDialog({
             currentHp: Math.min(sheet.currentHp + gain, sheet.maxHp + gain),
             levelUpClass: classChoice,
             ...(skillPick ? { levelUpSkill: skillPick } : {}),
-            ...(spellPicks.length ? { levelUpSpells: spellPicks } : {}),
+            ...(spellPicks.length || cantripPicks.length
+              ? { levelUpSpells: [...spellPicks, ...cantripPicks] }
+              : {}),
             features: [
               ...sheet.features,
               ...stylePicks.map((id) => ({
@@ -447,17 +517,44 @@ export function LevelUpDialog({
         const additions = [...spellPicks, ...granted].filter(
           (name) => !alreadyKnown.has(name.toLowerCase()),
         );
-        const intoKnown = sheet.spellcasting.known.length > 0;
-        spellcastingPatch = {
-          ...sheet.spellcasting,
-          slots: nextSlots,
-          known: intoKnown
-            ? [...sheet.spellcasting.known, ...additions]
-            : sheet.spellcasting.known,
-          prepared: intoKnown
-            ? sheet.spellcasting.prepared
-            : [...sheet.spellcasting.prepared, ...additions],
-        };
+        const intoKnown =
+          sheet.spellcasting.known.length > 0 || allowance?.label === "spells known";
+        const cantrips = [
+          ...(sheet.spellcasting.cantrips ?? []),
+          ...cantripPicks.filter((name) => !alreadyKnown.has(name.toLowerCase())),
+        ];
+        if (bookStyle && !intoKnown) {
+          // A wizard writes the new spells in the book and prepares them as
+          // far as the allowance has room: a level-up is a chance to
+          // prepare, like the long rest before it.
+          const room = allowance
+            ? Math.max(
+                0,
+                allowance.count -
+                  spellsAgainstLimit(
+                    [...sheet.spellcasting.prepared, ...(sheet.spellcasting.pending ?? [])],
+                    [...grantedFree],
+                  ),
+              )
+            : additions.length;
+          spellcastingPatch = {
+            ...sheet.spellcasting,
+            slots: nextSlots,
+            cantrips,
+            spellbook: [...new Set([...knownList, ...additions])],
+            prepared: [...sheet.spellcasting.prepared, ...additions.slice(0, room)],
+          };
+        } else {
+          spellcastingPatch = {
+            ...sheet.spellcasting,
+            slots: nextSlots,
+            cantrips,
+            known: intoKnown ? [...sheet.spellcasting.known, ...additions] : sheet.spellcasting.known,
+            prepared: intoKnown
+              ? sheet.spellcasting.prepared
+              : [...sheet.spellcasting.prepared, ...additions],
+          };
+        }
       }
       const response = await fetch(`/api/campaigns/${campaignId}/sheet`, {
         method: "PATCH",
@@ -942,100 +1039,89 @@ export function LevelUpDialog({
 
               {step === "spells" ? (
                 <>
-                  <p className="text-stone-300">
-                    New spells for {sheet.name}
-                    {remainingPicks !== null && allowance ? (
-                      <>
-                        {" "}
-                        (up to{" "}
-                        <span className="text-amber-200">
-                          {remainingPicks} new {allowance.label}
-                        </span>{" "}
-                        at level {targetLevel})
-                      </>
+                  <p className="text-stone-300">New spells for {sheet.name} at level {classLevelAfter}:</p>
+                  <ul className="space-y-1 text-xs text-stone-400">
+                    {remainingCantrips ? (
+                      <li>
+                        <span className="text-amber-200">Cantrips: choose {remainingCantrips}.</span>{" "}
+                        Small spells you know for good and cast as often as you like.
+                      </li>
                     ) : null}
-                    :
-                  </p>
-                  {packInstalled ? (
-                    <>
-                      <label className="flex items-center gap-2 rounded-md border border-stone-700 px-3 py-2">
-                        <Search className="size-4 text-stone-500" />
-                        <input
-                          value={spellQuery}
-                          onChange={(event) => setSpellQuery(event.target.value)}
-                          placeholder="Search your class's spell list"
-                          className="w-full bg-transparent text-sm outline-none placeholder:text-stone-600"
-                        />
-                      </label>
-                      <div className="max-h-56 space-y-1 overflow-y-auto pr-1">
-                        {spellOptions
-                          .filter((spell) => !alreadyKnown.has(spell.name.toLowerCase()))
-                          .map((spell) => (
-                            <div
-                              key={spell.slug}
-                              className="flex items-center gap-2 rounded-md border border-stone-800 pr-2 text-sm hover:border-stone-600"
-                            >
-                              <label className="flex flex-1 cursor-pointer items-center gap-2 px-3 py-1.5">
-                                <input
-                                  type="checkbox"
-                                  checked={spellPicks.includes(spell.name)}
-                                  disabled={
-                                    !spellPicks.includes(spell.name) &&
-                                    remainingPicks !== null &&
-                                    spellPicks.length >= remainingPicks
-                                  }
-                                  onChange={() => toggleSpell(spell.name)}
-                                  className="accent-amber-400"
-                                />
-                                <span className="flex-1">{spell.name}</span>
-                                <span className="text-xs text-stone-500">
-                                  {spell.level === 0 ? "cantrip" : `level ${spell.level}`}
-                                </span>
-                              </label>
-                              {/* Nobody should have to accept a spell to find
-                                  out what it does; the pack row is one tap
-                                  away and only fetched when it is opened. */}
-                              <InfoButton
-                                label={spell.name}
-                                reference={{ kind: "spells", slug: spell.slug, name: spell.name }}
-                              />
-                            </div>
-                          ))}
-                        {!spellOptions.length ? (
-                          <p className="reveal px-1 py-2 text-xs text-stone-500">No matching spells.</p>
-                        ) : null}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="flex gap-2">
-                      <input
-                        value={manualSpell}
-                        onChange={(event) => setManualSpell(event.target.value)}
-                        placeholder="Spell name"
-                        className="w-full rounded-md border border-stone-700 bg-transparent px-3 py-2 text-sm outline-none placeholder:text-stone-600"
-                      />
-                      <button
-                        type="button"
-                        disabled={!manualSpell.trim()}
-                        onClick={() => {
-                          toggleSpell(manualSpell.trim());
-                          setManualSpell("");
-                        }}
-                        className="rounded-md border border-stone-700 px-3 py-2 text-sm hover:bg-stone-900 disabled:opacity-50"
-                      >
-                        Add
-                      </button>
-                    </div>
-                  )}
-                  {spellPicks.length ? (
+                    {remainingPicks ? (
+                      <li>
+                        {bookGain !== null ? (
+                          <>
+                            <span className="text-amber-200">Spellbook: write {remainingPicks} new spells.</span>{" "}
+                            They are prepared right away while your limit has room; the rest you
+                            prepare from your sheet, ready after a long rest.
+                          </>
+                        ) : levelStyle === "known" ? (
+                          <>
+                            <span className="text-amber-200">Spells known: choose up to {remainingPicks}.</span>{" "}
+                            You keep them for good and always have them ready.
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-amber-200">Prepared spells: prepare up to {remainingPicks} more.</span>{" "}
+                            They are ready now; after any long rest you can swap them from your sheet.
+                          </>
+                        )}
+                      </li>
+                    ) : null}
+                    {!remainingCantrips && !remainingPicks ? (
+                      <li>Nothing new to choose at this level: your spells stay as they are.</li>
+                    ) : null}
+                  </ul>
+                  {spellNote ? (
+                    <p role="status" className="reveal text-xs text-amber-300">
+                      {spellNote}
+                    </p>
+                  ) : null}
+                  <SpellBook
+                    tiles={levelUpTiles}
+                    maxLevel={maxCastable ?? 0}
+                    counters={[
+                      ...(remainingCantrips
+                        ? [{ label: "Cantrips", value: cantripPicks.length, max: remainingCantrips }]
+                        : []),
+                      ...(remainingPicks !== 0
+                        ? [
+                            {
+                              label: bookGain !== null ? "Spellbook" : levelStyle === "known" ? "Known" : "Prepared",
+                              value: spellPicks.length,
+                              max: remainingPicks,
+                            },
+                          ]
+                        : []),
+                    ]}
+                    onTile={(tile) => {
+                      setSpellNote("");
+                      const picked =
+                        tile.level === 0 ? cantripPicks.includes(tile.name) : spellPicks.includes(tile.name);
+                      if (!picked) {
+                        const full =
+                          tile.level === 0
+                            ? remainingCantrips !== null && cantripPicks.length >= remainingCantrips
+                            : remainingPicks !== null && spellPicks.length >= remainingPicks;
+                        if (full) {
+                          setSpellNote(
+                            tile.level === 0
+                              ? `That is every new cantrip for this level. Untick one to choose ${tile.name}.`
+                              : `That is every new spell for this level. Untick one to choose ${tile.name}.`,
+                          );
+                          return;
+                        }
+                      }
+                      toggleSpell(tile.name, tile.level ?? undefined);
+                    }}
+                    emptyText={poolLoading ? "Loading the spell list..." : "No new spells at this level."}
+                  />
+                  {spellPicks.length || cantripPicks.length ? (
                     <p className="reveal text-xs text-stone-400">
-                      Learning: <span className="text-amber-200">{spellPicks.join(", ")}</span>
-                      {remainingPicks !== null && spellPicks.length >= remainingPicks ? (
-                        <span className="text-stone-500">
-                          {" "}
-                          (that is the full allowance at this level)
-                        </span>
-                      ) : null}
+                      Learning:{" "}
+                      <span className="text-amber-200">
+                        {[...cantripPicks.map((name) => `${name} (cantrip)`), ...spellPicks].join(", ")}
+                      </span>
                     </p>
                   ) : null}
                 </>

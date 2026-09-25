@@ -223,19 +223,6 @@ export function SkillRows({
   );
 }
 
-export function SpellChips({ spells, emptyText }: { spells: string[]; emptyText?: string }) {
-  return (
-    <InfoChipList
-      items={[...new Set(spells)].map((spell) => ({
-        name: spell,
-        icon: { kind: "spell" as const, key: spell },
-        reference: { kind: "spells", slug: contentSlug(spell), name: spell },
-      }))}
-      emptyText={emptyText}
-    />
-  );
-}
-
 // Every carried thing as an icon chip that opens its entry in the library,
 // so a rope and a Flame Tongue both say what they are. Worn and attuned gear
 // is marked on the chip.

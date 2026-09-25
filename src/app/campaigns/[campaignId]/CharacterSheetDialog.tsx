@@ -32,9 +32,9 @@ import {
   PortraitMedallion,
   SheetBlock,
   SkillRows,
-  SpellChips,
   VitalTiles,
 } from "@/components/sheet/SheetParts";
+import { SheetSpells } from "@/components/sheet/SheetSpells";
 
 function titleCase(value: string) {
   return value.replace(/[-_]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -58,6 +58,75 @@ const stepButton =
 // +7 came from without this file knowing a single rule.
 function explainParts(parts: DerivedPart[]): string {
   return parts.map((part) => `${formatModifier(part.value)} ${part.label}`).join(", ");
+}
+
+const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"];
+
+// One spell slot level: a mark per slot, filled while it is still there.
+function SlotRow({
+  label,
+  left,
+  max,
+  editable,
+  busy,
+  inCombat,
+  onSpend,
+  onRecover,
+}: {
+  label: string;
+  left: number;
+  max: number;
+  editable: boolean;
+  busy: boolean;
+  inCombat: boolean;
+  onSpend?: () => void;
+  onRecover?: () => void;
+}) {
+  return (
+    <span
+      className="flex items-center gap-1.5 rounded-lg border border-stone-800 px-2 py-1"
+      title={`${left} of ${max} ${label.toLowerCase()} slots left`}
+    >
+      <span className="font-display text-[11px] tracking-wide text-stone-400">{label}</span>
+      <span className="flex gap-0.5" aria-label={`${left} of ${max} left`}>
+        {Array.from({ length: max }, (_, index) => (
+          <span
+            key={index}
+            className={cn(
+              "size-2.5 rounded-full border",
+              index < left
+                ? "border-amber-400 bg-amber-400/80 shadow-[0_0_6px_rgba(212,171,58,0.5)]"
+                : "border-stone-600",
+            )}
+          />
+        ))}
+      </span>
+      {editable ? (
+        <>
+          <button
+            type="button"
+            className={stepButton}
+            disabled={busy || left <= 0}
+            title="Mark one slot as spent"
+            aria-label={`Spend a ${label} slot`}
+            onClick={onSpend}
+          >
+            <Minus className="size-3" />
+          </button>
+          <button
+            type="button"
+            className={stepButton}
+            disabled={busy || inCombat || left >= max}
+            title={inCombat ? "Slots come back at rests, not mid-combat" : "Give one slot back"}
+            aria-label={`Recover a ${label} slot`}
+            onClick={onRecover}
+          >
+            <Plus className="size-3" />
+          </button>
+        </>
+      ) : null}
+    </span>
+  );
 }
 
 export function CharacterSheetDialog({
@@ -300,51 +369,52 @@ export function CharacterSheetDialog({
                 </>
               }
             >
-              {Object.keys(sheet.spellcasting.slots).length ? (
-                <div className="reveal flex flex-wrap items-center gap-1.5 text-xs text-stone-400">
-                  <span className="flex items-center gap-1">
+              {Object.keys(sheet.spellcasting.slots).length || sheet.spellcasting.pact ? (
+                <div className="reveal space-y-1.5 text-xs text-stone-300">
+                  <p className="flex items-center gap-1 text-stone-400">
                     <GameIcon icon={{ kind: "glyph", key: "rest-spell-slot" }} size="size-5" />
-                    <GameTerm id="spell_slot">Slots</GameTerm>
-                  </span>
-                  {Object.entries(sheet.spellcasting.slots).map(([slotLevel, slot]) => (
-                    <span
-                      key={slotLevel}
-                      className="flex items-center gap-1 rounded border border-stone-800 px-1.5 py-0.5"
-                    >
-                      {mine ? (
-                        <button
-                          type="button"
-                          className={stepButton}
-                          disabled={busy || slot.used >= slot.max}
-                          title="Spend a slot"
-                          onClick={() => adjustUsage({ slots: { [slotLevel]: slot.used + 1 } })}
-                        >
-                          <Minus className="size-3" />
-                        </button>
-                      ) : null}
-                      <span>
-                        L{slotLevel} {slot.max - slot.used}/{slot.max}
-                      </span>
-                      {mine ? (
-                        <button
-                          type="button"
-                          className={stepButton}
-                          disabled={busy || inCombat || slot.used <= 0}
-                          title={inCombat ? "Slots recover at rests, not mid-combat" : "Recover a slot"}
-                          onClick={() => adjustUsage({ slots: { [slotLevel]: slot.used - 1 } })}
-                        >
-                          <Plus className="size-3" />
-                        </button>
-                      ) : null}
-                    </span>
-                  ))}
+                    <GameTerm id="spell_slot">Spell slots</GameTerm>
+                    <span className="text-stone-500">: the magic left today</span>
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {Object.entries(sheet.spellcasting.slots).map(([slotLevel, slot]) => (
+                      <SlotRow
+                        key={slotLevel}
+                        label={`Level ${ROMAN[Number(slotLevel)] ?? slotLevel}`}
+                        left={slot.max - slot.used}
+                        max={slot.max}
+                        editable={mine}
+                        busy={busy}
+                        inCombat={inCombat}
+                        onSpend={() => adjustUsage({ slots: { [slotLevel]: slot.used + 1 } })}
+                        onRecover={() => adjustUsage({ slots: { [slotLevel]: slot.used - 1 } })}
+                      />
+                    ))}
+                    {sheet.spellcasting.pact ? (
+                      <SlotRow
+                        label={`Pact, level ${ROMAN[sheet.spellcasting.pact.level] ?? sheet.spellcasting.pact.level}`}
+                        left={sheet.spellcasting.pact.max - sheet.spellcasting.pact.used}
+                        max={sheet.spellcasting.pact.max}
+                        editable={false}
+                        busy={busy}
+                        inCombat={inCombat}
+                      />
+                    ) : null}
+                  </div>
+                  <p className="text-[11px] leading-snug text-stone-500">
+                    Casting a spell of level I or higher uses up one slot of that level (or a higher
+                    one, to cast it stronger); cantrips never use one. Filled marks are slots still
+                    available, empty ones are spent. They all come back after a long rest
+                    {sheet.class === "warlock" || sheet.spellcasting.pact ? " (a warlock's pact slots after a short rest too)" : ""}.
+                    {mine
+                      ? " The DM marks them as you cast; the buttons are only for fixing the count."
+                      : ""}
+                  </p>
                 </div>
               ) : null}
-              {[...sheet.spellcasting.known, ...sheet.spellcasting.prepared].length ? (
-                <div className="reveal mt-2">
-                  <SpellChips spells={[...sheet.spellcasting.known, ...sheet.spellcasting.prepared]} />
-                </div>
-              ) : null}
+              <div className="reveal mt-3">
+                <SheetSpells sheet={sheet} editable={mine} />
+              </div>
             </SheetBlock>
           ) : null}
 

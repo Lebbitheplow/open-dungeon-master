@@ -341,6 +341,32 @@ export const REAL_DICE_RULE = `Physical dice at this table: some players roll th
 // Exported so Ask can answer sheet questions from exactly the same rendering
 // the DM sees, rather than growing a second, drifting description of a
 // character.
+// Cantrips first and labeled, so the model never spends a slot on one.
+// A wizard's unprepared book and the spells waiting for a long rest are
+// listed apart and marked, so the model never lets either be cast.
+function spellListLabel(lists: {
+  known: string[];
+  prepared: string[];
+  cantrips?: string[];
+  pending?: string[];
+  spellbook?: string[];
+}): string {
+  const cantrips = lists.cantrips ?? [];
+  const spells = [...lists.known, ...lists.prepared];
+  const ready = new Set([...spells, ...cantrips].map((name) => name.toLowerCase()));
+  const pending = lists.pending ?? [];
+  const bookOnly = (lists.spellbook ?? []).filter(
+    (name) => !ready.has(name.toLowerCase()) && !pending.some((entry) => entry.toLowerCase() === name.toLowerCase()),
+  );
+  const parts = [
+    cantrips.length ? `cantrips (no slot): ${cantrips.join(", ")}` : "",
+    spells.length ? `spells: ${spells.join(", ")}` : "",
+    pending.length ? `prepared after the next long rest (NOT castable yet): ${pending.join(", ")}` : "",
+    bookOnly.length ? `in spellbook, not prepared (NOT castable): ${bookOnly.join(", ")}` : "",
+  ].filter(Boolean);
+  return parts.join("; ") || "none";
+}
+
 export function describeSheet(
   sheet: CharacterSheet,
   playedBy: string,
@@ -515,22 +541,22 @@ export function describeSheet(
       // pool is shared across them (Pact Magic apart).
       lines.push(`  Spell slots (SHARED across their caster classes): ${slots || "none"}${pactLabel}`);
       for (const caster of sheet.spellcasting.casters) {
-        const casterSpells = [...caster.known, ...caster.prepared];
+        const casterSpells = spellListLabel(caster);
         const dc =
           8 +
           derived.proficiencyBonus +
           derived.abilityMods[caster.ability as keyof typeof derived.abilityMods];
         lines.push(
-          `    As a ${caster.classId} (${caster.ability.toUpperCase()}, Save DC ${dc}): ${casterSpells.join(", ") || "none"}`,
+          `    As a ${caster.classId} (${caster.ability.toUpperCase()}, Save DC ${dc}): ${casterSpells}`,
         );
       }
       lines.push(
         `    They can cast nothing beyond those lists.${sheet.concentratingOn ? ` Concentrating on: ${sheet.concentratingOn}` : ""}`,
       );
     } else {
-      const spellList = [...sheet.spellcasting.known, ...sheet.spellcasting.prepared];
+      const spellList = spellListLabel(sheet.spellcasting);
       lines.push(
-        `  Spell slots: ${slots || "none"}${pactLabel} | Save DC ${derived.spellSaveDc} | Spells (complete list, they can cast nothing else): ${spellList.join(", ") || "none"}${sheet.concentratingOn ? ` | Concentrating on: ${sheet.concentratingOn}` : ""}`,
+        `  Spell slots: ${slots || "none"}${pactLabel} | Save DC ${derived.spellSaveDc} | Spells (complete list, they can cast nothing else): ${spellList}${sheet.concentratingOn ? ` | Concentrating on: ${sheet.concentratingOn}` : ""}`,
       );
     }
   } else {

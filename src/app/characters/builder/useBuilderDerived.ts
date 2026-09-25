@@ -17,6 +17,7 @@ import { defaultArmor, suggestArmor } from "@/lib/srd/armor";
 import { classFeaturesFor, subclassSpellsFor } from "@/lib/srd/features";
 import { fightingStyleSlots } from "@/lib/srd/feature-effects";
 import { openOptionSlots, optionFeatureName, type OptionSlot } from "@/lib/srd/options";
+import { spellStyleFor, spellbookAllowance, type SpellStyle } from "@/lib/srd/spell-prep";
 import { defaultLoadout, suggestWeapons } from "@/lib/srd/weapons";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
 import type { BuilderState } from "./useBuilderState";
@@ -41,7 +42,7 @@ export function useBuilderDerived({
   const {
     level, scores, racialAsi, asiChoices, chosenSkills, expertisePicks, bonusLanguages,
     racialSkills, racialTool, hpOverride, acOverride, equipment, removedAutoNames,
-    subclass, optionPicks, spells, cantripNames, keepsStoredGear, asiRecorded, asiReachedLevel,
+    subclass, optionPicks, spells, cantrips, bookPrepared, keepsStoredGear, asiRecorded, asiReachedLevel,
   } = state;
 
   const effectiveLevel = fixedLevel ?? level;
@@ -143,7 +144,7 @@ export function useBuilderDerived({
       level: effectiveLevel,
       proficiencies,
       spellcasting: klass.spellAbility
-        ? { ability: klass.spellAbility, slots: {}, prepared: [], known: [] }
+        ? { ability: klass.spellAbility, slots: {}, prepared: [], known: [], cantrips: [] }
         : null,
     });
     const maxHp =
@@ -270,17 +271,34 @@ export function useBuilderDerived({
   );
   // What this class calls its spells, used in the empty-spell-list warning.
   const castingLabel = casts && klass ? (klass.castingLabel || "spells") : "";
-  // Which chosen names are cantrips, so the two counters read separately.
-  // Seeded from the recommendations and topped up by the picker and the
-  // spells step (which loads the class's cantrip list once), so a sheet that
-  // arrives for editing counts its cantrips too.
-  const chosenCantrips = useMemo(() => {
-    const known = new Set([
-      ...cantripNames.map((spellName) => spellName.toLowerCase()),
-      ...(starters?.cantrips.map((pick) => pick.n.toLowerCase()) ?? []),
-    ]);
-    return spells.filter((spellName) => known.has(spellName.toLowerCase()));
-  }, [spells, cantripNames, starters]);
+  // How this class holds its spells: known, prepared from the class list, or
+  // (a wizard) written in a spellbook and prepared from it. A content-pack
+  // class says whether it is a known caster; the rest follow the SRD.
+  const spellStyle: SpellStyle | null = !casts || !klass
+    ? null
+    : klass.knownCaster === true
+      ? "known"
+      : klass.knownCaster === false && spellStyleFor(klass.id) === "known"
+        ? "prepared"
+        : spellStyleFor(klass.id);
+  // A wizard's book: six spells at 1st level, two more every level.
+  const spellbookAdvice = spellStyle === "spellbook" ? spellbookAllowance(effectiveLevel) : null;
+  // Cantrips are their own list. Levelled spells count against the class's
+  // allowance except the subclass's always-prepared ones, which are free. For
+  // a wizard `chosenSpells` is the book and `chosenPrepared` what is
+  // prepared from it; for everyone else the two are the same list.
+  const chosenCantrips = cantrips;
+  const chosenSpells = useMemo(() => {
+    const free = new Set(subclassSpells.map((spellName) => spellName.toLowerCase()));
+    return spells.filter((spellName) => !free.has(spellName.toLowerCase()));
+  }, [spells, subclassSpells]);
+  const chosenPrepared = useMemo(() => {
+    if (spellStyle !== "spellbook") {
+      return chosenSpells;
+    }
+    const book = new Set(spells.map((spellName) => spellName.toLowerCase()));
+    return bookPrepared.filter((spellName) => book.has(spellName.toLowerCase()));
+  }, [spellStyle, chosenSpells, spells, bookPrepared]);
 
   return {
     effectiveLevel,
@@ -306,6 +324,10 @@ export function useBuilderDerived({
     subclassSpells,
     castingLabel,
     chosenCantrips,
+    chosenSpells,
+    chosenPrepared,
+    spellStyle,
+    spellbookAdvice,
     maxSpellLevel,
   };
 }

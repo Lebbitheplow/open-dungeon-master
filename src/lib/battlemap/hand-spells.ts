@@ -7,6 +7,7 @@ import { RAGING, resourceDef, resourceLevel, type ResourceDef } from "@/lib/srd/
 import type { CombatRiders } from "@/lib/srd/feature-effects";
 import { authoredSpellRow, parseSpellMech, spellMechFor, type SpellMech } from "@/lib/srd/spell-mechanics";
 import { baseHealingDice, scaledSpellDice } from "@/lib/srd/spell-scaling";
+import { allSpellNames } from "@/lib/srd/spell-lists";
 import {
   SAVE_LABEL,
   addFlat,
@@ -35,9 +36,8 @@ export function spellNames(sheet: CharacterSheet): string[] {
   const casting = sheet.spellcasting;
   if (!casting) return [];
   const all = [
-    ...casting.prepared,
-    ...casting.known,
-    ...(casting.casters ?? []).flatMap((caster) => [...caster.prepared, ...caster.known]),
+    ...allSpellNames(casting),
+    ...(casting.casters ?? []).flatMap((caster) => allSpellNames(caster)),
   ];
   const seen = new Set<string>();
   return all.filter((name) => {

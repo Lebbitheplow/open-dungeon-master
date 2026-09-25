@@ -28,6 +28,9 @@ import { suggestedSpellCount } from "@/lib/content/mechanics";
 import { spellClassFor } from "@/lib/classes";
 import { abilityMod, findClass, findSkill } from "@/lib/srd";
 import { populateFeaturesForClasses, subclassSpellsFor } from "@/lib/srd/features";
+import { allSpellNames, isCantripName, spellLevelOf, spellsAgainstLimit } from "@/lib/srd/spell-lists";
+import { spellStyleFor, spellbookAllowance } from "@/lib/srd/spell-prep";
+import { findSpellByName } from "@/lib/content";
 import {
   canMulticlassInto,
   classListFor,
@@ -197,6 +200,9 @@ function buildMulticlassLevelUp(
         ...caster,
         known: [...caster.known],
         prepared: [...caster.prepared],
+        cantrips: [...(caster.cantrips ?? [])],
+        ...(caster.pending ? { pending: [...caster.pending] } : {}),
+        ...(caster.spellbook ? { spellbook: [...caster.spellbook] } : {}),
       })) ?? []
     );
     if (!casters.length && spellcasting) {
@@ -210,12 +216,15 @@ function buildMulticlassLevelUp(
         ability: spellcasting.ability,
         known: [...spellcasting.known],
         prepared: [...spellcasting.prepared],
+        cantrips: [...(spellcasting.cantrips ?? [])],
+        ...(spellcasting.pending ? { pending: [...spellcasting.pending] } : {}),
+        ...(spellcasting.spellbook ? { spellbook: [...spellcasting.spellbook] } : {}),
       });
     }
     if (klass.casterType !== "none" && klass.spellAbility) {
       let mine = casters.find((caster) => caster.classId.toLowerCase() === classId);
       if (!mine) {
-        mine = { classId: klass.id, ability: klass.spellAbility, known: [], prepared: [] };
+        mine = { classId: klass.id, ability: klass.spellAbility, known: [], prepared: [], cantrips: [] };
         casters.push(mine);
       }
       const allowance = suggestedSpellCount(
@@ -224,14 +233,43 @@ function buildMulticlassLevelUp(
         abilityMod((data.abilities ?? sheet.abilities)[mine.ability]),
       );
       const heldNames = new Set(
-        [...mine.known, ...mine.prepared].map((name) => name.toLowerCase()),
+        [...allSpellNames(mine), ...(mine.spellbook ?? []), ...(mine.pending ?? [])].map((name) =>
+          name.toLowerCase(),
+        ),
       );
-      const picks = (data.levelUpSpells ?? []).filter(
+      const newPicks = (data.levelUpSpells ?? []).filter(
         (name) => !heldNames.has(name.toLowerCase()),
       );
+      // Cantrip picks join the cantrip list and never count as spells. The
+      // checklist only knows the books it bundles, so a content-pack cantrip
+      // is recognised by the level its pack row gives it; judging by the
+      // checklist alone counted one as a fourth spell against three allowed.
+      const isCantripPick = (name: string) => {
+        const level = spellLevelOf(name) ?? findSpellByName(name, sheet.userId)?.level;
+        return level === 0 || (level === undefined && isCantripName(name));
+      };
+      const cantripPicks = newPicks.filter(isCantripPick);
+      const picks = newPicks.filter((name) => !isCantripPick(name));
+      const grantedAll = subclassSpellsFor(klass.id, leveled.subclass, leveled.level);
       const intoKnown = allowance?.label === "spells known";
-      if (allowance) {
-        const held = (intoKnown ? mine.known : mine.prepared).length + picks.length;
+      // A wizard learns into the spellbook: a whole starting book for a first
+      // wizard level, two spells a level after that.
+      const intoBook = spellStyleFor(klass.id) === "spellbook";
+      if (intoBook) {
+        const bookGain = existing ? 2 * gained : spellbookAllowance(leveled.level);
+        if (picks.length > bookGain) {
+          return {
+            error: `A ${klass.name} writes ${bookGain} new spells in the spellbook at this level, not ${picks.length}.`,
+          };
+        }
+      } else if (allowance) {
+        // A subclass spell picked by hand is still free; spells waiting for
+        // the long rest already hold their place.
+        const held =
+          spellsAgainstLimit(
+            intoKnown ? mine.known : [...mine.prepared, ...(mine.pending ?? [])],
+            grantedAll,
+          ) + spellsAgainstLimit(picks, grantedAll);
         if (held > allowance.count) {
           return {
             error: `A ${klass.name} ${leveled.level} may hold ${allowance.count} ${allowance.label}; that list would have ${held}.`,
@@ -239,16 +277,27 @@ function buildMulticlassLevelUp(
         }
       }
       // Subclass spells (domain, circle, oath, patron) arrive free.
-      const granted = subclassSpellsFor(klass.id, leveled.subclass, leveled.level).filter(
+      const granted = grantedAll.filter(
         (name) =>
           !heldNames.has(name.toLowerCase()) &&
           !picks.some((pick) => pick.toLowerCase() === name.toLowerCase()),
       );
       if (intoKnown) {
         mine.known.push(...picks, ...granted);
+      } else if (intoBook) {
+        // Written in the book, and prepared as far as the allowance has room.
+        const room = allowance
+          ? Math.max(
+              0,
+              allowance.count - spellsAgainstLimit([...mine.prepared, ...(mine.pending ?? [])], grantedAll),
+            )
+          : picks.length;
+        mine.spellbook = [...new Set([...(mine.spellbook ?? []), ...mine.prepared, ...picks])];
+        mine.prepared.push(...picks.slice(0, room), ...granted);
       } else {
         mine.prepared.push(...picks, ...granted);
       }
+      mine.cantrips = [...(mine.cantrips ?? []), ...cantripPicks];
     }
     const table = slotTableFor({ class: sheet.class, classes: nextClasses });
     const slots = Object.fromEntries(
@@ -278,6 +327,13 @@ function buildMulticlassLevelUp(
       slots,
       known: dedupe(casters.flatMap((caster) => caster.known)).slice(0, 80),
       prepared: dedupe(casters.flatMap((caster) => caster.prepared)).slice(0, 60),
+      cantrips: dedupe(casters.flatMap((caster) => caster.cantrips ?? [])).slice(0, 40),
+      ...(casters.some((caster) => caster.pending?.length)
+        ? { pending: dedupe(casters.flatMap((caster) => caster.pending ?? [])).slice(0, 60) }
+        : {}),
+      ...(casters.some((caster) => caster.spellbook)
+        ? { spellbook: dedupe(casters.flatMap((caster) => caster.spellbook ?? [])).slice(0, 120) }
+        : {}),
       casters,
       ...(pactInfo
         ? {
@@ -702,8 +758,12 @@ export async function PATCH(
       parsed.data.level ?? sheet.level,
       abilityMod((parsed.data.abilities ?? sheet.abilities)[ability]),
     );
+    // Cantrips and the subclass's always-prepared spells are free.
     const next = parsed.data.spellcasting;
-    const held = (next.known.length > 0 ? next.known : next.prepared).length;
+    const held = spellsAgainstLimit(
+      next.known.length > 0 ? next.known : [...next.prepared, ...(next.pending ?? [])],
+      subclassSpellsFor(sheet.class, parsed.data.subclass ?? sheet.subclass, parsed.data.level ?? sheet.level),
+    );
     if (allowance && held > allowance.count) {
       return Response.json(
         {
@@ -711,6 +771,24 @@ export async function PATCH(
         },
         { status: 400 },
       );
+    }
+    // A wizard writes two new spells in the spellbook per level gained.
+    if (next.spellbook && spellStyleFor(sheet.class) === "spellbook") {
+      const before = new Set(
+        [...(sheet.spellcasting.spellbook ?? []), ...sheet.spellcasting.prepared].map((name) =>
+          name.toLowerCase(),
+        ),
+      );
+      const written = next.spellbook.filter((name) => !before.has(name.toLowerCase())).length;
+      const gainedLevels = Math.max(0, (parsed.data.level ?? sheet.level) - sheet.level);
+      if (written > 2 * gainedLevels) {
+        return Response.json(
+          {
+            error: `A wizard writes ${2 * gainedLevels} new spells in the spellbook for this level-up, not ${written}.`,
+          },
+          { status: 400 },
+        );
+      }
     }
   }
 

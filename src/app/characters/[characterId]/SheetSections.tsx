@@ -10,9 +10,9 @@ import {
   FeatChips,
   FeatureChips,
   SkillRows,
-  SpellChips,
   VitalTiles,
 } from "@/components/sheet/SheetParts";
+import { SheetSpells } from "@/components/sheet/SheetSpells";
 import { Ribbon } from "@/components/ui/Ribbon";
 import { cn } from "@/lib/cn";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
@@ -121,7 +121,7 @@ export function SheetSections({ sheet, level = 1 }: { sheet: CreateSheetInput; l
 
       {sheet.spellcasting ? (
         <SheetPanel title="Spells">
-          <SpellChips spells={[...sheet.spellcasting.known, ...sheet.spellcasting.prepared]} emptyText="None chosen." />
+          <SheetSpells sheet={{ ...sheet, level }} />
         </SheetPanel>
       ) : null}
 

@@ -2,6 +2,21 @@ import { spellSlotsFor, suggestedStartingHp } from "@/lib/srd";
 import { slotTableFor } from "@/lib/srd/multiclass";
 import { earnedAsiCount, removeAsiChoices } from "@/lib/srd/asi";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
+import { suggestedCantripCount } from "@/lib/content/mechanics";
+import { spellClassFor } from "@/lib/classes";
+import { findClass } from "@/lib/srd";
+import { spellLevelOf, spellsAgainstLimit } from "@/lib/srd/spell-lists";
+import {
+  casterViewsOf,
+  dedupeNames,
+  grantedSpellsOf,
+  maxSpellLevelOf,
+  spellCapOf,
+  spellbookAllowance,
+  spellbookOf,
+  withCasterViews,
+  type CasterView,
+} from "@/lib/srd/spell-prep";
 
 // Taking a stored sheet into a campaign that runs at a different level.
 //
@@ -108,7 +123,58 @@ export function adaptSheetToLevel(
         Object.entries(slots).map(([slotLevel, max]) => [slotLevel, { max, used: 0 }]),
       );
     }
+    // A character joining below the level they were built at gives back the
+    // spells that level has not earned: anything above what its slots can
+    // cast, and whatever is over the cantrip, known, prepared and spellbook
+    // allowances (the earliest picks are kept). Going up keeps every spell;
+    // the new room is filled in play.
+    if (level < fromLevel) {
+      const views = casterViewsOf({ ...sheet, level }).map((view) =>
+        trimToLevel(view, sheet.abilities),
+      );
+      sheet.spellcasting = withCasterViews(sheet.spellcasting, views);
+    }
   }
 
   return sheet;
+}
+
+function trimToLevel(view: CasterView, abilities: CreateSheetInput["abilities"]): CasterView {
+  const top = maxSpellLevelOf(view);
+  // Homebrew names the checklist does not know are kept: no level to judge.
+  const castable = (names: string[]) =>
+    names.filter((name) => (spellLevelOf(name) ?? 0) <= top);
+  const granted = grantedSpellsOf(view);
+  const isGranted = (name: string) =>
+    granted.some((entry) => entry.toLowerCase() === name.toLowerCase());
+  // Keep the granted spells and the first `cap` others.
+  const capList = (names: string[], cap: number | null) => {
+    let room = cap ?? Infinity;
+    return names.filter((name) => {
+      if (isGranted(name)) {
+        return true;
+      }
+      room -= 1;
+      return room >= 0;
+    });
+  };
+  const cantripCap = suggestedCantripCount(
+    spellClassFor(view.classId),
+    view.level,
+    findClass(view.classId)?.casterType,
+  );
+  const cap = spellCapOf(view, abilities)?.count ?? null;
+  const cantrips = cantripCap === null ? view.cantrips : view.cantrips.slice(0, cantripCap);
+  const known = capList(castable(view.known), cap);
+  const prepared = capList(castable(view.prepared), cap);
+  const room = cap === null ? Infinity : Math.max(0, cap - spellsAgainstLimit(prepared, granted));
+  const pending = castable(view.pending).slice(0, room);
+  let spellbook = view.spellbook;
+  if (view.style === "spellbook") {
+    // The book keeps what is prepared first, then the rest in order.
+    const book = castable(spellbookOf(view));
+    const size = spellbookAllowance(view.level);
+    spellbook = dedupeNames([...prepared, ...book]).slice(0, Math.max(size, prepared.length));
+  }
+  return { ...view, cantrips, known, prepared, pending, spellbook };
 }
