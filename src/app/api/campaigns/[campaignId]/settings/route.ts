@@ -17,8 +17,10 @@ export async function PATCH(
     return context;
   }
 
+  // Laid over the stored settings before parsing: zod 4 fills a .default()
+  // even under .partial(), so a partial parse would reset every unsent field.
   const raw = await request.json().catch(() => ({}));
-  const parsed = gameSettingsSchema.partial().safeParse(raw);
+  const parsed = gameSettingsSchema.safeParse({ ...context.campaign.gameSettings, ...raw });
   if (!parsed.success) {
     return Response.json({ error: "Invalid game settings." }, { status: 400 });
   }

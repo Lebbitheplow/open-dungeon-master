@@ -4,6 +4,7 @@ import {
   globalConfigSchema,
   type GlobalConfig,
 } from "@/lib/schemas/global-config";
+import { parseKeepingValid } from "@/lib/schemas/parse-keeping-valid";
 
 const GLOBAL_CONFIG_KEY = "global_config";
 
@@ -50,8 +51,7 @@ export function getInstanceId(): string {
 export function getGlobalConfig(): GlobalConfig {
   const raw = getAppSetting<unknown>(GLOBAL_CONFIG_KEY, null);
   if (raw === null) return DEFAULT_GLOBAL_CONFIG;
-  const parsed = globalConfigSchema.safeParse(raw);
-  return parsed.success ? parsed.data : DEFAULT_GLOBAL_CONFIG;
+  return parseKeepingValid(globalConfigSchema, raw);
 }
 
 export type GlobalConfigPatch = {

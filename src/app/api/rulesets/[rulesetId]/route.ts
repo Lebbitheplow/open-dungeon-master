@@ -8,7 +8,7 @@ import {
   getRulesetForUser,
   updateRuleset,
 } from "@/lib/db/rulesets";
-import { patchRulesetSchema } from "@/lib/schemas/ruleset";
+import { createRulesetSchema } from "@/lib/schemas/ruleset";
 import { rulesetChanges } from "@/lib/rulesets/logic";
 
 export const runtime = "nodejs";
@@ -75,7 +75,10 @@ export async function PATCH(
   if (resolved.error) {
     return resolved.error;
   }
-  const parsed = patchRulesetSchema.safeParse(await request.json().catch(() => ({})));
+  // The edit is laid over the stored ruleset and checked as a whole, so a
+  // field it leaves out keeps its value instead of taking the create default.
+  const raw = await request.json().catch(() => ({}));
+  const parsed = createRulesetSchema.safeParse({ ...resolved.ruleset, ...raw });
   if (!parsed.success) {
     return Response.json({ error: "Invalid change." }, { status: 400 });
   }

@@ -117,7 +117,7 @@ export default function CharacterBuilder({
   const [cropping, setCropping] = useState(false);
 
   function submit() {
-    const input = { state, derived, race, klass, background };
+    const input = { state, derived, race, klass, background, initial };
     const problem = validateBuilder(input);
     if (problem) {
       if (problem.kind === "spellWarning") {
