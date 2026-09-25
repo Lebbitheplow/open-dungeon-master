@@ -49,6 +49,12 @@ export interface ShellHost {
   };
   // The host these pages are talking to, when the app draws them.
   hostOrigin?: string;
+  // The app's own Settings (its audio and dice controls, updates, sharing
+  // the device world) and its user guide, laid over the page without
+  // taking the table down. Present when the app draws these pages itself
+  // (apps 0.15.0 and up); the account menu offers both.
+  openSettings?(): void;
+  openHelp?(): void;
 }
 
 declare global {

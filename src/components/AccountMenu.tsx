@@ -1,12 +1,7 @@
 "use client";
 
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import {
-  AppWindow,
-  CircleHelp,
-  LogOut,
-  UserRound,
-} from "lucide-react";
+import { AppWindow, BookOpen, CircleHelp, LogOut, SlidersHorizontal, UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
@@ -223,6 +218,19 @@ export function AccountMenu({
             {shell ? (
               <DropdownMenu.Item onSelect={() => shell.showServers()} className={itemClass}>
                 <AppWindow className="size-4" /> App home
+              </DropdownMenu.Item>
+            ) : null}
+            {/* The app's own settings (microphone, playback, dice, updates,
+                sharing the device world) and its guide: the app has no
+                bar of its own over these pages, so its doors live here. */}
+            {shell?.openSettings ? (
+              <DropdownMenu.Item onSelect={() => shell.openSettings?.()} className={itemClass}>
+                <SlidersHorizontal className="size-4" /> App settings
+              </DropdownMenu.Item>
+            ) : null}
+            {shell?.openHelp ? (
+              <DropdownMenu.Item onSelect={() => shell.openHelp?.()} className={itemClass}>
+                <BookOpen className="size-4" /> App guide
               </DropdownMenu.Item>
             ) : null}
             <DropdownMenu.Item onSelect={logout} className={itemClass}>
