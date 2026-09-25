@@ -341,6 +341,17 @@ export const REAL_DICE_RULE = `Physical dice at this table: some players roll th
 // Exported so Ask can answer sheet questions from exactly the same rendering
 // the DM sees, rather than growing a second, drifting description of a
 // character.
+// Cantrips first and labeled, so the model never spends a slot on one.
+function spellListLabel(lists: { known: string[]; prepared: string[]; cantrips?: string[] }): string {
+  const cantrips = lists.cantrips ?? [];
+  const spells = [...lists.known, ...lists.prepared];
+  const parts = [
+    cantrips.length ? `cantrips (no slot): ${cantrips.join(", ")}` : "",
+    spells.length ? `spells: ${spells.join(", ")}` : "",
+  ].filter(Boolean);
+  return parts.join("; ") || "none";
+}
+
 export function describeSheet(
   sheet: CharacterSheet,
   playedBy: string,
@@ -515,22 +526,22 @@ export function describeSheet(
       // pool is shared across them (Pact Magic apart).
       lines.push(`  Spell slots (SHARED across their caster classes): ${slots || "none"}${pactLabel}`);
       for (const caster of sheet.spellcasting.casters) {
-        const casterSpells = [...caster.known, ...caster.prepared];
+        const casterSpells = spellListLabel(caster);
         const dc =
           8 +
           derived.proficiencyBonus +
           derived.abilityMods[caster.ability as keyof typeof derived.abilityMods];
         lines.push(
-          `    As a ${caster.classId} (${caster.ability.toUpperCase()}, Save DC ${dc}): ${casterSpells.join(", ") || "none"}`,
+          `    As a ${caster.classId} (${caster.ability.toUpperCase()}, Save DC ${dc}): ${casterSpells}`,
         );
       }
       lines.push(
         `    They can cast nothing beyond those lists.${sheet.concentratingOn ? ` Concentrating on: ${sheet.concentratingOn}` : ""}`,
       );
     } else {
-      const spellList = [...sheet.spellcasting.known, ...sheet.spellcasting.prepared];
+      const spellList = spellListLabel(sheet.spellcasting);
       lines.push(
-        `  Spell slots: ${slots || "none"}${pactLabel} | Save DC ${derived.spellSaveDc} | Spells (complete list, they can cast nothing else): ${spellList.join(", ") || "none"}${sheet.concentratingOn ? ` | Concentrating on: ${sheet.concentratingOn}` : ""}`,
+        `  Spell slots: ${slots || "none"}${pactLabel} | Save DC ${derived.spellSaveDc} | Spells (complete list, they can cast nothing else): ${spellList}${sheet.concentratingOn ? ` | Concentrating on: ${sheet.concentratingOn}` : ""}`,
       );
     }
   } else {

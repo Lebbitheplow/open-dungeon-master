@@ -65,7 +65,7 @@ export function ancestryBlocker(
 // Whether the counts the SRD gives are rules for this class or only advice.
 // The tables in src/lib/content/mechanics.ts are the SRD's; a homebrew or
 // setting class borrows a list and may well have its own idea of how many.
-function srdClass(klass: ClassOption): boolean {
+export function srdClass(klass: ClassOption): boolean {
   return !klass.genres && SRD_CLASSES.some((entry) => entry.id === klass.id);
 }
 
@@ -128,11 +128,16 @@ export function spellsBlocker(
   if (cantripsLeft > 0) {
     return `Pick ${cantripsLeft} more ${cantripsLeft === 1 ? "cantrip" : "cantrips"}.`;
   }
+  if (derived.cantripAdvice !== null && cantripsLeft < 0) {
+    return `Remove ${-cantripsLeft} ${cantripsLeft === -1 ? "cantrip" : "cantrips"}: a ${klass.name.toLowerCase()} knows ${derived.cantripAdvice ?? 0} at this level.`;
+  }
   if (derived.spellAdvice) {
-    const levelled = state.spells.length - derived.chosenCantrips.length;
-    const spellsLeft = derived.spellAdvice.count - levelled;
+    const spellsLeft = derived.spellAdvice.count - derived.chosenSpells.length;
     if (spellsLeft > 0) {
       return `Pick ${spellsLeft} more ${spellsLeft === 1 ? "spell" : "spells"} (${derived.spellAdvice.label}).`;
+    }
+    if (spellsLeft < 0) {
+      return `Remove ${-spellsLeft} ${spellsLeft === -1 ? "spell" : "spells"}: the limit is ${derived.spellAdvice.count} ${derived.spellAdvice.label}.`;
     }
   }
   return null;
@@ -184,7 +189,7 @@ export function validateBuilder(
   }
   // Casters with no spells at all can still be submitted (homebrew varies),
   // but not by accident: one confirmation makes it a deliberate choice.
-  if (derived.castingLabel && !state.spells.length && !state.spellWarningAck) {
+  if (derived.castingLabel && !state.spells.length && !state.cantrips.length && !state.spellWarningAck) {
     return {
       kind: "spellWarning",
       message: `${state.name.trim() || "This character"} has no ${derived.castingLabel.toLowerCase()} selected and will start unable to cast. Press again to continue anyway.`,
@@ -218,18 +223,18 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
   );
   const isKnownCaster =
     klass.knownCaster ?? ["bard", "sorcerer", "warlock", "ranger"].includes(klass.id);
-  // A racial cantrip (high elf) joins the spell list for casters. A
+  // A racial cantrip (high elf) joins the cantrip list for casters. A
   // non-caster has nowhere to put it, so it rides along as a feature
   // instead, which populateFeatures keeps and the DM prompt can see.
-  const { spells, racialCantrip } = state;
-  const spellsWithRacial =
-    racialCantrip && !spells.includes(racialCantrip) ? [...spells, racialCantrip] : spells;
+  const { spells, cantrips, racialCantrip } = state;
+  const finalCantrips =
+    racialCantrip && !cantrips.includes(racialCantrip) ? [...cantrips, racialCantrip] : cantrips;
   // Domain, circle, oath and patron spells are always prepared and free:
   // they ride onto the list on top of whatever the player picked.
   const grantedSpells = subclassSpellsFor(klass.id, state.subclass, effectiveLevel).filter(
-    (spell) => !spellsWithRacial.some((entry) => entry.toLowerCase() === spell.toLowerCase()),
+    (spell) => !spells.some((entry) => entry.toLowerCase() === spell.toLowerCase()),
   );
-  const finalSpells = klass.spellAbility ? [...spellsWithRacial, ...grantedSpells] : spells;
+  const finalSpells = klass.spellAbility ? [...spells, ...grantedSpells] : spells;
   const racialFeatures =
     racialCantrip && !klass.spellAbility
       ? [{ name: `Racial cantrip: ${racialCantrip}`, source: "story" as const }]
@@ -294,6 +299,7 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
             slots,
             prepared: isKnownCaster ? [] : finalSpells,
             known: isKnownCaster ? finalSpells : [],
+            cantrips: finalCantrips,
           }
         : null,
       notes: "",

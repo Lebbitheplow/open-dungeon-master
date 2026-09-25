@@ -28,6 +28,7 @@ import { suggestedSpellCount } from "@/lib/content/mechanics";
 import { spellClassFor } from "@/lib/classes";
 import { abilityMod, findClass, findSkill } from "@/lib/srd";
 import { populateFeaturesForClasses, subclassSpellsFor } from "@/lib/srd/features";
+import { allSpellNames, isCantripName, spellsAgainstLimit } from "@/lib/srd/spell-lists";
 import {
   canMulticlassInto,
   classListFor,
@@ -197,6 +198,7 @@ function buildMulticlassLevelUp(
         ...caster,
         known: [...caster.known],
         prepared: [...caster.prepared],
+        cantrips: [...(caster.cantrips ?? [])],
       })) ?? []
     );
     if (!casters.length && spellcasting) {
@@ -210,12 +212,13 @@ function buildMulticlassLevelUp(
         ability: spellcasting.ability,
         known: [...spellcasting.known],
         prepared: [...spellcasting.prepared],
+        cantrips: [...(spellcasting.cantrips ?? [])],
       });
     }
     if (klass.casterType !== "none" && klass.spellAbility) {
       let mine = casters.find((caster) => caster.classId.toLowerCase() === classId);
       if (!mine) {
-        mine = { classId: klass.id, ability: klass.spellAbility, known: [], prepared: [] };
+        mine = { classId: klass.id, ability: klass.spellAbility, known: [], prepared: [], cantrips: [] };
         casters.push(mine);
       }
       const allowance = suggestedSpellCount(
@@ -223,15 +226,18 @@ function buildMulticlassLevelUp(
         leveled.level,
         abilityMod((data.abilities ?? sheet.abilities)[mine.ability]),
       );
-      const heldNames = new Set(
-        [...mine.known, ...mine.prepared].map((name) => name.toLowerCase()),
-      );
-      const picks = (data.levelUpSpells ?? []).filter(
+      const heldNames = new Set(allSpellNames(mine).map((name) => name.toLowerCase()));
+      const newPicks = (data.levelUpSpells ?? []).filter(
         (name) => !heldNames.has(name.toLowerCase()),
       );
+      // Cantrip picks join the cantrip list and never count as spells.
+      const cantripPicks = newPicks.filter(isCantripName);
+      const picks = newPicks.filter((name) => !isCantripName(name));
+      const grantedAll = subclassSpellsFor(klass.id, leveled.subclass, leveled.level);
       const intoKnown = allowance?.label === "spells known";
       if (allowance) {
-        const held = (intoKnown ? mine.known : mine.prepared).length + picks.length;
+        const held =
+          spellsAgainstLimit(intoKnown ? mine.known : mine.prepared, grantedAll) + picks.length;
         if (held > allowance.count) {
           return {
             error: `A ${klass.name} ${leveled.level} may hold ${allowance.count} ${allowance.label}; that list would have ${held}.`,
@@ -239,7 +245,7 @@ function buildMulticlassLevelUp(
         }
       }
       // Subclass spells (domain, circle, oath, patron) arrive free.
-      const granted = subclassSpellsFor(klass.id, leveled.subclass, leveled.level).filter(
+      const granted = grantedAll.filter(
         (name) =>
           !heldNames.has(name.toLowerCase()) &&
           !picks.some((pick) => pick.toLowerCase() === name.toLowerCase()),
@@ -249,6 +255,7 @@ function buildMulticlassLevelUp(
       } else {
         mine.prepared.push(...picks, ...granted);
       }
+      mine.cantrips = [...(mine.cantrips ?? []), ...cantripPicks];
     }
     const table = slotTableFor({ class: sheet.class, classes: nextClasses });
     const slots = Object.fromEntries(
@@ -278,6 +285,7 @@ function buildMulticlassLevelUp(
       slots,
       known: dedupe(casters.flatMap((caster) => caster.known)).slice(0, 80),
       prepared: dedupe(casters.flatMap((caster) => caster.prepared)).slice(0, 60),
+      cantrips: dedupe(casters.flatMap((caster) => caster.cantrips ?? [])).slice(0, 40),
       casters,
       ...(pactInfo
         ? {
@@ -674,8 +682,12 @@ export async function PATCH(
       parsed.data.level ?? sheet.level,
       abilityMod((parsed.data.abilities ?? sheet.abilities)[ability]),
     );
+    // Cantrips and the subclass's always-prepared spells are free.
     const next = parsed.data.spellcasting;
-    const held = (next.known.length > 0 ? next.known : next.prepared).length;
+    const held = spellsAgainstLimit(
+      next.known.length > 0 ? next.known : next.prepared,
+      subclassSpellsFor(sheet.class, parsed.data.subclass ?? sheet.subclass, parsed.data.level ?? sheet.level),
+    );
     if (allowance && held > allowance.count) {
       return Response.json(
         {

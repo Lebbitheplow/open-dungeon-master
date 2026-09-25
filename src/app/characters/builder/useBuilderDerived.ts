@@ -41,7 +41,7 @@ export function useBuilderDerived({
   const {
     level, scores, racialAsi, asiChoices, chosenSkills, expertisePicks, bonusLanguages,
     racialSkills, racialTool, hpOverride, acOverride, equipment, removedAutoNames,
-    subclass, optionPicks, spells, cantripNames,
+    subclass, optionPicks, spells, cantrips,
   } = state;
 
   const effectiveLevel = fixedLevel ?? level;
@@ -137,7 +137,7 @@ export function useBuilderDerived({
       level: effectiveLevel,
       proficiencies,
       spellcasting: klass.spellAbility
-        ? { ability: klass.spellAbility, slots: {}, prepared: [], known: [] }
+        ? { ability: klass.spellAbility, slots: {}, prepared: [], known: [], cantrips: [] }
         : null,
     });
     const maxHp =
@@ -261,17 +261,13 @@ export function useBuilderDerived({
   );
   // What this class calls its spells, used in the empty-spell-list warning.
   const castingLabel = casts && klass ? (klass.castingLabel || "spells") : "";
-  // Which chosen names are cantrips, so the two counters read separately.
-  // Seeded from the recommendations and topped up by the picker and the
-  // spells step (which loads the class's cantrip list once), so a sheet that
-  // arrives for editing counts its cantrips too.
-  const chosenCantrips = useMemo(() => {
-    const known = new Set([
-      ...cantripNames.map((spellName) => spellName.toLowerCase()),
-      ...(starters?.cantrips.map((pick) => pick.n.toLowerCase()) ?? []),
-    ]);
-    return spells.filter((spellName) => known.has(spellName.toLowerCase()));
-  }, [spells, cantripNames, starters]);
+  // Cantrips are their own list. Levelled spells count against the class's
+  // allowance except the subclass's always-prepared ones, which are free.
+  const chosenCantrips = cantrips;
+  const chosenSpells = useMemo(() => {
+    const free = new Set(subclassSpells.map((spellName) => spellName.toLowerCase()));
+    return spells.filter((spellName) => !free.has(spellName.toLowerCase()));
+  }, [spells, subclassSpells]);
 
   return {
     effectiveLevel,
@@ -296,6 +292,7 @@ export function useBuilderDerived({
     subclassSpells,
     castingLabel,
     chosenCantrips,
+    chosenSpells,
     maxSpellLevel,
   };
 }

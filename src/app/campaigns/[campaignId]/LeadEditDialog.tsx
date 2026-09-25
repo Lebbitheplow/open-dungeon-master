@@ -73,6 +73,17 @@ export function LeadEditDialog({
   );
   const [prepared, setPrepared] = useState<string[]>(sheet.spellcasting?.prepared ?? []);
   const [known, setKnown] = useState<string[]>(sheet.spellcasting?.known ?? []);
+  const [cantrips, setCantrips] = useState<string[]>(sheet.spellcasting?.cantrips ?? []);
+  // A cantrip picked from the known or prepared search still lands in the
+  // cantrip list; those two lists hold levelled spells only.
+  const addCantrips = (entries: Array<{ name: string; level?: number }>) => {
+    const picked = entries.filter((entry) => entry.level === 0).map((entry) => entry.name);
+    if (picked.length) {
+      setCantrips((list) => [...list, ...picked.filter((name) => !list.includes(name))]);
+    }
+  };
+  const spellNamesOf = (entries: Array<{ name: string; level?: number }>) =>
+    entries.filter((entry) => entry.level !== 0).map((entry) => entry.name);
   const [slots, setSlots] = useState<Record<string, { max: string; used: string }>>(() =>
     Object.fromEntries(
       Object.entries(sheet.spellcasting?.slots ?? {}).map(([level, slot]) => [
@@ -131,6 +142,7 @@ export function LeadEditDialog({
     }
     if (sheet.spellcasting) {
       const nextSpellcasting = {
+        ...sheet.spellcasting,
         ability: sheet.spellcasting.ability,
         slots: Object.fromEntries(
           Object.entries(sheet.spellcasting.slots).map(([level, slot]) => {
@@ -142,6 +154,7 @@ export function LeadEditDialog({
         ),
         prepared,
         known,
+        cantrips,
       };
       if (JSON.stringify(nextSpellcasting) !== JSON.stringify(sheet.spellcasting)) {
         patch.spellcasting = nextSpellcasting;
@@ -274,6 +287,23 @@ export function LeadEditDialog({
             <div className="reveal mt-3 space-y-2 text-xs">
               <SectionHead title="Spells" glyph="rest-spell-slot" level="h3" />
               <div className="space-y-1">
+                <span className="eyebrow text-[10px] text-amber-400/80">Cantrips</span>
+                <ChipList
+                  values={cantrips}
+                  onRemove={(value) =>
+                    setCantrips((list) => list.filter((entry) => entry !== value))
+                  }
+                />
+                <MultiContentPicker
+                  kind="spells"
+                  extraParams={{ class: spellClassFor(sheet.class), level: "0" }}
+                  placeholder="Search cantrips to add"
+                  selectedNames={cantrips}
+                  onAdd={(entries) => addCantrips(entries)}
+                  renderMeta={() => "cantrip"}
+                />
+              </div>
+              <div className="space-y-1">
                 <span className="eyebrow text-[10px] text-amber-400/80">Known</span>
                 <ChipList
                   values={known}
@@ -287,9 +317,10 @@ export function LeadEditDialog({
                   }}
                   placeholder="Search spells to add as known"
                   selectedNames={known}
-                  onAdd={(entries) =>
-                    setKnown((list) => [...list, ...entries.map((entry) => entry.name)])
-                  }
+                  onAdd={(entries) => {
+                    addCantrips(entries);
+                    setKnown((list) => [...list, ...spellNamesOf(entries)]);
+                  }}
                   renderMeta={(entry) =>
                     entry.level !== undefined
                       ? entry.level === 0
@@ -315,9 +346,10 @@ export function LeadEditDialog({
                   }}
                   placeholder="Search spells to add as prepared"
                   selectedNames={prepared}
-                  onAdd={(entries) =>
-                    setPrepared((list) => [...list, ...entries.map((entry) => entry.name)])
-                  }
+                  onAdd={(entries) => {
+                    addCantrips(entries);
+                    setPrepared((list) => [...list, ...spellNamesOf(entries)]);
+                  }}
                   renderMeta={(entry) =>
                     entry.level !== undefined
                       ? entry.level === 0

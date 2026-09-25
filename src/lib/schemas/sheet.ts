@@ -145,6 +145,10 @@ export const spellcastingSchema = z
     // Spells known (for known-casters); prepared casters leave this empty
     // and use `prepared` alone.
     known: z.array(z.string().trim().min(1).max(80)).max(80).default([]),
+    // Cantrips, apart from both lists above: they are neither prepared nor
+    // counted against spells known. Older sheets carried them inside
+    // prepared/known; the row reader moves them here (spell-lists.ts).
+    cantrips: z.array(z.string().trim().min(1).max(80)).max(40).default([]),
     // Per-class casting for multiclassed characters: each caster class
     // keeps its own ability and lists while `slots` becomes the SHARED
     // multiclass pool. Absent = single-class; the legacy fields above stay
@@ -157,6 +161,7 @@ export const spellcastingSchema = z
           ability: z.enum(["int", "wis", "cha"]),
           known: z.array(z.string().trim().min(1).max(80)).max(80).default([]),
           prepared: z.array(z.string().trim().min(1).max(80)).max(60).default([]),
+          cantrips: z.array(z.string().trim().min(1).max(80)).max(40).default([]),
         }),
       )
       .max(3)

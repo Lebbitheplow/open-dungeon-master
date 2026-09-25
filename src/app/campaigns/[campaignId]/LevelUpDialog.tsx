@@ -36,7 +36,7 @@ import {
   type FightingStyleId,
 } from "@/lib/srd/feature-effects";
 import { spellClassFor } from "@/lib/classes";
-import { suggestedSpellCount } from "@/lib/content/mechanics";
+import { suggestedCantripCount, suggestedSpellCount } from "@/lib/content/mechanics";
 import AsiFeatEditor from "@/app/characters/builder/AsiFeatEditor";
 import { useArchetypes } from "@/app/characters/builder/useBuilderOptions";
 import type { AsiChoice, CharacterSheet } from "@/lib/schemas/sheet";
@@ -69,6 +69,8 @@ export function LevelUpDialog({
   const [subclassChoice, setSubclassChoice] = useState("");
   const [expertisePicks, setExpertisePicks] = useState<string[]>([]);
   const [spellPicks, setSpellPicks] = useState<string[]>([]);
+  // Cantrips picked this level, kept apart: they have their own allowance.
+  const [cantripPicks, setCantripPicks] = useState<string[]>([]);
   const [stylePicks, setStylePicks] = useState<FightingStyleId[]>([]);
   const [spellQuery, setSpellQuery] = useState("");
   const [spellOptions, setSpellOptions] = useState<SpellRow[]>([]);
@@ -134,6 +136,7 @@ export function LevelUpDialog({
     setSubclassChoice("");
     setExpertisePicks([]);
     setSpellPicks([]);
+    setCantripPicks([]);
     setStylePicks([]);
     setOptionPicks([]);
     setSkillPick("");
@@ -323,9 +326,20 @@ export function LevelUpDialog({
         : sheet.spellcasting.prepared
       : [];
   }, [sheet.spellcasting, isMulticlassPath, casterEntry, isNewClass]);
+  const cantripList = useMemo(() => {
+    if (isMulticlassPath) {
+      if (casterEntry) {
+        return casterEntry.cantrips ?? [];
+      }
+      return sheet.spellcasting && !sheet.spellcasting.casters?.length && !isNewClass
+        ? (sheet.spellcasting.cantrips ?? [])
+        : [];
+    }
+    return sheet.spellcasting?.cantrips ?? [];
+  }, [sheet.spellcasting, isMulticlassPath, casterEntry, isNewClass]);
   const alreadyKnown = useMemo(
-    () => new Set(knownList.map((name) => name.toLowerCase())),
-    [knownList],
+    () => new Set([...knownList, ...cantripList].map((name) => name.toLowerCase())),
+    [knownList, cantripList],
   );
   const allowanceAbility = isMulticlassPath
     ? (casterEntry?.ability ?? chosenKlass?.spellAbility ?? null)
@@ -338,7 +352,27 @@ export function LevelUpDialog({
           abilityMod(sheet.abilities[allowanceAbility]),
         )
       : null;
-  const remainingPicks = allowance ? Math.max(0, allowance.count - knownList.length) : null;
+  // The subclass's always-prepared spells never count against the allowance.
+  const grantedFree = useMemo(
+    () =>
+      new Set(
+        subclassSpellsFor(classChoice, effectiveSubclass, classLevelAfter).map((name) =>
+          name.toLowerCase(),
+        ),
+      ),
+    [classChoice, effectiveSubclass, classLevelAfter],
+  );
+  const heldSpells = knownList.filter((name) => !grantedFree.has(name.toLowerCase())).length;
+  const remainingPicks = allowance ? Math.max(0, allowance.count - heldSpells) : null;
+  const cantripAllowance = showSpells
+    ? suggestedCantripCount(
+        spellClassFor(classChoice),
+        classLevelAfter,
+        (chosenKlass ?? findClass(sheet.class))?.casterType,
+      )
+    : null;
+  const remainingCantrips =
+    cantripAllowance !== null ? Math.max(0, cantripAllowance - cantripList.length) : null;
 
   function rollHp() {
     let total = 0;
@@ -357,7 +391,13 @@ export function LevelUpDialog({
     }
   }
 
-  function toggleSpell(name: string) {
+  function toggleSpell(name: string, level?: number) {
+    if (level === 0) {
+      setCantripPicks((current) =>
+        current.includes(name) ? current.filter((pick) => pick !== name) : [...current, name],
+      );
+      return;
+    }
     setSpellPicks((current) =>
       current.includes(name) ? current.filter((pick) => pick !== name) : [...current, name],
     );
@@ -385,7 +425,9 @@ export function LevelUpDialog({
             currentHp: Math.min(sheet.currentHp + gain, sheet.maxHp + gain),
             levelUpClass: classChoice,
             ...(skillPick ? { levelUpSkill: skillPick } : {}),
-            ...(spellPicks.length ? { levelUpSpells: spellPicks } : {}),
+            ...(spellPicks.length || cantripPicks.length
+              ? { levelUpSpells: [...spellPicks, ...cantripPicks] }
+              : {}),
             features: [
               ...sheet.features,
               ...stylePicks.map((id) => ({
@@ -447,10 +489,15 @@ export function LevelUpDialog({
         const additions = [...spellPicks, ...granted].filter(
           (name) => !alreadyKnown.has(name.toLowerCase()),
         );
-        const intoKnown = sheet.spellcasting.known.length > 0;
+        const intoKnown =
+          sheet.spellcasting.known.length > 0 || allowance?.label === "spells known";
         spellcastingPatch = {
           ...sheet.spellcasting,
           slots: nextSlots,
+          cantrips: [
+            ...(sheet.spellcasting.cantrips ?? []),
+            ...cantripPicks.filter((name) => !alreadyKnown.has(name.toLowerCase())),
+          ],
           known: intoKnown
             ? [...sheet.spellcasting.known, ...additions]
             : sheet.spellcasting.known,
@@ -950,7 +997,17 @@ export function LevelUpDialog({
                         (up to{" "}
                         <span className="text-amber-200">
                           {remainingPicks} new {allowance.label}
-                        </span>{" "}
+                        </span>
+                        {remainingCantrips ? (
+                          <>
+                            {" "}
+                            and{" "}
+                            <span className="text-amber-200">
+                              {remainingCantrips} new{" "}
+                              {remainingCantrips === 1 ? "cantrip" : "cantrips"}
+                            </span>
+                          </>
+                        ) : null}{" "}
                         at level {targetLevel})
                       </>
                     ) : null}
@@ -978,13 +1035,21 @@ export function LevelUpDialog({
                               <label className="flex flex-1 cursor-pointer items-center gap-2 px-3 py-1.5">
                                 <input
                                   type="checkbox"
-                                  checked={spellPicks.includes(spell.name)}
-                                  disabled={
-                                    !spellPicks.includes(spell.name) &&
-                                    remainingPicks !== null &&
-                                    spellPicks.length >= remainingPicks
+                                  checked={
+                                    spell.level === 0
+                                      ? cantripPicks.includes(spell.name)
+                                      : spellPicks.includes(spell.name)
                                   }
-                                  onChange={() => toggleSpell(spell.name)}
+                                  disabled={
+                                    spell.level === 0
+                                      ? !cantripPicks.includes(spell.name) &&
+                                        remainingCantrips !== null &&
+                                        cantripPicks.length >= remainingCantrips
+                                      : !spellPicks.includes(spell.name) &&
+                                        remainingPicks !== null &&
+                                        spellPicks.length >= remainingPicks
+                                  }
+                                  onChange={() => toggleSpell(spell.name, spell.level)}
                                   className="accent-amber-400"
                                 />
                                 <span className="flex-1">{spell.name}</span>
@@ -1027,9 +1092,12 @@ export function LevelUpDialog({
                       </button>
                     </div>
                   )}
-                  {spellPicks.length ? (
+                  {spellPicks.length || cantripPicks.length ? (
                     <p className="reveal text-xs text-stone-400">
-                      Learning: <span className="text-amber-200">{spellPicks.join(", ")}</span>
+                      Learning:{" "}
+                      <span className="text-amber-200">
+                        {[...cantripPicks.map((name) => `${name} (cantrip)`), ...spellPicks].join(", ")}
+                      </span>
                       {remainingPicks !== null && spellPicks.length >= remainingPicks ? (
                         <span className="text-stone-500">
                           {" "}

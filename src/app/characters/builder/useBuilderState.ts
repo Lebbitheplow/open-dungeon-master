@@ -52,10 +52,14 @@ export function useBuilderState({
   const [chosenSkills, setChosenSkills] = useState<string[]>([]);
   const [expertisePicks, setExpertisePicks] = useState<string[]>([]);
   const [stylePicks, setStylePicks] = useState<FightingStyleId[]>([]);
+  // Levelled spells and cantrips are two lists, the way the sheet keeps them.
   const [spells, setSpells] = useState<string[]>(() =>
     initial?.spellcasting
       ? [...new Set([...initial.spellcasting.known, ...initial.spellcasting.prepared])]
       : [],
+  );
+  const [cantrips, setCantrips] = useState<string[]>(() =>
+    initial?.spellcasting ? [...new Set(initial.spellcasting.cantrips ?? [])] : [],
   );
   const [equipment, setEquipment] = useState<EquipmentItem[]>(() =>
     (initial?.equipment ?? []).map((item) => ({
@@ -97,7 +101,6 @@ export function useBuilderState({
   );
   const [racialCantrip, setRacialCantrip] = useState(initial?.racialChoices?.cantrip ?? "");
   const [racialTool, setRacialTool] = useState(initial?.racialChoices?.tool ?? "");
-  const [cantripNames, setCantripNames] = useState<string[]>([]);
   // Prefixed feature names, e.g. "Invocation: Agonizing Blast".
   const [optionPicks, setOptionPicks] = useState<string[]>(() =>
     (initial?.features ?? [])
@@ -183,6 +186,7 @@ export function useBuilderState({
     setChosenSkills([]);
     setSubclass("");
     setSpells([]);
+    setCantrips([]);
     setRemovedAutoNames([]);
     setOptionPicks([]);
   }
@@ -203,6 +207,7 @@ export function useBuilderState({
     expertisePicks, setExpertisePicks,
     stylePicks, setStylePicks,
     spells, setSpells,
+    cantrips, setCantrips,
     equipment, setEquipment,
     removedAutoNames, setRemovedAutoNames,
     feats, setFeats,
@@ -212,7 +217,6 @@ export function useBuilderState({
     racialSkills, setRacialSkills,
     racialCantrip, setRacialCantrip,
     racialTool, setRacialTool,
-    cantripNames, setCantripNames,
     optionPicks, setOptionPicks,
     spellWarningAck, setSpellWarningAck,
     backstory, setBackstory,

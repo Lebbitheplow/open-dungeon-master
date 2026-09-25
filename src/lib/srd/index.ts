@@ -9,6 +9,7 @@ import { conditionAcRiders } from "@/lib/srd/condition-effects";
 import { combatRiders, defenseRiders, halfProficiencyCovers } from "@/lib/srd/feature-effects";
 import { effectiveAbilities, magicItemRiders } from "@/lib/srd/magic-items";
 import { encumbranceFor } from "@/lib/srd/encumbrance";
+import { allSpellNames } from "@/lib/srd/spell-lists";
 import type {
   Ability,
   AbilityScores,
@@ -487,7 +488,7 @@ function casterEntryForSpell(
   }
   return (
     spellcasting.casters.find((caster) =>
-      [...caster.known, ...caster.prepared].some(
+      allSpellNames(caster).some(
         (entry) => entry.trim().toLowerCase() === wanted,
       ),
     ) ?? null

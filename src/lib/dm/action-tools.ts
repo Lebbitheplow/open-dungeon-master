@@ -34,6 +34,7 @@ import { applyDmMutation } from "@/lib/dm/mutations";
 import { resolveSheetRef } from "@/lib/dm/rolls";
 import { DODGING } from "@/lib/dm/condition-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { allSpellNames } from "@/lib/srd/spell-lists";
 
 // The rest of a 5e turn: the actions that are not attacks or spells, plus
 // reactions. Dodge, Dash, Disengage, Hide, Help, Grapple, and Shove all had
@@ -526,7 +527,7 @@ export function handleUseReaction(
   // swings genuinely test the higher number. A refused spend refuses the
   // reaction (and leaves it unspent).
   const spellList = sheet.spellcasting
-    ? [...sheet.spellcasting.known, ...sheet.spellcasting.prepared]
+    ? allSpellNames(sheet.spellcasting)
     : [];
   const isShieldSpell =
     /^shield\b/i.test(args.feature.trim()) &&

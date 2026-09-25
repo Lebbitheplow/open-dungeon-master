@@ -23,6 +23,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { recordEncounterTarget } from "@/lib/db/encounters";
 import { planSpellFx } from "@/lib/battlemap/fx-plan";
 import { publishFx, tokenPosition } from "@/lib/dm/fx";
+import { allSpellNames } from "@/lib/srd/spell-lists";
 
 // cast_at_enemy: single-target save-or-suffer spells a player casts on an
 // enemy (Hold Person, Tasha's Hideous Laughter, single-target Poison
@@ -309,7 +310,7 @@ export function handleCastAtEnemy(
     }
   } else {
     // Cantrip path: no slot, but the spell must still be on their list.
-    const spellList = [...sheet.spellcasting.known, ...sheet.spellcasting.prepared];
+    const spellList = allSpellNames(sheet.spellcasting);
     const onList = spellList.some(
       (entry) =>
         entry.toLowerCase().includes(args.spell.toLowerCase()) ||
@@ -571,7 +572,7 @@ export function handleCastBuff(
       return spend;
     }
   } else {
-    const spellList = [...sheet.spellcasting.known, ...sheet.spellcasting.prepared];
+    const spellList = allSpellNames(sheet.spellcasting);
     const onList = spellList.some(
       (entry) =>
         entry.toLowerCase().includes(args.spell.toLowerCase()) ||

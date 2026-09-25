@@ -32,7 +32,7 @@ import {
   PortraitMedallion,
   SheetBlock,
   SkillRows,
-  SpellChips,
+  SpellGroups,
   VitalTiles,
 } from "@/components/sheet/SheetParts";
 
@@ -340,9 +340,13 @@ export function CharacterSheetDialog({
                   ))}
                 </div>
               ) : null}
-              {[...sheet.spellcasting.known, ...sheet.spellcasting.prepared].length ? (
+              {[
+                ...sheet.spellcasting.cantrips,
+                ...sheet.spellcasting.known,
+                ...sheet.spellcasting.prepared,
+              ].length ? (
                 <div className="reveal mt-2">
-                  <SpellChips spells={[...sheet.spellcasting.known, ...sheet.spellcasting.prepared]} />
+                  <SpellGroups spellcasting={sheet.spellcasting} />
                 </div>
               ) : null}
             </SheetBlock>
