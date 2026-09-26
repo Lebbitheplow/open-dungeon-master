@@ -285,8 +285,23 @@ export function instantiateIntoCampaign(
   return createSheet(campaignId, userId, level, sheet, characterId);
 }
 
+// What a campaign sheet carries back to its library character when the
+// table runs below the character's own level: the parts of a hero that are
+// not bound to a level. Everything else (level, XP, classes, HP, hit dice,
+// spells, features, feats, ability scores, AC) stays as the library holds it.
+export function keepsLibraryLevel(sheetLevel: number, libraryLevel: number): boolean {
+  return sheetLevel < libraryLevel;
+}
+
 // Write durable progression (never HP/conditions) from a campaign sheet
 // back to its linked library character.
+//
+// The library never drops a level (issue #36). A level 5 hero who plays a
+// level 1 one-shot comes home with the gear, gold, notes and portrait the
+// table gave them and nothing level-bound, because the lower sheet is the
+// joining adaptation of the same character, not progress. A sheet at or
+// above the library's level is the character as last played and writes
+// everything back, as before.
 export function syncProgressToLibrary(sheetId: string): LibraryCharacter | null {
   const sheet = getSheetById(sheetId);
   if (!sheet?.libraryCharacterId) {
@@ -295,6 +310,21 @@ export function syncProgressToLibrary(sheetId: string): LibraryCharacter | null 
   const character = getCharacter(sheet.libraryCharacterId);
   if (!character || character.userId !== sheet.userId) {
     return null;
+  }
+  if (keepsLibraryLevel(sheet.level, character.level)) {
+    const kept: CreateSheetInput = {
+      ...character.sheet,
+      equipment: sheet.equipment,
+      gold: sheet.gold,
+      copper: sheet.copper,
+      portrait: sheet.portrait,
+      notes: sheet.notes,
+      backstory: sheet.backstory,
+    };
+    getDatabase()
+      .prepare(`UPDATE library_characters SET sheet_json = ?, updated_at = ? WHERE id = ?`)
+      .run(JSON.stringify(kept), nowIso(), character.id);
+    return getCharacter(character.id);
   }
   const merged: CreateSheetInput = {
     ...character.sheet,
