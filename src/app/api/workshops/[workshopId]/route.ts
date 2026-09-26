@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { currentUser, unauthorized } from "@/lib/auth";
-import { deleteCampaign, publicCampaign, type Campaign } from "@/lib/db/campaigns";
+import { deleteCampaignWithFiles } from "@/lib/campaign-deletion";
+import { publicCampaign, type Campaign } from "@/lib/db/campaigns";
 import {
   getWorkshopForUser,
   renameWorkshop,
@@ -103,9 +104,8 @@ export async function DELETE(
   if (resolved.error) {
     return resolved.error;
   }
-  // Foreign keys cascade through every campaign-scoped table, which is the
-  // same sweep a deleted campaign gets, and the reason a workshop needed no
-  // teardown of its own.
-  deleteCampaign(resolved.workshop.id);
+  // A workshop is a campaign row, so it gets the same sweep a deleted
+  // campaign does: the cascades, then the art only it used.
+  deleteCampaignWithFiles(resolved.workshop.id);
   return Response.json({ ok: true });
 }

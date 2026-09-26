@@ -1,13 +1,11 @@
 import { currentScene } from "@/lib/dm/sky";
-import { rm } from "node:fs/promises";
-import path from "node:path";
 import { z } from "zod";
 import { capsFor, isErrorResponse, isLead, requireMember } from "@/lib/campaign-api";
 import { CAMPAIGN_DIFFICULTIES } from "@/lib/campaign-types";
+import { deleteCampaignWithFiles } from "@/lib/campaign-deletion";
 import {
   allocateSeq,
   campaignSeats,
-  deleteCampaign,
   latestSeq,
   listMembers,
   publicCampaign,
@@ -296,7 +294,8 @@ export async function PATCH(
 }
 
 // Deletes the campaign and everything under it. Rows cascade via foreign
-// keys; the per-campaign narration audio directory goes with them.
+// keys; the pictures only this table used and its narration audio go with
+// them (src/lib/campaign-deletion.ts).
 export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ campaignId: string }> },
@@ -312,10 +311,6 @@ export async function DELETE(
     return Response.json({ error: "Only the campaign owner can delete it." }, { status: 403 });
   }
 
-  deleteCampaign(campaignId);
-  await rm(path.join(process.cwd(), "public", "generated-audio", campaignId), {
-    recursive: true,
-    force: true,
-  });
+  deleteCampaignWithFiles(campaignId);
   return Response.json({ ok: true });
 }

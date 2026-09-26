@@ -523,7 +523,7 @@
 .ts-status-wait .ts-lamp { animation: ts-lamp 1.2s ease-in-out infinite; }
 
 /* ------------------------------------------------------------------------
-   Save slots: the other tables along the bottom edge
+   Save slots: your tables along the bottom edge
    ------------------------------------------------------------------------ */
 
 .ts-slots {
@@ -879,7 +879,7 @@
 
 @media (max-width: 1023px) {
   /* One column, in reading order: the title and its door, what happened
-     last, the other tables, then the menu and the status line. The two
+     last, your tables, then the menu and the status line. The two
      column wrappers dissolve so their children can be ordered together. */
   .ts-stage {
     display: flex;
