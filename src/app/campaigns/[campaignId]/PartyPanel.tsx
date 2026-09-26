@@ -101,36 +101,53 @@ function RequestCompanionButton({ campaignId }: { campaignId: string }) {
   );
 }
 
+// A table below the library character's level saves gear, gold and notes
+// only; the library keeps its own level (issue #36), and the button says so
+// for a moment instead of a bare "Saved".
 function SaveToLibraryButton({ campaignId }: { campaignId: string }) {
   const [state, setState] = useState<"idle" | "saving" | "saved">("idle");
+  const [keptLevel, setKeptLevel] = useState<number | null>(null);
   async function save() {
     setState("saving");
     try {
       const response = await fetch(`/api/campaigns/${campaignId}/sheet/sync`, {
         method: "POST",
       });
+      const data = response.ok ? await response.json().catch(() => ({})) : {};
+      const kept = typeof data.keptLevel === "number" ? data.keptLevel : null;
+      setKeptLevel(kept);
       setState(response.ok ? "saved" : "idle");
       if (response.ok) {
-        setTimeout(() => setState("idle"), 2_000);
+        setTimeout(() => {
+          setState("idle");
+          setKeptLevel(null);
+        }, kept === null ? 2_000 : 5_000);
       }
     } catch {
       setState("idle");
     }
   }
   return (
-    <KitButton onClick={save} disabled={state === "saving"} busy={state === "saving"} title="Save level, gear, and spells back to your character library" className="w-full justify-center">
-      {state === "saved" ? (
-        <>
-          <Check className="motion-pop size-3.5 text-emerald-400" /> Saved
-        </>
-      ) : state === "saving" ? (
-        "Save to library"
-      ) : (
-        <>
-          <Save className="size-3.5" /> Save to library
-        </>
-      )}
-    </KitButton>
+    <div className="space-y-1">
+      <KitButton onClick={save} disabled={state === "saving"} busy={state === "saving"} title="Save level, gear, and spells back to your character library. A character above this table's level keeps its own level; gear, gold and notes still save." className="w-full justify-center">
+        {state === "saved" ? (
+          <>
+            <Check className="motion-pop size-3.5 text-emerald-400" /> {keptLevel === null ? "Saved" : "Gear and notes saved"}
+          </>
+        ) : state === "saving" ? (
+          "Save to library"
+        ) : (
+          <>
+            <Save className="size-3.5" /> Save to library
+          </>
+        )}
+      </KitButton>
+      {state === "saved" && keptLevel !== null ? (
+        <p className="reveal text-center text-[11px] text-amber-200">
+          Level {keptLevel} kept in your library; this table is below it.
+        </p>
+      ) : null}
+    </div>
   );
 }
 

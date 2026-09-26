@@ -6,8 +6,10 @@
 // boons, feats, the background's feature, an item's attunement); "save this
 // table's rules" saved an empty ruleset; one bad field blanked a plugin
 // draft; a rename cleared a roll table's drawn results; the prep panel's
-// save cleared a fight's map seed; and an edit asked again for the ability
-// score improvements a hero took in play, which its scores already carry.
+// save cleared a fight's map seed; an edit asked again for the ability
+// score improvements a hero took in play, which its scores already carry;
+// and "save to library" and a campaign's end wrote a lower table's level
+// over the library character's own (issue #36).
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
@@ -53,6 +55,8 @@ const settingsRoute = await route("campaigns/[campaignId]/settings");
 const rulesetsRoute = await route("rulesets");
 const rulesetRoute = await route("rulesets/[rulesetId]");
 const sheetRoute = await route("campaigns/[campaignId]/sheet");
+const syncRoute = await route("campaigns/[campaignId]/sheet/sync");
+const campaignRoute = await route("campaigns/[campaignId]");
 const tablesRoute = await route("campaigns/[campaignId]/dm/roll-tables");
 const tableRoute = await route("campaigns/[campaignId]/dm/roll-tables/[tableId]");
 const rollRoute = await route("campaigns/[campaignId]/dm/roll-tables/[tableId]/roll");
@@ -409,6 +413,92 @@ await test("copper earned in play reaches the library", async () => {
   db.prepare("UPDATE character_sheets SET copper = ? WHERE id = ?").run(77, sheet.id);
   syncProgressToLibrary(sheet.id);
   assert.equal(getCharacter(library.id).sheet.copper, 77);
+});
+
+// ---- a lower table never de-levels the library (issue #36) ----
+
+// The campaign copy as a level 3 one-shot leaves it: played from the level 8
+// hero's joining adaptation, with the loot, coin and notes the table gave it
+// and a level-up it earned on the way. None of the level-bound fields may
+// reach the library; everything the table handed out does.
+function playedAtLowerTable(sheet) {
+  db.prepare(
+    `UPDATE character_sheets SET level = ?, xp = ?, max_hp = ?, gold = ?, copper = ?,
+       equipment_json = ?, notes = ?, backstory = ?, portrait_json = ?, features_json = ?,
+       abilities_json = ?
+     WHERE id = ?`,
+  ).run(
+    4,
+    2700,
+    31,
+    900,
+    12,
+    JSON.stringify([...sheet.equipment, { name: "Ferryman's lantern", qty: 1 }]),
+    "Paid the ferryman. The lantern lights the dead road.",
+    "Veteran of the border war; crossed the drowned river once.",
+    JSON.stringify({ url: "/uploads/brann-lantern.png" }),
+    JSON.stringify(sheet.features.filter((feature) => feature.source !== "story")),
+    JSON.stringify({ ...sheet.abilities, str: 12 }),
+    sheet.id,
+  );
+  return getSheetForUser(sheet.campaignId, sheet.userId);
+}
+
+function assertKeptLevel(before, after, played) {
+  assert.equal(after.level, 8);
+  assert.equal(after.xp, before.xp);
+  assert.equal(after.sheet.maxHp, before.sheet.maxHp);
+  assert.deepEqual(after.sheet.abilities, before.sheet.abilities);
+  assert.deepEqual(after.sheet.features, before.sheet.features);
+  assert.deepEqual(after.sheet.feats, before.sheet.feats);
+  assert.deepEqual(after.sheet.classes, before.sheet.classes);
+  assert.deepEqual(after.sheet.hitDice, before.sheet.hitDice);
+  assert.equal(after.sheet.ac, before.sheet.ac);
+  assert.deepEqual(after.sheet.spellcasting, before.sheet.spellcasting);
+  assert.deepEqual(after.sheet.equipment, played.equipment);
+  assert.equal(after.sheet.gold, 900);
+  assert.equal(after.sheet.copper, 12);
+  assert.equal(after.sheet.notes, played.notes);
+  assert.equal(after.sheet.backstory, played.backstory);
+  assert.deepEqual(after.sheet.portrait, played.portrait);
+}
+
+await test("save to library from a lower table keeps the library's level", async () => {
+  const { library, campaignId } = await joinWith(PLAYED, 8, 3);
+  const before = getCharacter(library.id);
+  const played = playedAtLowerTable(getSheetForUser(campaignId, player.id));
+  assert.equal(played.level, 4);
+  const saved = await call(syncRoute, "POST", undefined, { campaignId });
+  assert.equal(saved.status, 200, JSON.stringify(saved.json));
+  assert.equal(saved.json.keptLevel, 8);
+  assertKeptLevel(before, getCharacter(library.id), played);
+});
+
+await test("the campaign's end keeps the library's level the same way", async () => {
+  const { library, campaignId } = await joinWith(PLAYED, 8, 3);
+  const before = getCharacter(library.id);
+  const played = playedAtLowerTable(getSheetForUser(campaignId, player.id));
+  as(lead);
+  succeeded(await call(campaignRoute, "PATCH", { status: "ended" }, { campaignId }));
+  assertKeptLevel(before, getCharacter(library.id), played);
+});
+
+await test("a table at or above the library's level still writes everything back", async () => {
+  const { library, campaignId } = await joinWith(PLAYED, 8, 8);
+  const sheet = getSheetForUser(campaignId, player.id);
+  db.prepare("UPDATE character_sheets SET level = ?, xp = ?, max_hp = ? WHERE id = ?").run(
+    9,
+    50_000,
+    80,
+    sheet.id,
+  );
+  const saved = await call(syncRoute, "POST", undefined, { campaignId });
+  assert.equal(saved.status, 200, JSON.stringify(saved.json));
+  assert.equal(saved.json.keptLevel, null);
+  const after = getCharacter(library.id);
+  assert.equal(after.level, 9);
+  assert.equal(after.xp, 50_000);
+  assert.equal(after.sheet.maxHp, 80);
 });
 
 await test("a feat named in play fits a library sheet", () => {
