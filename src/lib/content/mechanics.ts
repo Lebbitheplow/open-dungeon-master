@@ -11,6 +11,9 @@ export type RaceMechanics = {
   languages: string[];
   // Extra languages of the player's choice granted by the race.
   bonusLanguages: number;
+  // When one of those picks is from a short list rather than from every
+  // language ("your choice of Common or Undercommon"), the list it is from.
+  languageChoice?: LanguageChoice;
   traitsSummary: string;
   // Structured grants. Bundled SRD rows fill these in; Open5e pack rows
   // leave them undefined rather than guess from trait prose.
@@ -25,12 +28,114 @@ export type RaceMechanics = {
   weapons?: string[];
 };
 
-// The 5e standard + exotic languages, for language pickers.
+// The 5e standard + exotic languages, for language pickers. The four
+// elemental tongues are dialects of Primordial that the expanded pack's kenku
+// and tortle name outright.
 export const STANDARD_LANGUAGES = [
   "Common", "Dwarvish", "Elvish", "Giant", "Gnomish", "Goblin", "Halfling",
   "Orc", "Abyssal", "Celestial", "Draconic", "Deep Speech", "Infernal",
-  "Primordial", "Sylvan", "Undercommon",
+  "Primordial", "Sylvan", "Undercommon", "Auran", "Aquan", "Ignan", "Terran",
 ];
+
+export type LanguageChoice = { count: number; from: string[] };
+
+export type LanguageGrant = {
+  languages: string[];
+  bonusLanguages: number;
+  languageChoice?: LanguageChoice;
+};
+
+const LANGUAGE_COUNT_WORDS: Record<string, number> = { a: 1, an: 1, one: 1, two: 2, three: 3 };
+
+// Canonical casing for a name the allowlist knows; anything else is kept as
+// written, so Darakhul, Minotaur and Machine Speech survive instead of
+// vanishing.
+function canonicalLanguage(name: string): string {
+  const wanted = name.trim().toLowerCase();
+  return STANDARD_LANGUAGES.find((entry) => entry.toLowerCase() === wanted) ?? name.trim();
+}
+
+// A token that reads as a language name: capitalised words, nothing else.
+// "Common", "Void Speech" and "Machine Speech" pass; "one of your choice",
+// "you can speak" and "the languages of other peoples" do not.
+function looksLikeLanguage(token: string): boolean {
+  const cleaned = token.trim().replace(/[.;:]+$/, "");
+  return /^[A-Z][A-Za-z'\u2019-]*(?:\s+[A-Z][A-Za-z'\u2019-]*)*$/.test(cleaned) && !/^(You|Your|The|They|It)$/.test(cleaned);
+}
+
+function languageTokens(text: string): string[] {
+  return text
+    .split(/,|\band\b|\bor\b|;/)
+    .map((token) => token.trim().replace(/[.;:]+$/, "").trim())
+    .filter((token) => token && looksLikeLanguage(token))
+    .map(canonicalLanguage);
+}
+
+// The grant sentence of a race's Languages trait, or the whole text when it
+// is a bare list ("Common, Auran"). Everything after the sentence that says
+// what the character can speak is flavor: which script a tongue is written
+// in, whose curses humans borrow. Reading names out of that flavor is how a
+// Human came to speak Common, Dwarvish, Elvish and Orc.
+function grantSentence(text: string): string {
+  const plain = text
+    .replace(/[*_]/g, "")
+    .replace(/^\s*Languages\.?\s*/i, "")
+    .replace(/\([^)]*\)/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const sentences = plain.split(/(?<=\.)\s+(?=[A-Z])/);
+  return sentences.find((sentence) => /\b(speak|read|write|know|understand)\b/i.test(sentence)) ?? sentences[0] ?? "";
+}
+
+// What a race's Languages trait grants: the tongues it names outright, the
+// free picks it offers, and a pick from a short list when it offers one.
+// Written for the Open5e prose ("You can speak, read, and write Common and
+// one extra language of your choice.") and for the plain lists the expanded
+// pack writes.
+export function parseRaceLanguages(text: string): LanguageGrant {
+  let sentence = grantSentence(String(text ?? ""));
+  if (!sentence) {
+    return { languages: [], bonusLanguages: 0 };
+  }
+  let bonusLanguages = 0;
+  let languageChoice: LanguageChoice | undefined;
+
+  // "one of the following: Abyssal, Infernal, or Void Speech"
+  sentence = sentence.replace(/\b(a|an|one|two)\s+of the following:?\s*([^.]+)/i, (_match, count: string, list: string) => {
+    const from = languageTokens(list);
+    if (from.length) {
+      languageChoice = { count: LANGUAGE_COUNT_WORDS[count.toLowerCase()] ?? 1, from };
+    }
+    return "";
+  });
+  // "your choice of Common or Undercommon", "either Common or Sylvan"
+  sentence = sentence.replace(
+    /\b(?:your choice of|either)\s+([A-Z][A-Za-z'\u2019 -]*?)\s+or\s+([A-Z][A-Za-z'\u2019-]*(?:\s+[A-Z][A-Za-z'\u2019-]*)*)/,
+    (_match, first: string, second: string) => {
+      const from = languageTokens(`${first}, ${second}`);
+      if (from.length) {
+        languageChoice = { count: 1, from };
+      }
+      return "";
+    },
+  );
+  // "one extra language of your choice", "two languages of your choice", "a
+  // language associated with your Heritage Subrace", "one other language
+  // spoken by your Living Origin", and the expanded pack's "one of your choice".
+  sentence = sentence.replace(
+    /\b(a|an|one|two|three)\s+(?:(?:extra|additional|other)\s+)?(?:languages?\b(?:\s+(?:of your choice|associated with[^,.]*|spoken by[^,.]*))?|of your choice)/gi,
+    (_match, count: string) => {
+      bonusLanguages += LANGUAGE_COUNT_WORDS[count.toLowerCase()] ?? 1;
+      return "";
+    },
+  );
+  sentence = sentence.replace(/^\s*You (?:can|also)?\s*(?:speak|read|write|know|understand|,|and|\s)+/i, "");
+  const languages = [...new Set(languageTokens(sentence))];
+  if (languageChoice) {
+    bonusLanguages += languageChoice.count;
+  }
+  return { languages, bonusLanguages, ...(languageChoice ? { languageChoice } : {}) };
+}
 
 export type ClassMechanics = {
   hitDie: 6 | 8 | 10 | 12;
@@ -123,37 +228,119 @@ export function raceMechanics(data: Record<string, unknown>): RaceMechanics {
       }
     }
   }
-  const speedRaw = (data.speed as { walk?: unknown } | undefined)?.walk;
-  const speed = Number.isFinite(Number(speedRaw)) && Number(speedRaw) > 0 ? Number(speedRaw) : 30;
+  const speedRaw =
+    typeof data.speed === "number" ? data.speed : (data.speed as { walk?: unknown } | undefined)?.walk;
+  const parsedSpeed = Number.isFinite(Number(speedRaw)) && Number(speedRaw) > 0 ? Number(speedRaw) : 30;
 
-  // Languages prose usually reads "...speak, read, and write Common and X".
-  const languageText = String(data.languages ?? "");
-  const languages = STANDARD_LANGUAGES.filter((language) =>
-    languageText.toLowerCase().includes(language.toLowerCase()),
-  );
-  // "...and one extra/additional/other language of your choice."
-  const bonusLanguages = /\b(one|1)\b[^.]*\blanguage/i.test(languageText.replace(/speak|read|write/gi, "")) &&
-    /choice|extra|additional|other language/i.test(languageText)
-    ? 1
-    : 0;
+  // A 2024-rules species (the srd-2024 rows) carries its traits as objects
+  // with a type, its speed among them, and no languages of its own: under
+  // those rules every character knows Common and two more of their choice.
+  const traitObjects = Array.isArray(data.traits)
+    ? (data.traits as Array<{ name?: unknown; desc?: unknown; type?: unknown }>)
+    : null;
+  const v2Speed = traitObjects
+    ?.filter((trait) => String(trait.type ?? "").toUpperCase() === "SPEED")
+    .map((trait) => Number.parseInt(String(trait.desc ?? ""), 10))
+    .find((value) => Number.isFinite(value) && value > 0);
+  const speed = v2Speed ?? parsedSpeed;
 
-  const traitsSummary = String(data.traits ?? "")
-    .replace(/\*\*_?|_?\*\*/g, "")
-    .split(/\n+/)
-    // The name ends at the first full stop that closes a sentence; the one
-    // inside "(adv. vs poison)" is an abbreviation, not an ending.
-    .map((line) => line.split(/\.(?=\s+[A-Z]|$)/)[0].trim())
-    .filter(Boolean)
+  // Languages: the expanded pack (and a re-imported pack) writes them
+  // structurally, the same shape as src/lib/srd/races.json; the Open5e rows
+  // carry the trait's prose and are parsed.
+  const grant: LanguageGrant = Array.isArray(data.languages)
+    ? {
+        languages: (data.languages as unknown[]).map((entry) => canonicalLanguage(String(entry))).filter((entry) => looksLikeLanguage(entry)),
+        bonusLanguages: Number(data.bonusLanguages ?? 0) || 0,
+      }
+    : traitObjects && data.languages === undefined
+      ? { languages: ["Common"], bonusLanguages: 2 }
+      : parseRaceLanguages(String(data.languages ?? ""));
+  if (Array.isArray(data.languages) && !grant.bonusLanguages) {
+    // The importer used to write "one of your choice" into the list itself.
+    grant.bonusLanguages = (data.languages as unknown[]).filter((entry) => /of your choice/i.test(String(entry))).length;
+  }
+  const languages = grant.languages;
+  const bonusLanguages = grant.bonusLanguages;
+
+  const traitsSummary = (
+    traitObjects
+      ? traitObjects
+          .filter((trait) => !["SIZE", "SPEED"].includes(String(trait.type ?? "").toUpperCase()))
+          .map((trait) => String(trait.name ?? ""))
+      : String(data.traits ?? "")
+          .replace(/\*\*\*|\*\*_?|_?\*\*|\*/g, "")
+          .split(/\n+/)
+          // The name ends at the first full stop that closes a sentence; the one
+          // inside "(adv. vs poison)" is an abbreviation, not an ending.
+          .map((line) => line.split(/\.(?=\s+[A-Z]|$)/)[0].trim())
+  )
+    // A markdown table row is not a trait.
+    .filter((line) => line && !line.startsWith("|"))
     .slice(0, 6)
     .join(" · ");
+
+  // Structured grants ride along when the row carries them (the expanded
+  // pack is generated from races.json and writes the same keys).
+  const structured = structuredGrants(data);
 
   return {
     speed,
     asi,
-    languages: languages.length ? languages : ["Common"],
+    // A row that names no language at all (a subrace, which inherits its
+    // parent's) is filled in by the caller; Common is the last resort.
+    languages: languages.length ? languages : data.languages === undefined ? [] : ["Common"],
     bonusLanguages,
+    ...(grant.languageChoice ? { languageChoice: grant.languageChoice } : {}),
     traitsSummary,
+    ...structured,
   };
+}
+
+type StructuredGrants = Pick<
+  RaceMechanics,
+  "skills" | "skillChoice" | "asiChoice" | "cantripChoice" | "tools" | "toolChoice" | "armor" | "weapons"
+>;
+
+function stringList(value: unknown): string[] | undefined {
+  return Array.isArray(value) ? value.map((entry) => String(entry)).filter(Boolean) : undefined;
+}
+
+function structuredGrants(data: Record<string, unknown>): StructuredGrants {
+  const out: StructuredGrants = {};
+  const skills = stringList(data.skills);
+  if (skills?.length) {
+    out.skills = skills;
+  }
+  const skillChoice = data.skillChoice as { count?: unknown } | undefined;
+  if (skillChoice && Number(skillChoice.count) > 0) {
+    out.skillChoice = { count: Number(skillChoice.count) };
+  }
+  const asiChoice = data.asiChoice as { count?: unknown; amount?: unknown } | undefined;
+  if (asiChoice && Number(asiChoice.count) > 0) {
+    out.asiChoice = { count: Number(asiChoice.count), amount: Number(asiChoice.amount) || 1 };
+  }
+  const cantripChoice = data.cantripChoice as { list?: unknown; count?: unknown } | undefined;
+  if (cantripChoice && typeof cantripChoice.list === "string") {
+    out.cantripChoice = { list: cantripChoice.list, count: Number(cantripChoice.count) || 1 };
+  }
+  const tools = stringList(data.tools);
+  if (tools?.length) {
+    out.tools = tools;
+  }
+  const toolChoice = data.toolChoice as { count?: unknown; from?: unknown } | undefined;
+  const toolFrom = stringList(toolChoice?.from);
+  if (toolChoice && toolFrom?.length) {
+    out.toolChoice = { count: Number(toolChoice.count) || 1, from: toolFrom };
+  }
+  const armor = stringList(data.armor);
+  if (armor?.length) {
+    out.armor = armor;
+  }
+  const weapons = stringList(data.weapons);
+  if (weapons?.length) {
+    out.weapons = weapons;
+  }
+  return out;
 }
 
 const FULL_CASTERS = new Set(["bard", "cleric", "druid", "sorcerer", "wizard"]);
@@ -235,6 +422,7 @@ const CANTRIP_TABLE: Record<string, number[]> = {
   sorcerer: [4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6],
   warlock: [2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
   wizard: [3, 3, 3, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5],
+  artificer: [2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4],
 };
 
 // Cantrips a class of this kind knows at the given level, or null when the
@@ -266,6 +454,11 @@ export function suggestedSpellCount(
   const known = KNOWN_CASTER_TABLE[slug];
   if (known) {
     return { label: "spells known", count: known[clamped - 1] };
+  }
+  // An artificer prepares from level 1: Intelligence modifier plus half the
+  // artificer level, rounded down, at least one.
+  if (slug === "artificer") {
+    return { label: "spells prepared", count: Math.max(1, spellAbilityMod + Math.floor(clamped / 2)) };
   }
   // A half caster has no spells at all until level 2 (paladins and rangers
   // pray and track for a level first), so there is nothing to prepare yet.

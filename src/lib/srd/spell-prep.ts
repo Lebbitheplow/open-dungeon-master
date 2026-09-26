@@ -1,9 +1,9 @@
 import { findCustomClass, spellClassFor } from "@/lib/classes";
-import { suggestedSpellCount } from "@/lib/content/mechanics";
+import { suggestedCantripCount, suggestedSpellCount } from "@/lib/content/mechanics";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { abilityMod, spellSlotsFor } from "@/lib/srd";
+import { SRD_CLASSES, abilityMod, spellSlotsFor } from "@/lib/srd";
 import { subclassSpellsFor } from "@/lib/srd/features";
-import { isCantripName, spellsAgainstLimit } from "@/lib/srd/spell-lists";
+import { isCantripName, spellLevelOf, spellsAgainstLimit } from "@/lib/srd/spell-lists";
 
 // How a caster's spell list works, and the 5e (SRD 5.1) timing for changing
 // it. Pure and database-free, shared by the sheet, the builder, the server
@@ -337,4 +337,74 @@ export function notReadyReason(
     return `${spell} is in the spellbook but not prepared, so it cannot be cast. Prepare it from the sheet; it is ready after the next long rest.`;
   }
   return null;
+}
+
+function casterTypeOf(classId: string) {
+  const id = classId.trim().toLowerCase();
+  return findCustomClass(id)?.casterType ?? SRD_CLASSES.find((entry) => entry.id === id)?.casterType ?? "none";
+}
+
+// Cantrips this class knows at its level, or null when it has none.
+export function cantripCapOf(view: Pick<CasterView, "classId" | "level">): number | null {
+  return suggestedCantripCount(spellClassFor(view.classId), view.level, casterTypeOf(view.classId));
+}
+
+// A warlock's Mystic Arcanum reaches past pact slots: one spell of 6th level
+// at 11, 7th at 13, 8th at 15 and 9th at 17.
+function arcanumTop(view: Pick<CasterView, "classId" | "level">): number {
+  if (spellClassFor(view.classId) !== "warlock") {
+    return 0;
+  }
+  return view.level >= 17 ? 9 : view.level >= 15 ? 8 : view.level >= 13 ? 7 : view.level >= 11 ? 6 : 0;
+}
+
+// Everything the 5e tables say is wrong with the spell lists a sheet arrives
+// with: more cantrips than the class knows, more spells held than its known
+// or prepared count, a wizard's book past its allowance, a spell above the
+// level its slots reach. The builder shows the same counts and blocks past
+// them; this is the server saying the same thing at creation and edit, so a
+// crafted request or an older client cannot save what the tables forbid.
+// Empty when the lists are within the rules or the class casts nothing.
+//
+// `bookAllowance` is checked at creation only: a wizard who copied scrolls in
+// play has a bigger book than the table gives, and rightly so.
+export function spellListProblems(
+  sheet: SheetLike & { abilities: CharacterSheet["abilities"] },
+  options: { bookAllowance?: boolean } = {},
+): string[] {
+  const problems: string[] = [];
+  for (const view of casterViewsOf(sheet)) {
+    const label = `level ${view.level} ${view.classId.replace(/[_-]+/g, " ")}`;
+    const cantripCap = cantripCapOf(view);
+    const cantrips = dedupeNames(view.cantrips);
+    if (cantripCap !== null && cantrips.length > cantripCap) {
+      problems.push(`A ${label} knows ${cantripCap} ${cantripCap === 1 ? "cantrip" : "cantrips"}; that list has ${cantrips.length}.`);
+    }
+    const granted = grantedSpellsOf(view);
+    const held = dedupeNames([...heldSpells(view), ...view.pending]).filter((name) => !isCantripName(name));
+    const cap = spellCapOf(view, sheet.abilities);
+    const counted = spellsAgainstLimit(held, granted);
+    if (cap && counted > cap.count) {
+      problems.push(`A ${label} may hold ${cap.count} ${cap.label}; that list has ${counted}.`);
+    }
+    if (view.style === "spellbook" && options.bookAllowance !== false) {
+      const book = spellbookOf(view);
+      const allowance = spellbookAllowance(view.level);
+      if (book.length > allowance) {
+        problems.push(`A ${label} starts with ${allowance} spells in the spellbook; that book has ${book.length}.`);
+      }
+    }
+    const top = Math.max(maxSpellLevelOf(view), arcanumTop(view));
+    for (const name of dedupeNames([...held, ...view.spellbook])) {
+      const spellLevel = spellLevelOf(name);
+      if (spellLevel !== null && spellLevel > top) {
+        problems.push(
+          top === 0
+            ? `A ${label} has no spell slots yet, so ${name} cannot be on the list.`
+            : `${name} is a level ${spellLevel} spell; a ${label} casts up to level ${top}.`,
+        );
+      }
+    }
+  }
+  return problems;
 }

@@ -34,6 +34,9 @@ export type SrdClass = {
   // Thieves' Cant. These are granted on top of the race's languages.
   languages?: string[];
   skillChoices: { count: number; from: string[] };
+  // One line for the class picker, so a new player can tell a warlock from
+  // a wizard before opening the full write-up.
+  blurb?: string;
 };
 export type SrdRace = {
   id: string;
@@ -66,6 +69,9 @@ export type SrdBackground = {
   tools?: string[];
   languages?: number;
   equipment?: string[];
+  // One line for the picker, and what the named feature does.
+  blurb?: string;
+  featureDesc?: string;
 };
 
 export const SRD_SKILLS = skillsJson.skills as SrdSkill[];

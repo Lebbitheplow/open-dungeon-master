@@ -6,8 +6,7 @@
 
 import { characterPlaceholder, normalizeGender, raceFamily } from "@/lib/placeholders";
 import type { Ability } from "@/lib/schemas/sheet";
-import { SRD_RACES } from "@/lib/srd";
-import type { SrdRace } from "@/lib/srd";
+import { canonicalRaceId, srdRaceFor } from "@/lib/content/race-options";
 
 const BASE = "/assets/placeholders";
 
@@ -24,21 +23,9 @@ export type LineageEntry = {
   toolChoice?: { count: number; from: string[] };
 };
 
-// Content-pack slugs are kebab-case and the pack's own copies of SRD rows
-// carry an "odm-" prefix; the bundled ids are snake_case.
-export function canonicalRaceId(raceId: string): string {
-  return raceId
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^odm_/, "")
-    .replace(/^_|_$/g, "");
-}
-
-export function srdRaceFor(raceId: string): SrdRace | null {
-  const id = canonicalRaceId(raceId);
-  return SRD_RACES.find((entry) => entry.id === id) ?? null;
-}
+// Shared with the help layer and the feature grants, so a pack slug, an
+// "odm-" copy and a bundled id all find the same lineage.
+export { canonicalRaceId, srdRaceFor };
 
 // Pack lineages beyond the SRD still deserve a face. Most are a heritage or a
 // variant of a family we have painted, so the family word in the slug or the

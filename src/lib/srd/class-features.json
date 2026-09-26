@@ -85,6 +85,7 @@
       "subclasses": [
         {
           "name": "Path of the Berserker",
+          "desc": "A barbarian whose rage becomes a frenzy: an extra attack while raging, immunity to fear and charm, and a presence that cows enemies.",
           "levels": {
             "3": [
               "Frenzy"
@@ -154,6 +155,7 @@
       "subclasses": [
         {
           "name": "College of Lore",
+          "desc": "A bard who collects knowledge from every discipline, cutting enemies down with words and borrowing spells from any class list.",
           "levels": {
             "3": [
               "Cutting Words",
@@ -211,6 +213,7 @@
       "subclasses": [
         {
           "name": "Life Domain",
+          "desc": "A cleric of healing and vitality, whose cures restore more, whose armor is heavy, and whose domain spells are always prepared.",
           "levels": {
             "1": [
               "Bonus Proficiency (heavy armor)",
@@ -286,6 +289,7 @@
       "subclasses": [
         {
           "name": "Circle of the Land",
+          "desc": "A druid attuned to one kind of terrain, with bonus spells drawn from it, an extra cantrip and slots recovered on a short rest.",
           "levels": {
             "2": [
               "Bonus Cantrip",
@@ -343,6 +347,7 @@
       "subclasses": [
         {
           "name": "Champion",
+          "desc": "A fighter of raw physical prowess: critical hits on a 19, remarkable athletics and a second fighting style.",
           "levels": {
             "3": [
               "Improved Critical"
@@ -417,6 +422,7 @@
       "subclasses": [
         {
           "name": "Way of the Open Hand",
+          "desc": "A monk who masters unarmed combat, knocking foes down and away with every flurry and healing with ki.",
           "levels": {
             "3": [
               "Open Hand Technique"
@@ -473,6 +479,7 @@
       "subclasses": [
         {
           "name": "Oath of Devotion",
+          "desc": "A paladin sworn to honesty, courage and compassion, with a sacred weapon and protection from fiends and undead.",
           "levels": {
             "3": [
               "Channel Divinity: Sacred Weapon",
@@ -560,6 +567,7 @@
       "subclasses": [
         {
           "name": "Hunter",
+          "desc": "A ranger who studies prey and picks a fighting technique to bring down hordes or giants.",
           "levels": {
             "3": [
               "Hunter's Prey"
@@ -619,6 +627,7 @@
       "subclasses": [
         {
           "name": "Thief",
+          "desc": "A rogue of quick hands and quick feet: faster climbing, items used as a bonus action, and stealth on the move.",
           "levels": {
             "3": [
               "Fast Hands",
@@ -663,6 +672,7 @@
       "subclasses": [
         {
           "name": "Draconic Bloodline",
+          "desc": "A sorcerer whose magic comes from a dragon ancestor: tougher scales, an elemental affinity and, in time, wings.",
           "levels": {
             "1": [
               "Dragon Ancestor",
@@ -713,6 +723,7 @@
       "subclasses": [
         {
           "name": "The Fiend",
+          "desc": "A warlock whose patron is a fiend of the lower planes, granting fiery spells and temporary hit points on a kill.",
           "levels": {
             "1": [
               "Dark One's Blessing"
@@ -750,6 +761,7 @@
       "subclasses": [
         {
           "name": "School of Evocation",
+          "desc": "A wizard who shapes destructive magic, sculpting spells around allies and making cantrips hit harder.",
           "levels": {
             "2": [
               "Evocation Savant",

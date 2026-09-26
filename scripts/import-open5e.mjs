@@ -364,6 +364,8 @@ function insertAuthoredContent(db) {
         document_slug: AUTHORED_DOC,
         is_subrace: 0,
         parent_slug: "",
+        // The structured grants ride along under the same keys races.json
+        // uses, so raceMechanics reads them instead of guessing from prose.
         data: {
           name: race.name,
           desc: race.traits.join(". ") + ".",
@@ -371,7 +373,16 @@ function insertAuthoredContent(db) {
           speed: race.speed,
           size: race.size,
           traits: race.traits.join("\n"),
-          languages: (race.languages || []).join(", "),
+          languages: (race.languages || []).filter((language) => !/of your choice/i.test(language)),
+          bonusLanguages: race.bonusLanguages ?? 0,
+          ...(race.skills ? { skills: race.skills } : {}),
+          ...(race.skillChoice ? { skillChoice: race.skillChoice } : {}),
+          ...(race.asiChoice ? { asiChoice: race.asiChoice } : {}),
+          ...(race.cantripChoice ? { cantripChoice: race.cantripChoice } : {}),
+          ...(race.tools ? { tools: race.tools } : {}),
+          ...(race.toolChoice ? { toolChoice: race.toolChoice } : {}),
+          ...(race.armor ? { armor: race.armor } : {}),
+          ...(race.weapons ? { weapons: race.weapons } : {}),
         },
       })),
     )}`,

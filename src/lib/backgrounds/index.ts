@@ -12,8 +12,9 @@ export type CustomBackground = {
   name: string;
   // Two skill ids from src/lib/srd/skills.json.
   skills: string[];
-  // Named flavor feature, like the SRD backgrounds carry.
+  // Named flavor feature, like the SRD backgrounds carry, and what it does.
   feature: string;
+  featureDesc: string;
   // Tool/kit proficiencies granted.
   tools: string[];
   // Extra languages of the player's choice.
@@ -44,4 +45,20 @@ export function backgroundFeatureFor(
   }
   const srd = SRD_BACKGROUNDS.find((entry) => entry.id === id);
   return srd ? { name: srd.feature, background: srd.name } : null;
+}
+
+// What a background's feature does, by the feature's name, for the sheet's
+// chip and the builder's background line. Covers the SRD list and the
+// setting catalog; a content-pack feature carries its text on its own row.
+export function describeBackgroundFeature(featureName: string): string | null {
+  const wanted = featureName.trim().toLowerCase();
+  if (!wanted) {
+    return null;
+  }
+  const custom = CUSTOM_BACKGROUNDS.find((entry) => entry.feature.toLowerCase() === wanted);
+  if (custom) {
+    return custom.featureDesc;
+  }
+  const srd = SRD_BACKGROUNDS.find((entry) => entry.feature.toLowerCase() === wanted);
+  return srd?.featureDesc ?? null;
 }

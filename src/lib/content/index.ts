@@ -278,7 +278,21 @@ export function listBackgrounds(options: SearchOptions = {}): ContentEntry[] {
   ];
 }
 
+// A subrace row says which race it belongs to (data.parent_slug), so the
+// builder can fold the parent's speed, languages and ability bumps into it.
+function subraceParents(): Map<string, string> {
+  const db = getContentDb();
+  if (!db) {
+    return new Map();
+  }
+  const rows = db
+    .prepare("SELECT slug, parent_slug FROM races WHERE is_subrace = 1 AND parent_slug <> ''")
+    .all() as Array<{ slug: string; parent_slug: string }>;
+  return new Map(rows.map((row) => [row.slug, row.parent_slug]));
+}
+
 export function listRaces(options: SearchOptions & { includeSubraces?: boolean } = {}): ContentEntry[] {
+  const parents = options.includeSubraces === false ? new Map<string, string>() : subraceParents();
   return [
     ...searchSimpleTable("races", {
       ...options,
@@ -286,6 +300,9 @@ export function listRaces(options: SearchOptions & { includeSubraces?: boolean }
       ...(options.includeSubraces === false
         ? { extraWhere: "is_subrace = 0", extraParams: [] }
         : {}),
+    }).map((entry) => {
+      const parent = parents.get(entry.slug);
+      return parent ? { ...entry, data: { ...entry.data, parent_slug: parent } } : entry;
     }),
     ...homebrewEntries(options.userId, "race", options.q),
   ];

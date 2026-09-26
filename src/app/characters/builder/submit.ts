@@ -1,9 +1,11 @@
+import { backgroundFeatureFor } from "@/lib/backgrounds";
 import { adaptSheetToLevel } from "@/lib/characters/adapt";
 import type { Ability, AsiChoice, CreateSheetInput, Spellcasting } from "@/lib/schemas/sheet";
 import { SRD_CLASSES, spellSlotsFor } from "@/lib/srd";
 import { expertiseSlotsFor, subclassLevelFor, subclassSpellsFor } from "@/lib/srd/features";
 import { fightingStyleFeatureName } from "@/lib/srd/feature-effects";
 import { POINT_BUY_BUDGET, POINT_BUY_MIN, pointBuyRemaining } from "@/lib/srd/point-buy";
+import { reconcilePicks } from "./reconcile";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
 import type { BuilderDerived } from "./useBuilderDerived";
 import type { BuilderState } from "./useBuilderState";
@@ -245,21 +247,31 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
   );
   const isKnownCaster = derived.spellStyle === "known";
   const isWizard = derived.spellStyle === "spellbook";
+  // The picks were checked against every change as it was made; checked
+  // once more here so the sheet can never carry what the rules do not allow.
+  const { picks } = reconcilePicks(state, { race, klass, background, level: effectiveLevel });
   // A racial cantrip (high elf) joins the cantrip list for casters. A
   // non-caster has nowhere to put it, so it rides along as a feature
   // instead, which populateFeatures keeps and the DM prompt can see.
-  const { spells, cantrips, racialCantrip } = state;
+  const { spells, cantrips, racialCantrip } = picks;
   const finalCantrips =
     racialCantrip && !cantrips.includes(racialCantrip) ? [...cantrips, racialCantrip] : cantrips;
   // Domain, circle, oath and patron spells are always prepared and free:
   // they ride onto the list on top of whatever the player picked.
-  const grantedSpells = subclassSpellsFor(klass.id, state.subclass, effectiveLevel).filter(
+  const grantedSpells = subclassSpellsFor(klass.id, picks.subclass, effectiveLevel).filter(
     (spell) => !spells.some((entry) => entry.toLowerCase() === spell.toLowerCase()),
   );
   const finalSpells = klass.spellAbility ? [...spells, ...grantedSpells] : spells;
   const racialFeatures =
     racialCantrip && !klass.spellAbility
       ? [{ name: `Racial cantrip: ${racialCantrip}`, source: "story" as const }]
+      : [];
+  // The server grants the feature of every bundled background itself
+  // (db/sheets.ts withBackgroundFeature); a content-pack background's is
+  // known only here, so it rides along the same way.
+  const packBackgroundFeature =
+    background.feature && !backgroundFeatureFor(background.id)
+      ? [{ name: `${background.feature} (${background.name})`.slice(0, 80), source: "background" as const }]
       : [];
 
   return {
@@ -268,7 +280,7 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
       name: state.name.trim(),
       race: race.id,
       class: klass.id,
-      subclass: state.subclass,
+      subclass: picks.subclass,
       background: background.id,
       alignment: state.alignment,
       gender: state.gender,
@@ -300,26 +312,25 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
       // no other home, like a non-caster's racial cantrip.
       features: [
         ...racialFeatures,
-        ...state.stylePicks
-          .slice(0, derived.styleSlots)
-          .map((id) => ({ name: fightingStyleFeatureName(id), source: "choice" as const })),
+        ...packBackgroundFeature,
+        ...picks.stylePicks.map((id) => ({ name: fightingStyleFeatureName(id), source: "choice" as const })),
         // Invocations, maneuvers, metamagic and the rest ride along as
         // "choice" features, the same shape as a fighting style, so the
         // level-up regrant preserves them.
-        ...state.optionPicks.map((optionName) => ({ name: optionName, source: "choice" as const })),
+        ...picks.optionPicks.map((optionName) => ({ name: optionName, source: "choice" as const })),
       ],
       asiChoices: resolvedAsiChoices,
       racialChoices: {
-        asi: state.racialAsi.filter((ability): ability is Ability => Boolean(ability)),
-        skills: state.racialSkills.filter(Boolean),
+        asi: picks.racialAsi.filter((ability): ability is Ability => Boolean(ability)),
+        skills: picks.racialSkills.filter(Boolean),
         cantrip: racialCantrip,
-        tool: state.racialTool,
+        tool: picks.racialTool,
       },
       spellcasting: klass.spellAbility
         ? {
             ability: klass.spellAbility,
             slots,
-            prepared: isKnownCaster ? [] : isWizard ? derived.chosenPrepared : finalSpells,
+            prepared: isKnownCaster ? [] : isWizard ? picks.bookPrepared : finalSpells,
             known: isKnownCaster ? finalSpells : [],
             cantrips: finalCantrips,
             ...(isWizard ? { spellbook: finalSpells } : {}),
