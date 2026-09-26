@@ -61,16 +61,25 @@ RUN DOCKER_BUILD=1 npm run build
 # later layer does not reclaim the bytes the earlier COPY already wrote.
 #
 # onnxruntime-node ships every platform plus the CUDA and TensorRT execution
-# providers (~400MB), and this app only ever embeds on CPU. File tracing also
-# drags in whole directories whenever it sees a path.join(process.cwd(), ...),
-# which is how data/, models/ and the repo docs end up here; the runner stage
-# re-adds the parts that are actually needed, at paths a volume cannot hide.
+# providers (~400MB), and this app only ever embeds on CPU. Only the Linux
+# binding for the CPU this image is built on stays: the one next.config.ts
+# traces, chosen by process.arch here too (x64 on the published amd64 image,
+# arm64 for an image built on an arm64 host, issue #39). The GPU providers
+# exist only in the x64 build, so on arm64 that line finds nothing. The build
+# stops here if the binding is missing, before the runner stage embeds with it.
+# File tracing also drags in whole directories whenever it sees a
+# path.join(process.cwd(), ...), which is how data/, models/ and the repo docs
+# end up here; the runner stage re-adds the parts that are actually needed, at
+# paths a volume cannot hide.
 RUN cd .next/standalone \
-  && rm -rf node_modules/onnxruntime-node/bin/napi-v6/darwin \
-            node_modules/onnxruntime-node/bin/napi-v6/win32 \
-            node_modules/onnxruntime-node/bin/napi-v6/linux/arm64 \
-  && rm -f  node_modules/onnxruntime-node/bin/napi-v6/linux/x64/libonnxruntime_providers_cuda.so \
-            node_modules/onnxruntime-node/bin/napi-v6/linux/x64/libonnxruntime_providers_tensorrt.so \
+  && keep="node_modules/onnxruntime-node/bin/napi-v6/linux/$(node -p process.arch)" \
+  && test -f "$keep/onnxruntime_binding.node" \
+     || { echo "No onnxruntime-node binding at $keep for this build platform" >&2; exit 1; } \
+  && for dir in node_modules/onnxruntime-node/bin/napi-v6/*/*; do \
+       [ "$dir" = "$keep" ] || rm -rf "$dir"; \
+     done \
+  && rm -f  "$keep/libonnxruntime_providers_cuda.so" \
+            "$keep/libonnxruntime_providers_tensorrt.so" \
   && rm -rf data models docs package-lock.json tsconfig.tsbuildinfo \
             README.md CLAUDE.md AGENTS.md eslint.config.mjs postcss.config.mjs
 

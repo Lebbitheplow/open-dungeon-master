@@ -101,8 +101,11 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          # amd64 only: the image prunes the arm64 onnxruntime binary and traces
-          # only linux/x64, and the app is meant to sit beside an x86 GPU host.
+          # amd64 only: the app is meant to sit beside an x86 GPU host, and a
+          # QEMU build of the Next.js app would take most of the hour. An arm64
+          # host builds its own image from a clone (docker compose up -d
+          # --build); next.config.ts and the Dockerfile keep that host's
+          # onnxruntime binding, so embeddings work there too (issue #39).
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}

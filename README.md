@@ -367,7 +367,8 @@ default embedding model: with another `EMBEDDING_MODEL`, each new container down
 on first use (so it needs internet then), unless you build the image yourself with
 `docker compose up -d --build`, which bakes the model set in `.env` into it.
 
-Every GitHub release is published to both registries as linux/amd64:
+Every GitHub release is published to both registries as linux/amd64 (an arm64 host builds
+its own image from a clone, below, and gets working embeddings the same way):
 
 ```bash
 docker pull lebbi/open-dungeon-master:latest                 # Docker Hub

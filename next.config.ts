@@ -42,7 +42,9 @@ const nextConfig: NextConfig = {
         // and every embed failed with "Cannot find module 'onnxruntime-node'".
         // It then requires onnxruntime-common's CommonJS build, while the
         // tracer only saw transformers.js import the ESM one (1.2 MB whole).
-        // Only the linux/x64 binding is shipped; embeddings are CPU-only.
+        // Only the Linux binding for the CPU the image is built on is shipped
+        // (linux/x64 on the published amd64 image, linux/arm64 when the image
+        // is built on an arm64 host, issue #39); embeddings are CPU-only.
         // The WASM picture codecs (src/lib/image-variants.ts) are loaded
         // inside a worker thread from a code string, so nothing imports
         // them statically and the tracer would miss them too.
@@ -52,7 +54,7 @@ const nextConfig: NextConfig = {
             "node_modules/onnxruntime-node/package.json",
             "node_modules/onnxruntime-node/dist/**/*",
             "node_modules/onnxruntime-common/**/*",
-            "node_modules/onnxruntime-node/bin/napi-v6/linux/x64/**/*",
+            `node_modules/onnxruntime-node/bin/napi-v6/linux/${process.arch}/**/*`,
             "node_modules/mediasoup/worker/out/Release/**/*",
             "node_modules/@jsquash/**/*",
             "node_modules/wasm-feature-detect/**/*",
