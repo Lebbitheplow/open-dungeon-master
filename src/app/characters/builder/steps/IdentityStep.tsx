@@ -8,6 +8,7 @@ import { describeSkill } from "@/lib/help";
 import { SRD_SKILLS } from "@/lib/srd";
 import type { WorldPack } from "@/lib/worlds/types";
 import OptionPicker, { type PickerGroup } from "../OptionPicker";
+import { backgroundInfoText } from "../usePickerGroups";
 import type { BackgroundOption } from "../useBuilderOptions";
 import type { BuilderState } from "../useBuilderState";
 import { Field, StepPanel, inputClass } from "./shared";
@@ -133,7 +134,7 @@ export function IdentityStep({
             ) : (
               <Select<string>
                 value={String(state.level)}
-                onChange={(next) => state.setLevel(Number(next))}
+                onChange={(next) => state.changeLevel(Number(next))}
                 label="Level"
                 className="w-full"
                 options={Array.from({ length: 20 }, (_, index) => ({ value: String(index + 1), label: String(index + 1) }))}
@@ -145,7 +146,7 @@ export function IdentityStep({
               value={background?.id ?? ""}
               groups={backgroundGroups}
               className={inputClass}
-              onChange={state.setBackgroundId}
+              onChange={state.changeBackground}
             />
             {background ? (
               <span className="mt-1 flex items-start gap-1 text-xs text-stone-500">
@@ -167,10 +168,23 @@ export function IdentityStep({
                         );
                       })
                     : "What your character did before adventuring."}
+                  {background.feature ? (
+                    <span className="whitespace-nowrap">
+                      {background.skills.length ? " · " : " "}
+                      Feature: {background.feature}
+                      <InfoButton
+                        label={background.feature}
+                        text={background.featureDesc || undefined}
+                        reference={
+                          background.featureDesc ? undefined : { kind: "backgrounds", slug: background.id }
+                        }
+                      />
+                    </span>
+                  ) : null}
                 </span>
                 <InfoButton
                   label={background.name}
-                  text={background.blurb || background.desc}
+                  text={backgroundInfoText(background)}
                   reference={{ kind: "backgrounds", slug: background.id }}
                 />
               </span>

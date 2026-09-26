@@ -10,6 +10,7 @@ import {
 import { listEventsForLibraryCharacter } from "@/lib/db/character-events";
 import { mirrorToCampaignSheets, portraitStatus } from "@/lib/portrait";
 import { attachmentSchema, createSheetSchema } from "@/lib/schemas/sheet";
+import { spellListProblems } from "@/lib/srd/spell-prep";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -79,6 +80,10 @@ export async function PATCH(
       { error: parsed.error.issues[0]?.message || "Invalid character update." },
       { status: 400 },
     );
+  }
+  const [problem] = spellListProblems({ ...parsed.data.sheet, level: parsed.data.level });
+  if (problem) {
+    return Response.json({ error: problem }, { status: 400 });
   }
   const character = updateCharacter(user.id, characterId, parsed.data.level, parsed.data.sheet);
   if (!character) {

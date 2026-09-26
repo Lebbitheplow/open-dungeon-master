@@ -28,7 +28,7 @@ import {
 } from "./submit";
 import { builderActions, useBuilderDerived } from "./useBuilderDerived";
 import { useArchetypes, useBuilderOptions, useWorldPack } from "./useBuilderOptions";
-import { useBuilderState } from "./useBuilderState";
+import { findRace, useBuilderState } from "./useBuilderState";
 import { usePickerGroups } from "./usePickerGroups";
 
 export type { BuilderResult } from "./submit";
@@ -95,15 +95,15 @@ export default function CharacterBuilder({
     [rawBackgrounds, pack],
   );
 
-  const state = useBuilderState({ initial, initialLevel, fixedLevel, races, backgrounds });
-  const race = races.find((entry) => entry.id === state.raceId) ?? races[0];
+  const state = useBuilderState({ initial, initialLevel, fixedLevel, races, classes, backgrounds });
+  const race = findRace(races, state.raceId) ?? races[0];
   const klass = classes.find((entry) => entry.id === state.classId) ?? classes[0];
   const background =
     backgrounds.find((entry) => entry.id === state.backgroundId) ?? backgrounds[0];
   const archetypes = useArchetypes(klass?.id ?? "");
 
   const derived = useBuilderDerived({ state, race, klass, background, fixedLevel });
-  const actions = builderActions(state, klass);
+  const actions = builderActions(state, klass, race, background);
   const pickers = usePickerGroups({
     races,
     rawRaces,

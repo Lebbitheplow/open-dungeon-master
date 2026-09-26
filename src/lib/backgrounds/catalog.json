@@ -9,6 +9,7 @@
         "persuasion"
       ],
       "feature": "Severance Package",
+      "featureDesc": "You still hold a valid corporate ID from your old employer. It gets you past lobby security and into the lower floors of any megacorp tower, and a former colleague will still take your call, though not risk their job for you.",
       "genres": [
         "cyberpunk"
       ],
@@ -32,6 +33,7 @@
         "investigation"
       ],
       "feature": "Back-Alley Clinic",
+      "featureDesc": "You know where to find unlicensed care in any district, and its staff will treat you and your crew first, discreetly, and on credit. In return you are expected to bring business and keep quiet about what you see.",
       "genres": [
         "cyberpunk"
       ],
@@ -56,6 +58,7 @@
         "stealth"
       ],
       "feature": "Favor Network",
+      "featureDesc": "Half the undercity owes you a small favor or is owed one. Once per session you can call one in: a safe room for the night, a name, a ride, or a package moved without questions.",
       "genres": [
         "cyberpunk"
       ],
@@ -79,6 +82,7 @@
         "stealth"
       ],
       "feature": "Service Tunnels",
+      "featureDesc": "You can find a maintenance route into or through any arcology or corporate block that others would miss. When you lead the party through the ducts, you travel between two points in the structure twice as fast.",
       "genres": [
         "cyberpunk"
       ],
@@ -102,6 +106,7 @@
         "intimidation"
       ],
       "feature": "Ring Reputation",
+      "featureDesc": "Fight crowds remember your handle. In any gym, cage or betting den you can find a place to sleep, a meal and a sparring partner, and a promoter will always have work for a fighter with a name.",
       "genres": [
         "cyberpunk"
       ],
@@ -125,6 +130,7 @@
         "perception"
       ],
       "feature": "Dead Drop Protocol",
+      "featureDesc": "You know the couriers' dead drops and handshakes. You can leave or collect a message or a small package in any city without meeting the other party, and no one can trace it to you.",
       "genres": [
         "cyberpunk"
       ],
@@ -148,6 +154,7 @@
         "investigation"
       ],
       "feature": "Guild Credentials",
+      "featureDesc": "Your guild card is honored in any workshop, foundry or engineering hall. You can borrow tools and a bench, read the guild's blueprints, and expect lodging from a fellow member, provided your dues are paid.",
       "genres": [
         "steampunk"
       ],
@@ -172,6 +179,7 @@
         "perception"
       ],
       "feature": "Skyline Contacts",
+      "featureDesc": "Every port tower has someone who crewed with you. You can secure passage on an airship for yourself and your companions in exchange for working the rigging, and you hear the gossip of the docks before it reaches the ground.",
       "genres": [
         "steampunk"
       ],
@@ -196,6 +204,7 @@
         "arcana"
       ],
       "feature": "Tinker's Eye",
+      "featureDesc": "Having wound and repaired a master's automata, you can tell at a glance how a clockwork device is meant to work, where its maker hid the override, and whether it has been tampered with.",
       "genres": [
         "steampunk"
       ],
@@ -219,6 +228,7 @@
         "intimidation"
       ],
       "feature": "Boiler Room Brotherhood",
+      "featureDesc": "The laborers' union counts you as family. Its halls will feed and hide you, its stokers pass you word of what moves through the engine rooms, and a picket line will open for you.",
       "genres": [
         "steampunk"
       ],
@@ -242,6 +252,7 @@
         "history"
       ],
       "feature": "Lecture Circuit",
+      "featureDesc": "Your academy name gets you into any symposium, salon or laboratory. Scholars will hear you out, share their notes, and put you up for a night, expecting a lecture in return.",
       "genres": [
         "steampunk"
       ],
@@ -265,6 +276,7 @@
         "insight"
       ],
       "feature": "Old Warrant Card",
+      "featureDesc": "Your retired warrant card still turns heads. Constables will speak to you as a colleague, show you a case file if asked quietly, and overlook a minor infraction, unless their captain is watching.",
       "genres": [
         "steampunk",
         "mystery"
@@ -290,6 +302,7 @@
         "medicine"
       ],
       "feature": "Vault Schooling",
+      "featureDesc": "You were taught from the old world's books. You can read pre-war signage, manuals and maps, and you know what a ruin was for and where its stores, generators and exits should be.",
       "genres": [
         "post_apocalyptic"
       ],
@@ -313,6 +326,7 @@
         "investigation"
       ],
       "feature": "Salvager's Nose",
+      "featureDesc": "You can tell worthwhile salvage from scrap at a glance. When you search a ruin, you find the parts, fuel and provisions others overlook, and you know which merchant will pay for them.",
       "genres": [
         "post_apocalyptic"
       ],
@@ -337,6 +351,7 @@
         "perception"
       ],
       "feature": "Trade Road Contacts",
+      "featureDesc": "Every waystation and caravanserai on the routes you guarded knows your face. You and your companions can expect a meal, a bunk and the latest news of the road wherever a caravan stops.",
       "genres": [
         "post_apocalyptic"
       ],
@@ -360,6 +375,7 @@
         "religion"
       ],
       "feature": "Doctrine Fluency",
+      "featureDesc": "You can recite the congregation's liturgy and signs well enough to pass as one of the faithful. Cultists take you for a believer until you give them reason not to.",
       "genres": [
         "post_apocalyptic",
         "horror"
@@ -384,6 +400,7 @@
         "nature"
       ],
       "feature": "Safe Passage",
+      "featureDesc": "You read the wasteland the way sailors read weather. When you lead the party, you sense storms, radiation and hostile ground before they reach you, and you can always find a route around them.",
       "genres": [
         "post_apocalyptic"
       ],
@@ -407,6 +424,7 @@
         "insight"
       ],
       "feature": "Triage Instinct",
+      "featureDesc": "You can tell at a glance who is dying, who is faking and what killed the ones who did not make it. Settlements will shelter a medic, and their people will bring you what supplies they have.",
       "genres": [
         "post_apocalyptic"
       ],
@@ -431,6 +449,7 @@
         "religion"
       ],
       "feature": "Consecrated Ground",
+      "featureDesc": "You know every graveyard's layout and which graves are best left alone. The dead do not rise on ground you have tended, and church wardens will shelter you among the tombs.",
       "genres": [
         "horror",
         "dark_fantasy"
@@ -455,6 +474,7 @@
         "deception"
       ],
       "feature": "Seen Behind the Veil",
+      "featureDesc": "Having been locked away for telling the truth, you can tell when someone is lying about what they have seen, and other survivors of the veil will speak with you when they will speak with no one else.",
       "genres": [
         "horror"
       ],
@@ -476,6 +496,7 @@
         "history"
       ],
       "feature": "Forbidden Stacks",
+      "featureDesc": "You remember where the worst books are shelved. In any library or archive you can find the restricted collection, and you know which volume holds the answer, though not always the cost of reading it.",
       "genres": [
         "horror",
         "mystery"
@@ -500,6 +521,7 @@
         "performance"
       ],
       "feature": "Voices Beyond",
+      "featureDesc": "You can hold a sitting for the grieving. Usually it is theater, and it pays. Sometimes something answers, and when it does, you are the one it speaks through.",
       "genres": [
         "horror"
       ],
@@ -523,6 +545,7 @@
         "intimidation"
       ],
       "feature": "Family Secret",
+      "featureDesc": "Your family name is known. It opens doors among those who fear it and closes them among those who know what it means, and once per session it turns aside a threat that would rather not cross your kin.",
       "genres": [
         "horror",
         "dark_fantasy"
@@ -545,6 +568,7 @@
         "athletics"
       ],
       "feature": "Keys to the Town",
+      "featureDesc": "You still carry a ring of keys and know which doors they open. After dark you can move through the town unchallenged, and you notice what has changed since your last round.",
       "genres": [
         "horror",
         "mystery"
@@ -569,6 +593,7 @@
         "insight"
       ],
       "feature": "Client Ledger",
+      "featureDesc": "Your ledger holds half the town's secrets. Once per session you can consult it for a fact about a local person of standing: a debt, an affair, a grudge, or who they were seen with.",
       "genres": [
         "mystery"
       ],
@@ -593,6 +618,7 @@
         "investigation"
       ],
       "feature": "Press Credentials",
+      "featureDesc": "A press card opens doors that stay shut to strangers. Officials, witnesses and the wealthy will grant you an interview, and printers will run what you bring them.",
       "genres": [
         "mystery"
       ],
@@ -616,6 +642,7 @@
         "stealth"
       ],
       "feature": "Knows the Locks",
+      "featureDesc": "You see every building as a puzzle of latches and sight lines. Given a minute to look, you can say how a place is secured, where its blind spots are, and how you would have gotten in.",
       "genres": [
         "mystery"
       ],
@@ -639,6 +666,7 @@
         "persuasion"
       ],
       "feature": "Paper Trail",
+      "featureDesc": "You know where every record is buried. In any courthouse, registry or archive you can find the deed, the will or the filing that matters, and the clerks let you look.",
       "genres": [
         "mystery"
       ],
@@ -662,6 +690,7 @@
         "persuasion"
       ],
       "feature": "Old Invitations",
+      "featureDesc": "Scandal cost you your standing, not your memory. You know the guest lists, the grudges and the back stairs of every great house, and a servant or a faded friend will still let you in.",
       "genres": [
         "mystery"
       ],
@@ -685,6 +714,7 @@
         "perception"
       ],
       "feature": "Both Sides of the Badge",
+      "featureDesc": "The precinct and the street both think you are theirs. You can get a message to either side, and each will tell you what the other is planning, as long as neither learns you asked.",
       "genres": [
         "mystery"
       ],
@@ -708,6 +738,7 @@
         "arcana"
       ],
       "feature": "Quarantine Pass",
+      "featureDesc": "Guards still let your mask through the barricades. You can enter and leave sealed districts, and the sick and their families will tell a plague doctor what they tell no one else.",
       "genres": [
         "dark_fantasy"
       ],
@@ -732,6 +763,7 @@
         "survival"
       ],
       "feature": "Hunter's Marks",
+      "featureDesc": "You can read the order's trail signs and warrants. You know where the hunters have been, whom they are after, and how to pass yourself off as one of their wards when it counts.",
       "genres": [
         "dark_fantasy"
       ],
@@ -755,6 +787,7 @@
         "athletics"
       ],
       "feature": "Roadside Shrines",
+      "featureDesc": "Keepers of wayside shrines shelter penitents. On any pilgrim road you can find a shrine that offers you and your companions food, a roof, and word of who passed before you.",
       "genres": [
         "dark_fantasy"
       ],
@@ -776,6 +809,7 @@
         "deception"
       ],
       "feature": "Company Tattoos",
+      "featureDesc": "You know your old company's signs, camps and habits. You can spot its members, predict how it fights, and find its quartermasters, but they know your name and want the desertion settled.",
       "genres": [
         "dark_fantasy"
       ],
@@ -800,6 +834,7 @@
         "arcana"
       ],
       "feature": "Necropolis Access",
+      "featureDesc": "The wardens of the great necropolis still admit you. You can enter the tombs, read the funerary rites carved there, and learn what the dead were buried with and why.",
       "genres": [
         "dark_fantasy"
       ],
@@ -823,6 +858,7 @@
         "performance"
       ],
       "feature": "Street Congregation",
+      "featureDesc": "The desperate who hear you preach bring you rumors and bread. In any city you can gather a small congregation within a day, and they will pass you what the streets are saying.",
       "genres": [
         "dark_fantasy"
       ],

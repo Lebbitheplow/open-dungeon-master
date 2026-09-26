@@ -3,9 +3,13 @@ import subclassesJson from "@/lib/srd/subclasses.json";
 import racesJson from "@/lib/srd/races.json";
 import { CUSTOM_CLASS_FEATURES } from "@/lib/classes";
 import type { SheetFeature } from "@/lib/schemas/sheet";
+import { chosenFightingStyles, fightingStyleSlots } from "@/lib/srd/feature-effects";
+import { findOptionByFeatureName, optionSlotsFor } from "@/lib/srd/options";
 
 export type SubclassTable = {
   name: string;
+  // One line for the pickers; the authored entries carry theirs in desc too.
+  desc?: string;
   // Other names a sheet may already hold for this subclass: content-pack
   // slugs and the shorthand players type ("Moon", "Land").
   aliases?: string[];
@@ -65,6 +69,23 @@ const AUTHORED_SUBCLASSES: Record<string, SubclassTable[]> = Object.fromEntries(
     ],
   ),
 );
+
+// The one-line pitch for a subclass, for the pickers and the level-up
+// dialog: the SRD table's own line or the authored entry's. Null for a
+// subclass only the content pack knows, whose row carries its own text.
+export function subclassBlurb(classId: string, subclass: string): string | null {
+  const wanted = subclass.trim().toLowerCase();
+  const srd = SRD_CLASS_FEATURES[classId]?.subclasses.find(
+    (entry) => entry.name.toLowerCase() === wanted && entry.desc,
+  );
+  if (srd?.desc) {
+    return srd.desc;
+  }
+  const authored = AUTHORED_SUBCLASS_ENTRIES[classId]?.find(
+    (entry) => entry.name.toLowerCase() === wanted || (entry.aliases ?? []).some((alias) => alias.toLowerCase() === wanted),
+  );
+  return authored?.desc ?? null;
+}
 
 // One line of rules text for a subclass feature, or null when the name is a
 // bare SRD one the model already knows. The DM prompt appends it so a
@@ -230,10 +251,11 @@ export function subclassSpellsFor(classId: string, subclass: string, level: numb
 
 const RACES = (racesJson as { races: Array<{ id: string; traits: string[] }> }).races;
 
-// Race ids arrive as SRD ids (half_elf) or content-pack slugs (half-elf);
-// normalize punctuation so both find the bundled traits.
+// Race ids arrive as SRD ids (half_elf), content-pack slugs (half-elf) or
+// the pack's own copies of the bundled rows (odm-half-elf); all three find
+// the bundled traits.
 function normalizeRaceId(raceId: string) {
-  return raceId.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_");
+  return raceId.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^odm_/, "");
 }
 
 export function racialTraitsFor(raceId: string): SheetFeature[] {
@@ -272,13 +294,17 @@ export function populateFeaturesForClasses(
   }
   granted.push(...racialTraitsFor(raceId));
   const grantedNames = new Set(granted.map((feature) => feature.name.toLowerCase()));
-  const kept = existing.filter(
-    (feature) =>
-      (feature.source === "feat" ||
-        feature.source === "story" ||
-        feature.source === "choice" ||
-        feature.source === "background") &&
-      !grantedNames.has(feature.name.toLowerCase()),
+  const kept = pruneChoiceFeatures(
+    existing.filter(
+      (feature) =>
+        (feature.source === "feat" ||
+          feature.source === "story" ||
+          feature.source === "choice" ||
+          feature.source === "background") &&
+        !grantedNames.has(feature.name.toLowerCase()),
+    ),
+    classes,
+    granted,
   );
   const seen = new Set<string>();
   return [...granted, ...kept].filter((feature) => {
@@ -287,6 +313,51 @@ export function populateFeaturesForClasses(
       return false;
     }
     seen.add(key);
+    return true;
+  });
+}
+
+// A "choice" feature is the player's own pick from a list a class feature
+// opens: a fighting style, an invocation, a maneuver. It stays only while
+// some class on the sheet still opens that list at its level, and only as
+// many as the list allows. Without this a Battle Master's maneuvers rode
+// along under a Champion for good, and a warlock adapted down to level 1
+// kept invocations it had not earned. Story, feat and background features
+// are not touched.
+function pruneChoiceFeatures(
+  features: SheetFeature[],
+  classes: Array<{ id: string; subclass: string; level: number }>,
+  granted: SheetFeature[],
+): SheetFeature[] {
+  const styleSlots = fightingStyleSlots(granted);
+  const styles = new Set(chosenFightingStyles(features).map((name) => name.toLowerCase()));
+  let stylesKept = 0;
+  const perKind = new Map<string, number>();
+  return features.filter((feature) => {
+    if (feature.source !== "choice") {
+      return true;
+    }
+    const option = findOptionByFeatureName(feature.name);
+    if (option) {
+      const total = classes.reduce(
+        (sum, entry) => sum + optionSlotsFor(entry.id, entry.subclass, entry.level, option.k),
+        0,
+      );
+      const taken = perKind.get(option.k) ?? 0;
+      if (taken >= total) {
+        return false;
+      }
+      perKind.set(option.k, taken + 1);
+      return true;
+    }
+    const bare = chosenFightingStyles([feature])[0];
+    if (bare !== undefined && styles.has(bare.toLowerCase())) {
+      if (stylesKept >= styleSlots) {
+        return false;
+      }
+      stylesKept += 1;
+      return true;
+    }
     return true;
   });
 }

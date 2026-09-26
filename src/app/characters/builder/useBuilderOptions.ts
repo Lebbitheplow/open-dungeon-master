@@ -1,12 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import {
-  classMechanics,
-  raceMechanics,
-  type ClassMechanics,
-  type RaceMechanics,
-} from "@/lib/content/mechanics";
+import { classMechanics, type ClassMechanics, type RaceMechanics } from "@/lib/content/mechanics";
+import { packRaceOptions } from "@/lib/content/race-options";
 import { SRD_BACKGROUNDS, SRD_CLASSES, SRD_RACES } from "@/lib/srd";
 import { CUSTOM_BACKGROUNDS } from "@/lib/backgrounds";
 import { CUSTOM_CLASSES } from "@/lib/classes";
@@ -35,9 +31,12 @@ export type BackgroundOption = {
   tools?: string[];
   languages?: number;
   equipment?: string[];
-  // Catalog-only extras; absent on SRD and Open5e rows.
+  // Catalog-only extras; absent on Open5e rows.
   genres?: Genre[];
   blurb?: string;
+  // The named feature the background grants, and what it does.
+  feature?: string;
+  featureDesc?: string;
   // The content pack's write-up, shown under the background select.
   desc?: string;
 };
@@ -55,7 +54,7 @@ type ContentRow = {
   data: Record<string, unknown>;
 };
 
-function srdRaceOptions(): RaceOption[] {
+export function srdRaceOptions(): RaceOption[] {
   return SRD_RACES.map((race) => ({
     id: race.id,
     name: race.name,
@@ -96,11 +95,12 @@ function customClassOptions(): ClassOption[] {
   }));
 }
 
-function srdClassOptions(): ClassOption[] {
+export function srdClassOptions(): ClassOption[] {
   return [
     ...SRD_CLASSES.map((klass) => ({
       id: klass.id,
       name: klass.name,
+      blurb: klass.blurb,
       languages: klass.languages,
       hitDie: klass.hitDie,
       saves: klass.saves,
@@ -125,10 +125,12 @@ function customBackgroundOptions(): BackgroundOption[] {
     equipment: background.equipment,
     genres: background.genres,
     blurb: background.blurb,
+    feature: background.feature,
+    featureDesc: background.featureDesc,
   }));
 }
 
-function srdBackgroundOptions(): BackgroundOption[] {
+export function srdBackgroundOptions(): BackgroundOption[] {
   return [
     ...SRD_BACKGROUNDS.map((background) => ({
       id: background.id,
@@ -137,9 +139,39 @@ function srdBackgroundOptions(): BackgroundOption[] {
       tools: background.tools,
       languages: background.languages,
       equipment: background.equipment,
+      blurb: background.blurb,
+      feature: background.feature,
+      featureDesc: background.featureDesc,
     })),
     ...customBackgroundOptions(),
   ];
+}
+
+// The content pack's backgrounds, added to the bundled list rather than
+// replacing it. A pack row for a background the bundled SRD already carries
+// (the wotc-srd acolyte, a third-party charlatan under the same slug) gives
+// way to the bundled one, which is what grants the tools, languages, kit
+// and feature; the pack's other backgrounds join after it with the write-up
+// and feature text their rows carry.
+export function mergedBackgroundOptions(rows: ContentRow[]): BackgroundOption[] {
+  const bundled = srdBackgroundOptions();
+  const bundledIds = new Set(bundled.map((option) => option.id));
+  const packBackgrounds: BackgroundOption[] = rows
+    .filter((row) => !bundledIds.has(row.slug.toLowerCase().replace(/-/g, "_")))
+    .map((row) => {
+      const feature = String(row.data?.feature ?? "").trim();
+      const featureDesc = String(row.data?.feature_desc ?? "").trim();
+      return {
+        id: row.slug,
+        name: row.name,
+        skills: skillsInText(row.data.skill_proficiencies),
+        desc: String(row.data?.desc ?? ""),
+        ...(feature ? { feature } : {}),
+        ...(featureDesc ? { featureDesc } : {}),
+      };
+    });
+  const srdCount = SRD_BACKGROUNDS.length;
+  return [...bundled.slice(0, srdCount), ...packBackgrounds, ...bundled.slice(srdCount)];
 }
 
 // Loads race/class/background options from the Open5e content pack with the
@@ -173,31 +205,26 @@ export function useBuilderOptions() {
         setPackInstalled(true);
         const raceRows = (racesData.results ?? []) as ContentRow[];
         if (raceRows.length) {
-          setRaces(
-            raceRows.map((row) => {
-              const mechanics = raceMechanics(row.data);
-              return {
-                id: row.slug,
-                name: row.name,
-                ...mechanics,
-                note: mechanics.traitsSummary,
-              };
-            }),
-          );
+          setRaces(packRaceOptions(raceRows));
         }
         const classRows = (classesData.results ?? []) as ContentRow[];
         if (classRows.length) {
           // Catalog classes ride along with the pack rows; pack slugs win a
           // (never expected) id collision so the dedupe is just a backstop.
-          const packOptions: ClassOption[] = classRows.map((row) => ({
-            id: row.slug,
-            name: row.name,
-            ...classMechanics(row.slug, row.data),
-            desc: String(row.data?.desc ?? ""),
-            // Open5e rows say nothing about Druidic or Thieves' Cant, so the
-            // bundled SRD entry supplies them.
-            languages: SRD_CLASSES.find((klass) => klass.id === row.slug)?.languages,
-          }));
+          const packOptions: ClassOption[] = classRows.map((row) => {
+            // Open5e rows say nothing about Druidic or Thieves' Cant, and
+            // open with a rules wall rather than a line a new player can
+            // read, so the bundled SRD entry supplies both.
+            const bundled = SRD_CLASSES.find((klass) => klass.id === row.slug);
+            return {
+              id: row.slug,
+              name: row.name,
+              ...classMechanics(row.slug, row.data),
+              desc: String(row.data?.desc ?? ""),
+              blurb: bundled?.blurb,
+              languages: bundled?.languages,
+            };
+          });
           const packIds = new Set(packOptions.map((option) => option.id));
           setClasses([
             ...packOptions,
@@ -206,21 +233,7 @@ export function useBuilderOptions() {
         }
         const backgroundRows = (backgroundsData.results ?? []) as ContentRow[];
         if (backgroundRows.length) {
-          // Catalog backgrounds ride along with the pack rows, same as
-          // classes; pack slugs win a (never expected) id collision.
-          const packBackgrounds: BackgroundOption[] = backgroundRows.map((row) => ({
-            id: row.slug,
-            name: row.name,
-            skills: skillsInText(row.data.skill_proficiencies),
-            desc: String(row.data?.desc ?? ""),
-          }));
-          const packBackgroundIds = new Set(packBackgrounds.map((option) => option.id));
-          setBackgrounds([
-            ...packBackgrounds,
-            ...customBackgroundOptions().filter(
-              (option) => !packBackgroundIds.has(option.id),
-            ),
-          ]);
+          setBackgrounds(mergedBackgroundOptions(backgroundRows));
         }
       } catch {
         // SRD fallback already in state.

@@ -13,9 +13,11 @@
 import glossaryJson from "@/lib/help/glossary.json";
 import srdFeaturesJson from "@/lib/help/srd-features.json";
 import starterSpellsJson from "@/lib/help/starter-spells.json";
-import racesJson from "@/lib/srd/races.json";
 import skillsJson from "@/lib/srd/skills.json";
+import { describeBackgroundFeature } from "@/lib/backgrounds";
 import { classFeatureDescription, spellClassFor } from "@/lib/classes";
+import { srdRaceFor } from "@/lib/content/race-options";
+import { normalizeRulesText } from "@/lib/help/rules-text";
 import { matchResource } from "@/lib/srd/class-resources";
 import { guidanceFor } from "@/lib/srd/feature-effects";
 import { subclassFeatureDescription } from "@/lib/srd/features";
@@ -94,23 +96,21 @@ export function describeFeature(classId: string, subclass: string, name: string)
     subclassFeatureDescription(classId, subclass, name) ??
     classFeatureDescription(classId, name) ??
     exactSrdText(classId, name) ??
+    // The background's feature sits on the sheet as "Shelter of the
+    // Faithful (Acolyte)"; the bare name finds its text.
+    describeBackgroundFeature(baseName(name)) ??
     matchResource(name)?.guidance ??
     guidanceFor({ class: classId, features: [], feature: name }) ??
     looseSrdText(classId, name);
   return stripLeadingLabel(found, name);
 }
 
-const RACES = (racesJson as { races: Array<{ id: string; name: string; traits: string[] }> }).races;
-
-function normalizeRaceId(raceId: string) {
-  return raceId.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_");
-}
-
 // The bundled lineage lines. Racial traits are written to describe themselves
 // ("Darkvision 60 ft", "Powerful Build (count as one size larger for
-// carrying)"), so the trait list IS the description.
+// carrying)"), so the trait list IS the description. A pack slug or the
+// pack's "odm-" copy of a bundled race resolves to the same entry.
 export function describeRace(raceId: string): string | null {
-  const race = RACES.find((entry) => entry.id === normalizeRaceId(raceId));
+  const race = srdRaceFor(raceId);
   return race ? race.traits.join(". ") + "." : null;
 }
 
@@ -129,35 +129,68 @@ export function describeSkill(skillId: string): string | null {
   }`.trim();
 }
 
+function textOf(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => {
+        if (typeof entry === "string") {
+          return entry;
+        }
+        const trait = entry as { name?: unknown; desc?: unknown } | null;
+        const desc = typeof trait?.desc === "string" ? trait.desc : "";
+        const name = typeof trait?.name === "string" ? trait.name : "";
+        return name && desc ? `**${name}.** ${desc}` : desc;
+      })
+      .filter(Boolean)
+      .join("\n\n");
+  }
+  return "";
+}
+
 // The description carried on a content-pack or homebrew row. Pack rows keep
 // the source's own field names, which differ between v1, v2 and the authored
-// layer, so every spelling is tried.
+// layer, so every spelling is tried, and the pieces some sources keep apart
+// (a feat's benefits, a background's feature, a 2024 species' trait list)
+// are put back together. Null when there is nothing to show.
 export function describeContentEntry(data: Record<string, unknown> | undefined): string | null {
   if (!data) {
     return null;
   }
+  const parts: string[] = [];
   for (const key of ["desc", "description", "traits", "benefits"]) {
-    const value = data[key];
-    if (typeof value === "string" && value.trim()) {
-      return value;
-    }
-    if (Array.isArray(value)) {
-      const joined = value
-        .map((entry) =>
-          typeof entry === "string"
-            ? entry
-            : typeof (entry as { desc?: string })?.desc === "string"
-              ? (entry as { desc: string }).desc
-              : "",
-        )
-        .filter(Boolean)
-        .join("\n\n");
-      if (joined.trim()) {
-        return joined;
-      }
+    const text = textOf(data[key]);
+    if (text.trim()) {
+      parts.push(text);
+      break;
     }
   }
-  return null;
+  // A Level Up feat keeps its flavor line in desc and its rules in
+  // effects_desc, one benefit per entry.
+  const effects = textOf(data.effects_desc);
+  if (effects.trim()) {
+    const prerequisite = typeof data.prerequisite === "string" && data.prerequisite.trim()
+      ? `*Prerequisite: ${data.prerequisite.trim()}*\n\n`
+      : "";
+    parts.push(
+      `${prerequisite}${effects
+        .split("\n\n")
+        .map((line) => `- ${line}`)
+        .join("\n")}`,
+    );
+  }
+  // A background's feature is a field of its own.
+  const feature = typeof data.feature === "string" ? data.feature.trim() : "";
+  const featureText = textOf(data.feature_desc).trim();
+  if (feature && featureText) {
+    parts.push(`**Feature: ${feature}.** ${featureText}`);
+  } else if (feature) {
+    parts.push(`**Feature: ${feature}.**`);
+  }
+  const joined = normalizeRulesText(parts.join("\n\n"));
+  return joined ? joined : null;
 }
 
 export type StarterSpells = {

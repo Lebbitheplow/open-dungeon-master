@@ -18,8 +18,13 @@ import { StepPanel, inputClass } from "./shared";
 
 function languageHelp(race: RaceOption, background: BackgroundOption | undefined): string {
   const parts = [`${race.name} speaks ${race.languages.join(" and ")}`];
-  if (race.bonusLanguages > 0) {
-    parts.push(`plus ${race.bonusLanguages} of your choice`);
+  const choice = race.languageChoice;
+  const open = race.bonusLanguages - (choice?.count ?? 0);
+  if (choice) {
+    parts.push(`plus ${choice.count === 1 ? "one" : choice.count} of ${choice.from.join(", ")}`);
+  }
+  if (open > 0) {
+    parts.push(`${choice ? "and" : "plus"} ${open} of your choice`);
   }
   if (background?.languages) {
     parts.push(
@@ -177,7 +182,12 @@ export function AncestryStep({
                 placeholder="Choose a language..."
                 options={[
                   { value: "", label: "Choose a language..." },
-                  ...STANDARD_LANGUAGES.filter(
+                  // A race that offers "your choice of Common or Undercommon"
+                  // fills its first slots from that list only.
+                  ...(race.languageChoice && index < race.languageChoice.count
+                    ? race.languageChoice.from
+                    : STANDARD_LANGUAGES
+                  ).filter(
                     (language) =>
                       !race.languages.includes(language) &&
                       (state.bonusLanguages[index] === language || !state.bonusLanguages.includes(language)),

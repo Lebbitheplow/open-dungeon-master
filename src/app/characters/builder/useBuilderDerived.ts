@@ -336,7 +336,15 @@ export type BuilderDerived = ReturnType<typeof useBuilderDerived>;
 
 // Action helpers that close over the state setters. Plain functions rather
 // than hooks so the steps can call them from any handler.
-export function builderActions(state: BuilderState, klass: ClassOption | undefined) {
+export function builderActions(
+  state: BuilderState,
+  klass: ClassOption | undefined,
+  race?: RaceOption,
+  background?: BackgroundOption,
+) {
+  // A skill the background or race grants outright is not a class pick;
+  // taking it again would spend a slot on nothing.
+  const granted = new Set([...(background?.skills ?? []), ...(race?.skills ?? [])]);
   return {
     addEquipmentItem(entry: {
       name: string;
@@ -382,7 +390,7 @@ export function builderActions(state: BuilderState, klass: ClassOption | undefin
       }
     },
     toggleSkill(skillId: string) {
-      if (!klass) {
+      if (!klass || granted.has(skillId)) {
         return;
       }
       state.setChosenSkills((current) =>

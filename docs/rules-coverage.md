@@ -34,6 +34,8 @@ table can switch it off with the `narrationGuard` game setting.
 | Magic item effects (AC, saves, ability-setting, resistances) | enforced | `srd/magic-items.ts` (`classes/magic-items.json`, generated) |
 | Hit points, hit dice | enforced | creation + `dm/rest-logic.ts` |
 | Saves, skills, expertise, passive Perception | enforced | `srd/index.ts computeSheetDerived` |
+| Builder picks re-checked when an earlier step changes (class skills against the background's and race's grants, expertise against proficiency and slots, subclass against its level, option picks against their slots, spells against the slot table, racial choices against the race) | enforced | `builder/reconcile.ts reconcilePicks`, run on every change and once more as the sheet is built |
+| Racial languages from the content pack (the grant sentence only, "your choice of X or Y" as a pick from that list, subraces inherit the parent's) | enforced | `content/mechanics.ts parseRaceLanguages`, `content/race-options.ts packRaceOptions` |
 | Jack of All Trades / Remarkable Athlete (half proficiency on checks + initiative) | enforced | feature-effects `half_proficiency` -> `computeSheetDerived`, `dm/rolls.ts` |
 | Armor stealth disadvantage (scale, plate...) | enforced | `srd/armor.ts` flag -> `dm/rolls.ts`, `take_action hide` |
 | Heavy armor below its STR requirement (speed -10) | enforced | `srd/index.ts speedFor` |
@@ -103,7 +105,7 @@ table can switch it off with the `narrationGuard` game setting.
 | Cantrip level scaling, upcast scaling (from content pack) | enforced | `srd/spell-scaling.ts` |
 | Save DC, spell attack bonus | enforced | `srd/index.ts` |
 | Healing spells rolled server-side | enforced | `dm/mutations.ts heal` |
-| Spells known / prepared limits | enforced | `dm/mutations.ts learn_spell`, level-up, PATCH route |
+| Spells known / prepared limits, cantrips known, a wizard's starting book, the top spell level the slots reach | enforced at creation, edit and level-up | `srd/spell-prep.ts spellListProblems` in `POST/PUT /api/characters`, the campaign sheet routes and `companions/create`; the builder shows the same counts (`builder/submit.ts spellsBlocker`) |
 | Arcane/Natural Recovery, Song of Rest | enforced | `dm/rest-tools.ts` |
 | Concentration on enemy spells | enforced (best effort) | tracked when cast through the tools with casterEnemyId |
 
@@ -115,7 +117,7 @@ table can switch it off with the `narrationGuard` game setting.
 | Custom genre-class limited-use features | enforced | `classes/resources.json` (235 counters, generated) |
 | Subclass and lineage limited-use features (Superiority Dice, Portent, Psionic Energy, Stone's Endurance, ...) | enforced | `srd/authored-resources.json` (122 counters) |
 | Typed counter effects: healing, dice pools, temp HP, buffs with variants (Starry Form, Spirit Totem), enemy saves, teleports execute on spend | enforced | `fx` rows -> `srd/class-resources.ts effectFromFx` -> `dm/resource-tools.ts` (39 authored + 32 generated genre rows; the guard in `test-feature-coverage.mjs` stops mechanical wording landing without one) |
-| Pick-lists: invocations, maneuvers, metamagic, pact boons, infusions, runes, elemental disciplines | enforced (choice + count); maneuvers and Agonizing Blast enforced in combat, metamagic spend via its counter, remaining effects guidance | `srd/options.ts`, `dm/pc-attack.ts` |
+| Pick-lists: invocations, maneuvers, metamagic, pact boons, infusions, runes, elemental disciplines | enforced (choice + count); maneuvers and Agonizing Blast enforced in combat, metamagic spend via its counter, remaining effects guidance; picks the class, subclass or level no longer opens are dropped on regrant | `srd/options.ts`, `dm/pc-attack.ts`, `srd/features.ts pruneChoiceFeatures` |
 | Subclass spell lists (domain, circle, oath, patron) | enforced | `srd/features.ts subclassSpellsFor`, granted at creation and level-up |
 | Wild Shape (full engine: authored beast table, CR/movement caps by druid level incl. Moon, stat swap, natural attacks, beast AC vs enemies, casting gate) | enforced | `srd/beast-forms.ts`, `dm/resource-tools.ts`, `srd/index.ts computeSheetDerived` |
 | Polymorph (form via cast_buff variant, CR <= target level, concentration-linked, damage reverts) | enforced | `dm/cast-tools.ts`, `srd/beast-forms.ts`, `dm/condition-tick.ts` |

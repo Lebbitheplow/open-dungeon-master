@@ -4,12 +4,15 @@ import { useMemo, useState } from "react";
 import { GameTerm } from "@/components/ui/GameTerm";
 import { InfoButton, InfoDialog } from "@/components/ui/InfoDialog";
 import { describeFeature, describeSkill } from "@/lib/help";
+import { firstSentence } from "@/lib/help/rules-text";
+import { subclassBlurb } from "@/lib/srd/features";
 import { SRD_SKILLS } from "@/lib/srd";
 import { displayName, type Reskinned } from "@/lib/worlds/reskin-logic";
 import type { WorldPack } from "@/lib/worlds/types";
 import { classArt } from "../lineage";
 import { OptionCardGrid, type OptionCardGroup } from "../OptionCardGrid";
 import OptionPicker, { type PickerGroup } from "../OptionPicker";
+import { classInfoText } from "../usePickerGroups";
 import type { ArchetypeOption, BackgroundOption, ClassOption } from "../useBuilderOptions";
 import type { BuilderActions, BuilderDerived } from "../useBuilderDerived";
 import type { BuilderState } from "../useBuilderState";
@@ -102,7 +105,7 @@ export function CallingStep({
               ) : null}
               <InfoButton
                 label={klass.name}
-                text={klass.blurb || klass.desc}
+                text={classInfoText(klass)}
                 reference={{ kind: "classes", slug: klass.id }}
               />
             </span>
@@ -133,19 +136,18 @@ export function CallingStep({
               groups={subclassGroups}
               placeholder="None yet"
               className={inputClass}
-              onChange={state.setSubclass}
+              onChange={state.changeSubclass}
             />
             <span className="mt-1 flex items-start gap-1 text-xs text-stone-500">
               {subclass ? (
                 <>
                   <span className="grow">
-                    {chosenArchetype?.desc
-                      ? chosenArchetype.desc.split("\n")[0]
-                      : "A specialization within your class."}
+                    {firstSentence(chosenArchetype?.desc || subclassBlurb(klass?.id ?? "", subclass)) ??
+                      "A specialization within your class."}
                   </span>
                   <InfoButton
                     label={subclass}
-                    text={chosenArchetype?.desc}
+                    text={chosenArchetype?.desc || subclassBlurb(klass?.id ?? "", subclass) || undefined}
                     reference={
                       chosenArchetype ? { kind: "archetypes", slug: chosenArchetype.id } : undefined
                     }

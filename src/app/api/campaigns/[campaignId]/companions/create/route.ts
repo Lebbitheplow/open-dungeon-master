@@ -8,6 +8,7 @@ import { listSheets } from "@/lib/db/sheets";
 import { companionMode, finalizeNewCompanion, listCompanions } from "@/lib/dm/companion-tools";
 import { requestDmTurn } from "@/lib/dm/loop";
 import { createSheetSchema } from "@/lib/schemas/sheet";
+import { spellListProblems } from "@/lib/srd/spell-prep";
 import { publishWithSeq } from "@/lib/events";
 
 export const runtime = "nodejs";
@@ -85,6 +86,10 @@ export async function POST(
     input = adaptSheetToLevel(character.sheet, character.level, level);
   } else {
     input = parsed.data.sheet;
+    const [problem] = spellListProblems({ ...input, level });
+    if (problem) {
+      return Response.json({ error: problem }, { status: 400 });
+    }
   }
 
   const { sheet } = finalizeNewCompanion(campaign, level, input, "party", input.backstory ?? "");

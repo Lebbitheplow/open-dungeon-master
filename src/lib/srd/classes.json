@@ -35,7 +35,8 @@
           "perception",
           "sleight_of_hand"
         ]
-      }
+      },
+      "blurb": "An inventor who casts through gadgets and infuses gear with magic, part tinkerer, part battlefield support."
     },
     {
       "id": "barbarian",
@@ -67,7 +68,8 @@
           "survival"
         ]
       },
-      "tools": []
+      "tools": [],
+      "blurb": "A fierce warrior who rages into battle, shrugging off blows that would fell anyone else."
     },
     {
       "id": "bard",
@@ -114,7 +116,8 @@
       },
       "tools": [
         "three musical instruments of your choice"
-      ]
+      ],
+      "blurb": "A performer whose music and wit are magic, inspiring allies and unsettling foes."
     },
     {
       "id": "cleric",
@@ -144,7 +147,8 @@
           "religion"
         ]
       },
-      "tools": []
+      "tools": [],
+      "blurb": "A champion of a god, wielding divine magic to heal, protect and smite."
     },
     {
       "id": "druid",
@@ -191,7 +195,8 @@
       ],
       "languages": [
         "Druidic"
-      ]
+      ],
+      "blurb": "A keeper of the wild who commands nature's magic and takes the shapes of beasts."
     },
     {
       "id": "fighter",
@@ -226,7 +231,8 @@
           "survival"
         ]
       },
-      "tools": []
+      "tools": [],
+      "blurb": "A master of arms and armor, the most versatile combatant in any party."
     },
     {
       "id": "monk",
@@ -256,7 +262,8 @@
       },
       "tools": [
         "one artisan's tools or one musical instrument of your choice"
-      ]
+      ],
+      "blurb": "A disciplined martial artist who channels ki into speed, precision and uncanny feats."
     },
     {
       "id": "paladin",
@@ -289,7 +296,8 @@
           "religion"
         ]
       },
-      "tools": []
+      "tools": [],
+      "blurb": "A holy warrior bound by an oath, backing steel with divine smites and healing."
     },
     {
       "id": "ranger",
@@ -323,7 +331,8 @@
           "survival"
         ]
       },
-      "tools": []
+      "tools": [],
+      "blurb": "A hunter and tracker of the wilds, deadly with a bow and at home far from any road."
     },
     {
       "id": "rogue",
@@ -366,7 +375,8 @@
       ],
       "languages": [
         "Thieves' Cant"
-      ]
+      ],
+      "blurb": "A cunning specialist in stealth, skill and the devastating sneak attack."
     },
     {
       "id": "sorcerer",
@@ -397,7 +407,8 @@
           "religion"
         ]
       },
-      "tools": []
+      "tools": [],
+      "blurb": "A caster born with magic in the blood, bending raw power with metamagic."
     },
     {
       "id": "warlock",
@@ -427,7 +438,8 @@
           "religion"
         ]
       },
-      "tools": []
+      "tools": [],
+      "blurb": "A wielder of magic bargained from an otherworldly patron, built around eldritch invocations."
     },
     {
       "id": "wizard",
@@ -458,7 +470,8 @@
           "religion"
         ]
       },
-      "tools": []
+      "tools": [],
+      "blurb": "A scholar of the arcane who studies spells into a spellbook and prepares them each day."
     }
   ]
 }

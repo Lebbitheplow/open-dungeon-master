@@ -8,6 +8,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { Dialog } from "@/components/ui/Dialog";
 import type { ItemSheet } from "@/lib/help/item-sheet";
+import { firstSentence, parseRulesBlocks } from "@/lib/help/rules-text";
 
 // The "what does this do?" affordance, used everywhere a game term appears.
 //
@@ -25,12 +26,12 @@ import type { ItemSheet } from "@/lib/help/item-sheet";
 export type ContentRef = { kind: string; slug: string; name?: string };
 
 // Content-pack descriptions are markdown-ish: headings, bold, italics, tables.
-// Rendering the handful of constructs that actually appear is far cheaper than
-// a markdown dependency, and unknown syntax degrades to plain text rather than
-// showing raw asterisks. Table rows keep their pipes inside a monospace block.
+// The block structure comes from src/lib/help/rules-text.ts, which knows the
+// pack's quirks; this only turns each block into elements. Table rows keep
+// their pipes inside a monospace block.
 function renderInline(text: string, keyPrefix: string): ReactNode[] {
   const out: ReactNode[] = [];
-  const pattern = /(\*\*[^*]+\*\*|\*[^*]+\*|_[^_]+_)/g;
+  const pattern = /(\*\*[^*]+\*\*|\*[^*\s][^*]*\*|(?<![\w])_[^_\n]+_(?![\w]))/g;
   let last = 0;
   let match: RegExpExecArray | null;
   let index = 0;
@@ -63,48 +64,35 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
 }
 
 export function renderRules(text: string): ReactNode {
-  const blocks = text.replace(/\r\n/g, "\n").split(/\n{2,}/);
-  return blocks.map((block, blockIndex) => {
-    const trimmed = block.trim();
-    if (!trimmed) {
-      return null;
-    }
-    // Tables: keep the alignment by rendering the raw rows in a scroll box.
-    if (trimmed.split("\n").every((line) => line.trim().startsWith("|"))) {
-      return (
-        <pre
-          key={blockIndex}
-          className="overflow-x-auto rounded-md bg-stone-900/60 p-2 text-[11px] leading-relaxed text-stone-400"
-        >
-          {trimmed}
-        </pre>
-      );
-    }
-    const lines = trimmed.split("\n");
-    if (lines.every((line) => /^\s*[-*+]\s+/.test(line))) {
-      return (
-        <ul key={blockIndex} className="list-disc space-y-1 pl-4">
-          {lines.map((line, lineIndex) => (
-            <li key={lineIndex}>
-              {renderInline(line.replace(/^\s*[-*+]\s+/, ""), `${blockIndex}-${lineIndex}`)}
-            </li>
-          ))}
-        </ul>
-      );
-    }
-    // A heading line becomes a small label rather than showing its hashes.
-    const heading = /^#{1,6}\s+(.*)$/.exec(lines[0]);
-    const body = heading ? lines.slice(1).join("\n") : trimmed;
-    return (
-      <div key={blockIndex}>
-        {heading ? (
-          <p className="reveal mb-1 text-xs font-medium uppercase tracking-wide text-amber-200/80">
-            {heading[1]}
+  return parseRulesBlocks(text).map((block, blockIndex) => {
+    switch (block.kind) {
+      case "table":
+        return (
+          <pre
+            key={blockIndex}
+            className="overflow-x-auto rounded-md bg-stone-900/60 p-2 text-[11px] leading-relaxed text-stone-400"
+          >
+            {block.rows.join("\n")}
+          </pre>
+        );
+      case "list":
+        return (
+          <ul key={blockIndex} className="list-disc space-y-1 pl-4">
+            {block.items.map((item, itemIndex) => (
+              <li key={itemIndex}>{renderInline(item, `${blockIndex}-${itemIndex}`)}</li>
+            ))}
+          </ul>
+        );
+      case "heading":
+        // A heading line becomes a small label rather than showing its hashes.
+        return (
+          <p key={blockIndex} className="reveal mb-1 text-xs font-medium uppercase tracking-wide text-amber-200/80">
+            {block.text}
           </p>
-        ) : null}
-        {body.trim() ? <p>{renderInline(body, String(blockIndex))}</p> : null}
-      </div>
-    );
+        );
+      default:
+        return <p key={blockIndex}>{renderInline(block.text, String(blockIndex))}</p>;
+    }
   });
 }
 
@@ -484,13 +472,9 @@ export function InfoChipList({
   );
 }
 
-// The first sentence of a write-up, for the hover preview.
+// The first sentence of a write-up, for the hover preview, markdown removed.
 function firstLine(text: string | null | undefined): string | null {
-  const plain = text?.replace(/\s+/g, " ").trim();
-  if (!plain) return null;
-  const stop = plain.search(/[.!?](\s|$)/);
-  const line = stop > 0 ? plain.slice(0, stop + 1) : plain;
-  return line.length > 160 ? `${line.slice(0, 157)}...` : line;
+  return firstSentence(text);
 }
 
 export function InfoDialog({

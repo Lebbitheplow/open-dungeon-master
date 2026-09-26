@@ -7,8 +7,10 @@ import { cn } from "@/lib/cn";
 import { InfoButton, InfoChipList } from "@/components/ui/InfoDialog";
 import { describeFeature, describeSkill } from "@/lib/help";
 import {
+  findOptionByFeatureName,
   openOptionSlots,
   optionFeatureName,
+  optionSlotsFor,
   type OptionSlot,
 } from "@/lib/srd/options";
 import { ALL_CLASSES, SRD_SKILLS, abilityMod, findClass, findSkill, spellSlotsFor } from "@/lib/srd";
@@ -24,6 +26,7 @@ import {
 import {
   expertiseSlotsFor,
   populateFeaturesForClasses,
+  subclassBlurb,
   subclassLevelFor,
   subclassNamesFor,
   subclassSpellsFor,
@@ -131,6 +134,20 @@ export function LevelUpDialog({
       ).filter((id) => !sheet.proficiencies.skills.includes(id))
     : [];
   const needsSkillPick = skillOptions.length > 0;
+
+  // Picking a subclass keeps only the option picks it has slots for: three
+  // Battle Master maneuvers do not survive a switch to Champion, and the
+  // fighting styles are asked again since the subclass decides how many.
+  function chooseSubclass(name: string) {
+    setSubclassChoice(name);
+    setStylePicks([]);
+    setOptionPicks((current) =>
+      current.filter((pick) => {
+        const option = findOptionByFeatureName(pick);
+        return option !== null && optionSlotsFor(classChoice, name, classLevelAfter, option.k) > 0;
+      }),
+    );
+  }
 
   function resetClassPicks() {
     setSubclassChoice("");
@@ -1005,7 +1022,7 @@ export function LevelUpDialog({
                         >
                           <button
                             type="button"
-                            onClick={() => setSubclassChoice(name)}
+                            onClick={() => chooseSubclass(name)}
                             className="flex grow items-center justify-between gap-2 py-2 text-left"
                           >
                             <span>{name}</span>
@@ -1019,7 +1036,7 @@ export function LevelUpDialog({
                           </button>
                           <InfoButton
                             label={name}
-                            text={archetype?.desc}
+                            text={archetype?.desc || subclassBlurb(classChoice, name) || undefined}
                             reference={
                               archetype ? { kind: "archetypes", slug: archetype.id, name } : undefined
                             }
