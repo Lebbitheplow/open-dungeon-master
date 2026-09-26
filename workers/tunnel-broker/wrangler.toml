@@ -2,9 +2,18 @@ name = "odm-tunnel-broker"
 main = "src/index.js"
 compatibility_date = "2026-08-01"
 
-# Runs on the free workers.dev subdomain:
+# Served at both addresses. The zone hostname is the one the apps use from
+# client 0.14.7 / server 0.23.9 on, and is where the zone's free WAF rate
+# limiting rule and bot protection apply; workers.dev stays for the apps
+# already installed.
+#   https://broker.opendungeonmaster.com
 #   https://odm-tunnel-broker.<your-subdomain>.workers.dev
-# No route on the zone is needed. Secrets, set with `wrangler secret put`:
+workers_dev = true
+routes = [
+  { pattern = "broker.opendungeonmaster.com", custom_domain = true },
+]
+
+# Secrets, set with `wrangler secret put`:
 #   ACCOUNT_ID       required. The Cloudflare account id (kept out of the
 #                    committed file; it is not abusable alone, but there is
 #                    no reason to publish it either).
@@ -15,7 +24,8 @@ compatibility_date = "2026-08-01"
 #                    TURN egress and pause minting near the free tier.
 #   TURN_KEY_ID      optional. A Cloudflare Realtime TURN key id; without
 #   TURN_API_TOKEN   it (and its token) /turn serves STUN-only forever.
-# The zone id is resolved from ZONE_NAME at runtime and cached in KV.
+#   RATE_LIMIT_SALT  optional. Salts the hashed per-address counters.
+# The zone id is resolved from ZONE_NAME at runtime and cached.
 # Without CF_API_TOKEN the broker still answers, but every /session request
 # fails and hosts silently fall back to quick tunnels.
 #
@@ -25,8 +35,35 @@ compatibility_date = "2026-08-01"
 #                           the rest of the month (default 900; needs the
 #                           analytics scope above to take effect)
 
+# All state lives in one SQLite-backed Durable Object (free plan: 100,000
+# rows written a day, against Workers KV's 1,000).
+[[durable_objects.bindings]]
+name = "BROKER"
+class_name = "Broker"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Broker"]
+
+# Edge rate limiters, free on every plan and storage-free. Per address, and
+# one for the whole broker as a damper on how fast the daily request
+# allowance can be burned. Both count per Cloudflare location.
+[[ratelimits]]
+name = "PER_IP"
+namespace_id = "1001"
+simple = { limit = 30, period = 60 }
+
+[[ratelimits]]
+name = "GLOBAL"
+namespace_id = "1002"
+simple = { limit = 300, period = 60 }
+
+# The KV namespace the broker lived on until 2026-09-26. Read once by the
+# Durable Object to carry the table claims and live sessions over. Safe to
+# remove (binding and namespace) after every row in it has expired, which
+# is 45 days after the move.
 [[kv_namespaces]]
-binding = "SESSIONS"
+binding = "LEGACY_KV"
 id = "47fe1069128549d199527670da4b7dd5"
 
 [triggers]

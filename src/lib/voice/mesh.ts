@@ -237,9 +237,11 @@ export function meshGainsFor(campaignId: string, userId: string): Record<string,
 
 // ICE servers for the peers: Cloudflare's free STUN always, plus short-lived
 // TURN credentials when the broker has a Realtime key configured. Cached so a
-// table joining together costs one broker call, refreshed well inside the
-// credential TTL.
-const ICE_CACHE_MS = 30 * 60 * 1000;
+// table joining together costs one broker call, refreshed inside the
+// four-hour credential TTL the broker mints. Every call costs the broker
+// two of its 1,000 daily KV writes on the free tier, so an evening's table
+// should need one, not eight.
+const ICE_CACHE_MS = 3 * 60 * 60 * 1000;
 const FALLBACK_ICE: unknown[] = [
   { urls: ["stun:stun.cloudflare.com:3478", "stun:stun.l.google.com:19302"] },
 ];
@@ -251,10 +253,7 @@ export async function meshIceServers(): Promise<unknown[]> {
   }
   // "off" opts a self-hosted server out of the phone-home entirely: mesh
   // then runs on public STUN alone, which still connects most tables.
-  const broker = serverEnv(
-    "ODM_ICE_BROKER_URL",
-    "https://odm-tunnel-broker.tunnel-broker.workers.dev",
-  );
+  const broker = serverEnv("ODM_ICE_BROKER_URL", "https://broker.opendungeonmaster.com");
   if (!broker || broker === "off") {
     return FALLBACK_ICE;
   }

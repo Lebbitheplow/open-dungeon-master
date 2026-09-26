@@ -1,0 +1,488 @@
+// The tunnel broker: gives a desktop app hosting a session a pretty, stable
+// address (play-CODE.opendungeonmaster.com) instead of a random
+// trycloudflare.com name.
+//
+// This module is the whole of the broker's behaviour and runs under plain
+// Node for its tests. src/index.js is the thin Cloudflare shell around it: a
+// Worker that gates by address and forwards every request to one Durable
+// Object, whose SQLite database (src/store.js) is the store every handler
+// here reads and writes through env.SESSIONS. That store has the shape of Workers KV
+// (get/put/delete/list, values are strings, put takes expirationTtl)
+// because the broker lived on KV until 2026-09-26, when one host's
+// republish loop spent the free tier's 1,000 writes a day before lunch.
+// SQLite in a Durable Object allows 100,000 row writes a day on the same
+// free plan, is strongly consistent (the rate limits are exact now), and
+// costs nothing.
+//
+// Flow: the app POSTs /session with the local port its bundled server
+// listens on. The broker uses a scoped API token to create a remotely
+// managed Cloudflare Tunnel, points CODE.play at it, and returns the tunnel
+// token; the app runs `cloudflared tunnel run --token ...` and the world is
+// reachable. Sessions die by DELETE (the app closing) or by the hourly cron
+// after MAX_AGE_MS, so abandoned tunnels and DNS records never pile up.
+//
+// SECURITY: the API token lives in a Worker secret, scoped to Tunnel:Edit
+// and this zone's DNS:Edit only. Creation is open but rate limited per IP;
+// a session can only be torn down early with the secret returned at
+// creation (stored hashed). Codes use the invite alphabet, so a hostname
+// never collides with meaningful subdomains.
+
+const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+const CODE_LENGTH = 8;
+const MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const CREATES_PER_DAY = 20;
+const API = "https://api.cloudflare.com/client/v4";
+
+function randomCode() {
+  const bytes = crypto.getRandomValues(new Uint8Array(CODE_LENGTH));
+  let code = "";
+  for (const byte of bytes) code += CODE_ALPHABET[byte % CODE_ALPHABET.length];
+  return code;
+}
+
+export function parsePort(raw) {
+  const port = Number(raw);
+  return Number.isInteger(port) && port >= 1 && port <= 65535 ? port : null;
+}
+
+export function parseCode(raw) {
+  if (typeof raw !== "string") return null;
+  const code = raw.trim().toUpperCase();
+  return new RegExp(`^[${CODE_ALPHABET}]{${CODE_LENGTH}}$`).test(code) ? code : null;
+}
+
+async function sha256Hex(text) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function json(body, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+async function cfApi(env, method, path, body) {
+  const response = await fetch(`${API}${path}`, {
+    method,
+    headers: {
+      authorization: `Bearer ${env.CF_API_TOKEN}`,
+      ...(body !== undefined ? { "content-type": "application/json" } : {}),
+    },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok || !data || data.success === false) {
+    const detail = data?.errors?.[0]?.message || `${response.status}`;
+    throw new Error(`Cloudflare API ${method} ${path} failed: ${detail}`);
+  }
+  return data.result;
+}
+
+// The zone id is looked up once from the zone's name (the scoped token can
+// list the zone it edits) and cached forever.
+async function zoneId(env) {
+  const cached = await env.SESSIONS.get("zone-id");
+  if (cached) return cached;
+  const zones = await cfApi(env, "GET", `/zones?name=${env.ZONE_NAME}`);
+  const id = Array.isArray(zones) ? zones[0]?.id : undefined;
+  if (!id) throw new Error(`Zone ${env.ZONE_NAME} is not visible to the API token.`);
+  await env.SESSIONS.put("zone-id", id);
+  return id;
+}
+
+// The per-address counters are keyed by a salted SHA-256 of the address, so
+// the store never holds a caller's IP. RATE_LIMIT_SALT is a Worker secret
+// (wrangler secret put RATE_LIMIT_SALT); the counters still work without it,
+// unsalted, which is the only fallback that keeps abuse limits on.
+async function rateLimited(env, ip, kind = "ip", cap = CREATES_PER_DAY) {
+  const subject = await sha256Hex(`${env.RATE_LIMIT_SALT || ""}:${ip}`);
+  const key = `${kind}:${subject.slice(0, 32)}:${new Date().toISOString().slice(0, 10)}`;
+  const used = Number((await env.SESSIONS.get(key)) || "0");
+  if (used >= cap) return true;
+  await env.SESSIONS.put(key, String(used + 1), { expirationTtl: 86_400 });
+  return false;
+}
+
+// ---------- the table registry ----------
+//
+// A table's code is the only code a player ever types. It is the campaign's
+// own invite code, which never changes, while the address its host answers
+// at changes with every share session. This registry is the join between
+// the two: the host's app writes "table EFGH6789 is at <url> right now"
+// whenever it goes online, and a joining app reads it back. That is what
+// lets one short code survive a new tunnel, and what keeps a player's
+// server list from filling with dead addresses.
+//
+// A code is claimed on first write with a secret the claiming app keeps, so
+// nobody else can point someone's table at their own server. The entry
+// holds a URL and a hash, never a campaign, a name or anything about who
+// plays there.
+const TABLE_TTL_S = 45 * 86_400;
+const TABLE_REFRESH_MS = 86_400 * 1000;
+const TABLE_CLAIMS_PER_DAY = 60;
+const TABLE_CODE_SHAPE = /^[A-HJ-NP-Z2-9]{4,12}$/;
+
+export function parseTableCode(raw) {
+  if (typeof raw !== "string") return null;
+  const code = raw.trim().toUpperCase();
+  return TABLE_CODE_SHAPE.test(code) ? code : null;
+}
+
+export function parseTableUrl(raw) {
+  if (typeof raw !== "string" || raw.length > 300) return null;
+  let url;
+  try {
+    url = new URL(raw.trim());
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+  if (url.username || url.password) return null;
+  return url.origin;
+}
+
+async function readTable(env, code) {
+  const raw = await env.SESSIONS.get(`table:${code}`);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+async function putTable(env, request, rawCode) {
+  const code = parseTableCode(rawCode);
+  if (!code) return json({ error: "Bad table code." }, 400);
+  const secret = request.headers.get("x-table-secret") || "";
+  if (secret.length < 16 || secret.length > 128) {
+    return json({ error: "Bad table secret." }, 400);
+  }
+  const body = await request.json().catch(() => ({}));
+  const url = parseTableUrl(body?.url);
+  if (!url) return json({ error: "Send the address the table is reachable at." }, 400);
+  const secretHash = await sha256Hex(secret);
+  const existing = await readTable(env, code);
+  if (existing && existing.secretHash !== secretHash) {
+    return json({ error: "That table code is claimed by another host." }, 409);
+  }
+  if (!existing) {
+    const ip = request.headers.get("cf-connecting-ip") || "unknown";
+    if (await rateLimited(env, ip, "table", TABLE_CLAIMS_PER_DAY)) {
+      return json({ error: "Too many tables claimed today. Try again tomorrow." }, 429);
+    }
+  }
+  // Hosts re-send their codes every minute for as long as they share, so
+  // a PUT that changes nothing is answered from the read alone. Writes are
+  // the scarce operation on any free storage (on KV one host with seven
+  // campaigns spent the whole day's 1,000 in under three hours; SQLite
+  // rows are a hundred times more plentiful but still counted). The row is
+  // rewritten only when the address moves or its 45-day expiry has aged a
+  // day, which keeps a permanently shared table alive at one write per
+  // day per code.
+  const now = Date.now();
+  const fresh =
+    existing &&
+    existing.url === url &&
+    typeof existing.at === "number" &&
+    now - existing.at < TABLE_REFRESH_MS;
+  if (fresh) return json({ code, url });
+  await env.SESSIONS.put(`table:${code}`, JSON.stringify({ url, secretHash, at: now }), {
+    expirationTtl: TABLE_TTL_S,
+  });
+  return json({ code, url });
+}
+
+// Where a table is right now. Public on purpose: knowing a code is what an
+// invite is, and reaching the host still takes an account there.
+async function getTable(env, rawCode) {
+  const code = parseTableCode(rawCode);
+  if (!code) return json({ error: "Bad table code." }, 400);
+  const entry = await readTable(env, code);
+  if (!entry?.url) return json({ error: "No table is online with that code." }, 404);
+  return json({ code, url: entry.url });
+}
+
+// Stopping the share takes the address down with it, so a friend is told
+// the table is offline rather than sent to a dead address. The claim
+// survives: the same secret re-points it next session. (It used to be
+// deleted outright, which left the code free for anyone to claim between
+// sessions and locked the real host out with a 409 the next evening.)
+// Same request and reply shape as before; only the stored row changes.
+async function dropTable(env, request, rawCode) {
+  const code = parseTableCode(rawCode);
+  if (!code) return json({ error: "Bad table code." }, 400);
+  const entry = await readTable(env, code);
+  if (!entry) return json({ code, dropped: true });
+  const secretHash = await sha256Hex(request.headers.get("x-table-secret") || "");
+  if (entry.secretHash !== secretHash) {
+    return json({ error: "That table code is claimed by another host." }, 409);
+  }
+  // Both shells drop on stop and again on quit; the second is free.
+  if (!entry.url) return json({ code, dropped: true });
+  await env.SESSIONS.put(`table:${code}`, JSON.stringify({ url: "", secretHash, at: Date.now() }), {
+    expirationTtl: TABLE_TTL_S,
+  });
+  return json({ code, dropped: true });
+}
+
+function monthKey() {
+  return new Date().toISOString().slice(0, 7);
+}
+
+// Global monthly budget on TURN credential mints: a backstop that works
+// even when the API token cannot read analytics. Exact now that the store
+// is a single Durable Object; a runaway client or abuse wave hits it fast.
+async function turnMintBudgetExceeded(env) {
+  const cap = Number(env.TURN_MONTHLY_MINT_CAP || "5000");
+  const key = `turn-month:${monthKey()}`;
+  const used = Number((await env.SESSIONS.get(key)) || "0");
+  if (used >= cap) return true;
+  await env.SESSIONS.put(key, String(used + 1), { expirationTtl: 35 * 86_400 });
+  return false;
+}
+
+// ICE servers for mesh voice. Every response carries Cloudflare's free STUN;
+// when a Realtime TURN key is configured (secrets TURN_KEY_ID and
+// TURN_API_TOKEN), short-lived TURN credentials ride along so peers behind
+// hostile NATs still connect. Relay traffic bills against the Realtime free
+// tier, hence the tighter per-IP cap, the global monthly mint budget, and
+// the egress kill switch set by the hourly usage check. All degrade to
+// STUN-only: most pairs connect directly and never notice.
+async function iceServers(env, request) {
+  const stun = { urls: ["stun:stun.cloudflare.com:3478"] };
+  if (!env.TURN_KEY_ID || !env.TURN_API_TOKEN) {
+    return json({ iceServers: [stun] });
+  }
+  if (await env.SESSIONS.get(`turn-paused:${monthKey()}`)) {
+    return json({ iceServers: [stun] });
+  }
+  const ip = request.headers.get("cf-connecting-ip") || "unknown";
+  if (await rateLimited(env, ip, "turn", 50)) {
+    return json({ iceServers: [stun] });
+  }
+  if (await turnMintBudgetExceeded(env)) {
+    return json({ iceServers: [stun] });
+  }
+  const response = await fetch(
+    `https://rtc.live.cloudflare.com/v1/turn/keys/${env.TURN_KEY_ID}/credentials/generate-ice-servers`,
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${env.TURN_API_TOKEN}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ ttl: 4 * 60 * 60 }),
+    },
+  );
+  const body = await response.json().catch(() => null);
+  if (!response.ok || !Array.isArray(body?.iceServers)) {
+    return json({ iceServers: [stun] });
+  }
+  return json({ iceServers: [stun, ...body.iceServers] });
+}
+
+async function createSession(env, request) {
+  const ip = request.headers.get("cf-connecting-ip") || "unknown";
+  if (await rateLimited(env, ip)) {
+    return json({ error: "Too many sessions today. Try again tomorrow." }, 429);
+  }
+  const body = await request.json().catch(() => ({}));
+  const port = parsePort(body?.port);
+  if (!port) {
+    return json({ error: "Send the local port your server listens on." }, 400);
+  }
+
+  const code = randomCode();
+  // One label deep on purpose: the zone's free Universal SSL wildcard covers
+  // *.opendungeonmaster.com but not *.play.opendungeonmaster.com, so the
+  // prettier CODE.play form would fail every TLS handshake without a paid
+  // Advanced Certificate Manager wildcard.
+  const hostname = `play-${code.toLowerCase()}.${env.ZONE_NAME}`;
+  const secret = [...crypto.getRandomValues(new Uint8Array(24))]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+
+  const tunnel = await cfApi(env, "POST", `/accounts/${env.ACCOUNT_ID}/cfd_tunnel`, {
+    name: `odm-${code}`,
+    config_src: "cloudflare",
+  });
+  const tunnelToken = await cfApi(
+    env,
+    "GET",
+    `/accounts/${env.ACCOUNT_ID}/cfd_tunnel/${tunnel.id}/token`,
+  );
+  await cfApi(env, "PUT", `/accounts/${env.ACCOUNT_ID}/cfd_tunnel/${tunnel.id}/configurations`, {
+    config: {
+      ingress: [
+        { hostname, service: `http://127.0.0.1:${port}` },
+        { service: "http_status:404" },
+      ],
+    },
+  });
+  const record = await cfApi(env, "POST", `/zones/${await zoneId(env)}/dns_records`, {
+    type: "CNAME",
+    name: hostname,
+    content: `${tunnel.id}.cfargotunnel.com`,
+    proxied: true,
+  });
+
+  const session = {
+    tunnelId: tunnel.id,
+    dnsRecordId: record.id,
+    secretHash: await sha256Hex(secret),
+    createdAt: Date.now(),
+  };
+  try {
+    await env.SESSIONS.put(`session:${code}`, JSON.stringify(session), {
+      expirationTtl: (MAX_AGE_MS / 1000) * 2,
+    });
+  } catch (err) {
+    // A tunnel with no record would never be purged (a storage quota
+    // running out is exactly when this happens), so it goes down with the
+    // failed request rather than living on unowned.
+    await destroySession(env, code, session).catch(() => undefined);
+    throw err;
+  }
+
+  return json({ code, hostname, url: `https://${hostname}`, tunnelToken, secret });
+}
+
+async function destroySession(env, code, session) {
+  // Order matters: DNS first so the name dies even if tunnel cleanup fails.
+  const zone = await zoneId(env).catch(() => null);
+  if (zone) {
+    await cfApi(env, "DELETE", `/zones/${zone}/dns_records/${session.dnsRecordId}`).catch(
+      () => undefined,
+    );
+  }
+  await cfApi(
+    env,
+    "DELETE",
+    `/accounts/${env.ACCOUNT_ID}/cfd_tunnel/${session.tunnelId}/connections`,
+  ).catch(() => undefined);
+  await cfApi(env, "DELETE", `/accounts/${env.ACCOUNT_ID}/cfd_tunnel/${session.tunnelId}`).catch(
+    () => undefined,
+  );
+  await env.SESSIONS.delete(`session:${code}`).catch(() => undefined);
+}
+
+async function deleteSession(env, request, rawCode) {
+  const code = parseCode(rawCode);
+  if (!code) return json({ error: "Bad session code." }, 400);
+  const stored = await env.SESSIONS.get(`session:${code}`);
+  if (!stored) return json({ error: "No such session." }, 404);
+  const session = JSON.parse(stored);
+  const secret = request.headers.get("x-session-secret") || "";
+  if ((await sha256Hex(secret)) !== session.secretHash) {
+    return json({ error: "Wrong session secret." }, 403);
+  }
+  await destroySession(env, code, session);
+  return json({ ok: true });
+}
+
+async function purgeExpired(env) {
+  const list = await env.SESSIONS.list({ prefix: "session:" });
+  for (const key of list.keys) {
+    const stored = await env.SESSIONS.get(key.name);
+    if (!stored) continue;
+    const session = JSON.parse(stored);
+    if (Date.now() - session.createdAt > MAX_AGE_MS) {
+      await destroySession(env, key.name.slice("session:".length), session);
+    }
+  }
+}
+
+// Hourly egress check against the Realtime free tier (1000 GB/month across
+// SFU and TURN). When this month's TURN egress passes the budget, /turn
+// stops minting relay credentials until the month rolls over; direct and
+// STUN-assisted connections keep working. Best effort: reading analytics
+// needs Account > Account Analytics > Read on the API token, and a token
+// without it just skips the check (the mint budget still applies).
+async function checkTurnUsage(env) {
+  if (!env.TURN_KEY_ID || !env.TURN_API_TOKEN) return;
+  const budgetGb = Number(env.TURN_MONTHLY_GB_BUDGET || "900");
+  const month = monthKey();
+  try {
+    const response = await fetch(`${API}/graphql`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${env.CF_API_TOKEN}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        query: `query($account: String!, $start: Time!) {
+          viewer { accounts(filter: { accountTag: $account }) {
+            callsTurnUsageAdaptiveGroups(filter: { datetime_geq: $start }, limit: 100) {
+              sum { egressBytes }
+            }
+          } }
+        }`,
+        variables: { account: env.ACCOUNT_ID, start: `${month}-01T00:00:00Z` },
+      }),
+    });
+    const body = await response.json().catch(() => null);
+    const groups = body?.data?.viewer?.accounts?.[0]?.callsTurnUsageAdaptiveGroups;
+    if (!Array.isArray(groups)) return;
+    const egressGb =
+      groups.reduce((total, group) => total + (group?.sum?.egressBytes || 0), 0) / 1e9;
+    // Every hour of every month this used to cost a write and a delete
+    // whether or not anything had changed: 48 of the free tier's daily
+    // 1,000 writes and 1,000 deletes spent on nothing. Reads are cheap, so
+    // the row is compared first and touched only when it would differ.
+    const usage = egressGb.toFixed(2);
+    if ((await env.SESSIONS.get(`turn-usage-gb:${month}`)) !== usage) {
+      await env.SESSIONS.put(`turn-usage-gb:${month}`, usage, {
+        expirationTtl: 35 * 86_400,
+      });
+    }
+    const paused = Boolean(await env.SESSIONS.get(`turn-paused:${month}`));
+    if (egressGb >= budgetGb && !paused) {
+      await env.SESSIONS.put(`turn-paused:${month}`, "over-budget", {
+        expirationTtl: 35 * 86_400,
+      });
+    } else if (egressGb < budgetGb && paused) {
+      await env.SESSIONS.delete(`turn-paused:${month}`);
+    }
+  } catch {
+    // Analytics being unreadable must never break session cleanup.
+  }
+}
+
+const worker = {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    try {
+      if (request.method === "GET" && url.pathname === "/turn") {
+        return await iceServers(env, request);
+      }
+      if (request.method === "POST" && url.pathname === "/session") {
+        return await createSession(env, request);
+      }
+      const match = url.pathname.match(/^\/session\/([^/]+)$/);
+      if (request.method === "DELETE" && match) {
+        return await deleteSession(env, request, match[1]);
+      }
+      const table = url.pathname.match(/^\/table\/([^/]+)$/);
+      if (table) {
+        if (request.method === "PUT") return await putTable(env, request, table[1]);
+        if (request.method === "GET") return await getTable(env, table[1]);
+        if (request.method === "DELETE") return await dropTable(env, request, table[1]);
+      }
+    } catch (err) {
+      console.error(err);
+      return json({ error: "The broker hit a Cloudflare API error. Try again." }, 502);
+    }
+    return json({ error: "Not found." }, 404);
+  },
+
+  async scheduled(_event, env) {
+    await purgeExpired(env);
+    await checkTurnUsage(env);
+    if (typeof env.SESSIONS.sweep === "function") await env.SESSIONS.sweep();
+  },
+};
+
+export default worker;
