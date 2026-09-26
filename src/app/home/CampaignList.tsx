@@ -11,14 +11,15 @@ import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { ExportMenu } from "@/app/campaigns/[campaignId]/ExportMenu";
 import { slotLine, steersStory, type HomeCampaign } from "@/app/home/types";
 
-// "Your other tables": every campaign this account sits at that is not the
-// one on the title screen, laid out as save slots along the bottom edge,
-// with the same three actions the old tiles carried. Export is for anyone
-// at the table, Duplicate follows story authority, Delete is the owner's
-// alone. A dashed slot at the end forges a new world.
-export function OtherTables({
+// "Your tables": every campaign this account sits at, laid out as save
+// slots along the bottom edge, with the same three actions the old tiles
+// carried. Export is for anyone at the table, Duplicate follows story
+// authority, Delete is the owner's alone. The one on the title screen is
+// listed too, or it could never be exported, copied or deleted from home;
+// its status badge tells it apart. A dashed slot at the end forges a new
+// world.
+export function YourTables({
   campaigns,
-  continueId,
   loading,
   userId,
   cloningId,
@@ -28,7 +29,6 @@ export function OtherTables({
   onNewCampaign,
 }: {
   campaigns: HomeCampaign[];
-  continueId: string | null;
   loading: boolean;
   userId: string;
   cloningId: string;
@@ -37,13 +37,12 @@ export function OtherTables({
   onDelete: (campaign: HomeCampaign) => void;
   onNewCampaign: () => void;
 }) {
-  const others = campaigns.filter((campaign) => campaign.id !== continueId);
-  if (!loading && others.length === 0 && !actionError) {
+  if (!loading && campaigns.length === 0 && !actionError) {
     return null;
   }
   return (
-    <section className="ts-slots ts-reveal" style={{ animationDelay: "900ms" }} aria-label="Your other tables">
-      <h2 className="ts-slots-eyebrow">{others.length === 1 ? "Your other table" : "Your other tables"}</h2>
+    <section className="ts-slots ts-reveal" style={{ animationDelay: "900ms" }} aria-label="Your tables">
+      <h2 className="ts-slots-eyebrow">{campaigns.length === 1 ? "Your table" : "Your tables"}</h2>
       {actionError ? <p className="motion-shake ts-error">{actionError}</p> : null}
       {loading ? (
         <div className="ts-slot-row" aria-busy="true">
@@ -52,7 +51,7 @@ export function OtherTables({
         </div>
       ) : (
         <ul className="ts-slot-row">
-          {others.map((campaign) => (
+          {campaigns.map((campaign) => (
             <li key={campaign.id} className="ts-slot-cell">
               <SaveSlot
                 campaign={campaign}

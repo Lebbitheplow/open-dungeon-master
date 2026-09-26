@@ -13,7 +13,7 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { HowToPlayDialog } from "@/components/HowToPlayDialog";
 import { Tooltip } from "@/components/ui/Tooltip";
 import type { WorkshopSummary } from "@/app/workshop/types";
-import { OtherTables } from "@/app/home/CampaignList";
+import { YourTables } from "@/app/home/CampaignList";
 import { ContinueHero, EmptyHero, FailedHero, LoadingHero, RecapPanel, ScreenBackdrop } from "@/app/home/ContinueHero";
 import { HomeFooter } from "@/app/home/HomeFooter";
 import { JoinCard } from "@/app/home/JoinCard";
@@ -37,7 +37,7 @@ function requestedWizard(): "campaign" | "solo" | null {
 
 // The home is a title screen (docs: "ODM World Concepts", round 3a): the
 // table you were last at fills the screen behind a Continue, the menu runs
-// down the left like a game's main menu, the recap and the other tables sit
+// down the left like a game's main menu, the recap and your tables sit
 // as raised night panels, and the bench, the sigil and the small print wait
 // below the fold. Everything the old dashboard offered is still here; only
 // the composition changed.
@@ -239,9 +239,8 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
           </div>
           <div className="ts-stage-right">
             {continueCampaign ? <RecapPanel campaign={continueCampaign} /> : null}
-            <OtherTables
+            <YourTables
               campaigns={campaigns}
-              continueId={continueCampaign?.id ?? null}
               loading={loading}
               userId={user.id}
               cloningId={cloningId}
