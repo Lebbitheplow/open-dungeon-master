@@ -91,16 +91,20 @@ export function campaignFilePaths(campaignId: string): string[] {
   return [...found];
 }
 
-// Every file path any text column anywhere still names: not only the
+// The candidates some text column anywhere still names: not only the
 // picture columns, but prose, settings and anything added later, so a file
 // kept alive by some row this module never heard of is still kept. One pass
 // per column, narrowed by LIKE to the rows that mention a path at all.
-function referencedFiles(): Set<string> {
+//
+// A plain substring test, not filePathsIn: keeping is the side to err on,
+// so a path at the end of a sentence ("/uploads/x.png.") or inside a full
+// address ("https://host/uploads/x.png") still counts as a use.
+function stillNamed(candidates: string[]): Set<string> {
   const db = getDatabase();
   const tables = db
     .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`)
     .all() as Array<{ name: string }>;
-  const found = new Set<string>();
+  const named = new Set<string>();
   for (const { name: table } of tables) {
     const info = db.prepare(`PRAGMA table_info("${table}")`).all() as Array<{ name: string; type: string }>;
     for (const { name: column, type } of info) {
@@ -114,13 +118,21 @@ function referencedFiles(): Set<string> {
         )
         .all() as Array<{ value: unknown }>;
       for (const { value } of rows) {
-        for (const url of filePathsIn(value)) {
-          found.add(url);
+        if (typeof value !== "string") {
+          continue;
         }
+        for (const url of candidates) {
+          if (!named.has(url) && value.includes(url)) {
+            named.add(url);
+          }
+        }
+      }
+      if (named.size === candidates.length) {
+        return named;
       }
     }
   }
-  return found;
+  return named;
 }
 
 // The original plus the WebP copies written beside a picture
@@ -149,10 +161,10 @@ export function removeUnreferencedFiles(urls: Iterable<string>): string[] {
   if (candidates.length === 0) {
     return [];
   }
-  const referenced = referencedFiles();
+  const named = stillNamed(candidates);
   const removed: string[] = [];
   for (const url of candidates) {
-    if (!referenced.has(url)) {
+    if (!named.has(url)) {
       removeFile(url);
       removed.push(url);
     }

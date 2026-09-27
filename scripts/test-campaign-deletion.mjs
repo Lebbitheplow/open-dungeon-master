@@ -113,6 +113,25 @@ db.prepare(
    VALUES ('m9', ?, 1, 'player', ?, 'Same map as before: /generated/1700000000001-openai-a-map.webp', ?)`,
 ).run(kept.id, alice.id, now);
 
+// Two more of the doomed table's pictures the other table names in shapes
+// the path finder does not pick out: a full address, and a path that ends
+// a sentence. A use is a use, so both stay.
+write("uploads", "linked-by-address.png");
+write("generated", "1700000000002-openai-a-gate.png");
+db.prepare(
+  `INSERT INTO campaign_messages (id, campaign_id, seq, author_type, user_id, content, generated_image_json, image_request_json, created_at)
+   VALUES ('m4', ?, 4, 'dm', NULL, 'Two more.', ?, ?, ?)`,
+).run(
+  doomed.id,
+  JSON.stringify({ url: "/generated/1700000000002-openai-a-gate.png" }),
+  JSON.stringify({ url: "/uploads/linked-by-address.png" }),
+  now,
+);
+db.prepare(
+  `INSERT INTO campaign_messages (id, campaign_id, seq, author_type, user_id, content, created_at)
+   VALUES ('m10', ?, 2, 'player', ?, 'See https://example.org/uploads/linked-by-address.png and /generated/1700000000002-openai-a-gate.png.', ?)`,
+).run(kept.id, alice.id, now);
+
 // Something outside the folders a crafted path would aim at.
 write("secret.png");
 
@@ -143,8 +162,10 @@ test("a campaign's files are gathered from its own row and its keyed rows", () =
     [
       "/generated/1700000000000-42-comfyui-a-cave.png",
       "/generated/1700000000001-openai-a-map.webp",
+      "/generated/1700000000002-openai-a-gate.png",
       "/uploads/doomed-cover.webp",
       "/uploads/library-portrait.jpg",
+      "/uploads/linked-by-address.png",
       "/uploads/shared-cover.png",
     ].sort(),
   );
@@ -167,6 +188,9 @@ test("art another row still names stays, and so does the other table", () => {
   assert.equal(exists("uploads", "library-portrait.jpg"), true);
   // Named only in the prose of the other table's message: still kept.
   assert.equal(exists("generated", "1700000000001-openai-a-map.webp"), true);
+  // Named by a full address, and at the end of a sentence: still kept.
+  assert.equal(exists("uploads", "linked-by-address.png"), true);
+  assert.equal(exists("generated", "1700000000002-openai-a-gate.png"), true);
   assert.equal(exists("generated-audio", kept.id, "m9.mp3"), true);
   assert.ok(getCampaignById(kept.id));
 });
