@@ -131,6 +131,10 @@ export function useBuilderState({
   );
   const [racialCantrip, setRacialCantrip] = useState(initial?.racialChoices?.cantrip ?? "");
   const [racialTool, setRacialTool] = useState(initial?.racialChoices?.tool ?? "");
+  // A content-pack background's skill pick, stored the same way.
+  const [backgroundSkills, setBackgroundSkills] = useState<string[]>(
+    initial?.backgroundChoices?.skills ?? [],
+  );
   // Prefixed feature names, e.g. "Invocation: Agonizing Blast".
   const [optionPicks, setOptionPicks] = useState<string[]>(() =>
     (initial?.features ?? [])
@@ -162,7 +166,7 @@ export function useBuilderState({
   // (reconcile.ts). Read from the render's values: every caller is an event
   // handler or an effect of this render.
   const picks: BuilderPicks = {
-    chosenSkills, racialSkills, racialAsi, racialCantrip, racialTool, bonusLanguages,
+    chosenSkills, racialSkills, racialAsi, racialCantrip, racialTool, backgroundSkills, bonusLanguages,
     subclass, expertisePicks, stylePicks, optionPicks, spells, bookPrepared, cantrips,
   };
   function applyPicks(next: BuilderPicks) {
@@ -171,6 +175,7 @@ export function useBuilderState({
     setRacialAsi(next.racialAsi);
     setRacialCantrip(next.racialCantrip);
     setRacialTool(next.racialTool);
+    setBackgroundSkills(next.backgroundSkills);
     setBonusLanguages(next.bonusLanguages);
     setSubclass(next.subclass);
     setExpertisePicks(next.expertisePicks);
@@ -188,12 +193,17 @@ export function useBuilderState({
   // background's language slots would be trimmed away by the next change.
   function reconciled(next: Partial<Selection>, current: BuilderPicks): BuilderPicks {
     const ids = { ...selection, ...next };
-    return reconcilePicks(current, {
+    const background = backgrounds.find((entry) => entry.id === ids.backgroundId);
+    const picks = reconcilePicks(current, {
       race: findRace(races, ids.raceId) ?? races[0],
       klass: classes.find((entry) => entry.id === ids.classId) ?? classes[0],
-      background: backgrounds.find((entry) => entry.id === ids.backgroundId) ?? backgrounds[0],
+      background: background ?? backgrounds[0],
       level: fixedLevel ?? ids.level,
     }).picks;
+    // A stored content-pack background is not in the bundled list the
+    // builder opens with; its skill pick waits for the pack's rows rather
+    // than being checked against the stand-in and lost.
+    return ids.backgroundId && !background ? { ...picks, backgroundSkills: current.backgroundSkills } : picks;
   }
 
   // Prefill pieces that need the async option lists: base ability scores
@@ -231,16 +241,22 @@ export function useBuilderState({
       const keys = Object.keys(base) as Ability[];
       setRollPool(keys.map((key) => ({ total: base[key], roll: null })));
       setRollSlots(Object.fromEntries(keys.map((key, index) => [key, index])) as PoolSlots<Ability>);
-      // Skills granted by background or race are not class picks; the racial
-      // ones are restored from racialChoices instead.
+      // Skills granted by background or race are not class picks; the chosen
+      // ones are restored from racialChoices and backgroundChoices instead.
       const grantedSkills = new Set([
         ...(initialBackground?.skills ?? []),
         ...(initialRace?.skills ?? []),
         ...(initial.racialChoices?.skills ?? []),
+        ...(initial.backgroundChoices?.skills ?? []),
       ]);
       const initialClass = classes.find((entry) => entry.id === initial.class);
-      // A class's own tongue (Druidic, Thieves' Cant) is not a pick either.
-      const spoken = new Set([...(initialRace?.languages ?? []), ...(initialClass?.languages ?? [])]);
+      // A class's own tongue (Druidic, Thieves' Cant) is not a pick either,
+      // nor one the background names.
+      const spoken = new Set([
+        ...(initialRace?.languages ?? []),
+        ...(initialClass?.languages ?? []),
+        ...(initialBackground?.knownLanguages ?? []),
+      ]);
       applyPicks(
         reconciled(ids, {
           ...picks,
@@ -295,9 +311,10 @@ export function useBuilderState({
   // A background, subclass or level change keeps every pick that still
   // fits and drops the rest: an acolyte's second language under a criminal,
   // Battle Master maneuvers under a Champion, a 3rd-level spell at level 1.
+  // The background's own skill pick belongs to the old background.
   function changeBackground(id: string) {
     setBackgroundId(id);
-    applyPicks(reconciled({ backgroundId: id }, picks));
+    applyPicks(reconciled({ backgroundId: id }, { ...picks, backgroundSkills: [] }));
   }
   function changeSubclass(name: string) {
     applyPicks(reconciled({}, { ...picks, subclass: name }));
@@ -350,6 +367,7 @@ export function useBuilderState({
     racialSkills, setRacialSkills,
     racialCantrip, setRacialCantrip,
     racialTool, setRacialTool,
+    backgroundSkills, setBackgroundSkills,
     optionPicks, setOptionPicks,
     spellWarningAck, setSpellWarningAck,
     backstory, setBackstory,

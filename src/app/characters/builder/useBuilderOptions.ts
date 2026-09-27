@@ -1,14 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { classMechanics, type ClassMechanics, type RaceMechanics } from "@/lib/content/mechanics";
+import {
+  backgroundMechanics,
+  classMechanics,
+  type ClassMechanics,
+  type RaceMechanics,
+} from "@/lib/content/mechanics";
 import { packRaceOptions } from "@/lib/content/race-options";
 import { SRD_BACKGROUNDS, SRD_CLASSES, SRD_RACES } from "@/lib/srd";
 import { CUSTOM_BACKGROUNDS } from "@/lib/backgrounds";
 import { CUSTOM_CLASSES } from "@/lib/classes";
 import type { Genre } from "@/lib/schemas/game-settings";
 import type { WorldPack } from "@/lib/worlds/types";
-import { skillsInText } from "@/lib/content/mechanics";
 
 export type RaceOption = { id: string; name: string; note: string } & RaceMechanics;
 export type ClassOption = { id: string; name: string } & ClassMechanics & {
@@ -27,9 +31,14 @@ export type BackgroundOption = {
   id: string;
   name: string;
   skills: string[];
-  // Grants beyond skills. Open5e pack rows leave these undefined.
+  // A pick of skills on top of the fixed ones (a pack artisan's "either
+  // Insight or History").
+  skillChoice?: { count: number; from: string[] };
+  // Grants beyond skills.
   tools?: string[];
   languages?: number;
+  // Languages the background names outright (a pack forest dweller's Sylvan).
+  knownLanguages?: string[];
   equipment?: string[];
   // Catalog-only extras; absent on Open5e rows.
   genres?: Genre[];
@@ -51,6 +60,7 @@ type ContentRow = {
   slug: string;
   name: string;
   source: string;
+  documentSlug: string;
   data: Record<string, unknown>;
 };
 
@@ -63,6 +73,8 @@ export function srdRaceOptions(): RaceOption[] {
     languages: race.languages,
     bonusLanguages: race.bonusLanguages ?? 0,
     traitsSummary: race.traits.join(" · "),
+    traitNames: race.traits,
+    choiceTraitNames: [],
     skills: race.skills,
     skillChoice: race.skillChoice,
     asiChoice: race.asiChoice,
@@ -151,8 +163,8 @@ export function srdBackgroundOptions(): BackgroundOption[] {
 // replacing it. A pack row for a background the bundled SRD already carries
 // (the wotc-srd acolyte, a third-party charlatan under the same slug) gives
 // way to the bundled one, which is what grants the tools, languages, kit
-// and feature; the pack's other backgrounds join after it with the write-up
-// and feature text their rows carry.
+// and feature; the pack's other backgrounds join after it with the write-up,
+// feature text and grants their rows carry.
 export function mergedBackgroundOptions(rows: ContentRow[]): BackgroundOption[] {
   const bundled = srdBackgroundOptions();
   const bundledIds = new Set(bundled.map((option) => option.id));
@@ -164,7 +176,7 @@ export function mergedBackgroundOptions(rows: ContentRow[]): BackgroundOption[] 
       return {
         id: row.slug,
         name: row.name,
-        skills: skillsInText(row.data.skill_proficiencies),
+        ...backgroundMechanics(row.data),
         desc: String(row.data?.desc ?? ""),
         ...(feature ? { feature } : {}),
         ...(featureDesc ? { featureDesc } : {}),

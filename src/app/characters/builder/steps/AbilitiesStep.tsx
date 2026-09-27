@@ -1,6 +1,7 @@
 "use client";
 
 import type { Ability } from "@/lib/schemas/sheet";
+import { hpBonusPerLevel } from "@/lib/srd/race-id";
 import AbilityEditor from "../AbilityEditor";
 import type { HpExplainerInput } from "../AbilityExplainers";
 import AsiFeatEditor from "../AsiFeatEditor";
@@ -9,8 +10,8 @@ import type { BuilderDerived } from "../useBuilderDerived";
 import type { BuilderState } from "../useBuilderState";
 
 // What the health explainer works from, shared with the Max HP field on the
-// last step. Null until the class and all six scores are known. The lineage
-// bonus mirrors suggestedStartingHp, which is what fills the Max HP field.
+// last step. Null until the class and all six scores are known. The Max HP
+// field is computed by the same hpBreakdown (useBuilderDerived.ts).
 export function hpExplainerInput(
   state: BuilderState,
   derived: BuilderDerived,
@@ -25,7 +26,7 @@ export function hpExplainerInput(
     hitDie: klass.hitDie,
     con: derived.abilities.con,
     level: derived.effectiveLevel,
-    bonusPerLevel: race?.id === "hill_dwarf" ? 1 : 0,
+    bonusPerLevel: race ? hpBonusPerLevel(race.id) : 0,
     override: state.hpOverride,
   };
 }
