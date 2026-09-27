@@ -22,10 +22,12 @@ export type RaceMechanics = {
   choiceTraitNames: string[];
   // Structured grants. Bundled SRD rows fill these in; Open5e pack rows
   // leave them undefined rather than guess from trait prose, except
-  // asiChoice, which they state outright as "Any" ability entries.
+  // asiChoice, which they state outright as "Any" ability entries or as an
+  // either-or sentence ("Your Strength or Dexterity score increases by 1"),
+  // a pick `from` those two.
   skills?: string[];
   skillChoice?: { count: number };
-  asiChoice?: { count: number; amount: number };
+  asiChoice?: { count: number; amount: number; from?: Ability[] };
   cantripChoice?: { list: string; count: number };
   tools?: string[];
   toolChoice?: { count: number; from: string[] };
@@ -275,6 +277,23 @@ export function raceMechanics(data: Record<string, unknown>): RaceMechanics {
     const other = /\b(one|two) other ability scores? of your choice increases? by (\d)/i.exec(String(data.asi_desc));
     if (!asiChoice && other) {
       asiChoice = { count: COUNT_WORDS[other[1].toLowerCase()], amount: Number(other[2]) };
+    }
+    // An either-or increase ("Your Strength or Dexterity score increases by
+    // 1", erina's "either your Wisdom or Charisma score by 1") is one pick
+    // from the two named abilities. Delver's row also lists both as fixed
+    // +1s; those come off, or the choice would be counted twice.
+    const either = /\b(?:your|either your)\s+(\w+) or (\w+) scores?(?: increases?)? by (\d)/i.exec(String(data.asi_desc));
+    const eitherFrom = either
+      ? [ABILITY_BY_NAME[normalizeText(either[1])], ABILITY_BY_NAME[normalizeText(either[2])]].filter(Boolean)
+      : [];
+    if (!asiChoice && eitherFrom.length === 2) {
+      const amount = Number(either![3]);
+      for (const ability of eitherFrom) {
+        if (asi[ability] === amount) {
+          delete asi[ability];
+        }
+      }
+      asiChoice = { count: 1, amount, from: eitherFrom };
     }
   } else if (data.asi && typeof data.asi === "object") {
     // The expanded pack writes the bumps as a plain map, {"con":2,"wis":1},

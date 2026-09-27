@@ -238,4 +238,12 @@ test("a pack race's 'Any' increases follow the existing pick rule", () => {
   assert.deepEqual(dwarfChassis.picks.racialAsi, ["", "wis"]);
 });
 
+test("an either-or racial increase takes one of its two abilities only", () => {
+  const context = { race: packRace("delver"), klass: klass("fighter"), background: background("soldier"), level: 1 };
+  assert.deepEqual(reconcilePicks({ ...empty, racialAsi: ["dex"] }, context).picks.racialAsi, ["dex"]);
+  // Constitution is neither Strength nor Dexterity; Intelligence the delver already raises.
+  assert.deepEqual(reconcilePicks({ ...empty, racialAsi: ["con"] }, context).picks.racialAsi, [""]);
+  assert.deepEqual(reconcilePicks({ ...empty, racialAsi: ["int"] }, context).picks.racialAsi, [""]);
+});
+
 console.log(`\ntest-builder-reconcile: ${passed} tests passed.`);

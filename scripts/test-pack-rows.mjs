@@ -276,4 +276,26 @@ test("a pack-only race saves its trait names, and a level-up regrant keeps them"
   assert.deepEqual(names, racialTraitsFor("hill_dwarf").map((feature) => feature.name));
 });
 
+test("an either-or increase is one pick from its two abilities, not both or neither", () => {
+  // Delver's row lists Strength +1 and Dexterity +1 under "Your Strength or
+  // Dexterity score increases by 1"; erina's lists nothing under "either your
+  // Wisdom or Charisma score by 1".
+  const delver = race("delver");
+  assert.deepEqual(delver.asi, { int: 2 });
+  assert.deepEqual(delver.asiChoice, { count: 1, amount: 1, from: ["str", "dex"] });
+  const erina = race("erina");
+  assert.deepEqual(erina.asi, { dex: 2 });
+  assert.deepEqual(erina.asiChoice, { count: 1, amount: 1, from: ["wis", "cha"] });
+});
+
+test("a race an edit needs stays an option even when its rules ask for a subrace", () => {
+  // A character saved on the bare Dwarf before its subraces stood alone.
+  const kept = packRaceOptions(rows.races, ["dwarf"]);
+  const dwarf = kept.find((option) => option.id === "dwarf");
+  assert.ok(dwarf);
+  assert.deepEqual(dwarf.asi, { con: 2 });
+  assert.equal(dwarf.speed, 25);
+  assert.ok(!kept.some((option) => option.id === "elf"));
+});
+
 console.log(`\ntest-pack-rows: ${passed} tests passed.`);

@@ -7,6 +7,8 @@ import { BaseSequencer, type TestSpecification } from "vitest/node";
 // Vitest suites: a file passes when its top level finishes without throwing,
 // exactly as when each ran in its own node process, so they still run with
 // `node scripts/<name>.mjs` too.
+// A failure is a throw or a process.exit(1) (which Vitest turns into an
+// error); a bare process.exitCode = 1 passes unseen.
 
 // Files in name order, as npm test always ran them. Vitest's default runs the
 // slowest and last-failed first, which makes two runs' logs hard to compare.

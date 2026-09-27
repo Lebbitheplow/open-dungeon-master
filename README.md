@@ -368,6 +368,8 @@ npm run coverage    # the same, plus a code coverage report in coverage/index.ht
 Each test script is a plain Node program, so `node scripts/test-<name>.mjs` runs one
 on its own. Code coverage counts the `.ts` files under `src/`; `.tsx` is left out,
 since the scripts render no UI. It shows which code ran, not what a test checked.
+A script reports a failure by throwing or by calling `process.exit(1)`; setting
+`process.exitCode` on its own is not seen by the runner.
 
 ## Run with Docker
 

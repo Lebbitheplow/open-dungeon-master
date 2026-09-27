@@ -144,8 +144,14 @@ export function reconcilePicks(
       .filter(([, bonus]) => (bonus ?? 0) !== 0)
       .map(([ability]) => ability),
   );
+  // An either-or increase (delver's Strength or Dexterity) only from its two.
+  const asiFrom = race?.asiChoice?.from;
   const racialAsi = race?.asiChoice
-    ? slotted(picks.racialAsi, race.asiChoice.count, (ability) => !fixedAsi.has(ability))
+    ? slotted(
+        picks.racialAsi,
+        race.asiChoice.count,
+        (ability) => !fixedAsi.has(ability) && (!asiFrom || asiFrom.includes(ability as Ability)),
+      )
     : [];
   note("racial ability bump", picks.racialAsi, racialAsi);
 

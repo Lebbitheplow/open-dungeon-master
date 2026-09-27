@@ -15,7 +15,8 @@ import { srdRaceId } from "@/lib/srd/race-id";
 //   that only shares a slug (Tome of Heroes' drow) is its own race.
 // - Anything else is parsed from the pack's prose.
 // - A parent whose rules require a subrace (the SRD's Dwarf, a gearforged
-//   without its chassis) is not an option itself; its subraces are.
+//   without its chassis) is not an option itself; its subraces are, unless a
+//   stored character already sits on the parent (`keepIds`).
 
 // Content-pack slugs are kebab-case and the pack's own copies of SRD rows
 // carry an "odm-" prefix; the bundled ids are snake_case.
@@ -83,7 +84,13 @@ function withParent(
     }
   }
   // A gearforged's two picks and its human chassis's one are three picks.
-  if (sub.asiChoice && parent.asiChoice && sub.asiChoice.amount === parent.asiChoice.amount) {
+  if (
+    sub.asiChoice &&
+    parent.asiChoice &&
+    sub.asiChoice.amount === parent.asiChoice.amount &&
+    !sub.asiChoice.from &&
+    !parent.asiChoice.from
+  ) {
     merged.asiChoice = { count: sub.asiChoice.count + parent.asiChoice.count, amount: sub.asiChoice.amount };
   }
   return merged;
@@ -107,7 +114,11 @@ function withSrd(parsed: RaceMechanics, srd: SrdRace): RaceMechanics {
   return merged;
 }
 
-export function packRaceOptions(rows: RaceRow[]): PackRaceOption[] {
+// `keepIds` are rows offered even though their rules ask for a subrace: a
+// character saved on a bare Dwarf before its subraces stood alone keeps its
+// race in an edit instead of falling to the list's first row.
+export function packRaceOptions(rows: RaceRow[], keepIds: Iterable<string> = []): PackRaceOption[] {
+  const kept = new Set(keepIds);
   const bySlug = new Map(rows.map((row) => [row.slug, row]));
   const parsed = new Map<string, RaceMechanics>();
   const mechanicsFor = (row: RaceRow): RaceMechanics => {
@@ -120,6 +131,7 @@ export function packRaceOptions(rows: RaceRow[]): PackRaceOption[] {
   };
   const parentSlugs = new Set(rows.map((row) => String(row.data.parent_slug ?? "")));
   const needsSubrace = (row: RaceRow) =>
+    !kept.has(row.slug) &&
     parentSlugs.has(row.slug) && (row.documentSlug === "wotc-srd" || mechanicsFor(row).choiceTraitNames.length > 0);
   return rows.filter((row) => !needsSubrace(row)).map((row) => {
     let mechanics = mechanicsFor(row);
