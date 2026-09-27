@@ -7,15 +7,22 @@
 // could carry Battle Master maneuvers under a Champion, an acolyte's two
 // languages under a criminal, and four expertise skills at level 1 (issue #37).
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
+
+const here = path.dirname(fileURLToPath(import.meta.url));
 
 const { reconcilePicks } = await import("../src/app/characters/builder/reconcile.ts");
 const { srdRaceOptions, srdClassOptions, srdBackgroundOptions } = await import(
   "../src/app/characters/builder/useBuilderOptions.ts"
 );
 const { populateFeaturesForClasses } = await import("../src/lib/srd/features.ts");
+const { backgroundMechanics } = await import("../src/lib/content/mechanics.ts");
+const { packRaceOptions } = await import("../src/lib/content/race-options.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -170,6 +177,73 @@ test("a warlock adapted down to level 1 keeps no invocations, and at 2 keeps two
   assert.equal(one.filter((feature) => feature.name.startsWith("Invocation:")).length, 0);
   const two = populateFeaturesForClasses(stored, [{ id: "warlock", subclass: "", level: 2 }], "human");
   assert.equal(two.filter((feature) => feature.name.startsWith("Invocation:")).length, 2);
+});
+
+// Content-pack rows, verbatim (scripts/test-pack-rows.mjs holds their parsing).
+const packRows = JSON.parse(readFileSync(path.join(here, "fixtures", "open5e-pack-rows.json"), "utf8"));
+const packBackground = (slug) => {
+  const row = packRows.backgrounds.find((entry) => entry.slug === slug);
+  return { id: row.slug, name: row.name, ...backgroundMechanics(row.data) };
+};
+const packRaces = packRaceOptions(packRows.races);
+const packRace = (id) => packRaces.find((entry) => entry.id === id);
+
+test("a pack background's skill pick is held to its list, slot by slot", () => {
+  const artisan = packBackground("artisan");
+  const context = { race: race("human"), klass: klass("rogue"), background: artisan, level: 1 };
+  assert.deepEqual(reconcilePicks({ ...empty, backgroundSkills: ["insight"] }, context).picks.backgroundSkills, ["insight"]);
+  // Arcana is not one of "either Insight or History"; Persuasion is granted outright.
+  assert.deepEqual(reconcilePicks({ ...empty, backgroundSkills: ["arcana"] }, context).picks.backgroundSkills, [""]);
+  assert.deepEqual(reconcilePicks({ ...empty, backgroundSkills: ["persuasion"] }, context).picks.backgroundSkills, [""]);
+});
+
+test("a background change drops the old background's skill pick, and names it", () => {
+  const { picks, dropped } = reconcilePicks(
+    { ...empty, backgroundSkills: ["insight"] },
+    { race: race("human"), klass: klass("rogue"), background: background("criminal"), level: 1 },
+  );
+  assert.deepEqual(picks.backgroundSkills, []);
+  assert.deepEqual(dropped, ["background skill: insight"]);
+});
+
+test("a class skill the background's pick already took is dropped", () => {
+  const { picks } = reconcilePicks(
+    { ...empty, backgroundSkills: ["insight"], chosenSkills: ["insight", "perception"] },
+    { race: race("human"), klass: klass("rogue"), background: packBackground("artisan"), level: 1 },
+  );
+  assert.deepEqual(picks.chosenSkills, ["perception"]);
+  assert.deepEqual(picks.backgroundSkills, ["insight"]);
+});
+
+test("a language the background names is spoken, not a pick", () => {
+  // Forest dweller names Sylvan; a human picks one language of their own.
+  const { picks } = reconcilePicks(
+    { ...empty, bonusLanguages: ["Sylvan"] },
+    { race: race("human"), klass: klass("fighter"), background: packBackground("forest-dweller"), level: 1 },
+  );
+  assert.deepEqual(picks.bonusLanguages, [""]);
+});
+
+test("a pack race's 'Any' increases follow the existing pick rule", () => {
+  const humanChassis = reconcilePicks(
+    { ...empty, racialAsi: ["str", "str", "dex"] },
+    { race: packRace("human-chassis"), klass: klass("fighter"), background: background("soldier"), level: 1 },
+  );
+  assert.deepEqual(humanChassis.picks.racialAsi, ["str", "", "dex"]);
+  // The dwarf chassis raises Constitution itself, so it is not a pick.
+  const dwarfChassis = reconcilePicks(
+    { ...empty, racialAsi: ["con", "wis"] },
+    { race: packRace("dwarf-chassis"), klass: klass("fighter"), background: background("soldier"), level: 1 },
+  );
+  assert.deepEqual(dwarfChassis.picks.racialAsi, ["", "wis"]);
+});
+
+test("an either-or racial increase takes one of its two abilities only", () => {
+  const context = { race: packRace("delver"), klass: klass("fighter"), background: background("soldier"), level: 1 };
+  assert.deepEqual(reconcilePicks({ ...empty, racialAsi: ["dex"] }, context).picks.racialAsi, ["dex"]);
+  // Constitution is neither Strength nor Dexterity; Intelligence the delver already raises.
+  assert.deepEqual(reconcilePicks({ ...empty, racialAsi: ["con"] }, context).picks.racialAsi, [""]);
+  assert.deepEqual(reconcilePicks({ ...empty, racialAsi: ["int"] }, context).picks.racialAsi, [""]);
 });
 
 console.log(`\ntest-builder-reconcile: ${passed} tests passed.`);

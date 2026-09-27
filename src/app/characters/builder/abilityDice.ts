@@ -3,6 +3,8 @@
 // rule: which die is set aside, how long a toss lasts, which tier a total
 // lands in (docs/visual-overhaul-plan.md 7.2).
 
+import { hpBonusPerLevel } from "@/lib/srd/race-id";
+
 export type Rng = () => number;
 
 export type DieRest = { dx: string; dy: string; dr: string };
@@ -240,4 +242,11 @@ export function hpBreakdown({
     bonusPerLevel,
     total: Math.max(1, firstLevel + laterLevels),
   };
+}
+
+// The builder's Max HP: the explainer's arithmetic on the class option's own
+// hit die, so a content-pack class (which suggestedStartingHp cannot find)
+// gets its d10 and the field and the explainer never disagree.
+export function builderMaxHp(hitDie: number, raceId: string, con: number, level: number): number {
+  return hpBreakdown({ hitDie, con, level, bonusPerLevel: hpBonusPerLevel(raceId) }).total;
 }

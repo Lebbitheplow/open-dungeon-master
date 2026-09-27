@@ -21,8 +21,9 @@ import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOpti
 // content pack replaces the option rows, and once more as the sheet is built.
 //
 // Pure, so scripts/test-builder-reconcile.mjs can prove every rule without
-// React. Slot-indexed picks (the racial ability bumps and skills, bonus
-// languages) keep their positions: an invalid slot is blanked, not shifted.
+// React. Slot-indexed picks (the racial ability bumps and skills, the
+// background's skills, bonus languages) keep their positions: an invalid
+// slot is blanked, not shifted.
 
 export type BuilderPicks = {
   chosenSkills: string[];
@@ -30,6 +31,7 @@ export type BuilderPicks = {
   racialAsi: Array<Ability | "">;
   racialCantrip: string;
   racialTool: string;
+  backgroundSkills: string[];
   bonusLanguages: string[];
   subclass: string;
   expertisePicks: string[];
@@ -86,6 +88,7 @@ export function reconcilePicks(
     racialAsi: input.racialAsi ?? [],
     racialCantrip: input.racialCantrip ?? "",
     racialTool: input.racialTool ?? "",
+    backgroundSkills: input.backgroundSkills ?? [],
     bonusLanguages: input.bonusLanguages ?? [],
     subclass: input.subclass ?? "",
     expertisePicks: input.expertisePicks ?? [],
@@ -109,17 +112,30 @@ export function reconcilePicks(
   // pick that duplicates one is a wasted slot the player never sees.
   const granted = new Set([...(background?.skills ?? []), ...(race?.skills ?? [])].map(lower));
 
+  // A background's skill pick comes first: its list is the narrowest, and
+  // the class and racial picks below treat it as taken.
+  const backgroundChoice = background?.skillChoice;
+  const backgroundSkills = backgroundChoice
+    ? slotted(
+        picks.backgroundSkills,
+        backgroundChoice.count,
+        (skill) => !granted.has(lower(skill)) && backgroundChoice.from.some((entry) => lower(entry) === lower(skill)),
+      )
+    : [];
+  note("background skill", picks.backgroundSkills, backgroundSkills);
+  const backgroundPicked = new Set(backgroundSkills.filter(Boolean).map(lower));
+
   const skillChoices = klass?.skillChoices;
   const skillPool = skillChoices?.from.length ? new Set(skillChoices.from.map(lower)) : null;
   const chosenSkills = klass
-    ? unique(picks.chosenSkills.filter((skill) => !granted.has(lower(skill)) && (!skillPool || skillPool.has(lower(skill)))))
+    ? unique(picks.chosenSkills.filter((skill) => !granted.has(lower(skill)) && !backgroundPicked.has(lower(skill)) && (!skillPool || skillPool.has(lower(skill)))))
         .slice(0, skillChoices?.count ?? picks.chosenSkills.length)
     : [];
   note("class skill", picks.chosenSkills, chosenSkills);
 
   const classPicked = new Set(chosenSkills.map(lower));
   const racialSkills = race?.skillChoice
-    ? slotted(picks.racialSkills, race.skillChoice.count, (skill) => !granted.has(lower(skill)) && !classPicked.has(lower(skill)))
+    ? slotted(picks.racialSkills, race.skillChoice.count, (skill) => !granted.has(lower(skill)) && !classPicked.has(lower(skill)) && !backgroundPicked.has(lower(skill)))
     : [];
   note("racial skill", picks.racialSkills, racialSkills);
 
@@ -128,8 +144,14 @@ export function reconcilePicks(
       .filter(([, bonus]) => (bonus ?? 0) !== 0)
       .map(([ability]) => ability),
   );
+  // An either-or increase (delver's Strength or Dexterity) only from its two.
+  const asiFrom = race?.asiChoice?.from;
   const racialAsi = race?.asiChoice
-    ? slotted(picks.racialAsi, race.asiChoice.count, (ability) => !fixedAsi.has(ability))
+    ? slotted(
+        picks.racialAsi,
+        race.asiChoice.count,
+        (ability) => !fixedAsi.has(ability) && (!asiFrom || asiFrom.includes(ability as Ability)),
+      )
     : [];
   note("racial ability bump", picks.racialAsi, racialAsi);
 
@@ -141,10 +163,13 @@ export function reconcilePicks(
   const racialCantrip = race?.cantripChoice ? picks.racialCantrip : "";
   note("racial cantrip", [picks.racialCantrip], [racialCantrip]);
 
-  // Languages: never one the race or class already speaks; a slot that comes
-  // from a short list ("your choice of Common or Undercommon") only from it;
-  // no more slots than the race and background offer together.
-  const spoken = new Set([...(race?.languages ?? []), ...(klass?.languages ?? [])].map(lower));
+  // Languages: never one the race, class or background already speaks; a
+  // slot that comes from a short list ("your choice of Common or
+  // Undercommon") only from it; no more slots than the race and background
+  // offer together.
+  const spoken = new Set(
+    [...(race?.languages ?? []), ...(klass?.languages ?? []), ...(background?.knownLanguages ?? [])].map(lower),
+  );
   const choice = race?.languageChoice;
   const bonusLanguages = slotted(
     picks.bonusLanguages,
@@ -159,7 +184,7 @@ export function reconcilePicks(
   const subclass = klass && (pickLevel === null || level >= pickLevel) ? picks.subclass : "";
   note("subclass", [picks.subclass], [subclass]);
 
-  const proficient = new Set([...chosenSkills, ...racialSkills, ...granted].filter(Boolean).map(lower));
+  const proficient = new Set([...chosenSkills, ...racialSkills, ...backgroundSkills, ...granted].filter(Boolean).map(lower));
   const expertisePicks = klass
     ? unique(picks.expertisePicks.filter((skill) => proficient.has(lower(skill)))).slice(0, expertiseSlotsFor(klass.id, level))
     : [];
@@ -215,6 +240,7 @@ export function reconcilePicks(
       racialAsi,
       racialCantrip,
       racialTool,
+      backgroundSkills,
       bonusLanguages,
       subclass,
       expertisePicks,

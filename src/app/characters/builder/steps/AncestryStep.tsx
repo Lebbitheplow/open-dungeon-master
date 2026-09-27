@@ -26,6 +26,9 @@ function languageHelp(race: RaceOption, background: BackgroundOption | undefined
   if (open > 0) {
     parts.push(`${choice ? "and" : "plus"} ${open} of your choice`);
   }
+  if (background?.knownLanguages?.length) {
+    parts.push(`and ${background.knownLanguages.join(" and ")} from your ${background.name} background`);
+  }
   if (background?.languages) {
     parts.push(
       `${race.bonusLanguages > 0 ? "and" : "plus"} ${background.languages} more from your ${background.name} background`,
@@ -190,6 +193,7 @@ export function AncestryStep({
                   ).filter(
                     (language) =>
                       !race.languages.includes(language) &&
+                      !(background?.knownLanguages ?? []).includes(language) &&
                       (state.bonusLanguages[index] === language || !state.bonusLanguages.includes(language)),
                   ).map((language) => ({ value: language as string, label: language as string })),
                 ]}
@@ -205,6 +209,7 @@ export function AncestryStep({
           grantedSkills={[
             ...state.chosenSkills,
             ...(background?.skills ?? []),
+            ...state.backgroundSkills,
             ...(race.skills ?? []),
           ]}
           asi={state.racialAsi}

@@ -332,4 +332,3 @@ await test("signing a player out everywhere disconnects their agents", async () 
 server.close();
 removeTempDir(dir);
 console.log(`harness turn: ${passed} checks passed`);
-process.exit(0);

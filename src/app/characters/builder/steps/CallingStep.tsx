@@ -208,7 +208,8 @@ export function CallingStep({
           <div className="flex flex-wrap gap-2">
             {klass.skillChoices.from.map((skillId) => {
               const skill = SRD_SKILLS.find((entry) => entry.id === skillId);
-              const fromBackground = background?.skills.includes(skillId) ?? false;
+              const fromBackground =
+                (background?.skills.includes(skillId) ?? false) || state.backgroundSkills.includes(skillId);
               return (
                 <PickPill
                   key={skillId}

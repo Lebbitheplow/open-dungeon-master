@@ -64,6 +64,8 @@ export function RacialChoicesSection({
   // A half-elf's +1s go to abilities other than the one the race already
   // raises, per the SRD.
   const fixedAbilities = new Set(Object.keys(race.asi) as Ability[]);
+  // An either-or increase ("Strength or Dexterity") offers only its two.
+  const asiFrom = race.asiChoice?.from;
 
   return (
     <div className="space-y-3 rounded-lg border border-amber-900/40 bg-amber-950/10 p-3">
@@ -73,7 +75,10 @@ export function RacialChoicesSection({
         <div>
           <span className="mb-1 flex flex-wrap items-center gap-1 text-stone-400">
             <GameTerm id="ability_score">Ability</GameTerm> increases (+{race.asiChoice.amount} to{" "}
-            {race.asiChoice.count} abilities of your choice)
+            {asiFrom
+              ? asiFrom.map((ability) => ABILITY_NAMES[ability]).join(" or ")
+              : `${race.asiChoice.count} abilities of your choice`}
+            )
           </span>
           <div className="grid grid-cols-2 gap-2">
             {Array.from({ length: race.asiChoice.count }, (_, index) => (
@@ -88,7 +93,10 @@ export function RacialChoicesSection({
                     // Still a row of its own, so a pick can be taken back.
                     { value: "" as const, label: "Choose an ability..." },
                     ...ABILITIES.filter(
-                      (ability) => !fixedAbilities.has(ability) && (asi[index] === ability || !asi.includes(ability)),
+                      (ability) =>
+                        !fixedAbilities.has(ability) &&
+                        (!asiFrom || asiFrom.includes(ability)) &&
+                        (asi[index] === ability || !asi.includes(ability)),
                     ).map((ability) => ({ value: ability, label: ABILITY_NAMES[ability] })),
                   ]}
                 />

@@ -9,8 +9,8 @@ const { longRestPatch, defaultShortRestDice, hitDiceExpression, hitDicePlanExpre
 );
 
 let passed = 0;
-function test(name, fn) {
-  fn();
+async function test(name, fn) {
+  await fn();
   passed += 1;
 }
 
@@ -33,7 +33,7 @@ function makeSheet(overrides = {}) {
   };
 }
 
-test("long rest restores HP, slots, and half the hit dice", () => {
+await test("long rest restores HP, slots, and half the hit dice", () => {
   const patch = longRestPatch(makeSheet());
   assert.equal(patch.currentHp, 30);
   assert.equal(patch.tempHp, 0);
@@ -45,7 +45,7 @@ test("long rest restores HP, slots, and half the hit dice", () => {
   assert.equal(patch.spellcasting.slots["2"].used, 0);
 });
 
-test("long rest recovers at least one hit die and clears exhaustion", () => {
+await test("long rest recovers at least one hit die and clears exhaustion", () => {
   const patch = longRestPatch(
     makeSheet({
       hitDice: { die: "d6", total: 1, spent: 1 },
@@ -58,7 +58,7 @@ test("long rest recovers at least one hit die and clears exhaustion", () => {
   assert.equal(patch.spellcasting, undefined);
 });
 
-test("default short-rest spending targets half HP", () => {
+await test("default short-rest spending targets half HP", () => {
   // 10/30 HP, d8 (avg 4.5) + con 2 per die: needs 5 HP -> 1 die.
   assert.equal(defaultShortRestDice(makeSheet(), 2), 1);
   // Above half HP: nothing to spend.
@@ -80,13 +80,13 @@ test("default short-rest spending targets half HP", () => {
   );
 });
 
-test("hit-dice expressions fold the CON modifier per die", () => {
+await test("hit-dice expressions fold the CON modifier per die", () => {
   assert.equal(hitDiceExpression("d8", 2, 3), "2d8+6");
   assert.equal(hitDiceExpression("d6", 1, 0), "1d6");
   assert.equal(hitDiceExpression("d10", 2, -1), "2d10-2");
 });
 
-test("long rest reduces exhaustion by one level, not to zero", async () => {
+await test("long rest reduces exhaustion by one level, not to zero", async () => {
   const { longRestPatch } = await import("../src/lib/dm/rest-logic.ts");
   const sheet = {
     maxHp: 20,
@@ -104,7 +104,7 @@ test("long rest reduces exhaustion by one level, not to zero", async () => {
   assert.equal(rested.exhaustion, undefined);
 });
 
-test("long rest converts legacy exhaustion condition strings", async () => {
+await test("long rest converts legacy exhaustion condition strings", async () => {
   const { longRestPatch } = await import("../src/lib/dm/rest-logic.ts");
   const sheet = {
     maxHp: 20,
@@ -121,7 +121,7 @@ test("long rest converts legacy exhaustion condition strings", async () => {
   assert.deepEqual(patch.conditions, ["prone"]);
 });
 
-test("a long rest drops a wild shape form and any lingering rage", () => {
+await test("a long rest drops a wild shape form and any lingering rage", () => {
   const patch = longRestPatch(
     makeSheet({
       conditions: ["raging"],
@@ -146,35 +146,35 @@ const casterSheet = (klass, slots, resources = {}) => ({
   spellcasting: { ability: "cha", slots, prepared: [], known: [] },
 });
 
-test("only pact casters get their slots back on a short rest", () => {
+await test("only pact casters get their slots back on a short rest", () => {
   assert.equal(slotsRefillOnShortRest({ class: "warlock" }), true);
   assert.equal(slotsRefillOnShortRest({ class: "wizard" }), false);
   assert.equal(slotsRefillOnShortRest({ class: "fighter" }), false);
 });
 
-test("a warlock's pact slots refill on a short rest", () => {
+await test("a warlock's pact slots refill on a short rest", () => {
   const warlock = casterSheet("warlock", { 2: { max: 2, used: 2 } });
   const patch = shortRestResourcePatch(warlock);
   assert.deepEqual(patch.spellcasting.slots, { 2: { max: 2, used: 0 } });
 });
 
-test("a wizard's slots survive a short rest untouched", () => {
+await test("a wizard's slots survive a short rest untouched", () => {
   const wizard = casterSheet("wizard", { 1: { max: 4, used: 3 } });
   assert.equal(shortRestResourcePatch(wizard), null);
 });
 
-test("a short rest with nothing to restore writes nothing", () => {
+await test("a short rest with nothing to restore writes nothing", () => {
   const warlock = casterSheet("warlock", { 2: { max: 2, used: 0 } });
   assert.equal(shortRestResourcePatch(warlock), null);
 });
 
-test("short-recharge resources refill alongside the slots", () => {
+await test("short-recharge resources refill alongside the slots", () => {
   const monk = casterSheet("monk", {}, { ki: { max: 5, used: 5 } });
   const patch = shortRestResourcePatch(monk);
   assert.equal(patch.resources.ki.used, 0);
 });
 
-test("a long rest claws back slots created by Font of Magic", () => {
+await test("a long rest claws back slots created by Font of Magic", () => {
   // A level 3 sorcerer's table is 4/2; the bumped 2nd-level max (Font of
   // Magic) and the created 3rd-level row both vanish, spent slots refill.
   const sorcerer = makeSheet({
@@ -210,7 +210,7 @@ test("a long rest claws back slots created by Font of Magic", () => {
   assert.deepEqual(longRestPatch(custom).spellcasting.slots, { 1: { max: 6, used: 0 } });
 });
 
-test("multiclass long rest recovers per-class pools, biggest die first", () => {
+await test("multiclass long rest recovers per-class pools, biggest die first", () => {
   const sheet = makeSheet({
     hitDice: { die: "d12", total: 5, spent: 4 },
     hitDicePools: [
@@ -232,7 +232,7 @@ test("multiclass long rest recovers per-class pools, biggest die first", () => {
   assert.equal(d8.spent, 2);
 });
 
-test("multiclass warlock: short rest refills pact only, long rest clamps to the shared table", () => {
+await test("multiclass warlock: short rest refills pact only, long rest clamps to the shared table", () => {
   const sheet = makeSheet({
     class: "warlock",
     level: 4,
@@ -263,7 +263,7 @@ test("multiclass warlock: short rest refills pact only, long rest clamps to the 
   assert.deepEqual(long.spellcasting.slots, { 1: { max: 3, used: 0 } });
 });
 
-test("multiclass short-rest dice plan draws biggest die first", () => {
+await test("multiclass short-rest dice plan draws biggest die first", () => {
   const sheet = {
     hitDice: { die: "d12", total: 5, spent: 0 },
     hitDicePools: [

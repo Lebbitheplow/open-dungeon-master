@@ -271,7 +271,7 @@ and clamped by code.
 
 ## Requirements
 
-- **Node 22+** (npm). `npm install` pulls everything the app itself needs. Or
+- **Node 22.18+, 24 or 26+** (npm). `npm install` pulls everything the app itself needs. Or
   **Docker**, if you would rather not install a toolchain at all: see
   [Run with Docker](#run-with-docker).
 - **A text model backend** (one of):
@@ -357,6 +357,19 @@ For real sessions build and run the production server:
 npm run build
 npm run start:lan   # 0.0.0.0:3005
 ```
+
+### Tests
+
+```bash
+npm test            # every scripts/test-*.mjs, one at a time, failures listed at the end
+npm run coverage    # the same, plus a code coverage report in coverage/index.html
+```
+
+Each test script is a plain Node program, so `node scripts/test-<name>.mjs` runs one
+on its own. Code coverage counts the `.ts` files under `src/`; `.tsx` is left out,
+since the scripts render no UI. It shows which code ran, not what a test checked.
+A script reports a failure by throwing or by calling `process.exit(1)`; setting
+`process.exitCode` on its own is not seen by the runner.
 
 ## Run with Docker
 

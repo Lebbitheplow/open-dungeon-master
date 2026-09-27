@@ -5,6 +5,7 @@ import { CUSTOM_CLASS_FEATURES } from "@/lib/classes";
 import type { SheetFeature } from "@/lib/schemas/sheet";
 import { chosenFightingStyles, fightingStyleSlots } from "@/lib/srd/feature-effects";
 import { findOptionByFeatureName, optionSlotsFor } from "@/lib/srd/options";
+import { srdRaceId } from "@/lib/srd/race-id";
 
 export type SubclassTable = {
   name: string;
@@ -254,12 +255,8 @@ const RACES = (racesJson as { races: Array<{ id: string; traits: string[] }> }).
 // Race ids arrive as SRD ids (half_elf), content-pack slugs (half-elf) or
 // the pack's own copies of the bundled rows (odm-half-elf); all three find
 // the bundled traits.
-function normalizeRaceId(raceId: string) {
-  return raceId.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^odm_/, "");
-}
-
 export function racialTraitsFor(raceId: string): SheetFeature[] {
-  const wanted = normalizeRaceId(raceId);
+  const wanted = srdRaceId(raceId);
   const race = RACES.find((entry) => entry.id === wanted);
   if (!race) {
     return [];
@@ -292,7 +289,11 @@ export function populateFeaturesForClasses(
       })),
     );
   }
-  granted.push(...racialTraitsFor(raceId));
+  const racialTraits = racialTraitsFor(raceId);
+  granted.push(...racialTraits);
+  // A race the bundled data doesn't describe (a content-pack Catfolk) has its
+  // trait names written by the builder; they are the only copy there is.
+  const keepsRaceNames = racialTraits.length === 0;
   const grantedNames = new Set(granted.map((feature) => feature.name.toLowerCase()));
   const kept = pruneChoiceFeatures(
     existing.filter(
@@ -300,7 +301,8 @@ export function populateFeaturesForClasses(
         (feature.source === "feat" ||
           feature.source === "story" ||
           feature.source === "choice" ||
-          feature.source === "background") &&
+          feature.source === "background" ||
+          (feature.source === "race" && keepsRaceNames)) &&
         !grantedNames.has(feature.name.toLowerCase()),
     ),
     classes,
