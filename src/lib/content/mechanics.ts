@@ -15,8 +15,14 @@ export type RaceMechanics = {
   // language ("your choice of Common or Undercommon"), the list it is from.
   languageChoice?: LanguageChoice;
   traitsSummary: string;
+  // Every trait the race's text names, and those among them whose text asks
+  // the player to choose (gearforged's "Race Chassis", a subrace heading):
+  // a subrace row is that choice already made.
+  traitNames: string[];
+  choiceTraitNames: string[];
   // Structured grants. Bundled SRD rows fill these in; Open5e pack rows
-  // leave them undefined rather than guess from trait prose.
+  // leave them undefined rather than guess from trait prose, except
+  // asiChoice, which they state outright as "Any" ability entries.
   skills?: string[];
   skillChoice?: { count: number };
   asiChoice?: { count: number; amount: number };
@@ -45,7 +51,9 @@ export type LanguageGrant = {
   languageChoice?: LanguageChoice;
 };
 
-const LANGUAGE_COUNT_WORDS: Record<string, number> = { a: 1, an: 1, one: 1, two: 2, three: 3 };
+const LANGUAGE_COUNT_WORDS: Record<string, number> = {
+  a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6,
+};
 
 // Canonical casing for a name the allowlist knows; anything else is kept as
 // written, so Darakhul, Minotaur and Machine Speech survive instead of
@@ -129,6 +137,11 @@ export function parseRaceLanguages(text: string): LanguageGrant {
       return "";
     },
   );
+  // A bare count: a5e's dungeon robber knows "Any six".
+  sentence = sentence.replace(/\bany\s+(one|two|three|four|five|six)\b/gi, (_match, count: string) => {
+    bonusLanguages += LANGUAGE_COUNT_WORDS[count.toLowerCase()];
+    return "";
+  });
   sentence = sentence.replace(/^\s*You (?:can|also)?\s*(?:speak|read|write|know|understand|,|and|\s)+/i, "");
   const languages = [...new Set(languageTokens(sentence))];
   if (languageChoice) {
@@ -204,17 +217,64 @@ const COUNT_WORDS: Record<string, number> = {
   any: 3,
 };
 
+// A heading paragraph that asks the player to pick one of several options
+// the text goes on to list, or to name another race.
+const CHOICE_HEADING = /\bchoose (?:one of (?:these|the following)\b|another race\b|[^.]*\bbelow\b)/i;
+// "***Name.***" and "**_Name._**", the two ways the pack marks a trait. A
+// bulleted "* **Option.**" under one is an option of that trait, not a trait.
+const TRAIT_HEADING = /^(?:\*\*\*|\*\*_)(.+?)(?:\*\*\*|_\*\*)\s*(.*)$/;
+
+function proseTraitNames(text: string): { names: string[]; choices: string[] } {
+  const lines = text.split(/\n+/).map((line) => line.trim());
+  if (lines.some((line) => TRAIT_HEADING.test(line))) {
+    const names: string[] = [];
+    const choices: string[] = [];
+    for (const line of lines) {
+      const heading = TRAIT_HEADING.exec(line);
+      if (!heading) {
+        continue;
+      }
+      const name = heading[1].replace(/\.$/, "").trim();
+      names.push(name);
+      if (CHOICE_HEADING.test(heading[2])) {
+        choices.push(name);
+      }
+    }
+    return { names, choices };
+  }
+  // No headings: the expanded pack writes one trait per line.
+  const names = text
+    .replace(/\*\*\*|\*\*_?|_?\*\*|\*/g, "")
+    .split(/\n+/)
+    // The name ends at the first full stop that closes a sentence; the one
+    // inside "(adv. vs poison)" is an abbreviation, not an ending.
+    .map((line) => line.split(/\.(?=\s+[A-Z]|$)/)[0].trim());
+  return { names, choices: [] };
+}
+
 export function raceMechanics(data: Record<string, unknown>): RaceMechanics {
   const asi: Partial<Record<Ability, number>> = {};
+  let asiChoice: RaceMechanics["asiChoice"];
   if (Array.isArray(data.asi)) {
     for (const entry of data.asi as Array<{ attributes?: unknown; value?: unknown }>) {
       const value = Number(entry?.value ?? 0);
       for (const attribute of Array.isArray(entry?.attributes) ? entry.attributes : []) {
-        const ability = ABILITY_BY_NAME[normalizeText(attribute)];
+        const name = normalizeText(attribute);
+        const ability = ABILITY_BY_NAME[name];
         if (ability && Number.isFinite(value)) {
           asi[ability] = (asi[ability] ?? 0) + value;
+        } else if (name === "any" || name === "other") {
+          // Each "Any" entry is one ability of the player's choice
+          // (gearforged's "Two different ability scores of your choice").
+          asiChoice = { count: (asiChoice?.count ?? 0) + 1, amount: value };
         }
       }
+    }
+    // Shade writes the pick in prose only: "Your Charisma score increases by
+    // 1, and one other ability score of your choice increases by 1."
+    const other = /\b(one|two) other ability scores? of your choice increases? by (\d)/i.exec(String(data.asi_desc));
+    if (!asiChoice && other) {
+      asiChoice = { count: COUNT_WORDS[other[1].toLowerCase()], amount: Number(other[2]) };
     }
   } else if (data.asi && typeof data.asi === "object") {
     // The expanded pack writes the bumps as a plain map, {"con":2,"wis":1},
@@ -262,22 +322,17 @@ export function raceMechanics(data: Record<string, unknown>): RaceMechanics {
   const languages = grant.languages;
   const bonusLanguages = grant.bonusLanguages;
 
-  const traitsSummary = (
-    traitObjects
-      ? traitObjects
+  const prose = traitObjects
+    ? {
+        names: traitObjects
           .filter((trait) => !["SIZE", "SPEED"].includes(String(trait.type ?? "").toUpperCase()))
-          .map((trait) => String(trait.name ?? ""))
-      : String(data.traits ?? "")
-          .replace(/\*\*\*|\*\*_?|_?\*\*|\*/g, "")
-          .split(/\n+/)
-          // The name ends at the first full stop that closes a sentence; the one
-          // inside "(adv. vs poison)" is an abbreviation, not an ending.
-          .map((line) => line.split(/\.(?=\s+[A-Z]|$)/)[0].trim())
-  )
-    // A markdown table row is not a trait.
-    .filter((line) => line && !line.startsWith("|"))
-    .slice(0, 6)
-    .join(" · ");
+          .map((trait) => String(trait.name ?? "")),
+        choices: [],
+      }
+    : proseTraitNames(String(data.traits ?? ""));
+  // A markdown table row is not a trait.
+  const traitNames = prose.names.filter((line) => line && !line.startsWith("|"));
+  const traitsSummary = traitNames.slice(0, 6).join(" · ");
 
   // Structured grants ride along when the row carries them (the expanded
   // pack is generated from races.json and writes the same keys).
@@ -292,6 +347,9 @@ export function raceMechanics(data: Record<string, unknown>): RaceMechanics {
     bonusLanguages,
     ...(grant.languageChoice ? { languageChoice: grant.languageChoice } : {}),
     traitsSummary,
+    traitNames,
+    choiceTraitNames: prose.choices,
+    ...(asiChoice ? { asiChoice } : {}),
     ...structured,
   };
 }
@@ -343,19 +401,62 @@ function structuredGrants(data: Record<string, unknown>): StructuredGrants {
   return out;
 }
 
+// A proficiency string split into entries. The SRD writes "None" where a
+// class has no armor or tools; that is not a proficiency.
+function proficiencyList(value: unknown): string[] {
+  return String(value ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry && entry.toLowerCase() !== "none");
+}
+
+const V2_PROFICIENCY_FIELDS: Record<string, string> = {
+  Armor: "prof_armor",
+  Weapons: "prof_weapons",
+  Tools: "prof_tools",
+  "Saving Throws": "prof_saving_throws",
+  Skills: "prof_skills",
+};
+
+// Open5e's v2 class rows (a5e-ag's marshal, bfrd's mechanist) have no prof_*
+// fields: the same texts sit in a "Proficiencies" feature, one
+// "**Armor:** ..." line each, and are read back into the v1 fields.
+function v2ProficiencyFields(data: Record<string, unknown>): Record<string, string> {
+  const features = Array.isArray(data.features)
+    ? (data.features as Array<{ name?: unknown; desc?: unknown }>)
+    : [];
+  const text = String(features.find((feature) => feature.name === "Proficiencies")?.desc ?? "");
+  const fields: Record<string, string> = {};
+  for (const [, label, value] of text.matchAll(/\*\*([A-Za-z ]+):\*\*\s*([^\n]*)/g)) {
+    const field = V2_PROFICIENCY_FIELDS[label];
+    if (field) {
+      fields[field] = value.trim();
+    }
+  }
+  return fields;
+}
+
 const FULL_CASTERS = new Set(["bard", "cleric", "druid", "sorcerer", "wizard"]);
 const HALF_CASTERS = new Set(["paladin", "ranger"]);
 
-export function classMechanics(slug: string, data: Record<string, unknown>): ClassMechanics {
+export function classMechanics(slug: string, row: Record<string, unknown>): ClassMechanics {
+  const data = row.prof_armor === undefined ? { ...row, ...v2ProficiencyFields(row) } : row;
   const hitDieRaw = Number.parseInt(String(data.hit_dice ?? "").replace(/^\d*d/i, ""), 10);
   const hitDie = ([6, 8, 10, 12] as const).includes(hitDieRaw as 6 | 8 | 10 | 12)
     ? (hitDieRaw as 6 | 8 | 10 | 12)
     : 8;
 
   const savesText = normalizeText(data.prof_saving_throws);
-  const saves = (Object.keys(ABILITY_BY_NAME) as Array<keyof typeof ABILITY_BY_NAME>)
-    .filter((name) => savesText.includes(name))
-    .map((name) => ABILITY_BY_NAME[name]);
+  // A v2 row's structured saves win over its prose, which can disagree (the
+  // marshal's text says Wisdom and Charisma, its saving_throws Con and Wis).
+  const saves = Array.isArray(data.saving_throws)
+    ? (data.saving_throws as Array<{ name?: unknown }>).flatMap((save) => {
+        const ability = ABILITY_BY_NAME[normalizeText(save.name)];
+        return ability ? [ability] : [];
+      })
+    : (Object.keys(ABILITY_BY_NAME) as Array<keyof typeof ABILITY_BY_NAME>)
+        .filter((name) => savesText.includes(name))
+        .map((name) => ABILITY_BY_NAME[name]);
 
   const skillsText = String(data.prof_skills ?? "");
   const countMatch = /choose\s+(\w+)/i.exec(skillsText);
@@ -383,20 +484,123 @@ export function classMechanics(slug: string, data: Record<string, unknown>): Cla
     hitDie,
     saves: saves.length ? saves : ["str", "con"],
     skillChoices: { count, from: from.length ? from : [...ALL_SKILLS] },
-    armor: String(data.prof_armor ?? "")
-      .split(",")
-      .map((entry) => entry.trim())
-      .filter(Boolean),
-    weapons: String(data.prof_weapons ?? "")
-      .split(",")
-      .map((entry) => entry.trim())
-      .filter(Boolean),
-    tools: String(data.prof_tools ?? "")
-      .split(",")
-      .map((entry) => entry.trim())
-      .filter(Boolean),
+    armor: proficiencyList(data.prof_armor),
+    weapons: proficiencyList(data.prof_weapons),
+    tools: proficiencyList(data.prof_tools),
     spellAbility: spellAbility && casterType !== "none" ? spellAbility : spellAbility,
     casterType,
+  };
+}
+
+export type BackgroundMechanics = {
+  skills: string[];
+  // "Persuasion, and either Insight or History": the part the player picks.
+  skillChoice?: { count: number; from: string[] };
+  tools: string[];
+  // Extra languages of the player's choice, and the ones named outright.
+  languages: number;
+  knownLanguages: string[];
+  equipment: string[];
+};
+
+const V2_BENEFIT_TYPES: Record<string, string> = {
+  skill_proficiencies: "skill_proficiency",
+  tool_proficiencies: "tool_proficiency",
+  languages: "language",
+  equipment: "equipment",
+};
+
+// A v1 background row carries each grant as a prose field; a v2 row (a5e-ag,
+// a5e-ddg, a5e-gpg) as a `benefits` entry of the matching type.
+function backgroundField(data: Record<string, unknown>, field: string): string {
+  if (Array.isArray(data.benefits)) {
+    const benefits = data.benefits as Array<{ type?: unknown; desc?: unknown }>;
+    return String(benefits.find((benefit) => benefit.type === V2_BENEFIT_TYPES[field])?.desc ?? "");
+  }
+  return String(data[field] ?? "");
+}
+
+function backgroundSkills(text: string): Pick<BackgroundMechanics, "skills" | "skillChoice"> {
+  // Where the fixed skills end and the pick begins: "and either Insight or
+  // History", "plus one of your choice from among ...", "Your choice of two
+  // from among ...", "any one skill of your choice", "Two of your choice".
+  const choice = /\b(?:(?:one|two|three|four)\s+of your choice|either|your choice|any)\b/i.exec(text);
+  if (!choice) {
+    return { skills: skillsInText(text) };
+  }
+  const skills = skillsInText(text.slice(0, choice.index));
+  const rest = text.slice(choice.index);
+  const named = skillsInText(rest).filter((skill) => !skills.includes(skill));
+  const count = COUNT_WORDS[/\b(one|two|three|four)\b/i.exec(rest)?.[1].toLowerCase() ?? ""] ?? 1;
+  return { skills, skillChoice: { count, from: named.length ? named : [...ALL_SKILLS] } };
+}
+
+// A choice stays one entry, the way the bundled backgrounds write "one
+// gaming set": "Your choice of one from Thieves' Tools, Forgery Kit, or
+// Disguise Kit." is one proficiency, not three.
+function backgroundTools(text: string): string[] {
+  const plain = text.trim().replace(/\.$/, "");
+  if (/^no additional\b/i.test(plain)) {
+    return [];
+  }
+  // "Two of your choice" names no noun; the field it sits in does.
+  const bare = /^(one|two|three|four) of your choice$/i.exec(plain);
+  if (bare) {
+    return [`${bare[1]} ${bare[1].toLowerCase() === "one" ? "tool" : "tools"} of your choice`];
+  }
+  return /\bchoice\b|\bor\b/i.test(plain) ? [plain] : proficiencyList(plain);
+}
+
+// Items split at the commas outside parentheses and numbers ("a bag of 1,000
+// ball bearings"). "A dagger, quarterstaff, or spear" is one item to pick, so
+// an "or ..." piece rejoins the pieces before it back to the one opening with
+// an article, or to the first.
+function backgroundEquipment(text: string): string[] {
+  const pieces: string[] = [];
+  let current = "";
+  let depth = 0;
+  for (const [index, char] of [...text].entries()) {
+    depth += char === "(" ? 1 : char === ")" ? -1 : 0;
+    const inNumber = /\d/.test(text[index - 1] ?? "") && /\d/.test(text[index + 1] ?? "");
+    if ((char === "," || char === ";") && depth === 0 && !inNumber) {
+      pieces.push(current);
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  pieces.push(current);
+  const article = /^(?:a|an|one)\s/i;
+  const items: string[] = [];
+  for (const raw of pieces) {
+    const piece = raw.trim().replace(/^and\s+/i, "").replace(/\.$/, "").trim();
+    if (!piece) {
+      continue;
+    }
+    if (/^or\s/i.test(piece) && items.length) {
+      let start = items.length - 1;
+      while (start > 0 && !article.test(items[start])) {
+        start -= 1;
+      }
+      items.splice(start, items.length - start, [...items.slice(start), piece].join(", "));
+    } else {
+      items.push(piece);
+    }
+  }
+  return items;
+}
+
+// What a content-pack background grants, read from its text: the builder
+// offers it the way it offers a bundled background's.
+export function backgroundMechanics(data: Record<string, unknown>): BackgroundMechanics {
+  // "No additional languages" names none and counts none, as it should.
+  const grant = parseRaceLanguages(backgroundField(data, "languages"));
+  return {
+    ...backgroundSkills(backgroundField(data, "skill_proficiencies")),
+    tools: backgroundTools(backgroundField(data, "tool_proficiencies")),
+    languages: grant.bonusLanguages,
+    knownLanguages: grant.languages,
+    equipment: backgroundEquipment(backgroundField(data, "equipment")),
   };
 }
 

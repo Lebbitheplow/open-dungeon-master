@@ -146,7 +146,7 @@ export default function CharacterBuilder({
   // Each gate mirrors a rule the final check enforces, so a player learns
   // about a missing pick on the step where they can fix it.
   const blockers = {
-    identity: identityBlocker(state),
+    identity: identityBlocker(state, background),
     ancestry: ancestryBlocker(state, race, background),
     calling: callingBlocker(klass, state, derived),
     abilities: abilitiesBlocker(derived, state),

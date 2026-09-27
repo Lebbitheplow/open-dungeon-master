@@ -264,6 +264,13 @@ export const createSheetSchema = z.object({
       tool: z.string().trim().max(60).default(""),
     })
     .optional(),
+  // The same for a background: the skills a content-pack background offers
+  // as a pick ("Persuasion, and either Insight or History").
+  backgroundChoices: z
+    .object({
+      skills: z.array(z.string().trim().min(1).max(40)).max(4).default([]),
+    })
+    .optional(),
   spellcasting: spellcastingSchema.default(null),
   portrait: attachmentSchema.nullable().default(null),
   notes: z.string().max(4000).default(""),

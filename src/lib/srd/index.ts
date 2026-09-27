@@ -10,6 +10,7 @@ import { combatRiders, defenseRiders, halfProficiencyCovers } from "@/lib/srd/fe
 import { effectiveAbilities, magicItemRiders } from "@/lib/srd/magic-items";
 import { encumbranceFor } from "@/lib/srd/encumbrance";
 import { allSpellNames } from "@/lib/srd/spell-lists";
+import { hpBonusPerLevel } from "@/lib/srd/race-id";
 import type {
   Ability,
   AbilityScores,
@@ -559,7 +560,7 @@ export function suggestedStartingHp(classId: string, raceId: string, con: number
     return 8;
   }
   const conMod = abilityMod(con);
-  const perLevelBonus = raceId === "hill_dwarf" ? 1 : 0;
+  const perLevelBonus = hpBonusPerLevel(raceId);
   const firstLevel = klass.hitDie + conMod + perLevelBonus;
   const laterLevels =
     (level - 1) * (Math.floor(klass.hitDie / 2) + 1 + conMod + perLevelBonus);

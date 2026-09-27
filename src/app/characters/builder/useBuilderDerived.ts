@@ -10,7 +10,6 @@ import {
   acBreakdownFor,
   computeSheetDerived,
   spellSlotsFor,
-  suggestedStartingHp,
 } from "@/lib/srd";
 import { ASI_LEVELS, applyAsiChoices, asiSlotsTakenInPlay } from "@/lib/srd/asi";
 import { defaultArmor, suggestArmor } from "@/lib/srd/armor";
@@ -19,6 +18,7 @@ import { fightingStyleSlots } from "@/lib/srd/feature-effects";
 import { openOptionSlots, optionFeatureName, type OptionSlot } from "@/lib/srd/options";
 import { spellStyleFor, spellbookAllowance, type SpellStyle } from "@/lib/srd/spell-prep";
 import { defaultLoadout, suggestWeapons } from "@/lib/srd/weapons";
+import { builderMaxHp } from "./abilityDice";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
 import type { BuilderState } from "./useBuilderState";
 
@@ -41,7 +41,7 @@ export function useBuilderDerived({
 }) {
   const {
     level, scores, racialAsi, asiChoices, chosenSkills, expertisePicks, bonusLanguages,
-    racialSkills, racialTool, hpOverride, acOverride, equipment, removedAutoNames,
+    racialSkills, racialTool, backgroundSkills, hpOverride, acOverride, equipment, removedAutoNames,
     subclass, optionPicks, spells, cantrips, bookPrepared, keepsStoredGear, asiRecorded, asiReachedLevel,
   } = state;
 
@@ -87,9 +87,10 @@ export function useBuilderDerived({
     [baseAbilities, activeAsiChoices],
   );
 
-  // Skills come from four places, not two: the class picks, the
-  // background, the race's fixed grants (high elf Perception, half-orc
-  // Intimidation) and the race's choice grants (half-elf). Known before any
+  // Skills come from five places, not two: the class picks, the
+  // background's fixed grants and its picks, the race's fixed grants (high
+  // elf Perception, half-orc Intimidation) and the race's choice grants
+  // (half-elf). Known before any
   // ability score is, which the expertise picks on the class step rely on:
   // a rogue or bard chooses them a step ahead of the scores.
   const proficientSkills = useMemo(
@@ -97,11 +98,12 @@ export function useBuilderDerived({
       ...new Set([
         ...chosenSkills,
         ...(background?.skills ?? []),
+        ...backgroundSkills.filter(Boolean),
         ...(race?.skills ?? []),
         ...racialSkills.filter(Boolean),
       ]),
     ],
-    [chosenSkills, background, race, racialSkills],
+    [chosenSkills, background, backgroundSkills, race, racialSkills],
   );
 
   const preview = useMemo(() => {
@@ -120,6 +122,7 @@ export function useBuilderDerived({
       languages: [
         ...new Set([
           ...race.languages,
+          ...(background.knownLanguages ?? []),
           ...bonusLanguages.filter(Boolean),
           ...(klass.languages ?? []),
         ]),
@@ -147,8 +150,7 @@ export function useBuilderDerived({
         ? { ability: klass.spellAbility, slots: {}, prepared: [], known: [], cantrips: [] }
         : null,
     });
-    const maxHp =
-      hpOverride ?? suggestedStartingHp(klass.id, race.id, abilities.con, effectiveLevel);
+    const maxHp = hpOverride ?? builderMaxHp(klass.hitDie, race.id, abilities.con, effectiveLevel);
     return { proficiencies, derived, maxHp };
   }, [abilities, race, klass, background, proficientSkills, expertisePicks, bonusLanguages, racialTool, effectiveLevel, hpOverride]);
 
@@ -344,7 +346,7 @@ export function builderActions(
 ) {
   // A skill the background or race grants outright is not a class pick;
   // taking it again would spend a slot on nothing.
-  const granted = new Set([...(background?.skills ?? []), ...(race?.skills ?? [])]);
+  const granted = new Set([...(background?.skills ?? []), ...state.backgroundSkills, ...(race?.skills ?? [])]);
   return {
     addEquipmentItem(entry: {
       name: string;

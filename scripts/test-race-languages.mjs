@@ -102,8 +102,8 @@ test("a 2024 species keeps its speed from the trait list and shows trait names",
 
 test("a subrace row folds in its parent's speed, languages and ability bumps", () => {
   const options = packRaceOptions([
-    { slug: "dwarf", name: "Dwarf", data: { asi: [{ attributes: ["Constitution"], value: 2 }], speed: { walk: 25 }, languages: "You can speak, read, and write Common and Dwarvish." } },
-    { slug: "toh-grim", name: "Grim Dwarf", data: { asi: [{ attributes: ["Wisdom"], value: 1 }], traits: "**_Grim._** You are grim.", parent_slug: "dwarf" } },
+    { slug: "dwarf", name: "Dwarf", documentSlug: "wotc-srd", data: { asi: [{ attributes: ["Constitution"], value: 2 }], speed: { walk: 25 }, languages: "You can speak, read, and write Common and Dwarvish." } },
+    { slug: "toh-grim", name: "Grim Dwarf", documentSlug: "toh", data: { asi: [{ attributes: ["Wisdom"], value: 1 }], traits: "**_Grim._** You are grim.", parent_slug: "dwarf" } },
   ]);
   const grim = options.find((entry) => entry.id === "toh-grim");
   assert.deepEqual(grim.asi, { con: 2, wis: 1 });
@@ -114,9 +114,9 @@ test("a subrace row folds in its parent's speed, languages and ability bumps", (
 
 test("a pack row the bundled SRD knows takes its grants from the SRD, keeping the pack's prose", () => {
   const [hillDwarf, highElf, variantHuman] = packRaceOptions([
-    { slug: "hill-dwarf", name: "Hill Dwarf", data: { asi: [{ attributes: ["Wisdom"], value: 1 }], traits: "**_Dwarven Toughness._** Your hit point maximum increases by 1.", parent_slug: "dwarf" } },
-    { slug: "high-elf", name: "High Elf", data: { asi: [{ attributes: ["Intelligence"], value: 1 }], parent_slug: "elf" } },
-    { slug: "variant-human", name: "Human (Variant)", data: { asi: {}, speed: 30, languages: "Common" } },
+    { slug: "hill-dwarf", name: "Hill Dwarf", documentSlug: "wotc-srd", data: { asi: [{ attributes: ["Wisdom"], value: 1 }], traits: "**_Dwarven Toughness._** Your hit point maximum increases by 1.", parent_slug: "dwarf" } },
+    { slug: "high-elf", name: "High Elf", documentSlug: "wotc-srd", data: { asi: [{ attributes: ["Intelligence"], value: 1 }], parent_slug: "elf" } },
+    { slug: "variant-human", name: "Human (Variant)", documentSlug: "odm-expanded", data: { asi: {}, speed: 30, languages: "Common" } },
   ]);
   assert.deepEqual(hillDwarf.asi, { con: 2, wis: 1 });
   assert.equal(hillDwarf.speed, 25);
