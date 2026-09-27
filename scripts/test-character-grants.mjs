@@ -17,32 +17,32 @@ const { CUSTOM_CLASSES } = await import("../src/lib/classes/index.ts");
 const { suggestedCantripCount } = await import("../src/lib/content/mechanics.ts");
 
 let passed = 0;
-function test(name, fn) {
-  fn();
+async function test(name, fn) {
+  await fn();
   passed += 1;
   console.log(`ok - ${name}`);
 }
 
 const race = (id) => SRD_RACES.find((entry) => entry.id === id);
 
-test("races that grant a skill in prose now carry it structurally", () => {
+await test("races that grant a skill in prose now carry it structurally", () => {
   assert.deepEqual(race("high_elf").skills, ["perception"]);
   assert.deepEqual(race("half_orc").skills, ["intimidation"]);
 });
 
-test("half-elf exposes both its choice grants", () => {
+await test("half-elf exposes both its choice grants", () => {
   assert.deepEqual(race("half_elf").asiChoice, { count: 2, amount: 1 });
   assert.deepEqual(race("half_elf").skillChoice, { count: 2 });
 });
 
-test("high elf offers a wizard cantrip, hill dwarf a tool choice", () => {
+await test("high elf offers a wizard cantrip, hill dwarf a tool choice", () => {
   assert.deepEqual(race("high_elf").cantripChoice, { list: "wizard", count: 1 });
   assert.equal(race("hill_dwarf").toolChoice.count, 1);
   assert.ok(race("hill_dwarf").toolChoice.from.includes("smith's tools"));
   assert.deepEqual(race("rock_gnome").tools, ["tinker's tools"]);
 });
 
-test("every SRD and custom class defines tool proficiencies", () => {
+await test("every SRD and custom class defines tool proficiencies", () => {
   for (const klass of [...SRD_CLASSES, ...CUSTOM_CLASSES]) {
     assert.ok(Array.isArray(klass.tools), `${klass.id} is missing tools`);
   }
@@ -52,7 +52,7 @@ test("every SRD and custom class defines tool proficiencies", () => {
   assert.ok(netrunner.tools.length > 0);
 });
 
-test("every background carries tools, languages and starting equipment", () => {
+await test("every background carries tools, languages and starting equipment", () => {
   for (const background of [...SRD_BACKGROUNDS, ...CUSTOM_BACKGROUNDS]) {
     assert.ok(Array.isArray(background.tools), `${background.id} is missing tools`);
     assert.equal(
@@ -67,7 +67,7 @@ test("every background carries tools, languages and starting equipment", () => {
   }
 });
 
-test("background features resolve for both SRD and catalog entries", () => {
+await test("background features resolve for both SRD and catalog entries", () => {
   assert.deepEqual(backgroundFeatureFor("acolyte"), {
     name: "Shelter of the Faithful",
     background: "Acolyte",
@@ -80,7 +80,7 @@ test("background features resolve for both SRD and catalog entries", () => {
   assert.equal(backgroundFeatureFor(""), null);
 });
 
-test("a background feature survives regrants at level up", () => {
+await test("a background feature survives regrants at level up", () => {
   const atOne = populateFeatures(
     [{ name: "Shelter of the Faithful (Acolyte)", source: "background" }],
     "cleric",
@@ -97,7 +97,7 @@ test("a background feature survives regrants at level up", () => {
   );
 });
 
-test("cantrip advice matches the SRD tables and custom caster fallback", () => {
+await test("cantrip advice matches the SRD tables and custom caster fallback", () => {
   assert.equal(suggestedCantripCount("wizard", 1), 3);
   assert.equal(suggestedCantripCount("wizard", 4), 4);
   assert.equal(suggestedCantripCount("bard", 1), 2);
@@ -108,7 +108,7 @@ test("cantrip advice matches the SRD tables and custom caster fallback", () => {
   assert.equal(suggestedCantripCount("street_samurai", 5, "none"), null);
 });
 
-test("the subrace variants carry their structural grants", () => {
+await test("the subrace variants carry their structural grants", () => {
   const byId = Object.fromEntries(SRD_RACES.map((race) => [race.id, race]));
   assert.deepEqual(byId.mountain_dwarf.armor, ["light", "medium"]);
   assert.ok(byId.wood_elf.weapons.includes("longbows"));
@@ -119,7 +119,7 @@ test("the subrace variants carry their structural grants", () => {
   assert.equal(byId.deep_gnome.languages.includes("Undercommon"), true);
 });
 
-test("sizeForRace: Small races are Small, everything else (and unknowns) Medium", () => {
+await test("sizeForRace: Small races are Small, everything else (and unknowns) Medium", () => {
   assert.equal(sizeForRace("stout_halfling"), "Small");
   assert.equal(sizeForRace("forest_gnome"), "Small");
   assert.equal(sizeForRace("goblin"), "Small");
@@ -129,7 +129,7 @@ test("sizeForRace: Small races are Small, everything else (and unknowns) Medium"
   assert.equal(sizeForRace("dragonkin homebrew"), "Medium");
 });
 
-test("speedFor gates class speed bonuses on what is worn", () => {
+await test("speedFor gates class speed bonuses on what is worn", () => {
   const monk = (equipment) => ({
     class: "monk",
     level: 10,
@@ -158,7 +158,7 @@ test("speedFor gates class speed bonuses on what is worn", () => {
   assert.equal(speedFor(barbarian([{ name: "Chain Mail", equipped: true }])), 30);
 });
 
-test("heavy armor below its Strength requirement costs 10 feet", () => {
+await test("heavy armor below its Strength requirement costs 10 feet", () => {
   const weakling = {
     class: "fighter",
     level: 1,
@@ -172,7 +172,7 @@ test("heavy armor below its Strength requirement costs 10 feet", () => {
   assert.equal(speedFor({ ...weakling, abilities: { ...weakling.abilities, str: 15 } }), 30);
 });
 
-test("a pack race gets its ability bumps whether they come as a list or a map", async () => {
+await test("a pack race gets its ability bumps whether they come as a list or a map", async () => {
   const { raceMechanics } = await import("../src/lib/content/mechanics.ts");
   // Open5e's shape, and the expanded pack's shape (Hill Dwarf, High Elf and
   // the rest), which used to be read as no bumps at all.
@@ -181,7 +181,7 @@ test("a pack race gets its ability bumps whether they come as a list or a map", 
   assert.deepEqual(raceMechanics({ asi: { Strength: 2 } }).asi, { str: 2 });
 });
 
-test("a trait name keeps the abbreviation inside its brackets", async () => {
+await test("a trait name keeps the abbreviation inside its brackets", async () => {
   const { raceMechanics } = await import("../src/lib/content/mechanics.ts");
   const pack = raceMechanics({ traits: "Darkvision 60 ft\nDwarven Resilience (adv. vs poison)\nStonecunning" });
   assert.equal(pack.traitsSummary, "Darkvision 60 ft · Dwarven Resilience (adv. vs poison) · Stonecunning");
