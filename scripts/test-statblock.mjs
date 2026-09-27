@@ -12,8 +12,8 @@ const { critDamageExpression } = await import("../src/lib/dm/encounter-logic.ts"
 const { isValidExpression } = await import("../src/lib/dice.ts");
 
 let passed = 0;
-function test(name, fn) {
-  fn();
+async function test(name, fn) {
+  await fn();
   passed += 1;
 }
 
@@ -49,7 +49,7 @@ const hellHound = {
   condition_immunities: "",
 };
 
-test("hell hound parses to an honest snapshot", () => {
+await test("hell hound parses to an honest snapshot", () => {
   const stats = parseMonster(hellHound, 3);
   assert.equal(stats.maxHp, 45);
   assert.equal(stats.ac, 15);
@@ -66,13 +66,13 @@ test("hell hound parses to an honest snapshot", () => {
   assert.equal(bite.type, "piercing/fire");
 });
 
-test("non-attack actions and specials become traits", () => {
+await test("non-attack actions and specials become traits", () => {
   const stats = parseMonster(hellHound, 3);
   assert.ok(stats.traits.some((line) => line.startsWith("Fire Breath")));
   assert.ok(stats.traits.some((line) => line.startsWith("Keen Hearing")));
 });
 
-test("multiattack lines with null bonus become traits, dice attacks parse", () => {
+await test("multiattack lines with null bonus become traits, dice attacks parse", () => {
   const dragon = {
     cr: 17,
     hit_points: 256,
@@ -89,7 +89,7 @@ test("multiattack lines with null bonus become traits, dice attacks parse", () =
   assert.ok(stats.traits.some((line) => line.startsWith("Multiattack")));
 });
 
-test("every parsed damage expression rolls", () => {
+await test("every parsed damage expression rolls", () => {
   for (const source of [hellHound]) {
     for (const attack of parseMonster(source, 3).attacks) {
       assert.ok(isValidExpression(attack.damage), attack.damage);
@@ -97,7 +97,7 @@ test("every parsed damage expression rolls", () => {
   }
 });
 
-test("missing fields degrade to sane defaults", () => {
+await test("missing fields degrade to sane defaults", () => {
   const stats = parseMonster({}, 1);
   assert.equal(stats.ac, 12);
   assert.equal(stats.maxHp, 10);
@@ -105,7 +105,7 @@ test("missing fields degrade to sane defaults", () => {
   assert.equal(stats.xp, 200);
 });
 
-test("synthesizeStats scales monotonically and rolls", () => {
+await test("synthesizeStats scales monotonically and rolls", () => {
   let lastHp = 0;
   for (const cr of [0, 1, 3, 5, 10, 20, 30]) {
     const stats = synthesizeStats(cr);
@@ -117,14 +117,14 @@ test("synthesizeStats scales monotonically and rolls", () => {
   }
 });
 
-test("crit doubles dice, not modifiers", () => {
+await test("crit doubles dice, not modifiers", () => {
   assert.equal(critDamageExpression("1d8+3"), "1d8+1d8+3");
   assert.equal(critDamageExpression("2d6"), "2d6+2d6");
   assert.equal(critDamageExpression("1d8+3+2d6"), "1d8+1d8+3+2d6+2d6");
   assert.ok(isValidExpression(critDamageExpression("1d8+3+2d6")));
 });
 
-test("save mods parse from scores with explicit saves winning", () => {
+await test("save mods parse from scores with explicit saves winning", () => {
   const stats = parseMonster(
     {
       armor_class: 15,
@@ -144,7 +144,7 @@ test("save mods parse from scores with explicit saves winning", () => {
   assert.equal(stats.saveMods.wis, -1);
 });
 
-test("saveModFor falls back for legacy snapshots without saveMods", () => {
+await test("saveModFor falls back for legacy snapshots without saveMods", () => {
   const legacy = { ...synthesizeStats(4), saveMods: undefined, dexMod: 2, cr: 4 };
   assert.equal(saveModFor(legacy, "dex"), 2);
   assert.equal(saveModFor(legacy, "con"), 1);
@@ -152,7 +152,7 @@ test("saveModFor falls back for legacy snapshots without saveMods", () => {
   assert.equal(saveModFor(modern, "dex"), modern.saveMods.dex);
 });
 
-test("health states", () => {
+await test("health states", () => {
   assert.equal(healthState(45, 45), "healthy");
   assert.equal(healthState(30, 45), "wounded");
   assert.equal(healthState(20, 45), "bloodied");
@@ -160,7 +160,7 @@ test("health states", () => {
   assert.equal(healthState(0, 45), "dead");
 });
 
-test("multiattack parsing", async () => {
+await test("multiattack parsing", async () => {
   const { parseMultiattackCount, parseMonster } = await import("../src/lib/bestiary/statblock.ts");
   assert.equal(parseMultiattackCount("The wolf makes two bite attacks."), 2);
   assert.equal(parseMultiattackCount("makes three attacks: one with its bite"), 3);
@@ -181,7 +181,7 @@ test("multiattack parsing", async () => {
   assert.equal(parsed.attacksPerTurn, 2);
 });
 
-test("creature size parses and ranks for the grapple cap", () => {
+await test("creature size parses and ranks for the grapple cap", () => {
   const parsed = parseMonster({ size: "Large", hit_points: 30 }, 1);
   assert.equal(parsed.size, "Large");
   // Synthesized stats and old snapshots carry no size and rank as Medium.

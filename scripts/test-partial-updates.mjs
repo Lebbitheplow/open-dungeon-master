@@ -42,7 +42,9 @@ const { gameSettingsSchema, normalizeGameSettings } = await import(
 const { adaptSheetToLevel } = await import("../src/lib/characters/adapt.ts");
 const { buildBuilderResult } = await import("../src/app/characters/builder/submit.ts");
 
-const route = (name) => import(`../src/app/api/${name}/route.ts`);
+// A URL, not a template literal: Vitest would read the literal as a one-level
+// glob, which the nested route paths below never match.
+const route = (name) => import(new URL(`../src/app/api/${name}/route.ts`, import.meta.url).href);
 const campaignsRoute = await route("campaigns");
 const joinRoute = await route("campaigns/join");
 const settingsRoute = await route("campaigns/[campaignId]/settings");

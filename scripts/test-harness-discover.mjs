@@ -11,12 +11,6 @@ import os from "node:os";
 import path from "node:path";
 import { removeTempDir } from "./lib/remove-temp-dir.mjs";
 
-// Windows never starts a login shell: the lookup returns early there.
-if (process.platform === "win32") {
-  console.log("harness discover: skipped on Windows");
-  process.exit(0);
-}
-
 const { loginShellPath, findBinary } = await import("../src/lib/harness/discover.ts");
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "odm-harness-discover-"));
@@ -26,6 +20,11 @@ const bash = fs.existsSync("/bin/bash") ? "/bin/bash" : null;
 
 let passed = 0;
 async function test(name, fn, { needsBash = false } = {}) {
+  // Windows never starts a login shell: the lookup returns early there.
+  if (process.platform === "win32") {
+    console.log(`skip: ${name} (Windows)`);
+    return;
+  }
   if (needsBash && !bash) {
     console.log(`skip: ${name} (no /bin/bash)`);
     return;

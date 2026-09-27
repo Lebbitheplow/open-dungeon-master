@@ -13,8 +13,8 @@ import {
 } from "../src/lib/srd/spell-scaling.ts";
 
 let passed = 0;
-function test(name, fn) {
-  fn();
+async function test(name, fn) {
+  await fn();
   passed += 1;
 }
 
@@ -40,14 +40,14 @@ const MAGIC_MISSILE = {
     "When you cast this spell using a spell slot of 2nd level or higher, the spell creates one more dart for each slot level above 1st.",
 };
 
-test("base dice come out of the description", () => {
+await test("base dice come out of the description", () => {
   assert.equal(baseDamageDice(FIRE_BOLT.desc), "1d10");
   assert.equal(baseDamageDice(FIREBALL.desc), "8d6");
   assert.equal(baseHealingDice(CURE_WOUNDS.desc), "1d8");
   assert.equal(baseDamageDice("You speak a word of comfort."), null);
 });
 
-test("a cantrip grows at 5th, 11th, and 17th level", () => {
+await test("a cantrip grows at 5th, 11th, and 17th level", () => {
   const at = (level) => cantripDamage(FIRE_BOLT.desc, FIRE_BOLT.higher_level, level).dice;
   assert.equal(at(1), "1d10");
   assert.equal(at(4), "1d10");
@@ -60,7 +60,7 @@ test("a cantrip grows at 5th, 11th, and 17th level", () => {
   assert.deepEqual(cantripTiers(FIRE_BOLT.higher_level), ["2d10", "3d10", "4d10"]);
 });
 
-test("upcasting adds dice per slot level above the spell's own", () => {
+await test("upcasting adds dice per slot level above the spell's own", () => {
   const at = (slot) => upcastDamage(FIREBALL.desc, FIREBALL.higher_level, slot).dice;
   assert.equal(at(3), "8d6");
   assert.equal(at(4), "9d6");
@@ -70,13 +70,13 @@ test("upcasting adds dice per slot level above the spell's own", () => {
   assert.deepEqual(step, { dice: "1d6", baseLevel: 3, kind: "damage", per: 1 });
 });
 
-test("healing upcasts the same way", () => {
+await test("healing upcasts the same way", () => {
   assert.equal(upcastDamage(CURE_WOUNDS.desc, CURE_WOUNDS.higher_level, 1).dice, "1d8");
   assert.equal(upcastDamage(CURE_WOUNDS.desc, CURE_WOUNDS.higher_level, 3).dice, "3d8");
   assert.equal(upcastStep(CURE_WOUNDS.higher_level).kind, "healing");
 });
 
-test("an unparseable rule returns null instead of guessing", () => {
+await test("an unparseable rule returns null instead of guessing", () => {
   // Magic Missile scales by darts, not dice: the parser must decline.
   assert.equal(upcastStep(MAGIC_MISSILE.higher_level), null);
   assert.equal(upcastDamage(MAGIC_MISSILE.desc, MAGIC_MISSILE.higher_level, 3), null);
@@ -84,7 +84,7 @@ test("an unparseable rule returns null instead of guessing", () => {
   assert.equal(cantripDamage(FIREBALL.desc, FIREBALL.higher_level, 5), null);
 });
 
-test("the single entry point routes cantrips and slots correctly", () => {
+await test("the single entry point routes cantrips and slots correctly", () => {
   assert.equal(
     scaledSpellDice({
       spellLevel: 0,
@@ -120,7 +120,7 @@ test("the single entry point routes cantrips and slots correctly", () => {
 // they are held to it: a healthy share of damaging spells must parse.
 const contentDb = "data/content/open5e.sqlite";
 if (existsSync(contentDb)) {
-  test("the shipped content pack parses at a useful rate", async () => {
+  await test("the shipped content pack parses at a useful rate", async () => {
     const { default: Database } = await import("better-sqlite3-multiple-ciphers");
     const db = new Database(contentDb, { readonly: true });
     const rows = db
