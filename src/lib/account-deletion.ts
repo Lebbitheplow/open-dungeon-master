@@ -1,6 +1,5 @@
-import fs from "node:fs";
-import path from "node:path";
 import { getGlobalConfig } from "@/lib/db/app-settings";
+import { removeCampaignAudio } from "@/lib/campaign-deletion";
 import { deleteCampaign } from "@/lib/db/campaigns";
 import { getDatabase, parseJson } from "@/lib/db/core";
 import {
@@ -10,6 +9,7 @@ import {
   listUsersDueForPurge,
   markDeletionRequested,
 } from "@/lib/db/users";
+import { campaignFilePaths, removeUnreferencedFiles } from "@/lib/image-files";
 import { isUploadedImagePath } from "@/lib/uploads";
 
 // Self-service account deletion, in two steps. The request stamps a due
@@ -107,67 +107,21 @@ function uploadsOwnedBy(userId: string): string[] {
   return [...urls];
 }
 
-// Text columns that can carry an image path. Portraits are shared by
-// reference when a character or NPC is copied between campaigns, so a file
-// is only removed once no row anywhere points at it.
-function imageBearingColumns(): Array<[table: string, column: string]> {
-  const db = getDatabase();
-  const tables = db
-    .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`)
-    .all() as Array<{ name: string }>;
-  const columns: Array<[string, string]> = [];
-  for (const { name: table } of tables) {
-    const info = db.prepare(`PRAGMA table_info("${table}")`).all() as Array<{
-      name: string;
-      type: string;
-    }>;
-    for (const column of info) {
-      if (/^TEXT/i.test(column.type) && /_(json|path|url)$/.test(column.name)) {
-        columns.push([table, column.name]);
-      }
-    }
-  }
-  return columns;
-}
-
-function uploadStillReferenced(url: string, columns: Array<[string, string]>): boolean {
-  const db = getDatabase();
-  for (const [table, column] of columns) {
-    const hit = db
-      .prepare(`SELECT 1 FROM "${table}" WHERE "${column}" LIKE ? LIMIT 1`)
-      .get(`%${url}%`);
-    if (hit) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function removeUploadFile(url: string) {
-  // isUploadedImagePath already pinned the shape to /uploads/<uuid>.<ext>,
-  // so the filename cannot climb out of the uploads directory.
-  const filename = url.slice("/uploads/".length);
-  const file = path.join(process.cwd(), "public", "uploads", filename);
-  try {
-    fs.rmSync(file, { force: true });
-  } catch (error) {
-    console.error(`[account-deletion] could not remove ${url}`, error);
-  }
-}
-
 // Erases the account now, whatever its due date says. Also what the admin
 // panel's delete does.
 export function purgeAccount(userId: string) {
   const db = getDatabase();
-  const uploads = uploadsOwnedBy(userId);
+  const owned = db
+    .prepare(`SELECT id FROM campaigns WHERE owner_user_id = ?`)
+    .all(userId) as Array<{ id: string }>;
+  // Read before the rows go: the account's own pictures, and every file its
+  // campaigns and workshops name (covers, scene art, maps, NPC portraits).
+  const files = [...uploadsOwnedBy(userId), ...owned.flatMap(({ id }) => campaignFilePaths(id))];
 
   db.transaction(() => {
     // Owned campaigns and workshops first: campaigns.owner_user_id is a
     // foreign key with no cascade, and deleteCampaign also sweeps the
     // companion bot users that exist only for their seats.
-    const owned = db
-      .prepare(`SELECT id FROM campaigns WHERE owner_user_id = ?`)
-      .all(userId) as Array<{ id: string }>;
     for (const { id } of owned) {
       deleteCampaign(id);
     }
@@ -213,12 +167,8 @@ export function purgeAccount(userId: string) {
     db.prepare(`DELETE FROM users WHERE id = ?`).run(userId);
   })();
 
-  if (uploads.length > 0) {
-    const columns = imageBearingColumns();
-    for (const url of uploads) {
-      if (!uploadStillReferenced(url, columns)) {
-        removeUploadFile(url);
-      }
-    }
+  removeUnreferencedFiles(files);
+  for (const { id } of owned) {
+    removeCampaignAudio(id);
   }
 }
