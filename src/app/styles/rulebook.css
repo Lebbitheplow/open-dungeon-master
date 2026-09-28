@@ -1,0 +1,1106 @@
+/* The rulebook (src/components/rulebook/): the SRD bound as an old book.
+   Crackled oxblood leather with a double gold tooled border, cream
+   parchment leaves over the painted parchment, a stitched gutter, and the
+   page block's edges showing under the leaves. Ink is brown-black, headings
+   are oxblood Cinzel, and a chapter opens on an illuminated capital.
+
+   Motion, all of it resting under reduced motion and low effects:
+   the cover swings open (1150 ms), a leaf turns across the spine carrying
+   the page's words (640 ms), text inks in block by block, a searched word is
+   swept with a highlighter, the passage arrived at is lit, chapters unfold,
+   and every row, chip and control answers the pointer. */
+
+/* ---- the desk and the binding ---- */
+.rb-desk {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.rb-book {
+  position: relative;
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 22px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  height: clamp(34rem, calc(100dvh - 7.25rem), 72rem);
+  padding: 16px 18px 24px;
+  border-radius: 10px 14px 14px 10px;
+  background:
+    linear-gradient(180deg, rgba(46, 12, 8, 0.45), rgba(18, 4, 3, 0.7)),
+    url("/assets/ui/leather-cover.webp") center / 420px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 170, 0.08),
+    inset 0 0 40px rgba(10, 2, 2, 0.55),
+    0 0 0 1px rgba(0, 0, 0, 0.55),
+    0 12px 24px rgba(3, 1, 8, 0.5),
+    0 36px 80px rgba(3, 1, 8, 0.7);
+  perspective: 2600px;
+  animation: rb-book-in 700ms var(--ease-settle) both;
+}
+/* The tooled border: a gold line, a dark channel, a fainter gold line. */
+.rb-book::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border-radius: 7px 10px 10px 7px;
+  border: 1px solid rgba(212, 171, 58, 0.6);
+  box-shadow: inset 0 0 0 3px rgba(22, 5, 3, 0.55), inset 0 0 0 4px rgba(212, 171, 58, 0.3);
+  pointer-events: none;
+}
+/* The page block: the edges of every other leaf, showing under these two. */
+.rb-book::after {
+  content: "";
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 10px;
+  height: 14px;
+  border-radius: 0 0 5px 5px;
+  background: repeating-linear-gradient(180deg, #eadcb8 0 1px, #c3ab7c 1px 2px);
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.5), inset 0 -2px 3px rgba(80, 50, 20, 0.4);
+  pointer-events: none;
+}
+@keyframes rb-book-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ---- the leaves ---- */
+.rb-leaf {
+  position: relative;
+  z-index: 1;
+  grid-row: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  color: #2b1d0e;
+  font-family: var(--font-serif, Georgia, serif);
+  background:
+    radial-gradient(130% 95% at 50% 42%, transparent 58%, rgba(112, 72, 26, 0.24) 100%),
+    linear-gradient(180deg, rgba(248, 240, 217, 0.82), rgba(239, 226, 194, 0.84)),
+    url("/assets/ui/parchment-body.webp") center / 360px;
+}
+.rb-left {
+  grid-column: 1;
+  border-radius: 4px 0 0 4px;
+  box-shadow: inset -30px 0 32px -20px rgba(70, 40, 12, 0.5), 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.rb-right {
+  grid-column: 3;
+  border-radius: 0 4px 4px 0;
+  box-shadow: inset 30px 0 32px -20px rgba(70, 40, 12, 0.5), 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+/* The spine between them, stitched. */
+.rb-gutter {
+  position: relative;
+  z-index: 1;
+  grid-column: 2;
+  grid-row: 1;
+  background: linear-gradient(90deg, #d9c89f, #a38c60 42%, #6f5b38 50%, #a38c60 58%, #d9c89f);
+  box-shadow: inset 0 0 8px rgba(40, 20, 5, 0.5);
+}
+.rb-gutter::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 50%;
+  width: 1px;
+  background: repeating-linear-gradient(180deg, rgba(60, 30, 8, 0.55) 0 6px, transparent 6px 12px);
+}
+/* Printer's ornaments in the outer corners, in the ink's brown. */
+.rb-left::before,
+.rb-right::before,
+.rb-left::after,
+.rb-right::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  width: 58px;
+  height: 58px;
+  background: url("/assets/ui/corner-ornament.webp") center / contain no-repeat;
+  filter: sepia(1) saturate(0.55) brightness(0.5);
+  opacity: 0.4;
+  pointer-events: none;
+}
+.rb-left::before { top: 8px; left: 8px; }
+.rb-left::after { bottom: 8px; left: 8px; transform: scaleY(-1); }
+.rb-right::before { top: 8px; right: 8px; transform: scaleX(-1); }
+.rb-right::after { bottom: 8px; right: 8px; transform: scale(-1, -1); }
+
+.rb-leaf-scroll {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2.1rem 2.4rem 1.6rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(110, 27, 16, 0.35) transparent;
+}
+
+/* ---- the toolbar (bookmark and turning; on a phone also the way back) ---- */
+.rb-toolbar {
+  position: absolute;
+  top: 0.6rem;
+  right: 4.4rem;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.rb-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(110, 27, 16, 0.25);
+  background: rgba(251, 244, 226, 0.75);
+  color: #6e1b10;
+  font-family: var(--font-display, serif);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transition:
+    background-color var(--dur-quick) var(--ease-snap),
+    border-color var(--dur-quick) var(--ease-snap),
+    color var(--dur-quick) var(--ease-snap),
+    translate 240ms var(--ease-spring);
+}
+.rb-tool:hover:not(:disabled) {
+  background: #fcf5e2;
+  border-color: rgba(110, 27, 16, 0.55);
+  translate: 0 -1px;
+}
+.rb-tool:disabled { opacity: 0.35; cursor: default; }
+.rb-toolbar .rb-tool-contents,
+.rb-toolbar .rb-toolbar-space { display: none; }
+.rb-tool-mark[aria-pressed="true"] {
+  color: #fdf1d6;
+  background: #8e2317;
+  border-color: #5a150b;
+}
+.rb-tool-mark[aria-pressed="true"]:hover:not(:disabled) { background: #a3281a; border-color: #5a150b; color: #fdf1d6; }
+.rb-tool-mark[aria-pressed="true"] svg { animation: rb-pop 460ms var(--ease-spring); }
+
+/* The ribbon hangs in the outer margin of a bookmarked page. */
+.rb-ribbon {
+  position: absolute;
+  top: -16px;
+  right: 0.45rem;
+  z-index: 3;
+  height: 132px;
+  width: auto;
+  pointer-events: none;
+  filter: drop-shadow(0 3px 3px rgba(20, 5, 2, 0.45));
+  transform-origin: 50% 0;
+  animation: rb-ribbon-drop 1000ms var(--ease-settle) both;
+}
+@keyframes rb-ribbon-drop {
+  0% { opacity: 0; transform: translateY(-45%); }
+  35% { opacity: 1; transform: translateY(0) rotate(5deg); }
+  60% { transform: rotate(-3deg); }
+  82% { transform: rotate(1.2deg); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes rb-pop {
+  0% { scale: 0.6; }
+  60% { scale: 1.2; }
+  100% { scale: 1; }
+}
+
+/* ---- the contents page ---- */
+.rb-contents-head {
+  margin-bottom: 1.15rem;
+  text-align: center;
+}
+.rb-running {
+  font-family: var(--font-display, serif);
+  font-size: 0.64rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: #8a6a42;
+}
+.rb-book-title {
+  margin-top: 0.3rem;
+  font-family: var(--font-display, serif);
+  font-size: clamp(1.5rem, 2.2vw, 1.9rem);
+  letter-spacing: 0.05em;
+  color: #5a150b;
+  text-shadow: 0 1px 0 rgba(255, 248, 230, 0.6);
+}
+.rb-book-sub { font-size: 0.86rem; font-style: italic; color: #6b4e2c; }
+
+.rb-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0 0 1.25rem;
+  padding: 0.35rem 0.15rem 0.45rem;
+  border-bottom: 1.5px solid rgba(90, 21, 11, 0.32);
+  cursor: text;
+}
+.rb-search-icon {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  color: #7a5a36;
+  transition: color var(--dur-quick) var(--ease-snap), scale 280ms var(--ease-spring);
+}
+.rb-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: #2b1d0e;
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: 1.02rem;
+}
+.rb-search input::placeholder { color: #8f7552; font-style: italic; }
+.rb-search input,
+.rb-search input:focus,
+.rb-search input:focus-visible {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  /* The app's "every field blooms" ring would box the inked line in. */
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent;
+  appearance: none;
+}
+/* Ink drawn out from the middle of the line while the field has focus. */
+.rb-search-ink {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1.5px;
+  height: 2px;
+  background: #7a1f14;
+  transform: scaleX(0);
+  transition: transform 460ms var(--ease-settle);
+}
+.rb-search:focus-within .rb-search-ink { transform: scaleX(1); }
+.rb-search:focus-within .rb-search-icon { color: #7a1f14; scale: 1.12; }
+.rb-search-clear {
+  display: grid;
+  place-items: center;
+  padding: 0.2rem;
+  border-radius: 999px;
+  color: #7a5a36;
+  transition: background-color 140ms var(--ease-snap), color 140ms var(--ease-snap), rotate 300ms var(--ease-spring);
+  animation: rb-pop 300ms var(--ease-spring);
+}
+.rb-search-clear:hover { background: rgba(110, 27, 16, 0.1); color: #5a150b; rotate: 90deg; }
+/* The quill writes while the book is being searched. */
+.rb-quill {
+  width: 1.35rem;
+  height: 1.35rem;
+  object-fit: contain;
+  transform-origin: 20% 90%;
+  animation: rb-quill 820ms var(--ease-drift) infinite;
+}
+@keyframes rb-quill {
+  0%, 100% { transform: rotate(-9deg) translateX(0); }
+  50% { transform: rotate(7deg) translateX(3px); }
+}
+
+.rb-section-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.5rem;
+  font-family: var(--font-display, serif);
+  font-size: 0.66rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #8a6a42;
+}
+.rb-section-label::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(138, 106, 66, 0.5), transparent);
+}
+.rb-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 1.25rem;
+}
+.rb-chip {
+  padding: 0.28rem 0.72rem;
+  border-radius: 999px;
+  border: 1px solid rgba(110, 27, 16, 0.3);
+  background: rgba(252, 246, 230, 0.7);
+  color: #5a150b;
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: 0.83rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 2px rgba(80, 50, 20, 0.15);
+  transition:
+    background-color 180ms var(--ease-snap),
+    border-color 180ms var(--ease-snap),
+    color 180ms var(--ease-snap),
+    box-shadow 220ms var(--ease-snap),
+    translate 240ms var(--ease-spring);
+  animation: rb-ink-in 480ms var(--ease-settle) both;
+}
+.rb-chip:hover {
+  background: #8e2317;
+  border-color: #5a150b;
+  color: #fdf3dc;
+  translate: 0 -1px;
+  box-shadow: 0 4px 10px rgba(110, 27, 16, 0.3);
+}
+.rb-marks { margin-bottom: 1.25rem; }
+.rb-marks .rb-entry { animation: rb-ink-in 420ms var(--ease-settle) both; }
+
+.rb-chapters { margin: 0; padding: 0; list-style: none; }
+.rb-chapter { animation: rb-ink-in 480ms var(--ease-settle) both; }
+.rb-chapter-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.42rem 0.3rem;
+  border-radius: 4px;
+  color: #3a1a0a;
+  text-align: left;
+  transition: background-color 180ms var(--ease-snap), color 180ms var(--ease-snap);
+}
+.rb-chapter-row:hover { background: rgba(176, 140, 70, 0.16); color: #5a150b; }
+.rb-numeral {
+  flex: none;
+  width: 2.5rem;
+  font-family: var(--font-display, serif);
+  font-size: 0.84rem;
+  letter-spacing: 0.04em;
+  text-align: right;
+  color: #8e2317;
+}
+.rb-chapter-title {
+  font-family: var(--font-display, serif);
+  font-size: 0.98rem;
+  letter-spacing: 0.02em;
+}
+.rb-leader {
+  flex: 1;
+  min-width: 1rem;
+  border-bottom: 1.5px dotted rgba(110, 80, 40, 0.42);
+  translate: 0 -0.28em;
+  transition: border-color 180ms var(--ease-snap);
+}
+.rb-chapter-row:hover .rb-leader,
+.rb-entry:hover .rb-leader { border-color: rgba(110, 27, 16, 0.6); }
+.rb-entry-folio {
+  min-width: 1.7rem;
+  font-size: 0.84rem;
+  font-variant-numeric: oldstyle-nums;
+  text-align: right;
+  color: #7a5a36;
+}
+.rb-chevron {
+  flex: none;
+  align-self: center;
+  width: 0.95rem;
+  height: 0.95rem;
+  color: #8a6a42;
+  transition: rotate 340ms var(--ease-spring);
+}
+.rb-chapter[data-open] .rb-chevron { rotate: 90deg; color: #8e2317; }
+.rb-chapter-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 440ms var(--ease-settle);
+}
+.rb-chapter[data-open] .rb-chapter-body { grid-template-rows: 1fr; }
+.rb-chapter-inner { min-height: 0; overflow: hidden; }
+.rb-chapter-pages {
+  padding: 0.15rem 0 0.8rem 3rem;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 300ms var(--ease-snap), transform 380ms var(--ease-settle);
+}
+.rb-chapter[data-open] .rb-chapter-pages { opacity: 1; transform: none; transition-delay: 90ms; }
+.rb-chapter-blurb { margin: 0 0 0.4rem; font-size: 0.84rem; font-style: italic; color: #6b4e2c; }
+.rb-group-name {
+  margin: 0.65rem 0 0.2rem;
+  font-family: var(--font-display, serif);
+  font-size: 0.68rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #8e2317;
+}
+.rb-group-wide { columns: 2 12.5rem; column-gap: 1.4rem; }
+.rb-entry {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.16rem 0.3rem;
+  border-radius: 3px;
+  color: #2b1d0e;
+  font-size: 0.88rem;
+  text-align: left;
+  break-inside: avoid;
+  transition: background-color 160ms var(--ease-snap), color 160ms var(--ease-snap);
+}
+/* A fleuron slides in beside the line under the pointer; the page open
+   now wears a diamond. */
+.rb-entry::before {
+  content: "\2767";
+  position: absolute;
+  left: -0.95rem;
+  color: #8e2317;
+  opacity: 0;
+  transform: translateX(-5px);
+  transition: opacity 180ms var(--ease-snap), transform 260ms var(--ease-spring);
+}
+.rb-entry:hover { background: rgba(176, 140, 70, 0.14); color: #5a150b; }
+.rb-entry:hover::before { opacity: 0.85; transform: none; }
+.rb-entry[data-on] { color: #8e2317; font-weight: 600; }
+.rb-entry[data-on]::before {
+  content: "\25C6";
+  font-size: 0.6rem;
+  top: 0.45rem;
+  opacity: 1;
+  transform: none;
+  animation: rb-pop 460ms var(--ease-spring);
+}
+.rb-entry-title { min-width: 0; }
+.rb-entry-note {
+  margin-left: 0.4rem;
+  font-size: 0.76rem;
+  font-style: italic;
+  font-weight: 400;
+  color: #8a6a42;
+}
+.rb-legal {
+  margin-top: 1.8rem;
+  font-size: 0.72rem;
+  font-style: italic;
+  line-height: 1.5;
+  color: #7a5a36;
+}
+.rb-legal a { text-decoration: underline; text-underline-offset: 2px; }
+.rb-trouble { padding: 2rem 0.5rem; text-align: center; font-style: italic; color: #5a3e20; }
+.rb-trouble .rb-chip { margin-top: 0.8rem; }
+
+/* ---- search results ---- */
+.rb-results-count { margin-bottom: 0.6rem; font-size: 0.88rem; font-style: italic; color: #6b4e2c; animation: rb-ink-in 360ms var(--ease-settle) both; }
+.rb-hits { margin: 0; padding: 0; list-style: none; }
+.rb-hits > li { animation: rb-ink-in 420ms var(--ease-settle) both; }
+.rb-hit {
+  display: grid;
+  gap: 0.12rem;
+  width: 100%;
+  padding: 0.55rem 0.6rem;
+  border-bottom: 1px solid rgba(138, 106, 66, 0.2);
+  border-radius: 4px;
+  text-align: left;
+  transition: background-color 180ms var(--ease-snap), box-shadow 220ms var(--ease-snap);
+}
+.rb-hit:hover { background: rgba(176, 140, 70, 0.16); box-shadow: inset 3px 0 0 #8e2317; }
+.rb-hit[data-on] { box-shadow: inset 3px 0 0 #8e2317; }
+.rb-hit-where {
+  font-family: var(--font-display, serif);
+  font-size: 0.62rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #8a6a42;
+}
+.rb-hit-title { font-family: var(--font-display, serif); font-size: 0.95rem; color: #5a150b; }
+.rb-hit-sep { margin: 0 0.35rem; color: #a4845a; }
+.rb-hit-snippet { font-size: 0.84rem; line-height: 1.45; color: #3f2d18; }
+
+/* ---- a page of text ---- */
+.rb-page { max-width: 46rem; margin: 0 auto; font-size: 0.97rem; line-height: 1.62; }
+.rb-head { margin-bottom: 1.15rem; text-align: center; }
+.rb-dot { color: #b2946a; }
+.rb-title {
+  margin-top: 0.5rem;
+  font-family: var(--font-display, serif);
+  font-size: clamp(1.55rem, 2.5vw, 2.2rem);
+  line-height: 1.15;
+  letter-spacing: 0.03em;
+  color: #5a150b;
+  text-shadow: 0 1px 0 rgba(255, 248, 230, 0.6);
+  animation: rb-title-in 620ms var(--ease-settle) 40ms both;
+}
+.rb-subtitle { margin-top: 0.3rem; font-style: italic; color: #6b4e2c; animation: rb-ink-in 520ms var(--ease-settle) 120ms both; }
+.rb-family {
+  margin-left: 0.55rem;
+  padding: 0.08rem 0.5rem;
+  border: 1px solid rgba(110, 27, 16, 0.35);
+  border-radius: 999px;
+  font-family: var(--font-display, serif);
+  font-size: 0.62rem;
+  font-style: normal;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  vertical-align: 0.15em;
+  color: #7a2a18;
+}
+.rb-divider {
+  display: block;
+  width: min(78%, 26rem);
+  height: auto;
+  aspect-ratio: 512 / 33;
+  margin: 0.8rem auto 0;
+  filter: sepia(0.35) saturate(0.85);
+  animation: rb-rule-draw 820ms var(--ease-settle) 140ms both;
+}
+@keyframes rb-rule-draw {
+  from { clip-path: inset(0 50% 0 50%); opacity: 0.3; }
+  to { clip-path: inset(0 0 0 0); opacity: 1; }
+}
+@keyframes rb-title-in {
+  from { opacity: 0; letter-spacing: 0.12em; filter: blur(2px); }
+  to { opacity: 1; letter-spacing: 0.03em; filter: none; }
+}
+@keyframes rb-ink-in {
+  from { opacity: 0; transform: translateY(4px); filter: blur(1.5px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+
+.rb-text { color: #2b1d0e; hyphens: auto; }
+.rb-text > :nth-child(-n + 10),
+.rb-statblock > :nth-child(-n + 10) { animation: rb-ink-in 540ms var(--ease-settle) both; }
+.rb-text p { margin: 0 0 0.75em; }
+.rb-text p.rb-prop { margin: 0 0 0.3em; text-align: left; }
+.rb-text p.rb-prop + p:not(.rb-prop) { margin-top: 0.7em; }
+/* Cinzel draws a 1 as an I ("Ist Level"); its digits are set in the text face. */
+.rb-num { font-family: var(--font-serif, Georgia, serif); font-variant-numeric: lining-nums; letter-spacing: 0; }
+.rb-text strong { font-weight: 700; color: #3a1a0a; }
+.rb-text .rb-bi { font-style: italic; color: #4a1208; }
+@media (min-width: 640px) {
+  .rb-text p { text-align: justify; }
+}
+.rb-h {
+  font-family: var(--font-display, serif);
+  line-height: 1.2;
+  color: #5a150b;
+  scroll-margin-top: 3.2rem;
+}
+.rb-sidebar { scroll-margin-top: 3.2rem; }
+.rb-h1 {
+  margin: 1.6em 0 0.55em;
+  padding-bottom: 0.3em;
+  font-size: 1.45rem;
+  letter-spacing: 0.02em;
+  border-bottom: 2px solid transparent;
+  border-image: linear-gradient(90deg, rgba(168, 118, 42, 0), rgba(168, 118, 42, 0.85) 12%, rgba(168, 118, 42, 0.85) 88%, rgba(168, 118, 42, 0)) 1;
+}
+.rb-h2 {
+  margin: 1.4em 0 0.45em;
+  padding-bottom: 0.15em;
+  font-size: 1.2rem;
+  border-bottom: 1px solid rgba(168, 118, 42, 0.55);
+}
+.rb-h3 { margin: 1.2em 0 0.35em; font-size: 1.05rem; }
+.rb-h4 { margin: 1em 0 0.3em; font-size: 0.95rem; letter-spacing: 0.04em; }
+.rb-h5,
+.rb-h6 { margin: 0.9em 0 0.3em; font-size: 0.9rem; letter-spacing: 0.05em; }
+.rb-text > .rb-h:first-child { margin-top: 0.2em; }
+/* The illuminated capital a chapter's prose opens on. */
+.rb-dropcap::first-letter {
+  float: left;
+  margin: 0.05em 0.12em 0 0;
+  padding: 0.04em 0.06em 0;
+  font-family: var(--font-display, serif);
+  font-size: 3.7em;
+  line-height: 0.8;
+  color: #7a1f14;
+  text-shadow: 1px 1px 0 rgba(212, 171, 58, 0.6), 2px 2px 0 rgba(90, 21, 11, 0.15);
+}
+.rb-list { margin: 0 0 0.85em 1.35em; padding: 0; }
+ol.rb-list { list-style: decimal; }
+.rb-list li { margin: 0.18em 0; padding-left: 0.2em; }
+ul.rb-list { list-style: none; }
+ul.rb-list > li::before {
+  content: "\25C6";
+  display: inline-block;
+  width: 1.05rem;
+  margin-left: -1.05rem;
+  color: #8e2317;
+  font-size: 0.55em;
+  vertical-align: 0.3em;
+}
+
+/* Tables, striped like the handbook's. */
+.rb-table-wrap { margin: 0.4em 0 1.15em; overflow-x: auto; }
+.rb-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; line-height: 1.4; }
+.rb-table caption {
+  caption-side: top;
+  padding: 0 0.45rem 0.35rem;
+  font-family: var(--font-display, serif);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-align: left;
+  color: #5a150b;
+}
+.rb-table th {
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1.5px solid rgba(110, 27, 16, 0.55);
+  font-weight: 700;
+  text-align: left;
+  vertical-align: bottom;
+  color: #3a1a0a;
+}
+.rb-table td { padding: 0.3rem 0.5rem; vertical-align: top; }
+.rb-table tbody tr { transition: background-color 160ms var(--ease-snap); }
+.rb-table tbody tr:nth-child(odd) { background: rgba(176, 140, 70, 0.16); }
+.rb-table tbody tr:hover { background: rgba(176, 110, 50, 0.24); }
+
+/* A sidebar, boxed and ruled top and bottom. */
+.rb-sidebar {
+  margin: 1em 0 1.25em;
+  padding: 0.9rem 1.1rem 0.45rem;
+  background: rgba(206, 184, 130, 0.36);
+  border-top: 2px solid rgba(60, 36, 14, 0.7);
+  border-bottom: 2px solid rgba(60, 36, 14, 0.7);
+  box-shadow: 0 4px 8px -5px rgba(60, 36, 14, 0.5);
+  font-size: 0.9rem;
+}
+.rb-sidebar .rb-h { margin-top: 0.4em; }
+.rb-text .rb-sidebar-title {
+  margin-bottom: 0.4em;
+  font-family: var(--font-display, serif);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: left;
+  color: #3a1a0a;
+}
+.rb-rule {
+  width: 60%;
+  height: 1px;
+  margin: 1.4em auto;
+  border: 0;
+  background: linear-gradient(90deg, transparent, rgba(110, 27, 16, 0.5), transparent);
+}
+
+/* A monster's statistics on the stat block's cream card. */
+.rb-statblock {
+  position: relative;
+  padding: 0.95rem 1.15rem 1rem;
+  background: linear-gradient(180deg, rgba(253, 243, 222, 0.78), rgba(248, 234, 204, 0.78));
+  border-top: 4px solid #c9ad6a;
+  border-bottom: 4px solid #c9ad6a;
+  box-shadow: 0 0 6px rgba(80, 50, 20, 0.35), 0 3px 12px rgba(80, 50, 20, 0.2);
+}
+.rb-statblock p { text-align: left; }
+.rb-statblock .rb-prop { margin-bottom: 0.2em; color: #5a1a0c; }
+.rb-statblock .rb-prop strong,
+.rb-statblock .rb-h { color: #7a200d; }
+.rb-statblock .rb-h6 {
+  margin: 1.1em 0 0.5em;
+  border-bottom: 1px solid #7a200d;
+  font-size: 1.12rem;
+  font-weight: 400;
+  font-variant: small-caps;
+  letter-spacing: 0.03em;
+}
+/* The tapered red rules either side of the ability scores. */
+.rb-abilities { position: relative; margin: 0.7em 0; padding: 0.45rem 0; }
+.rb-abilities::before,
+.rb-abilities::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 5px;
+  background: #922610;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+.rb-abilities::before { top: 0; }
+.rb-abilities::after { bottom: 0; }
+.rb-abilities .rb-table { font-size: 0.82rem; }
+.rb-abilities .rb-table th,
+.rb-abilities .rb-table td { text-align: center !important; border: 0; color: #5a1a0c; }
+.rb-abilities .rb-table tbody tr { background: none; }
+
+/* A spell or magic item named in italics, a link to its own page. */
+.rb-xref {
+  display: inline;
+  padding: 0;
+  background: none;
+  font: inherit;
+  text-align: inherit;
+  color: #7a1f14;
+  text-decoration: underline;
+  text-decoration-color: rgba(122, 31, 20, 0.35);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  transition: color 160ms var(--ease-snap), text-decoration-color 220ms var(--ease-snap);
+}
+.rb-xref:hover { color: #a3281a; text-decoration-color: currentColor; }
+
+/* A word the reader searched for, swept with a highlighter. */
+.rb-mark {
+  color: inherit;
+  border-radius: 2px;
+  background: linear-gradient(transparent 50%, rgba(226, 168, 52, 0.55) 50%, rgba(226, 168, 52, 0.55) 92%, transparent 92%) no-repeat 0 0 / 100% 100%;
+  animation: rb-mark-sweep 700ms var(--ease-settle) 420ms both;
+}
+@keyframes rb-mark-sweep {
+  from { background-size: 0% 100%; }
+  to { background-size: 100% 100%; }
+}
+/* The passage arrived at: lit gold, with a red mark in the margin. */
+.rb-arrive { border-radius: 3px; animation: rb-arrive 1900ms var(--ease-settle) 260ms both !important; }
+@keyframes rb-arrive {
+  0% { background-color: rgba(226, 168, 52, 0); box-shadow: -14px 0 0 -10px rgba(142, 35, 23, 0); }
+  16% { background-color: rgba(226, 168, 52, 0.34); box-shadow: -14px 0 0 -10px rgba(142, 35, 23, 0.9); }
+  100% { background-color: rgba(226, 168, 52, 0); box-shadow: -14px 0 0 -10px rgba(142, 35, 23, 0); }
+}
+
+.rb-foot {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 0.8rem;
+  margin-top: 2.2rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid rgba(138, 106, 66, 0.3);
+  font-size: 0.82rem;
+}
+.rb-folio {
+  font-family: var(--font-display, serif);
+  letter-spacing: 0.12em;
+  color: #7a5a36;
+}
+.rb-folio::before,
+.rb-folio::after { content: "\00B7"; margin: 0 0.55rem; color: rgba(138, 106, 66, 0.7); }
+.rb-turn-link {
+  font-style: italic;
+  color: #5a150b;
+  transition: color 160ms var(--ease-snap), translate 260ms var(--ease-spring);
+}
+.rb-turn-link:hover { color: #8e2317; }
+.rb-turn-prev { justify-self: start; text-align: left; }
+.rb-turn-next { justify-self: end; text-align: right; }
+.rb-turn-prev:hover { translate: -3px 0; }
+.rb-turn-next:hover { translate: 3px 0; }
+
+/* The title page, until a page is opened. */
+.rb-frontis { max-width: 34rem; margin: 0 auto; padding-top: 5vh; text-align: center; }
+.rb-frontis-title {
+  margin-top: 0.4rem;
+  font-family: var(--font-display, serif);
+  font-size: clamp(2.1rem, 3.6vw, 3.1rem);
+  letter-spacing: 0.06em;
+  color: #5a150b;
+  animation: rb-title-in 900ms var(--ease-settle) 200ms both;
+}
+.rb-frontis-sub { font-style: italic; color: #6b4e2c; }
+.rb-frontis-text { margin-top: 1rem; line-height: 1.65; color: #3a2a16; animation: rb-ink-in 600ms var(--ease-settle) 360ms both; }
+.rb-begin { margin-top: 1.6rem; padding: 0.5rem 1.25rem; font-family: var(--font-display, serif); letter-spacing: 0.06em; }
+
+/* ---- the leaf that turns ----
+   It shares the right-hand page's cell and hinges on the middle of the
+   spine, so turned over it lies exactly on the left-hand page. Its face
+   carries the words; its back is bare parchment. */
+.rb-turner {
+  position: relative;
+  z-index: 5;
+  grid-column: 3;
+  grid-row: 1;
+  opacity: 0;
+  pointer-events: none;
+  transform-origin: -11px 50%;
+  transform-style: preserve-3d;
+}
+.rb-turner-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 0 4px 4px 0;
+  backface-visibility: hidden;
+  color: #2b1d0e;
+  font-family: var(--font-serif, Georgia, serif);
+  background:
+    radial-gradient(130% 95% at 50% 42%, transparent 58%, rgba(112, 72, 26, 0.24) 100%),
+    linear-gradient(180deg, rgba(248, 240, 217, 0.97), rgba(239, 226, 194, 0.97)),
+    url("/assets/ui/parchment-body.webp") center / 360px;
+}
+.rb-turner-face .rb-leaf-scroll { overflow: hidden; }
+.rb-turner-face .rb-text > *,
+.rb-turner-face .rb-title,
+.rb-turner-face .rb-subtitle,
+.rb-turner-face .rb-divider,
+.rb-turner-face .rb-mark { animation: none !important; }
+.rb-turner-back {
+  transform: rotateY(180deg);
+  border-radius: 4px 0 0 4px;
+  box-shadow: inset -30px 0 32px -20px rgba(70, 40, 12, 0.45);
+}
+/* Shade on the face as it rises, light on the back as it lays down, and a
+   glint along the gilt edge while the leaf stands. */
+.rb-turner-face::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  opacity: 0;
+  pointer-events: none;
+}
+.rb-turner-front::after { background: linear-gradient(90deg, rgba(50, 28, 8, 0.05), rgba(50, 28, 8, 0.42)); }
+.rb-turner-back::after { background: linear-gradient(270deg, rgba(50, 28, 8, 0.05), rgba(50, 28, 8, 0.42)); }
+.rb-turner-front::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  z-index: 3;
+  width: 2px;
+  background: linear-gradient(180deg, transparent, rgba(244, 224, 166, 0.95), transparent);
+  opacity: 0;
+}
+.rb-turning-forward .rb-turner { animation: rb-leaf-forward 640ms var(--ease-drift) both; }
+.rb-turning-back .rb-turner { animation: rb-leaf-back 640ms var(--ease-drift) both; }
+.rb-turning-forward .rb-turner-front::after,
+.rb-turning-back .rb-turner-front::after { animation: rb-shade-rise 640ms var(--ease-drift) both; }
+.rb-turning-forward .rb-turner-back::after,
+.rb-turning-back .rb-turner-back::after { animation: rb-shade-fall 640ms var(--ease-drift) both; }
+.rb-turning-forward .rb-turner-front::before,
+.rb-turning-back .rb-turner-front::before { animation: rb-glint 640ms var(--ease-drift) both; }
+.rb-turning-back .rb-turner-front::after { animation-direction: reverse; }
+.rb-turning-back .rb-turner-back::after { animation-direction: reverse; }
+@keyframes rb-leaf-forward {
+  0% { opacity: 1; transform: rotateY(0deg); }
+  86% { opacity: 1; }
+  100% { opacity: 0; transform: rotateY(-180deg); }
+}
+@keyframes rb-leaf-back {
+  0% { opacity: 0; transform: rotateY(-180deg); }
+  12% { opacity: 1; }
+  100% { opacity: 1; transform: rotateY(0deg); }
+}
+@keyframes rb-shade-rise {
+  0% { opacity: 0; }
+  50%, 100% { opacity: 1; }
+}
+@keyframes rb-shade-fall {
+  0%, 50% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes rb-glint {
+  0%, 100% { opacity: 0; }
+  35%, 65% { opacity: 1; }
+}
+
+/* ---- the cover, swinging open as the book first appears ---- */
+.rb-cover {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  border-radius: 10px 14px 14px 10px;
+  background:
+    radial-gradient(70% 60% at 50% 45%, rgba(120, 30, 18, 0.25), transparent 70%),
+    linear-gradient(180deg, rgba(46, 12, 8, 0.4), rgba(18, 4, 3, 0.66)),
+    url("/assets/ui/leather-cover.webp") center / 420px;
+  box-shadow: inset 0 0 50px rgba(10, 2, 2, 0.65), 0 0 0 1px rgba(0, 0, 0, 0.6), 0 36px 80px rgba(3, 1, 8, 0.7);
+  transform-origin: left center;
+  cursor: pointer;
+  animation: rb-cover-open 1150ms cubic-bezier(0.55, 0.05, 0.35, 1) 650ms both;
+}
+.rb-cover.rb-cover-now { animation-delay: 0ms; animation-duration: 760ms; }
+.rb-cover::before,
+.rb-cover::after,
+.rb-cover-frame::before,
+.rb-cover-frame::after {
+  content: "";
+  position: absolute;
+  width: clamp(64px, 9vw, 110px);
+  height: clamp(64px, 9vw, 110px);
+  background: url("/assets/ui/corner-ornament.webp") center / contain no-repeat;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.5));
+  pointer-events: none;
+}
+.rb-cover::before { top: 22px; right: 22px; transform: scaleX(-1); }
+.rb-cover::after { bottom: 22px; left: 22px; transform: scaleY(-1); }
+.rb-cover-frame {
+  position: absolute;
+  inset: 12px;
+  border: 2px solid rgba(212, 171, 58, 0.7);
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 5px rgba(22, 5, 3, 0.5), inset 0 0 0 6px rgba(212, 171, 58, 0.4);
+  pointer-events: none;
+}
+.rb-cover-frame::before { top: 8px; left: 8px; }
+.rb-cover-frame::after { bottom: 8px; right: 8px; transform: scale(-1, -1); }
+.rb-cover-title {
+  font-family: var(--font-display, serif);
+  font-size: clamp(2.1rem, 5vw, 3.8rem);
+  letter-spacing: 0.08em;
+  color: transparent;
+  background: linear-gradient(100deg, #95761f 15%, #e3c15c 35%, #fdf4d8 48%, #e3c15c 60%, #95761f 85%) 0 0 / 260% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 2px 1px rgba(0, 0, 0, 0.7));
+  animation: rb-gilt 1600ms var(--ease-drift) 120ms both;
+}
+.rb-cover-sub {
+  font-family: var(--font-display, serif);
+  font-size: 0.8rem;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  color: #e3c15c;
+  opacity: 0.85;
+}
+.rb-cover-seal {
+  width: 86px;
+  height: auto;
+  margin-top: 0.9rem;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.55));
+  animation: rb-pop 600ms var(--ease-spring) 250ms both;
+}
+@keyframes rb-cover-open {
+  0% { opacity: 1; transform: perspective(2400px) rotateY(0deg); }
+  70% { opacity: 1; }
+  100% { opacity: 0; visibility: hidden; transform: perspective(2400px) rotateY(-118deg); }
+}
+@keyframes rb-gilt {
+  from { background-position: 100% 0; }
+  to { background-position: 0 0; }
+}
+
+/* ---- the book laid open over the table (RulebookDialog) ---- */
+.rb-dialog {
+  position: fixed;
+  z-index: 61;
+  inset: max(1rem, 2.5vh) max(1rem, 3vw);
+  display: flex;
+  outline: none;
+  animation: rb-dialog-in 520ms var(--ease-settle) both;
+}
+.rb-desk-embedded .rb-book { height: 100%; }
+@keyframes rb-dialog-in {
+  from { opacity: 0; transform: translateY(18px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+.rb-dialog-close {
+  position: absolute;
+  top: -0.7rem;
+  right: -0.7rem;
+  z-index: 12;
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 999px;
+  border: 1px solid rgba(212, 171, 58, 0.7);
+  background: radial-gradient(circle at 35% 30%, #9a2a1b, #4a1208);
+  color: #f4e0a6;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.55);
+  transition: rotate 320ms var(--ease-spring), background-color 160ms var(--ease-snap);
+}
+.rb-dialog-close:hover { rotate: 90deg; }
+
+/* ---- one page at a time, on a phone or a narrow window ---- */
+@media (max-width: 1023px) {
+  .rb-book {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+    min-height: calc(100dvh - 7rem);
+    padding: 10px 10px 20px;
+  }
+  .rb-desk-embedded .rb-book { min-height: 0; }
+  .rb-gutter,
+  .rb-turner { display: none; }
+  .rb-left,
+  .rb-right {
+    grid-column: 1;
+    border-radius: 4px;
+    box-shadow: inset 20px 0 26px -20px rgba(70, 40, 12, 0.45), 0 1px 2px rgba(0, 0, 0, 0.35);
+  }
+  .rb-book[data-view="page"] .rb-left,
+  .rb-book[data-view="contents"] .rb-right { display: none; }
+  .rb-leaf-scroll { overflow: visible; padding: 1.25rem 1.15rem 1.4rem; }
+  .rb-desk-embedded .rb-leaf-scroll { overflow-y: auto; }
+  .rb-toolbar {
+    position: sticky;
+    top: 0;
+    right: auto;
+    display: flex;
+    padding: 0.5rem 0.6rem;
+    border-bottom: 1px solid rgba(138, 106, 66, 0.3);
+    border-radius: 4px 4px 0 0;
+    background: linear-gradient(180deg, #f6ecd3, #f1e5c7);
+  }
+  .rb-dialog .rb-toolbar { padding-right: 3.2rem; }
+  .rb-toolbar .rb-tool-contents { display: inline-flex; }
+  .rb-toolbar .rb-toolbar-space { display: block; flex: 1; }
+  .rb-ribbon { top: 2.9rem; right: 0.2rem; height: 104px; }
+  .rb-leaf [data-anchor] { scroll-margin-top: 3.6rem; }
+  .rb-left::before, .rb-right::before, .rb-left::after, .rb-right::after { width: 44px; height: 44px; }
+  /* The incoming page swings in about the spine. */
+  .rb-book[data-enter="forward"] .rb-leaf { animation: rb-enter-forward 520ms var(--ease-settle) both; }
+  .rb-book[data-enter="back"] .rb-leaf { animation: rb-enter-back 520ms var(--ease-settle) both; }
+  .rb-dialog { inset: 0; }
+  .rb-dialog .rb-book { border-radius: 0; }
+  .rb-dialog .rb-cover { border-radius: 0; }
+  .rb-dialog-close { top: 0.95rem; right: 0.95rem; width: 2.1rem; height: 2.1rem; }
+}
+@keyframes rb-enter-forward {
+  from { opacity: 0.3; transform: perspective(1600px) rotateY(-24deg) translateX(6%); transform-origin: left center; }
+  to { opacity: 1; transform: none; transform-origin: left center; }
+}
+@keyframes rb-enter-back {
+  from { opacity: 0.3; transform: perspective(1600px) rotateY(24deg) translateX(-6%); transform-origin: right center; }
+  to { opacity: 1; transform: none; transform-origin: right center; }
+}
+
+/* The day theme keeps the book as it is: leather and paper read the same
+   on a light desk. Low effects and reduced motion keep every state, and
+   drop the travel. */
+html[data-effects="low"] .rb-cover { display: none; }
+html[data-effects="low"] .rb-quill { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .rb-cover { display: none; }
+  .rb-book,
+  .rb-leaf,
+  .rb-chip,
+  .rb-chapter,
+  .rb-marks .rb-entry,
+  .rb-hits > li,
+  .rb-results-count,
+  .rb-title,
+  .rb-subtitle,
+  .rb-divider,
+  .rb-frontis-title,
+  .rb-frontis-text,
+  .rb-text > *,
+  .rb-statblock > *,
+  .rb-mark,
+  .rb-ribbon,
+  .rb-quill,
+  .rb-dialog,
+  .rb-search-clear,
+  .rb-tool-mark[aria-pressed="true"] svg,
+  .rb-entry[data-on]::before { animation: none !important; }
+  .rb-chapter-body,
+  .rb-chapter-pages,
+  .rb-search-ink,
+  .rb-chevron { transition: none; }
+  .rb-arrive { animation: none !important; background-color: rgba(226, 168, 52, 0.22); }
+}

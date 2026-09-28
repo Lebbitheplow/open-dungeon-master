@@ -431,7 +431,12 @@ export function HelpDialog({
             rules reference
           </Link>{" "}
           collects the basics in plain language and lets you search every spell, feat, item and
-          condition the app knows about.
+          condition the app knows about. The{" "}
+          <Link href="/rulebook" className="text-amber-300 underline-offset-2 hover:underline">
+            rulebook
+          </Link>{" "}
+          is the whole fifth edition reference document, searchable, for the moment a rule needs
+          checking word for word; at the table it opens from the book button in the header.
         </p>
       </Section>
 

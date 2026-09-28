@@ -366,6 +366,9 @@ export default function SettingsPage() {
           <p className="text-sm text-stone-500">Open Dungeon Master</p>
         )}
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
+          <Link href="/rulebook" className={ui.btnSmall}>
+            Rulebook
+          </Link>
           <Link href="/reference" className={ui.btnSmall}>
             Rules reference
           </Link>
