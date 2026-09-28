@@ -15,6 +15,13 @@
 
 export type SttBackend = "whisper" | "builtin" | "openai" | "none";
 
+// STT_URL=off (or the admin field set to "off") says this server has no
+// Whisper service, so nothing probes the default address: for a machine
+// with something else on :8870, or an owner who wants the built-in engine.
+export function whisperSwitchedOff(value: string): boolean {
+  return value.trim().toLowerCase() === "off";
+}
+
 export function pickSttBackend(input: {
   explicitWhisperUrl: string;
   whisperReachable: boolean;

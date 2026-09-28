@@ -11,7 +11,7 @@ import {
   pickDictationEngine,
   pickRecorderType,
 } from "@/lib/dictation";
-import { nativeDictation, type NativeDictation } from "@/lib/native-dictation";
+import { nativeDictation, subscribeNativeDictation, type NativeDictation } from "@/lib/native-dictation";
 import { micBlockMessage, micBlockReason } from "@/lib/secure-context";
 import { encodeWav, SPEECH_SAMPLE_RATE, splitForUpload } from "@/lib/speech-wav";
 import { useCapabilities } from "@/lib/use-capabilities";
@@ -37,8 +37,9 @@ export function useDictation({
 }) {
   const capabilities = useCapabilities();
   // False on the server render, which has no window, so a bridge that only
-  // the client sees cannot mismatch the markup.
-  const hasNative = useSyncExternalStore(subscribeNothing, hasNativeDictation, noNativeOnServer);
+  // the client sees cannot mismatch the markup; a shell that installs one
+  // later says so with an event.
+  const hasNative = useSyncExternalStore(subscribeNativeDictation, hasNativeDictation, noNativeOnServer);
   const engine = pickDictationEngine(capabilities?.stt, hasNative);
 
   const [state, setState] = useState<DictationState>("idle");
@@ -57,6 +58,10 @@ export function useDictation({
   const abortRef = useRef<AbortController | null>(null);
   const teardownRef = useRef<(() => void) | null>(null);
   const timerRef = useRef(0);
+  // Why the device's recognizer ended a take on its own, shown if the take
+  // brought back no words.
+  const nativeErrorRef = useRef("");
+  const stopRef = useRef<() => void>(() => {});
   // The element that shows the live level, set by the caller; it gets a
   // --dictate-level custom property (0 to 1) while recording.
   const meterRef = useRef<HTMLElement | null>(null);
@@ -175,9 +180,17 @@ export function useDictation({
       bridge.stop().then(
         (text) => {
           setPartial("");
-          if (!discardRef.current) {
-            deliver(text);
+          const reason = nativeErrorRef.current;
+          nativeErrorRef.current = "";
+          if (discardRef.current) {
+            return;
           }
+          if (!text.trim() && reason) {
+            setHint(reason);
+            setState("error");
+            return;
+          }
+          deliver(text);
         },
         (error: unknown) => {
           setPartial("");
@@ -191,6 +204,10 @@ export function useDictation({
       recorderRef.current.stop();
     }
   }, [deliver, setLevel, stopTimer]);
+
+  useEffect(() => {
+    stopRef.current = stop;
+  });
 
   // Ends the take and throws it away.
   const cancel = useCallback(() => {
@@ -213,11 +230,19 @@ export function useDictation({
     async (bridge: NativeDictation) => {
       activeRef.current = true;
       discardRef.current = false;
+      nativeErrorRef.current = "";
       setHint("");
       setPartial("");
       setState("starting");
       try {
-        await bridge.start({ onLevel: setLevel, onPartial: setPartial });
+        await bridge.start({
+          onLevel: setLevel,
+          onPartial: setPartial,
+          onError: (message) => {
+            nativeErrorRef.current = message;
+            stopRef.current();
+          },
+        });
       } catch (error) {
         activeRef.current = false;
         setHint(errorText(error, "This device's speech recognizer is unavailable."));
@@ -401,10 +426,6 @@ export function useDictation({
   };
 }
 
-// The bridge is installed before the page loads and never changes.
-function subscribeNothing(): () => void {
-  return () => {};
-}
 function hasNativeDictation(): boolean {
   return nativeDictation() !== null;
 }

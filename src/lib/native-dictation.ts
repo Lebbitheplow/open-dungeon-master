@@ -12,6 +12,10 @@ export type NativeDictationHandlers = {
   onLevel?: (level: number) => void;
   // Everything heard so far in this take, refined as the speaker goes on.
   onPartial?: (text: string) => void;
+  // The recognizer gave up mid-take (no network for a cloud recognizer,
+  // the microphone taken by a call). What was heard so far still arrives
+  // from stop().
+  onError?: (message: string) => void;
 };
 
 export type NativeDictation = {
@@ -28,6 +32,16 @@ declare global {
   interface Window {
     odmDictation?: NativeDictation;
   }
+}
+
+// Fired on window when a shell installs (or replaces) window.odmDictation,
+// which it may do after the page has drawn: the check for a recognizer
+// runs in native code and answers asynchronously.
+export const NATIVE_DICTATION_EVENT = "odm-dictation";
+
+export function subscribeNativeDictation(listener: () => void): () => void {
+  window.addEventListener(NATIVE_DICTATION_EVENT, listener);
+  return () => window.removeEventListener(NATIVE_DICTATION_EVENT, listener);
 }
 
 export function nativeDictation(): NativeDictation | null {

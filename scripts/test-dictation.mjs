@@ -17,7 +17,7 @@ const {
   pickRecorderType,
 } = await import("../src/lib/dictation.ts");
 const { decodeWav, encodeWav, splitForUpload, SPEECH_CHUNK_SECONDS, SPEECH_SAMPLE_RATE } = await import("../src/lib/speech-wav.ts");
-const { pickSttBackend, sttWantsWav } = await import("../src/lib/stt-logic.ts");
+const { pickSttBackend, sttWantsWav, whisperSwitchedOff } = await import("../src/lib/stt-logic.ts");
 const { sttProbeUrl } = await import("../src/lib/capabilities.ts");
 
 let passed = 0;
@@ -111,6 +111,10 @@ test("the server's engine: Whisper, then built-in, then OpenAI", () => {
   // An address an admin typed is trusted: other Whisper servers may not
   // answer the model-list probe.
   assert.equal(pickSttBackend({ ...base, explicitWhisperUrl: "http://stt.lan:9000", builtinInstalled: true }), "whisper");
+  assert.equal(whisperSwitchedOff("off"), true);
+  assert.equal(whisperSwitchedOff(" OFF "), true);
+  assert.equal(whisperSwitchedOff("http://127.0.0.1:8870"), false);
+  assert.equal(whisperSwitchedOff(""), false);
   assert.equal(sttWantsWav("builtin"), true);
   assert.equal(sttWantsWav("whisper"), false);
   assert.equal(sttWantsWav("openai"), false);

@@ -1,7 +1,7 @@
 import { configValue, getGlobalConfig } from "@/lib/app-config";
 import { openAiImagesConfigured, openAiSpeechConfig } from "@/lib/openai-images";
 import { builtinSpeechInstalled } from "@/lib/stt-builtin";
-import { pickSttBackend, sttWantsWav, type SttBackend } from "@/lib/stt-logic";
+import { pickSttBackend, sttWantsWav, whisperSwitchedOff, type SttBackend } from "@/lib/stt-logic";
 import { configuredDefaultStorySettings } from "@/lib/runtime-defaults";
 import { serverEnv } from "@/lib/server-env";
 import { voiceConfig, type VoiceMode } from "@/lib/voice/config";
@@ -290,7 +290,7 @@ export async function capabilitiesSnapshot(): Promise<Capabilities> {
       : Promise.resolve(false),
     probeReachable(ttsProbeUrl(kokoroBase)),
     probeReachable(imagesProbeUrl(settings.imageBackend, comfyBase, fluxBase)),
-    probeReachable(sttProbeUrl(sttBase)),
+    whisperSwitchedOff(sttBase) ? Promise.resolve(false) : probeReachable(sttProbeUrl(sttBase)),
   ]);
   const voice = voiceConfig();
   // Asked of the backend's own resolver rather than re-listed here, so the
@@ -328,7 +328,7 @@ export async function capabilitiesSnapshot(): Promise<Capabilities> {
     // built-in engine, then an OpenAI key: see src/lib/stt-logic.ts.
     stt: sttCapability(
       pickSttBackend({
-        explicitWhisperUrl: configValue(cfg.speech.sttUrl, "STT_URL"),
+        explicitWhisperUrl: whisperSwitchedOff(sttBase) ? "" : configValue(cfg.speech.sttUrl, "STT_URL"),
         whisperReachable: sttReachable,
         builtinInstalled: builtinSpeechInstalled(),
         openAiKey: openAiSpeechConfig().apiKey,
