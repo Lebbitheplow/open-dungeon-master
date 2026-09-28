@@ -16,6 +16,8 @@ import {
   type BoardNode,
 } from "@/lib/workshop/board";
 import { KIND_GLYPH, LINK_FIELDS, LINK_GLYPH } from "@/app/workshop/storyboard/beat-fields";
+import { DictateField } from "@/components/DictateField";
+import { appendDictation } from "@/lib/dictation";
 
 // One card, open for editing: its kind and title, what happens, who and
 // where it involves, and which cards it leads to. Split out of
@@ -77,14 +79,16 @@ export function BeatEditor({
           className={cn(ui.input, "min-w-40 flex-1")}
         />
       </div>
-      <textarea
-        value={edit.body}
-        onChange={(event) => onChange({ ...edit, body: event.target.value })}
-        rows={3}
-        placeholder="What actually happens, and what it means if the party is not there."
-        aria-label="What happens"
-        className={cn(ui.input, "resize-y")}
-      />
+      <DictateField label="What happens" onTranscript={(text) => onChange({ ...edit, body: appendDictation(edit.body, text) })}>
+        <textarea
+          value={edit.body}
+          onChange={(event) => onChange({ ...edit, body: event.target.value })}
+          rows={3}
+          placeholder="What actually happens, and what it means if the party is not there."
+          aria-label="What happens"
+          className={cn(ui.input, "resize-y")}
+        />
+      </DictateField>
 
       <SectionHead title="Who and where" glyph="system-cast" className="mb-0 pt-1" />
       <div className="stagger-up grid gap-2 sm:grid-cols-2">

@@ -14,6 +14,8 @@ import type { PublicEncounter } from "@/lib/db/encounter-view";
 import type { StoredRoll } from "@/lib/db/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { TokenFace } from "@/app/campaigns/[campaignId]/BoardChrome";
+import { DictateField } from "@/components/DictateField";
+import { appendDictation } from "@/lib/dictation";
 
 // The cinematic table ("ODM World Concepts", round 3b): the scene's own
 // painting fills the screen, the chrome shrinks to its edges, and the fight
@@ -502,21 +504,28 @@ export function TabletopChronicle({
             ))}
           </div>
           <div className="cine-chronicle-well">
-            <textarea
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  onSubmit(event);
-                }
-              }}
-              rows={2}
+            <DictateField
+              label="Your move"
               disabled={inputBlocked}
-              placeholder={placeholder}
-              aria-label="Your move"
-              className="cine-chronicle-input"
-            />
+              className="min-w-0 flex-1"
+              onTranscript={(text) => setInput(appendDictation(input, text))}
+            >
+              <textarea
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    onSubmit(event);
+                  }
+                }}
+                rows={2}
+                disabled={inputBlocked}
+                placeholder={placeholder}
+                aria-label="Your move"
+                className="cine-chronicle-input"
+              />
+            </DictateField>
             <button type="submit" disabled={sending || !input.trim() || inputBlocked} className="cine-chronicle-send" aria-label="Send">
               Send <span aria-hidden="true">&#10230;</span>
             </button>

@@ -8,7 +8,6 @@ import { GameIcon } from "@/components/ui/GameIcon";
 import { Select, optionsFrom } from "@/components/ui/Select";
 import { Switch } from "@/components/ui/Switch";
 import { DeskCard } from "@/app/campaigns/[campaignId]/DmConsoleParts";
-import { PushToTalk } from "@/app/campaigns/[campaignId]/PushToTalk";
 import {
   BEAT_KINDS,
   BEAT_KIND_LABELS,
@@ -17,6 +16,8 @@ import {
   type BeatSource,
 } from "@/lib/dm/beat-logic";
 import type { DmBeat } from "@/lib/db/dm-beats";
+import { DictateField } from "@/components/DictateField";
+import { appendDictation } from "@/lib/dictation";
 
 // Story capture, in the three ways a DM will actually do it: type a sentence,
 // speak it, or press the button and edit what comes back.
@@ -100,14 +101,23 @@ export function DmBeatComposer({
         what the chapter summaries, the recap and the export are built from.
       </p>
 
-      <textarea
-        value={body}
-        onChange={(event) => setBody(event.target.value.slice(0, BEAT_MAX_CHARS))}
-        rows={3}
-        placeholder="They talked the reeve out of the toll and learned the mill burned last winter."
-        aria-label="What happened"
-        className={cn(ui.input, "resize-y")}
-      />
+      <DictateField
+        label="What happened"
+        disabled={drafting || saving}
+        onTranscript={(text) => {
+          setBody((current) => appendDictation(current, text, BEAT_MAX_CHARS));
+          setSource("voice");
+        }}
+      >
+        <textarea
+          value={body}
+          onChange={(event) => setBody(event.target.value.slice(0, BEAT_MAX_CHARS))}
+          rows={3}
+          placeholder="They talked the reeve out of the toll and learned the mill burned last winter."
+          aria-label="What happened"
+          className={cn(ui.input, "resize-y")}
+        />
+      </DictateField>
 
       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
         <Select
@@ -145,14 +155,6 @@ export function DmBeatComposer({
             <Switch on={expand} onChange={setExpand} label="Say it aloud" />
           </span>
         ) : null}
-
-        <PushToTalk
-          disabled={drafting || saving}
-          onTranscript={(text) => {
-            setBody((current) => (current ? `${current.trim()} ${text}` : text));
-            setSource("voice");
-          }}
-        />
 
         <button
           type="button"

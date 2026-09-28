@@ -11,6 +11,8 @@ import { SectionHead } from "@/components/ui/SectionHead";
 import { Select } from "@/components/ui/Select";
 import type { Quest, QuestStatus } from "@/lib/dm/quest-logic";
 import { GlyphChip, KitButton, PanelLoading, Tick, TickMark, panelField, panelRow } from "./PanelKit";
+import { DictateField } from "@/components/DictateField";
+import { appendDictation } from "@/lib/dictation";
 
 // The quest log (docs/vtt-parity-implementation-plan.md 5.7): what the
 // arc compiled and what the DM wrote, with objectives the DM ticks by
@@ -126,14 +128,16 @@ export function QuestsPanel({ campaignId, steersStory, refreshKey }: { campaignI
             aria-label="Quest title"
             className={panelField}
           />
-          <textarea
-            value={lines}
-            onChange={(event) => setLines(event.target.value)}
-            rows={3}
-            placeholder={"Objectives, one per line:\nAsk at the mill\nSearch the weir"}
-            aria-label="Objectives, one per line"
-            className={cn(panelField, "leading-5")}
-          />
+          <DictateField label="Objectives" onTranscript={(text) => setLines((current) => appendDictation(current.trim() ? `${current.trimEnd()}\n` : "", text))}>
+            <textarea
+              value={lines}
+              onChange={(event) => setLines(event.target.value)}
+              rows={3}
+              placeholder={"Objectives, one per line:\nAsk at the mill\nSearch the weir"}
+              aria-label="Objectives, one per line"
+              className={cn(panelField, "leading-5")}
+            />
+          </DictateField>
           <div className="flex gap-1.5">
             <KitButton tone="primary" disabled={busy || !title.trim()} busy={busy} onClick={() => void add()}>
               {busy ? null : <Check className="size-3.5" />} Add

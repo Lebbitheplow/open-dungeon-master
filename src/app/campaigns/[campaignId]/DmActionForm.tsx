@@ -11,6 +11,8 @@ import { FieldLabel, OptionalNumber } from "@/app/campaigns/[campaignId]/DmConso
 import type { CatalogEntry, CatalogField } from "@/lib/dm/invoke-catalog";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { DictateField } from "@/components/DictateField";
+import { appendDictation } from "@/lib/dictation";
 
 // One adjudication, rendered from its catalog entry. Nothing here knows what
 // any particular action does: the fields come from the catalog and the rules
@@ -337,17 +339,19 @@ function FieldInput({
       );
     case "longtext":
       return (
-        <textarea
-          value={String(value ?? "")}
-          rows={3}
-          placeholder={field.placeholder}
-          aria-label={field.label}
-          onChange={(event) => onChange(event.target.value)}
-          className={cn(inputClass, "resize-y")}
-        />
+        <DictateField label={field.label} onTranscript={(text) => onChange(appendDictation(String(value ?? ""), text))}>
+          <textarea
+            value={String(value ?? "")}
+            rows={3}
+            placeholder={field.placeholder}
+            aria-label={field.label}
+            onChange={(event) => onChange(event.target.value)}
+            className={cn(inputClass, "resize-y")}
+          />
+        </DictateField>
       );
-    default:
-      return (
+    default: {
+      const input = (
         <input
           type="text"
           value={String(value ?? "")}
@@ -357,5 +361,13 @@ function FieldInput({
           className={inputClass}
         />
       );
+      return field.dictate ? (
+        <DictateField single label={field.label} onTranscript={(text) => onChange(appendDictation(String(value ?? ""), text))}>
+          {input}
+        </DictateField>
+      ) : (
+        input
+      );
+    }
   }
 }

@@ -61,6 +61,10 @@ export type CatalogField = {
   // One line under the input. Says what the server does with the value,
   // not what the value is.
   help?: string;
+  // A one-line text field a DM would rather say than type (a milestone's
+  // sentence), so the console pins a microphone on it the way it does on
+  // every longtext.
+  dictate?: boolean;
 };
 
 export type CatalogEntry = {

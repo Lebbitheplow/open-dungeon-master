@@ -169,6 +169,11 @@ export function ttsProbeUrl(kokoroBaseUrl: string): string {
   return `${kokoroBaseUrl.replace(/\/+$/, "")}/health`;
 }
 
+// The Whisper service is OpenAI-shaped and answers a model list.
+export function sttProbeUrl(sttBaseUrl: string): string {
+  return `${sttBaseUrl.replace(/\/+$/, "")}/v1/models`;
+}
+
 type ProbeEntry = { probedAt: number; reachable: boolean };
 
 declare global {
@@ -260,7 +265,8 @@ export async function capabilitiesSnapshot(): Promise<Capabilities> {
   const kokoroBase = configValue(cfg.speech.kokoroUrl, "KOKORO_URL", "http://127.0.0.1:8880");
   const comfyBase = configValue(cfg.images.comfyUrl, "COMFYUI_URL", "http://127.0.0.1:8188");
   const fluxBase = serverEnv("FLUX_WORKER_URL", "http://127.0.0.1:7869");
-  const [storyReachable, ttsReachable, imagesReachable] = await Promise.all([
+  const sttBase = configValue(cfg.speech.sttUrl, "STT_URL", "http://127.0.0.1:8870");
+  const [storyReachable, ttsReachable, imagesReachable, sttReachable] = await Promise.all([
     settings.textProvider === "harness"
       ? harnessReady()
       : configured
@@ -276,6 +282,7 @@ export async function capabilitiesSnapshot(): Promise<Capabilities> {
       : Promise.resolve(false),
     probeReachable(ttsProbeUrl(kokoroBase)),
     probeReachable(imagesProbeUrl(settings.imageBackend, comfyBase, fluxBase)),
+    probeReachable(sttProbeUrl(sttBase)),
   ]);
   const voice = voiceConfig();
   // Asked of the backend's own resolver rather than re-listed here, so the
@@ -309,9 +316,10 @@ export async function capabilitiesSnapshot(): Promise<Capabilities> {
       configured: speechConfigured(configValue(cfg.speech.kokoroUrl, "KOKORO_URL"), ttsReachable),
       reachable: ttsReachable,
     },
-    // No probe for Whisper: nothing depends on it at creation time, so an
-    // explicit URL (admin panel or env) is the only signal reported.
-    stt: { configured: Boolean(configValue(cfg.speech.sttUrl, "STT_URL")) },
+    // An explicit URL counts, like Kokoro's; so does the default address
+    // answering, which is how a stock install with odm-stt running shows
+    // the dictation buttons without anyone setting STT_URL.
+    stt: { configured: speechConfigured(configValue(cfg.speech.sttUrl, "STT_URL"), sttReachable) },
     voice: { enabled: voice.enabled, mode: voice.mode },
   };
 }

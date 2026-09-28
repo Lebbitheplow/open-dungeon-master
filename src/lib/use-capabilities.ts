@@ -79,3 +79,8 @@ export function offersImages(capabilities: ClientCapabilities | null): boolean {
 export function offersStoryModel(capabilities: ClientCapabilities | null): boolean {
   return capabilities === null || capabilities.story.configured;
 }
+
+// Is there a speech-to-text service to dictate into a field with?
+export function offersDictation(capabilities: ClientCapabilities | null): boolean {
+  return capabilities === null || capabilities.stt.configured;
+}
