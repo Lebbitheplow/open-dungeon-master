@@ -45,7 +45,7 @@ import {
   salvageTextualToolCalls,
   salvageXmlToolCalls,
 } from "@/lib/dm/rolls";
-import { fakeRollMarkerRegex } from "@/lib/dm/tool-text";
+import { fakeRollMarkerRegex, stripToolText } from "@/lib/dm/tool-text";
 import { announcesEncounterStart, FAKE_ENCOUNTER_PROMPT } from "@/lib/dm/engine-boundary";
 import { handleCompleteBeat } from "@/lib/dm/arc";
 import { tickWaypointsFromCalls } from "@/lib/dm/waypoint-tick";
@@ -687,6 +687,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
   // One shot at fixing a fight announced in prose without start_encounter; a
   // model that ignores the correction keeps its text rather than looping.
   let encounterNudged = false;
+  // Whether the last call, sent with toolChoice "none", came back with tool
+  // calls anyway (see narrateAfterToolLeak).
+  let finalCallLeaked = false;
 
   while (turn.callIndex < MAX_MODEL_CALLS) {
     const finalCall = turn.callIndex === MAX_MODEL_CALLS - 1;
@@ -771,6 +774,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         ]
       : message?.tool_calls;
     const toolCalls = [...extractToolCalls(message?.tool_calls), ...salvagedCalls];
+    if (finalCall && toolCalls.length) {
+      finalCallLeaked = true;
+    }
     // The foes as they stand before the calls run: end_encounter names
     // none of its own, and a fight waypoint needs them (waypoint-tick.ts).
     const foesBefore = (() => {
@@ -978,6 +984,10 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       encounterCalls.length > 0 ||
       restCalls.length > 0 ||
       companionCalls.length > 0 ||
+      // A buff spends a slot and a split lands damage: both resolve in the
+      // follow-up branch below, so without this they never ran at all.
+      castBuffCalls.length > 0 ||
+      splitCalls.length > 0 ||
       // The model asked for a chapter recall or lore search in order to
       // use the answer.
       recallCalls.length > 0 ||
@@ -1014,22 +1024,31 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         saveDmTurn(turn);
         continue;
       }
-      // A spotlight with no narration yet gets one forced-narration call so
-      // the turn never lands empty.
-      if (spotlightSet && !turn.narrationParts.length && !finalCall) {
+      // A spotlight or a question with no narration yet gets one
+      // forced-narration call so the turn never lands empty. That covers a
+      // question put during a fight (no spotlight is set there, the
+      // initiative order owns the floor) and one naming no player's
+      // character (nobody was handed the floor), which used to close the
+      // turn on the empty-turn line.
+      if ((spotlightSet || inputCalls.length > 0) && !turn.narrationParts.length && !finalCall) {
+        const inFight = !spotlightSet && fightOwnsFloor(campaignId);
         turn.conversation.push({
           role: "assistant",
           content: visibleText || "",
           tool_calls: echoedToolCalls,
         });
-        for (const inputCall of inputCalls) {
+        // Every echoed call gets its result: a strict endpoint (OpenAI)
+        // refuses a history with an unanswered tool call, and a complete_beat
+        // or generate_image can ride along with the question.
+        for (const toolCall of toolCalls) {
           turn.conversation.push({
             role: "tool",
-            ...(inputCall.id ? { tool_call_id: inputCall.id } : {}),
-            content: JSON.stringify({
-              ok: true,
-              note: "The floor is theirs. Narrate the moment and stop.",
-            }),
+            ...(toolCall.id ? { tool_call_id: toolCall.id } : {}),
+            content: JSON.stringify(
+              toolCall.name === "request_player_input"
+                ? playerInputResult(spotlightSet, inFight, true)
+                : (beatResults.get(toolCall.id ?? "complete_beat") ?? { ok: true }),
+            ),
           });
         }
         continue;
@@ -1051,11 +1070,22 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       tool_calls: echoedToolCalls,
     });
 
+    const inputInFight = !spotlightSet && fightOwnsFloor(campaignId);
     for (const inputCall of inputCalls) {
       turn.conversation.push({
         role: "tool",
         ...(inputCall.id ? { tool_call_id: inputCall.id } : {}),
-        content: JSON.stringify({ ok: spotlightSet, note: "Floor updated." }),
+        content: JSON.stringify(playerInputResult(spotlightSet, inputInFight, false)),
+      });
+    }
+
+    // The picture is queued from the parsed call above; the result only
+    // pairs the call so a strict endpoint accepts the history.
+    for (const imageCall of toolCalls.filter((toolCall) => toolCall.name === "generate_image")) {
+      turn.conversation.push({
+        role: "tool",
+        ...(imageCall.id ? { tool_call_id: imageCall.id } : {}),
+        content: JSON.stringify({ ok: true, note: "The picture is queued with this turn." }),
       });
     }
 
@@ -1479,6 +1509,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     setDmStatus(campaignId, "narrating");
   }
 
+  if (!failed && finalCallLeaked && !turn.narrationParts.length) {
+    await narrateAfterToolLeak(context, turn);
+  }
   if (!failed) {
     await ensureWhisperReplies(context, turn);
     // Last stop before the narration is persisted: cross-check the prose
@@ -1496,6 +1529,50 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // turn's prompt, so background clocks never trigger model calls.
     tickWorldState(campaignId);
   }
+}
+
+// The last call goes out with toolChoice "none", yet some servers still
+// answer it with a tool call and no text (vLLM serving gpt-oss; Ollama has
+// no tool_choice at all), and the turn closed on the empty-turn line. One
+// more call with no tools offered asks for the narration. The leaked calls
+// never ran and are not echoed, so the history stays well-formed.
+const TOOLS_CLOSED_PROMPT =
+  "[System] Tools are closed for this turn: nothing you call now will run. Narrate the moment to the table in prose, from what has already resolved, and do not describe the outcome of anything that did not. If you need something from a player, ask it in the narration.";
+
+async function narrateAfterToolLeak(context: TurnContext, turn: DmTurn) {
+  const { campaign } = context;
+  const campaignId = campaign.id;
+  const filter = createStreamingArtifactFilter();
+  const batcher = createDeltaBatcher((text) => publishEphemeral(campaignId, "dm_delta", { text }));
+  const { message, error } = await requestDmMessage(
+    campaign.settings,
+    [...turn.conversation, { role: "user", content: TOOLS_CLOSED_PROMPT }],
+    {
+      tools: [],
+      toolChoice: "none",
+      harness: { campaignId, turn: true },
+      thinking: false,
+      onDelta: (text) => {
+        const visible = filter.push(text);
+        if (visible) {
+          batcher.push(visible);
+        }
+      },
+    },
+  );
+  batcher.push(filter.flush());
+  batcher.flush();
+  turn.callIndex += 1;
+  if (process.env.DM_DEBUG) {
+    console.log(
+      `[dm-debug] tool-leak rescue: content=${JSON.stringify(String(message?.content ?? "").slice(0, 300))} error=${Boolean(error)}`,
+    );
+  }
+  const narration = error ? "" : stripToolText(extractStoryText(message?.content)).trim();
+  if (narration) {
+    turn.narrationParts.push(narration);
+  }
+  saveDmTurn(turn);
 }
 
 // Guarantees every private player message this turn carried gets a private
@@ -1789,6 +1866,31 @@ function parseSpotlightUserIds(
   } catch {
     return null;
   }
+}
+
+// What request_player_input reports back. Only a spotlight hands the floor
+// over and shows its prompt; in a fight the initiative order keeps the
+// floor, and a call naming no player's character hands it to nobody. In
+// both of those the question reaches the table only if the narration asks it.
+function playerInputResult(
+  spotlightSet: boolean,
+  inFight: boolean,
+  narrateNow: boolean,
+): { ok: boolean; note: string } {
+  const stop = narrateNow ? " Narrate the moment and stop." : "";
+  if (spotlightSet) {
+    return { ok: true, note: narrateNow ? "The floor is theirs. Narrate the moment and stop." : "Floor updated." };
+  }
+  if (inFight) {
+    return {
+      ok: true,
+      note: `The initiative order keeps the floor and nobody sees this prompt: put the question in your narration.${stop}`,
+    };
+  }
+  return {
+    ok: false,
+    note: `No player's character was named (AI companions never take the floor), so nobody sees this prompt: put the question in your narration.${stop}`,
+  };
 }
 
 // The last thing a player said and what their sheet can cast, so an empty
