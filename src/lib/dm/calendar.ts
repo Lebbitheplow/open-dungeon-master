@@ -356,7 +356,9 @@ export function restMinutes(
   variant: "standard" | "gritty" | "heroic",
 ): number {
   if (variant === "gritty") {
-    return kind === "short" ? MINUTES_PER_DAY * 1 : MINUTES_PER_DAY * 7;
+    // Gritty realism: a short rest is 8 hours (a night's sleep) and a long
+    // rest is 7 days.
+    return kind === "short" ? MINUTES_PER_HOUR * 8 : MINUTES_PER_DAY * 7;
   }
   if (variant === "heroic") {
     // Heroic: a short rest is five minutes and a long rest is an hour.
@@ -400,7 +402,36 @@ export type CampaignClock = {
   // The sky, rolled by src/lib/dm/sky.ts when the clock crosses a dawn or a
   // long leg passes; null until the first roll (src/lib/srd/weather.ts).
   weather: Weather | null;
+  // The instant each character's last long rest ENDED, by characterId. A
+  // character benefits from one long rest in 24 hours, so the rest engine
+  // asks this before it restores anything (src/lib/dm/rest-tools.ts).
+  // Absent on a clock written before it was kept, which reads as "never".
+  longRests?: Record<string, Instant>;
+  // The instant each druid's Wild Shape runs out, by characterId. The clock
+  // reverts the form when it passes (src/lib/db/clock.ts).
+  shapeEnds?: Record<string, Instant>;
 };
+
+// A character benefits from one long rest in any 24 hours (SRD 5.1, Long
+// Rest), measured from the end of one to the end of the next: a party that
+// wakes at dawn may sleep again that night and wake at the next dawn.
+export function longRestAllowed(
+  lastEnded: Instant | undefined,
+  endsAt: Instant,
+): boolean {
+  return lastEnded === undefined || endsAt - lastEnded >= MINUTES_PER_DAY;
+}
+
+function normalizeInstants(raw: unknown): Record<string, Instant> | undefined {
+  if (!raw || typeof raw !== "object") {
+    return undefined;
+  }
+  const entries = Object.entries(raw as Record<string, unknown>)
+    .filter(([id, at]) => id.length <= 80 && Number.isFinite(Number(at)))
+    .map(([id, at]): [string, Instant] => [id, clampInstant(Number(at))])
+    .slice(0, 400);
+  return entries.length ? Object.fromEntries(entries) : undefined;
+}
 
 export function defaultClock(): CampaignClock {
   // Greening, the first month of spring, at eight in the morning: a campaign
@@ -469,9 +500,13 @@ export function normalizeClock(raw: unknown): CampaignClock {
   }
   const record = raw as Record<string, unknown>;
   const calendar = normalizeCalendarDefinition(record.calendar) ?? defaultClock().calendar;
+  const longRests = normalizeInstants(record.longRests);
+  const shapeEnds = normalizeInstants(record.shapeEnds);
   return {
     calendar,
     instant: clampInstant(Number(record.instant) || 0),
     weather: normalizeWeather(record.weather),
+    ...(longRests ? { longRests } : {}),
+    ...(shapeEnds ? { shapeEnds } : {}),
   };
 }

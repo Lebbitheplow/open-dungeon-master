@@ -3,38 +3,41 @@ import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import {
   getActiveEncounter,
   listEnemies,
-  orderEntryId,
   patchEnemyConditions,
   saveEncounter,
-  type Encounter,
+  type EncounterEnemy,
 } from "@/lib/db/encounters";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { insertRoll } from "@/lib/db/rolls";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
-import { acBreakdownFor, computeSheetDerived, sizeForRace } from "@/lib/srd";
+import { abilityMod, acBreakdownFor, computeSheetDerived, sizeForRace } from "@/lib/srd";
 import {
   conditionBlocksReactions,
   conditionExtraActions,
 } from "@/lib/srd/condition-effects";
-import { combatRiders } from "@/lib/srd/feature-effects";
 import { passivePerceptionFor, saveModFor, sizeRank } from "@/lib/bestiary/statblock";
-import {
-  budgetApplies,
-  freshBudget,
-  spendAction,
-  type ActionKind,
-  type TurnBudget,
-} from "@/lib/dm/action-budget";
+import { spendAction, type ActionKind, type TurnBudget } from "@/lib/dm/action-budget";
+import { attacksAllowedFor, budgetFor, storeBudget } from "@/lib/dm/turn-budget";
+import { canAct } from "@/lib/dm/can-act";
+import { seenClearlyBy, tilesBetween, wallBetween } from "@/lib/dm/attack-spatial";
+import { pushTokenAway } from "@/lib/dm/map-tools";
 
 import { resolveEnemyRef, publishEncounter } from "@/lib/dm/enemy-damage";
 // For the Shield spell's slot spend; mutations never imports back.
 import { applyDmMutation } from "@/lib/dm/mutations";
 import { resolveSheetRef } from "@/lib/dm/rolls";
-import { DODGING } from "@/lib/dm/condition-logic";
+import {
+  DODGING,
+  exhaustionRollState,
+  mergeAdvantage,
+  rollDerivation,
+  type AdvantageState,
+} from "@/lib/dm/condition-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { allSpellNames } from "@/lib/srd/spell-lists";
+import { spellFactsFor } from "@/lib/content";
+import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 
 // The rest of a 5e turn: the actions that are not attacks or spells, plus
 // reactions. Dodge, Dash, Disengage, Hide, Help, Grapple, and Shove all had
@@ -116,6 +119,12 @@ export const actionTools: ToolDef[] = [
             type: "string",
             description: "Protection style only: the ally being covered.",
           },
+          level: {
+            type: "integer",
+            minimum: 1,
+            maximum: 9,
+            description: "A reaction SPELL (Shield, Counterspell, Hellish Rebuke) cast from a higher slot. Omit for the spell's own level; the server spends the slot.",
+          },
           reason: { type: "string", description: "Short in-fiction cause." },
         },
         required: ["characterId", "feature"],
@@ -138,60 +147,22 @@ const useReactionSchema = z.object({
   feature: z.string().max(80),
   // The ally a Protection-style reaction covers.
   targetCharacterId: z.string().optional(),
+  // A reaction spell cast from a higher slot (Counterspell at 5th).
+  level: z.coerce.number().int().min(1).max(9).optional(),
   reason: z.string().optional(),
 });
 
 // ---- budget plumbing ----
 
-// The combatant the initiative pointer is currently on, or null out of
-// combat. Budgets only bind the character whose turn it actually is: a
-// character acting off-turn (a reaction, a lead correction, anything out of
-// initiative) is never refused for a spent action it does not owe.
-export function currentCombatantId(encounter: Encounter | null): string | null {
-  if (!encounter || !encounter.orderReady) {
-    return null;
-  }
-  const entry = encounter.order[encounter.turnIndex];
-  if (!entry) {
-    return null;
-  }
-  return orderEntryId(entry);
-}
-
-// The live budget for a combatant, created on first use of their turn.
-// Returns null when they are not the one acting, which every caller treats
-// as "no economy to enforce".
-export function budgetFor(
-  encounter: Encounter | null,
-  ownerId: string,
-  attacksAllowed: number,
-  // Extra actions per turn from effect conditions (Haste); only seeds a
-  // FRESH budget so spending one mid-turn sticks.
-  extraActions = 0,
-): TurnBudget | null {
-  if (!encounter || currentCombatantId(encounter) !== ownerId) {
-    return null;
-  }
-  if (budgetApplies(encounter.turnBudget, ownerId, encounter.round)) {
-    // attacksAllowed can change mid-turn (a level-up, a lead correction);
-    // the higher of the two is the fair reading.
-    return {
-      ...encounter.turnBudget,
-      attacksAllowed: Math.max(encounter.turnBudget.attacksAllowed, attacksAllowed),
-    };
-  }
-  return freshBudget({ ownerId, round: encounter.round, attacksAllowed, extraActions });
-}
-
-export function storeBudget(encounter: Encounter, budget: TurnBudget) {
-  encounter.turnBudget = budget;
-  saveEncounter(encounter);
-}
-
-// Attacks the Attack action grants this character: 1 plus Extra Attack.
-export function attacksAllowedFor(sheet: CharacterSheet): number {
-  return 1 + combatRiders(sheet).extraAttacks;
-}
+// Lives in src/lib/dm/turn-budget.ts; re-exported for the callers that
+// learned it here.
+export {
+  attacksAllowedFor,
+  budgetFor,
+  currentCombatantId,
+  grantActionSurge,
+  storeBudget,
+} from "@/lib/dm/turn-budget";
 
 // ---- take_action ----
 
@@ -213,23 +184,53 @@ function publishRoll(campaignId: string, roll: ReturnType<typeof insertRoll>) {
   publishWithSeq(campaignId, allocateSeq(campaignId), "roll_result", { roll, source: "digital" });
 }
 
-// Adds a condition to a sheet without disturbing the ones already there.
+// Adds a condition to a sheet without disturbing the ones already there. It
+// lasts a count of rounds, or until the start of the named combatant's next
+// turn, which is how Dodge, Help, Shield and the Protection style are worded.
 function addSheetCondition(
   campaign: Campaign,
   sheet: CharacterSheet,
   condition: string,
-  rounds: number,
+  lasts: { rounds: number } | { untilTurnOf: string },
 ) {
   if (sheet.conditions.some((entry) => entry.toLowerCase() === condition)) {
     return;
   }
   const updated = patchSheet(sheet.id, {
     conditions: [...sheet.conditions, condition],
-    conditionMeta: { ...sheet.conditionMeta, [condition]: { rounds } },
+    conditionMeta: { ...sheet.conditionMeta, [condition]: lasts },
   });
   if (updated) {
     publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
   }
+}
+
+// The d20 a contest or a Stealth roll is made with: an ability check, so the
+// conditions and exhaustion that put ability checks at disadvantage apply
+// here exactly as they do through request_roll.
+function checkAdvantage(
+  sheet: CharacterSheet,
+  ability: "str" | "dex",
+  extra: AdvantageState[] = [],
+): AdvantageState {
+  return mergeAdvantage([
+    rollDerivation(sheet.conditions, "skill_check", ability).advantage,
+    exhaustionRollState(sheet.exhaustion ?? 0, "skill_check").advantage,
+    ...extra,
+  ]);
+}
+
+// What an enemy contests a grapple or shove with: the better of Strength
+// (Athletics) and Dexterity (Acrobatics), a printed skill bonus when the
+// stat block has one and the bare ability modifier otherwise. A block with
+// no ability scores (an old snapshot) falls back to its save modifiers.
+function contestModifier(stats: EncounterEnemy["stats"]): number {
+  const skills = stats.skills ?? {};
+  const bare = (ability: "str" | "dex") =>
+    stats.abilities?.[ability] !== undefined
+      ? abilityMod(stats.abilities[ability])
+      : saveModFor(stats, ability);
+  return Math.max(skills.athletics ?? bare("str"), skills.acrobatics ?? bare("dex"));
 }
 
 export function handleTakeAction(
@@ -250,32 +251,43 @@ export function handleTakeAction(
   if (!sheet) {
     return { error: "Unknown characterId; use one from GAME STATE." };
   }
-  if (sheet.currentHp <= 0) {
-    return { error: `${sheet.name} is at 0 HP and takes no actions.` };
+  const encounter = getActiveEncounter(campaign.id);
+  const allowed = canAct({ sheet, encounter, kind: "action" });
+  if (!allowed.ok) {
+    return { error: allowed.error };
   }
 
-  const encounter = getActiveEncounter(campaign.id);
+  // The action is priced here and paid for below, by `spend`, once the
+  // action's own checks have passed: a grapple refused for size or a Help
+  // with no ally named leaves the turn its action.
   const budget = budgetFor(
     encounter,
     sheet.id,
     attacksAllowedFor(sheet),
     conditionExtraActions(sheet.conditions),
   );
+  let priced: TurnBudget | null = null;
   if (budget && encounter) {
-    const spend = spendAction(budget, ACTION_COST[args.action], args.action, sheet.name);
-    if (!spend.ok) {
-      return { error: spend.error };
+    const price = spendAction(budget, ACTION_COST[args.action], args.action, sheet.name);
+    if (!price.ok) {
+      return { error: price.error };
     }
-    storeBudget(encounter, spend.budget);
+    priced = price.budget;
   }
+  const spend = (flags: Partial<Pick<TurnBudget, "dashed" | "disengaged">> = {}) => {
+    if (encounter && priced) {
+      storeBudget(encounter, { ...priced, ...flags });
+    }
+  };
 
   const derived = computeSheetDerived(sheet);
 
   switch (args.action) {
     case "dodge": {
+      spend();
       // Until their next turn, attacks against them have disadvantage and
-      // they have advantage on DEX saves. One round covers both.
-      addSheetCondition(campaign, sheet, DODGING, 1);
+      // they have advantage on DEX saves.
+      addSheetCondition(campaign, sheet, DODGING, { untilTurnOf: sheet.id });
       return {
         ok: true,
         action: "Dodge",
@@ -283,9 +295,7 @@ export function handleTakeAction(
       };
     }
     case "dash": {
-      if (encounter && budget) {
-        storeBudget(encounter, { ...encounter.turnBudget!, dashed: true });
-      }
+      spend({ dashed: true });
       return {
         ok: true,
         action: "Dash",
@@ -293,9 +303,7 @@ export function handleTakeAction(
       };
     }
     case "disengage": {
-      if (encounter && budget) {
-        storeBudget(encounter, { ...encounter.turnBudget!, disengaged: true });
-      }
+      spend({ disengaged: true });
       return {
         ok: true,
         action: "Disengage",
@@ -303,10 +311,23 @@ export function handleTakeAction(
       };
     }
     case "hide": {
+      // Nobody hides from a creature that sees them clearly. On a mapped
+      // fight that is read from the board: a sight line with no cover and
+      // no darkness between is a clear view.
+      const watcher = encounter ? seenClearlyBy(encounter.id, sheet.id) : null;
+      if (watcher) {
+        return {
+          error: `${sheet.name} cannot hide: ${watcher} sees them clearly. They move out of its sight, behind cover or into darkness first, then hide.`,
+        };
+      }
+      spend();
       // Noisy armor (scale, plate...) makes hiding a disadvantage roll.
       const noisyArmor = acBreakdownFor(sheet).stealthDisadvantage;
       const stealth = rollExpression(
-        d20Expression(derived.skills.stealth ?? 0, noisyArmor ? "disadvantage" : "none"),
+        d20Expression(
+          derived.skills.stealth ?? 0,
+          checkAdvantage(sheet, "dex", noisyArmor ? ["disadvantage"] : []),
+        ),
       );
       const roll = insertRoll({
         campaignId: campaign.id,
@@ -331,7 +352,7 @@ export function handleTakeAction(
       );
       const hidden = stealth.total >= sharpest;
       if (hidden) {
-        addSheetCondition(campaign, sheet, HIDDEN, 10);
+        addSheetCondition(campaign, sheet, HIDDEN, { rounds: 10 });
       }
       return {
         ok: true,
@@ -354,8 +375,9 @@ export function handleTakeAction(
           error: "Help goes to another character: pass their targetCharacterId.",
         };
       }
+      spend();
       const fresh = getSheetById(target.id) ?? target;
-      addSheetCondition(campaign, fresh, HELPED, 1);
+      addSheetCondition(campaign, fresh, HELPED, { untilTurnOf: sheet.id });
       return {
         ok: true,
         action: "Help",
@@ -377,15 +399,25 @@ export function handleTakeAction(
           error: `${enemy.displayName} is ${enemy.stats.size}: too large for ${sheet.name} (${sizeForRace(sheet.race)}) to ${args.action}. A creature can only ${args.action} a target at most one size larger than itself.`,
         };
       }
+      // Hands on the target: it has to be within reach, with no wall between.
+      const apart = tilesBetween(encounter.id, sheet.id, enemy.id);
+      if (apart !== null && (apart > 1 || wallBetween(encounter.id, sheet.id, enemy.id))) {
+        return {
+          error: `${sheet.name} is ${apart * 5} ft from ${enemy.displayName}; a ${args.action} needs the target within 5 ft. They move their token next to it first.`,
+        };
+      }
+      spend();
       // SRD contest: the attacker's Athletics against the target's better of
-      // Athletics (STR) and Acrobatics (DEX). The stat block has no skills,
-      // so its raw ability modifiers stand in.
-      const attackRoll = rollExpression(d20Expression(derived.skills.athletics ?? 0));
-      const defenderMod = Math.max(
-        saveModFor(enemy.stats, "str"),
-        saveModFor(enemy.stats, "dex"),
+      // Athletics (STR) and Acrobatics (DEX).
+      const attackRoll = rollExpression(
+        d20Expression(derived.skills.athletics ?? 0, checkAdvantage(sheet, "str")),
       );
-      const defendRoll = rollExpression(d20Expression(defenderMod));
+      const defenderAdvantage = mergeAdvantage([
+        rollDerivation(enemy.conditions, "skill_check", "str").advantage,
+      ]);
+      const defendRoll = rollExpression(
+        d20Expression(contestModifier(enemy.stats), defenderAdvantage),
+      );
       const attackerCard = insertRoll({
         campaignId: campaign.id,
         characterId: sheet.id,
@@ -419,31 +451,45 @@ export function handleTakeAction(
       }
       const condition = args.action === "grapple" ? "grappled" : "prone";
       const pushOnly = args.action === "shove" && args.shove === "push";
-      if (!pushOnly) {
-        if (enemy.stats.conditionImmune.toLowerCase().includes(condition)) {
-          return {
-            ok: true,
-            action: args.action,
-            contest: `${attackRoll.total} vs ${defendRoll.total}`,
-            success: false,
-            note: `${enemy.displayName} cannot be ${condition}; it is immune. Narrate the attempt failing against its nature.`,
-          };
-        }
-        patchEnemyConditions(
-          enemy.id,
-          [...enemy.conditions, condition],
-          { ...enemy.conditionMeta, [condition]: {} },
-        );
-        publishEncounter(campaign.id);
+      if (pushOnly) {
+        // Five feet straight away from the shover, when the square is free.
+        const pushed = pushTokenAway(campaign, encounter.id, sheet.id, enemy.id);
+        return {
+          ok: true,
+          action: args.action,
+          contest: `${attackRoll.total} vs ${defendRoll.total}`,
+          success: true,
+          applied: pushed.moved
+            ? `${enemy.displayName} is shoved 5 feet back to (${pushed.at.x},${pushed.at.y}). The server moved its token; the push provokes nothing.`
+            : `${enemy.displayName} is shoved but has nowhere to go: ${pushed.reason}. It stays where it is.`,
+        };
       }
+      if (enemy.stats.conditionImmune.toLowerCase().includes(condition)) {
+        return {
+          ok: true,
+          action: args.action,
+          contest: `${attackRoll.total} vs ${defendRoll.total}`,
+          success: false,
+          note: `${enemy.displayName} cannot be ${condition}; it is immune. Narrate the attempt failing against its nature.`,
+        };
+      }
+      patchEnemyConditions(
+        enemy.id,
+        [...enemy.conditions, condition],
+        {
+          ...enemy.conditionMeta,
+          // Who holds the grapple, so it can end when they are incapacitated
+          // (src/lib/dm/set-condition.ts releaseGrapplesHeldBy).
+          [condition]: condition === "grappled" ? { source: sheet.id } : {},
+        },
+      );
+      publishEncounter(campaign.id);
       return {
         ok: true,
         action: args.action,
         contest: `${attackRoll.total} vs ${defendRoll.total}`,
         success: true,
-        applied: pushOnly
-          ? `${enemy.displayName} is shoved 5 feet back; move its token if the map shows the fight.`
-          : `${enemy.displayName} is ${condition}. The server applied the condition and its mechanics.`,
+        applied: `${enemy.displayName} is ${condition}. The server applied the condition and its mechanics.`,
       };
     }
   }
@@ -498,10 +544,13 @@ export function handleUseReaction(
   if (!sheet) {
     return { error: "Unknown characterId; use one from GAME STATE." };
   }
-  if (sheet.currentHp <= 0) {
-    return { error: `${sheet.name} is at 0 HP and has no reaction to spend.` };
-  }
   const encounter = getActiveEncounter(campaign.id);
+  // The dead, the dying, the incapacitated and the surprised have no
+  // reaction; whose turn it is does not matter to one.
+  const allowed = canAct({ sheet, encounter, kind: "reaction" });
+  if (!allowed.ok) {
+    return { error: allowed.error };
+  }
   if (!encounter) {
     return { error: "Reactions only exist in combat; there is no active encounter." };
   }
@@ -515,47 +564,63 @@ export function handleUseReaction(
 
   // A reaction is spent on someone ELSE's turn, so it cannot live in the
   // acting combatant's turn budget. Both sides of the table share
-  // encounter.reactionsUsed, which empties when the round wraps.
+  // encounter.reactionsUsed; a combatant's entry leaves it as their own turn
+  // starts (advancePointer).
   if (encounter.reactionsUsed.includes(sheet.id)) {
     return {
-      error: `${sheet.name} has already used their reaction this round; it comes back at the start of their next turn. ${args.feature} does not happen.`,
+      error: `${sheet.name} has already used their reaction; it comes back at the start of their next turn. ${args.feature} does not happen.`,
     };
   }
 
-  // The Shield SPELL has a real server payload: the slot is spent and the
-  // +5 AC lands as a registry condition until their next turn, so enemy
-  // swings genuinely test the higher number. A refused spend refuses the
-  // reaction (and leaves it unspent).
-  const spellList = sheet.spellcasting
-    ? allSpellNames(sheet.spellcasting)
-    : [];
-  const isShieldSpell =
-    /^shield\b/i.test(args.feature.trim()) &&
-    !/of faith|master|bash|protection/i.test(args.feature) &&
-    spellList.some((entry) => /^shield\b(?!.*of faith)/i.test(entry.trim()));
-  if (isShieldSpell) {
-    const spend = applyDmMutation(
+  // A reaction that is a spell (Shield, Counterspell, Hellish Rebuke,
+  // Absorb Elements, Feather Fall) is a cast: the caster must hold it and
+  // pay its slot through the one guard (src/lib/dm/cast-guard.ts), which
+  // refuses before the reaction is spent. Shield's +5 AC then lands as a
+  // registry condition until their next turn, so enemy swings genuinely
+  // test the higher number.
+  const reactionSpell = spellFactsFor(args.feature.trim(), spellAuthorsFor(campaign));
+  if (reactionSpell?.castingTime === "reaction") {
+    const cast = applyDmMutation(
       campaign,
       turn.id,
       "use_spell_slot",
-      JSON.stringify({ characterId: sheet.id, level: 1, spell: "Shield", reason: "Shield reaction" }),
+      JSON.stringify({
+        characterId: sheet.id,
+        spell: reactionSpell.name,
+        ...(args.level ? { level: args.level } : {}),
+        via: "reaction",
+        reason: `${reactionSpell.name} reaction`,
+      }),
       sheets,
       sheetsById,
     ).result;
-    if ("error" in spend) {
-      return spend;
+    if ("error" in cast) {
+      return cast;
     }
     encounter.reactionsUsed = [...encounter.reactionsUsed, sheet.id];
     saveEncounter(encounter);
-    addSheetCondition(campaign, sheet, "shielded", 1);
-    const updated = getSheetById(sheet.id);
+    const spent = `${sheet.name}'s reaction${
+      typeof cast.slotLevel === "number" ? ` and a level-${cast.slotLevel} slot are` : " is"
+    } spent.`;
+    if (reactionSpell.name.toLowerCase() === "shield") {
+      addSheetCondition(campaign, sheet, "shielded", { untilTurnOf: sheet.id });
+      const updated = getSheetById(sheet.id);
+      return {
+        ok: true,
+        reaction: args.feature,
+        spent,
+        applied: `Shield: +5 AC until the start of their next turn; their AC is now ${
+          updated?.ac ?? sheet.ac + 5
+        }. The server applied it. If the triggering attack rolled below that, it misses; narrate accordingly.`,
+      };
+    }
+    const known = REACTION_NOTES.find((entry) => entry.match.test(args.feature));
     return {
       ok: true,
       reaction: args.feature,
-      spent: `${sheet.name}'s reaction and a level-1 slot are spent.`,
-      applied: `Shield: +5 AC until the start of their next turn; their AC is now ${
-        updated?.ac ?? sheet.ac + 5
-      }. The server applied it. If the triggering attack rolled below that, it misses; narrate accordingly.`,
+      spent,
+      ...(cast.droppedConcentration ? { droppedConcentration: cast.droppedConcentration } : {}),
+      note: known?.note ?? `${reactionSpell.name} is cast; narrate its effect as the spell describes it.`,
     };
   }
 
@@ -571,7 +636,7 @@ export function handleUseReaction(
       : null;
     const ally = allyRef ? (getSheetById(allyRef.id) ?? allyRef) : null;
     if (ally && ally.id !== sheet.id) {
-      addSheetCondition(campaign, ally, "protected", 1);
+      addSheetCondition(campaign, ally, "protected", { untilTurnOf: sheet.id });
       return {
         ok: true,
         reaction: args.feature,

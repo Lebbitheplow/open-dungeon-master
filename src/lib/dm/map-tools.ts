@@ -40,6 +40,7 @@ import { publishEphemeral } from "@/lib/events";
 import { resolveSheetRef } from "@/lib/dm/rolls";
 import { resolvePcOpportunityAttacks } from "@/lib/dm/opportunity";
 import { effectiveSpeed } from "@/lib/dm/condition-logic";
+import { canEnemyAct } from "@/lib/dm/can-act";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { z } from "zod";
 
@@ -346,7 +347,7 @@ function resolveMoveTarget(
   ref: string,
   sheets: CharacterSheet[],
   sheetsById: Map<string, CharacterSheet>,
-): { token: BattleToken; kind: "pc" | "enemy"; speedTiles: number } | null {
+): { token: BattleToken; kind: "pc" | "enemy"; speedTiles: number; enemy?: EncounterEnemy } | null {
   const trimmed = ref.trim();
   const sheet = resolveSheetRef(trimmed, sheets, sheetsById);
   if (sheet) {
@@ -366,7 +367,13 @@ function resolveMoveTarget(
   // move with the standard "no movement left" error.
   const speedTiles =
     effectiveSpeed(enemy.conditions, 1) === 0 ? 0 : speedToTiles(enemy.stats.speed);
-  return token ? { token, kind: "enemy", speedTiles } : null;
+  return token ? { token, kind: "enemy", speedTiles, enemy } : null;
+}
+
+// The squares of a path up to and including the one landed on.
+function walkedPart(path: Array<{ x: number; y: number }>, landing: { x: number; y: number }) {
+  const at = path.findIndex((step) => step.x === landing.x && step.y === landing.y);
+  return at >= 0 ? path.slice(0, at + 1) : path;
 }
 
 export function handleMoveToken(
@@ -407,6 +414,14 @@ export function handleMoveToken(
       return {
         error: `It is ${resolved.token.name}'s own turn; they move their own token from the board. Forced movement is for a push, drag or carry on someone else's turn. Ask what they do, or use teleport_token for a magical relocation.`,
       };
+    }
+  }
+  // An enemy walking is an enemy acting: a surprised one stands where it is
+  // through round 1. A push or a drag moves whoever it moves.
+  if (resolved.kind === "enemy" && resolved.enemy && !args.forced) {
+    const allowed = canEnemyAct({ enemy: resolved.enemy, encounter, kind: "reaction" });
+    if (!allowed.ok && allowed.reason === "surprised") {
+      return { error: allowed.error };
     }
   }
   if (args.x < 0 || args.y < 0 || args.x >= map.width || args.y >= map.height) {
@@ -473,7 +488,13 @@ export function handleMoveToken(
   // (a shove, a gust of wind) provokes nothing.
   const opportunity =
     resolved.kind === "enemy" && !args.forced
-      ? resolvePcOpportunityAttacks(campaign, resolved.token.refId, origin, landing)
+      ? resolvePcOpportunityAttacks(
+          campaign,
+          resolved.token.refId,
+          origin,
+          landing,
+          walkedPart(path, landing),
+        )
       : [];
   // Fresh ranges from the landing tile, so the model narrates the new
   // distances instead of remembering the pre-move map.
@@ -502,6 +523,39 @@ export function handleMoveToken(
         }
       : {}),
   };
+}
+
+// A shove: the target goes one square straight away from whoever pushed it.
+// Forced movement, so nothing is spent and nothing is provoked. The square
+// has to be open floor with nobody on it; otherwise the target stays.
+export function pushTokenAway(
+  campaign: Campaign,
+  encounterId: string,
+  pusherRef: string,
+  targetRef: string,
+): { moved: true; at: { x: number; y: number } } | { moved: false; reason: string } {
+  const map = getBattleMapForEncounter(encounterId);
+  const pusher = map ? getTokenByRef(map.id, pusherRef) : null;
+  const target = map ? getTokenByRef(map.id, targetRef) : null;
+  if (!map || !pusher || !target) {
+    return { moved: false, reason: "there is no battle map to move it on" };
+  }
+  const at = {
+    x: target.x + Math.sign(target.x - pusher.x),
+    y: target.y + Math.sign(target.y - pusher.y),
+  };
+  if (at.x < 0 || at.y < 0 || at.x >= map.width || at.y >= map.height) {
+    return { moved: false, reason: "the edge of the map is behind it" };
+  }
+  if (blocksMove(tileAt(map.terrain, map.width, at.x, at.y))) {
+    return { moved: false, reason: "a wall is behind it" };
+  }
+  if (occupiedTiles(map, listTokens(map.id), target).has(tileIndex(map.width, at.x, at.y))) {
+    return { moved: false, reason: "someone stands behind it" };
+  }
+  moveToken(target.id, at.x, at.y, target.movedThisRound);
+  publishBattleMapUpdate(campaign.id);
+  return { moved: true, at };
 }
 
 // ---- spatial checks for pc_attack ----
@@ -579,7 +633,16 @@ export function checkPcAttackRange(
   encounterId: string,
   characterId: string,
   enemyId: string,
-  options: { ranged: boolean; rangeTiles: number; reachTiles: number; thrown: boolean },
+  options: {
+    ranged: boolean;
+    rangeTiles: number;
+    reachTiles: number;
+    thrown: boolean;
+    // The weapon's printed long range. Absent, the attack reaches twice its
+    // normal range, which is what an attack-roll spell and a homebrew weapon
+    // saved without one still do.
+    longRangeTiles?: number;
+  },
 ): string | null {
   const map = getBattleMapForEncounter(encounterId);
   if (!map) {
@@ -591,9 +654,7 @@ export function checkPcAttackRange(
     return null;
   }
   const distance = chebyshev(attacker.x, attacker.y, target.x, target.y);
-  if (!options.ranged && distance <= options.reachTiles) {
-    return null;
-  }
+  const maxTiles = options.longRangeTiles ?? options.rangeTiles * 2;
   const sighted = hasLineOfSight(
     map.terrain,
     map.width,
@@ -603,15 +664,22 @@ export function checkPcAttackRange(
     target.x,
     target.y,
   );
-  // The SRD long-range rule: a ranged weapon reaches twice its normal range,
-  // at disadvantage. Past that it cannot reach at all.
-  if ((options.ranged || options.thrown) && distance <= options.rangeTiles * 2) {
+  if (!options.ranged && distance <= options.reachTiles) {
+    // In reach. Toe to toe nothing can stand between; a reach weapon at 10
+    // feet does not strike through the wall square in the middle.
+    return distance <= 1 || sighted
+      ? null
+      : `A wall stands between ${attacker.name} and ${target.name}; the blow cannot reach through it. They must move their token to a clear line first or pick another target.`;
+  }
+  // The SRD long-range rule: past its normal range a weapon shoots at
+  // disadvantage out to its long range. Past that it cannot reach at all.
+  if ((options.ranged || options.thrown) && distance <= maxTiles) {
     return sighted
       ? null
       : `${attacker.name} has no line of sight to ${target.name}; something blocks the shot. They must move their token to a sightline first or pick another target.`;
   }
   if (options.ranged || options.thrown) {
-    return `${attacker.name} is ${distance * 5} ft from ${target.name}, beyond this attack's ${options.rangeTiles * 10} ft maximum range. They must move their token closer or pick another target.`;
+    return `${attacker.name} is ${distance * 5} ft from ${target.name}, beyond this attack's ${maxTiles * 5} ft maximum range. They must move their token closer or pick another target.`;
   }
   return `${attacker.name} is ${distance * 5} ft from ${target.name}, out of melee reach (${options.reachTiles * 5} ft). They must move their token adjacent first or attack with a ranged weapon.`;
 }
@@ -637,7 +705,7 @@ export function approachForAttack(
   enemyId: string,
   targetCharacterId: string,
   attackName: string,
-): { blocked?: Record<string, unknown>; movedTo?: string } | null {
+): { blocked?: Record<string, unknown>; movedTo?: string; opportunityAttacks?: string[] } | null {
   const map = getBattleMapForEncounter(encounterId);
   if (!map) {
     return null;
@@ -686,9 +754,23 @@ export function approachForAttack(
           )
         : null;
     if (spot) {
+      const origin = { x: attacker.x, y: attacker.y };
+      const walked = findPath(map.terrain, map.width, map.height, occupied, attacker, spot.at);
       moveToken(attacker.id, spot.at.x, spot.at.y, attacker.movedThisRound + spot.cost);
       publishBattleMapUpdate(campaign.id);
-      return { movedTo: `(${spot.at.x},${spot.at.y})` };
+      // Walking to a firing position is walking: whoever it leaves behind
+      // gets their opportunity attack.
+      const provoked = resolvePcOpportunityAttacks(
+        campaign,
+        enemyId,
+        origin,
+        spot.at,
+        walked ?? undefined,
+      );
+      return {
+        movedTo: `(${spot.at.x},${spot.at.y})`,
+        ...(provoked.length ? { opportunityAttacks: provoked } : {}),
+      };
     }
     return {
       blocked: {
@@ -713,17 +795,31 @@ export function approachForAttack(
   // Path targets the occupied tile; stop one step short of it.
   const approach = path ? path.slice(0, -1) : null;
   let landed = { x: attacker.x, y: attacker.y };
+  let provoked: string[] = [];
   if (approach && approach.length && budget > 0) {
     const walk = walkPathWithBudget(map.terrain, map.width, approach, budget);
     if (walk.at) {
+      const origin = { x: attacker.x, y: attacker.y };
       landed = walk.at;
       moveToken(attacker.id, walk.at.x, walk.at.y, attacker.movedThisRound + walk.spent);
       publishBattleMapUpdate(campaign.id);
+      // An enemy that leaves one character's reach to get at another is
+      // struck on its way, however it came to move.
+      provoked = resolvePcOpportunityAttacks(
+        campaign,
+        enemyId,
+        origin,
+        landed,
+        walkedPart(approach, landed),
+      );
     }
   }
   const remaining = chebyshev(landed.x, landed.y, target.x, target.y);
   if (remaining <= 1) {
-    return { movedTo: `(${landed.x},${landed.y})` };
+    return {
+      movedTo: `(${landed.x},${landed.y})`,
+      ...(provoked.length ? { opportunityAttacks: provoked } : {}),
+    };
   }
   return {
     blocked: {

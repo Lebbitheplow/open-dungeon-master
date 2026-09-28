@@ -1,190 +1,39 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import {
-  backgroundMechanics,
-  classMechanics,
-  type ClassMechanics,
-  type RaceMechanics,
-} from "@/lib/content/mechanics";
 import { packRaceOptions } from "@/lib/content/race-options";
-import { SRD_BACKGROUNDS, SRD_CLASSES, SRD_RACES } from "@/lib/srd";
-import { CUSTOM_BACKGROUNDS } from "@/lib/backgrounds";
-import { CUSTOM_CLASSES } from "@/lib/classes";
-import type { Genre } from "@/lib/schemas/game-settings";
+import {
+  mergedBackgroundOptions,
+  packClassOptions,
+  srdBackgroundOptions,
+  srdClassOptions,
+  srdRaceOptions,
+  type BackgroundOption,
+  type ClassOption,
+  type ContentRow,
+  type RaceOption,
+} from "@/lib/characters/options";
 import type { WorldPack } from "@/lib/worlds/types";
 
-export type RaceOption = { id: string; name: string; note: string } & RaceMechanics;
-export type ClassOption = { id: string; name: string } & ClassMechanics & {
-    // Catalog-only extras; absent on SRD and Open5e rows.
-    genres?: Genre[];
-    blurb?: string;
-    knownCaster?: boolean;
-    castingLabel?: string | null;
-    spellListFrom?: string | null;
-    // The content pack's write-up, shown under the class select.
-    desc?: string;
-    // Secret languages the class teaches (Druidic, Thieves' Cant).
-    languages?: string[];
-  };
-export type BackgroundOption = {
-  id: string;
-  name: string;
-  skills: string[];
-  // A pick of skills on top of the fixed ones (a pack artisan's "either
-  // Insight or History").
-  skillChoice?: { count: number; from: string[] };
-  // Grants beyond skills.
-  tools?: string[];
-  languages?: number;
-  // Languages the background names outright (a pack forest dweller's Sylvan).
-  knownLanguages?: string[];
-  equipment?: string[];
-  // Catalog-only extras; absent on Open5e rows.
-  genres?: Genre[];
-  blurb?: string;
-  // The named feature the background grants, and what it does.
-  feature?: string;
-  featureDesc?: string;
-  // The content pack's write-up, shown under the background select.
-  desc?: string;
+// The option rows themselves are built in src/lib/characters/options.ts,
+// which the server reads too; they are re-exported here because this is
+// where the builder's modules have always found them.
+export {
+  mergedBackgroundOptions,
+  srdBackgroundOptions,
+  srdClassOptions,
+  srdRaceOptions,
+  type BackgroundOption,
+  type ClassOption,
+  type RaceOption,
 };
+
 // `desc` is the subclass write-up shown in the builder before a pick is made.
 // For the authored subclasses it holds the whole level-by-level feature table
 // with its rules text, built by insertAuthoredContent in
 // scripts/import-open5e.mjs, so a new player can read what a circle or an
 // oath actually does before committing to it.
 export type ArchetypeOption = { id: string; name: string; desc: string };
-
-type ContentRow = {
-  slug: string;
-  name: string;
-  source: string;
-  documentSlug: string;
-  data: Record<string, unknown>;
-};
-
-export function srdRaceOptions(): RaceOption[] {
-  return SRD_RACES.map((race) => ({
-    id: race.id,
-    name: race.name,
-    speed: race.speed,
-    asi: race.asi,
-    languages: race.languages,
-    bonusLanguages: race.bonusLanguages ?? 0,
-    traitsSummary: race.traits.join(" · "),
-    traitNames: race.traits,
-    choiceTraitNames: [],
-    skills: race.skills,
-    skillChoice: race.skillChoice,
-    asiChoice: race.asiChoice,
-    cantripChoice: race.cantripChoice,
-    tools: race.tools,
-    toolChoice: race.toolChoice,
-    armor: race.armor,
-    weapons: race.weapons,
-    note: race.traits.join(" · "),
-  }));
-}
-
-function customClassOptions(): ClassOption[] {
-  return CUSTOM_CLASSES.map((klass) => ({
-    id: klass.id,
-    name: klass.name,
-    hitDie: klass.hitDie,
-    saves: klass.saves,
-    skillChoices: klass.skillChoices,
-    armor: klass.armor,
-    weapons: klass.weapons,
-    tools: klass.tools ?? [],
-    spellAbility: klass.spellAbility,
-    casterType: klass.casterType,
-    genres: klass.genres,
-    blurb: klass.blurb,
-    knownCaster: klass.knownCaster,
-    castingLabel: klass.castingLabel,
-    spellListFrom: klass.spellListFrom,
-  }));
-}
-
-export function srdClassOptions(): ClassOption[] {
-  return [
-    ...SRD_CLASSES.map((klass) => ({
-      id: klass.id,
-      name: klass.name,
-      blurb: klass.blurb,
-      languages: klass.languages,
-      hitDie: klass.hitDie,
-      saves: klass.saves,
-      skillChoices: klass.skillChoices,
-      armor: klass.armor,
-      weapons: klass.weapons,
-      tools: klass.tools ?? [],
-      spellAbility: klass.spellAbility,
-      casterType: klass.casterType,
-    })),
-    ...customClassOptions(),
-  ];
-}
-
-function customBackgroundOptions(): BackgroundOption[] {
-  return CUSTOM_BACKGROUNDS.map((background) => ({
-    id: background.id,
-    name: background.name,
-    skills: background.skills,
-    tools: background.tools,
-    languages: background.languages,
-    equipment: background.equipment,
-    genres: background.genres,
-    blurb: background.blurb,
-    feature: background.feature,
-    featureDesc: background.featureDesc,
-  }));
-}
-
-export function srdBackgroundOptions(): BackgroundOption[] {
-  return [
-    ...SRD_BACKGROUNDS.map((background) => ({
-      id: background.id,
-      name: background.name,
-      skills: background.skills,
-      tools: background.tools,
-      languages: background.languages,
-      equipment: background.equipment,
-      blurb: background.blurb,
-      feature: background.feature,
-      featureDesc: background.featureDesc,
-    })),
-    ...customBackgroundOptions(),
-  ];
-}
-
-// The content pack's backgrounds, added to the bundled list rather than
-// replacing it. A pack row for a background the bundled SRD already carries
-// (the wotc-srd acolyte, a third-party charlatan under the same slug) gives
-// way to the bundled one, which is what grants the tools, languages, kit
-// and feature; the pack's other backgrounds join after it with the write-up,
-// feature text and grants their rows carry.
-export function mergedBackgroundOptions(rows: ContentRow[]): BackgroundOption[] {
-  const bundled = srdBackgroundOptions();
-  const bundledIds = new Set(bundled.map((option) => option.id));
-  const packBackgrounds: BackgroundOption[] = rows
-    .filter((row) => !bundledIds.has(row.slug.toLowerCase().replace(/-/g, "_")))
-    .map((row) => {
-      const feature = String(row.data?.feature ?? "").trim();
-      const featureDesc = String(row.data?.feature_desc ?? "").trim();
-      return {
-        id: row.slug,
-        name: row.name,
-        ...backgroundMechanics(row.data),
-        desc: String(row.data?.desc ?? ""),
-        ...(feature ? { feature } : {}),
-        ...(featureDesc ? { featureDesc } : {}),
-      };
-    });
-  const srdCount = SRD_BACKGROUNDS.length;
-  return [...bundled.slice(0, srdCount), ...packBackgrounds, ...bundled.slice(srdCount)];
-}
 
 // Loads race/class/background options from the Open5e content pack with the
 // bundled SRD data as fallback (and as the shape contract). `keepRaceId` is
@@ -223,27 +72,7 @@ export function useBuilderOptions(keepRaceId?: string) {
         }
         const classRows = (classesData.results ?? []) as ContentRow[];
         if (classRows.length) {
-          // Catalog classes ride along with the pack rows; pack slugs win a
-          // (never expected) id collision so the dedupe is just a backstop.
-          const packOptions: ClassOption[] = classRows.map((row) => {
-            // Open5e rows say nothing about Druidic or Thieves' Cant, and
-            // open with a rules wall rather than a line a new player can
-            // read, so the bundled SRD entry supplies both.
-            const bundled = SRD_CLASSES.find((klass) => klass.id === row.slug);
-            return {
-              id: row.slug,
-              name: row.name,
-              ...classMechanics(row.slug, row.data),
-              desc: String(row.data?.desc ?? ""),
-              blurb: bundled?.blurb,
-              languages: bundled?.languages,
-            };
-          });
-          const packIds = new Set(packOptions.map((option) => option.id));
-          setClasses([
-            ...packOptions,
-            ...customClassOptions().filter((option) => !packIds.has(option.id)),
-          ]);
+          setClasses(packClassOptions(classRows));
         }
         const backgroundRows = (backgroundsData.results ?? []) as ContentRow[];
         if (backgroundRows.length) {

@@ -230,9 +230,10 @@ export function hpBreakdown({
   bonusPerLevel?: number;
 }): HpBreakdown {
   const conMod = Math.floor((con - 10) / 2);
-  const firstLevel = hitDie + conMod + bonusPerLevel;
-  const perLevel = Math.floor(hitDie / 2) + 1 + conMod + bonusPerLevel;
-  const laterLevels = Math.max(0, (level - 1) * perLevel);
+  // Every level adds at least 1, so the floor sits on each level.
+  const firstLevel = Math.max(1, hitDie + conMod + bonusPerLevel);
+  const perLevel = Math.max(1, Math.floor(hitDie / 2) + 1 + conMod + bonusPerLevel);
+  const laterLevels = Math.max(0, level - 1) * perLevel;
   return {
     hitDie,
     conMod,
@@ -240,7 +241,7 @@ export function hpBreakdown({
     perLevel,
     laterLevels,
     bonusPerLevel,
-    total: Math.max(1, firstLevel + laterLevels),
+    total: firstLevel + laterLevels,
   };
 }
 

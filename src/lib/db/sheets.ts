@@ -1,10 +1,12 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { touchCampaign } from "@/lib/db/campaigns";
+import { effectiveMaxHp } from "@/lib/dm/condition-logic";
 import { populateFeaturesForClasses } from "@/lib/srd/features";
 import { populateResources } from "@/lib/srd/class-resources";
-import { deriveAc } from "@/lib/srd";
+import { XP_THRESHOLDS, deriveAc } from "@/lib/srd";
+import { settleLevelChange, withoutDuplicateClasses } from "@/lib/srd/level-change";
 import { normalizeSpellcasting } from "@/lib/srd/spell-lists";
-import { ATTUNEMENT_SLOTS } from "@/lib/srd/armor";
+import { settleAttunement, type Wearer } from "@/lib/srd/magic-items";
 import { itemWeightByName } from "@/lib/content";
 import { hydrateHomebrewGear } from "@/lib/db/homebrew";
 import { backgroundFeatureFor } from "@/lib/backgrounds";
@@ -113,7 +115,11 @@ function mapSheet(row: SheetRow): CharacterSheet {
       );
       return { ...parsed, expertise: parsed.expertise ?? [] };
     })(),
-    equipment: withItemWeights(hydrateHomebrewGear(row.user_id, parseJson(row.equipment_json, []))),
+    // In play the gear's mechanics come from the table's owner and DM
+    // seats, so a player's own homebrew is not a second source of rules.
+    equipment: withItemWeights(
+      hydrateHomebrewGear(row.user_id, parseJson(row.equipment_json, []), { campaignId: row.campaign_id }),
+    ),
     gold: row.gold,
     copper: row.copper ?? 0,
     feats: parseJson(row.feats_json, []),
@@ -205,15 +211,14 @@ function withItemWeights(equipment: CharacterSheet["equipment"]): CharacterSheet
   });
 }
 
-function capAttunement(equipment: CharacterSheet["equipment"]): CharacterSheet["equipment"] {
-  let attuned = 0;
-  return equipment.map((item) => {
-    if (!item.attuned) {
-      return item;
-    }
-    attuned += 1;
-    return attuned <= ATTUNEMENT_SLOTS ? item : { ...item, attuned: false };
-  });
+// Attunement the rules deny (a fourth item, a second copy, an item that
+// needs none, one whose text keeps this character out) is taken off here,
+// whatever path wrote the pack.
+function capAttunement(
+  equipment: CharacterSheet["equipment"],
+  wearer: Wearer,
+): CharacterSheet["equipment"] {
+  return settleAttunement(equipment, wearer);
 }
 
 export function createSheet(
@@ -222,10 +227,15 @@ export function createSheet(
   level: number,
   input: CreateSheetInput,
   libraryCharacterId?: string | null,
+  options: { xp?: number } = {},
 ): CharacterSheet {
   const db = getDatabase();
   const id = crypto.randomUUID();
   const now = nowIso();
+  // A character of a level holds at least the experience that level takes
+  // (SRD 5.1, Character Advancement), so the next level costs what the table
+  // says and not the whole climb from nothing.
+  const xp = Math.max(XP_THRESHOLDS[Math.max(1, Math.min(20, level)) - 1] ?? 0, options.xp ?? 0);
   // Every creation path lands here, so the SRD class features and racial
   // traits are always granted for the level the sheet actually starts at.
   // A multiclassed library character re-entering play grants per class.
@@ -258,6 +268,9 @@ export function createSheet(
   // library character stored before the engine: its equipment list has no
   // armor in it, so its saved AC is the only truthful number available.
   const acOverride = input.acOverride ?? true;
+  // Homebrew armour is read with its mechanics, so a sheet created in it
+  // stores its armor class at once.
+  const equipment = capAttunement(input.equipment ?? [], input);
   const ac = acOverride
     ? input.ac
     : deriveAc({
@@ -266,8 +279,11 @@ export function createSheet(
         classes: classList.length > 1 ? classList : undefined,
         abilities: input.abilities,
         proficiencies: input.proficiencies,
-        equipment: input.equipment,
+        equipment: hydrateHomebrewGear(userId, equipment, { campaignId }),
         features,
+        race: input.race,
+        alignment: input.alignment,
+        spellcasting: input.spellcasting,
       });
 
   db.prepare(
@@ -280,7 +296,7 @@ export function createSheet(
         features_json, resources_json, spellcasting_json, conditions_json, portrait_json,
         notes, backstory, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?, ?)
     `,
   ).run(
     id,
@@ -296,6 +312,7 @@ export function createSheet(
     // Older library sheet_json blobs and companion drafts predate the field.
     input.gender ?? "",
     level,
+    xp,
     JSON.stringify(input.abilities),
     input.maxHp,
     input.maxHp,
@@ -307,8 +324,15 @@ export function createSheet(
     classList.length > 1 && input.hitDicePools?.length
       ? JSON.stringify(input.hitDicePools)
       : null,
-    JSON.stringify(input.proficiencies),
-    JSON.stringify(input.equipment),
+    // Expertise stands on a proficiency, and three items are attuned at
+    // most, whichever door the sheet came through.
+    JSON.stringify({
+      ...input.proficiencies,
+      expertise: (input.proficiencies.expertise ?? []).filter((skill) =>
+        input.proficiencies.skills.includes(skill),
+      ),
+    }),
+    JSON.stringify(equipment),
     input.gold,
     input.copper,
     JSON.stringify(input.feats),
@@ -354,8 +378,10 @@ export function getSheetForUser(campaignId: string, userId: string): CharacterSh
       return mapSheet(active);
     }
   }
+  // Two sheets made in the same millisecond are told apart by the order
+  // they were stored in, so "the first" is always the same one.
   const row = db
-    .prepare(`SELECT ${SHEET_COLUMNS} FROM character_sheets WHERE campaign_id = ? AND user_id = ? ORDER BY created_at ASC`)
+    .prepare(`SELECT ${SHEET_COLUMNS} FROM character_sheets WHERE campaign_id = ? AND user_id = ? ORDER BY created_at ASC, rowid ASC`)
     .get(campaignId, userId) as SheetRow | undefined;
   return row ? mapSheet(row) : null;
 }
@@ -363,7 +389,7 @@ export function getSheetForUser(campaignId: string, userId: string): CharacterSh
 // Every character this user made here, oldest first.
 export function listSheetsForUser(campaignId: string, userId: string): CharacterSheet[] {
   const rows = getDatabase()
-    .prepare(`SELECT ${SHEET_COLUMNS} FROM character_sheets WHERE campaign_id = ? AND user_id = ? ORDER BY created_at ASC`)
+    .prepare(`SELECT ${SHEET_COLUMNS} FROM character_sheets WHERE campaign_id = ? AND user_id = ? ORDER BY created_at ASC, rowid ASC`)
     .all(campaignId, userId) as SheetRow[];
   return rows.map(mapSheet);
 }
@@ -416,7 +442,7 @@ export function playingAsByCampaign(userId: string): Map<string, string> {
 export function listSheets(campaignId: string): CharacterSheet[] {
   const rows = getDatabase()
     .prepare(
-      `SELECT ${SHEET_COLUMNS} FROM character_sheets WHERE campaign_id = ? ORDER BY created_at ASC`,
+      `SELECT ${SHEET_COLUMNS} FROM character_sheets WHERE campaign_id = ? ORDER BY created_at ASC, rowid ASC`,
     )
     .all(campaignId) as SheetRow[];
   return rows.map(mapSheet);
@@ -495,6 +521,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
         : entry,
     );
   }
+  classes = withoutDuplicateClasses(classes, existing.classes);
   const usingClasses = classes.length > 0;
   const summedLevel = Math.min(
     20,
@@ -571,7 +598,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
             classes.length ? classes : undefined,
           )
         : existing.resources),
-    equipment: capAttunement(patch.equipment ?? existing.equipment),
+    equipment: patch.equipment ?? existing.equipment,
     hitDice: hitDicePools?.length
       ? poolsMirror(hitDicePools, classes[0]?.id)
       : (patch.hitDice ?? existing.hitDice),
@@ -590,9 +617,60 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
     backstory: patch.backstory ?? existing.backstory,
   };
 
+  // A level or a class that changed, by any path, brings its features, hit
+  // dice, slot row and experience floor with it (src/lib/srd/level-change.ts),
+  // so a level the DM sets leaves a sheet that can be played at that level.
+  const levelChanged = next.level !== existing.level;
+  const classChanged =
+    next.class !== existing.class ||
+    next.subclass !== existing.subclass ||
+    JSON.stringify(next.classes) !== JSON.stringify(existing.classes);
+  if (levelChanged || classChanged) {
+    const settled = settleLevelChange(
+      {
+        class: next.class,
+        subclass: next.subclass,
+        race: next.race,
+        level: next.level,
+        xp: next.xp,
+        classes: next.classes,
+        features: next.features,
+        // A spent count the patch itself carries is the newest word on it.
+        hitDice: patch.hitDice ?? existing.hitDice,
+        hitDicePools: patch.hitDicePools !== undefined ? patch.hitDicePools : existing.hitDicePools,
+        spellcasting: next.spellcasting,
+        loneClassBefore: existing.classes.length ? null : existing.class,
+      },
+      { spellcasting: patch.spellcasting !== undefined, xp: patch.xp !== undefined },
+    );
+    next.features = settled.features;
+    next.hitDice = settled.hitDice;
+    next.hitDicePools = settled.hitDicePools;
+    next.spellcasting = settled.spellcasting;
+    next.xp = settled.xp;
+    // The counters follow the features just granted. Counters the patch
+    // itself wrote are the newest word on what is spent, and are sized the
+    // same way, so the sheet reads the same after the next boot's resync.
+    next.resources = populateResources(
+      next.features,
+      next.level,
+      Object.fromEntries(
+        Object.entries(next.abilities).map(([ability, score]) => [
+          ability,
+          Math.floor((score - 10) / 2),
+        ]),
+      ),
+      patch.resources ?? existing.resources,
+      next.classes.length ? next.classes : undefined,
+    );
+  }
+
   // The armor engine owns the AC unless a human pinned it: buying a
   // breastplate, equipping a shield, or gaining Unarmored Defense changes
   // the number here rather than waiting for someone to retype it.
+  // Attunement is judged against the sheet as it now stands (class, race,
+  // alignment, spellcasting may have changed with the same patch).
+  next.equipment = capAttunement(next.equipment, next);
   if (!next.acOverride) {
     next.ac = deriveAc({
       class: next.class,
@@ -600,8 +678,11 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
       classes: next.classes.length ? next.classes : undefined,
       abilities: next.abilities,
       proficiencies: next.proficiencies,
-      equipment: next.equipment,
+      equipment: hydrateHomebrewGear(existing.userId, next.equipment, { campaignId: existing.campaignId }),
       features: next.features,
+      race: next.race,
+      alignment: next.alignment,
+      spellcasting: next.spellcasting,
       // Effect conditions (Shield of Faith, Mage Armor, Barkskin) move the
       // stored AC while they hold; expiry recomputes it right back.
       conditions: next.conditions,
@@ -632,7 +713,9 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
       next.speed,
       JSON.stringify(next.abilities),
       JSON.stringify(next.proficiencies),
-      Math.min(next.currentHp, next.maxHp),
+      // Never above the maximum the character really has: exhaustion level 4
+      // halves it for as long as it lasts (dm/condition-logic.ts).
+      Math.min(next.currentHp, effectiveMaxHp({ maxHp: next.maxHp, exhaustion: next.exhaustion })),
       next.tempHp,
       next.maxHp,
       next.ac,

@@ -36,6 +36,19 @@ export type TurnBudget = {
   // Extra actions still available this turn (Haste grants one, usable for
   // one weapon attack, Dash, Disengage, Hide, or Use an Object).
   extraActions?: number;
+  // Whole actions granted on top of the turn's own (Action Surge). Unlike
+  // Haste's these are unrestricted: a second Attack action with every swing
+  // of Extra Attack, a spell, a Dodge.
+  grantedActions?: number;
+  // The Attack action was taken this turn with a light melee weapon, which
+  // is what earns the bonus-action swing of two-weapon fighting.
+  lightMeleeAttack?: boolean;
+  // Loading weapons already fired inside the action now being spent. One
+  // shot each per action, however many attacks the action holds.
+  loadingFired?: string[];
+  // This turn's action went on casting a spell (an attack-roll spell through
+  // pc_attack), so the swings of Extra Attack are not there to take.
+  castThisAction?: boolean;
 };
 
 export function freshBudget(input: {
@@ -73,10 +86,38 @@ export type SpendResult =
   | { ok: true; budget: TurnBudget; note?: string }
   | { ok: false; error: string };
 
+// What Haste's extra action may be spent on (SRD 5.1, Haste): one weapon
+// attack, Dash, Disengage, Hide, or Use an Object.
+const HASTE_ACTIONS = /^(one weapon attack|dash|disengage|hide|use an object)$/i;
+
+// A whole action granted on top of the turn's own (Action Surge), spent
+// when the normal slot is gone. Null when none remains.
+function spendGrantedAction(budget: TurnBudget, what: string, who: string): SpendResult | null {
+  if ((budget.grantedActions ?? 0) <= 0) {
+    return null;
+  }
+  return {
+    ok: true,
+    budget: {
+      ...budget,
+      grantedActions: (budget.grantedActions ?? 0) - 1,
+      // A new action: loading weapons may fire again.
+      loadingFired: [],
+    },
+    note: `${who} spends their additional action (Action Surge) on ${what}.`,
+  };
+}
+
+// Grants one more action this turn. Called when Action Surge is spent
+// (src/lib/dm/action-tools.ts grantActionSurge).
+export function grantAction(budget: TurnBudget): TurnBudget {
+  return { ...budget, grantedActions: (budget.grantedActions ?? 0) + 1 };
+}
+
 // The Haste extra action, spent when the normal slot is gone. Null when
-// none remains.
+// none remains or when Haste does not allow this use of it.
 function spendExtraAction(budget: TurnBudget, what: string, who: string): SpendResult | null {
-  if ((budget.extraActions ?? 0) <= 0) {
+  if ((budget.extraActions ?? 0) <= 0 || !HASTE_ACTIONS.test(what.trim())) {
     return null;
   }
   return {
@@ -96,15 +137,18 @@ export function spendAction(
   who: string,
 ): SpendResult {
   if (kind === "action" && budget.actionUsed) {
-    const extra = spendExtraAction(budget, what, who);
+    const extra = spendGrantedAction(budget, what, who) ?? spendExtraAction(budget, what, who);
     if (extra) {
       return extra;
     }
+    const hasted = (budget.extraActions ?? 0) > 0;
     return {
       ok: false,
-      error: `${who} has already used their action this turn; ${what} needs one. They can still move${
-        budget.bonusUsed ? "" : " or take a bonus action"
-      }, or end their turn.`,
+      error: `${who} has already used their action this turn; ${what} needs one.${
+        hasted
+          ? " The extra action from Haste is only for one weapon attack, Dash, Disengage, Hide or Use an Object."
+          : ""
+      } They can still move${budget.bonusUsed ? "" : " or take a bonus action"}, or end their turn.`,
     };
   }
   if (kind === "bonus" && budget.bonusUsed) {
@@ -134,7 +178,17 @@ export function spendAction(
 // rest come free until Extra Attack runs out. Off-hand attacks are a bonus
 // action instead and go through spendAction.
 export function spendAttack(budget: TurnBudget, who: string): SpendResult {
-  if (budget.attacksMade >= budget.attacksAllowed || (budget.attacksMade === 0 && budget.actionUsed)) {
+  const swingsGone = budget.attacksMade >= budget.attacksAllowed || budget.castThisAction === true;
+  if (swingsGone || (budget.attacksMade === 0 && budget.actionUsed)) {
+    // An additional action (Action Surge) is a whole Attack action: the
+    // first swing spends it and Extra Attack counts again from one.
+    const granted = spendGrantedAction(budget, "the Attack action", who);
+    if (granted && granted.ok) {
+      return {
+        ...granted,
+        budget: { ...granted.budget, actionUsed: true, attacksMade: 1, castThisAction: false },
+      };
+    }
     // The normal Attack action is gone; the Haste extra action buys exactly
     // one more weapon attack.
     const extra = spendExtraAction(budget, "one weapon attack", who);
@@ -148,6 +202,12 @@ export function spendAttack(budget: TurnBudget, who: string): SpendResult {
         },
       };
     }
+  }
+  if (budget.castThisAction) {
+    return {
+      ok: false,
+      error: `${who} spent this turn's action casting a spell, so they cannot also take the Attack action. Extra Attack belongs to the Attack action.`,
+    };
   }
   if (budget.attacksMade >= budget.attacksAllowed) {
     // The action is spent AND the swings are gone: no more attacking.
@@ -174,8 +234,34 @@ export function spendAttack(budget: TurnBudget, who: string): SpendResult {
   };
 }
 
+// An attack-roll spell cast through pc_attack: the whole action, never one
+// swing of Extra Attack.
+export function spendCastAttack(budget: TurnBudget, spell: string, who: string): SpendResult {
+  if (budget.actionUsed) {
+    const granted = spendGrantedAction(budget, `casting ${spell}`, who);
+    if (granted && granted.ok) {
+      return {
+        ...granted,
+        budget: {
+          ...granted.budget,
+          castThisAction: true,
+          attacksMade: Math.max(granted.budget.attacksMade, granted.budget.attacksAllowed),
+        },
+      };
+    }
+    return {
+      ok: false,
+      error: `${who} has already used their action this turn; casting ${spell} needs one. Extra Attack gives more weapon attacks, not a second casting.`,
+    };
+  }
+  return { ok: true, budget: { ...budget, actionUsed: true, castThisAction: true } };
+}
+
 // How many attacks are left, for the reminder the tool result carries.
 export function attacksLeft(budget: TurnBudget): number {
+  if (budget.castThisAction) {
+    return 0;
+  }
   return Math.max(0, budget.attacksAllowed - budget.attacksMade);
 }
 
@@ -201,6 +287,9 @@ export function describeBudget(budget: TurnBudget): string {
   }
   if (!budget.reactionUsed) {
     parts.push("reaction");
+  }
+  if ((budget.grantedActions ?? 0) > 0) {
+    parts.push("an additional action (Action Surge)");
   }
   if ((budget.extraActions ?? 0) > 0) {
     parts.push("an extra action (Haste)");

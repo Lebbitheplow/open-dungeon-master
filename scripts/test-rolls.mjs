@@ -146,9 +146,11 @@ test("Remarkable Athlete covers physical checks only", () => {
     equipment: [],
     features: [{ name: "Remarkable Athlete" }],
   });
+  // Half the proficiency bonus ROUNDED UP (SRD 5.1, Champion): +2 of +3,
+  // where Jack of All Trades rounds down.
   assert.equal(
     resolveRollExpression({ kind: "ability_check", ability: "con" }, champion).expression,
-    "1d20+4",
+    "1d20+5",
   );
   assert.equal(
     resolveRollExpression({ kind: "ability_check", ability: "cha" }, champion).expression,

@@ -12,7 +12,13 @@ import {
 import {
   CAMPAIGN_LENGTH_LABELS,
   CAMPAIGN_LENGTHS,
+  HP_METHOD_LABELS,
+  HP_METHODS,
+  STARTING_WEALTH,
+  STARTING_WEALTH_LABELS,
   type CampaignLengthSetting,
+  type HpMethodSetting,
+  type StartingWealthSetting,
 } from "@/lib/schemas/game-settings-options";
 import { FieldLabel, ToggleCard } from "@/app/create-campaign/fields";
 import type { StepProps } from "@/app/create-campaign/draft";
@@ -59,6 +65,37 @@ export function PartyStep({ draft, patch, gates }: StepProps) {
           {/* The chosen tier says what it means without opening anything. */}
           <p className="mt-1 text-xs text-stone-500">
             {CAMPAIGN_DIFFICULTY_HINTS[draft.difficulty]}
+          </p>
+        </label>
+      </div>
+
+      {/* How heroes are built here. Asked at creation because the first
+          characters are built before anyone opens the lobby's settings. */}
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block">
+          <FieldLabel>Hit points per level</FieldLabel>
+          <Select<HpMethodSetting>
+            value={draft.hpMethod}
+            onChange={(hpMethod) => patch({ hpMethod })}
+            label="Hit points per level"
+            className="w-full"
+            options={HP_METHODS.map((value) => ({ value, label: HP_METHOD_LABELS[value] }))}
+          />
+          <p className="mt-1 text-xs text-stone-500">
+            1st level is always the hit die&apos;s highest face plus Constitution.
+          </p>
+        </label>
+        <label className="block">
+          <FieldLabel>Starting wealth</FieldLabel>
+          <Select<StartingWealthSetting>
+            value={draft.startingWealth}
+            onChange={(startingWealth) => patch({ startingWealth })}
+            label="Starting wealth"
+            className="w-full"
+            options={STARTING_WEALTH.map((value) => ({ value, label: STARTING_WEALTH_LABELS[value] }))}
+          />
+          <p className="mt-1 text-xs text-stone-500">
+            What a new hero starts with; rolled gold is thrown by the server.
           </p>
         </label>
       </div>

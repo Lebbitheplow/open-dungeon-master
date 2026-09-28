@@ -1,5 +1,6 @@
 "use client";
 
+import { featAbilityIncrease } from "@/lib/srd/feat-effects";
 import { X } from "lucide-react";
 import { GameTerm } from "@/components/ui/GameTerm";
 import { InfoButton } from "@/components/ui/InfoDialog";
@@ -8,6 +9,7 @@ import { cn } from "@/lib/cn";
 import { contentSlug } from "@/lib/help";
 import { abilityMod, formatModifier } from "@/lib/srd";
 import { ABILITY_SCORE_CAP, applyAsiChoices } from "@/lib/srd/asi";
+import { halfFeatPicks, scoresWithHalfFeats } from "@/lib/srd/legality/half-feats";
 import type { Ability, AbilityScores, AsiChoice } from "@/lib/schemas/sheet";
 import { ABILITY_LABELS } from "./AbilityEditor";
 import CatalogBrowser from "./CatalogBrowser";
@@ -85,8 +87,8 @@ export default function AsiFeatEditor({
           {slotLevels.map((slotLevel, index) => {
             const choice = choices[index] ?? null;
             // Scores as they stand entering this slot: base plus all
-            // earlier choices.
-            const current = applyAsiChoices(baseScores, choices.slice(0, index));
+            // earlier choices, a half-feat's point among them.
+            const current = scoresEntering(baseScores, choices.slice(0, index));
             if (takenInPlay[index]) {
               return (
                 <div
@@ -216,7 +218,7 @@ export default function AsiFeatEditor({
                         <ContentPicker
                           kind="feats"
                           placeholder="Search feats (e.g. alert, tough)"
-                          onPick={(entry) => setChoice(index, { mode: "feat", feat: entry.name })}
+                          onPick={(entry) => setChoice(index, featChoice(entry.name))}
                         />
                         {/* Nobody picks a feat they cannot name; the list is
                             here, with what each one does on every row. */}
@@ -224,7 +226,7 @@ export default function AsiFeatEditor({
                           kind="feats"
                           buttonLabel="Browse every feat"
                           selectedNames={[]}
-                          onPick={(entry) => setChoice(index, { mode: "feat", feat: entry.name })}
+                          onPick={(entry) => setChoice(index, featChoice(entry.name))}
                           sections={[{ key: "feats:all", label: "All feats" }]}
                         />
                       </>
@@ -232,10 +234,29 @@ export default function AsiFeatEditor({
                   </div>
                 ) : null}
 
+                {choice?.mode === "feat" && (featAbilityIncrease(choice.feat)?.from.length ?? 0) > 1 ? (
+                  // A half-feat that offers a choice of score (Resilient,
+                  // Athlete) asks which one it raises.
+                  <label className="mt-2 block sm:w-64">
+                    <span className="mb-1 block text-xs text-stone-500">{choice.feat} raises by 1</span>
+                    <Select<Ability>
+                      value={choice.ability ?? featAbilityIncrease(choice.feat)!.from[0]}
+                      onChange={(ability) => setChoice(index, { ...choice, ability })}
+                      label={`${choice.feat} raises`}
+                      className="w-full"
+                      options={featAbilityIncrease(choice.feat)!.from.map((ability) => ({
+                        value: ability,
+                        label: `${ABILITY_LABELS[ability]} (${current[ability]})`,
+                        disabled: current[ability] >= ABILITY_SCORE_CAP && ability !== choice.ability,
+                      }))}
+                    />
+                  </label>
+                ) : null}
+
                 {choice ? (
                   <p className="mt-2 text-xs text-stone-500">
                     {choice.mode === "feat"
-                      ? `Feat: ${choice.feat}`
+                      ? `Feat: ${choice.feat}${featRaise(current, choice)}`
                       : summarizeChoice(current, choice)}
                   </p>
                 ) : (
@@ -250,6 +271,34 @@ export default function AsiFeatEditor({
       )}
     </section>
   );
+}
+
+// A feat pick, with the first score a choosing half-feat offers already set
+// so the choice is never left blank.
+function featChoice(feat: string): AsiChoice {
+  const increase = featAbilityIncrease(feat);
+  return increase && increase.from.length > 1
+    ? { mode: "feat", feat, ability: increase.from[0] }
+    : { mode: "feat", feat };
+}
+
+// The scores after these choices, with each half-feat's point added the way
+// the server adds it (src/lib/srd/legality/half-feats.ts).
+function scoresEntering(base: AbilityScores, earlier: Array<AsiChoice | null>): AbilityScores {
+  const picks = earlier.filter((choice): choice is AsiChoice => choice !== null);
+  return scoresWithHalfFeats(applyAsiChoices(base, picks), halfFeatPicks({ asiChoices: picks }, 0)).abilities;
+}
+
+// ", Charisma 15 to 16 (+3)" for a half-feat, nothing for any other feat.
+function featRaise(current: AbilityScores, choice: AsiChoice): string {
+  if (choice.mode !== "feat") {
+    return "";
+  }
+  const after = scoresEntering(current, [choice]);
+  const raised = ABILITY_KEYS.find((ability) => after[ability] > current[ability]);
+  return raised
+    ? `, ${ABILITY_LABELS[raised]} ${current[raised]} to ${after[raised]} (${formatModifier(abilityMod(after[raised]))})`
+    : "";
 }
 
 function firstOpenAbility(scores: AbilityScores, skip?: Ability): Ability {

@@ -12,6 +12,20 @@ import {
 } from "@/lib/srd/condition-effects";
 import { defenseRiders } from "@/lib/srd/feature-effects";
 import { magicItemRiders } from "@/lib/srd/magic-items";
+import {
+  DAMAGE_TYPES,
+  PHYSICAL_TYPES,
+  rageApplies,
+  resistsAllDamage,
+} from "@/lib/dm/damage-logic";
+
+export {
+  DAMAGE_TYPES,
+  damageAdjust,
+  rageApplies,
+  resistsAllDamage,
+  wearsHeavyArmor,
+} from "@/lib/dm/damage-logic";
 
 export type AdvantageState = "none" | "advantage" | "disadvantage";
 export type SaveAbilityId = "str" | "dex" | "con" | "int" | "wis" | "cha";
@@ -23,16 +37,34 @@ export type SaveAbilityId = "str" | "dex" | "con" | "int" | "wis" | "cha";
 export type ConditionMeta = {
   // Expires when the counter reaches 0 at a round wrap.
   rounds?: number;
+  // Ends at the start of this combatant's next turn instead of by count.
+  untilTurnOf?: string;
   // Re-save at each round wrap; success ends the condition.
   saveEnds?: { ability: SaveAbilityId; dc: number };
+  // Who or what put the condition there: the characterId or enemyId of the
+  // charmer, the grappler or the source of the fear, or an engine word
+  // ("stable" on the unconscious of a stabilized creature). Optional, and
+  // absent on everything written before it existed.
+  source?: string;
+  // Rage only: the barbarian has taken damage since their last turn ended,
+  // which keeps the rage going through a turn with no attack in it.
+  stoked?: boolean;
 };
 export type ConditionMetaMap = Record<string, ConditionMeta>;
 
 const INCAPACITATING = ["incapacitated", "paralyzed", "stunned", "unconscious", "petrified"];
 const SPEED_ZERO = ["grappled", "restrained", ...INCAPACITATING];
 const AUTO_FAIL_STR_DEX = ["paralyzed", "stunned", "unconscious", "petrified"];
-// Attacks against these have advantage.
-const TARGET_GRANTS_ADVANTAGE = ["restrained", "blinded", ...INCAPACITATING];
+// Attacks against these have advantage. Each of them says so in its own
+// text; bare "incapacitated" only takes away actions and reactions.
+const TARGET_GRANTS_ADVANTAGE = [
+  "restrained",
+  "blinded",
+  "paralyzed",
+  "stunned",
+  "unconscious",
+  "petrified",
+];
 // Melee hits within 5 ft of these are automatic critical hits.
 const AUTO_CRIT_TARGETS = ["paralyzed", "unconscious"];
 // The attacker's own attack rolls suffer disadvantage.
@@ -104,7 +136,9 @@ export function attackContext(input: {
     notes.push("attacker is hidden: advantage, and the attack reveals them");
   }
 
-  if (has(input.targetConditions, ["prone"])) {
+  // An unconscious creature has fallen prone, whether or not anything wrote
+  // the second word down.
+  if (has(input.targetConditions, ["prone", "unconscious"])) {
     sources.push(input.adjacent ? "advantage" : "disadvantage");
     notes.push(
       input.adjacent ? "target is prone: advantage up close" : "target is prone: disadvantage at range",
@@ -218,10 +252,16 @@ export function describeConditionDuration(rounds: number): string {
 // moving outside it): decrements timed conditions (0 = expired and removed)
 // and lists the save-ends conditions due a new save. The caller rolls those
 // saves and removes successes via removeConditions.
+//
+// A condition bound to a turn (untilTurnOf) is not counted in rounds: in a
+// fight the pointer ends it (turnBoundConditionsEnding). Time passing with no
+// fight running has no turns left to wait for, so the clock passes
+// endTurnBound and they end with it.
 export function tickConditions(
   conditions: string[],
   meta: ConditionMetaMap | undefined,
   by = 1,
+  options?: { endTurnBound?: boolean },
 ): {
   conditions: string[];
   meta: ConditionMetaMap;
@@ -234,6 +274,14 @@ export function tickConditions(
   for (const name of conditions) {
     const entry = meta?.[name];
     if (!entry) {
+      continue;
+    }
+    if (entry.untilTurnOf) {
+      if (options?.endTurnBound) {
+        expired.push(name);
+      } else {
+        nextMeta[name] = entry;
+      }
       continue;
     }
     if (typeof entry.rounds === "number") {
@@ -256,6 +304,21 @@ export function tickConditions(
     expired,
     savesDue,
   };
+}
+
+// The conditions that end because these combatants' turns are starting:
+// Dodge and Shield on the combatant itself, Protection on the ally a
+// protector covered.
+export function turnBoundConditionsEnding(
+  conditions: string[],
+  meta: ConditionMetaMap | undefined,
+  combatantIds: string[],
+): string[] {
+  const starting = new Set(combatantIds);
+  return conditions.filter((name) => {
+    const bound = meta?.[name]?.untilTurnOf;
+    return bound !== undefined && starting.has(bound);
+  });
 }
 
 // Removes named conditions and their metadata together.
@@ -309,6 +372,14 @@ export function exhaustionMaxHp(level: number, maxHp: number): number {
   return level >= 4 ? Math.max(1, Math.floor(maxHp / 2)) : maxHp;
 }
 
+// The hit point maximum a character really has right now. The stored maxHp
+// is the sheet's own number; exhaustion level 4 halves it for as long as it
+// lasts. Healing, both rests and the massive damage rule all ask this, so the
+// halving is decided in one place.
+export function effectiveMaxHp(sheet: { maxHp: number; exhaustion?: number | null }): number {
+  return exhaustionMaxHp(sheet.exhaustion ?? 0, sheet.maxHp);
+}
+
 // Advantage effect of exhaustion on a d20 roll: level 1+ = disadvantage on
 // ability checks (and skill checks); level 3+ = disadvantage on attacks and
 // saves too.
@@ -340,38 +411,6 @@ export function describeExhaustion(level: number): string {
   return `exhaustion level ${level}${effects.length ? ` (${effects.join("; ")})` : ""}`;
 }
 
-// "fire" vs "fire; cold" / "bludgeoning, piercing, and slashing from
-// nonmagical attacks": substring match on the stat-block strings. Immunity
-// zeroes, resistance halves, vulnerability doubles (both = cancel).
-export function damageAdjust(
-  amount: number,
-  type: string | undefined,
-  resist: string,
-  immune: string,
-  vulnerable: string,
-): { amount: number; note: string | null } {
-  const wanted = (type ?? "").trim().toLowerCase();
-  if (!wanted) {
-    return { amount, note: null };
-  }
-  const listed = (block: string) => block.toLowerCase().includes(wanted);
-  if (listed(immune)) {
-    return { amount: 0, note: `immune to ${wanted} damage: no damage` };
-  }
-  const resisted = listed(resist);
-  const vulnerableTo = listed(vulnerable);
-  if (resisted && vulnerableTo) {
-    return { amount, note: null };
-  }
-  if (resisted) {
-    return { amount: Math.max(1, Math.floor(amount / 2)), note: `resistant to ${wanted} damage: halved` };
-  }
-  if (vulnerableTo) {
-    return { amount: amount * 2, note: `vulnerable to ${wanted} damage: doubled` };
-  }
-  return { amount, note: null };
-}
-
 // Racial, feature, and condition-derived damage resistances a sheet
 // carries, as a keyword string damageAdjust can match against.
 // Conservative: only unambiguous SRD grants are recognized.
@@ -379,7 +418,7 @@ export function pcResistances(sheet: {
   race: string;
   features: Array<{ name: string }>;
   conditions?: string[];
-  equipment?: Array<{ name: string; attuned?: boolean }>;
+  equipment?: Array<{ name: string; attuned?: boolean; equipped?: boolean }>;
   class?: string;
   level?: number;
 }): string {
@@ -397,19 +436,20 @@ export function pcResistances(sheet: {
   }
   // Lineage traits name their resistance directly: "Fire Resistance",
   // "Celestial Resistance (necrotic and radiant)".
-  const TYPES = [
-    "acid", "bludgeoning", "cold", "fire", "force", "lightning", "necrotic",
-    "piercing", "poison", "psychic", "radiant", "slashing", "thunder",
-  ];
+  const TYPES = DAMAGE_TYPES;
   for (const feature of sheet.features) {
     const name = feature.name.toLowerCase();
     if (name.includes("resistance")) {
       out.push(...TYPES.filter((type) => name.includes(type)));
     }
   }
-  // Rage: resistance to the three physical damage types, for its duration.
-  if (has(sheet.conditions ?? [], [RAGING])) {
-    out.push("bludgeoning", "piercing", "slashing");
+  // Rage: resistance to the three physical damage types, for its duration,
+  // and not in heavy armor.
+  if (rageApplies(sheet)) {
+    out.push(...PHYSICAL_TYPES);
+  }
+  if (resistsAllDamage(sheet.conditions)) {
+    out.push(...DAMAGE_TYPES);
   }
   const featureNames = sheet.features.map((feature) => feature.name.toLowerCase());
   const hasFeature = (fragment: string) =>
@@ -427,7 +467,7 @@ export function pcResistances(sheet: {
   out.push(...conditionResistances(sheet.conditions ?? []));
   // Worn magic items (Ring of Resistance, resistant armor) add their types.
   if (sheet.equipment) {
-    out.push(...magicItemRiders(sheet.equipment).resistances);
+    out.push(...magicItemRiders(sheet.equipment, sheet).resistances);
   }
   return [...new Set(out)].join(", ");
 }

@@ -14,11 +14,9 @@ import {
 } from "@/lib/db/campaigns";
 import {
   createDmTurn,
-  createPendingRoll,
   failStaleRunningTurns,
   getDmTurn,
   listPendingForTurn,
-  publicPendingRoll,
   saveDmTurn,
   type DmTurn,
 } from "@/lib/db/dm-turns";
@@ -26,10 +24,9 @@ import { DM_HALTED_PREFIX } from "@/lib/campaign-types";
 import { PC_ATTACK_PARKED } from "@/lib/dm/pc-attack";
 import { normalizeEventKind } from "@/lib/dm/arg-coerce";
 import { insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
-import { getRoll, insertRoll, listRecentRolls } from "@/lib/db/rolls";
-import { listSheets, patchSheet } from "@/lib/db/sheets";
-import { describeConditionDuration, removeConditions } from "@/lib/dm/condition-logic";
-import { rollExpression } from "@/lib/dice";
+import { getRoll, listRecentRolls } from "@/lib/db/rolls";
+import { listSheets } from "@/lib/db/sheets";
+import { describeConditionDuration } from "@/lib/dm/condition-logic";
 import { heldRollUserIds } from "@/lib/dice/held-rolls";
 import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
 import { generateImageTool, parseGenerateImageToolCall } from "@/lib/image-tool";
@@ -43,13 +40,10 @@ import { releaseHarnessConversation } from "@/lib/harness/bridge";
 import { setDmStatus } from "@/lib/dm/status";
 import {
   extractToolCalls,
-  resolveRollExpression,
   resolveSheetRef,
-  rollArgsSchema,
   salvageProseRollAsks,
   salvageTextualToolCalls,
   salvageXmlToolCalls,
-  type RollArgs,
 } from "@/lib/dm/rolls";
 import { fakeRollMarkerRegex } from "@/lib/dm/tool-text";
 import { announcesEncounterStart, FAKE_ENCOUNTER_PROMPT } from "@/lib/dm/engine-boundary";
@@ -128,9 +122,8 @@ import {
   ENCOUNTER_TOOL_NAMES,
   encounterTools,
   ensureInitiativeProgress,
-  recordInitiativeRoll,
 } from "@/lib/dm/encounter-tools";
-import { autoApplyDamageRoll } from "@/lib/dm/enemy-damage";
+import { handleRequestRoll } from "@/lib/dm/invoke-roll";
 import { handleTakeRest, restTools } from "@/lib/dm/rest-tools";
 import {
   checkTools,
@@ -144,7 +137,6 @@ import {
   splitDamageTool,
   SPLIT_DAMAGE_TOOL_NAMES,
 } from "@/lib/dm/split-damage";
-import { allySaveAura } from "@/lib/dm/aura";
 import {
   petTools,
   PET_TOOL_NAMES,
@@ -195,7 +187,6 @@ import {
   EFFECT_TOOL_NAMES,
   handleClearEffect,
   handleSetEffect,
-  rollEffectExtras,
 } from "@/lib/dm/effect-tools";
 import {
   handlePassTime,
@@ -1441,173 +1432,34 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     }
 
     for (const rollCall of rollCalls) {
-      let parsedArgs: RollArgs | null = null;
-      try {
-        parsedArgs = rollArgsSchema.parse(JSON.parse(rollCall.rawArguments || "{}"));
-      } catch {
-        parsedArgs = null;
-      }
-
-      if (!parsedArgs) {
-        turn.conversation.push({
-          role: "tool",
-          ...(rollCall.id ? { tool_call_id: rollCall.id } : {}),
-          content: JSON.stringify({
-            error:
-              "Invalid request_roll arguments. Send JSON with kind, and skill/ability/dc or expression as documented.",
-          }),
-        });
-        continue;
-      }
-
-      const sheet = resolveSheetRef(parsedArgs.characterId, sheets, sheetsById);
-      // In combat, character attacks belong to the pc_attack engine: the
-      // server derives the bonus, adjudicates vs AC, and applies damage.
-      if (parsedArgs.kind === "attack" && sheet && getActiveEncounter(campaignId)) {
-        turn.conversation.push({
-          role: "tool",
-          ...(rollCall.id ? { tool_call_id: rollCall.id } : {}),
-          content: JSON.stringify({
-            error:
-              "Character attacks in combat go through pc_attack: call it with characterId, targetEnemyId, and the weapon (or spell + damage dice). The server rolls to-hit from their sheet, adjudicates against the enemy's AC, and applies damage itself.",
-          }),
-        });
-        continue;
-      }
-      const aura =
-        parsedArgs.kind === "saving_throw" && sheet ? allySaveAura(campaignId, sheet) : null;
-      const resolved = resolveRollExpression(
-        parsedArgs,
-        sheet,
-        {
-          ...(aura ? { saveBonus: aura.bonus, saveNote: aura.note } : {}),
-          ...(sheet ? rollEffectExtras(campaignId, sheet.id, parsedArgs.kind) : {}),
-          encumbrance: campaign.gameSettings.variantRules.encumbrance,
-        },
+      // One request_roll for both callers (src/lib/dm/invoke-roll.ts): the
+      // table's strictness, the effects and auras on the roller, the
+      // inspiration die and the refusal of the dead are the console's too.
+      const result = handleRequestRoll(
+        campaign,
+        turn,
+        rollCall.rawArguments,
+        sheets,
+        sheetsById,
+        realDiceUserIds,
+        { toolCallId: rollCall.id ?? null },
       );
-      if ("error" in resolved) {
-        turn.conversation.push({
-          role: "tool",
-          ...(rollCall.id ? { tool_call_id: rollCall.id } : {}),
-          content: JSON.stringify({ error: resolved.error }),
-        });
-        continue;
-      }
-      // Conditions can decide a save outright (paralyzed auto-fails STR and
-      // DEX saves): no dice, the result is a failure the model narrates.
-      if ("autoFail" in resolved) {
-        turn.conversation.push({
-          role: "tool",
-          ...(rollCall.id ? { tool_call_id: rollCall.id } : {}),
-          content: JSON.stringify({
-            success: false,
-            autoFailed: true,
-            note: `${sheet?.name ?? "The character"} automatically fails: ${resolved.notes.join("; ")}. No dice are rolled; narrate the failure.`,
-          }),
-        });
-        continue;
-      }
-
-      // The inspiration die and a held Help are baked into the expression
-      // above, so they are spent whether the dice are digital or physical:
-      // clear them now. The field carries one or both, "|"-separated.
-      if (sheet && resolved.spendInspiration) {
-        const { conditions, meta } = removeConditions(
-          sheet.conditions,
-          sheet.conditionMeta,
-          resolved.spendInspiration.split("|"),
-        );
-        const updated = patchSheet(sheet.id, { conditions, conditionMeta: meta });
-        if (updated) {
-          publishPersisted(campaignId, "sheet_updated", { sheet: updated });
-        }
-      }
-
-      // Physical dice: park this call for the player instead of rolling.
-      if (sheet && realDiceUserIds.has(sheet.userId)) {
-        const pending = createPendingRoll({
-          campaignId,
-          turnId: turn.id,
-          toolCallId: rollCall.id ?? null,
-          userId: sheet.userId,
-          characterId: sheet.id,
-          kind: parsedArgs.kind,
-          detail: resolved.detail,
-          expression: resolved.expression,
-          advantage: parsedArgs.advantage ?? "none",
-          dc: parsedArgs.dc ?? null,
-          reason: parsedArgs.reason?.slice(0, 200) ?? "",
-          targetEnemyId:
-            parsedArgs.kind === "damage" ? parsedArgs.targetEnemyId ?? null : null,
-        });
-        publishPersisted(campaignId, "roll_pending", { pendingRoll: publicPendingRoll(pending) });
+      // Physical dice: the call is parked for the player, and its answer
+      // reaches the model when the turn resumes.
+      if (result.parked) {
         parkedAny = true;
         continue;
       }
-
-      // Digital roll: resolve immediately.
-      try {
-        const outcome = rollExpression(resolved.expression);
-        const roll = insertRoll({
-          campaignId,
-          characterId: sheet?.id ?? null,
-          requestedBy: "dm",
-          kind: parsedArgs.kind,
-          detail: resolved.detail,
-          advantage: parsedArgs.advantage ?? "none",
-          dc: parsedArgs.dc ?? null,
-          result: outcome,
-        });
-        turn.rollIds.push(roll.id);
-        publishWithSeq(campaignId, allocateSeq(campaignId), "roll_result", {
-          roll,
-          source: "digital",
-        });
-        // Combat initiative: feed the roll into the active encounter; the
-        // last one in locks the order and begins combat.
-        const combatNote =
-          parsedArgs.kind === "initiative"
-            ? recordInitiativeRoll(campaignId, sheet?.id ?? null, roll.total)
-            : null;
-        // Damage rolls aimed at an enemy apply server-side the moment the
-        // dice land, so the enemy card can never lag the narration.
-        const appliedDamage =
-          parsedArgs.kind === "damage" && parsedArgs.targetEnemyId
-            ? autoApplyDamageRoll(
-                campaign,
-                turn,
-                parsedArgs.targetEnemyId,
-                roll,
-                sheets,
-                sheetsById,
-                parsedArgs.damageType,
-              )
-            : null;
-        turn.conversation.push({
-          role: "tool",
-          ...(rollCall.id ? { tool_call_id: rollCall.id } : {}),
-          content: JSON.stringify({
-            total: roll.total,
-            dice: outcome.terms,
-            ...(parsedArgs.dc !== undefined
-              ? { dc: parsedArgs.dc, success: roll.total >= parsedArgs.dc }
-              : {}),
-            ...(outcome.crit ? { crit: outcome.crit } : {}),
-            ...(resolved.conditionNotes ? { conditionEffects: resolved.conditionNotes } : {}),
-            note: "Narrate this real result. Do not roll again for the same action.",
-            ...(combatNote ? { combat: combatNote } : {}),
-            ...(appliedDamage ? { applied: appliedDamage } : {}),
-          }),
-        });
-      } catch (rollError) {
-        turn.conversation.push({
-          role: "tool",
-          ...(rollCall.id ? { tool_call_id: rollCall.id } : {}),
-          content: JSON.stringify({
-            error: rollError instanceof Error ? rollError.message : "Invalid dice expression.",
-          }),
-        });
-      }
+      const rolled = typeof result.total === "number";
+      turn.conversation.push({
+        role: "tool",
+        ...(rollCall.id ? { tool_call_id: rollCall.id } : {}),
+        content: JSON.stringify(
+          rolled
+            ? { ...result, note: "Narrate this real result. Do not roll again for the same action." }
+            : result,
+        ),
+      });
     }
 
     // The NPC, item, objective and combat tools ran after the beat check:

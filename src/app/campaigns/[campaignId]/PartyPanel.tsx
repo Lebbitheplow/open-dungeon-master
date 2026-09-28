@@ -703,6 +703,9 @@ export function PartyPanel({
           sheet={viewingSheet}
           mine={viewingSheet.userId === meUserId}
           steersStory={steersStory}
+          // Who corrects a counter: whoever runs the story (the DM, or the
+          // lead of an AI table) and the party lead at any table.
+          corrects={Boolean(steersStory) || meUserId === leadUserId}
           encumbranceRule={encumbranceRule}
           inCombat={inCombat}
           portraitFallback={packArt.characterUrl({ race: viewingSheet.race, class: viewingSheet.class })}

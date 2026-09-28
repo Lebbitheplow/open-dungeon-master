@@ -127,6 +127,56 @@ export const ATTUNEMENT_SLOTS = 3;
 // SRD one, and the name lookup is only the fallback.
 export type WornItem = { name: string; equipped?: boolean; gear?: { armor?: SrdArmor } };
 
+// Wearing is opt in per sheet. Once any row says whether it is worn, every
+// row is read as it is marked, so a character who took the last piece off
+// stands unarmored. A sheet that has never said wears what it carries, which
+// keeps sheets written before the toggle working.
+export function wearingIsExplicit(equipment: Array<{ equipped?: boolean }>): boolean {
+  return equipment.some((item) => item.equipped !== undefined);
+}
+
+export function isWorn(
+  item: { equipped?: boolean },
+  equipment: Array<{ equipped?: boolean }>,
+): boolean {
+  return wearingIsExplicit(equipment) ? item.equipped === true : true;
+}
+
+// How much of the Dexterity modifier a suit lets through. Heavy armor takes
+// none of it, in either direction: a clumsy wearer is not penalized (SRD 5.1,
+// Armor). Medium armor caps the bonus and passes a penalty on whole.
+function dexThrough(armor: SrdArmor, dexMod: number): number {
+  if (armor.category === "heavy") {
+    return 0;
+  }
+  return Math.min(dexMod, armor.dexCap ?? dexMod);
+}
+
+// Whether the character wears armor or carries a shield they were never
+// trained in. SRD 5.1, Armor: that costs disadvantage on every ability check,
+// saving throw and attack roll that uses Strength or Dexterity, and the
+// wearer cannot cast spells. Needs only the pack and the training list, so
+// the attack engine and the cast guard ask the same question.
+export function wearsUntrainedArmor(sheet: {
+  equipment?: WornItem[];
+  proficiencies?: { armor?: string[] };
+}): boolean {
+  const equipment = sheet.equipment ?? [];
+  const trained = sheet.proficiencies?.armor ?? [];
+  return equipment.some((item) => {
+    if (!isWorn(item, equipment)) {
+      return false;
+    }
+    const armor = item.gear?.armor ?? matchArmor(item.name);
+    return armor ? !isArmorProficient(trained, armor) : false;
+  });
+}
+
+// SRD 5.1, Dwarf, Speed: "Your speed is not reduced by wearing heavy armor."
+export function ignoresHeavyArmorSpeedPenalty(race: string | undefined | null): boolean {
+  return /dwarf/i.test(race ?? "");
+}
+
 // An alternative base-AC formula a class feature provides while wearing no
 // armor: Unarmored Defense (barbarian 10 + DEX + CON, monk 10 + DEX + WIS),
 // Draconic Resilience (13 + DEX). `ability` is added on top of DEX.
@@ -202,9 +252,10 @@ export type AcBreakdown = {
 // formula does), DEX applies up to the armor's cap, a shield and any flat
 // bonuses stack on top.
 //
-// `equipped` is opt-in: an item explicitly marked equipped always counts,
-// but a character who has never touched the toggle wears the best armor and
-// shield they carry, so existing sheets keep working without an edit.
+// `equipped` is opt-in: once any item says whether it is worn, only the
+// items marked worn count, but a character who has never touched the toggle
+// wears the best armor and shield they carry, so existing sheets keep
+// working without an edit.
 export function computeArmorClass(input: {
   equipment: WornItem[];
   armorProfs: string[];
@@ -214,9 +265,10 @@ export function computeArmorClass(input: {
   unarmored: UnarmoredFormula | null;
   // Flat adds from features and fighting styles (Defense +1, a ring +1).
   bonus?: number;
+  // The wearer's race, for the one race heavy armor does not slow.
+  race?: string;
 }): AcBreakdown {
-  const anyExplicit = input.equipment.some((item) => item.equipped);
-  const worn = input.equipment.filter((item) => (anyExplicit ? item.equipped : true));
+  const worn = input.equipment.filter((item) => isWorn(item, input.equipment));
 
   let armorItem: { item: WornItem; armor: SrdArmor } | null = null;
   let shieldItem: { item: WornItem; armor: SrdArmor } | null = null;
@@ -231,9 +283,9 @@ export function computeArmorClass(input: {
       }
       continue;
     }
-    const score = armor.baseAc + Math.min(input.dexMod, armor.dexCap ?? input.dexMod);
+    const score = armor.baseAc + dexThrough(armor, input.dexMod);
     const bestScore = armorItem
-      ? armorItem.armor.baseAc + Math.min(input.dexMod, armorItem.armor.dexCap ?? input.dexMod)
+      ? armorItem.armor.baseAc + dexThrough(armorItem.armor, input.dexMod)
       : -Infinity;
     if (score > bestScore) {
       armorItem = { item, armor };
@@ -249,7 +301,7 @@ export function computeArmorClass(input: {
   if (armorItem) {
     const { armor, item } = armorItem;
     const magic = magicItemBonus(item.name);
-    const dex = Math.min(input.dexMod, armor.dexCap ?? input.dexMod);
+    const dex = dexThrough(armor, input.dexMod);
     ac = armor.baseAc + magic + dex;
     parts.push(`${item.name} ${armor.baseAc + magic}`);
     if (dex !== 0) {
@@ -257,10 +309,14 @@ export function computeArmorClass(input: {
     }
     unproficient = !isArmorProficient(input.armorProfs, armor);
     stealthDisadvantage = Boolean(armor.stealthDisadvantage);
-    if (armor.strengthRequirement && input.strength < armor.strengthRequirement) {
+    if (
+      armor.strengthRequirement &&
+      input.strength < armor.strengthRequirement &&
+      !ignoresHeavyArmorSpeedPenalty(input.race)
+    ) {
       speedPenalty = 10;
     }
-  } else if (input.unarmored) {
+  } else if (input.unarmored && (input.unarmored.allowsShield || !shieldItem)) {
     const extra = input.unarmored.ability ? input.abilityMods[input.unarmored.ability] : 0;
     ac = input.unarmored.base + input.dexMod + extra;
     parts.push(`${input.unarmored.source} ${input.unarmored.base}`);
@@ -278,9 +334,10 @@ export function computeArmorClass(input: {
     }
   }
 
-  // The monk's Unarmored Defense is the one formula a shield switches off.
-  const shieldAllowed = armorItem !== null || !input.unarmored || input.unarmored.allowsShield;
-  if (shieldItem && shieldAllowed) {
+  // The monk's Unarmored Defense is the one formula a shield switches off:
+  // behind a shield the monk stands at 10 + DEX + the shield, which is what
+  // the branch above fell through to. The shield itself always counts.
+  if (shieldItem) {
     const magic = magicItemBonus(shieldItem.item.name);
     ac += shieldItem.armor.baseAc + magic;
     parts.push(`${shieldItem.item.name} +${shieldItem.armor.baseAc + magic}`);
@@ -299,7 +356,7 @@ export function computeArmorClass(input: {
     ac: Math.max(1, Math.min(30, ac)),
     parts,
     armorName: armorItem?.item.name ?? null,
-    shieldName: shieldItem && shieldAllowed ? shieldItem.item.name : null,
+    shieldName: shieldItem ? shieldItem.item.name : null,
     stealthDisadvantage,
     speedPenalty,
     unproficient,
@@ -309,12 +366,31 @@ export function computeArmorClass(input: {
 // The armor a class should start the adventure wearing, from its training.
 // Mirrors defaultLoadout in weapons.ts: nobody should begin in a loincloth
 // because the builder never offered them a breastplate.
+// The SRD's metal armor. A druid's training reads "(nonmetal)": druids will
+// not wear armor or use shields made of metal (SRD 5.1, Druid).
+const METAL_ARMOR = new Set(
+  ["Chain Shirt", "Scale Mail", "Breastplate", "Half Plate", "Ring Mail", "Chain Mail", "Splint", "Plate"].map(normalize),
+);
+
+export function isMetalArmor(armor: Pick<SrdArmor, "name">): boolean {
+  return METAL_ARMOR.has(normalize(armor.name));
+}
+
+function wearsNoMetal(armorProfs: string[]): boolean {
+  return armorProfs.some((entry) => /non-?metal/i.test(entry));
+}
+
 export function defaultArmor(armorProfs: string[]): SrdArmor[] {
   const out: SrdArmor[] = [];
   const heavy = isArmorProficient(armorProfs, get("Plate"));
   const medium = isArmorProficient(armorProfs, get("Breastplate"));
   const light = isArmorProficient(armorProfs, get("Leather"));
-  if (heavy) {
+  if (wearsNoMetal(armorProfs)) {
+    // The SRD starts a druid in leather with a wooden shield.
+    if (light || medium) {
+      out.push(get("Leather"));
+    }
+  } else if (heavy) {
     out.push(get("Chain Mail"));
   } else if (medium) {
     out.push(get("Scale Mail"));
@@ -329,7 +405,10 @@ export function defaultArmor(armorProfs: string[]): SrdArmor[] {
 
 // Proficient armor worth offering as one-click adds in the builder.
 export function suggestArmor(armorProfs: string[]): SrdArmor[] {
-  return SRD_ARMOR.filter((armor) => isArmorProficient(armorProfs, armor));
+  const noMetal = wearsNoMetal(armorProfs);
+  return SRD_ARMOR.filter(
+    (armor) => isArmorProficient(armorProfs, armor) && !(noMetal && isMetalArmor(armor)),
+  );
 }
 
 function get(name: string) {

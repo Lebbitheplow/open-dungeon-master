@@ -256,6 +256,11 @@
       "name": "Gunner",
       "prerequisite": "",
       "desc": "Increase your Dexterity by 1, to a maximum of 20. You gain proficiency with firearms, ignore their loading property, and being within 5 feet of a hostile creature gives you no disadvantage on ranged attacks."
+    },
+    {
+      "name": "Alert",
+      "prerequisite": "",
+      "desc": "Your guard never quite drops. Add 5 to every initiative roll you make. While you are conscious no ambush catches you off guard, and an attacker hidden from your sight gets no advantage against you merely because you cannot see it."
     }
   ]
 }

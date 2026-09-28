@@ -186,3 +186,50 @@ export function revealItemMath(
   next[index] = { ...rest, name: to };
   return { equipment: next, from, to };
 }
+
+// The bounds the item and gold tools declare to the model, held for
+// everybody who calls them. A quantity is 1 to 99 a call, one row holds at
+// most 999 of a thing and a pack at most 60 rows (the sheet's own caps), and
+// one call moves at most 100,000 gp into a purse that holds 1,000,000.
+export const ITEM_QTY_PER_CALL = 99;
+export const ITEM_ROW_MAX = 999;
+export const EQUIPMENT_ROWS_MAX = 60;
+export const GOLD_PER_CALL = 100000;
+export const GOLD_PURSE_MAX = 1000000;
+export const COPPER_PURSE_MAX = GOLD_PURSE_MAX * 100;
+
+// Why a quantity cannot be used, or null when it can. Absent means one.
+export function quantityProblem(qty: number | undefined, what: string): string | null {
+  if (qty === undefined) {
+    return null;
+  }
+  if (!Number.isInteger(qty) || qty < 1 || qty > ITEM_QTY_PER_CALL) {
+    return `${what} takes a quantity from 1 to ${ITEM_QTY_PER_CALL}; ${qty} is outside it. Nothing changed.`;
+  }
+  return null;
+}
+
+// Why an item cannot be added to a pack, or null when it can.
+export function grantProblem(
+  owner: string,
+  before: EquipmentRow[],
+  after: EquipmentRow[],
+  name: string,
+): string | null {
+  if (after.length > before.length && after.length > EQUIPMENT_ROWS_MAX) {
+    return `${owner}'s pack already holds ${EQUIPMENT_ROWS_MAX} different items, the most a sheet keeps. Remove something first, then grant ${name}.`;
+  }
+  const over = after.find((item) => item.qty > ITEM_ROW_MAX);
+  if (over) {
+    return `${owner} cannot hold more than ${ITEM_ROW_MAX} of ${over.name}; grant fewer.`;
+  }
+  return null;
+}
+
+// Why a sum of gold cannot move in one call, or null when it can.
+export function goldProblem(gold: number, what: string): string | null {
+  if (!Number.isFinite(gold) || Math.abs(gold) > GOLD_PER_CALL) {
+    return `${what} moves at most ${GOLD_PER_CALL} gp in one call; ${gold} gp is more than that. Nothing changed.`;
+  }
+  return null;
+}

@@ -5,6 +5,8 @@ import {
   DICE_POLICIES,
   DM_MODES,
   GENRES,
+  HP_METHODS,
+  STARTING_WEALTH,
 } from "@/lib/schemas/game-settings-options";
 import { parseKeepingValid } from "@/lib/schemas/parse-keeping-valid";
 
@@ -21,11 +23,17 @@ export {
   DM_MODE_LABELS,
   DM_MODES,
   GENRES,
+  HP_METHOD_LABELS,
+  HP_METHODS,
+  STARTING_WEALTH,
+  STARTING_WEALTH_LABELS,
   type CampaignLengthSetting,
   type CompanionSetting,
   type DicePolicy,
   type DmModeSetting,
   type Genre,
+  type HpMethodSetting,
+  type StartingWealthSetting,
 } from "@/lib/schemas/game-settings-options";
 
 // Game-facing campaign settings. Stored in campaigns.game_settings_json,
@@ -109,6 +117,14 @@ export const gameSettingsSchema = z.object({
   // level-up. On by default; turning it off keeps the level-up flow
   // single-class (already-multiclassed characters keep what they have).
   multiclassingEnabled: z.boolean().default(true),
+  // How hit points are counted after 1st level, at creation and at every
+  // level-up. The server derives the number (or rolls the die); a player
+  // never types it. A table stored before the setting reads as "average".
+  hpMethod: z.enum(HP_METHODS).default("average"),
+  // What a new character starts with. "equipment" is the class's and the
+  // background's gear with the background's coin; "rolled" is wealth the
+  // server rolls by class, spent on gear at creation.
+  startingWealth: z.enum(STARTING_WEALTH).default("equipment"),
   // Lets new players join with the invite code after the adventure started.
   midGameJoinOpen: z.boolean().default(false),
   // The living-world engines: off-screen world arcs advancing on background

@@ -18,6 +18,9 @@ export const SNAPSHOT_TABLES = [
   "battle_tokens",
   "battle_explored",
   "overworld_maps",
+  // Lasting effects sit on the sheets and enemies above; an effect laid in
+  // the chapter being unwound must not outlive it.
+  "active_effects",
 ] as const;
 export type SnapshotTable = (typeof SNAPSHOT_TABLES)[number];
 
@@ -40,7 +43,25 @@ export const CAMPAIGN_SNAPSHOT_COLUMNS = [
   "story_arc_json",
   "world_tick_json",
   "last_recap_seq",
+  // The party's shared purse and pack move against the sheets, so they
+  // rewind with them or gold and items exist twice.
+  "party_json",
+  // Rests, travel and timed conditions are counted against the clock.
+  "clock_json",
 ] as const;
+
+// A snapshot taken before a table or a column joined the lists above does
+// not hold it. Restoring such a snapshot leaves that part of the campaign as
+// it stands, which is what the rewind did when the snapshot was taken.
+export function snapshotHoldsTable(payload: { tables: Record<string, unknown> }, table: string) {
+  return Object.prototype.hasOwnProperty.call(payload.tables ?? {}, table);
+}
+
+export function snapshotColumns(payload: { campaign: SnapshotRow }): string[] {
+  return CAMPAIGN_SNAPSHOT_COLUMNS.filter((column) =>
+    Object.prototype.hasOwnProperty.call(payload.campaign ?? {}, column),
+  );
+}
 
 export type SnapshotRow = Record<string, unknown>;
 

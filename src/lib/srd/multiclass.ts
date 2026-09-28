@@ -6,6 +6,7 @@
 
 import spellSlotsJson from "@/lib/srd/spell-slots.json";
 import { findClass, spellSlotsFor } from "@/lib/srd";
+import { isThirdCaster } from "@/lib/srd/third-caster";
 import type { Ability, AbilityScores, ClassEntry } from "@/lib/schemas/sheet";
 
 // UI sanity cap: RAW is unbounded, but nobody at this table needs four.
@@ -66,9 +67,25 @@ export function casterLevelFor(classList: ClassEntry[]): number {
       total += Math.floor(entry.level / 2);
     } else if (klass.casterType === "artificer") {
       total += Math.ceil(entry.level / 2);
+    } else if (isThirdCaster(entry.id, entry.subclass)) {
+      // Eldritch Knight and Arcane Trickster: a third, rounded down.
+      total += Math.floor(entry.level / 3);
     }
   }
   return Math.min(20, total);
+}
+
+// Whether this class entry has slots in the shared pool: a Spellcasting
+// class, or one of the two third-caster subclasses once it casts (level 3).
+function castsFromSlots(entry: ClassEntry): boolean {
+  const type = findClass(entry.id)?.casterType;
+  if (type === undefined || type === "pact") {
+    return false;
+  }
+  if (type === "none") {
+    return isThirdCaster(entry.id, entry.subclass) && entry.level >= 3;
+  }
+  return true;
 }
 
 const FULL_TABLE = (spellSlotsJson as unknown as { full: Record<string, number[]> }).full;
@@ -90,15 +107,12 @@ export function multiclassSlots(casterLevel: number): Record<string, number> {
 // (warlock Pact Magic lives in spellcasting.pact, not here).
 export function slotTableFor(sheet: ClassListSource): Record<string, number> {
   const classList = classListFor(sheet);
-  const casters = classList.filter((entry) => {
-    const type = findClass(entry.id)?.casterType;
-    return type !== undefined && type !== "none" && type !== "pact";
-  });
+  const casters = classList.filter(castsFromSlots);
   if (casters.length >= 2) {
     return multiclassSlots(casterLevelFor(classList));
   }
   if (casters.length === 1) {
-    return spellSlotsFor(casters[0].id, casters[0].level);
+    return spellSlotsFor(casters[0].id, casters[0].level, casters[0].subclass);
   }
   return {};
 }

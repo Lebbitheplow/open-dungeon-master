@@ -3,6 +3,7 @@ import type { ChatMessage } from "@/lib/model-client";
 import type { Advantage } from "@/lib/dice";
 import type { RollKind } from "@/lib/db/rolls";
 import type { ContextTrace } from "@/lib/dm/context-budget";
+import { parkReasonFor, type ParkReason } from "@/lib/dice/held-rolls";
 
 // A DM narration turn persisted as a state machine so it can park while a
 // player rolls physical dice and resume later (across restarts).
@@ -221,6 +222,17 @@ export type PendingAttack = {
   critRange?: number;
   // Great Weapon Fighting: reroll damage dice at or below this value.
   rerollBelow?: number;
+  // What the damage stage needs to resolve the blow the way the digital
+  // path does (src/lib/dm/damage-parts.ts): whether it counts as magical
+  // against "nonmagical attacks" resistance, the dice that ride it under a
+  // type of their own, how many trailing weapon dice a critical adds, and
+  // (on the parked damage roll) whether the hit was a critical. A roll
+  // parked before these were stored has none and resolves under the
+  // weapon's type alone, as it always did.
+  magical?: boolean;
+  riders?: Array<{ dice: string; type: string }>;
+  critExtraDice?: number;
+  crit?: boolean;
 };
 
 export type PendingRoll = {
@@ -243,12 +255,17 @@ export type PendingRoll = {
   // Server summary of what the resolved roll already did; the resumed turn
   // surfaces it to the model so it narrates the real outcome.
   combatNote: string | null;
+  // Why the roll waits: real dice the player throws and types, or a held
+  // roll the server throws when the player releases it. Null on a roll
+  // parked before the reason was recorded.
+  parkedFor: ParkReason | null;
   status: PendingRollStatus;
   rollId: string | null;
   createdAt: string;
 };
 
 type PendingRow = {
+  parked_for?: string | null;
   id: string;
   campaign_id: string;
   turn_id: string;
@@ -286,9 +303,49 @@ function mapPending(row: PendingRow): PendingRoll {
     targetEnemyId: row.target_enemy_id ?? null,
     attack: parseJson<PendingAttack | null>(row.attack_json, null),
     combatNote: row.combat_note ?? null,
+    parkedFor:
+      row.parked_for === "real_dice" || row.parked_for === "held" ? row.parked_for : null,
     status: row.status,
     rollId: row.roll_id,
     createdAt: row.created_at,
+  };
+}
+
+// pending_rolls.parked_for is added here, on first use, rather than in the
+// boot migration: a database opened by an older build gains the column the
+// first time a roll is parked, and every row written before reads as null.
+const parkColumnReady = new WeakSet<object>();
+
+function ensureParkColumn() {
+  const db = getDatabase();
+  if (parkColumnReady.has(db)) {
+    return;
+  }
+  const columns = db.prepare(`PRAGMA table_info(pending_rolls)`).all() as Array<{ name: string }>;
+  if (!columns.some((column) => column.name === "parked_for")) {
+    db.exec(`ALTER TABLE pending_rolls ADD COLUMN parked_for TEXT`);
+  }
+  parkColumnReady.add(db);
+}
+
+// What the table's dice policy and the player's own preferences say about a
+// roll parked for them now.
+export function dicePreferencesOf(campaignId: string, userId: string) {
+  const db = getDatabase();
+  const campaign = db
+    .prepare(`SELECT game_settings_json FROM campaigns WHERE id = ?`)
+    .get(campaignId) as { game_settings_json: string | null } | undefined;
+  const settings = parseJson<{ dicePolicy?: string }>(campaign?.game_settings_json ?? null, {});
+  const member = db
+    .prepare(
+      `SELECT use_real_dice, hold_rolls FROM campaign_members WHERE campaign_id = ? AND user_id = ?`,
+    )
+    .get(campaignId, userId) as { use_real_dice: number; hold_rolls: number } | undefined;
+  return {
+    dicePolicy: settings.dicePolicy ?? "digital_only",
+    member: member
+      ? { useRealDice: Boolean(member.use_real_dice), holdRolls: Boolean(member.hold_rolls) }
+      : null,
   };
 }
 
@@ -306,16 +363,26 @@ export function createPendingRoll(input: {
   reason: string;
   targetEnemyId?: string | null;
   attack?: PendingAttack | null;
+  // Left out by every caller today: the reason is read from the table's dice
+  // policy and the player's preferences as the roll is parked.
+  parkedFor?: ParkReason;
 }): PendingRoll {
   const id = crypto.randomUUID();
+  ensureParkColumn();
+  const preferences = dicePreferencesOf(input.campaignId, input.userId);
+  // A roll parked for somebody with neither preference (a test, a caller
+  // that parks by its own rule) is a held roll: the server throws it.
+  const parkedFor =
+    input.parkedFor ?? parkReasonFor(preferences.dicePolicy, preferences.member) ?? "held";
   getDatabase()
     .prepare(
       `
         INSERT INTO pending_rolls (
           id, campaign_id, turn_id, tool_call_id, user_id, character_id, kind,
-          detail, expression, advantage, dc, reason, target_enemy_id, attack_json, status, created_at
+          detail, expression, advantage, dc, reason, target_enemy_id, attack_json, parked_for,
+          status, created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
       `,
     )
     .run(
@@ -333,6 +400,7 @@ export function createPendingRoll(input: {
       input.reason,
       input.targetEnemyId ?? null,
       input.attack ? JSON.stringify(input.attack) : null,
+      parkedFor,
       nowIso(),
     );
   const pending = getPendingRoll(id);

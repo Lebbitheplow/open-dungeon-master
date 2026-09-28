@@ -90,7 +90,7 @@
       "tools": [
         "thieves' tools"
       ],
-      "languages": 0,
+      "languages": 1,
       "equipment": [
         "maintenance keycard",
         "climbing harness",
@@ -114,7 +114,7 @@
       "tools": [
         "cybernetics maintenance kit"
       ],
-      "languages": 0,
+      "languages": 1,
       "equipment": [
         "fight-night purse",
         "hand wraps",
@@ -163,7 +163,7 @@
         "tinker's tools",
         "smith's tools"
       ],
-      "languages": 1,
+      "languages": 0,
       "equipment": [
         "guild seal",
         "measuring instruments",
@@ -188,7 +188,7 @@
         "navigator's tools",
         "vehicles (air)"
       ],
-      "languages": 1,
+      "languages": 0,
       "equipment": [
         "rigging knife",
         "50 ft rope",
@@ -212,7 +212,7 @@
       "tools": [
         "tinker's tools"
       ],
-      "languages": 0,
+      "languages": 1,
       "equipment": [
         "apprentice's toolroll",
         "half-built automaton hand",
@@ -236,7 +236,7 @@
       "tools": [
         "smith's tools"
       ],
-      "languages": 0,
+      "languages": 1,
       "equipment": [
         "union token",
         "shovel",
@@ -260,7 +260,7 @@
       "tools": [
         "aether calipers"
       ],
-      "languages": 2,
+      "languages": 1,
       "equipment": [
         "lecture notes",
         "aether lens",
@@ -283,7 +283,6 @@
       ],
       "blurb": "You walked a beat and closed cases for the city constabulary before turning in your badge.",
       "tools": [
-        "manacles",
         "investigator's kit"
       ],
       "languages": 1,
@@ -408,7 +407,7 @@
       "tools": [
         "herbalism kit"
       ],
-      "languages": 0,
+      "languages": 1,
       "equipment": [
         "geiger counter",
         "route charts",
@@ -458,7 +457,7 @@
       "tools": [
         "one artisan's tools"
       ],
-      "languages": 0,
+      "languages": 1,
       "equipment": [
         "shovel",
         "lantern",
@@ -480,7 +479,7 @@
       ],
       "blurb": "They locked you away for what you claimed to see. You were right, and you learned to read people to get out.",
       "tools": [],
-      "languages": 1,
+      "languages": 2,
       "equipment": [
         "hospital bracelet",
         "journal of fragments",
@@ -505,7 +504,7 @@
       "tools": [
         "calligrapher's supplies"
       ],
-      "languages": 2,
+      "languages": 1,
       "equipment": [
         "reading glasses",
         "catalogue of restricted works",
@@ -552,7 +551,7 @@
       ],
       "blurb": "Your family name opens doors and ends conversations; everyone has heard what happens to your kin.",
       "tools": [],
-      "languages": 1,
+      "languages": 2,
       "equipment": [
         "family signet",
         "portrait locket",
@@ -577,7 +576,7 @@
       "tools": [
         "one gaming set"
       ],
-      "languages": 0,
+      "languages": 1,
       "equipment": [
         "ring of keys",
         "hooded lantern",
@@ -650,7 +649,7 @@
       "tools": [
         "thieves' tools"
       ],
-      "languages": 0,
+      "languages": 1,
       "equipment": [
         "retired lockpick set",
         "city map",
@@ -722,7 +721,7 @@
       "tools": [
         "forgery kit"
       ],
-      "languages": 0,
+      "languages": 1,
       "equipment": [
         "burner contact list",
         "nondescript clothes",
@@ -747,7 +746,7 @@
         "herbalism kit",
         "alchemist's supplies"
       ],
-      "languages": 1,
+      "languages": 0,
       "equipment": [
         "beaked mask",
         "waxed coat",
@@ -793,7 +792,7 @@
       ],
       "blurb": "You walk the old pilgrim roads atoning for something, and keepers of wayside shrines shelter you.",
       "tools": [],
-      "languages": 1,
+      "languages": 2,
       "equipment": [
         "pilgrim's staff",
         "prayer beads",
@@ -842,7 +841,7 @@
       "tools": [
         "calligrapher's supplies"
       ],
-      "languages": 2,
+      "languages": 1,
       "equipment": [
         "rubbing charcoal and vellum",
         "crypt keys",
@@ -864,7 +863,7 @@
       ],
       "blurb": "You preach doom on street corners, and the desperate who listen bring you rumors and bread.",
       "tools": [],
-      "languages": 1,
+      "languages": 2,
       "equipment": [
         "begging bowl",
         "scrawled prophecies",

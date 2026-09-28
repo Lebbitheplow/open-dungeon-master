@@ -41,6 +41,33 @@ function mapRuleset(row: RulesetRow): Ruleset {
   };
 }
 
+// The ids in a ruleset's homebrew list that are not entries of its author:
+// another account's, or a string that names nothing. The list is the
+// ruleset's claim about what is canon at the author's table, and a claim
+// over somebody else's writing is not theirs to make.
+export function homebrewIdsNotOwned(userId: string, ids: string[]): string[] {
+  if (!ids.length) {
+    return [];
+  }
+  const unique = [...new Set(ids)];
+  const rows = getDatabase()
+    .prepare(
+      `SELECT id FROM homebrew_entries WHERE user_id = ? AND id IN (${unique.map(() => "?").join(", ")})`,
+    )
+    .all(userId, ...unique) as Array<{ id: string }>;
+  const owned = new Set(rows.map((row) => row.id));
+  return unique.filter((id) => !owned.has(id));
+}
+
+// The sentence both ruleset routes refuse with.
+export function homebrewIdsRefusal(userId: string, ids: string[]): string | null {
+  const strangers = homebrewIdsNotOwned(userId, ids);
+  if (!strangers.length) {
+    return null;
+  }
+  return `A ruleset lists homebrew entries from your own library, and ${strangers.length === 1 ? "one of the ids sent is" : `${strangers.length} of the ids sent are`} not in it. Send only ids of entries you wrote.`;
+}
+
 export function listRulesetsForUser(userId: string): Ruleset[] {
   const rows = getDatabase()
     .prepare(`SELECT * FROM library_rulesets WHERE user_id = ? ORDER BY updated_at DESC`)

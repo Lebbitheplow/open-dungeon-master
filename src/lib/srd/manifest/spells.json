@@ -28,7 +28,9 @@
    "b": "phb",
    "l": 0,
    "s": "conjuration",
-   "c": "sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "v": "VS",
+   "d": 60
   },
   {
    "n": "Scorcher",
@@ -45,84 +47,119 @@
    "b": "phb",
    "l": 2,
    "s": "abjuration",
-   "c": "cleric"
+   "c": "cleric,paladin",
+   "v": "VSM",
+   "d": 30
   },
   {
    "n": "Alarm",
    "b": "phb",
    "l": 1,
    "s": "abjuration",
-   "c": "ranger,wizard"
+   "c": "ranger,wizard",
+   "r": true,
+   "t": 1,
+   "v": "VSM",
+   "d": 30
   },
   {
    "n": "Alter Self",
    "b": "phb",
    "l": 2,
    "s": "transmutation",
-   "c": "sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "k": true,
+   "v": "VS",
+   "d": "self"
   },
   {
    "n": "Animal Friendship",
    "b": "phb",
    "l": 1,
    "s": "enchantment",
-   "c": "druid,ranger,bard"
+   "c": "bard,druid,ranger",
+   "v": "VSM",
+   "d": 30
   },
   {
    "n": "Animal Messenger",
    "b": "phb",
    "l": 2,
    "s": "enchantment",
-   "c": "druid,ranger,bard"
+   "c": "bard,druid,ranger",
+   "r": true,
+   "v": "VSM",
+   "d": 30
   },
   {
    "n": "Animal Shapes",
    "b": "phb",
    "l": 8,
    "s": "transmutation",
-   "c": "druid"
+   "c": "druid",
+   "k": true,
+   "v": "VS",
+   "d": 30
   },
   {
    "n": "Animate Dead",
    "b": "phb",
    "l": 3,
    "s": "necromancy",
-   "c": "cleric,wizard"
+   "c": "cleric,wizard",
+   "t": 1,
+   "v": "VSM",
+   "d": 10
   },
   {
    "n": "Animate Objects",
    "b": "phb",
    "l": 5,
    "s": "transmutation",
-   "c": "bard,sorcerer,wizard"
+   "c": "bard,sorcerer,wizard",
+   "k": true,
+   "v": "VS",
+   "d": 120
   },
   {
    "n": "Antilife Shell",
    "b": "phb",
    "l": 5,
    "s": "abjuration",
-   "c": "druid"
+   "c": "druid",
+   "k": true,
+   "v": "VS",
+   "d": "self"
   },
   {
    "n": "Antimagic Field",
    "b": "phb",
    "l": 8,
    "s": "abjuration",
-   "c": "cleric,wizard"
+   "c": "cleric,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": "self"
   },
   {
    "n": "Antipathy/Sympathy",
    "b": "phb",
    "l": 8,
    "s": "enchantment",
-   "c": "druid,wizard"
+   "c": "druid,wizard",
+   "t": 60,
+   "v": "VSM",
+   "d": 60
   },
   {
    "n": "Arcane Eye",
    "b": "phb",
    "l": 4,
    "s": "divination",
-   "c": "cleric,wizard"
+   "c": "wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 30
   },
   {
    "n": "Arcane Gate",
@@ -136,7 +173,11 @@
    "b": "phb",
    "l": 2,
    "s": "abjuration",
-   "c": "wizard"
+   "c": "wizard",
+   "v": "VSM",
+   "g": 25,
+   "x": true,
+   "d": "touch"
   },
   {
    "n": "Armor of Agathys",
@@ -168,14 +209,24 @@
    "b": "phb",
    "l": 9,
    "s": "necromancy",
-   "c": "cleric,warlock,wizard"
+   "c": "cleric,warlock,wizard",
+   "t": 60,
+   "v": "VSM",
+   "g": 1100,
+   "x": true,
+   "d": 10
   },
   {
    "n": "Augury",
    "b": "phb",
    "l": 2,
    "s": "divination",
-   "c": "cleric"
+   "c": "cleric",
+   "r": true,
+   "t": 1,
+   "v": "VSM",
+   "g": 25,
+   "d": "self"
   },
   {
    "n": "Aura of Life",
@@ -203,14 +254,22 @@
    "b": "phb",
    "l": 5,
    "s": "transmutation",
-   "c": "druid,bard"
+   "c": "bard,druid",
+   "t": 480,
+   "v": "VSM",
+   "g": 1000,
+   "x": true,
+   "d": "touch"
   },
   {
    "n": "Bane",
    "b": "phb",
    "l": 1,
    "s": "enchantment",
-   "c": "cleric,bard"
+   "c": "bard,cleric",
+   "k": true,
+   "v": "VSM",
+   "d": 30
   },
   {
    "n": "Banishing Smite",
@@ -224,21 +283,30 @@
    "b": "phb",
    "l": 4,
    "s": "abjuration",
-   "c": "cleric,sorcerer,warlock,wizard"
+   "c": "cleric,paladin,sorcerer,warlock,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 60
   },
   {
    "n": "Barkskin",
    "b": "phb",
    "l": 2,
    "s": "transmutation",
-   "c": "cleric,druid,ranger"
+   "c": "druid,ranger",
+   "k": true,
+   "v": "VSM",
+   "d": "touch"
   },
   {
    "n": "Beacon of Hope",
    "b": "phb",
    "l": 3,
    "s": "abjuration",
-   "c": "cleric"
+   "c": "cleric",
+   "k": true,
+   "v": "VS",
+   "d": 30
   },
   {
    "n": "Beast Bond",
@@ -266,7 +334,10 @@
    "b": "phb",
    "l": 3,
    "s": "necromancy",
-   "c": "cleric,bard,wizard"
+   "c": "bard,cleric,wizard",
+   "k": true,
+   "v": "VS",
+   "d": "touch"
   },
   {
    "n": "Arcane Hand",
@@ -276,14 +347,20 @@
    ],
    "l": 5,
    "s": "evocation",
-   "c": "artificer,wizard"
+   "c": "artificer,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 120
   },
   {
    "n": "Blade Barrier",
    "b": "phb",
    "l": 6,
    "s": "evocation",
-   "c": "cleric"
+   "c": "cleric",
+   "k": true,
+   "v": "VS",
+   "d": 90
   },
   {
    "n": "Blade of Disaster",
@@ -304,14 +381,19 @@
    "b": "phb",
    "l": 1,
    "s": "enchantment",
-   "c": "cleric"
+   "c": "cleric,paladin",
+   "k": true,
+   "v": "VSM",
+   "d": 30
   },
   {
    "n": "Blight",
    "b": "phb",
    "l": 4,
    "s": "necromancy",
-   "c": "druid,sorcerer,warlock,wizard"
+   "c": "druid,sorcerer,warlock,wizard",
+   "v": "VS",
+   "d": 30
   },
   {
    "n": "Blinding Smite",
@@ -325,21 +407,28 @@
    "b": "phb",
    "l": 2,
    "s": "necromancy",
-   "c": "cleric,bard,sorcerer,warlock,wizard"
+   "c": "bard,cleric,sorcerer,wizard",
+   "v": "V",
+   "d": 30
   },
   {
    "n": "Blink",
    "b": "phb",
    "l": 3,
    "s": "transmutation",
-   "c": "cleric,sorcerer,warlock,wizard"
+   "c": "sorcerer,wizard",
+   "v": "VS",
+   "d": "self"
   },
   {
    "n": "Blur",
    "b": "phb",
    "l": 2,
    "s": "illusion",
-   "c": "druid,sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "k": true,
+   "v": "V",
+   "d": "self"
   },
   {
    "n": "Bones of the Earth",
@@ -367,28 +456,40 @@
    "b": "phb",
    "l": 2,
    "s": "evocation",
-   "c": "paladin"
+   "c": "paladin",
+   "k": true,
+   "t": "bonus",
+   "v": "V",
+   "d": "self"
   },
   {
    "n": "Burning Hands",
    "b": "phb",
    "l": 1,
    "s": "evocation",
-   "c": "cleric,sorcerer,warlock,wizard"
+   "c": "sorcerer,wizard",
+   "v": "VS",
+   "d": "self"
   },
   {
    "n": "Call Lightning",
    "b": "phb",
    "l": 3,
    "s": "conjuration",
-   "c": "cleric,druid"
+   "c": "druid",
+   "k": true,
+   "v": "VS",
+   "d": 120
   },
   {
    "n": "Calm Emotions",
    "b": "phb",
    "l": 2,
    "s": "enchantment",
-   "c": "cleric,bard,warlock"
+   "c": "bard,cleric",
+   "k": true,
+   "v": "VS",
+   "d": 60
   },
   {
    "n": "Catapult",
@@ -416,14 +517,16 @@
    "b": "xge",
    "l": 1,
    "s": "evocation",
-   "c": "cleric,herald"
+   "c": "cleric,paladin"
   },
   {
    "n": "Chain Lightning",
    "b": "phb",
    "l": 6,
    "s": "evocation",
-   "c": "sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "v": "VSM",
+   "d": 150
   },
   {
    "n": "Chaos Bolt",
@@ -444,14 +547,18 @@
    "b": "phb",
    "l": 1,
    "s": "enchantment",
-   "c": "cleric,druid,bard,sorcerer,warlock,wizard"
+   "c": "bard,druid,sorcerer,warlock,wizard",
+   "v": "VS",
+   "d": 30
   },
   {
    "n": "Chill Touch",
    "b": "phb",
    "l": 0,
    "s": "necromancy",
-   "c": "sorcerer,warlock,wizard"
+   "c": "sorcerer,warlock,wizard",
+   "v": "VS",
+   "d": 120
   },
   {
    "n": "Chromatic Orb",
@@ -465,7 +572,10 @@
    "b": "phb",
    "l": 6,
    "s": "necromancy",
-   "c": "sorcerer,warlock,wizard"
+   "c": "sorcerer,warlock,wizard",
+   "v": "VSM",
+   "g": 500,
+   "d": 150
   },
   {
    "n": "Circle of Power",
@@ -479,14 +589,24 @@
    "b": "phb",
    "l": 3,
    "s": "divination",
-   "c": "cleric,bard,sorcerer,warlock,wizard"
+   "c": "bard,cleric,sorcerer,wizard",
+   "k": true,
+   "t": 10,
+   "v": "VSM",
+   "g": 100,
+   "d": 5280
   },
   {
    "n": "Clone",
    "b": "phb",
    "l": 8,
    "s": "necromancy",
-   "c": "wizard"
+   "c": "wizard",
+   "t": 60,
+   "v": "VSM",
+   "g": 3000,
+   "x": true,
+   "d": "touch"
   },
   {
    "n": "Cloud of Daggers",
@@ -500,35 +620,50 @@
    "b": "phb",
    "l": 5,
    "s": "conjuration",
-   "c": "druid,sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "k": true,
+   "v": "VS",
+   "d": 120
   },
   {
    "n": "Color Spray",
    "b": "phb",
    "l": 1,
    "s": "illusion",
-   "c": "sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "v": "VSM",
+   "d": "self"
   },
   {
    "n": "Command",
    "b": "phb",
    "l": 1,
    "s": "enchantment",
-   "c": "cleric,warlock"
+   "c": "cleric,paladin",
+   "v": "V",
+   "d": 60
   },
   {
    "n": "Commune",
    "b": "phb",
    "l": 5,
    "s": "divination",
-   "c": "cleric"
+   "c": "cleric",
+   "r": true,
+   "t": 1,
+   "v": "VSM",
+   "d": "self"
   },
   {
    "n": "Commune with Nature",
    "b": "phb",
    "l": 5,
    "s": "divination",
-   "c": "druid,ranger"
+   "c": "druid,ranger",
+   "r": true,
+   "t": 1,
+   "v": "VS",
+   "d": "self"
   },
   {
    "n": "Compelled Duel",
@@ -542,35 +677,49 @@
    "b": "phb",
    "l": 1,
    "s": "divination",
-   "c": "bard,sorcerer,warlock,wizard"
+   "c": "bard,sorcerer,warlock,wizard",
+   "r": true,
+   "v": "VSM",
+   "d": "self"
   },
   {
    "n": "Compulsion",
    "b": "phb",
    "l": 4,
    "s": "enchantment",
-   "c": "bard"
+   "c": "bard",
+   "k": true,
+   "v": "VS",
+   "d": 30
   },
   {
    "n": "Cone of Cold",
    "b": "phb",
    "l": 5,
    "s": "evocation",
-   "c": "druid,sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "v": "VSM",
+   "d": "self"
   },
   {
    "n": "Confusion",
    "b": "phb",
    "l": 4,
    "s": "enchantment",
-   "c": "cleric,druid,bard,sorcerer,wizard"
+   "c": "bard,druid,sorcerer,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 90
   },
   {
    "n": "Conjure Animals",
    "b": "phb",
    "l": 3,
    "s": "conjuration",
-   "c": "druid,ranger"
+   "c": "druid,ranger",
+   "k": true,
+   "v": "VS",
+   "d": 60
   },
   {
    "n": "Conjure Barrage",
@@ -584,28 +733,44 @@
    "b": "phb",
    "l": 7,
    "s": "conjuration",
-   "c": "cleric"
+   "c": "cleric",
+   "k": true,
+   "t": 1,
+   "v": "VS",
+   "d": 90
   },
   {
    "n": "Conjure Elemental",
    "b": "phb",
    "l": 5,
    "s": "conjuration",
-   "c": "druid,wizard"
+   "c": "druid,wizard",
+   "k": true,
+   "t": 1,
+   "v": "VSM",
+   "d": 90
   },
   {
    "n": "Conjure Fey",
    "b": "phb",
    "l": 6,
    "s": "conjuration",
-   "c": "druid,warlock"
+   "c": "druid,warlock",
+   "k": true,
+   "t": 1,
+   "v": "VS",
+   "d": 90
   },
   {
    "n": "Conjure Minor Elementals",
    "b": "phb",
    "l": 4,
    "s": "conjuration",
-   "c": "druid,wizard"
+   "c": "druid,wizard",
+   "k": true,
+   "t": 1,
+   "v": "VS",
+   "d": 90
   },
   {
    "n": "Conjure Volley",
@@ -619,35 +784,52 @@
    "b": "phb",
    "l": 4,
    "s": "conjuration",
-   "c": "druid,ranger"
+   "c": "druid,ranger",
+   "k": true,
+   "v": "VSM",
+   "d": 60
   },
   {
    "n": "Contact Other Plane",
    "b": "phb",
    "l": 5,
    "s": "divination",
-   "c": "warlock,wizard"
+   "c": "warlock,wizard",
+   "r": true,
+   "t": 1,
+   "v": "V",
+   "d": "self"
   },
   {
    "n": "Contagion",
    "b": "phb",
    "l": 5,
    "s": "necromancy",
-   "c": "cleric,druid"
+   "c": "cleric,druid",
+   "v": "VS",
+   "d": "touch"
   },
   {
    "n": "Contingency",
    "b": "phb",
    "l": 6,
    "s": "evocation",
-   "c": "wizard"
+   "c": "wizard",
+   "t": 10,
+   "v": "VSM",
+   "g": 1500,
+   "d": "self"
   },
   {
    "n": "Continual Flame",
    "b": "phb",
    "l": 2,
    "s": "evocation",
-   "c": "cleric,wizard"
+   "c": "cleric,wizard",
+   "v": "VSM",
+   "g": 50,
+   "x": true,
+   "d": "touch"
   },
   {
    "n": "Control Flames",
@@ -661,14 +843,21 @@
    "b": "phb",
    "l": 4,
    "s": "transmutation",
-   "c": "cleric,druid,wizard"
+   "c": "cleric,druid,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 300
   },
   {
    "n": "Control Weather",
    "b": "phb",
    "l": 8,
    "s": "transmutation",
-   "c": "cleric,druid,wizard"
+   "c": "cleric,druid,wizard",
+   "k": true,
+   "t": 10,
+   "v": "VSM",
+   "d": "self"
   },
   {
    "n": "Control Winds",
@@ -689,7 +878,10 @@
    "b": "phb",
    "l": 3,
    "s": "abjuration",
-   "c": "sorcerer,warlock,wizard"
+   "c": "sorcerer,warlock,wizard",
+   "t": "reaction",
+   "v": "S",
+   "d": 60
   },
   {
    "n": "Create Bonfire",
@@ -703,7 +895,9 @@
    "b": "phb",
    "l": 3,
    "s": "conjuration",
-   "c": "cleric,druid"
+   "c": "cleric,paladin",
+   "v": "VS",
+   "d": 30
   },
   {
    "n": "Create Homunculus",
@@ -717,21 +911,30 @@
    "b": "phb",
    "l": 1,
    "s": "transmutation",
-   "c": "cleric,druid"
+   "c": "cleric,druid",
+   "v": "VSM",
+   "d": 30
   },
   {
    "n": "Create Undead",
    "b": "phb",
    "l": 6,
    "s": "necromancy",
-   "c": "cleric,warlock,wizard"
+   "c": "cleric,warlock,wizard",
+   "t": 1,
+   "v": "VSM",
+   "g": 150,
+   "d": 10
   },
   {
    "n": "Creation",
    "b": "phb",
    "l": 5,
    "s": "illusion",
-   "c": "sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "t": 1,
+   "v": "VSM",
+   "d": 30
   },
   {
    "n": "Crown of Madness",
@@ -759,14 +962,19 @@
    "b": "phb",
    "l": 1,
    "s": "evocation",
-   "c": "cleric,druid,ranger,bard"
+   "c": "bard,cleric,druid,paladin,ranger",
+   "v": "VS",
+   "d": "touch"
   },
   {
    "n": "Dancing Lights",
    "b": "phb",
    "l": 0,
    "s": "evocation",
-   "c": "bard,sorcerer,wizard"
+   "c": "bard,sorcerer,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 120
   },
   {
    "n": "Danse Macabre",
@@ -787,14 +995,19 @@
    "b": "phb",
    "l": 2,
    "s": "evocation",
-   "c": "druid,sorcerer,warlock,wizard"
+   "c": "sorcerer,warlock,wizard",
+   "k": true,
+   "v": "VM",
+   "d": 60
   },
   {
    "n": "Darkvision",
    "b": "phb",
    "l": 2,
    "s": "transmutation",
-   "c": "druid,ranger,sorcerer,wizard"
+   "c": "druid,ranger,sorcerer,wizard",
+   "v": "VSM",
+   "d": "touch"
   },
   {
    "n": "Dawn",
@@ -808,28 +1021,37 @@
    "b": "phb",
    "l": 3,
    "s": "evocation",
-   "c": "cleric,druid,ranger,sorcerer"
+   "c": "cleric,druid,paladin,ranger,sorcerer",
+   "v": "VS",
+   "d": 60
   },
   {
    "n": "Death Ward",
    "b": "phb",
    "l": 4,
    "s": "abjuration",
-   "c": "cleric"
+   "c": "cleric,paladin",
+   "v": "VS",
+   "d": "touch"
   },
   {
    "n": "Delayed Blast Fireball",
    "b": "phb",
    "l": 7,
    "s": "evocation",
-   "c": "sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 150
   },
   {
    "n": "Demiplane",
    "b": "phb",
    "l": 8,
    "s": "conjuration",
-   "c": "warlock,wizard"
+   "c": "warlock,wizard",
+   "v": "S",
+   "d": 60
   },
   {
    "n": "Destructive Wave",
@@ -843,63 +1065,88 @@
    "b": "phb",
    "l": 1,
    "s": "divination",
-   "c": "cleric"
+   "c": "cleric,paladin",
+   "k": true,
+   "v": "VS",
+   "d": "self"
   },
   {
    "n": "Detect Magic",
    "b": "phb",
    "l": 1,
    "s": "divination",
-   "c": "cleric,druid,ranger,bard,sorcerer,wizard"
+   "c": "bard,cleric,druid,paladin,ranger,sorcerer,wizard",
+   "r": true,
+   "k": true,
+   "v": "VS",
+   "d": "self"
   },
   {
    "n": "Detect Poison and Disease",
    "b": "phb",
    "l": 1,
    "s": "divination",
-   "c": "cleric,druid,ranger"
+   "c": "cleric,druid,paladin,ranger",
+   "r": true,
+   "k": true,
+   "v": "VSM",
+   "d": "self"
   },
   {
    "n": "Detect Thoughts",
    "b": "phb",
    "l": 2,
    "s": "divination",
-   "c": "bard,sorcerer,warlock,wizard"
+   "c": "bard,sorcerer,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": "self"
   },
   {
    "n": "Dimension Door",
    "b": "phb",
    "l": 4,
    "s": "conjuration",
-   "c": "cleric,bard,sorcerer,warlock,wizard"
+   "c": "bard,sorcerer,warlock,wizard",
+   "v": "V",
+   "d": 500
   },
   {
    "n": "Disguise Self",
    "b": "phb",
    "l": 1,
    "s": "illusion",
-   "c": "cleric,bard,sorcerer,wizard"
+   "c": "bard,sorcerer,wizard",
+   "v": "VS",
+   "d": "self"
   },
   {
    "n": "Disintegrate",
    "b": "phb",
    "l": 6,
    "s": "transmutation",
-   "c": "sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "v": "VSM",
+   "d": 60
   },
   {
    "n": "Dispel Evil and Good",
    "b": "phb",
    "l": 5,
    "s": "abjuration",
-   "c": "cleric"
+   "c": "cleric,paladin",
+   "k": true,
+   "v": "VSM",
+   "d": "self"
   },
   {
    "n": "Dispel Magic",
    "b": "phb",
    "l": 3,
    "s": "abjuration",
-   "c": "cleric,druid,bard,sorcerer,warlock,wizard"
+   "c": "bard,cleric,druid,paladin,sorcerer,warlock,wizard",
+   "v": "VS",
+   "d": 120
   },
   {
    "n": "Dissonant Whispers",
@@ -913,14 +1160,23 @@
    "b": "phb",
    "l": 4,
    "s": "divination",
-   "c": "cleric,druid"
+   "c": "cleric",
+   "r": true,
+   "v": "VSM",
+   "g": 25,
+   "x": true,
+   "d": "self"
   },
   {
    "n": "Divine Favor",
    "b": "phb",
    "l": 1,
    "s": "evocation",
-   "c": "cleric"
+   "c": "paladin",
+   "k": true,
+   "t": "bonus",
+   "v": "VS",
+   "d": "self"
   },
   {
    "n": "Divine Smite",
@@ -934,28 +1190,40 @@
    "b": "phb",
    "l": 7,
    "s": "evocation",
-   "c": "cleric"
+   "c": "cleric",
+   "t": "bonus",
+   "v": "V",
+   "d": 30
   },
   {
    "n": "Dominate Beast",
    "b": "phb",
    "l": 4,
    "s": "enchantment",
-   "c": "cleric,druid,sorcerer,warlock"
+   "c": "druid,sorcerer",
+   "k": true,
+   "v": "VS",
+   "d": 60
   },
   {
    "n": "Dominate Monster",
    "b": "phb",
    "l": 8,
    "s": "enchantment",
-   "c": "bard,sorcerer,warlock,wizard"
+   "c": "bard,sorcerer,warlock,wizard",
+   "k": true,
+   "v": "VS",
+   "d": 60
   },
   {
    "n": "Dominate Person",
    "b": "phb",
    "l": 5,
    "s": "enchantment",
-   "c": "cleric,bard,sorcerer,warlock,wizard"
+   "c": "bard,sorcerer,wizard",
+   "k": true,
+   "v": "VS",
+   "d": 60
   },
   {
    "n": "Draconic Transformation",
@@ -979,14 +1247,22 @@
    ],
    "l": 6,
    "s": "conjuration",
-   "c": "wizard"
+   "c": "wizard",
+   "r": true,
+   "t": 1,
+   "v": "VSM",
+   "g": 1000,
+   "d": "touch"
   },
   {
    "n": "Dream",
    "b": "phb",
    "l": 5,
    "s": "illusion",
-   "c": "druid,bard,warlock,wizard"
+   "c": "bard,warlock,wizard",
+   "t": 1,
+   "v": "VSM",
+   "d": "special"
   },
   {
    "n": "Dream of the Blue Veil",
@@ -1007,7 +1283,9 @@
    "b": "phb",
    "l": 0,
    "s": "transmutation",
-   "c": "druid"
+   "c": "druid",
+   "v": "VS",
+   "d": 30
   },
   {
    "n": "Dust Devil",
@@ -1035,14 +1313,19 @@
    "b": "phb",
    "l": 8,
    "s": "evocation",
-   "c": "cleric,druid,sorcerer"
+   "c": "cleric,druid,sorcerer",
+   "k": true,
+   "v": "VSM",
+   "d": 500
   },
   {
    "n": "Eldritch Blast",
    "b": "phb",
    "l": 0,
    "s": "evocation",
-   "c": "warlock"
+   "c": "warlock",
+   "v": "VS",
+   "d": 120
   },
   {
    "n": "Elemental Bane",
@@ -1084,14 +1367,20 @@
    "b": "phb",
    "l": 2,
    "s": "transmutation",
-   "c": "cleric,druid,bard,sorcerer"
+   "c": "bard,cleric,druid,sorcerer",
+   "k": true,
+   "v": "VSM",
+   "d": "touch"
   },
   {
    "n": "Enlarge/Reduce",
    "b": "phb",
    "l": 2,
    "s": "transmutation",
-   "c": "sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 30
   },
   {
    "n": "Ensnaring Strike",
@@ -1105,14 +1394,19 @@
    "b": "phb",
    "l": 1,
    "s": "conjuration",
-   "c": "druid"
+   "c": "druid",
+   "k": true,
+   "v": "VS",
+   "d": 90
   },
   {
    "n": "Enthrall",
    "b": "phb",
    "l": 2,
    "s": "enchantment",
-   "c": "bard,warlock"
+   "c": "bard,warlock",
+   "v": "VS",
+   "d": 60
   },
   {
    "n": "Erupting Earth",
@@ -1126,7 +1420,9 @@
    "b": "phb",
    "l": 7,
    "s": "transmutation",
-   "c": "cleric,bard,sorcerer,warlock,wizard"
+   "c": "bard,cleric,sorcerer,warlock,wizard",
+   "v": "VS",
+   "d": "self"
   },
   {
    "n": "Evard's Black Tentacles",
@@ -1136,42 +1432,60 @@
    ],
    "l": 4,
    "s": "conjuration",
-   "c": "warlock,wizard"
+   "c": "wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 90
   },
   {
    "n": "Expeditious Retreat",
    "b": "phb",
    "l": 1,
    "s": "transmutation",
-   "c": "sorcerer,warlock,wizard"
+   "c": "sorcerer,warlock,wizard",
+   "k": true,
+   "t": "bonus",
+   "v": "VS",
+   "d": "self"
   },
   {
    "n": "Eyebite",
    "b": "phb",
    "l": 6,
    "s": "necromancy",
-   "c": "bard,sorcerer,warlock,wizard"
+   "c": "bard,sorcerer,warlock,wizard",
+   "k": true,
+   "v": "VS",
+   "d": "self"
   },
   {
    "n": "Fabricate",
    "b": "phb",
    "l": 4,
    "s": "transmutation",
-   "c": "wizard"
+   "c": "wizard",
+   "t": 10,
+   "v": "VS",
+   "d": 120
   },
   {
    "n": "Faerie Fire",
    "b": "phb",
    "l": 1,
    "s": "evocation",
-   "c": "cleric,druid,bard,warlock"
+   "c": "bard,druid",
+   "k": true,
+   "v": "V",
+   "d": 60
   },
   {
    "n": "False Life",
    "b": "phb",
    "l": 1,
    "s": "necromancy",
-   "c": "sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "v": "VSM",
+   "d": "self"
   },
   {
    "n": "Far Step",
@@ -1185,21 +1499,29 @@
    "b": "phb",
    "l": 3,
    "s": "illusion",
-   "c": "bard,sorcerer,warlock,wizard"
+   "c": "bard,sorcerer,warlock,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": "self"
   },
   {
    "n": "Feather Fall",
    "b": "phb",
    "l": 1,
    "s": "transmutation",
-   "c": "bard,sorcerer,wizard"
+   "c": "bard,sorcerer,wizard",
+   "t": "reaction",
+   "v": "VM",
+   "d": 60
   },
   {
    "n": "Feeblemind",
    "b": "phb",
    "l": 8,
    "s": "enchantment",
-   "c": "druid,bard,warlock,wizard"
+   "c": "bard,druid,warlock,wizard",
+   "v": "VSM",
+   "d": 150
   },
   {
    "n": "Feign Death",
@@ -1213,7 +1535,13 @@
    "b": "phb",
    "l": 1,
    "s": "conjuration",
-   "c": "wizard"
+   "c": "wizard",
+   "r": true,
+   "t": 60,
+   "v": "VSM",
+   "g": 10,
+   "x": true,
+   "d": 10
   },
   {
    "n": "Find Greater Steed",
@@ -1227,56 +1555,76 @@
    "b": "phb",
    "l": 2,
    "s": "conjuration",
-   "c": "paladin"
+   "c": "paladin",
+   "t": 10,
+   "v": "VS",
+   "d": 30
   },
   {
    "n": "Find the Path",
    "b": "phb",
    "l": 6,
    "s": "divination",
-   "c": "cleric,druid,bard"
+   "c": "bard,cleric,druid",
+   "k": true,
+   "t": 1,
+   "v": "VSM",
+   "g": 100,
+   "d": "self"
   },
   {
    "n": "Find Traps",
    "b": "phb",
    "l": 2,
    "s": "divination",
-   "c": "cleric,druid,ranger"
+   "c": "cleric,druid,ranger",
+   "v": "VS",
+   "d": 120
   },
   {
    "n": "Finger of Death",
    "b": "phb",
    "l": 7,
    "s": "necromancy",
-   "c": "sorcerer,warlock,wizard"
+   "c": "sorcerer,warlock,wizard",
+   "v": "VS",
+   "d": 60
   },
   {
    "n": "Fire Bolt",
    "b": "phb",
    "l": 0,
    "s": "evocation",
-   "c": "sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "v": "VS",
+   "d": 120
   },
   {
    "n": "Fire Shield",
    "b": "phb",
    "l": 4,
    "s": "evocation",
-   "c": "warlock,wizard"
+   "c": "wizard",
+   "v": "VSM",
+   "d": "self"
   },
   {
    "n": "Fire Storm",
    "b": "phb",
    "l": 7,
    "s": "evocation",
-   "c": "cleric,druid,sorcerer"
+   "c": "cleric,druid,sorcerer",
+   "v": "VS",
+   "d": 150
   },
   {
    "n": "Fireball",
    "b": "phb",
    "l": 3,
    "s": "evocation",
-   "c": "sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "v": "VSM",
+   "d": 150
   },
   {
    "n": "Platinum Shield",
@@ -1300,63 +1648,92 @@
    "b": "phb",
    "l": 2,
    "s": "evocation",
-   "c": "druid"
+   "c": "druid",
+   "k": true,
+   "t": "bonus",
+   "v": "VSM",
+   "d": "self"
   },
   {
    "n": "Flame Strike",
    "b": "phb",
    "l": 5,
    "s": "evocation",
-   "c": "cleric,warlock"
+   "c": "cleric",
+   "v": "VSM",
+   "d": 60
   },
   {
    "n": "Flaming Sphere",
    "b": "phb",
    "l": 2,
    "s": "conjuration",
-   "c": "cleric,druid,wizard"
+   "c": "druid,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 60
   },
   {
    "n": "Flesh to Stone",
    "b": "phb",
    "l": 6,
    "s": "transmutation",
-   "c": "warlock,wizard"
+   "c": "warlock,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 60
   },
   {
    "n": "Fly",
    "b": "phb",
    "l": 3,
    "s": "transmutation",
-   "c": "sorcerer,warlock,wizard"
+   "c": "sorcerer,warlock,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": "touch"
   },
   {
    "n": "Fog Cloud",
    "b": "phb",
    "l": 1,
    "s": "conjuration",
-   "c": "cleric,druid,ranger,sorcerer,wizard"
+   "c": "druid,ranger,sorcerer,wizard",
+   "k": true,
+   "v": "VS",
+   "d": 120
   },
   {
    "n": "Forbiddance",
    "b": "phb",
    "l": 6,
    "s": "abjuration",
-   "c": "cleric"
+   "c": "cleric",
+   "r": true,
+   "t": 10,
+   "v": "VSM",
+   "g": 1000,
+   "d": "touch"
   },
   {
    "n": "Forcecage",
    "b": "phb",
    "l": 7,
    "s": "evocation",
-   "c": "bard,warlock,wizard"
+   "c": "bard,warlock,wizard",
+   "v": "VSM",
+   "g": 1500,
+   "d": 100
   },
   {
    "n": "Foresight",
    "b": "phb",
    "l": 9,
    "s": "divination",
-   "c": "druid,bard,warlock,wizard"
+   "c": "bard,druid,warlock,wizard",
+   "t": 1,
+   "v": "VSM",
+   "d": "touch"
   },
   {
    "n": "Fortune's Favor",
@@ -1370,7 +1747,9 @@
    "b": "phb",
    "l": 4,
    "s": "abjuration",
-   "c": "cleric,druid,ranger,bard"
+   "c": "bard,cleric,druid,ranger",
+   "v": "VSM",
+   "d": "touch"
   },
   {
    "n": "Friends",
@@ -1412,35 +1791,51 @@
    "b": "phb",
    "l": 3,
    "s": "transmutation",
-   "c": "druid,sorcerer,warlock,wizard"
+   "c": "sorcerer,warlock,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": "touch"
   },
   {
    "n": "Gate",
    "b": "phb",
    "l": 9,
    "s": "conjuration",
-   "c": "cleric,sorcerer,wizard"
+   "c": "cleric,sorcerer,wizard",
+   "k": true,
+   "v": "VSM",
+   "g": 5000,
+   "d": 60
   },
   {
    "n": "Geas",
    "b": "phb",
    "l": 5,
    "s": "enchantment",
-   "c": "cleric,druid,bard,wizard"
+   "c": "bard,cleric,druid,paladin,wizard",
+   "t": 1,
+   "v": "V",
+   "d": 60
   },
   {
    "n": "Gentle Repose",
    "b": "phb",
    "l": 2,
    "s": "necromancy",
-   "c": "cleric,wizard"
+   "c": "cleric,wizard",
+   "r": true,
+   "v": "VSM",
+   "d": "touch"
   },
   {
    "n": "Giant Insect",
    "b": "phb",
    "l": 4,
    "s": "transmutation",
-   "c": "druid"
+   "c": "druid",
+   "k": true,
+   "v": "VS",
+   "d": 30
   },
   {
    "n": "Gift of Alacrity",
@@ -1454,35 +1849,47 @@
    "b": "bomt",
    "l": 2,
    "s": "enchantment",
-   "c": "bard,rogue,warlock"
+   "c": "bard,warlock"
   },
   {
    "n": "Glibness",
    "b": "phb",
    "l": 8,
    "s": "transmutation",
-   "c": "bard,warlock"
+   "c": "bard,warlock",
+   "v": "V",
+   "d": "self"
   },
   {
    "n": "Globe of Invulnerability",
    "b": "phb",
    "l": 6,
    "s": "abjuration",
-   "c": "sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": "self"
   },
   {
    "n": "Glyph of Warding",
    "b": "phb",
    "l": 3,
    "s": "abjuration",
-   "c": "cleric,bard,wizard"
+   "c": "bard,cleric,wizard",
+   "t": 60,
+   "v": "VSM",
+   "g": 200,
+   "x": true,
+   "d": "touch"
   },
   {
    "n": "Goodberry",
    "b": "phb",
    "l": 1,
    "s": "transmutation",
-   "c": "druid,ranger"
+   "c": "druid,ranger",
+   "v": "VSM",
+   "d": "touch"
   },
   {
    "n": "Grasping Vine",
@@ -1510,21 +1917,30 @@
    "b": "phb",
    "l": 1,
    "s": "conjuration",
-   "c": "wizard"
+   "c": "wizard",
+   "v": "VSM",
+   "d": 60
   },
   {
    "n": "Greater Invisibility",
    "b": "phb",
    "l": 4,
    "s": "illusion",
-   "c": "druid,bard,sorcerer,warlock,wizard"
+   "c": "bard,sorcerer,wizard",
+   "k": true,
+   "v": "VS",
+   "d": "touch"
   },
   {
    "n": "Greater Restoration",
    "b": "phb",
    "l": 5,
    "s": "abjuration",
-   "c": "cleric,druid,bard"
+   "c": "bard,cleric,druid",
+   "v": "VSM",
+   "g": 100,
+   "x": true,
+   "d": "touch"
   },
   {
    "n": "Green-Flame Blade",
@@ -1538,7 +1954,9 @@
    "b": "phb",
    "l": 4,
    "s": "conjuration",
-   "c": "cleric"
+   "c": "cleric",
+   "v": "V",
+   "d": 30
   },
   {
    "n": "Guardian of Nature",
@@ -1552,21 +1970,30 @@
    "b": "phb",
    "l": 6,
    "s": "abjuration",
-   "c": "bard,wizard"
+   "c": "bard,wizard",
+   "t": 10,
+   "v": "VSM",
+   "g": 10,
+   "d": "touch"
   },
   {
    "n": "Guidance",
    "b": "phb",
    "l": 0,
    "s": "divination",
-   "c": "cleric,druid"
+   "c": "cleric,druid",
+   "k": true,
+   "v": "VS",
+   "d": "touch"
   },
   {
    "n": "Guiding Bolt",
    "b": "phb",
    "l": 1,
    "s": "evocation",
-   "c": "cleric"
+   "c": "cleric",
+   "v": "VS",
+   "d": 120
   },
   {
    "n": "Gust",
@@ -1580,7 +2007,10 @@
    "b": "phb",
    "l": 2,
    "s": "evocation",
-   "c": "cleric,druid,sorcerer,wizard"
+   "c": "druid,sorcerer,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": "self"
   },
   {
    "n": "Hail of Thorns",
@@ -1594,35 +2024,50 @@
    "b": "phb",
    "l": 5,
    "s": "evocation",
-   "c": "cleric,warlock"
+   "c": "cleric",
+   "t": 1440,
+   "v": "VSM",
+   "g": 1000,
+   "x": true,
+   "d": "touch"
   },
   {
    "n": "Hallucinatory Terrain",
    "b": "phb",
    "l": 4,
    "s": "illusion",
-   "c": "druid,bard,warlock,wizard"
+   "c": "bard,druid,warlock,wizard",
+   "t": 10,
+   "v": "VSM",
+   "d": 300
   },
   {
    "n": "Harm",
    "b": "phb",
    "l": 6,
    "s": "necromancy",
-   "c": "cleric"
+   "c": "cleric",
+   "v": "VS",
+   "d": 60
   },
   {
    "n": "Haste",
    "b": "phb",
    "l": 3,
    "s": "transmutation",
-   "c": "druid,sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 30
   },
   {
    "n": "Heal",
    "b": "phb",
    "l": 6,
    "s": "evocation",
-   "c": "cleric,druid"
+   "c": "cleric,druid",
+   "v": "VS",
+   "d": 60
   },
   {
    "n": "Healing Spirit",
@@ -1636,35 +2081,52 @@
    "b": "phb",
    "l": 1,
    "s": "evocation",
-   "c": "cleric,druid,bard"
+   "c": "bard,cleric,druid",
+   "t": "bonus",
+   "v": "V",
+   "d": 60
   },
   {
    "n": "Heat Metal",
    "b": "phb",
    "l": 2,
    "s": "transmutation",
-   "c": "druid,bard"
+   "c": "bard,druid",
+   "k": true,
+   "v": "VSM",
+   "d": 60
   },
   {
    "n": "Hellish Rebuke",
    "b": "phb",
    "l": 1,
    "s": "evocation",
-   "c": "warlock"
+   "c": "warlock",
+   "t": "reaction",
+   "v": "VS",
+   "d": 60
   },
   {
    "n": "Heroes' Feast",
    "b": "phb",
    "l": 6,
    "s": "conjuration",
-   "c": "cleric,druid"
+   "c": "cleric,druid",
+   "t": 10,
+   "v": "VSM",
+   "g": 1000,
+   "x": true,
+   "d": 30
   },
   {
    "n": "Heroism",
    "b": "phb",
    "l": 1,
    "s": "enchantment",
-   "c": "bard"
+   "c": "bard,paladin",
+   "k": true,
+   "v": "VS",
+   "d": "touch"
   },
   {
    "n": "Hex",
@@ -1678,21 +2140,31 @@
    "b": "phb",
    "l": 5,
    "s": "enchantment",
-   "c": "cleric,bard,sorcerer,warlock,wizard"
+   "c": "bard,sorcerer,warlock,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 90
   },
   {
    "n": "Hold Person",
    "b": "phb",
    "l": 2,
    "s": "enchantment",
-   "c": "cleric,druid,bard,sorcerer,warlock,wizard"
+   "c": "bard,cleric,druid,sorcerer,warlock,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 60
   },
   {
    "n": "Holy Aura",
    "b": "phb",
    "l": 8,
    "s": "abjuration",
-   "c": "cleric"
+   "c": "cleric",
+   "k": true,
+   "v": "VSM",
+   "g": 1000,
+   "d": "self"
   },
   {
    "n": "Holy Weapon",
@@ -1713,14 +2185,21 @@
    "b": "phb",
    "l": 1,
    "s": "divination",
-   "c": "ranger"
+   "c": "ranger",
+   "k": true,
+   "t": "bonus",
+   "v": "V",
+   "d": 90
   },
   {
    "n": "Hypnotic Pattern",
    "b": "phb",
    "l": 3,
    "s": "illusion",
-   "c": "bard,sorcerer,warlock,wizard"
+   "c": "bard,sorcerer,warlock,wizard",
+   "k": true,
+   "v": "SM",
+   "d": 120
   },
   {
    "n": "Ice Knife",
@@ -1734,14 +2213,21 @@
    "b": "phb",
    "l": 4,
    "s": "evocation",
-   "c": "cleric,druid,sorcerer,wizard"
+   "c": "druid,sorcerer,wizard",
+   "v": "VSM",
+   "d": 300
   },
   {
    "n": "Identify",
    "b": "phb",
    "l": 1,
    "s": "divination",
-   "c": "cleric,bard,wizard"
+   "c": "bard,wizard",
+   "r": true,
+   "t": 1,
+   "v": "VSM",
+   "g": 100,
+   "d": "touch"
   },
   {
    "n": "Illusory Dragon",
@@ -1755,7 +2241,13 @@
    "b": "phb",
    "l": 1,
    "s": "illusion",
-   "c": "bard,warlock,wizard"
+   "c": "bard,warlock,wizard",
+   "r": true,
+   "t": 1,
+   "v": "SM",
+   "g": 10,
+   "x": true,
+   "d": "touch"
   },
   {
    "n": "Immolation",
@@ -1776,14 +2268,21 @@
    "b": "phb",
    "l": 9,
    "s": "abjuration",
-   "c": "warlock,wizard"
+   "c": "warlock,wizard",
+   "t": 1,
+   "v": "VSM",
+   "g": 500,
+   "d": 30
   },
   {
    "n": "Incendiary Cloud",
    "b": "phb",
    "l": 8,
    "s": "conjuration",
-   "c": "sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "k": true,
+   "v": "VS",
+   "d": 150
   },
   {
    "n": "Infernal Calling",
@@ -1804,14 +2303,19 @@
    "b": "phb",
    "l": 1,
    "s": "necromancy",
-   "c": "cleric"
+   "c": "cleric",
+   "v": "VS",
+   "d": "touch"
   },
   {
    "n": "Insect Plague",
    "b": "phb",
    "l": 5,
    "s": "conjuration",
-   "c": "cleric,druid,sorcerer"
+   "c": "cleric,druid,sorcerer",
+   "k": true,
+   "v": "VSM",
+   "d": 300
   },
   {
    "n": "Intellect Fortress",
@@ -1853,14 +2357,19 @@
    "b": "phb",
    "l": 2,
    "s": "illusion",
-   "c": "druid,bard,sorcerer,warlock,wizard"
+   "c": "bard,sorcerer,warlock,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": "touch"
   },
   {
    "n": "Jump",
    "b": "phb",
    "l": 1,
    "s": "transmutation",
-   "c": "druid,ranger,sorcerer,wizard"
+   "c": "druid,ranger,sorcerer,wizard",
+   "v": "VSM",
+   "d": "touch"
   },
   {
    "n": "Kinetic Jaunt",
@@ -1874,14 +2383,21 @@
    "b": "phb",
    "l": 2,
    "s": "transmutation",
-   "c": "bard,sorcerer,wizard"
+   "c": "bard,sorcerer,wizard",
+   "v": "V",
+   "d": 60
   },
   {
    "n": "Legend Lore",
    "b": "phb",
    "l": 5,
    "s": "divination",
-   "c": "cleric,bard,wizard"
+   "c": "bard,cleric,wizard",
+   "t": 10,
+   "v": "VSM",
+   "g": 50,
+   "x": true,
+   "d": "self"
   },
   {
    "n": "Leomund's Secret Chest",
@@ -1891,7 +2407,10 @@
    ],
    "l": 4,
    "s": "conjuration",
-   "c": "wizard"
+   "c": "wizard",
+   "v": "VSM",
+   "g": 5050,
+   "d": "touch"
   },
   {
    "n": "Leomund's Tiny Hut",
@@ -1901,21 +2420,30 @@
    ],
    "l": 3,
    "s": "evocation",
-   "c": "bard,wizard"
+   "c": "bard,wizard",
+   "r": true,
+   "t": 1,
+   "v": "VSM",
+   "d": "self"
   },
   {
    "n": "Lesser Restoration",
    "b": "phb",
    "l": 2,
    "s": "abjuration",
-   "c": "cleric,druid,ranger,bard"
+   "c": "bard,cleric,druid,paladin,ranger",
+   "v": "VS",
+   "d": "touch"
   },
   {
    "n": "Levitate",
    "b": "phb",
    "l": 2,
    "s": "transmutation",
-   "c": "sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 60
   },
   {
    "n": "Life Transference",
@@ -1929,7 +2457,9 @@
    "b": "phb",
    "l": 0,
    "s": "evocation",
-   "c": "cleric,bard,sorcerer,wizard"
+   "c": "bard,cleric,sorcerer,wizard",
+   "v": "VM",
+   "d": "touch"
   },
   {
    "n": "Lightning Arrow",
@@ -1943,7 +2473,9 @@
    "b": "phb",
    "l": 3,
    "s": "evocation",
-   "c": "druid,sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "v": "VSM",
+   "d": "self"
   },
   {
    "n": "Lightning Lure",
@@ -1957,28 +2489,39 @@
    "b": "phb",
    "l": 2,
    "s": "divination",
-   "c": "druid,ranger,bard"
+   "c": "bard,druid,ranger",
+   "r": true,
+   "v": "VSM",
+   "d": "self"
   },
   {
    "n": "Locate Creature",
    "b": "phb",
    "l": 4,
    "s": "divination",
-   "c": "cleric,druid,ranger,bard,wizard"
+   "c": "bard,cleric,druid,paladin,ranger,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": "self"
   },
   {
    "n": "Locate Object",
    "b": "phb",
    "l": 2,
    "s": "divination",
-   "c": "cleric,druid,ranger,bard,wizard"
+   "c": "bard,cleric,druid,paladin,ranger,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": "self"
   },
   {
    "n": "Longstrider",
    "b": "phb",
    "l": 1,
    "s": "transmutation",
-   "c": "druid,ranger,bard,wizard"
+   "c": "bard,druid,ranger,wizard",
+   "v": "VSM",
+   "d": "touch"
   },
   {
    "n": "Maddening Darkness",
@@ -1999,42 +2542,63 @@
    "b": "phb",
    "l": 1,
    "s": "abjuration",
-   "c": "sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "v": "VSM",
+   "d": "touch"
   },
   {
    "n": "Mage Hand",
    "b": "phb",
    "l": 0,
    "s": "conjuration",
-   "c": "bard,sorcerer,warlock,wizard"
+   "c": "bard,sorcerer,warlock,wizard",
+   "v": "VS",
+   "d": 30
   },
   {
    "n": "Magic Circle",
    "b": "phb",
    "l": 3,
    "s": "abjuration",
-   "c": "cleric,warlock,wizard"
+   "c": "cleric,paladin,warlock,wizard",
+   "t": 1,
+   "v": "VSM",
+   "g": 100,
+   "x": true,
+   "d": 10
   },
   {
    "n": "Magic Jar",
    "b": "phb",
    "l": 6,
    "s": "necromancy",
-   "c": "wizard"
+   "c": "wizard",
+   "t": 1,
+   "v": "VSM",
+   "g": 500,
+   "d": "self"
   },
   {
    "n": "Magic Missile",
    "b": "phb",
    "l": 1,
    "s": "evocation",
-   "c": "sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "v": "VS",
+   "d": 120
   },
   {
    "n": "Magic Mouth",
    "b": "phb",
    "l": 2,
    "s": "illusion",
-   "c": "bard,wizard"
+   "c": "bard,wizard",
+   "r": true,
+   "t": 1,
+   "v": "VSM",
+   "g": 10,
+   "x": true,
+   "d": 30
   },
   {
    "n": "Magic Stone",
@@ -2048,7 +2612,11 @@
    "b": "phb",
    "l": 2,
    "s": "transmutation",
-   "c": "cleric,wizard"
+   "c": "paladin,wizard",
+   "k": true,
+   "t": "bonus",
+   "v": "VS",
+   "d": "touch"
   },
   {
    "n": "Magnify Gravity",
@@ -2062,28 +2630,38 @@
    "b": "phb",
    "l": 3,
    "s": "illusion",
-   "c": "bard,sorcerer,warlock,wizard"
+   "c": "bard,sorcerer,warlock,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 120
   },
   {
    "n": "Mass Cure Wounds",
    "b": "phb",
    "l": 5,
    "s": "conjuration",
-   "c": "cleric,druid,bard"
+   "c": "bard,cleric,druid",
+   "v": "VS",
+   "d": 60
   },
   {
    "n": "Mass Heal",
    "b": "phb",
    "l": 9,
    "s": "conjuration",
-   "c": "cleric"
+   "c": "cleric",
+   "v": "VS",
+   "d": 60
   },
   {
    "n": "Mass Healing Word",
    "b": "phb",
    "l": 3,
    "s": "evocation",
-   "c": "cleric"
+   "c": "cleric",
+   "t": "bonus",
+   "v": "V",
+   "d": 60
   },
   {
    "n": "Mass Polymorph",
@@ -2097,7 +2675,9 @@
    "b": "phb",
    "l": 6,
    "s": "enchantment",
-   "c": "bard,sorcerer,warlock,wizard"
+   "c": "bard,sorcerer,warlock,wizard",
+   "v": "VM",
+   "d": 60
   },
   {
    "n": "Earthen Grasp",
@@ -2114,14 +2694,20 @@
    "b": "phb",
    "l": 8,
    "s": "conjuration",
-   "c": "wizard"
+   "c": "wizard",
+   "k": true,
+   "v": "VS",
+   "d": 60
   },
   {
    "n": "Meld into Stone",
    "b": "phb",
    "l": 3,
    "s": "transmutation",
-   "c": "druid"
+   "c": "cleric,druid",
+   "r": true,
+   "v": "VS",
+   "d": "touch"
   },
   {
    "n": "Melf's Acid Arrow",
@@ -2131,7 +2717,9 @@
    ],
    "l": 2,
    "s": "evocation",
-   "c": "druid,wizard"
+   "c": "wizard",
+   "v": "VSM",
+   "d": 90
   },
   {
    "n": "Minute Meteors",
@@ -2148,7 +2736,10 @@
    "b": "phb",
    "l": 0,
    "s": "transmutation",
-   "c": "cleric,druid,bard,sorcerer,wizard"
+   "c": "bard,cleric,druid,sorcerer,wizard",
+   "t": 1,
+   "v": "VSM",
+   "d": "touch"
   },
   {
    "n": "Mental Prison",
@@ -2162,14 +2753,18 @@
    "b": "phb",
    "l": 0,
    "s": "transmutation",
-   "c": "bard,sorcerer,wizard"
+   "c": "bard,sorcerer,wizard",
+   "v": "VSM",
+   "d": 120
   },
   {
    "n": "Meteor Swarm",
    "b": "phb",
    "l": 9,
    "s": "evocation",
-   "c": "sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "v": "VS",
+   "d": 5280
   },
   {
    "n": "Mighty Fortress",
@@ -2183,7 +2778,9 @@
    "b": "phb",
    "l": 8,
    "s": "abjuration",
-   "c": "bard,wizard"
+   "c": "bard,wizard",
+   "v": "VS",
+   "d": "touch"
   },
   {
    "n": "Mind Sliver",
@@ -2204,42 +2801,58 @@
    "b": "phb",
    "l": 0,
    "s": "illusion",
-   "c": "bard,sorcerer,warlock,wizard"
+   "c": "bard,sorcerer,warlock,wizard",
+   "v": "SM",
+   "d": 30
   },
   {
    "n": "Mirage Arcane",
    "b": "phb",
    "l": 7,
    "s": "illusion",
-   "c": "druid,bard,wizard"
+   "c": "bard,druid,wizard",
+   "t": 10,
+   "v": "VS",
+   "d": "sight"
   },
   {
    "n": "Mirror Image",
    "b": "phb",
    "l": 2,
    "s": "illusion",
-   "c": "cleric,druid,sorcerer,warlock,wizard"
+   "c": "sorcerer,warlock,wizard",
+   "v": "VS",
+   "d": "self"
   },
   {
    "n": "Mislead",
    "b": "phb",
    "l": 5,
    "s": "illusion",
-   "c": "bard,wizard"
+   "c": "bard,wizard",
+   "k": true,
+   "v": "S",
+   "d": "self"
   },
   {
    "n": "Misty Step",
    "b": "phb",
    "l": 2,
    "s": "conjuration",
-   "c": "druid,sorcerer,warlock,wizard"
+   "c": "sorcerer,warlock,wizard",
+   "t": "bonus",
+   "v": "V",
+   "d": "self"
   },
   {
    "n": "Modify Memory",
    "b": "phb",
    "l": 5,
    "s": "enchantment",
-   "c": "cleric,bard,wizard"
+   "c": "bard,wizard",
+   "k": true,
+   "v": "VS",
+   "d": 30
   },
   {
    "n": "Mold Earth",
@@ -2253,7 +2866,10 @@
    "b": "phb",
    "l": 2,
    "s": "evocation",
-   "c": "druid"
+   "c": "druid",
+   "k": true,
+   "v": "VSM",
+   "d": 120
   },
   {
    "n": "Mordenkainen's Faithful Hound",
@@ -2263,7 +2879,9 @@
    ],
    "l": 4,
    "s": "conjuration",
-   "c": "wizard"
+   "c": "wizard",
+   "v": "VSM",
+   "d": 30
   },
   {
    "n": "Mordenkainen's Magnificent Mansion",
@@ -2273,7 +2891,11 @@
    ],
    "l": 7,
    "s": "conjuration",
-   "c": "bard,wizard"
+   "c": "bard,wizard",
+   "t": 1,
+   "v": "VSM",
+   "g": 5,
+   "d": 300
   },
   {
    "n": "Mordenkainen's Private Sanctum",
@@ -2283,7 +2905,10 @@
    ],
    "l": 4,
    "s": "abjuration",
-   "c": "wizard"
+   "c": "wizard",
+   "t": 10,
+   "v": "VSM",
+   "d": 120
   },
   {
    "n": "Mordenkainen's Sword",
@@ -2293,14 +2918,21 @@
    ],
    "l": 7,
    "s": "evocation",
-   "c": "bard,wizard"
+   "c": "bard,wizard",
+   "k": true,
+   "v": "VSM",
+   "g": 250,
+   "d": 60
   },
   {
    "n": "Move Earth",
    "b": "phb",
    "l": 6,
    "s": "transmutation",
-   "c": "druid,sorcerer,wizard"
+   "c": "druid,sorcerer,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 120
   },
   {
    "n": "Draconic Mischief",
@@ -2325,7 +2957,11 @@
    "b": "phb",
    "l": 3,
    "s": "abjuration",
-   "c": "cleric,ranger,bard,wizard"
+   "c": "bard,ranger,wizard",
+   "v": "VSM",
+   "g": 25,
+   "x": true,
+   "d": "touch"
   },
   {
    "n": "Nystul's Magic Aura",
@@ -2335,7 +2971,9 @@
    ],
    "l": 2,
    "s": "illusion",
-   "c": "wizard"
+   "c": "wizard",
+   "v": "VSM",
+   "d": "touch"
   },
   {
    "n": "Otiluke's Freezing Sphere",
@@ -2345,7 +2983,9 @@
    ],
    "l": 6,
    "s": "evocation",
-   "c": "wizard"
+   "c": "wizard",
+   "v": "VSM",
+   "d": 300
   },
   {
    "n": "Otiluke's Resilient Sphere",
@@ -2355,7 +2995,10 @@
    ],
    "l": 4,
    "s": "evocation",
-   "c": "wizard"
+   "c": "wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 30
   },
   {
    "n": "Otto's Irresistible Dance",
@@ -2365,21 +3008,29 @@
    ],
    "l": 6,
    "s": "enchantment",
-   "c": "bard,wizard"
+   "c": "bard,wizard",
+   "k": true,
+   "v": "V",
+   "d": 30
   },
   {
    "n": "Pass without Trace",
    "b": "phb",
    "l": 2,
    "s": "abjuration",
-   "c": "druid"
+   "c": "druid,ranger",
+   "k": true,
+   "v": "VSM",
+   "d": "self"
   },
   {
    "n": "Passwall",
    "b": "phb",
    "l": 5,
    "s": "transmutation",
-   "c": "druid,wizard"
+   "c": "wizard",
+   "v": "VSM",
+   "d": 30
   },
   {
    "n": "Phantasmal Force",
@@ -2393,56 +3044,81 @@
    "b": "phb",
    "l": 4,
    "s": "illusion",
-   "c": "wizard"
+   "c": "wizard",
+   "k": true,
+   "v": "VS",
+   "d": 120
   },
   {
    "n": "Phantom Steed",
    "b": "phb",
    "l": 3,
    "s": "illusion",
-   "c": "wizard"
+   "c": "wizard",
+   "r": true,
+   "t": 1,
+   "v": "VS",
+   "d": 30
   },
   {
    "n": "Planar Ally",
    "b": "phb",
    "l": 6,
    "s": "conjuration",
-   "c": "cleric"
+   "c": "cleric",
+   "t": 10,
+   "v": "VS",
+   "d": 60
   },
   {
    "n": "Planar Binding",
    "b": "phb",
    "l": 5,
    "s": "abjuration",
-   "c": "cleric,druid,bard,wizard"
+   "c": "bard,cleric,druid,wizard",
+   "t": 60,
+   "v": "VSM",
+   "g": 1000,
+   "x": true,
+   "d": 60
   },
   {
    "n": "Plane Shift",
    "b": "phb",
    "l": 7,
    "s": "conjuration",
-   "c": "cleric,sorcerer,warlock,wizard"
+   "c": "cleric,sorcerer,warlock,wizard",
+   "v": "VSM",
+   "g": 250,
+   "d": "touch"
   },
   {
    "n": "Plant Growth",
    "b": "phb",
    "l": 3,
    "s": "transmutation",
-   "c": "cleric,druid,ranger,bard,warlock"
+   "c": "bard,druid,ranger",
+   "v": "VS",
+   "d": 150
   },
   {
    "n": "Poison Spray",
    "b": "phb",
    "l": 0,
    "s": "conjuration",
-   "c": "druid,sorcerer,warlock,wizard"
+   "c": "druid,sorcerer,warlock,wizard",
+   "v": "VS",
+   "d": 10
   },
   {
    "n": "Polymorph",
    "b": "phb",
    "l": 4,
    "s": "transmutation",
-   "c": "cleric,druid,bard,sorcerer,wizard"
+   "c": "bard,druid,sorcerer,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 60
   },
   {
    "n": "Power Word Heal",
@@ -2456,7 +3132,9 @@
    "b": "phb",
    "l": 9,
    "s": "enchantment",
-   "c": "bard,sorcerer,warlock,wizard"
+   "c": "bard,sorcerer,warlock,wizard",
+   "v": "V",
+   "d": 60
   },
   {
    "n": "Power Word Pain",
@@ -2470,21 +3148,28 @@
    "b": "phb",
    "l": 8,
    "s": "enchantment",
-   "c": "bard,sorcerer,warlock,wizard"
+   "c": "bard,sorcerer,warlock,wizard",
+   "v": "V",
+   "d": 60
   },
   {
    "n": "Prayer of Healing",
    "b": "phb",
    "l": 2,
    "s": "evocation",
-   "c": "cleric"
+   "c": "cleric",
+   "t": 10,
+   "v": "V",
+   "d": 30
   },
   {
    "n": "Prestidigitation",
    "b": "phb",
    "l": 0,
    "s": "transmutation",
-   "c": "bard,sorcerer,warlock,wizard"
+   "c": "bard,sorcerer,warlock,wizard",
+   "v": "VS",
+   "d": 10
   },
   {
    "n": "Primal Savagery",
@@ -2505,56 +3190,77 @@
    "b": "phb",
    "l": 7,
    "s": "evocation",
-   "c": "sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "v": "VS",
+   "d": "self"
   },
   {
    "n": "Prismatic Wall",
    "b": "phb",
    "l": 9,
    "s": "abjuration",
-   "c": "wizard"
+   "c": "wizard",
+   "v": "VS",
+   "d": 60
   },
   {
    "n": "Produce Flame",
    "b": "phb",
    "l": 0,
    "s": "conjuration",
-   "c": "druid"
+   "c": "druid",
+   "v": "VS",
+   "d": "self"
   },
   {
    "n": "Programmed Illusion",
    "b": "phb",
    "l": 6,
    "s": "illusion",
-   "c": "bard,wizard"
+   "c": "bard,wizard",
+   "v": "VSM",
+   "g": 25,
+   "d": 120
   },
   {
    "n": "Project Image",
    "b": "phb",
    "l": 7,
    "s": "illusion",
-   "c": "bard,wizard"
+   "c": "bard,wizard",
+   "k": true,
+   "v": "VSM",
+   "g": 5,
+   "d": 2640000
   },
   {
    "n": "Protection from Energy",
    "b": "phb",
    "l": 3,
    "s": "abjuration",
-   "c": "cleric,druid,ranger,sorcerer,wizard"
+   "c": "cleric,druid,ranger,sorcerer,wizard",
+   "k": true,
+   "v": "VS",
+   "d": "touch"
   },
   {
    "n": "Protection from Evil and Good",
    "b": "phb",
    "l": 1,
    "s": "abjuration",
-   "c": "cleric,warlock,wizard"
+   "c": "cleric,paladin,warlock,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": "touch"
   },
   {
    "n": "Protection from Poison",
    "b": "phb",
    "l": 2,
    "s": "abjuration",
-   "c": "cleric,druid,ranger"
+   "c": "cleric,druid,paladin,ranger",
+   "v": "VS",
+   "d": "touch"
   },
   {
    "n": "Psychic Scream",
@@ -2582,7 +3288,10 @@
    "b": "phb",
    "l": 1,
    "s": "transmutation",
-   "c": "cleric,druid"
+   "c": "cleric,druid,paladin",
+   "r": true,
+   "v": "VS",
+   "d": 10
   },
   {
    "n": "Pyrotechnics",
@@ -2596,7 +3305,12 @@
    "b": "phb",
    "l": 5,
    "s": "necromancy",
-   "c": "cleric,bard"
+   "c": "bard,cleric,paladin",
+   "t": 60,
+   "v": "VSM",
+   "g": 500,
+   "x": true,
+   "d": "touch"
   },
   {
    "n": "Rary's Telepathic Bond",
@@ -2606,7 +3320,10 @@
    ],
    "l": 5,
    "s": "divination",
-   "c": "wizard"
+   "c": "wizard",
+   "r": true,
+   "v": "VSM",
+   "d": 30
   },
   {
    "n": "Psychic Lance",
@@ -2630,14 +3347,19 @@
    "b": "phb",
    "l": 2,
    "s": "necromancy",
-   "c": "warlock,wizard"
+   "c": "warlock,wizard",
+   "k": true,
+   "v": "VS",
+   "d": 60
   },
   {
    "n": "Ray of Frost",
    "b": "phb",
    "l": 0,
    "s": "evocation",
-   "c": "sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "v": "VS",
+   "d": 60
   },
   {
    "n": "Ray of Sickness",
@@ -2658,49 +3380,74 @@
    "b": "phb",
    "l": 7,
    "s": "transmutation",
-   "c": "cleric,druid,bard"
+   "c": "bard,cleric,druid",
+   "t": 1,
+   "v": "VSM",
+   "d": "touch"
   },
   {
    "n": "Reincarnate",
    "b": "phb",
    "l": 5,
    "s": "transmutation",
-   "c": "druid"
+   "c": "druid",
+   "t": 60,
+   "v": "VSM",
+   "g": 1000,
+   "x": true,
+   "d": "touch"
   },
   {
    "n": "Remove Curse",
    "b": "phb",
    "l": 3,
    "s": "abjuration",
-   "c": "cleric,warlock,wizard"
+   "c": "cleric,paladin,warlock,wizard",
+   "v": "VS",
+   "d": "touch"
   },
   {
    "n": "Resistance",
    "b": "phb",
    "l": 0,
    "s": "abjuration",
-   "c": "cleric,druid"
+   "c": "cleric,druid",
+   "k": true,
+   "v": "VSM",
+   "d": "touch"
   },
   {
    "n": "Resurrection",
    "b": "phb",
    "l": 7,
    "s": "necromancy",
-   "c": "cleric,bard"
+   "c": "bard,cleric",
+   "t": 60,
+   "v": "VSM",
+   "g": 1000,
+   "x": true,
+   "d": "touch"
   },
   {
    "n": "Reverse Gravity",
    "b": "phb",
    "l": 7,
    "s": "transmutation",
-   "c": "druid,sorcerer,wizard"
+   "c": "druid,sorcerer,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 100
   },
   {
    "n": "Revivify",
    "b": "phb",
    "l": 3,
    "s": "conjuration",
-   "c": "cleric"
+   "c": "cleric,paladin",
+   "v": "VSM",
+   "g": 300,
+   "x": true,
+   "d": "touch"
   },
   {
    "n": "Binding Ice",
@@ -2717,21 +3464,28 @@
    "b": "phb",
    "l": 2,
    "s": "transmutation",
-   "c": "wizard"
+   "c": "wizard",
+   "v": "VSM",
+   "d": "touch"
   },
   {
    "n": "Sacred Flame",
    "b": "phb",
    "l": 0,
    "s": "evocation",
-   "c": "cleric"
+   "c": "cleric",
+   "v": "VS",
+   "d": 60
   },
   {
    "n": "Sanctuary",
    "b": "phb",
    "l": 1,
    "s": "abjuration",
-   "c": "cleric"
+   "c": "cleric",
+   "t": "bonus",
+   "v": "VSM",
+   "d": 30
   },
   {
    "n": "Sapping Sting",
@@ -2752,14 +3506,21 @@
    "b": "phb",
    "l": 2,
    "s": "evocation",
-   "c": "cleric,sorcerer,warlock,wizard"
+   "c": "sorcerer,wizard",
+   "v": "VS",
+   "d": 120
   },
   {
    "n": "Scrying",
    "b": "phb",
    "l": 5,
    "s": "divination",
-   "c": "cleric,druid,bard,warlock,wizard"
+   "c": "bard,cleric,druid,warlock,wizard",
+   "k": true,
+   "t": 10,
+   "v": "VSM",
+   "g": 1000,
+   "d": "self"
   },
   {
    "n": "Searing Smite",
@@ -2773,28 +3534,38 @@
    "b": "phb",
    "l": 2,
    "s": "divination",
-   "c": "bard,sorcerer,wizard"
+   "c": "bard,sorcerer,wizard",
+   "v": "VSM",
+   "d": "self"
   },
   {
    "n": "Seeming",
    "b": "phb",
    "l": 5,
    "s": "illusion",
-   "c": "bard,sorcerer,warlock,wizard"
+   "c": "bard,sorcerer,wizard",
+   "v": "VS",
+   "d": 30
   },
   {
    "n": "Sending",
    "b": "phb",
    "l": 3,
    "s": "evocation",
-   "c": "cleric,bard,warlock,wizard"
+   "c": "bard,cleric,wizard",
+   "v": "VSM",
+   "d": "unlimited"
   },
   {
    "n": "Sequester",
    "b": "phb",
    "l": 7,
    "s": "transmutation",
-   "c": "wizard"
+   "c": "wizard",
+   "v": "VSM",
+   "g": 5000,
+   "x": true,
+   "d": "touch"
   },
   {
    "n": "Shadow Blade",
@@ -2822,35 +3593,51 @@
    "b": "phb",
    "l": 9,
    "s": "transmutation",
-   "c": "druid,wizard"
+   "c": "druid,wizard",
+   "k": true,
+   "v": "VSM",
+   "g": 1500,
+   "d": "self"
   },
   {
    "n": "Shatter",
    "b": "phb",
    "l": 2,
    "s": "evocation",
-   "c": "cleric,bard,sorcerer,warlock,wizard"
+   "c": "bard,sorcerer,warlock,wizard",
+   "v": "VSM",
+   "d": 60
   },
   {
    "n": "Shield",
    "b": "phb",
    "l": 1,
    "s": "abjuration",
-   "c": "sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "t": "reaction",
+   "v": "VS",
+   "d": "self"
   },
   {
    "n": "Shield of Faith",
    "b": "phb",
    "l": 1,
    "s": "abjuration",
-   "c": "cleric"
+   "c": "cleric,paladin",
+   "k": true,
+   "t": "bonus",
+   "v": "VSM",
+   "d": 60
   },
   {
    "n": "Shillelagh",
    "b": "phb",
    "l": 0,
    "s": "transmutation",
-   "c": "druid"
+   "c": "druid",
+   "t": "bonus",
+   "v": "VSM",
+   "d": "touch"
   },
   {
    "n": "Shining Smite",
@@ -2864,7 +3651,9 @@
    "b": "phb",
    "l": 0,
    "s": "evocation",
-   "c": "sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "v": "VS",
+   "d": "touch"
   },
   {
    "n": "Sickening Radiance",
@@ -2878,14 +3667,21 @@
    "b": "phb",
    "l": 2,
    "s": "illusion",
-   "c": "cleric,druid,ranger,bard"
+   "c": "bard,cleric,ranger",
+   "r": true,
+   "k": true,
+   "v": "VS",
+   "d": 120
   },
   {
    "n": "Silent Image",
    "b": "phb",
    "l": 1,
    "s": "illusion",
-   "c": "bard,sorcerer,wizard"
+   "c": "bard,sorcerer,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 60
   },
   {
    "n": "Silvery Barbs",
@@ -2899,7 +3695,12 @@
    "b": "phb",
    "l": 7,
    "s": "illusion",
-   "c": "wizard"
+   "c": "wizard",
+   "t": 720,
+   "v": "VSM",
+   "g": 1500,
+   "x": true,
+   "d": "touch"
   },
   {
    "n": "Skill Empowerment",
@@ -2920,21 +3721,29 @@
    "b": "phb",
    "l": 1,
    "s": "enchantment",
-   "c": "bard,sorcerer,warlock,wizard"
+   "c": "bard,sorcerer,wizard",
+   "v": "VSM",
+   "d": 90
   },
   {
    "n": "Sleet Storm",
    "b": "phb",
    "l": 3,
    "s": "conjuration",
-   "c": "cleric,druid,sorcerer,wizard"
+   "c": "druid,sorcerer,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 150
   },
   {
    "n": "Slow",
    "b": "phb",
    "l": 3,
    "s": "transmutation",
-   "c": "druid,sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 120
   },
   {
    "n": "Snare",
@@ -2972,49 +3781,67 @@
    "b": "phb",
    "l": 0,
    "s": "necromancy",
-   "c": "cleric"
+   "c": "cleric",
+   "v": "VS",
+   "d": "touch"
   },
   {
    "n": "Speak with Animals",
    "b": "phb",
    "l": 1,
    "s": "divination",
-   "c": "cleric,druid,ranger,bard"
+   "c": "bard,druid,ranger",
+   "r": true,
+   "v": "VS",
+   "d": "self"
   },
   {
    "n": "Speak with Dead",
    "b": "phb",
    "l": 3,
    "s": "necromancy",
-   "c": "cleric,bard"
+   "c": "bard,cleric",
+   "v": "VSM",
+   "d": 10
   },
   {
    "n": "Speak with Plants",
    "b": "phb",
    "l": 3,
    "s": "transmutation",
-   "c": "druid,ranger,bard"
+   "c": "bard,druid,ranger",
+   "v": "VS",
+   "d": "self"
   },
   {
    "n": "Spider Climb",
    "b": "phb",
    "l": 2,
    "s": "transmutation",
-   "c": "druid,sorcerer,warlock,wizard"
+   "c": "sorcerer,warlock,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": "touch"
   },
   {
    "n": "Spike Growth",
    "b": "phb",
    "l": 2,
    "s": "transmutation",
-   "c": "cleric,druid,ranger"
+   "c": "druid,ranger",
+   "k": true,
+   "v": "VSM",
+   "d": 150
   },
   {
    "n": "Spirit Guardians",
    "b": "phb",
    "l": 3,
    "s": "conjuration",
-   "c": "cleric"
+   "c": "cleric",
+   "k": true,
+   "v": "VSM",
+   "d": "self"
   },
   {
    "n": "Spirit Shroud",
@@ -3028,7 +3855,10 @@
    "b": "phb",
    "l": 2,
    "s": "evocation",
-   "c": "cleric"
+   "c": "cleric",
+   "t": "bonus",
+   "v": "VS",
+   "d": 60
   },
   {
    "n": "Spray of Cards",
@@ -3063,28 +3893,41 @@
    "b": "phb",
    "l": 3,
    "s": "conjuration",
-   "c": "druid,bard,sorcerer,warlock,wizard"
+   "c": "bard,sorcerer,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 90
   },
   {
    "n": "Stone Shape",
    "b": "phb",
    "l": 4,
    "s": "transmutation",
-   "c": "cleric,druid,wizard"
+   "c": "cleric,druid,wizard",
+   "v": "VSM",
+   "d": "touch"
   },
   {
    "n": "Stoneskin",
    "b": "phb",
    "l": 4,
    "s": "abjuration",
-   "c": "cleric,druid,ranger,sorcerer,wizard"
+   "c": "druid,ranger,sorcerer,wizard",
+   "k": true,
+   "v": "VSM",
+   "g": 100,
+   "x": true,
+   "d": "touch"
   },
   {
    "n": "Storm of Vengeance",
    "b": "phb",
    "l": 9,
    "s": "conjuration",
-   "c": "druid"
+   "c": "druid",
+   "k": true,
+   "v": "VS",
+   "d": "sight"
   },
   {
    "n": "Storm Sphere",
@@ -3105,7 +3948,10 @@
    "b": "phb",
    "l": 2,
    "s": "enchantment",
-   "c": "cleric,bard,sorcerer,warlock,wizard"
+   "c": "bard,sorcerer,warlock,wizard",
+   "k": true,
+   "v": "VM",
+   "d": 30
   },
   {
    "n": "Summon Aberration",
@@ -3203,14 +4049,19 @@
    "b": "phb",
    "l": 6,
    "s": "evocation",
-   "c": "druid,sorcerer,wizard"
+   "c": "druid,sorcerer,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": "self"
   },
   {
    "n": "Sunburst",
    "b": "phb",
    "l": 8,
    "s": "evocation",
-   "c": "druid,sorcerer,wizard"
+   "c": "druid,sorcerer,wizard",
+   "v": "VSM",
+   "d": 150
   },
   {
    "n": "Swift Quiver",
@@ -3231,7 +4082,12 @@
    "b": "phb",
    "l": 7,
    "s": "abjuration",
-   "c": "cleric,bard,wizard"
+   "c": "bard,cleric,wizard",
+   "t": 1,
+   "v": "VSM",
+   "g": 1000,
+   "x": true,
+   "d": "touch"
   },
   {
    "n": "Synaptic Static",
@@ -3258,7 +4114,10 @@
    ],
    "l": 1,
    "s": "enchantment",
-   "c": "bard,warlock,wizard"
+   "c": "bard,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 30
   },
   {
    "n": "Mind Whip",
@@ -3285,7 +4144,10 @@
    "b": "phb",
    "l": 5,
    "s": "transmutation",
-   "c": "sorcerer,warlock,wizard"
+   "c": "sorcerer,wizard",
+   "k": true,
+   "v": "VS",
+   "d": 60
   },
   {
    "n": "Telepathy",
@@ -3299,14 +4161,21 @@
    "b": "phb",
    "l": 7,
    "s": "conjuration",
-   "c": "bard,sorcerer,wizard"
+   "c": "bard,sorcerer,wizard",
+   "v": "V",
+   "d": 10
   },
   {
    "n": "Teleportation Circle",
    "b": "phb",
    "l": 5,
    "s": "conjuration",
-   "c": "bard,sorcerer,wizard"
+   "c": "bard,sorcerer,wizard",
+   "t": 1,
+   "v": "VM",
+   "g": 50,
+   "x": true,
+   "d": 10
   },
   {
    "n": "Temple of the Gods",
@@ -3330,7 +4199,10 @@
    ],
    "l": 1,
    "s": "conjuration",
-   "c": "wizard"
+   "c": "wizard",
+   "r": true,
+   "v": "VSM",
+   "d": 30
   },
   {
    "n": "Arcane Transformation",
@@ -3354,7 +4226,9 @@
    "b": "phb",
    "l": 0,
    "s": "transmutation",
-   "c": "cleric"
+   "c": "cleric",
+   "v": "V",
+   "d": 30
   },
   {
    "n": "Thorn Whip",
@@ -3389,7 +4263,9 @@
    "b": "phb",
    "l": 1,
    "s": "evocation",
-   "c": "cleric,druid,bard,sorcerer,wizard"
+   "c": "bard,druid,sorcerer,wizard",
+   "v": "VS",
+   "d": "self"
   },
   {
    "n": "Tidal Wave",
@@ -3410,7 +4286,9 @@
    "b": "phb",
    "l": 9,
    "s": "transmutation",
-   "c": "sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "v": "V",
+   "d": "self"
   },
   {
    "n": "Tiny Servant",
@@ -3431,7 +4309,9 @@
    "b": "phb",
    "l": 3,
    "s": "divination",
-   "c": "cleric,bard,sorcerer,warlock,wizard"
+   "c": "bard,cleric,sorcerer,warlock,wizard",
+   "v": "VM",
+   "d": "touch"
   },
   {
    "n": "Transmute Rock",
@@ -3445,42 +4325,62 @@
    "b": "phb",
    "l": 6,
    "s": "conjuration",
-   "c": "druid"
+   "c": "druid",
+   "v": "VS",
+   "d": 10
   },
   {
    "n": "Tree Stride",
    "b": "phb",
    "l": 5,
    "s": "conjuration",
-   "c": "cleric,druid,ranger"
+   "c": "druid,ranger",
+   "k": true,
+   "v": "VS",
+   "d": "self"
   },
   {
    "n": "True Polymorph",
    "b": "phb",
    "l": 9,
    "s": "transmutation",
-   "c": "bard,warlock,wizard"
+   "c": "bard,warlock,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 30
   },
   {
    "n": "True Resurrection",
    "b": "phb",
    "l": 9,
    "s": "necromancy",
-   "c": "cleric,druid"
+   "c": "cleric,druid",
+   "t": 60,
+   "v": "VSM",
+   "g": 25000,
+   "x": true,
+   "d": "touch"
   },
   {
    "n": "True Seeing",
    "b": "phb",
    "l": 6,
    "s": "divination",
-   "c": "cleric,bard,sorcerer,warlock,wizard"
+   "c": "bard,cleric,sorcerer,warlock,wizard",
+   "v": "VSM",
+   "g": 25,
+   "x": true,
+   "d": "touch"
   },
   {
    "n": "True Strike",
    "b": "phb",
    "l": 0,
    "s": "divination",
-   "c": "bard,sorcerer,warlock,wizard"
+   "c": "bard,sorcerer,warlock,wizard",
+   "k": true,
+   "v": "S",
+   "d": 30
   },
   {
    "n": "Tsunami",
@@ -3494,21 +4394,29 @@
    "b": "phb",
    "l": 1,
    "s": "conjuration",
-   "c": "bard,warlock,wizard"
+   "c": "bard,warlock,wizard",
+   "r": true,
+   "v": "VSM",
+   "d": 60
   },
   {
    "n": "Vampiric Touch",
    "b": "phb",
    "l": 3,
    "s": "necromancy",
-   "c": "warlock,wizard"
+   "c": "warlock,wizard",
+   "k": true,
+   "v": "VS",
+   "d": "self"
   },
   {
    "n": "Vicious Mockery",
    "b": "phb",
    "l": 0,
    "s": "enchantment",
-   "c": "bard"
+   "c": "bard",
+   "v": "V",
+   "d": 60
   },
   {
    "n": "Vitriolic Sphere",
@@ -3529,21 +4437,30 @@
    "b": "phb",
    "l": 4,
    "s": "evocation",
-   "c": "cleric,druid,sorcerer,warlock,wizard"
+   "c": "druid,sorcerer,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 120
   },
   {
    "n": "Wall of Force",
    "b": "phb",
    "l": 5,
    "s": "evocation",
-   "c": "wizard"
+   "c": "wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 120
   },
   {
    "n": "Wall of Ice",
    "b": "phb",
    "l": 6,
    "s": "evocation",
-   "c": "wizard"
+   "c": "wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 120
   },
   {
    "n": "Wall of Light",
@@ -3564,14 +4481,20 @@
    "b": "phb",
    "l": 5,
    "s": "evocation",
-   "c": "druid,sorcerer,wizard"
+   "c": "druid,sorcerer,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 120
   },
   {
    "n": "Wall of Thorns",
    "b": "phb",
    "l": 6,
    "s": "conjuration",
-   "c": "druid"
+   "c": "druid",
+   "k": true,
+   "v": "VSM",
+   "d": 120
   },
   {
    "n": "Wall of Water",
@@ -3585,7 +4508,10 @@
    "b": "phb",
    "l": 2,
    "s": "abjuration",
-   "c": "cleric"
+   "c": "cleric",
+   "v": "VSM",
+   "g": 50,
+   "d": "touch"
   },
   {
    "n": "Warding Wind",
@@ -3599,14 +4525,20 @@
    "b": "phb",
    "l": 3,
    "s": "transmutation",
-   "c": "druid,ranger,sorcerer,wizard"
+   "c": "druid,ranger,sorcerer,wizard",
+   "r": true,
+   "v": "VSM",
+   "d": 30
   },
   {
    "n": "Water Walk",
    "b": "phb",
    "l": 3,
    "s": "transmutation",
-   "c": "cleric,druid,ranger,sorcerer"
+   "c": "cleric,druid,ranger,sorcerer",
+   "r": true,
+   "v": "VSM",
+   "d": 30
   },
   {
    "n": "Watery Sphere",
@@ -3620,14 +4552,20 @@
    "b": "phb",
    "l": 2,
    "s": "conjuration",
-   "c": "druid,sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "k": true,
+   "v": "VSM",
+   "d": 60
   },
   {
    "n": "Weird",
    "b": "phb",
    "l": 9,
    "s": "illusion",
-   "c": "wizard"
+   "c": "wizard",
+   "k": true,
+   "v": "VS",
+   "d": 120
   },
   {
    "n": "Whirlwind",
@@ -3648,21 +4586,29 @@
    "b": "phb",
    "l": 6,
    "s": "transmutation",
-   "c": "druid"
+   "c": "druid",
+   "t": 1,
+   "v": "VSM",
+   "d": 30
   },
   {
    "n": "Wind Wall",
    "b": "phb",
    "l": 3,
    "s": "evocation",
-   "c": "cleric,druid,ranger"
+   "c": "druid,ranger",
+   "k": true,
+   "v": "VSM",
+   "d": 120
   },
   {
    "n": "Wish",
    "b": "phb",
    "l": 9,
    "s": "conjuration",
-   "c": "sorcerer,wizard"
+   "c": "sorcerer,wizard",
+   "v": "V",
+   "d": "self"
   },
   {
    "n": "Witch Bolt",
@@ -3690,7 +4636,9 @@
    "b": "phb",
    "l": 6,
    "s": "conjuration",
-   "c": "cleric"
+   "c": "cleric",
+   "v": "V",
+   "d": 5
   },
   {
    "n": "Wrath of Nature",
@@ -3725,7 +4673,9 @@
    "b": "phb",
    "l": 2,
    "s": "enchantment",
-   "c": "cleric,bard"
+   "c": "bard,cleric,paladin",
+   "v": "VS",
+   "d": 60
   }
  ]
 }

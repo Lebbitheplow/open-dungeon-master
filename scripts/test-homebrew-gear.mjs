@@ -73,7 +73,7 @@ test("effects keep the magic-items vocabulary and drop what they cannot read", (
   ]);
   assert.deepEqual(effects, [
     { kind: "ac_bonus", amount: 1 },
-    { kind: "save_bonus", amount: 5 },
+    { kind: "save_bonus", amount: 3 },
     { kind: "set_ability", ability: "str", score: 19 },
     { kind: "set_ability", ability: "str", score: 19 },
     { kind: "resistance", types: ["fire", "cold"] },

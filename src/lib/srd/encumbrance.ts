@@ -15,6 +15,7 @@
 // exact when it is not.
 import { matchArmor } from "@/lib/srd/armor";
 import { ammoCount, ammoKindForItem, AMMO_WEIGHT_LB } from "@/lib/srd/ammunition";
+import { magicItemRiders, type Wearer, type WornMagicItem } from "@/lib/srd/magic-items";
 
 // 50 coins weigh a pound, whatever the metal.
 export const COINS_PER_POUND = 50;
@@ -22,7 +23,9 @@ export const COINS_PER_POUND = 50;
 // `qty` is optional because the lighter sheet shapes elsewhere in the app
 // (the AC source, the builder's preview) carry only a name; a line without
 // one counts as a single item.
-export type CarriedItem = { name: string; qty?: number; weight?: number };
+export type CarriedItem = { name: string; qty?: number; weight?: number } & Partial<
+  Pick<WornMagicItem, "slug" | "equipped" | "attuned" | "gear">
+>;
 
 export type EncumbranceTier = "unencumbered" | "encumbered" | "heavily_encumbered";
 
@@ -110,13 +113,20 @@ export function carriedWeight(
 // The whole picture for one character. Pure: callers hand in the Strength
 // score, the pack and the purse, and gate the result on their table's
 // variant rule themselves.
+//
+// `strength` is the score written on the sheet. A worn item that sets
+// Strength (Gauntlets of Ogre Power, a Belt of Giant Strength) is in the pack
+// being weighed, so it is read here and every caller carries by the score the
+// character really has.
 export function encumbranceFor(input: {
   strength: number;
   equipment: CarriedItem[];
   coins?: number;
   size?: string;
+  wearer?: Wearer;
 }): Encumbrance {
-  const strength = Math.max(1, Math.floor(input.strength || 1));
+  const setByItem = magicItemRiders(input.equipment ?? [], input.wearer).abilitySet.str ?? 0;
+  const strength = Math.max(1, Math.floor(input.strength || 1), setByItem);
   const multiplier = carryMultiplier(input.size);
   const { pounds, unweighed } = carriedWeight(input.equipment ?? [], input.coins ?? 0);
   const encumberedAtLb = round2(strength * 5 * multiplier);

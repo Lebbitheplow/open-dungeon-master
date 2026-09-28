@@ -15,9 +15,25 @@ export type SrdWeapon = {
   properties?: string[];
   // Normal range in feet for ranged and thrown weapons.
   rangeFt?: number;
+  // Long range in feet: a shot past the normal range and inside this one is
+  // made at disadvantage. Absent on a homebrew weapon saved before the field
+  // existed, which reaches twice its normal range as it always did.
+  longRangeFt?: number;
 };
 
-export const SRD_WEAPONS: SrdWeapon[] = [
+// SRD 5.1 long ranges by normal range. Every SRD weapon's long range is
+// three or four times its normal one, so the table is written out rather
+// than derived; the firearms and genre weapons follow the same pattern.
+const LONG_RANGE_FT: Record<string, number> = {
+  Dagger: 60, Handaxe: 60, Javelin: 120, "Light Hammer": 60, Spear: 60,
+  "Light Crossbow": 320, Dart: 60, Shortbow: 320, Sling: 120, Trident: 60,
+  Blowgun: 100, "Hand Crossbow": 120, "Heavy Crossbow": 400, Longbow: 600, Net: 15,
+  Pistol: 150, Revolver: 180, "Sawed-off Scattergun": 90, "Hunting Rifle": 240,
+  Musket: 120, "Hand Cannon": 90, Vibroknife: 60, "Silvered Stake": 60, "Hurled Vial": 60,
+};
+
+const WEAPON_ROWS: SrdWeapon[] = [
+
   { name: "Club", category: "simple", kind: "melee", damage: "1d4 bludgeoning", properties: ["light"] },
   { name: "Dagger", category: "simple", kind: "melee", damage: "1d4 piercing", properties: ["finesse", "light", "thrown"], rangeFt: 20 },
   { name: "Greatclub", category: "simple", kind: "melee", damage: "1d8 bludgeoning", properties: ["two-handed"] },
@@ -54,7 +70,7 @@ export const SRD_WEAPONS: SrdWeapon[] = [
   { name: "Hand Crossbow", category: "martial", kind: "ranged", damage: "1d6 piercing", properties: ["ammunition", "light", "loading"], rangeFt: 30 },
   { name: "Heavy Crossbow", category: "martial", kind: "ranged", damage: "1d10 piercing", properties: ["ammunition", "heavy", "loading", "two-handed"], rangeFt: 100 },
   { name: "Longbow", category: "martial", kind: "ranged", damage: "1d8 piercing", properties: ["ammunition", "heavy", "two-handed"], rangeFt: 150 },
-  { name: "Net", category: "martial", kind: "ranged", damage: "0 (restrains)", properties: ["thrown"], rangeFt: 15 },
+  { name: "Net", category: "martial", kind: "ranged", damage: "0 (restrains)", properties: ["thrown"], rangeFt: 5 },
   { name: "Pistol", category: "firearm", kind: "ranged", damage: "1d10 piercing", properties: ["ammunition", "loading"], rangeFt: 50 },
   { name: "Revolver", category: "firearm", kind: "ranged", damage: "1d8 piercing", properties: ["ammunition"], rangeFt: 60 },
   { name: "Sawed-off Scattergun", category: "firearm", kind: "ranged", damage: "1d12 piercing", properties: ["ammunition", "loading"], rangeFt: 30 },
@@ -74,6 +90,15 @@ export const SRD_WEAPONS: SrdWeapon[] = [
   { name: "Censer Mace", category: "simple", kind: "melee", damage: "1d6 bludgeoning" },
   { name: "Hurled Vial", category: "simple", kind: "ranged", damage: "1d6 acid", properties: ["thrown"], rangeFt: 20 },
 ];
+
+export const SRD_WEAPONS: SrdWeapon[] = WEAPON_ROWS.map((weapon) =>
+  LONG_RANGE_FT[weapon.name] ? { ...weapon, longRangeFt: LONG_RANGE_FT[weapon.name] } : weapon,
+);
+
+// The two SRD weapons whose "special" property is a rule of its own
+// (src/lib/dm/attack-rules.ts reads them by name, so the property list the
+// builder shows stays the mechanical one).
+export const SPECIAL_WEAPONS = { net: "Net", lance: "Lance" } as const;
 
 // Curated shortlists so category proficiencies suggest familiar picks
 // instead of the whole table.
@@ -97,6 +122,11 @@ function normalize(term: string) {
   return term.trim().toLowerCase().replace(/s$/, "");
 }
 
+// Adventuring gear whose name sits inside a weapon's: the hammer of a
+// dungeoneer's pack is a tool, not a light hammer, and a priest's censer is
+// not a censer mace. Keys as normalize() writes them.
+const GEAR_NOT_WEAPONS = new Set(["hammer", "censer"]);
+
 // Finds the weapon a free-text reference points at: exact normalized name,
 // then containment either way so "Longsword of the Dawn" and "long sword"
 // both land on the Longsword. Longer names win so "hand crossbow" never
@@ -109,6 +139,9 @@ export function matchWeapon(term: string): SrdWeapon | null {
   const exact = byName.get(wanted);
   if (exact) {
     return exact;
+  }
+  if (GEAR_NOT_WEAPONS.has(wanted)) {
+    return null;
   }
   const candidates = SRD_WEAPONS.filter((weapon) => {
     const name = normalize(weapon.name);

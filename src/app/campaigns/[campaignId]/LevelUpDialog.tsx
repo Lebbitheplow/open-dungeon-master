@@ -13,8 +13,19 @@ import {
   optionSlotsFor,
   type OptionSlot,
 } from "@/lib/srd/options";
-import { ALL_CLASSES, SRD_SKILLS, abilityMod, findClass, findSkill, spellSlotsFor } from "@/lib/srd";
-import { applyAsiChoices, crossedAsiLevels } from "@/lib/srd/asi";
+import {
+  ALL_CLASSES,
+  SRD_SKILLS,
+  XP_THRESHOLDS,
+  abilityMod,
+  findClass,
+  findSkill,
+  levelForXp,
+  spellSlotsFor,
+} from "@/lib/srd";
+import { asiLevelsFor } from "@/lib/srd/asi";
+import { asiOwed } from "@/lib/srd/asi-ledger";
+import { fixedDieValue, type HpMethod } from "@/lib/srd/hit-points";
 import {
   MULTICLASS_CAP,
   canMulticlassInto,
@@ -39,7 +50,6 @@ import {
   type FightingStyleId,
 } from "@/lib/srd/feature-effects";
 import { spellClassFor } from "@/lib/classes";
-import { spellsAgainstLimit } from "@/lib/srd/spell-lists";
 import { spellStyleFor, spellbookAllowance } from "@/lib/srd/spell-prep";
 import { SpellBook, type SpellTile } from "@/components/sheet/SpellBook";
 import { useSpellPool } from "@/components/sheet/useSpellPool";
@@ -49,28 +59,49 @@ import { useArchetypes } from "@/app/characters/builder/useBuilderOptions";
 import type { AsiChoice, CharacterSheet } from "@/lib/schemas/sheet";
 
 
-// Guided level-up: pick average or rolled HP, resolve any Ability Score
-// Improvements, choose a subclass when the class reaches its subclass level,
-// and pick newly learned spells from the class's actual spell list. New class
-// features are granted automatically from the SRD tables. Everything is
-// saved through a single sheet PATCH.
+// Guided level-up, one level at a time. The dialog gathers the CHOICES the
+// rules leave to the player (the class taking the level, an Ability Score
+// Improvement or feat the class owes, a subclass at the class's subclass
+// level, expertise, a fighting style or other class pick, new spells) and the
+// server builds the level from them (src/lib/srd/level-up.ts): hit points by
+// the table's method, features, slots and counters. What the server answers
+// (the hit points gained, the die it rolled) is shown before the dialog
+// closes, and a refusal is shown in its words.
 export function LevelUpDialog({
   campaignId,
   sheet,
-  targetLevel,
   multiclassAllowed = true,
+  hpMethod = "average",
   onDone,
 }: {
   campaignId: string;
   sheet: CharacterSheet;
-  targetLevel: number;
+  // The level on offer. A level-up takes the next level only; the dialog
+  // opens again for the one after.
+  targetLevel?: number;
   // Campaign setting: offers the class step's new-class options only when
   // the table allows multiclassing (already-split sheets keep theirs).
   multiclassAllowed?: boolean;
+  // The table's hit point method (a campaign setting).
+  hpMethod?: HpMethod;
   onDone: () => void;
 }) {
-  const [rolledHp, setRolledHp] = useState<number | null>(null);
-  const [hpGain, setHpGain] = useState<number | null>(null);
+  // Held from the moment the dialog opens: the sheet the server sends back
+  // after the level is already at it.
+  const [startLevel] = useState(sheet.level);
+  const targetLevel = Math.min(20, startLevel + 1);
+  // Under "rolled" the player may still take the fixed value; the server
+  // rolls the die otherwise.
+  const [hpChoice, setHpChoice] = useState<"roll" | "average">("roll");
+  // The server's answer to a level taken: shown before the dialog closes.
+  const [result, setResult] = useState<{
+    hpGained: number;
+    rolled: number | null;
+    die: number;
+    classLine: string;
+  } | null>(null);
+  // A caster who knows their spells may give one up for another.
+  const [forgetPick, setForgetPick] = useState("");
   const [asiChoices, setAsiChoices] = useState<Array<AsiChoice | null>>([]);
   const [subclassChoice, setSubclassChoice] = useState("");
   const [expertisePicks, setExpertisePicks] = useState<string[]>([]);
@@ -90,7 +121,7 @@ export function LevelUpDialog({
   const [classChoice, setClassChoice] = useState(classList[0].id);
   const [skillPick, setSkillPick] = useState("");
 
-  const levelsGained = Math.max(1, targetLevel - sheet.level);
+  const levelsGained = 1;
   const chosenEntry = classList.find(
     (entry) => entry.id.toLowerCase() === classChoice.toLowerCase(),
   );
@@ -157,21 +188,31 @@ export function LevelUpDialog({
     setStylePicks([]);
     setOptionPicks([]);
     setSkillPick("");
-    setRolledHp(null);
+    setAsiChoices([]);
+    setForgetPick("");
   }
 
   const klass = chosenKlass ?? findClass(sheet.class);
   const hitDie = chosenKlass?.hitDie ?? Number(sheet.hitDice.die.replace("d", "")) ?? 8;
   const conMod = abilityMod(sheet.abilities.con);
-  const averageGain = Math.max(1, (Math.floor(hitDie / 2) + 1 + conMod) * levelsGained);
-  const rolledGain =
-    rolledHp !== null ? Math.max(1, rolledHp + conMod * levelsGained) : null;
+  // What the level adds under a method that needs no dice, before any
+  // Constitution raised by this level (the server counts that too).
+  const fixedFace = hpMethod === "max" ? hitDie : fixedDieValue(hitDie);
+  const fixedGain = Math.max(1, fixedFace + conMod);
 
-  const asiLevels = useMemo(
-    () => crossedAsiLevels(sheet.level, targetLevel),
-    [sheet.level, targetLevel],
-  );
-  const asiResolved = asiLevels.every((_, index) => asiChoices[index]);
+  // The improvements the class list earns at the new level, less those the
+  // sheet has taken: a fighter's 6th, a rogue's 10th, and an improvement an
+  // older character is owed by the per-class table. Counted by CLASS level.
+  const asiOwedNow = asiOwed(sheet, nextClasses);
+  const asiLevels = asiLevelsFor(classChoice)
+    .filter((level) => level <= classLevelAfter)
+    .slice(-Math.max(1, asiOwedNow));
+  while (asiOwedNow && asiLevels.length < asiOwedNow) {
+    asiLevels.unshift(asiLevels[0] ?? classLevelAfter);
+  }
+  if (!asiOwedNow) {
+    asiLevels.length = 0;
+  }
 
   // Expertise: rogue 1/6 and bard 3/10 double proficiency in two skills
   // each; the step appears when the new level grants unspent picks. Scales
@@ -213,28 +254,19 @@ export function LevelUpDialog({
   const archetypes = useArchetypes(needsSubclass ? classChoice : "");
   // The subclasses with real feature tables come first; content-pack
   // archetypes are prose only and fill in behind them.
-  const subclassOptions = useMemo(() => {
-    const names = [...builtInSubclasses];
-    for (const archetype of archetypes) {
-      if (!names.some((name) => name.toLowerCase() === archetype.name.toLowerCase())) {
-        names.push(archetype.name);
-      }
+  const subclassOptions = [...builtInSubclasses];
+  for (const archetype of archetypes) {
+    if (!subclassOptions.some((name) => name.toLowerCase() === archetype.name.toLowerCase())) {
+      subclassOptions.push(archetype.name);
     }
-    return names;
-    // builtInSubclasses is rebuilt each render from a constant table.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [builtInSubclasses.join("|"), archetypes]);
+  }
 
-  const openSlots = useMemo(
-    () =>
-      openOptionSlots({
-        classId: classChoice,
-        subclass: subclassChoice || entrySubclass,
-        level: classLevelAfter,
-        features: [...sheet.features, ...optionPicks.map((name) => ({ name }))],
-      }),
-    [classChoice, entrySubclass, sheet.features, subclassChoice, classLevelAfter, optionPicks],
-  );
+  const openSlots = openOptionSlots({
+    classId: classChoice,
+    subclass: subclassChoice || entrySubclass,
+    level: classLevelAfter,
+    features: [...sheet.features, ...optionPicks.map((name) => ({ name }))],
+  });
   const needsOptions = openSlots.some((slot) => slot.remaining > 0);
 
   function toggleOption(slot: OptionSlot, name: string) {
@@ -257,19 +289,16 @@ export function LevelUpDialog({
     ? Boolean(chosenKlass && chosenKlass.casterType !== "none" && chosenKlass.spellAbility)
     : Boolean(sheet.spellcasting);
 
-  const steps = useMemo(
-    () => [
-      ...(needsClassStep ? ["class"] : []),
-      "hp",
-      ...(asiLevels.length ? ["asi"] : []),
-      ...(needsExpertise ? ["expertise"] : []),
-      ...(needsStyle ? ["style"] : []),
-      ...(needsSubclass ? ["subclass"] : []),
-      ...(needsOptions ? ["options"] : []),
-      ...(showSpells ? ["spells"] : []),
-    ],
-    [needsClassStep, asiLevels.length, needsExpertise, needsStyle, needsSubclass, needsOptions, showSpells],
-  );
+  const steps = [
+    ...(needsClassStep ? ["class"] : []),
+    "hp",
+    ...(asiLevels.length ? ["asi"] : []),
+    ...(needsExpertise ? ["expertise"] : []),
+    ...(needsStyle ? ["style"] : []),
+    ...(needsSubclass ? ["subclass"] : []),
+    ...(needsOptions ? ["options"] : []),
+    ...(showSpells ? ["spells"] : []),
+  ];
   const step = steps[stepIndex];
   const lastStep = stepIndex === steps.length - 1;
 
@@ -385,8 +414,9 @@ export function LevelUpDialog({
       ? spellbookAllowance(classLevelAfter)
       : 2 * levelsGained
     : null;
+  // A spell given up makes room for one more.
   const remainingPicks =
-    bookGain ?? (allowance ? Math.max(0, allowance.count - heldSpells) : null);
+    bookGain ?? (allowance ? Math.max(0, allowance.count - heldSpells) + (forgetPick ? 1 : 0) : null);
   const cantripAllowance = showSpells
     ? suggestedCantripCount(
         spellClassFor(classChoice),
@@ -419,23 +449,6 @@ export function LevelUpDialog({
       };
     });
 
-  function rollHp() {
-    let total = 0;
-    for (let i = 0; i < levelsGained; i += 1) {
-      total += 1 + Math.floor(Math.random() * hitDie);
-    }
-    setRolledHp(total);
-  }
-
-  function pickHp(gain: number) {
-    setHpGain(gain);
-    if (stepIndex < steps.length - 1) {
-      setStepIndex(stepIndex + 1);
-    } else {
-      apply(gain);
-    }
-  }
-
   function toggleSpell(name: string, level?: number) {
     if (level === 0) {
       setCantripPicks((current) =>
@@ -448,159 +461,52 @@ export function LevelUpDialog({
     );
   }
 
-  async function apply(gain: number) {
+  // Only the choices go to the server; it builds the level from them and
+  // from nothing else in the request.
+  async function apply() {
     setBusy(true);
     setError("");
     try {
       const choices = asiChoices.filter((choice): choice is AsiChoice => choice !== null);
-      const newFeats = choices.flatMap((choice) =>
-        choice.mode === "feat" ? [choice.feat] : [],
-      );
-
-      // Multiclass path: name the class taking the level and send only the
-      // player's picks; the server builds the class array, hit-die pools,
-      // proficiency grants, and per-class spellcasting itself.
-      if (isMulticlassPath) {
-        const response = await fetch(`/api/campaigns/${campaignId}/sheet`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            level: targetLevel,
-            maxHp: sheet.maxHp + gain,
-            currentHp: Math.min(sheet.currentHp + gain, sheet.maxHp + gain),
-            levelUpClass: classChoice,
-            ...(skillPick ? { levelUpSkill: skillPick } : {}),
-            ...(spellPicks.length || cantripPicks.length
-              ? { levelUpSpells: [...spellPicks, ...cantripPicks] }
-              : {}),
-            features: [
-              ...sheet.features,
-              ...stylePicks.map((id) => ({
-                name: fightingStyleFeatureName(id),
-                source: "choice" as const,
-              })),
-              ...optionPicks.map((name) => ({ name, source: "choice" as const })),
-            ],
-            ...(choices.length
-              ? { abilities: applyAsiChoices(sheet.abilities, choices) }
-              : {}),
-            ...(newFeats.length
-              ? { feats: [...new Set([...sheet.feats, ...newFeats])] }
-              : {}),
-            ...(expertisePicks.length
-              ? { expertise: [...currentExpertise, ...expertisePicks] }
-              : {}),
-            ...(needsSubclass && subclassChoice ? { subclass: subclassChoice } : {}),
-          }),
-        });
-        if (!response.ok) {
-          const data = await response.json().catch(() => ({}));
-          setError(data.error || "Could not level up.");
-          return;
-        }
-        onDone();
-        return;
-      }
-
-      const slots = spellSlotsFor(sheet.class, targetLevel);
-      const features = [
-        ...populateFeaturesForClasses(
-          sheet.features,
-          [{ id: sheet.class, subclass: effectiveSubclass, level: targetLevel }],
-          sheet.race,
-        ),
-        ...stylePicks.map((id) => ({
-          name: fightingStyleFeatureName(id),
-          source: "choice" as const,
-        })),
-        ...optionPicks.map((name) => ({ name, source: "choice" as const })),
-      ];
-      let spellcastingPatch: CharacterSheet["spellcasting"] = null;
-      if (sheet.spellcasting) {
-        const nextSlots = Object.keys(slots).length
-          ? Object.fromEntries(
-              Object.entries(slots).map(([slotLevel, max]) => [
-                slotLevel,
-                {
-                  max,
-                  used: Math.min(sheet.spellcasting?.slots[slotLevel]?.used ?? 0, max),
-                },
-              ]),
-            )
-          : sheet.spellcasting.slots;
-        // Subclass spells (domain, circle, oath, patron) arrive on their own
-        // at the levels the table names, on top of the player's picks.
-        const granted = subclassSpellsFor(sheet.class, effectiveSubclass, targetLevel);
-        const additions = [...spellPicks, ...granted].filter(
-          (name) => !alreadyKnown.has(name.toLowerCase()),
-        );
-        const intoKnown =
-          sheet.spellcasting.known.length > 0 || allowance?.label === "spells known";
-        const cantrips = [
-          ...(sheet.spellcasting.cantrips ?? []),
-          ...cantripPicks.filter((name) => !alreadyKnown.has(name.toLowerCase())),
-        ];
-        if (bookStyle && !intoKnown) {
-          // A wizard writes the new spells in the book and prepares them as
-          // far as the allowance has room: a level-up is a chance to
-          // prepare, like the long rest before it.
-          const room = allowance
-            ? Math.max(
-                0,
-                allowance.count -
-                  spellsAgainstLimit(
-                    [...sheet.spellcasting.prepared, ...(sheet.spellcasting.pending ?? [])],
-                    [...grantedFree],
-                  ),
-              )
-            : additions.length;
-          spellcastingPatch = {
-            ...sheet.spellcasting,
-            slots: nextSlots,
-            cantrips,
-            spellbook: [...new Set([...knownList, ...additions])],
-            prepared: [...sheet.spellcasting.prepared, ...additions.slice(0, room)],
-          };
-        } else {
-          spellcastingPatch = {
-            ...sheet.spellcasting,
-            slots: nextSlots,
-            cantrips,
-            known: intoKnown ? [...sheet.spellcasting.known, ...additions] : sheet.spellcasting.known,
-            prepared: intoKnown
-              ? sheet.spellcasting.prepared
-              : [...sheet.spellcasting.prepared, ...additions],
-          };
-        }
-      }
       const response = await fetch(`/api/campaigns/${campaignId}/sheet`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           level: targetLevel,
-          maxHp: sheet.maxHp + gain,
-          currentHp: Math.min(sheet.currentHp + gain, sheet.maxHp + gain),
-          hitDice: { ...sheet.hitDice, total: targetLevel },
-          features,
-          ...(choices.length
-            ? { abilities: applyAsiChoices(sheet.abilities, choices) }
-            : {}),
-          ...(newFeats.length
-            ? { feats: [...new Set([...sheet.feats, ...newFeats])] }
-            : {}),
-          ...(expertisePicks.length
-            ? { expertise: [...currentExpertise, ...expertisePicks] }
-            : {}),
+          levelUpClass: classChoice,
+          ...(hpMethod === "rolled" ? { hpChoice } : {}),
+          ...(skillPick ? { levelUpSkill: skillPick } : {}),
+          ...(choices.length ? { asiChoices: choices } : {}),
           ...(needsSubclass && subclassChoice ? { subclass: subclassChoice } : {}),
-          ...(spellcastingPatch ? { spellcasting: spellcastingPatch } : {}),
+          ...(expertisePicks.length ? { expertise: [...currentExpertise, ...expertisePicks] } : {}),
+          ...(spellPicks.length || cantripPicks.length
+            ? { levelUpSpells: [...spellPicks, ...cantripPicks] }
+            : {}),
+          ...(forgetPick ? { levelUpForget: forgetPick } : {}),
+          ...(stylePicks.length || optionPicks.length
+            ? {
+                features: [
+                  ...stylePicks.map((id) => ({
+                    name: fightingStyleFeatureName(id),
+                    source: "choice" as const,
+                  })),
+                  ...optionPicks.map((name) => ({ name, source: "choice" as const })),
+                ],
+              }
+            : {}),
         }),
       });
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        setError(data.error || "Could not level up.");
+        setError(typeof data?.error === "string" ? data.error : "The level-up was refused.");
         return;
       }
-      onDone();
+      setResult({
+        hpGained: typeof data?.hpGained === "number" ? data.hpGained : 0,
+        rolled: typeof data?.rolled?.hp === "number" ? data.rolled.hp : null,
+        die: hitDie,
+        classLine: isMulticlassPath ? ` (${chosenKlass?.name ?? classChoice} ${classLevelAfter})` : "",
+      });
     } catch {
       setError("Could not reach the server.");
     } finally {
@@ -608,30 +514,46 @@ export function LevelUpDialog({
     }
   }
 
-  const stepReady =
+  // The server takes a level with any of these picks left open (they stay
+  // open for a later level), so the dialog does not hold the level back for
+  // them; it only says so.
+  const stepOpen =
     step === "class"
-      ? Boolean(classChoice) && (!needsSkillPick || Boolean(skillPick))
+      ? needsSkillPick && !skillPick
       : step === "asi"
-      ? asiResolved
-      : step === "expertise"
-        ? expertisePicks.length === Math.min(expertiseToPick, expertiseOptions.length)
-        : step === "style"
-        ? stylePicks.length === Math.min(stylesToPick, styleOptions.length)
-        : step === "subclass"
-          ? Boolean(subclassChoice) || subclassOptions.length === 0
-          : step === "options"
-            ? openSlots.every((slot) => slot.remaining === 0)
-            : true;
+        ? asiLevels.some((_, index) => !asiChoices[index])
+        : step === "expertise"
+          ? expertisePicks.length < Math.min(expertiseToPick, expertiseOptions.length)
+          : step === "style"
+            ? stylePicks.length < Math.min(stylesToPick, styleOptions.length)
+            : step === "subclass"
+              ? !subclassChoice && subclassOptions.length > 0
+              : step === "options"
+                ? openSlots.some((slot) => slot.remaining > 0)
+                : false;
+  const stepReady = Boolean(classChoice);
 
   function nextOrApply() {
     if (lastStep) {
-      apply(hpGain ?? averageGain);
+      void apply();
     } else {
       setStepIndex(stepIndex + 1);
     }
   }
 
-  const wideStep = step !== "hp";
+  // Why this character cannot take a level now, in the rules' words.
+  const reachedLevel = levelForXp(sheet.xp);
+  const blocked = sheet.deathSaves?.dead
+    ? `${sheet.name} is dead, and the dead gain no levels.`
+    : sheet.currentHp <= 0
+      ? `${sheet.name} is at 0 hit points. A character levels up once they are back on their feet.`
+      : startLevel >= 20
+        ? "No character passes level 20."
+        : reachedLevel < targetLevel
+          ? `Level ${targetLevel} takes ${XP_THRESHOLDS[targetLevel - 1]} experience points and ${sheet.name} has ${sheet.xp}. A level is earned in play, or granted by whoever runs the table.`
+          : "";
+
+  const wideStep = step !== "hp" && !blocked && !result;
 
   return (
     <Dialog.Root open onOpenChange={(open) => !open && onDone()}>
@@ -655,66 +577,119 @@ export function LevelUpDialog({
             </Dialog.Close>
           </div>
 
-          {step === "hp" ? (
-            <>
-              <p className="mb-3 text-sm text-stone-300">
-                {sheet.name} advances to level {targetLevel}
-                {isMulticlassPath
-                  ? ` as a ${chosenKlass?.name ?? classChoice} (${chosenKlass?.name ?? classChoice} level ${classLevelAfter})`
-                  : ""}
-                . Choose how to gain hit points ({levelsGained} d{hitDie}
-                {conMod ? ` ${conMod > 0 ? "+" : ""}${conMod} CON each` : ""}):
+          {result ? (
+            <div className="reveal space-y-4 text-sm" role="status">
+              <p className="text-stone-300">
+                {sheet.name} is level {targetLevel}
+                {result.classLine}.
               </p>
-              {newFeatureNames.length ? (
-                <div className="reveal mb-4 rounded-md border border-amber-900/50 bg-stone-950/60 px-3 py-2">
-                  <p className="mb-1 text-xs text-amber-200">New at level {targetLevel}:</p>
-                  <InfoChipList
-                    items={newFeatureNames.map((name) => ({
-                      name,
-                      text: describeFeature(classChoice, effectiveSubclass, name),
-                    }))}
-                  />
-                </div>
-              ) : null}
-
-              <div className="space-y-2">
-                <button
-                  type="button"
-                  disabled={busy} aria-busy={busy}
-                  onClick={() => pickHp(averageGain)}
-                  className="flex w-full items-center justify-between rounded-md border border-stone-700 px-4 py-2.5 text-sm hover:border-amber-700 hover:bg-stone-900 disabled:opacity-50"
-                >
-                  <span>Take the average</span>
-                  <span className="font-mono text-amber-400">+{averageGain} HP</span>
-                </button>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    disabled={busy} aria-busy={busy}
-                    onClick={rollHp}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-md border border-stone-700 px-4 py-2.5 text-sm hover:border-amber-700 hover:bg-stone-900 disabled:opacity-50"
-                  >
-                    <Dices className="size-4" />
-                    {rolledHp === null ? `Roll ${levelsGained}d${hitDie}` : `Rolled ${rolledHp}`}
-                  </button>
-                  {rolledGain !== null ? (
-                    <button
-                      type="button"
-                      disabled={busy} aria-busy={busy}
-                      onClick={() => pickHp(rolledGain)}
-                      className={cn(
-                        "rounded-lg bg-amber-200 px-4 py-2.5 text-sm font-medium text-stone-950",
-                        "hover:bg-amber-100 disabled:opacity-50",
-                      )}
-                    >
-                      {busy ? <Loader2 className="size-4 animate-spin" /> : `Take +${rolledGain} HP`}
-                    </button>
-                  ) : null}
-                </div>
+              <div className="flex items-center justify-between rounded-md border border-amber-900/50 bg-stone-950/60 px-4 py-3">
+                <span className="flex items-center gap-2 text-stone-300">
+                  {result.rolled !== null ? <Dices className="size-4 text-amber-300" /> : null}
+                  {result.rolled !== null
+                    ? `The server rolled ${result.rolled} on the d${result.die}`
+                    : hpMethod === "max"
+                      ? `The d${result.die}'s highest face`
+                      : `The d${result.die}'s average, ${fixedDieValue(result.die)}`}
+                </span>
+                <span className="motion-pop font-mono text-lg text-amber-300">+{result.hpGained} HP</span>
               </div>
-            </>
+              {reachedLevel > targetLevel && targetLevel < 20 ? (
+                <p className="text-xs text-stone-400">
+                  The experience already earns level {targetLevel + 1} too; take it next, one level at a time.
+                </p>
+              ) : null}
+              <button
+                type="button"
+                onClick={onDone}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-200 px-4 py-2.5 text-sm font-medium text-stone-950 hover:bg-amber-100"
+              >
+                Done
+              </button>
+            </div>
+          ) : blocked ? (
+            <div className="reveal space-y-4 text-sm">
+              <p role="alert" className="text-stone-300">
+                {blocked}
+              </p>
+              <button
+                type="button"
+                onClick={onDone}
+                className="w-full rounded-md border border-stone-700 px-4 py-2.5 text-sm text-stone-300 hover:bg-stone-900"
+              >
+                Close
+              </button>
+            </div>
           ) : (
             <div className="space-y-4 text-sm">
+              {step === "hp" ? (
+                <>
+                  <p className="text-stone-300">
+                    {sheet.name} advances to level {targetLevel}
+                    {isMulticlassPath
+                      ? ` as a ${chosenKlass?.name ?? classChoice} (${chosenKlass?.name ?? classChoice} level ${classLevelAfter})`
+                      : ""}
+                    .
+                  </p>
+                  {newFeatureNames.length ? (
+                    <div className="reveal rounded-md border border-amber-900/50 bg-stone-950/60 px-3 py-2">
+                      <p className="mb-1 text-xs text-amber-200">New at level {targetLevel}:</p>
+                      <InfoChipList
+                        items={newFeatureNames.map((name) => ({
+                          name,
+                          text: describeFeature(classChoice, effectiveSubclass, name),
+                        }))}
+                      />
+                    </div>
+                  ) : null}
+                  {hpMethod === "rolled" ? (
+                    <>
+                      <p className="text-stone-300">
+                        Hit points: this table rolls them. The server rolls the d{hitDie} when you
+                        confirm{conMod ? `, and adds ${conMod > 0 ? "+" : ""}${conMod} for Constitution` : ""}; every level adds at least 1.
+                      </p>
+                      <div className="stagger space-y-1.5" role="radiogroup" aria-label="Hit points">
+                        {(
+                          [
+                            ["roll", `Roll the d${hitDie}`, `${Math.max(1, 1 + conMod)} to ${Math.max(1, hitDie + conMod)} HP`],
+                            ["average", "Take the average instead", `+${fixedGain} HP`],
+                          ] as const
+                        ).map(([value, label, note]) => (
+                          <button
+                            key={value}
+                            type="button"
+                            role="radio"
+                            aria-checked={hpChoice === value}
+                            onClick={() => setHpChoice(value)}
+                            className={cn(
+                              "flex w-full items-center justify-between rounded-md border px-4 py-2.5 text-sm",
+                              hpChoice === value
+                                ? "border-amber-600 bg-stone-900 text-amber-100"
+                                : "border-stone-700 hover:border-amber-700 hover:bg-stone-900",
+                            )}
+                          >
+                            <span className="flex items-center gap-2">
+                              {value === "roll" ? <Dices className="size-4" /> : null}
+                              {label}
+                            </span>
+                            <span className="font-mono text-amber-400">{note}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex items-center justify-between rounded-md border border-stone-700 px-4 py-2.5">
+                      <span className="text-stone-300">
+                        {hpMethod === "max"
+                          ? `Hit points: the d${hitDie}'s highest face, as this table plays`
+                          : `Hit points: the d${hitDie}'s average, ${fixedDieValue(hitDie)}, as this table plays`}
+                        {conMod ? `, ${conMod > 0 ? "+" : ""}${conMod} Constitution` : ""}
+                      </span>
+                      <span className="font-mono text-amber-400">+{fixedGain} HP</span>
+                    </div>
+                  )}
+                </>
+              ) : null}
               {step === "class" ? (
                 <>
                   <p className="text-stone-300">
@@ -843,8 +818,9 @@ export function LevelUpDialog({
               {step === "asi" ? (
                 <>
                   <p className="text-stone-300">
-                    +{hpGain} HP locked in. This level also grants
-                    {asiLevels.length === 1 ? " an ability score improvement" : " ability score improvements"}:
+                    {sheet.name} is owed
+                    {asiLevels.length === 1 ? " an ability score improvement" : ` ${asiLevels.length} ability score improvements`}
+                    {" "}by {klass?.name ?? classChoice} level {classLevelAfter}: two points, or a feat, each.
                   </p>
                   <AsiFeatEditor
                     slotLevels={asiLevels}
@@ -1094,6 +1070,43 @@ export function LevelUpDialog({
                       {spellNote}
                     </p>
                   ) : null}
+                  {levelStyle === "known" && !isNewClass && knownList.length ? (
+                    <div className="reveal">
+                      <p className="mb-1 text-xs text-stone-400">
+                        Optional: give up one spell you know to learn another in its place.
+                      </p>
+                      <div className="stagger-pop flex flex-wrap gap-1.5">
+                        {knownList
+                          .filter((name) => !grantedFree.has(name.toLowerCase()))
+                          .map((name) => {
+                            const picked = forgetPick === name;
+                            return (
+                              <button
+                                key={name}
+                                type="button"
+                                aria-pressed={picked}
+                                onClick={() => {
+                                  setSpellNote("");
+                                  // Giving the swap back takes back the room it made.
+                                  if (picked && remainingPicks !== null && spellPicks.length >= remainingPicks) {
+                                    setSpellPicks((current) => current.slice(0, -1));
+                                  }
+                                  setForgetPick(picked ? "" : name);
+                                }}
+                                className={cn(
+                                  "rounded-full border px-3 py-1 text-xs",
+                                  picked
+                                    ? "border-red-700 bg-red-950/40 text-red-200 line-through"
+                                    : "border-stone-700 text-stone-300 hover:border-amber-800 hover:bg-stone-900",
+                                )}
+                              >
+                                {name}
+                              </button>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  ) : null}
                   <SpellBook
                     tiles={levelUpTiles}
                     maxLevel={maxCastable ?? 0}
@@ -1144,10 +1157,15 @@ export function LevelUpDialog({
                 </>
               ) : null}
 
+              {stepOpen ? (
+                <p className="reveal text-xs text-stone-500">
+                  You can leave this open and take the level now; it stays open for a later level.
+                </p>
+              ) : null}
               <div className="flex gap-2">
                 <button
                   type="button"
-                  disabled={busy} aria-busy={busy}
+                  disabled={busy || stepIndex === 0} aria-busy={busy}
                   onClick={() => setStepIndex(Math.max(0, stepIndex - 1))}
                   className="rounded-md border border-stone-700 px-4 py-2.5 text-sm text-stone-300 hover:bg-stone-900 disabled:opacity-50"
                 >
@@ -1170,7 +1188,11 @@ export function LevelUpDialog({
               </div>
             </div>
           )}
-          {error ? <p className="motion-shake mt-3 text-sm text-red-400">{error}</p> : null}
+          {error ? (
+            <p role="alert" className="motion-shake mt-3 text-sm text-red-400">
+              {error}
+            </p>
+          ) : null}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

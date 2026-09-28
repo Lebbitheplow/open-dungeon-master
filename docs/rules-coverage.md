@@ -30,7 +30,7 @@ table can switch it off with the `narrationGuard` game setting.
 | Armor Class from worn armor + shield + DEX cap + magic + features | enforced | `srd/armor.ts`, `srd/index.ts acBreakdownFor` |
 | Unarmored Defense (barbarian CON, monk WIS), Draconic Resilience | enforced | `srd/armor.ts unarmoredFormulaFor` |
 | Magic weapon/armor `+N` (read from item name) | enforced | `srd/armor.ts magicItemBonus`, `dm/attack-logic.ts` |
-| Attunement (3-slot cap, gates item effects) | enforced | `db/sheets.ts capAttunement`, `srd/magic-items.ts` |
+| Attunement (3-slot cap on every write path, effects only while worn and attuned, one copy per item, class/race/alignment restrictions, none mid-fight) | enforced | `srd/magic-items.ts settleAttunement`, `dm/usage-rules.ts attunementRefusal` |
 | Magic item effects (AC, saves, ability-setting, resistances) | enforced | `srd/magic-items.ts` (`classes/magic-items.json`, generated) |
 | Hit points, hit dice | enforced | creation + `dm/rest-logic.ts` |
 | Saves, skills, expertise, passive Perception | enforced | `srd/index.ts computeSheetDerived` |
@@ -39,13 +39,26 @@ table can switch it off with the `narrationGuard` game setting.
 | Jack of All Trades / Remarkable Athlete (half proficiency on checks + initiative) | enforced | feature-effects `half_proficiency` -> `computeSheetDerived`, `dm/rolls.ts` |
 | Armor stealth disadvantage (scale, plate...) | enforced | `srd/armor.ts` flag -> `dm/rolls.ts`, `take_action hide` |
 | Heavy armor below its STR requirement (speed -10) | enforced | `srd/index.ts speedFor` |
-| Armor worn without training (disadvantage on STR/DEX rolls) | enforced | `dm/rolls.ts` via `acBreakdownFor` |
+| Armor worn without training (disadvantage on STR/DEX checks, saves and attacks; no spellcasting) | enforced | `srd/armor.ts wearsUntrainedArmor`, `dm/rolls.ts`, `dm/pc-attack.ts`, `dm/cast-guard.ts` |
 | Subraces (Mountain Dwarf, Wood Elf, Drow, Stout Halfling, Forest/Deep Gnome, Variant Human) | enforced | `srd/races.json` flattened entries, race armor/weapon training |
 | Creature size (Small races vs heavy weapons, grapple/shove size cap) | enforced | `srd/index.ts sizeForRace`, `dm/pc-attack.ts`, `dm/action-tools.ts` |
 | Aura of Protection (+CHA to saves) | enforced | feature-effects `save_bonus` → derived saves |
 | Alert (+5 initiative), Observant (+5 passive) | enforced | feature-effects → derived stats |
 | Party spoils (XP each, a purse split evenly, an item to the finder) | enforced | `dm/mutations.ts party_award`, composing the single-target mutations so the audit trail is unchanged |
 | Encumbrance (carrying capacity, the two variant thresholds) | enforced when the `encumbrance` variant rule is on | `srd/encumbrance.ts`; item weights from the content pack, armor from `srd/armor.ts` |
+
+## Where a sheet's rules are checked
+
+Every door a character comes through (the builder's create and edit, the
+campaign sheet routes, the library, import, companions, and level-up) runs one
+server-side check, `srd/sheet-legality.ts` with `characters/admit.ts`. Hit
+dice, spell slots, casting ability, saving throws, class training, speed, armor
+class and hit points (by the table's `hpMethod`) are derived by the server, not
+accepted; starting gold follows the table's `startingWealth`. A level-up is built
+from the player's choices one level at a time and only with the XP for it
+(`srd/level-up.ts`). A player spends their counters and never refills them; the
+DM seats and the party lead correct (`dm/usage-rules.ts`). The suites that hold
+all of this are `scripts/test-enforce-*.mjs`; see `rules-enforcement-audit.md`.
 
 ## Combat
 
@@ -62,7 +75,7 @@ table can switch it off with the `narrationGuard` game setting.
 | Rage (resistance, bonus damage, advantage) | enforced | `srd/class-resources.ts`, `dm/condition-logic.ts` |
 | Action economy (action / bonus / reaction / attacks) | enforced | `dm/action-budget.ts` |
 | Dodge, Dash, Disengage, Hide, Help, Grapple, Shove | enforced | `dm/action-tools.ts take_action` |
-| Reactions (Shield, Uncanny Dodge, Counterspell, ...) | enforced (economy) + guidance (effect) | `dm/action-tools.ts use_reaction` |
+| Reactions (Shield, Uncanny Dodge, Counterspell, ...); a reaction returns at the start of its owner's turn, and Dodge, Help, Shield and Protection end there | enforced (economy, timing, Shield's AC and slot) + guidance (other effects) | `dm/action-tools.ts use_reaction`, `dm/condition-tick.ts startTurnConditions` |
 | Opportunity attacks, both sides | enforced | `dm/opportunity.ts` |
 | Cover (half / three-quarters) and long-range disadvantage | enforced | `battlemap/los.ts coverBetween`, `dm/map-tools.ts` |
 | Surprise round | enforced | `dm/encounter-tools.ts` |
@@ -113,7 +126,7 @@ table can switch it off with the `narrationGuard` game setting.
 
 | Subsystem | State | Where |
 |---|---|---|
-| SRD limited-use features (Ki, Second Wind, Channel Divinity, ...) | enforced | `srd/class-resources.ts` (29 counters) |
+| SRD limited-use features (Ki, Second Wind, Channel Divinity, ...) | enforced | `srd/class-resources.ts` |
 | Custom genre-class limited-use features | enforced | `classes/resources.json` (235 counters, generated) |
 | Subclass and lineage limited-use features (Superiority Dice, Portent, Psionic Energy, Stone's Endurance, ...) | enforced | `srd/authored-resources.json` (122 counters) |
 | Typed counter effects: healing, dice pools, temp HP, buffs with variants (Starry Form, Spirit Totem), enemy saves, teleports execute on spend | enforced | `fx` rows -> `srd/class-resources.ts effectFromFx` -> `dm/resource-tools.ts` (39 authored + 32 generated genre rows; the guard in `test-feature-coverage.mjs` stops mechanical wording landing without one) |
@@ -223,10 +236,13 @@ also proves it does not rot (every acknowledged name is a real granted name).
 | Level-up flow: class step with prereq gating, per-class HP die, subclass/expertise/spells at class levels | `LevelUpDialog.tsx` + server validation in the sheet PATCH route |
 | Library round-trip: multiclass sync-back, lower-level instantiation strips the last class first | `db/characters.ts` |
 
-Kept simplifications: ASIs stay at character-level thresholds (4/8/12/16/19, the
-pre-existing simplification); the lead edits multiclass sheets through the
-scalar class/subclass/level fields, which fold into the primary class entry;
-characters are always created single-class (multiclassing happens at level-up).
+Ability Score Improvements follow each class's own table by class level (the
+fighter's seven, the rogue's six, five for the rest; `srd/asi.ts`), and a
+character stored under the old single table is owed what the new one adds
+(`srd/asi-ledger.ts`). Kept simplifications: the lead edits multiclass sheets
+through the scalar class/subclass/level fields, which fold into the primary
+class entry; characters are always created single-class (multiclassing happens
+at level-up).
 
 ## Cross-cutting engines (Phase 8)
 

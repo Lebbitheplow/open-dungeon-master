@@ -138,6 +138,7 @@ export function CompanionBuilderDialog({
             </div>
           ) : null}
           <CharacterBuilder
+            campaignId={campaignId}
             fixedLevel={level}
             genre={genre}
             submitLabel="Add companion"

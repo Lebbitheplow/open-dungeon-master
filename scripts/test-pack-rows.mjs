@@ -26,7 +26,7 @@ const { packRaceOptions } = await import("../src/lib/content/race-options.ts");
 const { mergedBackgroundOptions } = await import("../src/app/characters/builder/useBuilderOptions.ts");
 const { buildBuilderResult } = await import("../src/app/characters/builder/submit.ts");
 const { builderMaxHp } = await import("../src/app/characters/builder/abilityDice.ts");
-const { SRD_RACES, suggestedStartingHp } = await import("../src/lib/srd/index.ts");
+const { suggestedStartingHp } = await import("../src/lib/srd/index.ts");
 const { populateFeaturesForClasses, racialTraitsFor } = await import("../src/lib/srd/features.ts");
 const { createSheetSchema } = await import("../src/lib/schemas/sheet.ts");
 
@@ -152,7 +152,7 @@ test("'Any' ability increases become the builder's asiChoice pickers", () => {
   assert.deepEqual(race("shade").asiChoice, { count: 1, amount: 1 });
 });
 
-test("only wotc-srd, odm-expanded and srd-2024 rows defer to the bundled race", () => {
+test("only wotc-srd and odm-expanded rows defer to the bundled race; a srd-2024 species is not offered unless a stored character names it", () => {
   const drow = race("drow");
   assert.deepEqual(drow.asi, { int: 2 });
   assert.equal(drow.speed, 25);
@@ -160,7 +160,9 @@ test("only wotc-srd, odm-expanded and srd-2024 rows defer to the bundled race", 
   assert.equal(race("delver").speed, 25);
   assert.deepEqual(race("high-elf").skills, ["perception"]);
   assert.equal(race("wood-elf").speed, 35);
-  assert.deepEqual(race("goliath").asi, SRD_RACES.find((entry) => entry.id === "goliath").asi);
+  assert.equal(raceOptions.some((entry) => entry.id === "goliath"), false);
+  const kept = packRaceOptions(rows.races, ["goliath"]).find((entry) => entry.id === "goliath");
+  assert.ok(kept, "a stored srd-2024 goliath keeps its race in an edit");
 });
 
 test("a v2 class gets its saves, armor, weapons, tools and skills", () => {

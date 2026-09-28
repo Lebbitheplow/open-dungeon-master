@@ -207,6 +207,12 @@ export const FEATURE_EFFECTS: FeatureDef[] = [
     guidance: "Alert: +5 to initiative, and they cannot be surprised while conscious.",
   },
   {
+    // Walking speed, like Fast Movement but never switched off by armor.
+    match: ["mobile"],
+    effects: [{ kind: "speed_bonus", amount: () => 10 }],
+    guidance: "Mobile: +10 feet of speed; a Dash ignores difficult terrain; a creature they attack in melee cannot make opportunity attacks against them that turn.",
+  },
+  {
     match: ["observant"],
     effects: [{ kind: "passive_bonus", amount: 5 }],
     guidance: "Observant: +5 to passive Perception and passive Investigation.",
@@ -635,7 +641,10 @@ export type CombatRiders = {
   unarmoredSpeedBonus: number;
   // Each speed bonus with the equipment that switches it off, for consumers
   // that can see what is worn; unarmoredSpeedBonus stays the ungated max.
-  speedBonuses: Array<{ amount: number; gate: "heavy_armor" | "armor_or_shield" | null }>;
+  // `source` is the table entry granting the bonus: one feature's tiers
+  // replace each other, different features (Unarmored Movement and Mobile)
+  // add up.
+  speedBonuses: Array<{ amount: number; gate: "heavy_armor" | "armor_or_shield" | null; source?: object }>;
   // Extra damage dice on landed attacks (Divine Strike, Improved Divine
   // Smite), resolved to this level's dice.
   damageRiders: Array<{
@@ -694,6 +703,11 @@ export function combatRiders(sheet: {
     magicalAttacks: false,
     cantripAbilityRiders: [],
   };
+  // Extra critical dice by the table entry that grants them. A barbarian 13
+  // holds "Brutal Critical (1 die)" and "Brutal Critical (2 dice)", which are
+  // one feature at two tiers: the highest tier counts, once. Different
+  // features (Brutal Critical and Savage Attacks) still add up.
+  const critDiceBySource = new Map<object, number>();
   for (const { effect, feature, featureClassId } of effectsFor(sheet)) {
     const scaledLevel = levelFor(featureClassId);
     switch (effect.kind) {
@@ -731,8 +745,14 @@ export function combatRiders(sheet: {
         riders.critRange = Math.min(riders.critRange, effect.low);
         break;
       case "crit_dice":
-        riders.critExtraDice +=
-          typeof effect.dice === "function" ? effect.dice(scaledLevel) : effect.dice;
+        critDiceBySource.set(
+          effect,
+          Math.max(
+            critDiceBySource.get(effect) ?? 0,
+            typeof effect.dice === "function" ? effect.dice(scaledLevel) : effect.dice,
+          ),
+        );
+        riders.critExtraDice = [...critDiceBySource.values()].reduce((sum, dice) => sum + dice, 0);
         break;
       case "smite":
         riders.canSmite = true;
@@ -740,7 +760,11 @@ export function combatRiders(sheet: {
       case "speed_bonus": {
         const amount = effect.amount(scaledLevel);
         riders.unarmoredSpeedBonus = Math.max(riders.unarmoredSpeedBonus, amount);
-        riders.speedBonuses.push({ amount, gate: effect.gate ?? null });
+        // The source rides along unlisted (not enumerable), so the entry
+        // still reads and compares as { amount, gate }.
+        riders.speedBonuses.push(
+          Object.defineProperty({ amount, gate: effect.gate ?? null }, "source", { value: effect, enumerable: false }),
+        );
         break;
       }
       case "weapon_damage_rider":
@@ -797,14 +821,20 @@ export function songOfRestDieFor(sheet: {
   level: number;
   features: Array<{ name: string }>;
 }): string | null {
+  // A bard 17 holds all four of "Song of Rest (d6)" to "(d12)": one feature
+  // at four tiers, and the largest die is the one they sing.
+  let best: string | null = null;
   for (const { effect, feature } of effectsFor(sheet)) {
     if (effect.kind !== "song_of_rest") {
       continue;
     }
     const named = /\((d\d{1,2})\)/.exec(feature);
-    return named ? named[1].toLowerCase() : effect.die(sheet.level);
+    const die = named ? named[1].toLowerCase() : effect.die(sheet.level);
+    if (!best || Number(die.slice(1)) > Number(best.slice(1))) {
+      best = die;
+    }
   }
-  return null;
+  return best;
 }
 
 // Non-combat mechanical riders a character's features grant, resolved for
@@ -931,10 +961,12 @@ export function hasBrave(sheet: {
 // Elven Accuracy (feat): with advantage on an attack roll using Dexterity,
 // Intelligence, Wisdom, or Charisma, reroll one of the dice, i.e. roll a
 // third d20 and keep the highest. The caller gates it on the attack ability.
+// A feat taken in the builder or at a level-up is in sheet.feats.
 export function hasElvenAccuracy(sheet: {
   features?: Array<{ name: string }>;
+  feats?: string[];
 }): boolean {
-  return (sheet.features ?? []).some((feature) =>
-    feature.name.toLowerCase().includes("elven accuracy"),
+  return [...(sheet.features ?? []).map((feature) => feature.name), ...(sheet.feats ?? [])].some(
+    (name) => name.toLowerCase().includes("elven accuracy"),
   );
 }

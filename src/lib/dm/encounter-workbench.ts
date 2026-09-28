@@ -267,7 +267,7 @@ function monsterSide(
         bestAverage = average;
       }
     }
-    const swings = Math.max(1, Math.min(3, entry.stats.attacksPerTurn ?? 1));
+    const swings = Math.max(1, Math.min(10, entry.stats.attacksPerTurn ?? 1));
     const forecast = forecastAttack({
       attackBonus: best.toHit,
       ac: partyAc,

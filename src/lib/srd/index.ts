@@ -11,6 +11,7 @@ import { effectiveAbilities, magicItemRiders } from "@/lib/srd/magic-items";
 import { encumbranceFor } from "@/lib/srd/encumbrance";
 import { allSpellNames } from "@/lib/srd/spell-lists";
 import { hpBonusPerLevel } from "@/lib/srd/race-id";
+import { isThirdCaster, thirdCasterSlots } from "@/lib/srd/third-caster";
 import type {
   Ability,
   AbilityScores,
@@ -127,8 +128,17 @@ export function formatModifier(value: number) {
 }
 
 // Spell slots {level: max} for a class at a character level, per SRD tables.
-export function spellSlotsFor(classId: string, level: number): Record<string, number> {
+// The subclass matters for a fighter or a rogue only: the Eldritch Knight and
+// the Arcane Trickster cast at a third of the pace (src/lib/srd/third-caster.ts).
+export function spellSlotsFor(
+  classId: string,
+  level: number,
+  subclass?: string | null,
+): Record<string, number> {
   const klass = findClass(classId);
+  if (klass?.casterType === "none" && isThirdCaster(classId, subclass)) {
+    return thirdCasterSlots(level);
+  }
   if (!klass || klass.casterType === "none") {
     return {};
   }
@@ -158,6 +168,11 @@ export type AcSource = {
   conditions?: string[];
   // Extra flat adds on top of whatever the feature table already grants.
   bonus?: number;
+  // Who wears the gear: a magic item that names who may attune to it gives
+  // nothing to anyone else, and a dwarf is not slowed by heavy armor.
+  race?: string;
+  alignment?: string;
+  spellcasting?: unknown;
 };
 
 // The character's armor class and how it was arrived at. The single place
@@ -172,10 +187,11 @@ export function acBreakdownFor(source: AcSource): AcBreakdown {
   });
   // Ability-setting magic items (a Belt of Giant Strength) change the DEX
   // and CON that feed the AC, so the effective scores are used throughout.
-  const abilities = effectiveAbilities(source.abilities, source.equipment);
-  const magic = magicItemRiders(source.equipment);
+  const abilities = effectiveAbilities(source.abilities, source.equipment, source);
+  const magic = magicItemRiders(source.equipment, source);
   const input = {
     equipment: source.equipment,
+    race: source.race,
     armorProfs: source.proficiencies.armor,
     dexMod: abilityMod(abilities.dex),
     abilityMods: {
@@ -247,10 +263,33 @@ export function deriveAc(source: AcSource): number {
 
 // The armor class attacks against this character actually face: the beast
 // form's AC while transformed, the derived sheet AC otherwise.
+//
+// A pinned armor class (acOverride) is a number the armor engine leaves
+// alone, but a spell still moves it: Shield, Shield of Faith, Haste and
+// Barkskin's floor are added on read, the same riders deriveAc folds into an
+// unpinned sheet's stored number.
 export function effectiveAcFor(
-  sheet: Pick<CharacterSheet, "ac"> & { wildShape?: CharacterSheet["wildShape"] },
+  sheet: Pick<CharacterSheet, "ac"> & {
+    wildShape?: CharacterSheet["wildShape"];
+    acOverride?: boolean;
+    conditions?: string[];
+    abilities?: AbilityScores;
+  },
 ): number {
-  return sheet.wildShape?.beastAc ?? sheet.ac;
+  if (sheet.wildShape?.beastAc !== undefined && sheet.wildShape?.beastAc !== null) {
+    return sheet.wildShape.beastAc;
+  }
+  if (!sheet.acOverride || !sheet.conditions?.length) {
+    return sheet.ac;
+  }
+  const mods = sheet.abilities
+    ? Object.fromEntries(
+        Object.entries(sheet.abilities).map(([ability, score]) => [ability, abilityMod(score)]),
+      )
+    : undefined;
+  const riders = conditionAcRiders(sheet.conditions, mods);
+  const raised = sheet.ac + riders.bonus;
+  return riders.floor ? Math.max(raised, riders.floor) : raised;
 }
 
 // The character's real walking speed. Worn armor gates the class speed
@@ -268,14 +307,19 @@ export function speedFor(
     wildShape?: CharacterSheet["wildShape"];
     gold?: number;
     race?: string;
+    feats?: string[];
   },
   options: { encumbrance?: boolean } = {},
 ): number {
   if (source.wildShape?.speed !== undefined) {
     return source.wildShape.speed;
   }
-  // Test doubles and half-built sheets may lack these lists.
-  const features = source.features ?? [];
+  // Test doubles and half-built sheets may lack these lists. A feat that
+  // moves speed (Mobile) is read from sheet.feats as a feature by its name.
+  const featNames = (source.feats ?? []).filter(
+    (feat) => !(source.features ?? []).some((feature) => feature.name.toLowerCase() === feat.toLowerCase()),
+  );
+  const features = [...(source.features ?? []), ...featNames.map((name) => ({ name }))];
   const equipment = source.equipment ?? [];
   const riders = combatRiders({
     class: source.class,
@@ -285,7 +329,8 @@ export function speedFor(
   });
   const breakdown = acBreakdownFor({ ...source, features, equipment });
   const worn = breakdown.armorName ? matchArmor(breakdown.armorName) : null;
-  let bonus = 0;
+  // One feature's tiers replace each other; different features add up.
+  const bySource = new Map<object | undefined, number>();
   for (const entry of riders.speedBonuses) {
     if (entry.gate === "heavy_armor" && worn?.category === "heavy") {
       continue;
@@ -293,8 +338,9 @@ export function speedFor(
     if (entry.gate === "armor_or_shield" && (worn || breakdown.shieldName)) {
       continue;
     }
-    bonus = Math.max(bonus, entry.amount);
+    bySource.set(entry.source, Math.max(bySource.get(entry.source) ?? 0, entry.amount));
   }
+  const bonus = [...bySource.values()].reduce((sum, amount) => sum + amount, 0);
   const load =
     options.encumbrance
       ? encumbranceFor({
@@ -302,6 +348,7 @@ export function speedFor(
           equipment,
           coins: source.gold ?? 0,
           size: source.race ? sizeForRace(source.race) : undefined,
+          wearer: source,
         }).speedPenalty
       : 0;
   return Math.max(0, source.speed + bonus - breakdown.speedPenalty - load);
@@ -363,7 +410,7 @@ export function computeSheetDerived(
   const pb = proficiencyBonus(sheet.level);
   // Ability-setting magic items raise the scores every other number reads.
   const withItems = sheet.equipment
-    ? effectiveAbilities(sheet.abilities, sheet.equipment)
+    ? effectiveAbilities(sheet.abilities, sheet.equipment, sheet)
     : sheet.abilities;
   // An active transformation overrides the scores its form carries: Wild
   // Shape stores STR/DEX/CON (mind stays the druid's), Polymorph all six.
@@ -371,7 +418,7 @@ export function computeSheetDerived(
   const abilities = sheet.wildShape?.abilities
     ? { ...withItems, ...sheet.wildShape.abilities }
     : withItems;
-  const magicSaveBonus = sheet.equipment ? magicItemRiders(sheet.equipment).saveBonus : 0;
+  const magicSaveBonus = sheet.equipment ? magicItemRiders(sheet.equipment, sheet).saveBonus : 0;
   const abilityMods = Object.fromEntries(
     (Object.keys(abilities) as Ability[]).map((ability) => [ability, abilityMod(abilities[ability])]),
   ) as Record<Ability, number>;
@@ -409,10 +456,11 @@ export function computeSheetDerived(
     ]),
   ) as Record<Ability, number>;
 
-  // Jack of All Trades / Remarkable Athlete: half the proficiency bonus
-  // (rounded down) on any covered check that does not already use it.
+  // Jack of All Trades / Remarkable Athlete: half the proficiency bonus on
+  // any covered check that does not already use it. The bard's rounds down;
+  // the Champion's, which covers the physical abilities only, rounds up.
   const halfScope = defense.halfProficiency ?? null;
-  const halfPb = Math.floor(pb / 2);
+  const halfPb = halfScope === "physical" ? Math.ceil(pb / 2) : Math.floor(pb / 2);
   const expertise = sheet.proficiencies.expertise ?? [];
   const skillParts = Object.fromEntries(
     SRD_SKILLS.map((skill) => {
@@ -561,8 +609,11 @@ export function suggestedStartingHp(classId: string, raceId: string, con: number
   }
   const conMod = abilityMod(con);
   const perLevelBonus = hpBonusPerLevel(raceId);
-  const firstLevel = klass.hitDie + conMod + perLevelBonus;
+  // Every level adds at least 1, however poor the Constitution (SRD 5.1,
+  // Beyond 1st Level), so the floor sits on each level and not on the total.
+  const firstLevel = Math.max(1, klass.hitDie + conMod + perLevelBonus);
   const laterLevels =
-    (level - 1) * (Math.floor(klass.hitDie / 2) + 1 + conMod + perLevelBonus);
-  return Math.max(1, firstLevel + Math.max(0, laterLevels));
+    Math.max(0, level - 1) *
+    Math.max(1, Math.floor(klass.hitDie / 2) + 1 + conMod + perLevelBonus);
+  return firstLevel + laterLevels;
 }

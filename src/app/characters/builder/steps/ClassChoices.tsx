@@ -34,7 +34,7 @@ export function ClassChoices({
   actions: BuilderActions;
   klass: ClassOption | undefined;
 }) {
-  const { effectiveLevel, proficientSkills, styleSlots, optionSlots } = derived;
+  const { effectiveLevel, proficientSkills, styleSlots, optionSlots, toolGrants } = derived;
   const expertiseSlots = klass ? expertiseSlotsFor(klass.id, effectiveLevel) : 0;
   // Only picks in a skill the character still has count: dropping a class
   // skill takes its expertise with it, here and in the step's gate.
@@ -43,6 +43,56 @@ export function ClassChoices({
   );
   return (
     <>
+      {/* "Three musical instruments of your choice", "one gaming set": the
+          sheet names the tools, so each open grant is a row of pills the
+          player picks from. Nothing is picked for them; the step waits. */}
+      {toolGrants.choices.map((choice, index) => {
+        const mine = toolGrants.chosen.filter((tool) => choice.from.includes(tool));
+        const left = toolGrants.left[index] ?? 0;
+        return (
+          <StepPanel
+            key={`${choice.label}-${index}`}
+            title={`Tool proficiency: ${choice.count} ${choice.label}${choice.count === 1 ? "" : "s"}`}
+            help={
+              left > 0 ? <span className="text-amber-300">{left} still to choose.</span> : undefined
+            }
+          >
+            <div className="flex flex-wrap gap-2">
+              {choice.from.map((tool) => {
+                const selected = mine.includes(tool);
+                return (
+                  <PickPill
+                    key={tool}
+                    label={tool}
+                    selected={selected}
+                    onClick={() => {
+                      if (selected) {
+                        state.setToolPicks(() => toolGrants.chosen.filter((entry) => entry !== tool));
+                        return;
+                      }
+                      if (left > 0) {
+                        state.setToolPicks(() => [...toolGrants.chosen, tool]);
+                        return;
+                      }
+                      // A single pick swaps; a full set of several waits for
+                      // one to be let go, as expertise does.
+                      if (choice.count === 1 && mine[0]) {
+                        state.setToolPicks(() => [
+                          ...toolGrants.chosen.filter((entry) => entry !== mine[0]),
+                          tool,
+                        ]);
+                      }
+                    }}
+                  >
+                    {tool}
+                  </PickPill>
+                );
+              })}
+            </div>
+          </StepPanel>
+        );
+      })}
+
       {/* Drawn from the skills alone, never from the sheet preview: that waits
           on ability scores, which are the NEXT step, and this step cannot be
           left until its expertise is picked. */}

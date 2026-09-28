@@ -2,7 +2,7 @@ import { openDatabase, type SqliteDatabase } from "./driver.ts";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { serverEnv } from "../server-env.ts";
-import { populateFeatures } from "@/lib/srd/features";
+import { populateFeatures, populateFeaturesForClasses } from "@/lib/srd/features";
 import { populateResources } from "@/lib/srd/class-resources";
 
 const dbPath =
@@ -112,6 +112,10 @@ function ensureSchema(db: SqliteDatabase) {
       PRIMARY KEY (campaign_id, user_id)
     );
 
+    -- character_sheets carries no UNIQUE (campaign_id, user_id): a table may
+    -- allow a player several characters (gameSettings.multiCharacter), and
+    -- one sheet per player everywhere else is the sheet route's rule.
+    -- Databases created with the constraint shed it in rebuildCharacterSheets.
     CREATE TABLE IF NOT EXISTS character_sheets (
       id TEXT PRIMARY KEY,
       campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
@@ -140,8 +144,7 @@ function ensureSchema(db: SqliteDatabase) {
       portrait_json TEXT,
       notes TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      UNIQUE (campaign_id, user_id)
+      updated_at TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS campaign_messages (
@@ -2019,6 +2022,12 @@ function ensureSchema(db: SqliteDatabase) {
   // interrupted halfway.
   rebuildBattleTokens(db);
 
+  // The second rebuild, for the same reason: a table constraint cannot be
+  // dropped by ALTER TABLE. character_sheets was created with UNIQUE
+  // (campaign_id, user_id), so a table that allows several characters per
+  // player could never store the second one.
+  rebuildCharacterSheets(db);
+
   // Reverse catch-up: library uploads used to skip campaign clones, so
   // sheets copied before their photo existed still have none. Fill-only.
   const sheetPortraitMarker = db
@@ -2115,6 +2124,68 @@ function rebuildBattleTokens(db: SqliteDatabase) {
   } finally {
     db.pragma("foreign_keys = ON");
   }
+}
+
+// Drops UNIQUE (campaign_id, user_id) from character_sheets.
+//
+// The new table is made from the stored DDL with that one clause taken out,
+// so every column the table has gained since (each ALTER TABLE ADD COLUMN is
+// in the stored text) arrives in the same order with the same type and
+// default, and the rows are copied whole: no sheet's rules state is read,
+// parsed or rewritten. Detected from the DDL, so a second run does nothing.
+// The swap is one transaction; a crash inside it leaves the old table as it
+// was and the next boot tries again. Nothing points AT character_sheets with
+// a foreign key, so turning them off suppresses no cascade.
+const SHEET_OWNER_UNIQUE = /,\s*UNIQUE\s*\(\s*campaign_id\s*,\s*user_id\s*\)/i;
+const SHEET_TABLE_HEAD = /^\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?["'`[]?character_sheets["'`\]]?/i;
+
+function rebuildCharacterSheets(db: SqliteDatabase) {
+  const ddl = db
+    .prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'character_sheets'`)
+    .get() as { sql: string } | undefined;
+  if (ddl && SHEET_OWNER_UNIQUE.test(ddl.sql) && SHEET_TABLE_HEAD.test(ddl.sql)) {
+    const rebuilt = ddl.sql
+      .replace(SHEET_OWNER_UNIQUE, "")
+      .replace(SHEET_TABLE_HEAD, "CREATE TABLE character_sheets_rebuilt");
+    // Indexes written by hand go with the old table; the constraint's own
+    // index has no SQL text and is meant to go.
+    const indexes = db
+      .prepare(
+        `SELECT sql FROM sqlite_master
+         WHERE type = 'index' AND tbl_name = 'character_sheets' AND sql IS NOT NULL`,
+      )
+      .all() as Array<{ sql: string }>;
+    db.pragma("foreign_keys = OFF");
+    try {
+      db.exec("BEGIN");
+      try {
+        db.exec(`DROP TABLE IF EXISTS character_sheets_rebuilt`);
+        db.exec(rebuilt);
+        db.exec(`INSERT INTO character_sheets_rebuilt SELECT * FROM character_sheets`);
+        const count = (table: string) =>
+          (db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
+        if (count("character_sheets_rebuilt") !== count("character_sheets")) {
+          throw new Error("character_sheets rebuild copied a different number of rows");
+        }
+        db.exec(`DROP TABLE character_sheets`);
+        db.exec(`ALTER TABLE character_sheets_rebuilt RENAME TO character_sheets`);
+        for (const index of indexes) {
+          db.exec(index.sql);
+        }
+        db.exec("COMMIT");
+      } catch (error) {
+        db.exec("ROLLBACK");
+        throw error;
+      }
+    } finally {
+      db.pragma("foreign_keys = ON");
+    }
+  }
+  // What the constraint's index did for lookups by seat, without the rule.
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_character_sheets_member
+       ON character_sheets(campaign_id, user_id)`,
+  );
 }
 
 // Copy each library character's portrait onto linked campaign sheets that
@@ -2281,7 +2352,8 @@ function backfillSheetFeatures(db: SqliteDatabase) {
 function backfillSheetResources(db: SqliteDatabase) {
   const sheets = db
     .prepare(
-      `SELECT id, class, subclass, race, level, abilities_json, features_json, resources_json
+      `SELECT id, class, subclass, race, level, abilities_json, features_json, resources_json,
+              classes_json
          FROM character_sheets`,
     )
     .all() as Array<{
@@ -2293,6 +2365,7 @@ function backfillSheetResources(db: SqliteDatabase) {
     abilities_json: string;
     features_json: string | null;
     resources_json: string | null;
+    classes_json: string | null;
   }>;
   if (!sheets.length) {
     return;
@@ -2315,14 +2388,23 @@ function backfillSheetResources(db: SqliteDatabase) {
       const existingResources = row.resources_json
         ? (JSON.parse(row.resources_json) as Parameters<typeof populateResources>[3])
         : undefined;
-      const features = populateFeatures(
-        existingFeatures,
-        row.class,
-        row.subclass ?? "",
-        row.race,
+      // A multiclassed sheet is regranted per class at each class's own
+      // level, as every write regrants it: read from the class and level
+      // columns alone it would lose its second class's features on a restart.
+      const classes = row.classes_json
+        ? (JSON.parse(row.classes_json) as Array<{ id: string; subclass: string; level: number }>)
+        : [];
+      const multiclass = Array.isArray(classes) && classes.length > 1;
+      const features = multiclass
+        ? populateFeaturesForClasses(existingFeatures, classes, row.race)
+        : populateFeatures(existingFeatures, row.class, row.subclass ?? "", row.race, row.level);
+      const resources = populateResources(
+        features,
         row.level,
+        mods,
+        existingResources,
+        multiclass ? classes : undefined,
       );
-      const resources = populateResources(features, row.level, mods, existingResources);
       const nextFeatures = JSON.stringify(features);
       const nextResources = JSON.stringify(resources);
       if (nextFeatures !== row.features_json || nextResources !== row.resources_json) {

@@ -902,7 +902,12 @@
       "uses": 1,
       "ability": null,
       "recharge": "short",
-      "upgrades": [],
+      "upgrades": [
+        {
+          "match": "rat tide (2 uses)",
+          "uses": 2
+        }
+      ],
       "guidance": "1/rest, a swarm floods a 15-ft cube: difficult terrain, and creatures inside save (DEX) or take 2d6 piercing and are distracted (disadvantage on their next attack).",
       "fx": {
         "kind": "enemy_save",
@@ -2646,7 +2651,12 @@
       "uses": 1,
       "ability": null,
       "recharge": "short",
-      "upgrades": [],
+      "upgrades": [
+        {
+          "match": "hardened (2 uses)",
+          "uses": 2
+        }
+      ],
       "guidance": "1/rest, reduce all damage you take this round by your CON modifier."
     },
     {

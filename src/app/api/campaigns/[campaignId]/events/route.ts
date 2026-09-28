@@ -41,9 +41,17 @@ export async function GET(
       // batch until none are left, then go live. Stopping at one batch left
       // a gap after a long absence that the client's seq guard (which only
       // rejects duplicates) could not see.
-      forEachEventSince(campaignId, lastSeq, (event) => {
-        send(sseChunk(event.type, event.payload, event.seq));
-      });
+      // Replayed as this member may read it: the notes on their own sheet,
+      // and no roll that was made for another seat.
+      forEachEventSince(
+        campaignId,
+        lastSeq,
+        (event) => {
+          send(sseChunk(event.type, event.payload, event.seq));
+        },
+        undefined,
+        context.user.id,
+      );
 
       // The member's id rides along so the bus can keep the campaign's
       // online set and announce joins and leaves (presence ephemeral).

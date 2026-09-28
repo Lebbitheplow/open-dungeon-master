@@ -1,26 +1,33 @@
-// request_roll for a human DM.
+// request_roll, for both callers of the engine.
 //
-// The AI's version of this lives in turn.ts and has one extra job: parking
-// the call so the model can be resumed with the answer. A person needs none
-// of that. What they DO need is the part turn.ts and this file share
-// exactly: the expression comes from the sheet, conditions can decide the
-// roll outright, an inspiration die is spent whether the dice are physical
-// or digital, an initiative roll feeds the encounter, and a damage roll
-// aimed at an enemy applies itself.
+// The AI's turn loop (turn.ts) used to carry its own copy of this, and the
+// two drifted: the copy skipped the table's strictness and rolled for the
+// dead. There is one now. The model's call differs in two things only, both
+// passed in: a parked roll remembers the tool call it answers, so the model
+// can be resumed with the result, and the refusals are worded for a model.
+// Everything else is shared: the expression comes from the sheet, conditions
+// can decide the roll outright, an inspiration die is spent whether the
+// dice are physical or digital, an initiative roll feeds the encounter, and
+// a damage roll aimed at an enemy applies itself.
 import { rollExpression } from "@/lib/dice";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import { insertRoll } from "@/lib/db/rolls";
 import { createPendingRoll, publicPendingRoll, type DmTurn } from "@/lib/db/dm-turns";
-import { patchSheet } from "@/lib/db/sheets";
+import { getSheetById } from "@/lib/db/sheets";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { allocateSeq } from "@/lib/db/campaigns";
-import { allySaveAura } from "@/lib/dm/aura";
-import { rollEffectExtras } from "@/lib/dm/effect-tools";
+import { rollExtrasFor, spendRollCarriers } from "@/lib/dm/forced-save";
 import { redactRoll } from "@/lib/dm/viewer";
-import { removeConditions } from "@/lib/dm/condition-logic";
 import { autoApplyDamageRoll } from "@/lib/dm/enemy-damage";
 import { recordInitiativeRoll } from "@/lib/dm/encounter-tools";
-import { resolveRollExpression, resolveSheetRef, rollArgsSchema, type RollArgs } from "@/lib/dm/rolls";
+import {
+  resolveRollExpression,
+  resolveSheetRef,
+  rollArgsSchema,
+  rollDcFor,
+  type RollArgs,
+} from "@/lib/dm/rolls";
+import { strictnessShift } from "@/lib/dm/safety-logic";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -33,31 +40,53 @@ export function handleRequestRoll(
   // Players who roll real dice at the table: their rolls park for them to
   // enter instead of being rolled by the server.
   realDiceUserIds: Set<string>,
+  // Set by the AI's turn loop: the tool call a parked roll answers.
+  model?: { toolCallId: string | null },
 ): Record<string, unknown> {
   const campaignId = campaign.id;
   let args: RollArgs;
   try {
-    args = rollArgsSchema.parse(JSON.parse(rawArguments || "{}"));
+    const raw = JSON.parse(rawArguments || "{}");
+    args = rollArgsSchema.parse(raw);
+    args = {
+      ...args,
+      dc: rollDcFor(args, raw, strictnessShift(campaign.gameSettings.gm?.strictness ?? "standard")),
+    };
   } catch {
-    return { error: "Pick a roll kind, and a skill, ability or DC to go with it." };
+    return {
+      error: model
+        ? "Invalid request_roll arguments. Send JSON with kind, and skill/ability/dc or expression as documented."
+        : "Pick a roll kind, and a skill, ability or DC to go with it.",
+    };
   }
 
   const sheet = resolveSheetRef(args.characterId, sheets, sheetsById);
+  // The dead roll nothing: not a check, not a save, not initiative.
+  if (sheet) {
+    const fresh = getSheetById(sheet.id) ?? sheet;
+    if (fresh.deathSaves?.dead) {
+      return {
+        error: `${fresh.name} is dead and makes no rolls. Only magic that raises the dead brings them back.`,
+      };
+    }
+  }
   // In combat a character's attack belongs to the attack engine, which
   // adjudicates against the enemy's AC and applies the damage itself.
   if (args.kind === "attack" && sheet && getActiveEncounter(campaignId)) {
     return {
-      error:
-        "Use Player attacks for a swing in combat: it rolls to hit from their sheet, compares it to the enemy's AC and applies the damage.",
+      error: model
+        ? "Character attacks in combat go through pc_attack: call it with characterId, targetEnemyId, and the weapon (or spell + damage dice). The server rolls to-hit from their sheet, adjudicates against the enemy's AC, and applies damage itself."
+        : "Use Player attacks for a swing in combat: it rolls to hit from their sheet, compares it to the enemy's AC and applies the damage.",
     };
   }
 
-  const aura = args.kind === "saving_throw" && sheet ? allySaveAura(campaignId, sheet) : null;
-  const resolved = resolveRollExpression(args, sheet, {
-    ...(aura ? { saveBonus: aura.bonus, saveNote: aura.note } : {}),
-    ...(sheet ? rollEffectExtras(campaignId, sheet.id, args.kind) : {}),
-    encumbrance: campaign.gameSettings.variantRules.encumbrance,
-  });
+  const resolved = resolveRollExpression(
+    args,
+    sheet,
+    sheet
+      ? rollExtrasFor(campaign, sheet, args.kind)
+      : { encumbrance: campaign.gameSettings.variantRules.encumbrance },
+  );
   if ("error" in resolved) {
     return { error: resolved.error };
   }
@@ -66,29 +95,23 @@ export function handleRequestRoll(
       ok: true,
       success: false,
       autoFailed: true,
-      note: `${sheet?.name ?? "The character"} automatically fails: ${resolved.notes.join("; ")}.`,
+      note: `${sheet?.name ?? "The character"} automatically fails: ${resolved.notes.join("; ")}.${
+        model ? " No dice are rolled; narrate the failure." : ""
+      }`,
     };
   }
 
   // The inspiration die and a held Help are already baked into the
   // expression, so they are spent either way.
-  if (sheet && resolved.spendInspiration) {
-    const { conditions, meta } = removeConditions(
-      sheet.conditions,
-      sheet.conditionMeta,
-      resolved.spendInspiration.split("|"),
-    );
-    const updated = patchSheet(sheet.id, { conditions, conditionMeta: meta });
-    if (updated) {
-      publishPersisted(campaignId, "sheet_updated", { sheet: updated });
-    }
+  if (sheet) {
+    spendRollCarriers(campaignId, sheet.id, resolved.spendInspiration);
   }
 
   if (sheet && realDiceUserIds.has(sheet.userId)) {
     const pending = createPendingRoll({
       campaignId,
       turnId: turn.id,
-      toolCallId: null,
+      toolCallId: model?.toolCallId ?? null,
       userId: sheet.userId,
       characterId: sheet.id,
       kind: args.kind,
@@ -118,7 +141,8 @@ export function handleRequestRoll(
       advantage: args.advantage ?? "none",
       dc: args.dc ?? null,
       result: outcome,
-      visibility: args.visibility ?? "public",
+      // A screen is a person's tool; the model's rolls are the table's.
+      visibility: model ? "public" : args.visibility ?? "public",
     });
     turn.rollIds.push(roll.id);
     // The stream is shared, so it carries what a PLAYER may see. Whoever is

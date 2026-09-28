@@ -231,6 +231,7 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
             </button>
           ) : null}
           <CharacterBuilder
+            campaignId={campaignId}
             fixedLevel={level}
             genre={genre}
             worldPackId={worldPackId}

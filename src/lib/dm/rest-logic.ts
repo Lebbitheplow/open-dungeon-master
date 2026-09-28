@@ -1,4 +1,5 @@
-import { pruneMeta, removeConditions } from "@/lib/dm/condition-logic";
+import { effectiveMaxHp, pruneMeta, removeConditions } from "@/lib/dm/condition-logic";
+import type { RollResult } from "@/lib/dice";
 import { RAGING, refillResources } from "@/lib/srd/class-resources";
 import { findClass, spellSlotsFor } from "@/lib/srd";
 import { isMulticlass, slotTableFor } from "@/lib/srd/multiclass";
@@ -26,12 +27,23 @@ function recoverPools(pools: HitDicePool[], count: number): HitDicePool[] {
 }
 
 // Long rest: full HP, temp HP gone, dying/concentration cleared, all spell
-// slots back, spells chosen for preparation now prepared, half the total hit dice (minimum 1) recovered, and the
-// exhaustion condition removed. Dead characters get nothing.
+// slots back to the class table, spells chosen for preparation now prepared,
+// half the total hit dice (minimum 1) recovered, and one level of exhaustion
+// removed. Who may take one (alive, at least 1 hit point, none in the last
+// 24 hours) is the caller's to decide (rest-tools.ts).
 export function longRestPatch(sheet: CharacterSheet): FullPatchSheetInput {
   const recovered = Math.max(1, Math.floor(sheet.hitDice.total / 2));
+  // 5e: a long rest reduces exhaustion by ONE level, not to zero. Legacy
+  // string entries convert into the leveled field on the way through. The
+  // level the character wakes with decides the maximum they wake at: level
+  // 4 still halves it, level 3 no longer does.
+  const legacyExhaustion = sheet.conditions.some((condition) =>
+    condition.startsWith("exhaustion"),
+  );
+  const effectiveExhaustion = Math.max(sheet.exhaustion ?? 0, legacyExhaustion ? 1 : 0);
+  const exhaustionAfter = Math.max(0, effectiveExhaustion - 1);
   const patch: FullPatchSheetInput = {
-    currentHp: sheet.maxHp,
+    currentHp: effectiveMaxHp({ maxHp: sheet.maxHp, exhaustion: exhaustionAfter }),
     tempHp: 0,
     deathSaves: null,
     concentratingOn: null,
@@ -66,32 +78,33 @@ export function longRestPatch(sheet: CharacterSheet): FullPatchSheetInput {
       ? slotTableFor(sheet)
       : spellSlotsFor(sheet.class, sheet.level);
     const hasTable = Object.keys(table).length > 0;
+    // With a table the character wakes with exactly its slots: a sheet that
+    // arrived short (an older client, a level-up that sent none) is made
+    // whole, and a slot the table does not give is taken back.
+    const rested = hasTable
+      ? Object.entries(table).map(([level, max]): [string, { max: number; used: number }] => [
+          level,
+          { max, used: 0 },
+        ])
+      : Object.entries(sheet.spellcasting.slots).map(
+          ([level, slot]): [string, { max: number; used: number }] => [
+            level,
+            { max: slot.max, used: 0 },
+          ],
+        );
     // The night is also when a prepared caster's new choices take hold:
     // spells waiting in `pending` become prepared (spell-prep.ts).
     patch.spellcasting = {
       ...settlePreparation(sheet.spellcasting),
-      slots: Object.fromEntries(
-        Object.entries(sheet.spellcasting.slots)
-          .map(([level, slot]): [string, { max: number; used: number }] => {
-            const cap = hasTable ? (table[level] ?? 0) : slot.max;
-            return [level, { max: Math.min(slot.max, cap), used: 0 }];
-          })
-          .filter(([, slot]) => slot.max > 0),
-      ),
+      slots: Object.fromEntries(rested.filter(([, slot]) => slot.max > 0)),
       // Pact Magic comes back with the night too.
       ...(sheet.spellcasting.pact
         ? { pact: { ...sheet.spellcasting.pact, used: 0 } }
         : {}),
     };
   }
-  // 5e: a long rest reduces exhaustion by ONE level, not to zero. Legacy
-  // string entries convert into the leveled field on the way through.
-  const legacyExhaustion = sheet.conditions.some((condition) =>
-    condition.startsWith("exhaustion"),
-  );
-  const effectiveExhaustion = Math.max(sheet.exhaustion ?? 0, legacyExhaustion ? 1 : 0);
   if (effectiveExhaustion > 0 || legacyExhaustion) {
-    patch.exhaustion = Math.max(0, effectiveExhaustion - 1);
+    patch.exhaustion = exhaustionAfter;
     if (legacyExhaustion) {
       patch.conditions = sheet.conditions.filter(
         (condition) => !condition.startsWith("exhaustion"),
@@ -168,12 +181,13 @@ export function shortRestResourcePatch(sheet: CharacterSheet): FullPatchSheetInp
 // half HP, bounded by what they have left.
 export function defaultShortRestDice(sheet: CharacterSheet, conMod: number): number {
   const available = Math.max(0, sheet.hitDice.total - sheet.hitDice.spent);
-  if (!available || sheet.currentHp <= 0 || sheet.currentHp >= Math.ceil(sheet.maxHp / 2)) {
+  const ceiling = effectiveMaxHp(sheet);
+  if (!available || sheet.currentHp <= 0 || sheet.currentHp >= Math.ceil(ceiling / 2)) {
     return 0;
   }
   const dieAverage = (Number(sheet.hitDice.die.slice(1)) + 1) / 2;
   const perDie = Math.max(1, dieAverage + conMod);
-  const missing = Math.ceil(sheet.maxHp / 2) - sheet.currentHp;
+  const missing = Math.ceil(ceiling / 2) - sheet.currentHp;
   return Math.min(available, Math.max(1, Math.ceil(missing / perDie)));
 }
 
@@ -241,4 +255,23 @@ export function hitDicePlanExpression(
     return `${dice}-${Math.abs(flat)}`;
   }
   return dice;
+}
+
+// What a rolled short rest heals. Each hit die heals its face plus the
+// Constitution modifier, and never less than 0 for that die (SRD 5.1, Short
+// Rest), so a low die cannot eat into a high one. The Song of Rest die, when
+// the roll carries one, is the last dice term and lands whole: it adds no
+// Constitution and nothing is taken from it.
+export function hitDiceHealing(
+  outcome: Pick<RollResult, "terms">,
+  conMod: number,
+  withSong: boolean,
+): number {
+  const diceTerms = outcome.terms.filter((term) => term.kind === "dice");
+  const song = withSong ? diceTerms.pop() : undefined;
+  const fromDice = diceTerms
+    .flatMap((term) => (term.kind === "dice" ? term.dice : []))
+    .filter((die) => die.kept)
+    .reduce((sum, die) => sum + Math.max(0, die.value + conMod), 0);
+  return fromDice + (song && song.kind === "dice" ? song.subtotal : 0);
 }

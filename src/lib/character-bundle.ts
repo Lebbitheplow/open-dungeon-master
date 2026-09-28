@@ -69,6 +69,9 @@ export const characterBundleSchema = z.object({
   exportedAt: z.string().max(40),
   name: z.string().trim().min(1).max(60),
   level: z.number().int().min(1).max(20),
+  // The experience behind the level. Optional: a file written before the
+  // field arrives with the least its level takes.
+  xp: z.number().int().min(0).max(1_000_000).optional(),
   sheet: createSheetSchema,
   portrait: bundlePortraitSchema.optional(),
 });
@@ -100,7 +103,7 @@ function fromBase64(encoded: string): Uint8Array {
 // the exact shape this app writes; anything else is dropped rather than
 // read, so a tampered row can never turn the export into a file reader.
 export async function buildCharacterBundle(
-  character: { name: string; level: number; sheet: CreateSheetInput },
+  character: { name: string; level: number; xp?: number; sheet: CreateSheetInput },
   readPortrait: PortraitReader,
   now: Date = new Date(),
 ): Promise<CharacterBundle> {
@@ -111,6 +114,7 @@ export async function buildCharacterBundle(
     exportedAt: now.toISOString(),
     name: character.name,
     level: character.level,
+    ...(character.xp !== undefined ? { xp: character.xp } : {}),
     sheet,
   };
   const stored = character.sheet.portrait;
@@ -157,6 +161,7 @@ export function parseCharacterBundle(raw: unknown, byteLength?: number): ParsedB
 
 export type UnpackedBundle = {
   level: number;
+  xp: number;
   sheet: CreateSheetInput;
   // True when the file brought its own picture, so the caller knows not to
   // queue a painted one.
@@ -186,6 +191,7 @@ export async function unpackCharacterBundle(
   }
   return {
     level: bundle.level,
+    xp: bundle.xp ?? 0,
     sheet: { ...bundle.sheet, name: bundle.sheet.name || bundle.name, portrait },
     carriedPortrait: portrait !== null,
   };

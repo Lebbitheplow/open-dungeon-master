@@ -9,10 +9,12 @@ import { rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
 import { healMath } from "@/lib/dm/mutation-math";
+import { effectiveMaxHp } from "@/lib/dm/condition-logic";
 import { resourceDef, resourceLevel } from "@/lib/srd/class-resources";
 import { songOfRestDieFor } from "@/lib/srd/feature-effects";
 import {
   defaultShortRestDice,
+  hitDiceHealing,
   hitDicePlanExpression,
   shortRestDicePlan,
   longRestPatch,
@@ -21,10 +23,15 @@ import {
 import { resolveSheetRef } from "@/lib/dm/rolls";
 import { normalizeRestKind } from "@/lib/dm/arg-coerce";
 import { tickWorldTimeskip } from "@/lib/dm/world-tick";
-import { advanceClock } from "@/lib/db/clock";
+import { advanceClock, getClock, recordLongRests } from "@/lib/db/clock";
 import { refreshSky } from "@/lib/dm/sky";
 import { publishTitleCard } from "@/lib/dm/scene-state";
-import { describeDuration, describeInstant, restMinutes } from "@/lib/dm/calendar";
+import {
+  describeDuration,
+  describeInstant,
+  longRestAllowed,
+  restMinutes,
+} from "@/lib/dm/calendar";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
 
 // The rest engine: short rests spend hit dice with real server rolls, long
@@ -91,6 +98,12 @@ function parseRestArgs(rawArguments: string): z.infer<typeof restArgsSchema> | n
   const nested = restArgsSchema.safeParse(raw);
   if (nested.success) {
     return nested.data;
+  }
+  // A spend list that was sent and cannot be read is a request that was not
+  // understood. Running the rest on the server's own spending would spend
+  // somebody's hit dice on it, so the whole call is refused.
+  if (raw && typeof raw === "object" && "spend" in raw && (raw as { spend?: unknown }).spend != null) {
+    return null;
   }
   const flat = z
     .object({
@@ -162,19 +175,48 @@ export function handleTakeRest(
   }
   const args = parseRestArgs(rawArguments);
   if (!args) {
-    return { error: 'Invalid take_rest arguments. Send {"kind":"short"} or {"kind":"long"}.' };
+    return {
+      error:
+        'Invalid take_rest arguments. Send {"kind":"short"} or {"kind":"long"}; a spend list is [{"characterId": "...", "dice": 1}] with whole dice of 1 or more. Nobody rested and no time passed.',
+    };
   }
   const reason = (args.reason ?? `${args.kind} rest`).slice(0, 200);
+  const variant = campaign.gameSettings.variantRules.restVariant;
+
+  // Who gains from a long rest is decided from how they START it: alive, at
+  // least 1 hit point, and no long rest ended in the 24 hours before this
+  // one ends (SRD 5.1, Long Rest). Decided before the clock moves, because
+  // the hours of the rest themselves wake a stable character. The rest
+  // happens whoever gains from it: the hours pass, conditions run out and a
+  // stable creature wakes, even when nobody at the table qualifies.
+  const starts = getClock(campaign.id);
+  const endsAt = starts.instant + restMinutes(args.kind, variant);
+  const resting: string[] = [];
+  const unaffected: string[] = [];
+  if (args.kind === "long") {
+    for (const stale of sheets) {
+      const sheet = getSheetById(stale.id);
+      if (!sheet) {
+        continue;
+      }
+      if (sheet.deathSaves?.dead) {
+        unaffected.push(`${sheet.name} (dead)`);
+      } else if (sheet.currentHp <= 0) {
+        unaffected.push(`${sheet.name} (at 0 hit points; a long rest needs at least 1 to begin with)`);
+      } else if (!longRestAllowed(starts.longRests?.[sheet.id], endsAt)) {
+        unaffected.push(`${sheet.name} (finished a long rest less than 24 hours ago)`);
+      } else {
+        resting.push(sheet.id);
+      }
+    }
+  }
 
   // A rest takes in-world time, and how much depends on the variant: eight
   // hours and one under the standard rules, a night and a week under gritty
   // realism, five minutes and an hour under the heroic option. Those two
   // settings existed only as a line in the prompt until there was a clock to
   // count against (src/lib/dm/calendar.ts).
-  const restedMinutes = restMinutes(
-    args.kind,
-    campaign.gameSettings.variantRules.restVariant,
-  );
+  const restedMinutes = restMinutes(args.kind, variant);
   const clockAfter = advanceClock(campaign.id, restedMinutes, "minutes");
   const restedFor = describeDuration(restedMinutes);
   const nowReads =
@@ -184,22 +226,20 @@ export function handleTakeRest(
 
   if (args.kind === "long") {
     const rested: string[] = [];
-    const skipped: string[] = [];
-    for (const stale of sheets) {
-      const sheet = getSheetById(stale.id);
-      if (!sheet) {
-        continue;
-      }
-      if (sheet.deathSaves?.dead) {
-        skipped.push(sheet.name);
+    for (const id of resting) {
+      const sheet = getSheetById(id);
+      if (!sheet || sheet.deathSaves?.dead) {
         continue;
       }
       auditRest(campaign, turnId, sheet, "rest_long", longRestPatch(sheet), reason);
       rested.push(sheet.name);
     }
+    recordLongRests(campaign.id, resting, endsAt);
     tableNote(
       campaign,
-      `The party takes a long rest (${restedFor})${nowReads ? `. It is now ${nowReads}` : ""}.`,
+      `The party takes a long rest (${restedFor})${nowReads ? `. It is now ${nowReads}` : ""}.${
+        unaffected.length ? ` No benefit from it for ${unaffected.join("; ")}.` : ""
+      }`,
     );
     // A night passing is a timeskip: the off-screen world moves too (world
     // arcs, NPC goals), with results landing as DM-only facts and sparks.
@@ -215,10 +255,12 @@ export function handleTakeRest(
       ok: true,
       kind: "long",
       rested,
-      ...(skipped.length ? { unaffected: `${skipped.join(", ")} (dead)` } : {}),
+      ...(unaffected.length ? { unaffected: unaffected.join("; ") } : {}),
       restedFor,
       ...(nowReads ? { now: nowReads } : {}),
-      note: `HP and spell slots are fully restored, half the hit dice returned, and any spells a caster chose to prepare are now prepared. ${restedFor} passed. Narrate it.`,
+      note: rested.length
+        ? `For those who rested, HP and spell slots are fully restored, half the hit dice returned, one level of exhaustion is gone, and any spells a caster chose to prepare are now prepared. ${restedFor} passed. Narrate it.`
+        : `${restedFor} passed, but nobody gained the rest's benefits (a character needs at least 1 hit point when it begins, and gains from one long rest in 24 hours). Narrate the time passing.`,
     };
   }
 
@@ -286,8 +328,10 @@ export function handleTakeRest(
       roll,
       source: "digital",
     });
-    const healed = Math.max(0, outcome.total);
-    const math = healMath(sheet.currentHp, sheet.maxHp, healed);
+    // Each die is floored at 0 on its own; the total is not what is floored.
+    const healed = hitDiceHealing(outcome, conMod, Boolean(songDie));
+    const ceiling = effectiveMaxHp(sheet);
+    const math = healMath(Math.min(sheet.currentHp, ceiling), ceiling, healed);
     auditRest(
       campaign,
       turnId,
@@ -303,7 +347,7 @@ export function handleTakeRest(
       name: sheet.name,
       diceSpent: count,
       healed: math.currentHp - sheet.currentHp,
-      hp: `${math.currentHp}/${sheet.maxHp}`,
+      hp: `${math.currentHp}/${ceiling}`,
     });
   }
   // Short-recharge resources (Ki, Second Wind, Action Surge...) refill for

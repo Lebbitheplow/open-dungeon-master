@@ -209,7 +209,7 @@ export function pcMoveBudget(
   map: BattleMap,
   sheet: CharacterSheet,
   token: BattleToken,
-): { speed: number; tiles: number } {
+): { speed: number; tiles: number; fullTiles: number } {
   const campaign = getCampaignById(campaignId);
   const base = speedFor(sheet, {
     encumbrance: campaign?.gameSettings.variantRules.encumbrance ?? false,
@@ -218,12 +218,21 @@ export function pcMoveBudget(
   // A scene has no rounds, so there is no per-round budget to spend: the
   // party walks the board while the DM describes it.
   if (encounter.kind === "scene") {
-    return { speed, tiles: map.width * map.height };
+    return { speed, tiles: map.width * map.height, fullTiles: map.width * map.height };
   }
   const dashed = budgetApplies(encounter.turnBudget, sheet.id, encounter.round)
     ? Boolean(encounter.turnBudget?.dashed)
     : false;
-  return { speed, tiles: Math.max(0, speedToTiles(speed) * (dashed ? 2 : 1) - token.movedThisRound) };
+  const fullTiles = Math.max(0, speedToTiles(speed) * (dashed ? 2 : 1) - token.movedThisRound);
+  // Prone: the character stands for half their speed and walks on what is
+  // left, or crawls at double cost, whichever reaches farther. `tiles` is
+  // what the board lights; `fullTiles` is the movement actually in hand,
+  // which the move route charges the standing or the crawling to.
+  const prone = sheet.conditions.some((entry) => entry.trim().toLowerCase() === "prone");
+  const tiles = prone
+    ? Math.max(fullTiles - Math.floor(speedToTiles(speed) / 2), Math.floor(fullTiles / 2))
+    : fullTiles;
+  return { speed, tiles: Math.max(0, tiles), fullTiles };
 }
 
 // The board on the table, fight or scene. Only the map layer asks this

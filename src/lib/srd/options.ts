@@ -11,6 +11,8 @@
 // Pure data and pure functions, client-importable like the rest of srd/.
 
 import optionsJson from "@/lib/srd/options.json";
+import subclassesJson from "@/lib/srd/subclasses.json";
+import { subclassNamed } from "@/lib/srd/subclass-name";
 
 export type OptionKind =
   | "invocation"
@@ -146,10 +148,19 @@ const GRANTS: Grant[] = [
   },
 ];
 
+// The subclass a grant belongs to, named by the sheet: exactly, by an alias,
+// or with the titles off both sides (src/lib/srd/subclass-name.ts, the rule
+// features.ts grants by). A fragment ("Master", "Elements") opens nothing.
+const SUBCLASS_ALIASES: Record<string, string[]> = Object.fromEntries(
+  Object.values(
+    (subclassesJson as unknown as { classes: Record<string, Array<{ name: string; aliases?: string[] }>> }).classes,
+  )
+    .flat()
+    .map((entry) => [entry.name, entry.aliases ?? []]),
+);
+
 function subclassMatches(stored: string, wanted: string): boolean {
-  const a = normalize(stored);
-  const b = normalize(wanted);
-  return Boolean(a) && (a === b || a.includes(b) || b.includes(a));
+  return subclassNamed(stored, wanted, SUBCLASS_ALIASES[wanted] ?? []);
 }
 
 export function optionSlotsFor(

@@ -1,6 +1,10 @@
-import { spellSlotsFor, suggestedStartingHp } from "@/lib/srd";
+import { spellSlotsFor } from "@/lib/srd";
 import { slotTableFor } from "@/lib/srd/multiclass";
-import { earnedAsiCount, removeAsiChoices } from "@/lib/srd/asi";
+import { earnedAsiCountFor, removeAsiChoices } from "@/lib/srd/asi";
+import { readAsiLedger, withAsiLedger } from "@/lib/srd/asi-ledger";
+import { derivedMaxHp, hpBonusPerLevelFor } from "@/lib/srd/hit-points";
+import { hpBonusPerLevel } from "@/lib/srd/race-id";
+import { isThirdCaster } from "@/lib/srd/third-caster";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import { suggestedCantripCount } from "@/lib/content/mechanics";
 import { spellClassFor } from "@/lib/classes";
@@ -47,22 +51,6 @@ export function adaptSheetToLevel(
   const sheet = structuredClone(input);
   const level = Math.max(1, Math.min(20, toLevel));
 
-  // Strip ASI choices earned above the target level: reverse their ability
-  // bonuses (slightly lossy for scores that hit the 20 cap) and drop their
-  // feats. Level-up ASIs taken mid-campaign sync back as raw abilities with
-  // no recorded choice, so those cannot be reversed here either.
-  const storedChoices = sheet.asiChoices ?? [];
-  const keptChoiceCount = earnedAsiCount(level);
-  if (storedChoices.length > keptChoiceCount) {
-    const dropped = storedChoices.slice(keptChoiceCount);
-    sheet.abilities = removeAsiChoices(sheet.abilities, dropped);
-    const droppedFeats = new Set(
-      dropped.flatMap((choice) => (choice.mode === "feat" ? [choice.feat] : [])),
-    );
-    sheet.feats = (sheet.feats ?? []).filter((feat) => !droppedFeats.has(feat));
-    sheet.asiChoices = storedChoices.slice(0, keptChoiceCount);
-  }
-
   // A multiclassed character adapting to a lower level sheds levels from the
   // LAST class first (acquisition order = array order); classes stripped to
   // zero drop entirely, along with their hit-die pool and caster entry.
@@ -103,22 +91,74 @@ export function adaptSheetToLevel(
     }
   }
 
+  // Strip ASI choices earned above the target level: reverse their ability
+  // bonuses (slightly lossy for scores that hit the 20 cap) and drop their
+  // feats. Improvements are earned by CLASS level, so this follows the class
+  // list the target level leaves. Level-up ASIs taken mid-campaign sync back
+  // as raw abilities with no recorded choice, so those cannot be reversed
+  // here either.
+  const classList =
+    (sheet.classes ?? []).length > 1
+      ? (sheet.classes ?? [])
+      : [{ id: sheet.class, subclass: sheet.subclass ?? "", level }];
+  const storedChoices = sheet.asiChoices ?? [];
+  const keptChoiceCount = earnedAsiCountFor(classList);
+  if (storedChoices.length > keptChoiceCount) {
+    const dropped = storedChoices.slice(keptChoiceCount);
+    sheet.abilities = removeAsiChoices(sheet.abilities, dropped);
+    const droppedFeats = new Set(
+      dropped.flatMap((choice) => (choice.mode === "feat" ? [choice.feat] : [])),
+    );
+    sheet.feats = (sheet.feats ?? []).filter((feat) => !droppedFeats.has(feat));
+    sheet.asiChoices = storedChoices.slice(0, keptChoiceCount);
+  }
+  // The count of improvements taken never passes what the level has earned,
+  // so the ones given back here are offered again when the level returns.
+  const taken = readAsiLedger(sheet.features ?? []);
+  if (taken !== null && taken > keptChoiceCount) {
+    sheet.features = withAsiLedger(sheet.features ?? [], keptChoiceCount);
+  }
+
   sheet.hitDice = { ...sheet.hitDice, total: level, spent: 0 };
   if (level !== fromLevel) {
-    const suggested = suggestedStartingHp(sheet.class, sheet.race, sheet.abilities.con, level);
-    // Only classes the SRD tables know produce a real suggestion; otherwise
-    // scale the stored HP roughly by level.
-    sheet.maxHp =
-      suggested !== 8 || sheet.class === "wizard"
-        ? suggested
-        : Math.max(1, Math.round((sheet.maxHp / Math.max(1, fromLevel)) * level));
+    // Each class counts its own hit die: a fighter 3 / wizard 2 is three
+    // d10s and two d6s, not five of the first class's. Only classes the
+    // tables know produce a real number; otherwise the stored hit points
+    // are scaled roughly by level.
+    const dice = classList.map((entry) => ({
+      die: findClass(entry.id)?.hitDie ?? 0,
+      level: entry.level,
+    }));
+    sheet.maxHp = dice.every((entry) => entry.die > 0)
+      ? derivedMaxHp("average", {
+          classes: dice,
+          con: sheet.abilities.con,
+          perLevelBonus: hpBonusPerLevelFor(hpBonusPerLevel(sheet.race) > 0, sheet.feats ?? []),
+        })
+      : Math.max(1, Math.round((sheet.maxHp / Math.max(1, fromLevel)) * level));
+  }
+  if (sheet.spellcasting) {
+    const casts = classList.some((entry) => {
+      const klass = findClass(entry.id);
+      return klass
+        ? (klass.casterType !== "none" && Boolean(klass.spellAbility)) ||
+            (isThirdCaster(entry.id, entry.subclass) && entry.level >= 3)
+        : true;
+    });
+    if (!casts) {
+      // Stripped of its only casting class, it has that class's slots and
+      // spells no longer.
+      sheet.spellcasting = null;
+    }
   }
   if (sheet.spellcasting) {
     const slots =
       (sheet.classes ?? []).length > 1
         ? slotTableFor({ class: sheet.class, classes: sheet.classes })
-        : spellSlotsFor(sheet.class, level);
-    if (Object.keys(slots).length) {
+        : spellSlotsFor(sheet.class, level, sheet.subclass);
+    // Always the table's row, an empty one included. A class the tables do
+    // not know keeps the slots it was stored with.
+    if (Object.keys(slots).length || findClass(sheet.class)) {
       sheet.spellcasting.slots = Object.fromEntries(
         Object.entries(slots).map(([slotLevel, max]) => [slotLevel, { max, used: 0 }]),
       );

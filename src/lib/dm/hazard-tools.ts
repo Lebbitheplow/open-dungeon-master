@@ -1,11 +1,13 @@
 import { z } from "zod";
 import type { Campaign } from "@/lib/db/campaigns";
-import { getSheetById } from "@/lib/db/sheets";
+import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { planHazardFx } from "@/lib/battlemap/fx-plan";
 import { publishFx, tokenPosition } from "@/lib/dm/fx";
 import { rollExpression } from "@/lib/dice";
-import { applyDmMutation } from "@/lib/dm/mutations";
+import { publishPersisted } from "@/lib/events";
+import { applyPcDamage } from "@/lib/dm/pc-damage";
+import { SUFFOCATING } from "@/lib/dm/vitals-logic";
 import { handleCastAtPlayer } from "@/lib/dm/cast-tools";
 import { resolveSheetRef } from "@/lib/dm/rolls";
 import { computeSheetDerived } from "@/lib/srd";
@@ -30,8 +32,8 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 // uses. Detection stays with check_notice (a trap is spotted by passive
 // Perception before it is sprung); this tool is the springing.
 //
-// This module imports the sheet layer, the cast engine, and mutations; it must
-// never be imported by them.
+// This module imports the sheet layer, the cast engine, and the damage
+// engine; it must never be imported by them.
 
 type ToolDef = {
   type: "function";
@@ -183,19 +185,15 @@ export function handleApplyHazard(
     }
     const perTarget = targets.map((sheet) => {
       const rolled = rollExpression(dice);
-      const applied = applyDmMutation(
-        campaign,
-        turn.id,
-        "apply_damage",
-        JSON.stringify({
-          characterId: sheet.id,
-          amount: rolled.total,
-          type: damageType,
-          reason: source,
-        }),
-        sheets,
-        sheetsById,
-      ).result;
+      // The server rolled these dice, so they land as rolled (20d6 can pass
+      // the 200 a typed amount is held to), and a fall that hurts leaves the
+      // creature prone.
+      const applied = applyPcDamage(campaign, turn.id, sheet, {
+        amount: rolled.total,
+        type: damageType,
+        knocksProne: true,
+        reason: source,
+      });
       const pos = tokenPosition(campaign.id, sheet.id);
       if (pos) {
         publishFx(
@@ -242,20 +240,26 @@ export function handleApplyHazard(
         };
       }
       // Past the limit: they drop straight to 0 HP and begin dying. Damage
-      // equal to their whole HP pool (temp included) floors them at 0 and
-      // hands them to the server's death-save machinery.
-      const applied = applyDmMutation(
-        campaign,
-        turn.id,
-        "apply_damage",
-        JSON.stringify({
-          characterId: sheet.id,
-          amount: sheet.currentHp + (sheet.tempHp ?? 0),
-          reason: `${source} (out of air)`,
-        }),
-        sheets,
-        sheetsById,
-      ).result;
+      // equal to their whole HP pool (temp and beast form included) floors
+      // them at 0 and hands them to the server's death-save machinery,
+      // however large the pool is.
+      const pool = sheet.currentHp + (sheet.tempHp ?? 0) + (sheet.wildShape?.beastHp ?? 0);
+      const applied =
+        pool > 0
+          ? applyPcDamage(campaign, turn.id, sheet, {
+              amount: pool,
+              reason: `${source} (out of air)`,
+            })
+          : { ok: true };
+      // Still without air: nothing heals or stabilizes them until the
+      // condition is cleared (src/lib/dm/mutations.ts heal, stabilize.ts).
+      const down = getSheetById(sheet.id);
+      if (down && !down.deathSaves?.dead && !down.conditions.includes(SUFFOCATING)) {
+        const updated = patchSheet(down.id, { conditions: [...down.conditions, SUFFOCATING] });
+        if (updated) {
+          publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
+        }
+      }
       return {
         name: sheet.name,
         survivalRounds: survival,
@@ -268,7 +272,7 @@ export function handleApplyHazard(
       ok: true,
       type: args.type,
       results: perTarget,
-      note: "Breath math resolved from Constitution; anyone past their limit is at 0 HP and dying. Narrate the struggle for air.",
+      note: "Breath math resolved from Constitution; anyone past their limit is at 0 HP, dying and suffocating. They cannot be healed or stabilized until they can breathe: once they reach air, call clear_condition with suffocating. Narrate the struggle for air.",
     };
   }
 

@@ -9,8 +9,8 @@ import {
 } from "@/lib/db/characters";
 import { listEventsForLibraryCharacter } from "@/lib/db/character-events";
 import { mirrorToCampaignSheets, portraitStatus } from "@/lib/portrait";
+import { admitSheet, refusal } from "@/lib/characters/admit";
 import { attachmentSchema, createSheetSchema } from "@/lib/schemas/sheet";
-import { spellListProblems } from "@/lib/srd/spell-prep";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -81,14 +81,27 @@ export async function PATCH(
       { status: 400 },
     );
   }
-  const [problem] = spellListProblems({ ...parsed.data.sheet, level: parsed.data.level });
-  if (problem) {
-    return Response.json({ error: problem }, { status: 400 });
+  const stored = getCharacterForUser(user.id, characterId);
+  if (!stored) {
+    return Response.json({ error: "Character not found." }, { status: 404 });
   }
-  const character = updateCharacter(user.id, characterId, parsed.data.level, parsed.data.sheet);
+  // An edit keeps what the stored character holds and adds only what the
+  // rules give: the stored sheet is the baseline the request is read against.
+  const admitted = admitSheet({
+    door: "library",
+    level: parsed.data.level,
+    sheet: parsed.data.sheet,
+    userId: user.id,
+    baseline: { sheet: stored.sheet, level: stored.level },
+  });
+  if (!admitted.ok) {
+    return refusal(admitted.problems);
+  }
+  const character = updateCharacter(user.id, characterId, parsed.data.level, admitted.sheet);
   if (!character) {
     return Response.json({ error: "Character not found." }, { status: 404 });
   }
+  admitted.settle();
   return Response.json({ character });
 }
 

@@ -202,6 +202,10 @@ test("damageAdjust: immunity zeroes, resistance halves, vulnerability doubles", 
   assert.equal(damageAdjust(11, "fire", "fire; cold", "", "").amount, 5);
   assert.equal(damageAdjust(10, "cold", "", "", "cold").amount, 20);
   assert.equal(damageAdjust(10, "fire", "fire", "", "fire").amount, 10);
+  // Resistance, then vulnerability: 25 is halved to 12 and doubled to 24.
+  assert.equal(damageAdjust(25, "fire", "fire", "", "fire").amount, 24);
+  // Immunity beats both.
+  assert.equal(damageAdjust(25, "fire", "fire", "fire", "fire").amount, 0);
   assert.equal(damageAdjust(10, "", "fire", "", "").amount, 10);
   assert.equal(damageAdjust(10, "radiant", "fire", "poison", "").amount, 10);
 });
@@ -212,8 +216,34 @@ test("damageAdjust: nonmagical-attacks substring matches base types", () => {
   assert.equal(damageAdjust(9, "fire", resist, "", "").amount, 9);
 });
 
-test("damageAdjust floors resistance at 1", () => {
-  assert.equal(damageAdjust(1, "fire", "fire", "", "").amount, 1);
+test("damageAdjust: resistance rounds down with no floor", () => {
+  assert.equal(damageAdjust(1, "fire", "fire", "", "").amount, 0);
+  assert.equal(damageAdjust(3, "fire", "fire", "", "").amount, 1);
+});
+
+test("damageAdjust: a type matches as a whole word", () => {
+  assert.equal(damageAdjust(10, "fir", "fire", "", "").amount, 10);
+  assert.equal(damageAdjust(10, "on", "poison", "", "").amount, 10);
+  assert.equal(damageAdjust(10, "Fire damage", "fire", "", "").amount, 5);
+  assert.equal(damageAdjust(10, "magical slashing", "slashing", "", "").amount, 5);
+});
+
+test("damageAdjust: magical damage passes resistance to nonmagical attacks", () => {
+  const resist = "bludgeoning, piercing, and slashing from nonmagical attacks";
+  assert.equal(damageAdjust(10, "slashing", resist, "", "", { magical: true }).amount, 10);
+  assert.equal(damageAdjust(10, "slashing", "", resist, "", { magical: true }).amount, 10);
+  assert.equal(damageAdjust(10, "slashing", "", resist, "").amount, 0);
+  // Only the weapon types are conditional: the fire on the same line is not.
+  const mixed = "fire, bludgeoning, piercing, and slashing from nonmagical attacks";
+  assert.equal(damageAdjust(10, "fire", mixed, "", "", { magical: true }).amount, 5);
+  // A clause of its own is unconditional.
+  assert.equal(damageAdjust(10, "slashing", `cold; ${resist}; slashing`, "", "", { magical: true }).amount, 5);
+});
+
+test("damageAdjust: resistAll halves every type, and immunity still wins", () => {
+  assert.equal(damageAdjust(11, "psychic", "", "", "", { resistAll: true }).amount, 5);
+  assert.equal(damageAdjust(11, "poison", "", "poison", "", { resistAll: true }).amount, 0);
+  assert.equal(damageAdjust(11, undefined, "", "", "", { resistAll: true }).amount, 5);
 });
 
 test("pcResistances: dwarf poison, tiefling fire, feature names", () => {

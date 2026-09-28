@@ -59,3 +59,26 @@ export const COMPANION_LABELS: Record<CompanionSetting, string> = {
   guests: "Temporary guests only",
   off: "Off",
 };
+
+// How hit points are counted after 1st level (1st is always the hit die's
+// highest face plus the Constitution modifier): the die's fixed value, a die
+// the SERVER rolls, or its highest face. src/lib/srd/hit-points.ts.
+export const HP_METHODS = ["average", "rolled", "max"] as const;
+export type HpMethodSetting = (typeof HP_METHODS)[number];
+
+export const HP_METHOD_LABELS: Record<HpMethodSetting, string> = {
+  average: "Fixed value each level (the average, rounded up)",
+  rolled: "Rolled each level (the server rolls the hit die)",
+  max: "Maximum each level",
+};
+
+// What a new character starts with: the class's and the background's gear
+// plus the background's coin, or wealth the server rolls by class in place
+// of the gear. src/lib/srd/starting-wealth.ts.
+export const STARTING_WEALTH = ["equipment", "rolled"] as const;
+export type StartingWealthSetting = (typeof STARTING_WEALTH)[number];
+
+export const STARTING_WEALTH_LABELS: Record<StartingWealthSetting, string> = {
+  equipment: "Class and background gear, plus the background's coin",
+  rolled: "Rolled wealth by class (the server rolls), spent on gear",
+};

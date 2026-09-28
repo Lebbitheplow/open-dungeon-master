@@ -9,6 +9,10 @@ import { computeSheetDerived, SRD_SKILLS } from "@/lib/srd";
 import { dcForDifficulty, difficultyOfDc, normalizeDifficulty } from "@/lib/srd/dc";
 import { strictnessShift } from "@/lib/dm/safety-logic";
 import { resolveRollExpression, resolveSheetRef } from "@/lib/dm/rolls";
+import { rollExtrasFor, spendRollCarriers } from "@/lib/dm/forced-save";
+import { rollEffectExtras } from "@/lib/dm/effect-tools";
+import { exhaustionRollState, mergeAdvantage, rollDerivation } from "@/lib/dm/condition-logic";
+import { conditionRollRiders } from "@/lib/srd/condition-effects";
 import type { RollArgs } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { getActiveBattleMap } from "@/lib/battlemap/view";
@@ -198,15 +202,24 @@ export function handleGroupCheck(
       skill: args.skill,
       ability: args.ability,
     } as unknown as RollArgs;
-    const resolved = resolveRollExpression(rollArgs, sheet, {
-      encumbrance: campaign.gameSettings.variantRules.encumbrance,
-    });
+    // The dead take no part, and count as a failure for the group.
+    if (sheet.deathSaves?.dead) {
+      results.push({ name: sheet.name, total: 0, success: false });
+      continue;
+    }
+    const resolved = resolveRollExpression(
+      rollArgs,
+      sheet,
+      rollExtrasFor(campaign, sheet, rollArgs.kind),
+    );
     if ("error" in resolved || "autoFail" in resolved) {
       // An auto-fail (paralysis) or an unresolvable skill counts as a failed
       // participant rather than aborting the whole group's attempt.
       results.push({ name: sheet.name, total: 0, success: false });
       continue;
     }
+    // An inspiration die or a held Help is spent by the roll it rides.
+    spendRollCarriers(campaign.id, sheet.id, resolved.spendInspiration);
     const rolled = rollExpression(resolved.expression);
     const roll = insertRoll({
       campaignId: campaign.id,
@@ -253,12 +266,36 @@ const checkNoticeSchema = z.object({
 // (Observant, keen senses) through the derived value; insight/investigation
 // take the plain 10 + skill modifier, which is faithful for all but the rare
 // Observant investigator and keeps the gate simple.
-function passiveScore(sheet: CharacterSheet, sense: "perception" | "insight" | "investigation") {
+function passiveScore(
+  campaign: Campaign,
+  sheet: CharacterSheet,
+  sense: "perception" | "insight" | "investigation",
+) {
   const derived = computeSheetDerived(sheet);
-  if (sense === "perception") {
-    return derived.passivePerception;
-  }
-  return 10 + (derived.skills[sense] ?? 0);
+  const base = sense === "perception" ? derived.passivePerception : 10 + (derived.skills[sense] ?? 0);
+  return base + passiveModifier(campaign, sheet, sense);
+}
+
+// A passive check takes -5 when the character would roll the check at
+// disadvantage and +5 at advantage (SRD 5.1, Passive Checks): the same
+// conditions, exhaustion and lasting effects an active check reads, plus
+// what an effect adds to checks outright.
+function passiveModifier(
+  campaign: Campaign,
+  sheet: CharacterSheet,
+  sense: "perception" | "insight" | "investigation",
+): number {
+  const ability = sense === "investigation" ? "int" : "wis";
+  const effect = rollEffectExtras(campaign.id, sheet.id, "skill_check");
+  const state = mergeAdvantage([
+    rollDerivation(sheet.conditions, "skill_check", ability).advantage,
+    exhaustionRollState(sheet.exhaustion ?? 0, "skill_check").advantage,
+    ...conditionRollRiders(sheet.conditions, "check", ability).advantageSources,
+    ...(effect.effectAdvantage ? ["advantage" as const] : []),
+    ...(effect.effectDisadvantage ? ["disadvantage" as const] : []),
+  ]);
+  const swing = state === "advantage" ? 5 : state === "disadvantage" ? -5 : 0;
+  return swing + (effect.effectBonus ?? 0);
 }
 
 export function handleCheckNotice(
@@ -294,7 +331,13 @@ export function handleCheckNotice(
   const noticedBy: string[] = [];
   const missedBy: string[] = [];
   for (const sheet of targets) {
-    const passive = passiveScore(sheet, sense) + weather.passiveMod;
+    const fresh = getSheetById(sheet.id) ?? sheet;
+    // The dead notice nothing.
+    if (fresh.deathSaves?.dead) {
+      missedBy.push(sheet.name);
+      continue;
+    }
+    const passive = passiveScore(campaign, fresh, sense) + weather.passiveMod;
     if (passive >= dc.dc) {
       noticedBy.push(sheet.name);
     } else {

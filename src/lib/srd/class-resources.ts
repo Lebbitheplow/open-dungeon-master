@@ -7,6 +7,7 @@
 
 import customResourcesJson from "@/lib/classes/resources.json";
 import authoredResourcesJson from "@/lib/srd/authored-resources.json";
+import { innateSpellCounterRows } from "@/lib/srd/racial-grants";
 
 export type Recharge = "short" | "long";
 
@@ -172,6 +173,22 @@ export function effectFromFx(fx: ResourceFx | undefined): ResourceEffect {
   }
 }
 
+// What a counter holds when the feature has no limit (Rage at barbarian 20,
+// Wild Shape at druid 20). The stored shape stays { max, used }; a spend
+// from a counter this size is not counted (src/lib/dm/resource-tools.ts).
+export const UNLIMITED_USES = 99;
+
+export function isUnlimited(state: { max: number }): boolean {
+  return state.max >= UNLIMITED_USES;
+}
+
+// What spending the feature costs of a turn in a fight. "none" is a feature
+// used on the character's own turn for nothing (Action Surge). Absent means
+// the feature's many uses cost different things (Ki, Channel Divinity
+// options, the genre counters) and the turn budget is left to the tool that
+// resolves the effect.
+export type ResourceAction = "action" | "bonus" | "none";
+
 export type ResourceDef = {
   id: string;
   // The class(es) whose level scales maxFor. On multiclass sheets the
@@ -185,13 +202,22 @@ export type ResourceDef = {
   // Require the feature name to BE the match term, not merely contain it as
   // a word: "Rage" is barbarian rage, "Road Rage" (road_warrior) is not.
   exact?: boolean;
+  // The classes whose feature this counter belongs to. A feature of the
+  // same name granted by any other class is not this feature: the grifter's
+  // Vanish is counted, the ranger's is not.
+  grantedBy?: string[];
   displayName: string;
-  maxFor: (level: number, abilityMods: Record<string, number>) => number;
+  // classId is the class whose level sized the counter, when one did.
+  maxFor: (level: number, abilityMods: Record<string, number>, classId?: string) => number;
   recharge: Recharge;
   effect: ResourceEffect;
+  action?: ResourceAction;
   // Never spent by choice: the server burns it on a trigger of its own, so
   // use_resource refuses rather than wasting the charge.
   passive?: boolean;
+  // The character level the counter starts at (a tiefling's hellish rebuke
+  // at 3rd); below it the sheet holds no counter.
+  minLevel?: number;
   // One line of SRD truth handed back to the model in the tool result, so a
   // spend never leaves it guessing what the feature does.
   guidance: string;
@@ -202,6 +228,8 @@ export type ResourceDef = {
 };
 
 function rageUses(level: number): number {
+  // Primal Champion's table row: unlimited.
+  if (level >= 20) return UNLIMITED_USES;
   if (level >= 17) return 6;
   if (level >= 12) return 5;
   if (level >= 6) return 4;
@@ -233,7 +261,9 @@ function inspirationDie(level: number): string {
   return "d6";
 }
 
-// Dragonborn breath weapon: d6s that grow with character level.
+// Dragonborn breath weapon: d6s that grow with character level. The save and
+// damage type a spend reports are the ancestry's (src/lib/srd/aoe-spend.ts);
+// the Dexterity save below stands for a dragonborn stored without one.
 function breathDice(level: number): string {
   if (level >= 16) return "5d6";
   if (level >= 11) return "4d6";
@@ -250,9 +280,10 @@ const SRD_RESOURCE_DEFS: ResourceDef[] = [
     displayName: "Rage",
     maxFor: (level) => rageUses(level),
     recharge: "long",
+    action: "bonus",
     effect: { kind: "condition", condition: RAGING, rounds: 10 },
     guidance:
-      "Raging for up to 1 minute: resistance to bludgeoning, piercing, and slashing damage, bonus damage on melee Strength attacks, and advantage on Strength checks and saves. The server applies all of it; the rage ends early if they end it or fall unconscious.",
+      "A bonus action. Raging for up to 1 minute: resistance to bludgeoning, piercing, and slashing damage, bonus damage on melee Strength attacks, and advantage on Strength checks and saves, none of it while wearing heavy armor. The server applies all of it; the rage ends early if they end it, fall unconscious, or end a turn without having attacked or taken damage since their last one.",
   },
   {
     id: "ki",
@@ -283,6 +314,7 @@ const SRD_RESOURCE_DEFS: ResourceDef[] = [
     displayName: "Second Wind",
     maxFor: () => 1,
     recharge: "short",
+    action: "bonus",
     effect: { kind: "heal_self", dice: (level) => `1d10+${level}` },
     guidance: "A bonus action that restores 1d10 + fighter level hit points to the fighter.",
   },
@@ -293,6 +325,7 @@ const SRD_RESOURCE_DEFS: ResourceDef[] = [
     displayName: "Action Surge",
     maxFor: (level) => (level >= 17 ? 2 : 1),
     recharge: "short",
+    action: "none",
     effect: { kind: "narrative" },
     guidance:
       "One additional action this turn, on top of the regular one. Resolve the extra action with its own tool call (a second pc_attack, a cast, a Dash).",
@@ -302,7 +335,9 @@ const SRD_RESOURCE_DEFS: ResourceDef[] = [
     classIds: ["cleric", "paladin"],
     match: ["channel divinity"],
     displayName: "Channel Divinity",
-    maxFor: (level) => channelUses(level),
+    // The paladin's table gives one use at every level; only the cleric's
+    // grows.
+    maxFor: (level, _mods, classId) => (classId === "paladin" ? 1 : channelUses(level)),
     recharge: "short",
     effect: { kind: "narrative" },
     guidance:
@@ -317,6 +352,7 @@ const SRD_RESOURCE_DEFS: ResourceDef[] = [
     // SRD: refills on long rest (short too from bard 5; modeled as long for
     // simplicity, the server errs toward scarcity).
     recharge: "long",
+    action: "bonus",
     effect: { kind: "inspire", die: inspirationDie },
     guidance:
       "The target keeps the inspiration die for up to 10 minutes and adds it to one ability check, attack roll, or saving throw. The server hands it to them and spends it on their next roll automatically.",
@@ -326,8 +362,10 @@ const SRD_RESOURCE_DEFS: ResourceDef[] = [
     classIds: ["druid"],
     match: ["wild shape"],
     displayName: "Wild Shape",
-    maxFor: () => 2,
+    // Archdruid, at druid 20: unlimited.
+    maxFor: (level) => (level >= 20 ? UNLIMITED_USES : 2),
     recharge: "short",
+    action: "action",
     effect: { kind: "wild_shape" },
     guidance:
       "The druid takes on a beast's form: its hit points, AC, and natural attacks, keeping their own mind. Damage spills back to their own hit points when the form drops.",
@@ -339,6 +377,7 @@ const SRD_RESOURCE_DEFS: ResourceDef[] = [
     displayName: "Lay on Hands (HP pool)",
     maxFor: (level) => Math.max(5, level * 5),
     recharge: "long",
+    action: "action",
     effect: { kind: "heal_pool" },
     guidance:
       "A touch that restores hit points straight from the paladin's pool: the amount spent is the amount healed. Spend 5 instead to cure one disease or neutralize one poison.",
@@ -396,10 +435,64 @@ const SRD_RESOURCE_DEFS: ResourceDef[] = [
     displayName: "Breath Weapon",
     maxFor: () => 1,
     recharge: "short",
+    action: "action",
     effect: { kind: "aoe", dice: breathDice, save: "dex" },
     guidance:
-      "A cone or line of the dragonborn's ancestral damage type. Resolve it with aoe_damage using the dice and DC this call reports, and the damage type their ancestry dictates.",
+      "A cone or line of the dragonborn's ancestral damage type. Resolve it with aoe_damage using the dice, save, DC and damage type this call reports (the ancestry sets the type and the save).",
   },
+  {
+    id: "indomitable",
+    classIds: ["fighter"],
+    // "Indomitable (1 use)"; the barbarian's Indomitable Might is another
+    // feature altogether, which the granting class tells apart.
+    grantedBy: ["fighter"],
+    match: ["indomitable"],
+    displayName: "Indomitable",
+    maxFor: (level) => (level >= 17 ? 3 : level >= 13 ? 2 : 1),
+    recharge: "long",
+    effect: { kind: "narrative" },
+    guidance:
+      "The fighter rerolls a saving throw they just failed and must use the new roll. Roll the save again with request_roll.",
+  },
+  {
+    id: "cleansing_touch",
+    classIds: ["paladin"],
+    grantedBy: ["paladin"],
+    match: ["cleansing touch"],
+    displayName: "Cleansing Touch",
+    maxFor: (_level, mods) => Math.max(1, mods.cha ?? 0),
+    recharge: "long",
+    action: "action",
+    effect: { kind: "narrative" },
+    guidance:
+      "An action that ends one spell on the paladin or on a willing creature they touch. Clear what the spell left with clear_condition.",
+  },
+  {
+    id: "stroke_of_luck",
+    classIds: ["rogue"],
+    grantedBy: ["rogue"],
+    match: ["stroke of luck"],
+    displayName: "Stroke of Luck",
+    maxFor: () => 1,
+    recharge: "short",
+    effect: { kind: "narrative" },
+    guidance:
+      "An attack that missed a target in range hits instead, or a failed ability check is treated as a 20 on the d20.",
+  },
+  ...[6, 7, 8, 9].map(
+    (spellLevel): ResourceDef => ({
+      id: `mystic_arcanum_${spellLevel}`,
+      classIds: ["warlock"],
+      grantedBy: ["warlock"],
+      match: [`mystic arcanum (${spellLevel}th level)`],
+      exact: true,
+      displayName: `Mystic Arcanum (${spellLevel}th level)`,
+      maxFor: () => 1,
+      recharge: "long",
+      effect: { kind: "narrative" },
+      guidance: `The warlock's one ${spellLevel}th level arcanum is cast once without a spell slot, and again only after a long rest. Resolve the spell with its own tool.`,
+    }),
+  ),
 ];
 
 // The custom genre-class counters, generated from the *-features.json
@@ -410,6 +503,8 @@ type CustomResourceRow = {
   id: string;
   displayName: string;
   match: string[];
+  // The genre classes that have the feature.
+  classes?: string[];
   uses: number;
   ability: "str" | "dex" | "con" | "int" | "wis" | "cha" | null;
   recharge: Recharge;
@@ -425,8 +520,11 @@ const CUSTOM_RESOURCE_DEFS: ResourceDef[] = (
 ).resources.map((row) => ({
   id: row.id,
   match: row.match,
-  // Custom feature names are distinctive, so a plain contains-word match is
-  // safe; exactness is not needed the way it is for "rage".
+  // A genre counter belongs to the feature of exactly that name, granted by
+  // the class it was written for. Containing its words is not enough: a
+  // rigger's Hardened Uplink is not the road warrior's Hardened.
+  exact: true,
+  ...(row.classes?.length ? { grantedBy: row.classes } : {}),
   displayName: row.displayName,
   maxFor: (_level: number, mods: Record<string, number>) => {
     const abilityFloor = row.ability ? Math.max(1, mods[row.ability] ?? 0) : row.uses;
@@ -500,10 +598,34 @@ const SUBCLASS_RESOURCE_DEFS: ResourceDef[] = (
   ...(row.passive ? { passive: true } : {}),
 }));
 
+// The spells a race casts once a day by nature (a tiefling's hellish rebuke
+// from 3rd level, darkness from 5th; a drow's faerie fire and darkness), on
+// the trait that carries them. Below the level the spell arrives at the
+// counter has no use, and populateResources leaves it off the sheet.
+// One counter per spell: a tiefling's darkness and a drow's are the same
+// counter on two traits.
+const ORDINAL = ["", "1st", "2nd", "3rd"];
+const INNATE_RESOURCE_DEFS: ResourceDef[] = [
+  ...new Map(innateSpellCounterRows().map((row) => [row.id, row])).values(),
+].map((row) => {
+  const rows = innateSpellCounterRows().filter((entry) => entry.id === row.id);
+  return {
+    id: row.id,
+    match: [...new Set(rows.map((entry) => entry.trait))],
+    displayName: row.spell,
+    maxFor: () => 1,
+    minLevel: Math.min(...rows.map((entry) => entry.gainedAt)),
+    recharge: "long",
+    effect: { kind: "narrative" },
+    guidance: `${row.spell} once, cast as a ${ORDINAL[row.castAt] ?? `${row.castAt}th`}-level spell, and again after a long rest.`,
+  };
+});
+
 export const RESOURCE_DEFS: ResourceDef[] = [
   ...SRD_RESOURCE_DEFS,
   ...CUSTOM_RESOURCE_DEFS,
   ...SUBCLASS_RESOURCE_DEFS,
+  ...INNATE_RESOURCE_DEFS,
 ];
 
 export type ResourceState = { max: number; used: number };
@@ -544,35 +666,75 @@ export function matchResource(term: string): ResourceDef | null {
   );
 }
 
-// The level a resource counter scales by. Single-class (no class list):
-// the character level, exactly as before. Multiclass: the def's own class
-// when the sheet has levels in it, else the level of the class that granted
-// the matching feature, else the character level (race features like Breath
+// The level a resource counter scales by, and the class it came from.
+// Single-class (no class list): the character level, exactly as before, from
+// the class that granted the feature. Multiclass: the def's own class when
+// the sheet has levels in it, else the level of the class that granted the
+// matching feature, else the character level (race features like Breath
 // Weapon scale by character level, per RAW).
 function resourceLevelFor(
   def: ResourceDef,
   grantingClassId: string | undefined,
   level: number,
   classes: Array<{ id: string; level: number }> | undefined,
-): number {
+): { level: number; classId: string | undefined } {
+  const granting = grantingClassId?.toLowerCase();
   if (!classes?.length || classes.length < 2) {
-    return level;
+    return { level, classId: granting ?? classes?.[0]?.id.toLowerCase() };
   }
   const levelOf = (classId: string) =>
     classes.find((entry) => entry.id.toLowerCase() === classId.toLowerCase())?.level ?? 0;
   for (const classId of def.classIds ?? []) {
     const held = levelOf(classId);
     if (held > 0) {
-      return held;
+      return { level: held, classId: classId.toLowerCase() };
     }
   }
-  if (grantingClassId) {
-    const held = levelOf(grantingClassId);
+  if (granting) {
+    const held = levelOf(granting);
     if (held > 0) {
-      return held;
+      return { level: held, classId: granting };
     }
   }
-  return level;
+  return { level, classId: granting };
+}
+
+const plainName = (value: string) =>
+  value.trim().toLowerCase().replace(/[^a-z0-9()]+/g, " ").trim();
+
+// "Hardened (2 uses)" is the feature Hardened, grown: the suffix is what an
+// upgrade line adds to the name of the feature it upgrades.
+const withoutUses = (name: string) => name.replace(/\s*\((?:\d+|[a-z]+) uses?\)\s*$/i, "");
+
+// Whether a feature on a sheet is the one this counter belongs to: the name
+// matches (exactly for the defs that ask for it, as whole words otherwise),
+// and the class that granted the feature is one the counter was written for.
+// A feature that names no class (story grants, sheets written before the
+// class was kept) is matched on its name alone.
+function featureHolds(def: ResourceDef, feature: { name: string; classId?: string }): boolean {
+  if (def.grantedBy?.length && feature.classId) {
+    const granting = feature.classId.toLowerCase();
+    if (!def.grantedBy.some((classId) => classId.toLowerCase() === granting)) {
+      return false;
+    }
+  }
+  const name = feature.name.trim().toLowerCase();
+  return def.match.some((fragment) => {
+    if (name === fragment || plainName(withoutUses(name)) === plainName(fragment)) {
+      return true;
+    }
+    if (def.upgrades?.some((upgrade) => plainName(upgrade.match) === plainName(name))) {
+      return true;
+    }
+    return !def.exact && containsWord(name, fragment);
+  });
+}
+
+// The "(N uses)" a feature's own name states, which is the count its class
+// table gives at that level.
+function usesNamed(name: string): number | null {
+  const stated = /\((\d+) uses?\)\s*$/i.exec(name.trim());
+  return stated ? Number(stated[1]) : null;
 }
 
 // The level a resource's scaling functions should receive for this sheet:
@@ -587,13 +749,8 @@ export function resourceLevel(
     features?: Array<{ name: string; classId?: string }>;
   },
 ): number {
-  const matched = sheet.features?.find((feature) => {
-    const name = feature.name.trim().toLowerCase();
-    return def.match.some(
-      (fragment) => name === fragment || (!def.exact && containsWord(name, fragment)),
-    );
-  });
-  return resourceLevelFor(def, matched?.classId, sheet.level, sheet.classes);
+  const matched = sheet.features?.find((feature) => featureHolds(def, feature));
+  return resourceLevelFor(def, matched?.classId, sheet.level, sheet.classes).level;
 }
 
 // Builds the resources map from the features list: features that map to a
@@ -609,24 +766,26 @@ export function populateResources(
   classes?: Array<{ id: string; level: number }>,
 ): ResourceMap {
   const out: ResourceMap = {};
-  const featureNames = features.map((feature) => feature.name.trim().toLowerCase());
   for (const def of RESOURCE_DEFS) {
-    const matched = features.find((feature) => {
-      const name = feature.name.trim().toLowerCase();
-      return def.match.some(
-        (fragment) => name === fragment || (!def.exact && containsWord(name, fragment)),
-      );
-    });
+    const held = features.filter((feature) => featureHolds(def, feature));
+    const matched = held[0];
     if (!matched) {
       continue;
     }
-    const defLevel = resourceLevelFor(def, matched.classId, level, classes);
-    let max = def.maxFor(defLevel, abilityMods);
-    // A feature that upgrades this one raises the ceiling.
-    for (const upgrade of def.upgrades ?? []) {
-      if (featureNames.includes(upgrade.match)) {
-        max = Math.max(max, upgrade.uses);
-      }
+    const scaled = resourceLevelFor(def, matched.classId, level, classes);
+    if (def.minLevel && level < def.minLevel) {
+      // A use the character has not reached yet (a tiefling's hellish
+      // rebuke before 3rd level) is no counter at all.
+      continue;
+    }
+    let max = def.maxFor(scaled.level, abilityMods, scaled.classId);
+    // A feature that upgrades this one raises the ceiling: by the row the
+    // catalog wrote for it, or by the count its own name states.
+    for (const feature of held) {
+      const name = feature.name.trim().toLowerCase();
+      const row = def.upgrades?.find((upgrade) => plainName(upgrade.match) === plainName(name));
+      const stated = def.upgrades ? usesNamed(name) : null;
+      max = Math.max(max, row?.uses ?? 0, stated ?? 0);
     }
     const used = Math.min(existing?.[def.id]?.used ?? 0, max);
     out[def.id] = { max, used };

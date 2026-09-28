@@ -209,4 +209,287 @@ test("every catalog entry reaches a handler through the façade", () => {
   assert.deepEqual(orphans, [], `catalog entries with no dispatch arm: ${orphans.join(", ")}`);
 });
 
+// ---- every form sends the fields its handler reads ----
+//
+// A form whose field is called enemyId, in front of a handler that reads
+// targetEnemyId, is refused as invalid arguments however it is filled in.
+// So each catalog entry's field names are held against the property names
+// of the tool definition the model is given, which is written beside the
+// handler's own schema. Read textually, like everything above.
+
+// The index of the brace that closes the one at `from`.
+function closingBrace(source, from) {
+  let depth = 0;
+  for (let index = from; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === '"' || char === "'" || char === "`") {
+      index += 1;
+      while (index < source.length && source[index] !== char) {
+        index += source[index] === "\\" ? 2 : 1;
+      }
+      continue;
+    }
+    if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+  return -1;
+}
+
+// The keys written directly inside an object literal's braces. A spread at
+// that level is reported as the key "..." since it brings names this scan
+// cannot see.
+function topLevelKeys(objectText) {
+  const keys = [];
+  let depth = 0;
+  for (let index = 0; index < objectText.length; index += 1) {
+    const char = objectText[index];
+    if (char === '"' || char === "'" || char === "`") {
+      const end = objectText.indexOf(char, index + 1);
+      index = end < 0 ? objectText.length : end;
+      continue;
+    }
+    if (char === "{" || char === "[") {
+      depth += 1;
+    } else if (char === "}" || char === "]") {
+      depth -= 1;
+    } else if (depth === 1 && objectText.startsWith("...", index)) {
+      keys.push("...");
+      index += 2;
+    } else if (depth === 1 && /[A-Za-z_]/.test(char) && /[\s{,]/.test(objectText[index - 1] ?? " ")) {
+      const match = /^([A-Za-z_][A-Za-z0-9_]*)\s*:/.exec(objectText.slice(index));
+      if (match) {
+        keys.push(match[1]);
+        index += match[0].length - 1;
+      }
+    }
+  }
+  return keys;
+}
+
+// The property names of one tool's parameters, or null when no source
+// declares the tool with a literal properties object.
+// Where tool definitions are written: the scan list above, and the two
+// modules whose tools reach it by name only.
+const DEFINITION_SOURCES = [...TOOL_SOURCES, "src/lib/dm/pc-attack.ts", "src/lib/dm/map-tools.ts"];
+
+function toolProperties(name) {
+  for (const relative of DEFINITION_SOURCES) {
+    const source = read(relative);
+    // A full definition: function: { name: "x", ... properties: { ... } }.
+    const defined = new RegExp(`function:\\s*\\{\\s*\\n\\s*name:\\s*"${name}"`).exec(source);
+    if (defined) {
+      const end = closingBrace(source, source.indexOf("{", defined.index));
+      const body = source.slice(defined.index, end + 1);
+      const at = body.indexOf("properties:");
+      if (at < 0) {
+        continue;
+      }
+      const open = body.indexOf("{", at);
+      const keys = topLevelKeys(body.slice(open, closingBrace(body, open) + 1));
+      return { keys, open: keys.includes("...") };
+    }
+    // mutations.ts: tool("x", "description", { ...properties }, [required]),
+    // every one of which also takes characterId.
+    const helper = new RegExp(`^\\s*tool\\(\\s*\\n?\\s*"${name}"`, "m").exec(source);
+    if (helper) {
+      const open = source.indexOf("{", helper.index);
+      const close = closingBrace(source, open);
+      const keys = topLevelKeys(source.slice(open, close + 1));
+      // characterProperty, which the helper spreads into every one of them.
+      return { keys: ["characterId", "reason", ...keys], open: keys.includes("...") };
+    }
+  }
+  return null;
+}
+
+// What the façade folds into the handler's shape before dispatch
+// (src/lib/dm/invoke.ts normalizeArgs): the form's own names for them.
+const FOLDED_BY_THE_FACADE = {
+  set_effect: ["field", "mode", "value"],
+};
+
+// What a handler folds itself: update_sheet turns the form's one named field
+// and its value into the sheet's own key (src/lib/dm/update-sheet-args.ts).
+const FOLDED_BY_THE_HANDLER = {
+  update_sheet: ["field", "value"],
+};
+
+// Fields only a person is offered: the handler reads them, and the model's
+// tool definition leaves them out on purpose (who may see a roll or a quest,
+// which handout to take down).
+const FOR_A_PERSON_ONLY = {
+  request_roll: ["visibility"],
+  set_quest: ["visibility"],
+  dismiss_handout: ["handoutId"],
+};
+
+function formDrift(entry) {
+  const found = toolProperties(entry.name);
+  if (!found || found.open) {
+    return null;
+  }
+  const folded = [
+    ...(FOLDED_BY_THE_FACADE[entry.name] ?? []),
+    ...(FOLDED_BY_THE_HANDLER[entry.name] ?? []),
+    ...(FOR_A_PERSON_ONLY[entry.name] ?? []),
+  ];
+  return entry.fields
+    .map((field) => field.name)
+    .filter((field) => !found.keys.includes(field) && !folded.includes(field));
+}
+
+const { COMBAT_ADJUDICATIONS } = await import("../src/lib/dm/catalog-combat.ts");
+const COMBAT_NAMES = new Set(COMBAT_ADJUDICATIONS.map((entry) => entry.name));
+
+test("the property scan reads the tools it is pointed at", () => {
+  assert.deepEqual(toolProperties("take_action").keys.sort(), [
+    "action", "characterId", "reason", "shove", "targetCharacterId", "targetEnemyId",
+  ]);
+  assert.ok(toolProperties("apply_damage").keys.includes("amount"));
+  assert.ok(toolProperties("apply_damage").keys.includes("characterId"));
+  assert.ok(toolProperties("pc_attack").keys.includes("targetEnemyId"));
+});
+
+test("every combat form sends only fields its handler reads", () => {
+  const drift = {};
+  for (const entry of COMBAT_ADJUDICATIONS) {
+    const extra = formDrift(entry);
+    if (extra === null) {
+      continue;
+    }
+    if (extra.length) {
+      drift[entry.name] = extra;
+    }
+  }
+  assert.deepEqual(drift, {}, `forms sending fields no handler reads: ${JSON.stringify(drift)}`);
+});
+
+// What the model is told to send and the handler does without: end_encounter
+// reads the outcome off the roster when none is given
+// (src/lib/dm/encounter-logic.ts coerceEncounterOutcome).
+const HANDLER_FILLS_IN = {
+  end_encounter: ["outcome"],
+};
+
+test("every combat form offers what its handler requires", () => {
+  const missing = {};
+  for (const entry of COMBAT_ADJUDICATIONS) {
+    for (const relative of DEFINITION_SOURCES) {
+      const source = read(relative);
+      const defined = new RegExp(`function:\\s*\\{\\s*\\n\\s*name:\\s*"${entry.name}"`).exec(source);
+      if (!defined) {
+        continue;
+      }
+      const end = closingBrace(source, source.indexOf("{", defined.index));
+      // The last `required` in the definition is the tool's own; any before
+      // it belong to the items of an array argument.
+      const lists = [...source.slice(defined.index, end + 1).matchAll(/required:\s*\[([^\]]*)\]/g)];
+      const required = lists.at(-1);
+      const names = required ? [...required[1].matchAll(/"([A-Za-z_]+)"/g)].map((match) => match[1]) : [];
+      const offered = entry.fields.filter((field) => field.required).map((field) => field.name);
+      const tolerated = HANDLER_FILLS_IN[entry.name] ?? [];
+      const absent = names.filter((name) => !offered.includes(name) && !tolerated.includes(name));
+      if (absent.length) {
+        missing[entry.name] = absent;
+      }
+    }
+  }
+  assert.deepEqual(missing, {}, `forms that do not require what the handler does: ${JSON.stringify(missing)}`);
+});
+
+// The catalogs outside combat are held to the same rule. What is listed here
+// is the drift they carry today, entry by entry, so the list can only shrink:
+// a form that is fixed has to come off it, and a new mismatch fails at once.
+const KNOWN_FORM_DRIFT = {};
+
+test("the other forms carry no drift beyond what is already recorded", () => {
+  const drift = {};
+  for (const entry of ADJUDICATIONS) {
+    if (COMBAT_NAMES.has(entry.name)) {
+      continue;
+    }
+    const extra = formDrift(entry);
+    if (extra?.length) {
+      drift[entry.name] = extra.sort();
+    }
+  }
+  assert.deepEqual(drift, KNOWN_FORM_DRIFT);
+});
+
+// What the model must send and a person is asked for another way.
+const REQUIRED_ANOTHER_WAY = {
+  ...HANDLER_FILLS_IN,
+  // The form's flat fields become the one modifier (FOLDED_BY_THE_FACADE).
+  set_effect: ["modifiers"],
+  // A checkbox is never missing: it starts ticked (CatalogField.default).
+  move_party: ["visionClear"],
+  update_location: ["visionClear"],
+  // A slot burned with no spell named still spends (Divine Smite, ODM's
+  // rule), so the console leaves the spell optional.
+  use_spell_slot: ["spell"],
+};
+
+test("every other form requires what its handler requires", () => {
+  const missing = {};
+  for (const entry of ADJUDICATIONS) {
+    if (COMBAT_NAMES.has(entry.name)) {
+      continue;
+    }
+    const offered = entry.fields.filter((field) => field.required).map((field) => field.name);
+    const tolerated = REQUIRED_ANOTHER_WAY[entry.name] ?? [];
+    for (const relative of DEFINITION_SOURCES) {
+      const source = read(relative);
+      const defined = new RegExp(`function:\\s*\\{\\s*\\n\\s*name:\\s*"${entry.name}"`).exec(source);
+      if (!defined) {
+        continue;
+      }
+      const end = closingBrace(source, source.indexOf("{", defined.index));
+      const lists = [...source.slice(defined.index, end + 1).matchAll(/required:\s*\[([^\]]*)\]/g)];
+      const required = lists.at(-1);
+      const names = required ? [...required[1].matchAll(/"([A-Za-z_]+)"/g)].map((match) => match[1]) : [];
+      const absent = names.filter((name) => !offered.includes(name) && !tolerated.includes(name));
+      if (absent.length) {
+        missing[entry.name] = absent;
+      }
+    }
+  }
+  assert.deepEqual(missing, {}, `forms that do not require what the handler does: ${JSON.stringify(missing)}`);
+});
+
+const { foldFieldValue, UPDATE_SHEET_FIELDS } = await import("../src/lib/dm/update-sheet-args.ts");
+const SCORES = { str: 10, dex: 12, con: 14, int: 8, wis: 13, cha: 15 };
+
+test("Correct a sheet turns a named field and its value into the sheet's own key", () => {
+  assert.deepEqual(foldFieldValue({ field: "level", value: "5" }, SCORES), { args: { level: 5 } });
+  assert.deepEqual(foldFieldValue({ field: "alignment", value: " LG " }, SCORES), { args: { alignment: "LG" } });
+  assert.deepEqual(foldFieldValue({ field: "Max HP", value: 40 }, SCORES), { args: { maxHp: 40 } });
+  assert.deepEqual(foldFieldValue({ field: "hp", value: "1,000" }, SCORES), { args: { currentHp: 1000 } });
+  assert.deepEqual(foldFieldValue({ field: "str", value: "16" }, SCORES), {
+    args: { abilities: { ...SCORES, str: 16 } },
+  });
+  assert.deepEqual(foldFieldValue({ field: "conditions", value: "poisoned, prone" }, SCORES), {
+    args: { conditions: ["poisoned", "prone"] },
+  });
+  assert.deepEqual(foldFieldValue({ field: "conditions", value: "none" }, SCORES), { args: { conditions: [] } });
+  // The model's own keys pass through, and win over the pair beside them.
+  assert.deepEqual(foldFieldValue({ level: 3, gold: 10 }, SCORES), { args: { level: 3, gold: 10 } });
+  assert.deepEqual(foldFieldValue({ field: "level", value: 9, level: 4 }, SCORES), { args: { level: 4 } });
+  // What cannot be read is refused, never guessed.
+  assert.match(foldFieldValue({ field: "shoe size", value: 9 }, SCORES).error, /no field called/);
+  assert.match(foldFieldValue({ field: "level", value: "five" }, SCORES).error, /whole number/);
+  assert.match(foldFieldValue({ field: "level", value: "4.5" }, SCORES).error, /whole number/);
+  assert.match(foldFieldValue({ field: "level" }, SCORES).error, /becomes/);
+  // Every field the form offers is one the fold knows.
+  for (const field of UPDATE_SHEET_FIELDS) {
+    const value = field.kind === "text" ? "x" : field.kind === "list" ? "prone" : "3";
+    assert.ok("args" in foldFieldValue({ field: field.name, value }, SCORES), field.name);
+  }
+});
+
 console.log(`invoke-catalog: ${passed} tests passed`);

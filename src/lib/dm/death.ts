@@ -4,9 +4,16 @@ import { insertSheetAudit } from "@/lib/db/sheet-audit";
 import { insertCharacterEvent } from "@/lib/db/character-events";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { insertRoll } from "@/lib/db/rolls";
-import { rollExpression } from "@/lib/dice";
+import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
-import type { CharacterSheet, DeathSaves } from "@/lib/schemas/sheet";
+import type { CharacterSheet, DeathSaves, FullPatchSheetInput } from "@/lib/schemas/sheet";
+import { effectiveMaxHp, exhaustionRollState } from "@/lib/dm/condition-logic";
+import {
+  downConditions,
+  stableTimer,
+  wakeConditions,
+  withoutStableTimer,
+} from "@/lib/dm/vitals-logic";
 import {
   applyDeathSaveRoll,
   freshDeathTrack,
@@ -19,6 +26,12 @@ import {
 // and healing or stabilizing clears the track. Every write is audited so
 // the party lead can undo it. This module must not import mutations.ts or
 // encounter-tools.ts (both import it).
+//
+// The body follows the track (src/lib/dm/vitals-logic.ts): a character who
+// drops is unconscious and prone, one who is healed wakes and stays prone,
+// and a stable one regains a hit point once 1d4 hours have passed.
+
+type DeathExtra = Pick<FullPatchSheetInput, "currentHp" | "conditions" | "conditionMeta">;
 
 function writeDeathState(
   campaign: Campaign,
@@ -27,7 +40,7 @@ function writeDeathState(
   deathSaves: DeathSaves,
   kind: string,
   reason: string,
-  extraPatch: { currentHp?: number } = {},
+  extraPatch: DeathExtra = {},
 ) {
   const patch = { deathSaves, ...extraPatch };
   const updated = patchSheet(sheet.id, patch);
@@ -102,11 +115,27 @@ export function applyDamageDeathHook(
     return {};
   }
 
-  // Already at 0 with a track: this damage adds automatic failures and
-  // breaks stabilization.
+  // Already at 0 with a track: damage as large as the hit point maximum
+  // kills outright, anything less adds automatic failures and breaks
+  // stabilization.
   if (!math.dropped && fresh.deathSaves && !fresh.deathSaves.dead) {
+    if (isMassiveDamage(math.overkill, effectiveMaxHp(fresh))) {
+      const track = { ...freshDeathTrack(), failures: 3, dead: true };
+      writeDeathState(campaign, turnId, fresh, track, "death_state", "massive damage at 0 HP");
+      recordDeath(campaign, fresh, "killed outright by massive damage");
+      tableNote(campaign, `${fresh.name} is killed outright by massive damage.`);
+      return { dead: true, note: `${fresh.name} is killed INSTANTLY (massive damage while at 0 HP). This death is real; narrate it.` };
+    }
     const next = onDamageAtZero(fresh.deathSaves, crit);
-    writeDeathState(campaign, turnId, fresh, next, "death_state", "damage while dying");
+    writeDeathState(
+      campaign,
+      turnId,
+      fresh,
+      next,
+      "death_state",
+      "damage while dying",
+      fresh.deathSaves.stable ? { conditionMeta: withoutStableTimer(fresh.conditionMeta) } : {},
+    );
     if (next.dead) {
       recordDeath(campaign, fresh, "wounds suffered while dying");
       tableNote(campaign, `${fresh.name} has died of their wounds.`);
@@ -119,14 +148,22 @@ export function applyDamageDeathHook(
   }
 
   if (math.dropped) {
-    if (isMassiveDamage(math.overkill, fresh.maxHp)) {
+    if (isMassiveDamage(math.overkill, effectiveMaxHp(fresh))) {
       const track = { ...freshDeathTrack(), failures: 3, dead: true };
       writeDeathState(campaign, turnId, fresh, track, "death_state", "massive damage");
       recordDeath(campaign, fresh, "killed outright by massive damage");
       tableNote(campaign, `${fresh.name} is killed outright by massive damage.`);
       return { dead: true, note: `${fresh.name} is killed INSTANTLY (massive damage). This death is real; narrate it.` };
     }
-    writeDeathState(campaign, turnId, fresh, freshDeathTrack(), "death_state", "dropped to 0 HP");
+    writeDeathState(
+      campaign,
+      turnId,
+      fresh,
+      freshDeathTrack(),
+      "death_state",
+      "dropped to 0 HP",
+      downConditions(fresh),
+    );
     return {
       dying: true,
       note: `${fresh.name} is unconscious and DYING at 0 HP. The server rolls their death saves automatically in combat. Healing any amount revives them; the stabilize tool stops the dying after a successful DC 10 Medicine check or a healer's kit.`,
@@ -141,15 +178,71 @@ export function healDeathHook(
   turnId: string,
   preSheet: CharacterSheet,
 ): Record<string, unknown> {
-  if (!preSheet.deathSaves || preSheet.deathSaves.dead) {
+  if (preSheet.deathSaves?.dead || preSheet.currentHp > 0) {
     return {};
   }
   const fresh = getSheetById(preSheet.id);
-  if (!fresh || !fresh.deathSaves) {
+  if (!fresh || fresh.currentHp <= 0) {
     return {};
   }
-  writeDeathState(campaign, turnId, fresh, null, "death_state", "healed while dying");
-  return { note: `${fresh.name} is no longer dying; they are conscious again.` };
+  // A sheet that reached 0 before the track or the conditions were kept has
+  // nothing to clear.
+  const asleep = fresh.conditions.some((entry) => entry.toLowerCase() === "unconscious");
+  if (!fresh.deathSaves && !asleep) {
+    return {};
+  }
+  writeDeathState(
+    campaign,
+    turnId,
+    fresh,
+    null,
+    "death_state",
+    "healed while dying",
+    wakeConditions(fresh),
+  );
+  return {
+    note: `${fresh.name} is no longer dying; they are conscious again, and prone until they stand.`,
+  };
+}
+
+// A stabilized creature's wait for its hit point: 1d4 hours, rolled here so
+// the table sees the die. Returns the condition metadata carrying the wait.
+export function rollStableTimer(campaign: Campaign, sheet: CharacterSheet) {
+  const outcome = rollExpression("1d4");
+  const roll = insertRoll({
+    campaignId: campaign.id,
+    characterId: sheet.id,
+    requestedBy: "dm",
+    kind: "custom",
+    detail: `hours until ${sheet.name} regains 1 hit point (1d4)`,
+    result: outcome,
+  });
+  publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", {
+    roll,
+    source: "digital",
+  });
+  const held = downConditions(sheet);
+  return {
+    hours: outcome.total,
+    conditions: held.conditions,
+    conditionMeta: stableTimer(held, outcome.total),
+  };
+}
+
+// The hit point a stable creature regains when its wait is over. Called by
+// the condition clocks (src/lib/dm/condition-tick.ts); returns the line for
+// the table, or null when the character is not waiting.
+export function wakeStable(campaign: Campaign, characterId: string): string | null {
+  const sheet = getSheetById(characterId);
+  const track = sheet?.deathSaves;
+  if (!sheet || !track?.stable || track.dead || sheet.currentHp > 0) {
+    return null;
+  }
+  writeDeathState(campaign, null, sheet, null, "death_state", "stable, and the hours have passed", {
+    currentHp: 1,
+    ...wakeConditions(sheet),
+  });
+  return `${sheet.name} comes round with 1 hit point.`;
 }
 
 // One automatic death save, rolled server-side when the initiative pointer
@@ -161,14 +254,18 @@ export function rollDeathSave(campaign: Campaign, characterId: string): void {
   if (!sheet || !track || track.stable || track.dead || sheet.currentHp > 0) {
     return;
   }
-  const outcome = rollExpression("1d20");
+  // A death save is a saving throw, so exhaustion level 3 costs it
+  // disadvantage like any other.
+  const tired = exhaustionRollState(sheet.exhaustion ?? 0, "saving_throw");
+  const outcome = rollExpression(d20Expression(0, tired.advantage));
   const roll = insertRoll({
     campaignId: campaign.id,
     characterId: sheet.id,
     requestedBy: "dm",
     kind: "saving_throw",
-    detail: "death save",
+    detail: `death save${tired.note ? ` (${tired.note})` : ""}`,
     dc: 10,
+    ...(tired.advantage === "none" ? {} : { advantage: tired.advantage }),
     result: outcome,
   });
   publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", {
@@ -179,21 +276,27 @@ export function rollDeathSave(campaign: Campaign, characterId: string): void {
   if (applied.outcome === "revive") {
     writeDeathState(campaign, null, sheet, null, "death_state", "natural 20 death save", {
       currentHp: 1,
+      ...wakeConditions(sheet),
     });
     tableNote(campaign, `${sheet.name} rolls a natural 20 on their death save and regains 1 HP!`);
+    return;
+  }
+  if (applied.outcome === "stable") {
+    const wait = rollStableTimer(campaign, sheet);
+    writeDeathState(campaign, null, sheet, applied.track, "death_state", "automatic death save", {
+      conditions: wait.conditions,
+      conditionMeta: wait.conditionMeta,
+    });
+    tableNote(
+      campaign,
+      `${sheet.name} succeeds their third death save and is stable (unconscious at 0 HP). They regain 1 hit point in ${wait.hours} hour${wait.hours === 1 ? "" : "s"}.`,
+    );
     return;
   }
   writeDeathState(campaign, null, sheet, applied.track, "death_state", "automatic death save");
   if (applied.outcome === "dead") {
     recordDeath(campaign, sheet, "failed death saving throws");
     tableNote(campaign, `${sheet.name} fails their final death save and dies.`);
-    return;
-  }
-  if (applied.outcome === "stable") {
-    tableNote(
-      campaign,
-      `${sheet.name} succeeds their third death save and is stable (unconscious at 0 HP).`,
-    );
     return;
   }
   tableNote(

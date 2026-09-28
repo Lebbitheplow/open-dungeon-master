@@ -65,6 +65,10 @@ export type CampaignDraft = {
   // Prep built in a workshop, brought in right after the row exists.
   contentImport: ImportSelection;
   companions: GameSettings["companions"];
+  // How characters are built at this table: hit points per level and what a
+  // new hero starts with (src/lib/srd/hit-points.ts, starting-wealth.ts).
+  hpMethod: GameSettings["hpMethod"];
+  startingWealth: GameSettings["startingWealth"];
   maxCompanions: number;
   maxGuests: number;
   voiceChat: GameSettings["voice"];
@@ -119,6 +123,8 @@ export const DEFAULT_DRAFT: CampaignDraft = {
   loreDrafts: [],
   contentImport: EMPTY_SELECTION,
   companions: "auto",
+  hpMethod: "average",
+  startingWealth: "equipment",
   maxCompanions: 2,
   maxGuests: 2,
   voiceChat: {

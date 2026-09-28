@@ -6,7 +6,8 @@ import {
 } from "@/lib/srd/weapons";
 import { magicItemBonus } from "@/lib/srd/armor";
 import type { CombatRiders } from "@/lib/srd/feature-effects";
-import { RAGING, rageDamageBonus } from "@/lib/srd/class-resources";
+import { rageDamageBonus } from "@/lib/srd/class-resources";
+import { rageApplies } from "@/lib/dm/damage-logic";
 import type { EquipmentItem } from "@/lib/schemas/sheet";
 import type { SheetDerived } from "@/lib/srd";
 
@@ -22,6 +23,10 @@ export type ResolvedWeapon = {
   // null = improvised weapon or unarmed strike (no SRD profile).
   srd: SrdWeapon | null;
   unarmed: boolean;
+  // False when the attack named a real weapon the character does not carry.
+  // An unarmed strike and an improvised object picked up by name are always
+  // "carried": neither comes out of the pack.
+  carried?: boolean;
 };
 
 export type AttackProfile = {
@@ -51,6 +56,13 @@ export type AttackProfile = {
   sneakEligible: boolean;
   // SRD heavy property: Small creatures attack with it at disadvantage.
   heavy: boolean;
+  // Long range in tiles for ranged and thrown use: past rangeTiles a shot is
+  // at disadvantage, past this it cannot be made. Absent on attacks with no
+  // printed long range, which reach twice their normal one.
+  longRangeTiles?: number;
+  // The weapon's own properties (light, loading, two-handed...), for the
+  // rules about hands and turns (src/lib/dm/attack-rules.ts).
+  properties?: string[];
   // Human-readable notes for the tool result ("Archery: +2 to hit").
   riderNotes: string[];
 };
@@ -79,9 +91,14 @@ export function resolveAttackWeapon(
   const arg = (weaponArg ?? "").trim();
   if (arg) {
     if (/unarmed|fist|punch|kick/i.test(arg)) {
-      return { displayName: "Unarmed strike", srd: null, unarmed: true };
+      return { displayName: "Unarmed strike", srd: null, unarmed: true, carried: true };
     }
-    const carriedItem = equipment.find((item) => itemMatchesTerm(item.name, arg));
+    // The exact name wins over a name that merely contains it, so a
+    // "Longsword" asked for beside a "Longsword +1" is the plain one.
+    const wanted = arg.toLowerCase();
+    const carriedItem =
+      equipment.find((item) => item.name.trim().toLowerCase() === wanted) ??
+      equipment.find((item) => itemMatchesTerm(item.name, arg));
     // A carried homebrew weapon carries its own block (src/lib/homebrew/
     // gear.ts) and wins over a name that happens to resemble an SRD one.
     const srd =
@@ -90,6 +107,10 @@ export function resolveAttackWeapon(
       displayName: carriedItem?.name ?? srd?.name ?? arg,
       srd,
       unarmed: false,
+      // A name that is a weapon on the table and on nobody's back is not
+      // theirs to swing. A name that is no weapon at all is whatever they
+      // picked up: improvised.
+      carried: Boolean(carriedItem) || srd === null,
     };
   }
   // No name given: best carried weapon, proficient ones first.
@@ -109,9 +130,9 @@ export function resolveAttackWeapon(
     }
   }
   if (best) {
-    return { displayName: best.item.name, srd: best.srd, unarmed: false };
+    return { displayName: best.item.name, srd: best.srd, unarmed: false, carried: true };
   }
-  return { displayName: "Unarmed strike", srd: null, unarmed: true };
+  return { displayName: "Unarmed strike", srd: null, unarmed: true, carried: true };
 }
 
 // "1d8 slashing" -> { dice: "1d8", type: "slashing" }; flat "1 piercing" and
@@ -159,7 +180,18 @@ export type AttackStance = {
   // The bonus-action attack of two-weapon fighting: no ability modifier on
   // damage unless the Two-Weapon Fighting style says otherwise.
   offHand?: boolean;
+  // Another weapon is in the other hand, which is what Dueling refuses.
+  otherWeaponInHand?: boolean;
 };
+
+// The off-hand swing leaves the ability modifier off its damage, unless the
+// modifier is negative (SRD 5.1, Two-Weapon Fighting): a penalty stays.
+function offHandModifier(mod: number, stance: AttackStance): number {
+  if (!stance.offHand || stance.riders?.twoWeaponKeepsAbility) {
+    return mod;
+  }
+  return Math.min(0, mod);
+}
 
 // Derives the full attack profile from the sheet's numbers and the weapon's
 // SRD properties: finesse picks the better of STR/DEX, ranged weapons use
@@ -189,7 +221,7 @@ export function weaponAttackProfile(
     return {
       weapon: resolved.displayName,
       toHit: mod + (resolved.unarmed ? derived.proficiencyBonus : 0),
-      damageExpression: withModifier(dice, stance.offHand && !riders?.twoWeaponKeepsAbility ? 0 : mod),
+      damageExpression: withModifier(dice, offHandModifier(mod, stance)),
       damageType: "bludgeoning",
       ranged: false,
       thrown: !resolved.unarmed,
@@ -245,12 +277,18 @@ export function weaponAttackProfile(
       toHitBonus += riders.meleeAttackBonus;
       notes.push(`+${riders.meleeAttackBonus} to hit`);
     }
-    if (!ranged && !twoHanded && !stance.offHand && riders.oneHandedMeleeDamageBonus) {
+    if (
+      !ranged &&
+      !twoHanded &&
+      !stance.offHand &&
+      !stance.otherWeaponInHand &&
+      riders.oneHandedMeleeDamageBonus
+    ) {
       damageBonus += riders.oneHandedMeleeDamageBonus;
       notes.push(`Dueling: +${riders.oneHandedMeleeDamageBonus} damage`);
     }
   }
-  const abilityToDamage = stance.offHand && !riders?.twoWeaponKeepsAbility ? 0 : mod;
+  const abilityToDamage = offHandModifier(mod, stance);
   if (stance.offHand && riders?.twoWeaponKeepsAbility) {
     notes.push("Two-Weapon Fighting: off-hand keeps its modifier");
   }
@@ -273,6 +311,10 @@ export function weaponAttackProfile(
     // Sneak Attack rides on finesse and ranged weapons only.
     sneakEligible: finesse || ranged,
     heavy: properties.includes("heavy"),
+    ...(srd.longRangeFt
+      ? { longRangeTiles: Math.max(rangeTiles, Math.round(srd.longRangeFt / 5)) }
+      : {}),
+    properties,
     riderNotes: notes,
   };
 }
@@ -316,11 +358,16 @@ export function spellAttackProfile(
 // attacks made with Strength only, so a raging barbarian's longbow and
 // their finesse rapier swung with Dexterity both get nothing.
 export function ragingMeleeBonus(
-  sheet: { conditions: string[]; level: number; classes?: Array<{ id: string; level: number }> },
+  sheet: {
+    conditions: string[];
+    level: number;
+    classes?: Array<{ id: string; level: number }>;
+    equipment?: Array<{ name: string; equipped?: boolean }>;
+  },
   profile: Pick<AttackProfile, "ranged" | "ability">,
 ): number {
-  const raging = sheet.conditions.some((entry) => entry.toLowerCase() === RAGING);
-  if (!raging || profile.ranged || profile.ability !== "str") {
+  // Rage gives nothing to a barbarian in heavy armor (rageApplies).
+  if (!rageApplies(sheet) || profile.ranged || profile.ability !== "str") {
     return 0;
   }
   // Multiclass: the bonus reads the BARBARIAN level, not the character's.

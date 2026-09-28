@@ -10,6 +10,7 @@ import { ALL_SKILLS } from "@/lib/content/mechanics";
 import { contentSlug, describeSkill } from "@/lib/help";
 import { SRD_SKILLS } from "@/lib/srd";
 import { ABILITIES, type Ability } from "@/lib/schemas/sheet";
+import { DRACONIC_ANCESTRIES, takesDraconicAncestry } from "@/lib/srd/racial-grants";
 
 const ABILITY_NAMES: Record<Ability, string> = {
   str: "Strength",
@@ -39,6 +40,11 @@ export function RacialChoicesSection({
   onCantripChange,
   tool,
   onToolChange,
+  ancestry = "",
+  onAncestryChange,
+  repeated = [],
+  repeatSkills = [],
+  onRepeatChange,
 }: {
   race: RaceOption;
   // Skills already granted by class and background, so they are not offered
@@ -52,10 +58,19 @@ export function RacialChoicesSection({
   onCantripChange: (spell: string) => void;
   tool: string;
   onToolChange: (tool: string) => void;
+  // A dragonborn's draconic ancestry, by id.
+  ancestry?: string;
+  onAncestryChange?: (ancestry: string) => void;
+  // Skills the race and the background both give, and the ones chosen in
+  // their place.
+  repeated?: string[];
+  repeatSkills?: string[];
+  onRepeatChange?: (index: number, skill: string) => void;
   inputClass: string;
 }) {
+  const draconic = takesDraconicAncestry(race.id);
   const hasChoices = Boolean(
-    race.asiChoice || race.skillChoice || race.cantripChoice || race.toolChoice,
+    race.asiChoice || race.skillChoice || race.cantripChoice || race.toolChoice || draconic || repeated.length,
   );
   if (!hasChoices) {
     return null;
@@ -138,6 +153,61 @@ export function RacialChoicesSection({
                     label={skillName(skills[index])}
                     text={describeSkill(skills[index])}
                   />
+                ) : null}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {draconic && onAncestryChange ? (
+        <label className="block">
+          <span className="mb-1 block text-stone-400">
+            Draconic ancestry: your breath weapon&apos;s damage and save, and the damage you resist
+          </span>
+          <Select<string>
+            value={ancestry}
+            onChange={onAncestryChange}
+            className="w-full"
+            label="Draconic ancestry"
+            placeholder="Choose a dragon..."
+            options={[
+              { value: "", label: "Choose a dragon..." },
+              ...DRACONIC_ANCESTRIES.map((entry) => ({
+                value: entry.id,
+                label: `${entry.dragon} (${entry.damageType}, ${entry.area}, ${entry.save.toUpperCase()} save)`,
+              })),
+            ]}
+          />
+        </label>
+      ) : null}
+
+      {repeated.length && onRepeatChange ? (
+        <div>
+          <span className="mb-1 flex flex-wrap items-center gap-1 text-stone-400">
+            Your race and background both give {repeated.map(skillName).join(" and ")}; choose
+            {repeated.length === 1 ? " another skill" : ` ${repeated.length} other skills`} in its place
+          </span>
+          <div className="grid grid-cols-2 gap-2">
+            {repeated.map((_, index) => (
+              <span key={index} className="flex items-center gap-1">
+                <Select<string>
+                  value={repeatSkills[index] ?? ""}
+                  onChange={(next) => onRepeatChange(index, next)}
+                  className="min-w-0 grow"
+                  label={`Skill in place of a repeated one ${index + 1}`}
+                  placeholder="Choose a skill..."
+                  options={[
+                    { value: "", label: "Choose a skill..." },
+                    ...ALL_SKILLS.filter(
+                      (skill) =>
+                        repeatSkills[index] === skill ||
+                        (!repeatSkills.includes(skill) && !grantedSkills.includes(skill) && !skills.includes(skill)),
+                    ).map((skill) => ({ value: skill as string, label: skillName(skill) })),
+                  ]}
+                />
+                {repeatSkills[index] ? (
+                  <InfoButton label={skillName(repeatSkills[index])} text={describeSkill(repeatSkills[index])} />
                 ) : null}
               </span>
             ))}

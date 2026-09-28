@@ -3,6 +3,7 @@ import { capsFor, isErrorResponse, requireMember } from "@/lib/campaign-api";
 import { getSheetForUser, listSheets } from "@/lib/db/sheets";
 import { insertRoll, listRollsVisibleTo } from "@/lib/db/rolls";
 import { d20Expression, rollExpression, type Advantage } from "@/lib/dice";
+import { trayExpressionProblem } from "@/lib/dice/tray-rules";
 import { computeSheetDerived, findSkill } from "@/lib/srd";
 import { allySaveAura } from "@/lib/dm/aura";
 import { publishPersisted } from "@/lib/events";
@@ -71,6 +72,11 @@ export async function POST(
   let advantage: Advantage = "none";
 
   if ("expression" in input) {
+    // Loose dice are still dice: the log never holds a number a player wrote.
+    const problem = trayExpressionProblem(input.expression);
+    if (problem) {
+      return Response.json({ error: problem }, { status: 400 });
+    }
     expression = input.expression;
   } else {
     if (!sheet) {

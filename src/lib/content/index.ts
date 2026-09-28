@@ -2,7 +2,17 @@ import { getContentDb } from "@/lib/content/db";
 import { listHomebrew } from "@/lib/db/homebrew";
 import { normalizeSpellMech } from "@/lib/homebrew/gear";
 import type { HomebrewKind } from "@/lib/schemas/homebrew";
-import { scaledSpellDice } from "@/lib/srd/spell-scaling";
+import { servedSpellRows } from "@/lib/content/spell-overrides";
+import { EDITION_2024_DOCUMENTS } from "@/lib/content/edition";
+import { backgroundMechanics } from "@/lib/content/mechanics";
+import { authoredFeatBySlug, withAuthoredFeats } from "@/lib/content/authored-feats";
+import {
+  authoredSpell,
+  bundledSpellFacts,
+  factsFromRow,
+  type SpellFacts,
+} from "@/lib/srd/spell-facts";
+import { addDice, scaledSpellDice } from "@/lib/srd/spell-scaling";
 import {
   authoredSpellRow,
   parseSpellMech,
@@ -86,65 +96,112 @@ function homebrewEntries(userId: string | undefined, kind: HomebrewKind, q?: str
     }));
 }
 
-export function searchSpells(
-  options: SearchOptions & { classSlug?: string; level?: number } = {},
-): SpellEntry[] {
+type SpellRow = {
+  slug: string;
+  name: string;
+  document_slug: string;
+  level: number;
+  school: string;
+  classes_csv: string;
+  ritual: number;
+  concentration: number;
+  aliases_csv: string;
+  data_json: string;
+};
+
+declare global {
+  var __odmServedSpells: { db: unknown; rows: SpellEntry[] } | undefined;
+}
+
+// Every spell the pack holds, as this engine serves it: one row a name, the
+// SRD's before any reprint, corrected where the pack is wrong
+// (src/lib/content/spell-overrides.ts). The pack is read-only, so the list is
+// built once for the life of the process.
+export function allPackSpells(): SpellEntry[] {
   const db = getContentDb();
-  const rows: SpellEntry[] = [];
-  if (db) {
-    // Alias matching is what makes a book name find an SRD-titled row.
-    const clauses = ["(name LIKE ? OR aliases_csv LIKE ?)"];
-    const params: unknown[] = [likeParam(options.q), likeParam((options.q ?? "").toLowerCase())];
-    if (options.classSlug) {
-      clauses.push("classes_csv LIKE ?");
-      params.push(`%${options.classSlug.toLowerCase()}%`);
-    }
-    if (options.level !== undefined) {
-      clauses.push("level <= ?");
-      params.push(options.level);
-    }
-    params.push(clampLimit(options.limit), options.offset ?? 0);
-    const found = db
-      .prepare(
-        `SELECT * FROM spells WHERE ${clauses.join(" AND ")} ORDER BY level, name LIMIT ? OFFSET ?`,
-      )
-      .all(...params) as Array<{
-      slug: string;
-      name: string;
-      document_slug: string;
-      level: number;
-      school: string;
-      classes_csv: string;
-      ritual: number;
-      concentration: number;
-      aliases_csv: string;
-      data_json: string;
-    }>;
-    rows.push(
-      ...found.map((row) => ({
-        slug: row.slug,
-        name: row.name,
-        source: "open5e" as const,
-        documentSlug: row.document_slug,
-        level: row.level,
-        school: row.school,
-        classes: row.classes_csv ? row.classes_csv.split(",") : [],
-        ritual: row.ritual === 1,
-        concentration: row.concentration === 1,
-        aliases: row.aliases_csv ? row.aliases_csv.split("|") : [],
-        data: parseData(row.data_json),
-      })),
-    );
+  if (!db) {
+    return [];
   }
-  const brews = homebrewEntries(options.userId, "spell", options.q).map((entry) => ({
-    ...entry,
-    level: Number(entry.data.level ?? 0),
-    school: String(entry.data.school ?? ""),
-    classes: Array.isArray(entry.data.classes) ? (entry.data.classes as string[]) : [],
-    ritual: entry.data.ritual === true,
-    concentration: entry.data.concentration === true,
-    aliases: [] as string[],
-  }));
+  if (globalThis.__odmServedSpells?.db === db) {
+    return globalThis.__odmServedSpells.rows;
+  }
+  const found = db.prepare(`SELECT * FROM spells`).all() as SpellRow[];
+  const rows = servedSpellRows(
+    found.map((row) => ({
+      slug: row.slug,
+      name: row.name,
+      documentSlug: row.document_slug,
+      level: row.level,
+      school: row.school,
+      classes: row.classes_csv ? row.classes_csv.split(",") : [],
+      ritual: row.ritual === 1,
+      concentration: row.concentration === 1,
+      aliases: row.aliases_csv ? row.aliases_csv.split("|") : [],
+      data: parseData(row.data_json),
+    })),
+  ).map((row) => ({ ...row, source: "open5e" as const }));
+  globalThis.__odmServedSpells = { db, rows };
+  return rows;
+}
+
+// Whose homebrew a search reads. `userIds` is for play, where the spells that
+// count are the ones whoever runs the table wrote (src/lib/dm/spell-authors.ts);
+// `userId` is one person looking at their own work.
+type SpellAuthors = { userId?: string; userIds?: string[] };
+
+function authorsOf(options: SpellAuthors): string[] {
+  const ids = options.userIds ?? (options.userId ? [options.userId] : []);
+  return [...new Set(ids.filter(Boolean))];
+}
+
+// A name somebody published: in the pack, or on the bundled checklist when
+// there is no pack to ask.
+function isPublishedSpellName(name: string): boolean {
+  const wanted = name.trim().toLowerCase();
+  if (!wanted) {
+    return false;
+  }
+  if (bundledSpellFacts(wanted)) {
+    return true;
+  }
+  return allPackSpells().some(
+    (entry) =>
+      entry.name.trim().toLowerCase() === wanted ||
+      entry.aliases.some((alias) => alias.trim().toLowerCase() === wanted),
+  );
+}
+
+export function searchSpells(
+  options: SearchOptions & SpellAuthors & { classSlug?: string; level?: number } = {},
+): SpellEntry[] {
+  const needle = (options.q ?? "").trim().replace(/[%_]/g, "").toLowerCase();
+  const classSlug = (options.classSlug ?? "").trim().toLowerCase();
+  const offset = Math.max(0, options.offset ?? 0);
+  const rows = allPackSpells()
+    .filter(
+      (row) =>
+        (!needle ||
+          row.name.toLowerCase().includes(needle) ||
+          row.aliases.some((alias) => alias.toLowerCase().includes(needle))) &&
+        (!classSlug || row.classes.some((entry) => entry.includes(classSlug))) &&
+        (options.level === undefined || row.level <= options.level),
+    )
+    .slice(offset, offset + clampLimit(options.limit));
+  // A published name is the published spell's: a homebrew row that takes the
+  // name of one is not offered in its place, so nobody rewrites Revivify into
+  // a 1st level spell by writing their own.
+  const brews = authorsOf(options)
+    .flatMap((userId) => homebrewEntries(userId, "spell", options.q))
+    .filter((entry) => !isPublishedSpellName(entry.name))
+    .map((entry) => ({
+      ...entry,
+      level: Number(entry.data.level ?? 0),
+      school: String(entry.data.school ?? ""),
+      classes: Array.isArray(entry.data.classes) ? (entry.data.classes as string[]) : [],
+      ritual: entry.data.ritual === true,
+      concentration: entry.data.concentration === true,
+      aliases: [] as string[],
+    }));
   // The DM's own work leads: a homebrew goblin boss should not sit after
   // twenty-five catalogue goblins.
   return [...brews, ...rows];
@@ -161,17 +218,40 @@ export function spellNameMatches(entry: SpellEntry, name: string): boolean {
   );
 }
 
-// The one spell a name refers to, alias-aware.
-export function findSpellByName(name: string, userId?: string): SpellEntry | null {
+// The one spell a name refers to, alias-aware. The second argument is whose
+// homebrew may answer for a name nobody published: one user, or in play the
+// people who run the table.
+export function findSpellByName(name: string, authors?: string | string[]): SpellEntry | null {
   const trimmed = name.trim();
   if (!trimmed) {
     return null;
   }
+  const userIds = Array.isArray(authors) ? authors : authors ? [authors] : [];
   return (
-    searchSpells({ q: trimmed, userId, limit: 20 }).find((entry) =>
+    searchSpells({ q: trimmed, userIds, limit: MAX_LIMIT }).find((entry) =>
       spellNameMatches(entry, trimmed),
     ) ?? null
   );
+}
+
+// What a cast needs to know of a spell (src/lib/srd/spell-facts.ts): from the
+// pack's row when the pack answers, from the bundled data when it does not,
+// and from the table's homebrew for a name nobody published.
+export function spellFactsFor(name: string, authors?: string | string[]): SpellFacts | null {
+  const entry = findSpellByName(name, authors);
+  if (entry) {
+    return factsFromRow({
+      name: entry.name,
+      level: entry.level,
+      ritual: entry.ritual,
+      concentration: entry.concentration,
+      classes: entry.classes,
+      aliases: entry.aliases,
+      homebrew: entry.source === "homebrew",
+      data: entry.data,
+    });
+  }
+  return bundledSpellFacts(name);
 }
 
 export function searchItems(
@@ -239,6 +319,13 @@ function searchSimpleTable(
   }
   const clauses = ["name LIKE ?"];
   const params: unknown[] = [likeParam(options.q)];
+  // The rules rows a 2014 character is offered leave the 2024 documents out
+  // (src/lib/content/edition.ts). Conditions are rules text read by name and
+  // keep every row.
+  if (table !== "conditions" && EDITION_2024_DOCUMENTS.size) {
+    clauses.push(`document_slug NOT IN (${[...EDITION_2024_DOCUMENTS].map(() => "?").join(", ")})`);
+    params.push(...EDITION_2024_DOCUMENTS);
+  }
   if (options.extraWhere) {
     clauses.push(options.extraWhere);
     params.push(...(options.extraParams ?? []));
@@ -264,16 +351,38 @@ function searchSimpleTable(
 }
 
 export function searchFeats(options: SearchOptions = {}): ContentEntry[] {
-  return [...homebrewEntries(options.userId, "feat", options.q), ...searchSimpleTable("feats", options)];
+  const served = searchSimpleTable("feats", options);
+  // Every name the pack serves for this search, on any page, so ODM's own
+  // feats fill only what the pack lacks (src/lib/content/authored-feats.ts).
+  const editions = [...EDITION_2024_DOCUMENTS];
+  const notIn = editions.length ? ` AND document_slug NOT IN (${editions.map(() => "?").join(", ")})` : "";
+  const packRows = options.offset
+    ? []
+    : (getContentDb()
+        ?.prepare(`SELECT name FROM feats WHERE name LIKE ?${notIn}`)
+        .all(likeParam(options.q), ...editions) as Array<{ name: string }> | undefined) ?? [];
+  const packNames = packRows.map((row) => row.name);
+  return [
+    ...homebrewEntries(options.userId, "feat", options.q),
+    ...withAuthoredFeats(served, { ...options, packNames }),
+  ];
 }
 
 export function listConditions(options: SearchOptions = {}): ContentEntry[] {
   return searchSimpleTable("conditions", { ...options, limit: options.limit ?? MAX_LIMIT });
 }
 
+// Every background gives two skill proficiencies. A pack row whose text
+// grants none (Tal'Dorei's Fate-Touched arrives with no skill line at all)
+// would leave a character two skills short, so it is not offered.
+function givesTwoSkills(entry: ContentEntry): boolean {
+  const grants = backgroundMechanics(entry.data);
+  return grants.skills.length + (grants.skillChoice?.count ?? 0) === 2;
+}
+
 export function listBackgrounds(options: SearchOptions = {}): ContentEntry[] {
   return [
-    ...searchSimpleTable("backgrounds", { ...options, limit: options.limit ?? MAX_LIMIT }),
+    ...searchSimpleTable("backgrounds", { ...options, limit: options.limit ?? MAX_LIMIT }).filter(givesTwoSkills),
     ...homebrewEntries(options.userId, "background", options.q),
   ];
 }
@@ -383,12 +492,20 @@ export function getEntryDetail(
   slug: string,
 ): ContentEntry | null {
   const db = getContentDb();
-  if (!db || slug.startsWith("homebrew:")) {
+  if (slug.startsWith("homebrew:")) {
     return null;
   }
   const row = db
-    .prepare(`SELECT slug, name, document_slug, data_json FROM ${kind} WHERE slug = ?`)
+    ?.prepare(`SELECT slug, name, document_slug, data_json FROM ${kind} WHERE slug = ?`)
     .get(slug) as { slug: string; name: string; document_slug: string; data_json: string } | undefined;
+  // A feat ODM wrote answers for its name where the pack has none, or has
+  // only the 2024 row a 2014 character is never offered (Alert).
+  if (kind === "feats" && (!row || EDITION_2024_DOCUMENTS.has(row.document_slug))) {
+    const authored = authoredFeatBySlug(slug);
+    if (authored) {
+      return authored;
+    }
+  }
   if (!row) {
     return null;
   }
@@ -402,27 +519,68 @@ export function getEntryDetail(
 }
 
 // The dice a named spell actually rolls for this caster, derived from the
-// content pack's own text rather than taken on trust from the model
-// (src/lib/srd/spell-scaling.ts). Null when the spell is unknown or its
-// wording does not parse, in which case the caller keeps the model's dice.
+// spell's own row rather than taken on trust from the model: an authored
+// dice row first (src/lib/srd/spell-mechanics.ts), then the text
+// (src/lib/srd/spell-scaling.ts). Null when the spell is unknown or deals
+// nothing a die can state, in which case the caller keeps the model's dice.
 export function spellDamageFor(input: {
   spell: string;
-  userId: string;
+  userId?: string;
+  userIds?: string[];
   casterLevel: number;
   slotLevel?: number;
+  // Magic Missile: how many of the darts are meant, all of them when absent.
+  darts?: number;
 }): { dice: string; note: string; spellLevel: number } | null {
-  const entry = findSpellByName(input.spell, input.userId);
-  if (!entry) {
+  const entry = findSpellByName(input.spell, input.userIds ?? input.userId);
+  const authored = entry ? null : authoredSpell(input.spell);
+  const spellLevel = entry?.level ?? authored?.level ?? bundledSpellFacts(input.spell)?.level ?? null;
+  if (spellLevel === null) {
+    return null;
+  }
+  const mech = spellMechFor([entry?.name ?? input.spell, ...(entry?.aliases ?? []), input.spell]);
+  const slotLevel = Math.max(spellLevel, Math.floor(input.slotLevel ?? spellLevel));
+  if (mech?.hitPointPool) {
+    // A pool of hit points is not damage.
+    return null;
+  }
+  if (mech?.darts) {
+    const held = mech.darts.count + mech.darts.perSlotLevel * (slotLevel - spellLevel);
+    const thrown = Math.max(1, Math.min(held, Math.floor(input.darts ?? held)));
+    const [die, flat] = mech.darts.each.split("+");
+    const sides = die.split("d")[1];
+    return {
+      dice: `${thrown}d${sides}${flat ? `+${Number(flat) * thrown}` : ""}`,
+      note: `${thrown} of ${held} darts of ${mech.darts.each}`,
+      spellLevel,
+    };
+  }
+  if (mech?.dice) {
+    const above = Math.max(0, slotLevel - mech.dice.baseLevel);
+    const dice = mech.dice.perSlotLevel
+      ? addDice(mech.dice.base, mech.dice.perSlotLevel, above)
+      : mech.dice.base;
+    return {
+      dice,
+      note: above ? `upcast to level ${slotLevel}: ${dice}` : `${dice} at its base level`,
+      spellLevel,
+    };
+  }
+  if (mech?.resolution === "utility" || mech?.resolution === "summon") {
+    return null;
+  }
+  const desc = String(entry?.data.desc ?? authored?.desc ?? "");
+  if (!desc) {
     return null;
   }
   const scaled = scaledSpellDice({
-    spellLevel: entry.level,
-    desc: String(entry.data.desc ?? ""),
-    higherLevel: String(entry.data.higher_level ?? ""),
+    spellLevel,
+    desc,
+    higherLevel: String(entry?.data.higher_level ?? authored?.higher_level ?? ""),
     casterLevel: input.casterLevel,
     slotLevel: input.slotLevel,
   });
-  return scaled ? { ...scaled, spellLevel: entry.level } : null;
+  return scaled ? { ...scaled, spellLevel } : null;
 }
 
 // The structured mechanics a spell resolves with: authored `mech` rows and
@@ -439,8 +597,9 @@ export type ResolvedSpellMech = {
 export function spellMechanicsFor(input: {
   spell: string;
   userId?: string;
+  userIds?: string[];
 }): ResolvedSpellMech | null {
-  const entry = findSpellByName(input.spell, input.userId);
+  const entry = findSpellByName(input.spell, input.userIds ?? input.userId);
   if (entry) {
     // A homebrew spell may carry its own block (src/lib/homebrew/gear.ts),
     // which beats parsing its prose; the prose is still parsed for damage.
@@ -455,18 +614,21 @@ export function spellMechanicsFor(input: {
       ? { mech, name: entry.name, spellLevel: entry.level, concentration: entry.concentration }
       : null;
   }
-  // No content database (or an unbundled name): the authored layer still
-  // answers on its own.
+  // No content database (or an unbundled name): the authored layer and the
+  // checklist still answer, the level and the concentration flag included.
   const authored = authoredSpellRow(input.spell);
-  const mech = spellMechFor([input.spell]) ?? (authored ? parseSpellMech({ desc: authored.desc }) : null);
+  const bundled = bundledSpellFacts(input.spell);
+  const mech =
+    spellMechFor([input.spell, bundled?.name ?? input.spell]) ??
+    (authored ? parseSpellMech({ desc: authored.desc }) : null);
   if (!mech) {
     return null;
   }
   return {
     mech,
-    name: authored?.name ?? input.spell,
-    spellLevel: authored?.level ?? 1,
-    concentration: authored?.concentration ?? false,
+    name: authored?.name ?? bundled?.name ?? input.spell,
+    spellLevel: authored?.level ?? bundled?.level ?? 1,
+    concentration: authored?.concentration ?? bundled?.concentration ?? false,
   };
 }
 

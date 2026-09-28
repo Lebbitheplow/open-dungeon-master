@@ -105,7 +105,7 @@ test("Unarmored Defense replaces the base only while unarmored", () => {
     }),
     17,
   );
-  // The monk's version is switched off by a shield entirely.
+  // A shield switches the monk's version off: 10 + DEX 2 + the shield's 2.
   assert.equal(
     ac({
       equipment: [{ name: "Shield" }],
@@ -113,7 +113,7 @@ test("Unarmored Defense replaces the base only while unarmored", () => {
       abilityMods: { con: 0, wis: 3 },
       unarmored: monk,
     }),
-    15,
+    14,
   );
   // Wearing armor overrides the formula.
   assert.equal(

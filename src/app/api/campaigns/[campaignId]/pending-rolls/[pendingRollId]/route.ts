@@ -2,6 +2,7 @@ import { z } from "zod";
 import { isErrorResponse, requireMember, steersStory } from "@/lib/campaign-api";
 import { allocateSeq } from "@/lib/db/campaigns";
 import {
+  dicePreferencesOf,
   getPendingRoll,
   listPendingForTurn,
   resolvePendingRoll,
@@ -9,6 +10,7 @@ import {
 } from "@/lib/db/dm-turns";
 import { insertRoll } from "@/lib/db/rolls";
 import { defaultRng, expressionDice, rollExpression, rollExpressionWithDice } from "@/lib/dice";
+import { mayTypeFaces } from "@/lib/dice/held-rolls";
 import { recordInitiativeRoll } from "@/lib/dm/encounter-tools";
 import { applyPendingDamageRoll } from "@/lib/dm/enemy-damage";
 import { resolvePendingPcAttack } from "@/lib/dm/pc-attack";
@@ -79,6 +81,21 @@ export async function POST(
     ? []
     : (parsed.data as { dice: Array<number | "digital"> }).dice;
   const anyDigital = submitted.includes("digital");
+  // A face the player typed is believed only for a roll parked for real
+  // dice, at a table that still allows them for this player. A held roll is
+  // released, never chosen: the server throws it.
+  if (submitted.some((entry) => entry !== "digital")) {
+    const preferences = dicePreferencesOf(campaignId, pending.userId);
+    if (!mayTypeFaces(pending.parkedFor, preferences.dicePolicy, preferences.member)) {
+      return Response.json(
+        {
+          error:
+            "This roll is thrown by the server: release it to roll, since typed dice count only for a player rolling real dice at a table that allows them.",
+        },
+        { status: 403 },
+      );
+    }
+  }
   const allDigital = submitted.length > 0 && submitted.every((entry) => entry === "digital");
 
   let outcome;

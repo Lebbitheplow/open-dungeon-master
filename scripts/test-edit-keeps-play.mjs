@@ -283,9 +283,20 @@ function builderEdit(initial, level, overrides = {}) {
     spellWarningAck: true,
     ...overrides,
   };
+  // The Calling step waits for the soldier's gaming set to be named (a
+  // character stored before that pick existed names it on its first edit),
+  // so the builder's output always carries one.
+  const soldier = (overrides.background ?? "soldier") === "soldier";
+  const tools = initial.proficiencies.tools ?? [];
   const derived = {
     abilities: initial.abilities,
-    preview: { maxHp: initial.maxHp, proficiencies: initial.proficiencies },
+    preview: {
+      maxHp: initial.maxHp,
+      proficiencies: {
+        ...initial.proficiencies,
+        tools: soldier && !tools.includes("dice set") ? [...tools, "dice set"] : tools,
+      },
+    },
     effectiveLevel: level,
     activeAsiChoices: [],
     ac: initial.ac,

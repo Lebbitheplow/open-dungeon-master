@@ -6,6 +6,7 @@ import { insertCampaignMessage } from "@/lib/db/messages";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { activePublicEncounter } from "@/lib/db/encounter-view";
+import { canEnemyAct, oweEnemiesAnAction } from "@/lib/dm/can-act";
 import {
   freshPool,
   legendaryProfile,
@@ -144,6 +145,12 @@ export function handleLegendaryAction(campaign: Campaign, rawArguments: string):
   if (!profile || !profile.actions.length) {
     return { error: `${enemy.displayName} has no legendary actions.` };
   }
+  // A legendary action is still an action of the creature's: not while it
+  // is incapacitated, and not while it is surprised.
+  const allowed = canEnemyAct({ enemy, encounter, kind: "legendary" });
+  if (!allowed.ok) {
+    return { error: allowed.error };
+  }
   const current = encounter.order[encounter.turnIndex];
   if (current && orderEntryId(current) === enemy.id) {
     return { error: `It is ${enemy.displayName}'s own turn; legendary actions come at the end of other creatures' turns. Use enemy_attack.` };
@@ -154,13 +161,18 @@ export function handleLegendaryAction(campaign: Campaign, rawArguments: string):
     return { error: outcome.error };
   }
   encounter.legendary.pools[enemy.id] = outcome.pool;
-  saveEncounter(encounter);
-  publishEncounter(campaign);
   const wanted = outcome.action.name.toLowerCase();
   const attack = enemy.stats.attacks.find((entry) => {
     const name = entry.name.toLowerCase();
     return name === wanted || wanted.includes(name) || name.includes(wanted);
   });
+  if (attack) {
+    // The attack this action buys is on top of the creature's one action a
+    // round, so enemy_attack is owed one more.
+    oweEnemiesAnAction(encounter, [enemy.id]);
+  }
+  saveEncounter(encounter);
+  publishEncounter(campaign);
   return {
     ok: true,
     enemy: enemy.displayName,

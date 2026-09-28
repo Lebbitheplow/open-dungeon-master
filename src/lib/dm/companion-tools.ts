@@ -1,12 +1,6 @@
 import { z } from "zod";
 import { allocateSeq, campaignSeats, countPartySlots, type Campaign } from "@/lib/db/campaigns";
-import {
-  createSheet,
-  getSheetById,
-  listSheets,
-  markSheetAsCompanion,
-  patchSheet,
-} from "@/lib/db/sheets";
+import { createSheet, listSheets, markSheetAsCompanion } from "@/lib/db/sheets";
 import { createCompanionUser, deleteCompanionUser } from "@/lib/db/users";
 import {
   partRelationshipsWithSubject,
@@ -27,17 +21,17 @@ import { spliceIntoOrder } from "@/lib/dm/encounter-logic";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
-import { d20Expression, rollExpression } from "@/lib/dice";
+import { d20Expression, defaultRng, rollExpression } from "@/lib/dice";
 import {
-  abilityMod,
-  findClass,
-  findRace,
-  levelForXp,
-  spellSlotsFor,
-  suggestedStartingHp,
-  type SrdClass,
-} from "@/lib/srd";
-import { populateFeatures } from "@/lib/srd/features";
+  DRACONIC_ANCESTRY_IDS,
+  findDraconicAncestry,
+  rollDraconicAncestry,
+  takesDraconicAncestry,
+} from "@/lib/srd/racial-grants";
+import { abilityMod, findClass, findRace, suggestedStartingHp, type SrdClass } from "@/lib/srd";
+import { abilityPriority } from "@/lib/srd/companion-build";
+import { startingKitFor } from "@/lib/srd/starting-kit";
+import { legalCompanionSheet } from "@/lib/dm/companion-level";
 import { queueCompanionPortrait } from "@/lib/portrait";
 import { settingClassIds } from "@/lib/classes";
 import { presetFor, packFor } from "@/lib/worlds/preset";
@@ -133,6 +127,11 @@ export function companionTools(campaign: Campaign): ToolDef[] {
           properties: {
             name: { type: "string", description: "The companion's in-world name." },
             race: { type: "string", description: raceDescription },
+            ancestry: {
+              type: "string",
+              enum: DRACONIC_ANCESTRY_IDS,
+              description: "A dragonborn's draconic ancestry, when the story names one. Omit it and the server rolls one.",
+            },
             class: { type: "string", description: classDescription },
             level: {
               type: "integer",
@@ -179,6 +178,7 @@ export function companionTools(campaign: Campaign): ToolDef[] {
 const addArgsSchema = z.object({
   name: z.string().trim().min(1).max(60),
   race: z.string().trim().max(60).optional(),
+  ancestry: z.string().trim().max(40).optional(),
   class: z.string().trim().min(1).max(60),
   level: z.number().int().min(1).max(20).optional(),
   personality: z.string().trim().min(1).max(500),
@@ -192,24 +192,6 @@ const dismissArgsSchema = z.object({
 });
 
 const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8];
-const ABILITY_ORDER: Ability[] = ["str", "dex", "con", "int", "wis", "cha"];
-
-// Standard-array assignment by a class-shaped priority: casters lead with
-// their casting stat, STR-save classes fight in melee, everyone else is a
-// DEX skirmisher. CON always lands second or third.
-function abilityPriority(klass: SrdClass): Ability[] {
-  if (klass.spellAbility) {
-    const rest = ABILITY_ORDER.filter(
-      (ability) => ability !== klass.spellAbility && ability !== "con" && ability !== "dex",
-    );
-    return [klass.spellAbility, "con", "dex", ...rest];
-  }
-  if (klass.saves.includes("str")) {
-    return ["str", "con", "dex", "wis", "cha", "int"];
-  }
-  return ["dex", "con", "wis", "str", "int", "cha"];
-}
-
 function slugify(value: string): string {
   return value.trim().toLowerCase().replace(/[\s-]+/g, "_");
 }
@@ -321,65 +303,33 @@ export function handleAddCompanion(
     abilities[ability as Ability] += bonus ?? 0;
   }
 
-  const dexMod = abilityMod(abilities.dex);
-  // Armor and weapons: a simple, valid kit the attack engine can resolve.
-  let ac: number;
-  const equipment: Array<{ name: string; qty: number }> = [];
-  if (klass.armor.includes("heavy")) {
-    ac = 16;
-    equipment.push({ name: "Chain Mail", qty: 1 });
-  } else if (klass.armor.includes("medium")) {
-    ac = 14 + Math.min(2, dexMod);
-    equipment.push({ name: "Scale Mail", qty: 1 });
-  } else if (klass.armor.includes("light")) {
-    ac = 11 + dexMod;
-    equipment.push({ name: "Leather Armor", qty: 1 });
-  } else {
-    ac = 10 + dexMod;
-  }
-  const martial = klass.weapons.includes("martial");
-  const primaryAbility = priority[0];
-  if (klass.spellAbility) {
-    equipment.push({ name: "Quarterstaff", qty: 1 }, { name: "Component Pouch", qty: 1 });
-  } else if (primaryAbility === "dex") {
-    equipment.push(
-      { name: martial ? "Rapier" : "Dagger", qty: 1 },
-      { name: "Shortbow", qty: 1 },
-    );
-  } else {
-    equipment.push({ name: martial ? "Longsword" : "Mace", qty: 1 });
-    if (klass.armor.includes("shields")) {
-      ac += 2;
-      equipment.push({ name: "Shield", qty: 1 });
-    }
-  }
-  equipment.push({ name: "Adventurer's Pack", qty: 1 });
+  // The class's starting equipment with the book's first option of every
+  // choice (src/lib/srd/starting-kit.ts): what a player's character of the
+  // class is handed. The armor engine derives the armor class from it when
+  // the sheet is written; the figure here is only a starting point.
+  const equipment = startingKitFor(klass, null).items;
+  const ac = 10 + abilityMod(abilities.dex);
 
   const skills = klass.skillChoices.from.slice(0, klass.skillChoices.count);
-  const slots = spellSlotsFor(klass.id, level);
-  const spellcasting = klass.spellAbility
-    ? {
-        ability: klass.spellAbility,
-        slots: Object.fromEntries(
-          Object.entries(slots).map(([slotLevel, max]) => [slotLevel, { max, used: 0 }]),
-        ),
-        known: args.spells ?? [],
-        prepared: [],
-      }
+
+  // A dragonborn's ancestry: the one the recruiter names, else a roll on the
+  // SRD's table, so an engine-made dragonborn is not always red.
+  const ancestry = takesDraconicAncestry(chosenRace.id)
+    ? (findDraconicAncestry(args.ancestry) ?? rollDraconicAncestry(defaultRng))
     : null;
-  if (klass.spellAbility && !args.spells?.length) {
-    notes.push(
-      "They know no spells yet: use learn_spell to give this caster a level-appropriate spell list now.",
-    );
+  if (ancestry && args.ancestry && !findDraconicAncestry(args.ancestry)) {
+    notes.push(`"${args.ancestry}" is not a draconic ancestry, so one was rolled: ${ancestry.dragon}.`);
   }
 
-  const input = createSheetSchema.parse({
+  const draft = createSheetSchema.parse({
     name: args.name,
     race: chosenRace.id,
     class: klass.id,
     background: "",
     alignment: "",
     abilities,
+    // A figure to start from; the legality check derives the real one by
+    // the table's hit point method, and the armor engine the armor class.
     maxHp: suggestedStartingHp(klass.id, chosenRace.id, abilities.con, level),
     ac,
     speed: chosenRace.speed,
@@ -395,9 +345,24 @@ export function handleAddCompanion(
     },
     equipment,
     gold: 10,
-    spellcasting,
+    spellcasting: null,
     backstory: args.personality,
+    ...(ancestry ? { racialChoices: { ancestry: ancestry.id } } : {}),
   });
+  // The same door a player's character comes through: the improvements the
+  // class has earned by this level, a spell list its tables allow, and every
+  // derived number written by the server.
+  const legal = legalCompanionSheet({
+    campaign,
+    level,
+    sheet: draft,
+    wantedSpells: args.spells ?? [],
+  });
+  if (!legal.ok) {
+    return { error: legal.error };
+  }
+  notes.push(...legal.notes);
+  const input = legal.sheet;
 
   const { sheet, hadEncounter } = finalizeNewCompanion(campaign, level, input, kind, args.personality);
 
@@ -617,53 +582,7 @@ export function applyCompanionCall(
   return { error: `Unknown companion tool ${toolName}.` };
 }
 
-// Companions have no level-up dialog, so an XP award that crosses a level
-// threshold applies a plain headless level-up (average HP, refreshed
-// features and slots; subclass choices stay as they are).
-export function autoLevelCompanion(campaign: Campaign, sheetId: string): string | null {
-  const sheet = getSheetById(sheetId);
-  if (!sheet?.isCompanion) {
-    return null;
-  }
-  const target = levelForXp(sheet.xp);
-  if (target <= sheet.level) {
-    return null;
-  }
-  const features = populateFeatures(sheet.features, sheet.class, sheet.subclass, sheet.race, target);
-  const maxHp = suggestedStartingHp(sheet.class, sheet.race, sheet.abilities.con, target);
-  const hpGain = Math.max(0, maxHp - sheet.maxHp);
-  const slots = spellSlotsFor(sheet.class, target);
-  const spellcasting =
-    sheet.spellcasting && Object.keys(slots).length
-      ? {
-          ...sheet.spellcasting,
-          slots: Object.fromEntries(
-            Object.entries(slots).map(([slotLevel, max]) => {
-              const used = sheet.spellcasting?.slots[slotLevel]?.used ?? 0;
-              return [slotLevel, { max, used: Math.min(used, max) }];
-            }),
-          ),
-        }
-      : sheet.spellcasting;
-  const updated = patchSheet(sheet.id, {
-    level: target,
-    maxHp,
-    currentHp: sheet.currentHp + hpGain,
-    hitDice: { die: sheet.hitDice.die, total: target, spent: Math.min(sheet.hitDice.spent, target) },
-    features,
-    spellcasting,
-  });
-  if (!updated) {
-    return null;
-  }
-  publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
-  insertCharacterEvent({
-    libraryCharacterId: null,
-    campaignCharacterId: sheet.id,
-    campaignId: campaign.id,
-    seq: allocateSeq(campaign.id),
-    kind: "level_up",
-    summary: `${sheet.name} reached level ${target}.`,
-  });
-  return `${sheet.name} leveled up to ${target} automatically (companions level with the party).`;
-}
+// A companion's level-up lives beside the legality check it goes through
+// (src/lib/dm/companion-level.ts); exported from here because this is where
+// every caller has always found it.
+export { autoLevelCompanion } from "@/lib/dm/companion-level";

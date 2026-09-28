@@ -1,5 +1,6 @@
 "use client";
 
+import { toolChoiceOf } from "@/lib/srd/tool-choices";
 import { useEffect, useRef, useState } from "react";
 import type {
   Ability,
@@ -8,6 +9,9 @@ import type {
   SheetAttachment,
 } from "@/lib/schemas/sheet";
 import { removeAsiChoices } from "@/lib/srd/asi";
+import { halfFeatPicks, halfFeatPoints } from "@/lib/srd/legality/half-feats";
+import { srdRaceId } from "@/lib/srd/race-id";
+import type { KitChoices } from "@/lib/srd/starting-kit";
 import { findOptionByFeatureName } from "@/lib/srd/options";
 import {
   FIGHTING_STYLES,
@@ -20,7 +24,10 @@ import type { PoolEntry, PoolSlots } from "./abilityDice";
 import { reconcilePicks, type BuilderPicks } from "./reconcile";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
 
-export type EquipmentItem = { name: string; qty: number; slug?: string };
+// `priceCp` is the listed price of one, in copper, as the catalog row it was
+// picked from gave it; it is what the purse is charged, and the server
+// charges its own catalog's price again when the sheet is saved.
+export type EquipmentItem = { name: string; qty: number; slug?: string; priceCp?: number };
 
 // Every field the character builder edits, in one hook so the wizard steps
 // can share it without the orchestrator re-declaring forty useStates. The
@@ -100,6 +107,12 @@ export function useBuilderState({
   );
   // Auto-added class weapons the user explicitly removed; reset on class change.
   const [removedAutoNames, setRemovedAutoNames] = useState<string[]>([]);
+  // The either-or choices of the class's starting equipment
+  // (src/lib/srd/starting-kit.ts); a stored sheet reopens with its own.
+  const [kitChoices, setKitChoices] = useState<KitChoices>(() => ({
+    options: initial?.kitChoices?.options ?? [],
+    picks: initial?.kitChoices?.picks ?? [],
+  }));
   const [feats, setFeats] = useState<string[]>(() => {
     if (!initial) {
       return [];
@@ -131,6 +144,20 @@ export function useBuilderState({
   );
   const [racialCantrip, setRacialCantrip] = useState(initial?.racialChoices?.cantrip ?? "");
   const [racialTool, setRacialTool] = useState(initial?.racialChoices?.tool ?? "");
+  // A dragonborn's draconic ancestry ("red").
+  const [racialAncestry, setRacialAncestry] = useState(initial?.racialChoices?.ancestry ?? "");
+  // The score a variant human's half-feat raises, where the feat offers a
+  // choice (Resilient, Athlete).
+  const [racialFeatAbility, setRacialFeatAbility] = useState<Ability | "">(
+    initial?.racialChoices?.featAbility ?? "",
+  );
+  // Named tools for a grant that leaves the choice open ("three musical
+  // instruments"); a stored sheet's named tools come back as its picks.
+  const [toolPicks, setToolPicks] = useState<string[]>(
+    () => (initial?.proficiencies.tools ?? []).filter((tool) => !toolChoiceOf(tool)),
+  );
+  // The skill chosen in place of one the race and the background both give.
+  const [repeatSkills, setRepeatSkills] = useState<string[]>([]);
   // A content-pack background's skill pick, stored the same way.
   const [backgroundSkills, setBackgroundSkills] = useState<string[]>(
     initial?.backgroundChoices?.skills ?? [],
@@ -151,7 +178,9 @@ export function useBuilderState({
   // entirely (they only queue one when the sheet arrives without a portrait).
   // Edit mode keeps the existing portrait unless the player clears it.
   const [portrait, setPortrait] = useState<SheetAttachment | null>(initial?.portrait ?? null);
-  const [gold, setGold] = useState(initial?.gold ?? 15);
+  // A stored character's own coin; a new one's purse is its background's
+  // (useBuilderDerived), not a number typed here.
+  const [gold, setGold] = useState(initial?.gold ?? 0);
   const [hpOverride, setHpOverride] = useState<number | null>(initial?.maxHp ?? null);
   // Only a pinned AC comes back pinned. A derived one re-derives from the
   // gear, or saving an edit would pin it and armour changed in play would
@@ -225,6 +254,12 @@ export function useBuilderState({
       const initialBackground = backgrounds.find((entry) => entry.id === initial.background) ?? backgrounds[0];
       const withoutAsi = removeAsiChoices(initial.abilities, initial.asiChoices ?? []);
       const base: Record<Ability, number> = { ...withoutAsi };
+      // A half-feat's point was added by the server when the character was
+      // saved, and is added again when it is saved from here.
+      const racialFeats = srdRaceId(initial.race) === "variant_human" ? 1 : 0;
+      for (const ability of halfFeatPoints(halfFeatPicks(initial, racialFeats))) {
+        base[ability] = Math.max(1, base[ability] - 1);
+      }
       for (const [ability, bonus] of Object.entries(initialRace?.asi ?? {})) {
         base[ability as Ability] -= bonus ?? 0;
       }
@@ -283,6 +318,8 @@ export function useBuilderState({
         { ...picks, racialAsi: [], racialSkills: [], racialCantrip: "", racialTool: "" },
       ),
     );
+    setRacialAncestry("");
+    setRepeatSkills([]);
   }
 
   // Same for the class: skills, subclass, spells, loadout edits and the
@@ -290,6 +327,7 @@ export function useBuilderState({
   function changeClass(id: string) {
     setClassId(id);
     setRemovedAutoNames([]);
+    setKitChoices({ options: [], picks: [] });
     applyPicks(
       reconciled(
         { classId: id },
@@ -360,6 +398,7 @@ export function useBuilderState({
     cantrips, setCantrips,
     equipment, setEquipment,
     removedAutoNames, setRemovedAutoNames,
+    kitChoices, setKitChoices,
     feats, setFeats,
     asiChoices, setAsiChoices,
     bonusLanguages, setBonusLanguages,
@@ -367,6 +406,10 @@ export function useBuilderState({
     racialSkills, setRacialSkills,
     racialCantrip, setRacialCantrip,
     racialTool, setRacialTool,
+    racialAncestry, setRacialAncestry,
+    racialFeatAbility, setRacialFeatAbility,
+    toolPicks, setToolPicks,
+    repeatSkills, setRepeatSkills,
     backgroundSkills, setBackgroundSkills,
     optionPicks, setOptionPicks,
     spellWarningAck, setSpellWarningAck,

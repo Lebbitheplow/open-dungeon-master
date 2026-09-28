@@ -146,8 +146,23 @@ function parseFx(desc) {
   return undefined;
 }
 
+// The count an upgrade line states in its own name: "Hardened (2 uses)" is
+// two, whatever its description goes on to say.
+function namedUses(name) {
+  const words = { one: 1, two: 2, three: 3, four: 4, five: 5 };
+  const stated = /\((\d+|[a-z]+)\s+uses?\)\s*$/i.exec(name.trim());
+  if (!stated) {
+    return null;
+  }
+  const raw = stated[1].toLowerCase();
+  return /^\d+$/.test(raw) ? Number(raw) : (words[raw] ?? null);
+}
+
 function collect() {
   const byId = new Map();
+  // Upgrade lines met before the feature they upgrade, or whose own
+  // description states no count: attached once every catalog is read.
+  const upgradesFor = new Map();
   const files = readdirSync(classesDir).filter((name) => name.endsWith("-features.json"));
   for (const file of files.sort()) {
     const parsed = JSON.parse(readFileSync(join(classesDir, file), "utf8"));
@@ -161,21 +176,21 @@ function collect() {
         for (const feats of Object.values(levels)) {
           for (const feat of feats) {
             const parsedUses = parseUses(feat.d);
-            if (!parsedUses) {
-              continue;
-            }
             const base = baseName(feat.n);
             const id = `${slugify(genre)}_${slugify(base)}`;
             const isUpgrade = base !== feat.n.trim();
+            if (isUpgrade && namedUses(feat.n) !== null) {
+              // The name is the count: "Hardened (2 uses)" gives 2 even when
+              // its description reads "Hardened now has two uses".
+              const rows = upgradesFor.get(id) ?? [];
+              rows.push({ match: feat.n.trim().toLowerCase(), uses: namedUses(feat.n) });
+              upgradesFor.set(id, rows);
+            }
+            if (!parsedUses) {
+              continue;
+            }
             const existing = byId.get(id);
             if (existing) {
-              // An upgrade line raises the count when the character has it.
-              if (isUpgrade) {
-                existing.upgrades.push({
-                  match: feat.n.trim().toLowerCase(),
-                  uses: parsedUses.uses,
-                });
-              }
               if (!existing.classes.includes(classId)) {
                 existing.classes.push(classId);
               }
@@ -190,7 +205,7 @@ function collect() {
               uses: parsedUses.uses,
               ability: parsedUses.ability,
               recharge: parsedUses.recharge,
-              upgrades: isUpgrade ? [{ match: feat.n.trim().toLowerCase(), uses: parsedUses.uses }] : [],
+              upgrades: [],
               guidance: feat.d,
               ...(fx ? { fx } : {}),
             });
@@ -198,6 +213,18 @@ function collect() {
         }
       }
     }
+  }
+  for (const [id, rows] of upgradesFor) {
+    const row = byId.get(id);
+    if (!row) {
+      continue;
+    }
+    for (const upgrade of rows) {
+      if (!row.upgrades.some((entry) => entry.match === upgrade.match)) {
+        row.upgrades.push(upgrade);
+      }
+    }
+    row.upgrades.sort((a, b) => a.uses - b.uses || a.match.localeCompare(b.match));
   }
   return [...byId.values()].sort((a, b) => a.id.localeCompare(b.id));
 }

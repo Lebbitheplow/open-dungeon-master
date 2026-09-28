@@ -25,10 +25,24 @@ import {
   CAMPAIGN_LENGTH_LABELS,
   CAMPAIGN_LENGTHS,
   COMPANION_LABELS,
+  HP_METHODS,
+  STARTING_WEALTH,
   type CampaignLengthSetting,
   type DicePolicy,
   type Genre,
 } from "@/lib/schemas/game-settings-options";
+
+// Short forms of the character-rule settings for a settings row; the long
+// forms live in game-settings-options.ts.
+const HP_METHOD_SHORT: Record<GameSettings["hpMethod"], string> = {
+  average: "HP: average each level",
+  rolled: "HP: rolled each level",
+  max: "HP: maximum each level",
+};
+const WEALTH_SHORT: Record<GameSettings["startingWealth"], string> = {
+  equipment: "Start: class kit and coin",
+  rolled: "Start: rolled gold, buy gear",
+};
 
 // The Living World explainer, shared with the campaign creator's info
 // button so the two never drift.
@@ -192,6 +206,14 @@ export function GameSettingsPanel({
           <span className="flex items-center gap-1.5">
             <GameIcon icon={{ kind: "glyph", key: "rest-level-up" }} size="size-5" />
             {settings.multiclassingEnabled ? "Multiclassing allowed" : "Multiclassing off"}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <GameIcon icon={{ kind: "glyph", key: "rest-hp" }} size="size-5" />
+            {HP_METHOD_SHORT[settings.hpMethod ?? "average"]}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <GameIcon icon={{ kind: "glyph", key: "coin-gp" }} size="size-5" />
+            {WEALTH_SHORT[settings.startingWealth ?? "equipment"]}
           </span>
           <span className="flex items-center gap-1.5">
             <GameIcon icon={{ kind: "glyph", key: "tab-friends" }} size="size-5" />
@@ -434,6 +456,33 @@ export function GameSettingsPanel({
             <SettingToggle on={settings.holdSubmissions} onToggle={() => patch({ holdSubmissions: !settings.holdSubmissions })}>
               Held responses {settings.holdSubmissions ? "on" : "off"}
             </SettingToggle>
+          </Tooltip>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="pk-rowlabel">Heroes</span>
+          <Tooltip content="How hit points grow after 1st level (1st is always the hit die's highest face plus Constitution). Rolled dice are thrown by the server.">
+            <span className="inline-flex min-w-0 max-w-full">
+              <Select
+                size="sm"
+                label="Hit points per level"
+                value={settings.hpMethod ?? "average"}
+                onChange={(value) => patch({ hpMethod: value as GameSettings["hpMethod"] })}
+                options={HP_METHODS.map((method) => ({ value: method, label: HP_METHOD_SHORT[method] }))}
+                className={selectClass}
+              />
+            </span>
+          </Tooltip>
+          <Tooltip content="What a new character starts with: the class and background kit plus the background's coin, or gold the server rolls by class to buy gear with.">
+            <span className="inline-flex min-w-0 max-w-full">
+              <Select
+                size="sm"
+                label="Starting wealth"
+                value={settings.startingWealth ?? "equipment"}
+                onChange={(value) => patch({ startingWealth: value as GameSettings["startingWealth"] })}
+                options={STARTING_WEALTH.map((method) => ({ value: method, label: WEALTH_SHORT[method] }))}
+                className={selectClass}
+              />
+            </span>
           </Tooltip>
         </div>
         {settings.dmMode !== "ai" ? (

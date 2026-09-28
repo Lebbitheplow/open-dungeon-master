@@ -276,6 +276,8 @@ test("every racial trait is enforced, a resource, or acknowledged", () => {
     // skill/feat choices are applied to the sheet at creation; darkvision
     // feeds the light engine by name; the resistances parse by name too.
     "Dwarven Armor Training (light and medium armor)",
+    "Dwarven Combat Training (battleaxe, handaxe, light hammer, warhammer)",
+    "Elf Weapon Training (longsword, shortsword, shortbow, longbow)",
     "Fleet of Foot (35 ft speed)",
     "Mask of the Wild (hide when lightly obscured by nature)",
     "Superior Darkvision 120 ft",

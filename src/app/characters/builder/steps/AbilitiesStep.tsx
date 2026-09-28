@@ -18,13 +18,14 @@ export function hpExplainerInput(
   race: RaceOption | undefined,
   klass: ClassOption | undefined,
 ): HpExplainerInput | null {
-  if (!klass || !derived.abilities) {
+  if (!klass || !derived.shownAbilities) {
     return null;
   }
   return {
     className: klass.name,
     hitDie: klass.hitDie,
-    con: derived.abilities.con,
+    // The Constitution the sheet will hold, a half-feat's point included.
+    con: derived.shownAbilities.con,
     level: derived.effectiveLevel,
     bonusPerLevel: race ? hpBonusPerLevel(race.id) : 0,
     override: state.hpOverride,
