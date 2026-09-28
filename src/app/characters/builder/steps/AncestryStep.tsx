@@ -1,5 +1,6 @@
 "use client";
 
+import { repeatedGrants } from "@/lib/srd/racial-grants";
 import { useMemo, useState } from "react";
 import { InfoButton } from "@/components/ui/InfoDialog";
 import { Select } from "@/components/ui/Select";
@@ -232,6 +233,17 @@ export function AncestryStep({
           onCantripChange={state.setRacialCantrip}
           tool={state.racialTool}
           onToolChange={state.setRacialTool}
+          ancestry={state.racialAncestry}
+          onAncestryChange={state.setRacialAncestry}
+          repeated={repeatedGrants(background?.skills, race.skills)}
+          repeatSkills={state.repeatSkills}
+          onRepeatChange={(index, skill) =>
+            state.setRepeatSkills((current) => {
+              const next = [...current];
+              next[index] = skill;
+              return next;
+            })
+          }
           inputClass={inputClass}
         />
       ) : null}

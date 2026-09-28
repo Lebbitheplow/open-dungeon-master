@@ -10,8 +10,9 @@
 //
 // The per-turn caps the AI works under (MUTATION_CAP_PER_TURN and friends)
 // are rails on a model that might loop, not rules of the game, so they do
-// not apply to a person. Saying that here, once, is better than the two
-// paths quietly differing.
+// not apply to a person. They do apply to the AI's share of an assisted
+// session, which reaches the engine through here with actor.kind "ai": the
+// same two counters the turn loop keeps are kept on its turn.
 import { getCampaignById, type Campaign } from "@/lib/db/campaigns";
 import { createDmTurn, getDmTurn, saveDmTurn, type DmTurn } from "@/lib/db/dm-turns";
 import { listMembers } from "@/lib/db/campaigns";
@@ -20,6 +21,8 @@ import { heldRollUserIds } from "@/lib/dice/held-rolls";
 import { listOpenPendingRolls } from "@/lib/db/dm-turns";
 import { adjudication, checkArgs, type CatalogEntry } from "@/lib/dm/invoke-catalog";
 import { dispatchAdjudication } from "@/lib/dm/invoke-dispatch";
+import { ENCOUNTER_CAP_PER_TURN, ENCOUNTER_TOOL_NAMES } from "@/lib/dm/encounter-tools";
+import { MUTATION_CAP_PER_TURN, MUTATION_TOOL_NAMES } from "@/lib/dm/mutations";
 // "goblin x4" is the same shorthand a prepared encounter is saved in, so the
 // live form and the saved roster share one parser.
 import { parseRoster } from "@/lib/dm/encounter-template-logic";
@@ -94,10 +97,54 @@ function toDamageTargets(
   return rows;
 }
 
+// Names a form has used for an argument its handler reads under another
+// one. The catalog now carries the handler's names; these stay so a console
+// built from an older catalog (the client apps compile the server's screens)
+// still reaches the engine.
+const FIELD_ALIASES: Record<string, Record<string, string>> = {
+  pc_attack: { enemyId: "targetEnemyId" },
+  pet_attack: { enemyId: "targetEnemyId" },
+  cast_at_enemy: { enemyId: "targetEnemyId" },
+  check_notice: { skill: "sense" },
+  relationship_beat: { npc: "subject" },
+  romance_advance: { npc: "subject" },
+  relationship_end: { npc: "subject" },
+  // The handler answers to a companion's name as well as their id.
+  dismiss_companion: { name: "characterId" },
+};
+
+// The first of a list a form sent where its handler takes one.
+function firstOf(value: unknown): string | null {
+  const list = toList(value);
+  return list.length ? list[0] : null;
+}
+
 export function normalizeArgs(
   entry: CatalogEntry,
   args: Record<string, unknown>,
 ): Record<string, unknown> {
+  const renamed: Record<string, unknown> = { ...args };
+  for (const [from, to] of Object.entries(FIELD_ALIASES[entry.name] ?? {})) {
+    const value = renamed[from];
+    const empty = (entry: unknown) => entry === undefined || entry === null || entry === "";
+    if (!empty(value) && empty(renamed[to])) {
+      renamed[to] = value;
+    }
+    // The handler never reads the old name; an enemyId beside a
+    // targetEnemyId is the same thing said twice.
+    if (from in renamed && FIELD_ALIASES[entry.name][from] === to) {
+      delete renamed[from];
+    }
+  }
+  if (entry.name === "cast_at_enemy" && !renamed.targetEnemyId && firstOf(renamed.enemyIds)) {
+    renamed.targetEnemyId = firstOf(renamed.enemyIds);
+    delete renamed.enemyIds;
+  }
+  if (entry.name === "cast_at_player" && !renamed.characterId && firstOf(renamed.characterIds)) {
+    renamed.characterId = firstOf(renamed.characterIds);
+    delete renamed.characterIds;
+  }
+  args = renamed;
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(args)) {
     if (value === undefined || value === null || value === "") {
@@ -184,6 +231,22 @@ export async function invokeEngine(
     return { ok: false, error: "That DM turn no longer exists." };
   }
 
+  // The rails on the model, for the model only.
+  const counted =
+    actor.kind !== "ai"
+      ? null
+      : ENCOUNTER_TOOL_NAMES.includes(entry.name)
+        ? ("encounterCount" as const)
+        : (MUTATION_TOOL_NAMES as readonly string[]).includes(entry.name)
+          ? ("mutationCount" as const)
+          : null;
+  if (counted === "encounterCount" && turn.encounterCount >= ENCOUNTER_CAP_PER_TURN) {
+    return { ok: false, error: "Encounter action limit reached for this turn." };
+  }
+  if (counted === "mutationCount" && turn.mutationCount >= MUTATION_CAP_PER_TURN) {
+    return { ok: false, error: "Mutation limit reached for this turn." };
+  }
+
   const sheets: CharacterSheet[] = listSheets(campaign.id);
   const sheetsById = new Map(sheets.map((sheet) => [sheet.id, sheet]));
 
@@ -211,6 +274,9 @@ export async function invokeEngine(
   //
   // Only a person's turn is closed here. A delegated AI turn may still have
   // more adjudications to come on it, so its caller decides when it is done.
+  if (counted) {
+    turn[counted] += 1;
+  }
   if (actor.kind === "human") {
     // A parked roll keeps the turn open so the answer lands on it; anything
     // else is finished the moment it resolves.

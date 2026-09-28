@@ -4,6 +4,8 @@ import {
   SNAPSHOT_TABLES,
   reviveRow,
   serializeRow,
+  snapshotColumns,
+  snapshotHoldsTable,
   type SnapshotPayload,
   type SnapshotRow,
 } from "@/lib/dm/rollback-logic";
@@ -189,6 +191,11 @@ export function restoreSnapshot(campaignId: string, payload: SnapshotPayload) {
   ]) {
     db.prepare(`DELETE FROM ${table} WHERE campaign_id = ?`).run(campaignId);
   }
+  // Only what the snapshot holds is replaced: one taken before lasting
+  // effects were captured says nothing about them, and they stay.
+  if (snapshotHoldsTable(payload, "active_effects")) {
+    db.prepare(`DELETE FROM active_effects WHERE campaign_id = ?`).run(campaignId);
+  }
   for (const table of SNAPSHOT_TABLES) {
     const rows = payload.tables[table] ?? [];
     if (!rows.length) {
@@ -204,11 +211,15 @@ export function restoreSnapshot(campaignId: string, payload: SnapshotPayload) {
       insert.run(...columns.map((column) => row[column] ?? null));
     }
   }
-  const campaignSets = CAMPAIGN_SNAPSHOT_COLUMNS.map((column) => `${column} = ?`).join(", ");
-  db.prepare(`UPDATE campaigns SET ${campaignSets} WHERE id = ?`).run(
-    ...CAMPAIGN_SNAPSHOT_COLUMNS.map((column) => payload.campaign?.[column] ?? null),
-    campaignId,
-  );
+  // The same holds for the campaign's own columns: the purse and the clock
+  // are restored from snapshots that captured them and left alone otherwise.
+  const held = new Set(snapshotColumns(payload));
+  const campaignSets = CAMPAIGN_SNAPSHOT_COLUMNS.filter((column) => held.has(column));
+  if (campaignSets.length) {
+    db.prepare(
+      `UPDATE campaigns SET ${campaignSets.map((column) => `${column} = ?`).join(", ")} WHERE id = ?`,
+    ).run(...campaignSets.map((column) => payload.campaign?.[column] ?? null), campaignId);
+  }
   // Lore/rules text is lead-owned and survives a rewind; only the
   // prompt-facing flags roll back, for entries that still exist.
   const updateLore = db.prepare(

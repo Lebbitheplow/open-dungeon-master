@@ -1,13 +1,39 @@
 import type { AbilityScores, AsiChoice } from "@/lib/schemas/sheet";
 
-// Levels that grant an Ability Score Improvement (or a feat) in 5e.
+// Levels that grant an Ability Score Improvement (or a feat) in 5e, for every
+// class but the two below.
 export const ASI_LEVELS = [4, 8, 12, 16, 19] as const;
+
+// SRD 5.1: a fighter improves twice more (6 and 14) and a rogue once more
+// (10). Every other class, the setting classes included, keeps the five.
+const CLASS_ASI_LEVELS: Record<string, readonly number[]> = {
+  fighter: [4, 6, 8, 12, 14, 16, 19],
+  rogue: [4, 8, 10, 12, 16, 19],
+};
 
 export const ABILITY_SCORE_CAP = 20;
 
-// How many ASI choices a character of this level has earned.
-export function earnedAsiCount(level: number): number {
-  return ASI_LEVELS.filter((threshold) => level >= threshold).length;
+// The most improvements any one class earns (the fighter's seven); what the
+// sheet schema sizes its list of recorded choices by.
+export const MAX_ASI_CHOICES = 7;
+
+// The levels of this class that grant an improvement. With no class named
+// the answer is the common five, which is what callers from before the
+// per-class tables still ask for.
+export function asiLevelsFor(classId?: string | null): readonly number[] {
+  return CLASS_ASI_LEVELS[(classId ?? "").trim().toLowerCase()] ?? ASI_LEVELS;
+}
+
+// How many ASI choices a character of this level has earned. On a multiclass
+// sheet the level is the CLASS level: use earnedAsiCountFor.
+export function earnedAsiCount(level: number, classId?: string | null): number {
+  return asiLevelsFor(classId).filter((threshold) => level >= threshold).length;
+}
+
+// Improvements earned across a class list, each class counted at its own
+// level (SRD 5.1, Multiclassing: the feature belongs to the class).
+export function earnedAsiCountFor(classes: Array<{ id: string; level: number }>): number {
+  return classes.reduce((sum, entry) => sum + earnedAsiCount(entry.level, entry.id), 0);
 }
 
 // Which of these slots were taken in play. The table's level-up folds an
@@ -24,9 +50,16 @@ export function asiSlotsTakenInPlay(
   return slotLevels.map((threshold, index) => index >= recordedCount && threshold <= reachedLevel);
 }
 
-// The ASI thresholds crossed when advancing from one level to another.
-export function crossedAsiLevels(fromLevel: number, toLevel: number): number[] {
-  return ASI_LEVELS.filter((threshold) => threshold > fromLevel && threshold <= toLevel);
+// The ASI thresholds crossed when advancing from one level to another, in
+// the class named (class levels, on a multiclass sheet).
+export function crossedAsiLevels(
+  fromLevel: number,
+  toLevel: number,
+  classId?: string | null,
+): number[] {
+  return asiLevelsFor(classId).filter(
+    (threshold) => threshold > fromLevel && threshold <= toLevel,
+  );
 }
 
 // Bake ASI choices into ability scores, capping each at 20. Null slots

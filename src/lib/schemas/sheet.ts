@@ -197,6 +197,10 @@ export const spellcastingSchema = z
   .nullable();
 export type Spellcasting = z.infer<typeof spellcastingSchema>;
 
+// The most improvements one class earns (the fighter's seven,
+// src/lib/srd/asi.ts); kept here as a number so the schema imports nothing.
+const MAX_ASI_CHOICES = 7;
+
 // One Ability Score Improvement choice (earned at levels 4/8/12/16/19):
 // +2 to one ability, +1 to two abilities, or a feat instead.
 export const asiChoiceSchema = z.discriminatedUnion("mode", [
@@ -205,7 +209,13 @@ export const asiChoiceSchema = z.discriminatedUnion("mode", [
     mode: z.literal("plus1x2"),
     abilities: z.tuple([z.enum(ABILITIES), z.enum(ABILITIES)]),
   }),
-  z.object({ mode: z.literal("feat"), feat: z.string().trim().min(1).max(80) }),
+  // `ability`: the score a half-feat raises where it offers a choice
+  // (Resilient, Athlete); absent for a feat that raises one score or none.
+  z.object({
+    mode: z.literal("feat"),
+    feat: z.string().trim().min(1).max(80),
+    ability: z.enum(ABILITIES).optional(),
+  }),
 ]);
 export type AsiChoice = z.infer<typeof asiChoiceSchema>;
 
@@ -251,7 +261,7 @@ export const createSheetSchema = z.object({
   features: z.array(sheetFeatureSchema).max(80).default([]),
   // The ASI choices baked into `abilities`, in threshold order. Stored so
   // instantiating at a lower campaign level can reverse the extra ones.
-  asiChoices: z.array(asiChoiceSchema).max(5).default([]),
+  asiChoices: z.array(asiChoiceSchema).max(MAX_ASI_CHOICES).default([]),
   // Choices a race offers rather than fixes (half-elf's two +1 bumps and
   // two skills, high elf's cantrip, dwarf's tool). Their effects are baked
   // into `abilities` and `proficiencies`; these are stored so reopening the
@@ -262,6 +272,11 @@ export const createSheetSchema = z.object({
       skills: z.array(z.string().trim().min(1).max(40)).max(4).default([]),
       cantrip: z.string().trim().max(80).default(""),
       tool: z.string().trim().max(60).default(""),
+      // A dragonborn's draconic ancestry ("red"), src/lib/srd/racial-grants.ts.
+      ancestry: z.string().trim().max(20).default(""),
+      // The score a variant human's half-feat raises where the feat offers a
+      // choice (Resilient, Athlete); src/lib/srd/legality/half-feats.ts.
+      featAbility: z.enum(ABILITIES).optional(),
     })
     .optional(),
   // The same for a background: the skills a content-pack background offers
@@ -269,6 +284,17 @@ export const createSheetSchema = z.object({
   backgroundChoices: z
     .object({
       skills: z.array(z.string().trim().min(1).max(40)).max(4).default([]),
+    })
+    .optional(),
+  // The either-or choices of the class's starting equipment
+  // (src/lib/srd/starting-kit.ts): the option taken on each line of the
+  // kit, 0 for the book's (a), and the weapon or instrument named for each
+  // "any simple weapon" the options taken leave open. Absent on a sheet
+  // made before kits had choices, which keeps the gear it holds.
+  kitChoices: z
+    .object({
+      options: z.array(z.number().int().min(0).max(5)).max(12).default([]),
+      picks: z.array(z.string().trim().min(1).max(60)).max(8).default([]),
     })
     .optional(),
   spellcasting: spellcastingSchema.default(null),
@@ -280,7 +306,13 @@ export const createSheetSchema = z.object({
 });
 export type CreateSheetInput = z.infer<typeof createSheetSchema>;
 
-// Fields a player may patch during play.
+// Fields a player may patch during play. Outside a level-up only the
+// cosmetic three (portrait, notes, backstory) are applied. Inside one, the
+// server builds the level from the CHOICES among these (the class, the
+// improvement or feat, the subclass, expertise, a class feature's picks, the
+// spells) and derives the rest: the engine-owned fields below are parsed so
+// that a client built before the choices existed is answered, and are not
+// applied (src/lib/srd/level-up.ts).
 export const patchSheetSchema = z.object({
   currentHp: z.number().int().min(0).max(500).optional(),
   tempHp: z.number().int().min(0).max(200).optional(),
@@ -317,6 +349,15 @@ export const patchSheetSchema = z.object({
   // only (the single-class flow patches spellcasting whole, as ever). The
   // server checks them against that class's own allowance at ITS level.
   levelUpSpells: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
+  // The one spell a caster who knows their spells gives up for another at
+  // a level-up.
+  levelUpForget: z.string().trim().max(80).optional(),
+  // The Ability Score Improvements taken with this level: two points each,
+  // or a feat. Only as many as the class's new level owes.
+  asiChoices: z.array(asiChoiceSchema).max(MAX_ASI_CHOICES).optional(),
+  // Under a table that rolls hit points, "average" takes the fixed value
+  // instead of the server's roll. Ignored under any other method.
+  hpChoice: z.enum(["roll", "average"]).optional(),
   portrait: attachmentSchema.nullable().optional(),
   notes: z.string().max(4000).optional(),
   backstory: z.string().trim().max(2000).optional(),
@@ -344,7 +385,19 @@ export type SheetResources = z.infer<typeof resourcesSchema>;
 export const conditionMetaSchema = z.record(
   z.string().max(40),
   z.object({
-    rounds: z.number().int().min(1).max(100).optional(),
+    // Rounds left. A long duration is stored in rounds too (Mage Armor's
+    // eight hours is 4800), so the ceiling is a day's worth.
+    rounds: z.number().int().min(1).max(14400).optional(),
+    // What put the condition there: the spell, feature or hazard by name.
+    source: z.string().trim().min(1).max(80).optional(),
+    // Set by the engine on a condition it has renewed (a rage kept going).
+    stoked: z.boolean().optional(),
+    // "Until the start of your next turn" (Dodge, Shield, the Protection
+    // style): the id of the combatant whose turn ends it, a characterId or
+    // an enemyId. Such a condition is not counted in rounds; the initiative
+    // pointer ends it on reaching that combatant
+    // (src/lib/dm/condition-tick.ts startTurnConditions).
+    untilTurnOf: z.string().trim().min(1).max(80).optional(),
     saveEnds: z
       .object({
         ability: z.enum(ABILITIES),

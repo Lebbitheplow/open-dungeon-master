@@ -3,6 +3,7 @@
 // AI DM is offered exactly.
 import type { CatalogEntry } from "@/lib/dm/catalog-types";
 import { cueOptions } from "@/lib/ambience/catalog";
+import { RELATIONSHIP_BEAT_NAMES } from "@/lib/dm/relationship-logic";
 
 const ABILITIES = [
   { value: "str", label: "Strength" },
@@ -27,6 +28,14 @@ const REASON = {
   label: "Reason",
   kind: "text" as const,
   placeholder: "Short in-fiction cause",
+};
+
+// One line for a relationship's memory, which those handlers call `note`.
+const NOTE = {
+  name: "note",
+  label: "What happened",
+  kind: "text" as const,
+  placeholder: "One short line for the record",
 };
 
 export const WORLD_ADJUDICATIONS: CatalogEntry[] = [
@@ -70,8 +79,8 @@ export const WORLD_ADJUDICATIONS: CatalogEntry[] = [
           { value: "fast", label: "Fast" },
         ],
       },
-      { name: "destination", label: "Toward", kind: "text" },
-      REASON,
+      { name: "characterIds", label: "Who travels", kind: "characters", help: "Leave empty for the whole party." },
+      { name: "reason", label: "The journey", kind: "text", placeholder: "Toward the pass, by the old road" },
     ],
   },
   {
@@ -263,6 +272,8 @@ export const WORLD_ADJUDICATIONS: CatalogEntry[] = [
       { name: "size", label: "Size", kind: "text", placeholder: "tiny, small, medium, large" },
       { name: "damage", label: "Damage", kind: "dice" },
       { name: "fragile", label: "Fragile", kind: "boolean" },
+      { name: "ac", label: "Its armor class", kind: "number", min: 1, max: 30, help: "Overrides the material's." },
+      { name: "hp", label: "Its hit points", kind: "number", min: 1, max: 1000, help: "Overrides the size's." },
       REASON,
     ],
   },
@@ -284,15 +295,17 @@ export const WORLD_ADJUDICATIONS: CatalogEntry[] = [
     name: "check_notice",
     label: "Passive notice",
     category: "world",
-    summary: "Compares passive Perception or Investigation against a DC without anyone rolling.",
+    summary: "Compares passive Perception, Insight or Investigation against a DC without anyone rolling.",
     fields: [
-      { name: "dc", label: "DC", kind: "number", required: true, min: 1, max: 30 },
+      { name: "difficulty", label: "Difficulty", kind: "select", options: DIFFICULTIES },
+      { name: "dc", label: "Or an exact DC", kind: "number", min: 1, max: 30 },
       {
-        name: "skill",
+        name: "sense",
         label: "Sense",
         kind: "select",
         options: [
           { value: "perception", label: "Perception" },
+          { value: "insight", label: "Insight" },
           { value: "investigation", label: "Investigation" },
         ],
       },
@@ -334,6 +347,7 @@ export const SOCIAL_ADJUDICATIONS: CatalogEntry[] = [
     fields: [
       { name: "name", label: "NPC", kind: "text", required: true },
       { name: "modifier", label: "Modifier", kind: "number", min: -10, max: 10 },
+      { name: "trait", label: "Trait", kind: "text" },
       { name: "location", label: "Found at", kind: "text" },
     ],
   },
@@ -366,9 +380,15 @@ export const SOCIAL_ADJUDICATIONS: CatalogEntry[] = [
     summary: "Moves a bond between a character and an NPC forward or back.",
     fields: [
       { name: "characterId", label: "Character", kind: "character", required: true },
-      { name: "npc", label: "NPC", kind: "text", required: true },
-      { name: "beat", label: "What happened", kind: "text", required: true },
-      REASON,
+      { name: "subject", label: "NPC or companion", kind: "text", required: true, help: "Their name as the table tracks it." },
+      {
+        name: "beat",
+        label: "What happened",
+        kind: "select",
+        required: true,
+        options: RELATIONSHIP_BEAT_NAMES.map((beat) => ({ value: beat, label: beat.replace(/_/g, " ") })),
+      },
+      NOTE,
     ],
   },
   {
@@ -378,8 +398,22 @@ export const SOCIAL_ADJUDICATIONS: CatalogEntry[] = [
     summary: "Advances a romance a stage, within the table's own limits.",
     fields: [
       { name: "characterId", label: "Character", kind: "character", required: true },
-      { name: "npc", label: "NPC", kind: "text", required: true },
-      REASON,
+      { name: "subject", label: "NPC or companion", kind: "text", required: true },
+      {
+        name: "to",
+        label: "Becomes",
+        kind: "select",
+        required: true,
+        options: [
+          { value: "interested", label: "Interested" },
+          { value: "courting", label: "Courting" },
+          { value: "together", label: "Together" },
+          { value: "betrothed", label: "Betrothed" },
+          { value: "married", label: "Married" },
+        ],
+        help: "The next step only; the server refuses a skipped one.",
+      },
+      NOTE,
     ],
   },
   {
@@ -389,7 +423,7 @@ export const SOCIAL_ADJUDICATIONS: CatalogEntry[] = [
     summary: "A falling out, a parting, a betrayal or a death.",
     fields: [
       { name: "characterId", label: "Character", kind: "character", required: true },
-      { name: "npc", label: "NPC", kind: "text", required: true },
+      { name: "subject", label: "NPC or companion", kind: "text", required: true },
       {
         name: "reason",
         label: "How it ends",
@@ -403,6 +437,7 @@ export const SOCIAL_ADJUDICATIONS: CatalogEntry[] = [
           { value: "death", label: "Death" },
         ],
       },
+      NOTE,
     ],
   },
 ];
@@ -455,6 +490,25 @@ export const STORY_ADJUDICATIONS: CatalogEntry[] = [
           { value: "dm", label: "You alone" },
         ],
         help: "Your screen. The dice are still the server's, and the number is still real.",
+      },
+      {
+        name: "expression",
+        label: "Dice",
+        kind: "dice",
+        help: "For an attack, damage or something else: 1d20+5, 2d6+3. Checks and saves come from the sheet.",
+      },
+      {
+        name: "targetEnemyId",
+        label: "Damage lands on",
+        kind: "enemy",
+        help: "For a damage roll in a fight: the server applies the total to this enemy.",
+      },
+      {
+        name: "against",
+        label: "The save resists",
+        kind: "text",
+        placeholder: "frightened, poison, a fireball",
+        help: "So a trait that helps against it is applied.",
       },
       { name: "reason", label: "What they are trying", kind: "text" },
     ],
@@ -565,6 +619,12 @@ export const STORY_ADJUDICATIONS: CatalogEntry[] = [
         placeholder: "a flooded stone stair descending into black water, lit by one lantern",
       },
       { name: "reason", label: "Why", kind: "text" },
+      {
+        name: "characterIds",
+        label: "Who is in it",
+        kind: "characters",
+        help: "Two at most: their portraits are passed as references.",
+      },
     ],
   },
 ];

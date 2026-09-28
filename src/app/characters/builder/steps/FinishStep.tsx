@@ -1,16 +1,21 @@
 "use client";
 
 import { Camera, UserRound } from "lucide-react";
-import { NumberStepper } from "@/components/ui/NumberStepper";
+import { Select } from "@/components/ui/Select";
 import { cn } from "@/lib/cn";
 import { contentSlug } from "@/lib/help";
-import type { CreateSheetInput } from "@/lib/schemas/sheet";
+import type { Ability, CreateSheetInput } from "@/lib/schemas/sheet";
 import { formatModifier, proficiencyBonus } from "@/lib/srd";
+import { featAbilityIncrease } from "@/lib/srd/feat-effects";
+import { srdRaceId } from "@/lib/srd/race-id";
+import { ABILITY_LABELS } from "../AbilityEditor";
 import { ui } from "@/lib/ui";
 import CatalogBrowser from "../CatalogBrowser";
 import ContentPicker from "../ContentPicker";
 import { HpExplainerButton } from "../AbilityExplainers";
-import type { ClassOption, RaceOption } from "../useBuilderOptions";
+import { armorClassLine, hitPointsLine, purseViewFor } from "../derivedReasons";
+import type { BackgroundOption, ClassOption, RaceOption } from "../useBuilderOptions";
+import type { TableRulesState } from "../useTableRules";
 import type { BuilderDerived } from "../useBuilderDerived";
 import type { BuilderState } from "../useBuilderState";
 import { hpExplainerInput } from "./AbilitiesStep";
@@ -23,6 +28,8 @@ export function FinishStep({
   derived,
   race,
   klass,
+  background,
+  table,
   initial,
   paintsPortraits,
   onUploadPortrait,
@@ -32,6 +39,8 @@ export function FinishStep({
   derived: BuilderDerived;
   race: RaceOption | undefined;
   klass: ClassOption | undefined;
+  background: BackgroundOption | undefined;
+  table: TableRulesState;
   initial?: CreateSheetInput;
   // Whether this server can paint a portrait at all. Without an image
   // backend the section offers the upload alone and stops promising a
@@ -40,10 +49,42 @@ export function FinishStep({
   onUploadPortrait: () => void;
   error: string;
 }) {
-  const { portrait, setPortrait, acOverride, setAcOverride, setHpOverride } = state;
-  const { preview, acInfo, ac, effectiveLevel, asiSlotLevels } = derived;
+  const { portrait, setPortrait } = state;
+  const { preview, acInfo, ac, effectiveLevel } = derived;
   const keptSaved = Boolean(initial?.portrait && portrait?.url === initial.portrait.url);
   const hp = hpExplainerInput(state, derived, race, klass);
+  // Hit points, armor class and coin are the server's to work out, so they
+  // are shown with their reasons and never typed.
+  const hpLine =
+    preview && klass
+      ? hitPointsLine({
+          hitDie: klass.hitDie,
+          level: effectiveLevel,
+          maxHp: preview.maxHp,
+          range: preview.hpRange,
+          method: preview.hpMethod,
+          kept: state.hpOverride !== null,
+          atTable: Boolean(table.rules),
+        })
+      : null;
+  const acLine = armorClassLine(acInfo?.ac ?? ac, acInfo?.parts);
+  const purse = purseViewFor({
+    purse: derived.purse,
+    keepsStoredGear: state.keepsStoredGear,
+    backgroundName: background?.name ?? "chosen",
+    backgroundPurse: background?.purse ?? 0,
+    classId: klass?.id ?? "",
+    className: klass?.name ?? "character",
+    table,
+  });
+  // Feats come with Ability Score Improvements (picked on the Abilities
+  // step). The one race that hands out a feat of its own is the variant
+  // human; anyone else's extra feat is refused by the server.
+  const racialFeat = race ? srdRaceId(race.id) === "variant_human" : false;
+  const featRoom = racialFeat ? Math.max(0, 1 - state.feats.length) : 0;
+  // A half-feat that offers a choice of score (Resilient, Athlete) asks
+  // which one it raises; the server adds the point when the sheet is saved.
+  const featScores = racialFeat ? (featAbilityIncrease(state.feats[0] ?? "")?.from ?? []) : [];
   return (
     <div className="space-y-4">
       <StepPanel title="Portrait (optional)" ornate>
@@ -120,50 +161,68 @@ export function FinishStep({
         />
       </StepPanel>
 
-      <StepPanel
-        title="Additional feats (optional)"
-        help={
-          asiSlotLevels.length
-            ? "Beyond the ability score improvement picks on the Abilities step; racial or homebrew feats go here."
-            : undefined
-        }
-      >
-        <ContentPicker
-          kind="feats"
-          placeholder="Search feats (e.g. alert, tough)"
-          onPick={(entry) =>
-            state.setFeats((current) =>
-              current.includes(entry.name) ? current : [...current, entry.name],
-            )
+      {racialFeat || state.feats.length ? (
+        <StepPanel
+          title={racialFeat ? "Your feat" : "Feats"}
+          help={
+            racialFeat
+              ? "A variant human starts with one feat of their choice."
+              : "Feats this character already holds. New feats come with an ability score improvement."
           }
-        />
-        {/* Feats are the pick a new player is least able to name, so the
-            whole list is one tap away with a ⓘ on every row. */}
-        <CatalogBrowser
-          kind="feats"
-          buttonLabel="Browse every feat"
-          selectedNames={state.feats}
-          onPick={(entry) =>
-            state.setFeats((current) =>
-              current.includes(entry.name) ? current : [...current, entry.name],
-            )
-          }
-          onUnpick={(featName) =>
-            state.setFeats((current) => current.filter((entry) => entry !== featName))
-          }
-          sections={[{ key: "feats:all", label: "All feats" }]}
-        />
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {state.feats.map((feat) => (
-            <Chip
-              key={feat}
-              label={feat}
-              info={{ reference: { kind: "feats", slug: contentSlug(feat), name: feat } }}
-              onRemove={() => state.setFeats((current) => current.filter((entry) => entry !== feat))}
-            />
-          ))}
-        </div>
-      </StepPanel>
+        >
+          {featRoom ? (
+            <>
+              <ContentPicker
+                kind="feats"
+                placeholder="Search feats (e.g. alert, tough)"
+                onPick={(entry) =>
+                  state.setFeats((current) =>
+                    current.includes(entry.name) || current.length >= 1 ? current : [...current, entry.name],
+                  )
+                }
+              />
+              {/* Feats are the pick a new player is least able to name, so the
+                  whole list is one tap away with a ⓘ on every row. */}
+              <CatalogBrowser
+                kind="feats"
+                buttonLabel="Browse every feat"
+                selectedNames={state.feats}
+                onPick={(entry) =>
+                  state.setFeats((current) =>
+                    current.includes(entry.name) || current.length >= 1 ? current : [...current, entry.name],
+                  )
+                }
+                onUnpick={(featName) =>
+                  state.setFeats((current) => current.filter((entry) => entry !== featName))
+                }
+                sections={[{ key: "feats:all", label: "All feats" }]}
+              />
+            </>
+          ) : null}
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {state.feats.map((feat) => (
+              <Chip
+                key={feat}
+                label={feat}
+                info={{ reference: { kind: "feats", slug: contentSlug(feat), name: feat } }}
+                onRemove={() => state.setFeats((current) => current.filter((entry) => entry !== feat))}
+              />
+            ))}
+          </div>
+          {featScores.length > 1 ? (
+            <label className="mt-2 block sm:w-64">
+              <span className="mb-1 block text-xs text-stone-500">{state.feats[0]} raises by 1</span>
+              <Select<Ability>
+                value={featScores.includes(state.racialFeatAbility as Ability) ? (state.racialFeatAbility as Ability) : featScores[0]}
+                onChange={(ability) => state.setRacialFeatAbility(ability)}
+                label={`${state.feats[0]} raises`}
+                className="w-full"
+                options={featScores.map((ability) => ({ value: ability, label: ABILITY_LABELS[ability] }))}
+              />
+            </label>
+          ) : null}
+        </StepPanel>
+      ) : null}
 
       {preview && race ? (
         <StepPanel title="Derived stats" ornate className="border-amber-500/30">
@@ -176,24 +235,27 @@ export function FinishStep({
                 </span>
               }
             >
-              <NumberStepper min={1} max={500} value={preview.maxHp} onChange={(next) => setHpOverride(next || 1)} label="Max HP" size="sm" />
-            </Field>
-            <Field label={`AC${acOverride === null ? "" : " (pinned)"}`}>
-              <NumberStepper min={1} max={30} value={ac} onChange={(next) => setAcOverride(next || 10)} label="AC" size="sm" />
-              <span className="mt-1 block text-[11px] text-stone-500">
-                {acOverride === null
-                  ? (acInfo?.parts.join(" + ") ?? "")
-                  : "typed by hand; armor no longer changes it"}
+              <span key={hpLine?.value} className="reveal font-mono text-base text-amber-100">
+                {hpLine?.value}
               </span>
-              {acOverride === null ? null : (
-                <button
-                  type="button"
-                  onClick={() => setAcOverride(null)}
-                  className="mt-1 text-[11px] text-amber-300/80 underline"
-                >
-                  use my armor instead
-                </button>
-              )}
+              <span className="mt-1 block text-[11px] text-stone-500">{hpLine?.reason}</span>
+            </Field>
+            <Field label="AC">
+              <span key={acLine.value} className="reveal font-mono text-base text-amber-100">
+                {acLine.value}
+              </span>
+              <span className="mt-1 block text-[11px] text-stone-500">{acLine.reason}</span>
+            </Field>
+            <Field label="Gold" className="col-span-2">
+              <span key={`${purse.gold}-${purse.copper}`} className="reveal font-mono text-base text-amber-100">
+                {purse.gold} gp{purse.copper ? ` ${purse.copper} cp` : ""}
+              </span>
+              <span className="mt-1 block text-[11px] text-stone-500">
+                {purse.wealth?.rolled
+                  ? `Rolled by the server: ${purse.wealth.rolled.gold} gp on ${purse.wealth.dice}. `
+                  : ""}
+                {purse.source}
+              </span>
             </Field>
             <span className="self-end">Speed {race.speed} ft</span>
             <span className="self-end">Prof {formatModifier(proficiencyBonus(effectiveLevel))}</span>

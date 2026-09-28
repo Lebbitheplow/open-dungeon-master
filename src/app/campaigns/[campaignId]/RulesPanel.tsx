@@ -32,8 +32,8 @@ export const VARIANT_TOGGLES: Array<{
   },
   {
     key: "criticalFumbles",
-    label: "Critical fumbles",
-    tip: "A natural 1 on an attack roll causes a minor narrated mishap.",
+    label: "Critical fumbles (narrated)",
+    tip: "A natural 1 on an attack roll comes with a minor mishap the DM describes. Narration only: the server changes no numbers.",
   },
   {
     key: "encumbrance",
@@ -42,8 +42,8 @@ export const VARIANT_TOGGLES: Array<{
   },
   {
     key: "lingeringInjuries",
-    label: "Lingering injuries",
-    tip: "A critical hit or dropping to 0 HP can leave a lasting injury the DM tracks.",
+    label: "Lingering injuries (narrated)",
+    tip: "A critical hit or dropping to 0 HP can leave a lasting injury the DM describes. Narration only: the server tracks no injury and changes no numbers.",
   },
   {
     key: "powerfulCritical",

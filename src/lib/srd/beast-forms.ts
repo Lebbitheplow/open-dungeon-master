@@ -201,6 +201,29 @@ export function wildShapeCapsFor(
   };
 }
 
+// The most hit points a creature of a challenge rating has (DMG, Monster
+// Statistics by Challenge Rating), for a form the table above does not list:
+// the caller states the beast's challenge rating, and the numbers it sends
+// with it may not be those of something stronger.
+const HP_CEILING_BY_CR: Array<[number, number]> = [
+  [0, 6], [0.125, 35], [0.25, 49], [0.5, 70], [1, 85], [2, 100], [3, 115],
+  [4, 130], [5, 145], [6, 160],
+];
+
+export function hitPointCeilingForCr(cr: number): number {
+  const row = HP_CEILING_BY_CR.find(([rating]) => cr <= rating);
+  return row ? row[1] : HP_CEILING_BY_CR[HP_CEILING_BY_CR.length - 1][1];
+}
+
+// No beast a druid can become wears better than natural armor of 18.
+export const UNLISTED_FORM_MAX_AC = 18;
+
+// How long a Wild Shape lasts: half the druid's level in hours, rounded
+// down (SRD 5.1, Wild Shape), and an hour at the least.
+export function wildShapeHours(druidLevel: number): number {
+  return Math.max(1, Math.floor(druidLevel / 2));
+}
+
 // Human-readable CR ("1/4" not "0.25") for error messages.
 export function formatCr(cr: number): string {
   if (cr === 0.125) return "1/8";

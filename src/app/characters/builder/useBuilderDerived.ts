@@ -4,51 +4,104 @@ import { useMemo } from "react";
 import { spellClassFor } from "@/lib/classes";
 import { suggestedCantripCount, suggestedSpellCount } from "@/lib/content/mechanics";
 import { starterSpellsFor } from "@/lib/help";
-import type { Ability, AbilityScores, EquipmentItem } from "@/lib/schemas/sheet";
+import type { Ability, AbilityScores, AsiChoice, EquipmentItem } from "@/lib/schemas/sheet";
 import {
   abilityMod,
   acBreakdownFor,
   computeSheetDerived,
   spellSlotsFor,
 } from "@/lib/srd";
-import { ASI_LEVELS, applyAsiChoices, asiSlotsTakenInPlay } from "@/lib/srd/asi";
-import { defaultArmor, suggestArmor } from "@/lib/srd/armor";
+import { applyAsiChoices, asiLevelsFor, asiSlotsTakenInPlay } from "@/lib/srd/asi";
+import { derivedMaxHp, hpBonusPerLevelFor, hpRange, type HpMethod } from "@/lib/srd/hit-points";
+import { hpBonusPerLevel, srdRaceId } from "@/lib/srd/race-id";
+import { halfFeatPicks, scoresWithHalfFeats } from "@/lib/srd/legality/half-feats";
+import {
+  bundledPrices,
+  judgeStartingGear,
+  type StartingWealthMethod,
+} from "@/lib/srd/starting-wealth";
+import { suggestArmor } from "@/lib/srd/armor";
 import { classFeaturesFor, subclassSpellsFor } from "@/lib/srd/features";
 import { fightingStyleSlots } from "@/lib/srd/feature-effects";
 import { openOptionSlots, optionFeatureName, type OptionSlot } from "@/lib/srd/options";
 import { spellStyleFor, spellbookAllowance, type SpellStyle } from "@/lib/srd/spell-prep";
-import { defaultLoadout, suggestWeapons } from "@/lib/srd/weapons";
-import { builderMaxHp } from "./abilityDice";
+import {
+  chooseKitOption as withKitOption,
+  classKitFor,
+  kitNames,
+  pickKitSlot as withKitPick,
+  resolveKit,
+  startingKitFor,
+  type KitTraining,
+} from "@/lib/srd/starting-kit";
+import { suggestWeapons } from "@/lib/srd/weapons";
+import { splitToolGrants, type ToolChoice } from "@/lib/srd/tool-choices";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
-import type { BuilderState } from "./useBuilderState";
+import type { BuilderState, EquipmentItem as BuilderItem } from "./useBuilderState";
 
 // Everything the builder computes from its fields: final abilities, the sheet
 // preview, the auto loadout and AC, spell counts and the class option slots.
 // Kept apart from the fields so each wizard step can read what it needs
 // without knowing how it was derived.
+// What the table has set for the numbers the server derives. Absent in the
+// library, where a character is built under the defaults.
+export type TableRules = {
+  hpMethod: HpMethod;
+  startingWealth: StartingWealthMethod;
+  // Gold the server rolled for this class, at a table that rolls wealth;
+  // null until it has.
+  wealthRoll?: number | null;
+};
+
+// The class's and background's tool grants with the player's picks placed on
+// the open ones they fit. Nothing is picked for the player: `left` is what
+// each open grant still waits for, and the class step holds until it is 0.
+export function resolveToolPicks(
+  grants: string[],
+  picks: string[],
+): { fixed: string[]; choices: ToolChoice[]; chosen: string[]; left: number[] } {
+  const { fixed, choices } = splitToolGrants(grants);
+  const taken = new Set(fixed.map((tool) => tool.toLowerCase()));
+  const left = choices.map((choice) => choice.count);
+  const chosen: string[] = [];
+  for (const pick of picks.map((tool) => tool.trim().toLowerCase())) {
+    const slot = choices.findIndex((choice, index) => left[index] > 0 && choice.from.includes(pick));
+    if (slot >= 0 && !chosen.includes(pick) && !taken.has(pick)) {
+      left[slot] -= 1;
+      chosen.push(pick);
+    }
+  }
+  return { fixed, choices, chosen, left };
+}
+
 export function useBuilderDerived({
   state,
   race,
   klass,
   background,
   fixedLevel,
+  rules,
 }: {
   state: BuilderState;
   race: RaceOption | undefined;
   klass: ClassOption | undefined;
   background: BackgroundOption | undefined;
   fixedLevel?: number;
+  rules?: TableRules;
 }) {
   const {
     level, scores, racialAsi, asiChoices, chosenSkills, expertisePicks, bonusLanguages,
     racialSkills, racialTool, backgroundSkills, hpOverride, acOverride, equipment, removedAutoNames,
+    toolPicks, repeatSkills,
     subclass, optionPicks, spells, cantrips, bookPrepared, keepsStoredGear, asiRecorded, asiReachedLevel,
   } = state;
 
   const effectiveLevel = fixedLevel ?? level;
+  // Improvements are the class's own: a fighter's seven, a rogue's six.
+  const classId = klass?.id;
   const asiSlotLevels = useMemo(
-    () => ASI_LEVELS.filter((threshold) => effectiveLevel >= threshold),
-    [effectiveLevel],
+    () => asiLevelsFor(classId).filter((threshold) => effectiveLevel >= threshold),
+    [effectiveLevel, classId],
   );
   const activeAsiChoices = useMemo(
     () => asiSlotLevels.map((_, index) => asiChoices[index] ?? null),
@@ -82,10 +135,31 @@ export function useBuilderDerived({
     return final as AbilityScores;
   }, [scores, race, racialAsi]);
 
+  // The scores the builder SENDS: the improvements in, the half-feats' points
+  // not (the server adds those, src/lib/srd/legality/half-feats.ts).
   const abilities = useMemo<AbilityScores | null>(
     () => (baseAbilities ? applyAsiChoices(baseAbilities, activeAsiChoices) : null),
     [baseAbilities, activeAsiChoices],
   );
+  // The scores the server will STORE, with those points in, and the saving
+  // throw Resilient adds: what every number on screen is worked out from.
+  const raceId = race?.id;
+  const { feats: racialFeatNames, racialFeatAbility } = state;
+  const halfFeats = useMemo(() => {
+    if (!abilities) {
+      return null;
+    }
+    const picks = halfFeatPicks(
+      {
+        asiChoices: activeAsiChoices.filter((choice): choice is AsiChoice => choice !== null),
+        feats: racialFeatNames,
+        racialChoices: { featAbility: racialFeatAbility },
+      },
+      raceId && srdRaceId(raceId) === "variant_human" ? 1 : 0,
+    );
+    return scoresWithHalfFeats(abilities, picks);
+  }, [abilities, activeAsiChoices, racialFeatNames, racialFeatAbility, raceId]);
+  const shownAbilities = halfFeats?.abilities ?? null;
 
   // Skills come from five places, not two: the class picks, the
   // background's fixed grants and its picks, the race's fixed grants (high
@@ -101,13 +175,19 @@ export function useBuilderDerived({
         ...backgroundSkills.filter(Boolean),
         ...(race?.skills ?? []),
         ...racialSkills.filter(Boolean),
+        ...repeatSkills.filter(Boolean),
       ]),
     ],
-    [chosenSkills, background, backgroundSkills, race, racialSkills],
+    [chosenSkills, background, backgroundSkills, race, racialSkills, repeatSkills],
+  );
+
+  const toolGrants = useMemo(
+    () => resolveToolPicks([...(klass?.tools ?? []), ...(background?.tools ?? [])], toolPicks),
+    [klass, background, toolPicks],
   );
 
   const preview = useMemo(() => {
-    if (!abilities || !race || !klass || !background) {
+    if (!shownAbilities || !race || !klass || !background) {
       return null;
     }
     const skills = proficientSkills;
@@ -130,10 +210,10 @@ export function useBuilderDerived({
       tools: [
         ...new Set(
           [
-            ...(klass.tools ?? []),
-            ...(background.tools ?? []),
+            ...toolGrants.fixed,
             ...(race.tools ?? []),
             racialTool,
+            ...toolGrants.chosen,
           ].filter(Boolean),
         ),
       ],
@@ -142,27 +222,84 @@ export function useBuilderDerived({
       armor: [...new Set([...klass.armor, ...(race.armor ?? [])])],
       weapons: [...new Set([...klass.weapons, ...(race.weapons ?? [])])],
     };
+    // Resilient's save counts in what is shown; the server writes it itself,
+    // so the proficiencies sent stay the class's.
+    const saves = [...new Set([...klass.saves, ...(halfFeats?.saves ?? [])])];
+    // The class's features and the feats count too (Remarkable Athlete and
+    // Alert move the initiative), as they do on the stored sheet.
     const derived = computeSheetDerived({
-      abilities,
+      abilities: shownAbilities,
       level: effectiveLevel,
-      proficiencies,
+      class: klass.id,
+      features: classFeaturesFor(klass.id, subclass, effectiveLevel),
+      feats: [
+        ...state.feats,
+        ...activeAsiChoices.flatMap((choice) => (choice?.mode === "feat" ? [choice.feat] : [])),
+      ],
+      proficiencies: { ...proficiencies, saves },
       spellcasting: klass.spellAbility
         ? { ability: klass.spellAbility, slots: {}, prepared: [], known: [], cantrips: [] }
         : null,
     });
-    const maxHp = hpOverride ?? builderMaxHp(klass.hitDie, race.id, abilities.con, effectiveLevel);
-    return { proficiencies, derived, maxHp };
-  }, [abilities, race, klass, background, proficientSkills, expertisePicks, bonusLanguages, racialTool, effectiveLevel, hpOverride]);
+    // Hit points are the server's to derive, by the table's method; this is
+    // the same arithmetic, shown. A table that rolls them rolls on the
+    // server when the character is saved, so the figure here is the fixed
+    // value and `hpRange` what the dice may give. A stored character keeps
+    // the hit points it came home with (hpOverride) until the server says
+    // otherwise.
+    const hpInput = {
+      classes: [{ die: klass.hitDie, level: effectiveLevel }],
+      con: shownAbilities.con,
+      perLevelBonus: hpBonusPerLevelFor(hpBonusPerLevel(race.id) > 0, [
+        ...state.feats,
+        ...activeAsiChoices.flatMap((choice) => (choice?.mode === "feat" ? [choice.feat] : [])),
+      ]),
+    };
+    const method = rules?.hpMethod ?? "average";
+    const maxHp =
+      hpOverride ?? derivedMaxHp(method === "max" ? "max" : "average", hpInput);
+    return { proficiencies, derived, maxHp, hpMethod: method, hpRange: hpRange(hpInput) };
+  }, [shownAbilities, halfFeats, race, klass, subclass, background, proficientSkills, expertisePicks, bonusLanguages, racialTool, toolGrants, effectiveLevel, hpOverride, rules?.hpMethod, state.feats, activeAsiChoices]);
 
-  // Class-appropriate starting weapons ride along automatically (removable
-  // chips) so no character begins the adventure unarmed. Weapons AND armor:
-  // a fighter who starts with no armor in their pack would derive an
-  // unarmored AC, which is not what "plate proficiency" should feel like on
-  // turn one.
-  const autoLoadout = useMemo(
-    () => (klass ? [...defaultLoadout(klass.weapons), ...defaultArmor(klass.armor)] : []),
-    [klass],
+  // The class's starting equipment rides along automatically (removable
+  // chips): the book's list with the either-or choices the player made on
+  // the gear step (src/lib/srd/starting-kit.ts), the same kit the server
+  // hands out free. A barbarian starts with a greataxe and no armor, and
+  // its armor class is its Unarmored Defense.
+  const kitChoicesState = state.kitChoices;
+  // The training a kit's "(if proficient)" options ask about.
+  const kitTraining = useMemo<KitTraining>(
+    () => ({
+      armor: [...(klass?.armor ?? []), ...(race?.armor ?? [])],
+      weapons: [...(klass?.weapons ?? []), ...(race?.weapons ?? [])],
+      subclass,
+    }),
+    [klass, race, subclass],
   );
+  const startingKit = useMemo(
+    () =>
+      klass
+        ? startingKitFor(
+            { id: klass.id, armor: kitTraining.armor, weapons: kitTraining.weapons },
+            kitChoicesState ?? null,
+            subclass,
+            klass.name,
+          )
+        : null,
+    [klass, kitTraining, kitChoicesState, subclass],
+  );
+  const autoLoadout = useMemo(() => startingKit?.items ?? [], [startingKit]);
+  const classKit = useMemo(() => (klass && !keepsStoredGear ? classKitFor(klass.id) : null), [klass, keepsStoredGear]);
+  // What the sheet stores: the choices as the server reads them, or a
+  // stored character's own while it keeps its gear.
+  const kitChoices =
+    keepsStoredGear
+      ? kitChoicesState?.options.length || kitChoicesState?.picks.length
+        ? kitChoicesState
+        : undefined
+      : startingKit?.tabled
+        ? startingKit.choices
+        : undefined;
   const equipmentSuggestions = useMemo(() => {
     if (!klass) {
       return [];
@@ -179,35 +316,82 @@ export function useBuilderDerived({
     if (keepsStoredGear) {
       return equipment;
     }
-    const manualNames = new Set(equipment.map((item) => item.name));
     const auto = autoLoadout
-      .filter((weapon) => !removedAutoNames.includes(weapon.name) && !manualNames.has(weapon.name))
-      .map((weapon) => ({ name: weapon.name, qty: 1 }));
+      .filter((item) => !removedAutoNames.includes(item.name))
+      .map((item) => ({ name: item.name, qty: item.qty }));
     // Backgrounds hand over a starting kit too, not just skills.
     const backgroundGear = (background?.equipment ?? [])
-      .filter((itemName) => !removedAutoNames.includes(itemName) && !manualNames.has(itemName))
+      .filter((itemName) => !removedAutoNames.includes(itemName))
       .map((itemName) => ({ name: itemName, qty: 1 }));
-    return [...auto, ...backgroundGear, ...equipment];
+    // One row per name: a dagger bought beside the rogue's two is a third.
+    const rows: BuilderItem[] = [];
+    for (const item of [...auto, ...backgroundGear, ...equipment]) {
+      const held = rows.findIndex((row) => row.name === item.name);
+      if (held >= 0) {
+        rows[held] = { ...rows[held], ...item, qty: rows[held].qty + item.qty };
+      } else {
+        rows.push({ ...item });
+      }
+    }
+    return rows;
   }, [equipment, autoLoadout, removedAutoNames, background, keepsStoredGear]);
 
-  // AC is derived from the gear above, not typed: equipping a breastplate
-  // moves the number here and on the sheet. The player can still pin a value
-  // (homebrew armor, a DM ruling), which sets acOverride on the sheet and
-  // tells the server engine to stop recomputing it.
+  // What the pack costs. Under "equipment" the class's gear and the
+  // background's kit are free and the background's coin is the purse; under
+  // "rolled" the server's roll is the purse and everything is bought. A
+  // stored character's pack was earned, so an edit charges only what it adds.
+  const wealthMethod = rules?.startingWealth ?? "equipment";
+  const purse = useMemo(() => {
+    const priceOf = (itemName: string) => {
+      const picked = equipment.find((item) => item.name === itemName);
+      return picked?.priceCp !== undefined
+        ? { copper: picked.priceCp, magic: false }
+        : bundledPrices(itemName);
+    };
+    const freeKit = keepsStoredGear
+      ? equipment.flatMap((item) => Array.from({ length: item.qty }, () => item.name))
+      : wealthMethod === "rolled"
+        ? []
+        : [...kitNames(autoLoadout), ...(background?.equipment ?? [])];
+    const coinCopper = keepsStoredGear
+      ? state.gold * 100
+      : Math.round(
+          (wealthMethod === "rolled" ? (rules?.wealthRoll ?? 0) : (background?.purse ?? 0)) * 100,
+        );
+    const verdict = judgeStartingGear({ equipment: fullEquipment, freeKit, coinCopper, priceOf });
+    const left = Math.max(0, coinCopper - verdict.spentCopper);
+    return {
+      method: wealthMethod,
+      coinCopper,
+      spentCopper: verdict.spentCopper,
+      // The kit's choices matter where the kit is free; under rolled wealth
+      // they only say what is pre-added to buy.
+      problems: [
+        ...(keepsStoredGear || wealthMethod === "rolled" ? [] : (startingKit?.problems ?? [])),
+        ...verdict.problems,
+      ],
+      gold: Math.floor(left / 100),
+      copper: left % 100,
+    };
+  }, [equipment, fullEquipment, autoLoadout, startingKit, background, keepsStoredGear, wealthMethod, rules?.wealthRoll, state.gold]);
+
+  // AC is derived from the gear above, never typed: equipping a breastplate
+  // moves the number here and on the sheet. Pinning an armor class is a
+  // correction, and corrections are the DM's or the party lead's to make.
   const acInfo = useMemo(() => {
-    if (!klass || !preview || !abilities) {
+    if (!klass || !preview || !shownAbilities) {
       return null;
     }
     return acBreakdownFor({
       class: klass.id,
       level: effectiveLevel,
-      abilities,
+      abilities: shownAbilities,
       proficiencies: preview.proficiencies,
       equipment: fullEquipment,
       features: classFeaturesFor(klass.id, subclass, effectiveLevel),
     });
-  }, [klass, preview, abilities, fullEquipment, subclass, effectiveLevel]);
-  const ac = acOverride ?? acInfo?.ac ?? 10;
+  }, [klass, preview, shownAbilities, fullEquipment, subclass, effectiveLevel]);
+  const ac = acInfo?.ac ?? acOverride ?? 10;
 
   // What this class and subclass actually hand the character at this level.
   // Showing them turns a blind dropdown choice into an informed one.
@@ -256,8 +440,8 @@ export function useBuilderDerived({
   const casts = Boolean(klass?.spellAbility) && (maxSpellLevel > 0 || rawCantripAdvice !== null);
   const cantripAdvice = casts ? rawCantripAdvice : null;
   const spellAdvice =
-    casts && klass?.spellAbility && abilities
-      ? suggestedSpellCount(spellSearchClass, effectiveLevel, abilityMod(abilities[klass.spellAbility]))
+    casts && klass?.spellAbility && shownAbilities
+      ? suggestedSpellCount(spellSearchClass, effectiveLevel, abilityMod(shownAbilities[klass.spellAbility]))
       : null;
   // Opening suggestions, so a player who has never seen a 5e spell list is
   // not left staring at an empty search box.
@@ -309,10 +493,16 @@ export function useBuilderDerived({
     asiTakenInPlay,
     baseAbilities,
     abilities,
+    shownAbilities,
     proficientSkills,
+    toolGrants,
     preview,
     equipmentSuggestions,
+    classKit,
+    kitChoices,
+    kitTraining,
     fullEquipment,
+    purse,
     acInfo,
     ac,
     grantedFeatures,
@@ -354,6 +544,7 @@ export function builderActions(
       slug?: string;
       gear?: EquipmentItem["gear"];
       weight?: number;
+      priceCp?: number;
     }) {
       state.setEquipment((current) => {
         const existing = current.find((item) => item.name === entry.name);
@@ -372,6 +563,7 @@ export function builderActions(
             slug: entry.slug,
             ...(entry.gear ? { gear: entry.gear } : {}),
             ...(entry.weight !== undefined ? { weight: entry.weight } : {}),
+            ...(entry.priceCp !== undefined ? { priceCp: entry.priceCp } : {}),
           },
         ];
       });
@@ -389,6 +581,25 @@ export function builderActions(
         state.setRemovedAutoNames((removed) =>
           removed.includes(itemName) ? removed : [...removed, itemName],
         );
+      }
+    },
+    // An either-or line of the class's starting equipment, and the weapon
+    // named for an "any simple weapon" slot. Kit items the player removed
+    // come back with a new choice, since the choice is about them.
+    chooseKitOption(line: number, option: number) {
+      const kit = klass ? classKitFor(klass.id) : null;
+      if (kit) {
+        state.setKitChoices((current) => withKitOption(kit, current, line, option));
+        state.setRemovedAutoNames([]);
+      }
+    },
+    pickKitSlot(index: number, name: string) {
+      const kit = klass ? classKitFor(klass.id) : null;
+      if (kit) {
+        state.setKitChoices((current) =>
+          withKitPick(resolveKit(kit, current, { armor: [], weapons: [] }).choices, index, name),
+        );
+        state.setRemovedAutoNames([]);
       }
     },
     toggleSkill(skillId: string) {

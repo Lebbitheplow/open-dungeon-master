@@ -1,5 +1,6 @@
 import { isValidExpression } from "@/lib/dice";
 import { xpForCr } from "@/lib/srd/encounter-math";
+import { correctedMonsterData } from "@/lib/bestiary/pack-corrections";
 
 // Compacts a raw Open5e monster blob into the snapshot an encounter stores
 // per enemy (stat_json). Snapshotting at spawn means a live fight never
@@ -108,16 +109,30 @@ export function creatureTypeOf(stats: Pick<EnemyStats, "type">): CreatureType {
   return normalizeCreatureType(stats.type) ?? "monstrosity";
 }
 
-// "The wolf makes two bite attacks." -> 2, clamped to 3 so a bad parse can
-// never flood a turn with swings.
+const MULTIATTACK_WORDS: Record<string, number> = {
+  two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+};
+// The same ceiling enemy-attack.ts holds a turn to: a guard against a
+// corrupt block, well above any SRD creature (the tarrasque makes five).
+const MAX_MULTIATTACK = 10;
+
+// "The wolf makes two bite attacks." -> 2. As many as the stat block says
+// (SRD 5.1, Multiattack): "makes five attacks" is five swings. The hydra's
+// "as many bite attacks as it has heads" reads as the five heads it starts
+// with.
 export function parseMultiattackCount(description: string): number | null {
-  const match = /makes?\s+(two|three|four|2|3|4)\b[^.]*attack/i.exec(description);
+  if (/as many [^.]*attacks? as it has heads/i.test(description)) {
+    return 5;
+  }
+  const match = /makes?\s+(two|three|four|five|six|seven|eight|nine|ten|\d{1,2})\b[^.]*attack/i.exec(
+    description,
+  );
   if (!match) {
     return null;
   }
   const word = match[1].toLowerCase();
-  const count = word === "two" || word === "2" ? 2 : word === "three" || word === "3" ? 3 : 4;
-  return Math.min(3, count);
+  const count = MULTIATTACK_WORDS[word] ?? Number(word);
+  return count >= 2 ? Math.min(MAX_MULTIATTACK, count) : null;
 }
 
 const MAX_ATTACKS = 4;
@@ -201,7 +216,9 @@ function formatSpeed(raw: unknown): string {
   return "30";
 }
 
-export function parseMonster(data: Record<string, unknown>, crFromRow: number): EnemyStats {
+export function parseMonster(raw: Record<string, unknown>, crFromRow: number): EnemyStats {
+  // A pack row that misprints its SRD block is read corrected.
+  const data = correctedMonsterData(raw);
   const actions = Array.isArray(data.actions) ? (data.actions as RawAction[]) : [];
   const specials = Array.isArray(data.special_abilities)
     ? (data.special_abilities as RawAction[])

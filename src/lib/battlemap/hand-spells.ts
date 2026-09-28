@@ -4,6 +4,7 @@
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { computeSheetDerived, spellAttackFor, spellSaveDcFor } from "@/lib/srd";
 import { RAGING, resourceDef, resourceLevel, type ResourceDef } from "@/lib/srd/class-resources";
+import { aoeSpendFor } from "@/lib/srd/aoe-spend";
 import type { CombatRiders } from "@/lib/srd/feature-effects";
 import { authoredSpellRow, parseSpellMech, spellMechFor, type SpellMech } from "@/lib/srd/spell-mechanics";
 import { baseHealingDice, scaledSpellDice } from "@/lib/srd/spell-scaling";
@@ -223,6 +224,7 @@ export function featureCards(sheet: CharacterSheet, turn: HandTurn): HandCard[] 
     let save: HandCard["save"] = null;
     let compose = false;
     let condition = "";
+    let damageType = "";
     if (effect.kind === "heal_self" || effect.kind === "heal_target") {
       damage = effect.dice(level, derived.abilityMods);
       dice = `heals ${damage}`;
@@ -251,9 +253,12 @@ export function featureCards(sheet: CharacterSheet, turn: HandTurn): HandCard[] 
       type = "ward";
       target = "ally";
     } else if (effect.kind === "aoe") {
-      damage = effect.dice(level);
-      save = { ability: SAVE_LABEL[effect.save] ?? effect.save, dc: 0 };
-      dice = `${damage}, ${save.ability} save`;
+      // A dragonborn's breath takes its ancestry's save and damage type.
+      const spend = aoeSpendFor(def, sheet, level, derived)!;
+      damage = spend.dice;
+      damageType = spend.damageType ?? "";
+      save = { ability: SAVE_LABEL[spend.saveAbility] ?? spend.saveAbility, dc: 0 };
+      dice = `${damage}${damageType ? ` ${damageType}` : ""}, ${save.ability} save`;
       type = "spell";
       target = "enemy";
     } else if (effect.kind === "enemy_save") {
@@ -281,7 +286,7 @@ export function featureCards(sheet: CharacterSheet, turn: HandTurn): HandCard[] 
       target,
       toHit: null,
       damage,
-      damageType: heals ? "healing" : "",
+      damageType: heals ? "healing" : damageType,
       heals,
       // A feature's DC is the engine's to compute at spend time, so the card
       // names the save and carries 0 for "not shown".

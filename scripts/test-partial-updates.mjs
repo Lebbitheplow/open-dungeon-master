@@ -53,7 +53,6 @@ const rulesetRoute = await route("rulesets/[rulesetId]");
 const sheetRoute = await route("campaigns/[campaignId]/sheet");
 const shopsRoute = await route("campaigns/[campaignId]/shops");
 const shopRoute = await route("campaigns/[campaignId]/shops/[shopId]");
-const charactersRoute = await route("characters");
 const characterRoute = await route("characters/[characterId]");
 const homebrewRoute = await route("homebrew");
 const homebrewEntryRoute = await route("homebrew/[id]");
@@ -225,7 +224,11 @@ const RULESET = {
 
 async function newRuleset() {
   as(lead);
-  const created = await call(rulesetsRoute, "POST", RULESET);
+  // A ruleset may only list homebrew its author wrote, so the id is a real
+  // entry of the lead's.
+  const brew = await call(homebrewRoute, "POST", { kind: "spell", name: "House Spark", data: { desc: "A spark.", level: 1 } });
+  succeeded(brew);
+  const created = await call(rulesetsRoute, "POST", { ...RULESET, homebrewIds: [brew.json.entry.id] });
   succeeded(created);
   return created.json.ruleset;
 }
@@ -256,7 +259,7 @@ await test("rulesets: an invalid value and another user are refused as before", 
 
 await test("a ruleset created without a description still gets the empty default", async () => {
   as(lead);
-  const created = await call(rulesetsRoute, "POST", omit(RULESET, "description"));
+  const created = await call(rulesetsRoute, "POST", { ...omit(RULESET, "description"), homebrewIds: [] });
   assert.equal(created.json.ruleset.description, "");
 });
 
@@ -337,9 +340,14 @@ function builderEdit(level, klass) {
     spells: [],
     spellWarningAck: true,
   };
+  // The Calling step waits for the soldier's gaming set to be named (a
+  // character stored before that pick existed names it on its first edit).
   const derived = {
     abilities: SYNCED.abilities,
-    preview: { maxHp: SYNCED.maxHp, proficiencies: SYNCED.proficiencies },
+    preview: {
+      maxHp: SYNCED.maxHp,
+      proficiencies: { ...SYNCED.proficiencies, tools: [...SYNCED.proficiencies.tools, "dice set"] },
+    },
     effectiveLevel: level,
     activeAsiChoices: [],
     ac: SYNCED.ac,
@@ -396,7 +404,9 @@ await test("a lobby edit at a lower level sheds multiclass levels as joining wou
   assert.equal(table.subclass, "battle-master");
   assert.equal(table.level, 3);
   assert.deepEqual(table.hitDicePools, adapted.hitDicePools);
-  assert.deepEqual(table.spellcasting.casters, []);
+  // Shed of its only casting class, it has that class's spells and slots no
+  // longer (src/lib/characters/adapt.ts).
+  assert.equal(table.spellcasting, null);
   assert.equal(table.notes, SYNCED.notes);
 });
 
@@ -446,9 +456,19 @@ await test("a shop's stock, a library sheet and a homebrew body still replace wh
   const restocked = await call(shopRoute, "PATCH", { stock: [{ itemName: "Rope", qty: 2, priceCp: 100 }] }, shopParams);
   assert.deepEqual(restocked.json.shop.stock.map((item) => item.note), [""]);
 
-  const withoutNotes = omit(SYNCED, "notes");
-  const character = await call(charactersRoute, "POST", { level: 5, sheet: SYNCED });
-  const replaced = await call(characterRoute, "PATCH", { level: 5, sheet: withoutNotes }, { characterId: character.json.character.id });
+  // Sent as the builder sends an edit, with the soldier's gaming set named
+  // (the Calling step waits for it).
+  const withoutNotes = {
+    ...omit(SYNCED, "notes"),
+    proficiencies: { ...SYNCED.proficiencies, tools: [...SYNCED.proficiencies.tools, "dice set"] },
+  };
+  // A played character, so it is put on the shelf the way play puts it
+  // there: the library's own door takes new characters, and holds them to
+  // the rules a new character is made under.
+  const character = createCharacter(player.id, 5, SYNCED);
+  as(player);
+  const replaced = await call(characterRoute, "PATCH", { level: 5, sheet: withoutNotes }, { characterId: character.id });
+  assert.equal(replaced.status, 200, JSON.stringify(replaced.json));
   assert.equal(replaced.json.character.sheet.notes, "");
 
   const entry = await call(homebrewRoute, "POST", { kind: "spell", name: "Frost Bite II", data: { desc: "Numbing cold.", level: 1 } });

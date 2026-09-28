@@ -127,7 +127,9 @@ test("a single advance is capped at a year", () => {
 test("rest length follows the variant, which is what the setting was for", () => {
   assert.equal(restMinutes("short", "standard"), 60);
   assert.equal(restMinutes("long", "standard"), 480);
-  assert.equal(restMinutes("short", "gritty"), MINUTES_PER_DAY);
+  // Gritty realism: a short rest is 8 hours, not a day (DMG, and ODM's own
+  // label for the setting).
+  assert.equal(restMinutes("short", "gritty"), 8 * 60);
   assert.equal(restMinutes("long", "gritty"), MINUTES_PER_DAY * 7);
   assert.equal(restMinutes("short", "heroic"), 5);
   assert.equal(restMinutes("long", "heroic"), 60);

@@ -21,6 +21,7 @@ import {
   ancestryBlocker,
   buildBuilderResult,
   callingBlocker,
+  gearBlocker,
   identityBlocker,
   spellsBlocker,
   validateBuilder,
@@ -30,6 +31,7 @@ import { builderActions, useBuilderDerived } from "./useBuilderDerived";
 import { useArchetypes, useBuilderOptions, useWorldPack } from "./useBuilderOptions";
 import { findRace, useBuilderState } from "./useBuilderState";
 import { usePickerGroups } from "./usePickerGroups";
+import { useTableRules } from "./useTableRules";
 
 export type { BuilderResult } from "./submit";
 
@@ -42,6 +44,7 @@ export type { BuilderResult } from "./submit";
 // dialog. The fields, validation and submitted sheet are unchanged from the
 // single-page form this replaced; only the pacing is new.
 export default function CharacterBuilder({
+  campaignId,
   fixedLevel,
   genre,
   worldPackId,
@@ -54,6 +57,10 @@ export default function CharacterBuilder({
   role,
   className,
 }: {
+  // The table the character is made for: its hit point method and starting
+  // wealth decide the numbers shown, and its wealth is rolled here. Absent in
+  // the library, where the defaults apply.
+  campaignId?: string;
   fixedLevel?: number;
   // Campaign genre: floats setting-appropriate classes to the top of the
   // class picker. Absent in the library builder (default ordering).
@@ -102,7 +109,8 @@ export default function CharacterBuilder({
     backgrounds.find((entry) => entry.id === state.backgroundId) ?? backgrounds[0];
   const archetypes = useArchetypes(klass?.id ?? "");
 
-  const derived = useBuilderDerived({ state, race, klass, background, fixedLevel });
+  const table = useTableRules(campaignId, klass?.id);
+  const derived = useBuilderDerived({ state, race, klass, background, fixedLevel, rules: table.rules });
   const actions = builderActions(state, klass, race, background);
   const pickers = usePickerGroups({
     races,
@@ -150,7 +158,7 @@ export default function CharacterBuilder({
     ancestry: ancestryBlocker(state, race, background),
     calling: callingBlocker(klass, state, derived),
     abilities: abilitiesBlocker(derived, state),
-    spells: spellsBlocker(state, derived, klass),
+    spells: spellsBlocker(state, derived, klass) ?? gearBlocker(derived),
   };
   const casts = derived.casts;
 
@@ -248,6 +256,8 @@ export default function CharacterBuilder({
             derived={derived}
             actions={actions}
             klass={klass}
+            background={background}
+            table={table}
             pack={pack}
           />
           <StepBlocker message={blockers.spells} />
@@ -266,6 +276,8 @@ export default function CharacterBuilder({
           derived={derived}
           race={race}
           klass={klass}
+          background={background}
+          table={table}
           initial={initial}
           paintsPortraits={paintsPortraits}
           onUploadPortrait={() => setCropping(true)}

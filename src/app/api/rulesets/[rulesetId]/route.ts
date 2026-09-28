@@ -6,6 +6,7 @@ import {
   applyRulesetToCampaign,
   deleteRuleset,
   getRulesetForUser,
+  homebrewIdsRefusal,
   updateRuleset,
 } from "@/lib/db/rulesets";
 import { layOver } from "@/lib/schemas/parse-keeping-valid";
@@ -83,6 +84,13 @@ export async function PATCH(
   const parsed = createRulesetSchema.safeParse(layOver(resolved.ruleset, raw));
   if (!parsed.success) {
     return Response.json({ error: "Invalid change." }, { status: 400 });
+  }
+  // Only a list the edit itself sends is judged: a ruleset stored before the
+  // check, or one whose entry was deleted since, can still be renamed.
+  const sendsIds = Boolean(raw) && typeof raw === "object" && "homebrewIds" in (raw as object);
+  const refusal = sendsIds ? homebrewIdsRefusal(resolved.user.id, parsed.data.homebrewIds) : null;
+  if (refusal) {
+    return Response.json({ error: refusal }, { status: 400 });
   }
   const ruleset = updateRuleset(resolved.user.id, rulesetId, parsed.data);
   return Response.json({ ruleset });

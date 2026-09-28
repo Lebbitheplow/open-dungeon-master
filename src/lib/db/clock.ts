@@ -5,6 +5,8 @@ import { gutterBurntLights } from "@/lib/dm/light-timers";
 import { fireCalendarEvents } from "@/lib/dm/calendar-fire";
 import { tickClockConditions } from "@/lib/dm/condition-tick";
 import { getDatabase, parseJson } from "@/lib/db/core";
+import { getSheetById, patchSheet } from "@/lib/db/sheets";
+import { publishPersisted } from "@/lib/events";
 import {
   advance,
   clampInstant,
@@ -49,8 +51,29 @@ export function advanceClock(
   if ("error" in moved) {
     return moved;
   }
-  const clock = { calendar: current.calendar, instant: moved.instant, weather: current.weather };
+  const clock = { ...current, instant: moved.instant };
+  // A Wild Shape lasts hours, and the hours are these.
+  const lapsed = Object.entries(current.shapeEnds ?? {}).filter(([, ends]) => ends <= moved.instant);
+  if (lapsed.length) {
+    const shapeEnds = Object.fromEntries(
+      Object.entries(current.shapeEnds ?? {}).filter(([, ends]) => ends > moved.instant),
+    );
+    if (Object.keys(shapeEnds).length) {
+      clock.shapeEnds = shapeEnds;
+    } else {
+      delete clock.shapeEnds;
+    }
+  }
   setClock(campaignId, clock);
+  for (const [characterId] of lapsed) {
+    const sheet = getSheetById(characterId);
+    if (sheet?.campaignId === campaignId && sheet.wildShape?.kind === "wildshape") {
+      const updated = patchSheet(sheet.id, { wildShape: null });
+      if (updated) {
+        publishPersisted(campaignId, "sheet_updated", { sheet: updated });
+      }
+    }
+  }
   // Time passing is what ends an effect measured in minutes. Doing it here
   // rather than in each caller means travel, a rest and pass_time all expire
   // the same things, which is the point of having one clock.
@@ -76,7 +99,7 @@ export function advanceClock(
 // somewhere other than day one, or to correct a drift.
 export function setClockInstant(campaignId: string, instant: Instant): CampaignClock {
   const current = getClock(campaignId);
-  const clock = { calendar: current.calendar, instant: clampInstant(instant), weather: current.weather };
+  const clock = { ...current, instant: clampInstant(instant) };
   setClock(campaignId, clock);
   return clock;
 }
@@ -86,7 +109,34 @@ export function setClockInstant(campaignId: string, instant: Instant): CampaignC
 // move every date the campaign has ever written down.
 export function setCalendar(campaignId: string, calendar: CalendarDefinition): CampaignClock {
   const current = getClock(campaignId);
-  const clock = { calendar, instant: current.instant, weather: current.weather };
+  const clock = { ...current, calendar };
   setClock(campaignId, clock);
   return clock;
+}
+
+// Writes down when a druid's beast form runs out: so many in-world hours
+// from now. Taking a new form replaces the old entry.
+export function recordShapeEnd(campaignId: string, characterId: string, hours: number) {
+  const current = getClock(campaignId);
+  setClock(campaignId, {
+    ...current,
+    shapeEnds: {
+      ...(current.shapeEnds ?? {}),
+      [characterId]: clampInstant(current.instant + Math.max(1, Math.round(hours)) * 60),
+    },
+  });
+}
+
+// Writes down when these characters' long rest ended, which is what the
+// next one is measured from (src/lib/dm/calendar.ts longRestAllowed).
+export function recordLongRests(campaignId: string, characterIds: string[], endedAt: Instant) {
+  if (!characterIds.length) {
+    return;
+  }
+  const current = getClock(campaignId);
+  const longRests = { ...(current.longRests ?? {}) };
+  for (const id of characterIds) {
+    longRests[id] = clampInstant(endedAt);
+  }
+  setClock(campaignId, { ...current, longRests });
 }

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { isErrorResponse, requireMember } from "@/lib/campaign-api";
 import { spellClassFor } from "@/lib/classes";
 import { searchSpells, spellNameMatches } from "@/lib/content";
+import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { allocateSeq } from "@/lib/db/campaigns";
 import { getSheetById, getSheetForUser, patchSheet } from "@/lib/db/sheets";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
@@ -96,7 +97,9 @@ async function changeSpell(
   if (action === "prepare" && view.style === "prepared") {
     const found = searchSpells({
       q: spell,
-      userId: context.user.id,
+      // Homebrew counts when the table's owner or DM seats wrote it, not
+      // because the player did (src/lib/dm/spell-authors.ts).
+      userIds: spellAuthorsFor(context.campaign),
       classSlug: spellClassFor(view.classId),
       level: maxSpellLevelOf(view),
       limit: 20,

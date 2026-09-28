@@ -28,7 +28,7 @@ export const magicItemEffectSchema = z.discriminatedUnion("kind", [
 
 // The same shapes as SrdWeapon and SrdArmor (src/lib/srd/weapons.ts,
 // armor.ts), so a snapshot type-checks straight into the engines.
-export const homebrewGearSchema = z.object({
+export const gearSnapshotShape = z.object({
   weapon: z
     .object({
       name: z.string(),
@@ -58,7 +58,17 @@ export const homebrewGearSchema = z.object({
     .optional(),
   weight: z.number().min(0).optional(),
 });
-export type HomebrewGearSnapshot = z.infer<typeof homebrewGearSchema>;
+export type HomebrewGearSnapshot = z.infer<typeof gearSnapshotShape>;
+
+// What an equipment row's `gear` reads as when it arrives from outside: as
+// nothing. The snapshot is the server's to write, rebuilt from the stored
+// entry every time a sheet is read (src/lib/db/homebrew.ts
+// hydrateHomebrewGear), so a block a client sends is never validated, only
+// dropped. The type stays the snapshot's, because that is what a sheet read
+// from the database carries.
+export const homebrewGearSchema = z
+  .unknown()
+  .transform((): HomebrewGearSnapshot | undefined => undefined);
 
 // Deliberately permissive at the wire: the route normalizes per kind
 // through src/lib/homebrew/gear.ts, which is where a weapon's damage

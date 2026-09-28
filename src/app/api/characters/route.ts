@@ -8,8 +8,8 @@ import {
   type CharacterRole,
 } from "@/lib/db/characters";
 import { portraitStatus, queueLibraryPortrait } from "@/lib/portrait";
+import { admitSheet, refusal } from "@/lib/characters/admit";
 import { createSheetSchema } from "@/lib/schemas/sheet";
-import { spellListProblems } from "@/lib/srd/spell-prep";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -57,16 +57,24 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  const [problem] = spellListProblems({ ...parsed.data.sheet, level: parsed.data.level });
-  if (problem) {
-    return Response.json({ error: problem }, { status: 400 });
+  // The library's door holds what the table's does: the sheet is checked
+  // against the rules and stored with what the server derives.
+  const admitted = admitSheet({
+    door: "library",
+    level: parsed.data.level,
+    sheet: parsed.data.sheet,
+    userId: user.id,
+  });
+  if (!admitted.ok) {
+    return refusal(admitted.problems);
   }
   const character = createCharacter(
     user.id,
     parsed.data.level,
-    parsed.data.sheet,
+    admitted.sheet,
     parsed.data.role as CharacterRole,
   );
+  admitted.settle();
   queueLibraryPortrait(character);
   return Response.json(
     { character: { ...character, portraitStatus: portraitStatus(character.id) } },

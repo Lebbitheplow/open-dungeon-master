@@ -1,4 +1,4 @@
-import { grantItemMath, removeItemMath } from "@/lib/dm/mutation-math";
+import { removeItemMath } from "@/lib/dm/mutation-math";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { addCopper, formatCopper, purseCopper } from "@/lib/srd/currency";
 
@@ -80,6 +80,48 @@ export function canResolveTrade(action: "approve" | "decline" | "cancel", actorI
 }
 
 type Patch = { gold: number; copper: number; equipment: CharacterSheet["equipment"] };
+type Row = CharacterSheet["equipment"][number];
+
+// What an item IS travels with it: whether the party knows what it is, the
+// entry its mechanics are read through, and what it weighs. How the giver
+// wore it does not: the new owner has neither put it on nor attuned to it,
+// and the snapshot is rebuilt from the entry when their sheet is read.
+function handedOver(row: Row, qty: number): Row {
+  return {
+    name: row.name,
+    qty,
+    ...(row.slug !== undefined ? { slug: row.slug } : {}),
+    ...(row.weight !== undefined ? { weight: row.weight } : {}),
+    ...(row.identified === false ? { identified: false } : {}),
+  };
+}
+
+const sameThing = (a: Row, b: Row) =>
+  a.name.toLowerCase() === b.name.toLowerCase() &&
+  (a.identified === false) === (b.identified === false) &&
+  (a.slug ?? "") === (b.slug ?? "");
+
+// Moves `qty` of a named item from one pack to the other, or null when the
+// giver holds fewer. The row that leaves is the one removeItemMath takes.
+function moveItem(
+  giver: Row[],
+  taker: Row[],
+  line: TradeLine,
+): { giver: Row[]; taker: Row[] } | null {
+  const held = giver.find((item) => item.name.toLowerCase() === line.name.toLowerCase());
+  const removal = removeItemMath(giver, line.name, line.qty);
+  if (!held || !removal || removal.removed < line.qty) {
+    return null;
+  }
+  const arriving = handedOver(held, line.qty);
+  const index = taker.findIndex((item) => sameThing(item, arriving));
+  if (index < 0) {
+    return { giver: removal.equipment, taker: [...taker, arriving] };
+  }
+  const next = [...taker];
+  next[index] = { ...next[index], qty: next[index].qty + line.qty };
+  return { giver: removal.equipment, taker: next };
+}
 
 // Both patches, or the reason it cannot happen. Everything is checked
 // before anything moves: the proposer must still carry what they offer and
@@ -88,20 +130,20 @@ export function computeTrade(from: CharacterSheet, to: CharacterSheet, offer: Tr
   let fromEquipment = from.equipment;
   let toEquipment = to.equipment;
   for (const line of offer.give) {
-    const removal = removeItemMath(fromEquipment, line.name, line.qty);
-    if (!removal || removal.removed < line.qty) {
+    const moved = moveItem(fromEquipment, toEquipment, line);
+    if (!moved) {
       return { error: `${from.name} no longer carries ${line.qty > 1 ? `${line.qty} ` : ""}${line.name}.` };
     }
-    fromEquipment = removal.equipment;
-    toEquipment = grantItemMath(toEquipment, line.name, line.qty).equipment;
+    fromEquipment = moved.giver;
+    toEquipment = moved.taker;
   }
   for (const line of offer.want) {
-    const removal = removeItemMath(toEquipment, line.name, line.qty);
-    if (!removal || removal.removed < line.qty) {
+    const moved = moveItem(toEquipment, fromEquipment, line);
+    if (!moved) {
       return { error: `${to.name} does not carry ${line.qty > 1 ? `${line.qty} ` : ""}${line.name}.` };
     }
-    toEquipment = removal.equipment;
-    fromEquipment = grantItemMath(fromEquipment, line.name, line.qty).equipment;
+    toEquipment = moved.giver;
+    fromEquipment = moved.taker;
   }
   const fromPurse = { gold: from.gold, copper: from.copper };
   const toPurse = { gold: to.gold, copper: to.copper };

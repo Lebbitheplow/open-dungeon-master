@@ -1,7 +1,13 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { allocateSeq } from "@/lib/db/campaigns";
+import { isSeatOnly, payloadForViewer, tablePayload, viewerFor, type Viewer } from "@/lib/table-delivery";
 
 type Subscriber = (chunk: string) => void;
+
+// Who is listening, for the events that are not the same for every seat
+// (src/lib/table-delivery.ts). Keyed by the listener itself so the bus can
+// stay a plain set; a listener nobody vouched for is sent the table's view.
+const listenerUserIds = new WeakMap<Subscriber, string>();
 
 // The bus must live on globalThis: in `next dev`, HMR re-evaluates modules
 // and a module-scoped map would silently drop subscribers.
@@ -53,6 +59,7 @@ export function subscribe(
   }
   subscribers.add(subscriber);
   if (userId) {
+    listenerUserIds.set(subscriber, userId);
     let counts = presenceCounts().get(campaignId);
     if (!counts) {
       counts = new Map();
@@ -120,14 +127,53 @@ function fanOut(campaignId: string, chunk: string) {
 // campaign seq). Use publishWithSeq when the seq was already allocated so a
 // row (e.g. a campaign message) can share it.
 export function publishWithSeq(campaignId: string, seq: number, type: string, payload: unknown) {
+  // The log holds what the whole table may read: every member can replay
+  // it. What one seat is owed beyond that is added when it is sent.
+  const stored = tablePayload(type, payload);
   getDatabase()
     .prepare(
       `INSERT INTO campaign_events (campaign_id, seq, type, payload_json, created_at) VALUES (?, ?, ?, ?, ?)`,
     )
-    .run(campaignId, seq, type, JSON.stringify(payload), nowIso());
-  fanOut(campaignId, sseChunk(type, payload, seq));
+    .run(campaignId, seq, type, JSON.stringify(stored), nowIso());
+  if (stored === payload && !isSeatOnly(type, stored)) {
+    fanOut(campaignId, sseChunk(type, stored, seq));
+  } else {
+    fanOutBySeat(campaignId, seq, type, stored, payload);
+  }
   globalThis.__odmVoiceEventHook?.(campaignId, type);
   return seq;
+}
+
+// The slow path, for an event that differs by seat: each listener is sent
+// its own view, and a listener owed nothing hears nothing.
+function fanOutBySeat(
+  campaignId: string,
+  seq: number,
+  type: string,
+  stored: unknown,
+  original: unknown,
+) {
+  const subscribers = bus().get(campaignId);
+  if (!subscribers) {
+    return;
+  }
+  const viewers = new Map<string, Viewer>();
+  for (const subscriber of subscribers) {
+    const userId = listenerUserIds.get(subscriber);
+    let viewer: Viewer | null = null;
+    if (userId) {
+      viewer = viewers.get(userId) ?? viewerFor(campaignId, userId);
+      viewers.set(userId, viewer);
+    }
+    try {
+      const view = payloadForViewer(type, stored, viewer, original);
+      if (view !== null) {
+        subscriber(sseChunk(type, view, seq));
+      }
+    } catch {
+      subscribers.delete(subscriber);
+    }
+  }
 }
 
 export function publishPersisted(campaignId: string, type: string, payload: unknown) {
@@ -184,28 +230,46 @@ export function latestEventOfType(campaignId: string, types: string[]): StoredEv
 // route replays with this so a long absence catches up whole instead of
 // stopping at one batch and leaving a gap the seq guard cannot see. Returns
 // how many were handed over.
+//
+// `viewerUserId` is the member the replay is for. Each event is handed over
+// as that seat may read it, and an event meant for other seats is skipped
+// (src/lib/table-delivery.ts); without one the replay is the table's view.
 export function forEachEventSince(
   campaignId: string,
   afterSeq: number,
   each: (event: StoredEvent) => void,
   batch = 500,
+  viewerUserId?: string,
 ): number {
+  const viewer = viewerUserId ? viewerFor(campaignId, viewerUserId) : null;
   let cursor = afterSeq;
   let count = 0;
   for (;;) {
-    const events = listEventsSince(campaignId, cursor, batch);
+    // The batch is counted as stored, so a run of skipped events cannot be
+    // mistaken for the end of the log.
+    const events = readEventsSince(campaignId, cursor, batch);
     for (const event of events) {
-      each(event);
       cursor = event.seq;
+      const payload = payloadForViewer(event.type, event.payload, viewer);
+      if (payload !== null) {
+        each({ ...event, payload });
+        count += 1;
+      }
     }
-    count += events.length;
     if (events.length < batch) {
       return count;
     }
   }
 }
 
+// The table's view of the log: what every member may read.
 export function listEventsSince(campaignId: string, afterSeq: number, limit = 500): StoredEvent[] {
+  return readEventsSince(campaignId, afterSeq, limit).filter(
+    (event) => !isSeatOnly(event.type, event.payload),
+  );
+}
+
+function readEventsSince(campaignId: string, afterSeq: number, limit: number): StoredEvent[] {
   const rows = getDatabase()
     .prepare(
       `

@@ -7,8 +7,8 @@ import { insertCampaignMessage } from "@/lib/db/messages";
 import { listSheets } from "@/lib/db/sheets";
 import { companionMode, finalizeNewCompanion, listCompanions } from "@/lib/dm/companion-tools";
 import { requestDmTurn } from "@/lib/dm/loop";
+import { admitSheet, refusal } from "@/lib/characters/admit";
 import { createSheetSchema } from "@/lib/schemas/sheet";
-import { spellListProblems } from "@/lib/srd/spell-prep";
 import { publishWithSeq } from "@/lib/events";
 
 export const runtime = "nodejs";
@@ -77,20 +77,37 @@ export async function POST(
   // The library entry has to be one of this user's own, and one they filed
   // as a companion: instantiating somebody's player character as an ally the
   // DM plays would take a character out from under them.
-  let input;
+  // A companion is a character like any other, so it comes through the door
+  // every sheet comes through (src/lib/characters/admit.ts): one built here
+  // is held to the rules a player's new character is, and one out of the
+  // library enters as a stored character does.
+  let admitted;
   if ("libraryCharacterId" in parsed.data) {
     const character = getCharacterForUser(context.user.id, parsed.data.libraryCharacterId);
     if (!character || character.role !== "companion") {
       return Response.json({ error: "That companion is not in your library." }, { status: 404 });
     }
-    input = adaptSheetToLevel(character.sheet, character.level, level);
+    admitted = admitSheet({
+      door: "stored",
+      level,
+      sheet: adaptSheetToLevel(character.sheet, character.level, level),
+      userId: context.user.id,
+      campaign,
+    });
   } else {
-    input = parsed.data.sheet;
-    const [problem] = spellListProblems({ ...input, level });
-    if (problem) {
-      return Response.json({ error: problem }, { status: 400 });
-    }
+    admitted = admitSheet({
+      door: "table",
+      level,
+      sheet: parsed.data.sheet,
+      userId: context.user.id,
+      campaign,
+    });
   }
+  if (!admitted.ok) {
+    return refusal(admitted.problems);
+  }
+  const input = admitted.sheet;
+  admitted.settle();
 
   const { sheet } = finalizeNewCompanion(campaign, level, input, "party", input.backstory ?? "");
 

@@ -107,8 +107,13 @@ export function handleSplitDamage(
       skipped.push(target.enemyId ?? target.characterId ?? "someone");
       continue;
     }
-    // Halving rounds down, as every 5e halving does.
-    const amount = Math.max(1, Math.floor(args.amount * share));
+    // Halving rounds down, as every 5e halving does, and half of 1 is
+    // nothing at all.
+    const amount = Math.floor(args.amount * share);
+    if (amount < 1) {
+      skipped.push(`${target.enemyId ?? target.characterId ?? "someone"} (half of ${args.amount} is no damage)`);
+      continue;
+    }
 
     if (target.enemyId) {
       if (!encounter) {

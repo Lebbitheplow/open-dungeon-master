@@ -13,7 +13,7 @@ export const FACTION_ADJUDICATIONS: CatalogEntry[] = [
     fields: [
       { name: "faction", label: "Faction", kind: "text", required: true, placeholder: "The Reed Court" },
       { name: "delta", label: "Change", kind: "number", required: true, min: -2, max: 2 },
-      { name: "reason", label: "Why", kind: "text", placeholder: "They returned the abbot's seal" },
+      { name: "reason", label: "Why", kind: "text", required: true, placeholder: "They returned the abbot's seal" },
     ],
   },
   {

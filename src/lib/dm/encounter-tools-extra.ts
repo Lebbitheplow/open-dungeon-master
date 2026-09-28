@@ -10,14 +10,16 @@ import {
 import { getBattleMapForEncounter, removeTokenByRef } from "@/lib/db/battle-maps";
 import { insertRoll } from "@/lib/db/rolls";
 import type { DmTurn } from "@/lib/db/dm-turns";
-import { d20Expression, isValidExpression, rollExpression } from "@/lib/dice";
+import { isValidExpression, rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
-import { saveModFor, type SaveAbility } from "@/lib/bestiary/statblock";
-import { allySaveAura } from "@/lib/dm/aura";
+import type { SaveAbility } from "@/lib/bestiary/statblock";
 import { trackEnemyConcentration } from "@/lib/dm/cast-tools";
 import { defenseRiders } from "@/lib/srd/feature-effects";
-import { computeSheetDerived, spellSaveDcFor } from "@/lib/srd";
-import { spellDamageFor, spellMechanicsFor } from "@/lib/content";
+import { spellSaveDcFor } from "@/lib/srd";
+import { spellDamageFor, spellFactsFor, spellMechanicsFor } from "@/lib/content";
+import { getSheetById } from "@/lib/db/sheets";
+import { spellAuthorsFor } from "@/lib/dm/spell-authors";
+import { spellReachProblem } from "@/lib/dm/cast-reach";
 import {
   applyEnemyDamage,
   finishEncounter,
@@ -28,8 +30,9 @@ import { addEnemiesTool, handleAddEnemies } from "@/lib/dm/encounter-spawn";
 import { handleLairAction, handleLegendaryAction, handleLegendaryResist, legendaryTools } from "@/lib/dm/legendary-tools";
 import { declareIntentTool, handleDeclareIntent } from "@/lib/dm/intent-tools";
 import { applyDmMutation, canonicalCondition } from "@/lib/dm/mutations";
-import { mergeAdvantage, pruneMeta, rollDerivation } from "@/lib/dm/condition-logic";
-import { conditionRollRiders } from "@/lib/srd/condition-effects";
+import { isIncapacitated, pruneMeta } from "@/lib/dm/condition-logic";
+import { releaseGrapplesHeldBy } from "@/lib/dm/set-condition";
+import { rollCharacterSave, rollEnemySave } from "@/lib/dm/forced-save";
 import { normalizeAbility } from "@/lib/dm/arg-coerce";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import { planConditionFx } from "@/lib/battlemap/fx-plan";
@@ -101,6 +104,15 @@ const setEnemyConditionTool: ToolDef = {
           description: "Save-ends: ability the enemy re-saves at the end of each round.",
         },
         saveDc: { type: "integer", minimum: 1, maximum: 30, description: "Save-ends DC." },
+        sourceCharacterId: {
+          type: "string",
+          description:
+            "The character that caused it, when the condition is tied to one: the grappler, the charmer, the source of the fear.",
+        },
+        sourceEnemyId: {
+          type: "string",
+          description: "The enemy that caused it, when it was another enemy.",
+        },
         reason: { type: "string", description: "Short in-fiction cause." },
       },
       required: ["enemyId", "condition"],
@@ -209,6 +221,10 @@ const enemyRefArgsSchema = z.object({
     z.enum(["str", "dex", "con", "int", "wis", "cha"]).optional(),
   ),
   saveDc: z.coerce.number().int().min(1).max(30).optional(),
+  // Who put the condition there: the grappler, the charmer, the source of
+  // the fear. Kept as the condition's source.
+  sourceCharacterId: z.string().max(80).optional(),
+  sourceEnemyId: z.string().max(80).optional(),
   reason: z.string().optional(),
 });
 
@@ -294,11 +310,13 @@ function handleEnemyCondition(
     if (enemy.conditions.includes(wanted)) {
       return { ok: true, note: `${enemy.displayName} is already ${wanted}.` };
     }
+    const source = (args.sourceCharacterId ?? args.sourceEnemyId ?? "").trim();
     const meta =
-      args.rounds || (args.saveAbility && args.saveDc)
+      args.rounds || (args.saveAbility && args.saveDc) || source
         ? {
             ...enemy.conditionMeta,
             [wanted]: {
+              ...(source ? { source } : {}),
               ...(args.rounds ? { rounds: args.rounds } : {}),
               ...(args.saveAbility && args.saveDc
                 ? { saveEnds: { ability: args.saveAbility, dc: args.saveDc } }
@@ -307,6 +325,8 @@ function handleEnemyCondition(
           }
         : enemy.conditionMeta;
     patchEnemyConditions(enemy.id, [...enemy.conditions, wanted], meta);
+    // A grapple ends when the grappler is incapacitated, monster or not.
+    const released = isIncapacitated([wanted]) ? releaseGrapplesHeldBy(campaign, enemy.id) : [];
     publishEncounter(campaign.id);
     {
       const pos = tokenPosition(campaign.id, enemy.id);
@@ -321,6 +341,9 @@ function handleEnemyCondition(
       ok: true,
       name: enemy.displayName,
       condition: wanted,
+      ...(released.length
+        ? { released: `${released.join(" and ")} ${released.length === 1 ? "is" : "are"} no longer grappled by it.` }
+        : {}),
       ...(args.rounds ? { duration: `${args.rounds} rounds, expires automatically` } : {}),
       ...(args.saveAbility && args.saveDc
         ? {
@@ -426,33 +449,57 @@ function handleAoeDamage(
   // spends, the dice scale with it, and the save comes from the pack's own
   // text and the caster's sheet. The model's numbers are the fallback.
   const corrections: string[] = [];
-  const casterSheet = args.casterId ? resolveSheetRef(args.casterId, sheets, sheetsById) : null;
+  const staleCaster = args.casterId ? resolveSheetRef(args.casterId, sheets, sheetsById) : null;
+  const casterSheet = staleCaster ? (getSheetById(staleCaster.id) ?? staleCaster) : null;
   if (args.spell && casterSheet) {
-    const resolved = spellMechanicsFor({ spell: args.spell, userId: casterSheet.userId });
-    if (resolved?.mech.resolution === "save") {
-      if (resolved.spellLevel >= 1) {
-        const spend = applyDmMutation(
-          campaign,
-          turn.id,
-          "use_spell_slot",
-          JSON.stringify({
-            characterId: casterSheet.id,
-            level: args.level ?? resolved.spellLevel,
-            spell: args.spell,
-            reason: (args.reason ?? "").slice(0, 200),
-          }),
-          sheets,
-          sheetsById,
-        ).result;
-        if ("error" in spend) {
-          return spend;
+    const authors = spellAuthorsFor(campaign);
+    const resolved = spellMechanicsFor({ spell: args.spell, userIds: authors });
+    // A spell centred on the caster (Burning Hands' cone, Thunderwave's
+    // cube) reaches only what its area covers, and never through a wall.
+    const facts = spellFactsFor(args.spell, authors);
+    if (facts?.range.kind === "self") {
+      for (const enemy of enemyTargets) {
+        const reach = spellReachProblem({
+          encounterId: encounter.id,
+          casterId: casterSheet.id,
+          casterName: casterSheet.name,
+          targetId: enemy.id,
+          targetName: enemy.displayName,
+          facts,
+        });
+        if (reach) {
+          return { error: reach };
         }
       }
+    }
+    // Every spell a character casts goes through the one guard
+    // (src/lib/dm/cast-guard.ts), known to the server or not: a character
+    // with no Spellcasting casts nothing, and a spell of 1st level or more
+    // spends its slot.
+    const cast = applyDmMutation(
+      campaign,
+      turn.id,
+      "use_spell_slot",
+      JSON.stringify({
+        characterId: casterSheet.id,
+        spell: args.spell,
+        ...(args.level ? { level: args.level } : {}),
+        via: "aoe",
+        reason: (args.reason ?? "").slice(0, 200),
+      }),
+      sheets,
+      sheetsById,
+    ).result;
+    if ("error" in cast) {
+      return cast;
+    }
+    const slotLevel = typeof cast.slotLevel === "number" ? cast.slotLevel : undefined;
+    if (resolved?.mech.resolution === "save") {
       const scaled = spellDamageFor({
         spell: args.spell,
-        userId: casterSheet.userId,
+        userIds: authors,
         casterLevel: casterSheet.level,
-        slotLevel: args.level,
+        slotLevel,
       });
       if (scaled) {
         args.damage = scaled.dice;
@@ -468,12 +515,15 @@ function handleAoeDamage(
       if (resolved.mech.damageType) {
         args.type = resolved.mech.damageType;
       }
-      // Multiclass: the DC follows the class whose list carries the spell.
-      const realDc = spellSaveDcFor(casterSheet, args.spell ?? "");
-      if (realDc && realDc !== args.dc) {
-        corrections.push(`Save DC ${realDc} from ${casterSheet.name}'s sheet.`);
-        args.dc = realDc;
-      }
+    }
+    // Multiclass: the DC follows the class whose list carries the spell.
+    const realDc = spellSaveDcFor(casterSheet, args.spell ?? "");
+    if (realDc && realDc !== args.dc) {
+      corrections.push(`Save DC ${realDc} from ${casterSheet.name}'s sheet.`);
+      args.dc = realDc;
+    }
+    if (cast.cost) {
+      corrections.push(`${casterSheet.name} spent ${cast.cost} casting ${resolved?.name ?? args.spell}.`);
     }
   }
 
@@ -511,12 +561,13 @@ function handleAoeDamage(
 
   // Enemy saves roll silently from stat blocks; results ride the table.
   for (const enemy of enemyTargets) {
-    const saveOutcome = rollExpression(d20Expression(saveModFor(enemy.stats, ability)));
-    const success = saveOutcome.total >= args.dc;
+    // The creature's conditions decide the save as a character's would.
+    const save = rollEnemySave(campaign.id, enemy, ability, args.dc);
+    const success = save.success;
     const damageTaken = success ? (halfOnSave ? half : 0) : total;
     const row: Record<string, unknown> = {
       target: enemy.displayName,
-      save: saveOutcome.total,
+      ...(save.autoFailed ? { autoFailed: save.notes.join("; ") } : { save: save.total }),
       success,
       damage: damageTaken,
     };
@@ -552,14 +603,22 @@ function handleAoeDamage(
   // Character saves use real sheet modifiers and publish dice cards; the
   // damage rides apply_damage so audit, undo, and the death engine apply.
   for (const sheet of pcTargets) {
-    // Conditions apply: restrained = DEX-save disadvantage; paralyzed and
-    // the like auto-fail STR/DEX saves.
-    const derivation = rollDerivation(sheet.conditions, "saving_throw", ability);
-    if (derivation.autoFail) {
+    // The save a requested roll would be: conditions, a paladin's aura,
+    // lasting effects, exhaustion and an inspiration die all count
+    // (src/lib/dm/forced-save.ts).
+    const save = rollCharacterSave(
+      campaign,
+      turn,
+      sheet,
+      ability,
+      args.dc,
+      `${ability.toUpperCase()} save vs area effect`,
+    );
+    if (save.autoFailed) {
       const row: Record<string, unknown> = {
         target: sheet.name,
         success: false,
-        autoFailed: derivation.notes.join("; "),
+        autoFailed: save.notes.join("; "),
         damage: total,
       };
       const applied = applyDmMutation(
@@ -584,31 +643,7 @@ function handleAoeDamage(
       results.push(row);
       continue;
     }
-    // A nearby paladin's aura covers allies caught in the blast too.
-    const aura = allySaveAura(campaign.id, sheet);
-    const saveMod = computeSheetDerived(sheet).saves[ability] + (aura?.bonus ?? 0);
-    // Effect conditions (Bless's +1d4, Haste's DEX-save advantage) ride the
-    // save exactly as they do on a requested roll.
-    const effects = conditionRollRiders(sheet.conditions, "save", ability);
-    const advantage = mergeAdvantage([derivation.advantage, ...effects.advantageSources]);
-    const saveOutcome = rollExpression(
-      `${d20Expression(saveMod, advantage)}${effects.diceSuffix}`,
-    );
-    const roll = insertRoll({
-      campaignId: campaign.id,
-      characterId: sheet.id,
-      requestedBy: "dm",
-      kind: "saving_throw",
-      detail: `${ability.toUpperCase()} save vs area effect`,
-      dc: args.dc,
-      result: saveOutcome,
-    });
-    turn.rollIds.push(roll.id);
-    publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", {
-      roll,
-      source: "digital",
-    });
-    const success = saveOutcome.total >= args.dc;
+    const success = save.success;
     // Evasion: on a Dexterity save for half, a made save takes nothing and a
     // failed one takes half. Only for DEX saves against effects that would
     // deal half on a success at all.
@@ -627,7 +662,7 @@ function handleAoeDamage(
         : total;
     const row: Record<string, unknown> = {
       target: sheet.name,
-      save: saveOutcome.total,
+      save: save.total,
       success,
       damage: damageTaken,
       ...(evasion ? { evasion: success ? "no damage" : "half damage" } : {}),

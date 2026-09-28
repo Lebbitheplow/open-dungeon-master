@@ -1,10 +1,21 @@
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { insertRoll } from "@/lib/db/rolls";
+import { getSheetById } from "@/lib/db/sheets";
+import { breakConcentration } from "@/lib/dm/concentration";
+import { aoeSpendFor } from "@/lib/srd/aoe-spend";
 import { rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
-import { findBeastForm, formatCr, wildShapeCapsFor } from "@/lib/srd/beast-forms";
-import { matchResource, resourceLevel } from "@/lib/srd/class-resources";
+import {
+  findBeastForm,
+  formatCr,
+  hitPointCeilingForCr,
+  UNLISTED_FORM_MAX_AC,
+  wildShapeCapsFor,
+  wildShapeHours,
+} from "@/lib/srd/beast-forms";
+import { isUnlimited, matchResource, RAGING, resourceLevel } from "@/lib/srd/class-resources";
+import { incapacitatedBy, wearsHeavyArmor } from "@/lib/dm/condition-logic";
 import { classLevelFor, classListFor } from "@/lib/srd/multiclass";
 import { conditionEffectsFor } from "@/lib/srd/condition-effects";
 import { consumableEffect, findCarriedItem } from "@/lib/dm/item-logic";
@@ -116,6 +127,21 @@ export const resourceTools: ToolDef[] = [
             maximum: 30,
             description: "Wild Shape only: the beast form's armor class.",
           },
+          formCr: {
+            type: "number",
+            minimum: 0,
+            maximum: 30,
+            description:
+              "Wild Shape only, for a beast the server does not know: its challenge rating from its stat block (0.25 for 1/4). The druid's level caps it.",
+          },
+          formFlies: {
+            type: "boolean",
+            description: "Wild Shape only, for a beast the server does not know: it has a flying speed.",
+          },
+          formSwims: {
+            type: "boolean",
+            description: "Wild Shape only, for a beast the server does not know: it has a swimming speed.",
+          },
           reason: { type: "string", description: "Short in-fiction cause." },
         },
         required: ["characterId", "resource"],
@@ -133,6 +159,8 @@ type Outcome = {
   // (Bardic Inspiration). Applied and published by the caller.
   patchTarget?: { characterId: string; patch: FullPatchSheetInput };
   event?: string;
+  // Wild Shape: how many in-world hours the form lasts, for the clock.
+  shapeHours?: number;
 };
 
 // Rolls healing server-side as a visible dice card, exactly as a player's
@@ -218,6 +246,12 @@ export function computePurchase(
   const removal = removeItemMath(sheet.equipment, args.item, args.qty);
   if (!removal) {
     return { error: `${sheet.name} does not carry "${args.item}" to sell.` };
+  }
+  // A sale pays for what changes hands, so more than is held is no sale.
+  if (removal.removed < args.qty) {
+    return {
+      error: `${sheet.name} carries ${removal.removed} of ${args.item} and cannot sell ${args.qty}; sell ${removal.removed} or fewer.`,
+    };
   }
   const gold = goldMath(sheet.gold, total);
   return {
@@ -355,7 +389,14 @@ export function computeUseResource(
   target: CharacterSheet,
   resourceName: string,
   amount: number,
-  form?: { name?: string; hp?: number; ac?: number },
+  form?: {
+    name?: string;
+    hp?: number;
+    ac?: number;
+    cr?: number;
+    flies?: boolean;
+    swims?: boolean;
+  },
   variant?: string,
 ): Outcome | { error: string } {
   const def = matchResource(resourceName);
@@ -373,9 +414,18 @@ export function computeUseResource(
       error: `${def.displayName} is not spent by choice: ${def.guidance} Do not call use_resource for it.`,
     };
   }
+  if (sheet.deathSaves?.dead) {
+    return { error: `${sheet.name} is dead and cannot use ${def.displayName}.` };
+  }
   if (sheet.currentHp <= 0) {
     return {
       error: `${sheet.name} is at 0 HP and cannot use ${def.displayName}; they are unconscious and take no actions.`,
+    };
+  }
+  const stoppedBy = incapacitatedBy(sheet.conditions);
+  if (stoppedBy) {
+    return {
+      error: `${sheet.name} is ${stoppedBy} and cannot use ${def.displayName} until the condition ends.`,
     };
   }
 
@@ -411,14 +461,18 @@ export function computeUseResource(
       error: `${sheet.name} has ${left}/${state.max} ${def.displayName} left; they cannot spend ${amount}. The feature is not available; narrate accordingly.`,
     };
   }
-  const spent = { ...sheet.resources, [def.id]: { max: state.max, used: state.used + amount } };
+  // A feature with no limit is used, not counted down.
+  const unlimited = isUnlimited(state);
+  const spent = unlimited
+    ? sheet.resources
+    : { ...sheet.resources, [def.id]: { max: state.max, used: state.used + amount } };
   const outcome: Outcome = {
     patch: { resources: spent },
     result: {
       ok: true,
       resource: def.displayName,
       spent: amount,
-      left: `${left - amount}/${state.max}`,
+      left: unlimited ? "unlimited" : `${left - amount}/${state.max}`,
       refills: def.recharge === "short" ? "on any rest" : "on a long rest",
       effect: def.guidance,
     },
@@ -573,12 +627,26 @@ export function computeUseResource(
       if (sheet.conditions.some((entry) => entry.toLowerCase() === condition)) {
         return { error: `${sheet.name} is already ${condition}; the feature is already running.` };
       }
-      outcome.patch.conditions = [...sheet.conditions, condition];
+      // A rage ends any spell the barbarian was concentrating on (SRD 5.1,
+      // Rage). Nothing is refused past this point, so it is ended here, and
+      // the conditions are read again after the spell's own have come off.
+      let holder = sheet;
+      if (condition === RAGING && sheet.concentratingOn) {
+        const ended = breakConcentration(campaign, null, sheet.id, "entered a rage");
+        holder = getSheetById(sheet.id) ?? sheet;
+        if (ended) {
+          outcome.result.concentrationEnded = `${sheet.name} stops concentrating on ${ended} as the rage takes hold.`;
+        }
+      }
+      outcome.patch.conditions = [...holder.conditions, condition];
       outcome.patch.conditionMeta = {
-        ...sheet.conditionMeta,
+        ...holder.conditionMeta,
         [condition]: { rounds: def.effect.rounds },
       };
       outcome.result.applied = `${condition} for ${def.effect.rounds} rounds`;
+      if (condition === RAGING && wearsHeavyArmor(sheet.equipment)) {
+        outcome.result.heavyArmor = `${sheet.name} is wearing heavy armor, so this rage gives none of its benefits: no resistance, no bonus damage, no advantage on Strength. They gain them the moment the armor is off.`;
+      }
       return outcome;
     }
     case "inspire": {
@@ -606,10 +674,17 @@ export function computeUseResource(
       return outcome;
     }
     case "aoe": {
+      const spend = aoeSpendFor(def, sheet, fxLevel, derived)!;
       outcome.result.resolveWith = "aoe_damage";
-      outcome.result.dice = def.effect.dice(fxLevel);
-      outcome.result.saveAbility = def.effect.save;
-      outcome.result.dc = 8 + derived.proficiencyBonus + derived.abilityMods.con;
+      outcome.result.dice = spend.dice;
+      outcome.result.saveAbility = spend.saveAbility;
+      outcome.result.dc = spend.dc;
+      if (spend.damageType) {
+        outcome.result.damageType = spend.damageType;
+      }
+      if (spend.area) {
+        outcome.result.area = spend.area;
+      }
       return outcome;
     }
     case "wild_shape": {
@@ -667,18 +742,44 @@ export function computeUseResource(
         if (known.traits) {
           outcome.result.formTraits = known.traits;
         }
+        outcome.shapeHours = wildShapeHours(druidLevel);
+        outcome.result.lasts = `${outcome.shapeHours} hour${outcome.shapeHours === 1 ? "" : "s"}`;
         outcome.result.note = `Damage lands on the beast's ${known.hp} hit points first; ${sheet.name}'s own ${sheet.currentHp}/${sheet.maxHp} waits for them when the form drops. Physical rolls use the beast's scores; they keep their own mind and cannot cast while shaped. Resolve the beast's attacks with pc_attack. Call use_resource on Wild Shape again to revert (no use spent).`;
         return outcome;
       }
-      // Unknown/homebrew beast: the old model-supplied path, kept so exotic
-      // fictions still work, but the level caps cannot be checked.
-      const beastHp = Math.min(300, Math.max(1, form?.hp ?? 0));
-      const beastAc = Math.min(30, Math.max(1, form?.ac ?? 0));
-      if (!form?.hp || !form?.ac) {
+      // A beast the table does not list: the caller brings its stat block,
+      // challenge rating included, and the same level caps hold. Numbers
+      // above what that challenge rating carries are refused, so naming a
+      // dragon a CR 1/4 beast buys nothing.
+      const limits = `CR ${formatCr(caps.maxCr)} or lower${caps.fly ? "" : ", no flying forms"}${caps.swim ? "" : ", no swimming forms"}`;
+      if (!form?.hp || !form?.ac || form.cr === undefined) {
         return {
-          error: `"${name}" is not in the beast-form table; pass formHp and formAc from its stat block (and keep it within CR ${formatCr(caps.maxCr)}${caps.fly ? "" : ", no flying forms"}${caps.swim ? "" : ", no swimming forms"}).`,
+          error: `"${name}" is not in the beast-form table; pass formHp, formAc and formCr from its stat block (and formFlies or formSwims if it does). At druid level ${druidLevel} the form must be ${limits}.`,
         };
       }
+      if (form.cr > caps.maxCr) {
+        return {
+          error: `${name} is CR ${formatCr(form.cr)}; at level ${druidLevel}${moonDruid ? " (Circle of the Moon)" : ""} ${sheet.name} can Wild Shape into beasts of ${limits}. Offer a form within the limit.`,
+        };
+      }
+      if (form.flies && !caps.fly) {
+        return {
+          error: `${name} has a flying speed; Wild Shape allows flying forms only from druid level 8. Offer a ground form instead.`,
+        };
+      }
+      if (form.swims && !caps.swim) {
+        return {
+          error: `${name} has a swimming speed; Wild Shape allows swimming forms only from druid level 4. Offer a land form instead.`,
+        };
+      }
+      const hpCeiling = hitPointCeilingForCr(form.cr);
+      if (form.hp > hpCeiling || form.ac > UNLISTED_FORM_MAX_AC) {
+        return {
+          error: `A CR ${formatCr(form.cr)} beast has at most ${hpCeiling} hit points and AC ${UNLISTED_FORM_MAX_AC}; ${form.hp} HP and AC ${form.ac} are not ${name}'s numbers at that challenge rating. Send its real stat block, or a form from the table.`,
+        };
+      }
+      const beastHp = Math.max(1, form.hp);
+      const beastAc = Math.max(1, form.ac);
       outcome.patch.wildShape = {
         form: name.slice(0, 60),
         beastHp,
@@ -686,6 +787,8 @@ export function computeUseResource(
         beastAc,
         kind: "wildshape",
       };
+      outcome.shapeHours = wildShapeHours(druidLevel);
+      outcome.result.lasts = `${outcome.shapeHours} hour${outcome.shapeHours === 1 ? "" : "s"}`;
       outcome.result.form = `${name}: ${beastHp} HP, AC ${beastAc}`;
       outcome.result.note = `Damage lands on the beast's ${beastHp} hit points first; ${sheet.name}'s own ${sheet.currentHp}/${sheet.maxHp} waits for them when the form drops. Call use_resource on Wild Shape again to revert (no use spent).`;
       return outcome;

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { capsFor, isErrorResponse, requireMember } from "@/lib/campaign-api";
 import { getFloor } from "@/lib/db/campaigns";
 import { getActiveBoard, listEnemies } from "@/lib/db/encounters";
-import { getSheetForUser } from "@/lib/db/sheets";
+import { getSheetForUser, patchSheet } from "@/lib/db/sheets";
 import {
   getBattleMapForEncounter,
   getTokenByRef,
@@ -10,7 +10,7 @@ import {
   moveToken,
 } from "@/lib/db/battle-maps";
 import { buildPlayerMapView, footprintLookup, occupiedTiles, pcMoveBudget } from "@/lib/battlemap/view";
-import { reachableTiles } from "@/lib/battlemap/movement";
+import { findPath, reachableTiles, speedToTiles } from "@/lib/battlemap/movement";
 import { tileIndex } from "@/lib/battlemap/types";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import { publishFx } from "@/lib/dm/fx";
@@ -18,6 +18,9 @@ import { planDoorFx } from "@/lib/battlemap/fx-plan";
 import { getCampaignById } from "@/lib/db/campaigns";
 import { budgetApplies } from "@/lib/dm/action-budget";
 import { resolveOpportunityAttacks } from "@/lib/dm/opportunity";
+import { canAct } from "@/lib/dm/can-act";
+import { removeConditions } from "@/lib/dm/condition-logic";
+import { publishPersisted } from "@/lib/events";
 
 export const runtime = "nodejs";
 
@@ -76,8 +79,12 @@ export async function POST(
   if (!sheet || !token) {
     return Response.json({ error: "You have no token on this map." }, { status: 400 });
   }
-  if (sheet.currentHp <= 0) {
-    return Response.json({ error: "You are down and cannot move." }, { status: 409 });
+  // The one guard every acting handler asks (src/lib/dm/can-act.ts): the
+  // dead, the dying, the incapacitated and the surprised do not move, and in
+  // a fight nobody moves on a turn that is not theirs.
+  const allowed = canAct({ sheet, encounter, kind: "move" });
+  if (!allowed.ok) {
+    return Response.json({ error: allowed.error }, { status: 409 });
   }
 
   const floor = getFloor(campaignId);
@@ -105,7 +112,7 @@ export async function POST(
   // gates and the heavy-armor Strength penalty, and the Dash action doubles
   // whatever is left. The same computation lights the board's reachable
   // tiles, so a tile the player was shown is never refused here.
-  const { speed, tiles: budget } = pcMoveBudget(campaignId, encounter, map, sheet, token);
+  const { speed, tiles: budget, fullTiles } = pcMoveBudget(campaignId, encounter, map, sheet, token);
   if (speed <= 0) {
     const cause =
       sheet.conditions.join(", ") ||
@@ -133,7 +140,22 @@ export async function POST(
     1,
     token.movement === "fly",
   );
-  const cost = reach.get(tileIndex(map.width, x, y));
+  const stepCost = reach.get(tileIndex(map.width, x, y));
+  // Prone: standing up costs half the character's speed and ends the
+  // condition; without the movement for that the character crawls, every
+  // foot costing two (SRD 5.1, Being Prone).
+  const prone =
+    !scene && sheet.conditions.some((entry) => entry.trim().toLowerCase() === "prone");
+  const standCost = Math.floor(speedToTiles(speed) / 2);
+  const stands = prone && stepCost !== undefined && stepCost + standCost <= fullTiles;
+  const cost =
+    stepCost === undefined || !prone
+      ? stepCost
+      : stands
+        ? stepCost + standCost
+        : stepCost * 2 <= fullTiles
+          ? stepCost * 2
+          : undefined;
   if (cost === undefined) {
     // A locked door on the way: the handle rattles for everyone (the shake
     // and the sting), and the DM's prompt is told so the model can offer
@@ -143,19 +165,63 @@ export async function POST(
       publishFx(campaignId, planDoorFx({ at: lockedDoor, state: "locked" }));
       return Response.json({ error: "The door there is locked." }, { status: 400 });
     }
-    return Response.json({ error: "You cannot reach that tile this round." }, { status: 400 });
+    return Response.json(
+      {
+        error: prone
+          ? "You are prone: standing costs half your speed and crawling costs double. You cannot reach that tile this round."
+          : "You cannot reach that tile this round.",
+      },
+      { status: 400 },
+    );
   }
 
   const from = { x: token.x, y: token.y };
+  // The walk itself, square by square, so an enemy passed on the way gets
+  // its opportunity attack (src/lib/dm/opportunity.ts).
+  const path = scene
+    ? null
+    : findPath(
+        map.terrain,
+        map.width,
+        map.height,
+        occupied,
+        token,
+        { x, y },
+        1,
+        token.movement === "fly",
+      );
   moveToken(token.id, x, y, scene ? 0 : token.movedThisRound + cost);
+  if (stands) {
+    const stood = removeConditions(sheet.conditions, sheet.conditionMeta, ["prone"]);
+    const updated = patchSheet(sheet.id, {
+      conditions: stood.conditions,
+      conditionMeta: stood.meta,
+    });
+    if (updated) {
+      publishPersisted(campaignId, "sheet_updated", { sheet: updated });
+    }
+  }
   publishBattleMapUpdate(campaignId);
 
   // Walking out of an enemy's reach is not free. Disengage suppresses it;
   // the budget carries that decision from the take_action tool.
   const opportunity =
     campaign && !scene
-      ? resolveOpportunityAttacks(campaign, sheet.id, from, { x, y }, turnState?.disengaged ?? false)
+      ? resolveOpportunityAttacks(
+          campaign,
+          sheet.id,
+          from,
+          { x, y },
+          turnState?.disengaged ?? false,
+          path ?? undefined,
+        )
       : { notes: [], downed: false };
+  // Struck down on the way: they fall where they were hit, not where they
+  // were going.
+  if (opportunity.downedAt) {
+    moveToken(token.id, opportunity.downedAt.x, opportunity.downedAt.y, token.movedThisRound + cost);
+    publishBattleMapUpdate(campaignId);
+  }
 
   // Fresh self view in the response saves the mover a follow-up fetch.
   return Response.json({

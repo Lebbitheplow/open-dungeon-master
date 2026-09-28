@@ -1,7 +1,9 @@
 "use client";
 
+import { Coins, Dices, Loader2 } from "lucide-react";
+import type { ReactNode } from "react";
 import { InfoButton } from "@/components/ui/InfoDialog";
-import { NumberStepper } from "@/components/ui/NumberStepper";
+import { cn } from "@/lib/cn";
 import { contentSlug } from "@/lib/help";
 import { gearFromHomebrewData, type HomebrewGear } from "@/lib/homebrew/gear";
 import CatalogBrowser from "./CatalogBrowser";
@@ -22,27 +24,48 @@ const STARTER_PACK: Array<{ name: string; qty: number }> = [
 // sorts after them under its own heading.
 const RARITY_ORDER = ["common", "uncommon", "rare", "very rare", "legendary", "artifact"];
 
-// Equipment block of the character builder: class-appropriate starting
-// weapons and armor arrive pre-added (removable), proficient gear is a
-// one-click suggestion, the whole catalog is browsable by category, and every
-// row and chip carries the ⓘ that says what the thing actually does.
+// The coin the character starts with, as the server will work it out: never
+// typed. Where it comes from is one line under the figure.
+export type PurseView = {
+  gold: number;
+  copper: number;
+  source: string;
+  // The first thing the purse cannot pay for, in the rules' words.
+  problem: string | null;
+  // A table that rolls starting wealth: the server's roll, or the button
+  // that asks for it.
+  wealth: {
+    dice: string;
+    rolled: { faces: number[]; gold: number } | null;
+    busy: boolean;
+    error: string;
+    onRoll: () => void;
+  } | null;
+};
+
+// Equipment block of the character builder: the class's starting equipment
+// arrives pre-added (removable), its either-or choices picked in `kit`,
+// proficient gear is a one-click suggestion, the whole catalog is browsable
+// by category, and every row and chip carries the ⓘ that says what the
+// thing actually does.
 export default function EquipmentSection({
   equipment,
   suggestions,
   onAdd,
   onAddMany,
   onRemove,
-  gold,
-  setGold,
+  purse,
+  kit,
 }: {
+  // The class kit's choices (KitChoicesSection), for a new character.
+  kit?: ReactNode;
   equipment: Array<{ name: string; qty: number; slug?: string }>;
   // Name plus a one-word stat to show beside it ("1d8 slashing", "AC 14").
   suggestions: Array<{ name: string; note: string }>;
   onAdd: (entry: { name: string; qty?: number; slug?: string; gear?: HomebrewGear }) => void;
   onAddMany: (entries: Array<{ name: string; qty: number }>) => void;
   onRemove: (name: string) => void;
-  gold: number;
-  setGold: (gold: number) => void;
+  purse: PurseView;
   inputClass: string;
 }) {
   const have = new Set(equipment.map((item) => item.name));
@@ -51,6 +74,7 @@ export default function EquipmentSection({
   return (
     <section className="panel rounded-xl p-4">
       <h2 className="eyebrow mb-1 text-xs text-amber-200/90">Equipment</h2>
+      {kit}
       {openSuggestions.length ? (
         <div className="mb-2">
           <p className="mb-1.5 text-xs text-stone-500">Suggested for your class:</p>
@@ -173,18 +197,42 @@ export default function EquipmentSection({
           />
         ))}
       </div>
-      <div className="mt-3 block w-fit">
-        <span className="mb-1 block text-xs text-stone-400">Starting gold</span>
-        {/* Six figures have to fit: the figure is widened past the kit's three. */}
-        <NumberStepper
-          min={0}
-          max={100000}
-          value={gold}
-          onChange={(next) => setGold(Math.max(0, next || 0))}
-          label="Starting gold"
-          suffix="gp"
-          className="[&_.kit-stepper-figure]:w-20!"
-        />
+      <div className="mt-3 space-y-1.5">
+        {purse.wealth && !purse.wealth.rolled ? (
+          <button
+            type="button"
+            onClick={purse.wealth.onRoll}
+            disabled={purse.wealth.busy}
+            aria-busy={purse.wealth.busy}
+            className="flex items-center gap-2 rounded-md border border-amber-800/70 bg-amber-950/30 px-3 py-1.5 text-xs text-amber-100 hover:bg-amber-950/60 disabled:opacity-60 motion-press"
+          >
+            {purse.wealth.busy ? <Loader2 className="size-3.5 animate-spin" /> : <Dices className="size-3.5" />}
+            Roll starting wealth ({purse.wealth.dice})
+          </button>
+        ) : null}
+        <div className="flex items-baseline gap-2">
+          <Coins className="size-3.5 self-center text-amber-300/80" />
+          <span className="text-xs text-stone-400">Coin left after the gear</span>
+          <span key={`${purse.gold}-${purse.copper}`} className="reveal font-mono text-sm text-amber-200">
+            {purse.gold} gp{purse.copper ? ` ${purse.copper} cp` : ""}
+          </span>
+        </div>
+        <p className="text-[11px] text-stone-500">
+          {purse.wealth?.rolled
+            ? `The server rolled ${purse.wealth.rolled.faces.join(", ")} on ${purse.wealth.dice}: ${purse.wealth.rolled.gold} gp. `
+            : ""}
+          {purse.source}
+        </p>
+        {purse.wealth?.error ? (
+          <p role="alert" className="reveal motion-shake text-[11px] text-red-400">
+            {purse.wealth.error}
+          </p>
+        ) : null}
+        {purse.problem ? (
+          <p role="alert" className={cn("reveal text-[11px] text-amber-300")}>
+            {purse.problem}
+          </p>
+        ) : null}
       </div>
     </section>
   );

@@ -4,11 +4,19 @@ import type { Ability, AsiChoice, CreateSheetInput, Spellcasting } from "@/lib/s
 import { SRD_CLASSES, spellSlotsFor } from "@/lib/srd";
 import { expertiseSlotsFor, racialTraitsFor, subclassLevelFor, subclassSpellsFor } from "@/lib/srd/features";
 import { fightingStyleFeatureName } from "@/lib/srd/feature-effects";
-import { POINT_BUY_BUDGET, POINT_BUY_MIN, pointBuyRemaining } from "@/lib/srd/point-buy";
+import { featAbilityIncrease } from "@/lib/srd/feat-effects";
+import { STANDARD_ARRAY } from "@/lib/srd/legality/abilities";
+import {
+  POINT_BUY_BUDGET,
+  POINT_BUY_MAX,
+  POINT_BUY_MIN,
+  pointBuyRemaining,
+} from "@/lib/srd/point-buy";
+import { findDraconicAncestry, innateCantripsFor, repeatedGrants, takesDraconicAncestry } from "@/lib/srd/racial-grants";
 import { reconcilePicks } from "./reconcile";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
 import type { BuilderDerived } from "./useBuilderDerived";
-import type { BuilderState } from "./useBuilderState";
+import type { BuilderState, EquipmentItem } from "./useBuilderState";
 
 export type BuilderResult = { level: number; sheet: CreateSheetInput };
 
@@ -70,6 +78,13 @@ export function ancestryBlocker(
   if (race.cantripChoice && !racialCantrip) {
     return `Pick your ${race.name} cantrip first.`;
   }
+  if (takesDraconicAncestry(race.id) && !findDraconicAncestry(state.racialAncestry ?? "")) {
+    return `Pick your ${race.name}'s draconic ancestry first.`;
+  }
+  const repeats = repeatedGrants(background?.skills, race.skills).length;
+  if (repeats && (state.repeatSkills ?? []).filter(Boolean).length < repeats) {
+    return `Your race and background both give the same skill; pick ${repeats === 1 ? "another skill" : `${repeats} other skills`} in its place.`;
+  }
   return null;
 }
 
@@ -99,6 +114,13 @@ export function callingBlocker(
   const skillsLeft = klass.skillChoices.count - state.chosenSkills.length;
   if (strict && skillsLeft > 0) {
     return `Pick ${skillsLeft} more class ${skillsLeft === 1 ? "skill" : "skills"}.`;
+  }
+  // An open tool grant ("three musical instruments") waits for its pick.
+  const toolsOwed = derived.toolGrants.choices.findIndex((_, index) => derived.toolGrants.left[index] > 0);
+  if (toolsOwed >= 0) {
+    const left = derived.toolGrants.left[toolsOwed];
+    const choice = derived.toolGrants.choices[toolsOwed];
+    return `Pick ${left} more ${choice.label}${left === 1 ? "" : "s"} for your tool proficiency.`;
   }
   const pickLevel = subclassLevelFor(klass.id);
   if (pickLevel !== null && derived.effectiveLevel >= pickLevel && !state.subclass.trim()) {
@@ -171,21 +193,39 @@ export function spellsBlocker(
   return null;
 }
 
+const sameNumbers = (left: number[], right: number[]) =>
+  left.length === right.length &&
+  [...left].sort((a, b) => a - b).join() === [...right].sort((a, b) => a - b).join();
+
 // `state` is optional so the rule about the scores themselves can still be
-// asked without it; with it, point buy is held to its budget.
+// asked without it; with it, each method is held to what it gives: the
+// standard array's six numbers once each, a point buy inside its range and
+// its budget, and rolled scores that are the six totals thrown.
 export function abilitiesBlocker(
   derived: BuilderDerived,
-  state?: Pick<BuilderState, "method" | "scores">,
+  state?: Pick<BuilderState, "method" | "scores"> & Partial<Pick<BuilderState, "rollPool">>,
 ): string | null {
   if (!derived.abilities) {
     return "Assign all six ability scores first.";
   }
+  const placed = state ? Object.values(state.scores).map((score) => score ?? POINT_BUY_MIN) : [];
+  if (state?.method === "standard" && !sameNumbers(placed, STANDARD_ARRAY)) {
+    return `The standard array is ${STANDARD_ARRAY.join(", ")}, each used once. Place each number on one ability.`;
+  }
   if (state?.method === "pointbuy") {
-    const over = -pointBuyRemaining(
-      Object.values(state.scores).map((score) => score ?? POINT_BUY_MIN),
-    );
+    const outside = placed.find((score) => score < POINT_BUY_MIN || score > POINT_BUY_MAX);
+    if (outside !== undefined) {
+      return `A point buy score runs from ${POINT_BUY_MIN} to ${POINT_BUY_MAX}; ${outside} is outside it.`;
+    }
+    const over = -pointBuyRemaining(placed);
     if (over > 0) {
       return `Point buy is ${over} ${over === 1 ? "point" : "points"} over its ${POINT_BUY_BUDGET}. Lower a score first.`;
+    }
+  }
+  if (state?.method === "roll") {
+    const thrown = (state.rollPool ?? []).map((entry) => entry.total);
+    if (!sameNumbers(placed, thrown)) {
+      return "Rolled scores are the six totals thrown, each placed on one ability. Roll the dice, then place all six.";
     }
   }
   const unresolvedSlot = derived.activeAsiChoices.findIndex(
@@ -195,6 +235,11 @@ export function abilitiesBlocker(
     return `Resolve your level ${derived.asiSlotLevels[unresolvedSlot]} ability score improvement first.`;
   }
   return null;
+}
+
+// The pack: what it costs against the coin the character starts with.
+export function gearBlocker(derived: BuilderDerived): string | null {
+  return derived.purse?.problems[0] ?? null;
 }
 
 // The final check before the payload is built. The same rules as the step
@@ -213,7 +258,8 @@ export function validateBuilder(
     abilitiesBlocker(derived, state) ??
     ancestryBlocker(state, race, background) ??
     callingBlocker(klass, state, derived) ??
-    spellsBlocker(state, derived, klass);
+    spellsBlocker(state, derived, klass) ??
+    gearBlocker(derived);
   if (message) {
     return { kind: "error", message };
   }
@@ -260,8 +306,40 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
   // non-caster has nowhere to put it, so it rides along as a feature
   // instead, which populateFeatures keeps and the DM prompt can see.
   const { spells, cantrips, racialCantrip } = picks;
-  const finalCantrips =
-    racialCantrip && !cantrips.includes(racialCantrip) ? [...cantrips, racialCantrip] : cantrips;
+  // Skills, expertise and languages are picks too, so they come from the
+  // reconciled ones: what the class, the background and the race grant, and
+  // no more of the player's own than each of them offers.
+  const skills = [
+    ...new Set([
+      ...picks.chosenSkills,
+      ...(background.skills ?? []),
+      ...picks.backgroundSkills.filter(Boolean),
+      ...(race.skills ?? []),
+      ...picks.racialSkills.filter(Boolean),
+      ...(state.repeatSkills ?? []).filter(Boolean),
+    ]),
+  ];
+  const proficiencies = {
+    ...preview.proficiencies,
+    skills,
+    expertise: picks.expertisePicks.filter((skill) => skills.includes(skill)),
+    languages: [
+      ...new Set([
+        ...(race.languages ?? []),
+        ...(background.knownLanguages ?? []),
+        ...picks.bonusLanguages.filter(Boolean),
+        ...(klass.languages ?? []),
+      ]),
+    ],
+  };
+  // The race's own cantrips (a tiefling's thaumaturgy) ride on top, free.
+  const finalCantrips = [
+    ...new Set([
+      ...cantrips,
+      ...(racialCantrip ? [racialCantrip] : []),
+      ...innateCantripsFor(race.id, effectiveLevel),
+    ]),
+  ];
   // Domain, circle, oath and patron spells are always prepared and free:
   // they ride onto the list on top of whatever the player picked.
   const grantedSpells = subclassSpellsFor(klass.id, picks.subclass, effectiveLevel).filter(
@@ -281,6 +359,15 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
       : [];
   // Likewise a content-pack race's traits: the server grants the bundled
   // races' (racialTraitsFor) and has no other copy of a Catfolk's.
+  // The score a variant human's half-feat raises where it offers a choice;
+  // the server adds the point (src/lib/srd/legality/half-feats.ts).
+  const racialFeatChoice = featAbilityIncrease(state.feats[0] ?? "")?.from ?? [];
+  const racialFeatAbility =
+    racialFeatChoice.length > 1
+      ? racialFeatChoice.includes(state.racialFeatAbility as Ability)
+        ? (state.racialFeatAbility as Ability)
+        : racialFeatChoice[0]
+      : null;
   const packRaceTraits = racialTraitsFor(race.id).length
     ? []
     : race.traitNames.map((traitName) => ({ name: traitName.slice(0, 80), source: "race" as const }));
@@ -299,7 +386,9 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
       abilities,
       maxHp: preview.maxHp,
       ac: derived.ac,
-      acOverride: state.acOverride !== null,
+      // The armor class is the armor engine's. Pinning one is a correction,
+      // which whoever runs the table makes in play.
+      acOverride: false,
       portrait: state.portrait,
       speed: race.speed,
       hitDice: {
@@ -311,12 +400,19 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
       // at level-up in play.
       classes: [],
       hitDicePools: null,
-      proficiencies: preview.proficiencies,
-      equipment: derived.fullEquipment,
-      gold: state.gold,
-      // Starting wealth is quoted in whole gold pieces everywhere in the
-      // PHB, so a new character starts with no small change.
-      copper: 0,
+      proficiencies,
+      // The catalog price rode along for the purse; the server prices the
+      // pack again from its own catalog.
+      equipment: derived.fullEquipment.map((entry) => {
+        const item: EquipmentItem = { ...entry };
+        delete item.priceCp;
+        return item;
+      }),
+      // The coin left once the pack is paid for: the background's purse (or
+      // the wealth the server rolled) less what was bought. The server works
+      // the same sum from its own prices and stores its answer.
+      gold: derived.purse?.gold ?? state.gold,
+      copper: derived.purse?.copper ?? 0,
       feats: [...new Set([...asiFeats, ...state.feats])],
       // Server-side creation populates SRD class features, racial traits
       // and the background feature; the builder contributes only what has
@@ -337,8 +433,12 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
         skills: picks.racialSkills.filter(Boolean),
         cantrip: racialCantrip,
         tool: picks.racialTool,
+        ancestry: takesDraconicAncestry(race.id) ? (findDraconicAncestry(state.racialAncestry ?? "")?.id ?? "") : "",
+        ...(racialFeatAbility ? { featAbility: racialFeatAbility } : {}),
       },
       backgroundChoices: { skills: picks.backgroundSkills.filter(Boolean) },
+      // The class kit's either-or choices, which the server hands out free.
+      ...(derived.kitChoices ? { kitChoices: derived.kitChoices } : {}),
       spellcasting: klass.spellAbility
         ? {
             ability: klass.spellAbility,

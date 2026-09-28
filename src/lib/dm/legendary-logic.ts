@@ -18,7 +18,24 @@ export type LegendaryProfile = {
 // Per enemy, what is left: actions refill at the top of its own turn,
 // resistances last the fight.
 export type LegendaryPool = { actions: number; resistances: number };
-export type LegendaryState = { pools: Record<string, LegendaryPool>; lair: boolean; lairUsedRound: number };
+// What the fight remembers about a round beyond the pools, carried in the
+// same stored object because it is the encounter's per-enemy, per-round
+// record. Optional: a fight saved before it existed reads as nobody having
+// acted.
+//   acted.ids   the enemies that have taken their action in acted.round
+//   acted.owed  enemies owed one action more: the round a surprised party
+//               lost to them (src/lib/dm/can-act.ts canEnemyAct)
+export type RoundLedger = { round: number; ids: string[]; owed?: string[] };
+export type LegendaryState = {
+  pools: Record<string, LegendaryPool>;
+  lair: boolean;
+  lairUsedRound: number;
+  acted?: RoundLedger;
+};
+
+function stringList(raw: unknown): string[] {
+  return Array.isArray(raw) ? raw.filter((entry): entry is string => typeof entry === "string") : [];
+}
 
 export function emptyLegendaryState(): LegendaryState {
   return { pools: {}, lair: false, lairUsedRound: 0 };
@@ -32,7 +49,21 @@ export function normalizeLegendaryState(raw: unknown): LegendaryState {
     const entry = (pool && typeof pool === "object" ? pool : {}) as Record<string, unknown>;
     pools[id] = { actions: Math.max(0, Number(entry.actions) || 0), resistances: Math.max(0, Number(entry.resistances) || 0) };
   }
-  return { pools, lair: record.lair === true, lairUsedRound: Math.max(0, Number(record.lairUsedRound) || 0) };
+  const acted = (record.acted && typeof record.acted === "object" ? record.acted : null) as Record<string, unknown> | null;
+  return {
+    pools,
+    lair: record.lair === true,
+    lairUsedRound: Math.max(0, Number(record.lairUsedRound) || 0),
+    ...(acted
+      ? {
+          acted: {
+            round: Number(acted.round) || 0,
+            ids: stringList(acted.ids),
+            ...(stringList(acted.owed).length ? { owed: stringList(acted.owed) } : {}),
+          },
+        }
+      : {}),
+  };
 }
 
 const COST = /\(costs?\s+(\d)\s+actions?\)/i;

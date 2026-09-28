@@ -1,6 +1,7 @@
 import { raceMechanics, type RaceMechanics } from "@/lib/content/mechanics";
 import { SRD_RACES, type SrdRace } from "@/lib/srd";
 import { srdRaceId } from "@/lib/srd/race-id";
+import { isEdition2024 } from "@/lib/content/edition";
 
 // The content pack's race rows, turned into the shape the character builder
 // works from. Three things happen here that raceMechanics alone cannot do:
@@ -9,7 +10,7 @@ import { srdRaceId } from "@/lib/srd/race-id";
 //   parent's speed, languages and ability bumps are folded in. Without this a
 //   pack Hill Dwarf had +1 Wisdom, no +2 Constitution, and spoke only Common.
 // - A row the bundled SRD also describes (the wotc-srd rows, the expanded
-//   pack's copies, the srd-2024 species) takes its mechanics from
+//   pack's copies) takes its mechanics from
 //   src/lib/srd/races.json, which is what actually grants skills, tools,
 //   cantrips and free languages; the pack keeps its prose. A third-party row
 //   that only shares a slug (Tome of Heroes' drow) is its own race.
@@ -17,6 +18,8 @@ import { srdRaceId } from "@/lib/srd/race-id";
 // - A parent whose rules require a subrace (the SRD's Dwarf, a gearforged
 //   without its chassis) is not an option itself; its subraces are, unless a
 //   stored character already sits on the parent (`keepIds`).
+// - A 2024 species (src/lib/content/edition.ts) is not offered to the 2014
+//   builder, again unless a stored character already names it.
 
 // Content-pack slugs are kebab-case and the pack's own copies of SRD rows
 // carry an "odm-" prefix; the bundled ids are snake_case.
@@ -31,7 +34,7 @@ export function srdRaceFor(raceId: string): SrdRace | null {
 
 export type RaceRow = { slug: string; name: string; documentSlug: string; data: Record<string, unknown> };
 
-const BUNDLED_DOCUMENTS = new Set(["wotc-srd", "odm-expanded", "srd-2024"]);
+const BUNDLED_DOCUMENTS = new Set(["wotc-srd", "odm-expanded"]);
 
 export type PackRaceOption = { id: string; name: string; note: string } & RaceMechanics;
 
@@ -133,7 +136,9 @@ export function packRaceOptions(rows: RaceRow[], keepIds: Iterable<string> = [])
   const needsSubrace = (row: RaceRow) =>
     !kept.has(row.slug) &&
     parentSlugs.has(row.slug) && (row.documentSlug === "wotc-srd" || mechanicsFor(row).choiceTraitNames.length > 0);
-  return rows.filter((row) => !needsSubrace(row)).map((row) => {
+  const offered = (row: RaceRow) =>
+    !needsSubrace(row) && (!isEdition2024(row.documentSlug) || kept.has(row.slug));
+  return rows.filter(offered).map((row) => {
     let mechanics = mechanicsFor(row);
     const parentSlug = String(row.data.parent_slug ?? "");
     const parent = parentSlug && parentSlug !== row.slug ? bySlug.get(parentSlug) : undefined;

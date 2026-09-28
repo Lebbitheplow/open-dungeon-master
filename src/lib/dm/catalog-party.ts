@@ -3,6 +3,8 @@
 // offered exactly, because both callers reach the same engine
 // (src/lib/dm/invoke.ts).
 import type { CatalogEntry } from "@/lib/dm/catalog-types";
+import { UPDATE_SHEET_FIELDS } from "@/lib/dm/update-sheet-args";
+import { DRACONIC_ANCESTRIES } from "@/lib/srd/racial-grants";
 
 const ABILITIES = [
   { value: "str", label: "Strength" },
@@ -30,6 +32,12 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
       { name: "characterId", label: "Character", kind: "character", required: true },
       { name: "amount", label: "Damage", kind: "number", required: true, min: 1, max: 200 },
       { name: "type", label: "Type", kind: "text", placeholder: "slashing, fire, ..." },
+      {
+        name: "magical",
+        label: "From a spell or a magic weapon",
+        kind: "boolean",
+        help: "Resistance to nonmagical attacks does not apply to it.",
+      },
       REASON,
     ],
   },
@@ -52,9 +60,21 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
     name: "stabilize",
     label: "Stabilize",
     category: "party",
-    summary: "Ends a dying character's death saves without healing them.",
+    summary: "Ends a dying character's death saves without healing them. It takes the helper's action.",
     fields: [
       { name: "characterId", label: "Character", kind: "character", required: true },
+      { name: "healerId", label: "Tended by", kind: "character", required: true },
+      {
+        name: "method",
+        label: "How",
+        kind: "select",
+        options: [
+          { value: "check", label: "Medicine check, DC 10" },
+          { value: "kit", label: "A use of their healer's kit" },
+          { value: "spell", label: "Spare the Dying" },
+        ],
+        help: "The server rolls the check; a kit or the spell needs none.",
+      },
       REASON,
     ],
   },
@@ -188,8 +208,18 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
     summary: "Moves the coin and the goods in one action.",
     fields: [
       { name: "characterId", label: "Character", kind: "character", required: true },
+      {
+        name: "action",
+        label: "Do",
+        kind: "select",
+        required: true,
+        options: [
+          { value: "buy", label: "Buy" },
+          { value: "sell", label: "Sell" },
+        ],
+      },
       { name: "item", label: "Item", kind: "text", required: true },
-      { name: "price", label: "Price", kind: "number", min: 0, max: 100000 },
+      { name: "price", label: "Gold each", kind: "number", required: true, min: 0, max: 100000 },
       { name: "qty", label: "How many", kind: "number", min: 1, max: 99 },
       REASON,
     ],
@@ -202,8 +232,15 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
     fields: [
       { name: "characterId", label: "Character", kind: "character", required: true },
       { name: "resource", label: "Resource", kind: "text", required: true },
+      { name: "amount", label: "How much", kind: "number", min: 1, max: 100, help: "Points from a pool: Lay on Hands, Ki. One use when left empty." },
       { name: "variant", label: "Option", kind: "text", help: "For a feature with choices." },
       { name: "targetCharacterId", label: "Target", kind: "character" },
+      { name: "form", label: "Beast form", kind: "text", help: "Wild Shape: the beast's name. The server reads its stat block." },
+      { name: "formHp", label: "Form's hit points", kind: "number", min: 1, max: 300 },
+      { name: "formAc", label: "Form's armor class", kind: "number", min: 1, max: 30 },
+      { name: "formCr", label: "Form's challenge rating", kind: "number", min: 0, max: 30, help: "For a beast the server has no stat block for; the druid's level limits it." },
+      { name: "formFlies", label: "The form flies", kind: "boolean" },
+      { name: "formSwims", label: "The form swims", kind: "boolean" },
       REASON,
     ],
   },
@@ -216,8 +253,17 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
       { name: "characterId", label: "Character", kind: "character", required: true },
       { name: "condition", label: "Condition", kind: "text", required: true },
       { name: "rounds", label: "Rounds", kind: "number", min: 1, max: 100 },
+      { name: "minutes", label: "Or minutes", kind: "number", min: 1, max: 1440 },
+      { name: "hours", label: "Or hours", kind: "number", min: 1, max: 24 },
       { name: "saveAbility", label: "Save to end", kind: "select", options: ABILITIES },
       { name: "saveDc", label: "Save DC", kind: "number", min: 1, max: 30 },
+      {
+        name: "sourceEnemyId",
+        label: "Caused by enemy",
+        kind: "enemy",
+        help: "Who they are frightened of, charmed or grappled by; it ends when that enemy falls.",
+      },
+      { name: "sourceCharacterId", label: "Or by character", kind: "character" },
       REASON,
     ],
   },
@@ -324,8 +370,11 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
     summary: "Marks a spell slot used and starts concentration when the spell needs it.",
     fields: [
       { name: "characterId", label: "Character", kind: "character", required: true },
-      { name: "level", label: "Slot level", kind: "number", required: true, min: 0, max: 9 },
-      { name: "name", label: "Spell", kind: "text" },
+      { name: "level", label: "Slot level", kind: "number", required: true, min: 1, max: 9 },
+      // The handler reads `spell`: the name is what it checks the list, the
+      // slot level, the casting time and concentration against. It may be
+      // left out: a slot burned with no spell (Divine Smite) still spends.
+      { name: "spell", label: "Spell", kind: "text" },
       { name: "concentration", label: "Concentration", kind: "boolean" },
       { name: "ritual", label: "Cast as a ritual", kind: "boolean" },
     ],
@@ -334,10 +383,15 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
     name: "learn_spell",
     label: "Learn a spell",
     category: "party",
-    summary: "Adds a spell to what a character knows.",
+    summary: "Adds a spell to what a character knows, or takes one away.",
     fields: [
       { name: "characterId", label: "Character", kind: "character", required: true },
-      { name: "name", label: "Spell", kind: "text", required: true },
+      { name: "action", label: "Learn or forget", kind: "select", required: true, options: [
+          { value: "add", label: "Learn it" },
+          { value: "remove", label: "Forget it" },
+        ],
+      },
+      { name: "spell", label: "Spell", kind: "text", required: true },
       REASON,
     ],
   },
@@ -348,8 +402,25 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
     summary: "For what the other actions do not cover. Everything is audited and undoable.",
     fields: [
       { name: "characterId", label: "Character", kind: "character", required: true },
-      { name: "field", label: "Field", kind: "text", required: true },
-      { name: "value", label: "Value", kind: "text", required: true },
+      // One field at a time, as a name and what it becomes. The handler
+      // turns the pair into the patch it takes from the model
+      // (src/lib/dm/update-sheet-args.ts), so the form stays two inputs
+      // rather than one per key of a sheet.
+      // Neither is required here: the model, and an assisted table's AI,
+      // send the sheet's own keys through this same entry, and the handler
+      // refuses a call that changes nothing.
+      {
+        name: "field",
+        label: "Field",
+        kind: "select",
+        options: UPDATE_SHEET_FIELDS.map((field) => ({ value: field.name, label: field.label })),
+      },
+      {
+        name: "value",
+        label: "Becomes",
+        kind: "text",
+        help: "A whole number for a number. Conditions as a list (poisoned, prone), or none to clear them.",
+      },
       REASON,
     ],
   },
@@ -379,13 +450,21 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
     summary: "Builds an AI-played party member or scene ally with a real sheet.",
     fields: [
       { name: "name", label: "Name", kind: "text", required: true },
-      { name: "class", label: "Class", kind: "text" },
+      { name: "class", label: "Class", kind: "text", required: true },
       { name: "race", label: "Race", kind: "text" },
-      { name: "kind", label: "Kind", kind: "select", options: [
+      {
+        name: "ancestry",
+        label: "Draconic ancestry",
+        kind: "select",
+        help: "For a dragonborn; rolled on the SRD table when left unset.",
+        options: DRACONIC_ANCESTRIES.map((entry) => ({ value: entry.id, label: entry.dragon })),
+      },
+      { name: "level", label: "Level", kind: "number", min: 1, max: 20, help: "The party's average when left empty." },
+      { name: "kind", label: "Kind", kind: "select", required: true, options: [
         { value: "party", label: "Party member" },
         { value: "guest", label: "Scene ally" },
       ] },
-      { name: "personality", label: "Personality", kind: "text" },
+      { name: "personality", label: "Personality", kind: "text", required: true },
     ],
   },
   {
@@ -394,7 +473,8 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
     category: "party",
     summary: "Writes an AI-played ally out of the party.",
     fields: [
-      { name: "name", label: "Companion", kind: "text", required: true },
+      // The handler takes the companion's id and answers to their name too.
+      { name: "characterId", label: "Companion", kind: "character", required: true },
       REASON,
     ],
   },

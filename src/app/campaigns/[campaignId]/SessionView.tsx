@@ -299,9 +299,11 @@ export function SessionView({
   const earnedLevel = mySheet && !mySheet.isCompanion ? Math.min(20, levelForXp(mySheet.xp)) : 0;
   const noticeKey =
     mySheet && noticeLevel > mySheet.level ? `${mySheet.id}:${noticeLevel}` : "";
+  // The experience earns the level (a DM's milestone is an experience award);
+  // levels are taken one at a time, so the next one is what is offered.
   const myLevelUp =
-    mySheet && Math.max(noticeLevel, earnedLevel) > mySheet.level
-      ? { characterId: mySheet.id, level: Math.max(noticeLevel, earnedLevel) }
+    mySheet && earnedLevel > mySheet.level
+      ? { characterId: mySheet.id, level: mySheet.level + 1 }
       : undefined;
   const levelUpShown =
     Boolean(myLevelUp) && (levelUpByHand || (Boolean(noticeKey) && dismissedLevelUp !== noticeKey));
@@ -974,6 +976,7 @@ export function SessionView({
             sheet={mySheet}
             targetLevel={myLevelUp.level}
             multiclassAllowed={campaign.gameSettings?.multiclassingEnabled ?? true}
+            hpMethod={campaign.gameSettings?.hpMethod ?? "average"}
             onDone={() => {
               setDismissedLevelUp(noticeKey);
               setLevelUpByHand(false);

@@ -1,3 +1,4 @@
+import { ancestryOf, takesDraconicAncestry } from "@/lib/srd/racial-grants";
 import classFeaturesJson from "@/lib/srd/class-features.json";
 import subclassesJson from "@/lib/srd/subclasses.json";
 import racesJson from "@/lib/srd/races.json";
@@ -6,6 +7,7 @@ import type { SheetFeature } from "@/lib/schemas/sheet";
 import { chosenFightingStyles, fightingStyleSlots } from "@/lib/srd/feature-effects";
 import { findOptionByFeatureName, optionSlotsFor } from "@/lib/srd/options";
 import { srdRaceId } from "@/lib/srd/race-id";
+import { subclassNamedBare, subclassNamedExactly } from "@/lib/srd/subclass-name";
 
 export type SubclassTable = {
   name: string;
@@ -173,42 +175,35 @@ function leveledNames(levels: Record<string, string[]>, level: number): SheetFea
 
 const normalizeName = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
 
-// Loose name match: sheets store subclasses as free text and content packs
-// use their own slugs, so "Evocation" must still hit "School of Evocation".
-function subclassMatches(stored: string, srdName: string): boolean {
-  const a = normalizeName(stored);
-  const b = normalizeName(srdName);
-  if (!a || a.length < 4) {
-    return a === b;
-  }
-  return a === b || a.includes(b) || b.includes(a);
+// The subclass a sheet's free-text string means, or null: the exact name, an
+// alias, or either with its title stripped on both sides and compared
+// whole. A string that is merely part of a name matches nothing, so a
+// paladin whose subclass reads "Oath" is granted no oath's features.
+// (The rule is src/lib/srd/subclass-name.ts, shared with options.ts.)
+function findSubclass(table: ClassFeatureTable, stored: string): SubclassTable | null {
+  return (
+    table.subclasses.find((entry) => subclassNamedExactly(stored, entry.name, entry.aliases)) ??
+    table.subclasses.find((entry) => subclassNamedBare(stored, entry.name, entry.aliases)) ??
+    null
+  );
 }
 
-// The subclass a sheet's free-text string means, or null. With eight or more
-// subclasses per class the loose match alone is ambiguous ("Land" is inside
-// "Circle of the Land" but so is "the Land" inside other prose), so exact
-// name and alias matches are tried across the whole list before any of them
-// is allowed to match loosely.
-function findSubclass(table: ClassFeatureTable, stored: string): SubclassTable | null {
-  const wanted = normalizeName(stored);
-  if (!wanted) {
+// The table's own name for a subclass a sheet names exactly, or by one of
+// its aliases; null for anything else. The strict match: the level-up and
+// the creation check ask it "is this one of the class's subclasses", where
+// the loose match above would answer yes to half a name.
+export function bundledSubclassName(classId: string, subclass: string): string | null {
+  const table = CLASS_FEATURES[classId];
+  const wanted = normalizeName(subclass);
+  if (!table || !wanted) {
     return null;
   }
-  const exact = table.subclasses.find(
+  const found = table.subclasses.find(
     (entry) =>
       normalizeName(entry.name) === wanted ||
       (entry.aliases ?? []).some((alias) => normalizeName(alias) === wanted),
   );
-  if (exact) {
-    return exact;
-  }
-  return (
-    table.subclasses.find(
-      (entry) =>
-        subclassMatches(stored, entry.name) ||
-        (entry.aliases ?? []).some((alias) => subclassMatches(stored, alias)),
-    ) ?? null
-  );
+  return found?.name ?? null;
 }
 
 // Base-class features up to `level`, plus the features of whichever subclass
@@ -302,7 +297,10 @@ export function populateFeaturesForClasses(
           feature.source === "story" ||
           feature.source === "choice" ||
           feature.source === "background" ||
-          (feature.source === "race" && keepsRaceNames)) &&
+          (feature.source === "race" && keepsRaceNames) ||
+          // A dragonborn's chosen ancestry is a race feature only the
+          // player's pick names; the regrant keeps it.
+          (feature.source === "race" && takesDraconicAncestry(raceId) && ancestryOf([feature]) !== null)) &&
         !grantedNames.has(feature.name.toLowerCase()),
     ),
     classes,

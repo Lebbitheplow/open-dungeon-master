@@ -1,6 +1,9 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { createSheet, getSheetById, getSheetForUser } from "@/lib/db/sheets";
 import { adaptSheetToLevel } from "@/lib/characters/adapt";
+import { admitSheet } from "@/lib/characters/admit";
+import { getCampaignById } from "@/lib/db/campaigns";
+import { XP_THRESHOLDS, levelForXp } from "@/lib/srd";
 import { populateFeaturesForClasses } from "@/lib/srd/features";
 import { normalizeSpellcasting } from "@/lib/srd/spell-lists";
 import { dedupeName } from "@/lib/workshop/import";
@@ -107,10 +110,15 @@ export function createCharacter(
   input: CreateSheetInput,
   role: CharacterRole = "pc",
   workshopId = "",
+  // Experience the character arrives with (a file's). Kept only while it
+  // is the experience of this level: it can never be worth a higher one.
+  xp = 0,
 ): LibraryCharacter {
   const db = getDatabase();
   const id = crypto.randomUUID();
   const now = nowIso();
+  const floor = XP_THRESHOLDS[Math.max(1, Math.min(20, level)) - 1] ?? 0;
+  const startingXp = levelForXp(xp) === level ? xp : floor;
   const stored: CreateSheetInput = {
     ...input,
     features: libraryFeatures(input, level),
@@ -121,7 +129,7 @@ export function createCharacter(
         id, user_id, name, role, race, class, subclass, background, level, xp,
         sheet_json, workshop_id, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
   ).run(
     id,
@@ -133,6 +141,7 @@ export function createCharacter(
     input.subclass,
     input.background,
     level,
+    startingXp,
     JSON.stringify(stored),
     workshopId,
     now,
@@ -261,28 +270,51 @@ export function deleteCharacter(userId: string, id: string): boolean {
 }
 
 // Copy a library character into a campaign as a fresh sheet. When the
-// campaign's starting level differs, hit dice, suggested HP, and spell
-// slots are recomputed (SRD tables; unknown classes keep their stored HP).
+// campaign's starting level differs, the sheet is adapted to it (levels shed
+// or added, improvements given back, spells trimmed). Either way it then
+// comes through the same door every sheet does (src/lib/characters/admit.ts):
+// hit dice, slots, training and hit points are written for the level and the
+// table's settings, and a character that cannot be made legal is refused
+// with what to fix. The library copy is never changed by this.
 export function instantiateIntoCampaign(
   characterId: string,
   campaignId: string,
   userId: string,
   targetLevel: number,
-): CharacterSheet | { error: string } {
+): CharacterSheet | { error: string; problems?: string[] } {
   const character = getCharacterForUser(userId, characterId);
   if (!character) {
     return { error: "Character not found in your library." };
   }
-  if (getSheetForUser(campaignId, userId)) {
+  const campaign = getCampaignById(campaignId);
+  // One character each, unless the table allows several: then the new one
+  // waits beside the one in play until its player switches to it.
+  const allowsSeveral = (campaign?.gameSettings.multiCharacter ?? "off") !== "off";
+  if (!allowsSeveral && getSheetForUser(campaignId, userId)) {
     return { error: "You already have a character in this campaign." };
   }
   const level = Math.max(1, Math.min(20, targetLevel));
   // The adaptation itself lives in src/lib/characters/adapt.ts, pure, so a
   // companion coming out of this same library gets exactly the work done to
   // it and a test can drive every branch without a database.
-  const sheet = adaptSheetToLevel(character.sheet, character.level, level);
-
-  return createSheet(campaignId, userId, level, sheet, characterId);
+  const adapted = adaptSheetToLevel(character.sheet, character.level, level);
+  const admitted = admitSheet({
+    door: "stored",
+    level,
+    sheet: adapted,
+    userId,
+    campaign,
+  });
+  if (!admitted.ok) {
+    return {
+      error: `${character.name} cannot enter play as stored. ${admitted.problems[0]} Edit the character in your library, then try again.`,
+      problems: admitted.problems,
+    };
+  }
+  // A character entering at its own level brings the experience it has.
+  return createSheet(campaignId, userId, level, admitted.sheet, characterId, {
+    xp: character.level === level ? character.xp : 0,
+  });
 }
 
 // What a campaign sheet carries back to its library character when the
@@ -338,6 +370,9 @@ export function syncProgressToLibrary(sheetId: string): LibraryCharacter | null 
     copper: sheet.copper,
     feats: sheet.feats,
     features: sheet.features,
+    // What a second class granted, the skill picked with it and expertise
+    // taken in play are part of the character and return with it.
+    proficiencies: sheet.proficiencies,
     // Level-up ASIs land here as raw scores; the campaign records no
     // AsiChoice for them, so asiChoices keeps only creation-time picks.
     abilities: sheet.abilities,
@@ -353,6 +388,7 @@ export function syncProgressToLibrary(sheetId: string): LibraryCharacter | null 
         }
       : sheet.spellcasting,
     maxHp: sheet.maxHp,
+    hitDice: { ...sheet.hitDice, spent: 0 },
     ac: sheet.ac,
     portrait: sheet.portrait,
     notes: sheet.notes,

@@ -27,6 +27,31 @@ export function baseDamageDice(desc: string): string | null {
   return null;
 }
 
+// The whole payload where the text states more than one term: Ice Storm's
+// "2d8 bludgeoning damage and 4d6 cold damage" is 2d8+4d6, Disintegrate's
+// "10d6 + 40 force damage" keeps its 40. Only terms joined by "and" are
+// added: "3d8 radiant damage ... or 3d8 necrotic damage" is a choice, and
+// dice in a later sentence are another effect.
+export function baseDamageExpression(desc: string): string | null {
+  const first = /(\d+d\d+)(?:\s*\+\s*(\d+))?(?:\s+[a-z]+)?\s+damage\b/i.exec(desc);
+  if (!first) {
+    return baseDamageDice(desc);
+  }
+  const terms = [first[1]];
+  let flat = first[2] ? Number(first[2]) : 0;
+  let rest = desc.slice(first.index + first[0].length);
+  for (;;) {
+    const more = /^\s+and\s+(\d+d\d+)(?:\s*\+\s*(\d+))?(?:\s+[a-z]+)?\s+damage\b/i.exec(rest);
+    if (!more) {
+      break;
+    }
+    terms.push(more[1]);
+    flat += more[2] ? Number(more[2]) : 0;
+    rest = rest.slice(more[0].length);
+  }
+  return `${terms.join("+")}${flat ? `+${flat}` : ""}`;
+}
+
 export function baseHealingDice(desc: string): string | null {
   const match = /(?:regains?|restores?|heals?)[^.]{0,60}?(\d+d\d+)/i.exec(desc);
   return match ? match[1] : null;
@@ -108,30 +133,55 @@ export function upcastStep(
   };
 }
 
-// Adds two dice expressions of the same size: "8d6" + 2 x "1d6" = "10d6".
-// Different sizes stay separate terms, which rollExpression handles fine.
-function addDice(base: string, extra: string, times: number): string {
+// Adds dice to an expression: "8d6" + 2 x "1d6" = "10d6", and "2d8+4d6" +
+// 1 x "1d8" = "3d8+4d6". Dice of a size the expression does not hold stay a
+// term of their own, which rollExpression handles fine.
+export function addDice(base: string, extra: string, times: number): string {
   if (times <= 0) {
     return base;
   }
-  const baseMatch = /^(\d+)d(\d+)$/.exec(base);
   const extraMatch = /^(\d+)d(\d+)$/.exec(extra);
-  if (baseMatch && extraMatch && baseMatch[2] === extraMatch[2]) {
-    return `${Number(baseMatch[1]) + Number(extraMatch[1]) * times}d${baseMatch[2]}`;
+  if (!extraMatch) {
+    return `${base}${`+${extra}`.repeat(times)}`;
   }
-  return `${base}${`+${extra}`.repeat(times)}`;
+  const terms = base.split("+");
+  const at = terms.findIndex((term) => new RegExp(`^\\d+d${extraMatch[2]}$`).test(term));
+  if (at < 0) {
+    const flatAt = terms.findIndex((term) => /^\d+$/.test(term));
+    const added = `${Number(extraMatch[1]) * times}d${extraMatch[2]}`;
+    const where = flatAt < 0 ? terms.length : flatAt;
+    return [...terms.slice(0, where), added, ...terms.slice(where)].join("+");
+  }
+  const count = Number(terms[at].split("d")[0]) + Number(extraMatch[1]) * times;
+  terms[at] = `${count}d${extraMatch[2]}`;
+  return terms.join("+");
 }
 
-// The dice a levelled spell rolls when cast from a given slot.
+// The dice a levelled spell rolls when cast from a given slot. A spell with
+// no line about higher slots (Harm, Chain Lightning, Meteor Swarm), or whose
+// higher slots add targets rather than dice (Scorching Ray), rolls what it
+// prints from every slot.
 export function upcastDamage(
   desc: string,
   higherLevel: string,
   slotLevel: number,
 ): { dice: string; note: string } | null {
   const step = upcastStep(higherLevel);
-  const base = step?.kind === "healing" ? baseHealingDice(desc) : baseDamageDice(desc);
-  if (!step || !base) {
+  const base =
+    step?.kind === "healing"
+      ? baseHealingDice(desc)
+      : (baseDamageExpression(desc) ?? (step ? null : baseHealingDice(desc)));
+  if (!base) {
     return null;
+  }
+  if (!step) {
+    // A higher-slot line that adds something other than dice (Magic
+    // Missile's darts) is not read as "the same from every slot"; one that
+    // adds rays, targets or creatures leaves each one's dice as printed.
+    if (higherLevel.trim() && !/\b(rays?|targets?|creatures?)\b/i.test(higherLevel)) {
+      return null;
+    }
+    return { dice: base, note: `${base} from any slot` };
   }
   const levelsAbove = Math.max(0, Math.floor(slotLevel) - step.baseLevel);
   const above = Math.floor(levelsAbove / step.per);

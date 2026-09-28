@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { currentUser, unauthorized } from "@/lib/auth";
-import { createRuleset, listRulesetsForUser, captureRulesetFromCampaign } from "@/lib/db/rulesets";
+import {
+  captureRulesetFromCampaign,
+  createRuleset,
+  homebrewIdsRefusal,
+  listRulesetsForUser,
+} from "@/lib/db/rulesets";
 import { getCampaignForUser } from "@/lib/db/campaigns";
 import { createRulesetSchema } from "@/lib/schemas/ruleset";
 
@@ -63,5 +68,9 @@ export async function POST(request: Request) {
       : Response.json({ error: "Could not capture those rules." }, { status: 400 });
   }
 
+  const refusal = homebrewIdsRefusal(user.id, parsed.data.homebrewIds);
+  if (refusal) {
+    return Response.json({ error: refusal }, { status: 400 });
+  }
   return Response.json({ ruleset: createRuleset(user.id, parsed.data) }, { status: 201 });
 }

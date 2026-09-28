@@ -5,6 +5,7 @@ import {
   expressionDice,
   rollExpressionWithDice,
 } from "../src/lib/dice.ts";
+import { trayExpressionProblem } from "../src/lib/dice/tray-rules.ts";
 
 let passed = 0;
 function test(name, fn) {
@@ -50,6 +51,19 @@ test("out-of-range and miscounted values are rejected", () => {
   assert.throws(() => rollExpressionWithDice("1d20", [10, 4]));
   assert.throws(() => rollExpressionWithDice("2d6", [3]));
   assert.throws(() => rollExpressionWithDice("1d6", [2.5]));
+});
+
+test("the dice tray rolls dice, with a bonus a sheet could hold", () => {
+  assert.equal(trayExpressionProblem("1d20+5"), null);
+  assert.equal(trayExpressionProblem("2d20kh1-1"), null);
+  assert.equal(trayExpressionProblem("8d6"), null);
+  assert.equal(trayExpressionProblem("1d20+30"), null);
+  assert.ok(trayExpressionProblem("20"));
+  assert.ok(trayExpressionProblem("5+5"));
+  assert.ok(trayExpressionProblem("1d20+31"));
+  assert.ok(trayExpressionProblem("1d20-31"));
+  assert.ok(trayExpressionProblem("1d1+19"));
+  assert.ok(trayExpressionProblem("drop table"));
 });
 
 console.log(`${passed} manual-roll tests passed`);

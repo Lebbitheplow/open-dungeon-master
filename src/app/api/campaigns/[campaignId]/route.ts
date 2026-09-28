@@ -31,6 +31,7 @@ import { listRollsVisibleTo } from "@/lib/db/rolls";
 import { getSheetForUser, listSheets } from "@/lib/db/sheets";
 import { requestDmTurn } from "@/lib/dm/loop";
 import { hasHumanDm, isPrimaryDm, lobbyBlocker } from "@/lib/dm/viewer";
+import { sheetForViewer } from "@/lib/dm/sheet-view";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { runStorySetup } from "@/lib/dm/setup";
 import { generateStoryArc } from "@/lib/dm/arc";
@@ -100,7 +101,9 @@ export async function GET(
     cast: publicCast(campaignId),
     // Players this user has blocked; their table messages fold away.
     blockedUserIds: listBlockedUserIds(user.id),
-    sheets,
+    // A player's notes are theirs: every other seat but the DM's is sent
+    // the sheet without them (src/lib/dm/sheet-view.ts).
+    sheets: sheets.map((sheet) => sheetForViewer(sheet, campaignSeats(campaign), user.id)),
     // The character this user is playing when they have several (11.3).
     activeSheetId: getSheetForUser(campaignId, user.id)?.id ?? "",
     messages: listRecentMessages(campaignId, 100),

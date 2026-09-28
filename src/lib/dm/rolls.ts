@@ -73,6 +73,20 @@ export const rollArgsSchema = z.object({
 
 export type RollArgs = z.infer<typeof rollArgsSchema>;
 
+// The DC of a request_roll at this table. A named difficulty moves with the
+// table's strictness (two points a step, docs/rules-coverage.md), as it does
+// for group_check and check_notice; a DC given as a number is the number.
+// `raw` is the call as it was sent, which is where "given as a number" can
+// still be told from "folded down from the tier".
+export function rollDcFor(args: RollArgs, raw: unknown, shift: number): number | undefined {
+  const sent = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const explicit = sent.dc !== undefined && sent.dc !== null && sent.dc !== "";
+  if (explicit || !args.difficulty) {
+    return args.dc;
+  }
+  return dcForDifficulty(args.difficulty, shift);
+}
+
 export type ParsedToolCall = {
   id?: string;
   name: string;
@@ -468,8 +482,10 @@ export function resolveRollExpression(
       : { advantage: "none" as const, note: null };
   // A held Help die: the ally's assistance gives advantage on the next
   // check, and is spent by taking it (src/lib/dm/action-tools.ts).
+  // Help is for an ability check or an attack roll, never a saving throw,
+  // which leaves the held Help where it is for the roll it was given for.
   const helped =
-    sheet && derivationKind && derivationKind !== "initiative"
+    sheet && derivationKind && derivationKind !== "initiative" && derivationKind !== "saving_throw"
       ? sheet.conditions.find((entry) => entry.trim().toLowerCase() === "helped") ?? null
       : null;
   // Feature-driven roll riders: Danger Sense grants advantage on the save
@@ -600,7 +616,9 @@ export function resolveRollExpression(
     // Reroll (Lucky) comes before floor (Reliable Talent): the 1 is rerolled,
     // then the surviving face is raised to 10 if still low.
     const d20Mods = `${lucky ? "r1" : ""}${reliable ? "f10" : ""}`;
-    const base = d20Expression(derived.skills[skill.id] ?? 0, finalAdvantage).replace(
+    // A skill check is an ability check: a lasting effect on checks counts.
+    const skillEffect = extras?.effectBonus ?? 0;
+    const base = d20Expression((derived.skills[skill.id] ?? 0) + skillEffect, finalAdvantage).replace(
       /^(\d+d20(?:k[hl]\d+)?)/,
       `$1${d20Mods}`,
     );
@@ -608,6 +626,7 @@ export function resolveRollExpression(
       ...(conditionNotes ?? []),
       ...(reliable ? ["Reliable Talent: a d20 face below 10 counts as 10"] : []),
       ...(armorStealth ? ["their armor imposes disadvantage on Stealth"] : []),
+      ...(extras?.effectNote ? [extras.effectNote] : []),
     ];
     return {
       expression: `${base}${bonusDie}`,
@@ -629,9 +648,13 @@ export function resolveRollExpression(
     // carry proficiency, so a covered ability always gets the half bonus.
     const halfScope =
       (defense as { halfProficiency?: "all" | "physical" | null }).halfProficiency ?? null;
+    // Jack of All Trades rounds down; Remarkable Athlete (the physical
+    // scope) rounds up.
     const halfBonus =
       args.kind === "ability_check" && halfProficiencyCovers(halfScope, args.ability)
-        ? Math.floor(derived.proficiencyBonus / 2)
+        ? halfScope === "physical"
+          ? Math.ceil(derived.proficiencyBonus / 2)
+          : Math.floor(derived.proficiencyBonus / 2)
         : 0;
     const auraBonus = args.kind === "saving_throw" ? (extras?.saveBonus ?? 0) : 0;
     const effectBonus = extras?.effectBonus ?? 0;
@@ -665,14 +688,20 @@ export function resolveRollExpression(
       return { error: "initiative needs a valid characterId from GAME STATE." };
     }
     const derived = computeSheetDerived(sheet);
-    const luckyBase = d20Expression(derived.initiative, advantage).replace(
+    // A lasting effect on initiative (Gift of Alacrity) adds to the roll.
+    const initiativeEffect = extras?.effectBonus ?? 0;
+    const luckyBase = d20Expression(derived.initiative + initiativeEffect, advantage).replace(
       /^(\d+d20(?:k[hl]\d+)?)/,
       lucky ? "$1r1" : "$1",
     );
+    const initiativeNotes = [
+      ...(conditionNotes ?? []),
+      ...(extras?.effectNote ? [extras.effectNote] : []),
+    ];
     return {
       expression: `${luckyBase}${effects.diceSuffix}`,
       detail: "initiative",
-      ...(conditionNotes ? { conditionNotes } : {}),
+      ...(initiativeNotes.length ? { conditionNotes: initiativeNotes } : {}),
     };
   }
 

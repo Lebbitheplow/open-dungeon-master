@@ -164,7 +164,15 @@ await test("multiattack parsing", async () => {
   const { parseMultiattackCount, parseMonster } = await import("../src/lib/bestiary/statblock.ts");
   assert.equal(parseMultiattackCount("The wolf makes two bite attacks."), 2);
   assert.equal(parseMultiattackCount("makes three attacks: one with its bite"), 3);
-  assert.equal(parseMultiattackCount("makes four claw attacks"), 3);
+  // As many swings as the block says (SRD 5.1 Multiattack), not clamped to 3.
+  assert.equal(parseMultiattackCount("makes four claw attacks"), 4);
+  assert.equal(
+    parseMultiattackCount("The tarrasque can use its Frightful Presence. It then makes five attacks: one with its bite, two with its claws, one with its horns, and one with its tail."),
+    5,
+  );
+  assert.equal(parseMultiattackCount("The hydra makes as many bite attacks as it has heads."), 5);
+  assert.equal(parseMultiattackCount("makes 6 attacks"), 6);
+  assert.equal(parseMultiattackCount("makes 40 attacks"), 10);
   assert.equal(parseMultiattackCount("It attacks once."), null);
   const parsed = parseMonster(
     {

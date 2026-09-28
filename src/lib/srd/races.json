@@ -1,5 +1,5 @@
 {
-  "_license": "Data derived from the SRD 5.1, (c) Wizards of the Coast LLC, CC-BY-4.0. See docs/LICENSES.md.",
+  "_license": "Rows hill_dwarf, high_elf, lightfoot_halfling, human, dragonborn, rock_gnome, half_elf, half_orc and tiefling are derived from the SRD 5.1, (c) Wizards of the Coast LLC, CC-BY-4.0. See docs/LICENSES.md. The other subraces (mountain_dwarf, wood_elf, drow, stout_halfling, forest_gnome, deep_gnome, variant_human) restate 2014 game mechanics that are not in the SRD, in ODM's own words; the lineages from aasimar on are original content (see _license_authored).",
   "races": [
     {
       "id": "hill_dwarf",
@@ -13,6 +13,7 @@
       "traits": [
         "Darkvision 60 ft",
         "Dwarven Resilience (adv. vs poison)",
+        "Dwarven Combat Training (battleaxe, handaxe, light hammer, warhammer)",
         "Stonecunning",
         "+1 HP per level (Dwarven Toughness)"
       ],
@@ -27,7 +28,13 @@
           "brewer's supplies",
           "mason's tools"
         ]
-      }
+      },
+      "weapons": [
+        "battleaxes",
+        "handaxes",
+        "light hammers",
+        "warhammers"
+      ]
     },
     {
       "id": "mountain_dwarf",
@@ -41,6 +48,7 @@
       "traits": [
         "Darkvision 60 ft",
         "Dwarven Resilience (adv. vs poison)",
+        "Dwarven Combat Training (battleaxe, handaxe, light hammer, warhammer)",
         "Stonecunning",
         "Dwarven Armor Training (light and medium armor)"
       ],
@@ -59,6 +67,12 @@
       "armor": [
         "light",
         "medium"
+      ],
+      "weapons": [
+        "battleaxes",
+        "handaxes",
+        "light hammers",
+        "warhammers"
       ]
     },
     {
@@ -74,6 +88,7 @@
         "Darkvision 60 ft",
         "Fey Ancestry (adv. vs charm, immune to magical sleep)",
         "Trance",
+        "Elf Weapon Training (longsword, shortsword, shortbow, longbow)",
         "One wizard cantrip",
         "Perception proficiency (Keen Senses)"
       ],
@@ -88,7 +103,13 @@
       "cantripChoice": {
         "list": "wizard",
         "count": 1
-      }
+      },
+      "weapons": [
+        "longswords",
+        "shortswords",
+        "shortbows",
+        "longbows"
+      ]
     },
     {
       "id": "wood_elf",
@@ -149,7 +170,27 @@
         "rapiers",
         "shortswords",
         "hand crossbows"
-      ]
+      ],
+      "innateSpells": {
+        "trait": "Drow Magic",
+        "ability": "cha",
+        "spells": [
+          {
+            "name": "Dancing Lights",
+            "level": 1
+          },
+          {
+            "name": "Faerie Fire",
+            "level": 3,
+            "per": "long"
+          },
+          {
+            "name": "Darkness",
+            "level": 5,
+            "per": "long"
+          }
+        ]
+      }
     },
     {
       "id": "lightfoot_halfling",
@@ -251,7 +292,8 @@
       "languages": [
         "Common",
         "Draconic"
-      ]
+      ],
+      "ancestryChoice": "draconic"
     },
     {
       "id": "rock_gnome",
@@ -294,7 +336,17 @@
       "languages": [
         "Common",
         "Gnomish"
-      ]
+      ],
+      "innateSpells": {
+        "trait": "Natural Illusionist",
+        "ability": "int",
+        "spells": [
+          {
+            "name": "Minor Illusion",
+            "level": 1
+          }
+        ]
+      }
     },
     {
       "id": "deep_gnome",
@@ -383,7 +435,28 @@
       "languages": [
         "Common",
         "Infernal"
-      ]
+      ],
+      "innateSpells": {
+        "trait": "Infernal Legacy",
+        "ability": "cha",
+        "spells": [
+          {
+            "name": "Thaumaturgy",
+            "level": 1
+          },
+          {
+            "name": "Hellish Rebuke",
+            "level": 3,
+            "castAt": 2,
+            "per": "long"
+          },
+          {
+            "name": "Darkness",
+            "level": 5,
+            "per": "long"
+          }
+        ]
+      }
     },
     {
       "id": "aasimar",
@@ -404,7 +477,17 @@
       "languages": [
         "Common",
         "Celestial"
-      ]
+      ],
+      "innateSpells": {
+        "trait": "Light Bearer",
+        "ability": "cha",
+        "spells": [
+          {
+            "name": "Light",
+            "level": 1
+          }
+        ]
+      }
     },
     {
       "id": "goliath",

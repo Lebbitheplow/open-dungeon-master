@@ -1,30 +1,31 @@
-import { notReadyReason } from "@/lib/srd/spell-prep";
 import { z } from "zod";
 import { autoLegendaryResistance } from "@/lib/dm/legendary-tools";
-import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
+import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, patchEnemyConditions, setEnemyConcentration } from "@/lib/db/encounters";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
-import { insertRoll } from "@/lib/db/rolls";
 import type { DmTurn } from "@/lib/db/dm-turns";
-import { d20Expression, isValidExpression, rollExpression } from "@/lib/dice";
-import { publishPersisted, publishWithSeq } from "@/lib/events";
+import { isValidExpression, rollExpression } from "@/lib/dice";
+import { publishPersisted } from "@/lib/events";
 import { spellSaveDcFor } from "@/lib/srd";
-import { spellDamageFor, spellMechanicsFor, type ResolvedSpellMech } from "@/lib/content";
-import { allySaveAura } from "@/lib/dm/aura";
+import { spellDamageFor, spellFactsFor, spellMechanicsFor, type ResolvedSpellMech } from "@/lib/content";
 import { findBeastForm, formatCr } from "@/lib/srd/beast-forms";
 import { conditionEffectsFor } from "@/lib/srd/condition-effects";
-import { clearSpellConditionsByName, setConcentration } from "@/lib/dm/concentration";
-import { saveModFor, type SaveAbility } from "@/lib/bestiary/statblock";
+import { clearSpellConditionsByName } from "@/lib/dm/concentration";
+import type { SaveAbility } from "@/lib/bestiary/statblock";
 import { applyDmMutation, canonicalCondition } from "@/lib/dm/mutations";
 import { applyEnemyDamage, publishEncounter, resolveEnemyRef } from "@/lib/dm/enemy-damage";
-import { resolveRollExpression, resolveSheetRef } from "@/lib/dm/rolls";
+import { resolveSheetRef } from "@/lib/dm/rolls";
 import { normalizeAbility } from "@/lib/dm/arg-coerce";
 import type { ConditionMeta } from "@/lib/dm/condition-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { recordEncounterTarget } from "@/lib/db/encounters";
+import { recordEncounterTarget, type EncounterEnemy } from "@/lib/db/encounters";
 import { planSpellFx } from "@/lib/battlemap/fx-plan";
 import { publishFx, tokenPosition } from "@/lib/dm/fx";
-import { allSpellNames } from "@/lib/srd/spell-lists";
+import { rollCharacterSave, rollEnemySave } from "@/lib/dm/forced-save";
+import { spellAuthorsFor } from "@/lib/dm/spell-authors";
+import { spellReachProblem } from "@/lib/dm/cast-reach";
+import { castShares, type SpellMech } from "@/lib/srd/spell-mechanics";
+import { addDice } from "@/lib/srd/spell-scaling";
 
 // cast_at_enemy: single-target save-or-suffer spells a player casts on an
 // enemy (Hold Person, Tasha's Hideous Laughter, single-target Poison
@@ -159,7 +160,7 @@ export function castRedirect(
     case "buff":
       return `${name} grants an effect, it forces no save; cast it with cast_buff.`;
     case "heal":
-      return `${name} heals; spend the slot with use_spell_slot and apply it with heal (the server rolls the dice).`;
+      return `${name} heals; resolve it with heal (spell="${name}", casterId, and the slot level): the server spends the slot and rolls the dice.`;
     case "summon":
       return `${name} conjures creatures; spend the slot with use_spell_slot and bring them in with add_enemies or add_companion.`;
     case "auto":
@@ -227,13 +228,15 @@ export function handleCastAtEnemy(
     return { error: `${enemy.displayName} is already ${enemy.status}.` };
   }
   // The content pack decides how a known spell resolves; the model's
-  // arguments are corrected rather than trusted. Unknown (homebrew) spells
-  // keep the model-supplied fallback.
-  const resolvedMech = spellMechanicsFor({ spell: args.spell, userId: sheet.userId });
+  // arguments are corrected rather than trusted. Unknown spells resolve only
+  // when the table's own homebrew defines them (src/lib/dm/spell-authors.ts).
+  const authors = spellAuthorsFor(campaign);
+  const resolvedMech = spellMechanicsFor({ spell: args.spell, userIds: authors });
   const redirect = castRedirect(resolvedMech, "save");
   if (redirect) {
     return { error: redirect };
   }
+  const facts = spellFactsFor(args.spell, authors);
   const mech = resolvedMech?.mech ?? null;
   const corrections: string[] = [];
   let ability = args.saveAbility as SaveAbility;
@@ -244,6 +247,7 @@ export function handleCastAtEnemy(
     ability = mech.save;
   }
   const autoHit = mech?.resolution === "auto";
+  const pool = mech?.hitPointPool ?? null;
   const halfOnSave = mech ? Boolean(mech.halfOnSave) : Boolean(args.halfOnSave);
   if (mech && Boolean(args.halfOnSave) !== Boolean(mech.halfOnSave) && !autoHit) {
     corrections.push(
@@ -253,107 +257,129 @@ export function handleCastAtEnemy(
     );
   }
   const damageType = mech?.damageType ?? args.damageType;
-  // The content pack's own text decides the dice where it can, so upcasting
-  // scales without the model having to remember how.
-  const scaled = spellDamageFor({
+  const spellName = resolvedMech?.name ?? facts?.name ?? args.spell;
+  // What the spell rolls from the slot the caller named; checked here so a
+  // cast that could not resolve spends nothing.
+  const named = spellDamageFor({
     spell: args.spell,
-    userId: sheet.userId,
+    userIds: authors,
     casterLevel: sheet.level,
     slotLevel: args.level,
   });
-  const damageExpression = scaled?.dice ?? args.damage;
-  if (!damageExpression && !args.condition && !mech?.condition) {
+  if (!pool && !(named?.dice ?? args.damage) && !args.condition && !mech?.condition) {
     return { error: "cast_at_enemy needs damage and/or condition; otherwise nothing happens." };
   }
-  if (damageExpression && !isValidExpression(damageExpression)) {
-    return { error: `Invalid damage expression "${damageExpression}".` };
+  const guessed = named?.dice ?? args.damage;
+  if (guessed && !isValidExpression(guessed)) {
+    return { error: `Invalid damage expression "${guessed}".` };
   }
   // The pack's condition wins over the model's guess; its duration comes
   // with it (save-ends unless the pack states rounds).
   const mechCondition = mech?.condition ?? null;
-  const condition = mechCondition
-    ? canonicalCondition(mechCondition.name)
-    : args.condition
-      ? canonicalCondition(args.condition)
-      : null;
+  const condition = pool
+    ? canonicalCondition(pool.condition)
+    : mechCondition
+      ? canonicalCondition(mechCondition.name)
+      : args.condition
+        ? canonicalCondition(args.condition)
+        : null;
   if (mechCondition && args.condition && canonicalCondition(args.condition) !== condition) {
     corrections.push(
       `${resolvedMech?.name} applies ${condition}, not ${args.condition}; the server used the real one.`,
     );
   }
-  const conditionRounds = mechCondition
-    ? (mechCondition.saveEnds ? undefined : mechCondition.rounds)
-    : args.rounds;
+  const conditionRounds = pool
+    ? pool.rounds
+    : mechCondition
+      ? (mechCondition.saveEnds ? undefined : mechCondition.rounds)
+      : args.rounds;
   if (condition && enemy.stats.conditionImmune.toLowerCase().includes(condition)) {
     return {
       error: `${enemy.displayName} is immune to ${condition} (immunities: ${enemy.stats.conditionImmune}); the spell cannot take hold. The slot was not spent.`,
     };
   }
-
-  // Spend the slot first (spell-list validation and concentration come with
-  // it); a refused spend refuses the cast.
-  if (args.level) {
-    const spend = applyDmMutation(
-      campaign,
-      turn.id,
-      "use_spell_slot",
-      JSON.stringify({
-        characterId: sheet.id,
-        level: args.level,
-        spell: args.spell,
-        reason: (args.reason ?? "").slice(0, 200),
-      }),
-      sheets,
-      sheetsById,
-    ).result;
-    if ("error" in spend) {
-      return spend;
-    }
-  } else {
-    // Cantrip path: no slot, but the spell must still be on their list.
-    const spellList = allSpellNames(sheet.spellcasting);
-    const onList = spellList.some(
-      (entry) =>
-        entry.toLowerCase().includes(args.spell.toLowerCase()) ||
-        args.spell.toLowerCase().includes(entry.toLowerCase()),
-    );
-    if (!onList) {
-      return {
-        error:
-          notReadyReason(sheet.spellcasting, args.spell) ??
-          `${args.spell} is not on ${sheet.name}'s spell list; they cannot cast it.`,
-      };
-    }
+  // Hold Person holds a humanoid and nothing else.
+  const creatureType = (enemy.stats.type ?? "").toLowerCase();
+  // A stat block that names no type is not refused on a guess.
+  if (creatureType && mech?.targetTypes?.length && !mech.targetTypes.some((type) => creatureType.includes(type))) {
+    return {
+      error: `${spellName} affects only ${mech.targetTypes.join(" or ")} creatures, and ${enemy.displayName} is ${creatureType ? `a ${creatureType}` : "not one"}. The slot was not spent; pick another target or another spell.`,
+    };
+  }
+  const reach = spellReachProblem({
+    encounterId: encounter.id,
+    casterId: sheet.id,
+    casterName: sheet.name,
+    targetId: enemy.id,
+    targetName: enemy.displayName,
+    facts,
+  });
+  if (reach) {
+    return { error: reach };
   }
 
-  // The enemy's save, rolled from its real stat block as a visible card.
-  // Auto-hit spells (Magic Missile) skip the save entirely.
+  // The cast itself, through the one guard (src/lib/dm/cast-guard.ts): who
+  // may cast, what they hold, the slot of the spell's own level when none is
+  // named, the turn, the material and concentration. A refusal refuses.
+  const cast = applyDmMutation(
+    campaign,
+    turn.id,
+    "use_spell_slot",
+    JSON.stringify({
+      characterId: sheet.id,
+      spell: args.spell,
+      ...(args.level ? { level: args.level } : {}),
+      via: "enemy",
+      reason: (args.reason ?? "").slice(0, 200),
+    }),
+    sheets,
+    sheetsById,
+  ).result;
+  if ("error" in cast) {
+    return cast;
+  }
+  const slotLevel = typeof cast.slotLevel === "number" ? cast.slotLevel : undefined;
+  const scaled =
+    slotLevel === args.level
+      ? named
+      : spellDamageFor({ spell: args.spell, userIds: authors, casterLevel: sheet.level, slotLevel });
+  const damageExpression = pool ? undefined : (scaled?.dice ?? args.damage);
+
+  if (pool) {
+    return sleepPool(campaign, encounter.id, enemy, spellName, pool, {
+      spellLevel: resolvedMech?.spellLevel ?? facts?.level ?? 1,
+      slotLevel: slotLevel ?? resolvedMech?.spellLevel ?? 1,
+      caster: sheet.name,
+      condition: condition ?? "unconscious",
+      note: mech?.note,
+    });
+  }
+
+  // The enemy's save, from its real stat block with its conditions and
+  // lasting effects (src/lib/dm/forced-save.ts). Auto-hit spells (Magic
+  // Missile) skip the save entirely.
   let saved = false;
   const base: Record<string, unknown> = {
-    spell: resolvedMech?.name ?? args.spell,
+    spell: spellName,
     caster: sheet.name,
     target: enemy.displayName,
+    ...(cast.cost ? { cost: cast.cost } : {}),
+    ...(cast.slot ? { slot: cast.slot } : {}),
+    ...(cast.droppedConcentration ? { droppedConcentration: cast.droppedConcentration } : {}),
+    ...(cast.shares ? { shares: cast.shares } : {}),
+    ...(cast.continuing ? { continuing: cast.continuing } : {}),
   };
   if (autoHit) {
     base.autoHit = true;
   } else {
-    const saveOutcome = rollExpression(d20Expression(saveModFor(enemy.stats, ability)));
-    const saveRoll = insertRoll({
-      campaignId: campaign.id,
-      characterId: null,
-      requestedBy: "dm",
-      kind: "saving_throw",
-      detail: `${enemy.displayName}: ${ability.toUpperCase()} save vs ${args.spell}`,
+    const save = rollEnemySave(campaign.id, enemy, ability, dc);
+    saved = save.success;
+    Object.assign(base, {
+      ...(save.autoFailed ? { autoFailed: save.notes.join("; ") } : { save: save.total }),
       dc,
-      result: saveOutcome,
+      saved,
+      ...(save.notes.length && !save.autoFailed ? { saveNotes: save.notes } : {}),
     });
-    turn.rollIds.push(saveRoll.id);
-    publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", {
-      roll: saveRoll,
-      source: "digital",
-    });
-    saved = saveOutcome.total >= dc;
-    Object.assign(base, { save: saveOutcome.total, dc, saved });
   }
   if (corrections.length) {
     base.corrected = corrections;
@@ -453,6 +479,55 @@ export function handleCastAtEnemy(
 }
 
 
+// Sleep: no saving throw. The caster rolls a pool of hit points, and a
+// creature whose hit points the pool covers falls asleep; one with more is
+// untouched. Undead and creatures that cannot be charmed are not affected
+// (SRD 5.1, Sleep). One call is one creature, the lowest first being the
+// caller's to pick.
+function sleepPool(
+  campaign: Campaign,
+  encounterId: string,
+  enemy: EncounterEnemy,
+  spell: string,
+  pool: NonNullable<SpellMech["hitPointPool"]>,
+  input: { spellLevel: number; slotLevel: number; caster: string; condition: string; note?: string },
+): Record<string, unknown> {
+  const dice = addDice(pool.dice, pool.perSlotLevel, Math.max(0, input.slotLevel - input.spellLevel));
+  const rolled = rollExpression(dice).total;
+  const base: Record<string, unknown> = {
+    ok: true,
+    spell,
+    caster: input.caster,
+    target: enemy.displayName,
+    noSave: true,
+    pool: `${dice}: ${rolled} hit points`,
+    ...(input.note ? { spellNote: input.note } : {}),
+  };
+  const type = (enemy.stats.type ?? "").toLowerCase();
+  if (type.includes("undead") || enemy.stats.conditionImmune.toLowerCase().includes("charmed")) {
+    return { ...base, note: `${enemy.displayName} cannot be put to sleep by magic; nothing happens.` };
+  }
+  if (enemy.currentHp > rolled) {
+    return {
+      ...base,
+      note: `${enemy.displayName} has ${enemy.currentHp} hit points, more than the ${rolled} the spell rolled: it stays awake.`,
+    };
+  }
+  const fresh = resolveEnemyRef(encounterId, enemy.id);
+  if (fresh && fresh.status === "alive" && !fresh.conditions.includes(input.condition)) {
+    patchEnemyConditions(fresh.id, [...fresh.conditions, input.condition], {
+      ...fresh.conditionMeta,
+      [input.condition]: { rounds: pool.rounds },
+    });
+    publishEncounter(campaign.id);
+  }
+  return {
+    ...base,
+    conditionApplied: input.condition,
+    duration: `${pool.rounds} rounds, or until it takes damage or is shaken awake`,
+  };
+}
+
 // ---- cast_buff ----
 
 export const castBuffTool: ToolDef = {
@@ -522,7 +597,8 @@ export function handleCastBuff(
   if (!sheet.spellcasting) {
     return { error: `${sheet.name} cannot cast spells.` };
   }
-  const resolvedMech = spellMechanicsFor({ spell: args.spell, userId: sheet.userId });
+  const authors = spellAuthorsFor(campaign);
+  const resolvedMech = spellMechanicsFor({ spell: args.spell, userIds: authors });
   if (!resolvedMech) {
     return {
       error: `No content pack knows "${args.spell}". If it grants an effect, apply it with set_condition (with rounds) after spending the slot with use_spell_slot.`,
@@ -556,53 +632,12 @@ export function handleCastBuff(
     };
   }
 
-  // Spend the slot (spell-list validation and concentration come with it);
-  // a refused spend refuses the cast. Cantrips validate the list only.
-  const slotLevel = resolvedMech.spellLevel >= 1 ? (args.level ?? resolvedMech.spellLevel) : null;
-  if (slotLevel) {
-    const spend = applyDmMutation(
-      campaign,
-      turn.id,
-      "use_spell_slot",
-      JSON.stringify({
-        characterId: sheet.id,
-        level: slotLevel,
-        spell: args.spell,
-        reason: (args.reason ?? "").slice(0, 200),
-      }),
-      sheets,
-      sheetsById,
-    ).result;
-    if ("error" in spend) {
-      return spend;
-    }
-  } else {
-    const spellList = allSpellNames(sheet.spellcasting);
-    const onList = spellList.some(
-      (entry) =>
-        entry.toLowerCase().includes(args.spell.toLowerCase()) ||
-        args.spell.toLowerCase().includes(entry.toLowerCase()),
-    );
-    if (!onList) {
-      return {
-        error:
-          notReadyReason(sheet.spellcasting, args.spell) ??
-          `${args.spell} is not on ${sheet.name}'s spell list; they cannot cast it.`,
-      };
-    }
-    // Cantrip concentration effects (Guidance, True Strike) never touch a
-    // slot, so concentration is set here instead.
-    if (resolvedMech.concentration) {
-      setConcentration(campaign, turn.id, sheet.id, resolvedMech.name);
-    }
-  }
-
   // Resolve the recipients: self-only spells ignore stray targets.
   const targetSheets: CharacterSheet[] = [];
   if (buff.target === "self" || !args.targetCharacterIds?.length) {
     targetSheets.push(sheet);
   } else {
-    for (const ref of args.targetCharacterIds.slice(0, buff.target === "ally" ? 1 : 6)) {
+    for (const ref of args.targetCharacterIds) {
       const found = resolveSheetRef(ref, sheets, sheetsById);
       const fresh = found ? (getSheetById(found.id) ?? found) : null;
       if (fresh && !fresh.deathSaves?.dead && !targetSheets.some((entry) => entry.id === fresh.id)) {
@@ -613,10 +648,24 @@ export function handleCastBuff(
       targetSheets.push(sheet);
     }
   }
-
-  // Combat rounds only tick inside encounters, so long real-world durations
-  // clamp to the meta's cap without losing anything at the table.
-  const rounds = Math.max(1, Math.min(100, buff.rounds));
+  // How many creatures one casting touches: Bless three, one more for each
+  // slot level above 1st; a single-target buff one.
+  const plannedSlot = resolvedMech.spellLevel >= 1 ? Math.max(resolvedMech.spellLevel, args.level ?? 0) : null;
+  const most =
+    buff.target === "ally" || buff.target === "self"
+      ? 1
+      : resolvedMech.mech.targets
+        ? castShares(resolvedMech.mech, {
+            spellLevel: resolvedMech.spellLevel,
+            slotLevel: plannedSlot,
+            casterLevel: sheet.level,
+          })
+        : 6;
+  if (targetSheets.length > most) {
+    return {
+      error: `${resolvedMech.name} from a level ${plannedSlot ?? resolvedMech.spellLevel} slot affects at most ${most} creature${most === 1 ? "" : "s"}; ${targetSheets.length} were named. Name ${most} or fewer, or cast it from a higher slot. Nothing was spent.`,
+    };
+  }
   // 5e: the new form's CR may not exceed the target's level.
   if (polymorphForm) {
     const tooLow = targetSheets.find((target) => polymorphForm.cr > target.level);
@@ -626,6 +675,59 @@ export function handleCastBuff(
       };
     }
   }
+  // On a mapped fight each recipient must be within the spell's range with
+  // a clear path: a touch spell reaches only the creature beside the caster.
+  const facts = spellFactsFor(args.spell, authors);
+  const encounter = getActiveEncounter(campaign.id);
+  if (encounter) {
+    for (const target of targetSheets) {
+      const reach = spellReachProblem({
+        encounterId: encounter.id,
+        casterId: sheet.id,
+        casterName: sheet.name,
+        targetId: target.id,
+        targetName: target.name,
+        facts,
+      });
+      if (reach) {
+        return { error: reach };
+      }
+    }
+  }
+
+  // The cast, through the one guard (src/lib/dm/cast-guard.ts): the list,
+  // the slot of the spell's own level when none is named, the turn, the
+  // material and concentration (a second concentration spell ends the
+  // first and its effects). A refused cast refuses the buff.
+  const cast = applyDmMutation(
+    campaign,
+    turn.id,
+    "use_spell_slot",
+    JSON.stringify({
+      characterId: sheet.id,
+      spell: args.spell,
+      ...(args.level ? { level: args.level } : {}),
+      via: "buff",
+      reason: (args.reason ?? "").slice(0, 200),
+    }),
+    sheets,
+    sheetsById,
+  ).result;
+  if ("error" in cast) {
+    return cast;
+  }
+  const slotLevel = typeof cast.slotLevel === "number" ? cast.slotLevel : null;
+
+  // The spell's own duration. Rounds tick in a fight and on the clock
+  // outside one (src/lib/dm/condition-tick.ts), so Mage Armor's eight hours
+  // are eight hours; set_condition takes the long ones as minutes or hours.
+  const rounds = Math.max(1, buff.rounds);
+  const duration =
+    rounds <= 100
+      ? { rounds }
+      : rounds % 600 === 0 && rounds / 600 <= 24
+        ? { hours: rounds / 600 }
+        : { minutes: Math.min(1440, Math.ceil(rounds / 10)) };
   const applied: string[] = [];
   for (const target of targetSheets) {
     const outcome = applyDmMutation(
@@ -635,7 +737,7 @@ export function handleCastBuff(
       JSON.stringify({
         characterId: target.id,
         condition,
-        rounds,
+        ...duration,
         reason: `${resolvedMech.name} cast by ${sheet.name}`,
       }),
       sheets,
@@ -706,7 +808,15 @@ export function handleCastBuff(
           ...(polymorphForm.traits ? { formTraits: polymorphForm.traits } : {}),
         }
       : {}),
-    duration: `${rounds} round${rounds === 1 ? "" : "s"}`,
+    duration:
+      "hours" in duration
+        ? `${duration.hours} hour${duration.hours === 1 ? "" : "s"}`
+        : "minutes" in duration
+          ? `${duration.minutes} minutes`
+          : `${rounds} round${rounds === 1 ? "" : "s"}`,
+    ...(cast.cost ? { cost: cast.cost } : {}),
+    ...(cast.slot ? { slot: cast.slot } : {}),
+    ...(cast.droppedConcentration ? { droppedConcentration: cast.droppedConcentration } : {}),
     ...(summary ? { effect: summary } : {}),
     ...(resolvedMech.mech.note ? { spellNote: resolvedMech.mech.note } : {}),
     ...(resolvedMech.concentration ? { concentration: `${sheet.name} is concentrating on ${resolvedMech.name}.` } : {}),
@@ -793,48 +903,20 @@ export function handleCastAtPlayer(
   }
 
   const source = (args.source ?? "the effect").trim() || "the effect";
-  // The save goes through the same roll engine as any other, so conditions,
-  // exhaustion, a held Bardic Inspiration die, and a nearby paladin's aura
-  // all apply.
-  const aura = allySaveAura(campaign.id, sheet);
-  const resolved = resolveRollExpression(
-    { kind: "saving_throw", ability: args.saveAbility, dc: args.dc },
+  // The save a requested roll would be (src/lib/dm/forced-save.ts):
+  // conditions, exhaustion, a nearby paladin's aura, the lasting effects on
+  // saves, and a held Bardic Inspiration die, which the roll spends.
+  const save = rollCharacterSave(
+    campaign,
+    turn,
     sheet,
-    {
-      ...(aura ? { saveBonus: aura.bonus, saveNote: aura.note } : {}),
-      encumbrance: campaign.gameSettings.variantRules.encumbrance,
-    },
+    args.saveAbility as SaveAbility,
+    args.dc,
+    `${sheet.name}: ${args.saveAbility.toUpperCase()} save vs ${source}`,
   );
-  if ("error" in resolved) {
-    return { error: resolved.error };
-  }
-  let saved: boolean;
-  let rolledTotal: number | null = null;
-  const notes: string[] = [];
-  if ("autoFail" in resolved) {
-    saved = false;
-    notes.push(...resolved.notes);
-  } else {
-    const outcome = rollExpression(resolved.expression);
-    rolledTotal = outcome.total;
-    const roll = insertRoll({
-      campaignId: campaign.id,
-      characterId: sheet.id,
-      requestedBy: "dm",
-      kind: "saving_throw",
-      detail: `${sheet.name}: ${args.saveAbility.toUpperCase()} save vs ${source}`,
-      dc: args.dc,
-      result: outcome,
-    });
-    turn.rollIds.push(roll.id);
-    publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", {
-      roll,
-      source: "digital",
-    });
-    saved = outcome.total >= args.dc;
-    notes.push(...(resolved.conditionNotes ?? []));
-  }
-
+  const saved = save.success;
+  const rolledTotal = save.total;
+  const notes = save.notes;
   const base: Record<string, unknown> = {
     ok: true,
     target: sheet.name,

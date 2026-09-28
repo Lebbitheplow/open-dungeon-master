@@ -17,7 +17,6 @@ import {
   canRerollPool,
   placeFromPool,
   poolSum,
-  rollPool,
   rollTier,
   scoresFromSlots,
   type PoolEntry,
@@ -26,6 +25,7 @@ import {
 import { HelpDot, MethodInfoDialog, type HpExplainerInput } from "./AbilityExplainers";
 import { AbilitySummary } from "./AbilitySummary";
 import { DiceDefs, DiceRow } from "./Dice";
+import { requestAbilityPool } from "./useTableRules";
 
 export const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8];
 export type AbilityMethod = "standard" | "pointbuy" | "roll";
@@ -117,6 +117,10 @@ export default function AbilityEditor({
   const [held, setHeld] = useState<number | null>(null);
   const [dropTarget, setDropTarget] = useState<Ability | "tray" | null>(null);
   const [methodInfoOpen, setMethodInfoOpen] = useState(false);
+  // The dice are the server's: while it answers the throw button waits, and
+  // a refusal is shown in its words beside the tray.
+  const [asking, setAsking] = useState(false);
+  const [rollError, setRollError] = useState("");
   const timers = useRef<number[]>([]);
 
   useEffect(() => {
@@ -147,12 +151,20 @@ export default function AbilityEditor({
     );
   }
 
-  function throwPool() {
-    if (!rerollOpen || anyRolling) {
+  async function throwPool() {
+    if (!rerollOpen || anyRolling || asking) {
+      return;
+    }
+    setAsking(true);
+    setRollError("");
+    const answer = await requestAbilityPool();
+    setAsking(false);
+    if ("error" in answer) {
+      setRollError(answer.error);
       return;
     }
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const thrown = rollPool();
+    const thrown = answer.pool;
     for (const id of timers.current) window.clearTimeout(id);
     timers.current = [];
     setHeld(null);
@@ -275,7 +287,8 @@ export default function AbilityEditor({
               <button
                 type="button"
                 onClick={throwPool}
-                disabled={anyRolling || !rerollOpen}
+                disabled={anyRolling || asking || !rerollOpen}
+                aria-busy={asking}
                 title={
                   rerollOpen
                     ? `These add up to less than ${REROLL_BELOW}, so you may throw again`
@@ -383,12 +396,26 @@ export default function AbilityEditor({
               <p className="max-w-sm text-xs text-stone-400">
                 Each throw keeps its best three. All six land at once, then you decide which ability gets which.
               </p>
-              <button type="button" onClick={throwPool} className="pool-throw motion-press">
-                <Dices className="size-4" /> Roll the dice
+              <button
+                type="button"
+                onClick={throwPool}
+                disabled={asking}
+                aria-busy={asking}
+                className="pool-throw motion-press disabled:opacity-60"
+              >
+                <Dices className={cn("size-4", asking && "animate-spin")} /> {asking ? "Rolling..." : "Roll the dice"}
               </button>
+              <p className="max-w-sm text-[11px] text-stone-500">
+                The server throws the dice and keeps them, so a rolled hero is one the table can trust.
+              </p>
             </div>
           )}
         </div>
+      ) : null}
+      {method === "roll" && rollError ? (
+        <p role="alert" className="reveal motion-shake mb-3 text-xs text-red-400">
+          {rollError}
+        </p>
       ) : null}
 
       <div className="flex flex-col gap-1.5">

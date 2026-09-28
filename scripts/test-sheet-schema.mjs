@@ -77,7 +77,8 @@ test("asiChoices reject unknown modes and overflow", () => {
   assert.equal(
     createSheetSchema.safeParse({
       ...baseSheet,
-      asiChoices: Array.from({ length: 6 }, () => ({ mode: "plus2", ability: "str" })),
+      // A fighter earns seven improvements (MAX_ASI_CHOICES); an eighth overflows.
+      asiChoices: Array.from({ length: 8 }, () => ({ mode: "plus2", ability: "str" })),
     }).success,
     false,
   );

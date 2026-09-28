@@ -9,8 +9,11 @@ import { cn } from "@/lib/cn";
 import { spellLevelOf } from "@/lib/srd/spell-lists";
 import { displayName } from "@/lib/worlds/reskin-logic";
 import type { WorldPack } from "@/lib/worlds/types";
+import { armorClassLine, purseViewFor } from "../derivedReasons";
 import EquipmentSection from "../EquipmentSection";
-import type { ClassOption } from "../useBuilderOptions";
+import KitChoicesSection from "../KitChoicesSection";
+import type { BackgroundOption, ClassOption } from "../useBuilderOptions";
+import type { TableRulesState } from "../useTableRules";
 import type { BuilderActions, BuilderDerived } from "../useBuilderDerived";
 import type { BuilderState } from "../useBuilderState";
 import { StepPanel, inputClass } from "./shared";
@@ -25,14 +28,27 @@ export function SpellsGearStep({
   derived,
   actions,
   klass,
+  background,
+  table,
   pack,
 }: {
   state: BuilderState;
   derived: BuilderDerived;
   actions: BuilderActions;
   klass: ClassOption | undefined;
+  background: BackgroundOption | undefined;
+  table: TableRulesState;
   pack: WorldPack | null;
 }) {
+  const purse = purseViewFor({
+    purse: derived.purse,
+    keepsStoredGear: state.keepsStoredGear,
+    backgroundName: background?.name ?? "chosen",
+    backgroundPurse: background?.purse ?? 0,
+    classId: klass?.id ?? "",
+    className: klass?.name ?? "character",
+    table,
+  });
   return (
     <div className="space-y-4">
       {klass && derived.casts ? (
@@ -44,9 +60,21 @@ export function SpellsGearStep({
         onAdd={actions.addEquipmentItem}
         onAddMany={actions.addEquipmentItems}
         onRemove={actions.removeEquipmentItem}
-        gold={state.gold}
-        setGold={state.setGold}
+        purse={purse}
         inputClass={inputClass}
+        kit={
+          klass && derived.classKit && derived.kitChoices ? (
+            <KitChoicesSection
+              kit={derived.classKit}
+              choices={derived.kitChoices}
+              training={derived.kitTraining}
+              className={klass.name.toLowerCase()}
+              armorClass={armorClassLine(derived.acInfo?.ac ?? derived.ac, derived.acInfo?.parts)}
+              onOption={actions.chooseKitOption}
+              onPick={actions.pickKitSlot}
+            />
+          ) : null
+        }
       />
     </div>
   );

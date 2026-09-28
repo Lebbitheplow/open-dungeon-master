@@ -160,11 +160,11 @@ export const VARIANT_RULE_LINES: Record<
   flanking:
     "Flanking: two allies on opposite sides of a creature give each other advantage on melee attacks against it.",
   criticalFumbles:
-    "Critical fumbles: a natural 1 on an attack roll causes a minor mishap the DM narrates (never damage to the fumbler).",
+    "Critical fumbles (narration only): a natural 1 on an attack roll is a miss, and you describe a minor mishap with it. The server applies nothing for it, so call no tool for the mishap: no damage, no condition, no lost item or turn.",
   encumbrance:
     "Encumbrance: carrying more than 5 times Strength in pounds costs 10 feet of speed, and more than 10 times Strength costs 20 feet plus disadvantage on STR, DEX and CON rolls. The server weighs every pack and applies it; never adjust a speed or a roll for weight yourself.",
   lingeringInjuries:
-    "Lingering injuries: a critical hit or dropping to 0 HP can leave a lasting injury the DM narrates and tracks.",
+    "Lingering injuries (narration only): a critical hit or dropping to 0 HP can leave a scar or an ache you describe and remember. The server tracks no injury and it changes no roll, speed or hit points; an injury that should cost something is a condition or effect you set with its own tool and reason.",
   powerfulCritical:
     "Powerful critical: on a critical hit the extra weapon dice are dealt as their maximum instead of being rolled. The server applies it.",
   criticalDamageMods:

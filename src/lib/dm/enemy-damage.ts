@@ -15,7 +15,8 @@ import { saveModFor } from "@/lib/bestiary/statblock";
 import { d20Expression, rollExpression } from "@/lib/dice";
 import { clearSpellConditionsByName } from "@/lib/dm/concentration";
 import { enemyDamageMath } from "@/lib/dm/encounter-logic";
-import { damageAdjust } from "@/lib/dm/condition-logic";
+import { damageAdjust, resistsAllDamage } from "@/lib/dm/condition-logic";
+import { damageParts, type TypedRider } from "@/lib/dm/damage-parts";
 import { applyDmMutation } from "@/lib/dm/mutations";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import { planDeathFx } from "@/lib/battlemap/fx-plan";
@@ -100,7 +101,10 @@ export function finishEncounter(
   const totalXp = enemies.reduce((sum, enemy) => sum + enemy.xp, 0);
   const share =
     outcome === "victory" ? 1 : outcome === "enemies_fled" || outcome === "truce" ? 0.5 : 0;
-  const xpEach = sheets.length ? Math.floor((totalXp * share) / sheets.length) : 0;
+  // The dead take no share: what the fight was worth is split among those
+  // who lived through it.
+  const earners = sheets.filter((sheet) => !(getSheetById(sheet.id) ?? sheet).deathSaves?.dead);
+  const xpEach = earners.length ? Math.floor((totalXp * share) / earners.length) : 0;
   let xpResult: Record<string, unknown> = {};
   if (xpEach > 0) {
     xpResult = applyDmMutation(
@@ -108,7 +112,7 @@ export function finishEncounter(
       turn.id,
       "award_xp",
       JSON.stringify({
-        characterIds: sheets.map((sheet) => sheet.id),
+        characterIds: earners.map((sheet) => sheet.id),
         amount: xpEach,
         reason: outcome === "victory" ? "encounter victory" : `encounter ended: ${outcome}`,
       }),
@@ -208,6 +212,12 @@ export function applyEnemyDamage(
   sheets: CharacterSheet[],
   sheetsById: Map<string, CharacterSheet>,
   damageType?: string,
+  options?: {
+    // The damage comes from a spell, a magic weapon, or strikes that count
+    // as magical, so "from nonmagical attacks" on the stat block does not
+    // cover it.
+    magical?: boolean;
+  },
 ): Record<string, unknown> {
   const adjusted = damageAdjust(
     amount,
@@ -215,6 +225,7 @@ export function applyEnemyDamage(
     enemy.stats.resist,
     enemy.stats.immune,
     enemy.stats.vulnerable,
+    { magical: options?.magical === true, resistAll: resistsAllDamage(enemy.conditions) },
   );
   if (adjusted.amount <= 0) {
     return {
@@ -223,7 +234,7 @@ export function applyEnemyDamage(
       hp: `${enemy.currentHp}/${enemy.maxHp}`,
       health: healthState(enemy.currentHp, enemy.maxHp),
       damageApplied: 0,
-      note: `${enemy.displayName} is ${adjusted.note}. Narrate the effect washing over it harmlessly.`,
+      note: `${enemy.displayName} is ${adjusted.note ?? "unharmed"}. Narrate the effect washing over it harmlessly.`,
     };
   }
   const math = enemyDamageMath(enemy.currentHp, adjusted.amount);
@@ -283,6 +294,86 @@ export function applyEnemyDamage(
   return base;
 }
 
+// How a parked attack's damage roll is resolved (carried on the pending
+// roll's attack context): the magical flag, the dice that ride it under a
+// type of their own, and the critical those dice were doubled for.
+export type DamageBlow = {
+  magical?: boolean;
+  riders?: TypedRider[];
+  crit?: boolean;
+  critExtraDice?: number;
+};
+
+// One rolled damage total landing on an enemy. With typed riders the blow is
+// split per type (damage-parts.ts) and each part meets the creature's
+// resistances on its own, the same way pc_attack's digital path resolves it;
+// what is left lands as one wound.
+function applyBlow(
+  campaign: Campaign,
+  turn: DmTurn,
+  encounter: Encounter,
+  enemy: EncounterEnemy,
+  roll: StoredRoll,
+  sheets: CharacterSheet[],
+  sheetsById: Map<string, CharacterSheet>,
+  damageType: string | undefined,
+  blow: DamageBlow | undefined,
+): Record<string, unknown> {
+  const amount = Math.max(1, roll.total);
+  const magical = blow?.magical === true;
+  const parts =
+    blow?.riders?.length && damageType && roll.breakdown?.terms
+      ? damageParts(roll.breakdown, damageType, blow.riders, {
+          crit: blow.crit === true,
+          trailingTerms: blow.crit ? (blow.critExtraDice ?? 0) : 0,
+        })
+      : [];
+  if (parts.length < 2) {
+    return applyEnemyDamage(campaign, turn, encounter, enemy, amount, sheets, sheetsById, damageType, {
+      magical,
+    });
+  }
+  // A creature that resists everything (petrified) is halved once, by
+  // applyEnemyDamage, not once per part.
+  const resistAll = resistsAllDamage(enemy.conditions);
+  const byType = parts.map((part, index) => ({
+    ...part,
+    ...damageAdjust(
+      part.amount,
+      part.type,
+      resistAll ? "" : enemy.stats.resist,
+      enemy.stats.immune,
+      enemy.stats.vulnerable,
+      // Only the weapon's own part can be nonmagical: a rider is a spell's or
+      // a feature's dice.
+      { magical: index === 0 ? magical : true },
+    ),
+  }));
+  const landed = byType.reduce((sum, part) => sum + part.amount, 0);
+  const applied: Record<string, unknown> =
+    landed > 0
+      ? applyEnemyDamage(campaign, turn, encounter, enemy, landed, sheets, sheetsById, undefined, {
+          magical: true,
+        })
+      : {
+          ok: true,
+          name: enemy.displayName,
+          hp: `${enemy.currentHp}/${enemy.maxHp}`,
+          health: healthState(enemy.currentHp, enemy.maxHp),
+          damageApplied: 0,
+        };
+  if ("error" in applied) {
+    return applied;
+  }
+  return {
+    ...applied,
+    damageApplied: resistAll ? Math.floor(landed / 2) : landed,
+    damageByType: byType.map(
+      (part) => `${part.amount} ${part.type || "untyped"}${part.note ? ` (${part.note})` : ""}`,
+    ),
+  };
+}
+
 // A resolved damage roll that names its target: apply it before the model
 // even sees the number. Returned payload merges into the roll's tool result.
 export function autoApplyDamageRoll(
@@ -293,6 +384,7 @@ export function autoApplyDamageRoll(
   sheets: CharacterSheet[],
   sheetsById: Map<string, CharacterSheet>,
   damageType?: string,
+  blow?: DamageBlow,
 ): Record<string, unknown> {
   const encounter = getActiveEncounter(campaign.id);
   if (!encounter) {
@@ -304,15 +396,16 @@ export function autoApplyDamageRoll(
       warning: `targetEnemyId "${targetEnemyRef}" matched no living enemy; the damage was NOT applied. Call damage_enemy with an exact enemyId from GAME STATE.`,
     };
   }
-  const result = applyEnemyDamage(
+  const result = applyBlow(
     campaign,
     turn,
     encounter,
     enemy,
-    Math.max(1, roll.total),
+    roll,
     sheets,
     sheetsById,
     damageType,
+    blow,
   );
   if (!("error" in result)) {
     markRollApplied(roll.id, enemy.id);
@@ -345,6 +438,14 @@ export function applyPendingDamageRoll(pending: PendingRoll, roll: StoredRoll): 
     sheets,
     sheetsById,
     pending.attack?.damageType,
+    pending.attack
+      ? {
+          magical: pending.attack.magical,
+          riders: pending.attack.riders,
+          crit: pending.attack.crit,
+          critExtraDice: pending.attack.critExtraDice,
+        }
+      : undefined,
   );
   if (typeof applied.warning === "string") {
     return applied.warning;
@@ -352,8 +453,11 @@ export function applyPendingDamageRoll(pending: PendingRoll, roll: StoredRoll): 
   if ("error" in applied) {
     return null;
   }
+  const byType = Array.isArray(applied.damageByType)
+    ? ` (${(applied.damageByType as string[]).join(", ")})`
+    : "";
   const parts = [
-    `The server already applied this ${roll.total} damage to ${String(applied.name)} (now ${
+    `The server already applied this ${roll.total} damage${byType} to ${String(applied.name)} (now ${
       applied.dead ? "SLAIN" : String(applied.health)
     }).`,
   ];

@@ -4,6 +4,11 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { SRD_CLASSES, abilityMod, spellSlotsFor } from "@/lib/srd";
 import { subclassSpellsFor } from "@/lib/srd/features";
 import { isCantripName, spellLevelOf, spellsAgainstLimit } from "@/lib/srd/spell-lists";
+import {
+  isThirdCaster,
+  thirdCasterCantrips,
+  thirdCasterSpellsKnown,
+} from "@/lib/srd/third-caster";
 
 // How a caster's spell list works, and the 5e (SRD 5.1) timing for changing
 // it. Pure and database-free, shared by the sheet, the builder, the server
@@ -101,7 +106,8 @@ function viewOf(
     ability,
     level,
     subclass,
-    style: spellStyleFor(classId),
+    // An Eldritch Knight or Arcane Trickster knows its spells, as a sorcerer does.
+    style: isThirdCaster(classId, subclass) ? "known" : spellStyleFor(classId),
     known: [...(lists.known ?? [])],
     prepared: [...(lists.prepared ?? [])],
     cantrips: [...(lists.cantrips ?? [])],
@@ -195,8 +201,10 @@ export function grantedSpellsOf(view: CasterView): string[] {
 }
 
 // The highest spell level this class can prepare or learn at its own level.
-export function maxSpellLevelOf(view: Pick<CasterView, "classId" | "level">): number {
-  return Object.keys(spellSlotsFor(view.classId, view.level)).reduce(
+export function maxSpellLevelOf(
+  view: Pick<CasterView, "classId" | "level"> & { subclass?: string },
+): number {
+  return Object.keys(spellSlotsFor(view.classId, view.level, view.subclass)).reduce(
     (top, slotLevel) => Math.max(top, Number(slotLevel)),
     0,
   );
@@ -209,6 +217,11 @@ export function spellCapOf(
   view: CasterView,
   abilities: CharacterSheet["abilities"],
 ): { label: string; count: number } | null {
+  if (isThirdCaster(view.classId, view.subclass)) {
+    return view.level >= 3
+      ? { label: "spells known", count: thirdCasterSpellsKnown(view.level) }
+      : null;
+  }
   return suggestedSpellCount(spellClassFor(view.classId), view.level, abilityMod(abilities[view.ability]));
 }
 
@@ -281,6 +294,17 @@ export function changePreparation(
   if (view.style === "spellbook" && !has(spellbookOf(view), name)) {
     return { error: `${name} is not in the spellbook. A wizard prepares only spells written in it.` };
   }
+  if (view.style === "spellbook") {
+    // A book can hold a spell the wizard cannot yet cast (a scroll copied
+    // early); it is prepared once the level reaches it.
+    const spellLevel = spellLevelOf(name);
+    const top = maxSpellLevelOf(view);
+    if (spellLevel !== null && spellLevel > top) {
+      return {
+        error: `${name} is a level ${spellLevel} spell; a level ${view.level} wizard prepares spells up to level ${top}.`,
+      };
+    }
+  }
   if (view.style === "prepared" && !context.inClassList) {
     return { error: `${name} is not on the list this class can prepare at its level.` };
   }
@@ -345,7 +369,12 @@ function casterTypeOf(classId: string) {
 }
 
 // Cantrips this class knows at its level, or null when it has none.
-export function cantripCapOf(view: Pick<CasterView, "classId" | "level">): number | null {
+export function cantripCapOf(
+  view: Pick<CasterView, "classId" | "level"> & { subclass?: string },
+): number | null {
+  if (isThirdCaster(view.classId, view.subclass)) {
+    return view.level >= 3 ? thirdCasterCantrips(view.classId, view.level) : null;
+  }
   return suggestedCantripCount(spellClassFor(view.classId), view.level, casterTypeOf(view.classId));
 }
 
@@ -368,15 +397,26 @@ function arcanumTop(view: Pick<CasterView, "classId" | "level">): number {
 //
 // `bookAllowance` is checked at creation only: a wizard who copied scrolls in
 // play has a bigger book than the table gives, and rightly so.
+//
+// `freeCantrips` are cantrips known from somewhere other than the class (a
+// high elf's one wizard cantrip): known on top of the class's own, so they
+// are left out of the count.
 export function spellListProblems(
   sheet: SheetLike & { abilities: CharacterSheet["abilities"] },
-  options: { bookAllowance?: boolean } = {},
+  options: { bookAllowance?: boolean; freeCantrips?: string[]; freeCantripCount?: number } = {},
 ): string[] {
   const problems: string[] = [];
+  const free = new Set((options.freeCantrips ?? []).map(lower).filter(Boolean));
+  // A sheet in play does not say which cantrip the race gave, only that it
+  // gave one: `freeCantripCount` is that many, whichever they are, and they
+  // sit with the first caster's.
+  let freeCount = options.freeCantripCount ?? 0;
   for (const view of casterViewsOf(sheet)) {
     const label = `level ${view.level} ${view.classId.replace(/[_-]+/g, " ")}`;
     const cantripCap = cantripCapOf(view);
-    const cantrips = dedupeNames(view.cantrips);
+    const named = dedupeNames(view.cantrips).filter((name) => !free.has(lower(name)));
+    const cantrips = named.slice(0, Math.max(0, named.length - freeCount));
+    freeCount = 0;
     if (cantripCap !== null && cantrips.length > cantripCap) {
       problems.push(`A ${label} knows ${cantripCap} ${cantripCap === 1 ? "cantrip" : "cantrips"}; that list has ${cantrips.length}.`);
     }

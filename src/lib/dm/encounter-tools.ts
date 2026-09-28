@@ -26,32 +26,35 @@ import { getSheetById, listSheets } from "@/lib/db/sheets";
 import { getRoll, insertRoll } from "@/lib/db/rolls";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { listOpenPendingRolls, saveDmTurn, type DmTurn } from "@/lib/db/dm-turns";
-import { d20Expression, rollExpression, type Advantage } from "@/lib/dice";
+import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
-import { computeSheetDerived, effectiveAcFor } from "@/lib/srd";
+import { computeSheetDerived } from "@/lib/srd";
 import { encounterCeiling, evaluateEncounter } from "@/lib/srd/encounter-math";
 import { suggestEnemies } from "@/lib/bestiary";
-import { synthesizeStats } from "@/lib/bestiary/synthesize";
 import { enemyRequestSchema, resolveEnemyRequests } from "@/lib/dm/encounter-spawn";
 import { healthState } from "@/lib/bestiary/health";
-import type { EnemyAttack } from "@/lib/bestiary/statblock";
 import {
   advanceOrder,
   buildOrder,
   coerceEncounterOutcome,
-  critDamageExpression,
   numberDuplicates,
   pickEnemyTarget,
+  spliceIntoOrder,
 } from "@/lib/dm/encounter-logic";
-import { applyDmMutation } from "@/lib/dm/mutations";
+import {
+  actingCombatantId,
+  canEnemyAct,
+  markEnemyActed,
+  oweEnemiesAnAction,
+} from "@/lib/dm/can-act";
+import { acWithEffects, enemyAcWithEffects } from "@/lib/dm/ac-effects";
+import { rollEffectExtras } from "@/lib/dm/effect-tools";
 import { followCombatAmbience } from "@/lib/dm/ambience-tools";
 import {
-  approachForAttack,
   createBattleMapForEncounter,
   handleMoveToken,
   handleSetMovement,
   handleTeleportToken,
-  isRangedAttackName,
   moveTokenTool,
   publishBattleMapUpdate,
   setMovementTool,
@@ -69,12 +72,10 @@ import {
   extraEncounterTools,
 } from "@/lib/dm/encounter-tools-extra";
 import { handlePcAttack, pcAttackTool } from "@/lib/dm/pc-attack";
+import { handleEnemyAttack } from "@/lib/dm/enemy-attack";
 import { isCompanionUserId } from "@/lib/db/users";
 import { wakeDm } from "@/lib/dm/wake";
-import { effectOutcome } from "@/lib/dm/effect-tools";
-import { applyField } from "@/lib/dm/effects-logic";
 import { resolveSheetRef } from "@/lib/dm/rolls";
-import { normalizeAdvantage } from "@/lib/dm/arg-coerce";
 import {
   castAtEnemyTool,
   castAtPlayerTool,
@@ -87,21 +88,11 @@ import {
   handleTakeAction,
   handleUseReaction,
 } from "@/lib/dm/action-tools";
-import {
-  attackContext,
-  incapacitatedBy,
-  isIncapacitated,
-  mergeAdvantage,
-} from "@/lib/dm/condition-logic";
-import { tickEncounterConditions } from "@/lib/dm/condition-tick";
+import { isIncapacitated, mergeAdvantage } from "@/lib/dm/condition-logic";
+import { startTurnConditions, tickEncounterConditions } from "@/lib/dm/condition-tick";
 import { rollDeathSave } from "@/lib/dm/death";
 import { getBattleMapForEncounter, getTokenByRef, resetRoundBudgets } from "@/lib/db/battle-maps";
-import { recordEncounterTarget } from "@/lib/db/encounters";
 import { initLegendaryPools, refillLegendaryForTurn } from "@/lib/dm/legendary-tools";
-import { planAttackFx } from "@/lib/battlemap/fx-plan";
-import { publishFx, tokenPosition } from "@/lib/dm/fx";
-import { normalizeClock } from "@/lib/dm/calendar";
-import { weatherRangedRider } from "@/lib/srd/weather";
 import { publishTitleCard } from "@/lib/dm/scene-state";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -202,6 +193,11 @@ const damageEnemyTool: ToolDef = {
         enemyId: { type: "string", description: "Exact enemyId from GAME STATE." },
         amount: { type: "integer", minimum: 1, maximum: 200 },
         type: { type: "string", description: "Damage type, e.g. slashing, fire." },
+        magical: {
+          type: "boolean",
+          description:
+            "True when the damage comes from a spell or a magic weapon, so resistance to nonmagical attacks does not apply.",
+        },
         reason: { type: "string", description: "Short in-fiction cause." },
       },
       required: ["enemyId", "amount"],
@@ -300,6 +296,9 @@ function crLabel(cr: number): string {
 }
 
 // ---- start_encounter ----
+
+const hasAlert = (sheet: CharacterSheet) =>
+  (sheet.feats ?? []).some((feat) => /^alert\b/i.test(feat.trim()));
 
 const startArgsSchema = z.object({
   enemies: z.array(enemyRequestSchema).min(1).max(8),
@@ -407,7 +406,10 @@ function handleStartEncounter(
   if (args.surprised === "enemies") {
     encounter.surprisedIds = enemies.map((enemy) => enemy.id);
   } else if (args.surprised === "party") {
-    encounter.surprisedIds = sheets.map((sheet) => sheet.id);
+    // Alert: a character with the feat cannot be surprised while conscious.
+    encounter.surprisedIds = sheets
+      .filter((sheet) => !(hasAlert(sheet) && sheet.currentHp > 0))
+      .map((sheet) => sheet.id);
   }
   // Legendary pools and the lair flag (docs/vtt-parity-implementation-
   // plan.md 4.1), written with the fight so the tracker shows them at once.
@@ -496,24 +498,9 @@ function entryActs(
   return entryAlive(entry, enemiesById) && !surprisedIds.includes(entryId(entry));
 }
 
-// A character's Armor Class with every active effect folded in
-// (src/lib/dm/effects-logic.ts). Every attack resolution asks this rather
-// than effectiveAcFor directly, so a Shield of Faith and a curse both land on
-// the same number instead of on whichever call site remembered them.
-export function acWithEffects(campaignId: string, sheet: CharacterSheet): number {
-  return applyField(
-    effectiveAcFor(sheet),
-    effectOutcome(campaignId, { kind: "character", id: sheet.id }, "ac"),
-  );
-}
-
-// The same for an enemy, whose base AC is a column rather than a derivation.
-export function enemyAcWithEffects(campaignId: string, enemy: EncounterEnemy): number {
-  return applyField(
-    enemy.ac,
-    effectOutcome(campaignId, { kind: "enemy", id: enemy.id }, "ac"),
-  );
-}
+// Armor Class with every active effect folded in lives in
+// src/lib/dm/ac-effects.ts; re-exported for the callers that learned it here.
+export { acWithEffects, enemyAcWithEffects };
 
 // Exported for src/lib/dm/initiative.ts: a DM editing the order moves the
 // pointer without going through advancePointer, and the floor has to follow
@@ -593,12 +580,30 @@ export function recordInitiativeRoll(
     return null;
   }
   const encounter = getActiveEncounter(campaignId);
-  if (!encounter || encounter.orderReady) {
+  if (!encounter) {
     return null;
   }
   const sheet = getSheetById(characterId);
   if (!sheet || encounter.order.some((entry) => entry.kind === "pc" && entry.characterId === characterId)) {
     return null;
+  }
+  if (encounter.orderReady) {
+    // A character joining a fight in progress takes a place in the order by
+    // their roll. The pointer stays on whoever is acting; the newcomer's
+    // turn comes when their count does.
+    const campaignNow = getCampaignById(campaignId);
+    const fielded = campaignNow ? fieldedSheets(campaignNow) : listSheets(campaignId);
+    if (!fielded.some((entry) => entry.id === sheet.id)) {
+      return null;
+    }
+    const joined = spliceIntoOrder(encounter.order, encounter.turnIndex, [
+      { kind: "pc", characterId: sheet.id, userId: sheet.userId, name: sheet.name, initiative: total },
+    ]);
+    encounter.order = joined.order;
+    encounter.turnIndex = joined.turnIndex;
+    saveEncounter(encounter);
+    publishEncounter(campaignId);
+    return `${sheet.name} joins the fight on initiative ${total}. Initiative order: ${describeOrder(encounter)}.`;
   }
   encounter.order.push({
     kind: "pc",
@@ -633,8 +638,7 @@ export function recordInitiativeRoll(
     entryActs(entry, enemiesById, encounter.surprisedIds),
   );
   if (!first) {
-    saveEncounter(encounter);
-    return null;
+    return openAfterAmbush(campaignId, encounter, enemies, enemiesById);
   }
   encounter.orderReady = true;
   encounter.turnIndex = first.turnIndex;
@@ -660,6 +664,57 @@ export function recordInitiativeRoll(
   }`;
 }
 
+// The whole party was surprised: round 1 belongs to the enemies. The order
+// still locks, or the fight would have no turns, no floor and no action
+// economy for as long as it lasts. Round 2 opens on the first character
+// standing, and every living enemy is owed the action of the round the
+// party lost, on top of its own.
+function openAfterAmbush(
+  campaignId: string,
+  encounter: Encounter,
+  enemies: EncounterEnemy[],
+  enemiesById: Map<string, EncounterEnemy>,
+): string | null {
+  const first = advanceOrder(encounter.order, -1, (entry) => entryAlive(entry, enemiesById));
+  if (!first) {
+    // Nobody in the party can stand at all: nothing to open.
+    saveEncounter(encounter);
+    return null;
+  }
+  encounter.orderReady = true;
+  encounter.round = 2;
+  encounter.surprisedIds = [];
+  encounter.turnIndex = first.turnIndex;
+  encounter.turnBudget = null;
+  encounter.waitingSeq = latestSeq(campaignId);
+  const ambushers = enemies.filter((enemy) => enemy.status === "alive");
+  oweEnemiesAnAction(
+    encounter,
+    ambushers.map((enemy) => enemy.id),
+  );
+  saveEncounter(encounter);
+  const campaign = getCampaignById(campaignId);
+  setInitiativeFloor(campaign, encounter);
+  publishEncounter(campaignId);
+  if (campaign) {
+    for (const passedCharacterId of first.pcsPassed) {
+      rollDeathSave(campaign, passedCharacterId);
+    }
+  }
+  const current = encounter.order[encounter.turnIndex];
+  const names = ambushers.map((enemy) => enemy.displayName);
+  const ahead = first.enemiesPassed
+    .map((enemyId) => enemiesById.get(enemyId)?.displayName)
+    .filter(Boolean);
+  return `Combat begins. Initiative order: ${describeOrder(encounter)}. The party was surprised and lost round 1: ${
+    names.join(" and ")
+  } ${names.length === 1 ? "acts" : "each act"} now, call enemy_attack for each.${
+    ahead.length
+      ? ` ${ahead.join(" and ")} ${ahead.length === 1 ? "comes" : "come"} before ${current?.name} in the order and ${ahead.length === 1 ? "acts" : "act"} a second time, for round 2.`
+      : ""
+  } Then it is ${current?.name}'s turn (round 2); narrate and stop for their action.`;
+}
+
 // Deadlock guard: if combat is stuck collecting initiative with nothing
 // pending, roll the stragglers digitally so a fight can never wedge.
 export function ensureInitiativeProgress(campaign: Campaign): string | null {
@@ -681,8 +736,16 @@ export function ensureInitiativeProgress(campaign: Campaign): string | null {
   }
   let note: string | null = null;
   for (const sheet of missing) {
+    // The same roll request_roll would make: effects on initiative count.
+    const effects = rollEffectExtras(campaign.id, sheet.id, "initiative");
     const outcome = rollExpression(
-      d20Expression(computeSheetDerived(sheet).initiative),
+      d20Expression(
+        computeSheetDerived(sheet).initiative + (effects.effectBonus ?? 0),
+        mergeAdvantage([
+          ...(effects.effectAdvantage ? ["advantage" as const] : []),
+          ...(effects.effectDisadvantage ? ["disadvantage" as const] : []),
+        ]),
+      ),
     );
     const roll = insertRoll({
       campaignId: campaign.id,
@@ -707,6 +770,7 @@ const damageArgsSchema = z.object({
   enemyId: z.string(),
   amount: z.number().int().min(1).max(200),
   type: z.string().optional(),
+  magical: z.coerce.boolean().optional(),
   reason: z.string().optional(),
 });
 
@@ -760,276 +824,13 @@ function handleDamageEnemy(
     sheets,
     sheetsById,
     args.type,
+    { magical: args.magical === true },
   );
 }
 
 // ---- enemy_attack ----
 
-const attackArgsSchema = z.object({
-  enemyId: z.string(),
-  targetCharacterId: z.string(),
-  attack: z.string().optional(),
-  advantage: z.preprocess(
-    normalizeAdvantage,
-    z.enum(["none", "advantage", "disadvantage"]).optional(),
-  ),
-});
-
-function pickAttack(enemy: EncounterEnemy, requested: string | undefined): EnemyAttack | null {
-  const attacks = enemy.stats.attacks.length
-    ? enemy.stats.attacks
-    : synthesizeStats(enemy.cr).attacks;
-  if (!attacks.length) {
-    return null;
-  }
-  const wanted = (requested ?? "").trim().toLowerCase();
-  if (wanted) {
-    const match = attacks.find(
-      (attack) =>
-        attack.name.toLowerCase() === wanted || attack.name.toLowerCase().includes(wanted),
-    );
-    if (match) {
-      return match;
-    }
-  }
-  return attacks[0];
-}
-
-function handleEnemyAttack(
-  campaign: Campaign,
-  turn: DmTurn,
-  rawArguments: string,
-  sheets: CharacterSheet[],
-  sheetsById: Map<string, CharacterSheet>,
-): Record<string, unknown> {
-  const encounter = getActiveEncounter(campaign.id);
-  if (!encounter) {
-    return { error: "No active encounter." };
-  }
-  let args: z.infer<typeof attackArgsSchema>;
-  try {
-    args = attackArgsSchema.parse(JSON.parse(rawArguments || "{}"));
-  } catch {
-    return { error: "Invalid arguments: enemy_attack needs enemyId and targetCharacterId." };
-  }
-  const enemy = resolveEnemyRef(encounter.id, args.enemyId);
-  if (!enemy) {
-    return { error: "Unknown enemyId; use one from GAME STATE." };
-  }
-  if (enemy.status !== "alive") {
-    return { error: `${enemy.displayName} is ${enemy.status} and cannot attack.` };
-  }
-  const stoppedBy = incapacitatedBy(enemy.conditions);
-  if (stoppedBy) {
-    return {
-      error: `${enemy.displayName} is ${stoppedBy} and cannot act this turn.`,
-    };
-  }
-  const staleTarget =
-    sheetsById.get(args.targetCharacterId.trim()) ??
-    sheets.find(
-      (sheet) => sheet.name.toLowerCase() === args.targetCharacterId.trim().toLowerCase(),
-    );
-  const target = staleTarget ? getSheetById(staleTarget.id) : null;
-  if (!target) {
-    return { error: "Unknown targetCharacterId; use one from GAME STATE." };
-  }
-  const attack = pickAttack(enemy, args.attack);
-  if (!attack) {
-    return { error: `${enemy.displayName} has no usable attacks; narrate a different action.` };
-  }
-
-  // Battle-map positions are authoritative: a melee attacker out of reach
-  // auto-approaches along a legal path, and the attack is refused when the
-  // target is still beyond range, so narration can never teleport enemies.
-  const spatial = approachForAttack(campaign, encounter.id, enemy.id, target.id, attack.name);
-  if (spatial?.blocked) {
-    return spatial.blocked;
-  }
-  // Where the two stand after the approach, for the effect and the target
-  // line every client draws (src/lib/battlemap/fx-plan.ts).
-  const attackerPos = tokenPosition(campaign.id, enemy.id);
-  const targetPos = tokenPosition(campaign.id, target.id);
-  if (attackerPos && targetPos) {
-    recordEncounterTarget(encounter.id, encounter.round, enemy.id, target.id);
-  }
-  // A gale over an outdoor board: disadvantage on ranged attacks past 30 ft,
-  // for the monsters exactly as for the party.
-  const boardForWeather = getBattleMapForEncounter(encounter.id);
-  const gale =
-    attackerPos && targetPos && boardForWeather?.outdoors
-      ? weatherRangedRider(
-          normalizeClock(campaign.clock).weather,
-          isRangedAttackName(attack.name),
-          Math.max(
-            Math.abs(attackerPos.at.x - targetPos.at.x),
-            Math.abs(attackerPos.at.y - targetPos.at.y),
-          ),
-        )
-      : { disadvantage: false, note: null };
-
-  // Conditions on both sides drive advantage and auto-crits; the model's
-  // situational claim merges in as one more source.
-  const ranged = isRangedAttackName(attack.name);
-  const conditionContext = attackContext({
-    attackerConditions: enemy.conditions,
-    targetConditions: target.conditions,
-    melee: !ranged,
-    adjacent: !ranged,
-    requested: args.advantage ?? "none",
-  });
-
-  // Multiattack: the full routine executes in this ONE call, each swing its
-  // own to-hit and damage dice cards, stopping early if the target drops.
-  const advantage: Advantage = mergeAdvantage([
-    conditionContext.advantage,
-    ...(gale.disadvantage ? ["disadvantage" as const] : []),
-  ]);
-  if (gale.note) {
-    conditionContext.notes.push(gale.note);
-  }
-  const totalSwings = Math.max(1, Math.min(3, enemy.stats.attacksPerTurn ?? 1));
-  const swings: Array<Record<string, unknown>> = [];
-  let dropped = false;
-  let totalDamage = 0;
-  let targetHp: string | undefined;
-  for (let swing = 0; swing < totalSwings && !dropped; swing += 1) {
-    const hitOutcome = rollExpression(d20Expression(attack.toHit, advantage));
-    const hitRoll = insertRoll({
-      campaignId: campaign.id,
-      characterId: target.id,
-      requestedBy: "dm",
-      kind: "attack",
-      detail: `${enemy.displayName}: ${attack.name}`,
-      advantage,
-      result: hitOutcome,
-    });
-    publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", {
-      roll: hitRoll,
-      source: "digital",
-    });
-    turn.rollIds.push(hitRoll.id);
-
-    const natCrit = hitOutcome.crit === "nat20";
-    const hit =
-      hitOutcome.crit !== "nat1" &&
-      (natCrit || hitOutcome.total >= acWithEffects(campaign.id, target));
-    const crit = natCrit || (hit && conditionContext.autoCrit);
-    if (!hit) {
-      swings.push({
-        rolled: hitOutcome.total,
-        hit: false,
-        ...(hitOutcome.crit === "nat1" ? { fumble: true } : {}),
-      });
-      if (attackerPos && targetPos && !attackerPos.hidden) {
-        publishFx(
-          campaign.id,
-          planAttackFx({
-            from: attackerPos.at,
-            to: targetPos.at,
-            fromTokenId: attackerPos.tokenId,
-            toTokenId: targetPos.tokenId,
-            hit: false,
-            crit: false,
-            fumble: hitOutcome.crit === "nat1",
-            ranged,
-            damageType: attack.type,
-            visibility: hitRoll.visibility,
-          }),
-        );
-      }
-      continue;
-    }
-
-    const damageExpression = crit
-      ? critDamageExpression(attack.damage, 0, {
-          powerfulCritical: campaign.gameSettings.variantRules.powerfulCritical,
-          multiplyNumeric: campaign.gameSettings.variantRules.criticalDamageMods,
-        })
-      : attack.damage;
-    const damageOutcome = rollExpression(damageExpression);
-    const damageRoll = insertRoll({
-      campaignId: campaign.id,
-      characterId: target.id,
-      requestedBy: "dm",
-      kind: "damage",
-      detail: `${enemy.displayName}: ${attack.name} damage`,
-      result: damageOutcome,
-    });
-    publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", {
-      roll: damageRoll,
-      source: "digital",
-    });
-    turn.rollIds.push(damageRoll.id);
-
-    // Damage lands through the standard mutation: temp HP, clamps, audit,
-    // and the live sheet_updated publish all come for free.
-    const applied = applyDmMutation(
-      campaign,
-      turn.id,
-      "apply_damage",
-      JSON.stringify({
-        characterId: target.id,
-        amount: Math.max(1, damageOutcome.total),
-        type: attack.type,
-        // Crits against a dying target count double death-save failures.
-        ...(crit ? { crit: true } : {}),
-        reason: `${enemy.displayName}'s ${attack.name}`,
-      }),
-      sheets,
-      sheetsById,
-    ).result;
-    totalDamage += damageOutcome.total;
-    if (attackerPos && targetPos && !attackerPos.hidden) {
-      publishFx(
-        campaign.id,
-        planAttackFx({
-          from: attackerPos.at,
-          to: targetPos.at,
-          fromTokenId: attackerPos.tokenId,
-          toTokenId: targetPos.tokenId,
-          hit: true,
-          crit,
-          ranged,
-          damage: damageOutcome.total,
-          damageType: attack.type,
-          visibility: hitRoll.visibility,
-        }),
-      );
-    }
-    if (typeof applied.hp === "string") {
-      targetHp = applied.hp;
-    }
-    if (applied.dropped) {
-      dropped = true;
-    }
-    swings.push({
-      rolled: hitOutcome.total,
-      hit: true,
-      ...(crit ? { crit: true } : {}),
-      damage: damageOutcome.total,
-    });
-  }
-
-  // The auto-act fallback in advanceAfterTurn skips enemies that already
-  // took their turn here.
-  if (!turn.actedEnemyIds.includes(enemy.id)) {
-    turn.actedEnemyIds.push(enemy.id);
-  }
-
-  return {
-    attack: attack.name,
-    vsAc: acWithEffects(campaign.id, target),
-    target: target.name,
-    ...(totalSwings > 1 ? { multiattack: `${totalSwings} attacks` } : {}),
-    swings,
-    hit: swings.some((entry) => entry.hit),
-    ...(totalDamage > 0 ? { totalDamage, damageType: attack.type } : {}),
-    ...(conditionContext.notes.length ? { conditionEffects: conditionContext.notes } : {}),
-    ...(targetHp ? { targetHp } : {}),
-    ...(dropped ? { dropped: true, note: `${target.name} falls to 0 HP.` } : {}),
-  };
-}
+// The handler lives in src/lib/dm/enemy-attack.ts.
 
 // ---- end_encounter ----
 
@@ -1133,11 +934,36 @@ function handleEndTurn(
   if (!sheet) {
     return { error: "Unknown characterId; use one from GAME STATE." };
   }
+  // Ending a turn is the one thing its owner can always do: a character
+  // stunned in the middle of their turn still has to be able to hand it on.
+  // So only whose turn it is is asked here, not whether they can act.
   const current = encounter.order[encounter.turnIndex];
-  if (!current || current.kind !== "pc" || current.characterId !== sheet.id) {
+  if (actingCombatantId(encounter) !== sheet.id || !current || current.kind !== "pc") {
     return { error: `It is ${current?.name ?? "someone else"}'s turn, not ${sheet.name}'s.` };
   }
   markTurnResolved(turn, sheet.id);
+  // The AI's turn loop moves the pointer when the turn finishes
+  // (advanceAfterTurn). A person at the console has no loop behind them, so
+  // their End a turn moves it here.
+  if (turn.actor === "human_dm") {
+    const advanced = advancePointer(campaign, encounter);
+    if (!advanced) {
+      return { error: "Nobody is left standing to take the next turn." };
+    }
+    const next = encounter.order[encounter.turnIndex];
+    const passed = advanced.enemiesPassed
+      .map((enemyId) => resolveEnemyRef(encounter.id, enemyId)?.displayName)
+      .filter(Boolean);
+    return {
+      ok: true,
+      nextTurn: next?.name ?? null,
+      round: encounter.round,
+      ...(passed.length ? { enemiesToAct: passed } : {}),
+      note: `${sheet.name}'s turn is over.${
+        passed.length ? ` ${passed.join(" and ")} act${passed.length === 1 ? "s" : ""} before ${next?.name}.` : ""
+      } It is now ${next?.name}'s turn (round ${encounter.round}).`,
+    };
+  }
   return {
     ok: true,
     note: "Turn recorded. Narrate the result and stop; the server hands the floor onward.",
@@ -1224,20 +1050,55 @@ function advancePointer(
   if (!next) {
     return null;
   }
+  // Every combatant from the one after the last turn to the one the pointer
+  // lands on is starting a turn: enemies and the downed are walked past, and
+  // an enemy's turn is taken inside the DM turn that follows.
+  const starting: string[] = [];
+  // The ones walked past before the order wrapped: their turn belongs to
+  // the round that is ending.
+  const beforeWrap: string[] = [];
+  for (let index = encounter.turnIndex; ; ) {
+    const wrappedHere = index + 1 >= encounter.order.length;
+    index = (index + 1) % encounter.order.length;
+    const id = orderEntryId(encounter.order[index]);
+    starting.push(id);
+    if (!wrappedHere && index > encounter.turnIndex) {
+      beforeWrap.push(id);
+    }
+    if (index === next.turnIndex || starting.length >= encounter.order.length) {
+      break;
+    }
+  }
+  const lostToSurprise = beforeWrap.filter(
+    (id) => encounter.surprisedIds.includes(id) && enemiesById.has(id),
+  );
   encounter.turnIndex = next.turnIndex;
   // The action economy belongs to whoever was acting; the next combatant
-  // starts clean (src/lib/dm/action-budget.ts).
+  // starts clean (src/lib/dm/action-budget.ts). What the turn that is ending
+  // spent is handed to the turn-end rules (a rage that was not fed) before
+  // it is thrown away, so they never depend on when this row is saved.
+  const endedTurn = { budget: encounter.turnBudget };
   encounter.turnBudget = null;
-  // A legendary creature's own turn refills its legendary actions.
-  const arriving = encounter.order[encounter.turnIndex];
-  if (arriving?.kind === "enemy") {
-    refillLegendaryForTurn(encounter, enemiesById.get(arriving.enemyId));
+  // A reaction comes back at the start of its owner's turn, and what lasted
+  // until that turn (Dodge, Shield) ends with it.
+  encounter.reactionsUsed = encounter.reactionsUsed.filter((id) => !starting.includes(id));
+  startTurnConditions(campaign, encounter, starting, endedTurn);
+  // A legendary creature's own turn refills its legendary actions. The
+  // pointer never rests on an enemy, so the turn that is starting is read
+  // from the ones it walked past.
+  for (const id of starting) {
+    const enemy = enemiesById.get(id);
+    if (enemy?.status === "alive") {
+      refillLegendaryForTurn(encounter, enemy);
+    }
   }
   if (next.wrapped) {
     encounter.round += 1;
-    // Reactions come back at the top of each combatant's turn; one round is
-    // the granularity the server tracks them at.
-    encounter.reactionsUsed = [];
+    // A surprised enemy at the tail of the order was walked past in round
+    // 1: that was the turn it lost, and the new round must not hand it back.
+    for (const id of lostToSurprise) {
+      markEnemyActed(encounter, id);
+    }
     // Surprise costs exactly one turn, so it is spent by the time round 1
     // has gone all the way around.
     encounter.surprisedIds = [];
@@ -1300,7 +1161,9 @@ function autoActSkippedEnemies(
       continue;
     }
     const enemy = resolveEnemyRef(encounter.id, enemyId);
-    if (!enemy || enemy.status !== "alive" || isIncapacitated(enemy.conditions)) {
+    // Read fresh: each attack before this one wrote to the encounter.
+    const live = getActiveEncounter(campaign.id);
+    if (!enemy || !live || !canEnemyAct({ enemy, encounter: live, kind: "action" }).ok) {
       continue;
     }
     const living = sheets.filter((sheet) => {

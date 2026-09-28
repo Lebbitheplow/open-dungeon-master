@@ -1,5 +1,9 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
+import { getContentDb } from "@/lib/content/db";
 import { gearFromHomebrewData } from "@/lib/homebrew/gear";
+import { SRD_ARMOR } from "@/lib/srd/armor";
+import { matchMagicItem } from "@/lib/srd/magic-items";
+import { SRD_WEAPONS } from "@/lib/srd/weapons";
 import type { CreateHomebrewInput, HomebrewKind } from "@/lib/schemas/homebrew";
 import type { EquipmentItem } from "@/lib/schemas/sheet";
 
@@ -116,30 +120,117 @@ export function updateHomebrew(
   return getHomebrew(userId, id);
 }
 
+// ---- homebrew gear on a sheet ----
+
+function nameKey(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[+-]\d+/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+let packItemNames: Set<string> | null = null;
+
+// Every item name the content pack publishes, keyed like nameKey. Read once;
+// an install without the pack has only the bundled tables to go by.
+function publishedPackNames(): Set<string> {
+  if (packItemNames) {
+    return packItemNames;
+  }
+  const names = new Set<string>();
+  const db = getContentDb();
+  if (db) {
+    for (const row of db.prepare(`SELECT name FROM items`).all() as Array<{ name: string }>) {
+      names.add(nameKey(row.name));
+    }
+  }
+  packItemNames = names;
+  return names;
+}
+
+// Whether a name belongs to gear the game already publishes: an SRD weapon
+// or suit of armor, a magic item, or an item in the content pack. A homebrew
+// entry may share such a name in the workshop, and it never changes what the
+// published thing does on a sheet: a dagger is 1d4 at every table.
+export function isPublishedGearName(name: string): boolean {
+  const key = nameKey(name);
+  if (!key) {
+    return false;
+  }
+  return (
+    SRD_WEAPONS.some((weapon) => nameKey(weapon.name) === key) ||
+    SRD_ARMOR.some((armor) => nameKey(armor.name) === key) ||
+    matchMagicItem(name) !== null ||
+    publishedPackNames().has(key)
+  );
+}
+
+// Whose workshop counts at a table: whoever runs it. The owner made the
+// campaign and the DM seats referee it; a player's own entries are theirs to
+// write and the table's to admit, which a DM does by keeping the entry.
+function tableAuthors(campaignId: string): string[] {
+  const row = getDatabase()
+    .prepare(
+      `SELECT owner_user_id, human_dm_user_id, assistant_dm_user_id FROM campaigns WHERE id = ?`,
+    )
+    .get(campaignId) as
+    | { owner_user_id: string; human_dm_user_id: string | null; assistant_dm_user_id: string | null }
+    | undefined;
+  if (!row) {
+    return [];
+  }
+  return [
+    ...new Set(
+      [row.owner_user_id, row.human_dm_user_id, row.assistant_dm_user_id].filter(
+        (id): id is string => Boolean(id),
+      ),
+    ),
+  ];
+}
+
 // A sheet's equipment with every homebrew item's mechanics snapshotted onto
-// its line (src/lib/homebrew/gear.ts). Matched by slug first, then by name
-// against the owner's own items, so a line typed by hand still finds the
-// entry it was named after. Run on every read, so an item edited in the
-// workshop reaches the sheets that carry it; an entry that has been deleted
-// leaves its last snapshot in place rather than stripping a sword mid-fight.
-export function hydrateHomebrewGear(userId: string, equipment: EquipmentItem[]): EquipmentItem[] {
+// its line (src/lib/homebrew/gear.ts). Run on every read, so an item edited
+// in the workshop reaches the sheets that carry it.
+//
+// The snapshot is the server's to write and is rebuilt here from the stored
+// entry each time: whatever `gear` a row arrived with is dropped first, so a
+// block sent by a client, or left behind by an entry since deleted, gives
+// nothing. A row finds its entry by its `homebrew:` slug, or by its name when
+// that name is not published gear's.
+//
+// `table.campaignId` names the table the sheet is played at. In play only the
+// entries of whoever runs that table have mechanics; without it (a library
+// character, outside any campaign) the sheet owner's own entries are read.
+export function hydrateHomebrewGear(
+  userId: string,
+  equipment: EquipmentItem[],
+  table: { campaignId?: string | null } = {},
+): EquipmentItem[] {
   if (!equipment.length) {
     return equipment;
   }
   let items: HomebrewEntry[] | null = null;
-  const load = () => (items ??= listHomebrew(userId, "item"));
+  const load = () =>
+    (items ??= (table.campaignId ? tableAuthors(table.campaignId) : [userId]).flatMap((author) =>
+      listHomebrew(author, "item"),
+    ));
   return equipment.map((item) => {
     const slugId = item.slug?.startsWith("homebrew:") ? item.slug.slice("homebrew:".length) : null;
     const wanted = item.name.trim().toLowerCase();
     const entry = slugId
       ? load().find((candidate) => candidate.id === slugId)
-      : load().find((candidate) => candidate.name.trim().toLowerCase() === wanted);
-    if (!entry) {
-      return item;
-    }
-    const gear = gearFromHomebrewData(entry.name, entry.data);
+      : isPublishedGearName(item.name)
+        ? undefined
+        : load().find((candidate) => candidate.name.trim().toLowerCase() === wanted);
+    const gear = entry ? gearFromHomebrewData(entry.name, entry.data) : null;
     if (!gear) {
-      return item.gear ? { ...item, gear: undefined } : item;
+      if (item.gear === undefined) {
+        return item;
+      }
+      const bare = { ...item };
+      delete bare.gear;
+      return bare;
     }
     return {
       ...item,

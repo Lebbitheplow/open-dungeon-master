@@ -4,6 +4,7 @@ import {
   parseCharacterBundle,
   unpackCharacterBundle,
 } from "@/lib/character-bundle";
+import { admitSheet, refusal } from "@/lib/characters/admit";
 import { createCharacter } from "@/lib/db/characters";
 import { portraitStatus, queueLibraryPortrait } from "@/lib/portrait";
 import { writeUploadedImage } from "@/lib/uploads-store";
@@ -18,6 +19,11 @@ export const dynamic = "force-dynamic";
 // inlined portrait is written to public/uploads like any upload; when the
 // file carried one, no painted portrait is queued, since the player already
 // chose a face.
+//
+// A file is a request somebody could have written by hand, so it comes
+// through the same legality check a new character does
+// (src/lib/characters/admit.ts) and is refused with what is wrong with it.
+// Nothing is written, the portrait included, for a file that is refused.
 export async function POST(request: Request) {
   const user = await currentUser();
   if (!user) {
@@ -41,8 +47,24 @@ export async function POST(request: Request) {
       { status: parsed.error.includes("larger than") ? 413 : 400 },
     );
   }
+  const admitted = admitSheet({
+    door: "import",
+    level: parsed.bundle.level,
+    sheet: parsed.bundle.sheet,
+    userId: user.id,
+  });
+  if (!admitted.ok) {
+    return refusal(admitted.problems);
+  }
   const unpacked = await unpackCharacterBundle(parsed.bundle, writeUploadedImage);
-  const character = createCharacter(user.id, unpacked.level, unpacked.sheet, "pc");
+  const character = createCharacter(
+    user.id,
+    unpacked.level,
+    { ...admitted.sheet, name: unpacked.sheet.name, portrait: unpacked.sheet.portrait },
+    "pc",
+    "",
+    unpacked.xp,
+  );
   if (!unpacked.carriedPortrait) {
     queueLibraryPortrait(character);
   }

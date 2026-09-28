@@ -54,8 +54,79 @@ export function checklistClassSpell(
   if (!spell || spell.l < 1 || spell.l > maxLevel) {
     return null;
   }
-  const classes = (spell.c ?? "").split(",").map((entry) => entry.trim().toLowerCase());
-  return classes.includes(classSlug.toLowerCase()) ? spell.n : null;
+  return classesOf(spell).includes(classSlug.toLowerCase()) ? spell.n : null;
+}
+
+// The checklist's class lists come from Open5e's spell lists, which leave the
+// paladin off nearly every spell it shares with the cleric and the ranger off
+// much of what it shares with the druid. These are the two lists as SRD 5.1
+// prints them ("Spell Lists", Paladin Spells and Ranger Spells), added to
+// whatever the checklist says so an honest paladin can prepare Bless.
+const SRD_LIST_SUPPLEMENT: Record<string, string[]> = {
+  paladin: [
+    "Bless", "Command", "Cure Wounds", "Detect Evil and Good", "Detect Magic",
+    "Detect Poison and Disease", "Divine Favor", "Heroism", "Protection from Evil and Good",
+    "Purify Food and Drink", "Shield of Faith",
+    "Aid", "Branding Smite", "Find Steed", "Lesser Restoration", "Locate Object", "Magic Weapon",
+    "Protection from Poison", "Zone of Truth",
+    "Create Food and Water", "Daylight", "Dispel Magic", "Magic Circle", "Remove Curse", "Revivify",
+    "Banishment", "Death Ward", "Locate Creature",
+    "Dispel Evil and Good", "Geas", "Raise Dead",
+  ],
+  ranger: [
+    "Alarm", "Animal Friendship", "Cure Wounds", "Detect Magic", "Detect Poison and Disease",
+    "Fog Cloud", "Goodberry", "Hunter's Mark", "Jump", "Longstrider", "Speak with Animals",
+    "Animal Messenger", "Barkskin", "Darkvision", "Find Traps", "Lesser Restoration",
+    "Locate Animals or Plants", "Locate Object", "Pass without Trace", "Protection from Poison",
+    "Silence", "Spike Growth",
+    "Conjure Animals", "Daylight", "Nondetection", "Plant Growth", "Protection from Energy",
+    "Speak with Plants", "Water Breathing", "Water Walk", "Wind Wall",
+    "Conjure Woodland Beings", "Freedom of Movement", "Locate Creature", "Stoneskin",
+    "Commune with Nature", "Tree Stride",
+  ],
+};
+
+const SUPPLEMENT_BY_SPELL = new Map<string, string[]>();
+for (const [classSlug, names] of Object.entries(SRD_LIST_SUPPLEMENT)) {
+  for (const name of names) {
+    const key = name.trim().toLowerCase();
+    SUPPLEMENT_BY_SPELL.set(key, [...(SUPPLEMENT_BY_SPELL.get(key) ?? []), classSlug]);
+  }
+}
+
+// The classes whose list a spell is on, from the checklist and the
+// supplement together, lowercased.
+function classesOf(spell: ManifestSpell & { c?: string }): string[] {
+  const listed = (spell.c ?? "")
+    .split(",")
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+  const more = [spell.n, ...(spell.a ?? [])].flatMap(
+    (name) => SUPPLEMENT_BY_SPELL.get(name.trim().toLowerCase()) ?? [],
+  );
+  return [...new Set([...listed, ...more])];
+}
+
+// What the checklist says of a spell by name: its canonical name, its level
+// and the class lists it is on. Null for a name it does not carry.
+export function checklistSpell(
+  name: string,
+): { name: string; level: number; classes: string[] } | null {
+  const spell = CHECKLIST.get(name.trim().toLowerCase());
+  if (!spell) {
+    return null;
+  }
+  return { name: spell.n, level: spell.l, classes: classesOf(spell) };
+}
+
+// Every spell the checklist puts on one class's list, cantrips included, by
+// canonical name in the checklist's own order. For a caller that has to
+// CHOOSE spells (a companion the engine builds) rather than judge a choice.
+export function checklistSpellsOn(classSlug: string): Array<{ name: string; level: number }> {
+  const wanted = classSlug.trim().toLowerCase();
+  return (spellManifest as { spells: Array<ManifestSpell & { c?: string }> }).spells
+    .filter((spell) => classesOf(spell).includes(wanted))
+    .map((spell) => ({ name: spell.n, level: spell.l }));
 }
 
 type SpellLists = { known: string[]; prepared: string[]; cantrips?: string[] };

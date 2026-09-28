@@ -51,6 +51,25 @@ export type SpellMech = {
     variants?: string[];
     tempHp?: { base: number; perSlotLevel?: number };
   };
+  // Dice the prose cannot be read for (a garbled upcast line): the base
+  // expression at `baseLevel` and what each slot level above it adds.
+  dice?: { base: string; perSlotLevel?: string; baseLevel: number };
+  // Magic Missile: so many darts, one more for each slot level above the
+  // spell's own, each dealing `each`. They hit without a roll.
+  darts?: { count: number; perSlotLevel: number; each: string };
+  // Several attack rolls from one casting: Eldritch Blast's beams grow with
+  // the caster's level (two at 5th, three at 11th, four at 17th), Scorching
+  // Ray's rays with the slot.
+  attacks?: { count: number; perSlotLevel?: number; byCasterLevel?: boolean };
+  // Sleep: a pool of hit points rolled by the caster and no saving throw. A
+  // creature with more hit points than the pool is untouched.
+  hitPointPool?: { dice: string; perSlotLevel: string; condition: string; rounds: number };
+  // How many creatures one casting may affect, and how many more each slot
+  // level above the spell's own adds. Absent means one.
+  targets?: { count: number; perSlotLevel?: number };
+  // The creature types the spell can take hold of (Hold Person: humanoid).
+  // Absent means any.
+  targetTypes?: string[];
   // One line the tool result hands the model for the parts no engine covers.
   note?: string;
 };
@@ -79,13 +98,15 @@ export const MECH_OVERRIDES: Record<string, SpellMech> = {
   bless: {
     resolution: "buff",
     buff: { condition: "blessed", target: "allies", rounds: MINUTE },
-    note: "Up to three creatures; concentration.",
+    targets: { count: 3, perSlotLevel: 1 },
+    note: "Up to three creatures, one more per slot level above 1st; concentration.",
   },
   bane: {
     resolution: "save",
     save: "cha",
     condition: { name: "baned", rounds: MINUTE },
-    note: "Up to three targets; concentration.",
+    targets: { count: 3, perSlotLevel: 1 },
+    note: "Up to three targets, one more per slot level above 1st; concentration.",
   },
   "shield of faith": {
     resolution: "buff",
@@ -99,7 +120,7 @@ export const MECH_OVERRIDES: Record<string, SpellMech> = {
   haste: {
     resolution: "buff",
     buff: { condition: "hasted", target: "ally", rounds: MINUTE },
-    note: "When the spell ends the target loses a turn to lethargy.",
+    note: "When the spell ends the target cannot move or act until after its next turn; the server applies the lethargy.",
   },
   polymorph: {
     resolution: "buff",
@@ -116,12 +137,66 @@ export const MECH_OVERRIDES: Record<string, SpellMech> = {
     resolution: "save",
     save: "wis",
     condition: { name: "paralyzed", saveEnds: true },
+    targets: { count: 1, perSlotLevel: 1 },
+    targetTypes: ["humanoid"],
   },
   "hold monster": {
     resolution: "save",
     save: "wis",
     condition: { name: "paralyzed", saveEnds: true },
+    targets: { count: 1, perSlotLevel: 1 },
   },
+  "charm person": {
+    resolution: "save",
+    save: "wis",
+    condition: { name: "charmed", rounds: HOUR },
+    targets: { count: 1, perSlotLevel: 1 },
+    targetTypes: ["humanoid"],
+  },
+  "dominate person": {
+    resolution: "save",
+    save: "wis",
+    condition: { name: "charmed", rounds: MINUTE },
+    targetTypes: ["humanoid"],
+    note: "The caster commands the charmed creature; it saves again each time it takes damage. Concentration.",
+  },
+  "dominate beast": {
+    resolution: "save",
+    save: "wis",
+    condition: { name: "charmed", rounds: MINUTE },
+    targetTypes: ["beast"],
+    note: "The caster commands the charmed beast; it saves again each time it takes damage. Concentration.",
+  },
+  sleep: {
+    resolution: "auto",
+    hitPointPool: { dice: "5d8", perSlotLevel: "2d8", condition: "unconscious", rounds: MINUTE },
+    note: "No saving throw: creatures fall asleep from the lowest hit points up while the roll lasts. Undead and creatures immune to being charmed are not affected. A sleeper wakes when it takes damage or is shaken awake.",
+  },
+  "eldritch blast": {
+    resolution: "attack",
+    damageType: "force",
+    attacks: { count: 1, byCasterLevel: true },
+    note: "One pc_attack call for each beam: two beams at 5th level, three at 11th, four at 17th, all from the one action.",
+  },
+  "scorching ray": {
+    resolution: "attack",
+    damageType: "fire",
+    attacks: { count: 3, perSlotLevel: 1 },
+    note: "One pc_attack call for each ray: three rays, one more per slot level above 2nd, all from the one slot.",
+  },
+  "wall of fire": {
+    resolution: "save",
+    save: "dex",
+    halfOnSave: true,
+    damageType: "fire",
+    dice: { base: "5d8", perSlotLevel: "1d8", baseLevel: 4 },
+    note: "Concentration. A creature that ends its turn within 10 feet of the hot side, or enters the wall, takes the same damage again.",
+  },
+  // Spells that move or remake rather than harm. Their text mentions damage
+  // only as what a mishap does to the caster.
+  "dimension door": { resolution: "utility" },
+  teleport: { resolution: "utility" },
+  wish: { resolution: "utility" },
   barkskin: {
     resolution: "buff",
     buff: { condition: "barkskin", target: "ally", rounds: HOUR },
@@ -204,7 +279,8 @@ export const MECH_OVERRIDES: Record<string, SpellMech> = {
   "magic missile": {
     resolution: "auto",
     damageType: "force",
-    note: "Three darts, 1d4+1 each, +1 dart per slot level above 1st; they always hit.",
+    darts: { count: 3, perSlotLevel: 1, each: "1d4+1" },
+    note: "Three darts, 1d4+1 each, +1 dart per slot level above 1st; they always hit. Every dart named at one target is rolled together.",
   },
   sanctuary: {
     resolution: "buff",
@@ -294,9 +370,36 @@ export function parseSpellMech(input: { desc: string; higherLevel?: string }): S
     return { resolution: "heal" };
   }
   const damage = baseDamageDice(desc);
-  if (damage) {
+  if (damage && !damageIsTheCastersOwn(desc)) {
     const type = damageTypeFor(desc);
     return { resolution: "auto", ...(type ? { damageType: type } : {}) };
   }
   return null;
+}
+
+// Whether the only damage a text speaks of is what the caster suffers when
+// the spell goes wrong ("you and any creature traveling with you each take
+// 4d6 force damage"). That is a mishap, not what the spell does to a target.
+function damageIsTheCastersOwn(desc: string): boolean {
+  const sentences = desc.split(/(?<=[.!?])\s+/).filter((sentence) => /\d+d\d+/.test(sentence) && /damage/i.test(sentence));
+  return sentences.length > 0 && sentences.every((sentence) => /\byou\b[^.]{0,80}?\btake\b/i.test(sentence));
+}
+
+// How many attack rolls, darts or targets one casting holds: what the row
+// states at the spell's own level, more from a higher slot, and for a cantrip
+// that grows with its caster one more at 5th, 11th and 17th level.
+export function castShares(
+  mech: SpellMech | null,
+  input: { spellLevel: number; slotLevel: number | null; casterLevel: number },
+): number {
+  const rule = mech?.attacks ?? mech?.targets ?? null;
+  if (!rule) {
+    return 1;
+  }
+  if ("byCasterLevel" in rule && rule.byCasterLevel) {
+    const level = input.casterLevel;
+    return rule.count + (level >= 17 ? 3 : level >= 11 ? 2 : level >= 5 ? 1 : 0);
+  }
+  const above = Math.max(0, (input.slotLevel ?? input.spellLevel) - input.spellLevel);
+  return rule.count + (rule.perSlotLevel ?? 0) * above;
 }

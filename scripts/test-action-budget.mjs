@@ -6,8 +6,10 @@ import {
   claimOncePerTurn,
   describeBudget,
   freshBudget,
+  grantAction,
   spendAction,
   spendAttack,
+  spendCastAttack,
 } from "../src/lib/dm/action-budget.ts";
 
 let passed = 0;
@@ -111,6 +113,70 @@ test("the summary names what is left, for the DM prompt", () => {
   assert.equal(describeBudget(budget), "has nothing left to spend");
   assert.match(describeBudget({ ...make(), dashed: true }), /Dash/);
   assert.match(describeBudget({ ...make(), disengaged: true }), /disengaged/);
+});
+
+test("Haste's extra action is one weapon attack, Dash, Disengage, Hide or Use an Object", () => {
+  const hasted = () => {
+    const budget = freshBudget({ ownerId: "char-1", round: 1, attacksAllowed: 1, extraActions: 1 });
+    return spendAction(budget, "action", "dash", "Grog").budget;
+  };
+  for (const allowed of ["dash", "disengage", "hide", "use an object"]) {
+    const spent = spendAction(hasted(), "action", allowed, "Grog");
+    assert.equal(spent.ok, true, allowed);
+    assert.equal(spent.budget.extraActions, 0, allowed);
+  }
+  for (const refused of ["dodge", "help", "grapple", "shove", "casting Fire Bolt"]) {
+    const spent = spendAction(hasted(), "action", refused, "Grog");
+    assert.equal(spent.ok, false, refused);
+    assert.match(spent.error, /Haste/);
+  }
+  assert.equal(spendAttack(hasted(), "Grog").ok, true);
+});
+
+test("Action Surge grants a whole action: another Attack action, or anything else", () => {
+  let budget = make(2);
+  budget = spendAttack(budget, "Grog").budget;
+  budget = spendAttack(budget, "Grog").budget;
+  assert.equal(spendAttack(budget, "Grog").ok, false);
+  budget = grantAction(budget);
+  assert.equal(budget.grantedActions, 1);
+  assert.match(describeBudget(budget), /Action Surge/);
+  // Both swings of Extra Attack again, and then no more.
+  const third = spendAttack(budget, "Grog");
+  assert.equal(third.ok, true);
+  assert.equal(third.budget.grantedActions, 0);
+  assert.equal(attacksLeft(third.budget), 1);
+  const fourth = spendAttack(third.budget, "Grog");
+  assert.equal(fourth.ok, true);
+  assert.equal(spendAttack(fourth.budget, "Grog").ok, false);
+  // Or a Dodge, which Haste would not buy.
+  const dodge = spendAction(grantAction(budget), "action", "dodge", "Grog");
+  assert.equal(dodge.ok, true);
+  assert.equal(dodge.budget.grantedActions, 1);
+});
+
+test("a granted action reloads a loading weapon", () => {
+  let budget = { ...make(2), loadingFired: ["heavy crossbow"] };
+  budget = spendAttack(budget, "Grog").budget;
+  budget = spendAttack(budget, "Grog").budget;
+  const surged = spendAttack(grantAction(budget), "Grog");
+  assert.deepEqual(surged.budget.loadingFired, []);
+});
+
+test("an attack-roll spell is the whole action, never one swing of Extra Attack", () => {
+  const cast = spendCastAttack(make(2), "Fire Bolt", "Grog");
+  assert.equal(cast.ok, true);
+  assert.equal(cast.budget.actionUsed, true);
+  assert.equal(attacksLeft(cast.budget), 0);
+  assert.equal(spendCastAttack(cast.budget, "Fire Bolt", "Grog").ok, false);
+  assert.equal(spendAttack(cast.budget, "Grog").ok, false);
+  // After a swing the action is the Attack action's, and no spell fits in it.
+  const swung = spendAttack(make(2), "Grog").budget;
+  assert.equal(spendCastAttack(swung, "Fire Bolt", "Grog").ok, false);
+  // Action Surge buys a second casting.
+  const surged = spendCastAttack(grantAction(cast.budget), "Fire Bolt", "Grog");
+  assert.equal(surged.ok, true);
+  assert.equal(surged.budget.grantedActions, 0);
 });
 
 console.log(`test-action-budget: ${passed} passed`);

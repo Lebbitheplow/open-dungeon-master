@@ -46,10 +46,16 @@ export const RARITIES = ["common", "uncommon", "rare", "very rare", "legendary",
 export const ABILITIES = ["str", "dex", "con", "int", "wis", "cha"] as const;
 export const EFFECT_KINDS = ["ac_bonus", "ac_unarmored", "save_bonus", "set_ability", "resistance"] as const;
 
+// The ceilings are the published game's own: no magic bonus in the SRD goes
+// past +3, and no weapon a character swings rolls more than a dozen or two.
 export const GEAR_LIMITS = {
   descMax: 8_000,
   effectsMax: 6,
-  bonusMax: 5,
+  bonusMax: 3,
+  // The largest die a weapon rolls, and the most its dice and flat damage
+  // can come to on their best roll (a greatsword's 2d6 is 12).
+  damageDieMax: 12,
+  damageRollMax: 30,
   acMin: 10,
   acMax: 21,
   shieldMax: 5,
@@ -94,6 +100,26 @@ function oneOf<T extends string>(value: unknown, options: readonly T[], fallback
 
 export type Outcome<T> = { data: T } | { error: string };
 
+// Why a damage expression is more than a weapon deals, or null. Every die is
+// a d12 at most and the best possible roll stays within damageRollMax.
+export function damageProblem(dice: string): string | null {
+  let best = 0;
+  for (const term of dice.matchAll(/(\d*)d(\d+)/gi)) {
+    const count = term[1] ? Number(term[1]) : 1;
+    const sides = Number(term[2]);
+    if (sides > GEAR_LIMITS.damageDieMax) {
+      return `a weapon's die is a d${GEAR_LIMITS.damageDieMax} at most, and "${dice}" rolls a d${sides}.`;
+    }
+    best += count * sides;
+  }
+  for (const flat of dice.replace(/\d*d\d+/gi, "").matchAll(/[+-]?\d+/g)) {
+    best += Number(flat[0]);
+  }
+  return best > GEAR_LIMITS.damageRollMax
+    ? `a weapon deals ${GEAR_LIMITS.damageRollMax} at most on its best roll, and "${dice}" can roll ${best}.`
+    : null;
+}
+
 export function normalizeWeapon(raw: unknown, name: string): Outcome<SrdWeapon> {
   const source = (raw ?? {}) as Raw;
   const damage = text(source.damage, 40);
@@ -103,6 +129,10 @@ export function normalizeWeapon(raw: unknown, name: string): Outcome<SrdWeapon> 
   const [dice] = damage.split(/\s+/);
   if (!isValidExpression(dice)) {
     return { error: `"${dice}" is not a dice expression the table can roll.` };
+  }
+  const tooMuch = damageProblem(dice);
+  if (tooMuch) {
+    return { error: `${name}: ${tooMuch}` };
   }
   const properties = Array.isArray(source.properties)
     ? [...new Set(source.properties.map((p) => String(p).trim().toLowerCase()).filter((p) => (WEAPON_PROPERTIES as readonly string[]).includes(p)))]

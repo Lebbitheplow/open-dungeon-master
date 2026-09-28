@@ -1,5 +1,7 @@
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
-import { allocateSeq } from "@/lib/db/campaigns";
+import { allocateSeq, campaignSeats } from "@/lib/db/campaigns";
+import { coherentCorrection } from "@/lib/dm/correction-rules";
+import { sheetForViewer } from "@/lib/dm/sheet-view";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
 import { fullPatchSheetSchema } from "@/lib/schemas/sheet";
@@ -43,7 +45,11 @@ export async function PATCH(
     );
   }
 
-  const updated = patchSheet(sheet.id, parsed.data);
+  // Permissive, and still a sheet: a counter cannot hold more spent than it
+  // has (src/lib/dm/correction-rules.ts). What was held is said in the
+  // answer, and the audit row records what was stored.
+  const { patch, held } = coherentCorrection(parsed.data);
+  const updated = patchSheet(sheet.id, patch);
   if (!updated) {
     return Response.json({ error: "Character not found." }, { status: 404 });
   }
@@ -54,14 +60,18 @@ export async function PATCH(
     turnId: null,
     actor: "lead",
     kind: "lead_edit",
-    delta: parsed.data as Record<string, unknown>,
+    delta: patch as Record<string, unknown>,
     reason: reason || `Corrected by ${context.user.username}`,
     seq: allocateSeq(campaignId),
     before: sheet,
-    patch: parsed.data as Record<string, unknown>,
+    patch: patch as Record<string, unknown>,
   });
   publishPersisted(campaignId, "sheet_audit", { entry, characterName: sheet.name });
   publishPersisted(campaignId, "sheet_updated", { sheet: updated });
 
-  return Response.json({ sheet: updated });
+  // The lead corrects numbers; the owner's notes are still the owner's.
+  return Response.json({
+    sheet: sheetForViewer(updated, campaignSeats(context.campaign), context.user.id),
+    ...(held.length ? { held } : {}),
+  });
 }

@@ -38,15 +38,26 @@ export type Ruleset = {
 // The eight variant toggles, in the order a person reads them, with the
 // sentence each one is actually worth. Shared by the library editor, the
 // apply preview and anything that has to say what a ruleset does.
+//
+// Two of them are guidance for the narrator and nothing else: no engine
+// reads them, no number moves. Their labels say so, because a switch that
+// reads like a mechanic is a promise (NARRATED_VARIANT_RULES below).
 export const VARIANT_RULE_LABELS: Record<keyof Omit<VariantRules, "restVariant">, string> = {
   flanking: "Flanking grants advantage",
-  criticalFumbles: "Natural 1 fumbles",
+  criticalFumbles: "Natural 1 fumbles (narrated, no mechanical effect)",
   encumbrance: "Encumbrance is weighed",
-  lingeringInjuries: "Lingering injuries",
+  lingeringInjuries: "Lingering injuries (narrated, no mechanical effect)",
   powerfulCritical: "Powerful Critical (extra crit dice are maximized)",
   criticalDamageMods: "Critical Damage Mods (modifiers double on a crit)",
   ammunition: "Ammunition is counted",
 };
+
+// The switches that change what the DM is asked to describe and leave every
+// roll, hit point and condition to the ordinary rules.
+export const NARRATED_VARIANT_RULES: ReadonlyArray<keyof typeof VARIANT_RULE_LABELS> = [
+  "criticalFumbles",
+  "lingeringInjuries",
+];
 
 export const REST_VARIANT_LABELS: Record<VariantRules["restVariant"], string> = {
   standard: "Standard rests",
