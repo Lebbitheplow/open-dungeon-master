@@ -17,6 +17,10 @@ import { serverEnv } from "./server-env.ts";
 
 export const BUILTIN_STT_MODEL = serverEnv("STT_BUILTIN_MODEL", "onnx-community/whisper-base").trim();
 const DTYPE = "q8";
+// Whisper base hears many languages, but transformers.js assumes English
+// unless told otherwise. A table that plays in Italian sets
+// STT_LANGUAGE=italian (Whisper's language names or codes both work).
+const LANGUAGE = serverEnv("STT_LANGUAGE", "").trim().toLowerCase();
 // Roughly what the install pulls, for the button that offers it.
 export const BUILTIN_STT_DOWNLOAD_MB = 76;
 
@@ -43,7 +47,7 @@ export function builtinSpeechInstalled(): boolean {
 
 type Transcriber = (
   audio: Float32Array,
-  options: { chunk_length_s: number; stride_length_s: number },
+  options: { chunk_length_s: number; stride_length_s: number; language?: string; task?: string },
 ) => Promise<{ text: string } | Array<{ text: string }>>;
 
 type InstallState = {
@@ -148,7 +152,11 @@ export function installBuiltinSpeech(): BuiltinSpeechStatus {
 export async function transcribeBuiltin(samples: Float32Array): Promise<string> {
   const run = async () => {
     const pipe = await transcriber();
-    const output = await pipe(samples, { chunk_length_s: 30, stride_length_s: 5 });
+    const output = await pipe(samples, {
+      chunk_length_s: 30,
+      stride_length_s: 5,
+      ...(LANGUAGE ? { language: LANGUAGE, task: "transcribe" } : {}),
+    });
     const parts = Array.isArray(output) ? output : [output];
     return parts.map((part) => part.text).join(" ").replace(/\s+/g, " ").trim();
   };
