@@ -79,7 +79,7 @@ export function BuiltinSpeechCard() {
           </p>
         </div>
         {builtin?.installed && !installing ? (
-          <span className="reveal-pop inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-950/40 px-2.5 py-1 text-xs text-emerald-200">
+          <span className="speech-installed reveal-pop inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-950/40 px-2.5 py-1 text-xs text-emerald-200">
             <Check className="tick-in size-3.5" /> Installed
           </span>
         ) : (
