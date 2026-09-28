@@ -78,3 +78,24 @@ export function levelFromWaveform(samples: ArrayLike<number>): number {
   const rms = Math.sqrt(sum / samples.length);
   return Math.min(1, rms * 4);
 }
+
+// How this page gets words from a take. The server listens when it can:
+// "upload" sends the recording as it is, "upload-wav" sends 16 kHz WAV for
+// the built-in engine. Only when the server has no speech-to-text does the
+// device's own recognizer ("native", an app shell's) take over. "none"
+// hides the button. Capabilities not known yet read as "upload", which is
+// what every server before the built-in engine understood.
+export type DictationEngine = "upload" | "upload-wav" | "native" | "none";
+
+export function pickDictationEngine(
+  stt: { configured: boolean; wantsWav?: boolean } | null | undefined,
+  hasNative: boolean,
+): DictationEngine {
+  if (!stt) {
+    return "upload";
+  }
+  if (stt.configured) {
+    return stt.wantsWav ? "upload-wav" : "upload";
+  }
+  return hasNative ? "native" : "none";
+}

@@ -13,8 +13,11 @@ const {
   dictationFileName,
   formatElapsed,
   levelFromWaveform,
+  pickDictationEngine,
   pickRecorderType,
 } = await import("../src/lib/dictation.ts");
+const { decodeWav, encodeWav, splitForUpload, SPEECH_CHUNK_SECONDS, SPEECH_SAMPLE_RATE } = await import("../src/lib/speech-wav.ts");
+const { pickSttBackend, sttWantsWav } = await import("../src/lib/stt-logic.ts");
 const { sttProbeUrl } = await import("../src/lib/capabilities.ts");
 
 let passed = 0;
@@ -96,6 +99,85 @@ test("the meter reads silence as zero and speech as a level", () => {
 test("the capability probe asks Whisper for its model list", () => {
   assert.equal(sttProbeUrl("http://127.0.0.1:8870"), "http://127.0.0.1:8870/v1/models");
   assert.equal(sttProbeUrl("http://stt.lan:8870/"), "http://stt.lan:8870/v1/models");
+});
+
+test("the server's engine: Whisper, then built-in, then OpenAI", () => {
+  const base = { explicitWhisperUrl: "", whisperReachable: false, builtinInstalled: false, openAiKey: "" };
+  assert.equal(pickSttBackend(base), "none");
+  assert.equal(pickSttBackend({ ...base, openAiKey: "sk-test" }), "openai");
+  assert.equal(pickSttBackend({ ...base, openAiKey: "  " }), "none");
+  assert.equal(pickSttBackend({ ...base, openAiKey: "sk-test", builtinInstalled: true }), "builtin");
+  assert.equal(pickSttBackend({ ...base, builtinInstalled: true, whisperReachable: true }), "whisper");
+  // An address an admin typed is trusted: other Whisper servers may not
+  // answer the model-list probe.
+  assert.equal(pickSttBackend({ ...base, explicitWhisperUrl: "http://stt.lan:9000", builtinInstalled: true }), "whisper");
+  assert.equal(sttWantsWav("builtin"), true);
+  assert.equal(sttWantsWav("whisper"), false);
+  assert.equal(sttWantsWav("openai"), false);
+});
+
+test("the page's engine follows the server, then the device", () => {
+  assert.equal(pickDictationEngine(null, true), "upload");
+  assert.equal(pickDictationEngine(undefined, false), "upload");
+  assert.equal(pickDictationEngine({ configured: true }, true), "upload");
+  assert.equal(pickDictationEngine({ configured: true, wantsWav: true }, true), "upload-wav");
+  assert.equal(pickDictationEngine({ configured: false }, true), "native");
+  assert.equal(pickDictationEngine({ configured: false }, false), "none");
+});
+
+test("WAV goes out and comes back as the same samples", () => {
+  const samples = Float32Array.from({ length: 1600 }, (_, index) => Math.sin(index / 7) * 0.5);
+  const bytes = encodeWav(samples);
+  assert.equal(bytes.length, 44 + samples.length * 2);
+  const back = decodeWav(bytes);
+  assert.ok(back);
+  assert.equal(back.sampleRate, SPEECH_SAMPLE_RATE);
+  assert.equal(back.samples.length, samples.length);
+  for (let index = 0; index < samples.length; index += 97) {
+    assert.ok(Math.abs(back.samples[index] - samples[index]) < 1e-3, `sample ${index}`);
+  }
+  // Loud values clip rather than wrap.
+  const loud = decodeWav(encodeWav(Float32Array.of(2, -2)));
+  assert.ok(loud.samples[0] > 0.99 && loud.samples[1] < -0.99);
+});
+
+test("stereo and float WAV read as mono; anything else is refused", () => {
+  const frames = 4;
+  const bytes = new Uint8Array(44 + frames * 2 * 4);
+  const view = new DataView(bytes.buffer);
+  const text = (at, value) => [...value].forEach((char, index) => view.setUint8(at + index, char.charCodeAt(0)));
+  text(0, "RIFF"); view.setUint32(4, 36 + frames * 8, true); text(8, "WAVE"); text(12, "fmt ");
+  view.setUint32(16, 16, true); view.setUint16(20, 3, true); view.setUint16(22, 2, true);
+  view.setUint32(24, 48000, true); view.setUint32(28, 48000 * 8, true); view.setUint16(32, 8, true); view.setUint16(34, 32, true);
+  text(36, "data"); view.setUint32(40, frames * 8, true);
+  for (let frame = 0; frame < frames; frame += 1) {
+    view.setFloat32(44 + frame * 8, 0.5, true);
+    view.setFloat32(48 + frame * 8, -0.1, true);
+  }
+  const read = decodeWav(bytes);
+  assert.equal(read.sampleRate, 48000);
+  assert.equal(read.samples.length, frames);
+  assert.ok(Math.abs(read.samples[0] - 0.2) < 1e-6);
+  assert.equal(decodeWav(new TextEncoder().encode("not a wav file at all, just some text here....")), null);
+  assert.equal(decodeWav(new Uint8Array(10)), null);
+});
+
+test("a long take goes up in parts, cut at a pause", () => {
+  const rate = SPEECH_SAMPLE_RATE;
+  const short = new Float32Array(rate * 30);
+  assert.equal(splitForUpload(short).length, 1);
+  // Five minutes of "speech" with one silent half second near each limit.
+  const long = Float32Array.from({ length: rate * 300 }, (_, index) => Math.sin(index / 5) * 0.4);
+  const pauseAt = rate * (SPEECH_CHUNK_SECONDS - 3);
+  long.fill(0, pauseAt, pauseAt + rate / 2);
+  const parts = splitForUpload(long);
+  assert.equal(parts.reduce((sum, part) => sum + part.length, 0), long.length);
+  assert.ok(parts.every((part) => part.length <= rate * SPEECH_CHUNK_SECONDS));
+  assert.ok(parts.length >= 3);
+  // The first cut lands inside the pause, not at the hard limit.
+  assert.ok(parts[0].length >= pauseAt && parts[0].length <= pauseAt + rate / 2, String(parts[0].length / rate));
+  // Every part fits /api/stt's 8 MB as WAV.
+  assert.ok(encodeWav(parts[0]).length < 8 * 1024 * 1024);
 });
 
 console.log(`dictation: ${passed} checks passed`);

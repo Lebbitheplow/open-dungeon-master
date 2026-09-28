@@ -65,6 +65,15 @@ function resolveConfig(story?: TextBackendKey) {
   };
 }
 
+// The same key, lent to speech-to-text: when a server has no Whisper of its
+// own, dictation can go to OpenAI's transcription API on the key the images
+// and the story already use (on a device world, the one saved in the app).
+// No campaign in play, so only the server-wide sources count.
+export function openAiSpeechConfig(): { baseUrl: string; apiKey: string; model: string } {
+  const { baseUrl, apiKey } = resolveConfig();
+  return { baseUrl, apiKey, model: serverEnv("STT_OPENAI_MODEL", "gpt-4o-mini-transcribe") };
+}
+
 // Whether picking the "openai" backend can actually produce anything. The
 // dispatcher checks this before enqueueing, so a backend selected without a
 // key degrades to "request recorded" like the FLUX backends do.

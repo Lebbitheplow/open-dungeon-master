@@ -4,7 +4,6 @@ import { Loader2, Mic, Square, X } from "lucide-react";
 import { useRef, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { DICTATION_MAX_MS, DICTATION_WARN_MS, formatElapsed } from "@/lib/dictation";
-import { offersDictation, useCapabilities } from "@/lib/use-capabilities";
 import { useDictation } from "@/lib/use-dictation";
 
 // A field you can speak into. Wraps one textarea (or a one-line input with
@@ -15,7 +14,8 @@ import { useDictation } from "@/lib/use-dictation";
 // saved or sent on its own.
 //
 // The wrapper is always rendered so the field never remounts; only the
-// button waits on the server saying it has a speech service.
+// button waits on the server saying it can listen (or, on a server that
+// cannot, on an app shell offering the device's own recognizer).
 export function DictateField({
   children,
   onTranscript,
@@ -34,7 +34,6 @@ export function DictateField({
   // What the field is, for the button's accessible name.
   label?: string;
 }) {
-  const capabilities = useCapabilities();
   const boxRef = useRef<HTMLDivElement | null>(null);
   const dictation = useDictation({
     onTranscript: (text) => {
@@ -42,8 +41,8 @@ export function DictateField({
       settle();
     },
   });
-  const { state, hint, elapsed, busy, start, stop, cancel, meterRef, clearHint } = dictation;
-  const shown = offersDictation(capabilities);
+  const { state, hint, elapsed, partial, progress, busy, start, stop, cancel, meterRef, clearHint } = dictation;
+  const shown = dictation.available;
   const recording = state === "recording";
 
   // After the words land: scroll a tall field to its end, where they went,
@@ -116,6 +115,8 @@ export function DictateField({
           state={state}
           hint={hint}
           elapsed={elapsed}
+          partial={partial}
+          progress={progress}
           onDiscard={cancel}
           onDismiss={clearHint}
         />
@@ -128,12 +129,16 @@ function DictateStatus({
   state,
   hint,
   elapsed,
+  partial,
+  progress,
   onDiscard,
   onDismiss,
 }: {
   state: string;
   hint: string;
   elapsed: number;
+  partial: string;
+  progress: { done: number; total: number } | null;
   onDiscard: () => void;
   onDismiss: () => void;
 }) {
@@ -147,22 +152,29 @@ function DictateStatus({
   if (state === "recording") {
     const closing = elapsed >= DICTATION_WARN_MS;
     return (
-      <p role="status" className="dictate-status">
-        <span className="dictate-dot" aria-hidden="true" />
-        <span className="dictate-time">{formatElapsed(elapsed)}</span>
-        <span className={cn("min-w-0 truncate", closing && "dictate-closing")}>
-          {closing ? `Stops itself at ${formatElapsed(DICTATION_MAX_MS)}` : "Listening. Tap the square when you are done."}
-        </span>
-        <button type="button" onClick={onDiscard} className="dictate-discard">
-          Discard
-        </button>
-      </p>
+      <div role="status">
+        <p className="dictate-status">
+          <span className="dictate-dot" aria-hidden="true" />
+          <span className="dictate-time">{formatElapsed(elapsed)}</span>
+          <span className={cn("min-w-0 truncate", closing && "dictate-closing")}>
+            {closing ? `Stops itself at ${formatElapsed(DICTATION_MAX_MS)}` : "Listening. Tap the square when you are done."}
+          </span>
+          <button type="button" onClick={onDiscard} className="dictate-discard">
+            Discard
+          </button>
+        </p>
+        {/* The device's recognizer shows its words as they come; the tail
+            is what matters, so a long take shows its last line. */}
+        {partial ? <p className="dictate-partial live-in">{partial.length > 160 ? `...${partial.slice(-160)}` : partial}</p> : null}
+      </div>
     );
   }
   if (state === "transcribing") {
     return (
       <p role="status" className="dictate-status">
-        <span className="breathe">Writing down what you said...</span>
+        <span className="breathe">
+          {progress ? `Writing down what you said (part ${Math.min(progress.done + 1, progress.total)} of ${progress.total})...` : "Writing down what you said..."}
+        </span>
       </p>
     );
   }

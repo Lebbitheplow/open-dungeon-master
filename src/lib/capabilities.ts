@@ -1,5 +1,7 @@
 import { configValue, getGlobalConfig } from "@/lib/app-config";
-import { openAiImagesConfigured } from "@/lib/openai-images";
+import { openAiImagesConfigured, openAiSpeechConfig } from "@/lib/openai-images";
+import { builtinSpeechInstalled } from "@/lib/stt-builtin";
+import { pickSttBackend, sttWantsWav, type SttBackend } from "@/lib/stt-logic";
 import { configuredDefaultStorySettings } from "@/lib/runtime-defaults";
 import { serverEnv } from "@/lib/server-env";
 import { voiceConfig, type VoiceMode } from "@/lib/voice/config";
@@ -25,7 +27,9 @@ export type Capabilities = {
   utility: { configured: boolean };
   images: { configured: boolean; reachable: boolean; backend: string };
   tts: { configured: boolean; reachable: boolean };
-  stt: { configured: boolean };
+  // backend: which engine /api/stt will use; wantsWav: whether the browser
+  // must send 16 kHz WAV instead of its own recording (the built-in engine).
+  stt: { configured: boolean; backend: SttBackend; wantsWav: boolean };
   voice: { enabled: boolean; mode: VoiceMode };
 };
 
@@ -167,6 +171,10 @@ export function storyProbeHeaders(
 
 export function ttsProbeUrl(kokoroBaseUrl: string): string {
   return `${kokoroBaseUrl.replace(/\/+$/, "")}/health`;
+}
+
+function sttCapability(backend: SttBackend): Capabilities["stt"] {
+  return { configured: backend !== "none", backend, wantsWav: sttWantsWav(backend) };
 }
 
 // The Whisper service is OpenAI-shaped and answers a model list.
@@ -316,10 +324,16 @@ export async function capabilitiesSnapshot(): Promise<Capabilities> {
       configured: speechConfigured(configValue(cfg.speech.kokoroUrl, "KOKORO_URL"), ttsReachable),
       reachable: ttsReachable,
     },
-    // An explicit URL counts, like Kokoro's; so does the default address
-    // answering, which is how a stock install with odm-stt running shows
-    // the dictation buttons without anyone setting STT_URL.
-    stt: { configured: speechConfigured(configValue(cfg.speech.sttUrl, "STT_URL"), sttReachable) },
+    // Whisper (an explicit URL, or the default address answering), then the
+    // built-in engine, then an OpenAI key: see src/lib/stt-logic.ts.
+    stt: sttCapability(
+      pickSttBackend({
+        explicitWhisperUrl: configValue(cfg.speech.sttUrl, "STT_URL"),
+        whisperReachable: sttReachable,
+        builtinInstalled: builtinSpeechInstalled(),
+        openAiKey: openAiSpeechConfig().apiKey,
+      }),
+    ),
     voice: { enabled: voice.enabled, mode: voice.mode },
   };
 }

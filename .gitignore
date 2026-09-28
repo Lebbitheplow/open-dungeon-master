@@ -25,6 +25,7 @@
 
 # local model cache (transformers.js auto-downloads on first run)
 /models/embeddings/
+/models/speech/
 
 # production
 /build

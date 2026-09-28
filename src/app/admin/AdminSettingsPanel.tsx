@@ -12,6 +12,7 @@ import { AdminInvitesSection } from "@/app/admin/AdminInvitesSection";
 import { AdminNetworkSections } from "@/app/admin/AdminNetworkSections";
 import { AdminBackupSection } from "@/app/admin/AdminBackupSection";
 import { BackendProbe } from "@/app/admin/BackendProbe";
+import { BuiltinSpeechCard } from "@/app/admin/BuiltinSpeechCard";
 import { AdminHarnessSection } from "@/app/admin/AdminHarnessSection";
 import {
   Field,
@@ -530,6 +531,7 @@ export function AdminSettingsPanel() {
               placeholder={env.sttUrl}
             />
           </Field>
+          <BuiltinSpeechCard />
         </div>
       </PageSection>
 

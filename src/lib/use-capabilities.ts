@@ -16,7 +16,8 @@ export type ClientCapabilities = {
   utility: { configured: boolean };
   images: { configured: boolean; reachable: boolean; backend: string };
   tts: { configured: boolean; reachable: boolean };
-  stt: { configured: boolean };
+  // backend and wantsWav arrive from servers newer than 0.23.11.
+  stt: { configured: boolean; backend?: "whisper" | "builtin" | "openai" | "none"; wantsWav?: boolean };
   voice: { enabled: boolean; mode: string };
 };
 

@@ -466,6 +466,15 @@
     transition: color var(--dur-quick) var(--ease-snap), background-color var(--dur-quick) var(--ease-snap);
   }
   .dictate-discard:hover { color: var(--color-amber-100); background: rgba(41, 37, 36, 0.7); }
+  .dictate-partial {
+    margin-top: 2px;
+    padding-left: 13px;
+    font-size: 12px;
+    line-height: 1.1rem;
+    font-style: italic;
+    color: var(--color-stone-300);
+  }
+  html[data-theme="light"] .dictate-partial { color: #4a3b27; }
   .dictate-time { font-family: var(--font-mono, ui-monospace, monospace); font-variant-numeric: tabular-nums; color: var(--color-red-200); }
   .dictate-closing { color: var(--color-amber-300); }
   .dictate-error { color: var(--color-red-400); }
