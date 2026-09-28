@@ -1024,8 +1024,12 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         continue;
       }
       // A spotlight with no narration yet gets one forced-narration call so
-      // the turn never lands empty.
-      if (spotlightSet && !turn.narrationParts.length && !finalCall) {
+      // the turn never lands empty. The same goes for a question put to a
+      // player during a fight: no spotlight is set there (the initiative
+      // order owns the floor), so a reply that only called
+      // request_player_input used to close the turn with no narration.
+      const askedInFight = inputCalls.length > 0 && !spotlightSet && fightOwnsFloor(campaignId);
+      if ((spotlightSet || askedInFight) && !turn.narrationParts.length && !finalCall) {
         turn.conversation.push({
           role: "assistant",
           content: visibleText || "",
@@ -1037,7 +1041,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
             ...(inputCall.id ? { tool_call_id: inputCall.id } : {}),
             content: JSON.stringify({
               ok: true,
-              note: "The floor is theirs. Narrate the moment and stop.",
+              note: askedInFight
+                ? "The initiative order keeps the floor. Narrate the moment and stop."
+                : "The floor is theirs. Narrate the moment and stop.",
             }),
           });
         }
