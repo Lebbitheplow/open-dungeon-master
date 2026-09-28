@@ -5,12 +5,10 @@ on 2026-09-27 against server 0.23.10, and the repair that followed on the
 `rules-enforcement` branch. The audit added suites that state each rule; the
 repair changed the engine until every one of them holds.
 
-**Status after the repair: 81 suites, 1741 rules enforced, 1 open gap**, with
-the content pack and without it. The open gap
-(`starting-kit-from-training-not-class-table`) was found while looking at the
-builder running after the repair: the free starting kit is derived from a
-class's training rather than the SRD's class equipment tables. The ledger is empty; the per-area reports in
-`rules-enforcement/` describe the state at the audit, before the repair.
+**Status after the repair: 81 suites, 1764 rules enforced, 0 open gaps**, with
+the content pack and without it (1704 without, where pack-only rules do not
+run). The ledger is empty; the per-area reports in `rules-enforcement/`
+describe the state at the audit, before the repair.
 
 - The list of open gaps: [`rules-enforcement-ledger.md`](rules-enforcement-ledger.md), generated.
 - Root causes and fix notes per area: [`rules-enforcement/`](rules-enforcement/).
