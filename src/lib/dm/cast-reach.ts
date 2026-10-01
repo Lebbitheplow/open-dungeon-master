@@ -12,6 +12,7 @@ import type { Campaign } from "@/lib/db/campaigns";
 import { spellDamageFor, spellFactsFor } from "@/lib/content";
 import type { AttackProfile } from "@/lib/dm/attack-logic";
 import { tilesBetween, wallBetween } from "@/lib/dm/attack-spatial";
+import { globeProblem } from "@/lib/dm/zone-rules";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { SpellFacts } from "@/lib/srd/spell-facts";
@@ -63,7 +64,8 @@ export function spellReachProblem(input: {
   if (apart > 1 && wallBetween(input.encounterId, input.casterId, input.targetId)) {
     return `${input.targetName} is behind total cover from ${input.casterName}: a spell needs a clear path to its target. They must move to a clear line first or pick another target. No slot was spent.`;
   }
-  return null;
+  // A Globe of Invulnerability around the target (src/lib/dm/zone-rules.ts).
+  return globeProblem(input.encounterId, input.casterId, input.targetId, input.targetName, facts.name, facts.level);
 }
 
 // An attack-roll spell's profile held to the spell: its own range in feet

@@ -13,10 +13,12 @@ import { searchItems } from "@/lib/content";
 import { rollExpression } from "@/lib/dice";
 import { grantItemMath, removeItemMath } from "@/lib/dm/mutation-math";
 import { resolveRollExpression, resolveSheetRef, type RollArgs } from "@/lib/dm/rolls";
+import { rollExtrasFor, spendRollCarriers } from "@/lib/dm/forced-save";
+import { keepsFullValue, listPriceCp } from "@/lib/dm/trade-value";
+import { capacityProblem } from "@/lib/dm/load-rules";
 import {
   addStock,
   askingPriceCp,
-  costToCopper,
   findStockLine,
   haggleDc,
   haggleStep,
@@ -96,7 +98,7 @@ export const shopTools: ToolDef[] = [
           shop: { type: "string" },
           item: { type: "string" },
           qty: { type: "integer", minimum: 1, maximum: 99 },
-          priceCp: { type: "integer", minimum: 1, description: "Only for an item the content pack has no price for: what the keeper pays each, in copper." },
+          priceCp: { type: "integer", minimum: 1, maximum: 10000000, description: "Only for an item the content pack has no price for: what the keeper pays each, in copper (at most 100,000 gp)." },
         },
         required: ["characterId", "shop", "item"],
       },
@@ -252,6 +254,11 @@ export function handleBuyItem(campaign: Campaign, rawArguments: string): Record<
   }
   const paid = addCopper(purse, -total);
   const items = grantItemMath(sheet.equipment, line.itemName, args.qty);
+  // Strength x 15 pounds is all a character can carry (src/lib/dm/load-rules.ts).
+  const tooHeavy = capacityProblem(sheet, items.equipment, line.itemName, paid.purse.gold);
+  if (tooHeavy) {
+    return { error: `${tooHeavy} Nothing was bought.` };
+  }
   const patch = { gold: paid.purse.gold, copper: paid.purse.copper, equipment: items.equipment };
   patchSheet(sheet.id, patch);
   updateShop(shop.id, { stock: takeStock(shop.stock, line.itemName, args.qty) ?? shop.stock });
@@ -262,12 +269,15 @@ export function handleBuyItem(campaign: Campaign, rawArguments: string): Record<
   return { ok: true, bought: line.itemName, qty: args.qty, paid: formatCopper(total), purse: formatCopper(paid.purse.gold * 100 + paid.purse.copper) };
 }
 
-const sellSchema = buySchema.extend({ priceCp: z.coerce.number().int().min(1).optional() });
+// A price the table cannot check is still held to the ceiling purchase keeps
+// (100,000 gp a unit), so a model's number cannot mint a fortune.
+const MAX_UNPRICED_CP = 10_000_000;
+const sellSchema = buySchema.extend({ priceCp: z.coerce.number().int().min(1).max(MAX_UNPRICED_CP).optional() });
 
 export function handleSellItem(campaign: Campaign, rawArguments: string): Record<string, unknown> {
   const args = parse(sellSchema, rawArguments);
   if (!args) {
-    return { error: "Invalid arguments: sell_item needs characterId, shop and item." };
+    return { error: "Invalid arguments: sell_item needs characterId, shop and item, and a priceCp of at most 10000000 (100,000 gp) when one is given." };
   }
   const sheet = resolveSheet(campaign, args.characterId);
   if (!sheet) {
@@ -285,9 +295,12 @@ export function handleSellItem(campaign: Campaign, rawArguments: string): Record
     return { error: `${sheet.name} does not carry "${args.item}".` };
   }
   const carried = sheet.equipment.find((item) => item.name.toLowerCase() === args.item.toLowerCase())?.name ?? args.item;
-  const known = searchItems({ q: carried, limit: 5 }).find((item) => item.name.toLowerCase() === carried.toLowerCase());
-  const listCp = known ? costToCopper(known.cost) : null;
-  const each = listCp !== null ? offerPriceCp(listCp) : args.priceCp ?? null;
+  // Gems, jewelry, art and trade goods keep their full value (SRD 5.1,
+  // Selling Treasure); a treasure named with its value is priced by it.
+  // A value written into the name prices only treasure; "Longsword (15 gp)"
+  // is priced as a longsword (src/lib/dm/trade-value.ts).
+  const listCp = listPriceCp(carried);
+  const each = listCp !== null ? (keepsFullValue(carried) ? listCp : offerPriceCp(listCp)) : args.priceCp ?? null;
   if (each === null) {
     return { error: `The pack has no price for "${carried}"; pass priceCp for what the keeper pays each.` };
   }
@@ -321,12 +334,17 @@ export function handleHaggle(campaign: Campaign, rawArguments: string): Record<s
   if (shop.haggledBy.includes(sheet.id)) {
     return { error: `${sheet.name} already tried their luck with ${shop.name}'s keeper.` };
   }
-  const resolved = resolveRollExpression({ kind: "skill_check", skill: "persuasion" } as unknown as RollArgs, sheet, {
-    encumbrance: campaign.gameSettings.variantRules.encumbrance,
-  });
+  // Held carriers and lasting effects ride the haggling check, and the
+  // carrier is spent by it.
+  const resolved = resolveRollExpression(
+    { kind: "skill_check", skill: "persuasion" } as unknown as RollArgs,
+    sheet,
+    rollExtrasFor(campaign, sheet, "skill_check"),
+  );
   if ("error" in resolved || "autoFail" in resolved) {
     return { error: "error" in resolved ? resolved.error : `${sheet.name} cannot make that check.` };
   }
+  spendRollCarriers(campaign.id, sheet.id, resolved.spendInspiration);
   const dc = haggleDc(shop.size);
   const rolled = rollExpression(resolved.expression);
   const roll = insertRoll({ campaignId: campaign.id, characterId: sheet.id, requestedBy: "dm", kind: "skill_check", detail: `${sheet.name}: haggling at ${shop.name}`, dc, result: rolled });

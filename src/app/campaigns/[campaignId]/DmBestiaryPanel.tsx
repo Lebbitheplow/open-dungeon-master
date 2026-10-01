@@ -1,6 +1,7 @@
 "use client";
 
 import { EmptyState } from "@/components/EmptyState";
+import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { MonsterTile, ui } from "@/lib/ui";
@@ -171,8 +172,20 @@ export function DmBestiaryPanel({
     }
   }
 
-  async function remove(id: string) {
-    await fetch(`/api/campaigns/${campaignId}/dm/bestiary/${id}`, { method: "DELETE" });
+  // A deleted monster is gone from every prepared fight that names it, so
+  // it asks first, and a refusal says why instead of quietly doing nothing.
+  async function remove(monster: Monster) {
+    const id = monster.id;
+    if (!(await appConfirm(`Delete ${monster.draft.name}? A prepared fight that names it will no longer find it.`, { actionLabel: "Delete" }))) {
+      return;
+    }
+    setError("");
+    const response = await fetch(`/api/campaigns/${campaignId}/dm/bestiary/${id}`, { method: "DELETE" }).catch(() => null);
+    if (!response?.ok) {
+      const payload = (await response?.json().catch(() => ({}))) as { error?: string } | undefined;
+      setError(payload?.error ?? (response ? "That could not be deleted." : "Could not reach the server."));
+      return;
+    }
     if (openId === id) {
       setOpenId(null);
       setDraft(null);
@@ -231,7 +244,7 @@ export function DmBestiaryPanel({
             genre={genre}
             onOpen={open}
             onDuplicate={(monster) => void duplicate(monster)}
-            onDelete={(monster) => void remove(monster.id)}
+            onDelete={(monster) => void remove(monster)}
           />
         </div>
 
@@ -276,7 +289,7 @@ export function DmBestiaryPanel({
           const items: ContextMenuItem[] = [
             { id: "open", label: isOpen ? "Close the stat block" : "Open the stat block", glyph: "system-bestiary", onSelect: toggle },
             { id: "duplicate", label: `Duplicate ${monster.draft.name}`, glyph: "system-homebrew", disabled: busy, onSelect: () => void duplicate(monster) },
-            { id: "delete", label: `Delete ${monster.draft.name}`, glyph: "quest-failed", tone: "danger", separated: true, onSelect: () => void remove(monster.id) },
+            { id: "delete", label: `Delete ${monster.draft.name}`, glyph: "quest-failed", tone: "danger", separated: true, onSelect: () => void remove(monster) },
           ];
           return (
             <ContextMenu key={monster.id} items={items} label={monster.draft.name} className={cn(ui.card, "rounded-lg")}>

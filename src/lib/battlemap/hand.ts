@@ -7,7 +7,11 @@
 // Pure and database-free: scripts/test-hand.mjs drives every branch. What a
 // card says once it is played lives next door in hand-play.ts.
 import { ragingMeleeBonus, weaponAttackProfile, weaponOf } from "@/lib/dm/attack-logic";
+import { magicWeaponOfRow, type WeaponGear } from "@/lib/dm/gear-attack";
+import { bonusRouteFor, kiLeft, type BonusRoute, type MoveAction } from "@/lib/dm/bonus-routes";
 import { effectiveSpeed } from "@/lib/dm/condition-logic";
+import { martialArtsApplies } from "@/lib/dm/pc-attack-options";
+import { attackOptionsFor, bonusStrikeCards, fastHandsCards, kiCards } from "@/lib/battlemap/hand-class";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { computeSheetDerived } from "@/lib/srd";
 import { AMMO_LABELS, ammoKindForWeapon, findAmmo } from "@/lib/srd/ammunition";
@@ -22,7 +26,6 @@ import {
   addFlat,
   costGate,
   gated,
-  hasFeature,
   lowestSlot,
   signed,
   slotLine,
@@ -37,22 +40,30 @@ import {
   type HandTurn,
 } from "@/lib/battlemap/hand-core";
 import { featureCards, spellCards, spellNames } from "@/lib/battlemap/hand-spells";
+import { intimidatingPresenceCards, subclassSpendCards } from "@/lib/battlemap/hand-subclass";
+import { spellHoldOf } from "@/lib/battlemap/hand-escape";
 
 export * from "@/lib/battlemap/hand-core";
 
 // ---- attacks ----
 
-type Carried = { name: string; srd: SrdWeapon; qty: number };
+type Carried = { name: string; srd: SrdWeapon; qty: number; gear: WeaponGear | null };
 
-function carriedWeapons(sheet: CharacterSheet): Carried[] {
+// Every carried row the engine would swing, resolved as resolveAttackWeapon
+// resolves a named weapon: a homebrew block first, then a magic weapon's base
+// item and riders (a Berserker Axe is a battleaxe with its +1 and its
+// attunement judged), then the SRD table by name.
+export function carriedWeapons(sheet: Pick<CharacterSheet, "equipment">): Carried[] {
   const seen = new Set<string>();
   const out: Carried[] = [];
   for (const item of sheet.equipment) {
-    const srd = weaponOf(item) ?? matchWeapon(item.name);
+    const own = weaponOf(item);
+    const magic = own ? null : magicWeaponOfRow(item);
+    const srd = own ?? (magic?.gear ? magic.srd : null) ?? matchWeapon(item.name);
     const key = item.name.trim().toLowerCase();
     if (!srd || seen.has(key)) continue;
     seen.add(key);
-    out.push({ name: item.name.trim(), srd, qty: item.qty });
+    out.push({ name: item.name.trim(), srd, qty: item.qty, gear: magic?.gear ?? null });
   }
   return out;
 }
@@ -67,7 +78,9 @@ function attackCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders
   const derived = computeSheetDerived(sheet);
   const profs = sheet.proficiencies.weapons;
   const allowed = 1 + riders.extraAttacks;
-  const standing = standingGate(sheet, turn);
+  const standing = standingGate(sheet, turn, "attack");
+  // Martial Arts only with no armor and no shield (the engine's own gate).
+  const martialArts = martialArtsApplies(sheet);
   const onHit = conditionOnHitDice(sheet.conditions);
   const cards: HandCard[] = [];
   const base = {
@@ -105,7 +118,7 @@ function attackCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders
             intent: { card: "attack", weapon: attack.name },
           },
           standing,
-          attackGate(turn, allowed),
+          attackGate(turn, allowed, sheet),
         ),
       );
     }
@@ -113,8 +126,13 @@ function attackCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders
   }
 
   const carried = carriedWeapons(sheet);
-  const build = (name: string, srd: SrdWeapon | null, offHand: boolean): HandCard => {
-    const profile = weaponAttackProfile(derived, profs, { displayName: name, srd, unarmed: srd === null }, { riders, offHand });
+  const build = (name: string, srd: SrdWeapon | null, offHand: boolean, gear: WeaponGear | null = null): HandCard => {
+    const profile = weaponAttackProfile(
+      derived,
+      profs,
+      { displayName: name, srd, unarmed: srd === null, ...(gear ? { gear } : {}) },
+      { riders, offHand, martialArts },
+    );
     const rage = ragingMeleeBonus(sheet, profile);
     const damage = `${addFlat(profile.damageExpression, rage)}${onHit.suffix}`;
     const notes: string[] = [];
@@ -146,26 +164,29 @@ function attackCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders
       damageType: profile.damageType,
       melee: !profile.ranged,
       intent: { card: "attack", weapon: name, ...(offHand ? { offHand: true } : {}) },
+      ...(offHand ? {} : { options: attackOptionsFor(sheet, turn, profile, derived, { allowed }) }),
     };
     const ammoGate: Gate =
       empty && options.trackAmmo ? { reason: `Out of ${AMMO_LABELS[ammoKind!]}.`, spent: true } : null;
     if (offHand) {
       const opened: Gate =
         turn.attacksMade > 0 ? null : { reason: "Attack with a light weapon first; the off-hand swing follows it.", spent: false };
-      return gated(card, standing, costGate("bonus", turn, sheet), opened);
+      return gated(card, standing, costGate("bonus", turn, sheet, `an off-hand attack with ${name}`), opened);
     }
-    return gated(card, standing, attackGate(turn, allowed), ammoGate);
+    return gated(card, standing, attackGate(turn, allowed, sheet, { unarmed: srd === null }), ammoGate);
   };
 
-  for (const weapon of carried) cards.push(build(weapon.name, weapon.srd, false));
+  for (const weapon of carried) cards.push(build(weapon.name, weapon.srd, false, weapon.gear));
   cards.push(build("Unarmed strike", null, false));
+  // The bonus-action strikes a feature grants (Martial Arts, Frenzy).
+  cards.push(...bonusStrikeCards(sheet, turn, riders, carried.map((weapon) => ({ name: weapon.name, srd: weapon.srd }))));
 
   // Two-weapon fighting: two light melee weapons in hand buy a bonus swing.
   const light = carried.filter((weapon) => weapon.srd.kind === "melee" && weapon.srd.properties?.includes("light"));
   const lightCount = light.reduce((sum, weapon) => sum + weapon.qty, 0);
   if (lightCount >= 2) {
     const second = light.length > 1 ? light[1] : light[0];
-    cards.push(build(second.name, second.srd, true));
+    cards.push(build(second.name, second.srd, true, second.gear));
   }
   return cards;
 }
@@ -180,7 +201,7 @@ function superiorityDie(level: number): string {
 }
 
 function riderCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders): HandCard[] {
-  const standing = standingGate(sheet, turn);
+  const standing = standingGate(sheet, turn, "attack");
   const cards: HandCard[] = [];
   const base = {
     type: "rider" as const,
@@ -254,43 +275,56 @@ function riderCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders)
 
 // ---- the basics ----
 
-const BASICS: Array<{ id: BasicActionId; name: string; rules: string; target: HandTarget; compose?: boolean }> = [
+const BASICS: Array<{ id: BasicActionId; name: string; rules: string; target: HandTarget; compose?: boolean; asks?: "trigger" }> = [
   { id: "dodge", name: "Dodge", rules: "Attacks against you roll at disadvantage until your next turn.", target: "none" },
   { id: "dash", name: "Dash", rules: "Double your movement this turn.", target: "none" },
   { id: "disengage", name: "Disengage", rules: "Your movement provokes no opportunity attacks this turn.", target: "none" },
-  { id: "help", name: "Help", rules: "An ally gets advantage on their next check or attack.", target: "ally" },
+  { id: "help", name: "Help", rules: "An ally gets advantage on their next attack against the creature you name, or on a check.", target: "ally" },
   { id: "hide", name: "Hide", rules: "A Stealth check to slip out of sight.", target: "none" },
-  { id: "ready", name: "Ready", rules: "Name a trigger; your reaction fires when it happens.", target: "none", compose: true },
+  { id: "search", name: "Search", rules: "Perception or Investigation to find what is hidden.", target: "none" },
+  { id: "escape", name: "Escape", rules: "Athletics or Acrobatics against the grappler's Athletics.", target: "none" },
+  { id: "ready", name: "Ready", rules: "Name a trigger; when it happens your reaction makes the attack.", target: "none", asks: "trigger" },
   { id: "grapple", name: "Grapple", rules: "Athletics against their Athletics or Acrobatics. Takes the place of one attack.", target: "enemy" },
   { id: "shove", name: "Shove", rules: "Knock them prone or push them 5 ft. Takes the place of one attack.", target: "enemy" },
   { id: "use-object", name: "Use an object", rules: "Drink, pull, light, throw: say what.", target: "none", compose: true },
   { id: "end-turn", name: "End turn", rules: "Done with your action, movement and bonus action.", target: "none" },
 ];
 
+// The moves a feature lets a character make as the bonus action, by the
+// engine's own reading of the sheet (bonus-routes.ts, which take_action asks).
+const BONUS_MOVES: MoveAction[] = ["dash", "disengage", "hide", "dodge"];
+
 function basicCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders): HandCard[] {
   const derived = computeSheetDerived(sheet);
-  const cunning = hasFeature(sheet, "cunning action");
   const allowed = 1 + riders.extraAttacks;
-  const standing = standingGate(sheet, turn);
-  return BASICS.map((basic) => {
+  const grappled = sheet.conditions.some((entry) => entry.trim().toLowerCase() === "grappled");
+  // A spell's hold (Web, Maze, Irresistible Dance): take_action escape breaks
+  // it when no grapple does (src/lib/dm/spell-escape.ts).
+  const hold = grappled ? null : spellHoldOf(sheet);
+  const cards: HandCard[] = [];
+  const athletics = derived.skills.athletics ?? derived.abilityMods.str;
+  const make = (basic: (typeof BASICS)[number], route: BonusRoute | null): HandCard => {
     const contest = basic.id === "grapple" || basic.id === "shove";
-    // Cunning Action moves Dash, Disengage and Hide to the bonus action once
-    // the action is gone.
-    const quick = cunning && (basic.id === "dash" || basic.id === "disengage" || basic.id === "hide");
-    const cost: HandCost =
-      basic.id === "end-turn" ? "free" : quick && turn.actionUsed && !turn.bonusUsed ? "bonus" : "action";
-    const athletics = derived.skills.athletics ?? derived.abilityMods.str;
-    const card: HandCard = {
-      id: `basic:${basic.id}`,
+    const cost: HandCost = basic.id === "end-turn" ? "free" : route ? "bonus" : "action";
+    const escape = basic.id === "escape";
+    const ki = route?.ki ? kiLeft(sheet) : null;
+    return {
+      id: route ? `basic:${basic.id}:bonus` : `basic:${basic.id}`,
       type: "basic",
-      name: basic.name,
+      name: route ? `${route.feature}: ${basic.name}` : basic.name,
       cost,
-      range: contest ? "5 ft" : basic.id === "help" ? "5 ft" : "Self",
-      dice: contest ? `Athletics ${signed(athletics)}` : basic.id === "hide" ? `Stealth ${signed(derived.skills.stealth ?? derived.abilityMods.dex)}` : "",
-      roll: contest ? "contested check" : basic.id === "hide" ? "skill check" : "no roll",
-      rules: quick ? `${basic.rules} Cunning Action: also a bonus action.` : basic.rules,
-      resource: "",
-      condition: basic.id === "dodge" ? "Dodging" : basic.id === "grapple" ? "Grappled" : basic.id === "shove" ? "Prone" : "",
+      range: contest || basic.id === "help" ? "5 ft" : "Self",
+      dice: contest || escape
+        ? `Athletics ${signed(athletics)}`
+        : basic.id === "hide"
+          ? `Stealth ${signed(derived.skills.stealth ?? derived.abilityMods.dex)}`
+          : basic.id === "search"
+            ? `Perception ${signed(derived.skills.perception ?? derived.abilityMods.wis)}`
+            : "",
+      roll: contest || escape ? "contested check" : basic.id === "hide" || basic.id === "search" ? "skill check" : "no roll",
+      rules: route ? `${basic.rules} ${route.feature}: a bonus action${route.ki ? ` for ${route.ki} ki` : ""}.` : basic.rules,
+      resource: route?.ki && sheet.resources.ki ? `Ki ${ki ?? 0}/${sheet.resources.ki.max}` : "",
+      condition: basic.id === "dodge" ? "Dodging" : basic.id === "grapple" ? "Grappled" : basic.id === "shove" ? "Prone" : basic.id === "ready" ? "Readied" : "",
       icon: { kind: "action", key: basic.id },
       target: basic.target,
       toHit: null,
@@ -302,18 +336,51 @@ function basicCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders)
       disabled: null,
       spent: false,
       compose: Boolean(basic.compose),
-      intent: { card: "basic", action: basic.id },
+      ...(basic.asks ? { asks: basic.asks } : {}),
+      intent: { card: "basic", action: basic.id, ...(route ? { bonus: true } : {}) },
     };
+  };
+  for (const basic of BASICS) {
+    // Escape is only there to take while something holds you.
+    if (basic.id === "escape" && !grappled && !hold) continue;
+    const plain = make(basic, null);
+    const card: HandCard =
+      basic.id === "escape" && hold
+        ? { ...plain, name: `Escape: ${hold.spell}`, rules: hold.rules, dice: hold.dice, roll: hold.roll, condition: "" }
+        : plain;
     if (basic.id === "end-turn") {
       // Ending the turn is always open to whoever holds it, down or not.
-      return turn.myTurn ? card : gated(card, standing);
+      cards.push(turn.myTurn ? card : gated(card, standingGate(sheet, turn, "free")));
+      continue;
     }
+    const contest = basic.id === "grapple" || basic.id === "shove";
     const still: Gate =
       basic.id === "dash" && effectiveSpeed(sheet.conditions, sheet.speed) === 0
         ? { reason: "Your speed is 0, so a Dash goes nowhere.", spent: false }
         : null;
-    return gated(card, standing, contest ? attackGate(turn, allowed) : costGate(cost, turn, sheet), still);
-  });
+    cards.push(
+      gated(
+        card,
+        standingGate(sheet, turn, contest ? "attack" : "action"),
+        contest ? attackGate(turn, allowed, sheet, { hasteOk: false }) : costGate("action", turn, sheet, basic.name),
+        still,
+      ),
+    );
+    // The same move as the bonus action, where a feature allows it: Cunning
+    // Action before the action as well as after it, Step of the Wind and
+    // Patient Defense for a point of ki.
+    const route = (BONUS_MOVES as string[]).includes(basic.id) ? bonusRouteFor(sheet, basic.id as MoveAction) : null;
+    if (route) {
+      const kiGate: Gate =
+        route.ki > 0 && (kiLeft(sheet) ?? 0) < route.ki
+          ? { reason: `${sheet.name} has no ki point left for ${route.feature}. It comes back after a rest.`, spent: true }
+          : null;
+      cards.push(
+        gated(make(basic, route), standingGate(sheet, turn, "bonus"), costGate("bonus", turn, sheet, `${route.feature} (${basic.name})`), kiGate, still),
+      );
+    }
+  }
+  return cards;
 }
 
 // ---- the hand ----
@@ -322,13 +389,39 @@ function basicCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders)
 // the basics every character has, so a level 1 commoner still holds a hand.
 export function deriveHand(sheet: CharacterSheet, turn: HandTurn = FRESH_TURN, options: HandOptions = {}): HandCard[] {
   const riders = combatRiders(sheet);
+  const spells = spellCards(sheet, turn, riders, options);
+  const features = featureCards(sheet, turn);
+  const taken = new Set(features.map((card) => spellKey(card.name)));
   return [
     ...attackCards(sheet, turn, riders, options),
     ...riderCards(sheet, turn, riders),
-    ...spellCards(sheet, turn, riders, options),
-    ...featureCards(sheet, turn),
-    ...basicCards(sheet, turn, riders),
+    ...spells,
+    ...features,
+    ...intimidatingPresenceCards(sheet, turn),
+    ...subclassSpendCards(sheet, turn, taken),
+    ...kiCards(sheet, turn),
+    ...basicCards(sheet, turn, riders).map((card) => (card.id === "basic:ready" ? withReadySpells(card, spells) : card)),
+    ...fastHandsCards(sheet, turn),
   ];
+}
+
+// Ready may hold a spell instead of an attack (take_action ready with spell
+// and level): the engine casts it now, slot and concentration, and releases
+// it with the reaction when the trigger comes. The spells offered are the
+// hand's own one-action spell cards that the cast guard would take now.
+function withReadySpells(card: HandCard, spells: HandCard[]): HandCard {
+  const ready = spells.filter(
+    (spell) => spell.intent.card === "spell" && spell.cost === "action" && !spell.disabled,
+  );
+  if (!ready.length) return card;
+  const levels: Record<string, number> = {};
+  const options: NonNullable<HandCard["choice"]>["options"] = [{ value: "", label: "An attack" }];
+  for (const spell of ready) {
+    if (spell.intent.card !== "spell") continue;
+    options.push({ value: spell.name, label: spell.name, note: spell.resource });
+    if (spell.intent.slotLevel) levels[spell.name] = spell.intent.slotLevel;
+  }
+  return { ...card, choice: { arg: "readySpell", label: "Ready", options, fallback: "", levels } };
 }
 
 // The spells the component has to look up before the hand is complete.

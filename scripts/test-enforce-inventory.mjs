@@ -304,13 +304,14 @@ await test("a heavy load puts disadvantage on Strength, Dexterity and Constituti
   assert.equal((await weighed.kit.swing(weighed.porter.id, { weapon: "Mace" }, 15, 4)).d20s.length, 1);
 });
 
-await test("ODM's rule: a grant past the carrying capacity is kept, with the heavy penalties", async () => {
-  // SRD 5.1 makes STR x 15 the most a character can carry at all. ODM does
-  // not refuse a grant the story already made (encumbrance.ts overCapacity).
+await test("a grant past the carrying capacity (Strength x 15) is refused, and up to it the heavy penalties hold", async () => {
+  // SRD 5.1, Lifting and Carrying: STR x 15 is the most a character can
+  // carry at all (src/lib/dm/load-rules.ts capacityProblem). This pinned
+  // ODM's old rule (the grant kept) until last-explore made it the SRD's.
   weighed.carry(149);
   const granted = await weighed.table.invoke("grant_item", { characterId: weighed.porter.id, name: "Leather", qty: 1 });
-  assert.equal(granted.ok, true);
-  assert.equal(weighed.table.sheet(weighed.porter.id).equipment.some((item) => item.name === "Leather"), true);
+  assert.equal(granted.ok, false, "10 lb of leather was granted onto 149 lb at a 150 lb capacity");
+  assert.equal(weighed.table.sheet(weighed.porter.id).equipment.some((item) => item.name === "Leather"), false);
   assert.equal(weighed.speed(), 10);
 });
 
@@ -318,12 +319,16 @@ await weighed.kit.endFight();
 
 const unweighed = await loadTable(false);
 
-await test("with the variant off the same load slows nobody and weighs on no roll", async () => {
-  unweighed.carry(149, 5000);
+await test("with the variant off the same load slows nobody and weighs on no roll, until it passes the carrying capacity", async () => {
+  // 149 lb, within the 150 lb capacity (the pin carried 5000 gp more, 249 lb
+  // in all, past the capacity, where the standard rule now slows to 5 feet).
+  unweighed.carry(149, 0);
   assert.equal(unweighed.speed(), 30);
   assert.equal(await unweighed.d20s({ kind: "ability_check", ability: "str" }), 1);
   assert.equal(await unweighed.d20s({ kind: "saving_throw", ability: "con" }), 1);
   assert.equal((await unweighed.kit.swing(unweighed.porter.id, { weapon: "Mace" }, 15, 4)).d20s.length, 1);
+  unweighed.carry(149, 5000);
+  assert.equal(unweighed.speed(), 5, "249 lb on a 150 lb capacity did not slow to 5 feet");
 });
 
 await unweighed.kit.endFight();

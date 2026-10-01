@@ -45,7 +45,9 @@ const rolls = (world) => listRecentRolls(world.campaignId, 100);
 await test("the turn loop rolls through the shared request_roll and rolls nothing itself", () => {
   const source = fs.readFileSync(new URL("../src/lib/dm/turn.ts", import.meta.url), "utf8");
   assert.match(source, /handleRequestRoll\(/);
-  assert.match(source, /toolCallId: rollCall\.id \?\? null/);
+  // The loop resolves a reply's calls in model order (resolveModelCall), and a
+  // parked roll still remembers the call it answers.
+  assert.match(source, /toolCallId: toolCall\.id \?\? null/);
   for (const own of ["rollExpression(", "insertRoll(", "createPendingRoll(", "resolveRollExpression("]) {
     assert.ok(!source.includes(own), `turn.ts still calls ${own}`);
   }

@@ -15,16 +15,56 @@ import { insertSheetAudit } from "@/lib/db/sheet-audit";
 import { insertRoll } from "@/lib/db/rolls";
 import { rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
-import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
+import type { CharacterSheet, EquipmentItem, FullPatchSheetInput } from "@/lib/schemas/sheet";
 import { allSpellNames } from "@/lib/srd/spell-lists";
 import { spendAction } from "@/lib/dm/action-budget";
 import { canAct } from "@/lib/dm/can-act";
 import { rollStableTimer } from "@/lib/dm/death";
+import { getBattleMapForEncounter, getTokenByRef } from "@/lib/db/battle-maps";
+import { chebyshev } from "@/lib/battlemap/types";
 import { findCarriedItem } from "@/lib/dm/item-logic";
-import { removeItemMath } from "@/lib/dm/mutation-math";
 import { resolveRollExpression } from "@/lib/dm/rolls";
+import { rollExtrasFor, spendRollCarriers } from "@/lib/dm/forced-save";
 import { attacksAllowedFor, budgetFor, storeBudget } from "@/lib/dm/turn-budget";
 import { STABILIZE_DC, SUFFOCATING, stabilizeMethod } from "@/lib/dm/vitals-logic";
+
+// A healer's kit holds ten uses (SRD 5.1, Adventuring Gear). The count lives
+// on the row's `charges`; a row with none recorded is a full kit, so every
+// kit carried before this was kept starts with all ten.
+export const HEALERS_KIT_USES = 10;
+
+// The pack after one use of the kit on `row`: the count lowered, or, on the
+// last use, one kit of the stack gone (the next starts full).
+export function kitAfterUse(equipment: EquipmentItem[], row: EquipmentItem): { equipment: EquipmentItem[]; left: number } {
+  const left = Math.max(0, Math.min(HEALERS_KIT_USES, row.charges ?? HEALERS_KIT_USES) - 1);
+  const next = equipment.flatMap((item) => {
+    if (item !== row) {
+      return [item];
+    }
+    if (left > 0) {
+      return [{ ...item, charges: left }];
+    }
+    const qty = item.qty ?? 1;
+    return qty > 1 ? [{ ...item, qty: qty - 1, charges: undefined }] : [];
+  });
+  return { equipment: next, left };
+}
+
+// On a mapped fight the healer must be beside the dying creature: tending
+// them, a kit and Spare the Dying are all touch. Null when that holds or
+// there is no board to read.
+function outOfTouch(encounterId: string | undefined, healer: CharacterSheet, sheet: CharacterSheet): string | null {
+  const map = encounterId ? getBattleMapForEncounter(encounterId) : null;
+  const from = map ? getTokenByRef(map.id, healer.id) : null;
+  const to = map ? getTokenByRef(map.id, sheet.id) : null;
+  if (!from || !to) {
+    return null;
+  }
+  const feet = chebyshev(from.x, from.y, to.x, to.y) * 5;
+  return feet > 5
+    ? `${healer.name} is ${feet} ft from ${sheet.name}; stabilizing needs them within 5 feet. Move ${healer.name} beside them first.`
+    : null;
+}
 
 function write(
   campaign: Campaign,
@@ -87,19 +127,23 @@ export function handleStabilize(
   if (!able.ok) {
     return { error: able.error };
   }
+  const far = outOfTouch(encounter?.id, healer, sheet);
+  if (far) {
+    return { error: far };
+  }
   const method = stabilizeMethod(input.method);
   let kitPatch: FullPatchSheetInput | null = null;
   let how = "";
   if (method === "kit") {
     const kit = findCarriedItem(healer.equipment, "healer's kit");
-    const removal = kit ? removeItemMath(healer.equipment, kit.name, 1) : null;
-    if (!kit || !removal) {
+    if (!kit || (kit.charges ?? HEALERS_KIT_USES) <= 0) {
       return {
-        error: `${healer.name} carries no healer's kit. Without one, stabilizing takes a DC ${STABILIZE_DC} Wisdom (Medicine) check: call stabilize again without a method.`,
+        error: `${healer.name} carries no healer's kit with a use left. Without one, stabilizing takes a DC ${STABILIZE_DC} Wisdom (Medicine) check: call stabilize again without a method.`,
       };
     }
-    kitPatch = { equipment: removal.equipment };
-    how = `${healer.name} spends a use of their ${kit.name}`;
+    const used = kitAfterUse(healer.equipment, kit);
+    kitPatch = { equipment: used.equipment };
+    how = `${healer.name} spends a use of their ${kit.name} (${used.left} left)`;
   } else if (method === "spell") {
     const knows = healer.spellcasting
       ? allSpellNames(healer.spellcasting).some(
@@ -126,7 +170,7 @@ export function handleStabilize(
     const resolved = resolveRollExpression(
       { kind: "skill_check", skill: "medicine", dc: STABILIZE_DC, characterId: healer.id },
       healer,
-      { encumbrance: campaign.gameSettings.variantRules.encumbrance },
+      rollExtrasFor(campaign, healer, "skill_check"),
     );
     if ("error" in resolved) {
       return { error: resolved.error };
@@ -134,6 +178,7 @@ export function handleStabilize(
     if ("autoFail" in resolved) {
       return { error: `${healer.name} cannot make the check: ${resolved.notes.join("; ")}.` };
     }
+    spendRollCarriers(campaign.id, healer.id, resolved.spendInspiration);
     // The check is made, pass or fail, so the action is spent from here on.
     if (encounter && spent?.ok) {
       storeBudget(encounter, spent.budget);

@@ -1,18 +1,12 @@
 "use client";
 
 import { useMemo } from "react";
-import { spellClassFor } from "@/lib/classes";
-import { suggestedCantripCount, suggestedSpellCount } from "@/lib/content/mechanics";
 import { starterSpellsFor } from "@/lib/help";
 import type { Ability, AbilityScores, AsiChoice, EquipmentItem } from "@/lib/schemas/sheet";
-import {
-  abilityMod,
-  acBreakdownFor,
-  computeSheetDerived,
-  spellSlotsFor,
-} from "@/lib/srd";
+import { acBreakdownFor, computeSheetDerived } from "@/lib/srd";
 import { applyAsiChoices, asiLevelsFor, asiSlotsTakenInPlay } from "@/lib/srd/asi";
 import { derivedMaxHp, hpBonusPerLevelFor, hpRange, type HpMethod } from "@/lib/srd/hit-points";
+import { featureHitPoints } from "@/lib/srd/trait-rules";
 import { hpBonusPerLevel, srdRaceId } from "@/lib/srd/race-id";
 import { halfFeatPicks, scoresWithHalfFeats } from "@/lib/srd/legality/half-feats";
 import {
@@ -35,6 +29,7 @@ import {
   type KitTraining,
 } from "@/lib/srd/starting-kit";
 import { suggestWeapons } from "@/lib/srd/weapons";
+import { builderCasting, builderSpellAdvice } from "./casting";
 import { splitToolGrants, type ToolChoice } from "@/lib/srd/tool-choices";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
 import type { BuilderState, EquipmentItem as BuilderItem } from "./useBuilderState";
@@ -222,6 +217,8 @@ export function useBuilderDerived({
       armor: [...new Set([...klass.armor, ...(race.armor ?? [])])],
       weapons: [...new Set([...klass.weapons, ...(race.weapons ?? [])])],
     };
+    // A third caster's Intelligence counts as a spellcasting ability too.
+    const castingAbility = builderCasting(klass, subclass, effectiveLevel).ability;
     // Resilient's save counts in what is shown; the server writes it itself,
     // so the proficiencies sent stay the class's.
     const saves = [...new Set([...klass.saves, ...(halfFeats?.saves ?? [])])];
@@ -237,8 +234,8 @@ export function useBuilderDerived({
         ...activeAsiChoices.flatMap((choice) => (choice?.mode === "feat" ? [choice.feat] : [])),
       ],
       proficiencies: { ...proficiencies, saves },
-      spellcasting: klass.spellAbility
-        ? { ability: klass.spellAbility, slots: {}, prepared: [], known: [], cantrips: [] }
+      spellcasting: castingAbility
+        ? { ability: castingAbility, slots: {}, prepared: [], known: [], cantrips: [] }
         : null,
     });
     // Hit points are the server's to derive, by the table's method; this is
@@ -254,6 +251,8 @@ export function useBuilderDerived({
         ...state.feats,
         ...activeAsiChoices.flatMap((choice) => (choice?.mode === "feat" ? [choice.feat] : [])),
       ]),
+      // Draconic Resilience, as the server adds it (src/lib/srd/trait-rules.ts).
+      extraHp: featureHitPoints({ class: klass.id, subclass: subclass ?? "", level: effectiveLevel }),
     };
     const method = rules?.hpMethod ?? "average";
     const maxHp =
@@ -422,32 +421,26 @@ export function useBuilderDerived({
 
   // Spell lists and advice go through the borrowed SRD list for catalog
   // casters (a Netrunner searches wizard spells).
-  const spellSearchClass = klass ? spellClassFor(klass.id) : "";
-  const maxSpellLevel = useMemo(() => {
-    if (!klass || klass.casterType === "none") {
-      return 0;
-    }
-    const slots = spellSlotsFor(klass.id, effectiveLevel);
-    return Object.keys(slots).reduce((top, slotLevel) => Math.max(top, Number(slotLevel)), 0);
-  }, [klass, effectiveLevel]);
-  const rawCantripAdvice = klass?.spellAbility
-    ? suggestedCantripCount(spellSearchClass, effectiveLevel, klass.casterType)
-    : null;
+  // An Eldritch Knight or Arcane Trickster searches the wizard's list
+  // (src/app/characters/builder/casting.ts).
+  const casting = useMemo(() => builderCasting(klass, subclass, effectiveLevel), [klass, subclass, effectiveLevel]);
+  const spellSearchClass = casting.list;
+  const maxSpellLevel = casting.maxSpellLevel;
   // A class that casts, and has something to cast at this level. A level 1
   // paladin or ranger has a spellcasting ability and no spells, no cantrips
   // and no slots: showing them a spell step with a level 0 search and an
   // "unable to cast" warning was a dead end with nothing to pick.
-  const casts = Boolean(klass?.spellAbility) && (maxSpellLevel > 0 || rawCantripAdvice !== null);
-  const cantripAdvice = casts ? rawCantripAdvice : null;
+  const casts = casting.casts;
+  const cantripAdvice = casting.cantripCap;
   const spellAdvice =
-    casts && klass?.spellAbility && shownAbilities
-      ? suggestedSpellCount(spellSearchClass, effectiveLevel, abilityMod(shownAbilities[klass.spellAbility]))
+    casts && klass && shownAbilities
+      ? builderSpellAdvice(casting, klass, subclass, effectiveLevel, shownAbilities)
       : null;
   // Opening suggestions, so a player who has never seen a 5e spell list is
   // not left staring at an empty search box.
   const starters = useMemo(
-    () => (casts && klass ? starterSpellsFor(klass.id) : null),
-    [klass, casts],
+    () => (casts && klass ? starterSpellsFor(casting.third ? casting.list : klass.id) : null),
+    [klass, casts, casting],
   );
   // Domain, circle, oath and patron spells: always prepared, free, and worth
   // showing at the top of the list so a cleric knows what their domain gives.
@@ -462,7 +455,9 @@ export function useBuilderDerived({
   // class says whether it is a known caster; the rest follow the SRD.
   const spellStyle: SpellStyle | null = !casts || !klass
     ? null
-    : klass.knownCaster === true
+    : casting.third
+      ? "known"
+      : klass.knownCaster === true
       ? "known"
       : klass.knownCaster === false && spellStyleFor(klass.id) === "known"
         ? "prepared"

@@ -15,7 +15,7 @@ import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { conditionExtraActions } from "@/lib/srd/condition-effects";
-import { matchResource } from "@/lib/srd/class-resources";
+import { matchResource, type ResourceAction } from "@/lib/srd/class-resources";
 import { spendAction } from "@/lib/dm/action-budget";
 import { canAct } from "@/lib/dm/can-act";
 import {
@@ -38,8 +38,12 @@ export function prepareResourceCharge(
   campaign: Campaign,
   sheet: CharacterSheet,
   resourceName: string,
+  // What this particular use costs, for a counter whose options cost
+  // different things (Channel Divinity's Turn Undead is an action).
+  override?: ResourceAction,
 ): ResourceCharge {
-  const def = matchResource(resourceName);
+  const found = matchResource(resourceName);
+  const def = found && override ? { ...found, action: override } : found;
   const encounter = getActiveEncounter(campaign.id);
   // Out of a fight there is no turn to charge, and a feature whose uses cost
   // different things is left to the tool that resolves the use.

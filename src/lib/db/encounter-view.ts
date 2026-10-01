@@ -1,6 +1,11 @@
 import { legendaryProfile } from "@/lib/dm/legendary-logic";
+import { isSurprised } from "@/lib/dm/can-act";
+import { freshLastHit, type LastHit } from "@/lib/dm/last-hit";
+import { conditionNote, conditionNoteLine, namesLookup } from "@/lib/battlemap/condition-notes";
 import { healthState, type HealthState } from "@/lib/bestiary/health";
 import { creatureTypeOf } from "@/lib/bestiary/statblock";
+import { isRegeneratingDown } from "@/lib/dm/regeneration";
+import { REGENERATION_STOPPED } from "@/lib/dm/monster-abilities";
 import { getBattleMapForEncounter, listHiddenRefIds } from "@/lib/db/battle-maps";
 import {
   getActiveEncounter,
@@ -35,6 +40,9 @@ export type PublicEncounter = {
     hidden: boolean;
     // DM view only, like the enemy numbers below.
     initiative?: number;
+    // Thief's Reflexes: the thief's second turn in the first round, a
+    // second entry with the same id (so rows are keyed by position).
+    reflex?: boolean;
   }>;
   enemies: Array<{
     id: string;
@@ -53,8 +61,15 @@ export type PublicEncounter = {
     // this is what lets the panel show a mob as one line the DM can open up
     // rather than four rows of the same goblin.
     groupKey: string;
+    // Alive at 0 hit points after a nonlethal blow: out of the fight.
+    knockedOut?: boolean;
+    // Down at 0 hit points waiting to regenerate (a troll, regeneration.ts):
+    // it rises at its turn, or dies then when `stopped` (acid or fire landed).
+    regenerating?: { stopped: boolean };
     conditions: string[];
     conditionRounds: Record<string, number>;
+    // "until Kael's turn", "save ends (WIS 13)", "from Kael", per condition.
+    conditionNotes?: Record<string, string>;
     // DM view only; absent for every player.
     currentHp?: number;
     maxHp?: number;
@@ -71,6 +86,21 @@ export type PublicEncounter = {
   // a guess. Only ever a player character's: nothing here is hidden from the
   // table, and an enemy's economy stays the DM's.
   turn?: PublicTurn;
+  // Who the pointer rests on, so a client can ask the engine's own canAct
+  // (src/lib/dm/can-act.ts) the question the server will ask. The id is a
+  // character's; any other combatant is named but not identified.
+  acting?: { id: string; name: string } | null;
+  // Characters surprised in round 1: those who may not act yet, and those who
+  // may not react yet (isSurprised in can-act.ts, asked on the server).
+  surprised?: { acting: string[]; reacting: string[] };
+  // Characters whose reaction is spent until their next turn starts. A
+  // reaction is spent on somebody else's turn, so it lives here and not in
+  // the turn budget.
+  reactionsUsed?: string[];
+  // The attacks a reaction may still answer (src/lib/dm/last-hit.ts): one
+  // per character hit this turn, while the engine would accept a reaction
+  // to it. Absent keys mean nothing to answer.
+  lastHits?: PublicLastHit[];
 };
 
 export type PublicTurn = {
@@ -81,6 +111,34 @@ export type PublicTurn = {
   attacksMade: number;
   attacksAllowed: number;
   extraActions?: number;
+  // Action Surge's additional action, still to spend.
+  grantedActions?: number;
+  // The budget's once-per-turn marks (Sneak Attack spent, Martial Arts'
+  // bonus strike open, a levelled or bonus-action spell cast, the creatures
+  // attacked), so the Hand can ask the engine's own spend and cast rules.
+  marks?: string[];
+  // Flurry of Blows strikes bought and not yet made.
+  flurryStrikes?: number;
+  dashed?: boolean;
+  disengaged?: boolean;
+  // A levelled spell already cast this turn with this kind of action.
+  castThisAction?: boolean;
+};
+
+export type PublicLastHit = {
+  characterId: string;
+  attacker: string;
+  // The enemy that made it, when the player may know it (not hidden).
+  attackerId: string | null;
+  attack: string;
+  type: string;
+  ranged: boolean;
+  source: "attack" | "fall";
+  // Whether any swing hit, and the damage the hits sent.
+  hit: boolean;
+  damage: number;
+  // Reactions already taken against it.
+  answered: string[];
 };
 
 function turnView(encounter: Encounter): { turn?: PublicTurn } {
@@ -100,20 +158,73 @@ function turnView(encounter: Encounter): { turn?: PublicTurn } {
       attacksMade: budget.attacksMade,
       attacksAllowed: budget.attacksAllowed,
       ...(budget.extraActions ? { extraActions: budget.extraActions } : {}),
+      ...(budget.grantedActions ? { grantedActions: budget.grantedActions } : {}),
+      ...(budget.oncePerTurn.length ? { marks: budget.oncePerTurn } : {}),
+      ...(budget.flurryStrikes ? { flurryStrikes: budget.flurryStrikes } : {}),
+      ...(budget.dashed ? { dashed: true } : {}),
+      ...(budget.disengaged ? { disengaged: true } : {}),
+      ...(budget.castThisAction ? { castThisAction: true } : {}),
     },
+  };
+}
+
+// The engine's own reading of whose turn it is, surprise and spent
+// reactions, for the characters only: an enemy's id or its reaction is the
+// DM's business, and a hidden one must not be given away.
+function actingView(encounter: Encounter, hidden: Set<string>, showNumbers: boolean) {
+  const pcIds = encounter.order
+    .filter((entry) => entry.kind === "pc")
+    .map((entry) => orderEntryId(entry));
+  const current = encounter.orderReady ? encounter.order[encounter.turnIndex] : undefined;
+  const concealed = current && !showNumbers && hidden.has(orderEntryId(current));
+  return {
+    acting: current
+      ? {
+          id: current.kind === "pc" ? current.characterId : "",
+          name: concealed ? "someone unseen" : current.name,
+        }
+      : null,
+    surprised: {
+      acting: pcIds.filter((id) => isSurprised(encounter, id)),
+      reacting: pcIds.filter((id) => isSurprised(encounter, id, true)),
+    },
+    reactionsUsed: encounter.reactionsUsed.filter((id) => pcIds.includes(id)),
+  };
+}
+
+function lastHitView(record: LastHit, hidden: Set<string>, showNumbers: boolean): PublicLastHit {
+  const attackerId = record.attacker.id;
+  return {
+    characterId: record.characterId,
+    attacker: record.attacker.name,
+    attackerId: attackerId && (showNumbers || !hidden.has(attackerId)) ? attackerId : null,
+    attack: record.attack,
+    type: record.type,
+    ranged: record.ranged,
+    source: record.source,
+    hit: record.source === "fall" || record.swings.some((swing) => swing.hit),
+    damage: record.swings.reduce((sum, swing) => sum + (swing.hit ? swing.raw : 0), 0),
+    answered: record.answered,
   };
 }
 
 export function publicEncounter(
   encounter: Encounter,
   enemies: EncounterEnemy[],
-  options: { enemyNumbers?: boolean; hiddenRefIds?: string[] } = {},
+  options: { enemyNumbers?: boolean; hiddenRefIds?: string[]; lastHits?: LastHit[] } = {},
 ): PublicEncounter {
   const showNumbers = options.enemyNumbers === true;
   // Hidden is one flag on the board token (src/lib/db/battle-maps.ts) and it
   // means the same thing in both places: an ambusher the players have not
   // met yet is neither on the map nor on the tracker.
   const hidden = new Set(options.hiddenRefIds ?? []);
+  // Names a condition's "until X's turn" or "from X" may show: the order as
+  // this viewer sees it.
+  const nameOf = namesLookup(
+    encounter.order
+      .filter((entry) => showNumbers || !hidden.has(orderEntryId(entry)))
+      .map((entry) => ({ id: orderEntryId(entry), name: entry.name })),
+  );
   return {
     id: encounter.id,
     status: encounter.status,
@@ -134,6 +245,7 @@ export function publicEncounter(
             // it. Players hear initiative announced; they do not need a
             // column of it, and the tracker has never shown one.
             ...(showNumbers ? { initiative: entry.initiative } : {}),
+            ...(entry.kind === "pc" && entry.reflex ? { reflex: true } : {}),
           }))
       : [],
     enemies: enemies
@@ -147,6 +259,12 @@ export function publicEncounter(
       cr: enemy.cr,
       type: creatureTypeOf(enemy.stats),
       groupKey: enemy.slug,
+      // Knocked out by a nonlethal blow (src/lib/dm/knockout.ts): alive at
+      // 0 hit points, out of the fight, not dying.
+      ...(knockedOut(enemy) ? { knockedOut: true } : {}),
+      ...(enemy.status === "alive" && isRegeneratingDown(enemy)
+        ? { regenerating: { stopped: enemy.conditions.includes(REGENERATION_STOPPED) } }
+        : {}),
       conditions: enemy.status === "alive" ? enemy.conditions : [],
       conditionRounds:
         enemy.status === "alive"
@@ -154,6 +272,19 @@ export function publicEncounter(
               Object.entries(enemy.conditionMeta)
                 .filter(([, meta]) => typeof meta.rounds === "number")
                 .map(([name, meta]) => [name, meta.rounds as number]),
+            )
+          : {},
+      // The rest of what each condition's metadata says: a turn it ends on,
+      // the save that ends it, who laid it (condition-notes.ts).
+      conditionNotes:
+        enemy.status === "alive"
+          ? Object.fromEntries(
+              enemy.conditions.flatMap((name) => {
+                const line = conditionNoteLine(conditionNote(name, enemy.conditionMeta[name], nameOf, enemy.id), {
+                  skipCounted: true,
+                });
+                return line ? [[name, line]] : [];
+              }),
             )
           : {},
       ...(showNumbers
@@ -170,7 +301,19 @@ export function publicEncounter(
       ? { lair: { active: true, usedThisRound: encounter.legendary.lairUsedRound === encounter.round } }
       : {}),
     ...turnView(encounter),
+    ...actingView(encounter, hidden, showNumbers),
+    ...(options.lastHits?.length
+      ? { lastHits: options.lastHits.map((record) => lastHitView(record, hidden, showNumbers)) }
+      : {}),
   };
+}
+
+function knockedOut(enemy: EncounterEnemy): boolean {
+  return (
+    enemy.status === "alive" &&
+    enemy.currentHp <= 0 &&
+    enemy.conditionMeta.unconscious?.source === "knocked out"
+  );
 }
 
 function legendaryView(encounter: Encounter, enemy: EncounterEnemy) {
@@ -198,8 +341,18 @@ export function activePublicEncounter(
     return null;
   }
   const map = getBattleMapForEncounter(encounter.id);
+  // Only records a reaction may still answer: the engine's own freshness
+  // rule (same round and turn), asked per character in the order.
+  const lastHits = encounter.order.flatMap((entry) => {
+    if (entry.kind !== "pc") {
+      return [];
+    }
+    const record = freshLastHit(campaignId, entry.characterId);
+    return record ? [record] : [];
+  });
   return publicEncounter(encounter, listEnemies(encounter.id), {
     ...options,
+    lastHits,
     hiddenRefIds: map ? listHiddenRefIds(map.id) : [],
   });
 }

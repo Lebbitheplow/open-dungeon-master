@@ -9,16 +9,20 @@ import { authoredFeatBySlug, withAuthoredFeats } from "@/lib/content/authored-fe
 import {
   authoredSpell,
   bundledSpellFacts,
+  bundledSpellSchool,
   factsFromRow,
   type SpellFacts,
 } from "@/lib/srd/spell-facts";
-import { addDice, scaledSpellDice } from "@/lib/srd/spell-scaling";
+import { mechSpellDamage } from "@/lib/srd/spell-dice";
+import { bakedSpellMech } from "@/lib/content/baked-spells";
 import {
   authoredSpellRow,
   parseSpellMech,
   spellMechFor,
   type SpellMech,
 } from "@/lib/srd/spell-mechanics";
+
+export { itemWeightByName } from "@/lib/content/item-weights";
 
 // Unified content entry: Open5e rows and homebrew rows share this shape so
 // pickers render one list. `data` is the raw normalized payload (Open5e API
@@ -252,6 +256,16 @@ export function spellFactsFor(name: string, authors?: string | string[]): SpellF
     });
   }
   return bundledSpellFacts(name);
+}
+
+// The school of magic a spell belongs to ("evocation"), from the pack's row
+// or the bundled checklist; null when neither knows the name.
+export function spellSchoolFor(name: string, authors?: string | string[]): string | null {
+  const entry = findSpellByName(name, authors);
+  if (entry) {
+    return entry.school ? entry.school.toLowerCase() : null;
+  }
+  return bundledSpellSchool(name);
 }
 
 export function searchItems(
@@ -539,48 +553,19 @@ export function spellDamageFor(input: {
     return null;
   }
   const mech = spellMechFor([entry?.name ?? input.spell, ...(entry?.aliases ?? []), input.spell]);
-  const slotLevel = Math.max(spellLevel, Math.floor(input.slotLevel ?? spellLevel));
-  if (mech?.hitPointPool) {
-    // A pool of hit points is not damage.
-    return null;
-  }
-  if (mech?.darts) {
-    const held = mech.darts.count + mech.darts.perSlotLevel * (slotLevel - spellLevel);
-    const thrown = Math.max(1, Math.min(held, Math.floor(input.darts ?? held)));
-    const [die, flat] = mech.darts.each.split("+");
-    const sides = die.split("d")[1];
-    return {
-      dice: `${thrown}d${sides}${flat ? `+${Number(flat) * thrown}` : ""}`,
-      note: `${thrown} of ${held} darts of ${mech.darts.each}`,
-      spellLevel,
-    };
-  }
-  if (mech?.dice) {
-    const above = Math.max(0, slotLevel - mech.dice.baseLevel);
-    const dice = mech.dice.perSlotLevel
-      ? addDice(mech.dice.base, mech.dice.perSlotLevel, above)
-      : mech.dice.base;
-    return {
-      dice,
-      note: above ? `upcast to level ${slotLevel}: ${dice}` : `${dice} at its base level`,
-      spellLevel,
-    };
-  }
-  if (mech?.resolution === "utility" || mech?.resolution === "summon") {
-    return null;
-  }
-  const desc = String(entry?.data.desc ?? authored?.desc ?? "");
-  if (!desc) {
-    return null;
-  }
-  const scaled = scaledSpellDice({
+  // The row first, then the prose, then the baked answers: one rule with the
+  // Hand's cards (src/lib/srd/spell-dice.ts).
+  const rolled = mechSpellDamage({
+    spell: input.spell,
+    mech,
     spellLevel,
-    desc,
-    higherLevel: String(entry?.data.higher_level ?? authored?.higher_level ?? ""),
     casterLevel: input.casterLevel,
     slotLevel: input.slotLevel,
+    darts: input.darts,
+    desc: String(entry?.data.desc ?? authored?.desc ?? ""),
+    higherLevel: String(entry?.data.higher_level ?? authored?.higher_level ?? ""),
   });
-  return scaled ? { ...scaled, spellLevel } : null;
+  return rolled ? { ...rolled, spellLevel } : null;
 }
 
 // The structured mechanics a spell resolves with: authored `mech` rows and
@@ -609,6 +594,7 @@ export function spellMechanicsFor(input: {
       parseSpellMech({
         desc: String(entry.data.desc ?? ""),
         higherLevel: String(entry.data.higher_level ?? ""),
+        duration: String(entry.data.duration ?? ""),
       });
     return mech
       ? { mech, name: entry.name, spellLevel: entry.level, concentration: entry.concentration }
@@ -620,7 +606,9 @@ export function spellMechanicsFor(input: {
   const bundled = bundledSpellFacts(input.spell);
   const mech =
     spellMechFor([input.spell, bundled?.name ?? input.spell]) ??
-    (authored ? parseSpellMech({ desc: authored.desc }) : null);
+    (authored ? parseSpellMech({ desc: authored.desc }) : null) ??
+    bakedSpellMech(input.spell) ??
+    null;
   if (!mech) {
     return null;
   }
@@ -630,61 +618,4 @@ export function spellMechanicsFor(input: {
     spellLevel: authored?.level ?? bundled?.level ?? 1,
     concentration: authored?.concentration ?? bundled?.concentration ?? false,
   };
-}
-
-// ---- item weights ----
-
-// Name -> pounds, built once from the whole items table (about 2,000 rows,
-// a few hundred kilobytes) because the optional encumbrance rule asks for a
-// weight on every line of every pack on every sheet read. Rows the source
-// left blank carry 0 and are skipped, so an unknown weight stays unknown
-// rather than becoming a confident zero.
-let weightIndex: Map<string, number> | null = null;
-
-function itemWeightIndex(): Map<string, number> {
-  if (weightIndex) {
-    return weightIndex;
-  }
-  const index = new Map<string, number>();
-  const db = getContentDb();
-  if (db) {
-    const rows = db.prepare(`SELECT name, weight FROM items WHERE weight > 0`).all() as Array<{
-      name: string;
-      weight: number;
-    }>;
-    for (const row of rows) {
-      const key = itemWeightKey(row.name);
-      // First writer wins: the v1 weapon and armor tables are imported
-      // before the v2 gear list, and their rows are the SRD ones.
-      if (key && !index.has(key)) {
-        index.set(key, row.weight);
-      }
-    }
-  }
-  weightIndex = index;
-  return index;
-}
-
-// The lookup key for an item name: lowercased, punctuation flattened, and a
-// trailing count dropped so "Arrows (20)" finds "Arrows". A magic bonus goes
-// too, so "+1 Longsword" weighs what a longsword weighs.
-function itemWeightKey(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/\(\s*\d+\s*\)\s*$/, " ")
-    .replace(/[+-]\d+/g, " ")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
-
-// Pounds per unit for a free-text item name, or null when the content pack
-// has nothing. Callers fall back to the SRD armor table
-// (src/lib/srd/encumbrance.ts) before giving up.
-export function itemWeightByName(name: string): number | null {
-  const key = itemWeightKey(name ?? "");
-  if (!key) {
-    return null;
-  }
-  const index = itemWeightIndex();
-  return index.get(key) ?? index.get(key.replace(/s$/, "")) ?? null;
 }

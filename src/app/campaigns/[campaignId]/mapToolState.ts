@@ -193,4 +193,5 @@ export const BRUSH_KEYS: Record<string, BrushName> = {
   "4": "difficult",
   "5": "door",
   "6": "lowwall",
+  "7": "climb",
 };

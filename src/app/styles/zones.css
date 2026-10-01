@@ -1,0 +1,89 @@
+/* Spell areas on the board (src/app/campaigns/[campaignId]/BoardZoneLayer.tsx).
+
+   An area settles in from its middle when it is cast and fades as it ends;
+   while it lasts it moves as the thing it is: a cloud drifts, the dark
+   breathes, difficult ground shimmers, a wall of fire flickers, and every
+   edge but a wall's flows. Durations and easings are the motion tokens in
+   globals.css. The global reduced-motion block collapses each animation to
+   its last frame, which is the area at rest; the low-effects block below
+   stops the loops. */
+
+@keyframes zone-in {
+  0% { opacity: 0; transform: scale(0.82); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes zone-out {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.06); }
+}
+@keyframes zone-drift {
+  0%, 100% { transform: translate(0, 0); opacity: 0.9; }
+  50% { transform: translate(4px, -3px); opacity: 1; }
+}
+@keyframes zone-dark {
+  0%, 100% { fill-opacity: 0.84; }
+  50% { fill-opacity: 0.94; }
+}
+@keyframes zone-glow {
+  0%, 100% { fill-opacity: 0.1; }
+  50% { fill-opacity: 0.2; }
+}
+@keyframes zone-shimmer {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 0.9; }
+}
+@keyframes zone-flicker {
+  0%, 100% { fill-opacity: 0.62; }
+  35% { fill-opacity: 0.8; }
+  60% { fill-opacity: 0.55; }
+}
+@keyframes zone-edge-flow {
+  to { stroke-dashoffset: -20; }
+}
+
+.zone-in {
+  transform-box: view-box;
+  animation: zone-in var(--dur-beat) var(--ease-settle) both;
+}
+.zone-out {
+  transform-box: view-box;
+  animation: zone-out var(--dur-beat) var(--ease-drift) both;
+}
+.zone-drift {
+  animation: zone-drift 7s var(--ease-drift) infinite;
+}
+.zone-dark {
+  animation: zone-dark 5s var(--ease-drift) infinite;
+}
+.zone-glow {
+  animation: zone-glow var(--dur-linger) var(--ease-drift) infinite;
+}
+.zone-shimmer {
+  animation: zone-shimmer 3.2s var(--ease-drift) infinite;
+}
+.zone-wall {
+  animation: zone-flicker 2.4s var(--ease-drift) infinite;
+}
+.zone-edge {
+  animation: zone-edge-flow var(--dur-linger) linear infinite;
+}
+
+[data-effects="low"] .zone-drift,
+[data-effects="low"] .zone-dark,
+[data-effects="low"] .zone-glow,
+[data-effects="low"] .zone-shimmer,
+[data-effects="low"] .zone-wall,
+[data-effects="low"] .zone-edge {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zone-drift,
+  .zone-dark,
+  .zone-glow,
+  .zone-shimmer,
+  .zone-wall,
+  .zone-edge {
+    animation: none !important;
+  }
+}

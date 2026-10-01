@@ -8,7 +8,7 @@
 //
 // This module must not import mutations.ts (which imports it).
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
-import { getActiveEncounter, listEnemies, patchEnemyConditions } from "@/lib/db/encounters";
+import { getActiveEncounter, getEnemy, listEnemies, patchEnemyConditions } from "@/lib/db/encounters";
 import { activePublicEncounter } from "@/lib/db/encounter-view";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
@@ -29,6 +29,11 @@ import {
   type SaveAbilityId,
 } from "@/lib/dm/condition-logic";
 import { exhaustionPatch, namesExhaustion } from "@/lib/dm/vitals-logic";
+import { spellEffectRefusal } from "@/lib/dm/spell-effects";
+import { allyConditionAura } from "@/lib/dm/aura";
+import { awardInspirationCounter, heldInspiration } from "@/lib/dm/roll-riders";
+import { featureConditionImmunities, sourcedConditionImmunity } from "@/lib/srd/trait-rules";
+import { conditionGrantedImmunity } from "@/lib/srd/condition-effect-queries";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
 
 // A sheet holds this many conditions at once (the stored list's own cap).
@@ -57,10 +62,10 @@ export function canonicalCondition(raw: string): string {
 // duration at all is until something ends it; save-ends with no count is
 // until the save is made, which may be never.
 function reach(entry: ConditionMeta | undefined): number {
-  if (!entry || (entry.rounds === undefined && !entry.saveEnds && !entry.untilTurnOf)) {
+  if (!entry || (entry.rounds === undefined && !entry.saveEnds && !entry.untilTurnOf && !entry.untilTurnEndOf)) {
     return Number.POSITIVE_INFINITY;
   }
-  if (entry.untilTurnOf) {
+  if (entry.untilTurnOf || entry.untilTurnEndOf) {
     return 1;
   }
   return entry.rounds ?? Number.MAX_SAFE_INTEGER;
@@ -201,6 +206,64 @@ export function raiseExhaustion(
   };
 }
 
+// Why a feature keeps this condition off the character, or null: their own
+// (Aura of Courage, Mindless Rage while raging, Purity of Body, Fey
+// Ancestry's magical sleep) or an ally paladin's aura that reaches them.
+export function conditionImmunity(
+  campaign: Campaign,
+  sheet: CharacterSheet,
+  condition: string,
+  reason: string,
+  sourceEnemyId?: string,
+): string | null {
+  const wanted = condition.trim().toLowerCase();
+  const source = sourceEnemyId ? getEnemy(sourceEnemyId.trim()) : null;
+  const sourced = sourcedConditionImmunity(sheet, wanted, source ? String(source.stats.type ?? "") : undefined);
+  if (sourced) {
+    return `${sourced} keeps ${source?.displayName ?? "that creature"}'s power off them`;
+  }
+  // A spell's protection (Heroism, Protection from Evil and Good, Heroes'
+  // Feast): src/lib/srd/condition-effects.ts.
+  const warded = conditionGrantedImmunity(sheet.conditions, wanted, source ? String(source.stats.type ?? "") : undefined);
+  if (warded) {
+    return `${warded} makes them immune`;
+  }
+  const own = featureConditionImmunities(sheet);
+  const held = own.conditions.find((entry) => entry.condition === wanted);
+  if (held) {
+    return `${held.because} makes them immune`;
+  }
+  if (wanted === "unconscious" && own.magicalSleep && /\bsleep|slumber/i.test(reason)) {
+    return `${own.magicalSleep}: magic cannot put them to sleep`;
+  }
+  const aura = allyConditionAura(campaign.id, sheet, wanted);
+  return aura ? `${aura} protects them` : null;
+}
+
+// The DM awards Inspiration. Holding it twice is holding it once.
+function awardInspiration(
+  campaign: Campaign,
+  turnId: string,
+  sheet: CharacterSheet,
+  reason: string,
+): Record<string, unknown> {
+  if (sheet.deathSaves?.dead) {
+    return { error: `${sheet.name} is dead; Inspiration has nothing to inspire.` };
+  }
+  if (heldInspiration(sheet)) {
+    return { ok: true, note: `${sheet.name} already has Inspiration; it does not stack.` };
+  }
+  const resources = awardInspirationCounter(sheet.resources);
+  patchSheet(sheet.id, { resources });
+  audit(campaign, turnId, sheet, { inspiration: true }, reason, { resources });
+  publishSheet(campaign, sheet.id);
+  return {
+    ok: true,
+    inspiration: `${sheet.name} has Inspiration`,
+    note: "They spend it for advantage on one attack, save or check (useInspiration on the roll).",
+  };
+}
+
 export type SetConditionArgs = {
   condition?: string;
   rounds?: number;
@@ -218,8 +281,16 @@ export function handleSetCondition(
   sheet: CharacterSheet,
   args: SetConditionArgs,
   reason: string,
+  // Set by cast_buff: the condition is a spell's effect, cast and paid for,
+  // and this is what the spell records on it (src/lib/dm/spell-effects.ts).
+  options?: { spellEffect?: ConditionMeta },
 ): Record<string, unknown> {
   const raw = args.condition ?? "";
+  // Inspiration is the DM's award, held on the sheet until a roll spends it
+  // (src/lib/dm/roll-riders.ts), not a condition.
+  if (/^\s*(heroic\s+)?inspir(ation|ed)\s*$/i.test(raw)) {
+    return awardInspiration(campaign, turnId, sheet, reason);
+  }
   // Exhaustion is a leveled track, not a stackable condition: each set
   // raises it one level (6 = death), whatever word the caller used for it.
   if (namesExhaustion(raw)) {
@@ -235,6 +306,18 @@ export function handleSetCondition(
   if (sheet.deathSaves?.dead) {
     return { error: `${sheet.name} is dead and takes no new conditions.` };
   }
+  // A spell's effect comes from casting the spell; the AI DM cannot hand it
+  // out for free (the human DM console keeps its correction power).
+  const unpaid = options?.spellEffect ? null : spellEffectRefusal(normalized, turnId);
+  if (unpaid) {
+    return { error: unpaid };
+  }
+  const immune = conditionImmunity(campaign, sheet, normalized, reason, args.sourceEnemyId);
+  if (immune) {
+    return {
+      error: `${sheet.name} cannot be ${normalized}: ${immune}. The condition was not applied; narrate them shrugging it off.`,
+    };
+  }
   // Duration metadata: timed conditions tick down at round wrap in combat
   // and against the in-world clock outside it (condition-tick.ts); save-ends
   // conditions re-save server-side each round. Minutes and hours become
@@ -244,11 +327,12 @@ export function handleSetCondition(
     args.saveAbility && args.saveDc ? { ability: args.saveAbility, dc: args.saveDc } : undefined;
   const source = (args.sourceEnemyId ?? args.sourceCharacterId ?? "").trim().slice(0, 80);
   const incoming: ConditionMeta | undefined =
-    rounds || saveEnds || source
+    rounds || saveEnds || source || options?.spellEffect
       ? {
           ...(rounds ? { rounds } : {}),
           ...(saveEnds ? { saveEnds } : {}),
           ...(source ? { source } : {}),
+          ...(options?.spellEffect ?? {}),
         }
       : undefined;
   const meta = sheet.conditionMeta as ConditionMetaMap;

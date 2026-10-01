@@ -290,12 +290,13 @@ await test("a healer's kit stabilizes with no check and spends a use; without a 
   const none = await kit.withDice([20], "stabilize", { characterId: hero.id, healerId: ally.id, method: "kit" });
   assert.equal(none.outcome.ok, false);
   assert.equal(track().stable, false);
-  world.patch(ally.id, { equipment: [...ally.equipment, { name: "Healer's Kit", qty: 10 }] });
+  // One kit holds ten uses (SRD 5.1); the count lives on the row's charges.
+  world.patch(ally.id, { equipment: [...ally.equipment, { name: "Healer's Kit", qty: 1 }] });
   const out = await kit.withDice([2], "stabilize", { characterId: hero.id, healerId: ally.id, method: "kit" });
   assert.equal(out.outcome.ok, true, out.outcome.error);
   assert.deepEqual(out.dice, ["d4:2"], "the kit needs no d20");
   assert.equal(track().stable, true);
-  assert.equal(world.sheet(ally.id).equipment.find((item) => item.name === "Healer's Kit").qty, 9);
+  assert.equal(world.sheet(ally.id).equipment.find((item) => item.name === "Healer's Kit").charges, 9);
   world.patch(ally.id, { equipment: ally.equipment });
 });
 

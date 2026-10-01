@@ -27,6 +27,7 @@ import { DmWorkbenchPanel } from "@/app/campaigns/[campaignId]/DmWorkbenchPanel"
 import type { CampaignMessage } from "@/lib/db/messages";
 import type { DmBeat } from "@/lib/db/dm-beats";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
+import { DmEnemyHpCard } from "@/app/campaigns/[campaignId]/DmEnemyHpCard";
 import type { DmCover } from "@/lib/dm/delegation";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -393,7 +394,7 @@ export function DmConsolePanel({
               )}
             >
               <GameIcon icon={{ kind: "glyph", key: TAB_GLYPH[tab] }} size="size-7" />
-              <span className="eyebrow max-w-full truncate text-[8.5px] !tracking-normal">{label}</span>
+              <span className="eyebrow max-w-full truncate text-[10px] !tracking-normal">{label}</span>
             </button>
           ))}
         </div>
@@ -460,6 +461,9 @@ export function DmConsolePanel({
                 </li>
               ))}
             </ul>
+            {category === "combat" && encounter ? (
+              <DmEnemyHpCard campaignId={campaignId} encounter={encounter} />
+            ) : null}
           </div>
           )}
         </div>

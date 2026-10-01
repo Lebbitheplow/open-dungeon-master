@@ -26,6 +26,9 @@ export type SpellFacts = {
   name: string;
   level: number;
   classes: string[];
+  // The school of magic ("evocation"), where known: the third casters learn
+  // from two schools (src/lib/srd/third-caster.ts).
+  school?: string | null;
 };
 
 export type FeatFacts = { name: string; prerequisite: string };

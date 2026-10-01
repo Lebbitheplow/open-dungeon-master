@@ -11,6 +11,9 @@
 @import "./styles/hand.css";
 @import "./styles/maps.css";
 @import "./styles/board.css";
+@import "./styles/board-refusal.css";
+@import "./styles/zones.css";
+@import "./styles/zones-aim.css";
 @import "./styles/campaign-creator.css";
 @import "./styles/creator.css";
 @import "./styles/session.css";

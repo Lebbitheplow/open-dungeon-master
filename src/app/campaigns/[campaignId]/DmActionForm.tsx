@@ -5,33 +5,26 @@ import { Loader2, Play } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { GameIcon } from "@/components/ui/GameIcon";
-import { Select, type SelectOption } from "@/components/ui/Select";
-import { Switch } from "@/components/ui/Switch";
-import { FieldLabel, OptionalNumber } from "@/app/campaigns/[campaignId]/DmConsoleParts";
+import { appConfirm } from "@/components/ui/ConfirmDialog";
+import { FieldLabel } from "@/app/campaigns/[campaignId]/DmConsoleParts";
+import { DmSquarePick } from "@/app/campaigns/[campaignId]/DmSquarePick";
+import {
+  FieldInput,
+  argsFor,
+  initialValue,
+  type Value,
+} from "@/app/campaigns/[campaignId]/DmActionFields";
 import type { CatalogEntry, CatalogField } from "@/lib/dm/invoke-catalog";
+import { needsConfirm } from "@/lib/dm/catalog-types";
+import { describeAdjudicationResult, type ResultLine } from "@/lib/dm/catalog-result";
+import { holdConsoleOutcome } from "@/app/campaigns/[campaignId]/ConsoleOutcomeBanner";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { DictateField } from "@/components/DictateField";
-import { appendDictation } from "@/lib/dictation";
 
 // One adjudication, rendered from its catalog entry. Nothing here knows what
 // any particular action does: the fields come from the catalog and the rules
 // come from the server, which is what keeps a tool added for the AI DM
 // reachable by a human one without touching this file.
-
-const inputClass = ui.input;
-
-type Value = string | number | boolean | string[];
-
-function initialValue(field: CatalogField): Value {
-  if (field.kind === "boolean") {
-    return field.default === true;
-  }
-  if (field.kind === "characters") {
-    return [];
-  }
-  return "";
-}
 
 // A prefilled value from the assist rail's suggestion. The model produced it,
 // so anything whose shape does not match the field it lands in is dropped
@@ -44,13 +37,27 @@ function prefilledValue(field: CatalogField, raw: unknown): Value | null {
   if (field.kind === "boolean") {
     return typeof raw === "boolean" ? raw : null;
   }
-  if (field.kind === "characters") {
+  if (field.kind === "characters" || field.kind === "enemies") {
     return Array.isArray(raw) && raw.every((entry) => typeof entry === "string")
       ? (raw as string[])
       : null;
   }
+  if (field.kind === "list") {
+    return Array.isArray(raw) ? raw.map(String).join(", ") : typeof raw === "string" ? raw : null;
+  }
+  if (field.kind === "shares" || field.kind === "hitDice") {
+    // Rows are the handler's own objects; a suggestion in any other shape
+    // is dropped rather than half-read.
+    return Array.isArray(raw) && raw.every((row) => row && typeof row === "object")
+      ? (raw as Value)
+      : null;
+  }
   if (field.kind === "number") {
     return typeof raw === "number" && Number.isFinite(raw) ? raw : null;
+  }
+  if (field.kind === "select" && field.other) {
+    // A pick that also takes a typed value (a story condition) keeps it.
+    return typeof raw === "string" ? raw : null;
   }
   if (field.kind === "select") {
     const allowed = (field.options ?? []).map((option) => option.value);
@@ -91,7 +98,7 @@ export function DmActionForm({
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [outcome, setOutcome] = useState("");
+  const [outcome, setOutcome] = useState<ResultLine[]>([]);
 
   const enemies = useMemo(
     // The dead and the fled are still on the encounter so the log reads
@@ -106,28 +113,38 @@ export function DmActionForm({
   }
 
   async function run() {
+    const args = argsFor(entry.fields, values);
+    // What cannot be taken back asks first (end the fight, dismiss a
+    // companion, a death).
+    const question = needsConfirm(entry, args);
+    if (question && !(await appConfirm(question, { title: entry.label, actionLabel: "Run it" }))) {
+      return;
+    }
     setBusy(true);
     setError("");
-    setOutcome("");
+    setOutcome([]);
     try {
       const response = await fetch(`/api/campaigns/${campaignId}/dm/invoke`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: entry.name, args: values }),
+        body: JSON.stringify({ name: entry.name, args }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
         setError(String(body.error ?? "The engine refused that."));
         return;
       }
-      setOutcome(describeResult(body.result));
+      const lines = describeAdjudicationResult(body.result);
+      setOutcome(lines);
+      // Starting a fight moves the panel to the board: the result waits there.
+      if (entry.name === "start_encounter") holdConsoleOutcome(campaignId, entry.label, lines);
       // Keep the picked character or enemy: a DM usually runs several
       // actions against the same target in a row.
       setValues((current) =>
         Object.fromEntries(
           entry.fields.map((field) => [
             field.name,
-            field.kind === "character" || field.kind === "enemy"
+            field.kind === "character" || field.kind === "enemy" || field.kind === "combatant"
               ? current[field.name]
               : initialValue(field),
           ]),
@@ -164,10 +181,25 @@ export function DmActionForm({
       <div className="stagger space-y-2.5">
         {entry.fields.map((field) => (
           <div key={field.name} className={cn(field.kind === "boolean" && "flex flex-wrap items-center justify-between gap-x-3")}>
-            <FieldLabel className={cn(field.kind === "boolean" && "mb-0")}>
-              {field.label}
-              {field.required ? <span className="text-amber-400"> *</span> : null}
-            </FieldLabel>
+            <div className={cn(field.square && "flex flex-wrap items-center gap-x-2")}>
+              <FieldLabel className={cn((field.kind === "boolean" || field.square) && "mb-0")}>
+                {field.label}
+                {field.required ? <span className="text-amber-400"> *</span> : null}
+              </FieldLabel>
+              {/* A spell area's square, picked on the battle map: one tap
+                  fills this column and its row (DmSquarePick.tsx). */}
+              {field.square ? (
+                <DmSquarePick
+                  requestId={`${entry.name}:${field.name}`}
+                  field={field}
+                  values={values}
+                  onPick={(square) => {
+                    const row = field.square?.row;
+                    setValues((current) => ({ ...current, [field.name]: square.x, ...(row ? { [row]: square.y } : {}) }));
+                  }}
+                />
+              ) : null}
+            </div>
             <FieldInput
               field={field}
               value={values[field.name]}
@@ -191,183 +223,28 @@ export function DmActionForm({
           {busy ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
           Run
         </button>
-        {error ? <span className="motion-shake inline-block text-xs text-red-300">{error}</span> : null}
-        {outcome ? <span className="live-in text-xs text-emerald-300">{outcome}</span> : null}
+        {error ? (
+          <span role="alert" className="motion-shake inline-block text-xs text-red-300">
+            {error}
+          </span>
+        ) : null}
       </div>
+      {outcome.length ? (
+        // The engine's answer, line by line: the hit points it moved, the
+        // resistance it applied, the concentration it broke.
+        <ul className="reveal stagger space-y-0.5 rounded-lg border border-stone-700/50 bg-stone-950/40 px-2.5 py-2 text-xs" aria-live="polite">
+          {outcome.map((line, index) => (
+            <li
+              key={`${index}-${line.text}`}
+              className={cn(
+                line.tone === "bad" ? "text-ember-300" : line.tone === "good" ? "text-emerald-300" : "text-stone-200",
+              )}
+            >
+              {line.text}
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
-}
-
-// The engine answers with whatever the handler returns. Rather than a
-// per-action renderer, show the parts a DM actually reads: a note, a total,
-// or a plain confirmation.
-function describeResult(result: unknown): string {
-  if (!result || typeof result !== "object") {
-    return "Done.";
-  }
-  const record = result as Record<string, unknown>;
-  const parts: string[] = [];
-  if (typeof record.total === "number") {
-    parts.push(`Rolled ${record.total}`);
-  }
-  if (typeof record.success === "boolean") {
-    parts.push(record.success ? "success" : "failure");
-  }
-  if (typeof record.note === "string") {
-    parts.push(record.note);
-  }
-  if (typeof record.combat === "string") {
-    parts.push(record.combat);
-  }
-  if (typeof record.summary === "string") {
-    parts.push(record.summary);
-  }
-  return parts.length ? parts.join(" - ") : "Done.";
-}
-
-function FieldInput({
-  field,
-  value,
-  onChange,
-  sheets,
-  enemies,
-}: {
-  field: CatalogField;
-  value: Value;
-  onChange: (value: Value) => void;
-  sheets: CharacterSheet[];
-  enemies: NonNullable<PublicEncounter["enemies"]>;
-}) {
-  switch (field.kind) {
-    case "character": {
-      // The empty row stays in the list, as it did in the browser's own
-      // select, so a picked target can be unpicked.
-      const options: SelectOption<string>[] = [
-        { value: "", label: "Pick a character" },
-        ...sheets.map((sheet) => ({
-          value: sheet.id,
-          label: sheet.name,
-          icon: { kind: "glyph" as const, key: "tab-characters" },
-        })),
-      ];
-      return (
-        <Select
-          value={String(value ?? "")}
-          onChange={onChange}
-          options={options}
-          label={field.label}
-          placeholder="Pick a character"
-        />
-      );
-    }
-    case "characters": {
-      const picked = Array.isArray(value) ? value : [];
-      return (
-        <div className="stagger-pop flex flex-wrap gap-1.5" role="group" aria-label={field.label}>
-          {sheets.map((sheet) => {
-            const on = picked.includes(sheet.id);
-            return (
-              <button
-                key={sheet.id}
-                type="button"
-                aria-pressed={on}
-                onClick={() =>
-                  onChange(on ? picked.filter((id) => id !== sheet.id) : [...picked, sheet.id])
-                }
-                className={cn(
-                  ui.btnSmall,
-                  "min-h-9 px-2.5 py-1 text-xs",
-                  on && "border-amber-500/70 bg-amber-400/10 text-amber-100 shadow-glow-gold",
-                )}
-              >
-                {sheet.name}
-              </button>
-            );
-          })}
-          {sheets.length === 0 ? (
-            <span className="text-xs text-stone-500">Nobody has a character yet.</span>
-          ) : null}
-        </div>
-      );
-    }
-    case "enemy": {
-      const options: SelectOption<string>[] = [
-        { value: "", label: "Pick an enemy" },
-        ...enemies.map((enemy) => ({
-          value: enemy.id,
-          label: `${enemy.name}${enemy.currentHp !== undefined ? ` (${enemy.currentHp}/${enemy.maxHp})` : ""}`,
-          icon: { kind: "glyph" as const, key: "system-bestiary" },
-        })),
-      ];
-      return (
-        <Select
-          value={String(value ?? "")}
-          onChange={onChange}
-          options={options}
-          label={field.label}
-          placeholder="Pick an enemy"
-        />
-      );
-    }
-    case "select": {
-      const options: SelectOption<string>[] = [
-        { value: "", label: "Not set" },
-        ...(field.options ?? []).map((option) => ({ value: option.value, label: option.label })),
-      ];
-      return (
-        <Select
-          value={String(value ?? "")}
-          onChange={onChange}
-          options={options}
-          label={field.label}
-          placeholder="Not set"
-        />
-      );
-    }
-    case "boolean":
-      return <Switch on={Boolean(value)} onChange={onChange} label={field.label} />;
-    case "number":
-      return (
-        <OptionalNumber
-          value={value === "" || value === undefined ? "" : Number(value)}
-          min={field.min}
-          max={field.max}
-          onChange={onChange}
-          label={field.label}
-          emptyHint="Not set"
-        />
-      );
-    case "longtext":
-      return (
-        <DictateField label={field.label} onTranscript={(text) => onChange(appendDictation(String(value ?? ""), text))}>
-          <textarea
-            value={String(value ?? "")}
-            rows={3}
-            placeholder={field.placeholder}
-            aria-label={field.label}
-            onChange={(event) => onChange(event.target.value)}
-            className={cn(inputClass, "resize-y")}
-          />
-        </DictateField>
-      );
-    default: {
-      const input = (
-        <input
-          type="text"
-          value={String(value ?? "")}
-          placeholder={field.placeholder}
-          aria-label={field.label}
-          onChange={(event) => onChange(event.target.value)}
-          className={inputClass}
-        />
-      );
-      return field.dictate ? (
-        <DictateField single label={field.label} onTranscript={(text) => onChange(appendDictation(String(value ?? ""), text))}>
-          {input}
-        </DictateField>
-      ) : (
-        input
-      );
-    }
-  }
 }

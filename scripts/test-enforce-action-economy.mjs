@@ -7,9 +7,8 @@
 // A reaction comes back at the start of its owner's own turn (SRD 5.1), not
 // when the round wraps.
 //
-// ODM's own rules, pinned here as it documents them:
-//   - Hide, Dash and Disengage always cost the action slot, even for a rogue
-//     with Cunning Action (src/lib/dm/action-tools.ts ACTION_COST).
+// Cunning Action and the monk's ki move Hide, Dash, Disengage and Dodge to
+// the bonus action (test-enforce-bonus-actions.mjs).
 import assert from "node:assert/strict";
 import { heroInput, openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
@@ -173,12 +172,17 @@ await test("the off-hand attack adds no ability modifier to its damage", async (
   assert.equal(off.result.damage, 4);
 });
 
+// A reaction the novice's sheet holds, resolved from its own text: the count
+// is what these two tests are about. (An opportunity attack is the server's
+// own on a battle map, so use_reaction no longer spends one.)
+world.patch(novice.id, { features: [...world.sheet(novice.id).features, { name: "Parry", source: "story" }] });
+
 await test("one reaction a round", async () => {
   await stage(veteran);
-  const one = await world.invoke("use_reaction", { characterId: novice.id, feature: "Opportunity attack" });
+  const one = await world.invoke("use_reaction", { characterId: novice.id, feature: "Parry" });
   assert.equal(one.ok, true, one.error);
   assert.deepEqual(world.encounter().reactionsUsed, [novice.id]);
-  const two = await world.invoke("use_reaction", { characterId: novice.id, feature: "Opportunity attack" });
+  const two = await world.invoke("use_reaction", { characterId: novice.id, feature: "Parry" });
   assert.equal(two.ok, false);
   assert.deepEqual(world.encounter().reactionsUsed, [novice.id]);
 });
@@ -192,7 +196,7 @@ await test("a reaction comes back at the start of its owner's turn, not at the r
   assert.deepEqual(world.encounter().reactionsUsed, []);
   // Spent on their own turn, it stays spent through the round wrap and
   // the veteran's whole next turn.
-  const spent = await world.invoke("use_reaction", { characterId: novice.id, feature: "Opportunity attack" });
+  const spent = await world.invoke("use_reaction", { characterId: novice.id, feature: "Parry" });
   assert.equal(spent.ok, true, spent.error);
   assert.equal(kit.endTurn(novice.userId), true);
   assert.equal(world.encounter().round, 2);

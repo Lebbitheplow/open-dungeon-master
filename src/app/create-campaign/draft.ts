@@ -117,6 +117,7 @@ export const DEFAULT_DRAFT: CampaignDraft = {
     powerfulCritical: false,
     criticalDamageMods: false,
     ammunition: false,
+    supplies: false,
     restVariant: "standard",
   },
   houseRules: "",

@@ -324,7 +324,8 @@ await test("a blow that breaks a beast form sets the concentration DC by the who
 // concentration flag (src/lib/srd/spell-facts.ts).
 await test("an enemy caster concentrates, saves on damage, and loses the spell on a failure or death", async () => {
   const { world, sheets: [mage, friend] } = await party(wizard(5, { abilities: { int: 16, wis: 10 } }), { class: "fighter", level: 5 });
-  const [hag, second] = await fightDummies(world, 2);
+  // Casters: an enemy casts only a spell its block lists (monsters workstream, C:G32).
+  const [hag, second] = await fightDummies(world, 2, { stats: { spells: ["Hold Person"] } });
   const cast = async (enemy, target) => {
     world.dice(1);
     const out = await world.invoke("cast_at_player", {

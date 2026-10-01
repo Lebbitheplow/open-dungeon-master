@@ -7,10 +7,12 @@ import { publishFx, tokenPosition } from "@/lib/dm/fx";
 import { rollExpression } from "@/lib/dice";
 import { publishPersisted } from "@/lib/events";
 import { applyPcDamage } from "@/lib/dm/pc-damage";
+import { openFall } from "@/lib/dm/last-hit";
 import { SUFFOCATING } from "@/lib/dm/vitals-logic";
 import { handleCastAtPlayer } from "@/lib/dm/cast-tools";
 import { resolveSheetRef } from "@/lib/dm/rolls";
-import { computeSheetDerived } from "@/lib/srd";
+import { acBreakdownFor, computeSheetDerived } from "@/lib/srd";
+import { hourlyConSaves } from "@/lib/dm/endurance";
 import {
   breathHoldMinutes,
   extremeColdSave,
@@ -50,7 +52,7 @@ export const hazardTools: ToolDef[] = [
     function: {
       name: "apply_hazard",
       description:
-        "Resolve a trap, a fall, or an environmental hazard against one or more characters with real 5e numbers. The server computes the damage and (for traps) the save DC from the book and applies the save and damage itself, so you never invent them. Use this instead of damage_enemy for any harm from the environment. Call it BEFORE narrating the result and narrate exactly what it reports. Types: 'falling' (pass feet; 1d6 per 10 ft, no save), 'trap' (pass severity; a Dexterity save and damage scaled to each victim's level), 'generic' (pass your own damage dice, saveAbility, and dc for a bespoke hazard like a gout of flame), 'suffocation'/'drowning' (a character out of air; pass roundsWithoutAir and the server derives from their Constitution how long they last before dropping to 0 HP), or 'extreme_cold'/'extreme_heat' (one CON save per hour of exposure; a failure is a level of exhaustion, applied automatically).",
+        "Resolve a trap, a fall, or an environmental hazard against one or more characters with real 5e numbers. The server computes the damage and (for traps) the save DC from the book and applies the save and damage itself, so you never invent them. Use this instead of damage_enemy for any harm from the environment. Call it BEFORE narrating the result and narrate exactly what it reports. Types: 'falling' (pass feet; 1d6 per 10 ft, no save), 'trap' (pass severity; a Dexterity save and damage scaled to each victim's level), 'generic' (pass your own damage dice, saveAbility, and dc for a bespoke hazard like a gout of flame), 'suffocation'/'drowning' (a character out of air; pass roundsWithoutAir and the server derives from their Constitution how long they last before dropping to 0 HP), or 'extreme_cold'/'extreme_heat' (pass hours: one CON save per hour of exposure, a failure a level of exhaustion, applied automatically; cold weather gear or the matching resistance shrugs it off).",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -67,6 +69,13 @@ export const hazardTools: ToolDef[] = [
               "extreme_heat",
             ],
             description: "Which hazard math to use.",
+          },
+          hours: {
+            type: "integer",
+            minimum: 1,
+            maximum: 48,
+            description:
+              "extreme_cold/extreme_heat only: hours of exposure. The server rolls one Constitution save for each hour (cold DC 10; heat DC 5 rising by 1 an hour, at disadvantage in medium or heavy armor) and applies a level of exhaustion for each failure.",
           },
           roundsWithoutAir: {
             type: "integer",
@@ -133,6 +142,8 @@ const hazardSchema = z.object({
   characterIds: z.array(z.string()).min(1),
   feet: z.coerce.number().int().min(0).max(1000).optional(),
   roundsWithoutAir: z.coerce.number().int().min(0).max(100).optional(),
+  // extreme_cold / extreme_heat: hours of exposure, one save for each.
+  hours: z.coerce.number().int().min(1).max(48).optional(),
   severity: z.enum(["setback", "dangerous", "deadly"]).optional(),
   saveAbility: z.enum(["str", "dex", "con", "int", "wis", "cha"]).optional(),
   dc: z.coerce.number().int().min(1).max(30).optional(),
@@ -184,7 +195,13 @@ export function handleApplyHazard(
       return { ok: true, type: "falling", feet: args.feet ?? 0, note: "Too short a fall to hurt." };
     }
     const perTarget = targets.map((sheet) => {
+      // Feather Fall: a slow descent and no falling damage, and so no prone.
+      if (sheet.conditions.some((entry) => entry.trim().toLowerCase() === "feather fall")) {
+        return { name: sheet.name, damage: 0, note: `${sheet.name} drifts down under Feather Fall and lands unhurt.` };
+      }
       const rolled = rollExpression(dice);
+      // Kept so Slow Fall and Feather Fall can answer it (src/lib/dm/last-hit.ts).
+      const fall = openFall(campaign.id, sheet.id);
       // The server rolled these dice, so they land as rolled (20d6 can pass
       // the 200 a typed amount is held to), and a fall that hurts leaves the
       // creature prone.
@@ -194,6 +211,7 @@ export function handleApplyHazard(
         knocksProne: true,
         reason: source,
       });
+      fall.close(rolled.total);
       const pos = tokenPosition(campaign.id, sheet.id);
       if (pos) {
         publishFx(
@@ -280,35 +298,39 @@ export function handleApplyHazard(
   // is a level of exhaustion, which the exhaustion track enforces from
   // there. Cold resistance or immunity shrugs it off entirely.
   if (args.type === "extreme_cold" || args.type === "extreme_heat") {
-    const save = args.type === "extreme_cold" ? extremeColdSave() : extremeHeatSave(1);
-    const wanted = args.type === "extreme_cold" ? "cold" : "fire";
+    const cold = args.type === "extreme_cold";
+    const hours = Array.from({ length: args.hours ?? 1 }, (_, index) => ({
+      hour: index + 1,
+      dc: args.dc ?? (cold ? extremeColdSave() : extremeHeatSave(index + 1)).dc,
+    }));
     const perTarget = targets.map((sheet) => {
-      if (pcResistances(sheet).includes(wanted)) {
-        return {
-          name: sheet.name,
-          immune: `${wanted} resistance: unaffected by the ${args.type === "extreme_cold" ? "cold" : "heat"}`,
-        };
+      const shrug = exposureShrug(sheet, cold);
+      if (shrug) {
+        return { name: sheet.name, immune: shrug };
       }
-      const result = handleCastAtPlayer(
+      const saves = hourlyConSaves({
         campaign,
         turn,
-        JSON.stringify({
-          characterId: sheet.id,
-          source,
-          saveAbility: save.ability,
-          dc: args.dc ?? save.dc,
-          condition: "exhaustion",
-        }),
+        sheet,
+        hours,
+        disadvantage: !cold && heatHampers(sheet),
+        detail: (hour) => `${sheet.name}: CON save vs ${cold ? "the cold" : "the heat"}, hour ${hour}`,
+        reason: source,
         sheets,
         sheetsById,
-      );
-      return { name: sheet.name, ...result };
+      });
+      return { name: sheet.name, saves };
     });
     return {
       ok: true,
       type: args.type,
+      hours: hours.length,
       results: perTarget,
-      note: "One save per hour of exposure; a failure is a level of exhaustion, applied by the server. Cold-weather gear or fitting resistances negate it; call again for each further hour.",
+      note: `One Constitution save for each of ${hours.length} hour${hours.length === 1 ? "" : "s"} of exposure${
+        cold ? " (DC 10)" : " (DC 5, one higher each hour; medium or heavy armor or heavy clothing at disadvantage)"
+      }; each failure is a level of exhaustion, applied by the server. ${
+        cold ? "Cold weather gear or" : "Fire"
+      } resistance negates it. Narrate the toll.`,
     };
   }
 
@@ -358,6 +380,30 @@ export function handleApplyHazard(
     results: perTarget,
     note: "Saves and damage applied by the server; narrate the outcome per character.",
   };
+}
+
+// What keeps a character from the weather's toll: resistance to cold or
+// fire, or cold weather gear against the cold (the SRD's weather rules).
+function exposureShrug(sheet: CharacterSheet, cold: boolean): string | null {
+  const wanted = cold ? "cold" : "fire";
+  if (pcResistances(sheet).includes(wanted)) {
+    return `${wanted} resistance: unaffected by the ${cold ? "cold" : "heat"}`;
+  }
+  if (cold && sheet.equipment.some((item) => /cold[- ]weather gear|winter (?:clothes|clothing|gear)|fur cloak/i.test(item.name))) {
+    return "dressed for the cold: unaffected";
+  }
+  return null;
+}
+
+// Medium or heavy armor, or heavy clothing, puts the heat's saves at
+// disadvantage.
+function heatHampers(sheet: CharacterSheet): boolean {
+  const category = acBreakdownFor(sheet).armor?.category;
+  return (
+    category === "medium" ||
+    category === "heavy" ||
+    sheet.equipment.some((item) => /heavy clothing|cold[- ]weather gear|fur cloak/i.test(item.name))
+  );
 }
 
 function defaultSource(args: z.infer<typeof hazardSchema>): string {

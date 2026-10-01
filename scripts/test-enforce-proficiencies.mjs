@@ -252,9 +252,11 @@ await test("the builder makes each class proficient in what the class grants, an
       assert.ok(row.skills.includes(skill), `${classId} took ${skill}`);
     }
     assert.equal(profs.expertise.length, row.expertise ?? 0, `${classId} expertise`);
-    // One hit die of the class's size, and its maximum plus CON for hit points.
+    // One hit die of the class's size, and its maximum plus CON for hit points
+    // (plus Draconic Resilience's one for a Draconic Bloodline sorcerer).
     assert.deepEqual(sheet.hitDice, { die: `d${row.die}`, total: 1, spent: 0 }, `${classId} hit dice`);
-    assert.equal(sheet.maxHp, row.die + abilityMod(sheet.abilities.con), `${classId} hit points`);
+    const draconic = classId === "sorcerer" && /draconic/i.test(sheet.subclass ?? "") ? 1 : 0;
+    assert.equal(sheet.maxHp, row.die + abilityMod(sheet.abilities.con) + draconic, `${classId} hit points`);
     assert.equal(sheet.currentHp, sheet.maxHp);
     const granted = sheet.features.filter((feature) => feature.source === "class").map((feature) => feature.name);
     for (const feature of row.features) {

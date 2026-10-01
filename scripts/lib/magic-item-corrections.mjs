@@ -79,13 +79,16 @@ export const ADDED = [
       [`Ring of Resistance (${title(type)})`],
     ),
   ),
-  ...DAMAGE_TYPES.map((type) =>
-    attuned(
+  // Light armor, as the pack's Armor of Resistance row says; a sheet row
+  // that names its suit ("Chain Mail of Fire Resistance") wears that one.
+  ...DAMAGE_TYPES.map((type) => ({
+    ...attuned(
       `Armor of ${title(type)} Resistance`,
       [{ kind: "resistance", types: [type] }],
       [`Armor of Resistance (${title(type)})`],
     ),
-  ),
+    base: { kind: "armor", name: "Leather" },
+  })),
   ...[
     ["Black", "acid"],
     ["Blue", "lightning"],
@@ -97,8 +100,8 @@ export const ADDED = [
     ["Red", "fire"],
     ["Silver", "cold"],
     ["White", "cold"],
-  ].map(([dragon, type]) =>
-    attuned(
+  ].map(([dragon, type]) => ({
+    ...attuned(
       `${dragon} Dragon Scale Mail`,
       [
         { kind: "ac_bonus", amount: 1 },
@@ -106,6 +109,7 @@ export const ADDED = [
       ],
       [`Dragon Scale Mail (${dragon})`],
     ),
-  ),
+    base: { kind: "armor", name: "Scale Mail" },
+  })),
   attuned("Ioun Stone of Protection", [{ kind: "ac_bonus", amount: 1 }], ["Ioun Stone (Protection)"]),
 ];

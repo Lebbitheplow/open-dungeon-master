@@ -7,11 +7,13 @@ import {
   CONDITION_GLYPHS,
   GLYPH_TONE_COLOR,
   glyphFor,
+  glyphIconKey,
   MAX_BADGES,
 } from "@/lib/battlemap/condition-glyphs";
 import { HEALTH_LABEL, HEALTH_RING, type HealthWord } from "@/lib/battlemap/health-words";
 import { iconPath } from "@/lib/icons";
 import { variantUrl } from "@/lib/image-format";
+import { HostSvgImage } from "@/components/ui/HostSvgImage";
 import type { Footprint } from "@/lib/battlemap/footprint";
 import type { MapDrawing } from "@/lib/battlemap/scene";
 import type { PlayerMapView } from "@/lib/battlemap/view";
@@ -212,7 +214,7 @@ export type TokenFigureProps = {
   portrait?: string;
   footprint: Footprint;
   health?: HealthWord;
-  conditions?: Array<{ id: string; label: string; rounds?: number }>;
+  conditions?: Array<{ id: string; label: string; rounds?: number; note?: string }>;
   elevation?: "flying" | "burrowing";
   isCurrent: boolean;
   held: boolean;
@@ -262,7 +264,9 @@ export const TokenFigure = memo(function TokenFigure({
   const title = [
     token.name,
     health ? HEALTH_LABEL[health] ?? health : null,
-    ...(conditions ?? []).map((c) => (c.rounds ? `${c.label} (${c.rounds})` : c.label)),
+    ...(conditions ?? []).map((c) =>
+      c.note ? `${c.label} (${c.rounds ? `${c.rounds} rd, ` : ""}${c.note})` : c.rounds ? `${c.label} (${c.rounds})` : c.label,
+    ),
   ]
     .filter(Boolean)
     .join(" · ");
@@ -375,7 +379,7 @@ export const TokenFigure = memo(function TokenFigure({
         ) : null}
         {/* A face on a 24 px token wants the 256 px copy, not the full portrait. */}
         {portrait ? (
-          <image
+          <HostSvgImage
             href={variantUrl(portrait, 256)}
             x={4}
             y={4}
@@ -466,7 +470,7 @@ export const TokenFigure = memo(function TokenFigure({
                       the fallback for a condition with no painting. */}
                   {glyph.id !== "effect" ? (
                     <image
-                      href={iconPath("condition", glyph.id)}
+                      href={iconPath("condition", glyphIconKey(glyph))}
                       x={bx + badgeSize / 2 - badgeSize * 0.92}
                       y={by + badgeSize / 2 - badgeSize * 0.92}
                       width={badgeSize * 1.84}

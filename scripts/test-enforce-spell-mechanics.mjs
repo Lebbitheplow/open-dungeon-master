@@ -145,7 +145,9 @@ if (pack) {
     const fireball = spellMechanicsFor({ spell: "Fireball" });
     assert.deepEqual(
       { ...fireball.mech, level: fireball.spellLevel, concentration: fireball.concentration },
-      { resolution: "save", save: "dex", halfOnSave: true, damageType: "fire", level: 3, concentration: false },
+      // The area's size rides along: it bounds how far from the caster a
+      // caught creature may stand (aoe-spell.ts).
+      { resolution: "save", save: "dex", halfOnSave: true, damageType: "fire", area: true, areaFeet: 20, level: 3, concentration: false },
     );
     const hold = spellMechanicsFor({ spell: "Hold Person" });
     assert.equal(hold.mech.save, "wis");

@@ -6,11 +6,19 @@
 // nothing is written and nothing is refused.
 
 import type { Campaign } from "@/lib/db/campaigns";
+import { inDirectSunlight } from "@/lib/dm/sunlight";
+import { hasSunlightSensitivity } from "@/lib/srd/trait-rules";
 import type { Encounter, EncounterEnemy } from "@/lib/db/encounters";
 import type { Advantage } from "@/lib/dice";
 import { enemyAcWithEffects } from "@/lib/dm/ac-effects";
 import type { AttackProfile } from "@/lib/dm/attack-logic";
-import { characterFlanks, characterShootsInMelee, tilesBetween } from "@/lib/dm/attack-spatial";
+import { attackSight, characterSenses, enemySenses, lightOnAttack } from "@/lib/dm/attack-light";
+import {
+  characterFlanks,
+  characterShootsInMelee,
+  creatureCover,
+  tilesBetween,
+} from "@/lib/dm/attack-spatial";
 import { normalizeClock } from "@/lib/dm/calendar";
 import { attackContext, exhaustionRollState, mergeAdvantage } from "@/lib/dm/condition-logic";
 import type { effectOutcome } from "@/lib/dm/effect-tools";
@@ -24,11 +32,25 @@ import { conditionRollRiders } from "@/lib/srd/condition-effects";
 import { encumbranceFor } from "@/lib/srd/encumbrance";
 import type { CombatRiders } from "@/lib/srd/feature-effects";
 import { weatherRangedRider } from "@/lib/srd/weather";
+import { isImmersed, underwaterSwing } from "@/lib/dm/underwater";
+import { swimsFrom } from "@/lib/battlemap/types";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
-// A held Help (src/lib/dm/action-tools.ts HELPED), named here because
-// action-tools imports this module's neighbours.
-const HELPED = "helped";
+import { heldHelp } from "@/lib/dm/help-logic";
+import { authoredAttackSituation } from "@/lib/dm/authored-hooks";
+import { hasFeralSenses, seenTargetConditions } from "@/lib/dm/attack-features";
+
+// An unspent Bardic Inspiration die: the size rides in the condition name,
+// "bardic inspiration (d8)", as use_resource writes it.
+function heldInspiration(conditions: string[]): { condition: string; die: string } | null {
+  for (const condition of conditions) {
+    const match = /^bardic inspiration \((d\d{1,2})\)$/i.exec(condition.trim());
+    if (match) {
+      return { condition, die: match[1].toLowerCase() };
+    }
+  }
+  return null;
+}
 
 export type AttackGeometry = ReturnType<typeof attackGeometry>;
 
@@ -46,14 +68,17 @@ export function attackGeometry(
     rangeTiles: profile.rangeTiles,
     thrown: profile.thrown,
   });
-  const effectiveAc = enemyAcWithEffects(campaignId, enemy) + spatials.cover;
+  // A creature in the line gives half cover; the better cover counts.
+  const screen = spatials.cover < 5 ? creatureCover(encounterId, sheetId, enemy.id) : null;
+  const cover: 0 | 2 | 5 = screen && spatials.cover < 2 ? 2 : spatials.cover;
+  const effectiveAc = enemyAcWithEffects(campaignId, enemy) + cover;
   // How far apart the two stand, when the board knows. A thrown weapon is a
   // ranged attack once it leaves the hand, a melee one inside its reach.
   const apart = tilesBetween(encounterId, sheetId, enemy.id);
   const atRange =
     profile.ranged || (profile.thrown && apart !== null && apart > profile.reachTiles);
   const withinFiveFeet = apart === null ? !profile.ranged : apart <= 1;
-  return { spatials, effectiveAc, apart, atRange, withinFiveFeet };
+  return { spatials, cover, screen, effectiveAc, apart, atRange, withinFiveFeet };
 }
 
 type EffectOutcome = ReturnType<typeof effectOutcome>;
@@ -78,19 +103,43 @@ export function attackSituation(input: {
   onHitNotes: string[];
   featureRiders: FeatureRider[];
   maneuver: ManeuverPick | null;
+  // Reckless Attack's advantage on this swing (pc-attack-options.ts).
+  recklessAdvantage?: boolean;
+  // What became of the caller's advantage claim, for the notes.
+  claimNote?: string | null;
+  // Inspiration spent on this roll.
+  inspired?: boolean;
 }) {
   const { campaign, encounter, sheet, enemy, geometry, profile, kind, maneuver } = input;
   const { spatials, apart, atRange } = geometry;
 
   // Conditions on both sides drive advantage and auto-crits; the model's
   // situational claim merges in as one more source.
+  // Feral Senses: a creature the ranger cannot see costs the roll nothing
+  // (src/lib/dm/attack-features.ts).
+  const feral = hasFeralSenses(sheet);
   const conditionContext = attackContext({
     attackerConditions: sheet.conditions,
-    targetConditions: enemy.conditions,
+    targetConditions: seenTargetConditions(sheet, enemy.conditions),
     melee: !atRange,
     adjacent: geometry.withinFiveFeet,
     requested: input.requested ?? "none",
   });
+  // Light on a mapped fight: who can see whom (src/lib/dm/attack-light.ts).
+  const sight = attackSight({
+    campaignId: campaign.id,
+    encounterId: encounter.id,
+    attacker: { refId: sheet.id, senses: characterSenses(sheet) },
+    target: { refId: enemy.id, senses: enemySenses(enemy) },
+  });
+  const light = lightOnAttack(sight && feral ? { ...sight, attackerSees: true } : sight, {
+    attacker: sheet.name,
+    target: enemy.displayName,
+  });
+  if (feral && ((sight !== null && !sight.attackerSees) || enemy.conditions.some((entry) => /^(invisible|hidden)$/i.test(entry.trim())))) {
+    conditionContext.notes.push("Feral Senses: not seeing the target costs no disadvantage");
+  }
+  conditionContext.notes.push(...light.notes);
   const exhaustion = exhaustionRollState(sheet.exhaustion ?? 0, "attack");
   if (exhaustion.note) {
     conditionContext.notes.push(exhaustion.note);
@@ -110,9 +159,11 @@ export function attackSituation(input: {
   if (input.damageEffect.sources.length) {
     conditionContext.notes.push(`on damage rolls: ${input.damageEffect.sources.join("; ")}`);
   }
-  if (spatials.cover) {
+  if (geometry.cover) {
     conditionContext.notes.push(
-      `${enemy.displayName} has ${spatials.cover === 2 ? "half" : "three-quarters"} cover: +${spatials.cover} AC`,
+      `${enemy.displayName} has ${geometry.cover === 2 ? "half" : "three-quarters"} cover${
+        geometry.screen && geometry.cover === 2 ? ` behind ${geometry.screen}` : ""
+      }: +${geometry.cover} AC`,
     );
   }
   if (spatials.longRange) {
@@ -138,9 +189,34 @@ export function attackSituation(input: {
     conditionContext.notes.push("flanking: advantage");
   }
   // A held Help: advantage on this attack, which spends it.
-  const helped = sheet.conditions.find((entry) => entry.trim().toLowerCase() === HELPED) ?? null;
+  // Only a Help given against this enemy (src/lib/dm/help-logic.ts).
+  const helped = heldHelp(sheet, { enemyId: enemy.id });
   if (helped) {
     conditionContext.notes.push("spends the Help their ally gave them: advantage");
+  }
+  if (input.claimNote) {
+    conditionContext.notes.push(input.claimNote);
+  }
+  if (input.recklessAdvantage) {
+    conditionContext.notes.push("attacking recklessly: advantage");
+  }
+  if (input.inspired) {
+    conditionContext.notes.push("spends their Inspiration: advantage");
+  }
+  // The Grappler feat: advantage against the creature its holder grapples.
+  const grappling =
+    sheet.feats.some((feat) => feat.trim().toLowerCase() === "grappler") &&
+    enemy.conditions.some(
+      (entry) =>
+        entry.trim().toLowerCase() === "grappled" &&
+        (enemy.conditionMeta as Record<string, { source?: string } | undefined>)[entry]?.source === sheet.id,
+    );
+  // Authored subclass features (Assassinate, Avenging Angel, the wolf totem): authored-hooks.ts.
+  const authored = authoredAttackSituation({ campaignId: campaign.id, encounter, sheet, enemy, melee: !atRange });
+  conditionContext.notes.push(...authored.notes);
+  conditionContext.autoCrit = conditionContext.autoCrit || Boolean(authored.autoCrit);
+  if (grappling) {
+    conditionContext.notes.push(`Grappler: advantage against the creature ${sheet.name} grapples`);
   }
   if (maneuver) {
     conditionContext.notes.push(
@@ -153,6 +229,14 @@ export function attackSituation(input: {
   // Effect conditions on the attacker's own roll: Bless's +1d4, Bane's
   // -1d4, True Strike's one-shot advantage.
   const attackRiders = conditionRollRiders(sheet.conditions, "attack");
+  // A held Bardic Inspiration die rides the attack roll and is spent by it,
+  // as it is by a check or a save (src/lib/dm/rolls.ts).
+  const inspiration = heldInspiration(sheet.conditions);
+  if (inspiration) {
+    attackRiders.diceSuffix += `+1${inspiration.die}`;
+    attackRiders.notes.push(`spends their Bardic Inspiration die: +1${inspiration.die} to the attack roll`);
+    attackRiders.spent.push(inspiration.condition);
+  }
   conditionContext.notes.push(...attackRiders.notes, ...input.onHitNotes);
   for (const rider of input.featureRiders) {
     conditionContext.notes.push(
@@ -165,6 +249,11 @@ export function attackSituation(input: {
   // SRD heavy property: Small creatures swing oversized weapons at
   // disadvantage.
   const smallWithHeavy = profile.heavy && sizeForRace(sheet.race) === "Small";
+  // Sunlight Sensitivity: in direct sunlight, disadvantage (sunlight.ts).
+  const sunlit = hasSunlightSensitivity(sheet) && inDirectSunlight(campaign.id);
+  if (sunlit) {
+    conditionContext.notes.push(`${sheet.name} is in direct sunlight (Sunlight Sensitivity): disadvantage`);
+  }
   if (smallWithHeavy) {
     conditionContext.notes.push(
       `${profile.weapon} is a heavy weapon and ${sheet.name} is Small: disadvantage`,
@@ -202,6 +291,13 @@ export function attackSituation(input: {
   if (gale.note) {
     conditionContext.notes.push(gale.note);
   }
+  // Under the water: weapons not made for it (src/lib/dm/underwater.ts).
+  const underwater = kind !== "spell" && isImmersed(campaign.id, sheet.id)
+    ? underwaterSwing({ weapon: profile.weapon, melee: !atRange, swims: swimsFrom(undefined, sheet.features), beyondNormal: spatials.longRange })
+    : null;
+  if (underwater?.note) {
+    conditionContext.notes.push(underwater.note);
+  }
   const advantage: Advantage = mergeAdvantage([
     conditionContext.advantage,
     exhaustion.advantage,
@@ -211,12 +307,19 @@ export function attackSituation(input: {
     ...(input.attackEffect.disadvantage ? ["disadvantage" as const] : []),
     ...(helped ? ["advantage" as const] : []),
     ...(flanking ? ["advantage" as const] : []),
+    ...(input.recklessAdvantage ? ["advantage" as const] : []),
+    ...(input.inspired ? ["advantage" as const] : []),
+    ...light.sources,
+    ...(grappling ? ["advantage" as const] : []),
+    ...authored.sources,
     ...(spatials.longRange ? ["disadvantage" as const] : []),
     ...(crowded ? ["disadvantage" as const] : []),
     ...(lanceClose ? ["disadvantage" as const] : []),
     ...(smallWithHeavy ? ["disadvantage" as const] : []),
+    ...(sunlit ? ["disadvantage" as const] : []),
     ...(armorUntrained ? ["disadvantage" as const] : []),
     ...(gale.disadvantage ? ["disadvantage" as const] : []),
+    ...(underwater?.disadvantage ? ["disadvantage" as const] : []),
   ]);
   return { context: conditionContext, advantage, helped, attackRiders };
 }

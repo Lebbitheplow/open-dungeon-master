@@ -8,6 +8,7 @@ import { DmConsolePanel } from "@/app/campaigns/[campaignId]/DmConsolePanel";
 import { LeadPanel } from "@/app/campaigns/[campaignId]/LeadPanel";
 import type { CampaignMessage } from "@/lib/db/messages";
 import type { DmBeat } from "@/lib/db/dm-beats";
+import { ConsoleOutcomeBanner } from "@/app/campaigns/[campaignId]/ConsoleOutcomeBanner";
 import { BattleMapPanel } from "@/app/campaigns/[campaignId]/BattleMapPanel";
 import type { FxEvent } from "@/lib/battlemap/fx-plan";
 import type { CameraEvent, SceneState } from "@/lib/scene/state";
@@ -337,6 +338,9 @@ export function SidePanelRouter({
   if (tab === "party") {
     return (
       <>
+        {/* With the board on the stage the Battle tab shows the party: a
+            fight the console just started leaves its result here. */}
+        {rawTab === "battle" && adjudicates ? <ConsoleOutcomeBanner campaignId={campaignId} /> : null}
         {partySubTabs.length > 1 ? (
           <SubTabs tabs={partySubTabs} value={partySection} onChange={setPartySection} />
         ) : null}
@@ -384,6 +388,7 @@ export function SidePanelRouter({
                 realDiceAllowed={campaign?.gameSettings?.dicePolicy === "real_allowed"}
                 encumbranceRule={Boolean(campaign?.gameSettings?.variantRules?.encumbrance)}
                 inCombat={Boolean(encounter)}
+                encounter={encounter ?? null}
                 campaignId={campaignId}
                 worldPack={campaign?.gameSettings?.worldPack ?? ""}
                 lights={Object.fromEntries((battleMap?.tokens ?? []).filter((token) => token.kind === "pc" && token.light).map((token) => [token.refId, token.light!]))}
@@ -430,6 +435,8 @@ export function SidePanelRouter({
   }
   if (tab === "battle" && battleMap) {
     return (
+      <>
+      {adjudicates ? <ConsoleOutcomeBanner campaignId={campaignId} /> : null}
       <BattleMapPanel
         campaignId={campaignId}
         view={battleMap}
@@ -457,6 +464,7 @@ export function SidePanelRouter({
         chronicle={tabletopChronicle}
         visible={visible}
       />
+      </>
     );
   }
   if (tab === "map") {

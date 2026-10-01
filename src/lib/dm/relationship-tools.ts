@@ -43,6 +43,7 @@ import type { DmTurn } from "@/lib/db/dm-turns";
 import { rollExpression } from "@/lib/dice";
 import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
 import { resolveRollExpression, resolveSheetRef } from "@/lib/dm/rolls";
+import { rollExtrasFor, spendRollCarriers } from "@/lib/dm/forced-save";
 import type { RollArgs } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -338,16 +339,19 @@ export function handleRelationshipBeat(
   let rollTotal: number | null = null;
   let dc: number | null = null;
   if (spec.skill) {
+    // Held carriers and lasting effects ride the check, and the carrier is
+    // spent by it.
     const resolved = resolveRollExpression(
       { kind: "skill_check", skill: spec.skill } as unknown as RollArgs,
       sheet,
-      { encumbrance: campaign.gameSettings.variantRules.encumbrance },
+      rollExtrasFor(campaign, sheet, "skill_check"),
     );
     if ("error" in resolved || "autoFail" in resolved) {
       return {
         error: "error" in resolved ? resolved.error : `${sheet.name} cannot make that check.`,
       };
     }
+    spendRollCarriers(campaign.id, sheet.id, resolved.spendInspiration);
     dc = beatDc(relationship.approval);
     const rolled = rollExpression(resolved.expression);
     rollTotal = rolled.total;

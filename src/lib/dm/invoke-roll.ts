@@ -9,6 +9,7 @@
 // can decide the roll outright, an inspiration die is spent whether the
 // dice are physical or digital, an initiative roll feeds the encounter, and
 // a damage roll aimed at an enemy applies itself.
+import { claimedAdvantage } from "@/lib/dm/pc-attack-options";
 import { rollExpression } from "@/lib/dice";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import { insertRoll } from "@/lib/db/rolls";
@@ -20,6 +21,7 @@ import { rollExtrasFor, spendRollCarriers } from "@/lib/dm/forced-save";
 import { redactRoll } from "@/lib/dm/viewer";
 import { autoApplyDamageRoll } from "@/lib/dm/enemy-damage";
 import { recordInitiativeRoll } from "@/lib/dm/encounter-tools";
+import { applyInitiativeRefills } from "@/lib/dm/feature-hooks";
 import {
   resolveRollExpression,
   resolveSheetRef,
@@ -30,6 +32,8 @@ import {
 import { strictnessShift } from "@/lib/dm/safety-logic";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { moteAfterRoll, moteOf } from "@/lib/dm/authored-mote";
+import { applyRollGates } from "@/lib/dm/roll-gates";
 
 export function handleRequestRoll(
   campaign: Campaign,
@@ -60,6 +64,12 @@ export function handleRequestRoll(
     };
   }
 
+  // The AI's advantage stands only on a circumstance the server cannot see
+  // (the same rule as pc_attack's); the DM console rules freely.
+  if (turn.actor === "ai" && args.advantage && args.advantage !== "none") {
+    const claim = claimedAdvantage({ requested: args.advantage, reason: args.advantageReason, byAi: true });
+    args = { ...args, advantage: claim.requested };
+  }
   const sheet = resolveSheetRef(args.characterId, sheets, sheetsById);
   // The dead roll nothing: not a check, not a save, not initiative.
   if (sheet) {
@@ -70,13 +80,31 @@ export function handleRequestRoll(
       };
     }
   }
+  // No stealth on a normal or fast march, and a contest rolls the
+  // creature's own check for the DC (src/lib/dm/roll-gates.ts).
+  const gated = applyRollGates(campaign, turn, args);
+  if ("error" in gated) {
+    return { error: gated.error };
+  }
+  args = gated.args;
   // In combat a character's attack belongs to the attack engine, which
   // adjudicates against the enemy's AC and applies the damage itself.
   if (args.kind === "attack" && sheet && getActiveEncounter(campaignId)) {
     return {
       error: model
-        ? "Character attacks in combat go through pc_attack: call it with characterId, targetEnemyId, and the weapon (or spell + damage dice). The server rolls to-hit from their sheet, adjudicates against the enemy's AC, and applies damage itself."
+        ? "Character attacks in combat go through pc_attack: call it with characterId, targetEnemyId, and the weapon (or an attack-roll spell by name). The server rolls to-hit from their sheet, adjudicates against the enemy's AC, and applies damage itself."
         : "Use Player attacks for a swing in combat: it rolls to hit from their sheet, compares it to the enemy's AC and applies the damage.",
+    };
+  }
+  // The same holds for the damage: a party character's damage on an enemy
+  // with no attack roll behind it would skip the hit, the action and the
+  // turn. Damage aimed at an enemy from nobody's sheet (an NPC ally the
+  // story never recruited) still lands.
+  if (args.kind === "damage" && args.targetEnemyId && sheet && getActiveEncounter(campaignId)) {
+    return {
+      error: model
+        ? `${sheet.name}'s damage on an enemy comes from pc_attack (or the spell tools), which roll the hit first and apply the damage themselves; request_roll does not apply a party character's damage to an enemy.`
+        : `${sheet.name}'s damage on an enemy comes from Player attacks or a cast form, which roll the hit first; a bare damage roll does not land on an enemy.`,
     };
   }
 
@@ -103,6 +131,8 @@ export function handleRequestRoll(
 
   // The inspiration die and a held Help are already baked into the
   // expression, so they are spent either way.
+  // A Creation bard's mote rides the die being spent (authored-mote.ts).
+  const mote = sheet ? moteOf(sheet, resolved.spendInspiration) : null;
   if (sheet) {
     spendRollCarriers(campaignId, sheet.id, resolved.spendInspiration);
   }
@@ -156,6 +186,9 @@ export function handleRequestRoll(
       args.kind === "initiative"
         ? recordInitiativeRoll(campaignId, sheet?.id ?? null, roll.total)
         : null;
+    // Superior Inspiration, Perfect Self: a use back on rolling initiative.
+    const refilled = args.kind === "initiative" && sheet ? applyInitiativeRefills(campaign, sheet.id) : [];
+    const moteLine = sheet ? moteAfterRoll(campaign, sheet, mote, args.kind, outcome) : null;
     const applied =
       args.kind === "damage" && args.targetEnemyId
         ? autoApplyDamageRoll(
@@ -173,9 +206,12 @@ export function handleRequestRoll(
       total: roll.total,
       dice: outcome.terms,
       ...(args.dc !== undefined ? { dc: args.dc, success: roll.total >= args.dc } : {}),
+      ...(gated.contest ? { contest: `${gated.contest.name} rolled ${gated.contest.skill} ${gated.contest.total}; ${gated.contest.answering ? "a tie goes to the character" : "the character must beat it"}.` } : {}),
       ...(outcome.crit ? { crit: outcome.crit } : {}),
       ...(resolved.conditionNotes ? { conditionEffects: resolved.conditionNotes } : {}),
       ...(combatNote ? { combat: combatNote } : {}),
+      ...(refilled.length ? { refilled } : {}),
+      ...(moteLine ? { mote: moteLine } : {}),
       ...(applied ? { applied } : {}),
     };
   } catch (error) {

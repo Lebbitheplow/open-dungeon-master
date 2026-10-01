@@ -20,7 +20,10 @@ const {
 // The thirteen damage types and the one keyword the damage engine reads.
 const RESISTABLE = [
   "acid", "bludgeoning", "cold", "fire", "force", "lightning", "necrotic",
-  "piercing", "poison", "psychic", "radiant", "slashing", "thunder", "nonmagical",
+  "piercing", "poison", "psychic", "radiant", "slashing", "thunder",
+  // Armor of Invulnerability: resistance to nonmagical damage of every type,
+  // expanded by pcResistances (src/lib/dm/condition-logic.ts).
+  "nonmagical damage",
 ];
 
 let passed = 0;
@@ -114,8 +117,13 @@ test("every generated item is well formed", () => {
     assert.equal(item.match, item.name.toLowerCase());
     assert.equal(names.has(item.match), false, `duplicate ${item.match}`);
     names.add(item.match);
-    // A row with no effect is in the table for one reason: who may attune.
-    assert.ok(item.effects.length > 0 || item.attunedBy, item.name);
+    // A row with no effect is in the table for what the engine holds about
+    // it: who may attune, the weapon or armor it is built on, its bonus and
+    // riders, its charges.
+    assert.ok(
+      item.effects.length > 0 || item.attunedBy || item.base || item.weapon || item.armor || item.charges,
+      item.name,
+    );
     assert.equal(typeof item.requiresAttunement, "boolean", item.name);
     for (const effect of item.effects) {
       if (effect.kind === "resistance") {
@@ -192,8 +200,10 @@ test("attunement is refused with the reason, and settled the same way on a write
 });
 
 test("the rows a person corrected against the item's own text", () => {
-  assert.equal(matchMagicItem("Vorpal Sword"), null);
-  assert.equal(matchMagicItem("Defender"), null);
+  // Magic weapons now have rows (their base weapon and bonus), with no worn
+  // effect: a Vorpal Sword gives no resistance, a Defender no standing AC.
+  assert.deepEqual(matchMagicItem("Vorpal Sword")?.effects, []);
+  assert.deepEqual(matchMagicItem("Defender")?.effects, []);
   assert.equal(matchMagicItem("Asi"), null);
   assert.deepEqual(matchMagicItem("Staff of Power").effects, [
     { kind: "ac_bonus", amount: 2 },

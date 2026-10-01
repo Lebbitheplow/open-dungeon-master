@@ -5,22 +5,13 @@
 import type { CatalogEntry } from "@/lib/dm/catalog-types";
 import { UPDATE_SHEET_FIELDS } from "@/lib/dm/update-sheet-args";
 import { DRACONIC_ANCESTRIES } from "@/lib/srd/racial-grants";
-
-const ABILITIES = [
-  { value: "str", label: "Strength" },
-  { value: "dex", label: "Dexterity" },
-  { value: "con", label: "Constitution" },
-  { value: "int", label: "Intelligence" },
-  { value: "wis", label: "Wisdom" },
-  { value: "cha", label: "Charisma" },
-];
-
-const REASON = {
-  name: "reason",
-  label: "Reason",
-  kind: "text" as const,
-  placeholder: "Short in-fiction cause",
-};
+import {
+  ABILITY_OPTIONS as ABILITIES,
+  AREA_PLACEMENT_FIELDS,
+  REASON_FIELD as REASON,
+  conditionField,
+  damageTypeField,
+} from "@/lib/dm/catalog-vocab";
 
 export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
   {
@@ -31,7 +22,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
     fields: [
       { name: "characterId", label: "Character", kind: "character", required: true },
       { name: "amount", label: "Damage", kind: "number", required: true, min: 1, max: 200 },
-      { name: "type", label: "Type", kind: "text", placeholder: "slashing, fire, ..." },
+      damageTypeField("type", "Type", "Resistance, immunity and vulnerability read it."),
       {
         name: "magical",
         label: "From a spell or a magic weapon",
@@ -198,6 +189,8 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
       { name: "characterId", label: "Character", kind: "character", required: true },
       { name: "item", label: "Item", kind: "text", required: true },
       { name: "targetCharacterId", label: "Used on", kind: "character" },
+      { name: "charges", label: "Charges spent", kind: "number", min: 1, max: 50, help: "A wand or a staff: the item stays and the count drops. It refills at dawn." },
+      { name: "spell", label: "Spell cast from it", kind: "text", help: "A wand or staff's spell: the charges set its level, and the spell's own form then spends no slot." },
       REASON,
     ],
   },
@@ -235,6 +228,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
       { name: "amount", label: "How much", kind: "number", min: 1, max: 100, help: "Points from a pool: Lay on Hands, Ki. One use when left empty." },
       { name: "variant", label: "Option", kind: "text", help: "For a feature with choices." },
       { name: "targetCharacterId", label: "Target", kind: "character" },
+      { name: "targetEnemyId", label: "Enemy aimed at", kind: "enemy", help: "Intimidating Presence and the subclass features aimed at a creature: the server rolls its save." },
       { name: "form", label: "Beast form", kind: "text", help: "Wild Shape: the beast's name. The server reads its stat block." },
       { name: "formHp", label: "Form's hit points", kind: "number", min: 1, max: 300 },
       { name: "formAc", label: "Form's armor class", kind: "number", min: 1, max: 30 },
@@ -251,7 +245,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
     summary: "Applies a condition, with rounds or a save that ends it; the server re-rolls both.",
     fields: [
       { name: "characterId", label: "Character", kind: "character", required: true },
-      { name: "condition", label: "Condition", kind: "text", required: true },
+      conditionField("condition", "Condition", { required: true }),
       { name: "rounds", label: "Rounds", kind: "number", min: 1, max: 100 },
       { name: "minutes", label: "Or minutes", kind: "number", min: 1, max: 1440 },
       { name: "hours", label: "Or hours", kind: "number", min: 1, max: 24 },
@@ -359,7 +353,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
     summary: "Cured, dispelled, rested off or shaken off.",
     fields: [
       { name: "characterId", label: "Character", kind: "character", required: true },
-      { name: "condition", label: "Condition", kind: "text", required: true },
+      conditionField("condition", "Condition", { required: true }),
       REASON,
     ],
   },
@@ -377,6 +371,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
       { name: "spell", label: "Spell", kind: "text" },
       { name: "concentration", label: "Concentration", kind: "boolean" },
       { name: "ritual", label: "Cast as a ritual", kind: "boolean" },
+      ...AREA_PLACEMENT_FIELDS,
     ],
   },
   {
@@ -440,6 +435,12 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
           { value: "long", label: "Long rest" },
         ],
       },
+      {
+        name: "spend",
+        label: "Hit dice to spend",
+        kind: "hitDice",
+        help: "Short rest, for a character with no player at the table. A connected player spends their own on their sheet.",
+      },
       REASON,
     ],
   },
@@ -465,6 +466,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
         { value: "guest", label: "Scene ally" },
       ] },
       { name: "personality", label: "Personality", kind: "text", required: true },
+      { name: "spells", label: "Spells they know", kind: "list", placeholder: "Cure Wounds, Bless", help: "For a caster, comma separated; the server keeps what their level allows." },
     ],
   },
   {
@@ -472,6 +474,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
     label: "Dismiss a companion",
     category: "party",
     summary: "Writes an AI-played ally out of the party.",
+    confirm: { message: "Dismiss this companion? They leave the party and the board." },
     fields: [
       // The handler takes the companion's id and answers to their name too.
       { name: "characterId", label: "Companion", kind: "character", required: true },

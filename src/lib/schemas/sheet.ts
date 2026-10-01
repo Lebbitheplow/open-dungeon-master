@@ -1,8 +1,11 @@
 import { z } from "zod";
 import { homebrewGearSchema } from "@/lib/schemas/homebrew";
+import type { SheetSummon } from "@/lib/schemas/summon";
+import { ABILITIES } from "@/lib/schemas/abilities";
+import { conditionMetaSchema, type ConditionMetaMap } from "@/lib/schemas/condition-meta";
 
-export const ABILITIES = ["str", "dex", "con", "int", "wis", "cha"] as const;
-export type Ability = (typeof ABILITIES)[number];
+export { ABILITIES, type Ability } from "@/lib/schemas/abilities";
+export { conditionMetaSchema, type ConditionMetaMap } from "@/lib/schemas/condition-meta";
 
 export const abilityScoresSchema = z.object({
   str: z.number().int().min(1).max(30),
@@ -82,6 +85,15 @@ export const equipmentItemSchema = z.object({
   equipped: z.boolean().optional(),
   // Magic item currently attuned. Capped at 3 per character by patchSheet.
   attuned: z.boolean().optional(),
+  // Asked to attune and waiting for the short rest that attuning takes
+  // (SRD 5.1, Attunement); the rest engine turns it into `attuned`. Counts
+  // against the three attunements while it waits. Absent on every row
+  // written before it.
+  attuning: z.boolean().optional(),
+  // Charges left on a charged magic item (a wand, a staff). Absent means
+  // full: a row written before charges were kept starts with all of them
+  // (src/lib/dm/item-charges.ts).
+  charges: z.number().int().min(0).max(999).optional(),
   // Pounds per unit, for the optional encumbrance rule. Filled in from the
   // content pack when a sheet is read (src/lib/db/sheets.ts), so rows
   // written before the field still get weighed; a value a player typed
@@ -379,35 +391,6 @@ export const resourcesSchema = z.record(
 );
 export type SheetResources = z.infer<typeof resourcesSchema>;
 
-// Duration/save metadata for active conditions, keyed by condition name.
-// Lives NEXT TO the plain `conditions` string list so its consumers never
-// change; the server maintains both together (src/lib/dm/condition-logic.ts).
-export const conditionMetaSchema = z.record(
-  z.string().max(40),
-  z.object({
-    // Rounds left. A long duration is stored in rounds too (Mage Armor's
-    // eight hours is 4800), so the ceiling is a day's worth.
-    rounds: z.number().int().min(1).max(14400).optional(),
-    // What put the condition there: the spell, feature or hazard by name.
-    source: z.string().trim().min(1).max(80).optional(),
-    // Set by the engine on a condition it has renewed (a rage kept going).
-    stoked: z.boolean().optional(),
-    // "Until the start of your next turn" (Dodge, Shield, the Protection
-    // style): the id of the combatant whose turn ends it, a characterId or
-    // an enemyId. Such a condition is not counted in rounds; the initiative
-    // pointer ends it on reaching that combatant
-    // (src/lib/dm/condition-tick.ts startTurnConditions).
-    untilTurnOf: z.string().trim().min(1).max(80).optional(),
-    saveEnds: z
-      .object({
-        ability: z.enum(ABILITIES),
-        dc: z.number().int().min(1).max(30),
-      })
-      .optional(),
-  }),
-);
-export type ConditionMetaMap = z.infer<typeof conditionMetaSchema>;
-
 // An active transformation (Wild Shape or Polymorph). The character's own
 // hit points are untouched while shaped (5e: they are remembered and
 // returned to on revert); damage lands on the beast pool and only the
@@ -562,6 +545,9 @@ export type CharacterSheet = {
   wildShape: WildShape;
   // Bound creatures: familiars, animal companions, drakes.
   pets: SheetPet[];
+  // A creature a spell or feature made: its attacks, Multiattack and who
+  // made it (src/lib/schemas/summon.ts). Absent or null on every other sheet.
+  summon?: SheetSummon | null;
   exhaustion: number;
   deathSaves: DeathSaves;
   // Spell this character is concentrating on; null when none. Managed by

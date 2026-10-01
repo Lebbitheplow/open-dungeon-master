@@ -50,3 +50,55 @@ export function thirdCasterCantrips(classId: string, level: number): number {
 // Both cast with Intelligence from the wizard's list.
 export const THIRD_CASTER_ABILITY = "int" as const;
 export const THIRD_CASTER_LIST = "wizard";
+
+// The two schools each third caster learns its levelled spells from; any
+// other school only with the picks the class allows from any school: one at
+// 3rd level and one more at 8th, 14th and 20th. Cantrips are free of it.
+const THIRD_CASTER_SCHOOLS: Record<string, [string, string]> = {
+  fighter: ["abjuration", "evocation"],
+  rogue: ["enchantment", "illusion"],
+};
+
+export function thirdCasterAnySchoolPicks(level: number): number {
+  return level >= 20 ? 4 : level >= 14 ? 3 : level >= 8 ? 2 : level >= 3 ? 1 : 0;
+}
+
+// How many of these levelled spells sit outside the class's two schools. A
+// spell whose school nobody knows (homebrew without one) is not counted.
+export function thirdCasterOutside(classId: string, spells: Array<{ school: string | null | undefined }>): number {
+  const schools = THIRD_CASTER_SCHOOLS[normalize(classId)];
+  if (!schools) {
+    return 0;
+  }
+  return spells.filter((spell) => {
+    const school = normalize(spell.school ?? "");
+    return Boolean(school) && !schools.includes(school);
+  }).length;
+}
+
+// What is wrong with a third caster's levelled spells known: more from
+// outside its two schools than its level allows. `heldOutside` is how many
+// the stored sheet already held outside them, so a sheet written before this
+// rule is not refused for keeping what it has, only for adding more. Null
+// when nothing is wrong or the class casts no third-caster magic. The level
+// up route, the sheet legality check and the level-up picker all ask this.
+export function thirdCasterSchoolProblem(input: {
+  classId: string;
+  subclass: string | null | undefined;
+  level: number;
+  spells: Array<{ name: string; school: string | null | undefined }>;
+  heldOutside?: number;
+}): string | null {
+  if (!isThirdCaster(input.classId, input.subclass)) {
+    return null;
+  }
+  const schools = THIRD_CASTER_SCHOOLS[normalize(input.classId)];
+  const outside = thirdCasterOutside(input.classId, input.spells);
+  const allowed = Math.max(thirdCasterAnySchoolPicks(input.level), input.heldOutside ?? 0);
+  if (outside <= allowed) {
+    return null;
+  }
+  const who = normalize(input.classId) === "fighter" ? "An Eldritch Knight" : "An Arcane Trickster";
+  const any = thirdCasterAnySchoolPicks(input.level);
+  return `${who} of level ${input.level} learns ${schools[0]} and ${schools[1]} spells, and ${any} from any other school; this would make ${outside}. Pick an ${schools[0]} or ${schools[1]} spell instead.`;
+}

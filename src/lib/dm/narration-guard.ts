@@ -5,23 +5,77 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { requestDmMessage } from "@/lib/dm/model";
 import { extractStoryText } from "@/lib/story-prompt";
 import { fakeRollMarkerRegex } from "@/lib/dm/tool-text";
-import { buildCorrectionPrompt, checkNarration } from "@/lib/dm/engine-boundary";
+import {
+  buildCorrectionPrompt,
+  checkNarration,
+  normalizeSpellName,
+  type LiveState,
+} from "@/lib/dm/engine-boundary";
+import { getActiveEncounter, listEnemies } from "@/lib/db/encounters";
+import spellManifest from "@/lib/srd/manifest/spells.json";
 
 // The DB/model rim of the engine-boundary guard. All the matching lives in
 // dm/engine-boundary.ts (pure); this file only decides what to do about a
 // detection, and its answer is deliberately small: ask the model to fix its
-// own prose, once, inside the turn's existing call budget.
+// own prose, once.
+//
+// That one call is held in reserve outside the turn's four-call budget
+// (GUARD_RESERVED_CALLS). The turns most likely to contradict their results
+// are the busy ones (an attack, the extra attack, end_turn and the enemies),
+// and those are exactly the turns that end with the budget spent; a guard
+// that could only log there would miss the turns it exists for.
 //
 // Never touches mechanical state. The dice, the hit points, and the slots
 // already resolved through their tools before the narration existed; a
-// contradiction is a prose bug, so only prose is ever changed. When the budget
-// is gone, or the rewrite is no better, the original narration stands and the
-// contradiction is logged rather than papered over.
+// contradiction is a prose bug, so only prose is ever changed. When the
+// rewrite is no better, the original narration stands and the contradiction
+// is logged rather than papered over.
+
+export const GUARD_RESERVED_CALLS = 1;
+
+type ManifestSpell = { n: string; l: number; a?: string[] };
+
+let leveled: string[] | null = null;
+
+// Every leveled spell in the bundled spell checklist, with its aliases,
+// normalized the way the guard compares names. Cantrips are left out:
+// casting one spends nothing, so a missing tool call proves nothing.
+export function leveledSpellNames(): string[] {
+  if (!leveled) {
+    leveled = [
+      ...new Set(
+        (spellManifest as { spells: ManifestSpell[] }).spells
+          .filter((spell) => spell.l >= 1)
+          .flatMap((spell) => [spell.n, ...(spell.a ?? [])])
+          .map(normalizeSpellName)
+          .filter((name) => name.length >= 3),
+      ),
+    ];
+  }
+  return leveled;
+}
+
+// The running fight's enemies as they stand now, after every call this
+// turn made: what a tool-less kill or a refused attack is checked against.
+export function liveStateFor(campaignId: string): LiveState | null {
+  const encounter = getActiveEncounter(campaignId);
+  if (!encounter) {
+    return null;
+  }
+  return {
+    enemies: listEnemies(encounter.id).map((enemy) => ({
+      id: enemy.id,
+      name: enemy.displayName,
+      hp: enemy.currentHp,
+      maxHp: enemy.maxHp,
+      status: enemy.status,
+    })),
+  };
+}
 
 export async function enforceEngineBoundary(
   campaign: Campaign,
   turn: DmTurn,
-  callsRemaining: number,
   sheets: readonly CharacterSheet[],
 ): Promise<void> {
   const narration = turn.narrationParts.join("\n\n").trim();
@@ -34,11 +88,15 @@ export async function enforceEngineBoundary(
   const lines = campaign.gameSettings.safety?.lines ?? [];
   const crossed = lineViolations(narration, lines);
   const partyNames = sheets.map((sheet) => sheet.name);
+  const live = liveStateFor(campaign.id);
+  const leveledSpells = leveledSpellNames();
   const contradictions = campaign.gameSettings.narrationGuard
     ? checkNarration({
         conversation: turn.conversation,
         narration,
         partyNames,
+        live,
+        leveledSpells,
       })
     : [];
   if (!contradictions.length && !crossed.length) {
@@ -46,12 +104,6 @@ export async function enforceEngineBoundary(
   }
 
   const summary = [...contradictions.map((entry) => entry.detail), ...crossed.map((line) => `line crossed: ${line}`)].join("; ");
-  if (callsRemaining < 1) {
-    console.warn(
-      `[engine-boundary] turn ${turn.id}: narration contradicts the resolved outcomes, but the model-call budget is spent (${summary})`,
-    );
-    return;
-  }
 
   // The narration is echoed back explicitly: a turn that ended on a pure
   // narration call never pushed that assistant message into the conversation,
@@ -70,7 +122,8 @@ export async function enforceEngineBoundary(
       },
     ],
     // No tools: this call exists to rewrite prose, and a tool call here would
-    // resolve mechanics a second time.
+    // resolve mechanics a second time. It is the reserved call, so it is
+    // made whatever the turn's budget has left.
     { tools: [], toolChoice: "none", thinking: false },
   );
   turn.callIndex += 1;
@@ -98,6 +151,8 @@ export async function enforceEngineBoundary(
         conversation: turn.conversation,
         narration: corrected,
         partyNames,
+        live,
+        leveledSpells,
       })
     : [];
   const stillCrossed = lineViolations(corrected, lines);

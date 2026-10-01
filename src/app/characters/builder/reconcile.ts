@@ -1,11 +1,9 @@
-import { spellClassFor } from "@/lib/classes";
-import { suggestedCantripCount } from "@/lib/content/mechanics";
 import type { Ability } from "@/lib/schemas/sheet";
-import { spellSlotsFor } from "@/lib/srd";
 import { classFeaturesFor, expertiseSlotsFor, subclassLevelFor } from "@/lib/srd/features";
 import { fightingStyleSlots, type FightingStyleId } from "@/lib/srd/feature-effects";
 import { findOptionByFeatureName, optionSlotsFor } from "@/lib/srd/options";
 import { spellLevelOf } from "@/lib/srd/spell-lists";
+import { builderCasting } from "./casting";
 import { bonusLanguageCount } from "./submit";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
 
@@ -212,14 +210,8 @@ export function reconcilePicks(
   // Spells: only for a class that casts at this level, only up to the level
   // its slots reach. A spell above that is one the spell book cannot show, so
   // it has to go here or the player is asked to remove what they cannot see.
-  const castingClass = klass?.spellAbility ? klass : undefined;
-  const maxSpellLevel = castingClass
-    ? Object.keys(spellSlotsFor(castingClass.id, level)).reduce((top, slot) => Math.max(top, Number(slot)), 0)
-    : 0;
-  const cantripCap = castingClass
-    ? suggestedCantripCount(spellClassFor(castingClass.id), level, castingClass.casterType)
-    : null;
-  const casts = Boolean(castingClass) && (maxSpellLevel > 0 || cantripCap !== null);
+  // An Eldritch Knight or Arcane Trickster casts too (./casting.ts).
+  const { maxSpellLevel, cantripCap, casts } = builderCasting(klass, subclass, level);
   const cantrips = casts && cantripCap !== null ? unique(picks.cantrips) : [];
   note("cantrip", picks.cantrips, cantrips);
   const spells = casts

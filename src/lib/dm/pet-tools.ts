@@ -9,9 +9,12 @@ import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { proficiencyBonus } from "@/lib/srd";
 import { findBeastForm } from "@/lib/srd/beast-forms";
 import { applyEnemyDamage, publishEncounter, resolveEnemyRef } from "@/lib/dm/enemy-damage";
+import { enemyAcWithEffects } from "@/lib/dm/ac-effects";
+import { petAttackCost } from "@/lib/dm/pet-attack-cost";
 import { resolveSheetRef } from "@/lib/dm/rolls";
 import type { CharacterSheet, SheetPet } from "@/lib/schemas/sheet";
 import { allSpellNames } from "@/lib/srd/spell-lists";
+import { FAMILIAR_FORMS } from "@/lib/srd/familiar-forms";
 
 // The creatures bound to a character: familiars (Find Familiar, Pact of the
 // Chain), the Beast Master's companion, the Drakewarden's drake, and story
@@ -30,32 +33,6 @@ type ToolDef = {
 };
 
 export const PET_TOOL_NAMES = ["summon_pet", "pet_attack", "damage_pet", "dismiss_pet"] as const;
-
-// The classic familiar shapes, small enough to author inline. All are
-// speed/senses flavor with 1 HP; a familiar cannot attack (Pact of the
-// Chain lifts that with its special forms).
-const FAMILIAR_FORMS: Array<
-  Pick<SheetPet, "form" | "hp" | "maxHp" | "ac" | "speed" | "notes"> & {
-    attacks?: SheetPet["attacks"];
-    chainOnly?: boolean;
-  }
-> = [
-  { form: "Owl", hp: 1, maxHp: 1, ac: 11, speed: 5, notes: "60 ft fly; Flyby (no opportunity attacks when it flies out of reach); superb night vision." },
-  { form: "Raven", hp: 1, maxHp: 1, ac: 12, speed: 10, notes: "50 ft fly; Mimicry (imitates simple sounds)." },
-  { form: "Cat", hp: 2, maxHp: 2, ac: 12, speed: 40, notes: "30 ft climb; Keen Smell." },
-  { form: "Bat", hp: 1, maxHp: 1, ac: 12, speed: 5, notes: "30 ft fly; blindsight 60 ft (echolocation)." },
-  { form: "Rat", hp: 1, maxHp: 1, ac: 10, speed: 20, notes: "Keen Smell." },
-  { form: "Spider", hp: 1, maxHp: 1, ac: 12, speed: 20, notes: "20 ft climb; Spider Climb; Web Sense." },
-  { form: "Weasel", hp: 1, maxHp: 1, ac: 13, speed: 30, notes: "Keen Hearing and Smell." },
-  { form: "Hawk", hp: 1, maxHp: 1, ac: 13, speed: 10, notes: "60 ft fly; Keen Sight." },
-  { form: "Frog", hp: 1, maxHp: 1, ac: 11, speed: 20, notes: "20 ft swim; standing leap." },
-  { form: "Snake", hp: 2, maxHp: 2, ac: 13, speed: 30, notes: "30 ft swim; blindsight 10 ft." },
-  // Pact of the Chain special forms: real combatants with an attack.
-  { form: "Imp", hp: 10, maxHp: 10, ac: 13, speed: 20, chainOnly: true, notes: "40 ft fly; invisibility at will; devil's sight.", attacks: [{ name: "Sting", toHit: 5, damage: "1d4+3+3d6", type: "piercing (poison rides the sting)" }] },
-  { form: "Quasit", hp: 7, maxHp: 7, ac: 13, speed: 40, chainOnly: true, notes: "Invisibility and Scare at will; shapechanger.", attacks: [{ name: "Claws", toHit: 4, damage: "1d4+3", type: "slashing plus poison" }] },
-  { form: "Pseudodragon", hp: 7, maxHp: 7, ac: 13, speed: 15, chainOnly: true, notes: "60 ft fly; blindsight 10 ft; Sting (poison, save or sleep).", attacks: [{ name: "Bite", toHit: 4, damage: "1d4+2", type: "piercing" }, { name: "Sting", toHit: 4, damage: "1d4+2", type: "piercing plus poison save" }] },
-  { form: "Sprite", hp: 2, maxHp: 2, ac: 15, speed: 10, chainOnly: true, notes: "40 ft fly; Invisibility; Shortbow (poison, save or sleep).", attacks: [{ name: "Longsword", toHit: 2, damage: "1", type: "slashing" }, { name: "Shortbow", toHit: 6, damage: "1", type: "piercing plus sleep-poison save" }] },
-];
 
 export const petTools: ToolDef[] = [
   {
@@ -85,7 +62,7 @@ export const petTools: ToolDef[] = [
     function: {
       name: "pet_attack",
       description:
-        "A character's pet attacks an enemy: the server checks the pet may attack at all (plain familiars cannot; Pact of the Chain forms, companions and drakes can), rolls to-hit and damage with the pet's real numbers, and applies the result. Commanding a Beast Master companion costs the ranger's action, a drake the bonus action; the server notes it.",
+        "A character's pet attacks an enemy: the server checks the pet may attack at all (plain familiars cannot; Pact of the Chain forms, companions and drakes can), rolls to-hit against the enemy's real AC and damage with the pet's real numbers, and applies the result. In a fight it happens on the owner's own turn, while the owner can act, and the server charges it: a Beast Master companion costs the ranger's action, a drake the bonus action, a Pact of the Chain familiar one of the warlock's attacks of the Attack action (once a turn), a story pet the owner's action. A refusal spends nothing.",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -420,6 +397,12 @@ export function handlePetAttack(
   if (!enemy || enemy.status !== "alive") {
     return { error: "pet_attack needs a living targetEnemyId from GAME STATE." };
   }
+  // Commanding the pet is the owner's to do, on the owner's turn, and costs
+  // what the feature says (src/lib/dm/pet-attack-cost.ts).
+  const charge = petAttackCost(sheet, pet, encounter);
+  if ("error" in charge) {
+    return { error: charge.error };
+  }
   const wantedAttack = (args.attack ?? "").trim().toLowerCase();
   const attack =
     pet.attacks.find(
@@ -444,21 +427,18 @@ export function handlePetAttack(
   });
   turn.rollIds.push(hitRoll.id);
 
-  const economy =
-    pet.kind === "beast_companion"
-      ? `Commanding ${pet.name} used ${sheet.name}'s action.`
-      : pet.kind === "drake"
-        ? `Commanding ${pet.name} used ${sheet.name}'s bonus action.`
-        : `${pet.name} attacked with its own reaction (${sheet.name} forgoes one of their attacks).`;
+  const economy = charge.commit();
 
+  // The enemy's real AC today: a spell or an effect on it counts.
+  const vsAc = enemyAcWithEffects(campaign.id, enemy);
   const crit = hitOutcome.crit === "nat20";
-  const hit = hitOutcome.crit !== "nat1" && (crit || hitOutcome.total >= enemy.stats.ac);
+  const hit = hitOutcome.crit !== "nat1" && (crit || hitOutcome.total >= vsAc);
   if (!hit) {
     return {
       ok: true,
       attack: `${pet.name}: ${attack.name}`,
       rolled: hitOutcome.total,
-      vsAc: enemy.stats.ac,
+      vsAc,
       hit: false,
       economy,
     };
@@ -492,7 +472,7 @@ export function handlePetAttack(
     ok: true,
     attack: `${pet.name}: ${attack.name}`,
     rolled: hitOutcome.total,
-    vsAc: enemy.stats.ac,
+    vsAc,
     hit: true,
     ...(crit ? { crit: true } : {}),
     ...applied,

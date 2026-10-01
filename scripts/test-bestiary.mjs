@@ -16,7 +16,9 @@ const { CREATURE_TYPES, normalizeCreatureType } = await import("../src/lib/besti
 const { GENRES } = await import("../src/lib/schemas/game-settings.ts");
 
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
-const contentDbPath = path.resolve(scriptsDir, "../data/content/open5e.sqlite");
+// CONTENT_DB_PATH wins, as it does for the app, so a run pointed away from
+// the pack (the way CI runs) skips the pack checks here too.
+const contentDbPath = process.env.CONTENT_DB_PATH ?? path.resolve(scriptsDir, "../data/content/open5e.sqlite");
 
 let passed = 0;
 function test(name, fn) {

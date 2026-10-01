@@ -1,4 +1,6 @@
 import { foldFieldValue } from "@/lib/dm/update-sheet-args";
+import { aiSheetFieldRefusal } from "@/lib/dm/update-sheet-ai";
+import { getDmTurn } from "@/lib/db/dm-turns";
 import { z } from "zod";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
@@ -23,6 +25,7 @@ import {
   sheetBuffViolation,
   spendSlotMath,
 } from "@/lib/dm/mutation-math";
+import { capacityProblem } from "@/lib/dm/load-rules";
 import {
   addCopper,
   COPPER_PER_GOLD,
@@ -34,11 +37,20 @@ import {
 } from "@/lib/srd/currency";
 import { healDeathHook } from "@/lib/dm/death";
 import { applyPcDamage } from "@/lib/dm/pc-damage";
+import { featureVariantSpend } from "@/lib/dm/feature-spends";
+import { authoredFeatureSpend } from "@/lib/dm/authored-spends";
+import { combatFeatureSpend } from "@/lib/dm/combat-features";
+import { srdFeatureSpend } from "@/lib/dm/srd-feature-spends";
 import { handleStabilize } from "@/lib/dm/stabilize";
 import { canonicalCondition, handleSetCondition } from "@/lib/dm/set-condition";
 import { exhaustionPatch, namesExhaustion, SUFFOCATING } from "@/lib/dm/vitals-logic";
 import { prepareResourceCharge } from "@/lib/dm/resource-turn";
+import { prepareUseItem } from "@/lib/dm/object-actions";
+import { chargedItemUse } from "@/lib/dm/item-use";
+import { applyConsumable, consumableRefusal } from "@/lib/dm/consumables";
 import { castSpell } from "@/lib/dm/cast-guard";
+import { ZONE_ARGS, zoneArgsSchema, zonePlacement } from "@/lib/dm/zone-args";
+import { castHealingSpell } from "@/lib/dm/heal-spell";
 import { advanceClock, recordShapeEnd } from "@/lib/db/clock";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import { copyCost, learnProblem } from "@/lib/dm/learn-rules";
@@ -55,17 +67,14 @@ import {
   computePurchase,
   computeUseItem,
   computeUseResource,
-  resourceTools,
   rollHealing,
 } from "@/lib/dm/resource-tools";
-import { searchSpells, spellDamageFor, spellFactsFor, spellNameMatches } from "@/lib/content";
+import { resourceTools } from "@/lib/dm/resource-tool-defs";
+import { searchSpells, spellFactsFor, spellNameMatches } from "@/lib/content";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { suggestedSpellCount } from "@/lib/content/mechanics";
-import { abilityMod, computeSheetDerived } from "@/lib/srd";
+import { abilityMod } from "@/lib/srd";
 import { spellClassFor } from "@/lib/classes";
-import { insertRoll } from "@/lib/db/rolls";
-import { rollExpression } from "@/lib/dice";
-import { publishWithSeq } from "@/lib/events";
 import { planHealFx } from "@/lib/battlemap/fx-plan";
 import { publishFx, tokenPosition } from "@/lib/dm/fx";
 import { checklistClassSpell, isCantripName, spellsAgainstLimit } from "@/lib/srd/spell-lists";
@@ -155,7 +164,7 @@ export const mutationTools: ToolDef[] = [
   }, []),
   tool(
     "stabilize",
-    "Stabilize a DYING character at 0 HP without healing. Name the character tending to them as healerId: it takes that character's action and the server rolls their DC 10 Wisdom (Medicine) check. Pass method 'kit' to spend a use of the healer's kit they carry, or 'spell' for Spare the Dying, and no check is needed. A stable character stops making death saves, stays unconscious at 0 HP, and regains 1 hit point after 1d4 hours.",
+    "Stabilize a DYING character at 0 HP without healing. Name the character tending to them as healerId: it takes that character's action and the server rolls their DC 10 Wisdom (Medicine) check. Pass method 'kit' to spend one of the ten uses of the healer's kit they carry, or 'spell' for Spare the Dying, and no check is needed. On a battle map the healer must be within 5 feet. A stable character stops making death saves, stays unconscious at 0 HP, and regains 1 hit point after 1d4 hours.",
     {
       healerId: { type: "string", description: "The characterId of whoever is tending to them." },
       method: {
@@ -266,7 +275,7 @@ export const mutationTools: ToolDef[] = [
   tool("clear_condition", "Remove a condition from a character the moment the fiction ends it (cured, dispelled, rested, shaken off). Use the condition name shown in GAME STATE.", {
     condition: { type: "string" },
   }, ["condition"]),
-  tool("use_spell_slot", "Cast a spell that no other tool resolves (a utility spell, a summoning, a ritual): the server checks the caster holds the spell and can cast it now, spends the slot of the spell's level (or the higher one named), its casting time from the turn and any costly material, and tracks concentration: a new concentration spell ends the previous one and its effects. cast_at_enemy, cast_buff, aoe_damage, pc_attack, heal and use_reaction spend their own slot; do not call this before them.", {
+  tool("use_spell_slot", "Cast a spell that no other tool resolves (a utility spell, a summoning, a ritual): the server checks the caster holds the spell and can cast it now, spends the slot of the spell's level (or the higher one named), its casting time from the turn and any costly material, and tracks concentration: a new concentration spell ends the previous one and its effects. cast_at_enemy, cast_buff, aoe_damage, pc_attack, heal and use_reaction spend their own slot; do not call this before them. A spell that leaves an area on the battle map with nobody caught in it yet (Fog Cloud, Darkness, Silence, Spike Growth, Web, Moonbeam, Daylight, a Wall of Stone, Force, Ice, Fire or Thorns, Guardian of Faith) is laid there: send atX/atY, and towardX/towardY for a wall; the server applies the area from then on (movement, sight, Silence, the saves and damage of creatures entering it or starting or ending a turn in it) and removes it when the concentration or the duration ends.", {
     level: { type: "integer", minimum: 1, maximum: 9 },
     spell: { type: "string", description: "Exact name of the spell being cast, from the character's spell list." },
     ritual: {
@@ -277,6 +286,7 @@ export const mutationTools: ToolDef[] = [
       type: "boolean",
       description: "Only for homebrew spells the server does not know: true if this spell requires concentration.",
     },
+    ...ZONE_ARGS,
   }, ["level", "spell"]),
   tool(
     "learn_spell",
@@ -289,22 +299,13 @@ export const mutationTools: ToolDef[] = [
   ),
   tool(
     "update_sheet",
-    "Directly set character sheet fields for permanent or story-driven changes: renames, transformations, curses, blessings, training, level or ability score changes. For routine bookkeeping (damage, healing, loot, gold, XP, conditions, spell slots) use the specific tools instead. Include ONLY the fields that change.",
+    "Set who a character is in the story: a rename, a race after a transformation, a background, an alignment, a speed a curse changed, an ability score a tome or a curse changed, a feat or a lasting ability the story grants. Never a level, hit points, XP, AC, gold or conditions: the level-up is the player's, and heal, apply_damage, award_xp, modify_gold, set_condition and set_effect move the rest (the server refuses them here). Include ONLY the fields that change.",
     {
       name: { type: "string" },
       race: { type: "string" },
-      class: { type: "string" },
-      subclass: { type: "string" },
       background: { type: "string" },
       alignment: { type: "string" },
-      level: { type: "integer", minimum: 1, maximum: 20 },
-      xp: { type: "integer", minimum: 0 },
-      maxHp: { type: "integer", minimum: 1, maximum: 500 },
-      currentHp: { type: "integer", minimum: 0, maximum: 500 },
-      tempHp: { type: "integer", minimum: 0, maximum: 200 },
-      ac: { type: "integer", minimum: 1, maximum: 30 },
       speed: { type: "integer", minimum: 0, maximum: 120 },
-      gold: { type: "integer", minimum: 0 },
       abilities: {
         type: "object",
         description: "Full ability block: str, dex, con, int, wis, cha (1-30 each).",
@@ -317,7 +318,6 @@ export const mutationTools: ToolDef[] = [
           cha: { type: "integer" },
         },
       },
-      conditions: { type: "array", items: { type: "string" } },
       feats: { type: "array", items: { type: "string" } },
       features: {
         type: "array",
@@ -384,6 +384,10 @@ const argsSchema = z.object({
   // writes nothing (src/lib/dm/cast-guard.ts). Not in the tool schema.
   via: z.enum(["slot", "enemy", "buff", "aoe", "attack", "heal", "reaction"]).optional(),
   dryRun: z.boolean().optional(),
+  // use_spell_slot, internal: how many of the casting's shares this call
+  // resolves (Magic Missile's darts at one target).
+  uses: z.coerce.number().int().min(1).max(700).optional(),
+  ...zoneArgsSchema,
   // heal: temporary hit points instead of healing.
   temp: z.coerce.boolean().optional(),
   delta: z.coerce.number().int().optional(),
@@ -399,7 +403,11 @@ const argsSchema = z.object({
   qty: z.coerce.number().int().optional(),
   // use_item / purchase / use_resource.
   item: z.string().optional(),
+  // use_item: charges a charged item spends (src/lib/dm/item-use.ts).
+  charges: z.coerce.number().int().min(1).max(50).optional(),
   targetCharacterId: z.string().optional(),
+  // use_resource: the creature a feature is aimed at (Intimidating Presence).
+  targetEnemyId: z.string().optional(),
   price: z.coerce.number().int().min(0).max(100000).optional(),
   resource: z.string().optional(),
   // use_resource, Wild Shape: the beast form's stat block.
@@ -683,6 +691,8 @@ export function applyDmMutation(
           type: args.type,
           crit: args.crit === true,
           magical: args.magical === true,
+          // A named spell's damage: Spell Resistance and Aura of Warding resist it.
+          spell: Boolean(args.spell),
           reason,
         }),
       };
@@ -696,75 +706,32 @@ export function applyDmMutation(
       const healSpell = (args.spell ?? "").trim();
       if (healSpell) {
         const caster = (args.casterId ? resolve(args.casterId) : null) ?? sheet;
-        // The healing is only rolled once nothing can refuse it: the target
-        // can be healed, and the caster casts the spell through the one
-        // guard, which checks the list and spends the slot
-        // (src/lib/dm/cast-guard.ts). A name nobody published and the table
-        // never wrote is not a spell, and heals by the amount sent.
-        if (sheet.deathSaves?.dead) {
-          return {
-            result: {
-              error: `${sheet.name} is DEAD. Healing cannot help; only the party lead can reverse a death.`,
-            },
-          };
+        // Everything a healing spell asks is asked before the slot is spent
+        // (src/lib/dm/heal-spell.ts): its healing can be derived, the target
+        // is in reach, the dead are reached only by a revival spell inside
+        // its window. A name nobody published heals by the amount sent.
+        const outcome = castHealingSpell(
+          campaign,
+          turnId,
+          { target: sheet, caster, spell: healSpell, level: args.level, amount: args.amount, reason },
+          (castArgs) =>
+            applyDmMutation(campaign, turnId, "use_spell_slot", JSON.stringify(castArgs), sheets, sheetsById).result,
+        );
+        if (outcome && "error" in outcome) {
+          return { result: { error: outcome.error } };
         }
-        if (spellFactsFor(healSpell, spellAuthorsFor(campaign))) {
-          const cast = applyDmMutation(
-            campaign,
-            turnId,
-            "use_spell_slot",
-            JSON.stringify({
-              characterId: caster.id,
-              spell: healSpell,
-              ...(args.level !== undefined ? { level: args.level } : {}),
-              via: "heal",
-              reason: reason || `${healSpell} on ${sheet.name}`,
-            }),
-            sheets,
-            sheetsById,
-          ).result;
-          if ("error" in cast) {
-            return { result: cast };
-          }
-          if (typeof cast.slotLevel === "number") {
-            args.level = cast.slotLevel;
-          }
+        if (outcome && "done" in outcome) {
+          return { result: outcome.done };
         }
-        const scaled = spellDamageFor({
-          spell: healSpell,
-          userId: caster.userId,
-          casterLevel: caster.level,
-          slotLevel: args.level,
-        });
-        if (scaled) {
-          const derived = computeSheetDerived(caster);
-          const modifier = caster.spellcasting
-            ? derived.abilityMods[caster.spellcasting.ability]
-            : 0;
-          const expression = modifier > 0 ? `${scaled.dice}+${modifier}` : scaled.dice;
-          const outcome = rollExpression(expression);
-          const roll = insertRoll({
-            campaignId: campaign.id,
-            characterId: sheet.id,
-            requestedBy: "dm",
-            kind: "custom",
-            detail: `${healSpell} on ${sheet.name} (${expression})`,
-            result: outcome,
-          });
-          publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", {
-            roll,
-            source: "digital",
-          });
-          amount = Math.max(1, outcome.total);
-          healNote = `${healSpell}: ${scaled.note}, rolled ${amount}`;
+        if (outcome) {
+          amount = outcome.amount;
+          healNote = outcome.note;
         }
       }
       if (amount < 1) {
         return {
           result: {
-            error: healSpell
-              ? `The server could not derive ${healSpell}'s healing; send heal again with an explicit amount.`
-              : "heal needs a positive amount, or a spell name to roll.",
+            error: "heal needs a positive amount, or a spell name to roll.",
           },
         };
       }
@@ -916,7 +883,7 @@ export function applyDmMutation(
         return { result: { error: badQty } };
       }
       const math = grantItemMath(sheet.equipment, name, args.qty ?? 1, { identified: known });
-      const noRoom = grantProblem(sheet.name, sheet.equipment, math.equipment, name);
+      const noRoom = grantProblem(sheet.name, sheet.equipment, math.equipment, name) ?? capacityProblem(sheet, math.equipment, name);
       if (noRoom) {
         return { result: { error: noRoom } };
       }
@@ -992,11 +959,31 @@ export function applyDmMutation(
       if (!target) {
         return { result: { error: "Unknown targetCharacterId; use one from GAME STATE." } };
       }
+      // A charged item (a wand, a staff) spends charges and stays in the
+      // pack (src/lib/dm/item-use.ts); null for anything else.
+      const charged = chargedItemUse(campaign, turnId, sheet, itemName, args.charges, args.spell);
+      if (charged) {
+        return { result: charged };
+      }
+      // Using an object is an action, and only for someone who can take one
+      // (src/lib/dm/object-actions.ts); asked before anything is rolled.
+      const objectCharge = prepareUseItem(campaign, sheet, target, itemName);
+      if ("error" in objectCharge) {
+        return { result: objectCharge };
+      }
+      // A scroll off the reader's class list stays unread (consumables.ts).
+      const unreadable = consumableRefusal(sheet, itemName);
+      if (unreadable) {
+        return { result: { error: unreadable } };
+      }
       const outcome = computeUseItem(campaign, sheet, target, itemName);
       if ("error" in outcome) {
         return { result: outcome };
       }
       patchSheet(sheet.id, outcome.patch);
+      Object.assign(outcome.result, objectCharge.commit());
+      // What the potion or scroll does, applied by the engine.
+      Object.assign(outcome.result, applyConsumable(campaign, turnId, sheet, target, String(outcome.result.used ?? itemName)) ?? {});
       audit(campaign, turnId, sheet, "use_item", { item: itemName }, reason, outcome.patch);
       publishSheet(campaign, sheet.id);
       // Potion healing rides the standard heal mutation so the death engine
@@ -1038,7 +1025,7 @@ export function applyDmMutation(
         return { result: outcome };
       }
       const noRoom = outcome.patch.equipment
-        ? grantProblem(sheet.name, sheet.equipment, outcome.patch.equipment, itemName)
+        ? grantProblem(sheet.name, sheet.equipment, outcome.patch.equipment, itemName) ?? capacityProblem(sheet, outcome.patch.equipment, itemName, outcome.patch.gold)
         : null;
       if (noRoom) {
         return { result: { error: noRoom } };
@@ -1082,6 +1069,29 @@ export function applyDmMutation(
             error: `use_resource spends a whole number of uses or points, 1 or more; ${args.amount} is not a spend. Nothing was spent.`,
           },
         };
+      }
+      // Intimidating Presence, Holy Nimbus and Divine Intervention resolve in
+      // the fight (src/lib/dm/combat-features.ts).
+      const combatSpend = combatFeatureSpend(campaign, turnId, sheet, resourceName, args.targetEnemyId);
+      if (combatSpend) {
+        return { result: combatSpend };
+      }
+      // Peerless Skill, Quivering Palm, Draconic Presence, Hide in Plain
+      // Sight, Primeval Awareness (src/lib/dm/srd-feature-spends.ts).
+      const srdSpend = srdFeatureSpend(campaign, turnId, sheet, resourceName, args);
+      if (srdSpend) {
+        return { result: srdSpend };
+      }
+      // Authored subclass features the engine resolves (src/lib/dm/authored-spends.ts).
+      const authoredSpend = authoredFeatureSpend(campaign, turnId, sheet, resourceName, args, reason);
+      if (authoredSpend) {
+        return { result: authoredSpend };
+      }
+      // Channel Divinity's options and Indomitable resolve in the engine
+      // (src/lib/dm/feature-spends.ts); everything else takes the generic path.
+      const featureSpend = featureVariantSpend(campaign, turnId, sheet, resourceName, args.variant, args.targetCharacterId, reason);
+      if (featureSpend) {
+        return { result: featureSpend };
       }
       // What the feature costs of the turn is checked before anything is
       // spent or rolled, and charged once the spend has gone through.
@@ -1300,6 +1310,8 @@ export function applyDmMutation(
             ...(args.concentration !== undefined ? { concentration: args.concentration } : {}),
             ...(args.via ? { via: args.via } : {}),
             ...(args.dryRun ? { dryRun: true } : {}),
+            ...(args.uses ? { uses: args.uses } : {}),
+            ...zonePlacement(args),
           },
           {
             record: (delta, patch) => audit(campaign, turnId, sheet, "use_spell_slot", delta, reason, patch),
@@ -1600,6 +1612,15 @@ export function applyDmMutation(
         return {
           result: { error: "update_sheet changed nothing; include at least one field." },
         };
+      }
+      // From the model this is a story tool, not a correction: the fields
+      // the rules move are refused (src/lib/dm/update-sheet-ai.ts). A person
+      // at the console keeps the whole of it.
+      if (getDmTurn(turnId)?.actor !== "human_dm") {
+        const refusal = aiSheetFieldRefusal(changed);
+        if (refusal) {
+          return { result: { error: refusal } };
+        }
       }
       // The ceiling is on what one story moment gives, however the edit is
       // split: it is measured from the sheet as it stood before the first

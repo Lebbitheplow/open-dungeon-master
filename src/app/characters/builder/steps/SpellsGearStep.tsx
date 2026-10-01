@@ -7,6 +7,8 @@ import { useSpellLookups, useSpellPool } from "@/components/sheet/useSpellPool";
 import { GameTerm } from "@/components/ui/GameTerm";
 import { cn } from "@/lib/cn";
 import { spellLevelOf } from "@/lib/srd/spell-lists";
+import { bundledSpellSchool } from "@/lib/srd/spell-facts";
+import { thirdCasterSchoolProblem } from "@/lib/srd/third-caster";
 import { displayName } from "@/lib/worlds/reskin-logic";
 import type { WorldPack } from "@/lib/worlds/types";
 import { armorClassLine, purseViewFor } from "../derivedReasons";
@@ -152,6 +154,14 @@ function SpellsSection({
     if (has(spells, name)) {
       setSpells((current) => current.filter((entry) => lower(entry) !== lower(name)));
       setBookPrepared((current) => current.filter((entry) => lower(entry) !== lower(name)));
+      return;
+    }
+    // An Eldritch Knight's or Arcane Trickster's two schools, as the server
+    // judges the sheet (src/lib/srd/third-caster.ts).
+    const schoolOf = (spell: string) => ({ name: spell, school: (pool.find((entry) => entry.name === spell)?.data?.school as string | undefined) ?? bundledSpellSchool(spell) });
+    const offSchool = thirdCasterSchoolProblem({ classId: klass.id, subclass: state.subclass, level: state.level, spells: [...spells.filter((entry) => !isGranted(entry)), name].map(schoolOf) });
+    if (offSchool) {
+      setLimitNote(offSchool);
       return;
     }
     const cap = wizard ? bookCap : spellCap;

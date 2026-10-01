@@ -135,11 +135,11 @@ test("Extra Attack is on the card and keeps the action open for the second swing
   assert.equal(afterOne.attacksMade, 1);
   const second = deriveHand(fighter, afterOne);
   assert.equal(byId(second, "attack:longsword").disabled, null);
-  // The Attack action is taken, so Dodge is gone.
-  assert.match(byId(second, "basic:dodge").disabled, /action is spent/);
+  // The Attack action is taken, so Dodge is gone, in the engine's words.
+  assert.match(byId(second, "basic:dodge").disabled, /already used their action this turn/);
   const afterTwo = afterCommit(afterOne, first, 2);
   const third = byId(deriveHand(fighter, afterTwo), "attack:longsword");
-  assert.match(third.disabled, /All 2 attacks/);
+  assert.match(third.disabled, /already made all 2 of their attacks/);
   assert.equal(third.spent, true);
 });
 
@@ -173,7 +173,7 @@ test("a beast form swings with its own statblock", () => {
   const cards = deriveHand(druid, FRESH_TURN, { spells: FACTS });
   assert.equal(byId(cards, "attack:claws").toHit, 6);
   assert.equal(byId(cards, "attack:quarterstaff"), undefined);
-  assert.match(byId(cards, "spell:fire bolt").disabled, /Brown Bear form/);
+  assert.match(byId(cards, "spell:fire bolt").disabled, /wild shaped as a Brown Bear/);
 });
 
 // ---- riders ----
@@ -249,7 +249,7 @@ test("a spent slot level upcasts to the next one, and no slots dims the card", (
   assert.equal(word.intent.slotLevel, 2);
   const dry = caster({ spellcasting: { ability: "int", slots: { 1: { max: 4, used: 4 } }, prepared: ["Healing Word", "Fire Bolt"], known: [] } });
   const cards = deriveHand(dry, FRESH_TURN, { spells: FACTS });
-  assert.match(byId(cards, "spell:healing word").disabled, /No spell slot of level 1/);
+  assert.match(byId(cards, "spell:healing word").disabled, /no free level 1 spell slot/);
   assert.equal(byId(cards, "spell:healing word").spent, true);
   assert.equal(byId(cards, "spell:fire bolt").disabled, null);
 });
@@ -263,9 +263,10 @@ test("after a bonus action spell only a cantrip may follow", () => {
   const cards = deriveHand(caster(), FRESH_TURN, { spells: FACTS });
   const turn = afterCommit(FRESH_TURN, byId(cards, "spell:healing word"));
   assert.equal(turn.bonusUsed, true);
-  assert.equal(turn.leveledSpell, "bonus");
+  // The cast guard's own mark (cast-rules.ts BONUS_SPELL) and its sentence.
+  assert.ok(turn.marks.includes("spell:bonus-action"));
   const next = deriveHand(caster(), turn, { spells: FACTS });
-  assert.match(byId(next, "spell:hold person").disabled, /only a cantrip/);
+  assert.match(byId(next, "spell:hold person").disabled, /only other spell they can cast is a cantrip/);
   assert.equal(byId(next, "spell:fire bolt").disabled, null);
 });
 
@@ -296,38 +297,47 @@ test("limited-use features become cards with their uses and their cost", () => {
   assert.equal(surge.disabled, null);
   // Action Surge hands back an action.
   const spentAction = { ...FRESH_TURN, actionUsed: true, attacksMade: 1 };
-  assert.match(byId(deriveHand(fighter, spentAction), "basic:dodge").disabled, /action is spent/);
+  assert.match(byId(deriveHand(fighter, spentAction), "basic:dodge").disabled, /already used their action/);
   const surged = afterCommit(spentAction, surge);
-  assert.equal(surged.extraActions, 1);
+  // Action Surge is a whole additional action (the engine's grantedActions), not Haste's.
+  assert.equal(surged.grantedActions, 1);
   assert.equal(byId(deriveHand(fighter, surged), "basic:dodge").disabled, null);
 });
 
 // ---- the basics, and what stops a hand ----
 
-test("every character holds the ten basic actions", () => {
+test("every character holds the eleven basic actions, and Escape while grappled", () => {
   const cards = deriveHand(sheet());
-  for (const id of ["dodge", "dash", "disengage", "help", "hide", "ready", "grapple", "shove", "use-object", "end-turn"]) {
+  for (const id of ["dodge", "dash", "disengage", "help", "hide", "search", "ready", "grapple", "shove", "use-object", "end-turn"]) {
     assert.ok(byId(cards, `basic:${id}`), id);
   }
   assert.equal(byId(cards, "basic:grapple").dice, "Athletics +5");
-  assert.equal(byId(cards, "basic:ready").compose, true);
+  // Ready asks for its trigger in the aim bar; the engine refuses Ready without one.
+  assert.equal(byId(cards, "basic:ready").asks, "trigger");
+  assert.equal(byId(cards, "basic:ready").compose, false);
+  assert.equal(byId(cards, "basic:escape"), undefined);
+  assert.ok(byId(deriveHand(sheet({ conditions: ["grappled"] })), "basic:escape"));
 });
 
-test("Cunning Action moves Dash to the bonus action once the action is gone", () => {
+test("Cunning Action offers Dash, Disengage and Hide as bonus actions, before the action and after it", () => {
   const rogue = sheet({ class: "rogue", features: [{ name: "Cunning Action", source: "class" }] });
+  const fresh = byId(deriveHand(rogue), "basic:dash:bonus");
+  assert.equal(fresh.cost, "bonus");
+  assert.equal(fresh.disabled, null);
+  assert.equal(fresh.intent.bonus, true);
   const turn = { ...FRESH_TURN, actionUsed: true, attacksMade: 1 };
-  const dash = byId(deriveHand(rogue, turn), "basic:dash");
-  assert.equal(dash.cost, "bonus");
+  const dash = byId(deriveHand(rogue, turn), "basic:dash:bonus");
   assert.equal(dash.disabled, null);
-  assert.match(composeSentence(dash, null), /bonus action/);
-  assert.match(byId(deriveHand(sheet(), turn), "basic:dash").disabled, /action is spent/);
+  assert.equal(composeSentence(dash, null), "I Dash as a bonus action (Cunning Action).");
+  assert.match(byId(deriveHand(rogue, turn), "basic:dash").disabled, /already used their action/);
+  assert.equal(byId(deriveHand(sheet(), turn), "basic:dash:bonus"), undefined);
 });
 
 test("a condition that forbids acting stops every card but End turn", () => {
   const cards = deriveHand(sheet({ equipment: [item("Longsword")], conditions: ["Stunned"] }));
   for (const card of cards) {
     if (card.id === "basic:end-turn") assert.equal(card.disabled, null);
-    else assert.match(card.disabled, /stunned and cannot act/, card.id);
+    else assert.match(card.disabled, /is stunned and cannot/, card.id);
   }
   const grappled = deriveHand(sheet({ conditions: ["grappled"] }));
   assert.match(byId(grappled, "basic:dash").disabled, /speed is 0/);
@@ -336,17 +346,18 @@ test("a condition that forbids acting stops every card but End turn", () => {
 
 test("it is somebody else's turn: the hand can be read, not played", () => {
   const cards = deriveHand(sheet({ equipment: [item("Longsword")] }), { ...FRESH_TURN, myTurn: false, currentName: "Talia" });
-  assert.ok(cards.every((card) => card.disabled === "It is Talia's turn."));
+  // canAct's own sentence (src/lib/dm/can-act.ts).
+  assert.ok(cards.every((card) => /^It is Talia's turn, not Kael's\. Off their own turn a character can only use their reaction\.$/.test(card.disabled)));
 });
 
 test("a character at 0 hit points cannot act", () => {
   const cards = deriveHand(sheet({ currentHp: 0, equipment: [item("Longsword")] }));
-  assert.match(byId(cards, "attack:longsword").disabled, /is down/);
+  assert.match(byId(cards, "attack:longsword").disabled, /Kael is at 0 HP and cannot attack/);
 });
 
 test("a slowed character has no reaction", () => {
   const cards = deriveHand(caster({ conditions: ["slowed"] }), FRESH_TURN, { spells: FACTS });
-  assert.match(byId(cards, "spell:shield").disabled, /No reactions/);
+  assert.match(byId(cards, "spell:shield").disabled, /slowed and cannot take a reaction/);
 });
 
 // ---- the preview ----

@@ -14,6 +14,7 @@ import {
 } from "@/lib/srd/point-buy";
 import { findDraconicAncestry, innateCantripsFor, repeatedGrants, takesDraconicAncestry } from "@/lib/srd/racial-grants";
 import { reconcilePicks } from "./reconcile";
+import { builderCasting } from "./casting";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
 import type { BuilderDerived } from "./useBuilderDerived";
 import type { BuilderState, EquipmentItem } from "./useBuilderState";
@@ -291,8 +292,11 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
   const asiFeats = resolvedAsiChoices.flatMap((choice) =>
     choice.mode === "feat" ? [choice.feat] : [],
   );
+  // How the class casts at this level: an Eldritch Knight or Arcane
+  // Trickster with Intelligence and a third caster's slots (./casting.ts).
+  const casting = builderCasting(klass, state.subclass, effectiveLevel);
   const slots = Object.fromEntries(
-    Object.entries(spellSlotsFor(klass.id, effectiveLevel)).map(([slotLevel, max]) => [
+    Object.entries(spellSlotsFor(klass.id, effectiveLevel, state.subclass)).map(([slotLevel, max]) => [
       slotLevel,
       { max, used: 0 },
     ]),
@@ -345,9 +349,9 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
   const grantedSpells = subclassSpellsFor(klass.id, picks.subclass, effectiveLevel).filter(
     (spell) => !spells.some((entry) => entry.toLowerCase() === spell.toLowerCase()),
   );
-  const finalSpells = klass.spellAbility ? [...spells, ...grantedSpells] : spells;
+  const finalSpells = casting.ability ? [...spells, ...grantedSpells] : spells;
   const racialFeatures =
-    racialCantrip && !klass.spellAbility
+    racialCantrip && !casting.ability
       ? [{ name: `Racial cantrip: ${racialCantrip}`, source: "story" as const }]
       : [];
   // The server grants the feature of every bundled background itself
@@ -439,9 +443,9 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
       backgroundChoices: { skills: picks.backgroundSkills.filter(Boolean) },
       // The class kit's either-or choices, which the server hands out free.
       ...(derived.kitChoices ? { kitChoices: derived.kitChoices } : {}),
-      spellcasting: klass.spellAbility
+      spellcasting: casting.ability
         ? {
-            ability: klass.spellAbility,
+            ability: casting.ability,
             slots,
             prepared: isKnownCaster ? [] : isWizard ? picks.bookPrepared : finalSpells,
             known: isKnownCaster ? finalSpells : [],

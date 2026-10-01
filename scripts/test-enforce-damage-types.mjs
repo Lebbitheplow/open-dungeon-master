@@ -129,7 +129,11 @@ await test("the damage a call may carry is 1 to 200", async () => {
 
 await test("rage ends when the barbarian drops to 0 hit points", async () => {
   kit.reset(barbarian.id, { conditions: ["raging"], currentHp: 4 });
+  // A barbarian of 11th level or more makes Relentless Rage's CON save
+  // first (test-enforce-feature-uses.mjs); this one fails it.
+  world.dice(1);
   await world.invoke("apply_damage", { characterId: barbarian.id, amount: 20, type: "fire" });
+  world.clearDice();
   assert.equal(world.sheet(barbarian.id).currentHp, 0);
   // Down is unconscious and prone, and no longer raging.
   assert.deepEqual(world.sheet(barbarian.id).conditions, ["unconscious", "prone"]);

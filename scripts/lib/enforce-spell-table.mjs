@@ -87,7 +87,9 @@ export const SPELL_TABLE = [
   { name: "Fireball", level: 3, school: "evocation", time: A, range: "150 feet", comp: "VSM", material: ["guano", "sulfur"], duration: "instantaneous", conc: false, ritual: false, how: "save", save: "dex", half: true, dice: "8d6", type: "fire", up: "1d6" },
   { name: "Lightning Bolt", level: 3, school: "evocation", time: A, range: "self", comp: "VSM", duration: "instantaneous", how: "save", save: "dex", half: true, dice: "8d6", type: "lightning", up: "1d6" },
   { name: "Counterspell", level: 3, school: "abjuration", time: R, range: "60 feet", comp: "S", duration: "instantaneous", conc: false },
-  { name: "Spirit Guardians", level: 3, school: "conjuration", time: A, range: "self", comp: "VSM", material: ["holy symbol"], duration: "10 minutes", conc: true, how: "save", save: "wis", half: true, dice: "3d8", up: "1d8" },
+  // Cast with cast_buff: an aura that makes each enemy starting its turn in
+  // it save (WIS, half), held in test-enforce-spell-engine.mjs.
+  { name: "Spirit Guardians", level: 3, school: "conjuration", time: A, range: "self", comp: "VSM", material: ["holy symbol"], duration: "10 minutes", conc: true, how: "buff", dice: "3d8", up: "1d8" },
   { name: "Haste", level: 3, school: "transmutation", time: A, range: "30 feet", comp: "VSM", material: ["licorice"], duration: "1 minute", conc: true },
   { name: "Slow", level: 3, school: "transmutation", time: A, range: "120 feet", comp: "VSM", material: ["molasses"], duration: "1 minute", conc: true, how: "save", save: "wis" },
   { name: "Revivify", level: 3, time: A, range: "touch", comp: "VSM", material: ["diamond", "300 gp", "consume"], duration: "instantaneous", conc: false },

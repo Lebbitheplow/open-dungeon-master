@@ -348,6 +348,9 @@ await test("out of a fight gear changes freely", async () => {
     gear: { Plate: { equipped: true }, "Ring of Protection": { attuned: true } },
   });
   assert.equal(out.status, 200, out.json.error);
+  // Attuning takes a short rest spent with the item: the ring waits for it.
+  assert.equal(table.sheet(fighter.id).equipment.find((item) => item.name === "Ring of Protection").attuning, true);
+  assert.equal((await table.invoke("take_rest", { kind: "short" })).ok, true);
   const gear = Object.fromEntries(table.sheet(fighter.id).equipment.map((item) => [item.name, item]));
   assert.equal(gear.Plate.equipped, true);
   assert.equal(gear["Ring of Protection"].attuned, true);

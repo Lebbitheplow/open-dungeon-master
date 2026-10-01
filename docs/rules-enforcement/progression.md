@@ -1,5 +1,7 @@
 # Progression: enforcement audit
 
+The second audit and repair (2026-09-30) and the state after it are in [`../rules-enforcement-audit.md`](../rules-enforcement-audit.md); this report describes the first audit.
+
 Area: class progression 1 to 20, subclasses, experience and levelling, the level-up flow, feats and Ability Score Improvements, companion auto-levelling.
 Ruleset: D&D 5e SRD 5.1 (2014). Date: 2026-09-27. Nothing under src/ was edited.
 

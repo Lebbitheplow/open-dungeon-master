@@ -14,6 +14,13 @@ import {
   type MountSize,
 } from "@/lib/srd/mounts";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import type { DmTurn } from "@/lib/db/dm-turns";
+import { getActiveEncounter } from "@/lib/db/encounters";
+import { getBattleMapForEncounter, getTokenByRef, moveToken } from "@/lib/db/battle-maps";
+import { speedToTiles } from "@/lib/battlemap/movement";
+import { publishEphemeral } from "@/lib/events";
+import { rollCharacterSave } from "@/lib/dm/forced-save";
+import { applyDmMutation } from "@/lib/dm/mutations";
 
 // Getting on and off a horse, with the PHB's rules attached.
 //
@@ -35,7 +42,7 @@ export const mountTools: ToolDef[] = [
     type: "function",
     function: {
       name: "mount_up",
-      description: `Put a character on a mount. While mounted they move at the mount's speed rather than their own, and mounting costs half their movement. A mount must be one size larger than its rider. Known mounts: ${MOUNTS.map((mount) => mount.name).join(", ")}. For anything else, send customName with a speed and a size.`,
+      description: `Put a character on a mount. While mounted they move at the mount's speed rather than their own (the board lets them walk that far), and mounting costs half their movement, taken from this round's movement in a fight. A mount must be one size larger than its rider. Known mounts: ${MOUNTS.map((mount) => mount.name).join(", ")}. For anything else, send customName with a speed and a size.`,
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -55,7 +62,7 @@ export const mountTools: ToolDef[] = [
     type: "function",
     function: {
       name: "dismount",
-      description: `Take a character off their mount. A voluntary dismount costs half their movement and needs no roll. When something threw them, send cause: the server calls for the DC ${DISMOUNT_SAVE_DC} Dexterity save and they land prone on a failure.`,
+      description: `Take a character off their mount. A voluntary dismount costs half their movement (taken from this round's movement on the board) and needs no roll. When something threw them, send cause: the server rolls their DC ${DISMOUNT_SAVE_DC} Dexterity save and lays them prone on a failure; do not roll it or set the condition yourself.`,
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -139,6 +146,10 @@ export function handleMountUp(
   if ("error" in checked) {
     return checked;
   }
+  const spent = spendMountingMovement(campaign, sheet);
+  if ("error" in spent) {
+    return spent;
+  }
   setMount(campaign.id, sheet.id, checked.state);
   publishPersisted(campaign.id, "mounts_updated", { mounts: getMounts(campaign.id) });
   tableNote(campaign, `${sheet.name} mounts up: ${describeMount(checked.state)}.`);
@@ -147,8 +158,31 @@ export function handleMountUp(
     mounted: checked.state.name,
     speed: checked.state.speed,
     movementSpent: mountCost(sheet.speed),
-    note: `${sheet.name} now moves at ${checked.state.speed} ft. Mounting cost half their movement (${mountCost(sheet.speed)} ft).`,
+    note: `${sheet.name} now moves at ${checked.state.speed} ft. Mounting cost half their movement (${mountCost(sheet.speed)} ft)${spent.charged ? ", taken from this round's movement on the board" : ""}.`,
   };
+}
+
+// Mounting or dismounting costs half the rider's speed (SRD 5.1, Mounted
+// Combat). In a fight on a board it comes out of this round's movement, and
+// without that much left it cannot be done this round.
+function spendMountingMovement(campaign: Campaign, sheet: CharacterSheet): { charged: boolean } | { error: string } {
+  const encounter = getActiveEncounter(campaign.id);
+  const map = encounter?.orderReady ? getBattleMapForEncounter(encounter.id) : null;
+  const token = map ? getTokenByRef(map.id, sheet.id) : null;
+  if (!token) {
+    return { charged: false };
+  }
+  const half = Math.floor(speedToTiles(sheet.speed) / 2);
+  const mounted = getMounts(campaign.id)[sheet.id];
+  const full = speedToTiles(mounted ? mounted.speed : sheet.speed);
+  if (full - token.movedThisRound < half) {
+    return {
+      error: `${sheet.name} has too little movement left this round to ${mounted ? "dismount" : "mount"}: it costs half their speed (${half * 5} ft).`,
+    };
+  }
+  moveToken(token.id, token.x, token.y, token.movedThisRound + half);
+  publishEphemeral(campaign.id, "battle_map_updated", {});
+  return { charged: true };
 }
 
 export function handleDismount(
@@ -156,6 +190,8 @@ export function handleDismount(
   rawArguments: string,
   sheets: CharacterSheet[],
   sheetsById: Map<string, CharacterSheet>,
+  // The turn the thrown rider's save is rolled on.
+  turn?: DmTurn,
 ): Record<string, unknown> {
   let args: z.infer<typeof dismountSchema>;
   try {
@@ -171,10 +207,16 @@ export function handleDismount(
   if (!current) {
     return { error: `${sheet.name} is not mounted.` };
   }
+  const cause = args.cause ?? "voluntary";
+  if (cause === "voluntary") {
+    const spent = spendMountingMovement(campaign, sheet);
+    if ("error" in spent) {
+      return spent;
+    }
+  }
   setMount(campaign.id, sheet.id, null);
   publishPersisted(campaign.id, "mounts_updated", { mounts: getMounts(campaign.id) });
 
-  const cause = args.cause ?? "voluntary";
   if (cause === "voluntary") {
     tableNote(campaign, `${sheet.name} dismounts.`);
     return {
@@ -184,16 +226,28 @@ export function handleDismount(
       note: "A deliberate dismount costs half their movement and needs no roll.",
     };
   }
-  // The save itself goes through request_roll or the console, so the same
-  // dice card and the same real-dice pause apply as to every other save.
+  // Thrown: the server rolls the DC 10 Dexterity save from the rider's sheet
+  // and lays them prone on a failure (SRD 5.1, Mounted Combat).
   tableNote(campaign, `${sheet.name} is thrown from ${current.name}.`);
+  const save = turn
+    ? rollCharacterSave(campaign, turn, sheet, "dex", DISMOUNT_SAVE_DC, `${sheet.name}: DEX save to land on their feet`)
+    : null;
+  const failed = !save || !save.success;
+  if (failed && turn) {
+    applyDmMutation(
+      campaign,
+      turn.id,
+      "set_condition",
+      JSON.stringify({ characterId: sheet.id, condition: "prone", reason: `thrown from ${current.name}` }),
+      sheets,
+      sheetsById,
+    );
+  }
   return {
     ok: true,
     dismounted: current.name,
-    saveRequired: {
-      ability: "dex",
-      dc: DISMOUNT_SAVE_DC,
-      note: `${sheet.name} must make a DC ${DISMOUNT_SAVE_DC} Dexterity save. On a failure they land prone within 5 feet of ${current.name}. Call request_roll for it, then set_condition prone if they fail.`,
-    },
+    save: save?.total ?? "failed automatically",
+    dc: DISMOUNT_SAVE_DC,
+    ...(failed ? { landed: "prone, within 5 feet of the mount" } : { landed: "on their feet" }),
   };
 }

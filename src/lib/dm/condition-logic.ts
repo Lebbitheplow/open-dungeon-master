@@ -5,19 +5,9 @@
 // branch; both the PC and enemy sides of combat read from this one table.
 
 import { RAGING } from "@/lib/srd/class-resources";
-import {
-  conditionIncomingAttackState,
-  conditionResistances,
-  conditionSpeed,
-} from "@/lib/srd/condition-effects";
-import { defenseRiders } from "@/lib/srd/feature-effects";
-import { magicItemRiders } from "@/lib/srd/magic-items";
-import {
-  DAMAGE_TYPES,
-  PHYSICAL_TYPES,
-  rageApplies,
-  resistsAllDamage,
-} from "@/lib/dm/damage-logic";
+import { conditionIncomingAttackState, conditionSpeed } from "@/lib/srd/condition-effects";
+import { conditionSeesInvisible } from "@/lib/srd/condition-effect-queries";
+import { magicItemRiders, type Wearer } from "@/lib/srd/magic-items";
 
 export {
   DAMAGE_TYPES,
@@ -26,6 +16,7 @@ export {
   resistsAllDamage,
   wearsHeavyArmor,
 } from "@/lib/dm/damage-logic";
+export { pcImmunities, pcResistances } from "@/lib/dm/pc-defenses";
 
 export type AdvantageState = "none" | "advantage" | "disadvantage";
 export type SaveAbilityId = "str" | "dex" | "con" | "int" | "wis" | "cha";
@@ -39,6 +30,11 @@ export type ConditionMeta = {
   rounds?: number;
   // Ends at the start of this combatant's next turn instead of by count.
   untilTurnOf?: string;
+  // Ends at the END of this combatant's next turn (Stunning Strike, Guiding
+  // Bolt): turnBegun is set as that turn starts, and the turn's end then
+  // takes it (src/lib/dm/turn-end.ts).
+  untilTurnEndOf?: string;
+  turnBegun?: boolean;
   // Re-save at each round wrap; success ends the condition.
   saveEnds?: { ability: SaveAbilityId; dc: number };
   // Who or what put the condition there: the characterId or enemyId of the
@@ -49,11 +45,29 @@ export type ConditionMeta = {
   // Rage only: the barbarian has taken damage since their last turn ended,
   // which keeps the rage going through a turn with no attack in it.
   stoked?: boolean;
+  // Spell effects (src/lib/dm/spell-effects.ts): the spell that laid it
+  // down and its slot, ending on damage, or a new save on damage.
+  spell?: string;
+  slotLevel?: number;
+  endsOnDamage?: boolean;
+  saveOnDamage?: { ability: SaveAbilityId; dc: number; advantage?: boolean };
+  // Hunter's Mark and Hex: the enemyId of the marked creature, the only one
+  // the extra die rides against.
+  quarry?: string;
+  // Flesh to Stone: the saves counted at the ends of the creature's turns
+  // (src/lib/dm/spell-turn-end.ts).
+  tally?: { passed: number; failed: number };
+  // A Creation bard's inspiration die carries a mote (authored-mote.ts).
+  mote?: boolean;
+  // A monster's grapple: its printed escape DC (grapple.ts).
+  escapeDc?: number;
 };
 export type ConditionMetaMap = Record<string, ConditionMeta>;
 
 const INCAPACITATING = ["incapacitated", "paralyzed", "stunned", "unconscious", "petrified"];
-const SPEED_ZERO = ["grappled", "restrained", ...INCAPACITATING];
+// Each of these says "can't move" (or speed 0) in its own text (SRD 5.1,
+// Conditions); bare "incapacitated" takes actions and reactions only.
+const SPEED_ZERO = ["grappled", "restrained", "paralyzed", "stunned", "unconscious", "petrified"];
 const AUTO_FAIL_STR_DEX = ["paralyzed", "stunned", "unconscious", "petrified"];
 // Attacks against these have advantage. Each of them says so in its own
 // text; bare "incapacitated" only takes away actions and reactions.
@@ -116,6 +130,8 @@ export function attackContext(input: {
   // Attacker within 5 ft of the target (true for resolved melee attacks).
   adjacent: boolean;
   requested: AdvantageState;
+  // An enemy attacker's creature type (Protection from Evil and Good).
+  attackerType?: string;
 }): { advantage: AdvantageState; autoCrit: boolean; notes: string[] } {
   const sources: AdvantageState[] = [input.requested];
   const notes: string[] = [];
@@ -125,7 +141,8 @@ export function attackContext(input: {
     sources.push("disadvantage");
     notes.push(`attacker is ${attackerDown}: disadvantage`);
   }
-  if (has(input.attackerConditions, ["invisible"])) {
+  // See Invisibility and True Seeing see the invisible (condition-effects-last.ts).
+  if (has(input.attackerConditions, ["invisible"]) && !conditionSeesInvisible(input.targetConditions)) {
     sources.push("advantage");
     notes.push("attacker is invisible: advantage");
   }
@@ -149,9 +166,15 @@ export function attackContext(input: {
     sources.push("advantage");
     notes.push(`target is ${targetOpen}: advantage`);
   }
-  if (has(input.targetConditions, ["invisible"])) {
+  if (has(input.targetConditions, ["invisible"]) && !conditionSeesInvisible(input.attackerConditions)) {
     sources.push("disadvantage");
     notes.push("target is invisible: disadvantage");
+  }
+  // A hidden creature is an unseen target (SRD 5.1, Unseen Attackers and
+  // Targets): the attacker is guessing where it is.
+  if (has(input.targetConditions, ["hidden"])) {
+    sources.push("disadvantage");
+    notes.push("target is hidden: disadvantage");
   }
   // Dodge only helps a target who can actually see it coming: an
   // incapacitated dodger gets nothing, per the SRD.
@@ -160,7 +183,7 @@ export function attackContext(input: {
     notes.push("target is dodging: disadvantage");
   }
   // Effect conditions on the target (blur, faerie fire, protected).
-  const incoming = conditionIncomingAttackState(input.targetConditions);
+  const incoming = conditionIncomingAttackState(input.targetConditions, input.attackerType);
   sources.push(...incoming.sources);
   notes.push(...incoming.notes);
 
@@ -179,6 +202,9 @@ export function rollDerivation(
   conditions: string[],
   kind: "skill_check" | "ability_check" | "saving_throw" | "initiative",
   ability?: SaveAbilityId,
+  // What the conditions alone cannot say: a raging barbarian in heavy armor
+  // gets none of the rage's benefits (the caller knows what is worn).
+  options?: { rageSuppressed?: boolean },
 ): { advantage: AdvantageState; autoFail: boolean; notes: string[] } {
   const sources: AdvantageState[] = [];
   const notes: string[] = [];
@@ -209,7 +235,12 @@ export function rollDerivation(
   }
   // Rage: advantage on Strength checks and Strength saves (not attacks;
   // those get the damage bonus instead).
-  if (ability === "str" && kind !== "initiative" && has(conditions, [RAGING])) {
+  if (
+    ability === "str" &&
+    kind !== "initiative" &&
+    has(conditions, [RAGING]) &&
+    !options?.rageSuppressed
+  ) {
     sources.push("advantage");
     notes.push("raging: advantage on Strength checks and saves");
   }
@@ -276,7 +307,7 @@ export function tickConditions(
     if (!entry) {
       continue;
     }
-    if (entry.untilTurnOf) {
+    if (entry.untilTurnOf || entry.untilTurnEndOf) {
       if (options?.endTurnBound) {
         expired.push(name);
       } else {
@@ -376,8 +407,28 @@ export function exhaustionMaxHp(level: number, maxHp: number): number {
 // is the sheet's own number; exhaustion level 4 halves it for as long as it
 // lasts. Healing, both rests and the massive damage rule all ask this, so the
 // halving is decided in one place.
-export function effectiveMaxHp(sheet: { maxHp: number; exhaustion?: number | null }): number {
-  return exhaustionMaxHp(sheet.exhaustion ?? 0, sheet.maxHp);
+//
+// An item that sets Constitution (an Amulet of Health) raises the maximum by
+// the change in the modifier for every level, as a higher score would: the
+// stored maxHp is the character's own, and the item's share is added here
+// while it is worn and attuned. A caller without the scores or the gear to
+// hand gets the stored number.
+export function effectiveMaxHp(sheet: {
+  maxHp: number;
+  exhaustion?: number | null;
+  level?: number;
+  abilities?: Record<"str" | "dex" | "con" | "int" | "wis" | "cha", number>;
+  equipment?: Array<{ name: string; equipped?: boolean; attuned?: boolean }>;
+}): number {
+  let max = sheet.maxHp;
+  if (sheet.abilities && sheet.equipment?.length && sheet.level) {
+    const set = magicItemRiders(sheet.equipment, sheet as Wearer).abilitySet.con;
+    if (set && set > sheet.abilities.con) {
+      const modOf = (score: number) => Math.floor((score - 10) / 2);
+      max += (modOf(set) - modOf(sheet.abilities.con)) * sheet.level;
+    }
+  }
+  return exhaustionMaxHp(sheet.exhaustion ?? 0, max);
 }
 
 // Advantage effect of exhaustion on a d20 roll: level 1+ = disadvantage on
@@ -409,65 +460,4 @@ export function describeExhaustion(level: number): string {
     level >= 5 ? "speed 0" : null,
   ].filter(Boolean);
   return `exhaustion level ${level}${effects.length ? ` (${effects.join("; ")})` : ""}`;
-}
-
-// Racial, feature, and condition-derived damage resistances a sheet
-// carries, as a keyword string damageAdjust can match against.
-// Conservative: only unambiguous SRD grants are recognized.
-export function pcResistances(sheet: {
-  race: string;
-  features: Array<{ name: string }>;
-  conditions?: string[];
-  equipment?: Array<{ name: string; attuned?: boolean; equipped?: boolean }>;
-  class?: string;
-  level?: number;
-}): string {
-  const out: string[] = [];
-  const race = sheet.race.toLowerCase();
-  // Typed feature effects (parsed subclass features, Heart of the Storm).
-  if (sheet.class) {
-    out.push(
-      ...defenseRiders({
-        class: sheet.class,
-        level: sheet.level ?? 1,
-        features: sheet.features,
-      }).resistances,
-    );
-  }
-  // Lineage traits name their resistance directly: "Fire Resistance",
-  // "Celestial Resistance (necrotic and radiant)".
-  const TYPES = DAMAGE_TYPES;
-  for (const feature of sheet.features) {
-    const name = feature.name.toLowerCase();
-    if (name.includes("resistance")) {
-      out.push(...TYPES.filter((type) => name.includes(type)));
-    }
-  }
-  // Rage: resistance to the three physical damage types, for its duration,
-  // and not in heavy armor.
-  if (rageApplies(sheet)) {
-    out.push(...PHYSICAL_TYPES);
-  }
-  if (resistsAllDamage(sheet.conditions)) {
-    out.push(...DAMAGE_TYPES);
-  }
-  const featureNames = sheet.features.map((feature) => feature.name.toLowerCase());
-  const hasFeature = (fragment: string) =>
-    featureNames.some((name) => name.includes(fragment));
-  if (race.includes("dwarf") || hasFeature("dwarven resilience")) {
-    out.push("poison");
-  }
-  if (race.includes("stout") || hasFeature("stout resilience")) {
-    out.push("poison");
-  }
-  if (race.includes("tiefling") || hasFeature("hellish resistance")) {
-    out.push("fire");
-  }
-  // Effect conditions (blade ward, stoneskin) grant theirs for a duration.
-  out.push(...conditionResistances(sheet.conditions ?? []));
-  // Worn magic items (Ring of Resistance, resistant armor) add their types.
-  if (sheet.equipment) {
-    out.push(...magicItemRiders(sheet.equipment, sheet).resistances);
-  }
-  return [...new Set(out)].join(", ");
 }

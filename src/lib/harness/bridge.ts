@@ -65,6 +65,20 @@ type Waiter = {
 
 export type BridgeCallResult = { text: string; isError: boolean };
 
+// Whether a tool result the loop appended is the engine refusing. An agent
+// program reads isError, not the payload, to tell a refusal from a success;
+// handed a refusal as a success it narrates on as if the thing happened.
+export function toolResultIsError(text: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return Boolean(
+      parsed && typeof parsed === "object" && typeof (parsed as { error?: unknown }).error === "string",
+    );
+  } catch {
+    return false;
+  }
+}
+
 export class BridgeSession {
   readonly tokenHash: string;
   readonly campaignId: string | null;
@@ -276,7 +290,8 @@ export class BridgeSession {
         if (message.role === "tool" && message.tool_call_id && this.inflight.has(message.tool_call_id)) {
           const call = this.inflight.get(message.tool_call_id)!;
           this.inflight.delete(message.tool_call_id);
-          call.answer(typeof message.content === "string" ? message.content : JSON.stringify(message.content), false);
+          const text = typeof message.content === "string" ? message.content : JSON.stringify(message.content);
+          call.answer(text, toolResultIsError(text));
         }
       }
       // A call the loop chose not to run (over a cap, deduplicated) still

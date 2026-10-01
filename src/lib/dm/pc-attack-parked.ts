@@ -3,6 +3,7 @@
 // hit, parks the damage roll too. Split from pc-attack.ts, which has
 // already refused or paid for everything the parked roll carries.
 
+import { tryParry } from "@/lib/dm/enemy-reactions";
 import { getCampaignById } from "@/lib/db/campaigns";
 import {
   createPendingRoll,
@@ -10,7 +11,7 @@ import {
   publicPendingRoll,
   type PendingRoll,
 } from "@/lib/db/dm-turns";
-import { getActiveEncounter } from "@/lib/db/encounters";
+import { getActiveEncounter, getEnemy } from "@/lib/db/encounters";
 import type { StoredRoll } from "@/lib/db/rolls";
 import { listSheets } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
@@ -20,7 +21,44 @@ import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
 import { liveTypedRiders, strikesAsMagic } from "@/lib/dm/pc-attack-damage";
 import type { AttackPlan } from "@/lib/dm/pc-attack-plan";
 import type { Strike } from "@/lib/dm/pc-attack-resolve";
-import { spendOnHit, type ParkedAttack } from "@/lib/dm/pc-attack-riders";
+import { clearHitSpent, spendOnHit, stunningStrikeSave, type ParkedAttack } from "@/lib/dm/pc-attack-riders";
+import { authoredOnHit } from "@/lib/dm/authored-hooks";
+import { applySpellHitCondition, spellAttackRider } from "@/lib/dm/spell-attack-riders";
+import { gearCritRiders } from "@/lib/dm/gear-attack";
+import { FOE_SLAYER, rescueMiss, STROKE_OF_LUCK } from "@/lib/dm/attack-features";
+import {
+  HURL_THROUGH_HELL,
+  hurlThroughHell,
+  openHandOnHit,
+  poisonOnHit,
+  spendFeatureUse,
+} from "@/lib/dm/attack-onhit";
+import { storeBudget } from "@/lib/dm/turn-budget";
+
+// The parked roll's share of what rides the attack (src/lib/dm/pc-attack-plan.ts).
+function parkedExtras(plan: AttackPlan): Pick<ParkedAttack, "extras"> | null {
+  const { extras } = plan;
+  const kept = {
+    ...(extras.foeSlayer > 0 ? { foeSlayer: extras.foeSlayer } : {}),
+    ...(extras.strokeOfLuck ? { strokeOfLuck: true } : {}),
+    ...(extras.openHand ? { openHand: extras.openHand } : {}),
+    ...(extras.hurl ? { hurl: true } : {}),
+    ...(extras.poison ? { poison: true } : {}),
+  };
+  return Object.keys(kept).length ? { extras: kept } : null;
+}
+
+// Foe Slayer is once on each of the ranger's turns: the live turn remembers
+// it. False when it was already used.
+function claimParkedFoeSlayer(campaignId: string): boolean {
+  const encounter = getActiveEncounter(campaignId);
+  const budget = encounter?.turnBudget;
+  if (!encounter || !budget || budget.oncePerTurn.includes(FOE_SLAYER)) {
+    return false;
+  }
+  storeBudget(encounter, { ...budget, oncePerTurn: [...budget.oncePerTurn, FOE_SLAYER] });
+  return true;
+}
 
 // Physical dice: park the to-hit roll for the player; the submit route
 // adjudicates it and, on a hit, parks the damage roll too.
@@ -30,8 +68,10 @@ export function parkPcAttack(plan: AttackPlan, strike: Strike, toolCallId: strin
   // The damage stage resolves the blow per type and with the magical flag,
   // as the digital path does, so both travel with the roll.
   const parkedRiders = liveTypedRiders(plan.typedRiders, plan.droppedRiders);
+  const critGear = gearCritRiders(profile, enemy.stats.type);
   const parked: ParkedAttack = {
     magical: strikesAsMagic(plan),
+    ...(plan.atRange ? {} : { melee: true }),
     ...(parkedRiders.length ? { riders: parkedRiders } : {}),
     ...(critExtraDice ? { critExtraDice } : {}),
     attacker: sheet.name,
@@ -42,9 +82,14 @@ export function parkPcAttack(plan: AttackPlan, strike: Strike, toolCallId: strin
     critDamageExpression: critDamageExpression(profile.damageExpression, critExtraDice, strike.critOptions),
     damageType: profile.damageType,
     ...(context.autoCrit ? { autoCrit: true } : {}),
-    ...(riders.critRange < 20 ? { critRange: riders.critRange } : {}),
+    ...(riders.critRange < 20 && plan.weaponAttack ? { critRange: riders.critRange } : {}),
     ...(strike.rerollBelow ? { rerollBelow: strike.rerollBelow } : {}),
     ...(strike.hasOnHit ? { onHit: strike.onHitSpends } : {}),
+    ...(plan.options.nonlethal ? { nonlethal: true } : {}),
+    ...(plan.hitSpent.length ? { hitSpent: plan.hitSpent } : {}),
+    ...(plan.kind === "spell" && plan.args.spell ? { spell: plan.args.spell } : {}),
+    ...(critGear.suffix ? { critGear } : {}),
+    ...(parkedExtras(plan) ?? {}),
   };
   const pending = createPendingRoll({
     campaignId: campaign.id,
@@ -88,16 +133,40 @@ export function resolvePendingPcAttack(pending: PendingRoll, roll: StoredRoll): 
       return `${context.attacker}'s ${context.weapon} attack was still unrolled when their turn ended, so it does not land. No damage roll happens; narrate the moment passing.`;
     }
   }
-  const adjudicated = adjudicateHit(roll.total, roll.breakdown.crit, context.targetAc, {
+  const judged = adjudicateHit(roll.total, roll.breakdown.crit, context.targetAc, {
     natural: roll.breakdown.natural,
     critRange: context.critRange,
   });
-  const hit = adjudicated.hit;
+  // Parry: the creature's reaction lifts its AC against a melee hit (enemy-reactions.ts).
+  const parryFoe = fight && context.targetEnemyId ? getEnemy(context.targetEnemyId) : null;
+  const parry = judged.hit && !judged.crit && fight && parryFoe && (context as ParkedAttack).melee
+    ? tryParry({ encounter: fight, enemy: parryFoe, total: roll.total, natural20: false, ac: context.targetAc, melee: true, attackerUnseen: false })
+    : null;
+  const adjudicated = parry ? { ...judged, hit: false, crit: false } : judged;
+  const extras = (context as ParkedAttack).extras;
+  // Foe Slayer turns a near miss into a hit, and a declared Stroke of Luck
+  // any miss (src/lib/dm/attack-features.ts).
+  const rescued = adjudicated.hit
+    ? null
+    : rescueMiss({
+        total: roll.total,
+        ac: context.targetAc,
+        natural1: roll.breakdown.crit === "nat1",
+        foeSlayer: extras?.foeSlayer ?? 0,
+        strokeOfLuck: extras?.strokeOfLuck === true,
+      });
+  const rescueNote =
+    rescued === "foe slayer"
+      ? claimParkedFoeSlayer(pending.campaignId) && `Foe Slayer: +${extras?.foeSlayer} turns the miss into a hit`
+      : rescued === "stroke of luck" && spendFeatureUse(campaign, pending.characterId ?? "", STROKE_OF_LUCK, "Stroke of Luck")
+        ? "Stroke of Luck: the miss becomes a hit"
+        : null;
+  const hit = adjudicated.hit || Boolean(rescueNote);
   const crit = adjudicated.crit || (hit && context.autoCrit === true);
   if (!hit) {
     return `${context.attacker}'s ${context.weapon} attack rolled ${roll.total} vs AC ${context.targetAc}: MISS${
       roll.breakdown.crit === "nat1" ? " (natural 1)" : ""
-    }. No damage roll happens; narrate the miss.`;
+    }${parry ? ` (${parry.note})` : ""}. No damage roll happens; narrate the miss.`;
   }
   // Verify the target still stands before asking for damage dice (the lead
   // may have force-ended the encounter while the roll sat parked).
@@ -108,12 +177,22 @@ export function resolvePendingPcAttack(pending: PendingRoll, roll: StoredRoll): 
   }
   const sheets = listSheets(pending.campaignId);
   const sheet = sheets.find((entry) => entry.id === pending.characterId);
+  // The hit uses up the charges waiting for it (the smites), and an attack
+  // spell's rider lands on it (spell-attack-riders.ts).
+  const parked = context as ParkedAttack;
+  if (sheet && parked.hitSpent?.length) {
+    clearHitSpent(campaign, sheet.id, parked.hitSpent);
+  }
+  const spellRider = spellAttackRider(parked.spell);
+  const spellLine = spellRider && sheet ? applySpellHitCondition(campaign, spellRider, enemy.id, sheet.id) : null;
+  // Authored subclass features on a hit (a guardian's mark, Order's Wrath): authored-hooks.ts.
+  const authoredLines = sheet && encounter ? authoredOnHit(campaign, { encounter, sheet, enemy, weapon: !parked.spell, weaponName: context.weapon, dead: false }) : [];
   // The player's own d20 said hit: now the smite slot and the maneuver's
   // die are spent, and their dice join the damage the player rolls.
   const onHit = (context as ParkedAttack).onHit;
   let damage = context.damageExpression;
   let critDamage = context.critDamageExpression;
-  const spentNotes: string[] = [];
+  const spentNotes: string[] = [...authoredLines];
   if (onHit) {
     const paid = spendOnHit(
       campaign,
@@ -123,6 +202,9 @@ export function resolvePendingPcAttack(pending: PendingRoll, roll: StoredRoll): 
       new Map(sheets.map((entry) => [entry.id, entry])),
     );
     spentNotes.push(...paid.notes);
+    if (paid.stunPaid && onHit.stun) {
+      spentNotes.push(stunningStrikeSave(campaign, enemy.encounterId, enemy.id, pending.characterId ?? "", onHit.stun.dc));
+    }
     if (paid.suffix) {
       damage = `${onHit.baseDamage}${paid.suffix}`;
       critDamage = critDamageExpression(damage, onHit.critExtraDice, {
@@ -131,11 +213,41 @@ export function resolvePendingPcAttack(pending: PendingRoll, roll: StoredRoll): 
       });
     }
   }
+  // A natural 20's magic weapon dice, and Foe Slayer's bonus on a hit it
+  // did not have to rescue.
+  const parkedGear = (context as ParkedAttack).critGear;
+  if (roll.breakdown.crit === "nat20" && parkedGear?.suffix) {
+    damage = `${damage}${parkedGear.suffix}`;
+    critDamage = critDamageExpression(damage, context.critExtraDice ?? 0, {
+      powerfulCritical: campaign.gameSettings.variantRules.powerfulCritical,
+      multiplyNumeric: campaign.gameSettings.variantRules.criticalDamageMods,
+    });
+    spentNotes.push(...parkedGear.notes);
+  }
+  if (adjudicated.hit && (extras?.foeSlayer ?? 0) > 0 && claimParkedFoeSlayer(pending.campaignId)) {
+    damage = `${damage}+${extras?.foeSlayer}`;
+    critDamage = `${critDamage}+${extras?.foeSlayer}`;
+    spentNotes.push(`Foe Slayer: +${extras?.foeSlayer} damage`);
+  }
+  if (rescueNote) {
+    spentNotes.push(rescueNote);
+  }
+  // What the hit carries past its damage (src/lib/dm/attack-onhit.ts).
+  if (extras?.poison && sheet) {
+    spentNotes.push(poisonOnHit(campaign, sheet.id, enemy.id) ?? "");
+  }
+  if (extras?.openHand && sheet) {
+    spentNotes.push(openHandOnHit(campaign, sheet.id, enemy.id, extras.openHand.choice, extras.openHand.dc));
+  }
+  if (extras?.hurl && sheet && spendFeatureUse(campaign, sheet.id, HURL_THROUGH_HELL, "Hurl Through Hell")) {
+    spentNotes.push(hurlThroughHell(campaign, sheet.id, enemy.id));
+  }
   const expression = crit ? critDamage : damage;
   // A smite the hit paid for rides as radiant, as on the digital path.
   const smiteDice = onHit?.smite ? `${onHit.smite.dice}d8` : null;
   const damageRiders = [
     ...(context.riders ?? []),
+    ...(roll.breakdown.crit === "nat20" ? (parkedGear?.typed ?? []) : []),
     ...(smiteDice && damage.includes(`+${smiteDice}`) ? [{ dice: smiteDice, type: "radiant" }] : []),
   ];
   const damagePending = createPendingRoll({
@@ -167,7 +279,7 @@ export function resolvePendingPcAttack(pending: PendingRoll, roll: StoredRoll): 
   });
   return `${context.attacker}'s ${context.weapon} attack rolled ${roll.total} vs AC ${context.targetAc}: HIT${
     crit ? " (CRITICAL: damage dice are doubled)" : ""
-  }.${spentNotes.length ? ` ${spentNotes.join("; ")}.` : ""} ${context.attacker} now rolls damage (${expression})${
+  }.${spentNotes.length ? ` ${spentNotes.join("; ")}.` : ""}${spellLine ? ` ${spellLine}.` : ""} ${context.attacker} now rolls damage (${expression})${
     context.rerollBelow
       ? `, rerolling any die of ${context.rerollBelow} or less once for Great Weapon Fighting`
       : ""

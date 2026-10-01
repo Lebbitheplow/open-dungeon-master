@@ -11,6 +11,7 @@ import {
 } from "@/lib/db/battle-maps";
 import { buildPlayerMapView, footprintLookup, occupiedTiles, pcMoveBudget } from "@/lib/battlemap/view";
 import { findPath, reachableTiles, speedToTiles } from "@/lib/battlemap/movement";
+import { pcMoveTraits } from "@/lib/battlemap/passage";
 import { tileIndex } from "@/lib/battlemap/types";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import { publishFx } from "@/lib/dm/fx";
@@ -20,7 +21,17 @@ import { budgetApplies } from "@/lib/dm/action-budget";
 import { resolveOpportunityAttacks } from "@/lib/dm/opportunity";
 import { canAct } from "@/lib/dm/can-act";
 import { removeConditions } from "@/lib/dm/condition-logic";
+import { awayFromFear, fearSourceAt } from "@/lib/dm/enemy-approach";
 import { publishPersisted } from "@/lib/events";
+import { releaseGrapplesOutOfReach } from "@/lib/dm/grapple";
+import { withZoneSteps } from "@/lib/dm/zone-rules";
+import { zonesAfterMove } from "@/lib/dm/zone-triggers";
+import { standUpTiles } from "@/lib/srd/authored-effects-more";
+import { dragCostFactor, dragPlacements, grappledBy } from "@/lib/dm/drag";
+import { jumpMove } from "@/lib/dm/jump-move";
+import { jumpLine } from "@/lib/srd/jump";
+import { sizeForRace } from "@/lib/srd";
+import { proneCharge } from "@/lib/battlemap/board-move";
 
 export const runtime = "nodejs";
 
@@ -49,6 +60,11 @@ export const dynamic = "force-dynamic";
 const moveSchema = z.object({
   x: z.number().int().min(0),
   y: z.number().int().min(0),
+  // Drag the creature this character grapples along, at half speed
+  // (src/lib/dm/drag.ts).
+  drag: z.boolean().optional(),
+  // A long jump in a straight line to the square (src/lib/dm/jump-move.ts).
+  jump: z.boolean().optional(),
 });
 
 // A player moves their own token. Server-authoritative: walls, occupancy,
@@ -127,9 +143,39 @@ export async function POST(
     !scene && budgetApplies(encounter.turnBudget, sheet.id, encounter.round)
       ? encounter.turnBudget
       : null;
+  // Frightened: a jump may not carry them closer to what they fear either.
+  const feared = scene ? null : fearSourceAt(map.id, sheet.conditions, sheet.conditionMeta as Record<string, { source?: string }>);
+  if (parsed.data.jump && campaign) {
+    const line = jumpLine(token, { x, y });
+    if (feared && awayFromFear(token, line, feared).length < line.length) {
+      return Response.json({ error: "You are frightened and cannot move closer to what you fear. Move away from it, or hold your ground." }, { status: 409 });
+    }
+    const leap = jumpMove({ campaign, encounter, map, sheet, token, to: { x, y }, budgetTiles: budget, scene, disengaged: turnState?.disengaged ?? false });
+    if ("error" in leap) {
+      return Response.json({ error: leap.error }, { status: leap.status });
+    }
+    return Response.json({
+      view: buildPlayerMapView(campaignId, user.id, { enemyNumbers: capsFor(context).enemyNumbers }),
+      jump: leap.jump,
+      ...(leap.opportunity.notes.length ? { opportunityAttacks: leap.opportunity.notes } : {}),
+      ...(leap.zoneEffects.length ? { zoneEffects: leap.zoneEffects } : {}),
+    });
+  }
   // Large enemies hold every square of their footprint, as the board shows.
   const enemiesById = new Map(listEnemies(encounter.id).map((enemy) => [enemy.id, enemy]));
-  const occupied = occupiedTiles(map, listTokens(map.id), token, footprintLookup(enemiesById));
+  const tokens = listTokens(map.id);
+  const occupied = occupiedTiles(map, tokens, token, footprintLookup(enemiesById));
+  // Allies' spaces, and a hostile's two sizes apart (or larger, for Halfling
+  // Nimbleness), are walked through at double cost (src/lib/battlemap/passage.ts).
+  // And the spell areas on the board: difficult ground, Spirit Guardians (zone-rules.ts).
+  const traits = withZoneSteps(pcMoveTraits({
+    width: map.width,
+    tokens,
+    mover: token,
+    sheet,
+    footprintOf: footprintLookup(enemiesById),
+    enemySize: (refId) => enemiesById.get(refId)?.stats.size,
+  }), map, "pc", sheet.id);
   const reach = reachableTiles(
     map.terrain,
     map.width,
@@ -139,6 +185,7 @@ export async function POST(
     budget,
     1,
     token.movement === "fly",
+    traits,
   );
   const stepCost = reach.get(tileIndex(map.width, x, y));
   // Prone: standing up costs half the character's speed and ends the
@@ -146,16 +193,12 @@ export async function POST(
   // foot costing two (SRD 5.1, Being Prone).
   const prone =
     !scene && sheet.conditions.some((entry) => entry.trim().toLowerCase() === "prone");
-  const standCost = Math.floor(speedToTiles(speed) / 2);
-  const stands = prone && stepCost !== undefined && stepCost + standCost <= fullTiles;
-  const cost =
-    stepCost === undefined || !prone
-      ? stepCost
-      : stands
-        ? stepCost + standCost
-        : stepCost * 2 <= fullTiles
-          ? stepCost * 2
-          : undefined;
+  // Half the speed, or a feature's own price (Tipsy Sway: 5 feet).
+  const standCost = standUpTiles(sheet, speedToTiles(speed));
+  // The board's lit squares price a prone walk with the same function.
+  const charged = prone && stepCost !== undefined ? proneCharge(stepCost, standCost, fullTiles) : null;
+  const stands = Boolean(charged?.stands);
+  const cost = stepCost === undefined || !prone ? stepCost : charged?.cost;
   if (cost === undefined) {
     // A locked door on the way: the handle rattles for everyone (the shake
     // and the sting), and the DM's prompt is told so the model can offer
@@ -189,8 +232,61 @@ export async function POST(
         { x, y },
         1,
         token.movement === "fly",
+        traits,
       );
-  moveToken(token.id, x, y, scene ? 0 : token.movedThisRound + cost);
+  // Frightened: no square of the walk may be closer to the source of the
+  // fear than where it began (SRD 5.1, Frightened).
+  const fear = feared;
+  if (fear && path && awayFromFear(token, path, fear).length < path.length) {
+    return Response.json(
+      { error: "You are frightened and cannot move closer to what you fear. Move away from it, or hold your ground." },
+      { status: 409 },
+    );
+  }
+  // Dragging the creature they grapple (src/lib/dm/drag.ts): every square
+  // costs double unless it is two sizes smaller, and it is set down beside
+  // them where they stop, so the grapple holds.
+  let spend = cost;
+  let carried: Array<{ token: (typeof tokens)[number]; at: { x: number; y: number } }> = [];
+  if (parsed.data.drag && !scene) {
+    const held = [...enemiesById.values()].filter((enemy) => enemy.status === "alive" && grappledBy(enemy, sheet.id));
+    const heldTokens = held
+      .map((enemy) => ({ token: tokens.find((entry) => entry.refId === enemy.id), enemy }))
+      .filter((entry): entry is { token: (typeof tokens)[number]; enemy: (typeof held)[number] } => Boolean(entry.token));
+    if (!heldTokens.length) {
+      return Response.json({ error: `${sheet.name} is not grappling anyone on the board, so there is nothing to drag. Move without dragging.` }, { status: 400 });
+    }
+    if (prone) {
+      return Response.json({ error: `${sheet.name} is prone; they stand up before dragging anyone.` }, { status: 409 });
+    }
+    spend = cost * dragCostFactor(sizeForRace(sheet.race), held.map((enemy) => ({ refId: enemy.id, name: enemy.displayName, size: enemy.stats.size })));
+    if (spend > budget) {
+      return Response.json({ error: `Dragging a grappled creature halves ${sheet.name}'s speed: that move costs ${spend * 5} feet and ${budget * 5} are left this round.` }, { status: 400 });
+    }
+    const heldIds = new Set(heldTokens.map((entry) => entry.token.id));
+    const landed = tokens.filter((entry) => !heldIds.has(entry.id)).map((entry) => (entry.id === token.id ? { ...entry, x, y } : entry));
+    const placed = dragPlacements({
+      terrain: map.terrain,
+      width: map.width,
+      height: map.height,
+      occupied: occupiedTiles(map, landed, null, footprintLookup(enemiesById)),
+      landing: { x, y },
+      walked: [from, ...(path ?? [])],
+      dragged: heldTokens.map((entry) => ({ token: entry.token, footprint: footprintLookup(enemiesById)(entry.token) })),
+    });
+    if (!placed) {
+      return Response.json({ error: `There is no room beside (${x},${y}) to set down the creature ${sheet.name} drags. Choose another square.` }, { status: 400 });
+    }
+    carried = placed;
+  }
+  moveToken(token.id, x, y, scene ? 0 : token.movedThisRound + spend);
+  for (const entry of carried) {
+    moveToken(entry.token.id, entry.at.x, entry.at.y, entry.token.movedThisRound);
+  }
+  if (campaign) {
+    // Walking away from a grapple ends it (src/lib/dm/grapple.ts).
+    releaseGrapplesOutOfReach(campaign);
+  }
   if (stands) {
     const stood = removeConditions(sheet.conditions, sheet.conditionMeta, ["prone"]);
     const updated = patchSheet(sheet.id, {
@@ -216,10 +312,12 @@ export async function POST(
           path ?? undefined,
         )
       : { notes: [], downed: false };
+  // The spell areas walked into: Spike Growth's spikes, a web's hold.
+  const zoneEffects = campaign && !scene && path && !opportunity.downedAt ? zonesAfterMove(campaign, encounter.id, { kind: "pc", refId: sheet.id }, from, path) : [];
   // Struck down on the way: they fall where they were hit, not where they
   // were going.
   if (opportunity.downedAt) {
-    moveToken(token.id, opportunity.downedAt.x, opportunity.downedAt.y, token.movedThisRound + cost);
+    moveToken(token.id, opportunity.downedAt.x, opportunity.downedAt.y, token.movedThisRound + spend);
     publishBattleMapUpdate(campaignId);
   }
 
@@ -227,5 +325,6 @@ export async function POST(
   return Response.json({
     view: buildPlayerMapView(campaignId, user.id, { enemyNumbers: capsFor(context).enemyNumbers }),
     ...(opportunity.notes.length ? { opportunityAttacks: opportunity.notes } : {}),
+    ...(zoneEffects.length ? { zoneEffects } : {}),
   });
 }

@@ -13,7 +13,7 @@ import {
   acBreakdownFor,
   computeSheetDerived,
   formatModifier,
-  speedFor,
+  sizeForRace,
   type DerivedPart,
 } from "@/lib/srd";
 import { ATTUNEMENT_SLOTS, matchArmor } from "@/lib/srd/armor";
@@ -21,7 +21,6 @@ import { encumbranceFor } from "@/lib/srd/encumbrance";
 import { matchMagicItem, magicItemRiders } from "@/lib/srd/magic-items";
 import { RESOURCE_DEFS } from "@/lib/srd/class-resources";
 import { GameTerm } from "@/components/ui/GameTerm";
-import { InfoButton } from "@/components/ui/InfoDialog";
 import {
   AbilityTiles,
   ConditionChips,
@@ -35,6 +34,13 @@ import {
   VitalTiles,
 } from "@/components/sheet/SheetParts";
 import { SheetSpells } from "@/components/sheet/SheetSpells";
+import { DefensesLine, HitDiceSpend, StateTags } from "@/components/sheet/SheetState";
+import { SheetBetween } from "@/components/sheet/SheetBetween";
+import { conditionDetail, hitDiceLine, itemStatus, maxHpView, otherSpeedsLine, speedView } from "@/components/sheet/sheet-state";
+import { FeatureChoicePicker, OtherSpeeds } from "@/components/sheet/SheetChoices";
+import { SheetGearRow } from "@/components/sheet/SheetGearRow";
+import { ResourceRow, SlotRow, STEP_BUTTON } from "@/components/sheet/SheetCounters";
+import { namesLookup } from "@/lib/battlemap/condition-notes";
 
 function titleCase(value: string) {
   return value.replace(/[-_]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -44,9 +50,6 @@ const RESOURCE_NAMES = new Map(RESOURCE_DEFS.map((def) => [def.id, def.displayNa
 // Every resource already carries a line explaining what spending it does; it
 // was written for the DM model and reads just as well for the player.
 const RESOURCE_HELP = new Map(RESOURCE_DEFS.map((def) => [def.id, def.guidance]));
-
-const stepButton =
-  "flex items-center justify-center rounded border border-stone-700 p-0.5 text-stone-300 hover:bg-stone-800 disabled:opacity-40";
 
 // Full character sheet, opened by selecting any party member. Read-only,
 // except the owner may mark counters their class actually has as spent
@@ -63,75 +66,6 @@ function explainParts(parts: DerivedPart[]): string {
 
 const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"];
 
-// One spell slot level: a mark per slot, filled while it is still there.
-function SlotRow({
-  label,
-  left,
-  max,
-  spends,
-  corrects,
-  busy,
-  onSpend,
-  onRecover,
-}: {
-  label: string;
-  left: number;
-  max: number;
-  // May mark a slot spent: the sheet's owner, and whoever corrects.
-  spends: boolean;
-  // May hand a slot back: the DM and the party lead only.
-  corrects: boolean;
-  busy: boolean;
-  onSpend?: () => void;
-  onRecover?: () => void;
-}) {
-  return (
-    <span
-      className="flex items-center gap-1.5 rounded-lg border border-stone-800 px-2 py-1"
-      title={`${left} of ${max} ${label.toLowerCase()} slots left`}
-    >
-      <span className="font-display text-[11px] tracking-wide text-stone-400">{label}</span>
-      <span className="flex gap-0.5" aria-label={`${left} of ${max} left`}>
-        {Array.from({ length: max }, (_, index) => (
-          <span
-            key={index}
-            className={cn(
-              "size-2.5 rounded-full border",
-              index < left
-                ? "border-amber-400 bg-amber-400/80 shadow-[0_0_6px_rgba(212,171,58,0.5)]"
-                : "border-stone-600",
-            )}
-          />
-        ))}
-      </span>
-      {spends ? (
-        <button
-          type="button"
-          className={stepButton}
-          disabled={busy || left <= 0}
-          title="Mark one slot as spent"
-          aria-label={`Spend a ${label} slot`}
-          onClick={onSpend}
-        >
-          <Minus className="size-3" />
-        </button>
-      ) : null}
-      {corrects ? (
-        <button
-          type="button"
-          className={stepButton}
-          disabled={busy || left >= max}
-          title="Correction: give one slot back"
-          aria-label={`Give back a ${label} slot`}
-          onClick={onRecover}
-        >
-          <Plus className="size-3" />
-        </button>
-      ) : null}
-    </span>
-  );
-}
-
 export function CharacterSheetDialog({
   sheet,
   mine,
@@ -139,6 +73,8 @@ export function CharacterSheetDialog({
   corrects = false,
   encumbranceRule = false,
   inCombat = false,
+  myTurn = false,
+  names = [],
   portraitFallback,
   onAdjust,
   onClose,
@@ -158,6 +94,12 @@ export function CharacterSheetDialog({
   // on or off and nothing is attuned. A shield costs the action of the turn.
   // (Hit dice belong to a short rest in or out of a fight; see below.)
   inCombat?: boolean;
+  // Whether the fight's pointer rests on this character (a shield is handled
+  // with the action, on their own turn).
+  myTurn?: boolean;
+  // Who a condition's "until X's turn" or "from X" may name: the party and
+  // the enemies the viewer can see.
+  names?: Array<{ id: string; name: string }>;
   onAdjust?: () => void;
   onClose: () => void;
 }) {
@@ -179,24 +121,36 @@ export function CharacterSheetDialog({
   // The speed the server will actually let them move: armor gates the class
   // bonuses, heavy armor below its Strength minimum costs 10 feet, and a
   // heavy pack costs more when the table plays with encumbrance.
-  const speed = speedFor(sheet, { encumbrance: encumbranceRule });
+  // speedFor, then the conditions, then exhaustion: the speed the move route
+  // lets them walk (src/components/sheet/sheet-state.ts).
+  const speedState = speedView(sheet, { encumbrance: encumbranceRule });
+  const speed = speedState.speed;
+  const hp = maxHpView(sheet);
+  const nameOf = namesLookup(names);
+  const dead = Boolean(sheet.deathSaves?.dead);
+  // The same load speedFor weighs (size and a Belt of Giant Strength count),
+  // so the tile and the speed beside it agree.
   const load = encumbranceFor({
     strength: sheet.abilities.str,
     equipment: sheet.equipment,
     coins: sheet.gold,
+    size: sizeForRace(sheet.race),
+    wearer: sheet,
   });
   const anyEquipped = sheet.equipment.some((item) => item.equipped);
-  const speedNote =
-    speed === sheet.speed
-      ? "Their walking speed."
-      : `Base ${sheet.speed} ft, reduced by what they wear${encumbranceRule && load.speedPenalty ? " and carry" : ""}.`;
+  const speedNote = speedState.notes.length ? speedState.notes.join(" ") : "Their walking speed.";
   const [busy, setBusy] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   // The server's reason when it refuses an adjustment, shown under the
   // counters so the player knows what would be accepted.
   // It is kept beside the control that was used (the counters or the gear).
   const [refusal, setRefusal] = useState<{ text: string; at: "usage" | "gear" } | null>(null);
+  // The route's line after armor went on or off outside a fight: the minutes
+  // it took, already on the clock.
+  const [timeNote, setTimeNote] = useState<string | null>(null);
   const spends = mine || corrects;
+  // The usage route's own refusal for a dead character's spend.
+  const deadNote = dead && !corrects ? `${sheet.name} is dead and spends nothing.` : null;
 
   async function handleDownloadPdf() {
     setPdfBusy(true);
@@ -212,6 +166,7 @@ export function CharacterSheetDialog({
   async function adjustUsage(body: Record<string, unknown>, at: "usage" | "gear" = "usage") {
     setBusy(true);
     setRefusal(null);
+    setTimeNote(null);
     try {
       const response = await fetch(`/api/campaigns/${sheet.campaignId}/sheet/usage`, {
         method: "POST",
@@ -219,9 +174,13 @@ export function CharacterSheetDialog({
         // A correction names the sheet; a player is answered on their own.
         body: JSON.stringify(mine ? body : { ...body, characterId: sheet.id }),
       });
+      const data = await response.json().catch(() => null);
       if (!response.ok) {
-        const data = await response.json().catch(() => null);
         setRefusal({ text: typeof data?.error === "string" ? data.error : "That change was refused.", at });
+      } else if (typeof data?.timePassed === "string") {
+        // Out of a fight armor takes minutes to put on or take off, and the
+        // route moved the table's clock by them (src/lib/dm/don-doff.ts).
+        setTimeNote(data.timePassed);
       }
     } catch {
       setRefusal({ text: "The change did not reach the server.", at });
@@ -281,7 +240,7 @@ export function CharacterSheetDialog({
           </div>
 
           <div className="space-y-1.5">
-            <HpBar current={sheet.currentHp} max={sheet.maxHp} temp={sheet.tempHp ?? 0} />
+            <HpBar current={sheet.currentHp} max={hp.max} temp={sheet.tempHp ?? 0} note={hp.note} />
             <VitalTiles
               vitals={[
                 {
@@ -290,7 +249,13 @@ export function CharacterSheetDialog({
                   value: sheet.ac,
                   title: sheet.acOverride ? "Set by hand; armor does not change it." : armor.parts.join(" + "),
                 },
-                { glyph: "rest-speed", label: "Speed", value: `${speed} ft`, title: speedNote },
+                {
+                  glyph: "rest-speed",
+                  label: "Speed",
+                  value: `${speed} ft`,
+                  title: [speedNote, ...otherSpeedsLine(derived.speeds)].join(" "),
+                  tone: speed < speedState.base ? "warn" : "plain",
+                },
                 {
                   glyph: "rest-initiative",
                   label: <GameTerm id="initiative">Initiative</GameTerm>,
@@ -309,19 +274,28 @@ export function CharacterSheetDialog({
                 {
                   glyph: `die-${sheet.hitDice.die}`,
                   label: <GameTerm id="hit_dice">Hit dice</GameTerm>,
-                  value: `${sheet.hitDice.total - sheet.hitDice.spent}/${sheet.hitDice.total}${sheet.hitDice.die}`,
+                  // Every pool of a multiclass character, not only the first.
+                  value: hitDiceLine(sheet),
                 },
                 {
                   glyph: "coin-purse",
                   label: "Carried",
                   value: `${load.carriedLb}${load.unweighed ? "+" : ""}/${load.capacityLb} lb`,
-                  tone: encumbranceRule && load.tier !== "unencumbered" ? "warn" : "plain",
-                  title: encumbranceRule
-                    ? `${load.note ?? "Not encumbered"}. Capacity ${load.capacityLb} lb.${load.unweighed ? ` ${load.unweighed} item${load.unweighed === 1 ? "" : "s"} of unknown weight are not counted.` : ""}`
-                    : `Carrying capacity ${load.capacityLb} lb. Encumbrance is off for this table, so the weight costs nothing.${load.unweighed ? ` ${load.unweighed} item${load.unweighed === 1 ? "" : "s"} of unknown weight are not counted.` : ""}`,
+                  tone: load.overCapacity || (encumbranceRule && load.tier !== "unencumbered") ? "warn" : "plain",
+                  // Past the capacity (Strength x 15) the load can only be
+                  // dragged at 5 feet, whatever the table's encumbrance rule
+                  // (src/lib/dm/load-rules.ts, speedFor).
+                  title: `${
+                    load.overCapacity
+                      ? `Past their carrying capacity of ${load.capacityLb} lb: they can only drag this load, at a speed of 5 feet, and nothing more can be given to them.`
+                      : encumbranceRule
+                        ? `${load.note ?? "Not encumbered"}. Capacity ${load.capacityLb} lb.`
+                        : `Carrying capacity ${load.capacityLb} lb. Encumbrance is off for this table, so weight up to the capacity costs nothing.`
+                  }${load.unweighed ? ` ${load.unweighed} item${load.unweighed === 1 ? "" : "s"} of unknown weight are not counted.` : ""}`,
                 },
               ]}
             />
+            <OtherSpeeds speeds={derived.speeds} />
           </div>
 
           {sheet.wildShape ? (
@@ -334,17 +308,24 @@ export function CharacterSheetDialog({
               </span>
               <span className="font-mono text-xs">AC {sheet.wildShape.beastAc}</span>
               <span className="w-full text-xs text-lime-400/80">
-                Damage hits the beast&apos;s hit points first. The {sheet.currentHp}/{sheet.maxHp} HP
+                Damage hits the beast&apos;s hit points first. The {sheet.currentHp}/{hp.max} HP
                 above is what {sheet.name} returns to when the form breaks.
               </span>
             </div>
           ) : null}
 
+          <StateTags sheet={sheet} className="mt-2" />
+          <SheetBetween sheet={sheet} className="mt-2" />
           {sheet.conditions.length ? (
             <div className="reveal mt-2">
-              <ConditionChips conditions={sheet.conditions} rounds={sheet.conditionMeta} />
+              <ConditionChips
+                conditions={sheet.conditions}
+                rounds={sheet.conditionMeta}
+                detail={(condition) => conditionDetail(sheet, condition, nameOf)}
+              />
             </div>
           ) : null}
+          <DefensesLine sheet={sheet} />
 
           <SheetBlock
             className="mt-4"
@@ -405,7 +386,7 @@ export function CharacterSheetDialog({
                         max={slot.max}
                         spends={spends}
                         corrects={corrects}
-                        busy={busy}
+                        busy={busy || Boolean(deadNote)}
                         onSpend={() => adjustUsage({ slots: { [slotLevel]: slot.used + 1 } })}
                         onRecover={() => adjustUsage({ slots: { [slotLevel]: slot.used - 1 } })}
                       />
@@ -415,9 +396,11 @@ export function CharacterSheetDialog({
                         label={`Pact, level ${ROMAN[sheet.spellcasting.pact.level] ?? sheet.spellcasting.pact.level}`}
                         left={sheet.spellcasting.pact.max - sheet.spellcasting.pact.used}
                         max={sheet.spellcasting.pact.max}
-                        spends={false}
-                        corrects={false}
-                        busy={busy}
+                        spends={spends}
+                        corrects={corrects}
+                        busy={busy || Boolean(deadNote)}
+                        onSpend={() => adjustUsage({ pactUsed: (sheet.spellcasting?.pact?.used ?? 0) + 1 })}
+                        onRecover={() => adjustUsage({ pactUsed: (sheet.spellcasting?.pact?.used ?? 0) - 1 })}
                       />
                     ) : null}
                   </div>
@@ -443,17 +426,19 @@ export function CharacterSheetDialog({
           {spends || Object.keys(sheet.resources).length ? (
             <SheetBlock className="mt-4" title="Hit dice and resources">
               <div className="space-y-1.5 text-xs text-stone-300">
-                <div className="flex items-center gap-2">
-                  <span className="w-36 shrink-0 text-stone-400">
-                    <GameTerm id="hit_dice">Hit dice</GameTerm> ({sheet.hitDice.die})
+                <div className="flex items-start gap-2">
+                  <span className="w-36 shrink-0 pt-1 text-stone-400">
+                    <GameTerm id="hit_dice">Hit dice</GameTerm>
                   </span>
-                  {/* SRD 5.1: hit dice are spent at the end of a short rest,
-                      which the rest itself rolls (take_rest). A player has
-                      no counter to tick; the DM seats and the lead correct. */}
-                  {corrects ? (
+                  {/* SRD 5.1: hit dice are spent at the end of a short rest.
+                      A player at the table chooses their own while the rest's
+                      window is open (POST /sheet/hit-dice, which rolls and
+                      heals); the DM seats and the lead correct the count. */}
+                  <HitDiceSpend sheet={sheet} mine={mine} inCombat={inCombat} />
+                  {corrects && !(sheet.hitDicePools?.length ?? 0) ? (
                     <button
                       type="button"
-                      className={stepButton}
+                      className={STEP_BUTTON}
                       disabled={busy || sheet.hitDice.spent >= sheet.hitDice.total}
                       title="Correction: mark a hit die as spent"
                       onClick={() => adjustUsage({ hitDiceSpent: sheet.hitDice.spent + 1 })}
@@ -461,18 +446,10 @@ export function CharacterSheetDialog({
                       <Minus className="size-3" />
                     </button>
                   ) : null}
-                  <span>
-                    {sheet.hitDice.total - sheet.hitDice.spent}/{sheet.hitDice.total}
-                  </span>
-                  {mine && !corrects ? (
-                    <span className="text-[11px] text-stone-500">
-                      Spent at the end of a short rest; ask the DM for one.
-                    </span>
-                  ) : null}
-                  {corrects ? (
+                  {corrects && !(sheet.hitDicePools?.length ?? 0) ? (
                     <button
                       type="button"
-                      className={stepButton}
+                      className={STEP_BUTTON}
                       disabled={busy || sheet.hitDice.spent <= 0}
                       title="Correction: give a hit die back"
                       onClick={() => adjustUsage({ hitDiceSpent: sheet.hitDice.spent - 1 })}
@@ -482,40 +459,19 @@ export function CharacterSheetDialog({
                   ) : null}
                 </div>
                 {Object.entries(sheet.resources).map(([id, pool]) => (
-                  <div key={id} className="flex items-center gap-2">
-                    <span className="flex w-36 shrink-0 items-center gap-1 text-stone-400">
-                      {RESOURCE_NAMES.get(id) ?? titleCase(id)}
-                      <InfoButton
-                        label={RESOURCE_NAMES.get(id) ?? titleCase(id)}
-                        text={RESOURCE_HELP.get(id)}
-                      />
-                    </span>
-                    {spends ? (
-                      <button
-                        type="button"
-                        className={stepButton}
-                        disabled={busy || pool.used >= pool.max}
-                        title="Spend a use"
-                        onClick={() => adjustUsage({ resources: { [id]: pool.used + 1 } })}
-                      >
-                        <Minus className="size-3" />
-                      </button>
-                    ) : null}
-                    <span>
-                      {pool.max - pool.used}/{pool.max}
-                    </span>
-                    {corrects ? (
-                      <button
-                        type="button"
-                        className={stepButton}
-                        disabled={busy || pool.used <= 0}
-                        title="Correction: give a use back"
-                        onClick={() => adjustUsage({ resources: { [id]: pool.used - 1 } })}
-                      >
-                        <Plus className="size-3" />
-                      </button>
-                    ) : null}
-                  </div>
+                  <ResourceRow
+                    key={id}
+                    id={id}
+                    pool={pool}
+                    name={RESOURCE_NAMES.get(id) ?? titleCase(id)}
+                    help={RESOURCE_HELP.get(id)}
+                    spends={spends}
+                    corrects={corrects}
+                    busy={busy}
+                    deadNote={deadNote}
+                    onSpend={() => adjustUsage({ resources: { [id]: pool.used + 1 } })}
+                    onRecover={() => adjustUsage({ resources: { [id]: pool.used - 1 } })}
+                  />
                 ))}
               </div>
               {spends ? (
@@ -536,7 +492,13 @@ export function CharacterSheetDialog({
 
           {sheet.equipment.length ? (
             <SheetBlock className="mt-4" title="Equipment" aside={`Attuned ${attunedCount}/${ATTUNEMENT_SLOTS}`}>
-              <EquipmentChips equipment={sheet.equipment} />
+              <EquipmentChips
+                equipment={sheet.equipment}
+                extra={(index) => {
+                  const item = sheet.equipment[index];
+                  return item ? itemStatus(sheet, item).charges : null;
+                }}
+              />
               {mine && wearable.length ? (
                 <div className="reveal mt-2 space-y-1">
                   <p className="text-[11px] text-stone-500">
@@ -558,77 +520,27 @@ export function CharacterSheetDialog({
                         .join(" \u00b7 ") || "worn"}
                     </p>
                   ) : null}
-                  {wearable.map((item) => {
-                    // Magic gear works only while worn, so every row here can
-                    // be put on; only body armor is barred in a fight.
-                    const isArmor = matchArmor(item.name) !== null;
-                    const isShield = matchArmor(item.name)?.category === "shield";
-                    const armorLocked = inCombat && isArmor && !isShield;
-                    const worn = item.equipped ?? !anyEquipped;
-                    // Only an item that asks for attunement offers it; plain
-                    // armor and "+1" gear work without one, and the server
-                    // refuses the rest (srd/magic-items.ts attunementProblem).
-                    // One already attuned keeps the control so it can end.
-                    const def = matchMagicItem(item.name, item.slug);
-                    const attunable =
-                      Boolean(item.attuned) ||
-                      Boolean(item.gear?.magic?.requiresAttunement) ||
-                      Boolean(def?.requiresAttunement);
-                    return (
-                      <div key={item.name} className="flex items-center gap-2 text-xs text-stone-300">
-                        <GameIcon icon={{ kind: "item", key: item.name, family: "item-gear" }} size="size-6" />
-                        <span className="grow truncate">{item.name}</span>
-                        <button
-                          type="button"
-                          disabled={busy || armorLocked}
-                          aria-busy={busy}
-                          title={
-                            !inCombat || !isArmor
-                              ? undefined
-                              : isShield
-                                ? "A shield takes your action, on your own turn"
-                                : "Armor takes minutes to change, so not during a fight"
-                          }
-                          onClick={() =>
-                            adjustUsage({ gear: { [item.name]: { equipped: !worn } } }, "gear")
-                          }
-                          className={cn(
-                            "rounded border px-1.5 py-0.5",
-                            worn
-                              ? "border-amber-700/70 bg-amber-950/40 text-amber-200"
-                              : "border-stone-700 text-stone-400",
-                          )}
-                        >
-                          {worn ? "worn" : "wear"}
-                        </button>
-                        {attunable ? (
-                        <button
-                          type="button"
-                          disabled={
-                            busy || inCombat || (!item.attuned && attunedCount >= ATTUNEMENT_SLOTS)
-                          }
-                          title={
-                            inCombat ? "Attuning takes a short rest, so not during a fight" : undefined
-                          }
-                          onClick={() =>
-                            adjustUsage({ gear: { [item.name]: { attuned: !item.attuned } } }, "gear")
-                          }
-                          className={cn(
-                            "rounded border px-1.5 py-0.5 disabled:opacity-40",
-                            item.attuned
-                              ? "border-sky-800/70 bg-sky-950/40 text-sky-200"
-                              : "border-stone-700 text-stone-400",
-                          )}
-                        >
-                          {item.attuned ? "attuned" : "attune"}
-                        </button>
-                        ) : null}
-                      </div>
-                    );
-                  })}
+                  {wearable.map((item) => (
+                    <SheetGearRow
+                      key={item.name}
+                      sheet={sheet}
+                      item={item}
+                      worn={item.equipped ?? !anyEquipped}
+                      inCombat={inCombat}
+                      myTurn={myTurn}
+                      dead={dead}
+                      busy={busy}
+                      onGear={(change) => adjustUsage({ gear: { [item.name]: change } }, "gear")}
+                    />
+                  ))}
                   {refusal?.at === "gear" ? (
                     <p role="alert" className="reveal text-[11px] text-amber-300">
                       {refusal.text}
+                    </p>
+                  ) : null}
+                  {timeNote ? (
+                    <p key={timeNote} role="status" className="animate-fade-up text-[11px] text-sky-200/90">
+                      {timeNote}
                     </p>
                   ) : null}
                 </div>
@@ -639,6 +551,7 @@ export function CharacterSheetDialog({
           {sheet.features.length ? (
             <SheetBlock className="mt-4" title="Features and traits">
               <FeatureChips features={sheet.features} classId={sheet.class} subclass={sheet.subclass} />
+              <FeatureChoicePicker sheet={sheet} mine={mine} inCombat={inCombat} />
             </SheetBlock>
           ) : null}
 

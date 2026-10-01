@@ -96,6 +96,8 @@ await test("a table nobody configured runs the plain SRD rules", async () => {
     powerfulCritical: false,
     criticalDamageMods: false,
     ammunition: false,
+    // Food and water: a variant, off by default (the party is supplied).
+    supplies: false,
     restVariant: "standard",
   });
   assert.equal(stored.dicePolicy, "digital_only");

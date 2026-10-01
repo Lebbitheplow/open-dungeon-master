@@ -2,12 +2,14 @@ import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
 import { insertCharacterEvent } from "@/lib/db/character-events";
+import { noteDeathMoment } from "@/lib/dm/revival";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { insertRoll } from "@/lib/db/rolls";
 import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import type { CharacterSheet, DeathSaves, FullPatchSheetInput } from "@/lib/schemas/sheet";
-import { effectiveMaxHp, exhaustionRollState } from "@/lib/dm/condition-logic";
+import { effectiveMaxHp, exhaustionRollState, mergeAdvantage } from "@/lib/dm/condition-logic";
+import { conditionDeathSaveAdvantage } from "@/lib/srd/condition-effect-queries";
 import {
   downConditions,
   stableTimer,
@@ -62,6 +64,8 @@ function writeDeathState(
 }
 
 function recordDeath(campaign: Campaign, sheet: CharacterSheet, cause: string) {
+  // When, in the world's time: the window a revival spell holds to.
+  noteDeathMoment(campaign.id, sheet.id);
   insertCharacterEvent({
     libraryCharacterId: sheet.libraryCharacterId,
     campaignCharacterId: sheet.id,
@@ -257,15 +261,18 @@ export function rollDeathSave(campaign: Campaign, characterId: string): void {
   // A death save is a saving throw, so exhaustion level 3 costs it
   // disadvantage like any other.
   const tired = exhaustionRollState(sheet.exhaustion ?? 0, "saving_throw");
-  const outcome = rollExpression(d20Expression(0, tired.advantage));
+  // Beacon of Hope: death saves with advantage (condition-effects.ts).
+  const hope = conditionDeathSaveAdvantage(sheet.conditions);
+  const advantage = mergeAdvantage([tired.advantage, hope ? "advantage" : "none"]);
+  const outcome = rollExpression(d20Expression(0, advantage));
   const roll = insertRoll({
     campaignId: campaign.id,
     characterId: sheet.id,
     requestedBy: "dm",
     kind: "saving_throw",
-    detail: `death save${tired.note ? ` (${tired.note})` : ""}`,
+    detail: `death save${tired.note ? ` (${tired.note})` : ""}${hope ? ` (${hope}: advantage)` : ""}`,
     dc: 10,
-    ...(tired.advantage === "none" ? {} : { advantage: tired.advantage }),
+    ...(advantage === "none" ? {} : { advantage }),
     result: outcome,
   });
   publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", {

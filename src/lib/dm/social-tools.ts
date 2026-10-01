@@ -36,6 +36,7 @@ import {
   socialCheckDc,
 } from "@/lib/dm/social";
 import { resolveRollExpression, resolveSheetRef } from "@/lib/dm/rolls";
+import { rollExtrasFor, spendRollCarriers } from "@/lib/dm/forced-save";
 import type { RollArgs } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -323,14 +324,17 @@ export function handleSocialCheck(
     return { error: "approach must be persuade, deceive, or intimidate." };
   }
 
+  // Held carriers (Bardic Inspiration, Help, Guidance) and lasting effects
+  // ride this check like any other, and the carrier is spent by it.
   const resolved = resolveRollExpression(
     { kind: "skill_check", skill } as unknown as RollArgs,
     sheet,
-    { encumbrance: campaign.gameSettings.variantRules.encumbrance },
+    rollExtrasFor(campaign, sheet, "skill_check"),
   );
   if ("error" in resolved || "autoFail" in resolved) {
     return { error: "error" in resolved ? resolved.error : `${sheet.name} cannot make that check.` };
   }
+  spendRollCarriers(campaign.id, sheet.id, resolved.spendInspiration);
   // A faction's member leans on the party's standing with that faction
   // (docs/vtt-parity-implementation-plan.md section 6).
   const factionOffset = npc.factionId ? reputationDcOffset(getParty(campaign.id).reputation[npc.factionId] ?? 0) : 0;

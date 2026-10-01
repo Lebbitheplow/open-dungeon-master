@@ -10,6 +10,8 @@
 // used to throw it away the moment the narration was assembled. Nothing here
 // mutates mechanical state; a detection at most costs one corrective model call.
 
+import { LEVELED_SPELL_NAMES } from "./leveled-spells";
+
 // ---------------------------------------------------------------------------
 // Part 1: the contract block
 // ---------------------------------------------------------------------------
@@ -34,12 +36,12 @@ The server is the rules engine and you are its voice. It rolls the dice, adjudic
 - HP and death. Current hit points, dropping to 0, death saves, stabilizing, and dying are all server-tracked. A creature is dead, down, or recovered ONLY when a tool result says so.
 - Spell slots and resources. Slots, pact slots, limited-use features, and consumables are spent by their tools before the effect exists. A spell narrated without its tool call was never cast.
 - Conditions and durations. Conditions land, tick, and expire through their tools, on characters and enemies alike. Never narrate one taking hold or lifting without the call that records it.
-- XP and level. The server awards XP and reports when a level-up is available. You never set a level, hit points, feature, or spell yourself.
+- XP and level. The server awards XP and reports when a level-up is available. You never set a level, hit points, armor class, or a level's features and spells yourself: the player levels up from their sheet. A lasting gift the story grants is a story feature through update_sheet, and a spell the story teaches is learn_spell.
 - Gold and inventory. Coins, loot, purchases, and items move through their tools, which refuse what a purse cannot cover. Never let money or gear change hands in narration alone.
 - The weather and the hour. The clock and the sky in GAME STATE are what the world is doing; time passes through travel, rests and pass_time, and the sky rolls with it. Never narrate a dusk or a storm the state does not show.
 - Faction standing. The party's reputation with each faction moves only through adjust_reputation; a member's welcome and the DCs they set follow it.
 - Shop prices. What a shelf asks and pays is the server's; buy_item, sell_item and haggle move the coin and the goods. Never quote a price of your own.
-If a tool result has not come back, the thing it decides has NOT happened yet: call the tool, or write around it. If a tool returns an error, the attempt failed, and that failure is what you narrate. If an expected number is simply absent, proceed without it and never fabricate the value. Enemy stat-block numbers exist so you can run the fight and are never spoken aloud.`;
+If a tool result has not come back, the thing it decides has NOT happened yet: call the tool, or write around it. If a tool refuses on the rules (refused "rules"), the attempt failed, and that failure is what you narrate; if it marks the error retry, the mistake is in your call, so fix the call and send it again instead of narrating it. If an expected number is simply absent, proceed without it and never fabricate the value. Enemy stat-block numbers exist so you can run the fight and are never spoken aloud.`;
 
 // Appended to the contract only when the table leaves the guard on, so the
 // prompt never promises a check that is switched off.
@@ -86,9 +88,19 @@ export type AttackFact = {
   ambiguous: boolean;
 };
 
+// The encounter as it stands when the narration is checked, read by the rim
+// (dm/narration-guard.ts). It is what makes a claim checkable on a turn
+// whose tools said nothing about a creature: a kill narrated with no call
+// at all, or a hit on an attack the engine refused.
+export type LiveEnemy = { id: string; name: string; hp: number; maxHp: number; status: string };
+export type LiveState = { enemies: readonly LiveEnemy[] };
+
 export type ResolvedOutcomes = {
   attacks: Map<string, AttackFact>;
   creatures: Map<string, CreatureFact>;
+  // A fight is running: a damage figure in prose then needs a roll behind
+  // it even on a turn whose tools produced no numbers at all.
+  liveFight?: boolean;
   // Every number the engine produced this turn, from anywhere in any result.
   numbers: Set<number>;
   // The subset that plausibly reads as damage or healing in prose; used to
@@ -330,15 +342,28 @@ const SPELL_ACCOUNTING_TOOLS = new Set([
   "use_item",
 ]);
 
-export function resolveOutcomes(exchanges: readonly ToolExchange[]): ResolvedOutcomes {
+// Tools whose refusal means a blow never landed on the enemy they named.
+const ATTACK_TOOLS = new Set(["pc_attack", "cast_at_enemy", "pet_attack"]);
+
+export function resolveOutcomes(
+  exchanges: readonly ToolExchange[],
+  live: LiveState | null = null,
+): ResolvedOutcomes {
   const attacks = new Map<string, AttackFact>();
   const creatures = new Map<string, CreatureFact>();
   const numbers = new Set<number>();
   const damageNumbers: number[] = [];
   const spells = new Set<string>();
+  const refusedTargets: string[] = [];
   let toolResultCount = 0;
 
   for (const exchange of exchanges) {
+    if (ATTACK_TOOLS.has(exchange.name) && exchange.result && "error" in exchange.result) {
+      const args = parseJsonObject(exchange.arguments);
+      if (typeof args?.targetEnemyId === "string") {
+        refusedTargets.push(args.targetEnemyId);
+      }
+    }
     // A named spell counts as accounted for the moment its tool ran without an
     // error, whether that spent a slot, a pact slot, a resource, or nothing at
     // all (rituals and cantrips legitimately spend nothing).
@@ -392,6 +417,38 @@ export function resolveOutcomes(exchanges: readonly ToolExchange[]): ResolvedOut
     }
   }
 
+  if (live) {
+    // How many live enemies answer to each name a narrator would write: two
+    // goblins make "the goblin" nobody in particular.
+    const perKey = new Map<string, number>();
+    for (const enemy of live.enemies) {
+      const key = normalizeCreatureName(enemy.name);
+      perKey.set(key, (perKey.get(key) ?? 0) + 1);
+    }
+    // A refused attack landed nothing. It is a fact about the target only
+    // when no call this turn resolved an attack on it (a retried swing that
+    // hit is the truth then).
+    for (const id of refusedTargets) {
+      const enemy = live.enemies.find((entry) => entry.id === id);
+      const key = enemy ? normalizeCreatureName(enemy.name) : "";
+      if (enemy && key.length >= 3 && !attacks.has(key)) {
+        attacks.set(key, { display: enemy.name, hit: false, ambiguous: (perKey.get(key) ?? 0) > 1 });
+      }
+    }
+    // The encounter's own hit points come last, so they win: they are the
+    // state after every call this turn made.
+    for (const enemy of live.enemies) {
+      if (enemy.status !== "alive" && enemy.status !== "dead") {
+        continue;
+      }
+      recordCreature(creatures, enemy.name, {
+        hp: enemy.hp,
+        maxHp: enemy.maxHp,
+        dead: enemy.status === "dead",
+      });
+    }
+  }
+
   // Two enemies whose names collapse together (Goblin 1 and Goblin 2) make
   // every claim about "the goblin" unattributable, whichever map noticed the
   // collision, so the doubt propagates both ways.
@@ -408,7 +465,15 @@ export function resolveOutcomes(exchanges: readonly ToolExchange[]): ResolvedOut
     }
   }
 
-  return { attacks, creatures, numbers, damageNumbers, spells, toolResultCount };
+  return {
+    attacks,
+    creatures,
+    liveFight: Boolean(live?.enemies.length),
+    numbers,
+    damageNumbers,
+    spells,
+    toolResultCount,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -557,103 +622,9 @@ function downedClaimPatterns(name: string): RegExp[] {
 // and "the third bell" never reach the check.
 const NUMBER_CLAIM = /(?<![\dd])(\d{1,3})\s+(?:points?\s+of\s+)?(damage|healing)\b/gi;
 
-// Only leveled SRD spells whose casting genuinely costs a slot. Cantrips are
-// absent on purpose: casting one spends nothing, so their absence from the
-// turn's tool calls would prove nothing.
-const LEVELED_SPELLS = [
-  "burning hands",
-  "charm person",
-  "cure wounds",
-  "detect magic",
-  "disguise self",
-  "faerie fire",
-  "false life",
-  "feather fall",
-  "find familiar",
-  "fog cloud",
-  "healing word",
-  "hellish rebuke",
-  "hex",
-  "hunter's mark",
-  "identify",
-  "inflict wounds",
-  "magic missile",
-  "mage armor",
-  "protection from evil and good",
-  "shield of faith",
-  "sleep",
-  "thunderwave",
-  "bless",
-  "bane",
-  "aid",
-  "blur",
-  "darkness",
-  "enhance ability",
-  "hold person",
-  "invisibility",
-  "lesser restoration",
-  "levitate",
-  "mirror image",
-  "misty step",
-  "moonbeam",
-  "pass without trace",
-  "scorching ray",
-  "shatter",
-  "silence",
-  "spike growth",
-  "spiritual weapon",
-  "suggestion",
-  "web",
-  "animate dead",
-  "bestow curse",
-  "call lightning",
-  "counterspell",
-  "dispel magic",
-  "fear",
-  "fireball",
-  "fly",
-  "haste",
-  "hypnotic pattern",
-  "lightning bolt",
-  "mass healing word",
-  "revivify",
-  "sleet storm",
-  "slow",
-  "spirit guardians",
-  "stinking cloud",
-  "vampiric touch",
-  "banishment",
-  "blight",
-  "confusion",
-  "dimension door",
-  "greater invisibility",
-  "ice storm",
-  "polymorph",
-  "wall of fire",
-  "cloudkill",
-  "cone of cold",
-  "dominate person",
-  "flame strike",
-  "hold monster",
-  "mass cure wounds",
-  "raise dead",
-  "wall of force",
-  "chain lightning",
-  "disintegrate",
-  "sunbeam",
-  "true seeing",
-  "finger of death",
-  "plane shift",
-  "resurrection",
-  "teleport",
-  "dominate monster",
-  "power word stun",
-  "sunburst",
-  "meteor swarm",
-  "power word kill",
-  "time stop",
-  "wish",
-].map(normalizeSpellName);
+// Only leveled SRD spells whose casting genuinely costs a slot
+// (src/lib/dm/leveled-spells.ts), normalized as the guard compares them.
+const LEVELED_SPELLS = LEVELED_SPELL_NAMES.map(normalizeSpellName);
 
 // Every subset sum of the turn's damage numbers, so prose that adds two hits
 // into one figure ("nine damage in all") is never called a contradiction.
@@ -676,10 +647,18 @@ function allowedNumbers(outcomes: ResolvedOutcomes): Set<number> {
 // Part 4: the matchers
 // ---------------------------------------------------------------------------
 
+// The verbs a narrator casts with. Present tense only, so a recap of an
+// earlier casting is left alone.
+const CAST_VERBS = "casts|unleashes|hurls|calls down|conjures|looses";
+const CAST_VERB = new RegExp(`\\b(?:${CAST_VERBS})\\b`, "i");
+
 export function findNarrationContradictions(
   narration: string,
   outcomes: ResolvedOutcomes,
   partyNames: readonly string[] = [],
+  // Every leveled spell the table's spell data knows, normalized; the short
+  // built-in list stands in when the caller has none.
+  leveledSpells: readonly string[] = LEVELED_SPELLS,
 ): Contradiction[] {
   const clauses = narrationClauses(narration);
   if (!clauses.length) {
@@ -694,7 +673,7 @@ export function findNarrationContradictions(
       found.push(contradiction);
     }
   };
-  const allowed = outcomes.numbers.size ? allowedNumbers(outcomes) : null;
+  const allowed = outcomes.numbers.size || outcomes.liveFight ? allowedNumbers(outcomes) : null;
   const casters = partyNames.map((name) => name.trim()).filter((name) => name.length >= 3);
 
   for (const clause of clauses) {
@@ -752,8 +731,9 @@ export function findNarrationContradictions(
     }
 
     // 3. A stated damage or healing figure the engine never produced. Only runs
-    // when the turn produced numbers at all: with no ground truth there is
-    // nothing to contradict.
+    // when the turn produced numbers or a fight is running: with no ground
+    // truth there is nothing to contradict, and in a fight a figure no roll
+    // produced is invented whether or not a tool ran.
     if (allowed) {
       NUMBER_CLAIM.lastIndex = 0;
       let match = NUMBER_CLAIM.exec(clause);
@@ -774,16 +754,17 @@ export function findNarrationContradictions(
     // for. Enemy casters are excluded (their spells run through other tools and
     // spend nothing), and only the present tense counts, so a recap of an
     // earlier casting is left alone.
-    if (casters.length && /\bcasts\b/i.test(clause)) {
+    if (casters.length && CAST_VERB.test(clause)) {
+      const lowered = clause.toLowerCase().replace(/[‘’]/g, "'");
       for (const caster of casters) {
-        for (const spell of LEVELED_SPELLS) {
-          if (outcomes.spells.has(spell)) {
+        for (const spell of leveledSpells) {
+          if (outcomes.spells.has(spell) || !lowered.includes(spell)) {
             continue;
           }
           // Either apostrophe spelling reads as the same spell in prose.
           const spellInProse = namePattern(spell).replace(/'/g, "['‘’]");
           const pattern = new RegExp(
-            `\\b${namePattern(caster)}\\b[^.;]{0,30}?\\bcasts\\s+(?:the\\s+)?(?:spell\\s+)?${spellInProse}\\b`,
+            `\\b${namePattern(caster)}\\b[^.;]{0,30}?\\b(?:${CAST_VERBS})\\s+(?:the\\s+|a\\s+|an\\s+)?(?:spell\\s+)?${spellInProse}\\b`,
             "i",
           );
           if (pattern.test(clause)) {
@@ -806,13 +787,22 @@ export function checkNarration(input: {
   conversation: readonly GuardMessage[];
   narration: string;
   partyNames?: readonly string[];
+  // The running encounter, when there is one (see LiveState).
+  live?: LiveState | null;
+  // Every leveled spell the spell data knows, already normalized.
+  leveledSpells?: readonly string[];
 }): Contradiction[] {
   const narration = (input.narration ?? "").trim();
   if (!narration) {
     return [];
   }
-  const outcomes = resolveOutcomes(collectExchanges(input.conversation));
-  return findNarrationContradictions(narration, outcomes, input.partyNames ?? []);
+  const outcomes = resolveOutcomes(collectExchanges(input.conversation), input.live ?? null);
+  return findNarrationContradictions(
+    narration,
+    outcomes,
+    input.partyNames ?? [],
+    input.leveledSpells?.length ? input.leveledSpells : LEVELED_SPELLS,
+  );
 }
 
 // The correction the model is asked to make. Kept here so the wording is

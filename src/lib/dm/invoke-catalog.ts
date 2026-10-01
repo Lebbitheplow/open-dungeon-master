@@ -10,6 +10,7 @@
 // scripts/test-invoke-catalog.mjs fails the build when the two drift.
 import { BINDER_ADJUDICATIONS, FACTION_ADJUDICATIONS } from "@/lib/dm/catalog-binder";
 import { COMMERCE_ADJUDICATIONS } from "@/lib/dm/catalog-commerce";
+import { EXPLORE_ADJUDICATIONS } from "@/lib/dm/catalog-explore";
 import { COMBAT_ADJUDICATIONS } from "@/lib/dm/catalog-combat";
 import { PARTY_ADJUDICATIONS } from "@/lib/dm/catalog-party";
 import {
@@ -38,6 +39,7 @@ export const ADJUDICATIONS: CatalogEntry[] = [
   ...BINDER_ADJUDICATIONS,
   ...FACTION_ADJUDICATIONS,
   ...COMMERCE_ADJUDICATIONS,
+  ...EXPLORE_ADJUDICATIONS,
 ];
 
 export const ADJUDICATION_NAMES: string[] = ADJUDICATIONS.map((entry) => entry.name);

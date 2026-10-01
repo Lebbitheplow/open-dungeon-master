@@ -1,4 +1,5 @@
 import type { ChatMessage } from "@/lib/model-client";
+import { markToolError } from "@/lib/dm/tool-errors";
 
 // What the table reads when a DM turn ends with no narration at all.
 //
@@ -78,7 +79,10 @@ function lastActionRefusal(conversation: ChatMessage[]): string | null {
       continue;
     }
     const error = (parsed as { error?: unknown } | null)?.error;
-    if (typeof error === "string" && error.trim()) {
+    // Only the rules saying no is the player's business. An argument fault
+    // (a wrong id the model sent) coaches the model and means nothing at
+    // the table, and a cap on the turn is not their character failing.
+    if (typeof error === "string" && error.trim() && markToolError(parsed as Record<string, unknown>).refused === "rules") {
       return firstSentences(error);
     }
   }

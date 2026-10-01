@@ -1,7 +1,10 @@
+import { gearDefFor, gearRidersActive } from "@/lib/srd/magic-gear";
+
 // SRD 5.1 armor table plus the pure AC math the whole app derives armor
 // class from. Mirrors src/lib/srd/weapons.ts: a data table, fuzzy name
-// matching, a proficiency test, and starting-kit helpers, with no runtime
-// dependencies so scripts/test-armor.mjs can import it directly.
+// matching, a proficiency test, and starting-kit helpers. Its one dependency
+// is the generated magic item table (src/lib/srd/magic-gear.ts), which says
+// what suit a magic armor is.
 //
 // Before this module AC was a number the player typed once and nothing ever
 // changed it; buying plate did nothing. computeSheetDerived now computes it
@@ -94,6 +97,69 @@ export function matchArmor(term: string): SrdArmor | null {
   return candidates[0] ?? null;
 }
 
+// An SRD armor named anywhere in a free-text name, as whole words, longest
+// first: "Chain Mail of Fire Resistance" holds chain mail. Only used to find
+// the magic armor such a name is (armorOfRow), never as armor on its own, so
+// a "Leather Backpack" stays a backpack.
+function armorInside(term: string): SrdArmor | null {
+  const wanted = ` ${normalize(term)} `;
+  const candidates = SRD_ARMOR.filter((armor) => wanted.includes(` ${normalize(armor.name)} `));
+  candidates.sort((a, b) => b.name.length - a.name.length);
+  return candidates[0] ?? null;
+}
+
+// A worn row as the armor engine reads it: the suit (or shield) it is, the
+// magic bonus it carries, and whether it is worn as if trained. A magic
+// armor is its base armor with what its entry changes (src/lib/srd/
+// magic-gear.ts): Armor of Invulnerability is plate, Elven Chain a chain
+// shirt +1 anyone may wear, mithral drops the Strength requirement and the
+// Stealth disadvantage. A name that says which suit it is ("Mithral Half
+// Plate") wins over the entry's default. The bonus and the other riders of an
+// item that asks for attunement count only while attuned; the suit itself is
+// armor either way.
+export type WornArmor = { armor: SrdArmor; bonus: number; proficientAnyway: boolean };
+
+export function armorOfRow(item: WornItem): WornArmor | null {
+  const named = magicItemBonus(item.name);
+  if (item.gear?.armor) {
+    return { armor: item.gear.armor, bonus: named, proficientAnyway: false };
+  }
+  const tail = matchArmor(item.name);
+  const inside = tail ?? armorInside(item.name);
+  const def = gearDefFor(item.name, item.slug, inside?.name ?? null);
+  if (!def || def.base?.kind !== "armor") {
+    return tail ? { armor: tail, bonus: named, proficientAnyway: false } : null;
+  }
+  const base = inside ?? byName.get(normalize(def.base.name)) ?? null;
+  if (!base) {
+    return null;
+  }
+  const riders = gearRidersActive(def, item) ? (def.armor ?? {}) : {};
+  const armor: SrdArmor = {
+    ...base,
+    ...(riders.noStrength ? { strengthRequirement: undefined } : {}),
+    ...(riders.noStealthPenalty ? { stealthDisadvantage: false } : {}),
+  };
+  return {
+    armor,
+    bonus: Math.max(named, riders.bonus ?? 0),
+    proficientAnyway: riders.proficientAnyway === true,
+  };
+}
+
+// SRD 5.1, Adamantine Armor: "While you're wearing it, any critical hit
+// against you becomes a normal hit." For the attack engines that roll
+// against a character.
+export function wornArmorTurnsCrits(equipment: WornItem[]): boolean {
+  return equipment.some((item) => {
+    if (!isWorn(item, equipment)) {
+      return false;
+    }
+    const def = gearDefFor(item.name, item.slug, matchArmor(item.name)?.name ?? null);
+    return def?.base?.kind === "armor" && def.armor?.critProof === true;
+  });
+}
+
 // Whether a sheet's armor-training list covers this piece. Class armor
 // proficiencies are category terms ("light", "medium", "heavy", "shields",
 // "shields (nonmetal)"), and heavy training implies the lighter categories
@@ -125,7 +191,13 @@ export const ATTUNEMENT_SLOTS = 3;
 // `gear` is a homebrew item's snapshotted mechanics (src/lib/homebrew/
 // gear.ts): an armour written in the workshop is read here exactly as an
 // SRD one, and the name lookup is only the fallback.
-export type WornItem = { name: string; equipped?: boolean; gear?: { armor?: SrdArmor } };
+export type WornItem = {
+  name: string;
+  slug?: string;
+  equipped?: boolean;
+  attuned?: boolean;
+  gear?: { armor?: SrdArmor };
+};
 
 // Wearing is opt in per sheet. Once any row says whether it is worn, every
 // row is read as it is marked, so a character who took the last piece off
@@ -167,8 +239,8 @@ export function wearsUntrainedArmor(sheet: {
     if (!isWorn(item, equipment)) {
       return false;
     }
-    const armor = item.gear?.armor ?? matchArmor(item.name);
-    return armor ? !isArmorProficient(trained, armor) : false;
+    const worn = armorOfRow(item);
+    return worn ? !worn.proficientAnyway && !isArmorProficient(trained, worn.armor) : false;
   });
 }
 
@@ -239,6 +311,9 @@ export type AcBreakdown = {
   // Human-readable parts for the sheet UI: ["Plate 18", "Shield +2"].
   parts: string[];
   armorName: string | null;
+  // The suit worn, as the armor engine read it (a magic armor's base, with
+  // what its magic changes), for the callers that ask its category.
+  armor?: SrdArmor | null;
   shieldName: string | null;
   stealthDisadvantage: boolean;
   // Heavy armor worn below its Strength requirement.
@@ -270,25 +345,27 @@ export function computeArmorClass(input: {
 }): AcBreakdown {
   const worn = input.equipment.filter((item) => isWorn(item, input.equipment));
 
-  let armorItem: { item: WornItem; armor: SrdArmor } | null = null;
-  let shieldItem: { item: WornItem; armor: SrdArmor } | null = null;
+  type Piece = { item: WornItem; armor: SrdArmor; bonus: number; proficientAnyway: boolean };
+  let armorItem: Piece | null = null;
+  let shieldItem: Piece | null = null;
   for (const item of worn) {
-    const armor = item.gear?.armor ?? matchArmor(item.name);
-    if (!armor) {
+    const resolved = armorOfRow(item);
+    if (!resolved) {
       continue;
     }
+    const { armor } = resolved;
     if (armor.category === "shield") {
-      if (!shieldItem || armor.baseAc > shieldItem.armor.baseAc) {
-        shieldItem = { item, armor };
+      if (!shieldItem || armor.baseAc + resolved.bonus > shieldItem.armor.baseAc + shieldItem.bonus) {
+        shieldItem = { item, ...resolved };
       }
       continue;
     }
-    const score = armor.baseAc + dexThrough(armor, input.dexMod);
+    const score = armor.baseAc + resolved.bonus + dexThrough(armor, input.dexMod);
     const bestScore = armorItem
-      ? armorItem.armor.baseAc + dexThrough(armorItem.armor, input.dexMod)
+      ? armorItem.armor.baseAc + armorItem.bonus + dexThrough(armorItem.armor, input.dexMod)
       : -Infinity;
     if (score > bestScore) {
-      armorItem = { item, armor };
+      armorItem = { item, ...resolved };
     }
   }
 
@@ -300,14 +377,14 @@ export function computeArmorClass(input: {
 
   if (armorItem) {
     const { armor, item } = armorItem;
-    const magic = magicItemBonus(item.name);
+    const magic = armorItem.bonus;
     const dex = dexThrough(armor, input.dexMod);
     ac = armor.baseAc + magic + dex;
     parts.push(`${item.name} ${armor.baseAc + magic}`);
     if (dex !== 0) {
       parts.push(`DEX ${dex >= 0 ? "+" : ""}${dex}`);
     }
-    unproficient = !isArmorProficient(input.armorProfs, armor);
+    unproficient = !armorItem.proficientAnyway && !isArmorProficient(input.armorProfs, armor);
     stealthDisadvantage = Boolean(armor.stealthDisadvantage);
     if (
       armor.strengthRequirement &&
@@ -338,10 +415,10 @@ export function computeArmorClass(input: {
   // behind a shield the monk stands at 10 + DEX + the shield, which is what
   // the branch above fell through to. The shield itself always counts.
   if (shieldItem) {
-    const magic = magicItemBonus(shieldItem.item.name);
+    const magic = shieldItem.bonus;
     ac += shieldItem.armor.baseAc + magic;
     parts.push(`${shieldItem.item.name} +${shieldItem.armor.baseAc + magic}`);
-    if (!isArmorProficient(input.armorProfs, shieldItem.armor)) {
+    if (!shieldItem.proficientAnyway && !isArmorProficient(input.armorProfs, shieldItem.armor)) {
       unproficient = true;
     }
   }
@@ -356,6 +433,7 @@ export function computeArmorClass(input: {
     ac: Math.max(1, Math.min(30, ac)),
     parts,
     armorName: armorItem?.item.name ?? null,
+    armor: armorItem?.armor ?? null,
     shieldName: shieldItem ? shieldItem.item.name : null,
     stealthDisadvantage,
     speedPenalty,

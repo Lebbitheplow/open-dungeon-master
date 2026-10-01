@@ -2,16 +2,23 @@
 // 5.2): what a prepared spell or a limited-use feature costs, rolls and
 // spends, read from the same tables the cast and use_resource tools read.
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { casterStateProblem, componentProblem, materialPlan, slotPlan, turnCharge } from "@/lib/dm/cast-rules";
 import { computeSheetDerived, spellAttackFor, spellSaveDcFor } from "@/lib/srd";
-import { RAGING, resourceDef, resourceLevel, type ResourceDef } from "@/lib/srd/class-resources";
+import { resourceDef, resourceLevel, type ResourceDef } from "@/lib/srd/class-resources";
+import { isMeleeSpellAttack } from "@/lib/srd/melee-spell";
+import { bundledSpellFacts } from "@/lib/srd/spell-facts";
 import { aoeSpendFor } from "@/lib/srd/aoe-spend";
 import type { CombatRiders } from "@/lib/srd/feature-effects";
 import { authoredSpellRow, parseSpellMech, spellMechFor, type SpellMech } from "@/lib/srd/spell-mechanics";
 import { baseHealingDice, scaledSpellDice } from "@/lib/srd/spell-scaling";
+import { mechSpellDamage } from "@/lib/srd/spell-dice";
+import { bakedSpellMech } from "@/lib/content/baked-spells";
 import { allSpellNames } from "@/lib/srd/spell-lists";
+import { areaFor } from "@/lib/battlemap/hand-area";
 import {
   SAVE_LABEL,
   addFlat,
+  budgetOf,
   costGate,
   feet,
   gated,
@@ -23,6 +30,7 @@ import {
   standingGate,
   type Gate,
   type HandCard,
+  type HandChoice,
   type HandCardType,
   type HandCost,
   type HandOptions,
@@ -65,6 +73,72 @@ function factFor(name: string, options: HandOptions): SpellFact | null {
   };
 }
 
+const title = (word: string) => word.replace(/^./, (c) => c.toUpperCase());
+
+// Bestow Curse's nine curses, in the words a player picks from.
+const CURSE_LABELS: Record<string, string> = {
+  str: "Strength",
+  dex: "Dexterity",
+  con: "Constitution",
+  int: "Intelligence",
+  wis: "Wisdom",
+  cha: "Charisma",
+  attacks: "Its attacks on you",
+  will: "Its will",
+  necrotic: "Necrotic wounds",
+};
+
+// The one pick a spell's row asks the caster to make, as the engine names it
+// (src/lib/srd/spell-mech-types.ts): a condition's variants (Blindness/
+// Deafness, Eyebite, Bestow Curse), a word's choices (Command), Heat Metal
+// on worn armor, the condition a restoration ends, a buff's form
+// (Enlarge/Reduce). The value is what cast_at_enemy's `condition` or
+// cast_buff's `variant` reads (src/lib/dm/spell-riders.ts chosenCondition).
+export function spellChoice(mech: SpellMech): HandChoice | undefined {
+  const condition = mech.condition;
+  if (condition?.variants && condition.variants.length > 1) {
+    return {
+      arg: "condition",
+      label: "Choose",
+      options: condition.variants.map((variant) => {
+        const inner = /\(([^)]+)\)$/.exec(variant)?.[1];
+        return inner
+          ? { value: inner, label: CURSE_LABELS[inner] ?? title(inner) }
+          : { value: variant, label: title(variant) };
+      }),
+    };
+  }
+  if (condition?.choices && Object.keys(condition.choices).length) {
+    return {
+      arg: "condition",
+      label: "The word",
+      options: Object.entries(condition.choices).map(([word, adds]) => ({ value: word, label: title(word), note: adds.join(", ") })),
+    };
+  }
+  if (mech.riders?.gripSave) {
+    return {
+      arg: "condition",
+      label: "The metal",
+      options: [
+        { value: "", label: "A held object" },
+        { value: "armor", label: "Worn armor" },
+      ],
+      fallback: "",
+    };
+  }
+  if (mech.cures && !mech.cures.all && mech.cures.conditions.length > 1) {
+    return {
+      arg: "variant",
+      label: "Ends",
+      options: mech.cures.conditions.map((entry) => ({ value: entry, label: entry === "cursed" ? "A curse" : title(entry) })),
+    };
+  }
+  if (mech.buff?.variants && mech.buff.variants.length > 1) {
+    return { arg: "variant", label: "Choose", options: mech.buff.variants.map((variant) => ({ value: variant, label: title(variant) })) };
+  }
+  return undefined;
+}
+
 function castingCost(castingTime: string): HandCost | null {
   const text = castingTime.toLowerCase();
   if (text.includes("bonus")) return "bonus";
@@ -76,7 +150,15 @@ function castingCost(castingTime: string): HandCost | null {
 function spellCard(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, name: string, fact: SpellFact): HandCard | null {
   const cost = castingCost(fact.castingTime);
   if (!cost) return null;
-  const mech: SpellMech = spellMechFor([name]) ?? parseSpellMech({ desc: fact.desc, higherLevel: fact.higherLevel }) ?? { resolution: "utility" };
+  // The mechanics row the engine reads; the prose is parsed only for what the
+  // card shows when no row exists (its target, its save). With no pack there
+  // is no prose, and the engine reads the answers baked from the SRD rows, so
+  // the card does too (Shocking Grasp stays a melee spell attack).
+  const row = spellMechFor([name]);
+  const mech: SpellMech =
+    row ??
+    (fact.desc ? parseSpellMech({ desc: fact.desc, higherLevel: fact.higherLevel }) : bakedSpellMech(name)) ??
+    { resolution: "utility" };
   const slot = fact.level > 0 ? lowestSlot(sheet, fact.level) : null;
   const derived = computeSheetDerived(sheet);
   const abilityMod = sheet.spellcasting ? derived.abilityMods[sheet.spellcasting.ability] : 0;
@@ -87,7 +169,18 @@ function spellCard(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, 
     casterLevel: sheet.level,
     slotLevel: slot?.level,
   });
-  let damage: string | null = mech.resolution === "heal" || mech.resolution === "buff" ? null : scaled?.dice ?? null;
+  // The dice the engine rolls (spellDamageFor reads the same rule): Web,
+  // Entangle and Hypnotic Pattern deal none whatever their prose mentions.
+  const rolled = mechSpellDamage({
+    spell: name,
+    mech: row,
+    spellLevel: fact.level,
+    casterLevel: sheet.level,
+    slotLevel: slot?.level,
+    desc: fact.desc,
+    higherLevel: fact.higherLevel,
+  });
+  let damage: string | null = mech.resolution === "heal" || mech.resolution === "buff" ? null : rolled?.dice ?? null;
   let heals = false;
   if (mech.resolution === "heal") {
     // upcastDamage reads a healing step too, so a higher slot heals more.
@@ -101,6 +194,9 @@ function spellCard(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, 
     damage = addFlat(damage, derived.abilityMods[rider.ability as keyof typeof derived.abilityMods] ?? 0);
   }
   const toHit = mech.resolution === "attack" ? spellAttackFor(sheet, name) : null;
+  // The engine's own facts (casting time, components, material cost, range)
+  // for the engine's own gates below.
+  const facts = bundledSpellFacts(name);
   const dc = mech.resolution === "save" && mech.save ? spellSaveDcFor(sheet, name) : null;
   const save = dc !== null && mech.save ? { ability: SAVE_LABEL[mech.save] ?? mech.save.toUpperCase(), dc } : null;
   const type: HandCardType =
@@ -118,7 +214,12 @@ function spellCard(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, 
     ? damage ? `heals ${damage}` : "heals"
     : save
       ? typed ? `${typed}, ${save.ability} save` : `${save.ability} save DC ${save.dc}`
-      : typed || (mech.buff ? mech.buff.condition : "");
+      : typed ||
+        (mech.buff
+          ? // A buff with an aura that hurts (Spirit Guardians) names the
+            // engine's dice beside it; the card itself aims at no enemy.
+            `${mech.buff.condition}${mech.resolution === "buff" && rolled ? `, ${rolled.dice}${mech.damageType ? ` ${mech.damageType}` : ""}` : ""}`
+          : "");
   const roll =
     toHit !== null ? `${signed(toHit)} to hit` : save ? (typed ? `DC ${save.dc}${mech.halfOnSave ? ", half on a save" : ""}` : "no attack") : "no roll";
   const notes: string[] = [];
@@ -127,22 +228,25 @@ function spellCard(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, 
   }
   if (mech.note) notes.push(mech.note);
   if (slot && slot.level > fact.level) notes.push(`Cast with a level ${slot.level} slot.`);
-  const raging = sheet.conditions.some((entry) => entry.toLowerCase() === RAGING);
-  const form: Gate = sheet.wildShape
-    ? { reason: `No spellcasting in ${sheet.wildShape.form} form.`, spent: false }
-    : raging
-      ? { reason: "No spellcasting while raging.", spent: false }
-      : null;
-  const slotGate: Gate =
-    fact.level > 0 && !slot ? { reason: `No spell slot of level ${fact.level} or higher left.`, spent: true } : null;
-  // A levelled spell on one action leaves only an action cantrip for the other.
-  const other = turn.leveledSpell ?? null;
-  const pairGate: Gate =
-    other && fact.level > 0 && other !== cost && cost !== "reaction"
-      ? { reason: "You already cast a levelled spell this turn; only a cantrip may follow it.", spent: false }
-      : other === "bonus" && cost === "action" && fact.level > 0
-        ? { reason: "After a bonus action spell, only a cantrip may be cast with your action.", spent: false }
-        : null;
+  // Every refusal below is the cast guard's own (src/lib/dm/cast-rules.ts),
+  // asked of the same sheet: raging, a beast form without Beast Spells,
+  // untrained armor, a verbal component while silenced, no free hand, a
+  // costly material neither carried nor affordable, no slot, and the
+  // bonus-action spell rule.
+  const problem = (text: string | null, spent = false): Gate => (text ? { reason: text, spent } : null);
+  const material = materialPlan(sheet, facts);
+  const slotRefusal = fact.level > 0 && !slot ? slotPlan(sheet, name, facts, fact.level) : null;
+  const charge = turnCharge({
+    who: sheet.name,
+    facts,
+    spell: name,
+    slotLevel: slot?.level ?? null,
+    inFight: true,
+    budget: turn.myTurn ? budgetOf(turn, sheet) : null,
+    reactionSpent: turn.reactionUsed,
+  });
+  const melee = mech.resolution === "attack" && isMeleeSpellAttack(name, facts?.range.kind);
+  if (melee) notes.unshift("Melee spell attack: a creature beside you.");
   const card: HandCard = {
     id: `spell:${spellKey(name)}`,
     type,
@@ -161,13 +265,36 @@ function spellCard(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, 
     damageType: heals ? "healing" : mech.damageType ?? "",
     heals,
     save,
-    melee: false,
+    // A touch spell is a melee spell attack with touch reach (the engine's
+    // isMeleeSpellAttack): it previews and aims like a swing.
+    melee,
+    ...(melee ? { range: "Touch" } : {}),
     disabled: null,
     spent: false,
     compose: false,
-    intent: { card: "spell", spell: name, slotLevel: slot?.level ?? null },
+    // A reaction spell (Shield, Hellish Rebuke) is played as a reaction:
+    // use_reaction resolves it, off the caster's turn too.
+    intent:
+      cost === "reaction"
+        ? { card: "reaction", feature: name, spell: name, slotLevel: slot?.level ?? null }
+        : { card: "spell", spell: name, slotLevel: slot?.level ?? null },
   };
-  return gated(card, standingGate(sheet, turn), form, costGate(cost, turn, sheet), slotGate, pairGate);
+  const choice = cost === "reaction" ? undefined : spellChoice(mech);
+  if (choice) card.choice = choice;
+  // Web, Moonbeam, a wall: the square it is laid on is picked on the board.
+  const area = cost === "reaction" ? null : areaFor(name, slot?.level ?? (fact.level || null));
+  if (area) card.area = area;
+  return gated(
+    card,
+    standingGate(sheet, turn, cost === "reaction" ? "reaction" : "cast"),
+    problem(casterStateProblem(sheet)),
+    problem(componentProblem(sheet, facts)),
+    // A reaction spell needs a reaction to spend (slowed takes it away).
+    cost === "reaction" ? costGate("reaction", turn, sheet, name) : null,
+    "error" in material ? { reason: material.error, spent: false } : null,
+    slotRefusal && "error" in slotRefusal ? { reason: slotRefusal.error, spent: true } : null,
+    "error" in charge ? { reason: charge.error, spent: charge.error.includes("already used") } : null,
+  );
 }
 
 export function spellCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, options: HandOptions): HandCard[] {
@@ -211,7 +338,9 @@ export function featureCards(sheet: CharacterSheet, turn: HandTurn): HandCard[] 
   for (const [id, state] of Object.entries(sheet.resources)) {
     const def = resourceDef(id);
     // Superiority dice ride attacks (riderCards); recoveries belong to a rest.
-    if (!def || def.passive || id === "sub_superiority_dice" || def.effect.kind === "recover_slots") continue;
+    // Ki is spent through its techniques, each a card of its own (hand-class.ts
+    // Flurry of Blows, and the bonus-action moves in hand.ts).
+    if (!def || def.passive || id === "sub_superiority_dice" || id === "ki" || def.effect.kind === "recover_slots") continue;
     const level = resourceLevel(def, sheet);
     const effect = def.effect;
     const left = state.max - state.used;
@@ -295,14 +424,17 @@ export function featureCards(sheet: CharacterSheet, turn: HandTurn): HandCard[] 
       disabled: null,
       spent: false,
       compose,
-      intent: { card: "feature", resourceId: id },
+      intent:
+        cost === "reaction"
+          ? { card: "reaction", feature: def.displayName }
+          : { card: "feature", resourceId: id },
     };
     cards.push(
       gated(
         card,
-        standingGate(sheet, turn),
+        standingGate(sheet, turn, cost === "reaction" ? "reaction" : cost === "bonus" ? "bonus" : cost === "free" ? "free" : "action"),
         left > 0 ? null : { reason: `${def.displayName} is spent until a ${def.recharge} rest.`, spent: true },
-        costGate(cost, turn, sheet),
+        costGate(cost, turn, sheet, def.displayName),
       ),
     );
   }

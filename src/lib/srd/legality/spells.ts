@@ -26,6 +26,8 @@ import {
   THIRD_CASTER_ABILITY,
   THIRD_CASTER_LIST,
   isThirdCaster,
+  thirdCasterOutside,
+  thirdCasterSchoolProblem,
 } from "@/lib/srd/third-caster";
 import { lower, type ClassGrants, type SpellFacts } from "@/lib/srd/legality/types";
 
@@ -332,6 +334,23 @@ export function judgeSpellcasting(input: SpellcastingInput): SpellcastingVerdict
         }),
         ...spellFilingProblems(view),
       );
+      // An Eldritch Knight or Arcane Trickster learns from two schools, a few
+      // picks from any other; only adding past both is refused.
+      const levelled = (names: string[]) =>
+        dedupeNames(names)
+          .map((name) => ({ name, school: input.spellOf(name)?.school ?? null, level: input.spellOf(name)?.level ?? 1 }))
+          .filter((spell) => spell.level > 0);
+      const heldNames = namesOf(input.held ?? null).filter((name) => !innate.some((entry) => lower(entry) === lower(name)));
+      const schools = thirdCasterSchoolProblem({
+        classId: view.classId,
+        subclass: casting.find((entry) => lower(entry.entry.id) === lower(view.classId))?.entry.subclass,
+        level: view.level,
+        spells: levelled(view.known.length ? view.known : view.prepared),
+        heldOutside: thirdCasterOutside(view.classId, levelled(heldNames)),
+      });
+      if (schools) {
+        problems.push(schools);
+      }
     }
   }
   const written = withoutEmptyBooks(withCasterViews(shaped, views));

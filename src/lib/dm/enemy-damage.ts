@@ -1,22 +1,31 @@
-import { getCampaignById, getFloor, setFloor, type Campaign } from "@/lib/db/campaigns";
-import { endEncounter, getActiveEncounter, getEnemy, listEnemies, patchEnemyHp, setEnemyConcentration, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
+import { getFloor, setFloor, type Campaign } from "@/lib/db/campaigns";
+import { silencedImmunity } from "@/lib/dm/zone-rules";
+import { burnWebUnder } from "@/lib/dm/zone-cast";
+import { endEncounter, getEnemy, listEnemies, patchEnemyHp, setEnemyConcentration, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { activePublicEncounter } from "@/lib/db/encounter-view";
-import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
-import { getDmTurn, type DmTurn, type PendingRoll } from "@/lib/db/dm-turns";
-import { listRollsSince, markRollApplied, type StoredRoll } from "@/lib/db/rolls";
+import { getSheetById, patchSheet } from "@/lib/db/sheets";
+import type { DmTurn } from "@/lib/db/dm-turns";
+import { listRollsSince } from "@/lib/db/rolls";
 import { listAuditSince } from "@/lib/db/sheet-audit";
-import { setEncounterSummary } from "@/lib/db/encounters";
+import { patchEnemyConditions, setEncounterSummary } from "@/lib/db/encounters";
+import { restoreOwnForm } from "@/lib/db/enemy-form";
 import { computeEncounterSummary, describeEncounterSummary } from "@/lib/dm/encounter-summary";
 import { getBattleMapForEncounter, removeTokenByRef } from "@/lib/db/battle-maps";
 import { publishPersisted } from "@/lib/events";
 import { healthState } from "@/lib/bestiary/health";
 import { ammoCount, recoveredAmmo, withAmmoCount } from "@/lib/srd/ammunition";
-import { saveModFor } from "@/lib/bestiary/statblock";
-import { d20Expression, rollExpression } from "@/lib/dice";
 import { clearSpellConditionsByName } from "@/lib/dm/concentration";
+import { spellEffectsOnEnemyDamage } from "@/lib/dm/spell-effects";
 import { enemyDamageMath } from "@/lib/dm/encounter-logic";
 import { damageAdjust, resistsAllDamage } from "@/lib/dm/condition-logic";
-import { damageParts, type TypedRider } from "@/lib/dm/damage-parts";
+import { resistLineFor } from "@/lib/dm/underwater";
+import { authoredIgnoresResistance } from "@/lib/dm/authored-saves";
+import { isDefeated, isKnockedOut, knockedOutConditions } from "@/lib/dm/knockout";
+import { endConditionsHeldBy } from "@/lib/dm/enemy-conditions";
+import { hasTrait, REGENERATION_STOPPED, regenerationOf } from "@/lib/dm/monster-abilities";
+import { fallsRegenerating, regeneratingDown } from "@/lib/dm/regeneration";
+import { rollEnemySave } from "@/lib/dm/forced-save";
+import { settleFrenzies } from "@/lib/dm/frenzy";
 import { applyDmMutation } from "@/lib/dm/mutations";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import { planDeathFx } from "@/lib/battlemap/fx-plan";
@@ -72,6 +81,8 @@ export function finishEncounter(
     }
   }
   endEncounter(encounter.id, outcome);
+  // A frenzy outliving its rage costs its level of exhaustion (frenzy.ts).
+  settleFrenzies(campaign);
 
   // Half the ammunition spent in the fight is recovered from the field
   // (PHB). Only ever non-empty when the `ammunition` variant rule is on, so
@@ -194,7 +205,8 @@ export function autoEndOnVictory(
   sheetsById: Map<string, CharacterSheet>,
 ): Record<string, unknown> {
   const enemies = listEnemies(encounter.id);
-  if (enemies.some((enemy) => enemy.status === "alive")) {
+  // A creature knocked out is out of the fight (src/lib/dm/knockout.ts).
+  if (enemies.some((enemy) => !isDefeated(enemy))) {
     return {};
   }
   return finishEncounter(campaign, turn, encounter, "victory", sheets, sheetsById);
@@ -217,16 +229,36 @@ export function applyEnemyDamage(
     // as magical, so "from nonmagical attacks" on the stat block does not
     // cover it.
     magical?: boolean;
+    // A melee blow meant to knock out (src/lib/dm/knockout.ts).
+    nonlethal?: boolean;
+    // Leave the fight open when the last foe falls: an opportunity attack
+    // has no DM turn, so the end and its XP wait for the next one (ODM's
+    // rule, test-enforce-movement).
+    holdVictory?: boolean;
+    // A critical hit, which Undead Fortitude cannot save against.
+    crit?: boolean;
+    // Not damage but death outright (exhaustion 6): no resistance halves it
+    // and no Undead Fortitude holds it.
+    death?: boolean;
+    // A silvered or adamantine weapon (damage-logic.ts weaponMaterial).
+    silvered?: boolean;
+    adamantine?: boolean;
   },
 ): Record<string, unknown> {
-  const adjusted = damageAdjust(
-    amount,
-    damageType,
-    enemy.stats.resist,
-    enemy.stats.immune,
-    enemy.stats.vulnerable,
-    { magical: options?.magical === true, resistAll: resistsAllDamage(enemy.conditions) },
-  );
+  // Inescapable Destruction: the acting Death cleric's necrotic ignores resistance (authored-saves.ts).
+  const ignores = damageType && authoredIgnoresResistance(campaign.id, damageType);
+  const adjusted = options?.death
+    ? { amount: Math.max(1, enemy.currentHp), note: null }
+    : damageAdjust(
+        amount,
+        damageType,
+        // Fully immersed in water: resistance to fire (underwater.ts).
+        ignores ? resistLineFor(campaign.id, enemy).replace(new RegExp(`\\b${damageType}\\b`, "gi"), "") : resistLineFor(campaign.id, enemy),
+        // Inside Silence, thunder does nothing (zone-rules.ts).
+        `${enemy.stats.immune ?? ""}${silencedImmunity(campaign.id, enemy.id)}`,
+        enemy.stats.vulnerable,
+        { magical: options?.magical === true, resistAll: resistsAllDamage(enemy.conditions), silvered: options?.silvered, adamantine: options?.adamantine },
+      );
   if (adjusted.amount <= 0) {
     return {
       ok: true,
@@ -237,8 +269,66 @@ export function applyEnemyDamage(
       note: `${enemy.displayName} is ${adjusted.note ?? "unharmed"}. Narrate the effect washing over it harmlessly.`,
     };
   }
-  const math = enemyDamageMath(enemy.currentHp, adjusted.amount);
-  const updated = patchEnemyHp(enemy.id, math.currentHp, math.dropped ? "dead" : "alive");
+  // Fire burns away the web around it (zone-cast.ts).
+  if (/\bfire\b/i.test(damageType ?? "")) {
+    burnWebUnder(campaign, enemy.id);
+  }
+  // A Polymorph's beast dropped to 0 reverts (SRD 5.1): the creature's own
+  // block and hit points return (src/lib/db/enemy-form.ts), and only the
+  // excess reaches them, already through the beast's defences, so untyped.
+  const own = enemy.stats.polymorphedFrom;
+  if (own && (options?.death === true || adjusted.amount >= enemy.currentHp)) {
+    restoreOwnForm(enemy.id, own);
+    const reverted = getEnemy(enemy.id);
+    if (reverted) {
+      const excess = adjusted.amount - enemy.currentHp;
+      const formEnded = `${reverted.displayName}'s ${own.form} form drops to 0 hit points and ${own.spell} ends for it: its own form returns${excess > 0 ? `, and the ${excess} damage left over carries over` : ""}.`;
+      publishEncounter(campaign.id);
+      if (excess <= 0 && options?.death !== true) {
+        return { ok: true, name: reverted.displayName, hp: `${reverted.currentHp}/${reverted.maxHp}`, health: healthState(reverted.currentHp, reverted.maxHp), formEnded };
+      }
+      return { ...applyEnemyDamage(campaign, turn, encounter, reverted, excess, sheets, sheetsById, undefined, options), formEnded };
+    }
+  }
+  // A knockout leaves the creature alive at 0 and unconscious; any damage
+  // to a creature already knocked out is the killing blow.
+  const knockedOut = isKnockedOut(enemy);
+  // Death outright takes a creature lying at 0 too (a troll down and burned).
+  let math = knockedOut || (options?.death === true && enemy.currentHp <= 0)
+    ? { currentHp: 0, dropped: true }
+    : enemyDamageMath(enemy.currentHp, adjusted.amount);
+  // Undead Fortitude (SRD 5.1, zombies): damage that would drop it forces a
+  // Constitution save, DC 5 + the damage taken, unless the damage is radiant
+  // or from a critical hit; on a success it drops to 1 hit point instead.
+  let fortitude: string | null = null;
+  if (
+    math.dropped &&
+    !knockedOut &&
+    options?.nonlethal !== true &&
+    options?.crit !== true &&
+    options?.death !== true &&
+    !/radiant/i.test(damageType ?? "") &&
+    hasTrait(enemy.stats, "undeadFortitude")
+  ) {
+    const dc = 5 + adjusted.amount;
+    // A save like any other (forced-save.ts): exhaustion, Bane, its roll row.
+    const save = rollEnemySave(campaign.id, enemy, "con", dc, { record: { turn, detail: `${enemy.displayName}: Undead Fortitude (CON save)` } });
+    if (save.success) {
+      math = { currentHp: 1, dropped: false };
+      fortitude = `${enemy.displayName}'s Undead Fortitude holds (CON save ${save.total} vs DC ${dc}): it stays up at 1 hit point.`;
+    } else {
+      fortitude = `${enemy.displayName}'s Undead Fortitude fails (CON save ${save.total ?? "failed"} vs DC ${dc}).`;
+    }
+  }
+  const knockout = options?.nonlethal === true && math.dropped && !knockedOut;
+  // A troll dies only at its turn start (src/lib/dm/regeneration.ts): 0 hit
+  // points leaves it down.
+  const regenerating = math.dropped && !knockout && options?.death !== true && fallsRegenerating(enemy);
+  const updated = patchEnemyHp(enemy.id, math.currentHp, math.dropped && !knockout && !regenerating ? "dead" : "alive");
+  if (knockout || regenerating) {
+    const out = knockout ? knockedOutConditions(enemy) : regeneratingDown(enemy.conditions, enemy.conditionMeta);
+    patchEnemyConditions(enemy.id, out.conditions, out.meta);
+  }
   publishEncounter(campaign.id);
   if (!updated) {
     return { error: "Failed to update enemy." };
@@ -248,8 +338,35 @@ export function applyEnemyDamage(
     name: updated.displayName,
     hp: `${updated.currentHp}/${updated.maxHp}`,
     health: healthState(updated.currentHp, updated.maxHp),
+    // The type as it was taken, a homebrew one ("sonic") included: a
+    // resistance answers only the type it names, so an unknown one is simply
+    // unresisted, and the console says which was used.
+    ...(damageType?.trim() ? { damageType: damageType.trim().toLowerCase() } : {}),
     ...(adjusted.note ? { damageApplied: adjusted.amount, damageNote: adjusted.note } : {}),
+    ...(fortitude ? { undeadFortitude: fortitude } : {}),
   };
+  // The damage that stops Regeneration (a troll's acid or fire) holds it off
+  // at the creature's next turn start (legendary-tools.ts). Kept as a
+  // condition on the creature that ends at the start of its own turn, so
+  // the table and the DM see it.
+  const stoppers = regenerationOf(enemy.stats)?.stoppedBy ?? [];
+  if ((!math.dropped || regenerating) && stoppers.some((type) => new RegExp(`\\b${type}\\b`, "i").test(damageType ?? ""))) {
+    const fresh = getEnemy(enemy.id);
+    if (fresh && !fresh.conditions.includes(REGENERATION_STOPPED)) {
+      patchEnemyConditions(enemy.id, [...fresh.conditions, REGENERATION_STOPPED], {
+        ...fresh.conditionMeta,
+        [REGENERATION_STOPPED]: { untilTurnOf: enemy.id },
+      });
+    }
+  }
+  // A creature that falls lets go: its grapples, charms and fears on others
+  // end with it (src/lib/dm/enemy-conditions.ts).
+  if (math.dropped) {
+    const freed = endConditionsHeldBy(campaign, enemy.id);
+    if (freed.length) {
+      base.released = `${freed.join("; ")}: no longer held by ${updated.displayName}.`;
+    }
+  }
   // Enemy concentration: damage forces the CON save (DC 10 or half the
   // damage); death breaks it outright. A break ends the spell's conditions
   // on everyone it was holding (the same cleanup a PC's break runs).
@@ -257,22 +374,36 @@ export function applyEnemyDamage(
     const spell = enemy.concentration;
     if (math.dropped) {
       setEnemyConcentration(enemy.id, null);
-      clearSpellConditionsByName(campaign, spell);
-      base.concentrationBroken = `${updated.displayName}'s ${spell} ends with its death; the spell's effects fade.`;
+      clearSpellConditionsByName(campaign, spell, undefined, enemy.id);
+      base.concentrationBroken = `${updated.displayName}'s ${spell} ends as it falls; the spell's effects fade.`;
     } else {
       const dc = Math.max(10, Math.floor(adjusted.amount / 2));
-      const outcome = rollExpression(d20Expression(saveModFor(enemy.stats, "con")));
-      const held = outcome.total >= dc;
+      // A save like any other (forced-save.ts): exhaustion, Bane, its roll row.
+      const outcome = rollEnemySave(campaign.id, enemy, "con", dc, { record: { turn, detail: `${enemy.displayName}: concentration on ${spell} (CON save)` } });
+      const held = outcome.success;
       if (!held) {
         setEnemyConcentration(enemy.id, null);
-        clearSpellConditionsByName(campaign, spell);
+        clearSpellConditionsByName(campaign, spell, undefined, enemy.id);
       }
       base.concentration = held
         ? `${updated.displayName} keeps concentrating on ${spell} (CON save ${outcome.total} vs DC ${dc}).`
-        : `${updated.displayName} loses concentration on ${spell} (CON save ${outcome.total} vs DC ${dc}); the spell's effects end.`;
+        : `${updated.displayName} loses concentration on ${spell} (CON save ${outcome.total ?? "failed"} vs DC ${dc}); the spell's effects end.`;
     }
   }
-  if (math.dropped) {
+  // A spell that ends on damage (Sleep, Hypnotic Pattern) ends; one that
+  // grants a save on damage rolls it (src/lib/dm/spell-effects.ts).
+  const spellEffects = math.dropped ? [] : spellEffectsOnEnemyDamage(enemy.id);
+  if (spellEffects.length) {
+    base.spellEffects = spellEffects;
+  }
+  if (knockout) {
+    base.knockedOut = true;
+    base.note = `${updated.displayName} is knocked out: unconscious at 0 hit points, out of the fight but alive. Narrate it falling senseless.`;
+    Object.assign(base, options?.holdVictory ? {} : autoEndOnVictory(campaign, turn, encounter, sheets, sheetsById));
+  } else if (regenerating) {
+    base.down = true;
+    base.note = `${updated.displayName} falls at 0 hit points but is not dead: it regenerates and rises at the start of its turn, and dies then only if ${(regenerationOf(enemy.stats)?.stoppedBy ?? []).join(" or ") || "the damage that stops its regeneration"} damage has landed since its last turn. Narrate it collapsing, not dying.`;
+  } else if (math.dropped) {
     base.dead = true;
     base.note = `${updated.displayName} is slain. You may now narrate its death.`;
     const map = getBattleMapForEncounter(encounter.id);
@@ -289,181 +420,11 @@ export function applyEnemyDamage(
       removeTokenByRef(map.id, enemy.id);
       publishBattleMapUpdate(campaign.id);
     }
-    Object.assign(base, autoEndOnVictory(campaign, turn, encounter, sheets, sheetsById));
+    Object.assign(base, options?.holdVictory ? {} : autoEndOnVictory(campaign, turn, encounter, sheets, sheetsById));
   }
   return base;
 }
 
-// How a parked attack's damage roll is resolved (carried on the pending
-// roll's attack context): the magical flag, the dice that ride it under a
-// type of their own, and the critical those dice were doubled for.
-export type DamageBlow = {
-  magical?: boolean;
-  riders?: TypedRider[];
-  crit?: boolean;
-  critExtraDice?: number;
-};
-
-// One rolled damage total landing on an enemy. With typed riders the blow is
-// split per type (damage-parts.ts) and each part meets the creature's
-// resistances on its own, the same way pc_attack's digital path resolves it;
-// what is left lands as one wound.
-function applyBlow(
-  campaign: Campaign,
-  turn: DmTurn,
-  encounter: Encounter,
-  enemy: EncounterEnemy,
-  roll: StoredRoll,
-  sheets: CharacterSheet[],
-  sheetsById: Map<string, CharacterSheet>,
-  damageType: string | undefined,
-  blow: DamageBlow | undefined,
-): Record<string, unknown> {
-  const amount = Math.max(1, roll.total);
-  const magical = blow?.magical === true;
-  const parts =
-    blow?.riders?.length && damageType && roll.breakdown?.terms
-      ? damageParts(roll.breakdown, damageType, blow.riders, {
-          crit: blow.crit === true,
-          trailingTerms: blow.crit ? (blow.critExtraDice ?? 0) : 0,
-        })
-      : [];
-  if (parts.length < 2) {
-    return applyEnemyDamage(campaign, turn, encounter, enemy, amount, sheets, sheetsById, damageType, {
-      magical,
-    });
-  }
-  // A creature that resists everything (petrified) is halved once, by
-  // applyEnemyDamage, not once per part.
-  const resistAll = resistsAllDamage(enemy.conditions);
-  const byType = parts.map((part, index) => ({
-    ...part,
-    ...damageAdjust(
-      part.amount,
-      part.type,
-      resistAll ? "" : enemy.stats.resist,
-      enemy.stats.immune,
-      enemy.stats.vulnerable,
-      // Only the weapon's own part can be nonmagical: a rider is a spell's or
-      // a feature's dice.
-      { magical: index === 0 ? magical : true },
-    ),
-  }));
-  const landed = byType.reduce((sum, part) => sum + part.amount, 0);
-  const applied: Record<string, unknown> =
-    landed > 0
-      ? applyEnemyDamage(campaign, turn, encounter, enemy, landed, sheets, sheetsById, undefined, {
-          magical: true,
-        })
-      : {
-          ok: true,
-          name: enemy.displayName,
-          hp: `${enemy.currentHp}/${enemy.maxHp}`,
-          health: healthState(enemy.currentHp, enemy.maxHp),
-          damageApplied: 0,
-        };
-  if ("error" in applied) {
-    return applied;
-  }
-  return {
-    ...applied,
-    damageApplied: resistAll ? Math.floor(landed / 2) : landed,
-    damageByType: byType.map(
-      (part) => `${part.amount} ${part.type || "untyped"}${part.note ? ` (${part.note})` : ""}`,
-    ),
-  };
-}
-
-// A resolved damage roll that names its target: apply it before the model
-// even sees the number. Returned payload merges into the roll's tool result.
-export function autoApplyDamageRoll(
-  campaign: Campaign,
-  turn: DmTurn,
-  targetEnemyRef: string,
-  roll: StoredRoll,
-  sheets: CharacterSheet[],
-  sheetsById: Map<string, CharacterSheet>,
-  damageType?: string,
-  blow?: DamageBlow,
-): Record<string, unknown> {
-  const encounter = getActiveEncounter(campaign.id);
-  if (!encounter) {
-    return { warning: "No active encounter; this damage was not applied to anyone." };
-  }
-  const enemy = resolveEnemyRef(encounter.id, targetEnemyRef);
-  if (!enemy || enemy.status !== "alive") {
-    return {
-      warning: `targetEnemyId "${targetEnemyRef}" matched no living enemy; the damage was NOT applied. Call damage_enemy with an exact enemyId from GAME STATE.`,
-    };
-  }
-  const result = applyBlow(
-    campaign,
-    turn,
-    encounter,
-    enemy,
-    roll,
-    sheets,
-    sheetsById,
-    damageType,
-    blow,
-  );
-  if (!("error" in result)) {
-    markRollApplied(roll.id, enemy.id);
-    result.note = result.dead
-      ? `${enemy.displayName} is slain; the server already applied this damage. Do NOT call damage_enemy for this hit.`
-      : `The server already applied this damage to ${enemy.displayName}. Do NOT call damage_enemy for this hit.`;
-  }
-  return result;
-}
-
-// Physical-dice variant, called from the pending-rolls route when a player
-// submits a targeted damage roll. Returns the summary the resumed turn
-// surfaces to the model (stored in pending_rolls.combat_note).
-export function applyPendingDamageRoll(pending: PendingRoll, roll: StoredRoll): string | null {
-  if (!pending.targetEnemyId) {
-    return null;
-  }
-  const campaign = getCampaignById(pending.campaignId);
-  const turn = getDmTurn(pending.turnId);
-  if (!campaign || !turn) {
-    return null;
-  }
-  const sheets = listSheets(campaign.id);
-  const sheetsById = new Map(sheets.map((sheet) => [sheet.id, sheet]));
-  const applied = autoApplyDamageRoll(
-    campaign,
-    turn,
-    pending.targetEnemyId,
-    roll,
-    sheets,
-    sheetsById,
-    pending.attack?.damageType,
-    pending.attack
-      ? {
-          magical: pending.attack.magical,
-          riders: pending.attack.riders,
-          crit: pending.attack.crit,
-          critExtraDice: pending.attack.critExtraDice,
-        }
-      : undefined,
-  );
-  if (typeof applied.warning === "string") {
-    return applied.warning;
-  }
-  if ("error" in applied) {
-    return null;
-  }
-  const byType = Array.isArray(applied.damageByType)
-    ? ` (${(applied.damageByType as string[]).join(", ")})`
-    : "";
-  const parts = [
-    `The server already applied this ${roll.total} damage${byType} to ${String(applied.name)} (now ${
-      applied.dead ? "SLAIN" : String(applied.health)
-    }).`,
-  ];
-  if (applied.encounterOver) {
-    parts.push(`The encounter ended: ${String(applied.outcome)}. XP was awarded automatically.`);
-  }
-  parts.push("Do NOT call damage_enemy for this hit; narrate from this state.");
-  return parts.join(" ");
-}
+// The blow of a parked (physical dice) attack and a targeted damage roll:
+// src/lib/dm/enemy-blow.ts, re-exported for the callers that find them here.
+export { applyPendingDamageRoll, autoApplyDamageRoll, type DamageBlow } from "@/lib/dm/enemy-blow";

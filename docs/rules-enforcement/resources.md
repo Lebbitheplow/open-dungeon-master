@@ -1,5 +1,7 @@
 # Enforcement audit: resources and rests
 
+The second audit and repair (2026-09-30) and the state after it are in [`../rules-enforcement-audit.md`](../rules-enforcement-audit.md); this report describes the first audit.
+
 Area: every limited-use resource, the player usage route, consumables, Wild Shape, Font of Magic, and both rests.
 Ruleset: D&D 5e SRD 5.1 (2014). All eight files pass with `node` and with `npx vitest run`, and were run five times in a row with identical results.
 

@@ -57,10 +57,12 @@ test("all fifteen tool modes and Roll are on the rail, with the app's keys and n
   assert.ok(!state.MODES.some((entry) => entry.key === "G"), "the mockup's G is not a mode here");
 });
 
-test("digits one to six still pick the six brushes", () => {
-  assert.deepEqual(Object.keys(state.BRUSH_KEYS), ["1", "2", "3", "4", "5", "6"]);
+// Seven since the climbable tile (TERRAIN.climb "^", which the engine charges
+// double to cross without a climbing speed) got its brush.
+test("digits one to seven pick the seven brushes", () => {
+  assert.deepEqual(Object.keys(state.BRUSH_KEYS), ["1", "2", "3", "4", "5", "6", "7"]);
   assert.deepEqual(Object.values(state.BRUSH_KEYS), [...BRUSHES]);
-  assert.equal(BRUSHES.length, 6);
+  assert.equal(BRUSHES.length, 7);
   assert.equal(STAMPS.length, 6);
 });
 
@@ -99,7 +101,7 @@ test("the keys sheet lists every tool, every brush, and the editing keys", () =>
   const groups = state.mapHotkeyGroups(state.LIBRARY_CAPS);
   assert.deepEqual(groups.map((group) => group.title), ["Tools", "Brushes", "Editing"]);
   assert.equal(groups[0].rows.length, 16);
-  assert.equal(groups[1].rows.length, 6);
+  assert.equal(groups[1].rows.length, BRUSHES.length);
   const editing = groups[2].rows.map((row) => row.does).join("|");
   for (const word of ["Undo", "Redo", "Put the tool down", "Delete", "This sheet"]) {
     assert.ok(editing.includes(word), word);

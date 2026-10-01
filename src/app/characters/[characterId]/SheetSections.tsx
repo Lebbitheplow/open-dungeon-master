@@ -16,7 +16,7 @@ import { SheetSpells } from "@/components/sheet/SheetSpells";
 import { Ribbon } from "@/components/ui/Ribbon";
 import { cn } from "@/lib/cn";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
-import { computeSheetDerived, formatModifier, type DerivedPart } from "@/lib/srd";
+import { computeSheetDerived, formatModifier, speedFor, type DerivedPart } from "@/lib/srd";
 import { ui } from "@/lib/ui";
 
 export type CharacterEvent = {
@@ -88,7 +88,14 @@ export function SheetSections({ sheet, level = 1 }: { sheet: CreateSheetInput; l
             vitals={[
               { glyph: "rest-hp", label: <GameTerm id="hit_points">Hit points</GameTerm>, value: sheet.maxHp },
               { glyph: "rest-ac", label: <GameTerm id="armor_class">Armor class</GameTerm>, value: sheet.ac },
-              { glyph: "rest-speed", label: "Speed", value: `${sheet.speed} ft` },
+              // The speed the engine moves them at: armor and features
+              // (speedFor), not the raw base on the sheet.
+              {
+                glyph: "rest-speed",
+                label: "Speed",
+                value: `${speedFor(sheet)} ft`,
+                title: speedFor(sheet) === sheet.speed ? "Their walking speed." : `Base ${sheet.speed} ft, changed by what they wear and their features.`,
+              },
               { glyph: "coin-gp", label: "Gold", value: `${sheet.gold} gp` },
               {
                 glyph: "rest-initiative",

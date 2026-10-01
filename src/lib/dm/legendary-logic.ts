@@ -1,5 +1,6 @@
 import { groupTraits } from "@/lib/bestiary/block-sections";
 import type { EnemyStats } from "@/lib/bestiary/statblock";
+import { normalizeAbilityLedgers, type AbilityLedger } from "@/lib/dm/monster-abilities";
 
 // Legendary and lair actions and legendary resistance (docs/vtt-parity-
 // implementation-plan.md 4.1): what a stat block says a creature may do
@@ -31,6 +32,20 @@ export type LegendaryState = {
   lair: boolean;
   lairUsedRound: number;
   acted?: RoundLedger;
+  // Enemies whose next enemy_attack is the one attack a legendary action
+  // bought: one swing, not the Multiattack. Optional, like everything below.
+  strikes?: string[];
+  // What each enemy has spent of its limited abilities this fight: recharge
+  // abilities waiting on their d6, uses a day, spell slots
+  // (src/lib/dm/monster-abilities.ts).
+  abilities?: Record<string, AbilityLedger>;
+  // The enemies a model's end_turn handed it to act, with the DM turn that
+  // got them, so the finalize step neither moves the pointer twice nor acts
+  // them again (src/lib/dm/encounter-tools.ts).
+  handoff?: { turnId: string; enemyIds: string[] };
+  // The enemies that have taken a bonus action in `round` (Nimble Escape's
+  // Disengage or Hide).
+  bonus?: { round: number; ids: string[] };
 };
 
 function stringList(raw: unknown): string[] {
@@ -50,6 +65,9 @@ export function normalizeLegendaryState(raw: unknown): LegendaryState {
     pools[id] = { actions: Math.max(0, Number(entry.actions) || 0), resistances: Math.max(0, Number(entry.resistances) || 0) };
   }
   const acted = (record.acted && typeof record.acted === "object" ? record.acted : null) as Record<string, unknown> | null;
+  const abilities = normalizeAbilityLedgers(record.abilities);
+  const handoff = (record.handoff && typeof record.handoff === "object" ? record.handoff : null) as Record<string, unknown> | null;
+  const bonus = (record.bonus && typeof record.bonus === "object" ? record.bonus : null) as Record<string, unknown> | null;
   return {
     pools,
     lair: record.lair === true,
@@ -63,6 +81,12 @@ export function normalizeLegendaryState(raw: unknown): LegendaryState {
           },
         }
       : {}),
+    ...(stringList(record.strikes).length ? { strikes: stringList(record.strikes) } : {}),
+    ...(Object.keys(abilities).length ? { abilities } : {}),
+    ...(handoff && typeof handoff.turnId === "string"
+      ? { handoff: { turnId: handoff.turnId, enemyIds: stringList(handoff.enemyIds) } }
+      : {}),
+    ...(bonus ? { bonus: { round: Number(bonus.round) || 0, ids: stringList(bonus.ids) } } : {}),
   };
 }
 

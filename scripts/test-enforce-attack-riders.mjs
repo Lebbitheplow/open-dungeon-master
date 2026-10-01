@@ -72,6 +72,9 @@ async function stage(hero, { count = 1 } = {}) {
   for (const enemy of enemies) {
     kit.setEnemy(enemy.id, { maxHp: 400 });
   }
+  // The hero holds the floor whatever the other heroes rolled: a barbarian's
+  // Feral Instinct rolls initiative with a second, unforced d20.
+  kit.giveTurn(hero.id);
   kit.place(hero.id, 5, 5);
   kit.place(enemies[0].id, 5, 6);
   assert.equal(kit.current().characterId, hero.id);
@@ -207,7 +210,9 @@ await test("Sneak Attack: once per turn, and again on the next", async () => {
   assert.equal(off.ok, true, off.error);
   assert.equal(off.unused, 3);
   assert.equal(off.damage.total, 4);
-  while (world.encounter().round === 1) {
+  // Walk the order to the rogue's next turn (a barbarian's Feral Instinct
+  // rolls initiative with an unforced second d20, so the order may vary).
+  while (world.encounter().round === 1 || kit.current().characterId !== rogue.id) {
     assert.equal(kit.endTurn(kit.current().userId), true);
   }
   assert.equal(kit.current().characterId, rogue.id);

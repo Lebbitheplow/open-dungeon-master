@@ -1,5 +1,7 @@
 # Enforcement audit: conditions, exhaustion, damage, healing, death, hazards
 
+The second audit and repair (2026-09-30) and the state after it are in [`../rules-enforcement-audit.md`](../rules-enforcement-audit.md); this report describes the first audit.
+
 Area: `conditions`. Repo: `/home/lebbi/open-dungeon-master`. Ruleset: D&D 5e SRD 5.1 (2014).
 Nothing under `src/` was edited. No existing test, `package.json` or `vitest.config.mts` was touched.
 

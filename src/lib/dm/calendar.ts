@@ -17,6 +17,8 @@
 
 import { normalizeWeather } from "@/lib/srd/weather";
 import type { Weather } from "@/lib/scene/state";
+import { normalizeBetween, type BetweenState } from "@/lib/dm/between-state";
+import { normalizeMarch, type MarchState } from "@/lib/dm/march-state";
 
 export type CalendarMonth = {
   name: string;
@@ -410,7 +412,7 @@ export type CampaignClock = {
   // The instant each druid's Wild Shape runs out, by characterId. The clock
   // reverts the form when it passes (src/lib/db/clock.ts).
   shapeEnds?: Record<string, Instant>;
-};
+} & MarchState & BetweenState;
 
 // A character benefits from one long rest in any 24 hours (SRD 5.1, Long
 // Rest), measured from the end of one to the end of the next: a party that
@@ -508,5 +510,9 @@ export function normalizeClock(raw: unknown): CampaignClock {
     weather: normalizeWeather(record.weather),
     ...(longRests ? { longRests } : {}),
     ...(shapeEnds ? { shapeEnds } : {}),
+    // The march and its supplies (march-state.ts); lifestyles, downtime and
+    // afflictions (between-state.ts).
+    ...normalizeMarch(record),
+    ...normalizeBetween(record),
   };
 }

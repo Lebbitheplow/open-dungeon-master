@@ -14,93 +14,36 @@
 // this table carries the named effects layered on top, and nothing here
 // duplicates a name handled there.
 
-export type SaveAbilityId = "str" | "dex" | "con" | "int" | "wis" | "cha";
+import { TAIL_CONDITION_EFFECTS } from "@/lib/srd/condition-effects-tail";
+import { COMBAT_CONDITION_EFFECTS } from "@/lib/srd/combat-rows";
+import { AUTHORED_CONDITION_ROWS } from "@/lib/srd/authored-conditions";
+import { AFFLICTION_CONDITION_EFFECTS } from "@/lib/srd/affliction-conditions";
+import { LAST_CONDITION_EFFECTS } from "@/lib/srd/condition-effects-last";
+import { NUMBERED_CONDITION_EFFECTS, STRIKE_CONDITION_EFFECTS } from "@/lib/srd/condition-effects-spells";
+import type { ConditionEffectRow, SaveAbilityId } from "@/lib/srd/condition-effect-types";
 
-// An attack option a condition grants its holder (Starry Form's Archer,
-// Spiritual Weapon). Resolved by pc_attack when the model names it as the
-// weapon; to-hit is the sheet's spell attack bonus and the ability modifier
-// rides the damage.
-export type GrantedAttack = {
-  name: string;
-  // Damage dice by character level, ascending [level, dice] pairs; the last
-  // row at or below the level wins. A single ["1", "1d8"] row is flat.
-  diceByLevel: Array<[number, string]>;
-  type: string;
-  // Casting-ability modifier added to the damage roll.
-  abilityToDamage: boolean;
-  ranged: boolean;
-  bonusAction: boolean;
-};
-
-export type ConditionEffectRow = {
-  id: string;
-  // Lowercased names this row answers to. A condition matches when it equals
-  // a term or begins with one followed by " (" so parameterized forms
-  // ("hunter's mark (goblin)") land on the same row.
-  match: string[];
-  // One line of rules text for tool results and roll notes.
-  summary: string;
-  // Flat armor class change (shield of faith +2, haste +2, slow -2).
-  acBonus?: number;
-  // AC bonus equal to an ability modifier, minimum 0 (Bladesong: +INT).
-  acBonusAbility?: SaveAbilityId;
-  // Alternative unarmored base AC, full DEX applies (mage armor 13).
-  acBase?: number;
-  // AC can never sit below this while the condition holds (barkskin 16).
-  acFloor?: number;
-  // Dice added to the holder's attack rolls / saving throws (bless "1d4").
-  attackDie?: string;
-  saveDie?: string;
-  // Dice subtracted from the holder's attack rolls / saves (bane "1d4").
-  attackPenaltyDie?: string;
-  savePenaltyDie?: string;
-  // Dice added to the holder's ability and skill checks (guidance "1d4").
-  checkDie?: string;
-  // Flat save modifier, optionally restricted to one ability (slow: -2 DEX).
-  saveFlat?: number;
-  saveFlatAbility?: SaveAbilityId;
-  // Dice added to the holder's initiative rolls (gift of alacrity "1d8").
-  initiativeDie?: string;
-  // The rider is spent by its first qualifying roll; the engine clears the
-  // condition afterwards (guidance, resistance, true strike, the smites).
-  consumedBy?: "attack" | "save" | "check";
-  // Advantage on the holder's own attack rolls (true strike).
-  attackAdvantage?: boolean;
-  // Damage resistances while the condition holds (blade ward, stoneskin).
-  resistances?: string[];
-  // The resistance type rides in the condition name's parentheses:
-  // "absorb elements (fire)" grants fire resistance.
-  paramResistance?: boolean;
-  // Advantage / disadvantage on the holder's saves or checks, optionally
-  // per-ability (haste: advantage on DEX saves; enlarged: advantage on STR).
-  advantageOn?: Array<{ kind: "save" | "check"; ability?: SaveAbilityId }>;
-  disadvantageOn?: Array<{ kind: "save" | "check"; ability?: SaveAbilityId }>;
-  // Attack rolls AGAINST the holder are made at disadvantage (blur,
-  // protected) or advantage (faerie fire).
-  attacksAgainstDisadvantage?: boolean;
-  attacksAgainstAdvantage?: boolean;
-  // Movement changes (longstrider +10, haste x2, slow x0.5).
-  speedBonus?: number;
-  speedMultiplier?: number;
-  // One extra action per turn, usable for one weapon attack, Dash,
-  // Disengage, Hide, or Use an Object (haste).
-  extraAction?: boolean;
-  // The holder cannot take reactions (slow).
-  noReactions?: boolean;
-  // Extra dice the holder's weapon and spell attacks deal on a hit
-  // (divine favor +1d4 radiant, hunter's mark +1d6 of the weapon's type,
-  // enlarged +1d4). `type` "" = the attack's own damage type. A leading "-"
-  // subtracts (reduced).
-  onHitDice?: { dice: string; type: string };
-  // Concentration saves cannot roll below this total (Starry Form: Dragon).
-  concentrationFloor?: number;
-  grantedAttack?: GrantedAttack;
-};
+export type { ConditionEffectRow, GrantedAttack, SaveAbilityId } from "@/lib/srd/condition-effect-types";
 
 // Druid level for Starry Form's die upgrade and similar leveled attacks is
 // read from the holder's sheet level by the consumer; the table stores the
 // steps.
 export const CONDITION_EFFECTS: ConditionEffectRow[] = [
+  {
+    id: "empty_body",
+    match: ["empty body"],
+    summary: "Empty Body: invisible, and resistant to all damage except force, for a minute.",
+    resistances: [
+      "acid", "bludgeoning", "cold", "fire", "lightning", "necrotic", "piercing",
+      "poison", "psychic", "radiant", "slashing", "thunder",
+    ],
+  },
+  {
+    id: "sacred_weapon",
+    match: ["sacred weapon"],
+    summary:
+      "Sacred Weapon: the paladin's Charisma modifier is added to their weapon attack rolls, and the weapon sheds bright light, for a minute.",
+    paramAttackBonus: true,
+  },
   {
     id: "blessed",
     match: ["blessed", "bless"],
@@ -178,6 +121,7 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
     match: ["stoneskin"],
     summary: "Stoneskin: resistance to nonmagical bludgeoning, piercing, and slashing damage.",
     resistances: ["bludgeoning", "piercing", "slashing"],
+    nonmagicalOnly: true,
   },
   {
     id: "blurred",
@@ -217,6 +161,7 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
     match: ["divine favor"],
     summary: "Divine Favor: weapon attacks deal +1d4 radiant damage.",
     onHitDice: { dice: "1d4", type: "radiant" },
+    weaponOnly: true,
   },
   {
     id: "hunters_mark",
@@ -224,6 +169,8 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
     summary:
       "Hunter's Mark: +1d6 weapon damage against the marked quarry, and advantage on Perception and Survival checks to find it.",
     onHitDice: { dice: "1d6", type: "" },
+    weaponOnly: true,
+    marksTarget: true,
   },
   {
     id: "hexed_caster",
@@ -231,6 +178,7 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
     summary:
       "Hex: attacks against the hexed target deal +1d6 necrotic damage, and it has disadvantage on checks with the chosen ability.",
     onHitDice: { dice: "1d6", type: "necrotic" },
+    marksTarget: true,
   },
   {
     id: "enlarged",
@@ -242,6 +190,7 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
       { kind: "check", ability: "str" },
     ],
     onHitDice: { dice: "1d4", type: "" },
+    weaponOnly: true,
   },
   {
     id: "reduced",
@@ -253,7 +202,9 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
       { kind: "check", ability: "str" },
     ],
     onHitDice: { dice: "-1d4", type: "" },
+    weaponOnly: true,
   },
+  ...STRIKE_CONDITION_EFFECTS,
   {
     id: "longstrider",
     match: ["longstrider"],
@@ -272,6 +223,7 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
     match: ["heroism"],
     summary:
       "Heroism: immune to being frightened, and they gain temporary hit points equal to the caster's spellcasting modifier at the start of each of their turns.",
+    conditionImmunities: ["frightened"],
   },
   {
     id: "mirror_image",
@@ -335,6 +287,7 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
       "Zephyr Strike: their movement provokes no opportunity attacks; their next weapon attack has advantage and deals +1d8 force, then the charge is spent (the spell's speed burst rides that turn).",
     attackAdvantage: true,
     onHitDice: { dice: "1d8", type: "force" },
+    weaponOnly: true,
     consumedBy: "attack",
   },
   {
@@ -369,6 +322,7 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
     match: ["crusader's mantle", "crusaders mantle"],
     summary: "Crusader's Mantle: their weapon attacks deal +1d4 radiant damage.",
     onHitDice: { dice: "1d4", type: "radiant" },
+    weaponOnly: true,
   },
   {
     id: "elemental_weapon",
@@ -377,12 +331,14 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
       "Elemental Weapon: the touched weapon is magical, +1 to attack rolls, and deals +1d4 of the chosen element.",
     attackDie: "1",
     onHitDice: { dice: "1d4", type: "" },
+    weaponOnly: true,
   },
   {
     id: "flame_arrows",
     match: ["flame arrows"],
     summary: "Flame Arrows: ammunition drawn from the quiver deals +1d6 fire damage on a hit (twelve pieces).",
     onHitDice: { dice: "1d6", type: "fire" },
+    weaponOnly: true,
   },
   {
     id: "spirit_shroud",
@@ -395,49 +351,55 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
     id: "thunderous_smite",
     match: ["thunderous smite"],
     summary:
-      "Thunderous Smite: the next weapon hit deals +2d6 thunder and forces a STR save or the target is pushed 10 feet and knocked prone; the charge is spent on the swing.",
+      "Thunderous Smite: the next weapon hit deals +2d6 thunder and forces a STR save or the target is pushed 10 feet and knocked prone; the charge is spent by the hit.",
     onHitDice: { dice: "2d6", type: "thunder" },
-    consumedBy: "attack",
+    weaponOnly: true,
+    consumedBy: "hit",
   },
   {
     id: "wrathful_smite",
     match: ["wrathful smite"],
     summary:
-      "Wrathful Smite: the next weapon hit deals +1d6 psychic and forces a WIS save or the target is frightened; the charge is spent on the swing.",
+      "Wrathful Smite: the next weapon hit deals +1d6 psychic and forces a WIS save or the target is frightened; the charge is spent by the hit.",
     onHitDice: { dice: "1d6", type: "psychic" },
-    consumedBy: "attack",
+    weaponOnly: true,
+    consumedBy: "hit",
   },
   {
     id: "searing_smite",
     match: ["searing smite"],
     summary:
-      "Searing Smite: the next weapon hit deals +1d6 fire and ignites the target (1d6 fire at the start of its turns, CON save ends); the charge is spent on the swing.",
+      "Searing Smite: the next weapon hit deals +1d6 fire and ignites the target (1d6 fire at the start of its turns, CON save ends); the charge is spent by the hit.",
     onHitDice: { dice: "1d6", type: "fire" },
-    consumedBy: "attack",
+    weaponOnly: true,
+    consumedBy: "hit",
   },
   {
     id: "blinding_smite",
     match: ["blinding smite"],
     summary:
-      "Blinding Smite: the next weapon hit deals +3d8 radiant and forces a CON save or the target is blinded; the charge is spent on the swing.",
+      "Blinding Smite: the next weapon hit deals +3d8 radiant and forces a CON save or the target is blinded; the charge is spent by the hit.",
     onHitDice: { dice: "3d8", type: "radiant" },
-    consumedBy: "attack",
+    weaponOnly: true,
+    consumedBy: "hit",
   },
   {
     id: "staggering_smite",
     match: ["staggering smite"],
     summary:
-      "Staggering Smite: the next weapon hit deals +4d6 psychic and forces a WIS save or the target reels (disadvantage on attacks and checks, no reactions, for a turn); the charge is spent on the swing.",
+      "Staggering Smite: the next weapon hit deals +4d6 psychic and forces a WIS save or the target reels (disadvantage on attacks and checks, no reactions, for a turn); the charge is spent by the hit.",
     onHitDice: { dice: "4d6", type: "psychic" },
-    consumedBy: "attack",
+    weaponOnly: true,
+    consumedBy: "hit",
   },
   {
     id: "banishing_smite",
     match: ["banishing smite"],
     summary:
-      "Banishing Smite: the next weapon hit deals +5d10 force, banishing the target if that leaves it at 50 HP or fewer; the charge is spent on the swing.",
+      "Banishing Smite: the next weapon hit deals +5d10 force, banishing the target if that leaves it at 50 HP or fewer; the charge is spent by the hit.",
     onHitDice: { dice: "5d10", type: "force" },
-    consumedBy: "attack",
+    weaponOnly: true,
+    consumedBy: "hit",
   },
   {
     id: "blazing_stride",
@@ -464,6 +426,7 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
       { kind: "check", ability: "str" },
     ],
     onHitDice: { dice: "1d6", type: "force" },
+    weaponOnly: true,
   },
   {
     id: "guardian_great_tree",
@@ -519,6 +482,7 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
     summary:
       "Holy Weapon: the weapon is magical, sheds bright light, and deals +2d8 radiant on a hit; it can burst when the spell is ended early.",
     onHitDice: { dice: "2d8", type: "radiant" },
+    weaponOnly: true,
   },
   {
     id: "intellect_fortress",
@@ -560,6 +524,7 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
       "Arcane Transformation: advantage on weapon attacks, +2d12 force on weapon hits, an extra attack per Attack action, no spellcasting, and a CON save against exhaustion when it ends (the 50 temporary hit points were granted at casting).",
     attackAdvantage: true,
     onHitDice: { dice: "2d12", type: "force" },
+    weaponOnly: true,
   },
   {
     id: "crown_of_stars",
@@ -623,6 +588,7 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
       { kind: "check", ability: "str" },
     ],
     onHitDice: { dice: "1d6", type: "" },
+    weaponOnly: true,
   },
   {
     id: "bladesong",
@@ -715,8 +681,15 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
       abilityToDamage: true,
       ranged: false,
       bonusAction: true,
+      upcast: { baseLevel: 2, every: 2, dice: "1d8" },
     },
   },
+  ...NUMBERED_CONDITION_EFFECTS,
+  ...TAIL_CONDITION_EFFECTS,
+  ...COMBAT_CONDITION_EFFECTS,
+  ...AUTHORED_CONDITION_ROWS,
+  ...AFFLICTION_CONDITION_EFFECTS,
+  ...LAST_CONDITION_EFFECTS,
 ];
 
 function normalize(name: string) {
@@ -812,6 +785,8 @@ export function conditionRollRiders(
   conditions: string[],
   kind: RollRiderKind,
   ability?: SaveAbilityId,
+  // The skill of a check, for a bonus to one skill (Pass without Trace).
+  skill?: string,
 ): ConditionRollRiders {
   const riders: ConditionRollRiders = { diceSuffix: "", advantageSources: [], notes: [], spent: [] };
   for (const { row, condition } of activeConditionEffects(conditions)) {
@@ -827,9 +802,20 @@ export function conditionRollRiders(
         riders.notes.push(`${condition}: -${row.attackPenaltyDie} to the attack roll`);
         used = true;
       }
+      const flat = row.paramAttackBonus ? Number(/\(\+(\d+)\)/.exec(condition)?.[1] ?? 0) : 0;
+      if (flat) {
+        riders.diceSuffix += `+${flat}`;
+        riders.notes.push(`${condition}: +${flat} to the attack roll`);
+        used = true;
+      }
       if (row.attackAdvantage) {
         riders.advantageSources.push("advantage");
         riders.notes.push(`${condition}: advantage on this attack`);
+        used = true;
+      }
+      if (row.attackDisadvantage) {
+        riders.advantageSources.push("disadvantage");
+        riders.notes.push(`${condition}: disadvantage on this attack`);
         used = true;
       }
       // A one-shot on-hit charge (the smites, Zephyr Strike) is spent by the
@@ -863,6 +849,10 @@ export function conditionRollRiders(
         );
         used = true;
       }
+    }
+    if (kind === "check" && row.skillBonus && skill && skill.trim().toLowerCase() === row.skillBonus.skill) {
+      riders.diceSuffix += `+${row.skillBonus.bonus}`;
+      riders.notes.push(`${condition}: +${row.skillBonus.bonus} to ${row.skillBonus.skill}`);
     }
     if (kind === "check" && row.checkDie) {
       riders.diceSuffix += `+${row.checkDie}`;
@@ -904,16 +894,33 @@ function matchesRollKind(
 }
 
 // Extra on-hit damage dice the holder's conditions add to a landed attack.
-// Positive dice are appended, a leading "-" subtracts. Types are advisory
-// (the roll rides the attack's expression); notes carry them.
-export function conditionOnHitDice(conditions: string[]): {
+// Positive dice are appended, a leading "-" subtracts. A weapon-only row
+// (Divine Favor, Hunter's Mark, the smites) skips a spell or granted attack,
+// and a marking row (Hunter's Mark, Hex) rides only a hit on its marked
+// creature: `marked` answers that per condition. `typed` lists the dice
+// that carry a damage type of their own, for the per-type resolution, and
+// `hitSpent` the conditions the first hit uses up (the smites).
+export function conditionOnHitDice(
+  conditions: string[],
+  context: { weapon?: boolean; marked?: (condition: string) => boolean } = {},
+): {
   suffix: string;
   notes: string[];
+  typed: Array<{ dice: string; type: string }>;
+  hitSpent: string[];
 } {
   let suffix = "";
   const notes: string[] = [];
+  const typed: Array<{ dice: string; type: string }> = [];
+  const hitSpent: string[] = [];
   for (const { row, condition } of activeConditionEffects(conditions)) {
     if (!row.onHitDice) {
+      continue;
+    }
+    if (row.weaponOnly && context.weapon === false) {
+      continue;
+    }
+    if (row.marksTarget && context.marked && !context.marked(condition)) {
       continue;
     }
     const { dice, type } = row.onHitDice;
@@ -923,23 +930,39 @@ export function conditionOnHitDice(conditions: string[]): {
     } else {
       suffix += `+${dice}`;
       notes.push(`${condition}: +${dice}${type ? ` ${type}` : ""} damage`);
+      if (type) {
+        typed.push({ dice, type });
+      }
+    }
+    if (row.consumedBy === "hit") {
+      hitSpent.push(condition);
     }
   }
-  return { suffix, notes };
+  return { suffix, notes, typed, hitSpent };
 }
 
 // Attack-roll state granted by the TARGET's conditions (blur, faerie fire,
 // protected). Merged by attackContext next to the SRD condition rules.
-export function conditionIncomingAttackState(targetConditions: string[]): {
+export function conditionIncomingAttackState(
+  targetConditions: string[],
+  // The attacker's creature type, when an enemy attacks: Protection from
+  // Evil and Good turns away only fiends, undead and their kin.
+  attackerType?: string,
+): {
   sources: Array<"advantage" | "disadvantage">;
   notes: string[];
 } {
   const sources: Array<"advantage" | "disadvantage"> = [];
   const notes: string[] = [];
+  const type = (attackerType ?? "").toLowerCase();
   for (const { row, condition } of activeConditionEffects(targetConditions)) {
     if (row.attacksAgainstDisadvantage) {
       sources.push("disadvantage");
       notes.push(`target is ${condition}: disadvantage`);
+    }
+    if (type && row.attacksAgainstDisadvantageFrom?.some((entry) => type.includes(entry))) {
+      sources.push("disadvantage");
+      notes.push(`target is ${condition}: disadvantage for a ${type}`);
     }
     if (row.attacksAgainstAdvantage) {
       sources.push("advantage");
@@ -952,10 +975,10 @@ export function conditionIncomingAttackState(targetConditions: string[]): {
 // Damage resistances the holder's conditions grant (blade ward, stoneskin).
 // paramResistance rows read the type out of the condition name's
 // parentheses: "absorb elements (fire)" grants fire resistance.
-export function conditionResistances(conditions: string[]): string[] {
+export function conditionResistances(conditions: string[], options?: { magical?: boolean }): string[] {
   const out: string[] = [];
   for (const { row, condition } of activeConditionEffects(conditions)) {
-    if (row.resistances) {
+    if (row.resistances && !(row.nonmagicalOnly && options?.magical)) {
       out.push(...row.resistances);
     }
     if (row.paramResistance) {
@@ -973,6 +996,11 @@ export function conditionResistances(conditions: string[]): string[] {
 export function conditionSpeed(conditions: string[], baseSpeed: number): number {
   let speed = baseSpeed;
   let multiplier = 1;
+  // A form with a speed of its own (Gaseous Form) replaces the walk.
+  const set = activeConditionEffects(conditions).map(({ row }) => row.speedSet).filter((value): value is number => value !== undefined);
+  if (set.length) {
+    return Math.min(...set);
+  }
   for (const { row } of activeConditionEffects(conditions)) {
     if (row.speedBonus) {
       speed += row.speedBonus;
@@ -1016,46 +1044,6 @@ export function conditionConcentrationFloor(conditions: string[]): number {
     }
   }
   return floor;
-}
-
-// Attack options the holder's conditions grant, resolved for pc_attack:
-// the named term matches loosely so "starry form" or "archer" finds it.
-export function grantedAttackFor(
-  conditions: string[],
-  term: string,
-): { attack: GrantedAttack; condition: string } | null {
-  const wanted = normalize(term);
-  if (!wanted) {
-    return null;
-  }
-  for (const { row, condition } of activeConditionEffects(conditions)) {
-    const attack = row.grantedAttack;
-    if (!attack) {
-      continue;
-    }
-    const name = normalize(attack.name);
-    if (
-      name === wanted ||
-      name.includes(wanted) ||
-      wanted.includes(name) ||
-      normalize(condition).includes(wanted)
-    ) {
-      return { attack, condition };
-    }
-  }
-  return null;
-}
-
-// The granted attack's damage dice at a character level.
-export function grantedAttackDice(attack: GrantedAttack, level: number): string {
-  const clamped = Math.max(1, Math.min(20, Math.floor(level)));
-  let dice = attack.diceByLevel[0]?.[1] ?? "1d8";
-  for (const [atLevel, expression] of attack.diceByLevel) {
-    if (clamped >= atLevel) {
-      dice = expression;
-    }
-  }
-  return dice;
 }
 
 // One-line summaries for every effect condition a sheet carries, for the DM

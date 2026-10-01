@@ -38,13 +38,18 @@ import {
 } from "@/lib/battlemap/scene";
 import { PromptDialog } from "@/components/ui/PromptDialog";
 import { cn } from "@/lib/cn";
-import { findPath } from "@/lib/battlemap/movement";
-import { moveCost, tileAt, TILE_FEET } from "@/lib/battlemap/types";
+import { jumpRulerFor, moveNotesFrom, rulerFor } from "@/lib/battlemap/board-move";
+import { BoardMoveHints, JumpArc, useBoardMoveModes } from "@/app/campaigns/[campaignId]/BoardMoveModes";
+import { TILE_FEET } from "@/lib/battlemap/types";
+import { useAreaAim } from "@/app/campaigns/[campaignId]/BoardAreaAim";
+import { BoardMoveNotes, useMoveNotes } from "@/app/campaigns/[campaignId]/BoardMoveNotes";
 import type { FxEvent } from "@/lib/battlemap/fx-plan";
 import type { TemplateShape } from "@/lib/battlemap/template";
 import type { AdhocTokenKind } from "@/lib/battlemap/types";
 import type { MapPing } from "@/lib/dm/board-logic";
 import type { PlayerMapView } from "@/lib/battlemap/view";
+import { boardHudGates } from "@/lib/battlemap/hand-hud";
+import { effectiveMaxHp } from "@/lib/dm/condition-logic";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
 import type { CameraEvent, SceneState } from "@/lib/scene/state";
 import { SkyLayer } from "@/components/SkyLayer";
@@ -62,7 +67,7 @@ import {
   type TurnHudBudget,
 } from "@/app/campaigns/[campaignId]/BoardChrome";
 import { IntentLayer } from "@/app/campaigns/[campaignId]/BoardIntent";
-import { BoardCameraControls, BoardOrderDialog } from "@/app/campaigns/[campaignId]/BoardPanelParts";
+import { BoardCameraControls, BoardOrderDialog, BoardOrderStrip, boardHintText } from "@/app/campaigns/[campaignId]/BoardPanelParts";
 import type { StageToken } from "@/app/campaigns/[campaignId]/BoardStage";
 import type { TokenIntent } from "@/lib/battlemap/intent";
 import { familyIconPath } from "@/lib/icons";
@@ -209,6 +214,13 @@ export function BattleMapPanel({
   const [hover, setHover] = useState<{ x: number; y: number } | null>(null);
   const [handledPing, setHandledPing] = useState<number | null>(null);
   const [expiredPing, setExpiredPing] = useState<number | null>(null);
+  // A spell's area being aimed from the Hand or a console form, and the
+  // notes a walk brought back.
+  const areaAim = useAreaAim(view, canDirect, hover);
+  const moveNotes = useMoveNotes();
+  // A walk, a long jump, or a walk dragging the creature held, the squares
+  // the move still reaches, and the arc of a jump just made (BoardMoveModes.tsx).
+  const { moveMode, setMoveMode, gridView, leap, moveBody, landed } = useBoardMoveModes(view);
 
   // DM tools.
   const [tool, setTool] = useState<BoardTool>("handle");
@@ -306,9 +318,10 @@ export function BattleMapPanel({
     return () => clearTimeout(timer);
   }, [ping]);
 
-  async function post(path: string, body: unknown): Promise<boolean> {
+  // The route's answer on success (truthy), null when it refused.
+  async function post(path: string, body: unknown): Promise<Record<string, unknown> | null> {
     if (busy) {
-      return false;
+      return null;
     }
     setBusy(true);
     setError("");
@@ -318,23 +331,28 @@ export function BattleMapPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = (await response.json().catch(() => ({}))) as { error?: string };
+      const data = (await response.json().catch(() => ({}))) as { error?: string } & Record<string, unknown>;
       if (!response.ok) {
         setError(data.error ?? "That was not allowed.");
-        return false;
+        return null;
       }
-      return true;
+      return data;
     } catch {
       setError("Could not reach the table.");
-      return false;
+      return null;
     } finally {
       setBusy(false);
     }
   }
 
   async function moveTo(x: number, y: number) {
-    if (await post("/battle-map/move", { x, y })) {
+    const start = view.tokens.find((token) => token.id === view.myTokenId);
+    const moved = await post("/battle-map/move", { x, y, ...moveBody });
+    if (moved) {
       setHover(null);
+      landed(start ? { x: start.x, y: start.y } : null, { x, y });
+      // What the walk met: opportunity attacks, a spell area's spikes or hold.
+      moveNotes.push(moveNotesFrom(moved));
     }
     await refreshBattleMap();
   }
@@ -394,37 +412,24 @@ export function BattleMapPanel({
   // reachable set does count the hidden token, so the tile still refuses the
   // click, and a ruler that bent around an invisible ambusher would give it
   // away.
+  //
+  // The cost is the server's: the view carries what the move route would
+  // charge for every lit square (spell areas, prone, passing allies), and
+  // the ruler reads it (src/lib/battlemap/board-move.ts).
+  const aimingArea = areaAim.active;
   const ruler = useMemo(() => {
     // Whoever is being measured: the piece the DM picked up, or the player's
-    // own character.
+    // own character. Not while a spell's area is being aimed.
     const fromId = held ?? view.myTokenId;
-    if (!hover || !fromId) {
+    if (!hover || !fromId || aimingArea) {
       return null;
     }
-    const from = view.tokens.find((token) => token.id === fromId);
-    if (!from || (from.x === hover.x && from.y === hover.y)) {
-      return null;
+    // The DM spends no budget, so nothing they measure is ever too far.
+    if (held === null && moveMode === "jump" && view.moves) {
+      return jumpRulerFor(view, fromId, hover, view.moves.jumpFeet);
     }
-    const occupied = new Set(
-      view.tokens
-        .filter((token) => token.id !== from.id)
-        .map((token) => token.y * view.width + token.x),
-    );
-    const path = findPath(view.terrain, view.width, view.height, occupied, from, hover);
-    if (!path?.length) {
-      return null;
-    }
-    const cost = path.reduce(
-      (total, step) => total + moveCost(tileAt(view.terrain, view.width, step.x, step.y)),
-      0,
-    );
-    return {
-      path: [{ x: from.x, y: from.y }, ...path],
-      label: `${cost * TILE_FEET} ft`,
-      // The DM spends no budget, so nothing they measure is ever too far.
-      overBudget: held === null && cost > view.budgetLeft,
-    };
-  }, [hover, held, view]);
+    return rulerFor(view, fromId, hover, held === null, held === null && moveMode === "drag" ? view.moves?.drag?.factor ?? 1 : 1);
+  }, [hover, held, view, aimingArea, moveMode]);
 
   // Who may be aimed at while a target is being chosen, nearest first, with
   // the distance the table would count (a diagonal is one square).
@@ -461,8 +466,9 @@ export function BattleMapPanel({
       selectedTokenId: held ?? teleporting,
       sketch: sketch ? { kind: drawKind, points: sketch, tone: drawTone } : null,
       aim,
+      area: areaAim.overlay,
     }),
-    [liveMeasure, ruler, pings, held, teleporting, sketch, drawKind, drawTone, aim],
+    [liveMeasure, ruler, pings, held, teleporting, sketch, drawKind, drawTone, aim, areaAim.overlay],
   );
 
   async function endTurn() {
@@ -471,7 +477,15 @@ export function BattleMapPanel({
     }
     setEndingTurn(true);
     try {
-      await fetch(`/api/campaigns/${campaignId}/encounter/end-turn`, { method: "POST" });
+      const response = await fetch(`/api/campaigns/${campaignId}/encounter/end-turn`, { method: "POST" });
+      // A refusal (the pointer moved, the turn is not theirs) is the
+      // engine's sentence, shown on the board's own error line.
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string };
+        setError(data.error ?? "The turn could not be ended.");
+      }
+    } catch {
+      setError("Could not reach the table.");
     } finally {
       setEndingTurn(false);
     }
@@ -663,6 +677,10 @@ export function BattleMapPanel({
       void sendPing(x, y);
       return;
     }
+    // A spell's area being aimed takes the square (BoardAreaAim.tsx).
+    if (areaAim.tap(x, y)) {
+      return;
+    }
     if (targeting) {
       // A tile is not a target; the hint says so.
       return;
@@ -758,6 +776,10 @@ export function BattleMapPanel({
     if (!token) {
       return;
     }
+    // Aiming an area: a figure is the square it stands on.
+    if (areaAim.tap(token.x, token.y)) {
+      return;
+    }
     if (targeting && onCompose) {
       if (token.kind !== "enemy" && token.kind !== "npc") {
         setError("Pick an enemy.");
@@ -790,7 +812,7 @@ export function BattleMapPanel({
   // being measured. Otherwise the reachable overlay is the whole clickable
   // surface, exactly as before.
   const everyTileClickable =
-    pointing || (canDirect && (tool !== "handle" || held !== null || teleporting !== null));
+    pointing || areaAim.active || (!canDirect && canMove && moveMode === "jump") || (canDirect && (tool !== "handle" || held !== null || teleporting !== null));
 
   const hudToken = hudTokenId ? tokensById.get(hudTokenId) : undefined;
   const plateToken = plateTokenId ? tokensById.get(plateTokenId) : undefined;
@@ -825,6 +847,8 @@ export function BattleMapPanel({
         },
       });
     }
+    // The same engine questions the Hand asks (src/lib/battlemap/hand-hud.ts),
+    // so a sigil the engine would refuse says so instead of composing.
     return playerActions(
       hudToken,
       (text) => {
@@ -832,10 +856,12 @@ export function BattleMapPanel({
         setHudTokenId(null);
       },
       (mode) => setTargeting(mode),
+      mySheet && !scene ? boardHudGates(mySheet, encounter ?? null, { myTurn, currentName: view.currentTurnName }) : undefined,
+      (reason) => setError(reason),
     );
     // `board` is a closure over state; the actions are rebuilt per token.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hudToken, canDirect, onCompose]);
+  }, [hudToken, canDirect, onCompose, mySheet, encounter, myTurn, view.currentTurnName, scene]);
 
   const promptToken = prompt ? tokensById.get(prompt.tokenId) : undefined;
   const submitPrompt = useCallback(
@@ -899,13 +925,13 @@ export function BattleMapPanel({
         }}
       >
         <BattleMapGrid
-          view={view}
+          view={gridView}
           sheets={sheets}
           painted={painted}
           faces={faces}
-          onTileClick={canDirect || canMove || pointing ? handleTile : undefined}
+          onTileClick={canDirect || canMove || pointing || areaAim.active ? handleTile : undefined}
           onTileHover={
-            canMove || held
+            canMove || held || areaAim.active
               ? (x, y) => setHover(y === null ? null : { x, y })
               : undefined
           }
@@ -922,6 +948,7 @@ export function BattleMapPanel({
           onFxPlayed={onFxPlayed}
           onLabelClick={onOpenLabel}
         />
+        <JumpArc leap={leap} width={view.width} height={view.height} />
         {tokenGhost ? (
           <div
             className="pointer-events-none absolute z-20 overflow-hidden rounded-full border-2 border-amber-300 bg-stone-950/70 shadow-glow-gold"
@@ -997,6 +1024,7 @@ export function BattleMapPanel({
             face={faceOfToken(plateToken)}
             health={view.tokenHealth[plateToken.id]}
             conditions={view.tokenConditions[plateToken.id]}
+            edge={plateToken.kind === "enemy" ? view.edges?.[plateToken.refId] : undefined}
           />
         ) : null}
       </div>
@@ -1017,13 +1045,16 @@ export function BattleMapPanel({
           budget={turnBudget}
           speedLeftFeet={myTurn ? view.budgetLeft * TILE_FEET : null}
           ac={mySheet?.ac ?? null}
-          hp={mySheet ? { current: mySheet.currentHp, max: mySheet.maxHp } : null}
+          // The maximum the engine heals to: exhaustion 4 halves it, an
+          // Amulet of Health raises it (condition-logic.ts effectiveMaxHp).
+          hp={mySheet ? { current: mySheet.currentHp, max: effectiveMaxHp(mySheet) } : null}
         />
       ) : null}
       {!scene && bannerKey ? (
         <TurnBanner key={bannerKey} text={myTurn ? "Your turn" : view.currentTurnName} mine={myTurn} />
       ) : null}
       {fieldRoll ? <FieldDie label={fieldRoll.label} /> : null}
+      <BoardMoveNotes notes={moveNotes.notes} />
       {targeting ? (
         <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2.5 rounded-[10px] border border-[rgba(224,112,58,0.5)] bg-[rgba(13,11,28,0.94)] px-3 py-1.5 shadow-elev-2">
           <span className="whitespace-nowrap font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-[#ffbe8f]">
@@ -1233,36 +1264,28 @@ export function BattleMapPanel({
           }}
         />
       ) : null}
+      <BoardMoveHints
+        moveMode={moveMode}
+        moves={!canDirect && canMove && !areaAim.active ? view.moves : undefined}
+        onMode={setMoveMode}
+        areaHint={areaAim.hint}
+        caught={areaAim.caught}
+      />
       <p className="text-[11px] leading-4 text-stone-500">
-        {canDirect
-          ? tool === "draw"
-            ? "Drag to draw. Everyone sees it; it is a plan, not a fact."
-            : teleporting
-            ? "Tap the tile it appears on. No path, no movement spent."
-            : held
-              ? "Tap where it should stand. The round's movement is not charged for this."
-              : tool === "measure"
-                ? liveOrigin
-                  ? "Now tap where it points."
-                  : "Tap where the area starts."
-                : tool === "point"
-                  ? "Tap a tile and everyone looks at it."
-                  : tool === "place"
-                    ? "Name it, then tap a tile."
-                    : "Tap a piece for its actions. Nothing here is charged against the round."
-          : pointing
-            ? "Tap a tile to point at it."
-            : drawing
-              ? "Drag to draw. The table sees it; erase it when the plan changes."
-            : targeting
-              ? "Tap the enemy."
-              : canMove
-                ? scene
-                  ? "Tap anywhere you can walk. Nothing is being counted out here."
-                  : `Tap a highlighted tile to move (${view.budgetLeft * TILE_FEET} ft left this round). Tap your figure for actions.`
-                : view.myTokenId
-                  ? "You can move on your turn. The shroud shows what your character cannot see."
-                  : "You have no token on this field."}
+        {boardHintText({
+          canDirect,
+          tool,
+          teleporting: Boolean(teleporting),
+          held: Boolean(held),
+          liveOrigin: Boolean(liveOrigin),
+          pointing,
+          drawing,
+          targeting: Boolean(targeting),
+          canMove,
+          scene,
+          budgetLeft: view.budgetLeft,
+          hasToken: Boolean(view.myTokenId),
+        })}
       </p>
       {error ? <p className="text-[11px] text-red-400">{error}</p> : null}
       {targeting ? (
@@ -1277,31 +1300,7 @@ export function BattleMapPanel({
           onHover={setAimHoverId}
         />
       ) : null}
-      {encounter?.orderReady ? (
-        <ol className="flex flex-wrap gap-1 text-[11px] text-stone-400">
-          {encounter.order.map((entry, index) => (
-            <li
-              key={`${entry.id}-${index}`}
-              className={cn(
-                "flex items-center gap-1 rounded-full py-0.5 pl-0.5 pr-2",
-                index === encounter.turnIndex ? "bg-amber-950/60 font-medium text-amber-300" : "bg-stone-900",
-              )}
-            >
-              <TokenFace
-                candidates={faceOfEntry(entry)}
-                name={entry.name}
-                enemy={entry.kind === "enemy"}
-                className={cn(
-                  "size-5 rounded-full border",
-                  index === encounter.turnIndex ? "border-amber-500" : "border-stone-700",
-                )}
-              />
-              {entry.name}
-              {entry.hidden ? " (hidden)" : ""}
-            </li>
-          ))}
-        </ol>
-      ) : null}
+      <BoardOrderStrip encounter={encounter} faceOf={faceOfEntry} />
       <PromptDialog
         open={Boolean(prompt && promptToken)}
         title={

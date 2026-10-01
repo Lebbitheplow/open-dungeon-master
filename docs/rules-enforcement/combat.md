@@ -1,5 +1,7 @@
 # Enforcement report: combat
 
+The second audit and repair (2026-09-30) and the state after it are in [`../rules-enforcement-audit.md`](../rules-enforcement-audit.md); this report describes the first audit.
+
 Area: the combat engine through the real tool handlers (src/lib/dm/invoke.ts invokeEngine as a
 human DM, and the two player routes a fight has: battle-map/move and encounter/end-turn), every
 die forced. 14 test files and one helper. 187 test(), 60 gap(). Every file passes under

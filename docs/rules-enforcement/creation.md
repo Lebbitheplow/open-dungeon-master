@@ -1,5 +1,7 @@
 # Rules enforcement audit: character creation
 
+The second audit and repair (2026-09-30) and the state after it are in [`../rules-enforcement-audit.md`](../rules-enforcement-audit.md); this report describes the first audit.
+
 Area: "creation". Repo: /home/lebbi/open-dungeon-master. Date: 2026-09-27.
 All six suites pass both ways (`node scripts/<file>` and `npx vitest run scripts/<file>`),
 with the content pack present and with it absent (`CONTENT_DB_PATH` pointed at nothing).

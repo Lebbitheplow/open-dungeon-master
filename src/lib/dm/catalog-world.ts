@@ -4,24 +4,15 @@
 import type { CatalogEntry } from "@/lib/dm/catalog-types";
 import { cueOptions } from "@/lib/ambience/catalog";
 import { RELATIONSHIP_BEAT_NAMES } from "@/lib/dm/relationship-logic";
-
-const ABILITIES = [
-  { value: "str", label: "Strength" },
-  { value: "dex", label: "Dexterity" },
-  { value: "con", label: "Constitution" },
-  { value: "int", label: "Intelligence" },
-  { value: "wis", label: "Wisdom" },
-  { value: "cha", label: "Charisma" },
-];
-
-const DIFFICULTIES = [
-  { value: "very_easy", label: "Very easy (DC 5)" },
-  { value: "easy", label: "Easy (DC 10)" },
-  { value: "moderate", label: "Moderate (DC 15)" },
-  { value: "hard", label: "Hard (DC 20)" },
-  { value: "very_hard", label: "Very hard (DC 25)" },
-  { value: "nearly_impossible", label: "Nearly impossible (DC 30)" },
-];
+import {
+  ABILITY_OPTIONS as ABILITIES,
+  DIFFICULTY_OPTIONS as DIFFICULTIES,
+  OBJECT_MATERIAL_OPTIONS,
+  OBJECT_SIZE_OPTIONS,
+  SKILL_OPTIONS,
+  damageTypeField,
+} from "@/lib/dm/catalog-vocab";
+import { REQUEST_ROLL_ADJUDICATION } from "@/lib/dm/catalog-roll";
 
 const REASON = {
   name: "reason",
@@ -66,9 +57,11 @@ export const WORLD_ADJUDICATIONS: CatalogEntry[] = [
     name: "travel",
     label: "Travel",
     category: "world",
-    summary: "Hours on the road at a pace, with the forced-march saves that come with it.",
+    summary: "Hours (or miles) on the road at a pace, with the distance covered and the forced-march saves that come with it.",
     fields: [
-      { name: "hours", label: "Hours", kind: "number", required: true, min: 1, max: 48 },
+      { name: "hours", label: "Hours", kind: "number", min: 1, max: 48, help: "Give hours or miles." },
+      { name: "miles", label: "Or miles", kind: "number", min: 1, max: 200, help: "The server works out the hours the pace and the ground need." },
+      { name: "terrain", label: "Ground", kind: "select", options: [{ value: "normal", label: "Normal" }, { value: "difficult", label: "Difficult (half the distance)" }] },
       {
         name: "pace",
         label: "Pace",
@@ -80,6 +73,7 @@ export const WORLD_ADJUDICATIONS: CatalogEntry[] = [
         ],
       },
       { name: "characterIds", label: "Who travels", kind: "characters", help: "Leave empty for the whole party." },
+      { name: "water", label: "Water to be found", kind: "select", options: [{ value: "plenty", label: "Plenty" }, { value: "half", label: "Half (DC 15 CON a day)" }, { value: "none", label: "None" }], help: "Supplies variant only; holds until set to plenty." },
       { name: "reason", label: "The journey", kind: "text", placeholder: "Toward the pass, by the old road" },
     ],
   },
@@ -247,6 +241,7 @@ export const WORLD_ADJUDICATIONS: CatalogEntry[] = [
           { value: "weeks", label: "weeks" },
         ],
       },
+      { name: "water", label: "Water to be found", kind: "select", options: [{ value: "plenty", label: "Plenty" }, { value: "half", label: "Half (DC 15 CON a day)" }, { value: "none", label: "None" }], help: "Supplies variant only; holds until set to plenty." },
       REASON,
     ],
   },
@@ -268,9 +263,13 @@ export const WORLD_ADJUDICATIONS: CatalogEntry[] = [
     category: "world",
     summary: "Doors, chests and chains with real AC and hit points for their material.",
     fields: [
-      { name: "material", label: "Material", kind: "text", placeholder: "wood, stone, iron" },
-      { name: "size", label: "Size", kind: "text", placeholder: "tiny, small, medium, large" },
-      { name: "damage", label: "Damage", kind: "dice" },
+      { name: "name", label: "The object", kind: "text", placeholder: "the oak door", help: "Named, it keeps its damage between blows. A Wall of Ice is struck a section at a time: \"Wall of Ice section 2\", the numbers on the board." },
+      { name: "material", label: "Material", kind: "select", options: OBJECT_MATERIAL_OPTIONS },
+      { name: "size", label: "Size", kind: "select", options: OBJECT_SIZE_OPTIONS },
+      { name: "characterId", label: "Struck by", kind: "character", help: "The server rolls their weapon attack against its AC and their damage." },
+      { name: "weapon", label: "With", kind: "text", placeholder: "warhammer", help: "From their equipment." },
+      { name: "damage", label: "Or damage", kind: "dice", help: "Something other than a character's weapon." },
+      damageTypeField("damageType", "Damage type", "Objects shrug off poison and psychic."),
       { name: "fragile", label: "Fragile", kind: "boolean" },
       { name: "ac", label: "Its armor class", kind: "number", min: 1, max: 30, help: "Overrides the material's." },
       { name: "hp", label: "Its hit points", kind: "number", min: 1, max: 1000, help: "Overrides the size's." },
@@ -283,7 +282,7 @@ export const WORLD_ADJUDICATIONS: CatalogEntry[] = [
     category: "world",
     summary: "Everyone rolls the same check at once and the server totals who made it.",
     fields: [
-      { name: "skill", label: "Skill", kind: "text", placeholder: "stealth" },
+      { name: "skill", label: "Skill", kind: "select", options: SKILL_OPTIONS },
       { name: "ability", label: "Or ability", kind: "select", options: ABILITIES },
       { name: "difficulty", label: "Difficulty", kind: "select", options: DIFFICULTIES },
       { name: "dc", label: "Or an exact DC", kind: "number", min: 1, max: 30 },
@@ -309,6 +308,29 @@ export const WORLD_ADJUDICATIONS: CatalogEntry[] = [
           { value: "investigation", label: "Investigation" },
         ],
       },
+      {
+        name: "by",
+        label: "Noticed by",
+        kind: "select",
+        options: [
+          { value: "sight", label: "Sight (the light counts)" },
+          { value: "hearing", label: "Hearing (the light does not)" },
+        ],
+        help: "Perception only.",
+      },
+      {
+        name: "light",
+        label: "Light there",
+        kind: "select",
+        options: [
+          { value: "bright", label: "Bright" },
+          { value: "dim", label: "Dim (-5)" },
+          { value: "dark", label: "Dark" },
+        ],
+        help: "Off the board; left empty, the current location and the hour decide.",
+      },
+      { name: "againstEnemyId", label: "Hiding (enemy)", kind: "enemy", help: "The server rolls its Stealth (or Deception for Insight) as the DC." },
+      { name: "againstMonster", label: "Hiding (stat block)", kind: "text", placeholder: "goblin", help: "Out of a fight: the creature's stat block by name." },
       { name: "characterIds", label: "Who might notice", kind: "characters" },
       REASON,
     ],
@@ -421,6 +443,7 @@ export const SOCIAL_ADJUDICATIONS: CatalogEntry[] = [
     label: "End a relationship",
     category: "social",
     summary: "A falling out, a parting, a betrayal or a death.",
+    confirm: { message: "Record this death? The relationship closes for good.", when: { field: "reason", equals: "death" } },
     fields: [
       { name: "characterId", label: "Character", kind: "character", required: true },
       { name: "subject", label: "NPC or companion", kind: "text", required: true },
@@ -443,76 +466,7 @@ export const SOCIAL_ADJUDICATIONS: CatalogEntry[] = [
 ];
 
 export const STORY_ADJUDICATIONS: CatalogEntry[] = [
-  {
-    name: "request_roll",
-    label: "Ask for a roll",
-    category: "story",
-    summary: "Asks a player for a check, save or attack; the modifier comes from their sheet.",
-    fields: [
-      { name: "characterId", label: "Character", kind: "character", required: true },
-      {
-        name: "kind",
-        label: "Roll",
-        kind: "select",
-        required: true,
-        options: [
-          { value: "skill_check", label: "Skill check" },
-          { value: "saving_throw", label: "Saving throw" },
-          { value: "ability_check", label: "Ability check" },
-          { value: "attack", label: "Attack" },
-          { value: "damage", label: "Damage" },
-          { value: "initiative", label: "Initiative" },
-          { value: "custom", label: "Something else" },
-        ],
-      },
-      { name: "skill", label: "Skill", kind: "text", placeholder: "stealth" },
-      { name: "ability", label: "Ability", kind: "select", options: ABILITIES },
-      { name: "difficulty", label: "Difficulty", kind: "select", options: DIFFICULTIES },
-      { name: "dc", label: "Or an exact DC", kind: "number", min: 1, max: 30 },
-      {
-        name: "advantage",
-        label: "Advantage",
-        kind: "select",
-        options: [
-          { value: "none", label: "Straight" },
-          { value: "advantage", label: "Advantage" },
-          { value: "disadvantage", label: "Disadvantage" },
-        ],
-      },
-      {
-        name: "visibility",
-        label: "Who sees it",
-        kind: "select",
-        options: [
-          { value: "public", label: "Everyone (default)" },
-          { value: "blind", label: "Blind: they know they rolled, not what" },
-          { value: "self", label: "The roller and you" },
-          { value: "dm", label: "You alone" },
-        ],
-        help: "Your screen. The dice are still the server's, and the number is still real.",
-      },
-      {
-        name: "expression",
-        label: "Dice",
-        kind: "dice",
-        help: "For an attack, damage or something else: 1d20+5, 2d6+3. Checks and saves come from the sheet.",
-      },
-      {
-        name: "targetEnemyId",
-        label: "Damage lands on",
-        kind: "enemy",
-        help: "For a damage roll in a fight: the server applies the total to this enemy.",
-      },
-      {
-        name: "against",
-        label: "The save resists",
-        kind: "text",
-        placeholder: "frightened, poison, a fireball",
-        help: "So a trait that helps against it is applied.",
-      },
-      { name: "reason", label: "What they are trying", kind: "text" },
-    ],
-  },
+  REQUEST_ROLL_ADJUDICATION,
   {
     name: "request_player_input",
     label: "Give the floor",
@@ -570,7 +524,7 @@ export const STORY_ADJUDICATIONS: CatalogEntry[] = [
     category: "story",
     summary: "Proposes a note for the table; the lead approves it.",
     fields: [
-      { name: "title", label: "Title", kind: "text", required: true },
+      { name: "title", label: "Title", kind: "text", help: "Optional; the note stands on its body." },
       { name: "body", label: "Note", kind: "longtext", required: true },
     ],
   },

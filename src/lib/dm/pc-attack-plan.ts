@@ -6,25 +6,17 @@
 // the quiver is only counted, the maneuver's pool and the smite's slot are
 // only looked at, and the budget is a copy until pc-attack.ts stores it.
 
+import { underwaterRangeProblem } from "@/lib/dm/underwater";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
-import type { Encounter, EncounterEnemy } from "@/lib/db/encounters";
+import { listEnemies, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import type { Advantage } from "@/lib/dice";
-import { attacksLeft, spendAction, spendAttack, type TurnBudget } from "@/lib/dm/action-budget";
+import { spendAction, type TurnBudget } from "@/lib/dm/action-budget";
 import type { AttackProfile } from "@/lib/dm/attack-logic";
-import {
-  isUndeadOrFiend,
-  loadingProblem,
-  offHandProblem,
-  resourceLeft,
-  slotFree,
-  smiteDice,
-  withLoadingFired,
-} from "@/lib/dm/attack-rules";
-import { actingCombatantId, canAct } from "@/lib/dm/can-act";
+import { isUndeadOrFiend, offHandProblem, slotFree, smiteDice } from "@/lib/dm/attack-rules";
+import { planMarks, type MarkPlan } from "@/lib/dm/attack-marks";
 import type { TypedRider } from "@/lib/dm/damage-parts";
-import type { ConditionMetaMap } from "@/lib/dm/condition-logic";
-import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
+import { itemRidersAgainst } from "@/lib/dm/gear-attack";
 import { checkPcAttackRange } from "@/lib/dm/map-tools";
 import type { PcAttackArgs } from "@/lib/dm/pc-attack";
 import {
@@ -32,17 +24,26 @@ import {
   foldDamageRiders,
   withSneakAttack,
 } from "@/lib/dm/pc-attack-damage";
+import { gatePcAttack } from "@/lib/dm/pc-attack-gate";
+import { checkAttackOptions, claimedAdvantage, type AttackOptions } from "@/lib/dm/pc-attack-options";
+import { spendAttackEconomy } from "@/lib/dm/pc-attack-spend";
+import { tilesBetween } from "@/lib/dm/attack-spatial";
 import { buildAttackProfile, type BuiltAttack } from "@/lib/dm/pc-attack-profile";
-import { MANEUVER_RIDERS, superiorityDie, type OnHitSpends } from "@/lib/dm/pc-attack-riders";
+import { pickManeuver, type OnHitSpends } from "@/lib/dm/pc-attack-riders";
 import { attackGeometry, attackSituation } from "@/lib/dm/pc-attack-situation";
+import { globeProblemFor, missileProblem } from "@/lib/dm/zone-rules";
 import { checkAttackSpell } from "@/lib/dm/pc-attack-spell";
 import { attacksAllowedFor, budgetFor } from "@/lib/dm/turn-budget";
 import { acBreakdownFor } from "@/lib/srd";
+import { foeSlayerBonus } from "@/lib/dm/attack-features";
+import { carriesPoison, type OpenHandChoice } from "@/lib/dm/attack-onhit";
+import { rapidStrike, secondWeaponProblem } from "@/lib/dm/authored-attacks";
+import { curseRider } from "@/lib/dm/spell-retort";
 import type { AmmoSpend } from "@/lib/srd/ammunition";
 import { spendAmmo } from "@/lib/srd/ammunition";
-import { conditionBlocksReactions, conditionExtraActions } from "@/lib/srd/condition-effects";
+import { conditionExtraActions } from "@/lib/srd/condition-effects";
+import { conditionsSpentAgainst } from "@/lib/srd/condition-effect-queries";
 import type { ConditionRollRiders } from "@/lib/srd/condition-effects";
-import { classLevelFor } from "@/lib/srd/multiclass";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // A Battle Master maneuver riding the swing.
@@ -83,8 +84,36 @@ export type AttackPlan = {
   attackRiders: ConditionRollRiders;
   maneuver: ManeuverPick | null;
   smite: OnHitSpends["smite"];
+  // The feature options the attack carries (src/lib/dm/pc-attack-options.ts).
+  options: AttackOptions;
+  // Hunter's Mark and Hex: whose die rides this hit, and the marks it places.
+  marks: MarkPlan;
+  // The attacker's conditions the first hit uses up (the smites).
+  hitSpent: string[];
+  // The target's conditions this attack roll uses up (Guiding Bolt).
+  targetSpent: string[];
   advantage: Advantage;
   budget: TurnBudget | null;
+  // The features and effects that ride this attack beyond its damage
+  // (src/lib/dm/attack-features.ts, attack-onhit.ts).
+  extras: AttackExtras;
+};
+
+export type AttackExtras = {
+  // Inspiration spent for the roll's advantage.
+  inspired: boolean;
+  // Stroke of Luck declared: a miss becomes a hit and spends the use.
+  strokeOfLuck: boolean;
+  // Foe Slayer's bonus open to this attack (0 when none).
+  foeSlayer: number;
+  // Open Hand Technique on this Flurry of Blows strike, and its ki DC.
+  openHand: { choice: OpenHandChoice; dc: number } | null;
+  // Hurl Through Hell on the hit.
+  hurl: boolean;
+  // The weapon carries a coat of basic poison.
+  poison: boolean;
+  // The reaction attack is Giant Killer's.
+  giantKiller: boolean;
 };
 
 export function planPcAttack(input: {
@@ -100,51 +129,13 @@ export function planPcAttack(input: {
 
   // ---- refusals: everything that can stop this attack, before any spend ----
 
-  // On their own turn a character attacks with their action. Off it they
-  // have one reaction, and an attack made then is that reaction (an
-  // opportunity attack, a readied strike): one, until their turn comes round.
-  const onTurn = actingCombatantId(encounter) === sheet.id;
-  const allowed = canAct({ sheet, encounter, kind: onTurn ? "attack" : "reaction" });
-  if (!allowed.ok) {
-    return { refused: { error: allowed.error } };
+  // Whether the attacker may attack now and the target can be attacked at
+  // all (src/lib/dm/pc-attack-gate.ts).
+  const gate = gatePcAttack({ campaign, encounter, sheet, args });
+  if ("refused" in gate) {
+    return gate;
   }
-  if (!onTurn) {
-    const blocked = conditionBlocksReactions(sheet.conditions);
-    if (blocked) {
-      return { refused: { error: `${sheet.name} is ${blocked} and cannot take reactions, so they cannot attack off their own turn.` } };
-    }
-    if (encounter.reactionsUsed.includes(sheet.id)) {
-      return {
-        refused: {
-          error: `It is not ${sheet.name}'s turn, and they have already used their reaction. Off their own turn a character attacks only with their reaction; it comes back at the start of their next turn.`,
-        },
-      };
-    }
-    if (args.offHand) {
-      return {
-        refused: {
-          error: `The off-hand attack is a bonus action on ${sheet.name}'s own turn; it is not their turn.`,
-        },
-      };
-    }
-  }
-  const enemy = resolveEnemyRef(encounter.id, args.targetEnemyId);
-  if (!enemy) {
-    return { refused: { error: "Unknown targetEnemyId; use one from GAME STATE." } };
-  }
-  if (enemy.status !== "alive") {
-    return { refused: { error: `${enemy.displayName} is already ${enemy.status}.` } };
-  }
-  // A charmed creature cannot attack the one who charmed it.
-  const charmedAs = sheet.conditions.find((entry) => entry.trim().toLowerCase() === "charmed");
-  const charmer = charmedAs ? (sheet.conditionMeta as ConditionMetaMap)[charmedAs]?.source : undefined;
-  if (charmer && charmer === enemy.id) {
-    return {
-      refused: {
-        error: `${sheet.name} is charmed by ${enemy.displayName} and cannot attack it. They can attack another target, or act once the charm ends.`,
-      },
-    };
-  }
+  const { enemy, giantKiller } = gate;
 
   const built = buildAttackProfile(campaign.id, sheet, args);
   if ("error" in built) {
@@ -189,8 +180,15 @@ export function planPcAttack(input: {
     thrown: profile.thrown,
     longRangeTiles: profile.longRangeTiles,
   });
-  if (rangeError) {
-    return { refused: { error: rangeError } };
+  // Wind Wall turns arrows and bolts shot through it (zone-rules.ts).
+  const blown =
+    rangeError ??
+    (profile.ranged && weaponAttack ? missileProblem(encounter.id, sheet.id, enemy.id, enemy.displayName) : null) ??
+    (kind === "spell" ? globeProblemFor(encounter.id, sheet.id, enemy.id, enemy.displayName, args.spell, args.level) : null) ??
+    // Underwater, a shot past normal range misses (underwater.ts).
+    (weaponAttack ? underwaterRangeProblem(campaign.id, encounter.id, sheet.id, profile, enemy) : null);
+  if (blown) {
+    return { refused: { error: blown } };
   }
   const geometry = attackGeometry(campaign.id, encounter.id, sheet.id, enemy, profile);
   const { atRange } = geometry;
@@ -198,48 +196,11 @@ export function planPcAttack(input: {
   // A Battle Master maneuver riding this swing. The pick and the pool are
   // checked here; the die is spent on the roll for Precision Attack and on
   // the hit for every other maneuver.
-  let maneuver: ManeuverPick | null = null;
-  if (args.maneuver?.trim()) {
-    if (!weaponAttack) {
-      return { refused: { error: "Maneuvers ride weapon attacks, not spells." } };
-    }
-    const term = args.maneuver.trim().toLowerCase();
-    const picks = sheet.features
-      .map((feature) => feature.name)
-      .filter((name) => name.toLowerCase().startsWith("maneuver"));
-    const known = picks.some((name) => {
-      const bare = name.toLowerCase().replace(/^maneuver:\s*/, "");
-      return bare.includes(term) || term.includes(bare);
-    });
-    if (!known) {
-      return {
-        refused: {
-          error: `${sheet.name} knows no maneuver "${args.maneuver}".${
-            picks.length ? ` Their maneuvers: ${picks.join(", ")}.` : " They have no maneuver picks."
-          }`,
-        },
-      };
-    }
-    const pool = resourceLeft(sheet, "Superiority Dice");
-    if (pool === null || pool.left < 1) {
-      return {
-        refused: {
-          error:
-            pool === null
-              ? `${sheet.name} has no Superiority Dice.`
-              : `${sheet.name} has 0/${pool.max} Superiority Dice left; ${args.maneuver.trim()} is not available until they rest. They can make the attack without it.`,
-        },
-      };
-    }
-    // Multiclass: the superiority die grows with FIGHTER levels.
-    const die = superiorityDie(classLevelFor(sheet, "fighter") || sheet.level);
-    maneuver = {
-      name: args.maneuver.trim(),
-      die,
-      precision: /precision/i.test(term),
-      rider: MANEUVER_RIDERS.find((entry) => entry.match.test(term)) ?? null,
-    };
+  const picked = pickManeuver(sheet, args.maneuver, weaponAttack);
+  if ("refused" in picked) {
+    return { refused: { error: picked.refused } };
   }
+  const maneuver = picked.maneuver;
 
   // Divine Smite: checked here, paid for on the hit. 2d8 at 1st level, 1d8
   // more per slot level above to 5d8, and 1d8 more against undead and fiends.
@@ -271,7 +232,12 @@ export function planPcAttack(input: {
     attacksAllowedFor(sheet),
     conditionExtraActions(sheet.conditions),
   );
-  if (args.offHand && !grantedBonusAction) {
+  // The second blade a feature's weapon grants (authored-attacks.ts).
+  const secondWeapon = args.offHand ? secondWeaponProblem(sheet, args.weapon, budget) : undefined;
+  if (secondWeapon) {
+    return { refused: { error: secondWeapon } };
+  }
+  if (args.offHand && !grantedBonusAction && secondWeapon === undefined) {
     const problem = offHandProblem({
       who: sheet.name,
       profile,
@@ -285,48 +251,90 @@ export function planPcAttack(input: {
       return { refused: { error: problem } };
     }
   }
-  let spendNote: string | undefined;
-  if (budget) {
-    const usesAttackAction = !grantedBonusAction && !args.offHand && kind !== "spell";
-    if (usesAttackAction) {
-      const loading = loadingProblem({ who: sheet.name, profile, budget, feats: sheet.feats });
-      // A new action (Action Surge, Haste) reloads; only a swing that would
-      // ride the action already fired from is refused.
-      if (loading && attacksLeft(budget) > 0 && budget.attacksMade > 0) {
-        return { refused: { error: loading } };
-      }
+  // The feature options riding the swing: a bonus attack a feature grants,
+  // Stunning Strike, Reckless Attack, a knockout blow.
+  const checked = checkAttackOptions({
+    sheet,
+    args,
+    profile,
+    kind,
+    atRange,
+    derived: built.derived,
+    budget,
+    targetId: enemy.id,
+    besideEarlierTarget: (earlierId) => {
+      const apart = tilesBetween(encounter.id, earlierId, enemy.id);
+      return apart === null || apart <= 1;
+    },
+  });
+  if ("refused" in checked) {
+    return { refused: { error: checked.refused } };
+  }
+  const options = checked.options;
+  // The part of the turn the attack spends (src/lib/dm/pc-attack-spend.ts).
+  const spent = spendAttackEconomy({
+    sheet,
+    args,
+    profile,
+    kind,
+    atRange,
+    weaponAttack,
+    budget,
+    options,
+    grantedBonusAction,
+    encounterId: encounter.id,
+    enemyId: enemy.id,
+  });
+  if ("refused" in spent) {
+    return { refused: { error: spent.refused } };
+  }
+  budget = spent.budget;
+  const { spendNote, notes: context0 } = spent;
+
+  // Hunter's Mark and Hex ride hits on their marked creature only; moving a
+  // mark off a fallen creature is the bonus action (attack-marks.ts).
+  let marks = planMarks({ sheet, enemy, encounterEnemies: listEnemies(encounter.id), budget });
+  if (marks.movesMark && budget) {
+    const moved = spendAction(budget, "bonus", "moving the mark", sheet.name);
+    if (moved.ok) {
+      budget = moved.budget;
+    } else {
+      marks = { applies: new Set(), assign: [], movesMark: false, notes: [] };
     }
-    const spend = grantedBonusAction
-      ? spendAction(budget, "bonus", `the ${profile.weapon} attack`, sheet.name)
-      : args.offHand
-        ? spendAction(budget, "bonus", "an off-hand attack", sheet.name)
-        : kind === "spell"
-          ? // The cast guard charges the casting time in pc-attack.ts.
-            { ok: true as const, budget }
-          : spendAttack(budget, sheet.name);
-    if (!spend.ok) {
-      return { refused: { error: spend.error } };
-    }
-    budget = spend.budget;
-    if (usesAttackAction) {
-      budget = withLoadingFired(budget, profile);
-      if (!profile.ranged && (profile.properties ?? []).includes("light")) {
-        budget = { ...budget, lightMeleeAttack: true };
-      }
-    }
-    spendNote = spend.note;
   }
 
   // ---- what the attack carries: nothing below refuses it ----
 
-  const folded = foldDamageRiders({ campaignId: campaign.id, sheet, profile, riders, kind });
-  profile = folded.profile;
+  // The advantage the caller claims for the roll: the AI names a
+  // circumstance the engine does not already decide (pc-attack-options.ts).
+  const claim = claimedAdvantage({
+    requested: args.advantage,
+    reason: args.advantageReason,
+    byAi: turn.actor === "ai",
+  });
+  const folded = foldDamageRiders({
+    campaignId: campaign.id,
+    sheet,
+    profile,
+    riders,
+    kind,
+    enemy,
+    marked: marks.applies,
+  });
+  // A magic weapon's dice against this target (src/lib/dm/gear-attack.ts).
+  const gear = itemRidersAgainst(folded.profile, enemy.stats.type, atRange);
+  profile = gear.profile;
+  // Bestow Curse's necrotic rides its caster's hits on the cursed (spell-retort.ts).
+  const curse = curseRider(enemy, sheet.id);
+  if (curse) {
+    profile = { ...profile, damageExpression: `${profile.damageExpression}+${curse.dice}` };
+  }
   const situation = attackSituation({
     campaign,
     encounter,
     sheet,
     enemy,
-    requested: args.advantage,
+    requested: claim.requested,
     geometry,
     profile,
     kind,
@@ -339,15 +347,31 @@ export function planPcAttack(input: {
     onHitNotes: folded.onHitNotes,
     featureRiders: folded.featureRiders,
     maneuver,
+    recklessAdvantage: options.recklessAdvantage,
+    claimNote: claim.note,
+    inspired: args.useInspiration === true,
   });
   const context = situation.context;
+  context.notes.push(...context0);
+  // Rapid Strike: the advantage of this attack traded for one more attack of
+  // the action, once a turn (src/lib/dm/authored-attacks.ts).
+  let advantage = situation.advantage;
+  if (args.rapidStrike) {
+    const traded = rapidStrike({ sheet, budget, advantage, weaponAttack, bonus: Boolean(options.bonusAttack || args.offHand || grantedBonusAction) });
+    if ("refused" in traded) {
+      return { refused: { error: traded.refused } };
+    }
+    advantage = "none";
+    budget = traded.budget;
+    context.notes.push(traded.note);
+  }
   const sneak = withSneakAttack({
     encounterId: encounter.id,
     sheetId: sheet.id,
     enemyId: enemy.id,
     profile,
     riders,
-    advantage: situation.advantage,
+    advantage,
     notes: context.notes,
   });
   profile = sneak.profile;
@@ -361,6 +385,7 @@ export function planPcAttack(input: {
   if (spendNote) {
     context.notes.push(spendNote);
   }
+  context.notes.push(...marks.notes);
   let droppedRiders: string[] = [];
   if (budget) {
     const claimed = claimOncePerTurnRiders({
@@ -368,7 +393,7 @@ export function planPcAttack(input: {
       profile,
       notes: context.notes,
       sneak: sneak.sneak,
-      sneakAttackDice: riders.sneakAttackDice,
+      sneakAttackDice: sneak.dice,
       featureRiders: folded.featureRiders,
     });
     budget = claimed.budget;
@@ -395,16 +420,31 @@ export function planPcAttack(input: {
     spellSlotLevel: spell.spellSlotLevel,
     weaponAttack,
     ammo,
-    typedRiders: folded.typedRiders,
+    typedRiders: [...folded.typedRiders, ...gear.typed, ...(curse ? [curse] : [])],
     droppedRiders,
     effectiveAc: geometry.effectiveAc,
     atRange,
     context,
     helped: situation.helped,
     attackRiders: situation.attackRiders,
+    marks,
+    hitSpent: folded.hitSpent,
+    targetSpent: conditionsSpentAgainst(enemy.conditions),
     maneuver,
     smite,
-    advantage: situation.advantage,
+    options,
+    advantage,
     budget,
+    extras: {
+      inspired: args.useInspiration === true,
+      strokeOfLuck: args.strokeOfLuck === true,
+      foeSlayer: weaponAttack || kind === "spell" ? foeSlayerBonus(sheet, built.derived, enemy, budget?.oncePerTurn ?? null) : 0,
+      openHand: args.openHand
+        ? { choice: args.openHand, dc: 8 + built.derived.proficiencyBonus + built.derived.abilityMods.wis }
+        : null,
+      hurl: args.hurlThroughHell === true,
+      poison: carriesPoison(sheet, weaponAttack, profile.damageType),
+      giantKiller,
+    },
   };
 }

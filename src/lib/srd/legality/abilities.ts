@@ -39,6 +39,11 @@ export type AbilityCheck = {
   // Pools of six the base scores may be: the server's roll for this player,
   // the stored character's own scores on an edit.
   pools: number[][];
+  // Points a feature adds to a score and the cap it lifts by as much:
+  // Primal Champion's +4 STR and CON, to 24 (src/lib/srd/trait-rules.ts).
+  // A sheet from before the feature was applied may not hold them yet, so
+  // the base is a span that allows either.
+  grants?: Partial<Record<Ability, number>>;
 };
 
 type Span = { lo: number; hi: number };
@@ -66,9 +71,10 @@ export function baseSpans(check: AbilityCheck): Record<Ability, Span> {
   }
   const spans = {} as Record<Ability, Span>;
   for (const ability of ABILITIES) {
-    const lo = check.scores[ability] - (check.racial[ability] ?? 0) - improved[ability];
+    const granted = check.grants?.[ability] ?? 0;
+    const lo = check.scores[ability] - (check.racial[ability] ?? 0) - improved[ability] - granted;
     const lost = check.scores[ability] >= ABILITY_SCORE_CAP ? improved[ability] : 0;
-    spans[ability] = { lo, hi: lo + lost };
+    spans[ability] = { lo, hi: lo + lost + granted };
   }
   return spans;
 }
@@ -145,9 +151,10 @@ function fitsBounds(spans: Span[], freePoints: number): boolean {
 export function abilityProblems(check: AbilityCheck): string[] {
   const problems: string[] = [];
   for (const ability of ABILITIES) {
-    if (check.scores[ability] > ABILITY_SCORE_CAP) {
+    const cap = ABILITY_SCORE_CAP + (check.grants?.[ability] ?? 0);
+    if (check.scores[ability] > cap) {
       problems.push(
-        `${ABILITY_NAMES[ability]} is ${check.scores[ability]}; no score passes ${ABILITY_SCORE_CAP} without a feature or an item that says so. Lower it to ${ABILITY_SCORE_CAP} or less.`,
+        `${ABILITY_NAMES[ability]} is ${check.scores[ability]}; no score passes ${cap} without a feature or an item that says so. Lower it to ${cap} or less.`,
       );
     }
   }

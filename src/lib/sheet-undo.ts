@@ -8,6 +8,7 @@ import {
   type SheetAuditEntry,
 } from "@/lib/db/sheet-audit";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
+import { forgetLongRest } from "@/lib/db/clock";
 import { publishPersisted } from "@/lib/events";
 import { fullPatchSheetSchema, type CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -83,6 +84,11 @@ export function revertAuditEntry(campaign: Campaign, entry: SheetAuditEntry): Un
     });
     markReverted(entry.id, compensating.id);
   })();
+  // A long rest undone never happened: the 24 hours it started are given
+  // back, so the character may rest again (SRD 5.1, one long rest a day).
+  if (entry.kind === "rest_long") {
+    forgetLongRest(campaign.id, entry.characterId);
+  }
 
   const sheet = getSheetById(entry.characterId)!;
   publishPersisted(campaign.id, "sheet_audit", {

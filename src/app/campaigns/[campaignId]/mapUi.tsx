@@ -112,6 +112,7 @@ export const FLAT_TONES: Record<string, string> = {
   [TERRAIN.difficult]: "#4a4126",
   [TERRAIN.door]: "#c99a3c",
   [TERRAIN.lowwall]: "#5a5147",
+  [TERRAIN.climb]: "#5b4a33",
 };
 
 // The picture of the material a skin paints each terrain character with.

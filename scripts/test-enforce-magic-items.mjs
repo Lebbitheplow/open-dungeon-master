@@ -49,7 +49,10 @@ const BOOK = [
   ["Frost Brand", true, [resist("fire")]],
   ["Belt of Dwarvenkind", true, [resist("poison")]],
   ["Cloak of Arachnida", true, [resist("poison")]],
-  ["Armor of Invulnerability", true, [resist("nonmagical")]],
+  // SRD 5.1: "resistance to nonmagical damage", every type, not the three
+  // weapon types alone; pcResistances expands the token for damage that is
+  // not magical (test-enforce-explore-defects).
+  ["Armor of Invulnerability", true, [resist("nonmagical damage")]],
 ];
 
 await test("well-known SRD items carry the effects and the attunement the book gives them", () => {

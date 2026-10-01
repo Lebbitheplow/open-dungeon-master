@@ -93,7 +93,7 @@ function problemsAt(classId, sheet, level, { withSubclass = true } = {}) {
   expect("proficiency bonus", computeSheetDerived(sheet).proficiencyBonus, PROFICIENCY_BY_LEVEL[level - 1]);
   expect("hit die", sheet.hitDice.die, `d${table.hitDie}`);
   expect("hit dice", sheet.hitDice.total, level);
-  expect("hit points", sheet.maxHp, averageHp(table.hitDie, CON_MOD, level));
+  expect("hit points", sheet.maxHp, averageHp(table.hitDie, CON_MOD, level) + featureHp(classId, sheet.subclass, level));
 
   // Features: the class's own entries only, since race and background
   // entries are another suite's.
@@ -187,6 +187,19 @@ function problemsAt(classId, sheet, level, { withSubclass = true } = {}) {
   return problems;
 }
 
+// Hit points a class feature adds on top of the dice (SRD 5.1): Draconic
+// Resilience one per sorcerer level, and Primal Champion's +4 Constitution,
+// which counts for every level held.
+function featureHp(classId, subclass, level) {
+  if (classId === "sorcerer" && /draconic/i.test(subclass ?? "")) {
+    return level;
+  }
+  if (classId === "barbarian" && level >= 20) {
+    return (abilityMod(SCORES.con + 4) - CON_MOD) * level;
+  }
+  return 0;
+}
+
 const heroOf = (classId, level, subclass) => {
   const table = SRD_CLASSES[classId];
   return {
@@ -194,7 +207,7 @@ const heroOf = (classId, level, subclass) => {
     level,
     subclass,
     abilities: SCORES,
-    maxHp: averageHp(table.hitDie, CON_MOD, level),
+    maxHp: averageHp(table.hitDie, CON_MOD, level) + featureHp(classId, subclass, level),
     spellcasting: table.ability
       ? { ability: table.ability, slots: slotsPatch(classId, level), prepared: [], known: [], cantrips: [] }
       : null,

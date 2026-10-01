@@ -126,6 +126,37 @@ export function normalizeListAction(value: unknown): unknown {
   return value;
 }
 
+// The strings "true" and "false" a model sometimes sends for a boolean
+// argument, turned into the booleans they mean before any schema reads them.
+// A tool's z.coerce.boolean() reads every non-empty string as true, so
+// useInspiration: "false" spent the Inspiration it was told to keep. Only a
+// top-level value that is exactly one of the two words is touched: no text
+// argument of any tool is ever the bare word, and anything that is not a JSON
+// object is handed back as it came for the handler to refuse.
+export function strictBooleanArgs(rawArguments: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawArguments || "{}");
+  } catch {
+    return rawArguments;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return rawArguments;
+  }
+  let changed = false;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+    const word = typeof value === "string" ? value.trim().toLowerCase() : null;
+    if (word === "true" || word === "false") {
+      out[key] = word === "true";
+      changed = true;
+    } else {
+      out[key] = value;
+    }
+  }
+  return changed ? JSON.stringify(out) : rawArguments;
+}
+
 // record_event kinds fall back to "story" instead of erroring: a milestone
 // is always worth recording under some kind.
 export function normalizeEventKind(value: unknown, known: readonly string[]): string {

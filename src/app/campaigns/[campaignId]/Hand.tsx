@@ -10,18 +10,22 @@ import { HandCardFace, HandPlayedCard } from "@/app/campaigns/[campaignId]/HandC
 import { HandMoreSheet } from "@/app/campaigns/[campaignId]/HandMoreSheet";
 import { HAND_TUTORIAL_ID, HandTutorial } from "@/app/campaigns/[campaignId]/HandTutorial";
 import { useHandSpells } from "@/app/campaigns/[campaignId]/HandSpells";
-import { FRESH_TURN, attacksAllowed, deriveHand, splitHand, type HandCard, type HandTurn } from "@/lib/battlemap/hand";
+import { HandReactPrompt } from "@/app/campaigns/[campaignId]/HandReactPrompt";
+import { HandPips } from "@/app/campaigns/[campaignId]/HandPips";
+import { handTargets } from "@/app/campaigns/[campaignId]/handTargets";
+import { holdPendingCards, useHandChoices, useHandPending } from "@/app/campaigns/[campaignId]/useHandChoices";
+import { deriveHand, splitHand, type HandCard } from "@/lib/battlemap/hand";
 import {
-  HAND_AIM_EVENT,
   HAND_TARGET_EVENT,
-  afterCommit,
   composeSentence,
   intentBody,
   previewRows,
   targetFromComposedText,
-  type HandAimDetail,
   type HandTargetDetail,
 } from "@/lib/battlemap/hand-play";
+import { reactionAim, reactionCards, withReactions } from "@/lib/battlemap/hand-react";
+import { turnFromEncounter, turnPips, turnSignature } from "@/lib/battlemap/hand-table";
+import type { TargetEdge } from "@/lib/battlemap/view-tactics";
 import { replayAnimation } from "@/lib/motion/replay";
 import { markTourSeen, tourSeen } from "@/lib/tours/logic";
 import type { InputKind } from "@/lib/campaign-types";
@@ -69,17 +73,6 @@ function writeFlag(key: string, on: boolean) {
   window.dispatchEvent(new Event(STORE_EVENT));
 }
 
-// The turn as the Hand has seen it, kept per turn of the tracker so a reload
-// mid-turn does not hand the action back.
-function readTurn(key: string): HandTurn {
-  try {
-    const raw = window.sessionStorage.getItem(`odm:hand-turn:${key}`);
-    return raw ? { ...FRESH_TURN, ...(JSON.parse(raw) as Partial<HandTurn>) } : FRESH_TURN;
-  } catch {
-    return FRESH_TURN;
-  }
-}
-
 function HandInner({
   campaignId,
   sheets,
@@ -94,6 +87,7 @@ function HandInner({
   composerRef,
   trackAmmo,
   leaving,
+  edges,
 }: {
   campaignId: string;
   sheets: CharacterSheet[];
@@ -110,41 +104,40 @@ function HandInner({
   trackAmmo?: boolean;
   // The fight is over and the mount is about to go: the fan folds away (FOLD_MS).
   leaving?: boolean;
+  // The board's verdict from this character to each enemy (cover, flanking),
+  // keyed by enemy id; absent off the map.
+  edges?: Record<string, TargetEdge>;
 }) {
   const sheet = useMemo(
     () => sheets.find((entry) => entry.userId === meUserId && !entry.isCompanion) ?? null,
     [sheets, meUserId],
   );
-  const myTurn = floor.mode === "initiative" ? floor.userIds.includes(meUserId) : !inputBlocked;
-  const currentName = floor.mode === "initiative" ? floor.currentName : undefined;
-  const turnKey = `${encounter.id}:${encounter.round}:${encounter.turnIndex}`;
+  const floorTurn = floor.mode === "initiative" ? floor.userIds.includes(meUserId) : !inputBlocked;
+  const floorName = floor.mode === "initiative" ? floor.currentName : undefined;
 
-  const [stored, setStored] = useState<{ key: string; turn: HandTurn }>(() => ({ key: turnKey, turn: readTurn(turnKey) }));
-  const spent = stored.key === turnKey ? stored.turn : FRESH_TURN;
-  // The engine's own count for this character's turn, when the table sent it:
-  // it also sees what was typed rather than played from the Hand. Either
-  // record saying a thing is spent is enough.
-  const engine = sheet && encounter.turn?.ownerId === sheet.id ? encounter.turn : null;
-  const turn = useMemo<HandTurn>(
-    () => ({
-      ...spent,
-      ...(engine
-        ? {
-            actionUsed: spent.actionUsed || engine.actionUsed,
-            bonusUsed: spent.bonusUsed || engine.bonusUsed,
-            reactionUsed: spent.reactionUsed || engine.reactionUsed,
-            attacksMade: Math.max(spent.attacksMade, engine.attacksMade),
-            extraActions: engine.extraActions ?? spent.extraActions,
-          }
-        : {}),
-      myTurn,
-      currentName,
-    }),
-    [spent, engine, myTurn, currentName],
+  // The engine's count, and nothing else: the Hand keeps no ledger of its own
+  // (src/lib/battlemap/hand-table.ts).
+  const turn = useMemo(
+    () => (sheet ? turnFromEncounter(encounter, sheet, { myTurn: floorTurn, currentName: floorName }) : null),
+    [encounter, sheet, floorTurn, floorName],
   );
+  const myTurn = turn?.myTurn ?? floorTurn;
+  const currentName = turn?.currentName ?? floorName;
+  const signature = turn ? turnSignature(turn) : "";
 
   const spells = useHandSpells(sheet);
-  const cards = useMemo(() => (sheet ? deriveHand(sheet, turn, { spells, trackAmmo }) : []), [sheet, turn, spells, trackAmmo]);
+  // A card sent and not yet resolved holds the cards of its cost (useHandChoices.ts).
+  const { waiting, setPending } = useHandPending(signature);
+
+  const hits = encounter.lastHits;
+  const reactions = useMemo(
+    () => (sheet && turn ? reactionCards(sheet, turn, hits ?? [], sheets) : []),
+    [sheet, turn, hits, sheets],
+  );
+  const cards = useMemo(() => {
+    if (!sheet || !turn) return [];
+    return holdPendingCards(withReactions(reactions, deriveHand(sheet, turn, { spells, trackAmmo })), waiting);
+  }, [sheet, turn, reactions, spells, trackAmmo, waiting]);
 
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [targetId, setTargetId] = useState<string | null>(null);
@@ -169,29 +162,10 @@ function HandInner({
     [cards, riderIds],
   );
 
-  const targets = useMemo<HandTargetChip[]>(() => {
-    const enemies: HandTargetChip[] = encounter.enemies
-      .filter((enemy) => enemy.status === "alive")
-      .map((enemy) => ({
-        id: enemy.id,
-        name: enemy.name,
-        kind: "enemy",
-        ac: enemy.ac,
-        cr: enemy.cr,
-        conditions: enemy.conditions,
-        note: [enemy.health, ...enemy.conditions.slice(0, 2)].join(" · "),
-      }));
-    const party: HandTargetChip[] = sheets
-      .filter((entry) => !entry.deathSaves?.dead)
-      .map((entry) => ({
-        id: entry.id,
-        name: entry.name,
-        kind: entry.id === sheet?.id ? "self" : "ally",
-        conditions: entry.conditions,
-        note: `${entry.currentHp}/${entry.maxHp} hp`,
-      }));
-    return [...enemies, ...party];
-  }, [encounter.enemies, sheets, sheet?.id]);
+  const targets = useMemo<HandTargetChip[]>(
+    () => handTargets(encounter.enemies, sheets, sheet?.id, edges),
+    [encounter.enemies, sheets, sheet?.id, edges],
+  );
   const enemyTargets = useMemo(() => targets.filter((target) => target.kind === "enemy"), [targets]);
   const partyTargets = useMemo(() => targets.filter((target) => target.kind !== "enemy"), [targets]);
 
@@ -199,12 +173,23 @@ function HandInner({
   // sentence in the message box; it is read here rather than stored, so the
   // board needs to know nothing about the Hand.
   const boardName = picked?.target === "enemy" ? targetFromComposedText(input, enemyTargets.map((target) => target.name)) : null;
-  const offered = picked?.target === "enemy" ? enemyTargets : picked?.target === "ally" ? partyTargets : [];
+  // A reaction answers one recorded attack: its target is fixed by it (the
+  // attacker for Hellish Rebuke, the ally for Cutting Words), not picked.
+  const fixed = picked?.intent.card === "reaction" && sheet ? reactionAim(picked, hits ?? [], sheet.id, sheets) : null;
+  const fixedChip = fixed ? targets.find((target) => target.id === fixed.id) ?? { ...fixed, note: "" } : null;
+  const offered = fixedChip
+    ? [fixedChip]
+    : picked?.target === "enemy"
+      ? enemyTargets
+      : picked?.target === "ally"
+        ? partyTargets
+        : [];
   const self = partyTargets.find((target) => target.kind === "self") ?? null;
   const aim =
     picked?.target === "self"
       ? self
-      : (boardName ? offered.find((target) => target.name === boardName) : null) ??
+      : fixedChip ??
+        (boardName ? offered.find((target) => target.name === boardName) : null) ??
         offered.find((target) => target.id === targetId) ??
         null;
   // What the hover previews are worked against until something is aimed at.
@@ -212,21 +197,21 @@ function HandInner({
   const conditions = sheet?.conditions ?? EMPTY;
 
   const attachedRiders = picked?.intent.card === "attack" && !picked.intent.offHand ? riders : EMPTY_CARDS;
-  const sentence = picked ? composeSentence(picked, aim, attachedRiders) : "";
-  const rows = useMemo(() => (picked ? previewRows(picked, aim ?? (picked.target === "enemy" ? defaultAim : null), conditions) : []), [picked, aim, defaultAim, conditions]);
+  // The options, trigger, choice and area the card carries; the board hears
+  // of the raised card from here too (useHandChoices.ts).
+  const { choices, resetChoices, barProps } = useHandChoices(picked);
+  const sentence = picked ? composeSentence(picked, aim, attachedRiders, choices) : "";
+  const rows = useMemo(
+    () => (picked ? previewRows(picked, aim ?? (picked.target === "enemy" ? defaultAim : null), conditions, choices) : []),
+    [picked, aim, defaultAim, conditions, choices],
+  );
 
   const clearAim = useCallback(() => {
     setPickedId(null);
     setTargetId(null);
-  }, []);
+    resetChoices();
+  }, [resetChoices]);
 
-  // Tell a board that wants to know, and take a pick from one that sends it.
-  const aimingId = picked?.id ?? null;
-  const aimingAt = picked?.target ?? null;
-  useEffect(() => {
-    const detail: HandAimDetail = { active: aimingId !== null, cardId: aimingId, target: aimingAt };
-    window.dispatchEvent(new CustomEvent(HAND_AIM_EVENT, { detail }));
-  }, [aimingId, aimingAt]);
   useEffect(() => {
     const onTarget = (event: Event) => {
       const detail = (event as CustomEvent<HandTargetDetail>).detail ?? {};
@@ -255,9 +240,10 @@ function HandInner({
         return;
       }
       setTargetId(null);
+      resetChoices();
       setPickedId((current) => (current === card.id ? null : card.id));
     },
-    [say],
+    [say, resetChoices],
   );
 
   const toComposer = useCallback(
@@ -295,20 +281,25 @@ function HandInner({
         : await fetch(`/api/campaigns/${campaignId}/actions`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ content: sentence, kind: "do", intent: intentBody(picked, aim, attachedRiders) }),
+            body: JSON.stringify({ content: sentence, kind: "do", intent: intentBody(picked, aim, attachedRiders, choices) }),
           });
       if (!response.ok) {
+        // The engine's own reason (the actions route asks canAct and the
+        // cast guard before anything is posted); the card stays playable.
         const data = (await response.json().catch(() => ({}))) as { error?: string };
         say(data.error || "Could not send your action.");
         return;
       }
-      const next = afterCommit(spent, picked, attacksAllowed(sheet));
-      try {
-        window.sessionStorage.setItem(`odm:hand-turn:${turnKey}`, JSON.stringify(next));
-      } catch {
-        // Without storage the turn is simply remembered for this page only.
+      // Nothing is marked spent: the engine's count arrives with the
+      // encounter. Until it moves, the same cost waits on this card.
+      if (!ending) {
+        setPending({
+          cost: picked.cost,
+          attack: picked.intent.card === "attack" || picked.intent.card === "rider",
+          name: picked.name,
+          signature,
+        });
       }
-      setStored({ key: turnKey, turn: next });
       setPlayed((current) => ({ card: picked, seq: (current?.seq ?? 0) + 1 }));
       setRiderIds([]);
       // The board's sentence has done its work as the pick; it is not sent twice.
@@ -322,9 +313,9 @@ function HandInner({
     } finally {
       setSending(false);
     }
-  }, [picked, sheet, sending, sentence, campaignId, aim, attachedRiders, spent, turnKey, boardName, setInput, clearAim, say, toComposer]);
+  }, [picked, sheet, sending, sentence, campaignId, aim, attachedRiders, choices, signature, setPending, boardName, setInput, clearAim, say, toComposer]);
 
-  if (!sheet) return null;
+  if (!sheet || !turn) return null;
 
   const { fan, more } = splitHand(cards);
   // A card chosen from behind the spine takes the last seat before End turn.
@@ -333,11 +324,8 @@ function HandInner({
   // The mockup's 4.4 degrees between neighbours, eased off as the hand fills
   // so nine cards lean no further than five did.
   const step = shown.length > 1 ? Math.min(4.4, 13 / (shown.length - 1)) : 0;
-  const pips: Array<{ label: string; used: boolean }> = [
-    { label: "Action", used: spent.actionUsed && (spent.extraActions ?? 0) <= 0 },
-    { label: "Bonus", used: spent.bonusUsed },
-    { label: "Reaction", used: spent.reactionUsed },
-  ];
+  // The engine's count, the same one the cards read.
+  const pips = turnPips(turn);
 
   return (
     <section
@@ -352,10 +340,12 @@ function HandInner({
         }
       }}
     >
-      <div className="flex items-center gap-2">
+      {/* The label keeps its whole words: on a phone the pips wrap under it
+          rather than squeeze it to "YOUR HAN...". */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span
           key={myTurn ? "mine" : (currentName ?? "other")}
-          className="hand-label min-w-0 truncate font-display text-[11px] uppercase tracking-[0.22em] text-amber-200/90"
+          className="hand-label min-w-0 break-words font-display text-[11px] uppercase tracking-[0.22em] text-amber-200/90"
         >
           {myTurn ? "Your hand" : `${currentName ?? "Another hero"}'s turn`}
         </span>
@@ -363,20 +353,7 @@ function HandInner({
           {myTurn ? "Play a card, or type your move below." : "Look your cards over while you wait."}
         </span>
         <span className="ml-auto flex items-center gap-1">
-          {pips.map((pip) => (
-            <span
-              key={pip.label}
-              data-used={pip.used ? "true" : undefined}
-              // The strike through a spent pip is drawn by hand-motion.css, which eases it in.
-              className={cn(
-                "hand-pip rounded-full border px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider",
-                pip.used ? "border-stone-700/60 text-stone-600" : "border-amber-500/45 bg-amber-500/10 text-amber-200",
-              )}
-              aria-label={`${pip.label} ${pip.used ? "spent" : "available"}`}
-            >
-              {pip.label}
-            </span>
-          ))}
+          <HandPips pips={pips} flurryStrikes={turn.flurryStrikes} />
           <Tooltip content="How the hand works">
             <button
               type="button"
@@ -428,6 +405,20 @@ function HandInner({
         />
       ) : null}
 
+      {/* A reaction the moment offers (an attack just hit you or an ally):
+          above the fan, even while the hand is put away, because it is gone
+          once the turn moves on. */}
+      <HandReactPrompt
+        cards={reactions}
+        pickedId={picked?.id ?? null}
+        onPick={(card) => {
+          // The aim bar that sends it lives in the fan's space: a put-away
+          // hand comes back out for it.
+          if (collapsed) writeFlag(COLLAPSED_KEY, false);
+          pick(card);
+        }}
+      />
+
       {collapsed ? null : (
         <>
           <div
@@ -448,7 +439,7 @@ function HandInner({
                 picked={picked?.id === card.id}
                 attached={riderIds.includes(card.id)}
                 played={played?.card.id === card.id}
-                aim={defaultAim}
+                aim={card.intent.card === "reaction" ? null : defaultAim}
                 conditions={conditions}
                 onPick={pick}
               />
@@ -482,7 +473,11 @@ function HandInner({
               rows={rows}
               sentence={sentence}
               sending={sending}
-              blocked={inputBlocked ? blockedReason : null}
+              {...barProps}
+              onRefused={say}
+              // A reaction is taken on anyone's turn: the initiative floor
+              // does not hold it (the engine's canAct judges it instead).
+              blocked={inputBlocked && picked.cost !== "reaction" ? blockedReason : null}
               onBack={clearAim}
               onEdit={() => toComposer(sentence)}
               onCommit={() => void commit()}

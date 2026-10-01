@@ -19,8 +19,12 @@ import { incapacitatedBy, wearsHeavyArmor } from "@/lib/dm/condition-logic";
 import { classLevelFor, classListFor } from "@/lib/srd/multiclass";
 import { conditionEffectsFor } from "@/lib/srd/condition-effects";
 import { consumableEffect, findCarriedItem } from "@/lib/dm/item-logic";
-import { goldMath, grantItemMath, removeItemMath } from "@/lib/dm/mutation-math";
+import { kiTechnique, spendKiTechnique } from "@/lib/dm/bonus-actions";
+import { removeItemMath } from "@/lib/dm/mutation-math";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
+import { holdsMote } from "@/lib/srd/authored-effects-more";
+
+export { computePurchase } from "@/lib/dm/purchase-math";
 
 // Handlers for the resource-engine mutation tools: use_item (atomic
 // consumable use), purchase (atomic gold + item trade), and use_resource
@@ -29,128 +33,9 @@ import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
 // the patch + result so mutations.ts only grows dispatch lines. Must not
 // import mutations.ts (the import points the other way).
 
-type ToolDef = {
-  type: "function";
-  function: { name: string; description: string; parameters: Record<string, unknown> };
-};
+export { RESOURCE_TOOL_NAMES, resourceTools } from "@/lib/dm/resource-tool-defs";
 
-export const RESOURCE_TOOL_NAMES = ["use_item", "purchase", "use_resource"] as const;
-
-export const resourceTools: ToolDef[] = [
-  {
-    type: "function",
-    function: {
-      name: "use_item",
-      description:
-        "A character uses up ONE consumable they carry (potion, scroll, thrown flask, ration, torch). The server checks they carry it, applies a healing potion's healing itself (rolling the dice), and decrements or removes the item, all in one call. Never narrate a consumable's use without calling this.",
-      parameters: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          characterId: { type: "string", description: "Exact characterId from GAME STATE." },
-          item: { type: "string", description: "Item name from their equipment." },
-          targetCharacterId: {
-            type: "string",
-            description: "Who receives the effect when fed to someone else; defaults to the user.",
-          },
-          reason: { type: "string", description: "Short in-fiction cause." },
-        },
-        required: ["characterId", "item"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "purchase",
-      description:
-        "A character buys or sells an item for gold, atomically: buying refuses when the purse cannot cover price x qty, otherwise the gold moves and the item lands in (or leaves) their pack in one audited step. Use this for EVERY trade instead of separate modify_gold and grant_item calls.",
-      parameters: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          characterId: { type: "string", description: "Exact characterId from GAME STATE." },
-          item: { type: "string", description: "Item name." },
-          price: { type: "integer", minimum: 0, maximum: 100000, description: "Gold per unit." },
-          qty: { type: "integer", minimum: 1, maximum: 99 },
-          action: { type: "string", enum: ["buy", "sell"] },
-          reason: { type: "string", description: "Short in-fiction cause." },
-        },
-        required: ["characterId", "item", "price", "action"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "use_resource",
-      description:
-        "A character spends a limited-use class feature tracked in their Resources list (Rage, Ki Points, Second Wind, Action Surge, Channel Divinity, Bardic Inspiration, Wild Shape, Lay on Hands...). The server spends the use AND applies the feature's real effect: Second Wind heals, Lay on Hands moves hit points to the target, Rage grants its resistance and damage, Bardic Inspiration hands the target a die. It refuses at 0 uses left. Call this BEFORE narrating the feature and narrate exactly what it reports back.",
-      parameters: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          characterId: { type: "string", description: "Exact characterId from GAME STATE." },
-          resource: {
-            type: "string",
-            description: "Resource name from their Resources list, e.g. 'Rage' or 'Ki Points'.",
-          },
-          amount: {
-            type: "integer",
-            minimum: 1,
-            maximum: 50,
-            description: "Uses or points to spend (default 1). Lay on Hands spends HP from its pool.",
-          },
-          targetCharacterId: {
-            type: "string",
-            description:
-              "Who the feature is aimed at, for features that touch someone else (Lay on Hands, Bardic Inspiration). Defaults to the user.",
-          },
-          form: {
-            type: "string",
-            description: "Wild Shape only: the beast being assumed, e.g. 'dire wolf'.",
-          },
-          variant: {
-            type: "string",
-            description:
-              "For features with a choice (Starry Form's archer/chalice/dragon, Spirit Totem's bear/hawk/unicorn): the chosen option.",
-          },
-          formHp: {
-            type: "integer",
-            minimum: 1,
-            maximum: 300,
-            description: "Wild Shape only: the beast form's hit points from its stat block.",
-          },
-          formAc: {
-            type: "integer",
-            minimum: 1,
-            maximum: 30,
-            description: "Wild Shape only: the beast form's armor class.",
-          },
-          formCr: {
-            type: "number",
-            minimum: 0,
-            maximum: 30,
-            description:
-              "Wild Shape only, for a beast the server does not know: its challenge rating from its stat block (0.25 for 1/4). The druid's level caps it.",
-          },
-          formFlies: {
-            type: "boolean",
-            description: "Wild Shape only, for a beast the server does not know: it has a flying speed.",
-          },
-          formSwims: {
-            type: "boolean",
-            description: "Wild Shape only, for a beast the server does not know: it has a swimming speed.",
-          },
-          reason: { type: "string", description: "Short in-fiction cause." },
-        },
-        required: ["characterId", "resource"],
-      },
-    },
-  },
-];
-
-type Outcome = {
+export type Outcome = {
   patch: FullPatchSheetInput;
   result: Record<string, unknown>;
   // Extra target-sheet patch for use_item fed to someone else.
@@ -222,48 +107,6 @@ export function computeUseItem(
     base.result.healingRolled = total;
   }
   return base;
-}
-
-export function computePurchase(
-  sheet: CharacterSheet,
-  args: { item: string; price: number; qty: number; action: "buy" | "sell" },
-): Outcome | { error: string } {
-  const total = args.price * args.qty;
-  if (args.action === "buy") {
-    if (sheet.gold < total) {
-      return {
-        error: `${sheet.name} has ${sheet.gold} gold; ${args.qty > 1 ? `${args.qty}x ` : ""}${args.item} costs ${total}. They cannot afford it.`,
-      };
-    }
-    const gold = goldMath(sheet.gold, -total);
-    const items = grantItemMath(sheet.equipment, args.item.slice(0, 80), args.qty);
-    return {
-      patch: { gold: gold.gold, equipment: items.equipment },
-      result: { ok: true, bought: args.item, qty: args.qty, paid: total, gold: gold.gold },
-      event: `Bought ${args.item}${args.qty > 1 ? ` x${args.qty}` : ""} for ${total} gold.`,
-    };
-  }
-  const removal = removeItemMath(sheet.equipment, args.item, args.qty);
-  if (!removal) {
-    return { error: `${sheet.name} does not carry "${args.item}" to sell.` };
-  }
-  // A sale pays for what changes hands, so more than is held is no sale.
-  if (removal.removed < args.qty) {
-    return {
-      error: `${sheet.name} carries ${removal.removed} of ${args.item} and cannot sell ${args.qty}; sell ${removal.removed} or fewer.`,
-    };
-  }
-  const gold = goldMath(sheet.gold, total);
-  return {
-    patch: { gold: gold.gold, equipment: removal.equipment },
-    result: {
-      ok: true,
-      sold: args.item,
-      qty: removal.removed,
-      received: args.price * removal.removed,
-      gold: gold.gold,
-    },
-  };
 }
 
 // How the target of an inspiration die carries it: a condition on their
@@ -427,6 +270,16 @@ export function computeUseResource(
     return {
       error: `${sheet.name} is ${stoppedBy} and cannot use ${def.displayName} until the condition ends.`,
     };
+  }
+
+  // The monk's ki techniques spend the bonus action and land their effect
+  // (src/lib/dm/bonus-actions.ts); a plain spend (Stunning Strike's point)
+  // passes no variant and falls through to the generic path below.
+  if (def.id === "ki") {
+    const technique = kiTechnique(variant);
+    if (technique) {
+      return spendKiTechnique(campaign, sheet, technique, variant);
+    }
   }
 
   // Font of Magic: sorcery points convert into a spell slot and back. The
@@ -666,7 +519,9 @@ export function computeUseResource(
           conditions: [...target.conditions, condition],
           conditionMeta: {
             ...target.conditionMeta,
-            [condition]: { rounds: INSPIRATION_ROUNDS },
+            // Who gave it, and a Creation bard's mote with it
+            // (src/lib/dm/authored-mote.ts).
+            [condition]: { rounds: INSPIRATION_ROUNDS, ...(holdsMote(sheet) ? { source: sheet.id, mote: true } : {}) },
           },
         },
       };

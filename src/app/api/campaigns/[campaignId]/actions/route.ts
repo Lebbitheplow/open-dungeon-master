@@ -18,6 +18,8 @@ import { hasHumanDm } from "@/lib/dm/viewer";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { runResumeRecap } from "@/lib/dm/recap";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
+import { parseMessageIntent } from "@/lib/dm/intent-logic";
+import { intentRefusal } from "@/lib/dm/intent-check";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,6 +27,10 @@ export const dynamic = "force-dynamic";
 const actionSchema = z.object({
   content: z.string().trim().min(1).max(2000),
   kind: z.enum(["do", "say", "ooc"]).default("do"),
+  // The card the Hand played, beside the sentence it wrote. Optional: typed
+  // actions and older clients send none, and a malformed one is dropped
+  // rather than refusing the action (src/lib/dm/intent-logic.ts).
+  intent: z.unknown().optional(),
 });
 
 export async function POST(
@@ -54,13 +60,17 @@ export async function POST(
   }
 
   const { kind } = parsed.data;
+  const intent = kind === "do" ? parseMessageIntent(parsed.data.intent) : null;
 
   // Floor control: during a spotlight only the named players may act (ooc is
   // always allowed); the floor releases once ALL of them have answered.
   // During a hold nobody may act until the lead releases. This read-modify-
   // write must stay await-free so it is atomic in Node.
   const floor = getFloor(campaignId);
-  if (!canAct(floor, user.id, kind)) {
+  // A reaction is taken on somebody else's turn (SRD 5.1): a reaction card
+  // passes the initiative floor, and the engine's canAct judges it below.
+  const reactionOffTurn = intent?.card === "reaction" && floor.mode === "initiative";
+  if (!reactionOffTurn && !canAct(floor, user.id, kind)) {
     if (floor.mode === "hold") {
       return Response.json(
         {
@@ -99,6 +109,15 @@ export async function POST(
       },
       { status: 409 },
     );
+  }
+  // A card the engine would refuse is refused here, with the engine's own
+  // reason and before anything is posted, so the Hand never marks spent a
+  // card that was never going to resolve (src/lib/dm/intent-check.ts).
+  if (intent) {
+    const refusal = intentRefusal(campaign, sheet, intent);
+    if (refusal) {
+      return Response.json({ error: refusal }, { status: 409 });
+    }
   }
   let spotlightStillWaiting = false;
   if (kind !== "ooc" && floor.mode === "spotlight") {
@@ -159,6 +178,7 @@ export async function POST(
     userId: user.id,
     characterId: sheet.id,
     content,
+    intent,
   });
   publishWithSeq(campaignId, seq, "message_added", { message });
 

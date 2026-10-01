@@ -22,6 +22,8 @@ export type VariantRules = {
   powerfulCritical: boolean;
   criticalDamageMods: boolean;
   ammunition: boolean;
+  // Optional so a settings object written before the rule reads as off.
+  supplies?: boolean;
   restVariant: "standard" | "gritty" | "heroic";
 };
 
@@ -171,6 +173,8 @@ export const VARIANT_RULE_LINES: Record<
     "Critical damage modifiers: on a critical hit the flat damage modifiers double along with the dice. The server applies it.",
   ammunition:
     "Ammunition: arrows, bolts and bullets are spent when a character fires and half are recovered after the fight. The server applies it; an empty quiver makes pc_attack refuse the shot, and that refusal is what you narrate.",
+  supplies:
+    "Food and water: at each dawn every character eats a ration from their pack and drinks from a waterskin. Going without food past 3 + CON modifier days, or a day without water, costs a level of exhaustion (two for a character already exhausted), and a long rest lifts none until they eat and drink. When water is scarce, pass water 'half' (a DC 15 Constitution save each day) or 'none' on pass_time or travel, and 'plenty' when it is found again. The server applies it; hand out rations and water with grant_item.",
 };
 
 export const REST_VARIANT_LINES: Record<VariantRules["restVariant"], string> = {

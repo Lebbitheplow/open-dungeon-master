@@ -1,25 +1,44 @@
 // The Hand's shared vocabulary: what a card is, what a turn is, and the
 // gates that stop a card being played. Split from hand.ts only to keep each
 // file readable; hand.ts re-exports everything a caller needs.
-import { incapacitatedBy } from "@/lib/dm/condition-logic";
+import {
+  spendAction,
+  spendAttack,
+  type AttackSpendOptions,
+  type SpendResult,
+  type TurnBudget,
+} from "@/lib/dm/action-budget";
+import { canAct, type ActKind, type ActingEncounter } from "@/lib/dm/can-act";
+import type { OrderEntry } from "@/lib/db/encounters";
 import type { IconRef } from "@/lib/icons";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { conditionBlocksReactions } from "@/lib/srd/condition-effects";
+import type { HandIntentExtras } from "@/lib/battlemap/hand-intent";
+import type { HandArea } from "@/lib/battlemap/hand-area";
+
+export type { HandBonusAttack } from "@/lib/battlemap/hand-intent";
 
 export type HandCost = "action" | "bonus" | "reaction" | "rider" | "free";
 export type HandCardType = "attack" | "rider" | "spell" | "control" | "mend" | "ward" | "feature" | "basic";
 export type HandTarget = "enemy" | "ally" | "self" | "none";
 export type BasicActionId =
-  | "dodge" | "dash" | "disengage" | "help" | "hide" | "ready" | "grapple" | "shove" | "use-object" | "end-turn";
+  | "dodge" | "dash" | "disengage" | "help" | "hide" | "ready" | "grapple" | "shove" | "use-object" | "end-turn"
+  | "search" | "escape";
 
 // What the structured commit carries beside the sentence. An optional extra
-// field on the action body: a server that does not know it drops it.
-export type HandIntent =
+// field on the action body: a server that does not know it drops it. The
+// extras (hand-intent.ts) carry what the newer rules need: a reaction's
+// feature, a ki variant, a bonus-action route, Ready's trigger, the attack
+// options pc_attack resolves.
+export type HandIntent = (
   | { card: "attack"; weapon: string; offHand?: boolean }
   | { card: "rider"; rider: string; slotLevel?: number }
   | { card: "spell"; spell: string; slotLevel: number | null }
   | { card: "feature"; resourceId: string }
-  | { card: "basic"; action: BasicActionId };
+  | { card: "basic"; action: BasicActionId }
+  | { card: "reaction"; feature: string; spell?: string; slotLevel?: number | null }
+) &
+  HandIntentExtras;
 
 export type HandCard = {
   id: string;
@@ -52,12 +71,68 @@ export type HandCard = {
   // The sentence needs finishing by hand (a Ready trigger, a Lay on Hands
   // amount), so the card fills the composer instead of sending.
   compose: boolean;
+  // What a composed spend is counted in ("ki" for Touch of the Long Death);
+  // hit points when absent (Lay on Hands).
+  unit?: string;
   intent: HandIntent;
+  // The class options this attack may carry, each already judged by the
+  // engine's checkAttackOptions (Reckless Attack, Stunning Strike, knock out).
+  options?: HandAttackOption[];
+  // The card needs a line from the player before it can go: Ready's trigger.
+  asks?: "trigger";
+  // A reaction card's reason to be offered now ("Goblin 2's scimitar hit
+  // you for 7").
+  prompt?: string;
+  // One pick the card needs beside its target: a spell's form (Command's
+  // word, Bestow Curse's curse, Heat Metal on worn armor), the condition a
+  // restoration ends, the spell a Ready holds. Sent under the tool
+  // argument's own name (hand-intent.ts).
+  choice?: HandChoice;
+  // A spell that leaves an area on the battle map: the square it is laid on
+  // is picked on the board (src/lib/battlemap/hand-area.ts) and sent as the
+  // tool's atX/atY/towardX/towardY.
+  area?: HandArea;
 };
 
-// The turn so far. Shaped after the engine's TurnBudget
-// (src/lib/dm/action-budget.ts) so a server projection of it can be handed
-// straight in; until one exists the Hand keeps its own from what it sent.
+export type HandChoice = {
+  arg: "condition" | "variant" | "readySpell";
+  label: string;
+  options: Array<{ value: string; label: string; note?: string }>;
+  // What is sent when the player picks none (the first option otherwise).
+  fallback?: string;
+  // A readied spell's slot level, by spell name (take_action's `level`).
+  levels?: Record<string, number>;
+};
+
+// The toggles an attack card carries. Open Hand Technique is one choice of
+// three, so its ids carry the rider after a colon and share a group.
+export type HandAttackOptionId =
+  | "reckless"
+  | "stunningStrike"
+  | "nonlethal"
+  | "useInspiration"
+  | "strokeOfLuck"
+  | "hurlThroughHell"
+  | "rapidStrike"
+  | "openHand:prone"
+  | "openHand:push"
+  | "openHand:no reactions";
+
+export type HandAttackOption = {
+  id: HandAttackOptionId;
+  label: string;
+  // What choosing it does, for the toggle's tooltip.
+  note: string;
+  // The engine's refusal when it cannot ride this swing now.
+  disabled: string | null;
+  // Options of one group exclude each other (Open Hand's three riders).
+  group?: "openHand";
+};
+
+// The turn so far, read from the engine's TurnBudget
+// (src/lib/dm/action-budget.ts) through the encounter's public projection
+// (hand-table.ts turnFromEncounter). The Hand keeps no ledger of its own: a
+// card sent is spent when the engine says so.
 export type HandTurn = {
   myTurn: boolean;
   // Whose turn it is when it is not mine, for the tooltip.
@@ -67,9 +142,26 @@ export type HandTurn = {
   reactionUsed: boolean;
   attacksMade: number;
   extraActions?: number;
-  // The bonus-action spell rule: a levelled spell cast with one kind of
-  // action leaves only an action cantrip for the other.
-  leveledSpell?: "action" | "bonus" | null;
+  // Action Surge's additional action, not yet spent.
+  grantedActions?: number;
+  // The engine budget's once-per-turn marks (Martial Arts' strike open, a
+  // levelled or bonus-action spell cast, Sneak Attack spent).
+  marks?: string[];
+  // Flurry of Blows strikes bought and not made.
+  flurryStrikes?: number;
+  // This turn's action went on an attack-roll spell, so Extra Attack is gone.
+  castThisAction?: boolean;
+  // The engine's reading of the fight, so the gates ask canAct itself.
+  table?: HandTable | null;
+};
+
+// What canAct needs to know about the fight, off the public encounter.
+export type HandTable = {
+  round: number;
+  orderReady: boolean;
+  // The combatant the pointer rests on; `id` is empty unless a character.
+  acting: { id: string; name: string } | null;
+  surprised: { acting: string[]; reacting: string[] };
 };
 
 export const FRESH_TURN: HandTurn = {
@@ -78,7 +170,6 @@ export const FRESH_TURN: HandTurn = {
   bonusUsed: false,
   reactionUsed: false,
   attacksMade: 0,
-  leveledSpell: null,
 };
 
 // What the content pack says about a spell. Fetched by the component; the
@@ -134,46 +225,97 @@ export function primaryClass(sheet: CharacterSheet): string {
 
 export type Gate = { reason: string; spent: boolean } | null;
 
-export function standingGate(sheet: CharacterSheet, turn: HandTurn): Gate {
-  if (sheet.deathSaves?.dead) return { reason: `${sheet.name} is dead.`, spent: false };
-  if (sheet.currentHp <= 0 && !sheet.wildShape) {
-    return { reason: `${sheet.name} is down and cannot act.`, spent: false };
-  }
-  const stopped = incapacitatedBy(sheet.conditions);
-  if (stopped) return { reason: `${sheet.name} is ${stopped} and cannot act.`, spent: false };
-  if (!turn.myTurn) {
+// The fight as canAct reads it, built from the public projection. The order
+// is reduced to the one entry canAct looks at (the pointer's), and the
+// surprise list is the server's own answer for this kind of act, so the
+// verdict is the one the server will give.
+export function actingEncounter(turn: HandTurn, kind: ActKind): ActingEncounter | null {
+  const table = turn.table;
+  if (!table) {
+    // No projection (a test, an older server): the floor's word decides.
+    if (turn.myTurn) return null;
     return {
-      reason: turn.currentName ? `It is ${turn.currentName}'s turn.` : "It is not your turn.",
-      spent: false,
+      orderReady: true,
+      round: 2,
+      turnIndex: 0,
+      surprisedIds: [],
+      order: [{ kind: "npc", npcId: "", name: turn.currentName ?? "someone else", initiative: 0 }],
     };
   }
-  return null;
+  const current: OrderEntry[] = table.acting
+    ? [
+        table.acting.id
+          ? { kind: "pc", characterId: table.acting.id, userId: "", name: table.acting.name, initiative: 0 }
+          : { kind: "npc", npcId: "", name: table.acting.name, initiative: 0 },
+      ]
+    : [];
+  return {
+    orderReady: table.orderReady,
+    round: table.round,
+    turnIndex: 0,
+    order: current,
+    surprisedIds: kind === "reaction" ? table.surprised.reacting : table.surprised.acting,
+  };
 }
 
-export function costGate(cost: HandCost, turn: HandTurn, sheet: CharacterSheet): Gate {
-  if (cost === "action" && turn.actionUsed && (turn.extraActions ?? 0) <= 0) {
-    return { reason: "Your action is spent this turn.", spent: true };
-  }
-  if (cost === "bonus" && turn.bonusUsed) {
-    return { reason: "Your bonus action is spent this turn.", spent: true };
-  }
+// Whether this character may act at all right now, in the engine's words
+// (src/lib/dm/can-act.ts): dead, at 0 HP, incapacitated, surprised, the
+// order not rolled, or somebody else's turn. A reaction is asked as one, so
+// it is open on anyone's turn.
+export function standingGate(sheet: CharacterSheet, turn: HandTurn, kind: ActKind = "action"): Gate {
+  const verdict = canAct({ sheet, encounter: actingEncounter(turn, kind), kind });
+  return verdict.ok ? null : { reason: verdict.error, spent: false };
+}
+
+// The turn as the engine's own TurnBudget, so a cost is judged by the same
+// spend functions pc_attack, take_action and the cast guard call, and a
+// refusal reads in their words.
+export function budgetOf(turn: HandTurn, sheet: Pick<CharacterSheet, "id">, allowed = 1): TurnBudget {
+  return {
+    ownerId: sheet.id,
+    round: turn.table?.round ?? 1,
+    actionUsed: turn.actionUsed,
+    bonusUsed: turn.bonusUsed,
+    reactionUsed: turn.reactionUsed,
+    attacksMade: turn.attacksMade,
+    attacksAllowed: Math.max(1, allowed),
+    oncePerTurn: turn.marks ?? [],
+    dashed: false,
+    disengaged: false,
+    ...(turn.extraActions ? { extraActions: turn.extraActions } : {}),
+    ...(turn.grantedActions ? { grantedActions: turn.grantedActions } : {}),
+    ...(turn.flurryStrikes ? { flurryStrikes: turn.flurryStrikes } : {}),
+    ...(turn.castThisAction ? { castThisAction: true } : {}),
+  };
+}
+
+const spentGate = (result: SpendResult): Gate => (result.ok ? null : { reason: result.error, spent: true });
+
+// `what` is the card's name as the engine would name the spend ("Dash",
+// "Longsword"): Haste's extra action pays only for the ones it allows.
+export function costGate(cost: HandCost, turn: HandTurn, sheet: CharacterSheet, what = "that"): Gate {
   if (cost === "reaction") {
-    if (turn.reactionUsed) return { reason: "Your reaction is spent until your next turn.", spent: true };
     const blocked = conditionBlocksReactions(sheet.conditions);
-    if (blocked) return { reason: `No reactions while ${blocked}.`, spent: false };
+    if (blocked) return { reason: `${sheet.name} is ${blocked} and cannot take a reaction.`, spent: false };
+    return spentGate(spendAction(budgetOf(turn, sheet), "reaction", what, sheet.name));
+  }
+  if (cost === "action" || cost === "bonus") {
+    return spentGate(spendAction(budgetOf(turn, sheet), cost, what, sheet.name));
   }
   return null;
 }
 
 // The Attack action stays open until every swing it grants is made, which
-// is what lets a fighter play the same card twice.
-export function attackGate(turn: HandTurn, allowed: number): Gate {
-  if (!turn.actionUsed) return null;
-  if (turn.attacksMade > 0 && turn.attacksMade < allowed) return null;
-  if ((turn.extraActions ?? 0) > 0) return null;
-  return turn.attacksMade >= allowed && turn.attacksMade > 0
-    ? { reason: allowed > 1 ? `All ${allowed} attacks are made this turn.` : "Your attack is made this turn.", spent: true }
-    : { reason: "Your action is spent this turn.", spent: true };
+// is what lets a fighter play the same card twice. Asked of spendAttack
+// itself: Action Surge's action, Haste's one weapon attack and Flurry of
+// Blows' unarmed strikes count exactly as the engine counts them.
+export function attackGate(
+  turn: HandTurn,
+  allowed: number,
+  sheet: Pick<CharacterSheet, "id" | "name">,
+  options: AttackSpendOptions = {},
+): Gate {
+  return spentGate(spendAttack(budgetOf(turn, sheet, allowed), sheet.name, options));
 }
 
 export function gated<T extends HandCard>(card: T, ...gates: Gate[]): T {

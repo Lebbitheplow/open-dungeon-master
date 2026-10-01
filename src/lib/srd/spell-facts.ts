@@ -228,6 +228,7 @@ export function authoredSpells(): AuthoredSpell[] {
 type ManifestSpell = {
   n: string;
   l: number;
+  s?: string;
   c?: string;
   a?: string[];
   r?: boolean;
@@ -250,6 +251,13 @@ function manifestRange(value: ManifestSpell["d"]): SpellRange {
     return { kind: "feet", feet: value };
   }
   return value ? rangeFrom(value) : { kind: "unknown" };
+}
+
+// The school the bundled checklist gives a spell ("evocation"), or null.
+export function bundledSpellSchool(name: string): string | null {
+  const listed = MANIFEST.get(normalize(name));
+  const authored = authoredSpell(listed?.n ?? name);
+  return (listed?.s ?? authored?.school ?? "").trim().toLowerCase() || null;
 }
 
 // What the bundled data says of a spell by name, or null for a name neither

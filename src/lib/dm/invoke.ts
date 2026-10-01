@@ -274,7 +274,10 @@ export async function invokeEngine(
   //
   // Only a person's turn is closed here. A delegated AI turn may still have
   // more adjudications to come on it, so its caller decides when it is done.
-  if (counted) {
+  // Only a call that resolved counts, as in the turn loop: a refusal
+  // changed nothing, and counting it would run a delegated turn into its
+  // cap on the model's mistakes rather than on what it did.
+  if (counted && typeof result.error !== "string") {
     turn[counted] += 1;
   }
   if (actor.kind === "human") {

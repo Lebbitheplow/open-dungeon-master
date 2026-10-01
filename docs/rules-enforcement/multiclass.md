@@ -1,5 +1,7 @@
 # Enforcement audit: multiclass
 
+The second audit and repair (2026-09-30) and the state after it are in [`../rules-enforcement-audit.md`](../rules-enforcement-audit.md); this report describes the first audit.
+
 Area: multiclassing end to end, through the real level-up path (PATCH on
 `src/app/api/campaigns/[campaignId]/sheet/route.ts`), the rest, casting and
 resource engines reached through `invokeEngine`, and the library round trip.

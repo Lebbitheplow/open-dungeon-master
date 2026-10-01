@@ -17,6 +17,7 @@
 
 import subclassesJson from "@/lib/srd/subclasses.json";
 import authoredFeatsJson from "@/lib/srd/authored-feats.json";
+import { authoredFeatureDefs } from "@/lib/srd/authored-feature-defs";
 
 export type FightingStyleId =
   | "archery"
@@ -328,19 +329,21 @@ export const FEATURE_EFFECTS: FeatureDef[] = [
     match: ["aura of protection"],
     effects: [{ kind: "save_bonus", ability: "cha", min: 1 }],
     guidance:
-      "Aura of Protection: the paladin and every ally within 10 feet add the paladin's Charisma modifier (minimum +1) to their saving throws. During a mapped encounter the server applies it to allies from token positions; outside one, apply it yourself when the fiction has them close.",
+      "Aura of Protection: the paladin and every ally within 10 feet (30 from paladin 18) add the paladin's Charisma modifier (minimum +1) to their saving throws while the paladin is conscious. The server applies it to every save it rolls: from token positions on a battle map, and to the whole party off the map. Never add it yourself.",
   },
   {
     match: ["danger sense"],
     effects: [{ kind: "save_advantage", ability: "dex" }],
     guidance:
-      "Danger Sense: advantage on Dexterity saving throws against effects they can see, such as traps and spells.",
+      "Danger Sense: advantage on Dexterity saving throws against effects they can see, such as traps and spells, but not while blinded, deafened or incapacitated. The server applies it.",
   },
   {
-    match: ["evasion"],
+    // The Hunter's Superior Hunter's Defense taken as Evasion is the same
+    // feature by another name.
+    match: ["evasion", "superior hunter's defense: evasion", "superior hunter's defense (evasion)"],
     effects: [{ kind: "evasion" }],
     guidance:
-      "Evasion: on a Dexterity save for half damage they instead take none on a success and half on a failure. The server applies it.",
+      "Evasion: on a Dexterity save for half damage they instead take none on a success and half on a failure. The server applies it on aoe_damage, cast_at_player and apply_hazard; send the full damage and halfOnSave.",
   },
   {
     match: ["jack of all trades"],
@@ -355,12 +358,12 @@ export const FEATURE_EFFECTS: FeatureDef[] = [
       "Remarkable Athlete: half their proficiency bonus (rounded down) on Strength, Dexterity, and Constitution checks that do not already use it, initiative included. The server applies it.",
   },
   {
-    // Recognized but not yet enforced in the dice engine (a floored d20 has
-    // no expression form); the guidance keeps the model honest meanwhile.
+    // Enforced by the roll resolver with the dice grammar's floor suffix
+    // (src/lib/dm/rolls.ts, "1d20f10").
     match: ["reliable talent"],
     effects: [{ kind: "reliable_talent" }],
     guidance:
-      "Reliable Talent: for any ability check they are proficient in, a d20 roll of 9 or lower counts as a 10.",
+      "Reliable Talent: for any ability check they are proficient in, a d20 roll of 9 or lower counts as a 10. The server applies it.",
   },
   {
     match: ["fast movement"],
@@ -551,6 +554,15 @@ const AUTHORED_PARSED = new Map<string, { effects: FeatureEffect[]; guidance: st
   for (const [name, parsed] of AUTHORED_PARSED) {
     if (parsed.effects.length) {
       FEATURE_EFFECTS.push({ match: [name], effects: parsed.effects, guidance: parsed.guidance });
+    }
+  }
+  // The authored features whose hook is one of this table's own shapes
+  // (walking speed, an ability on initiative, a damage rider), typed by hand
+  // in src/lib/srd/authored-effects-data*.ts where the phrasing does not
+  // parse. A name the table already answers keeps its entry.
+  for (const def of authoredFeatureDefs()) {
+    if (!FEATURE_EFFECTS.some((existing) => existing.match.some((term) => def.match.includes(term)))) {
+      FEATURE_EFFECTS.push(def);
     }
   }
 }

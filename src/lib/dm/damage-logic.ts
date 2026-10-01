@@ -37,7 +37,10 @@ function damageTypeOf(raw: string | undefined): string {
 // has to appear as a whole word, and a clause about nonmagical attacks does
 // not cover a magical one. Only the three weapon types are ever conditional
 // on that, so "fire, slashing from nonmagical attacks" still covers fire.
-function lineCovers(line: string, type: string, magical: boolean): boolean {
+// A clause "from nonmagical attacks that aren't silvered" (a werewolf) is
+// also passed by a silvered weapon, and "that aren't adamantine" (a golem)
+// by an adamantine one (SRD 5.1, Silvered Weapons).
+function lineCovers(line: string, type: string, magical: boolean, material: WeaponMaterial = {}): boolean {
   return line
     .toLowerCase()
     .split(";")
@@ -46,8 +49,25 @@ function lineCovers(line: string, type: string, magical: boolean): boolean {
         return false;
       }
       const conditional = clause.includes("nonmagical") && PHYSICAL_TYPES.includes(type);
-      return !(conditional && magical);
+      const passed =
+        magical ||
+        (material.silvered === true && clause.includes("silver")) ||
+        (material.adamantine === true && clause.includes("adamantine"));
+      return !(conditional && passed);
     });
+}
+
+// What a weapon is made of, for the resistances that name it.
+export type WeaponMaterial = { silvered?: boolean; adamantine?: boolean };
+
+// A weapon's material read from its name: "Silvered Longsword",
+// "Adamantine Greataxe".
+export function weaponMaterial(name: string | undefined): WeaponMaterial {
+  const text = (name ?? "").toLowerCase();
+  return {
+    ...(/\bsilver(ed)?\b/.test(text) ? { silvered: true } : {}),
+    ...(/\badamantine\b/.test(text) ? { adamantine: true } : {}),
+  };
 }
 
 // Immunity is no damage and beats the other two. Resistance halves, rounded
@@ -66,20 +86,21 @@ export function damageAdjust(
     magical?: boolean;
     // Resistance to every type, whatever the lines say (petrified).
     resistAll?: boolean;
-  },
+  } & WeaponMaterial,
 ): { amount: number; note: string | null } {
   const wanted = damageTypeOf(type);
   const magical = options?.magical === true;
+  const material: WeaponMaterial = { silvered: options?.silvered, adamantine: options?.adamantine };
   if (!wanted) {
     return options?.resistAll
       ? { amount: Math.floor(amount / 2), note: "resistant to all damage: halved" }
       : { amount, note: null };
   }
-  if (lineCovers(immune, wanted, magical)) {
+  if (lineCovers(immune, wanted, magical, material)) {
     return { amount: 0, note: `immune to ${wanted} damage: no damage` };
   }
-  const resisted = options?.resistAll === true || lineCovers(resist, wanted, magical);
-  const vulnerableTo = lineCovers(vulnerable, wanted, magical);
+  const resisted = options?.resistAll === true || lineCovers(resist, wanted, magical, material);
+  const vulnerableTo = lineCovers(vulnerable, wanted, magical, material);
   if (resisted && vulnerableTo) {
     return {
       amount: Math.floor(amount / 2) * 2,

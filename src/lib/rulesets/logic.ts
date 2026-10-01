@@ -50,6 +50,7 @@ export const VARIANT_RULE_LABELS: Record<keyof Omit<VariantRules, "restVariant">
   powerfulCritical: "Powerful Critical (extra crit dice are maximized)",
   criticalDamageMods: "Critical Damage Mods (modifiers double on a crit)",
   ammunition: "Ammunition is counted",
+  supplies: "Food and water are eaten each day",
 };
 
 // The switches that change what the DM is asked to describe and leave every

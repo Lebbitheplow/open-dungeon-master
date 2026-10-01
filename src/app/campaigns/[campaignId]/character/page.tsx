@@ -14,6 +14,7 @@ import CharacterBuilder, {
 import type { Genre } from "@/lib/schemas/game-settings";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import { navigateTo } from "@/lib/navigation";
+import { refusalText } from "@/app/characters/builder/refusal";
 
 type LibraryCharacter = {
   id: string;
@@ -103,7 +104,7 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setError(data.error || "Could not save the character.");
+        setError(refusalText(data, "Could not save the character."));
         return;
       }
       navigateTo(`/campaigns/${campaignId}`);
@@ -217,7 +218,7 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
           >
             <Plus className="size-4" /> Create a new character instead
           </button>
-          {error ? <p className="motion-shake text-sm text-red-400">{error}</p> : null}
+          {error ? <p className="motion-shake whitespace-pre-line text-sm text-red-400" role="alert">{error}</p> : null}
         </section>
       ) : (
         <>

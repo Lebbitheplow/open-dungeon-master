@@ -31,6 +31,8 @@ export type WornMagicItem = {
   slug?: string;
   equipped?: boolean;
   attuned?: boolean;
+  // Waiting on the short rest attuning takes; holds one of the three places.
+  attuning?: boolean;
   gear?: { magic?: { requiresAttunement: boolean; effects: MagicItemEffect[] } };
 };
 
@@ -73,11 +75,16 @@ export type MagicItemDef = {
 // is optional: a caller with no sheet to hand (the builder's preview of a
 // bare equipment list) passes nothing and no restriction is judged.
 export type Wearer = {
+  // A Potion of Giant Strength's "giant strength (21)" lasts on the sheet as
+  // a timed condition (src/lib/dm/consumables.ts).
+  conditions?: string[];
   class?: string;
   classes?: Array<{ id: string }>;
   race?: string;
   alignment?: string;
   spellcasting?: unknown;
+  // Use Magic Device (Thief 13) ignores class, race and level requirements.
+  features?: Array<{ name: string }>;
 };
 
 const MAGIC_ITEMS = (magicItemsJson as { items: MagicItemDef[] }).items;
@@ -149,19 +156,20 @@ export function mayAttune(def: Pick<MagicItemDef, "attunedBy">, wearer: Wearer):
   if (!rule) {
     return true;
   }
-  if (rule.classes?.length) {
+  const device = (wearer.features ?? []).some((f) => /^use magic device\b/i.test(f.name.trim()));
+  if (rule.classes?.length && !device) {
     const held = [lower(wearer.class), ...(wearer.classes ?? []).map((entry) => lower(entry.id))];
     if (!rule.classes.some((name) => held.includes(name))) {
       return false;
     }
   }
-  if (rule.spellcaster && !isSpellcaster(wearer)) {
+  if (rule.spellcaster && !device && !isSpellcaster(wearer)) {
     return false;
   }
   if (rule.alignment && !lower(wearer.alignment).includes(rule.alignment)) {
     return false;
   }
-  if (rule.race && !lower(wearer.race).replace(/_/g, " ").includes(rule.race)) {
+  if (rule.race && !device && !lower(wearer.race).replace(/_/g, " ").includes(rule.race)) {
     return false;
   }
   return true;
@@ -258,7 +266,14 @@ export function effectiveAbilities(
   equipment: WornMagicItem[],
   wearer?: Wearer,
 ): Record<Ability, number> {
-  const set = magicItemRiders(equipment, wearer).abilitySet;
+  const set = { ...magicItemRiders(equipment, wearer).abilitySet };
+  // A Potion of Giant Strength sets Strength for an hour, like the belt.
+  for (const condition of wearer?.conditions ?? []) {
+    const potion = /^giant strength \((\d+)\)$/i.exec(condition.trim());
+    if (potion) {
+      set.str = Math.max(set.str ?? 0, Math.min(30, Number(potion[1])));
+    }
+  }
   if (!Object.keys(set).length) {
     return abilities;
   }
@@ -288,7 +303,8 @@ export function attunementProblem(
   if (def && wearer && !mayAttune(def, wearer)) {
     return `${item.name} can be attuned only by ${def.attunedBy?.text ?? "someone else"}, and ${who} is not one.`;
   }
-  const others = equipment.filter((entry) => entry !== item && entry.attuned);
+  // An attunement still waiting on its short rest holds its place too.
+  const others = equipment.filter((entry) => entry !== item && (entry.attuned || entry.attuning));
   if (def && others.some((entry) => defOf(entry)?.match === def.match)) {
     return `${who} is already attuned to a ${def.name}, and a creature attunes to one copy of an item at most.`;
   }

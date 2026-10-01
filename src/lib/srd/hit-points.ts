@@ -25,6 +25,10 @@ export type HpInput = {
   con: number;
   // Flat extra per character level: Dwarven Toughness (1), the Tough feat (2).
   perLevelBonus?: number;
+  // Hit points a feature adds per level of one class, already summed for the
+  // levels held: Draconic Resilience's one per sorcerer level
+  // (src/lib/srd/trait-rules.ts featureHitPoints).
+  extraHp?: number;
 };
 
 const conModOf = (score: number) => Math.floor((score - 10) / 2);
@@ -66,9 +70,11 @@ export function derivedMaxHp(method: Exclude<HpMethod, "rolled">, input: HpInput
   if (!first) {
     return 1;
   }
-  return laterLevels(input.classes).reduce(
-    (sum, die) => sum + levelHpGain(methodFace(method, die), input.con, bonus),
-    firstLevelHp(first.die, input.con, bonus),
+  return (
+    laterLevels(input.classes).reduce(
+      (sum, die) => sum + levelHpGain(methodFace(method, die), input.con, bonus),
+      firstLevelHp(first.die, input.con, bonus),
+    ) + (input.extraHp ?? 0)
   );
 }
 
@@ -80,7 +86,7 @@ export function hpRange(input: HpInput): { min: number; max: number } {
   if (!first) {
     return { min: 1, max: 1 };
   }
-  const base = firstLevelHp(first.die, input.con, bonus);
+  const base = firstLevelHp(first.die, input.con, bonus) + (input.extraHp ?? 0);
   const dice = laterLevels(input.classes);
   return {
     min: dice.reduce((sum) => sum + levelHpGain(1, input.con, bonus), base),

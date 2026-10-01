@@ -85,7 +85,7 @@ await test("multiattack lines with null bonus become traits, dice attacks parse"
   };
   const stats = parseMonster(dragon, 17);
   assert.equal(stats.attacks.length, 1);
-  assert.equal(stats.attacks[0].damage, "2d10+2d6+8+2d6");
+  assert.equal(stats.attacks[0].damage, "2d10+2d6+8");
   assert.ok(stats.traits.some((line) => line.startsWith("Multiattack")));
 });
 

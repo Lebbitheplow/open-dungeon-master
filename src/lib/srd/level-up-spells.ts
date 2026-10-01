@@ -24,6 +24,7 @@ import {
 } from "@/lib/srd/spell-prep";
 import type { AbilityScores } from "@/lib/schemas/sheet";
 import type { SpellFacts } from "@/lib/srd/legality/types";
+import { thirdCasterOutside, thirdCasterSchoolProblem } from "@/lib/srd/third-caster";
 
 const lower = (name: string) => name.trim().toLowerCase();
 const has = (list: string[], name: string) => list.some((entry) => lower(entry) === lower(name));
@@ -205,6 +206,22 @@ export function levelUpSpells(input: SpellLevelUp): SpellLevelUpResult {
             ? `A ${label} has no spell slots yet, so ${spell.name} cannot be learned.`
             : `${spell.name} is a level ${spell.level} spell; a ${label} casts up to level ${top}.`,
       };
+    }
+  }
+
+  // ---- a third caster's two schools (src/lib/srd/third-caster.ts) ----
+  if (newSpells.length) {
+    const schoolOf = (name: string) => ({ name, school: input.spellOf(name)?.school ?? null });
+    const levelled = (list: string[]) => dedupeNames(list).filter((name) => !isGranted(name)).map(schoolOf);
+    const schools = thirdCasterSchoolProblem({
+      classId: before.classId,
+      subclass: input.subclass,
+      level: input.level,
+      spells: levelled(after.known.length ? after.known : after.prepared),
+      heldOutside: thirdCasterOutside(before.classId, levelled(before.known.length ? before.known : before.prepared)),
+    });
+    if (schools) {
+      return { error: schools };
     }
   }
 

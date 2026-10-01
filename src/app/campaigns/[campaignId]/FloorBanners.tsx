@@ -6,6 +6,7 @@ import { cn } from "@/lib/cn";
 import { SessionBanner, bannerButtonClass } from "@/app/campaigns/[campaignId]/SessionBanner";
 import type { Floor } from "@/lib/db/campaigns";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
+import { REFLEX_LABEL, currentOrderIndex, orderRowKey } from "@/lib/battlemap/initiative-rows";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // Spotlight, held-responses, and initiative banners above the composer;
@@ -30,6 +31,8 @@ export function FloorBanners({
   onRelease: () => void;
 }) {
   const [endingTurn, setEndingTurn] = useState(false);
+  // The end-turn route's refusal, in its own words, under the banner.
+  const [refusal, setRefusal] = useState("");
   const myInitiativeTurn =
     floor.mode === "initiative" && meUserId !== "" && floor.userIds.includes(meUserId);
 
@@ -37,8 +40,15 @@ export function FloorBanners({
   // actions stay open), so this is the player's way to say "done".
   async function endTurn() {
     setEndingTurn(true);
+    setRefusal("");
     try {
-      await fetch(`/api/campaigns/${campaignId}/encounter/end-turn`, { method: "POST" });
+      const response = await fetch(`/api/campaigns/${campaignId}/encounter/end-turn`, { method: "POST" });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string };
+        setRefusal(data.error ?? "The turn could not be ended.");
+      }
+    } catch {
+      setRefusal("Could not reach the table.");
     } finally {
       setEndingTurn(false);
     }
@@ -83,16 +93,23 @@ export function FloorBanners({
               {encounter?.orderReady && encounter.order.length ? (
                 <>
                   {encounter.order.map((entry, index) => {
-                    const current = index === encounter.turnIndex;
+                    // A player's order leaves hidden combatants out, so the
+                    // pointer's index can point past them; the engine names
+                    // who it rests on. A thief's second round-1 turn is a
+                    // second row with the same id (Thief's Reflexes).
+                    const current = index === currentOrderIndex(encounter.order, encounter.turnIndex, encounter.acting);
                     return (
                       <span
-                        key={entry.id}
+                        key={orderRowKey(entry, index)}
+                        title={entry.reflex ? REFLEX_LABEL : undefined}
                         className={cn(
+                          "transition-opacity duration-200",
                           current ? "font-semibold" : "opacity-60",
                         )}
                       >
                         {index > 0 ? " > " : ""}
                         {entry.name}
+                        {entry.reflex ? <sup className="motion-pop ml-0.5 text-[9px] text-amber-300">2nd</sup> : null}
                       </span>
                     );
                   })}
@@ -101,6 +118,11 @@ export function FloorBanners({
                 <>{floor.currentName}&apos;s turn</>
               )}
           </span>
+          {refusal ? (
+            <span key={refusal} role="alert" className="mt-0.5 block animate-fade-up text-xs text-amber-200">
+              {refusal}
+            </span>
+          ) : null}
         </SessionBanner>
       ) : null}
       {floor.mode === "spotlight" ? (

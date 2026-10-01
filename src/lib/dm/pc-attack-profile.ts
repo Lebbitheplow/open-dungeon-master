@@ -7,7 +7,11 @@
 import { getMounts } from "@/lib/db/mounts";
 import { isValidExpression } from "@/lib/dice";
 import { acBreakdownFor, computeSheetDerived, spellAttackFor, type SheetDerived } from "@/lib/srd";
-import { spellDamageFor, spellMechanicsFor } from "@/lib/content";
+import { spellDamageFor, spellFactsFor, spellMechanicsFor, spellSchoolFor } from "@/lib/content";
+import { spellDamageRiders } from "@/lib/srd/spell-damage-riders";
+import { isMeleeSpellAttack } from "@/lib/dm/spell-attack-riders";
+import type { ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { lastCastSlot } from "@/lib/dm/spell-effects";
 import { castRedirect } from "@/lib/dm/cast-tools";
 import {
   resolveAttackWeapon,
@@ -16,11 +20,15 @@ import {
   type AttackProfile,
 } from "@/lib/dm/attack-logic";
 import { handsRuling, otherHandArmed } from "@/lib/dm/attack-rules";
+import { martialArtsApplies } from "@/lib/dm/pc-attack-options";
+import { shillelaghSwing } from "@/lib/dm/attack-features";
 import { combatRiders, type CombatRiders } from "@/lib/srd/feature-effects";
-import { grantedAttackDice, grantedAttackFor } from "@/lib/srd/condition-effects";
+import { grantedAttackDice, grantedAttackFor } from "@/lib/srd/granted-attacks";
+import { authoredNaturalWeapon, authoredReachBonus, naturalWeaponGated } from "@/lib/srd/authored-effects-more";
 import { allSpellNames } from "@/lib/srd/spell-lists";
 import { SPECIAL_WEAPONS } from "@/lib/srd/weapons";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { summonAttackProfile } from "@/lib/dm/summon-rules";
 
 export type AttackKind = "weapon" | "spell" | "natural" | "granted";
 
@@ -62,11 +70,18 @@ export function buildAttackProfile(
   const grantedTerm = [args.weapon, args.spell].filter(Boolean).join(" ").trim();
   const granted = grantedTerm ? grantedAttackFor(sheet.conditions, grantedTerm) : null;
   let grantedBonusAction = false;
+  const natural = !granted && !args.spell?.trim() ? authoredNaturalWeapon(sheet, args.weapon, derived.abilityMods) : null;
   if (granted) {
     if (derived.spellAttack === null) {
       return { error: `${sheet.name} has no spell attack bonus for ${granted.attack.name}.` };
     }
-    const dice = grantedAttackDice(granted.attack, sheet.level);
+    // Cast from a higher slot, a scaling attack (Spiritual Weapon) rolls the
+    // slot's dice: the level the condition carries, else the caster's last
+    // casting of the spell on the audit trail.
+    const slotLevel =
+      (sheet.conditionMeta as ConditionMetaMap)[granted.condition]?.slotLevel ??
+      (granted.attack.upcast ? lastCastSlot(sheet.id, granted.attack.name) : null);
+    const dice = grantedAttackDice(granted.attack, sheet.level, slotLevel);
     const abilityMod =
       granted.attack.abilityToDamage && sheet.spellcasting
         ? derived.abilityMods[sheet.spellcasting.ability]
@@ -127,7 +142,8 @@ export function buildAttackProfile(
       userId: sheet.userId,
       casterLevel: sheet.level,
     });
-    const damageArg = scaled?.dice ?? (args.damage ?? "").trim();
+    // A spell attack that deals no damage (Ray of Enfeeblement) rolls none.
+    const damageArg = scaled?.dice ?? ((args.damage ?? "").trim() || (resolvedMech?.mech.noDamage ? "0" : ""));
     if (!damageArg || !isValidExpression(damageArg)) {
       return {
         error: `Spell attacks need the spell's damage dice, e.g. damage="1d10". Send pc_attack again with a damage expression.`,
@@ -141,12 +157,18 @@ export function buildAttackProfile(
       { spellAttack: spellAttackFor(sheet, spellName) ?? derived.spellAttack },
       spellName,
       damageArg,
-      (args.damageType ?? mechDamageType ?? "").trim().toLowerCase(),
+      // A known spell deals its own damage type; the caller's word counts
+      // only for a spell the content does not know (SRD 5.1).
+      (mechDamageType || args.damageType || "").trim().toLowerCase(),
     );
     if (!spellProfile) {
       return { error: `${sheet.name} has no spell attack bonus.` };
     }
-    profile = spellProfile;
+    // A melee spell attack (a touch) is a melee attack: it reaches only the
+    // creature beside the caster, and the rules for ranged attacks do not
+    // apply to it.
+    const melee = isMeleeSpellAttack(spellName, spellFactsFor(spellName, sheet.userId)?.range.kind);
+    profile = melee ? { ...spellProfile, ranged: false, reachTiles: 1, rangeTiles: 1 } : spellProfile;
     kind = "spell";
     // Option riders on named attack spells (Agonizing Blast: +CHA per
     // Eldritch Blast beam).
@@ -163,6 +185,36 @@ export function buildAttackProfile(
         }
       }
     }
+    // Empowered Evocation, Elemental Affinity (src/lib/srd/spell-damage-riders.ts).
+    const facts = spellFactsFor(spellName, sheet.userId);
+    const spellRiders = spellDamageRiders(sheet, { school: spellSchoolFor(spellName, sheet.userId), damageType: mechDamageType || args.damageType, level: facts?.level ?? 0, classes: facts?.classes });
+    if (spellRiders.flat > 0 || spellRiders.dice.length) {
+      const extra = [...spellRiders.dice, ...(spellRiders.flat > 0 ? [String(spellRiders.flat)] : [])].join("+");
+      profile = { ...profile, damageExpression: `${profile.damageExpression}+${extra}`, riderNotes: [...profile.riderNotes, ...spellRiders.notes] };
+    }
+  } else if (sheet.summon && !sheet.wildShape) {
+    // A creature a spell made fights with its stat block (summon-rules.ts).
+    const summoned = summonAttackProfile(sheet, args.weapon);
+    if (!summoned || "error" in summoned) {
+      return summoned ?? { error: `${sheet.name} has no attack.` };
+    }
+    profile = summoned;
+    kind = "natural";
+  } else if (!sheet.wildShape?.attacks?.length && (natural || naturalWeaponGated(sheet, args.weapon))) {
+    // A weapon a subclass feature is (Form of the Beast's claws, the
+    // Soulknife's psychic blade, Radiant Sun Bolt): a proficient weapon of
+    // its kind, with no item behind it (src/lib/srd/authored-effects-more.ts).
+    if (!natural) {
+      return { error: `${sheet.name}'s ${args.weapon} exists only while raging (${naturalWeaponGated(sheet, args.weapon)}). They rage first (use_resource Rage), or attack with a weapon they carry.` };
+    }
+    // The bonus-action second blade keeps its modifier and rolls its own die.
+    const srd = args.offHand && natural.second ? { ...natural.srd, damage: `${natural.second} ${natural.weapon.type}` } : natural.srd;
+    profile = weaponAttackProfile(derived, [...sheet.proficiencies.weapons, "simple", srd.name.toLowerCase()], { displayName: srd.name, srd, unarmed: false, carried: true }, {
+      riders,
+      martialArts: false,
+    });
+    profile = { ...profile, proficient: true, riderNotes: [...profile.riderNotes, `${natural.feature}: ${srd.damage}`] };
+    kind = "weapon";
   } else if (sheet.wildShape?.attacks?.length) {
     // Transformed: the form's natural attacks replace the sheet's weapons,
     // with the statblock's own to-hit and damage. A named attack matches
@@ -217,8 +269,12 @@ export function buildAttackProfile(
     if ("error" in hands) {
       return hands;
     }
-    profile = weaponAttackProfile(derived, sheet.proficiencies.weapons, resolved, {
+    // Shillelagh: a club or quarterstaff swings with the spellcasting
+    // ability and a d8, and is magical (src/lib/dm/attack-features.ts).
+    const shillelagh = shillelaghSwing(sheet, resolved, derived);
+    profile = weaponAttackProfile(shillelagh?.derived ?? derived, sheet.proficiencies.weapons, shillelagh?.resolved ?? resolved, {
       riders,
+      martialArts: martialArtsApplies(sheet),
       twoHanded: hands.twoHanded,
       offHand: args.offHand,
       otherWeaponInHand: otherHandArmed({
@@ -230,8 +286,16 @@ export function buildAttackProfile(
     if (hands.note) {
       profile = { ...profile, riderNotes: [...profile.riderNotes, hands.note] };
     }
+    if (shillelagh) {
+      profile = { ...profile, magicWeapon: true, riderNotes: [...profile.riderNotes, shillelagh.note] };
+    }
     kind = "weapon";
     special = lance ? "lance" : resolved.srd?.name === SPECIAL_WEAPONS.net ? "net" : null;
+  }
+  // Demiurgic Colossus: a raging giant's melee reach grows by 5 feet.
+  const reach = kind === "weapon" && !profile.ranged ? authoredReachBonus(sheet) : null;
+  if (reach) {
+    profile = { ...profile, reachTiles: profile.reachTiles + reach.tiles, riderNotes: [...profile.riderNotes, `${reach.feature}: ${reach.tiles * 5} more feet of reach`] };
   }
   return { profile, derived, riders, scalingNote, grantedBonusAction, kind, special };
 }

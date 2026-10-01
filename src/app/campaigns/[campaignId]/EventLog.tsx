@@ -145,6 +145,10 @@ export function EventLog({
   steersStory?: boolean;
 }) {
   const [busyId, setBusyId] = useState("");
+  // The server's sentence for an undo it refused, under the row it was for
+  // (U:UC10). Before, anything but a 409 was dropped and the row just sat
+  // there looking undoable.
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [confirming, setConfirming] = useState<{
     warnings: string[];
     run: () => Promise<void>;
@@ -155,27 +159,57 @@ export function EventLog({
   const nameFor = (entry: AuditEntry) =>
     entry.characterName ?? nameForCharacter(entry.characterId);
 
+  function noteError(busyKey: string, message: string) {
+    setErrors((current) => {
+      const next = { ...current };
+      if (message) {
+        next[busyKey] = message;
+      } else {
+        delete next[busyKey];
+      }
+      return next;
+    });
+  }
+
+  async function send(url: string, body: Record<string, unknown>): Promise<{ response: Response | null; data: Record<string, unknown> }> {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).catch(() => null);
+    const data = response ? ((await response.json().catch(() => ({}))) as Record<string, unknown>) : {};
+    return { response, data };
+  }
+
+  const refusal = (response: Response | null, data: Record<string, unknown>) =>
+    !response
+      ? "Could not reach the server."
+      : typeof data.error === "string" && data.error
+        ? data.error
+        : "That change could not be undone.";
+
   async function post(url: string, body: Record<string, unknown>, busyKey: string) {
     setBusyId(busyKey);
+    noteError(busyKey, "");
     try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (response.status === 409) {
-        const data = await response.json().catch(() => ({}));
+      const { response, data } = await send(url, body);
+      // 409 with warnings: the server wants a second yes (later changes
+      // stacked on this one). A 409 without them is a refusal like any other.
+      if (response?.status === 409 && Array.isArray(data.warnings) && data.warnings.length) {
         setConfirming({
-          warnings: Array.isArray(data.warnings) ? data.warnings : [],
+          warnings: data.warnings as string[],
           run: async () => {
-            await fetch(url, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ ...body, confirm: true }),
-            });
+            const retry = await send(url, { ...body, confirm: true });
             setConfirming(null);
+            if (!retry.response?.ok) {
+              noteError(busyKey, refusal(retry.response, retry.data));
+            }
           },
         });
+        return;
+      }
+      if (!response?.ok) {
+        noteError(busyKey, refusal(response, data));
       }
     } finally {
       setBusyId("");
@@ -254,6 +288,9 @@ export function EventLog({
                   Revert this turn ({liveByTurn.get(turnId)})
                 </button>
               ) : null}
+              {showRevertTurn && errors[`turn:${turnId}`] ? (
+                <p role="alert" className="motion-shake text-[11px] text-red-300">{errors[`turn:${turnId}`]}</p>
+              ) : null}
               <div
                 className={cn(
                   "rounded-md border border-stone-800 bg-stone-950/40 px-2.5 py-1.5 text-xs text-stone-300 transition-opacity duration-[260ms] ease-settle",
@@ -276,7 +313,8 @@ export function EventLog({
                       disabled={busyId === entry.id}
                       onClick={() => undoEntry(entry)}
                       title="Undo this change (restores the sheet fields it touched)"
-                      className="shrink-0 text-stone-600 hover:text-amber-300"
+                      aria-label="Undo this change"
+                      className="-my-1.5 -mr-1.5 inline-flex size-8 shrink-0 items-center justify-center rounded-md text-stone-600 hover:text-amber-300 motion-nudge"
                     >
                       {busyId === entry.id ? (
                         <Loader2 className="size-3 animate-spin" />
@@ -288,6 +326,9 @@ export function EventLog({
                 </div>
                 {entry.reason ? (
                   <span className="block pl-4.5 text-[11px] text-stone-500">{entry.reason}</span>
+                ) : null}
+                {errors[entry.id] ? (
+                  <span role="alert" className="motion-shake block pl-4.5 text-[11px] text-red-300">{errors[entry.id]}</span>
                 ) : null}
               </div>
             </li>

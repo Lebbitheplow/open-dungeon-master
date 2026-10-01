@@ -49,6 +49,9 @@ export type TurnBudget = {
   // This turn's action went on casting a spell (an attack-roll spell through
   // pc_attack), so the swings of Extra Attack are not there to take.
   castThisAction?: boolean;
+  // Flurry of Blows: bonus-action unarmed strikes still to make this turn,
+  // bought with 1 ki after the Attack action (src/lib/dm/bonus-actions.ts).
+  flurryStrikes?: number;
 };
 
 export function freshBudget(input: {
@@ -174,11 +177,35 @@ export function spendAction(
   };
 }
 
+// What kind of attack a swing is, for the spends that care. `unarmed` lets
+// a Flurry of Blows strike be spent once the Attack action's own swings are
+// gone; `hasteOk: false` keeps Haste's extra action, which buys one WEAPON
+// attack, from paying for a grapple or a shove.
+export type AttackSpendOptions = { unarmed?: boolean; hasteOk?: boolean };
+
 // One swing of the Attack action. The first attack spends the action; the
 // rest come free until Extra Attack runs out. Off-hand attacks are a bonus
 // action instead and go through spendAction.
-export function spendAttack(budget: TurnBudget, who: string): SpendResult {
+export function spendAttack(
+  budget: TurnBudget,
+  who: string,
+  options: AttackSpendOptions = {},
+): SpendResult {
   const swingsGone = budget.attacksMade >= budget.attacksAllowed || budget.castThisAction === true;
+  // Flurry of Blows is spent only once the Attack action has no swing left
+  // to give, so a monk with Extra Attack uses both before the flurry.
+  if (
+    options.unarmed &&
+    (budget.flurryStrikes ?? 0) > 0 &&
+    (swingsGone || (budget.attacksMade === 0 && budget.actionUsed))
+  ) {
+    const left = (budget.flurryStrikes ?? 0) - 1;
+    return {
+      ok: true,
+      budget: { ...budget, flurryStrikes: left },
+      note: `${who} makes a Flurry of Blows strike (${left} left this turn).`,
+    };
+  }
   if (swingsGone || (budget.attacksMade === 0 && budget.actionUsed)) {
     // An additional action (Action Surge) is a whole Attack action: the
     // first swing spends it and Extra Attack counts again from one.
@@ -191,7 +218,8 @@ export function spendAttack(budget: TurnBudget, who: string): SpendResult {
     }
     // The normal Attack action is gone; the Haste extra action buys exactly
     // one more weapon attack.
-    const extra = spendExtraAction(budget, "one weapon attack", who);
+    const extra =
+      options.hasteOk === false ? null : spendExtraAction(budget, "one weapon attack", who);
     if (extra && extra.ok) {
       return {
         ...extra,
@@ -290,6 +318,9 @@ export function describeBudget(budget: TurnBudget): string {
   }
   if ((budget.grantedActions ?? 0) > 0) {
     parts.push("an additional action (Action Surge)");
+  }
+  if ((budget.flurryStrikes ?? 0) > 0) {
+    parts.push(`${budget.flurryStrikes} Flurry of Blows strike${budget.flurryStrikes === 1 ? "" : "s"}`);
   }
   if ((budget.extraActions ?? 0) > 0) {
     parts.push("an extra action (Haste)");

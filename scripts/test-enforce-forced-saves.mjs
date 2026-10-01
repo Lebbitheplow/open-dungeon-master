@@ -166,9 +166,12 @@ await test("The DM console's forms for Cast at a player and Cast at an enemy rea
   world.clearDice();
   assert.equal(listed.ok, true, listed.error);
   assert.equal(listed.result.saved, true);
-  // Cast at an enemy asks for the target and the save its handler reads.
+  // Cast at an enemy asks for the caster, the target and the spell, as its
+  // handler does: a known spell brings its own save (the form still offers
+  // the save for one the server does not know).
   const names = adjudication("cast_at_enemy").fields.filter((field) => field.required).map((field) => field.name);
-  assert.deepEqual(names.sort(), ["characterId", "saveAbility", "spell", "targetEnemyId"]);
+  assert.deepEqual(names.sort(), ["characterId", "spell", "targetEnemyId"]);
+  assert.ok(adjudication("cast_at_enemy").fields.some((field) => field.name === "saveAbility"));
 });
 
 reset();

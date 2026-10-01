@@ -1626,6 +1626,213 @@
      "starry form: dragon"
     ]
    }
+  },
+  {
+   "id": "sub_embodiment_of_the_law",
+   "displayName": "Embodiment of the Law",
+   "match": [
+    "embodiment of the law"
+   ],
+   "uses": 1,
+   "ability": "wis",
+   "recharge": "long",
+   "guidance": "Casting an enchantment spell of 1st level or higher as a bonus action instead of an action. Spend it with use_resource, then cast the spell with its own tool."
+  },
+  {
+   "id": "sub_cauterizing_flames",
+   "displayName": "Cauterizing Flames",
+   "match": [
+    "cauterizing flames"
+   ],
+   "uses": 1,
+   "ability": null,
+   "proficiency": 1,
+   "recharge": "long",
+   "guidance": "A reaction when a creature dies near the druid or the Wildfire Spirit: the flame heals an ally (variant 'heal', targetCharacterId) or burns an enemy (variant 'burn', targetEnemyId) for 2d10 + WIS. The server rolls and applies it."
+  },
+  {
+   "id": "sub_unwavering_mark",
+   "displayName": "Unwavering Mark",
+   "match": [
+    "unwavering mark"
+   ],
+   "uses": 1,
+   "ability": "str",
+   "recharge": "long",
+   "guidance": "The bonus-action attack against a marked creature that attacked someone else; the mark itself the server lays on every melee hit."
+  },
+  {
+   "id": "sub_bulwark_of_force",
+   "displayName": "Bulwark of Force",
+   "match": [
+    "bulwark of force"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "A bonus action: the psi warrior and up to INT-modifier allies within 30 feet gain half cover (+2 AC, +2 DEX saves) for a minute. Once per long rest, or by spending a Psionic Energy die. The server applies it."
+  },
+  {
+   "id": "sub_telekinetic_master",
+   "displayName": "Telekinetic Master",
+   "match": [
+    "telekinetic master"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "Telekinesis once without a slot; while concentrating on it, a weapon attack as a bonus action (pc_attack bonusAttack 'feature')."
+  },
+  {
+   "id": "sub_elder_champion",
+   "displayName": "Elder Champion",
+   "match": [
+    "elder champion"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "An action: for a minute, 10 hit points at the start of each turn and enemies within 10 feet save at disadvantage against the paladin's spells. The server applies both."
+  },
+  {
+   "id": "sub_avenging_angel",
+   "displayName": "Avenging Angel",
+   "match": [
+    "avenging angel"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "An action: for an hour, a 60-foot flying speed; enemies within 30 feet save (WIS) or are frightened, and attacks against the frightened have advantage. The server rolls the saves."
+  },
+  {
+   "id": "sub_invincible_conqueror",
+   "displayName": "Invincible Conqueror",
+   "match": [
+    "invincible conqueror"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "An action: resistance to all damage for a minute (the server applies it); the extra attack and the 19-20 critical are narrated."
+  },
+  {
+   "id": "sub_living_legend",
+   "displayName": "Living Legend",
+   "match": [
+    "living legend"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "A bonus action: advantage on Charisma checks for a minute (the server applies it); the reroll of a miss and the turned save are narrated."
+  },
+  {
+   "id": "sub_mortal_bulwark",
+   "displayName": "Mortal Bulwark",
+   "match": [
+    "mortal bulwark"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "A bonus action: truesight 120 feet and advantage on attacks against aberrations, celestials, elementals, fey and fiends for a minute. The server applies the advantage."
+  },
+  {
+   "id": "sub_exalted_champion",
+   "displayName": "Exalted Champion",
+   "match": [
+    "exalted champion"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "An action: for an hour, resistance to nonmagical weapon damage and advantage on Wisdom saves. The server applies both to the paladin."
+  },
+  {
+   "id": "sub_dread_lord",
+   "displayName": "Dread Lord",
+   "match": [
+    "dread lord"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "An action: for a minute, attacks against the oathbreaker are at disadvantage, enemies starting a turn within 30 feet take 4d10 psychic, and a bonus-action spectral strike deals 4d10 psychic (pc_attack weapon \"Dread Lord's Shadows\"). The server applies all of it."
+  },
+  {
+   "id": "sub_wind_soul",
+   "displayName": "Wind Soul",
+   "match": [
+    "wind soul"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "An action: the sorcerer and up to 3 + CHA-modifier creatures within 30 feet gain a flying speed for an hour. The server marks them flying."
+  },
+  {
+   "id": "sub_elemental_gift",
+   "displayName": "Elemental Gift",
+   "match": [
+    "elemental gift"
+   ],
+   "uses": 1,
+   "ability": null,
+   "proficiency": 1,
+   "recharge": "long",
+   "guidance": "A bonus action: a 30-foot flying speed for 10 minutes (use_resource 'Elemental Flight'). The resistance is chosen once with use_resource 'Elemental Gift' and the patron's type as the variant."
+  },
+  {
+   "id": "sub_defensive_field",
+   "displayName": "Defensive Field",
+   "match": [
+    "defensive field"
+   ],
+   "uses": 1,
+   "ability": null,
+   "proficiency": 1,
+   "recharge": "long",
+   "guidance": "A bonus action in Guardian armor: temporary hit points equal to the artificer level (use_resource 'Defensive Field')."
+  },
+  {
+   "id": "sub_perfected_armor",
+   "displayName": "Perfected Armor",
+   "match": [
+    "perfected armor"
+   ],
+   "uses": 1,
+   "ability": null,
+   "proficiency": 1,
+   "recharge": "long",
+   "guidance": "A reaction in Guardian armor: a Large or smaller creature within 30 feet makes a Strength save or is pulled in and knocked prone. The server rolls it (use_reaction 'Perfected Armor')."
+  },
+  {
+   "id": "sub_arcane_ward",
+   "displayName": "Arcane Ward",
+   "match": [
+    "arcane ward"
+   ],
+   "uses": 1,
+   "ability": null,
+   "byLevel": true,
+   "levelTimes": 2,
+   "plusAbility": "int",
+   "recharge": "long",
+   "passive": true,
+   "guidance": "The ward's hit points: twice the wizard level plus the Intelligence modifier. The first abjuration spell of 1st level or higher after a long rest raises it at full strength, damage to the wizard lands on it first, and each later abjuration spell restores twice its level. The server keeps it; nobody spends it by hand."
+  },
+  {
+   "id": "sub_arcane_ward_raised",
+   "displayName": "Arcane Ward raised",
+   "match": [
+    "arcane ward"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "passive": true,
+   "guidance": "Whether the Arcane Ward has been raised since the last long rest (it is raised once a day, by the first abjuration spell of 1st level or higher). The server keeps it."
   }
  ]
 }

@@ -57,6 +57,8 @@ import {
 import { handleGenerateImage } from "@/lib/dm/images";
 import { handleRequestRoll } from "@/lib/dm/invoke-roll";
 import { handleSplitDamage } from "@/lib/dm/split-damage";
+import { strictBooleanArgs } from "@/lib/dm/arg-coerce";
+import { EXPLORE_TOOL_NAMES, handleExploreCall } from "@/lib/dm/explore-tools";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -74,10 +76,12 @@ export type DispatchContext = {
 
 export async function dispatchAdjudication(
   name: string,
-  rawArguments: string,
+  sentArguments: string,
   context: DispatchContext,
 ): Promise<Record<string, unknown>> {
   const { campaign, turn, sheets, sheetsById } = context;
+  // "false" sent as a string is false (src/lib/dm/arg-coerce.ts).
+  const rawArguments = strictBooleanArgs(sentArguments);
 
   if (MUTATIONS.has(name)) {
     return applyDmMutation(campaign, turn.id, name, rawArguments, sheets, sheetsById).result;
@@ -87,6 +91,11 @@ export async function dispatchAdjudication(
       realDiceUserIds: context.realDiceUserIds,
       toolCallId: null,
     }).result;
+  }
+
+  // Lifting, lifestyles, downtime and afflictions (src/lib/dm/explore-tools.ts).
+  if ((EXPLORE_TOOL_NAMES as readonly string[]).includes(name)) {
+    return handleExploreCall(campaign, turn, name, rawArguments, sheets, sheetsById);
   }
 
   switch (name) {
@@ -182,9 +191,9 @@ export async function dispatchAdjudication(
     case "mount_up":
       return handleMountUp(campaign, rawArguments, sheets, sheetsById);
     case "dismount":
-      return handleDismount(campaign, rawArguments, sheets, sheetsById);
+      return handleDismount(campaign, rawArguments, sheets, sheetsById, turn);
     case "damage_object":
-      return handleDamageObject(rawArguments);
+      return handleDamageObject(rawArguments, campaign, turn);
     case "add_companion":
       return handleAddCompanion(campaign, rawArguments, sheets);
     case "dismiss_companion":

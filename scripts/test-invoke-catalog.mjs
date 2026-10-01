@@ -9,7 +9,7 @@
 // modules pull in the database layer and this check has no business opening
 // one.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { register } from "node:module";
@@ -52,6 +52,7 @@ function toolNamesIn(relative) {
 const TOOL_SOURCES = [
   "src/lib/dm/mutations.ts",
   "src/lib/dm/encounter-tools.ts",
+  "src/lib/dm/encounter-tool-defs.ts",
   "src/lib/dm/encounter-tools-extra.ts",
   "src/lib/dm/legendary-tools.ts",
   "src/lib/dm/intent-tools.ts",
@@ -69,6 +70,7 @@ const TOOL_SOURCES = [
   "src/lib/dm/ambience-tools.ts",
   "src/lib/dm/mount-tools.ts",
   "src/lib/dm/resource-tools.ts",
+  "src/lib/dm/resource-tool-defs.ts",
   "src/lib/dm/companion-tools.ts",
   "src/lib/dm/cast-tools.ts",
   "src/lib/dm/prompt.ts",
@@ -79,6 +81,7 @@ const TOOL_SOURCES = [
   "src/lib/dm/shop-tools.ts",
   "src/lib/dm/settlement-tools.ts",
   "src/lib/dm/split-damage.ts",
+  "src/lib/dm/explore-tools.ts",
   "src/lib/image-tool.ts",
 ];
 
@@ -106,6 +109,9 @@ const routedBySet = new Set([
   ...namedList("src/lib/dm/encounter-tools.ts", "ENCOUNTER_TOOL_NAMES"),
   ...namedList("src/lib/dm/encounter-tools-extra.ts", "EXTRA_ENCOUNTER_TOOL_NAMES"),
   ...namedList("src/lib/dm/action-tools.ts", "ACTION_TOOL_NAMES"),
+  // Lifting, lifestyles, downtime and afflictions: invoke-dispatch routes
+  // EXPLORE_TOOL_NAMES to handleExploreCall before its switch.
+  ...namedList("src/lib/dm/explore-tools.ts", "EXPLORE_TOOL_NAMES"),
 ]);
 
 test("the tool scan actually found the tools", () => {
@@ -250,8 +256,12 @@ function topLevelKeys(objectText) {
   for (let index = 0; index < objectText.length; index += 1) {
     const char = objectText[index];
     if (char === '"' || char === "'" || char === "`") {
-      const end = objectText.indexOf(char, index + 1);
-      index = end < 0 ? objectText.length : end;
+      // Escaped quotes stay inside the string: a description that quotes
+      // "thieves' tools" must not end it early and hide the keys after it.
+      index += 1;
+      while (index < objectText.length && objectText[index] !== char) {
+        index += objectText[index] === "\\" ? 2 : 1;
+      }
       continue;
     }
     if (char === "{" || char === "[") {
@@ -259,7 +269,10 @@ function topLevelKeys(objectText) {
     } else if (char === "}" || char === "]") {
       depth -= 1;
     } else if (depth === 1 && objectText.startsWith("...", index)) {
-      keys.push("...");
+      // A spread of a named object (...ZONE_ARGS) is kept by name so the
+      // caller can read that object's own keys; anything else stays "...".
+      const spread = /^\.\.\.([A-Za-z_][A-Za-z0-9_]*)\s*[,}\n]/.exec(objectText.slice(index));
+      keys.push(spread ? `...${spread[1]}` : "...");
       index += 2;
     } else if (depth === 1 && /[A-Za-z_]/.test(char) && /[\s{,]/.test(objectText[index - 1] ?? " ")) {
       const match = /^([A-Za-z_][A-Za-z0-9_]*)\s*:/.exec(objectText.slice(index));
@@ -276,7 +289,56 @@ function topLevelKeys(objectText) {
 // declares the tool with a literal properties object.
 // Where tool definitions are written: the scan list above, and the two
 // modules whose tools reach it by name only.
-const DEFINITION_SOURCES = [...TOOL_SOURCES, "src/lib/dm/pc-attack.ts", "src/lib/dm/map-tools.ts"];
+const DEFINITION_SOURCES = [
+  ...TOOL_SOURCES,
+  "src/lib/dm/pc-attack.ts",
+  "src/lib/dm/map-tools.ts",
+  // aoe_damage's definition moved here from encounter-tools-extra.ts, and
+  // add_enemies is defined beside the spawner; both names are routed by the
+  // lists above, so only their properties were unread.
+  "src/lib/dm/aoe-damage-tool.ts",
+  "src/lib/dm/encounter-spawn.ts",
+];
+
+// The keys of the object literal a spread names: declared in the same file,
+// or imported from "@/..." and declared there. Null when it cannot be read,
+// which leaves the tool open (unchecked) rather than wrongly checked.
+function spreadKeys(name, source, depth = 0) {
+  const declared = (text) => new RegExp(`(?:^|\\n)\\s*(?:export\\s+)?const\\s+${name}\\b[^=]*=\\s*\\{`).exec(text);
+  let text = source;
+  let found = declared(text);
+  if (!found) {
+    const imported = new RegExp(`import\\s*(?:type\\s*)?\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from\\s*"@/([^"]+)"`).exec(source);
+    if (!imported) {
+      return null;
+    }
+    try {
+      text = read(`src/${imported[1]}.ts`);
+    } catch {
+      return null;
+    }
+    found = declared(text);
+  }
+  if (!found) {
+    return null;
+  }
+  const open = found.index + found[0].length - 1;
+  return expandSpreads(topLevelKeys(text.slice(open, closingBrace(text, open) + 1)), text, depth + 1);
+}
+
+// A key list with every named spread replaced by the keys it brings.
+function expandSpreads(keys, source, depth = 0) {
+  const out = [];
+  for (const key of keys) {
+    if (!key.startsWith("...") || key === "...") {
+      out.push(key);
+      continue;
+    }
+    const inner = depth < 4 ? spreadKeys(key.slice(3), source, depth) : null;
+    out.push(...(inner ?? ["..."]));
+  }
+  return out;
+}
 
 function toolProperties(name) {
   for (const relative of DEFINITION_SOURCES) {
@@ -291,7 +353,7 @@ function toolProperties(name) {
         continue;
       }
       const open = body.indexOf("{", at);
-      const keys = topLevelKeys(body.slice(open, closingBrace(body, open) + 1));
+      const keys = expandSpreads(topLevelKeys(body.slice(open, closingBrace(body, open) + 1)), source);
       return { keys, open: keys.includes("...") };
     }
     // mutations.ts: tool("x", "description", { ...properties }, [required]),
@@ -300,7 +362,7 @@ function toolProperties(name) {
     if (helper) {
       const open = source.indexOf("{", helper.index);
       const close = closingBrace(source, open);
-      const keys = topLevelKeys(source.slice(open, close + 1));
+      const keys = expandSpreads(topLevelKeys(source.slice(open, close + 1)), source);
       // characterProperty, which the helper spreads into every one of them.
       return { keys: ["characterId", "reason", ...keys], open: keys.includes("...") };
     }
@@ -349,11 +411,44 @@ const COMBAT_NAMES = new Set(COMBAT_ADJUDICATIONS.map((entry) => entry.name));
 
 test("the property scan reads the tools it is pointed at", () => {
   assert.deepEqual(toolProperties("take_action").keys.sort(), [
-    "action", "characterId", "reason", "shove", "targetCharacterId", "targetEnemyId",
+    "action", "bonus", "characterId", "enemyId", "item", "level", "reason", "shove", "skill",
+    "spell", "targetCharacterId", "targetEnemyId", "trigger",
   ]);
   assert.ok(toolProperties("apply_damage").keys.includes("amount"));
   assert.ok(toolProperties("apply_damage").keys.includes("characterId"));
   assert.ok(toolProperties("pc_attack").keys.includes("targetEnemyId"));
+});
+
+// The spell-area placement every area tool spreads in (src/lib/dm/zone-args.ts
+// ZONE_ARGS): the scan used to stop at a spread and skip the tool, so these
+// three forms could leave the four fields off unseen.
+test("a tool's spread-in arguments are read like its own", () => {
+  for (const name of ["use_spell_slot", "aoe_damage", "cast_at_enemy"]) {
+    const found = toolProperties(name);
+    assert.ok(found, `${name} has no readable definition`);
+    assert.equal(found.open, false, `${name} still has a spread the scan cannot read`);
+    for (const key of ["atX", "atY", "towardX", "towardY"]) {
+      assert.ok(found.keys.includes(key), `${name} does not show ${key}`);
+    }
+  }
+});
+
+// Where a tool definition may live without the scan knowing: every engine
+// file that defines one is read, except the Ask panel's own search tool,
+// which the players' question box hands its model and no DM calls.
+const NOT_A_DM_TOOL = new Set(["src/lib/dm/ask.ts"]);
+test("every file that defines a tool is one the scan reads", () => {
+  const unread = [];
+  for (const file of readdirSync(path.join(root, "src/lib/dm"))) {
+    const relative = `src/lib/dm/${file}`;
+    if (!file.endsWith(".ts") || NOT_A_DM_TOOL.has(relative) || DEFINITION_SOURCES.includes(relative)) {
+      continue;
+    }
+    if (/function:\s*\{\s*\n\s*name:\s*"[a-z_]+"/.test(read(relative))) {
+      unread.push(relative);
+    }
+  }
+  assert.deepEqual(unread, [], `tool definitions the drift checks never read: ${unread.join(", ")}`);
 });
 
 test("every combat form sends only fields its handler reads", () => {
@@ -460,6 +555,308 @@ test("every other form requires what its handler requires", () => {
     }
   }
   assert.deepEqual(missing, {}, `forms that do not require what the handler does: ${JSON.stringify(missing)}`);
+});
+
+// ---- every field a handler offers has a place on its form ----
+//
+// The other direction of the drift above, and the one the second audit found
+// open (U:UD1 to UD6): start_encounter had no lair switch, so a human DM could
+// never run a lair action; take_rest had no hit dice to spend; aoe_damage
+// could not name a player's spell. Each tool property the model may send is
+// either a field on the form or named below with the reason a person does not
+// need it.
+const OMITTED_ON_PURPOSE = {
+  // The console asks for one modifier as three flat fields (FOLDED_BY_THE_FACADE).
+  set_effect: ["modifiers"],
+  // update_sheet's form names one field and its value; the fold turns it into
+  // any of these keys (src/lib/dm/update-sheet-args.ts).
+  update_sheet: "*",
+  // The roster is one text field the façade parses (parseRoster), so the
+  // model's per-enemy object keys never appear as form fields.
+  start_encounter: ["enemies"],
+  // A person runs one character's downtime per form; the model may batch
+  // several in activities, each with the same fields the form offers.
+  downtime: ["activities"],
+};
+
+function formOmissions(entry) {
+  const found = toolProperties(entry.name);
+  if (!found || found.open) {
+    return null;
+  }
+  const allowed = OMITTED_ON_PURPOSE[entry.name];
+  if (allowed === "*") {
+    return [];
+  }
+  const offered = new Set(entry.fields.map((field) => field.name));
+  // What the façade folds from another name (enemyIds -> targetEnemyId) is
+  // offered under that other name.
+  const aliases = {
+    cast_at_enemy: { targetEnemyId: "enemyIds" },
+    cast_at_player: { characterId: "characterIds" },
+  };
+  return found.keys.filter(
+    (key) =>
+      key !== "..." &&
+      key !== "reason" &&
+      !offered.has(key) &&
+      !offered.has(aliases[entry.name]?.[key] ?? "") &&
+      !(allowed ?? []).includes(key),
+  );
+}
+
+test("every form offers every field its handler reads, or names why not", () => {
+  const omitted = {};
+  for (const entry of ADJUDICATIONS) {
+    const missing = formOmissions(entry);
+    if (missing?.length) {
+      omitted[entry.name] = missing.sort();
+    }
+  }
+  assert.deepEqual(omitted, {}, `forms that leave out a handler's field: ${JSON.stringify(omitted)}`);
+});
+
+// A form may not demand what the handler does without: aoe_damage's damage
+// kept a player's Entangle (no damage at all) off the console, and
+// cast_at_enemy's save kept a known spell from bringing its own.
+const REQUIRED_BY_THE_FORM_ONLY = {
+  // The façade folds the flat fields into modifiers (FOLDED_BY_THE_FACADE).
+  set_effect: ["field"],
+  // The handler refuses a move with no hands in it ("someone has to be
+  // handing it over or taking it"), so the form asks up front.
+  party_stash: ["characterId"],
+  // The handler refuses downtime without a character and an activity unless
+  // activities lists several; the form runs one character, so it asks.
+  downtime: ["characterId", "activity"],
+};
+
+test("no form requires a field its handler leaves optional", () => {
+  const over = {};
+  for (const entry of ADJUDICATIONS) {
+    for (const relative of DEFINITION_SOURCES) {
+      const source = read(relative);
+      const defined = new RegExp(`function:\\s*\\{\\s*\\n\\s*name:\\s*"${entry.name}"`).exec(source);
+      if (!defined) {
+        continue;
+      }
+      const end = closingBrace(source, source.indexOf("{", defined.index));
+      const lists = [...source.slice(defined.index, end + 1).matchAll(/required:\s*\[([^\]]*)\]/g)];
+      const required = lists.at(-1);
+      const names = required ? [...required[1].matchAll(/"([A-Za-z_]+)"/g)].map((match) => match[1]) : [];
+      const tolerated = REQUIRED_BY_THE_FORM_ONLY[entry.name] ?? [];
+      const extra = entry.fields
+        .filter((field) => field.required && !names.includes(field.name) && !tolerated.includes(field.name))
+        .map((field) => field.name);
+      if (extra.length) {
+        over[entry.name] = extra;
+      }
+      break;
+    }
+  }
+  assert.deepEqual(over, {}, `forms that require what the handler does not: ${JSON.stringify(over)}`);
+});
+
+// ---- fixed values are picked, not typed (U:UD4) ----
+
+const vocab = await import("../src/lib/dm/catalog-vocab.ts");
+const { DAMAGE_TYPES } = await import("../src/lib/dm/damage-logic.ts");
+
+test("the damage types offered are exactly the engine's", () => {
+  assert.deepEqual([...vocab.DAMAGE_TYPE_VALUES], DAMAGE_TYPES);
+});
+
+test("the conditions offered are the SRD conditions the monster kit enforces", () => {
+  const kit = read("src/lib/bestiary/kit.ts");
+  const block = /export const CONDITIONS = \[([^\]]*)\]/.exec(kit);
+  assert.ok(block, "kit.ts CONDITIONS not found");
+  const listed = [...block[1].matchAll(/"([a-z]+)"/g)].map((match) => match[1]);
+  assert.deepEqual([...vocab.CONDITION_VALUES], listed);
+});
+
+test("trap severity, object material and size, and skills match the handlers' enums", () => {
+  const hazard = read("src/lib/dm/hazard-tools.ts");
+  const severity = /SEVERITY_ENUM = \[([^\]]*)\]/.exec(hazard);
+  assert.deepEqual(
+    vocab.TRAP_SEVERITY_OPTIONS.map((option) => option.value),
+    [...severity[1].matchAll(/"([a-z]+)"/g)].map((match) => match[1]),
+  );
+  const objects = read("src/lib/dm/object-damage.ts");
+  const materials = /OBJECT_MATERIALS[^=]*= \[([^\]]*)\]/.exec(objects);
+  assert.deepEqual([...vocab.OBJECT_MATERIAL_VALUES], [...materials[1].matchAll(/"([a-z]+)"/g)].map((match) => match[1]));
+  const sizes = /OBJECT_SIZES[^=]*= \[([^\]]*)\]/.exec(objects);
+  assert.deepEqual(
+    vocab.OBJECT_SIZE_OPTIONS.map((option) => option.value),
+    [...sizes[1].matchAll(/"([a-z]+)"/g)].map((match) => match[1]),
+  );
+  const skills = JSON.parse(read("src/lib/srd/skills.json")).skills.map((skill) => skill.id);
+  assert.deepEqual(vocab.SKILL_OPTIONS.map((option) => option.value), skills);
+});
+
+// Field names the engine reads as a damage type, a condition or a trap's
+// severity. None of them may be a text box on any form.
+const DAMAGE_TYPE_FIELDS = new Set(["type", "damageType"]);
+test("no form asks for a damage type, a condition or a severity as free text", () => {
+  const typed = [];
+  for (const entry of ADJUDICATIONS) {
+    for (const field of entry.fields) {
+      const isDamageType = DAMAGE_TYPE_FIELDS.has(field.name) && entry.name !== "apply_hazard" && entry.name !== "request_roll"
+        ? true
+        : field.name === "damageType";
+      // apply_hazard's and request_roll's `type`/`kind` are not damage types.
+      const damageTypeField = isDamageType && !(field.name === "type" && ["apply_hazard", "summon_pet", "set_npc"].includes(entry.name));
+      const conditionField = field.name === "condition";
+      const severityField = field.name === "severity";
+      if ((damageTypeField || conditionField || severityField) && field.kind !== "select") {
+        typed.push(`${entry.name}.${field.name}`);
+      }
+      if (damageTypeField && field.kind === "select") {
+        assert.deepEqual(field.options.map((option) => option.value), [...vocab.DAMAGE_TYPE_VALUES], `${entry.name}.${field.name}`);
+      }
+    }
+  }
+  assert.deepEqual(typed, []);
+});
+
+// A homebrew damage type is legitimate: the handlers take any word and a
+// resistance answers only the type it names (test-enforce-damage-types holds
+// "sonic" and "fir" landing whole). So the damage type pick offers the SRD's
+// thirteen first and takes another typed in, as the condition pick does.
+test("a condition pick takes a story condition and a damage type pick a homebrew type", () => {
+  const condition = adjudication("set_condition");
+  assert.equal(checkArgs(condition, { characterId: "c1", condition: "soaked" }), null);
+  const damage = adjudication("apply_damage");
+  assert.ok(damage.fields.find((field) => field.name === "type").other, "the damage type pick has an 'other' entry");
+  assert.equal(checkArgs(damage, { characterId: "c1", amount: 4, type: "sonic" }), null);
+  // The delegated AI writes the type its own way; the handler reads it.
+  assert.equal(checkArgs(damage, { characterId: "c1", amount: 4, type: "Fire damage" }), null);
+});
+
+test("multi-target forms pick creatures instead of typing ids (U:UD5)", () => {
+  assert.equal(adjudication("aoe_damage").fields.find((field) => field.name === "enemyIds").kind, "enemies");
+  assert.equal(adjudication("split_damage").fields.find((field) => field.name === "targets").kind, "shares");
+  for (const name of ["move_token", "teleport_token", "set_movement"]) {
+    assert.equal(adjudication(name).fields.find((field) => field.name === "tokenName").kind, "combatant", name);
+  }
+  const split = adjudication("split_damage");
+  assert.equal(checkArgs(split, { amount: 9, targets: [{ enemyId: "e1", share: "half" }] }), null);
+  assert.match(checkArgs(split, { amount: 9, targets: ["e1 half"] }), /list of rows/);
+  const rest = adjudication("take_rest");
+  assert.equal(checkArgs(rest, { kind: "short", spend: [{ characterId: "c1", dice: 2 }] }), null);
+});
+
+test("the lair switch, a player's area spell and chosen hit dice reach the console (U:UD1, UD2, UD6)", () => {
+  const start = adjudication("start_encounter");
+  assert.equal(start.fields.find((field) => field.name === "lair")?.kind, "boolean");
+  const aoe = adjudication("aoe_damage");
+  for (const name of ["casterId", "spell", "level", "casterEnemyId"]) {
+    assert.ok(aoe.fields.some((field) => field.name === name), `aoe_damage.${name}`);
+  }
+  assert.equal(aoe.fields.find((field) => field.name === "damage").required, undefined);
+  // A successful save halves by default, as the handler says; an unticked
+  // box would send false and quietly take the half away.
+  assert.equal(aoe.fields.find((field) => field.name === "halfOnSave").default, true);
+  assert.equal(adjudication("take_rest").fields.find((field) => field.name === "spend")?.kind, "hitDice");
+});
+
+const { needsConfirm } = await import("../src/lib/dm/catalog-types.ts");
+
+test("what cannot be taken back asks first (U:UD8)", () => {
+  assert.ok(needsConfirm(adjudication("end_encounter"), {}));
+  assert.ok(needsConfirm(adjudication("dismiss_companion"), { characterId: "c1" }));
+  const ending = adjudication("relationship_end");
+  assert.ok(needsConfirm(ending, { reason: "death" }));
+  assert.equal(needsConfirm(ending, { reason: "parting" }), null);
+  assert.equal(needsConfirm(adjudication("apply_damage"), {}), null);
+});
+
+const { describeAdjudicationResult } = await import("../src/lib/dm/catalog-result.ts");
+const said = (result) => describeAdjudicationResult(result).map((line) => line.text);
+
+test("a result shows hit points, resistance, temp HP absorbed and broken concentration (U:UD3)", () => {
+  const lines = said({
+    ok: true,
+    hp: "3/30",
+    resistance: "Tharn is resistant to fire",
+    tempHpAbsorbed: 5,
+    concentrationBroken: "Bless",
+  });
+  assert.ok(lines.includes("HP now 3/30"), lines.join(" | "));
+  assert.ok(lines.includes("Tharn is resistant to fire"));
+  assert.ok(lines.includes("Temporary hit points absorbed 5"));
+  assert.ok(lines.includes("Concentration on Bless broken"));
+  assert.equal(describeAdjudicationResult({ concentrationBroken: "Bless" })[0].tone, "bad");
+  const held = said({ ok: true, hp: "20/30", concentration: { spell: "Bless", dc: 10, rolled: 14, held: true } });
+  assert.ok(held.includes("Concentration on Bless: rolled 14 against DC 10, held"), held.join(" | "));
+  const down = said({ ok: true, hp: "0/30", dropped: true, dying: "0 successes, 1 failure" });
+  assert.ok(down.includes("Down at 0 HP"));
+  assert.ok(down.includes("Dying: 0 successes, 1 failure"));
+});
+
+test("an area result reads one line per creature caught", () => {
+  const lines = said({
+    ok: true,
+    spell: "Fireball",
+    damageRolled: 28,
+    results: [
+      { target: "Goblin 1", save: 8, success: false, damage: 28, dead: true },
+      { target: "Aldric", save: 17, success: true, damage: 14, hp: "20/34" },
+    ],
+  });
+  assert.ok(lines.includes("28 damage"));
+  assert.ok(lines.includes("Goblin 1: failed the save (8), 28 damage, dead"), lines.join(" | "));
+  assert.ok(lines.includes("Aldric: made the save (17), 14 damage, HP 20/34"));
+  assert.ok(lines.includes("Spell: Fireball"));
+});
+
+test("a spell's area and what a walk met read as the engine's own lines", () => {
+  const cast = describeAdjudicationResult({ ok: true, area: "Web covers 16 squares around (12,2) for 1 hour: difficult terrain." });
+  assert.deepEqual(cast, [{ text: "Web covers 16 squares around (12,2) for 1 hour: difficult terrain.", tone: "info" }]);
+  const walked = describeAdjudicationResult({
+    ok: true,
+    zoneEffects: ["Spike Growth: 5 piercing to Goblin 1.", "It is held fast at (4,4)."],
+    opportunityAttacks: ["Kael strikes as it leaves: 7 slashing."],
+  });
+  assert.deepEqual(walked.map((line) => line.text), [
+    "Kael strikes as it leaves: 7 slashing.",
+    "Spike Growth: 5 piercing to Goblin 1.",
+    "It is held fast at (4,4).",
+  ]);
+  assert.ok(walked.every((line) => line.tone === "bad"));
+});
+
+// Prismatic Spray's rows (src/lib/dm/prismatic.ts) carry the rays each
+// creature drew and what each did.
+test("a Prismatic Spray result says each creature's rays and what they did", () => {
+  const lines = said({
+    ok: true,
+    spell: "Prismatic Spray",
+    results: [
+      { target: "Ogre", save: 9, success: false, rays: ["red"], effects: ["red: 31 fire"] },
+      { target: "Goblin 2", save: 15, success: true, rays: ["indigo", "violet"], effects: ["indigo: no effect", "violet: no effect"] },
+    ],
+  });
+  assert.ok(lines.includes("Ogre: failed the save (9), ray red, red: 31 fire"), JSON.stringify(lines));
+  assert.ok(lines.includes("Goblin 2: made the save (15), rays indigo, violet, indigo: no effect, violet: no effect"), JSON.stringify(lines));
+});
+
+// A summoning spell's creature and a shape spell's beast are picked from the
+// engine's own form table, and anything else can still be typed.
+test("cast_buff's choice offers the engine's summon and beast forms and still takes a typed choice", () => {
+  const entry = adjudication("cast_buff");
+  const variant = entry.fields.find((field) => field.name === "variant");
+  assert.equal(variant.kind, "select");
+  assert.ok(variant.other, "no typed choice for Enlarge/Reduce and the rest");
+  const values = variant.options.map((option) => option.value);
+  // Find Familiar's forms come from the familiar table (src/lib/srd/familiar-forms.ts).
+  for (const form of ["wolf", "skeleton", "giant spider", "owl", "imp", "pseudodragon"]) {
+    assert.ok(values.includes(form), `${form} is not offered`);
+  }
+  assert.equal(checkArgs(entry, { characterId: "c1", spell: "Enlarge/Reduce", variant: "enlarge" }), null);
+});
+
+test("a result with nothing to read is still a confirmation", () => {
+  assert.deepEqual(said({ ok: true }), ["Done."]);
+  assert.deepEqual(said(null), ["Done."]);
 });
 
 const { foldFieldValue, UPDATE_SHEET_FIELDS } = await import("../src/lib/dm/update-sheet-args.ts");

@@ -115,7 +115,11 @@ await test("Hold Person: a Wisdom save against the caster's DC, paralyzed until 
   assert.equal(held.result.saved, false);
   const target = world.enemies().find((enemy) => enemy.id === first.id);
   assert.deepEqual(target.conditions, ["paralyzed"]);
-  assert.deepEqual(target.conditionMeta, { paralyzed: { saveEnds: { ability: "wis", dc } } });
+  // The condition records the spell, its caster and the slot, so the caster's
+  // concentration ends this casting and nothing else (spell-effects.ts).
+  assert.deepEqual(target.conditionMeta, {
+    paralyzed: { saveEnds: { ability: "wis", dc }, spell: "Hold Person", source: mage.id, slotLevel: 2 },
+  });
   world.dice(20);
   const resisted = await world.invoke("cast_at_enemy", {
     characterId: mage.id, targetEnemyId: second.id, spell: "Hold Person", saveAbility: "wis", level: 2,

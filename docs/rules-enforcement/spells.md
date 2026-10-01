@@ -1,5 +1,7 @@
 # Enforcement report: spells
 
+The second audit and repair (2026-09-30) and the state after it are in [`../rules-enforcement-audit.md`](../rules-enforcement-audit.md); this report describes the first audit.
+
 Area: spell slots, spell data, casting legality, concentration, spell effects, learning spells.
 Written by the continuing agent (the first agent on this area was cut off; its seven test files
 and two helpers were kept, run, reviewed gap by gap, and extended with four new files).

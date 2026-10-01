@@ -7,6 +7,8 @@ import { CUSTOM_CLASSES } from "@/lib/classes";
 import { computeArmorClass, matchArmor, unarmoredFormulaFor, type AcBreakdown } from "@/lib/srd/armor";
 import { conditionAcRiders } from "@/lib/srd/condition-effects";
 import { combatRiders, defenseRiders, halfProficiencyCovers } from "@/lib/srd/feature-effects";
+import { featureSaveProficiencies } from "@/lib/srd/trait-rules";
+import { authoredAcBonus, authoredSaveModifier, authoredSpeeds } from "@/lib/srd/authored-effects";
 import { effectiveAbilities, magicItemRiders } from "@/lib/srd/magic-items";
 import { encumbranceFor } from "@/lib/srd/encumbrance";
 import { allSpellNames } from "@/lib/srd/spell-lists";
@@ -18,63 +20,11 @@ import type {
   CharacterSheet,
   Proficiencies,
 } from "@/lib/schemas/sheet";
+import { itemCastNumbers } from "@/lib/srd/item-cast-credit";
 
-export type SrdSkill = { id: string; name: string; ability: Ability };
-export type SrdClass = {
-  id: string;
-  name: string;
-  hitDie: 6 | 8 | 10 | 12;
-  saves: Ability[];
-  // "artificer" is a half caster that rounds up, so it needs its own table.
-  casterType: "none" | "full" | "half" | "pact" | "artificer";
-  spellAbility: "int" | "wis" | "cha" | null;
-  armor: string[];
-  weapons: string[];
-  // Tool/kit proficiencies the class grants (thieves' tools, instruments).
-  tools: string[];
-  // Languages the class itself teaches: a druid learns Druidic, a rogue
-  // Thieves' Cant. These are granted on top of the race's languages.
-  languages?: string[];
-  skillChoices: { count: number; from: string[] };
-  // One line for the class picker, so a new player can tell a warlock from
-  // a wizard before opening the full write-up.
-  blurb?: string;
-};
-export type SrdRace = {
-  id: string;
-  name: string;
-  speed: number;
-  size: string;
-  asi: Partial<Record<Ability, number>>;
-  asiChoice?: { count: number; amount: number };
-  traits: string[];
-  languages: string[];
-  // Extra languages of the player's choice (SRD: human, half-elf, high elf).
-  bonusLanguages?: number;
-  // Structured grants behind the trait prose, so the builder can put them on
-  // the sheet instead of leaving them as flavor text.
-  skills?: string[];
-  skillChoice?: { count: number };
-  cantripChoice?: { list: string; count: number };
-  tools?: string[];
-  toolChoice?: { count: number; from: string[] };
-  // Race-taught combat training on top of the class lists (mountain dwarf
-  // armor, drow and wood elf weapons).
-  armor?: string[];
-  weapons?: string[];
-};
-export type SrdBackground = {
-  id: string;
-  name: string;
-  skills: string[];
-  feature: string;
-  tools?: string[];
-  languages?: number;
-  equipment?: string[];
-  // One line for the picker, and what the named feature does.
-  blurb?: string;
-  featureDesc?: string;
-};
+import type { SrdBackground, SrdClass, SrdRace, SrdSkill } from "@/lib/srd/srd-types";
+
+export type { SrdBackground, SrdClass, SrdRace, SrdSkill } from "@/lib/srd/srd-types";
 
 export const SRD_SKILLS = skillsJson.skills as SrdSkill[];
 export const SRD_CLASSES = classesJson.classes as SrdClass[];
@@ -166,6 +116,8 @@ export type AcSource = {
   // Active conditions, so effect conditions (Shield of Faith, Mage Armor,
   // Barkskin) land in the stored AC for as long as they hold.
   conditions?: string[];
+  // The spell being concentrated on (Durable Magic's +2 AC holds while one is).
+  concentratingOn?: string | null;
   // Extra flat adds on top of whatever the feature table already grants.
   bonus?: number;
   // Who wears the gear: a magic item that names who may attune to it gives
@@ -243,8 +195,10 @@ export function acBreakdownFor(source: AcSource): AcBreakdown {
   // Bracers of Defense: only while wearing no armor and no shield.
   const unarmoredBonus =
     !armored && !resolved.shieldName ? magic.acUnarmoredBonus : 0;
+  // The authored subclass features' own (Soul of the Forge, Durable Magic).
+  const authored = authoredAcBonus(source);
   const bonus =
-    featureBonus + magic.acBonus + unarmoredBonus + conditionAc.bonus + (source.bonus ?? 0);
+    featureBonus + magic.acBonus + unarmoredBonus + conditionAc.bonus + authored.bonus + (source.bonus ?? 0);
   let final = bonus ? computeArmorClass({ ...chosenInput, bonus }) : resolved;
   // Barkskin: the AC never sits below the floor while the condition holds.
   if (conditionAc.floor && final.ac < conditionAc.floor) {
@@ -328,7 +282,7 @@ export function speedFor(
     classes: source.classes,
   });
   const breakdown = acBreakdownFor({ ...source, features, equipment });
-  const worn = breakdown.armorName ? matchArmor(breakdown.armorName) : null;
+  const worn = breakdown.armor ?? (breakdown.armorName ? matchArmor(breakdown.armorName) : null);
   // One feature's tiers replace each other; different features add up.
   const bySource = new Map<object | undefined, number>();
   for (const entry of riders.speedBonuses) {
@@ -341,17 +295,21 @@ export function speedFor(
     bySource.set(entry.source, Math.max(bySource.get(entry.source) ?? 0, entry.amount));
   }
   const bonus = [...bySource.values()].reduce((sum, amount) => sum + amount, 0);
-  const load =
-    options.encumbrance
-      ? encumbranceFor({
-          strength: source.abilities.str,
-          equipment,
-          coins: source.gold ?? 0,
-          size: source.race ? sizeForRace(source.race) : undefined,
-          wearer: source,
-        }).speedPenalty
-      : 0;
-  return Math.max(0, source.speed + bonus - breakdown.speedPenalty - load);
+  const carried = source.abilities
+    ? encumbranceFor({
+        strength: source.abilities.str,
+        equipment,
+        coins: source.gold ?? 0,
+        size: source.race ? sizeForRace(source.race) : undefined,
+        wearer: source,
+      })
+    : null;
+  const load = options.encumbrance ? (carried?.speedPenalty ?? 0) : 0;
+  const speed = Math.max(0, source.speed + bonus - breakdown.speedPenalty - load);
+  // Past the carrying capacity (Strength x 15, SRD 5.1 Lifting and
+  // Carrying) the load can only be dragged: speed 5 feet, whatever the
+  // table's encumbrance rule (src/lib/dm/load-rules.ts).
+  return carried?.overCapacity ? Math.min(speed, 5) : speed;
 }
 
 // One named contribution to a derived number. The pattern is AC's: the sheet
@@ -378,8 +336,12 @@ export type SheetDerived = {
   skills: Record<string, number>;
   initiative: number;
   passivePerception: number;
+  passiveInvestigation: number;
   spellSaveDc: number | null;
   spellAttack: number | null;
+  // Flying and swimming speeds the authored subclass features grant
+  // (Stormborn, Wind Soul, Gift of the Sea), in feet; absent when none do.
+  speeds?: { fly?: number; swim?: number };
   parts: DerivedParts;
 };
 
@@ -391,6 +353,13 @@ function keepMeaningful(parts: DerivedPart[]): DerivedPart[] {
 
 function sumParts(parts: DerivedPart[]): number {
   return parts.reduce((total, part) => total + part.value, 0);
+}
+
+// Flying and swimming speeds from the authored features, as a spread for the
+// derived numbers; nothing when there are none.
+function otherSpeeds(sheet: { features?: Array<{ name: string }>; speed?: number }): { speeds?: { fly?: number; swim?: number } } {
+  const speeds = authoredSpeeds(sheet, sheet.speed ?? 30);
+  return Object.keys(speeds).length ? { speeds } : {};
 }
 
 // All derived numbers come from the sheet + SRD data; the model never
@@ -435,6 +404,11 @@ export function computeSheetDerived(
       ? defenseRiders({ class: sheet.class, level: sheet.level, features: riderFeatures }, abilityMods)
       : { saveBonus: 0, initiativeBonus: 0, passiveBonus: 0, halfProficiency: null };
 
+  // Saves a feature trains on top of the class table's (Diamond Soul,
+  // Slippery Mind): derived here, so no stored sheet has to change.
+  const featureSaves = featureSaveProficiencies({
+    features: riderFeatures,
+  });
   const saveParts = Object.fromEntries(
     (Object.keys(abilities) as Ability[]).map((ability) => [
       ability,
@@ -442,9 +416,12 @@ export function computeSheetDerived(
         { label: `${ability.toUpperCase()} modifier`, value: abilityMods[ability] },
         {
           label: "proficiency",
-          value: sheet.proficiencies.saves.includes(ability) ? pb : 0,
+          value:
+            sheet.proficiencies.saves.includes(ability) || featureSaves.includes(ability) ? pb : 0,
         },
         { label: "features", value: defense.saveBonus },
+        // Durable Magic's +2, Elegant Courtier's Charisma (authored-effects.ts).
+        { label: "subclass features", value: authoredSaveModifier(sheet, ability, abilityMods) },
         { label: "magic items", value: magicSaveBonus },
       ]),
     ]),
@@ -497,6 +474,12 @@ export function computeSheetDerived(
     { label: "Perception", value: skills.perception },
     { label: "features", value: defense.passiveBonus },
   ]);
+  // Observant's +5 covers passive Investigation too.
+  const passiveInvestigationParts = keepMeaningful([
+    { label: "base", value: 10 },
+    { label: "Investigation", value: skills.investigation },
+    { label: "features", value: defense.passiveBonus },
+  ]);
   const spellSaveParts = spellAbility
     ? [
         { label: "base", value: 8 },
@@ -517,8 +500,10 @@ export function computeSheetDerived(
     skills,
     initiative: sumParts(initiativeParts),
     passivePerception: sumParts(passiveParts),
+    passiveInvestigation: sumParts(passiveInvestigationParts),
     spellSaveDc: spellAbility ? sumParts(spellSaveParts) : null,
     spellAttack: spellAbility ? sumParts(spellAttackParts) : null,
+    ...otherSpeeds(sheet),
     parts: {
       saves: saveParts,
       skills: skillParts,
@@ -557,6 +542,12 @@ export function spellSaveDcFor(
   sheet: Parameters<typeof computeSheetDerived>[0],
   spellName: string,
 ): number | null {
+  // A spell cast from a scroll or a wand carries the item's DC
+  // (src/lib/srd/item-cast-credit.ts).
+  const fromItem = itemCastNumbers((sheet as { id?: string }).id, spellName)?.saveDc;
+  if (fromItem) {
+    return fromItem;
+  }
   const derived = computeSheetDerived(sheet);
   if (!sheet.spellcasting) {
     return derived.spellSaveDc;
@@ -573,6 +564,10 @@ export function spellAttackFor(
   sheet: Parameters<typeof computeSheetDerived>[0],
   spellName: string,
 ): number | null {
+  const fromItem = itemCastNumbers((sheet as { id?: string }).id, spellName)?.attackBonus;
+  if (fromItem) {
+    return fromItem;
+  }
   const derived = computeSheetDerived(sheet);
   if (!sheet.spellcasting) {
     return derived.spellAttack;

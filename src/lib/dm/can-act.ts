@@ -15,6 +15,7 @@
 import type { Encounter, EncounterEnemy } from "@/lib/db/encounters";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { incapacitatedBy } from "@/lib/dm/condition-logic";
+import { spellTurnHold } from "@/lib/srd/condition-effect-queries";
 
 // What the combatant is trying to spend. "attack" and "cast" are actions
 // with their own handlers, "free" is anything that costs nothing but still
@@ -144,11 +145,18 @@ export function canAct(input: {
     );
   }
   const stoppedBy = incapacitatedBy(sheet.conditions);
-  if (stoppedBy) {
+  // Bare incapacitation takes actions and reactions, not speed (SRD 5.1); the
+  // conditions that also stop movement zero the speed (condition-logic.ts).
+  if (stoppedBy && !(kind === "move" && stoppedBy === "incapacitated")) {
     return refuse(
       "incapacitated",
       `${sheet.name} is ${stoppedBy} and cannot ${what} until the condition ends.`,
     );
+  }
+  // A spell's hold on the turn: Stinking Cloud, Command's Halt, Gaseous Form.
+  const held = spellTurnHold(sheet.conditions, kind);
+  if (held) {
+    return refuse("incapacitated", `${sheet.name} is ${held} and cannot ${what} while it lasts.`);
   }
   if (!encounter) {
     // Outside a fight there are no turns to wait for.
@@ -247,6 +255,10 @@ export function canEnemyAct(input: {
       "incapacitated",
       `${enemy.displayName} is ${stoppedBy} and cannot act until the condition ends.`,
     );
+  }
+  const held = kind === "action" ? spellTurnHold(enemy.conditions, "action") : null;
+  if (held) {
+    return refuse("incapacitated", `${enemy.displayName} is ${held} and loses its action this turn.`);
   }
   if (!encounter) {
     return { ok: true };

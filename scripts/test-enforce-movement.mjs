@@ -9,8 +9,9 @@
 //   - One square is 5 feet and a diagonal is one square
 //     (src/lib/battlemap/movement.ts STEPS). SRD 5.1 plays it the same way;
 //     the 5-10-5 diagonal is a DMG variant.
-//   - Nobody moves through another token, friend or foe: "stricter than 5e
-//     but simple and server-enforceable" (movement.ts).
+//   - Nobody moves onto another token, or through a hostile one within a
+//     size of their own; an ally's space is walked through at double cost
+//     (SRD 5.1, src/lib/battlemap/passage.ts).
 //   - Water costs double, like difficult ground (types.ts moveCost).
 //   - A killing blow from a character's opportunity attack does not end the
 //     fight; the next DM turn does (docs/rules-coverage.md, Deliberate
@@ -117,7 +118,7 @@ await test("walls stop a move and a move goes around them", async () => {
   assert.deepEqual(at(runner.id), [2, 2]);
 });
 
-await test("nobody moves onto or through another token (ODM's rule)", async () => {
+await test("nobody moves onto another token or through a hostile one of their size; an ally's space is walked through", async () => {
   const [enemy] = await stage();
   // A corridor one square wide with the enemy standing in it.
   const paint = [];
@@ -130,8 +131,11 @@ await test("nobody moves onto or through another token (ODM's rule)", async () =
   assert.ok((await walk(runnerUser, 5, 2)).status >= 400);
   kit.place(enemy.id, 18, 12);
   kit.place(friend.id, 4, 2);
-  assert.ok((await walk(runnerUser, 5, 2)).status >= 400);
-  assert.deepEqual(at(runner.id), [2, 2]);
+  // SRD 5.1, Moving Around Other Creatures: through a nonhostile creature's
+  // space (difficult terrain), never ending in it.
+  assert.ok((await walk(runnerUser, 4, 2)).status >= 400);
+  assert.equal((await walk(runnerUser, 5, 2)).status, 200);
+  assert.deepEqual(at(runner.id), [5, 2]);
 });
 
 await test("nobody moves on a turn that is not theirs", async () => {

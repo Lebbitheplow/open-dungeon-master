@@ -50,7 +50,7 @@ export const effectTools: ToolDef[] = [
         properties: {
           characterId: { type: "string", description: "The character it lands on." },
           enemyId: { type: "string", description: "Or the enemy it lands on." },
-          name: { type: "string", description: "What it is called, e.g. 'Bless'." },
+          name: { type: "string", description: "What it is called, e.g. 'Shrine's Blessing'. A spell's effect is cast_buff, never an effect." },
           source: { type: "string", description: "What caused it, e.g. 'Aldric's spell'." },
           modifiers: {
             type: "array",
@@ -76,7 +76,7 @@ export const effectTools: ToolDef[] = [
             minimum: 5,
             maximum: 120,
             description:
-              "Radius in feet when the effect reaches around its target (Aura of Protection 10, Spirit Guardians 15); the board draws the ring.",
+              "Radius in feet when the effect reaches around its target (a haunted shrine's chill 15); the board draws the ring. Spell and class auras are the server's own, never an effect.",
           },
           auraTone: {
             type: "string",

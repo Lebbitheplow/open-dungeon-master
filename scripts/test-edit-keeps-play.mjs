@@ -113,6 +113,7 @@ const GRITTY = {
   powerfulCritical: false,
   criticalDamageMods: false,
   ammunition: false,
+  supplies: false,
   restVariant: "gritty",
 };
 

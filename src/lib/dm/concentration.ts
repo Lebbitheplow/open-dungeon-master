@@ -12,10 +12,14 @@ import { findSpellByName, spellMechanicsFor } from "@/lib/content";
 import { allySaveAura } from "@/lib/dm/aura";
 import { computeSheetDerived } from "@/lib/srd";
 import { conditionConcentrationFloor, conditionRollRiders } from "@/lib/srd/condition-effects";
-import { mergeAdvantage, removeConditions } from "@/lib/dm/condition-logic";
+import { mergeAdvantage, removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { heldBySpell, spellKey } from "@/lib/dm/spell-effects";
 import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { endSpellZones } from "@/lib/dm/zone-store";
+import { endSpellSummons } from "@/lib/dm/summon-store";
+import { authoredConcentrationGuard } from "@/lib/srd/authored-effects-more";
 
 // Server-tracked concentration: casting a concentration spell sets it (and
 // breaks the previous one), taking damage forces the CON save server-side,
@@ -90,7 +94,7 @@ export function breakConcentration(
   // The spell's lingering effect conditions end with the concentration:
   // Bless's dice, Haste's action, Hold Person's paralysis all stop here
   // instead of waiting for their duration to expire.
-  clearSpellConditionsByName(campaign, spell, sheet.userId);
+  clearSpellConditionsByName(campaign, spell, sheet.userId, sheet.id);
   return spell;
 }
 
@@ -123,37 +127,56 @@ export function lethargyRounds(
 
 // Removes the effect conditions a broken concentration spell was holding in
 // place, from every party sheet and every living enemy in the active
-// encounter. Best effort: an unknown/homebrew spell simply clears nothing.
+// encounter. A condition records the spell and caster that laid it down
+// (src/lib/dm/spell-effects.ts), so only THAT casting's conditions end: a
+// goblin a ghoul paralyzed stays paralyzed when the wizard's Hold Person
+// ends. `casterId` is the one whose spell ended; without it any caster's
+// casting of the spell ends (an enemy's concentration, a legacy call).
+// Best effort: an unknown/homebrew spell simply clears nothing.
 // Shared by PC concentration (above) and enemy concentration breaks
 // (src/lib/dm/enemy-damage.ts), which have no caster userId.
 export function clearSpellConditionsByName(
   campaign: Campaign,
   spell: string,
   userId?: string,
+  casterId?: string,
 ) {
+  // Its area on the board goes with it (src/lib/dm/zone-store.ts), and the
+  // creatures it made vanish or, where the spell says so, turn hostile
+  // (src/lib/dm/summon-store.ts). Only a known caster's: an enemy's broken
+  // concentration names none and must not send the party's away.
+  endSpellZones(campaign.id, spell, casterId);
+  if (casterId) {
+    endSpellSummons(campaign, spell, casterId);
+  }
   const resolved = spellMechanicsFor({ spell, userId });
   if (!resolved) {
     return;
   }
-  const wanted = new Set(
+  const conditionNames = new Set(
     [
       resolved.mech.buff?.condition,
       ...(resolved.mech.buff?.variants ?? []),
+      ...(resolved.mech.buff?.bySlot ?? []).map(([, name]) => name),
       resolved.mech.condition?.name,
+      ...(resolved.mech.condition?.also ?? []),
+      ...(resolved.mech.condition?.variants ?? []),
+      resolved.mech.hitPointPool?.condition,
     ]
       .filter((name): name is string => Boolean(name))
       .map((name) => name.toLowerCase()),
   );
-  if (!wanted.size) {
-    return;
-  }
+  const spellNames = new Set([spellKey(spell), spellKey(resolved.name)]);
   const encounter = getActiveEncounter(campaign.id);
   for (const target of listSheets(campaign.id)) {
-    const held = target.conditions.filter((condition) => wanted.has(condition.toLowerCase()));
+    const meta = target.conditionMeta as ConditionMetaMap;
+    const held = target.conditions.filter((condition) =>
+      heldBySpell(condition, meta[condition], spellNames, conditionNames, casterId),
+    );
     // A polymorphed target reverts to their own body with the condition.
     const revertsForm =
-      wanted.has("polymorphed") && target.wildShape?.kind === "polymorph";
-    if (!held.length && !revertsForm) {
+      held.some((condition) => condition.toLowerCase() === "polymorphed") && target.wildShape?.kind === "polymorph";
+    if (!held.length) {
       continue;
     }
     const cleared = removeConditions(target.conditions, target.conditionMeta, held);
@@ -170,6 +193,7 @@ export function clearSpellConditionsByName(
       conditions: cleared.conditions,
       conditionMeta: cleared.meta,
       ...(revertsForm ? { wildShape: null } : {}),
+      ...spellEndPatch(target, held),
     });
     if (updated) {
       publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
@@ -182,8 +206,9 @@ export function clearSpellConditionsByName(
     if (enemy.status !== "alive") {
       continue;
     }
+    const meta = enemy.conditionMeta as ConditionMetaMap;
     const held = (enemy.conditions ?? []).filter((condition) =>
-      wanted.has(condition.toLowerCase()),
+      heldBySpell(condition, meta[condition], spellNames, conditionNames, casterId),
     );
     if (held.length) {
       const cleared = removeConditions(enemy.conditions ?? [], enemy.conditionMeta, held);
@@ -199,6 +224,28 @@ export function clearSpellConditionsByName(
       patchEnemyConditions(enemy.id, cleared.conditions, cleared.meta);
     }
   }
+}
+
+// What else a sheet gives back when a spell's condition ends: Aid's extra
+// hit points ("aided (+10)" carries the amount), down to the maximum it
+// raised.
+export function spellEndPatch(
+  sheet: Pick<CharacterSheet, "maxHp" | "currentHp">,
+  ended: string[],
+): { maxHp?: number; currentHp?: number } {
+  let lost = 0;
+  for (const name of ended) {
+    // Aid and Heroes' Feast carry what they gave in the name.
+    const aid = /^(?:aided|heroes' feast) \(\+(\d+)\)$/i.exec(name.trim());
+    if (aid) {
+      lost += Number(aid[1]);
+    }
+  }
+  if (!lost) {
+    return {};
+  }
+  const maxHp = Math.max(1, sheet.maxHp - lost);
+  return { maxHp, currentHp: Math.min(sheet.currentHp, maxHp) };
 }
 
 // Called from apply_damage after HP lands. Rolls the CON save (DC 10 or
@@ -221,6 +268,12 @@ export function concentrationDamageHook(
   if (fresh.currentHp <= 0) {
     breakConcentration(campaign, turnId, fresh.id, "dropped to 0 HP");
     return { concentrationBroken: spell };
+  }
+  // Grasping Tentacles: damage cannot break the concentration on Evard's
+  // Black Tentacles (src/lib/srd/authored-effects-more.ts).
+  const guarded = authoredConcentrationGuard(fresh, spell);
+  if (guarded) {
+    return { concentration: { spell, held: true, guarded: `${guarded.feature}: damage cannot break it` } };
   }
   const dc = Math.max(10, Math.floor(damage / 2));
   // A nearby paladin's aura protects concentration checks too (map-scoped).

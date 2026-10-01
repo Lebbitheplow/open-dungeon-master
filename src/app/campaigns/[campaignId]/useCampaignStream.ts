@@ -1322,6 +1322,13 @@ export function useCampaignStream(campaignId: string) {
           if (eventType === "encounter_updated" && capsRef.current.enemyNumbers) {
             void refreshEncounter();
           }
+          // An attack roll is when a reaction becomes possible (the engine's
+          // last-hit record) and when a turn's count moves; the projection
+          // carrying both is pulled again, coalesced, so the Hand's reaction
+          // prompt and its pips arrive with the roll.
+          if (eventType === "roll_result" && !capsRef.current.enemyNumbers) {
+            void refreshEncounter();
+          }
           if (
             eventType === "roll_result" &&
             (payload.roll as { hidden?: boolean } | undefined)?.hidden &&
