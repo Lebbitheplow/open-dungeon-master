@@ -120,6 +120,15 @@ export function handleAoeDamage(
   for (const ref of (args.targets ?? "").split(",").map((part) => part.trim()).filter(Boolean)) {
     addRef(ref);
   }
+  // The dead are beyond an area's harm: no save, no damage, no condition,
+  // and no place on its card (apply_damage refuses them anyway).
+  const skippedDead = pcTargets.filter((sheet) => sheet.deathSaves?.dead).map((sheet) => sheet.name);
+  if (skippedDead.length) {
+    pcTargets.splice(0, pcTargets.length, ...pcTargets.filter((sheet) => !sheet.deathSaves?.dead));
+    if (!enemyTargets.length && !pcTargets.length) {
+      return { error: `${skippedDead.join(", ")} ${skippedDead.length === 1 ? "is" : "are"} dead; the area catches nobody it can harm. Nothing was spent.` };
+    }
+  }
   // A creature Blink, Etherealness, Maze or a Resilient Sphere took away is
   // beyond the area's reach, and a caster off the Material Plane reaches
   // nobody (src/lib/dm/spell-planes.ts).
@@ -205,7 +214,7 @@ export function handleAoeDamage(
     // Prismatic Spray rolls a ray for each creature (prismatic.ts).
     if (isPrismaticSpray(planned.spell)) {
       const results = castPrismaticSpray({ campaign, turn, caster: planned.caster, dc: planned.dc, enemies: enemyTargets, characters: pcTargets.filter((sheet) => !planned.sculpted.includes(sheet.id)), sheets, sheetsById });
-      return { ok: true, spell: planned.spell, caster: planned.caster.name, dc: planned.dc, saveAbility: "dex", results, ...(planned.corrections.length ? { corrected: planned.corrections } : {}) };
+      return { ok: true, spell: planned.spell, caster: planned.caster.name, dc: planned.dc, saveAbility: "dex", results, ...(planned.corrections.length ? { corrected: planned.corrections } : {}), ...(skippedDead.length ? { skippedDead } : {}) };
     }
     args.damage = planned.damage ?? undefined;
     args.saveAbility = planned.saveAbility;
@@ -507,6 +516,7 @@ export function handleAoeDamage(
     results,
     ...(corrections.length ? { corrected: corrections } : {}),
     ...(unmatched.length ? { unmatchedTargets: unmatched } : {}),
+    ...(skippedDead.length ? { skippedDead } : {}),
     ...(enemyConcentration ? { enemyConcentration } : {}),
     ...(area ? { area } : {}),
     ...(beyondReach.length ? { outOfReach: `${beyondReach.join(", ")} ${beyondReach.length === 1 ? "is" : "are"} off the Material Plane; the spell does not touch them.` } : {}),

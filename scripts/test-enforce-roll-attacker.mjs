@@ -462,6 +462,41 @@ await test("An area that catches only hidden enemies names none of them, and the
   assert.equal(hidden.currentHp, hidden.maxHp - 24);
 });
 
+await test("A dead character caught in an area rolls no save, takes nothing and is not named; the result says they were skipped.", async () => {
+  const { world: spells, sheets: [aria, bren], enemies: [mage] } = await table(
+    [{ ...FIGHTER, name: "Aria" }, { ...FIGHTER, name: "Bren" }], 1, { spells: ["Fireball"] },
+  );
+  spells.patch(bren.id, { currentHp: 0, deathSaves: { successes: 0, failures: 3, stable: false, dead: true } });
+  const dead = spells.sheet(bren.id);
+  const before = new Set(listRecentRolls(spells.campaignId, 200).map((roll) => roll.id));
+  spells.dice(...new Array(8).fill(3), 1);
+  const out = await spells.invoke("aoe_damage", { casterEnemyId: mage.id, spell: "Fireball", characterIds: [aria.id, bren.id], saveAbility: "dex", dc: 15, damage: "8d6", type: "fire" });
+  assert.equal(spells.clearDice(), 0, "a die was queued for a save nobody rolled");
+  assert.equal(out.ok, true, out.error);
+  assert.deepEqual(out.result.skippedDead, ["Bren"]);
+  assert.deepEqual(out.result.results.map((row) => row.target), ["Aria"]);
+  const made = listRecentRolls(spells.campaignId, 200).filter((roll) => !before.has(roll.id));
+  assert.equal(made.some((roll) => roll.characterId === bren.id), false, "the dead character rolled a save");
+  const [blast] = combatSince(before, spells.campaignId);
+  expectRoll(blast, { kind: "damage", attacker: asEnemy(mage), detail: "Fireball on Aria", characterId: null });
+  assert.deepEqual(spells.sheet(bren.id), dead);
+});
+
+await test("An area that catches only the dead is refused, and the caster's action is not spent.", async () => {
+  const { world: spells, sheets: [aria, bren], enemies: [mage] } = await table(
+    [{ ...FIGHTER, name: "Aria" }, { ...FIGHTER, name: "Bren" }], 1, { spells: ["Fireball"] },
+  );
+  spells.patch(bren.id, { currentHp: 0, deathSaves: { successes: 0, failures: 3, stable: false, dead: true } });
+  const before = new Set(listRecentRolls(spells.campaignId, 200).map((roll) => roll.id));
+  const refused = await spells.invoke("aoe_damage", { casterEnemyId: mage.id, spell: "Fireball", characterIds: [bren.id], saveAbility: "dex", dc: 15, damage: "8d6", type: "fire" });
+  assert.equal(refused.ok, false, "a Fireball on the dead alone went through");
+  assert.equal(listRecentRolls(spells.campaignId, 200).filter((roll) => !before.has(roll.id)).length, 0);
+  spells.dice(...new Array(8).fill(3), 1);
+  const cast = await spells.invoke("aoe_damage", { casterEnemyId: mage.id, spell: "Fireball", characterIds: [aria.id], saveAbility: "dex", dc: 15, damage: "8d6", type: "fire" });
+  spells.clearDice();
+  assert.equal(cast.ok, true, `the refused cast spent the action: ${cast.error}`);
+});
+
 await kit.endFight();
 closeTables();
 world.close();
