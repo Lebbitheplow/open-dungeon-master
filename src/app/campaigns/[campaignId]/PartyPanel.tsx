@@ -1,7 +1,11 @@
 "use client";
 
 import { Bot, Check, Crown, Heart, ImagePlus, PawPrint, Save, Sparkles, UserPlus } from "lucide-react";
-import { describeConditionDuration } from "@/lib/dm/condition-logic";
+import { describeExhaustion } from "@/lib/dm/condition-logic";
+import { namesLookup } from "@/lib/battlemap/condition-notes";
+import { conditionIconKey } from "@/lib/battlemap/condition-glyphs";
+import { conditionDetail, maxHpView } from "@/components/sheet/sheet-state";
+import type { PublicEncounter } from "@/lib/db/encounter-view";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { KitButton, SettingToggle } from "./PanelKit";
@@ -24,6 +28,12 @@ import type { Genre } from "@/lib/schemas/game-settings";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { computeSheetDerived, formatModifier } from "@/lib/srd";
 import { usePackArt } from "@/lib/worlds/use-pack-art";
+
+// Inspiration held (resources.inspiration, used below its one use).
+function inspired(sheet: CharacterSheet): boolean {
+  const pool = sheet.resources?.inspiration;
+  return Boolean(pool && pool.used < pool.max);
+}
 
 // Mid-game physical-dice opt-in/out; the same per-member preference the
 // Lobby toggle writes. Turning it ON means the DM pauses on your rolls and
@@ -167,6 +177,7 @@ export function PartyPanel({
   realDiceAllowed = false,
   encumbranceRule = false,
   inCombat = false,
+  encounter = null,
   campaignId = "",
   companionsAvailable = false,
   companionBuildAvailable = false,
@@ -204,6 +215,9 @@ export function PartyPanel({
   realDiceAllowed?: boolean;
   // Active encounter: the owner's counter steppers lock the recover side.
   inCombat?: boolean;
+  // The fight as the engine projects it: whose turn it is, and the names a
+  // condition's "until X's turn" or "from X" may show.
+  encounter?: PublicEncounter | null;
   // AI companions: when a party or guest slot is free, show the request button.
   campaignId?: string;
   companionsAvailable?: boolean;
@@ -250,6 +264,13 @@ export function PartyPanel({
   const croppingSheet = sheets.find((sheet) => sheet.id === croppingSheetId);
   const notesSheet = sheets.find((sheet) => sheet.id === notesSheetId);
   const myMember = members.find((member) => member.userId === meUserId);
+  // Who a condition's metadata may name: the party, and the fight's order as
+  // this viewer sees it.
+  const conditionNames = [
+    ...sheets.map((entry) => ({ id: entry.id, name: entry.name })),
+    ...(encounter?.order ?? []).map((entry) => ({ id: entry.id, name: entry.name })),
+  ];
+  const nameOf = namesLookup(conditionNames);
   const Wrapper = embedded ? "div" : "aside";
 
   // Safety net for the Radix dropdown-opens-dialog race: whenever every
@@ -298,12 +319,14 @@ export function PartyPanel({
         // Wild Shape: the beast's pool is what damage actually hits, so the
         // bar tracks it and the druid's own hit points wait in the label.
         const shape = sheet.wildShape;
+        // The maximum the engine heals to (exhaustion 4 halves it).
+        const hp = maxHpView(sheet);
         const hpFraction = shape
           ? shape.beastMaxHp > 0
             ? shape.beastHp / shape.beastMaxHp
             : 0
-          : sheet.maxHp > 0
-            ? sheet.currentHp / sheet.maxHp
+          : hp.max > 0
+            ? sheet.currentHp / hp.max
             : 0;
         const publicNoteCount = notes.filter(
           (note) => note.characterId === sheet.id && note.visibility === "public",
@@ -421,7 +444,7 @@ export function PartyPanel({
             {shape ? (
               <div
                 className="mt-2 flex items-center gap-1.5 rounded-md border border-lime-800/60 bg-lime-950/40 px-2 py-1 text-xs text-lime-300"
-                title={`Wild Shaped: damage hits the beast's hit points first. ${sheet.name}'s own ${sheet.currentHp}/${sheet.maxHp} waits for them when the form breaks.`}
+                title={`Wild Shaped: damage hits the beast's hit points first. ${sheet.name}'s own ${sheet.currentHp}/${hp.max} waits for them when the form breaks.`}
               >
                 <PawPrint className="size-3.5 shrink-0" />
                 <span className="truncate capitalize">{shape.form}</span>
@@ -456,22 +479,24 @@ export function PartyPanel({
               {shape ? (
                 <span
                   className="font-mono text-xs text-lime-300"
-                  title={`Beast form hit points. ${sheet.name}'s own: ${sheet.currentHp}/${sheet.maxHp}`}
+                  title={`Beast form hit points. ${sheet.name}'s own: ${sheet.currentHp}/${hp.max}`}
                 >
                   {shape.beastHp}
                   {sheet.tempHp ? `+${sheet.tempHp}` : ""}/{shape.beastMaxHp}
                 </span>
               ) : (
-                <CountPop value={`${sheet.currentHp}+${sheet.tempHp}`} className="font-mono text-xs">
-                  {sheet.currentHp}
-                  {sheet.tempHp ? `+${sheet.tempHp}` : ""}/{sheet.maxHp}
+                <CountPop value={`${sheet.currentHp}+${sheet.tempHp}/${hp.max}`} className={cn("font-mono text-xs", hp.note && "text-orange-300")}>
+                  <span title={hp.note ?? undefined}>
+                    {sheet.currentHp}
+                    {sheet.tempHp ? `+${sheet.tempHp}` : ""}/{hp.max}
+                  </span>
                 </CountPop>
               )}
             </div>
 
             {shape ? (
               <div className="reveal mt-1 text-right font-mono text-[10px] text-stone-500">
-                own {sheet.currentHp}/{sheet.maxHp}
+                own {sheet.currentHp}/{hp.max}
               </div>
             ) : null}
 
@@ -596,29 +621,42 @@ export function PartyPanel({
               </div>
             ) : null}
 
-            {sheet.conditions.length || sheet.concentratingOn || (sheet.exhaustion ?? 0) > 0 ? (
+            {sheet.conditions.length || sheet.concentratingOn || (sheet.exhaustion ?? 0) > 0 || inspired(sheet) ? (
               <div className="stagger-pop mt-1.5 flex flex-wrap gap-1">
                 {(sheet.exhaustion ?? 0) > 0 ? (
                   <span
                     className="inline-flex items-center gap-1 rounded-full bg-orange-950 px-2 py-0.5 text-xs text-orange-300"
-                    title="Exhaustion level (a long rest reduces it by one)"
+                    title={`${describeExhaustion(sheet.exhaustion ?? 0)}. A long rest lowers it by one.`}
                   >
                     <GameIcon icon={{ kind: "glyph", key: "rest-exhaustion" }} size="size-4" />
                     exhaustion {sheet.exhaustion}
                   </span>
                 ) : null}
-                {sheet.conditions.map((condition) => (
+                {sheet.conditions.map((condition) => {
+                  // Rounds, "until Kael's turn", "save ends (WIS 13)", "from
+                  // Goblin 2": what the engine stored with the condition.
+                  const detail = conditionDetail(sheet, condition, nameOf);
+                  return (
+                    <span
+                      key={condition}
+                      className="motion-pop inline-flex max-w-full items-center gap-1 rounded-full bg-red-950 px-2 py-0.5 text-xs text-red-300"
+                      title={detail || undefined}
+                    >
+                      <GameIcon icon={{ kind: "condition", key: conditionIconKey(condition) }} size="size-4" className="border-red-800/60" />
+                      {condition}
+                      {detail ? <span className="truncate text-red-300/70">({detail})</span> : null}
+                    </span>
+                  );
+                })}
+                {inspired(sheet) ? (
                   <span
-                    key={condition}
-                    className="inline-flex items-center gap-1 rounded-full bg-red-950 px-2 py-0.5 text-xs text-red-300"
+                    className="motion-pop inline-flex items-center gap-1 rounded-full bg-amber-950 px-2 py-0.5 text-xs text-amber-200"
+                    title="Inspiration: spent for advantage on one attack, save or check."
                   >
-                    <GameIcon icon={{ kind: "condition", key: condition }} size="size-4" className="border-red-800/60" />
-                    {condition}
-                    {sheet.conditionMeta?.[condition]?.rounds
-                      ? ` (${describeConditionDuration(sheet.conditionMeta[condition].rounds)})`
-                      : ""}
+                    <GameIcon icon={{ kind: "glyph", key: "rest-inspiration" }} size="size-4" />
+                    Inspiration
                   </span>
-                ))}
+                ) : null}
                 {sheet.concentratingOn ? (
                   <span
                     className="inline-flex items-center gap-1 rounded-full bg-sky-950 px-2 py-0.5 text-xs text-sky-300"
@@ -708,6 +746,8 @@ export function PartyPanel({
           corrects={Boolean(steersStory) || meUserId === leadUserId}
           encumbranceRule={encumbranceRule}
           inCombat={inCombat}
+          myTurn={encounter?.acting?.id === viewingSheet.id}
+          names={conditionNames}
           portraitFallback={packArt.characterUrl({ race: viewingSheet.race, class: viewingSheet.class })}
           onAdjust={() => {
             // Close the sheet dialog fully before mounting the edit dialog;

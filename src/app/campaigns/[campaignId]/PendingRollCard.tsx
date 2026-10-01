@@ -1,6 +1,6 @@
 "use client";
 
-import { Dices, Loader2, Smartphone } from "lucide-react";
+import { Dices, Loader2, Smartphone, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { CampaignMember } from "@/lib/campaign-types";
 import { cn } from "@/lib/cn";
@@ -22,6 +22,8 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { PendingRoll } from "@/app/campaigns/[campaignId]/useCampaignStream";
 import { CheckDie, CheckFrame, ModifierBreakdown } from "@/app/campaigns/[campaignId]/SkillCheckCard";
 import { findSkill } from "@/lib/srd";
+import { heldInspiration } from "@/lib/dm/roll-riders";
+import { INSPIRED_KINDS } from "@/lib/dm/pending-inspiration";
 
 const KIND_TITLES: Record<string, string> = {
   skill_check: "Skill check",
@@ -253,6 +255,29 @@ export function PendingRollCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shakeActive, busy, heldOnly, complete, faces, values]);
 
+  // Inspiration: advantage on this d20 before it is thrown (SRD 5.1). Offered
+  // while the character holds it and the roll could use it; the route answers
+  // with the rule's sentence when it cannot.
+  const canInspire =
+    Boolean(character && heldInspiration(character)) &&
+    (INSPIRED_KINDS as readonly string[]).includes(pending.kind) &&
+    pending.advantage !== "advantage";
+  async function inspire() {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/pending-rolls/${pending.id}/inspiration`, { method: "POST" });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        setError(data.error || "Could not spend your Inspiration.");
+      }
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function stopHolding() {
     await fetch(`/api/campaigns/${campaignId}/members/me`, {
       method: "PATCH",
@@ -317,6 +342,17 @@ export function PendingRollCard({
             <span className="min-w-0">Your roll: {label}</span>
           </p>
           {pending.reason ? <p className="check-dim mt-0.5 text-xs">{pending.reason}</p> : null}
+          {canInspire ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void inspire()}
+              title="Spend your Inspiration: advantage on this roll."
+              className="motion-pop motion-press mt-1.5 inline-flex min-h-9 items-center gap-1.5 rounded-full border border-amber-400/60 bg-amber-500/10 px-3 text-xs text-amber-100 transition-colors duration-150 hover:bg-amber-500/20 disabled:opacity-50 sm:min-h-8"
+            >
+              <Sparkles className="size-3.5" /> Spend Inspiration
+            </button>
+          ) : null}
       {heldOnly ? (
         <>
           {advantageNote ? (

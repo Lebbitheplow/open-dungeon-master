@@ -10,10 +10,10 @@ const {
   matchResource,
   populateResources,
   rageDamageBonus,
-  refillResources,
   resourceDef,
   spendRelentlessEndurance,
 } = await import("../src/lib/srd/class-resources.ts");
+const { refillResources } = await import("../src/lib/srd/resource-refills.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -177,9 +177,15 @@ test("Breath Weapon routes to the AoE engine with growing dice", () => {
   assert.equal(effect.dice(16), "5d6");
 });
 
-test("Relentless Endurance is the only passive def", () => {
+// Passive: never spent with use_resource. Relentless Endurance and
+// Relentless Rage are burned by the damage path; Inspiration is spent by the
+// roll it gives advantage to (useInspiration).
+test("the passive defs are the ones something else spends", () => {
   const passive = RESOURCE_DEFS.filter((def) => def.passive).map((def) => def.id);
-  assert.deepEqual(passive, ["relentless_endurance"]);
+  // Signature Spells and Overchannel are spent by the cast itself
+  // (src/lib/dm/caster-features.ts). The Arcane Ward's pool and its
+  // raised-today mark are kept by the abjuration cast and the damage path.
+  assert.deepEqual(passive, ["relentless_endurance", "inspiration", "relentless_rage", "signature_spell_1", "signature_spell_2", "overchannel", "sub_arcane_ward", "sub_arcane_ward_raised"]);
 });
 
 test("Relentless Endurance spends once, then refuses", () => {

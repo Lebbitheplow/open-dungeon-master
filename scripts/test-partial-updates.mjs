@@ -216,6 +216,9 @@ const RULESET = {
     powerfulCritical: false,
     criticalDamageMods: false,
     ammunition: true,
+    // The food-and-water variant the gear workstream added; a ruleset
+    // stores every variant, so the fixture names it.
+    supplies: false,
     restVariant: "gritty",
   },
   houseRulesText: "No long rests in dungeons.",

@@ -21,7 +21,6 @@ import {
   findClass,
   findSkill,
   levelForXp,
-  spellSlotsFor,
 } from "@/lib/srd";
 import { asiLevelsFor } from "@/lib/srd/asi";
 import { asiOwed } from "@/lib/srd/asi-ledger";
@@ -35,7 +34,6 @@ import {
   multiclassGrantsFor,
 } from "@/lib/srd/multiclass";
 import {
-  expertiseSlotsFor,
   populateFeaturesForClasses,
   subclassBlurb,
   subclassLevelFor,
@@ -49,11 +47,17 @@ import {
   fightingStyleSlots,
   type FightingStyleId,
 } from "@/lib/srd/feature-effects";
-import { spellClassFor } from "@/lib/classes";
 import { spellStyleFor, spellbookAllowance } from "@/lib/srd/spell-prep";
+import {
+  abilitiesAfterLevel,
+  casterPreview,
+  expertiseOpen,
+  freeCantripsIn,
+  levelUpHpPreview,
+  thirdCasterPickRefusal,
+} from "./level-up-preview";
 import { SpellBook, type SpellTile } from "@/components/sheet/SpellBook";
 import { useSpellPool } from "@/components/sheet/useSpellPool";
-import { suggestedCantripCount, suggestedSpellCount } from "@/lib/content/mechanics";
 import AsiFeatEditor from "@/app/characters/builder/AsiFeatEditor";
 import { useArchetypes } from "@/app/characters/builder/useBuilderOptions";
 import type { AsiChoice, CharacterSheet } from "@/lib/schemas/sheet";
@@ -194,11 +198,12 @@ export function LevelUpDialog({
 
   const klass = chosenKlass ?? findClass(sheet.class);
   const hitDie = chosenKlass?.hitDie ?? Number(sheet.hitDice.die.replace("d", "")) ?? 8;
-  const conMod = abilityMod(sheet.abilities.con);
-  // What the level adds under a method that needs no dice, before any
-  // Constitution raised by this level (the server counts that too).
-  const fixedFace = hpMethod === "max" ? hitDie : fixedDieValue(hitDie);
-  const fixedGain = Math.max(1, fixedFace + conMod);
+  // The scores after this level's improvements (and Primal Champion at
+  // barbarian 20), as the server applies them before it counts hit points
+  // and the spell allowance (U:UB5, UB6).
+  const pickedChoices = asiChoices.filter((choice): choice is AsiChoice => choice !== null);
+  const after = abilitiesAfterLevel(sheet, pickedChoices, { id: classChoice, level: classLevelAfter });
+  const conMod = abilityMod(after.abilities.con);
 
   // The improvements the class list earns at the new level, less those the
   // sheet has taken: a fighter's 6th, a rogue's 10th, and an improvement an
@@ -218,8 +223,9 @@ export function LevelUpDialog({
   // each; the step appears when the new level grants unspent picks. Scales
   // by the chosen class's own level, so a rogue dip never grants bard picks.
   const currentExpertise = sheet.proficiencies.expertise ?? [];
-  const expertiseSlots = expertiseSlotsFor(classChoice, classLevelAfter);
-  const expertiseToPick = Math.max(0, expertiseSlots - currentExpertise.length);
+  // Summed over every class the character holds, as the server sums it
+  // (U:UB4): a rogue 6 taking bard 3 has bard's two on top of the rogue's.
+  const expertiseToPick = expertiseOpen(sheet, nextClasses);
   const expertiseOptions = sheet.proficiencies.skills.filter(
     (skill) => !currentExpertise.includes(skill),
   );
@@ -285,9 +291,33 @@ export function LevelUpDialog({
   const casterEntry = sheet.spellcasting?.casters?.find(
     (caster) => caster.classId.toLowerCase() === classChoice.toLowerCase(),
   );
-  const showSpells = isMulticlassPath
-    ? Boolean(chosenKlass && chosenKlass.casterType !== "none" && chosenKlass.spellAbility)
-    : Boolean(sheet.spellcasting);
+  const effectiveSubclass = subclassChoice || entrySubclass;
+  // The chosen class's casting at its new level, from the engine's tables:
+  // an Eldritch Knight or Arcane Trickster casts from the wizard's list
+  // (U:UB1), which the class row alone (no spell ability) never showed.
+  const caster = casterPreview({
+    classId: classChoice,
+    subclass: effectiveSubclass,
+    level: classLevelAfter,
+    abilitiesAfter: after.abilities,
+  });
+  const showSpells = caster.casts || (!isMulticlassPath && Boolean(sheet.spellcasting));
+  // The hit points, the per-level bonuses and Draconic Resilience included.
+  const classesAfter = nextClasses.map((entry) =>
+    entry.id.toLowerCase() === classChoice.toLowerCase()
+      ? { ...entry, subclass: effectiveSubclass || entry.subclass }
+      : entry,
+  );
+  const hpPreview = levelUpHpPreview({
+    sheet,
+    hitDie,
+    method: hpMethod,
+    abilitiesAfter: after.abilities,
+    featsAfter: after.feats,
+    classesAfter,
+    targetLevel,
+  });
+  const fixedGain = hpPreview.fixed;
 
   const steps = [
     ...(needsClassStep ? ["class"] : []),
@@ -302,7 +332,6 @@ export function LevelUpDialog({
   const step = steps[stepIndex];
   const lastStep = stepIndex === steps.length - 1;
 
-  const effectiveSubclass = subclassChoice || entrySubclass;
   const newFeatureNames = useMemo(() => {
     const current = new Set(sheet.features.map((feature) => feature.name.toLowerCase()));
     const withSubclass = nextClasses.map((entry) =>
@@ -318,16 +347,13 @@ export function LevelUpDialog({
   // The class's real spell list at the levels this character can now cast,
   // so nobody has to know 5e spell lists by heart. Multiclass, per RAW: the
   // learnable levels come from the class's OWN table at its class level.
-  const maxCastable = useMemo(() => {
-    const slotLevels = Object.keys(spellSlotsFor(classChoice, classLevelAfter)).map(Number);
-    return slotLevels.length ? Math.max(...slotLevels) : null;
-  }, [classChoice, classLevelAfter]);
+  const maxCastable = caster.maxLevel || null;
 
   // The class's whole list up to what it can now cast (the old search
   // stopped at sixty rows, cantrips first, which could leave a wizard with
   // nothing but cantrips to look at).
   const { pool: spellPool, loading: poolLoading } = useSpellPool(
-    spellClassFor(classChoice),
+    caster.list,
     maxCastable ?? 0,
     step === "spells",
   );
@@ -385,17 +411,8 @@ export function LevelUpDialog({
     () => new Set([...knownList, ...pendingList, ...cantripList].map((name) => name.toLowerCase())),
     [knownList, pendingList, cantripList],
   );
-  const allowanceAbility = isMulticlassPath
-    ? (casterEntry?.ability ?? chosenKlass?.spellAbility ?? null)
-    : (sheet.spellcasting?.ability ?? null);
-  const allowance =
-    showSpells && allowanceAbility
-      ? suggestedSpellCount(
-          spellClassFor(classChoice),
-          classLevelAfter,
-          abilityMod(sheet.abilities[allowanceAbility]),
-        )
-      : null;
+  // Read with the scores after this level's improvement (U:UB6).
+  const allowance = showSpells ? caster.spellCap : null;
   // The subclass's always-prepared spells never count against the allowance.
   const grantedFree = useMemo(
     () =>
@@ -417,16 +434,16 @@ export function LevelUpDialog({
   // A spell given up makes room for one more.
   const remainingPicks =
     bookGain ?? (allowance ? Math.max(0, allowance.count - heldSpells) + (forgetPick ? 1 : 0) : null);
-  const cantripAllowance = showSpells
-    ? suggestedCantripCount(
-        spellClassFor(classChoice),
-        classLevelAfter,
-        (chosenKlass ?? findClass(sheet.class))?.casterType,
-      )
-    : null;
+  const cantripAllowance = showSpells ? caster.cantripCap : null;
+  // The race's cantrips (a high elf's pick, a tiefling's Thaumaturgy) are
+  // known on top of the class's and leave its count alone (U:UB2), as the
+  // level-up route counts them.
+  const freeCantrips = freeCantripsIn(sheet, cantripList);
   const remainingCantrips =
-    cantripAllowance !== null ? Math.max(0, cantripAllowance - cantripList.length) : null;
-  const levelStyle = spellStyleFor(classChoice);
+    cantripAllowance !== null
+      ? Math.max(0, cantripAllowance - Math.max(0, cantripList.length - freeCantrips))
+      : null;
+  const levelStyle = caster.style;
   // What can still be learned: the class list minus what is already held,
   // cantrips only while there is a cantrip to choose.
   const levelUpTiles: SpellTile[] = spellPool
@@ -621,7 +638,9 @@ export function LevelUpDialog({
               </button>
             </div>
           ) : (
-            <div className="space-y-4 text-sm">
+            // Keyed by the step, so each step arrives with the kit's fade-up
+            // instead of its content swapping in place.
+            <div key={step} className="reveal space-y-4 text-sm">
               {step === "hp" ? (
                 <>
                   <p className="text-stone-300">
@@ -651,7 +670,7 @@ export function LevelUpDialog({
                       <div className="stagger space-y-1.5" role="radiogroup" aria-label="Hit points">
                         {(
                           [
-                            ["roll", `Roll the d${hitDie}`, `${Math.max(1, 1 + conMod)} to ${Math.max(1, hitDie + conMod)} HP`],
+                            ["roll", `Roll the d${hitDie}`, `${hpPreview.min} to ${hpPreview.max} HP`],
                             ["average", "Take the average instead", `+${fixedGain} HP`],
                           ] as const
                         ).map(([value, label, note]) => (
@@ -688,6 +707,18 @@ export function LevelUpDialog({
                       <span className="font-mono text-amber-400">+{fixedGain} HP</span>
                     </div>
                   )}
+                  {hpPreview.extras.length || after.primalChampion ? (
+                    // What rides on top of the die, each counted in the
+                    // numbers above as the server counts it.
+                    <ul className="stagger space-y-0.5 text-xs text-stone-400" aria-label="Also added">
+                      {hpPreview.extras.map((line) => (
+                        <li key={line}>{line}</li>
+                      ))}
+                      {after.primalChampion ? (
+                        <li className="text-amber-200">Primal Champion: +4 Strength and Constitution (to 24)</li>
+                      ) : null}
+                    </ul>
+                  ) : null}
                 </>
               ) : null}
               {step === "class" ? (
@@ -1133,11 +1164,15 @@ export function LevelUpDialog({
                           tile.level === 0
                             ? remainingCantrips !== null && cantripPicks.length >= remainingCantrips
                             : remainingPicks !== null && spellPicks.length >= remainingPicks;
-                        if (full) {
+                        // An Eldritch Knight's or Arcane Trickster's schools, as the server judges them.
+                        const schoolOf = (name: string) => spellPool.find((spell) => spell.name === name)?.data?.school as string | undefined;
+                        const offSchool = tile.level === 0 ? null : thirdCasterPickRefusal({ classId: classChoice, subclass: effectiveSubclass, level: classLevelAfter, known: knownList, picks: spellPicks, adding: tile.name, schoolOf });
+                        if (full || offSchool) {
                           setSpellNote(
-                            tile.level === 0
-                              ? `That is every new cantrip for this level. Untick one to choose ${tile.name}.`
-                              : `That is every new spell for this level. Untick one to choose ${tile.name}.`,
+                            offSchool ??
+                              (tile.level === 0
+                                ? `That is every new cantrip for this level. Untick one to choose ${tile.name}.`
+                                : `That is every new spell for this level. Untick one to choose ${tile.name}.`),
                           );
                           return;
                         }

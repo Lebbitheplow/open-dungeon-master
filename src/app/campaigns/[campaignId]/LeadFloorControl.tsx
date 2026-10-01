@@ -7,6 +7,7 @@ import { SectionHead } from "@/components/ui/SectionHead";
 import { PanelError, kitButtonClass, panelField } from "./PanelKit";
 import type { Floor } from "@/lib/db/campaigns";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
+import { REFLEX_LABEL, orderRowKey } from "@/lib/battlemap/initiative-rows";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // Who may speak right now, from the lead's desk. The same route the DM
@@ -114,14 +115,18 @@ export function LeadFloorControl({
               <>
                 {" · "}
                 {encounter.order.map((entry, index) => (
+                  // Keyed by position: a thief's second round-1 turn repeats the id.
                   <span
-                    key={entry.id}
-                    className={
-                      index === encounter.turnIndex ? "font-medium text-amber-200" : undefined
-                    }
+                    key={orderRowKey(entry, index)}
+                    title={entry.reflex ? REFLEX_LABEL : undefined}
+                    className={cn(
+                      "transition-colors duration-200",
+                      index === encounter.turnIndex ? "font-medium text-amber-200" : undefined,
+                    )}
                   >
                     {index > 0 ? " > " : ""}
                     {entry.name}
+                    {entry.reflex ? <sup className="motion-pop ml-0.5 text-[9px] text-amber-300">2nd</sup> : null}
                   </span>
                 ))}
               </>

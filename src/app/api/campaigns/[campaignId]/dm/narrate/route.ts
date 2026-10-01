@@ -9,6 +9,7 @@ import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { enqueueNarrationAudio } from "@/lib/tts";
 import { getNpcById } from "@/lib/db/npcs";
 import type { Speaker } from "@/lib/dm/speech";
+import { agentNarrationProblem, closeAgentTurn, isAgentRequest } from "@/lib/dm/agent-turn";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -63,6 +64,16 @@ export async function POST(
     speaker = { kind: "npc", id: npc.id, name: npc.name };
   } else if (parsed.data.speaker?.kind === "monster" && parsed.data.speaker.name) {
     speaker = { kind: "monster", id: parsed.data.speaker.id ?? "", name: parsed.data.speaker.name };
+  }
+  // A connected agent program's prose is checked like the storyteller's,
+  // and a contradiction comes back to it as the rewrite prompt.
+  const agent = isAgentRequest(request);
+  const problem = agent ? agentNarrationProblem(campaign, parsed.data.content) : null;
+  if (problem) {
+    return Response.json({ error: problem }, { status: 409 });
+  }
+  if (agent) {
+    closeAgentTurn(campaignId);
   }
 
   const seq = allocateSeq(campaignId);

@@ -5,8 +5,36 @@ import type { OrderEntry } from "@/lib/db/encounters";
 
 // Sorts combatants into initiative order, descending. Ties break PCs first,
 // then by name, so the order is deterministic across rebuilds.
+// Thief's Reflexes (Thief 17): a second turn in the first round, at the
+// thief's initiative minus 10, unless the thief is surprised.
+export function withReflexTurns<T extends { characterId: string; initiative: number }>(
+  pcs: T[],
+  hasReflexes: (characterId: string) => boolean,
+  surprised: string[],
+): Array<T & { reflex?: boolean }> {
+  return [
+    ...pcs,
+    ...pcs
+      .filter((pc) => hasReflexes(pc.characterId) && !surprised.includes(pc.characterId))
+      .map((pc) => ({ ...pc, initiative: pc.initiative - 10, reflex: true })),
+  ];
+}
+
+// The order once round 1 is over: the reflex turns go, and the pointer keeps
+// its place (on the entry before a removed one, so the next step still
+// reaches the one after it).
+export function withoutReflexTurns(order: OrderEntry[], turnIndex: number): { order: OrderEntry[]; turnIndex: number } | null {
+  if (!order.some((entry) => entry.kind === "pc" && entry.reflex)) {
+    return null;
+  }
+  const kept = order.filter((entry) => !(entry.kind === "pc" && entry.reflex));
+  const before = order.slice(0, turnIndex + 1).filter((entry) => !(entry.kind === "pc" && entry.reflex)).length;
+  const index = before - 1;
+  return { order: kept, turnIndex: index < 0 ? kept.length - 1 : index };
+}
+
 export function buildOrder(
-  pcs: Array<{ characterId: string; userId: string; name: string; initiative: number }>,
+  pcs: Array<{ characterId: string; userId: string; name: string; initiative: number; reflex?: boolean }>,
   enemies: Array<{ enemyId: string; name: string; initiative: number }>,
 ): OrderEntry[] {
   const entries: OrderEntry[] = [
@@ -103,14 +131,18 @@ export function spliceIntoOrder(
 // Chebyshev distance on the battle map, tie-break lowest AC, falling back to
 // the lowest-AC candidate when positions are unknown. Pure so the test
 // suite covers it; candidates are pre-filtered to living PCs.
+//
+// A creature it cannot see (hidden, invisible) is picked only when nobody it
+// can see is left: it would have to guess where they are (SRD 5.1).
 export function pickEnemyTarget(
   attackerPosition: { x: number; y: number } | null,
-  candidates: Array<{ characterId: string; ac: number; position: { x: number; y: number } | null }>,
+  candidates: Array<{ characterId: string; ac: number; position: { x: number; y: number } | null; unseen?: boolean }>,
 ): string | null {
   if (!candidates.length) {
     return null;
   }
-  const scored = candidates.map((candidate) => ({
+  const seen = candidates.filter((candidate) => !candidate.unseen);
+  const scored = (seen.length ? seen : candidates).map((candidate) => ({
     characterId: candidate.characterId,
     ac: candidate.ac,
     distance:
@@ -176,11 +208,14 @@ export function coerceEncounterOutcome(
   return { outcome: "truce", inferred: true };
 }
 
+// Damage the engine rolled lands in full: no cap on one blow (a 250-point
+// Disintegrate is 250). What a caller may SEND is bounded by its tool's own
+// schema, not here.
 export function enemyDamageMath(
   currentHp: number,
   amount: number,
 ): { currentHp: number; dropped: boolean } {
-  const applied = Math.min(Math.max(Math.floor(amount), 1), 200);
+  const applied = Math.max(Math.floor(amount), 1);
   const next = Math.max(0, currentHp - applied);
   return { currentHp: next, dropped: currentHp > 0 && next === 0 };
 }

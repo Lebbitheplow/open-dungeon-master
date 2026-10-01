@@ -114,7 +114,7 @@ await test("Trip Attack: a Strength save against 8 + proficiency + Strength, pro
   assert.equal(kit.enemy(enemy.id).currentHp, 400 - 12);
 });
 
-await test("Menacing Attack: a Wisdom save, frightened for a round on a failure", async () => {
+await test("Menacing Attack: a Wisdom save, frightened of the fighter until the end of their next turn on a failure", async () => {
   const enemy = await stage();
   const out = await swing(enemy, [15, 4, 5, 2], { maneuver: "Menacing Attack" });
   assert.equal(out.ok, true, out.error);
@@ -122,7 +122,9 @@ await test("Menacing Attack: a Wisdom save, frightened for a round on a failure"
   assert.equal(save.total, 2 + DUMMY.saveMods.wis);
   assert.equal(save.dc, DC);
   assert.deepEqual(kit.enemy(enemy.id).conditions, ["frightened"]);
-  assert.equal(kit.enemy(enemy.id).conditionMeta.frightened.rounds, 1);
+  // SRD 5.1: "frightened of you until the end of your next turn".
+  assert.equal(kit.enemy(enemy.id).conditionMeta.frightened.untilTurnEndOf, kit.current().characterId);
+  assert.equal(kit.enemy(enemy.id).conditionMeta.frightened.source, kit.current().characterId);
 });
 
 await test("Precision Attack: the die goes on the attack roll and not on the damage", async () => {

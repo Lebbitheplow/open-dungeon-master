@@ -220,8 +220,18 @@ await test("an enemy's attack reads the same conditions", async () => {
     const [enemy] = await stage();
     world.patch(hero.id, { ac: 12, acOverride: true, conditions: theirs });
     kit.setEnemy(enemy.id, { conditions: mine });
+    // A prone creature stands before it attacks when it has the movement
+    // (SRD 5.1, Being Prone; enemy-approach.ts); with its speed spent it
+    // stays down and attacks at disadvantage.
+    if (mine.includes("prone")) {
+      kit.place(enemy.id, 5, 6, 99);
+    }
     expectState(await enemyRoll(enemy, hero), state, `${mine.join()} against ${theirs.join()}`);
   }
+  // With its movement to spend, a prone creature stands up first and swings on a straight roll.
+  const [enemy] = await stage();
+  kit.setEnemy(enemy.id, { conditions: ["prone"] });
+  expectState(await enemyRoll(enemy, hero), "none", "a prone enemy with its speed stood up first");
   world.patch(hero.id, { conditions: [] });
 });
 

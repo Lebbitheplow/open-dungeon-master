@@ -52,6 +52,7 @@ type SheetRow = {
   resources_json: string | null;
   wild_shape_json: string | null;
   pets_json: string | null;
+  summon_json?: string | null;
   exhaustion: number | null;
   death_saves_json: string | null;
   concentrating_on: string | null;
@@ -130,6 +131,7 @@ function mapSheet(row: SheetRow): CharacterSheet {
     resources: parseJson<CharacterSheet["resources"]>(row.resources_json, {}),
     wildShape: parseJson<CharacterSheet["wildShape"]>(row.wild_shape_json, null),
     pets: parseJson<CharacterSheet["pets"]>(row.pets_json, []),
+    summon: parseJson<CharacterSheet["summon"]>(row.summon_json ?? null, null),
     exhaustion: row.exhaustion ?? 0,
     deathSaves: parseJson<CharacterSheet["deathSaves"]>(row.death_saves_json, null),
     concentratingOn: row.concentrating_on ?? null,
@@ -153,7 +155,7 @@ const SHEET_COLUMNS = `
   abilities_json, max_hp, current_hp, temp_hp, ac, ac_override, speed, hit_dice_json,
   classes_json, hit_dice_pools_json,
   proficiencies_json, equipment_json, gold, copper, feats_json, features_json,
-  spellcasting_json, conditions_json, condition_meta_json, resources_json, wild_shape_json, pets_json, exhaustion, death_saves_json, concentrating_on,
+  spellcasting_json, conditions_json, condition_meta_json, resources_json, wild_shape_json, pets_json, summon_json, exhaustion, death_saves_json, concentrating_on,
   portrait_json, notes, backstory, is_companion, companion_kind, personality, created_at, updated_at
 `;
 
@@ -169,6 +171,15 @@ export function markSheetAsCompanion(
       `UPDATE character_sheets SET is_companion = 1, companion_kind = ?, personality = ? WHERE id = ?`,
     )
     .run(kind, personality, sheetId);
+  return getSheetById(sheetId);
+}
+
+// Marks a sheet as a creature a spell or feature made (src/lib/dm/summon-store.ts),
+// or clears the mark. Kept out of patchSheet like the companion flag above.
+export function setSheetSummon(sheetId: string, summon: CharacterSheet["summon"]): CharacterSheet | null {
+  getDatabase()
+    .prepare(`UPDATE character_sheets SET summon_json = ? WHERE id = ?`)
+    .run(summon ? JSON.stringify(summon) : null, sheetId);
   return getSheetById(sheetId);
 }
 
@@ -686,6 +697,8 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
       // Effect conditions (Shield of Faith, Mage Armor, Barkskin) move the
       // stored AC while they hold; expiry recomputes it right back.
       conditions: next.conditions,
+      // Durable Magic's +2 holds while a spell is concentrated on.
+      concentratingOn: next.concentratingOn,
     });
   }
 
@@ -715,7 +728,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
       JSON.stringify(next.proficiencies),
       // Never above the maximum the character really has: exhaustion level 4
       // halves it for as long as it lasts (dm/condition-logic.ts).
-      Math.min(next.currentHp, effectiveMaxHp({ maxHp: next.maxHp, exhaustion: next.exhaustion })),
+      Math.min(next.currentHp, effectiveMaxHp(next)),
       next.tempHp,
       next.maxHp,
       next.ac,

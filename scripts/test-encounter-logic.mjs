@@ -117,7 +117,8 @@ test("enemyDamageMath clamps and flags the drop", () => {
   assert.deepEqual(enemyDamageMath(10, 4), { currentHp: 6, dropped: false });
   assert.deepEqual(enemyDamageMath(10, 15), { currentHp: 0, dropped: true });
   assert.deepEqual(enemyDamageMath(0, 15), { currentHp: 0, dropped: false });
-  assert.deepEqual(enemyDamageMath(500, 999), { currentHp: 300, dropped: false });
+  // Engine-rolled damage is not capped (SRD 5.1): 999 drops a 500 HP creature.
+  assert.deepEqual(enemyDamageMath(500, 999), { currentHp: 0, dropped: true });
   assert.deepEqual(enemyDamageMath(10, 0), { currentHp: 9, dropped: false });
 });
 

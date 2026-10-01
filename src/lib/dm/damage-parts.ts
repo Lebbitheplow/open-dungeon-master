@@ -32,14 +32,19 @@ export function damageParts(
   const claimed = new Set<number>();
   const byType = new Map<string, number>();
   for (const rider of [...riders].reverse()) {
-    const match = /^(\d+)d(\d+)$/i.exec(rider.dice.trim());
+    // A monster's rider can carry its own flat part ("plus 17 (2d10 + 6)
+    // slashing damage", a behir's Constrict): that number is the rider's
+    // share of the rolled total, once, as a critical never doubles it.
+    const match = /^(\d+)d(\d+)(?:([+-])(\d+))?$/i.exec(rider.dice.replace(/\s+/g, ""));
     const type = rider.type.trim().toLowerCase();
     if (!match || !type || type === weaponType.trim().toLowerCase()) {
       continue;
     }
     const count = Number(match[1]);
     const sides = Number(match[2]);
-    let wanted = options.crit ? 2 : 1;
+    const flat = match[4] ? (match[3] === "-" ? -1 : 1) * Number(match[4]) : 0;
+    const copies = options.crit ? 2 : 1;
+    let wanted = copies;
     let amount = 0;
     for (let index = last - 1; index >= 0 && wanted > 0; index -= 1) {
       const term = terms[index];
@@ -63,6 +68,10 @@ export function damageParts(
         amount += termValue(next);
         wanted -= 1;
       }
+    }
+    // The flat part rides only dice that were found in the roll.
+    if (wanted < copies) {
+      amount += flat;
     }
     if (amount > 0) {
       byType.set(type, (byType.get(type) ?? 0) + amount);

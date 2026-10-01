@@ -1,43 +1,26 @@
 import { z } from "zod";
-import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
-import {
-  getActiveEncounter,
-  listEnemies,
-  patchEnemyConditions,
-  saveEncounter,
-  type EncounterEnemy,
-} from "@/lib/db/encounters";
+import type { Campaign } from "@/lib/db/campaigns";
+import { getActiveEncounter } from "@/lib/db/encounters";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
-import { insertRoll } from "@/lib/db/rolls";
 import type { DmTurn } from "@/lib/db/dm-turns";
-import { d20Expression, rollExpression } from "@/lib/dice";
-import { publishPersisted, publishWithSeq } from "@/lib/events";
-import { abilityMod, acBreakdownFor, computeSheetDerived, sizeForRace } from "@/lib/srd";
-import {
-  conditionBlocksReactions,
-  conditionExtraActions,
-} from "@/lib/srd/condition-effects";
-import { passivePerceptionFor, saveModFor, sizeRank } from "@/lib/bestiary/statblock";
-import { spendAction, type ActionKind, type TurnBudget } from "@/lib/dm/action-budget";
+import { publishPersisted } from "@/lib/events";
+import { conditionExtraActions } from "@/lib/srd/condition-effects";
+import { spendAction, spendAttack, type SpendResult, type TurnBudget } from "@/lib/dm/action-budget";
+import { addSheetCondition } from "@/lib/dm/action-common";
+import { bonusRouteFor, kiSpend, noBonusRoute, type MoveAction } from "@/lib/dm/bonus-actions";
+import { authoredBonusRoute } from "@/lib/srd/authored-economy";
+import { EXPEDITIOUS_RETREAT, hasFastHands } from "@/lib/dm/bonus-routes";
+import { BONUS_SPELL } from "@/lib/dm/cast-rules";
 import { attacksAllowedFor, budgetFor, storeBudget } from "@/lib/dm/turn-budget";
 import { canAct } from "@/lib/dm/can-act";
-import { seenClearlyBy, tilesBetween, wallBetween } from "@/lib/dm/attack-spatial";
-import { pushTokenAway } from "@/lib/dm/map-tools";
-
-import { resolveEnemyRef, publishEncounter } from "@/lib/dm/enemy-damage";
-// For the Shield spell's slot spend; mutations never imports back.
-import { applyDmMutation } from "@/lib/dm/mutations";
+import { characterEscape, enemyEscape } from "@/lib/dm/grapple";
+import { readyAction, searchAction, objectAction } from "@/lib/dm/object-actions";
 import { resolveSheetRef } from "@/lib/dm/rolls";
-import {
-  DODGING,
-  exhaustionRollState,
-  mergeAdvantage,
-  rollDerivation,
-  type AdvantageState,
-} from "@/lib/dm/condition-logic";
+import { readySpell } from "@/lib/dm/readied-spell";
+import { applyDmMutation } from "@/lib/dm/mutations";
+import { DODGING } from "@/lib/dm/condition-logic";
+import { contest, help, hide } from "@/lib/dm/combat-actions";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { spellFactsFor } from "@/lib/content";
-import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 
 // The rest of a 5e turn: the actions that are not attacks or spells, plus
 // reactions. Dodge, Dash, Disengage, Hide, Help, Grapple, and Shove all had
@@ -46,7 +29,11 @@ import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 //
 // Each one lands as real state: Dodge writes a condition the attack engine
 // reads, Grapple and Shove run the SRD contested check through the real dice
-// engine, Dash flags the doubled movement the battle map honors.
+// engine, Dash flags the doubled movement the battle map honors. Ready,
+// Search, Use an Object and the escape from a grapple joined them later
+// (src/lib/dm/object-actions.ts, src/lib/dm/grapple.ts), and the features
+// that move an action to the bonus action are read in
+// src/lib/dm/bonus-actions.ts. use_reaction lives in reaction-tools.ts.
 //
 // This module must not be imported by encounter-tools (the import points the
 // other way); it imports the enemy helpers and the sheet layer only.
@@ -58,12 +45,25 @@ type ToolDef = {
 
 export const ACTION_TOOL_NAMES = ["take_action", "use_reaction"] as const;
 
-// A held Help die works like a held Bardic Inspiration die: a condition on
-// the recipient the next d20 roll consumes.
-export const HELPED = "helped";
-// Successfully hidden: attacks from here have advantage, and the first one
-// spends it (src/lib/dm/condition-logic.ts).
-export const HIDDEN = "hidden";
+// A held Help works like a held Bardic Inspiration die: a condition on the
+// recipient the roll it helps consumes. Its source says which roll
+// (src/lib/dm/help-logic.ts).
+export { HELPED } from "@/lib/dm/help-logic";
+export { HIDDEN } from "@/lib/dm/combat-actions";
+
+const ACTIONS = [
+  "dodge",
+  "dash",
+  "disengage",
+  "hide",
+  "help",
+  "grapple",
+  "shove",
+  "ready",
+  "search",
+  "use_object",
+  "escape",
+] as const;
 
 export const actionTools: ToolDef[] = [
   {
@@ -71,19 +71,22 @@ export const actionTools: ToolDef[] = [
     function: {
       name: "take_action",
       description:
-        "A character takes one of the standard 5e actions that is not an attack or a spell: Dodge, Dash, Disengage, Hide, Help, Grapple, or Shove. The server spends the action from their turn, rolls any contest the action calls for, and applies the real effect (Dodge makes attacks against them roll at disadvantage, a won Grapple applies grappled, a won Shove knocks prone or pushes). Call this BEFORE narrating the action; narrate exactly what it reports.",
+        "A character takes one of the standard 5e actions that is not an attack or a spell: Dodge, Dash, Disengage, Hide, Help, Grapple, Shove, Ready, Search, Use an Object, or Escape (a grapple). The server spends the action from their turn, rolls any check or contest the action calls for through the same resolver as request_roll, and applies the real effect (Dodge makes attacks against them roll at disadvantage, a won Grapple applies grappled, a won Shove knocks prone or pushes, a won Escape ends the grapple). Grapple and Shove each take the place of ONE attack of the Attack action, so a character with Extra Attack can grapple and still swing. bonus=true takes Dash, Disengage or Hide as a bonus action with Cunning Action, Dash with Expeditious Retreat running (the casting's own Dash too, on the turn it is cast), Use an Object with a Thief's Fast Hands, and Dash, Disengage or Dodge with a monk's ki (Step of the Wind, Patient Defense, 1 ki spent by the server); with the action already spent, Cunning Action is used by itself. Ready needs the trigger and holds one readied attack for the character's reaction until their next turn; Ready with spell casts a one-action spell now (slot and concentration) and holds it: when the trigger comes, cast it with its own tool and it is released with the reaction, no second slot. Hide is for a fight; out of one, call request_roll for Stealth. An enemy escaping a character's grapple: action=escape with enemyId. Call this BEFORE narrating the action; narrate exactly what it reports.",
       parameters: {
         type: "object",
         additionalProperties: false,
         properties: {
           characterId: { type: "string", description: "Exact characterId from GAME STATE." },
-          action: {
-            type: "string",
-            enum: ["dodge", "dash", "disengage", "hide", "help", "grapple", "shove"],
+          action: { type: "string", enum: [...ACTIONS] },
+          bonus: {
+            type: "boolean",
+            description:
+              "Take Dash, Disengage, Hide or Dodge as a bonus action through a feature that allows it (Cunning Action, Step of the Wind, Patient Defense, Expeditious Retreat's Dash), or Use an Object with a Thief's Fast Hands.",
           },
           targetEnemyId: {
             type: "string",
-            description: "Grapple and Shove: the exact enemyId being seized or pushed.",
+            description:
+              "Grapple and Shove: the exact enemyId being seized or pushed. Help: the enemy the ally's attack is helped against (within 5 ft of the helper); omit to help an ability check.",
           },
           targetCharacterId: {
             type: "string",
@@ -94,9 +97,37 @@ export const actionTools: ToolDef[] = [
             enum: ["prone", "push"],
             description: "Shove only: knock the target prone (default) or push it 5 feet back.",
           },
+          trigger: {
+            type: "string",
+            description: "Ready only: what the readied attack waits for, e.g. 'when the ogre comes through the door'.",
+          },
+          skill: {
+            type: "string",
+            enum: ["perception", "investigation"],
+            description: "Search only: look (perception, the default) or reason it out (investigation).",
+          },
+          item: {
+            type: "string",
+            description: "Use an Object only: the object, when it is one they carry. Consumables go through use_item instead.",
+          },
+          enemyId: {
+            type: "string",
+            description: "Escape only, for an ENEMY escaping a character's grapple: the exact enemyId. Omit characterId then.",
+          },
+          spell: {
+            type: "string",
+            description:
+              "Ready only: a spell with a casting time of one action to ready instead of an attack. The server casts it now (slot, action, concentration to hold it); when the trigger comes, cast it with its own tool and it is released with the reaction, no second slot.",
+          },
+          level: {
+            type: "integer",
+            minimum: 1,
+            maximum: 9,
+            description: "Ready with a spell: the slot level to cast it from. Omit for the spell's own level.",
+          },
           reason: { type: "string", description: "Short in-fiction cause." },
         },
-        required: ["characterId", "action"],
+        required: ["action"],
       },
     },
   },
@@ -105,7 +136,7 @@ export const actionTools: ToolDef[] = [
     function: {
       name: "use_reaction",
       description:
-        "A character spends their reaction on a feature that interrupts someone else's turn: Shield (+5 AC), Uncanny Dodge (halve the damage of one hit), Deflect Missiles, Cutting Words, or a Protection style shield block. The server checks they still have their reaction and applies the effect. One reaction per round, refreshed at the start of their turn.",
+        "A character spends their reaction on a feature or spell that answers someone else's turn, and the server applies it. The engine keeps the last attack against each character, so a reaction to a hit that already landed re-resolves that attack and gives back what the rules give back: Shield (+5 AC, the hit becomes a miss if the new AC beats the roll), Uncanny Dodge (the hit's damage is halved), Deflect Missiles (a ranged weapon hit loses 1d10 + DEX + monk level), Cutting Words (a Bardic Inspiration die off the attacker's roll or damage; targetCharacterId is the one attacked), Protection (a shield-bearer with the style imposes disadvantage on an attack against an adjacent ally, re-rolled against the attack that just came), Slow Fall and Feather Fall (after a fall), Hellish Rebuke (targetEnemyId: the attacker's DEX save and fire damage), Counterspell (targetEnemyId and spell, called BEFORE the enemy's spell is resolved: a countered spell spends the enemy's action and is not cast). Subclass reactions resolve the same way: Spectral Defense, Spirit Shield, Protective Field, Guardian Coil, Song of Defense (level: the slot) and Body of the Astral Self take damage off the hit; Arcane Deflection and Combat Inspiration raise AC against it; Shadowy Dodge rerolls it at disadvantage; Dampen Elements resists it; Divine Allegiance, Aura of the Guardian and Protective Bond move it onto the protector (targetCharacterId); Storm's Fury, Halo of Spores, Vigilant Rebuke and Ascendant Aspect strike back (targetEnemyId); Opportunist, Hold the Line, Soul of Vengeance, Slayer's Counter, Voice of Authority and Inspiring Surge make one weapon attack (targetEnemyId); Tipsy Sway (1 ki) turns a melee attack that just missed the monk onto another creature within 5 feet (targetEnemyId); Skirmisher (when an enemy stands within 5 feet) and Relentless Avenger (right after the paladin's opportunity attack hit, spending no second reaction) move the character up to half their speed to the square x, y, drawing no opportunity attacks; Retaliation (a Berserker damaged by a creature within 5 feet) makes one melee weapon attack at it; Stand Against the Tide (a Hunter a melee attack just missed) makes the attacker repeat it against another creature (targetEnemyId), rolled by the server. Only the holder of a feature uses it, and a refusal spends nothing. Opportunity attacks are not taken here: on a battle map the server rolls them itself; off the map pass targetEnemyId and the server resolves the swing. One reaction per round, refreshed at the start of their turn.",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -117,7 +148,17 @@ export const actionTools: ToolDef[] = [
           },
           targetCharacterId: {
             type: "string",
-            description: "Protection style only: the ally being covered.",
+            description:
+              "The ally the reaction is for: Protection's covered ally, Cutting Words' attacked ally, Feather Fall's falling ally.",
+          },
+          targetEnemyId: {
+            type: "string",
+            description:
+              "The enemy the reaction answers: Hellish Rebuke's attacker, Counterspell's caster, Deflect Missiles' shooter to throw the caught missile back at (1 ki), an opportunity attack's target off the map.",
+          },
+          spell: {
+            type: "string",
+            description: "Counterspell only: the spell the enemy is casting, as its stat block names it.",
           },
           level: {
             type: "integer",
@@ -125,6 +166,8 @@ export const actionTools: ToolDef[] = [
             maximum: 9,
             description: "A reaction SPELL (Shield, Counterspell, Hellish Rebuke) cast from a higher slot. Omit for the spell's own level; the server spends the slot.",
           },
+          x: { type: "integer", minimum: 0, description: "Skirmisher, Relentless Avenger: the column of the square the character moves to." },
+          y: { type: "integer", minimum: 0, description: "Skirmisher, Relentless Avenger: the row of the square the character moves to." },
           reason: { type: "string", description: "Short in-fiction cause." },
         },
         required: ["characterId", "feature"],
@@ -134,20 +177,17 @@ export const actionTools: ToolDef[] = [
 ];
 
 const takeActionSchema = z.object({
-  characterId: z.string(),
-  action: z.enum(["dodge", "dash", "disengage", "hide", "help", "grapple", "shove"]),
+  characterId: z.string().optional(),
+  action: z.enum(ACTIONS),
+  bonus: z.coerce.boolean().optional(),
   targetEnemyId: z.string().optional(),
   targetCharacterId: z.string().optional(),
   shove: z.enum(["prone", "push"]).optional(),
-  reason: z.string().optional(),
-});
-
-const useReactionSchema = z.object({
-  characterId: z.string(),
-  feature: z.string().max(80),
-  // The ally a Protection-style reaction covers.
-  targetCharacterId: z.string().optional(),
-  // A reaction spell cast from a higher slot (Counterspell at 5th).
+  trigger: z.string().max(200).optional(),
+  skill: z.enum(["perception", "investigation"]).optional(),
+  item: z.string().max(80).optional(),
+  enemyId: z.string().optional(),
+  spell: z.string().max(80).optional(),
   level: z.coerce.number().int().min(1).max(9).optional(),
   reason: z.string().optional(),
 });
@@ -163,75 +203,121 @@ export {
   grantActionSurge,
   storeBudget,
 } from "@/lib/dm/turn-budget";
+export { handleUseReaction } from "@/lib/dm/reaction-tools";
 
 // ---- take_action ----
 
-// Which slot of the turn each action costs. Hide and Disengage can be bonus
-// actions for some classes (Cunning Action, Step of the Wind); the server
-// takes the action slot and lets the model say otherwise via the feature
-// guidance rather than guessing.
-const ACTION_COST: Record<string, ActionKind> = {
-  dodge: "action",
-  dash: "action",
-  disengage: "action",
-  hide: "action",
-  help: "action",
-  grapple: "action",
-  shove: "action",
+// The words each action is priced under. Haste's extra action reads them
+// (src/lib/dm/action-budget.ts): one weapon attack, Dash, Disengage, Hide
+// or Use an Object.
+const ACTION_WORDS: Record<(typeof ACTIONS)[number], string> = {
+  dodge: "dodge",
+  dash: "dash",
+  disengage: "disengage",
+  hide: "hide",
+  help: "help",
+  grapple: "grapple",
+  shove: "shove",
+  ready: "ready",
+  search: "search",
+  use_object: "use an object",
+  escape: "escape",
 };
 
-function publishRoll(campaignId: string, roll: ReturnType<typeof insertRoll>) {
-  publishWithSeq(campaignId, allocateSeq(campaignId), "roll_result", { roll, source: "digital" });
-}
+const MOVES = new Set<string>(["dodge", "dash", "disengage", "hide"]);
 
-// Adds a condition to a sheet without disturbing the ones already there. It
-// lasts a count of rounds, or until the start of the named combatant's next
-// turn, which is how Dodge, Help, Shield and the Protection style are worded.
-function addSheetCondition(
-  campaign: Campaign,
+// How an action is paid for: the priced budget, and what the tool result
+// says of the cost. Null budget = no turn to charge (out of a fight).
+type Price = { budget: TurnBudget | null; note?: string; ki?: number; feature?: string };
+
+function priceAction(
   sheet: CharacterSheet,
-  condition: string,
-  lasts: { rounds: number } | { untilTurnOf: string },
-) {
-  if (sheet.conditions.some((entry) => entry.toLowerCase() === condition)) {
-    return;
+  budget: TurnBudget | null,
+  action: (typeof ACTIONS)[number],
+  bonus: boolean,
+): Price | { error: string } {
+  const move = MOVES.has(action) ? (action as MoveAction) : null;
+  // Fast Hands (Thief 3): Use an Object with Cunning Action's bonus action.
+  if (bonus && action === "use_object" && hasFastHands(sheet)) {
+    if (!budget) {
+      return { budget: null, feature: "Fast Hands" };
+    }
+    const spent = spendAction(budget, "bonus", "Fast Hands (use an object)", sheet.name);
+    return spent.ok
+      ? { budget: spent.budget, note: "Fast Hands: their bonus action", feature: "Fast Hands" }
+      : { error: spent.error };
   }
-  const updated = patchSheet(sheet.id, {
-    conditions: [...sheet.conditions, condition],
-    conditionMeta: { ...sheet.conditionMeta, [condition]: lasts },
-  });
-  if (updated) {
-    publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
+  if (bonus) {
+    // Help and Search as a bonus action are the authored features' (Master
+    // of Tactics, Eye for Detail): src/lib/srd/authored-effects.ts.
+    const route = move ? bonusRouteFor(sheet, move) : authoredBonusRoute(sheet, action);
+    if (!route) {
+      return {
+        error: move
+          ? noBonusRoute(sheet, move)
+          : `${action} is not a bonus action for ${sheet.name}; it takes their action.`,
+      };
+    }
+    if (route.ki) {
+      const covered = kiSpend(sheet, route.ki, route.feature);
+      if ("error" in covered) {
+        return covered;
+      }
+    }
+    if (!budget) {
+      return { budget: null, ki: route.ki, feature: route.feature };
+    }
+    // Expeditious Retreat's casting (itself the bonus action) takes the Dash
+    // with it, once, on the turn it is cast.
+    if (route.feature === "Expeditious Retreat" && budget.bonusUsed && castRetreatThisTurn(sheet, budget)) {
+      return {
+        budget: { ...budget, oncePerTurn: [...budget.oncePerTurn, RETREAT_DASH] },
+        note: "Expeditious Retreat: the Dash that comes with the casting",
+        feature: route.feature,
+      };
+    }
+    const spent = spendAction(budget, "bonus", `${route.feature} (${action})`, sheet.name);
+    return spent.ok
+      ? { budget: spent.budget, note: `${route.feature}: their bonus action`, ki: route.ki, feature: route.feature }
+      : { error: spent.error };
   }
+  if (!budget) {
+    return { budget: null };
+  }
+  // Grapple and Shove take the place of one attack of the Attack action.
+  let spent: SpendResult =
+    action === "grapple" || action === "shove"
+      ? spendAttack(budget, sheet.name, { hasteOk: false })
+      : spendAction(budget, "action", ACTION_WORDS[action], sheet.name);
+  if (!spent.ok && move) {
+    // With the action gone, a free bonus-action route (Cunning Action) is
+    // what the player meant; a ki route costs ki and waits to be asked for.
+    const route = bonusRouteFor(sheet, move);
+    if (route && route.ki === 0) {
+      const asBonus = spendAction(budget, "bonus", `${route.feature} (${action})`, sheet.name);
+      if (asBonus.ok) {
+        spent = { ...asBonus, note: `${route.feature}: their bonus action` };
+        return { budget: spent.budget, note: spent.note, ki: 0, feature: route.feature };
+      }
+    }
+  }
+  return spent.ok ? { budget: spent.budget, note: spent.note } : { error: spent.error };
 }
 
-// The d20 a contest or a Stealth roll is made with: an ability check, so the
-// conditions and exhaustion that put ability checks at disadvantage apply
-// here exactly as they do through request_roll.
-function checkAdvantage(
-  sheet: CharacterSheet,
-  ability: "str" | "dex",
-  extra: AdvantageState[] = [],
-): AdvantageState {
-  return mergeAdvantage([
-    rollDerivation(sheet.conditions, "skill_check", ability).advantage,
-    exhaustionRollState(sheet.exhaustion ?? 0, "skill_check").advantage,
-    ...extra,
-  ]);
-}
+const RETREAT_DASH = "expeditious-retreat:dash";
 
-// What an enemy contests a grapple or shove with: the better of Strength
-// (Athletics) and Dexterity (Acrobatics), a printed skill bonus when the
-// stat block has one and the bare ability modifier otherwise. A block with
-// no ability scores (an old snapshot) falls back to its save modifiers.
-function contestModifier(stats: EncounterEnemy["stats"]): number {
-  const skills = stats.skills ?? {};
-  const bare = (ability: "str" | "dex") =>
-    stats.abilities?.[ability] !== undefined
-      ? abilityMod(stats.abilities[ability])
-      : saveModFor(stats, ability);
-  return Math.max(skills.athletics ?? bare("str"), skills.acrobatics ?? bare("dex"));
+// Whether Expeditious Retreat was cast on this very turn: a bonus-action
+// spell went on the turn, the spell's minute-count has not ticked yet (the
+// round has not wrapped since), and its casting's Dash is still unclaimed.
+function castRetreatThisTurn(sheet: CharacterSheet, budget: TurnBudget): boolean {
+  if (!budget.oncePerTurn.includes(BONUS_SPELL) || budget.oncePerTurn.includes(RETREAT_DASH)) {
+    return false;
+  }
+  const name = sheet.conditions.find((entry) => entry.trim().toLowerCase() === EXPEDITIOUS_RETREAT);
+  const meta = name ? (sheet.conditionMeta as Record<string, { rounds?: number }>)[name] : undefined;
+  return (meta?.rounds ?? 0) >= RETREAT_ROUNDS;
 }
+const RETREAT_ROUNDS = 100;
 
 export function handleTakeAction(
   campaign: Campaign,
@@ -246,13 +332,16 @@ export function handleTakeAction(
   } catch {
     return { error: "Invalid arguments: take_action needs characterId and a known action." };
   }
+  if (args.action === "escape" && args.enemyId && !args.characterId) {
+    return enemyEscape(campaign, turn, args.enemyId);
+  }
   const staleSheet = resolveSheetRef(args.characterId, sheets, sheetsById);
   const sheet = staleSheet ? (getSheetById(staleSheet.id) ?? staleSheet) : null;
   if (!sheet) {
     return { error: "Unknown characterId; use one from GAME STATE." };
   }
   const encounter = getActiveEncounter(campaign.id);
-  const allowed = canAct({ sheet, encounter, kind: "action" });
+  const allowed = canAct({ sheet, encounter, kind: args.bonus ? "bonus" : "action" });
   if (!allowed.ok) {
     return { error: allowed.error };
   }
@@ -266,21 +355,30 @@ export function handleTakeAction(
     attacksAllowedFor(sheet),
     conditionExtraActions(sheet.conditions),
   );
-  let priced: TurnBudget | null = null;
-  if (budget && encounter) {
-    const price = spendAction(budget, ACTION_COST[args.action], args.action, sheet.name);
-    if (!price.ok) {
-      return { error: price.error };
-    }
-    priced = price.budget;
+  const price = priceAction(sheet, budget && encounter ? budget : null, args.action, args.bonus === true);
+  if ("error" in price) {
+    return { error: price.error };
   }
+  const costs: Record<string, unknown> = {};
   const spend = (flags: Partial<Pick<TurnBudget, "dashed" | "disengaged">> = {}) => {
-    if (encounter && priced) {
-      storeBudget(encounter, { ...priced, ...flags });
+    if (encounter && price.budget) {
+      storeBudget(encounter, { ...price.budget, ...flags });
+    }
+    if (price.ki) {
+      const covered = kiSpend(getSheetById(sheet.id) ?? sheet, price.ki, price.feature ?? "ki");
+      if (!("error" in covered)) {
+        const updated = patchSheet(sheet.id, { resources: covered.resources });
+        if (updated) {
+          publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
+        }
+        costs.ki = `${price.ki} ki (${price.feature})`;
+      }
+    }
+    if (price.note) {
+      costs.cost = price.note;
     }
   };
-
-  const derived = computeSheetDerived(sheet);
+  const inFight = encounter !== null && (encounter.kind ?? "fight") === "fight";
 
   switch (args.action) {
     case "dodge": {
@@ -291,6 +389,7 @@ export function handleTakeAction(
       return {
         ok: true,
         action: "Dodge",
+        ...costs,
         applied: `${sheet.name} is dodging: every attack against them rolls at disadvantage until their next turn, and they have advantage on Dexterity saves. The server applies it.`,
       };
     }
@@ -299,6 +398,7 @@ export function handleTakeAction(
       return {
         ok: true,
         action: "Dash",
+        ...costs,
         applied: `${sheet.name}'s movement is doubled this turn; the battle map allows the extra distance.`,
       };
     }
@@ -307,350 +407,37 @@ export function handleTakeAction(
       return {
         ok: true,
         action: "Disengage",
+        ...costs,
         applied: `${sheet.name} can move out of every enemy's reach this turn without provoking an opportunity attack.`,
       };
     }
-    case "hide": {
-      // Nobody hides from a creature that sees them clearly. On a mapped
-      // fight that is read from the board: a sight line with no cover and
-      // no darkness between is a clear view.
-      const watcher = encounter ? seenClearlyBy(encounter.id, sheet.id) : null;
-      if (watcher) {
-        return {
-          error: `${sheet.name} cannot hide: ${watcher} sees them clearly. They move out of its sight, behind cover or into darkness first, then hide.`,
-        };
-      }
-      spend();
-      // Noisy armor (scale, plate...) makes hiding a disadvantage roll.
-      const noisyArmor = acBreakdownFor(sheet).stealthDisadvantage;
-      const stealth = rollExpression(
-        d20Expression(
-          derived.skills.stealth ?? 0,
-          checkAdvantage(sheet, "dex", noisyArmor ? ["disadvantage"] : []),
-        ),
-      );
-      const roll = insertRoll({
-        campaignId: campaign.id,
-        characterId: sheet.id,
-        requestedBy: "dm",
-        kind: "skill_check",
-        detail: `${sheet.name}: Stealth to hide`,
-        result: stealth,
-      });
-      publishRoll(campaign.id, roll);
-      turn.rollIds.push(roll.id);
-
-      // Compared against the sharpest living enemy's real passive
-      // Perception rather than left to judgement. No enemies = nothing to
-      // hide from, so the attempt simply succeeds.
-      const watchers = encounter
-        ? listEnemies(encounter.id).filter((enemy) => enemy.status === "alive")
-        : [];
-      const sharpest = watchers.reduce(
-        (best, enemy) => Math.max(best, passivePerceptionFor(enemy.stats)),
-        0,
-      );
-      const hidden = stealth.total >= sharpest;
-      if (hidden) {
-        addSheetCondition(campaign, sheet, HIDDEN, { rounds: 10 });
-      }
-      return {
-        ok: true,
-        action: "Hide",
-        stealth: stealth.total,
-        ...(watchers.length ? { vsPassivePerception: sharpest } : {}),
-        hidden,
-        ...(noisyArmor ? { armor: "their armor imposed disadvantage on the Stealth roll" } : {}),
-        note: hidden
-          ? `${sheet.name} is hidden. Their next attack has advantage and reveals them; the server applies both.`
-          : `${sheet.name} stays in plain sight: ${stealth.total} does not beat a passive Perception of ${sharpest}.`,
-      };
-    }
-    case "help": {
-      const target = args.targetCharacterId
-        ? resolveSheetRef(args.targetCharacterId, sheets, sheetsById)
-        : null;
-      if (!target || target.id === sheet.id) {
-        return {
-          error: "Help goes to another character: pass their targetCharacterId.",
-        };
-      }
-      spend();
-      const fresh = getSheetById(target.id) ?? target;
-      addSheetCondition(campaign, fresh, HELPED, { untilTurnOf: sheet.id });
-      return {
-        ok: true,
-        action: "Help",
-        applied: `${fresh.name} has advantage on their next ability check or attack; the server spends it on their next d20 roll.`,
-      };
-    }
+    case "hide":
+      return hide(campaign, turn, sheet, encounter, spend, costs);
+    case "help":
+      return help(campaign, sheet, encounter, args, sheets, sheetsById, spend);
     case "grapple":
-    case "shove": {
-      if (!encounter) {
-        return { error: `${args.action} needs an active encounter and a target.` };
+    case "shove":
+      return contest(campaign, turn, sheet, encounter, args, spend, costs);
+    case "ready":
+      // A readied spell is cast now and held (src/lib/dm/readied-spell.ts);
+      // its casting is the Ready action's cost.
+      if (args.spell?.trim()) {
+        return readySpell(campaign, turn, sheet, { spell: args.spell, level: args.level, trigger: args.trigger, inFight }, (castArgs) =>
+          applyDmMutation(campaign, turn.id, "use_spell_slot", JSON.stringify(castArgs), sheets, sheetsById).result,
+        );
       }
-      const enemy = args.targetEnemyId ? resolveEnemyRef(encounter.id, args.targetEnemyId) : null;
-      if (!enemy || enemy.status !== "alive") {
-        return { error: `${args.action} needs a living targetEnemyId from GAME STATE.` };
-      }
-      // SRD: the target can be at most one size larger than the attacker.
-      if (sizeRank(enemy.stats.size) > sizeRank(sizeForRace(sheet.race)) + 1) {
-        return {
-          error: `${enemy.displayName} is ${enemy.stats.size}: too large for ${sheet.name} (${sizeForRace(sheet.race)}) to ${args.action}. A creature can only ${args.action} a target at most one size larger than itself.`,
-        };
-      }
-      // Hands on the target: it has to be within reach, with no wall between.
-      const apart = tilesBetween(encounter.id, sheet.id, enemy.id);
-      if (apart !== null && (apart > 1 || wallBetween(encounter.id, sheet.id, enemy.id))) {
-        return {
-          error: `${sheet.name} is ${apart * 5} ft from ${enemy.displayName}; a ${args.action} needs the target within 5 ft. They move their token next to it first.`,
-        };
-      }
-      spend();
-      // SRD contest: the attacker's Athletics against the target's better of
-      // Athletics (STR) and Acrobatics (DEX).
-      const attackRoll = rollExpression(
-        d20Expression(derived.skills.athletics ?? 0, checkAdvantage(sheet, "str")),
+      return readyAction(campaign, sheet, args.trigger, inFight, { spend: () => spend() });
+    case "search":
+      return searchAction(campaign, turn, sheet, args.skill ?? "perception", { spend: () => spend() });
+    case "use_object":
+      return objectAction(
+        sheet,
+        args.item,
+        args.reason,
+        { spend: () => spend() },
+        price.feature === "Fast Hands" ? "their bonus action (Fast Hands)" : undefined,
       );
-      const defenderAdvantage = mergeAdvantage([
-        rollDerivation(enemy.conditions, "skill_check", "str").advantage,
-      ]);
-      const defendRoll = rollExpression(
-        d20Expression(contestModifier(enemy.stats), defenderAdvantage),
-      );
-      const attackerCard = insertRoll({
-        campaignId: campaign.id,
-        characterId: sheet.id,
-        requestedBy: "dm",
-        kind: "skill_check",
-        detail: `${sheet.name}: Athletics to ${args.action} ${enemy.displayName}`,
-        result: attackRoll,
-      });
-      const defenderCard = insertRoll({
-        campaignId: campaign.id,
-        characterId: null,
-        requestedBy: "dm",
-        kind: "skill_check",
-        detail: `${enemy.displayName}: contest against the ${args.action}`,
-        result: defendRoll,
-      });
-      publishRoll(campaign.id, attackerCard);
-      publishRoll(campaign.id, defenderCard);
-      turn.rollIds.push(attackerCard.id, defenderCard.id);
-
-      // Ties go to the defender, per the SRD contest rule.
-      const won = attackRoll.total > defendRoll.total;
-      if (!won) {
-        return {
-          ok: true,
-          action: args.action,
-          contest: `${attackRoll.total} vs ${defendRoll.total}`,
-          success: false,
-          note: `${enemy.displayName} resists; narrate the failed ${args.action}.`,
-        };
-      }
-      const condition = args.action === "grapple" ? "grappled" : "prone";
-      const pushOnly = args.action === "shove" && args.shove === "push";
-      if (pushOnly) {
-        // Five feet straight away from the shover, when the square is free.
-        const pushed = pushTokenAway(campaign, encounter.id, sheet.id, enemy.id);
-        return {
-          ok: true,
-          action: args.action,
-          contest: `${attackRoll.total} vs ${defendRoll.total}`,
-          success: true,
-          applied: pushed.moved
-            ? `${enemy.displayName} is shoved 5 feet back to (${pushed.at.x},${pushed.at.y}). The server moved its token; the push provokes nothing.`
-            : `${enemy.displayName} is shoved but has nowhere to go: ${pushed.reason}. It stays where it is.`,
-        };
-      }
-      if (enemy.stats.conditionImmune.toLowerCase().includes(condition)) {
-        return {
-          ok: true,
-          action: args.action,
-          contest: `${attackRoll.total} vs ${defendRoll.total}`,
-          success: false,
-          note: `${enemy.displayName} cannot be ${condition}; it is immune. Narrate the attempt failing against its nature.`,
-        };
-      }
-      patchEnemyConditions(
-        enemy.id,
-        [...enemy.conditions, condition],
-        {
-          ...enemy.conditionMeta,
-          // Who holds the grapple, so it can end when they are incapacitated
-          // (src/lib/dm/set-condition.ts releaseGrapplesHeldBy).
-          [condition]: condition === "grappled" ? { source: sheet.id } : {},
-        },
-      );
-      publishEncounter(campaign.id);
-      return {
-        ok: true,
-        action: args.action,
-        contest: `${attackRoll.total} vs ${defendRoll.total}`,
-        success: true,
-        applied: `${enemy.displayName} is ${condition}. The server applied the condition and its mechanics.`,
-      };
-    }
+    case "escape":
+      return characterEscape(campaign, turn, sheet, () => spend());
   }
-}
-
-// ---- use_reaction ----
-
-// Reactions with a server-side payload. Everything else spends the reaction
-// and comes back with the SRD line for the model to narrate.
-const REACTION_NOTES: Array<{ match: RegExp; note: string }> = [
-  {
-    match: /shield/i,
-    note: "Shield: +5 AC until the start of their next turn, which can turn a hit into a miss. If the triggering attack already landed, re-read its roll against the new AC and narrate accordingly.",
-  },
-  {
-    match: /uncanny dodge/i,
-    note: "Uncanny Dodge: the damage of that one attack is halved. Apply the halved number with apply_damage, or if the full damage already landed, heal the difference back.",
-  },
-  {
-    match: /deflect missile/i,
-    note: "Deflect Missiles: reduce the ranged weapon damage by 1d10 + monk level + DEX modifier; if that reduces it to 0 they may throw the missile back as a monk weapon attack.",
-  },
-  {
-    match: /cutting words/i,
-    note: "Cutting Words: spend a Bardic Inspiration die and subtract it from the triggering roll, which can turn a hit into a miss.",
-  },
-  {
-    match: /protection/i,
-    note: "Protection fighting style: the triggering attack against the ally rolls at disadvantage.",
-  },
-  {
-    match: /opportunity|attack of opportunity/i,
-    note: "Opportunity attack: one melee attack against the creature leaving their reach. Resolve it with pc_attack.",
-  },
-];
-
-export function handleUseReaction(
-  campaign: Campaign,
-  turn: DmTurn,
-  rawArguments: string,
-  sheets: CharacterSheet[],
-  sheetsById: Map<string, CharacterSheet>,
-): Record<string, unknown> {
-  let args: z.infer<typeof useReactionSchema>;
-  try {
-    args = useReactionSchema.parse(JSON.parse(rawArguments || "{}"));
-  } catch {
-    return { error: "Invalid arguments: use_reaction needs characterId and feature." };
-  }
-  const staleSheet = resolveSheetRef(args.characterId, sheets, sheetsById);
-  const sheet = staleSheet ? (getSheetById(staleSheet.id) ?? staleSheet) : null;
-  if (!sheet) {
-    return { error: "Unknown characterId; use one from GAME STATE." };
-  }
-  const encounter = getActiveEncounter(campaign.id);
-  // The dead, the dying, the incapacitated and the surprised have no
-  // reaction; whose turn it is does not matter to one.
-  const allowed = canAct({ sheet, encounter, kind: "reaction" });
-  if (!allowed.ok) {
-    return { error: allowed.error };
-  }
-  if (!encounter) {
-    return { error: "Reactions only exist in combat; there is no active encounter." };
-  }
-  // Slow and its kin switch reactions off entirely.
-  const blocked = conditionBlocksReactions(sheet.conditions);
-  if (blocked) {
-    return {
-      error: `${sheet.name} is ${blocked} and cannot take reactions; ${args.feature} does not happen.`,
-    };
-  }
-
-  // A reaction is spent on someone ELSE's turn, so it cannot live in the
-  // acting combatant's turn budget. Both sides of the table share
-  // encounter.reactionsUsed; a combatant's entry leaves it as their own turn
-  // starts (advancePointer).
-  if (encounter.reactionsUsed.includes(sheet.id)) {
-    return {
-      error: `${sheet.name} has already used their reaction; it comes back at the start of their next turn. ${args.feature} does not happen.`,
-    };
-  }
-
-  // A reaction that is a spell (Shield, Counterspell, Hellish Rebuke,
-  // Absorb Elements, Feather Fall) is a cast: the caster must hold it and
-  // pay its slot through the one guard (src/lib/dm/cast-guard.ts), which
-  // refuses before the reaction is spent. Shield's +5 AC then lands as a
-  // registry condition until their next turn, so enemy swings genuinely
-  // test the higher number.
-  const reactionSpell = spellFactsFor(args.feature.trim(), spellAuthorsFor(campaign));
-  if (reactionSpell?.castingTime === "reaction") {
-    const cast = applyDmMutation(
-      campaign,
-      turn.id,
-      "use_spell_slot",
-      JSON.stringify({
-        characterId: sheet.id,
-        spell: reactionSpell.name,
-        ...(args.level ? { level: args.level } : {}),
-        via: "reaction",
-        reason: `${reactionSpell.name} reaction`,
-      }),
-      sheets,
-      sheetsById,
-    ).result;
-    if ("error" in cast) {
-      return cast;
-    }
-    encounter.reactionsUsed = [...encounter.reactionsUsed, sheet.id];
-    saveEncounter(encounter);
-    const spent = `${sheet.name}'s reaction${
-      typeof cast.slotLevel === "number" ? ` and a level-${cast.slotLevel} slot are` : " is"
-    } spent.`;
-    if (reactionSpell.name.toLowerCase() === "shield") {
-      addSheetCondition(campaign, sheet, "shielded", { untilTurnOf: sheet.id });
-      const updated = getSheetById(sheet.id);
-      return {
-        ok: true,
-        reaction: args.feature,
-        spent,
-        applied: `Shield: +5 AC until the start of their next turn; their AC is now ${
-          updated?.ac ?? sheet.ac + 5
-        }. The server applied it. If the triggering attack rolled below that, it misses; narrate accordingly.`,
-      };
-    }
-    const known = REACTION_NOTES.find((entry) => entry.match.test(args.feature));
-    return {
-      ok: true,
-      reaction: args.feature,
-      spent,
-      ...(cast.droppedConcentration ? { droppedConcentration: cast.droppedConcentration } : {}),
-      note: known?.note ?? `${reactionSpell.name} is cast; narrate its effect as the spell describes it.`,
-    };
-  }
-
-  encounter.reactionsUsed = [...encounter.reactionsUsed, sheet.id];
-  saveEncounter(encounter);
-
-  // The Protection fighting style covers an ally with a real condition:
-  // the triggering attack (and any other until the protector's next turn)
-  // rolls at disadvantage against them.
-  if (/protection/i.test(args.feature)) {
-    const allyRef = args.targetCharacterId
-      ? resolveSheetRef(args.targetCharacterId, sheets, sheetsById)
-      : null;
-    const ally = allyRef ? (getSheetById(allyRef.id) ?? allyRef) : null;
-    if (ally && ally.id !== sheet.id) {
-      addSheetCondition(campaign, ally, "protected", { untilTurnOf: sheet.id });
-      return {
-        ok: true,
-        reaction: args.feature,
-        spent: `${sheet.name}'s reaction is used until the start of their next turn.`,
-        applied: `${ally.name} is protected: attacks against them roll at disadvantage until ${sheet.name}'s next turn. The server applies it; if the triggering attack already hit, re-read it at disadvantage.`,
-      };
-    }
-  }
-
-  const known = REACTION_NOTES.find((entry) => entry.match.test(args.feature));
-  return {
-    ok: true,
-    reaction: args.feature,
-    spent: `${sheet.name}'s reaction is used until the start of their next turn.`,
-    note: known?.note ?? `Narrate ${args.feature} exactly as their sheet describes it.`,
-  };
 }

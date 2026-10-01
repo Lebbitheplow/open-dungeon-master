@@ -3,16 +3,286 @@
 An audit of whether ODM's D&D rules are held by the engine or only said, run
 on 2026-09-27 against server 0.23.10, and the repair that followed on the
 `rules-enforcement` branch. The audit added suites that state each rule; the
-repair changed the engine until every one of them holds.
+repair changed the engine until every one of them holds. A second audit and
+repair followed on 2026-09-30 on `rules-enforcement-2`; its section comes
+first below. Everything after it is the first audit's text, kept as the record
+it is.
 
-**Status after the repair: 81 suites, 1764 rules enforced, 0 open gaps**, with
-the content pack and without it (1704 without, where pack-only rules do not
-run). The ledger is empty; the per-area reports in `rules-enforcement/`
-describe the state at the audit, before the repair.
+**Status after the second repair: 131 suites, 2607 rules enforced, 0 open
+gaps** with the content pack; without it the same 131 suites hold 2540 rules
+with 0 gaps (pack-only rules do not run). The first repair ended at 81 suites
+and 1764 rules (1704 without the pack). The ledger is empty; the per-area
+reports in `rules-enforcement/` describe the state at the first audit, before
+its repair.
 
 - The list of open gaps: [`rules-enforcement-ledger.md`](rules-enforcement-ledger.md), generated.
-- Root causes and fix notes per area: [`rules-enforcement/`](rules-enforcement/).
-- What the engine is meant to enforce: [`rules-coverage.md`](rules-coverage.md).
+- Root causes and fix notes per area (first audit): [`rules-enforcement/`](rules-enforcement/).
+- What the engine is meant to enforce, with the suite that holds each row: [`rules-coverage.md`](rules-coverage.md).
+
+## Second audit and repair (2026-09-30)
+
+### Why it was run
+
+The first repair made every rule its suites stated hold, but the suites only
+stated what the first audit thought to write down. The goal set for the
+stabilization milestone (issue #37) is that the engine holds at least 90% of
+SRD 5.1, and that the rules it holds work through the UI and the AI narrator
+DM. The second audit measured that directly, on `rules-enforcement-2` at
+main 475b2515 (server 0.23.11), and found the real figure well under it.
+
+### How it was measured
+
+- Six read-only inventories, one per area, listing the SRD 5.1 rules of the
+  area row by row and marking each held, partial, narrated, or missing or
+  wrong, with the code path and, for most verdicts, a probe run through
+  `dm/invoke.ts` with forced dice: class and racial features (the 181 with a
+  numeric, state or action-economy effect; pure roleplay, subclass markers and
+  spell-list grants left out), spells (all 319 SRD rows in the pack, run
+  through the resolvers with the pack and without it), combat (139 rows, turn
+  structure to the monster side), exploration, checks, items, rests and
+  economy (86 rows), the narrator seam (every place the prompt or a tool
+  description says something the engine does not do), and the UI (the Hand,
+  the builder, the sheet and the DM console against the server).
+- Magic items were counted over the content pack: the 237 SRD rows and all
+  1618 rows.
+- The repair ran as four waves of workstreams in one checkout. Every finding
+  was first written as a `gap()` and run against the unfixed engine, to see
+  it fail on its rule, then fixed and turned into a `test()` with the
+  assertion unchanged. An assertion that misread the rule was corrected and
+  the correction written down; none was weakened.
+- After the third wave, read-only recounts re-ran the combat and exploration
+  inventories without trusting the repair reports: a row counted as held only
+  with a passing test or a probe. They put combat at 123 of 139 and
+  exploration at 70 of 86, and they found defects the repair itself had
+  introduced: rider dice dropped when they matched the base dice, grapples
+  from reach breaking on any move, printed escape DCs ignored, a restraint
+  outliving its grapple, enemy opportunity attacks bypassing the typed hit
+  path, the string `"false"` read as true for a boolean argument, an Amulet of
+  Health's hit points clipped by exhaustion, and a Shield with no list price.
+  The fourth wave fixed each with a test that failed on the code before the
+  fix, closed the remaining rows, and re-ran the recounts.
+
+### Before and after
+
+| Area | Counted over | Before the repair | After |
+|---|---|---|---|
+| Class and racial features | 181 mechanical features | 75 held (41%) | 181 held (3 partly: Natural Explorer's travel benefits, Primeval Awareness, Dragon Wings) |
+| Combat | 139 rules | 74 enforced (53%) | 135 enforced (97%), 4 narrated by design, 0 missing |
+| Exploration, checks, items, rests, economy | 86 rules | 28 held (33%) | 86 held (100%) |
+| Spells, the effect layer | 319 SRD spells | 29 held, 110 partial, 32 wrong, 148 narrated | 200 held, 21 partial, 0 wrong, 98 narrated (91 of them pure utility) |
+| Spells without the content pack | 319 SRD spells | 18 held, 16 partial, 4 wrong, 281 narrated | identical to the pack: 0 of 319 differ |
+| SRD magic items with an engine mechanic | 237 | 23 (9.7%) | 108 (45.6%) |
+| All magic items in the pack with an engine mechanic | 1618 | 105 (6.5%) | 577 (35.7%) |
+| Authored subclass features | 533 | 32 typed, 150 counters, 166 with mechanical wording and no hook | 189 typed, 150 counters, 11 narrated with a written reason, 0 with mechanical wording and no hook |
+
+The casting layer (the caster holds the spell, slot level, ritual, casting
+time, components, concentration, DC and range) was close to 100% at the audit
+and is counted apart from the effect layer above. The authored figures are
+`srd/authored-coverage.ts authoredCoverage` as it counts today; the repair
+reports stopped at 184 typed and 15 narrated before the Arcane Ward,
+Projected Ward and the summons landed.
+
+### Decisions taken
+
+Everything the first repair decided still stands. Added:
+
+- SRD 5.1 (2014) is the rule wherever ODM and the SRD disagree and nothing below says otherwise.
+- The engine resolves and the model narrates: a tool that lets the AI assert a mechanical outcome without its cost or its roll is closed or routed through the rules path; the human DM's console keeps its correction power.
+- Grapple and shove replace one attack of the Attack action, not the whole action.
+- A touch spell is a melee spell attack with touch reach (adjacent on a map).
+- A character attacks off their turn only as an opportunity attack (automatic) or a readied action.
+- Bonus-action features are real: Cunning Action, Step of the Wind, Patient Defense, Flurry of Blows, Martial Arts' bonus unarmed strike, Frenzy, and Nimble Escape for monsters spend the bonus action.
+- Reaction features resolve in the engine, including after a hit, against a record of the last attack on each character; no tool text tells the model to heal the difference.
+- Reckless Attack, Stunning Strike and knocking a creature out (`nonlethal`) are engine options on `pc_attack`.
+- Revivify, Raise Dead, Resurrection and True Resurrection work through the engine, their time windows checked before anything is spent.
+- Every SRD magic weapon and armor gets its base item from the pack row's category, with an authored rider table for the SRD items with numbers; charges are tracked and regained at dawn; a pack item the generator cannot parse stays narrated, with its one-line effect and its worn and attuned state in GAME STATE; attuning takes a short rest.
+- Light on attacks: on a mapped fight, a creature that cannot perceive its target attacks at disadvantage and one that cannot be perceived attacks with advantage, from the board's own light and senses. Off the map, conditions only.
+- Tool proficiency adds the proficiency bonus to checks that name the tool. Inspiration is real state.
+- Food and water are a variant rule, `supplies`, off by default (assumed supplied, like ammunition).
+- Hit dice on a short rest: the player chooses; the server's default applies only to a character with no connected player.
+- Surprise can be decided by the engine (the hidden side's Stealth against each opponent's passive Perception); the DM's explicit `surprised` stays as an override.
+- Tool calls in one model reply resolve in the order the model sent them.
+- The narration guard's rewrite gets one reserved model call outside the four-call turn budget.
+- Stored data is never broken: old sheets, encounters and campaigns load and play; new fields are optional with a default; new validation applies to new writes.
+
+The first audit's deviation "Metamagic shaping and most reaction effects are
+narrated" is now only half true: the reactions resolve in the engine, the
+metamagic shaping is still narrated. Its "Ammunition is assumed unless the
+variant rule is on" is joined by food and water under `supplies`.
+
+### New mechanics
+
+Each group names the suites that hold it. `rules-coverage.md` has a row, and
+the suite, for each.
+
+- **Reactions after a hit.** The engine records the last attack against each
+  character (the d20 faces, total, AC met, damage and type, ranged, attacker,
+  the character as they stood before it; table `last_hits`). Shield, Uncanny
+  Dodge, Deflect Missiles (and the throw back), Cutting Words, Protection,
+  Slow Fall, Retaliation, Stand Against the Tide and Giant Killer re-resolve
+  it, undoing a drop to 0 or a broken concentration where the new result
+  calls for it. Hellish Rebuke, Feather Fall and Counterspell resolve through
+  `use_reaction`; monsters Parry. Suites `test-enforce-reactions`,
+  `test-enforce-final-features`, `test-enforce-tail-attacks`,
+  `test-enforce-last-combat`.
+- **Bonus-action features and the rest of the action list.** Cunning Action
+  and Fast Hands, Step of the Wind, Patient Defense, Flurry of Blows,
+  Martial Arts' bonus strike, Frenzy, Expeditious Retreat and Nimble Escape
+  spend the bonus action; Ready (an attack or a spell), Search, Use an Object
+  and Escape are real actions; Help names its creature. Suites
+  `test-enforce-bonus-actions`, `test-enforce-turn-actions`,
+  `test-enforce-pc-attack-features`, `test-enforce-tail-features`.
+- **End-of-turn durations.** `untilTurnEndOf` beside `untilTurnOf`: Stunning
+  Strike, Guiding Bolt, Menacing and Goading Attack, Intimidating Presence,
+  Open Hand's no reactions, Hurl Through Hell and Chill Touch's undead dread
+  end as the named turn ends. Old rows tick as before. Suite
+  `test-enforce-turn-end`.
+- **Spell areas on the map.** A zone record on the battle map (squares,
+  caster, spell, concentration or duration) that movement, sight, perception,
+  casting and the turn loop read: difficult terrain, light and heavy
+  obscurement, magical darkness, Silence, walls (Wall of Ice by 10-foot
+  sections with hit points), damage and saves on entering, starting or ending
+  a turn and every 5 feet, Globe of Invulnerability, Antimagic Field,
+  Forcecage, Antilife Shell, Earthquake. Drawn on the board, listed in GAME
+  STATE, ended with the concentration or the duration. Suites
+  `test-enforce-zones`, `test-enforce-last-spells`, `test-enforce-zones-ui`.
+- **Summons.** The conjuring and animating spells, Faithful Hound and the
+  Steel Defender put an ally on the board with its SRD stat block, a token,
+  initiative and attacks through `pc_attack`, gone at 0 hit points or when
+  the spell ends; Find Familiar binds a pet. Suite `test-enforce-summons`.
+- **Magic items.** Base items, riders (+N, typed dice, dice against creature
+  types, natural-20 dice on both dice paths, Adamantine Armor, curses),
+  charges with the dawn regain and the last-charge d20, potions beyond
+  healing, scrolls (the class list, the check above the reader's level, the
+  scroll's DC), casting from a wand or scroll with no slot, check riders, CON
+  items and the hit point maximum, attuning over a short rest. Suites
+  `test-enforce-magic-gear`, `test-enforce-consumables`,
+  `test-enforce-attunement`, `test-enforce-feature-saves`,
+  `test-enforce-explore-defects`.
+- **Afflictions.** The SRD diseases, the poison table (injury poisons coat a
+  weapon) and the three madness tables, with incubation and durations on the
+  clock, through the new `afflict` tool; lesser restoration ends a disease.
+  Suite `test-enforce-afflictions`.
+- **Lifestyle and downtime.** `set_lifestyle` charges the SRD daily cost at
+  each dawn; `downtime` runs crafting, a profession, recuperating, research
+  and training, and the sheet and GAME STATE show the progress. Suites
+  `test-enforce-downtime`, `test-enforce-sheet-between`.
+- **The supplies variant.** Off by default. On: a ration and water each dawn,
+  3 + CON modifier days without food, half water a DC 15 CON save, the SRD's
+  exhaustion schedule, and a long rest that keeps exhaustion while going
+  without. Suites `test-enforce-supplies`, `test-enforce-explore-rules`.
+- **Inspiration.** The DM awards it; the holder spends it for advantage on a
+  check, save or attack (`useInspiration`). Suites
+  `test-enforce-feature-saves`, `test-enforce-tail-attacks`,
+  `test-enforce-final-ui`.
+- **Tool proficiency.** A check that names a tool adds the proficiency bonus,
+  twice with expertise. Suite `test-enforce-feature-saves`.
+- **Knockout.** A melee attack declared `nonlethal` leaves the creature alive
+  at 0, unconscious and prone, counted as defeated; later damage kills it.
+  Suite `test-enforce-pc-attack-features`.
+- **Light on attacks.** On a mapped fight both sides' sight of each other
+  comes from the board's light, spell areas and senses; opportunity attacks
+  need a creature the reactor can see. Off the board, a check reads the
+  place's light (a cave is dark, a building lit). Suites
+  `test-enforce-pc-attack-board`, `test-enforce-zones`,
+  `test-enforce-explore-rules`.
+- **Movement through creatures.** An ally's space, a hostile two sizes apart
+  and (for a halfling) any larger creature are walked through at double cost
+  and never ended in; squeezing; climbing and swimming speeds. Suites
+  `test-enforce-tail-movement`, `test-enforce-objects-terrain`.
+- **Jumping.** The long jump (the Strength score in feet after a 10-foot run,
+  half standing) and the high jump (3 + the Strength modifier) on the board
+  with `jump`, low obstacles, landing in difficult terrain; the Jump spell
+  triples them. Suites `test-enforce-last-combat-board`,
+  `test-enforce-spell-last`.
+- **Dragging.** A grappler drags the creature it holds at half speed (a
+  player's move with `drag`, an enemy's `move_token drag`) and sets it down
+  beside itself, so the grapple holds. Suite `test-enforce-last-combat-board`.
+- **Underwater.** A creature in deep water fights underwater: the SRD's weapon
+  exceptions, disadvantage and the missed shot past normal range, fire
+  resistance while immersed. Suite `test-enforce-last-combat-board`.
+
+Also in this repair, without a group of their own: the monster side (stat
+blocks parsed into Multiattack routines, riders, reach and range, recharge,
+spellcasting and legendary actions; the common traits; enemies acting on their
+own turn), the narrator seam (the AI's `update_sheet` limited to story fields,
+refusals marked for the model, Hand cards stored as intent and refused up front
+with the engine's reason), and the spell riders, revival spells, Dispel Magic
+and caster features listed in `rules-coverage.md`.
+
+### What stays narrated, and why
+
+- **Combat, 4 of 139 rows.** Free object interaction (ODM tracks what is
+  equipped, not the one free interaction a turn); a generic hazard's DC and
+  dice (the SRD gives none; every hazard with numbers is resolved); enemy
+  target choice and morale (the DM's decision in the SRD itself; the backstop
+  picks the nearest seen, lowest-AC target and `enemy_flees` records a rout).
+- **Exploration.** Foraging and navigation (DMG, not SRD 5.1) and an
+  interrupted rest (`take_rest` is atomic: not calling it is the
+  interruption), counted as held by design.
+- **Features, 3 partly.** Natural Explorer's travel benefits, Primeval
+  Awareness's answer, and sprouting Dragon Wings (the flying speed is always
+  there): the numbers are held, the rest is the DM's to say.
+- **Spells.** 91 pure utility spells, where narration is the resolution
+  (Mending, Knock, Comprehend Languages, Teleport...). Seven with a mechanic:
+  Time Stop, Telekinesis, Alter Self, Meld into Stone, Hallucinatory Terrain,
+  Stone Shape and Move Earth (they change the map or need a contest no tool
+  resolves). The 21 partial spells each keep one named part narrated, for
+  example Calm Emotions' suppression of charm and fear, Antimagic Field on
+  magic items and summons, Reverse Gravity's fall (the board has no heights).
+- **Magic items.** 129 SRD rows (Bag of Holding, Boots of Speed, Cloak of
+  Displacement, Ring of Spell Storing and the like) and the non-SRD pack rows
+  the generator cannot parse: GAME STATE carries each carried item's one-line
+  effect so the model narrates it from the text.
+- **Authored features, 11.** Roleplay or information (Master of Nature, Know
+  Your Enemy, Weapon Bond, Storm Guide, Telepathic Speech, Moon Fire,
+  Illusory Reality, Wizardly Quill), a position or companion the engine does
+  not track (Manifest Echo, Ranger's Companion), and Unstable Backlash, which
+  rerolls the narrated Wild Surge table. Each reason is written in
+  `srd/authored-effects-data*.ts`.
+- **Metamagic shaping**, as before: the sorcery points are spent, the
+  targeting is narrated.
+
+### New suites
+
+Fifty suites were added, every one green with the content pack and without it:
+
+- Actions, reactions and turns: `test-enforce-bonus-actions`,
+  `test-enforce-reactions`, `test-enforce-turn-actions`,
+  `test-enforce-turn-end`.
+- Character attacks and movement: `test-enforce-pc-attack-features`,
+  `test-enforce-pc-attack-spells`, `test-enforce-pc-attack-board`,
+  `test-enforce-tail-attacks`, `test-enforce-tail-features`,
+  `test-enforce-tail-movement`.
+- Monsters and the board: `test-enforce-monster-blocks`,
+  `test-enforce-monster-actions`, `test-enforce-monster-traits`,
+  `test-enforce-enemy-turns`, `test-enforce-last-combat`,
+  `test-enforce-last-combat-board`.
+- Spells: `test-enforce-spell-engine`, `test-enforce-spell-rows`,
+  `test-enforce-spell-riders`, `test-enforce-spell-tail`,
+  `test-enforce-spell-hooks`, `test-enforce-spell-last`,
+  `test-enforce-last-spells`, `test-enforce-caster-features`,
+  `test-enforce-zones`, `test-enforce-summons`.
+- Features: `test-enforce-feature-saves`, `test-enforce-feature-uses`,
+  `test-enforce-authored`, `test-enforce-final-engine`,
+  `test-enforce-final-features`.
+- Gear, exploration and economy: `test-enforce-magic-gear`,
+  `test-enforce-consumables`, `test-enforce-economy`,
+  `test-enforce-exploration`, `test-enforce-objects-terrain`,
+  `test-enforce-rest-choice`, `test-enforce-roll-carriers`,
+  `test-enforce-supplies`, `test-enforce-explore-defects`,
+  `test-enforce-explore-rules`, `test-enforce-downtime`,
+  `test-enforce-afflictions`.
+- The narrator and the screens: `test-enforce-narrator`,
+  `test-enforce-ui-play`, `test-enforce-ui-dm`, `test-enforce-final-ui`,
+  `test-enforce-zones-ui`, `test-enforce-board-moves`,
+  `test-enforce-sheet-between`.
+
+Beside them, `test-hand-area`, `test-hand-engine` and `test-hand-final` hold the
+Hand's pure logic, and `test-feature-coverage` and `test-invoke-catalog` were
+extended (the authored tiers; every console form offers every field its handler
+takes).
+
 
 ## The ruleset ODM is held to
 

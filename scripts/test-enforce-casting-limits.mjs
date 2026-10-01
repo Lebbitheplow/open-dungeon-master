@@ -13,7 +13,8 @@
 //
 // ODM's own rules, pinned where they differ: every spell ATTACK is given a
 // 120 foot range (src/lib/dm/attack-logic.ts spellAttackProfile, "real
-// per-spell ranges are not modeled"), so a touch spell reaches that far, and
+// per-spell ranges are not modeled"); a touch spell now reaches only the
+// creature beside the caster (the second repair's decision), and
 // with no battle map there are no spatial rules at all (map-tools.ts).
 // The Hand (src/lib/battlemap/hand-spells.ts) greys out a card for several
 // of the rules below; this suite asks the engine, which is what a DM's tool
@@ -282,16 +283,23 @@ await test("a spell attack needs a clear line and stops at the edge of its reach
   assert.equal(near.ok, true, near.error);
 });
 
-await test("ODM's rule: every spell attack reaches 120 feet, a touch spell too", async () => {
-  // SRD 5.1: Shocking Grasp and Inflict Wounds have a range of touch. ODM
-  // gives every spell attack one generous range (attack-logic.ts
-  // spellAttackProfile says so); this pins it so a change is a decision.
+await test("A touch spell attack is a melee spell attack: it reaches only a creature beside the caster", async () => {
+  // SRD 5.1: Shocking Grasp and Inflict Wounds have a range of touch and
+  // "make a melee spell attack". The owner's decision (second repair): a
+  // touch spell is a melee spell attack with touch reach, adjacent on a map.
+  // This replaced the pin "every spell attack reaches 120 feet, a touch
+  // spell too".
   const { world, sheets: [hero], enemies: [enemy] } = await table([wizard(5)]);
   await layMap(world, FIELD, { [hero.id]: { x: 1, y: 2 }, [enemy.id]: { x: 21, y: 2 } });
   world.dice(15, 5, 5);
   const out = await world.invoke("pc_attack", { characterId: hero.id, enemyId: enemy.id, targetEnemyId: enemy.id, spell: "Shocking Grasp", damage: "1d8" });
   world.clearDice();
-  assert.equal(out.ok, true, out.error);
+  assert.equal(out.ok, false, "a touch spell reached 100 feet");
+  await layMap(world, FIELD, { [hero.id]: { x: 1, y: 2 }, [enemy.id]: { x: 2, y: 2 } });
+  world.dice(15, 5, 5);
+  const beside = await world.invoke("pc_attack", { characterId: hero.id, enemyId: enemy.id, targetEnemyId: enemy.id, spell: "Shocking Grasp", damage: "1d8" });
+  world.clearDice();
+  assert.equal(beside.ok, true, beside.error);
 });
 
 await test("a spell attack reaches its own range and no farther", async () => {

@@ -216,6 +216,10 @@ export const gameSettingsSchema = z.object({
       // and recovered after the fight. Off by default because most tables
       // assume quivers are full; on, the server counts them.
       ammunition: z.boolean().default(false),
+      // Food and water (SRD 5.1): each dawn a character eats a ration and
+      // drinks, and going without costs exhaustion. Off by default, as
+      // ammunition is: the party is assumed supplied (src/lib/dm/supplies.ts).
+      supplies: z.boolean().default(false),
       restVariant: z.enum(["standard", "gritty", "heroic"]).default("standard"),
     })
     .default({
@@ -226,6 +230,7 @@ export const gameSettingsSchema = z.object({
       powerfulCritical: false,
       criticalDamageMods: false,
       ammunition: false,
+      supplies: false,
       restVariant: "standard",
     }),
   // Live voice chat. `enabled` is the table's own switch; the server also has

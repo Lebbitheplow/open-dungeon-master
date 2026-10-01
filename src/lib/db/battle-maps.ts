@@ -27,6 +27,7 @@ import {
   type MapDrawing,
 } from "@/lib/battlemap/scene";
 import { isEmptyMapSkin, normalizeMapSkin, type MapSkin } from "@/lib/battlemap/skins";
+import { normalizeSpellZones, withZoneWalls, type SpellZone } from "@/lib/battlemap/zones";
 import { isUploadedImagePath } from "@/lib/uploads";
 
 // Persistence for tactical battle maps. One map per encounter; the active
@@ -68,6 +69,8 @@ export type BattleMap = {
   // What the board is painted with; empty means the setting and theme decide
   // (src/lib/battlemap/skins.ts). Cosmetic: no rule reads it.
   skin: MapSkin;
+  // Spell areas on the board; their walls are already rock in `terrain`.
+  spellZones: SpellZone[];
 };
 
 type MapRow = {
@@ -91,6 +94,7 @@ type MapRow = {
   outdoors: number | null;
   drawings_json: string | null;
   skin_json: string | null;
+  spell_zones_json?: string | null;
 };
 
 export type SceneExtras = {
@@ -124,13 +128,14 @@ const TOKEN_COLUMNS = `id, kind, ref_id, name, x, y, moved_this_round, light_rad
 function mapRow(row: MapRow): BattleMap {
   const doors = normalizeDoors(parseJson<unknown>(row.doors_json ?? "{}", {}), row.terrain, row.width, row.height);
   const overlay = row.overlay_path ?? "";
+  const spellZones = normalizeSpellZones(parseJson<unknown>(row.spell_zones_json ?? "[]", []), row.width, row.height);
   return {
     id: row.id,
     encounterId: row.encounter_id,
     campaignId: row.campaign_id,
     width: row.width,
     height: row.height,
-    terrain: effectiveTerrain(row.terrain, row.width, doors),
+    terrain: withZoneWalls(effectiveTerrain(row.terrain, row.width, doors), row.width, spellZones),
     drawnTerrain: row.terrain,
     ambient: row.ambient,
     theme: row.theme ?? "field",
@@ -150,6 +155,7 @@ function mapRow(row: MapRow): BattleMap {
     overlayPath: overlay && isUploadedImagePath(overlay) ? overlay : "",
     drawings: normalizeDrawings(parseJson<unknown>(row.drawings_json ?? "[]", []), row.width, row.height),
     skin: normalizeMapSkin(parseJson<unknown>(row.skin_json ?? "{}", {})),
+    spellZones,
   };
 }
 

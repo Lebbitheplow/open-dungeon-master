@@ -11,6 +11,7 @@ import type { CampaignCover } from "@/lib/campaign-types";
 import type { CampaignMessage } from "@/lib/db/messages";
 import { clipRecap } from "@/lib/recap";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
+import { effectiveMaxHp } from "@/lib/dm/condition-logic";
 import type { StoredRoll } from "@/lib/db/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { TokenFace } from "@/app/campaigns/[campaignId]/BoardChrome";
@@ -193,7 +194,7 @@ export function PartyRail({
   const next: Record<string, { hp: number; dir?: "up" | "down" }> = { ...memory };
   let changed = false;
   for (const sheet of party) {
-    const max = Math.max(1, sheet.maxHp ?? 1);
+    const max = Math.max(1, effectiveMaxHp(sheet));
     const hp = Math.max(0, Math.min(max, sheet.currentHp ?? max));
     const prior = memory[sheet.id];
     if (!prior || prior.hp !== hp) {
@@ -207,12 +208,18 @@ export function PartyRail({
   if (party.length === 0) {
     return null;
   }
+  // The engine names whose turn it is: a player's order leaves hidden
+  // combatants out, so the pointer's index can point past them.
   const currentId =
-    encounter?.status === "active" && encounter.orderReady ? encounter.order[encounter.turnIndex]?.id : undefined;
+    encounter?.status === "active" && encounter.orderReady
+      ? encounter.acting
+        ? encounter.acting.id || undefined
+        : encounter.order[encounter.turnIndex]?.id
+      : undefined;
   return (
     <aside className="cine-party" aria-label="The party" data-tour="party-rail">
       {party.map((sheet, index) => {
-        const max = Math.max(1, sheet.maxHp ?? 1);
+        const max = Math.max(1, effectiveMaxHp(sheet));
         const hp = Math.max(0, Math.min(max, sheet.currentHp ?? max));
         const ratio = hp / max;
         const pct = `${Math.round(ratio * 100)}%`;
@@ -367,6 +374,7 @@ export function TabletopOrder({
             <span className="cine-order-name">
               {entry.name}
               {entry.hidden ? " (hidden)" : ""}
+              {entry.reflex ? <sup className="motion-pop ml-0.5 text-[9px] text-amber-300" title="Thief's Reflexes: a second turn this round">2nd</sup> : null}
             </span>
             {typeof entry.initiative === "number" ? <span className="cine-order-init">{entry.initiative}</span> : null}
           </li>

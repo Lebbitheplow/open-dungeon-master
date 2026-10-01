@@ -54,6 +54,7 @@ import {
 import { hpBonusPerLevel } from "@/lib/srd/race-id";
 import { casterViewsOf, dedupeNames, withCasterViews, type CasterView } from "@/lib/srd/spell-prep";
 import { isThirdCaster } from "@/lib/srd/third-caster";
+import { featureHitPoints, holdsFeature, PRIMAL_CHAMPION_CAP } from "@/lib/srd/trait-rules";
 import { isChoiceFeature, unmetPrerequisite } from "@/lib/srd/legality/features";
 import { castingClassesOf } from "@/lib/srd/legality/spells";
 import {
@@ -153,7 +154,7 @@ function improvementsAsked(
 
 // A choice as the points it adds, a lone odd point included (the old shape
 // can ask for +1 to a single score).
-function applyChoices(scores: AbilityScores, choices: AsiChoice[]): AbilityScores {
+export function applyChoices(scores: AbilityScores, choices: AsiChoice[]): AbilityScores {
   const next = { ...scores };
   for (const choice of choices) {
     if (choice.mode === "plus1x2" && choice.abilities[0] === choice.abilities[1]) {
@@ -312,6 +313,21 @@ export function buildLevelUp(
     }
   }
 
+  // Primal Champion (barbarian 20): +4 Strength and Constitution, to a
+  // maximum of 24. Applied before the hit points, since the Constitution
+  // counts for every level held.
+  const primalChampion =
+    lower(leveled.id) === "barbarian" &&
+    leveled.level === 20 &&
+    !holdsFeature(sheet, "primal champion");
+  if (primalChampion) {
+    abilities = {
+      ...abilities,
+      str: Math.min(PRIMAL_CHAMPION_CAP, abilities.str + 4),
+      con: Math.min(PRIMAL_CHAMPION_CAP, abilities.con + 4),
+    };
+  }
+
   // ---- hit points ----
   const hpClasses = before.map((entry) => ({
     die: context.classOf(entry.id)?.hitDie ?? Number(sheet.hitDice.die.slice(1)),
@@ -333,8 +349,13 @@ export function buildLevelUp(
     { con: sheet.abilities.con, perLevelBonus: bonusBefore },
     { con: abilities.con, perLevelBonus: bonusAfter },
   );
-  const hpGained = gain + Math.max(0, backPay);
-  const maxHp = Math.max(1, Math.min(500, sheet.maxHp + gain + backPay));
+  // Draconic Resilience: one more hit point for each sorcerer level, the
+  // ones already held included when the bloodline is taken now.
+  const featureHp =
+    featureHitPoints({ ...sheet, classes, class: classes[0].id, level: target }) -
+    featureHitPoints(sheet);
+  const hpGained = gain + Math.max(0, backPay) + Math.max(0, featureHp);
+  const maxHp = Math.max(1, Math.min(500, sheet.maxHp + gain + backPay + featureHp));
   const currentHp = Math.min(maxHp, sheet.currentHp + hpGained);
 
   // ---- training and expertise ----
@@ -498,7 +519,7 @@ export function buildLevelUp(
     currentHp,
     proficiencies,
     features,
-    ...(asked.choices.length ? { abilities, feats } : {}),
+    ...(asked.choices.length || primalChampion ? { abilities, feats } : {}),
     ...(spellcasting !== sheet.spellcasting ? { spellcasting } : {}),
     ...(multiclass ? { classes } : { level: target, subclass: classes[0].subclass }),
   };

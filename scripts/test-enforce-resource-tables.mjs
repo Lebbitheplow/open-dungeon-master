@@ -71,7 +71,8 @@ for (const level of LEVELS.filter((value) => value >= 6)) {
 }
 // SRD features with a daily limit that ODM does not count yet. A counter for
 // one of them appearing is a fix, not a stray.
-const UNCOUNTED = /indomitable|stroke_of_luck|cleansing_touch|mystic_arcanum/;
+const UNCOUNTED =
+  /indomitable|stroke_of_luck|cleansing_touch|mystic_arcanum|relentless_rage|wholeness_of_body|dark_ones_own_luck|hurl_through_hell|eldritch_master|holy_nimbus|divine_intervention|signature_spell_1|signature_spell_2|overchannel/;
 
 const made = new Map();
 function heroAt(classId, level, extra = {}) {
@@ -257,11 +258,16 @@ await test("every counter id is unique, so no definition hides another", () => {
     assert.ok(!seen.has(def.id), `${def.id} is defined twice`);
     seen.add(def.id);
   }
-  // 21 SRD counters: the fourteen the class tables always had, and
-  // Indomitable, Cleansing Touch, Stroke of Luck and the four Mystic Arcana.
+  // 27 SRD counters: the fourteen the class tables always had, and
+  // Indomitable, Cleansing Touch, Stroke of Luck and the four Mystic Arcana,
+  // then Inspiration (the DM's award), Relentless Rage (its climbing DC),
+  // Wholeness of Body, Dark One's Own Luck, Hurl Through Hell and Eldritch
+  // Master, then Holy Nimbus and Divine Intervention (src/lib/srd/combat-rows.ts).
   // Then one per spell a race casts once a day (hellish rebuke, faerie fire,
-  // darkness; the tiefling's and the drow's darkness are one counter).
-  assert.equal(RESOURCE_DEFS.length, 21 + AUTHORED.length + GENRE.length + 3);
+  // darkness; the tiefling's and the drow's darkness are one counter). And
+  // the wizard's two Signature Spells and Overchannel's count of uses
+  // (src/lib/dm/caster-features.ts).
+  assert.equal(RESOURCE_DEFS.length, 32 + AUTHORED.length + GENRE.length + 3);
 });
 
 await test("every authored and genre row is structurally legal", () => {

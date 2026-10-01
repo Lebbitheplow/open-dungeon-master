@@ -6,6 +6,7 @@ import { GoldTitle } from "@/components/ui/GoldTitle";
 import { PIXEL_ICONS, PixelTile } from "@/lib/ui";
 import CharacterBuilder, { type BuilderResult } from "../builder/CharacterBuilder";
 import { navigateTo } from "@/lib/navigation";
+import { refusalText } from "@/app/characters/builder/refusal";
 
 export default function NewCharacterPage() {
   const [busy, setBusy] = useState(false);
@@ -28,7 +29,7 @@ export default function NewCharacterPage() {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setError(data.error || "Could not save the character.");
+        setError(refusalText(data, "Could not save the character."));
         return;
       }
       navigateTo("/characters");

@@ -264,7 +264,11 @@
    loses its glow. None of this uses opacity: the cards overlap, and a
    see-through card shows its neighbour's text through its own. */
 .hand-fan[data-aiming="true"] .hand-card:not([data-picked="true"]):not([aria-pressed="true"]) { filter: brightness(0.55) saturate(0.7); }
-.hand-card[aria-disabled="true"] { cursor: not-allowed; }
+/* A refused card reads as refused at a glance, the same in the fan, the
+   reaction prompt and the more sheet: dimmed and drained, a spent one more
+   so; a hover lifts it enough to read the reason. */
+.hand-card[aria-disabled="true"] { cursor: not-allowed; filter: brightness(0.72) saturate(0.5); transition: filter var(--dur-quick) var(--ease-snap); }
+.hand-card[aria-disabled="true"]:not([data-spent="true"]):is(:hover, :focus-visible) { filter: brightness(0.9) saturate(0.75); }
 .hand-card[aria-disabled="true"] .hand-card-foil { opacity: 0; }
 .hand-card[aria-disabled="true"] .hand-card-foil::after { animation-play-state: paused; }
 .hand-card[aria-disabled="true"] .hand-card-sheen { opacity: 0; }
@@ -544,6 +548,7 @@ html[data-theme="light"] .hand-card[data-type] { --ribbon-ink: #fffaf0; }
 html[data-theme="light"] .hand-card[data-type="rider"], html[data-theme="light"] .hand-card[data-type="feature"] { --ribbon-ink: #2a2014; }
 /* Parchment steps back by going tan, never grey. */
 html[data-theme="light"] .hand-fan[data-aiming="true"] .hand-card:not([data-picked="true"]):not([aria-pressed="true"]) { filter: brightness(0.84) contrast(0.94); }
+html[data-theme="light"] .hand-card[aria-disabled="true"] { filter: brightness(0.88) contrast(0.9) saturate(0.6); }
 html[data-theme="light"] .hand-card[aria-disabled="true"][data-spent="true"] { filter: brightness(0.8) contrast(0.9) saturate(0.8); }
 html[data-theme="light"] .hand-card[aria-disabled="true"][data-spent="true"]:is(:hover, :focus-visible) { filter: brightness(0.92); }
 html[data-theme="light"] .hand-card[aria-disabled="true"] .hand-card-ribbon { filter: saturate(0.7); }

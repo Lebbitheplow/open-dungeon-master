@@ -22,7 +22,7 @@ import {
 } from "@/lib/db/dm-turns";
 import { DM_HALTED_PREFIX } from "@/lib/campaign-types";
 import { PC_ATTACK_PARKED } from "@/lib/dm/pc-attack";
-import { normalizeEventKind } from "@/lib/dm/arg-coerce";
+import { normalizeEventKind, strictBooleanArgs } from "@/lib/dm/arg-coerce";
 import { insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
 import { getRoll, listRecentRolls } from "@/lib/db/rolls";
 import { listSheets } from "@/lib/db/sheets";
@@ -46,7 +46,10 @@ import {
   salvageXmlToolCalls,
 } from "@/lib/dm/rolls";
 import { fakeRollMarkerRegex, stripToolText } from "@/lib/dm/tool-text";
-import { announcesEncounterStart, FAKE_ENCOUNTER_PROMPT } from "@/lib/dm/engine-boundary";
+import { announcesEncounterStart, collectExchanges, FAKE_ENCOUNTER_PROMPT } from "@/lib/dm/engine-boundary";
+import { markToolError } from "@/lib/dm/tool-errors";
+import { dispatchAdjudication } from "@/lib/dm/invoke-dispatch";
+import { intentAnswered, intentCorrection, intentNeedsTool, type MessageIntent } from "@/lib/dm/intent-logic";
 import { handleCompleteBeat } from "@/lib/dm/arc";
 import { tickWaypointsFromCalls } from "@/lib/dm/waypoint-tick";
 import { enforceEngineBoundary } from "@/lib/dm/narration-guard";
@@ -113,7 +116,7 @@ import {
   mutationTools,
 } from "@/lib/dm/mutations";
 import { describeBudget } from "@/lib/dm/action-budget";
-import { castBuffTool, handleCastBuff } from "@/lib/dm/cast-tools";
+import { castBuffTool } from "@/lib/dm/cast-tools";
 import {
   advanceAfterTurn,
   fightOwnsFloor,
@@ -124,91 +127,29 @@ import {
   ensureInitiativeProgress,
 } from "@/lib/dm/encounter-tools";
 import { handleRequestRoll } from "@/lib/dm/invoke-roll";
-import { handleTakeRest, restTools } from "@/lib/dm/rest-tools";
-import {
-  checkTools,
-  CHECK_TOOL_NAMES,
-  handleCheckNotice,
-  handleGroupCheck,
-} from "@/lib/dm/check-tools";
-import { hazardTools, HAZARD_TOOL_NAMES, handleApplyHazard } from "@/lib/dm/hazard-tools";
-import {
-  handleSplitDamage,
-  splitDamageTool,
-  SPLIT_DAMAGE_TOOL_NAMES,
-} from "@/lib/dm/split-damage";
-import {
-  petTools,
-  PET_TOOL_NAMES,
-  handleSummonPet,
-  handlePetAttack,
-  handleDamagePet,
-  handleDismissPet,
-} from "@/lib/dm/pet-tools";
-import {
-  socialTools,
-  SOCIAL_TOOL_NAMES,
-  handleSetNpc,
-  handleNpcReaction,
-  handleSocialCheck,
-  npcRosterForPrompt,
-} from "@/lib/dm/social-tools";
+import { restTools } from "@/lib/dm/rest-tools";
+import { checkTools, CHECK_TOOL_NAMES } from "@/lib/dm/check-tools";
+import { hazardTools, HAZARD_TOOL_NAMES } from "@/lib/dm/hazard-tools";
+import { splitDamageTool, SPLIT_DAMAGE_TOOL_NAMES } from "@/lib/dm/split-damage";
+import { petTools, PET_TOOL_NAMES } from "@/lib/dm/pet-tools";
+import { socialTools, SOCIAL_TOOL_NAMES, handleSetNpc, npcRosterForPrompt } from "@/lib/dm/social-tools";
 import {
   relationshipTools,
   RELATIONSHIP_TOOL_NAMES,
-  handleRelationshipBeat,
-  handleRomanceAdvance,
-  handleRelationshipEnd,
   relationshipRosterForPrompt,
 } from "@/lib/dm/relationship-tools";
-import { handlePartyStash, PARTY_TOOL_NAMES, partyTools } from "@/lib/dm/party-tools";
-import {
-  handleEndScene,
-  handleSceneCheck,
-  handleStartScene,
-  SCENE_TOOL_NAMES,
-  sceneTools,
-} from "@/lib/dm/scene-tools";
-import {
-  AMBIENCE_TOOL_NAMES,
-  ambienceTools,
-  followSceneAmbience,
-  handlePlaySting,
-  handleSetAmbience,
-} from "@/lib/dm/ambience-tools";
-import {
-  handleDismount,
-  handleMountUp,
-  MOUNT_TOOL_NAMES,
-  mountTools,
-} from "@/lib/dm/mount-tools";
-import {
-  effectTools,
-  EFFECT_TOOL_NAMES,
-  handleClearEffect,
-  handleSetEffect,
-} from "@/lib/dm/effect-tools";
-import {
-  handlePassTime,
-  worldTools,
-  WORLD_TOOL_NAMES,
-  handleRollTreasure,
-  handleDamageObject,
-  handleTravel,
-  handleSetWeather,
-  handleShowTitle,
-} from "@/lib/dm/world-tools";
-import {
-  BINDER_TOOL_NAMES,
-  binderTools,
-  handleDismissHandout,
-  handleSetQuest,
-  handleShowHandout,
-  handleTickObjective,
-} from "@/lib/dm/binder-tools";
-import { FACTION_TOOL_NAMES, factionTools, handleAdjustReputation, handleFactionNote } from "@/lib/dm/faction-tools";
-import { SHOP_TOOL_NAMES, shopTools, handleOpenShop, handleBuyItem, handleSellItem, handleHaggle, shopsBlock } from "@/lib/dm/shop-tools";
-import { SETTLEMENT_TOOL_NAMES, settlementTools, handleGenerateSettlement } from "@/lib/dm/settlement-tools";
+import { PARTY_TOOL_NAMES, partyTools } from "@/lib/dm/party-tools";
+import { SCENE_TOOL_NAMES, sceneTools } from "@/lib/dm/scene-tools";
+import { AMBIENCE_TOOL_NAMES, ambienceTools, followSceneAmbience } from "@/lib/dm/ambience-tools";
+import { MOUNT_TOOL_NAMES, mountTools } from "@/lib/dm/mount-tools";
+import { effectTools, EFFECT_TOOL_NAMES } from "@/lib/dm/effect-tools";
+import { worldTools, WORLD_TOOL_NAMES } from "@/lib/dm/world-tools";
+import { exploreTools, EXPLORE_TOOL_NAMES } from "@/lib/dm/explore-tools";
+import { betweenLinesBySheet } from "@/lib/dm/between-lines";
+import { BINDER_TOOL_NAMES, binderTools } from "@/lib/dm/binder-tools";
+import { FACTION_TOOL_NAMES, factionTools } from "@/lib/dm/faction-tools";
+import { SHOP_TOOL_NAMES, shopTools, shopsBlock } from "@/lib/dm/shop-tools";
+import { SETTLEMENT_TOOL_NAMES, settlementTools } from "@/lib/dm/settlement-tools";
 import { placeIsWritten, populateSettlement } from "@/lib/dm/settlement";
 import { listFactions } from "@/lib/db/factions";
 import { getParty } from "@/lib/db/party";
@@ -240,15 +181,44 @@ const ENCOUNTER_NAMES = new Set<string>(ENCOUNTER_TOOL_NAMES);
 // where a resumed turn may re-enter the loop.
 export const MAX_MODEL_CALLS = 4;
 
-// Tools whose results decide an attack/damage outcome: narration written in
-// the same model call is a premature guess and is withheld from players.
-const ATTACK_OUTCOME_TOOLS = new Set([
+// Tools whose results decide an outcome the model cannot know yet (a hit, a
+// save, a contest, damage or healing rolled): narration written in the same
+// model call is a premature guess and is withheld from players. A plain
+// request_roll is not here, because the prose beside it is the set-up (and,
+// for a player on physical dice, the ask to roll); its damage kind is.
+const OUTCOME_TOOLS = new Set([
   "pc_attack",
   "cast_at_enemy",
   "enemy_attack",
   "damage_enemy",
   "aoe_damage",
+  "take_action",
+  "cast_at_player",
+  "legendary_action",
+  "legendary_resist",
+  "lair_action",
+  "pet_attack",
+  "apply_hazard",
+  "use_reaction",
+  "split_damage",
+  "cast_buff",
+  "heal",
+  "apply_damage",
+  "use_item",
+  "use_resource",
+  "stabilize",
 ]);
+
+function resolvesOutcome(toolCall: { name: string; rawArguments: string }): boolean {
+  if (toolCall.name === "request_roll") {
+    try {
+      return (JSON.parse(toolCall.rawArguments || "{}") as { kind?: unknown }).kind === "damage";
+    } catch {
+      return false;
+    }
+  }
+  return OUTCOME_TOOLS.has(toolCall.name);
+}
 
 type TurnContext = {
   campaign: Campaign;
@@ -450,6 +420,8 @@ export async function startDmTurn(campaignId: string) {
           events.map((event) => event.summary),
         ]),
       ),
+      // Afflictions, lifestyle and downtime (src/lib/dm/between-lines.ts).
+      betweenBySheet: betweenLinesBySheet(campaignId, context.sheets),
       pins: listPins(campaignId).map((pin) => ({ text: pin.text })),
       chapters: listChapters(campaignId)
         .filter((chapter) => chapter.status === "closed")
@@ -615,6 +587,9 @@ function dmTurnTools(
     ...socialTools,
     ...(inEncounter ? [] : relationshipTools(campaign)),
     ...(inEncounter ? [] : worldTools),
+    // Lifting a load, lifestyles, downtime, diseases, madness and poisons
+    // (src/lib/dm/explore-tools.ts); downtime refuses itself in a fight.
+    ...exploreTools,
     // Handouts and the quest log are read at the table's pace, not mid-round.
     ...(inEncounter ? [] : binderTools),
     ...(inEncounter ? [] : factionTools),
@@ -650,7 +625,7 @@ function dmTurnTools(
 // program reads its tool list once, when it starts (src/lib/harness/bridge.ts),
 // so a turn that starts a fight must already have the combat tools on it; the
 // bridge refuses any call the loop is not offering at that moment.
-function dmTurnToolCatalogue(campaign: Campaign, imageEnabled: boolean, leanTools: boolean): unknown[] {
+export function dmTurnToolCatalogue(campaign: Campaign, imageEnabled: boolean, leanTools: boolean): unknown[] {
   return [
     ...dmTurnTools(campaign, false, imageEnabled, leanTools),
     ...dmTurnTools(campaign, true, imageEnabled, leanTools),
@@ -658,7 +633,7 @@ function dmTurnToolCatalogue(campaign: Campaign, imageEnabled: boolean, leanTool
 }
 
 async function runAdvance(context: TurnContext, turn: DmTurn) {
-  const { campaign, sheets, sheetsById, realDiceUserIds } = context;
+  const { campaign, sheets, sheetsById } = context;
   const campaignId = campaign.id;
   let failed = "";
   let spotlightSet = false;
@@ -690,6 +665,10 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
   // Whether the last call, sent with toolChoice "none", came back with tool
   // calls anyway (see narrateAfterToolLeak).
   let finalCallLeaked = false;
+  // The card the player played, when their action came from the Hand as an
+  // attack or a cast, and whether the one corrective call for it was spent.
+  const card = cardPlayed(context);
+  let intentNudged = false;
 
   while (turn.callIndex < MAX_MODEL_CALLS) {
     const finalCall = turn.callIndex === MAX_MODEL_CALLS - 1;
@@ -789,14 +768,14 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // the tool result comes back this same turn and the follow-up call
     // narrates from the real numbers. It stays in the echoed assistant
     // message, so the model keeps its own context.
-    const calledAttackTool = toolCalls.some((toolCall) =>
-      ATTACK_OUTCOME_TOOLS.has(toolCall.name),
-    );
+    const calledAttackTool = toolCalls.some(resolvesOutcome);
     // Hand-written "[roll:...]" markers rolled nothing (real markers are
     // appended by finalize() from actual roll ids); drop them before the
     // text is persisted so players never see dead bookkeeping tokens.
     const narration = (visibleText ?? "").replace(fakeRollMarkerRegex(), "").trim();
-    if (narration && !calledAttackTool) {
+    // On the last call the tools never run (toolChoice "none"; a leaked call
+    // is dropped), so its prose is the only narration there will be.
+    if (narration && (!calledAttackTool || finalCall)) {
       turn.narrationParts.push(narration);
     }
     const rollCalls = toolCalls.filter((toolCall) => toolCall.name === "request_roll");
@@ -844,6 +823,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     const worldCalls = toolCalls.filter(
       (toolCall) =>
         (WORLD_TOOL_NAMES as readonly string[]).includes(toolCall.name) ||
+        (EXPLORE_TOOL_NAMES as readonly string[]).includes(toolCall.name) ||
         (PARTY_TOOL_NAMES as readonly string[]).includes(toolCall.name) ||
         (EFFECT_TOOL_NAMES as readonly string[]).includes(toolCall.name) ||
         (SCENE_TOOL_NAMES as readonly string[]).includes(toolCall.name) ||
@@ -909,6 +889,13 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         handleRecordEvent(campaign, eventCall.rawArguments, sheets, sheetsById),
       );
     }
+    // set_npc is bookkeeping like record_event: it runs here, before the
+    // follow-up decision, so a roster entry sent beside narration is never
+    // dropped for want of a follow-up call.
+    const setNpcResults = new Map<string, Record<string, unknown>>();
+    for (const npcCall of setNpcCalls) {
+      setNpcResults.set(npcCall.id ?? "set_npc", handleSetNpc(campaign, npcCall.rawArguments));
+    }
     // Waypoints tick before the beat is judged, so an arrival and the beat
     // it lands in the same reply resolve in order (issue #31). The location
     // calls above already ran; the rest of the tools tick again below.
@@ -968,6 +955,52 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       }
     }
 
+    // What a bookkeeping call already returned above, before the follow-up
+    // decision: these ran first because the beat check and the narration
+    // link depend on them. Null for a call that resolves below.
+    const ranAbove = (
+      toolCall: { id?: string; name: string },
+      inFight: boolean,
+      narrateNow: boolean,
+    ): Record<string, unknown> | null => {
+      switch (toolCall.name) {
+        case "request_player_input":
+          return playerInputResult(spotlightSet, inFight, narrateNow);
+        case "generate_image":
+          return { ok: true, note: "The picture is queued with this turn." };
+        case "move_party":
+        case "update_location":
+          return locationResults.get(toolCall.id ?? toolCall.name) ?? { ok: true };
+        case "record_event":
+          return eventResults.get(toolCall.id ?? "record_event") ?? { ok: true };
+        case "complete_beat":
+          return beatResults.get(toolCall.id ?? "complete_beat") ?? { ok: true };
+        case "recall_story":
+          return recallResults.get(toolCall.id ?? "recall_story") ?? { ok: true };
+        case "search_lore":
+          return searchLoreResults.get(toolCall.id ?? "search_lore") ?? { ok: true };
+        case "write_campaign_note":
+          return noteResults.get(toolCall.id ?? "write_campaign_note") ?? { ok: true };
+        case "send_whisper":
+          return whisperResults.get(toolCall.id ?? "send_whisper") ?? { ok: true };
+        case "set_npc":
+          return setNpcResults.get(toolCall.id ?? "set_npc") ?? { ok: true };
+        default:
+          return null;
+      }
+    };
+    // Every echoed call gets its result: a strict endpoint (OpenAI) refuses
+    // a history with an unanswered tool call.
+    const answerRanAbove = (inFight: boolean, narrateNow: boolean) => {
+      for (const toolCall of toolCalls) {
+        turn.conversation.push({
+          role: "tool",
+          ...(toolCall.id ? { tool_call_id: toolCall.id } : {}),
+          content: JSON.stringify(markToolError(ranAbove(toolCall, inFight, narrateNow) ?? { ok: true })),
+        });
+      }
+    };
+
     // Location-only calls with narration already in hand are pure
     // bookkeeping (applied above); the turn can end without another call.
     const needsFollowUp =
@@ -1019,8 +1052,36 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
           content: visibleText || "",
           tool_calls: echoedToolCalls,
         });
+        answerRanAbove(fightOwnsFloor(campaignId), false);
         turn.conversation.push({ role: "user", content: FAKE_ENCOUNTER_PROMPT });
         // Saved again: the save above still carried the withheld announcement.
+        saveDmTurn(turn);
+        continue;
+      }
+      // A card played from the Hand as an attack or a cast that no tool
+      // resolved has not happened, however the prose tells it. The prose is
+      // held back and the model is sent once to the tool the card names;
+      // the follow-up narrates from its result (src/lib/dm/intent-logic.ts).
+      if (
+        !finalCall &&
+        !intentNudged &&
+        card &&
+        !intentAnswered(card.intent, [...calledToolNames(turn.conversation), ...toolCalls.map((toolCall) => toolCall.name)])
+      ) {
+        intentNudged = true;
+        if (narration && turn.narrationParts[turn.narrationParts.length - 1] === narration) {
+          turn.narrationParts.pop();
+        }
+        turn.conversation.push({
+          role: "assistant",
+          content: visibleText || "",
+          tool_calls: echoedToolCalls,
+        });
+        answerRanAbove(fightOwnsFloor(campaignId), false);
+        turn.conversation.push({
+          role: "user",
+          content: intentCorrection(card.intent, card.characterId, card.name),
+        });
         saveDmTurn(turn);
         continue;
       }
@@ -1031,26 +1092,12 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       // character (nobody was handed the floor), which used to close the
       // turn on the empty-turn line.
       if ((spotlightSet || inputCalls.length > 0) && !turn.narrationParts.length && !finalCall) {
-        const inFight = !spotlightSet && fightOwnsFloor(campaignId);
         turn.conversation.push({
           role: "assistant",
           content: visibleText || "",
           tool_calls: echoedToolCalls,
         });
-        // Every echoed call gets its result: a strict endpoint (OpenAI)
-        // refuses a history with an unanswered tool call, and a complete_beat
-        // or generate_image can ride along with the question.
-        for (const toolCall of toolCalls) {
-          turn.conversation.push({
-            role: "tool",
-            ...(toolCall.id ? { tool_call_id: toolCall.id } : {}),
-            content: JSON.stringify(
-              toolCall.name === "request_player_input"
-                ? playerInputResult(spotlightSet, inFight, true)
-                : (beatResults.get(toolCall.id ?? "complete_beat") ?? { ok: true }),
-            ),
-          });
-        }
+        answerRanAbove(!spotlightSet && fightOwnsFloor(campaignId), true);
         continue;
       }
       break;
@@ -1070,425 +1117,24 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       tool_calls: echoedToolCalls,
     });
 
+    // The calls resolve in the order the model sent them: a Rage, a Bless or
+    // a Hunter's Mark called before the attack in the same reply is on the
+    // sheet when the attack reads it. Each result is marked as an argument
+    // fault or a rules refusal when it is an error (src/lib/dm/tool-errors.ts).
+    // A pc_attack or roll for a physical-dice player parks instead: its
+    // result arrives when the turn resumes with the adjudicated roll.
     const inputInFight = !spotlightSet && fightOwnsFloor(campaignId);
-    for (const inputCall of inputCalls) {
-      turn.conversation.push({
-        role: "tool",
-        ...(inputCall.id ? { tool_call_id: inputCall.id } : {}),
-        content: JSON.stringify(playerInputResult(spotlightSet, inputInFight, false)),
-      });
-    }
-
-    // The picture is queued from the parsed call above; the result only
-    // pairs the call so a strict endpoint accepts the history.
-    for (const imageCall of toolCalls.filter((toolCall) => toolCall.name === "generate_image")) {
-      turn.conversation.push({
-        role: "tool",
-        ...(imageCall.id ? { tool_call_id: imageCall.id } : {}),
-        content: JSON.stringify({ ok: true, note: "The picture is queued with this turn." }),
-      });
-    }
-
-    for (const locationCall of locationCalls) {
-      turn.conversation.push({
-        role: "tool",
-        ...(locationCall.id ? { tool_call_id: locationCall.id } : {}),
-        content: JSON.stringify(
-          locationResults.get(locationCall.id ?? locationCall.name) ?? { ok: true },
-        ),
-      });
-    }
-
-    for (const eventCall of eventCalls) {
-      turn.conversation.push({
-        role: "tool",
-        ...(eventCall.id ? { tool_call_id: eventCall.id } : {}),
-        content: JSON.stringify(
-          eventResults.get(eventCall.id ?? "record_event") ?? { ok: true },
-        ),
-      });
-    }
-
-    for (const beatCall of beatCalls) {
-      turn.conversation.push({
-        role: "tool",
-        ...(beatCall.id ? { tool_call_id: beatCall.id } : {}),
-        content: JSON.stringify(beatResults.get(beatCall.id ?? "complete_beat") ?? { ok: true }),
-      });
-    }
-
-    for (const recallCall of recallCalls) {
-      turn.conversation.push({
-        role: "tool",
-        ...(recallCall.id ? { tool_call_id: recallCall.id } : {}),
-        content: JSON.stringify(
-          recallResults.get(recallCall.id ?? "recall_story") ?? { ok: true },
-        ),
-      });
-    }
-
-    for (const searchLoreCall of searchLoreCalls) {
-      turn.conversation.push({
-        role: "tool",
-        ...(searchLoreCall.id ? { tool_call_id: searchLoreCall.id } : {}),
-        content: JSON.stringify(
-          searchLoreResults.get(searchLoreCall.id ?? "search_lore") ?? { ok: true },
-        ),
-      });
-    }
-
-    for (const noteCall of noteCalls) {
-      turn.conversation.push({
-        role: "tool",
-        ...(noteCall.id ? { tool_call_id: noteCall.id } : {}),
-        content: JSON.stringify(
-          noteResults.get(noteCall.id ?? "write_campaign_note") ?? { ok: true },
-        ),
-      });
-    }
-
-    for (const whisperCall of whisperCalls) {
-      turn.conversation.push({
-        role: "tool",
-        ...(whisperCall.id ? { tool_call_id: whisperCall.id } : {}),
-        content: JSON.stringify(
-          whisperResults.get(whisperCall.id ?? "send_whisper") ?? { ok: true },
-        ),
-      });
-    }
-
-    // Encounter tools resolve synchronously against server-authoritative
-    // enemy state; the model narrates from the compact results. A pc_attack
-    // for a physical-dice player parks instead: its tool result arrives when
-    // the turn resumes with the adjudicated roll.
     let parkedAny = false;
-    for (const encounterCall of encounterCalls) {
-      let result: Record<string, unknown>;
-      if (turn.encounterCount >= ENCOUNTER_CAP_PER_TURN) {
-        result = { error: "Encounter action limit reached for this turn." };
-      } else {
-        result = applyEncounterCall(
-          campaign,
-          turn,
-          encounterCall.name,
-          encounterCall.rawArguments,
-          sheets,
-          sheetsById,
-          { realDiceUserIds, toolCallId: encounterCall.id ?? null },
-        ).result;
-        if (!("error" in result)) {
-          turn.encounterCount += 1;
-        }
-      }
-      if (result[PC_ATTACK_PARKED]) {
+    for (const toolCall of toolCalls) {
+      const outcome = ranAbove(toolCall, inputInFight, false) ?? (await resolveModelCall(context, turn, toolCall));
+      if (outcome[PARKED]) {
         parkedAny = true;
         continue;
       }
       turn.conversation.push({
         role: "tool",
-        ...(encounterCall.id ? { tool_call_id: encounterCall.id } : {}),
-        content: JSON.stringify(result),
-      });
-    }
-
-    // Companion recruit/dismiss resolves synchronously: the sheet, order
-    // slot, and token exist before the model narrates the arrival. The
-    // fresh sheet list matters (the shared `sheets` snapshot predates it),
-    // so later tools in this turn resolve the new characterId via the DB.
-    for (const companionCall of companionCalls) {
-      const result = applyCompanionCall(
-        campaign,
-        companionCall.name,
-        companionCall.rawArguments,
-        listSheets(campaignId),
-      );
-      if (!("error" in result)) {
-        // Refresh the shared snapshot in place so pc_attack and friends can
-        // resolve the new (or removed) companion later this same turn.
-        const fresh = listSheets(campaignId);
-        sheets.length = 0;
-        sheets.push(...fresh);
-        sheetsById.clear();
-        for (const freshSheet of fresh) {
-          sheetsById.set(freshSheet.id, freshSheet);
-        }
-      }
-      turn.conversation.push({
-        role: "tool",
-        ...(companionCall.id ? { tool_call_id: companionCall.id } : {}),
-        content: JSON.stringify(result),
-      });
-    }
-
-    // Buff casts resolve synchronously: the slot spends, the effect lands
-    // as a tracked condition, and the model narrates from the result.
-    for (const castBuffCall of castBuffCalls) {
-      const result = handleCastBuff(
-        campaign,
-        turn,
-        castBuffCall.rawArguments,
-        sheets,
-        sheetsById,
-      );
-      turn.conversation.push({
-        role: "tool",
-        ...(castBuffCall.id ? { tool_call_id: castBuffCall.id } : {}),
-        content: JSON.stringify(result),
-      });
-    }
-
-    // Rests resolve synchronously: hit dice roll server-side and every
-    // sheet write is audited; the model narrates from the results.
-    for (const restCall of restCalls) {
-      const result = handleTakeRest(campaign, turn.id, restCall.rawArguments, sheets, sheetsById);
-      turn.conversation.push({
-        role: "tool",
-        ...(restCall.id ? { tool_call_id: restCall.id } : {}),
-        content: JSON.stringify(result),
-      });
-    }
-
-    // Stat mutations resolve synchronously; the model narrates from the
-    // compact results. A hard per-turn cap bounds the blast radius.
-    for (const mutationCall of mutationCalls) {
-      let result: Record<string, unknown>;
-      if (turn.mutationCount >= MUTATION_CAP_PER_TURN) {
-        result = { error: "Mutation limit reached for this turn." };
-      } else {
-        // inventoryApprovals: item/gold changes to player characters stage
-        // as offers the owning player answers; null falls through to the
-        // normal auto-apply path.
-        const proposed = maybeProposeItemChange(
-          campaign,
-          turn.id,
-          mutationCall.name,
-          mutationCall.rawArguments,
-          sheetsById,
-        );
-        result =
-          proposed ??
-          applyDmMutation(
-            campaign,
-            turn.id,
-            mutationCall.name,
-            mutationCall.rawArguments,
-            sheets,
-            sheetsById,
-          ).result;
-        if (!("error" in result)) {
-          turn.mutationCount += 1;
-        }
-      }
-      turn.conversation.push({
-        role: "tool",
-        ...(mutationCall.id ? { tool_call_id: mutationCall.id } : {}),
-        content: JSON.stringify(result),
-      });
-    }
-
-    // Group checks and passive-notice gates resolve synchronously against the
-    // sheets: group_check rolls every participant and applies the half-succeed
-    // rule, check_notice compares passive scores with no dice.
-    for (const checkCall of checkCalls) {
-      const result =
-        checkCall.name === "group_check"
-          ? handleGroupCheck(campaign, turn, checkCall.rawArguments, sheets, sheetsById)
-          : handleCheckNotice(campaign, checkCall.rawArguments, sheets, sheetsById);
-      turn.conversation.push({
-        role: "tool",
-        ...(checkCall.id ? { tool_call_id: checkCall.id } : {}),
-        content: JSON.stringify(result),
-      });
-    }
-
-    // Traps, falls, and environmental hazards resolve synchronously: the
-    // server owns the save DC and damage dice and applies them per victim.
-    for (const hazardCall of hazardCalls) {
-      const result = handleApplyHazard(campaign, turn, hazardCall.rawArguments, sheets, sheetsById);
-      turn.conversation.push({
-        role: "tool",
-        ...(hazardCall.id ? { tool_call_id: hazardCall.id } : {}),
-        content: JSON.stringify(result),
-      });
-    }
-
-    // One rolled total, several targets, a share each: the halving and
-    // doubling are the server's, and every share then lands through the
-    // ordinary damage rules.
-    for (const splitCall of splitCalls) {
-      const result = handleSplitDamage(campaign, turn, splitCall.rawArguments, sheets, sheetsById);
-      turn.conversation.push({
-        role: "tool",
-        ...(splitCall.id ? { tool_call_id: splitCall.id } : {}),
-        content: JSON.stringify(result),
-      });
-    }
-
-    // Familiars, companions, and drakes: summons validate the granting
-    // feature, attacks roll real dice, damage lands on the pet's own pool.
-    for (const petCall of petCalls) {
-      let result: Record<string, unknown>;
-      if (petCall.name === "summon_pet") {
-        result = handleSummonPet(campaign, turn, petCall.rawArguments, sheets, sheetsById);
-      } else if (petCall.name === "pet_attack") {
-        result = handlePetAttack(campaign, turn, petCall.rawArguments, sheets, sheetsById);
-      } else if (petCall.name === "damage_pet") {
-        result = handleDamagePet(campaign, petCall.rawArguments, sheets, sheetsById);
-      } else {
-        result = handleDismissPet(campaign, petCall.rawArguments, sheets, sheetsById);
-      }
-      turn.conversation.push({
-        role: "tool",
-        ...(petCall.id ? { tool_call_id: petCall.id } : {}),
-        content: JSON.stringify(result),
-      });
-    }
-
-    // NPC bookkeeping and social checks resolve synchronously against the
-    // persisted NPC roster: attitude drives the check DC and shifts on a
-    // decisive result, at most once per exchange.
-    for (const socialCall of socialCalls) {
-      let result: Record<string, unknown>;
-      if (socialCall.name === "set_npc") {
-        result = handleSetNpc(campaign, socialCall.rawArguments);
-      } else if (socialCall.name === "npc_reaction") {
-        result = handleNpcReaction(campaign, turn, socialCall.rawArguments);
-      } else {
-        result = handleSocialCheck(campaign, turn, socialCall.rawArguments, sheets, sheetsById);
-      }
-      turn.conversation.push({
-        role: "tool",
-        ...(socialCall.id ? { tool_call_id: socialCall.id } : {}),
-        content: JSON.stringify(result),
-      });
-    }
-
-    // Standing resolves synchronously against the relationship ledger: a
-    // deed is weighed against the subject's own nature, an overture rolls a
-    // real Charisma skill, and a romance moves at most once per exchange.
-    for (const relationshipCall of relationshipCalls) {
-      let result: Record<string, unknown>;
-      if (relationshipCall.name === "relationship_beat") {
-        result = handleRelationshipBeat(
-          campaign,
-          turn,
-          relationshipCall.rawArguments,
-          sheets,
-          sheetsById,
-        );
-      } else if (relationshipCall.name === "romance_advance") {
-        result = handleRomanceAdvance(
-          campaign,
-          turn,
-          relationshipCall.rawArguments,
-          sheets,
-          sheetsById,
-        );
-      } else {
-        result = handleRelationshipEnd(campaign, relationshipCall.rawArguments, sheets, sheetsById);
-      }
-      turn.conversation.push({
-        role: "tool",
-        ...(relationshipCall.id ? { tool_call_id: relationshipCall.id } : {}),
-        content: JSON.stringify(result),
-      });
-    }
-
-    // Treasure, object-breaking, and travel resolve synchronously: coins move
-    // through modify_gold, forced-march failures apply exhaustion, and an
-    // object break is read from the DMG table.
-    for (const worldCall of worldCalls) {
-      let result: Record<string, unknown>;
-      if (worldCall.name === "roll_treasure") {
-        result = handleRollTreasure(campaign, turn, worldCall.rawArguments, sheets, sheetsById);
-      } else if (worldCall.name === "travel") {
-        result = handleTravel(campaign, turn, worldCall.rawArguments, sheets, sheetsById);
-      } else if (worldCall.name === "pass_time") {
-        result = handlePassTime(campaign, worldCall.rawArguments);
-      } else if (worldCall.name === "set_weather") {
-        result = handleSetWeather(campaign, worldCall.rawArguments);
-      } else if (worldCall.name === "show_title") {
-        result = handleShowTitle(campaign, worldCall.rawArguments);
-      } else if (worldCall.name === "show_handout") {
-        result = handleShowHandout(campaign, turn, worldCall.rawArguments);
-      } else if (worldCall.name === "dismiss_handout") {
-        result = handleDismissHandout(campaign, worldCall.rawArguments);
-      } else if (worldCall.name === "set_quest") {
-        result = handleSetQuest(campaign, worldCall.rawArguments);
-      } else if (worldCall.name === "tick_objective") {
-        result = handleTickObjective(campaign, worldCall.rawArguments);
-      } else if (worldCall.name === "generate_settlement") {
-        result = handleGenerateSettlement(campaign, worldCall.rawArguments);
-      } else if (worldCall.name === "open_shop") {
-        result = handleOpenShop(campaign, worldCall.rawArguments);
-      } else if (worldCall.name === "buy_item") {
-        result = handleBuyItem(campaign, worldCall.rawArguments);
-      } else if (worldCall.name === "sell_item") {
-        result = handleSellItem(campaign, worldCall.rawArguments);
-      } else if (worldCall.name === "haggle") {
-        result = handleHaggle(campaign, worldCall.rawArguments);
-      } else if (worldCall.name === "adjust_reputation") {
-        result = handleAdjustReputation(campaign, worldCall.rawArguments);
-      } else if (worldCall.name === "faction_note") {
-        result = handleFactionNote(campaign, worldCall.rawArguments);
-      } else if (worldCall.name === "party_stash") {
-        result = handlePartyStash(campaign, worldCall.rawArguments, sheets, sheetsById);
-      } else if (worldCall.name === "set_effect") {
-        result = handleSetEffect(campaign, worldCall.rawArguments, sheets, sheetsById);
-      } else if (worldCall.name === "clear_effect") {
-        result = handleClearEffect(campaign, worldCall.rawArguments, sheets, sheetsById);
-      } else if (worldCall.name === "start_scene") {
-        result = handleStartScene(campaign, worldCall.rawArguments);
-      } else if (worldCall.name === "scene_check") {
-        result = handleSceneCheck(campaign, worldCall.rawArguments, sheets, sheetsById);
-      } else if (worldCall.name === "end_scene") {
-        result = handleEndScene(campaign, worldCall.rawArguments);
-      } else if (worldCall.name === "mount_up") {
-        result = handleMountUp(campaign, worldCall.rawArguments, sheets, sheetsById);
-      } else if (worldCall.name === "dismount") {
-        result = handleDismount(campaign, worldCall.rawArguments, sheets, sheetsById);
-      } else if (worldCall.name === "set_ambience") {
-        result = handleSetAmbience(campaign, worldCall.rawArguments);
-      } else if (worldCall.name === "play_sting") {
-        result = handlePlaySting(campaign, worldCall.rawArguments);
-      } else {
-        result = handleDamageObject(worldCall.rawArguments);
-      }
-      turn.conversation.push({
-        role: "tool",
-        ...(worldCall.id ? { tool_call_id: worldCall.id } : {}),
-        content: JSON.stringify(result),
-      });
-    }
-
-    for (const rollCall of rollCalls) {
-      // One request_roll for both callers (src/lib/dm/invoke-roll.ts): the
-      // table's strictness, the effects and auras on the roller, the
-      // inspiration die and the refusal of the dead are the console's too.
-      const result = handleRequestRoll(
-        campaign,
-        turn,
-        rollCall.rawArguments,
-        sheets,
-        sheetsById,
-        realDiceUserIds,
-        { toolCallId: rollCall.id ?? null },
-      );
-      // Physical dice: the call is parked for the player, and its answer
-      // reaches the model when the turn resumes.
-      if (result.parked) {
-        parkedAny = true;
-        continue;
-      }
-      const rolled = typeof result.total === "number";
-      turn.conversation.push({
-        role: "tool",
-        ...(rollCall.id ? { tool_call_id: rollCall.id } : {}),
-        content: JSON.stringify(
-          rolled
-            ? { ...result, note: "Narrate this real result. Do not roll again for the same action." }
-            : result,
-        ),
+        ...(toolCall.id ? { tool_call_id: toolCall.id } : {}),
+        content: JSON.stringify(markToolError(outcome)),
       });
     }
 
@@ -1515,9 +1161,11 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
   if (!failed) {
     await ensureWhisperReplies(context, turn);
     // Last stop before the narration is persisted: cross-check the prose
-    // against the outcomes this turn's tools actually resolved, and spend a
-    // remaining model call on a rewrite when they disagree.
-    await enforceEngineBoundary(campaign, turn, MAX_MODEL_CALLS - turn.callIndex, sheets);
+    // against the outcomes this turn's tools actually resolved and against
+    // the encounter as it now stands, and spend the one call held in
+    // reserve for it (outside MAX_MODEL_CALLS) on a rewrite when they
+    // disagree.
+    await enforceEngineBoundary(campaign, turn, sheets);
   }
   finalize(context, turn, failed);
   if (!failed) {
@@ -1529,6 +1177,105 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // turn's prompt, so background clocks never trigger model calls.
     tickWorldState(campaignId);
   }
+}
+
+// Marks a call that parked for a player's physical dice: its tool result
+// arrives when the turn resumes, so none is written now.
+const PARKED = "__turnParked";
+
+// One model call that did not run above, resolved against the engine with
+// the loop's own rails: the per-turn caps, the item-approval offers, the
+// companion roster refresh, and parking for physical dice. Everything else
+// goes through the same dispatch the DM console uses
+// (src/lib/dm/invoke-dispatch.ts), so the two callers cannot drift.
+async function resolveModelCall(
+  context: TurnContext,
+  turn: DmTurn,
+  toolCall: { id?: string; name: string; rawArguments: string },
+): Promise<Record<string, unknown>> {
+  const { campaign, sheets, sheetsById, realDiceUserIds } = context;
+  const { name } = toolCall;
+  // "false" sent as a string is false (src/lib/dm/arg-coerce.ts).
+  const rawArguments = strictBooleanArgs(toolCall.rawArguments);
+  if (ENCOUNTER_NAMES.has(name)) {
+    if (turn.encounterCount >= ENCOUNTER_CAP_PER_TURN) {
+      return { error: "Encounter action limit reached for this turn." };
+    }
+    const result = applyEncounterCall(campaign, turn, name, rawArguments, sheets, sheetsById, {
+      realDiceUserIds,
+      toolCallId: toolCall.id ?? null,
+    }).result;
+    if (!("error" in result)) {
+      turn.encounterCount += 1;
+    }
+    return result[PC_ATTACK_PARKED] ? { [PARKED]: true } : result;
+  }
+  // Companion recruit/dismiss resolves synchronously: the sheet, order
+  // slot, and token exist before the model narrates the arrival. The shared
+  // snapshot is refreshed in place so a pc_attack later in the same reply
+  // resolves the new (or removed) companion.
+  if (COMPANION_TOOL_NAMES.has(name)) {
+    const result = applyCompanionCall(campaign, name, rawArguments, listSheets(campaign.id));
+    if (!("error" in result)) {
+      const fresh = listSheets(campaign.id);
+      sheets.length = 0;
+      sheets.push(...fresh);
+      sheetsById.clear();
+      for (const freshSheet of fresh) {
+        sheetsById.set(freshSheet.id, freshSheet);
+      }
+    }
+    return result;
+  }
+  // Stat mutations resolve synchronously under a hard per-turn cap. With
+  // inventoryApprovals, item and gold changes to player characters stage as
+  // offers the owning player answers.
+  if (MUTATION_NAMES.has(name)) {
+    if (turn.mutationCount >= MUTATION_CAP_PER_TURN) {
+      return { error: "Mutation limit reached for this turn." };
+    }
+    const result =
+      maybeProposeItemChange(campaign, turn.id, name, rawArguments, sheetsById) ??
+      applyDmMutation(campaign, turn.id, name, rawArguments, sheets, sheetsById).result;
+    if (!("error" in result)) {
+      turn.mutationCount += 1;
+    }
+    return result;
+  }
+  // One request_roll for both callers (src/lib/dm/invoke-roll.ts); the
+  // model's parks remember the call they answer.
+  if (name === "request_roll") {
+    const result = handleRequestRoll(campaign, turn, rawArguments, sheets, sheetsById, realDiceUserIds, {
+      toolCallId: toolCall.id ?? null,
+    });
+    if (result.parked) {
+      return { [PARKED]: true };
+    }
+    return typeof result.total === "number"
+      ? { ...result, note: "Narrate this real result. Do not roll again for the same action." }
+      : result;
+  }
+  return dispatchAdjudication(name, rawArguments, { campaign, turn, sheets, sheetsById, realDiceUserIds });
+}
+
+// Every tool the turn has called so far, from its conversation.
+function calledToolNames(conversation: DmTurn["conversation"]): string[] {
+  return collectExchanges(conversation).map((exchange) => exchange.name).filter(Boolean);
+}
+
+// The card behind the action this turn answers: the last player message,
+// when it came from the Hand as an attack or a cast.
+function cardPlayed(
+  context: TurnContext,
+): { intent: MessageIntent; characterId: string | null; name: string } | null {
+  const last = [...listRecentMessages(context.campaign.id, 20)]
+    .reverse()
+    .find((message) => message.authorType !== "system");
+  if (!last || last.authorType !== "player" || !last.intent || !intentNeedsTool(last.intent)) {
+    return null;
+  }
+  const sheet = last.characterId ? context.sheetsById.get(last.characterId) : undefined;
+  return { intent: last.intent, characterId: last.characterId, name: sheet?.name ?? "The player" };
 }
 
 // The last call goes out with toolChoice "none", yet some servers still

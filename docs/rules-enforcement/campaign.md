@@ -1,5 +1,7 @@
 # Enforcement report: campaign
 
+The second audit and repair (2026-09-30) and the state after it are in [`../rules-enforcement-audit.md`](../rules-enforcement-audit.md); this report describes the first audit.
+
 Area: campaign creation and settings, permissions, persistence, import and export, custom
 content (homebrew, rulesets, world packs, genre classes), multiplayer synchronization, and the
 AI DM's tool interface. Continued from an interrupted agent; its seven files were kept, re-run,

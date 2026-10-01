@@ -1,7 +1,12 @@
 // SRD armor matching, proficiency, and the derived-AC math that replaced
 // the hand-typed armor class.
 import assert from "node:assert/strict";
-import {
+import { register } from "node:module";
+
+// armor.ts reads magic armor from the generated item table, which is
+// imported through the "@/" alias this loader resolves.
+register("./lib/register-alias.mjs", import.meta.url);
+const {
   ATTUNEMENT_SLOTS,
   SRD_ARMOR,
   computeArmorClass,
@@ -11,7 +16,7 @@ import {
   matchArmor,
   suggestArmor,
   unarmoredFormulaFor,
-} from "../src/lib/srd/armor.ts";
+} = await import("../src/lib/srd/armor.ts");
 
 let passed = 0;
 function test(name, fn) {

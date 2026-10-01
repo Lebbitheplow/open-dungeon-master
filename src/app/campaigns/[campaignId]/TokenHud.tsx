@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { StageToken } from "@/app/campaigns/[campaignId]/BoardStage";
+import type { HudGateId } from "@/lib/battlemap/hand-hud";
 
 // The radial HUD on a token (docs/vtt-parity-implementation-plan.md section
 // 1.4). Six 40 px buttons in an arc, scaling in over --dur-quick. It is a
@@ -33,6 +34,9 @@ export type HudAction = {
   label: string;
   icon: typeof Hand;
   tone?: "gold" | "ember" | "plain";
+  // The engine's reason this cannot be done now; the sigil dims and a press
+  // says why instead of composing it.
+  disabled?: string | null;
   onPick: () => void;
 };
 
@@ -40,14 +44,22 @@ export function playerActions(
   token: StageToken,
   compose: (text: string) => void,
   pickTarget: (mode: "attack" | "cast") => void,
+  // hudGates (src/lib/battlemap/hand-hud.ts): canAct, the turn's spends and
+  // the casting state, asked the way the Hand asks them.
+  gates?: Partial<Record<HudGateId, string | null>>,
+  refuse?: (reason: string) => void,
 ): HudAction[] {
+  const gate = (id: HudGateId, action: Omit<HudAction, "disabled">): HudAction => {
+    const reason = gates?.[id] ?? null;
+    return reason ? { ...action, disabled: reason, onPick: () => refuse?.(reason) } : action;
+  };
   return [
-    { id: "attack", label: "Attack", icon: Crosshair, tone: "ember", onPick: () => pickTarget("attack") },
-    { id: "cast", label: "Cast", icon: Wand2, tone: "gold", onPick: () => pickTarget("cast") },
-    { id: "dodge", label: "Dodge", icon: Shield, onPick: () => compose("I take the Dodge action.") },
-    { id: "dash", label: "Dash", icon: Wind, onPick: () => compose("I Dash.") },
-    { id: "disengage", label: "Disengage", icon: ArrowRightLeft, onPick: () => compose("I Disengage and step away.") },
-    { id: "help", label: "Help", icon: HandHelping, onPick: () => compose("I take the Help action for ") },
+    gate("attack", { id: "attack", label: "Attack", icon: Crosshair, tone: "ember", onPick: () => pickTarget("attack") }),
+    gate("cast", { id: "cast", label: "Cast", icon: Wand2, tone: "gold", onPick: () => pickTarget("cast") }),
+    gate("dodge", { id: "dodge", label: "Dodge", icon: Shield, onPick: () => compose("I take the Dodge action.") }),
+    gate("dash", { id: "dash", label: "Dash", icon: Wind, onPick: () => compose("I Dash.") }),
+    gate("disengage", { id: "disengage", label: "Disengage", icon: ArrowRightLeft, onPick: () => compose("I Disengage and step away.") }),
+    gate("help", { id: "help", label: "Help", icon: HandHelping, onPick: () => compose("I take the Help action for ") }),
   ];
 }
 
@@ -137,21 +149,27 @@ export function TokenHud({
               key={action.id}
               type="button"
               role="menuitem"
-              title={action.label}
-              aria-label={action.label}
+              title={action.disabled ?? action.label}
+              aria-label={action.disabled ? `${action.label}: ${action.disabled}` : action.label}
+              aria-disabled={action.disabled ? "true" : undefined}
+              data-refused={action.disabled ? "true" : undefined}
               onClick={(event) => {
                 event.stopPropagation();
                 action.onPick();
               }}
               className={cn(
                 // The Dial's sigil: a dark glass disc with a lit rim, the same
-                // on the painted board in both themes.
+                // on the painted board in both themes. A refused one dims
+                // (token-sigil[data-refused] in board.css eases it) but still
+                // takes the press, which says why.
                 "token-sigil pointer-events-auto fx-pop absolute flex size-10 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-full border shadow-elev-2 backdrop-blur",
-                action.tone === "gold"
-                  ? "border-[rgba(212,171,58,0.75)] text-[#ecd287]"
-                  : action.tone === "ember"
-                    ? "border-[rgba(224,112,58,0.75)] text-[#ffbe8f]"
-                    : "border-[rgba(143,138,171,0.6)] text-[#dedbec]",
+                action.disabled
+                  ? "border-[rgba(107,99,148,0.4)] text-[#6f6a8c]"
+                  : action.tone === "gold"
+                    ? "border-[rgba(212,171,58,0.75)] text-[#ecd287]"
+                    : action.tone === "ember"
+                      ? "border-[rgba(224,112,58,0.75)] text-[#ffbe8f]"
+                      : "border-[rgba(143,138,171,0.6)] text-[#dedbec]",
               )}
               style={{
                 left: x,

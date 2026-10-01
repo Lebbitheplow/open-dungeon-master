@@ -12,6 +12,7 @@ import { familyIconPath } from "@/lib/icons";
 import { characterPlaceholder, monsterPlaceholder, npcPlaceholder } from "@/lib/placeholders";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { regeneratingNote } from "@/lib/battlemap/regeneration-notes";
 
 function crLabel(cr: number): string {
   if (cr === 0.125) return "1/8";
@@ -230,11 +231,42 @@ export function EncounterPanel({
                   className={cn(
                     // The health word changes tone the way the ring on the board does.
                     "ml-2 shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize transition-colors duration-[420ms] ease-snap",
-                    HEALTH_COLORS[enemy.status === "fled" ? "dead" : enemy.health],
+                    HEALTH_COLORS[enemy.status === "fled" || enemy.knockedOut ? "dead" : enemy.health],
                   )}
+                  title={
+                    enemy.knockedOut
+                      ? "Alive at 0 hit points after a blow meant to knock it out: out of the fight, not dying."
+                      : enemy.regenerating
+                        ? regeneratingNote(enemy.regenerating.stopped)
+                        : undefined
+                  }
                 >
-                  {enemy.status === "fled" ? "fled" : enemy.health}
+                  {/* A nonlethal blow leaves it alive at 0 (src/lib/dm/knockout.ts);
+                      a troll lies at 0 until its turn (src/lib/dm/regeneration.ts). */}
+                  {enemy.status === "fled"
+                    ? "fled"
+                    : enemy.knockedOut
+                      ? "knocked out"
+                      : enemy.regenerating
+                        ? enemy.regenerating.stopped
+                          ? "down, burning"
+                          : "down, regenerating"
+                        : enemy.health}
                 </span>
+                {enemy.regenerating ? (
+                  <span
+                    key={enemy.regenerating.stopped ? "stopped" : "rising"}
+                    title={regeneratingNote(enemy.regenerating.stopped)}
+                    className={cn(
+                      "motion-pop ml-1.5 shrink-0 rounded-full border px-2 py-0.5 text-[10px]",
+                      enemy.regenerating.stopped
+                        ? "border-ember-500/50 bg-ember-500/10 text-ember-300"
+                        : "border-emerald-700/50 bg-emerald-950/30 text-emerald-200",
+                    )}
+                  >
+                    {enemy.regenerating.stopped ? "dies at its turn" : "regenerates at its turn"}
+                  </span>
+                ) : null}
                 {/* DM only: publicEncounter attaches these for the seat that
                     is allowed them, so their presence is the permission. */}
                 {enemy.currentHp !== undefined && enemy.status === "alive" ? (
@@ -266,6 +298,7 @@ export function EncounterPanel({
                       key={condition}
                       label={condition}
                       rounds={enemy.conditionRounds?.[condition]}
+                      note={enemy.conditionNotes?.[condition]}
                     />
                   ))}
                 </div>

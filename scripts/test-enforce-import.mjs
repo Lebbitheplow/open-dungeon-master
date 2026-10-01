@@ -436,8 +436,10 @@ await test("a bundle's variant rules pass through the settings schema", async ()
   const rules = workshop.gameSettings.variantRules;
   assert.deepEqual(Object.keys(rules).sort(), [
     "ammunition", "criticalDamageMods", "criticalFumbles", "encumbrance", "flanking",
-    "lingeringInjuries", "powerfulCritical", "restVariant",
+    "lingeringInjuries", "powerfulCritical", "restVariant", "supplies",
   ]);
+  // Food and water (the `supplies` variant) is off unless a table turns it on.
+  assert.equal(rules.supplies, false);
   assert.equal(rules.encumbrance, true);
   assert.equal(rules.flanking, false);
   assert.equal(rules.powerfulCritical, false);

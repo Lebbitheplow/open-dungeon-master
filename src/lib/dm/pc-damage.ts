@@ -12,6 +12,8 @@
 // death engine, and damage forces the concentration save.
 //
 // This module must not import mutations.ts (which imports it).
+import { immersedResistance } from "@/lib/dm/underwater";
+import { deathWardPatch } from "@/lib/dm/spell-effects";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
@@ -20,16 +22,27 @@ import { RAGING, spendRelentlessEndurance } from "@/lib/srd/class-resources";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
 import { applyDamageMath, wildShapeDamageMath } from "@/lib/dm/mutation-math";
 import { applyDamageDeathHook } from "@/lib/dm/death";
+import { releaseGrapplesHeldBy } from "@/lib/dm/set-condition";
 import { isMassiveDamage } from "@/lib/dm/death-logic";
 import { concentrationDamageHook } from "@/lib/dm/concentration";
 import {
   damageAdjust,
   effectiveMaxHp,
+  pcImmunities,
   pcResistances,
   removeConditions,
 } from "@/lib/dm/condition-logic";
+import { rollFeatureSave } from "@/lib/dm/contest-roll";
+import { holdsFeature } from "@/lib/srd/trait-rules";
 import { PRONE } from "@/lib/dm/vitals-logic";
+import { authoredAuraResistances } from "@/lib/dm/authored-saves";
 import type { ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { silencedImmunity } from "@/lib/dm/zone-rules";
+import { burnWebUnder } from "@/lib/dm/zone-cast";
+import { summonImmunities, summonResistances, summonVulnerabilities } from "@/lib/dm/summon-rules";
+import { summonAfterDamage } from "@/lib/dm/summon-store";
+import { absorbByWard } from "@/lib/dm/arcane-ward";
+import { afflictionStress } from "@/lib/dm/afflictions";
 
 export type PcDamageInput = {
   // What was rolled or sent, before resistance.
@@ -40,8 +53,14 @@ export type PcDamageInput = {
   // From a spell, a magic weapon or strikes that count as magical, so
   // resistance to nonmagical attacks does not apply.
   magical?: boolean;
+  // From a spell: Spell Resistance and Aura of Warding resist it.
+  spell?: boolean;
   // The creature lands prone if any of this damage gets through (a fall).
   knocksProne?: boolean;
+  // Disintegrate: dropping to 0 is death, not dying.
+  disintegrate?: boolean;
+  // The caster's share of a Warding Bond (never shared again).
+  bond?: boolean;
   reason?: string;
 };
 
@@ -91,9 +110,31 @@ export function applyPcDamage(
   }
   // Racial, feature and condition resistances halve matching damage types
   // server-side.
-  const adjusted = damageAdjust(amount, input.type, pcResistances(sheet), "", "", {
+  // Immunities from features (Purity of Body: poison) take all of it.
+  // An ally's aura adds its own (Aura of Warding, Shielding Storm): authored-saves.ts.
+  // A summoned creature keeps its stat block's (summon-rules.ts).
+  const resisted = [pcResistances(sheet, { magical: input.magical === true, spell: input.spell === true }), ...authoredAuraResistances(campaign.id, sheet, { spell: input.spell === true }), summonResistances(sheet), immersedResistance(campaign.id, sheet.id)].filter(Boolean).join(", ");
+  // Inside Silence, thunder does nothing (zone-rules.ts).
+  const resolved = damageAdjust(amount, input.type, resisted, `${summonImmunities(sheet)}${pcImmunities(sheet)}${silencedImmunity(campaign.id, sheet.id)}`, summonVulnerabilities(sheet), {
     magical: input.magical === true,
   });
+  // An abjurer's Arcane Ward takes the blow first (arcane-ward.ts).
+  const arcaneWard = absorbByWard(campaign, sheet, resolved.amount);
+  const adjusted = arcaneWard ? { ...resolved, amount: resolved.amount - arcaneWard.absorbed } : resolved;
+  if (adjusted.amount <= 0) {
+    return {
+      ok: true,
+      hp: `${sheet.currentHp}/${effectiveMaxHp(sheet)}`,
+      damageApplied: 0,
+      ...(adjusted.note ? { resistance: `${sheet.name} is ${adjusted.note}` } : {}),
+      ...(arcaneWard ? { arcaneWard: arcaneWard.note } : {}),
+      note: `${sheet.name} takes no damage from it.`,
+    };
+  }
+  // Fire burns away the web around them (zone-cast.ts).
+  if (/\bfire\b/i.test(input.type ?? "")) {
+    burnWebUnder(campaign, sheet.id);
+  }
   // Wild Shape: the beast's hit points take the blow first. While the form
   // holds, the druid's own sheet is untouched and no death hook fires; when
   // it breaks, only the excess carries through into the rest of this same
@@ -183,13 +224,31 @@ export function applyPcDamage(
     ...stoked,
   });
   publishSheet(campaign, sheet.id);
-  const proneInfo = landProne(campaign, turnId, sheet.id, input, adjusted.amount, reason);
+  // Damage is great stress: cackle fever's laughter, madness's confusion
+  // (src/lib/dm/afflictions.ts).
+  if (carried > 0 && !math.dropped) {
+    afflictionStress(campaign, turnId, sheet.id, "damage");
+  }
+  // A summoned creature at 0 hit points disappears (summon-store.ts).
+  const vanished = summonAfterDamage(campaign, sheet, math.dropped, carried);
+  if (vanished) {
+    return { ok: true, hp: `${math.currentHp}/${sheet.maxHp}`, damageApplied: carried, ...(math.dropped ? { dropped: true } : {}), vanished };
+  }
+  const bond = wardingBondShare(campaign, turnId, sheet, input, adjusted.amount);
+  const proneInfo = { ...landProne(campaign, turnId, sheet.id, input, adjusted.amount, reason), ...bond };
+  const ward = math.dropped ? deathWardPatch(getSheetById(sheet.id) ?? sheet) : null;
+  if (ward) {
+    patchSheet(sheet.id, ward);
+    audit(campaign, turnId, sheet, "apply_damage", { deathWard: true }, reason, ward);
+    publishSheet(campaign, sheet.id);
+    return { ok: true, hp: `1/${effectiveMaxHp(sheet)}`, deathWard: true, ...shapeInfo, ...proneInfo, note: `Death Ward holds ${sheet.name} at 1 HP instead of 0, and the spell ends.` };
+  }
   // Relentless Endurance: a half-orc who would drop stays up at 1 HP
   // instead, once per long rest. The server burns the use itself, so the
   // death engine never sees the drop. It answers being reduced to 0 "but not
   // killed outright", so massive damage goes past it to the death engine
   // with the use unspent.
-  if (math.dropped && !isMassiveDamage(math.overkill, effectiveMaxHp(sheet))) {
+  if (math.dropped && !input.disintegrate && !isMassiveDamage(math.overkill, effectiveMaxHp(sheet))) {
     const spent = spendRelentlessEndurance(sheet.resources);
     if (spent) {
       const patch: FullPatchSheetInput = { currentHp: 1, resources: spent };
@@ -205,6 +264,13 @@ export function applyPcDamage(
         note: `${sheet.name} should have fallen, but Relentless Endurance holds them at 1 HP. The feature is now spent until a long rest.`,
       };
     }
+  }
+  // Relentless Rage (barbarian 11): raging and dropped to 0 but not killed
+  // outright, a CON save keeps them at 1 hit point. The DC is 10, 5 more for
+  // every use since their last rest, which the counter keeps.
+  const relentless = relentlessRage(campaign, turnId, sheet, math, reason);
+  if (relentless) {
+    return { ...relentless, ...shapeInfo, ...proneInfo };
   }
   // A barbarian knocked unconscious stops raging. Checked after Relentless
   // Endurance, which keeps them on their feet still raging.
@@ -223,7 +289,11 @@ export function applyPcDamage(
   }
   // Death engine: dropping to 0 starts the dying track; damage while
   // already down adds automatic failures; massive damage kills.
-  const deathInfo = applyDamageDeathHook(campaign, turnId, sheet, math, input.crit === true);
+  // Disintegrate leaves nothing to be dying: the drop is death itself.
+  const fatal = input.disintegrate && math.dropped ? { ...math, overkill: Math.max(math.overkill, effectiveMaxHp(sheet)) } : math;
+  const deathInfo = applyDamageDeathHook(campaign, turnId, sheet, fatal, input.crit === true);
+  // Unconscious at 0 is incapacitated: a grapple they held ends.
+  const letGo = math.dropped ? releaseGrapplesHeldBy(campaign, sheet.id) : [];
   // Concentration: damage forces the CON save server-side. A form that broke
   // took the blow too, so the save is against all of it.
   const concentrationInfo = concentrationDamageHook(
@@ -246,7 +316,46 @@ export function applyPcDamage(
         ? { dropped: true }
         : {}),
     ...deathInfo,
+    ...(letGo.length ? { grappleEnded: letGo } : {}),
     ...concentrationInfo,
+  };
+}
+
+function relentlessRage(
+  campaign: Campaign,
+  turnId: string,
+  sheet: CharacterSheet,
+  math: { dropped: boolean; overkill: number },
+  reason: string,
+): Record<string, unknown> | null {
+  if (
+    !math.dropped ||
+    isMassiveDamage(math.overkill, effectiveMaxHp(sheet)) ||
+    !sheet.conditions.some((entry) => entry.toLowerCase() === RAGING) ||
+    !holdsFeature(sheet, "relentless rage")
+  ) {
+    return null;
+  }
+  const used = sheet.resources?.relentless_rage?.used ?? 0;
+  const dc = 10 + 5 * used;
+  const save = rollFeatureSave(campaign, sheet, "con", dc, "Relentless Rage");
+  const now = getSheetById(sheet.id) ?? sheet;
+  const resources = {
+    ...now.resources,
+    relentless_rage: { max: now.resources?.relentless_rage?.max ?? 99, used: used + 1 },
+  };
+  if (!save.success) {
+    patchSheet(sheet.id, { resources });
+    return null;
+  }
+  const patch: FullPatchSheetInput = { currentHp: 1, resources };
+  patchSheet(sheet.id, patch);
+  audit(campaign, turnId, now, "apply_damage", { relentlessRage: true, dc }, reason, patch);
+  publishSheet(campaign, sheet.id);
+  return {
+    ok: true,
+    hp: `1/${effectiveMaxHp(sheet)}`,
+    relentlessRage: `CON save ${save.total} against DC ${dc}: ${sheet.name} stays on their feet at 1 hit point, still raging. The next save is DC ${dc + 5} until they rest.`,
   };
 }
 
@@ -272,4 +381,24 @@ function landProne(
   audit(campaign, turnId, now, "set_condition", { condition: PRONE }, reason, patch);
   publishSheet(campaign, sheetId);
   return { prone: `${now.name} lands prone.` };
+}
+
+// Warding Bond: each time the warded creature takes damage, the caster who
+// bound it takes the same amount (SRD 5.1). The caster's share is not shared
+// again.
+function wardingBondShare(
+  campaign: Campaign,
+  turnId: string,
+  sheet: CharacterSheet,
+  input: PcDamageInput,
+  taken: number,
+): Record<string, unknown> {
+  const bond = sheet.conditions.find((entry) => entry.trim().toLowerCase() === "warding bond");
+  const casterId = bond ? (sheet.conditionMeta as ConditionMetaMap)[bond]?.source : undefined;
+  const caster = casterId && casterId !== sheet.id ? getSheetById(casterId) : null;
+  if (input.bond || taken <= 0 || !caster || caster.deathSaves?.dead) {
+    return {};
+  }
+  applyPcDamage(campaign, turnId, caster, { amount: taken, bond: true, reason: `Warding Bond with ${sheet.name}` });
+  return { wardingBond: `${caster.name} takes the same ${taken} damage through the Warding Bond.` };
 }

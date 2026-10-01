@@ -206,8 +206,30 @@ function artTile(idx: number, px: number, py: number, ch: string, palette: Palet
       />
     );
   }
+  if (ch === "^") {
+    return (
+      <g key={idx} pointerEvents="none">
+        <rect x={px} y={py} width={TILE} height={TILE} fill={palette.difficult} opacity={0.3} />
+        <ClimbMarks px={px} py={py} />
+      </g>
+    );
+  }
   // Clear ground and doorways: the picture speaks for itself.
   return null;
+}
+
+// A climbable surface (TERRAIN.climb, "^"): three chevrons pointing up the
+// climb, so a ladder, a rope or a rough wall reads the same on every skin.
+// Climbing costs double unless the mover has a climbing speed (the engine's
+// moveCost); the marks only say where.
+function ClimbMarks({ px, py }: { px: number; py: number }) {
+  return (
+    <g stroke="#e8d7a8" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" fill="none" opacity={0.75}>
+      {[8, 15, 22].map((y) => (
+        <path key={y} d={`M ${px + 9} ${py + y + 4} L ${px + TILE / 2} ${py + y} L ${px + TILE - 9} ${py + y + 4}`} />
+      ))}
+    </g>
+  );
 }
 
 export function buildCells(view: PlayerMapView, palette: Palette, painted = false) {
@@ -241,7 +263,9 @@ export function buildCells(view: PlayerMapView, palette: Palette, painted = fals
     if (!isExplored) {
       base.push(<rect key={idx} x={px} y={py} width={TILE} height={TILE} fill="#050505" />);
     } else if (art) {
-      const tile = painted ? null : artTile(idx, px, py, ch, palette);
+      // The painter has no climbable material, so a painted board still
+      // marks the climb tiles.
+      const tile = painted && ch !== "^" ? null : artTile(idx, px, py, ch, palette);
       if (tile) {
         base.push(tile);
       }
@@ -323,6 +347,14 @@ export function buildCells(view: PlayerMapView, palette: Palette, painted = fals
           <path d={`M ${px + 3} ${py + 11} q 6 -4 12 0 t 14 0`} stroke="#ffffff2a" strokeWidth={1.5} fill="none" />
           <path d={`M ${px + 2} ${py + 22} q 7 4 13 0 t 13 0`} stroke="#ffffff18" strokeWidth={1.5} fill="none" />
           {foam}
+        </g>,
+      );
+    } else if (ch === "^") {
+      base.push(
+        <g key={idx} pointerEvents="none">
+          <rect x={px} y={py} width={TILE} height={TILE} fill={palette.floorAlt} />
+          <rect x={px + 3} y={py + 3} width={TILE - 6} height={TILE - 6} rx={2} fill={palette.difficult} opacity={0.55} />
+          <ClimbMarks px={px} py={py} />
         </g>,
       );
     } else if (ch === ",") {

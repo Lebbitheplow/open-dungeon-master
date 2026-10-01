@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { EmptyState } from "@/components/EmptyState";
+import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
@@ -211,8 +212,20 @@ export function DmEncounterPrepPanel({
     }
   }
 
-  async function remove(id: string) {
-    await fetch(`/api/campaigns/${campaignId}/dm/encounter-templates/${id}`, { method: "DELETE" });
+  // Asks first, and a refusal is shown rather than swallowed.
+  async function remove(template: PreparedEncounter) {
+    const id = template.id;
+    if (!(await appConfirm(`Delete the prepared fight "${template.name}"?`, { actionLabel: "Delete" }))) {
+      return;
+    }
+    setError("");
+    setNote("");
+    const response = await fetch(`/api/campaigns/${campaignId}/dm/encounter-templates/${id}`, { method: "DELETE" }).catch(() => null);
+    if (!response?.ok) {
+      const payload = (await response?.json().catch(() => ({}))) as { error?: string } | undefined;
+      setError(payload?.error ?? (response ? "That could not be deleted." : "Could not reach the server."));
+      return;
+    }
     if (editingId === id) {
       setEditingId(null);
       setEditorOpen(false);
@@ -268,7 +281,7 @@ export function DmEncounterPrepPanel({
           onOpen={openEditor}
           onDeploy={(template) => void deploy(template.id)}
           onDuplicate={(template) => void duplicate(template)}
-          onDelete={(template) => void remove(template.id)}
+          onDelete={(template) => void remove(template)}
         />
         {feedback}
         <Sheet
@@ -309,7 +322,7 @@ export function DmEncounterPrepPanel({
               const items: ContextMenuItem[] = [
                 { id: "deploy", label: "Deploy", glyph: "tab-battle", disabled: busy, onSelect: () => void deploy(template.id) },
                 { id: "duplicate", label: `Duplicate ${template.name}`, glyph: "system-homebrew", disabled: busy, onSelect: () => void duplicate(template) },
-                { id: "delete", label: `Delete ${template.name}`, glyph: "quest-failed", tone: "danger", separated: true, onSelect: () => void remove(template.id) },
+                { id: "delete", label: `Delete ${template.name}`, glyph: "quest-failed", tone: "danger", separated: true, onSelect: () => void remove(template) },
               ];
               return (
                 <ContextMenu key={template.id} as="li" items={items} label={template.name} className={panelRow}>

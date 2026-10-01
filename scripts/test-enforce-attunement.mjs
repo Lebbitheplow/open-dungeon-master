@@ -41,6 +41,12 @@ async function adjust(body, user = player, campaignId = world.campaignId) {
   return { status: response.status, body: await response.json() };
 }
 const attune = (name, attuned = true) => adjust({ gear: { [name]: { attuned } } });
+// Attuning takes a short rest spent with the item (SRD 5.1): the route puts
+// the item on the wait, and the rest makes it attuned.
+const shortRest = async () => {
+  const rested = await world.invoke("take_rest", { kind: "short" });
+  assert.equal(rested.ok, true, rested.error);
+};
 
 // ---- the magic is for the attuned ----
 
@@ -49,6 +55,8 @@ await test("an item that asks for attunement does nothing until the player attun
   assert.equal(sheet().ac, 10);
   assert.equal(saves().wis, 0);
   assert.equal((await attune("Ring of Protection")).status, 200);
+  assert.equal(sheet().ac, 10);
+  await shortRest();
   assert.equal(sheet().ac, 11);
   assert.deepEqual(saves(), { str: 2, dex: 1, con: 1, int: 1, wis: 1, cha: 1 });
   await attune("Ring of Protection", false);
@@ -110,6 +118,7 @@ await test("the fourth attunement through the player's route does not take, and 
   for (const name of FOUR) {
     await attune(name);
   }
+  await shortRest();
   assert.deepEqual(attunedNames(), FOUR.slice(0, 3));
   assert.equal(sheet().ac, 12);
   assert.equal(saves().wis, 3);
@@ -118,6 +127,7 @@ await test("the fourth attunement through the player's route does not take, and 
 await test("letting one go makes room for another", async () => {
   await attune("Cloak of Protection", false);
   await attune("Luck Blade");
+  await shortRest();
   assert.deepEqual(attunedNames(), ["Ring of Protection", "Robe of Stars", "Luck Blade"]);
   assert.equal(sheet().ac, 11);
   assert.equal(saves().wis, 3);
@@ -225,12 +235,14 @@ await test("the class an item names may attune to it through the same route", as
   const wizard = world.addHero({ user: mage, class: "wizard", level: 5, acOverride: false, abilities: { dex: 10 }, equipment: [{ name: "Staff of Power", qty: 1 }] });
   const reply = await adjust({ gear: { "Staff of Power": { attuned: true } } }, mage);
   assert.equal(reply.status, 200, reply.body.error);
+  await shortRest();
   assert.deepEqual(attunedNames(world.sheet(wizard.id)), ["Staff of Power"]);
 });
 
 await test("attuning on a sheet that says what it wears puts the item on, so its magic works", async () => {
   carry([{ name: "Leather", qty: 1, equipped: true }, { name: "Ring of Protection", qty: 1, equipped: false }]);
   assert.equal((await attune("Ring of Protection")).status, 200);
+  await shortRest();
   const ring = sheet().equipment.find((item) => item.name === "Ring of Protection");
   assert.equal(ring.attuned, true);
   assert.equal(ring.equipped, true);

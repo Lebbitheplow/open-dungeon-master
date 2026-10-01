@@ -25,6 +25,7 @@ import { SpeakerPicker } from "@/app/campaigns/[campaignId]/SpeakerPicker";
 import type { CastMember } from "@/lib/dm/cast";
 import type { Speaker } from "@/lib/dm/speech";
 import type { BeatCadence } from "@/lib/dm/beat-cadence";
+import type { TargetEdge } from "@/lib/battlemap/view-tactics";
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
 
 import type { InputKind } from "@/lib/campaign-types";
@@ -77,6 +78,7 @@ function ComposerInner({
   onXCard,
   composerRef,
   trackAmmo,
+  edges,
   highlight = false,
   directorArm,
   storyCadence,
@@ -120,6 +122,9 @@ function ComposerInner({
   composerRef: RefObject<HTMLTextAreaElement | null>;
   // The ammunition variant rule, for the Hand's ranged cards.
   trackAmmo?: boolean;
+  // The board's cover and flanking from this character to each enemy, for
+  // the Hand's hit preview (src/lib/battlemap/view-tactics.ts).
+  edges?: Record<string, TargetEdge>;
   // A gold pulse on the frame: the board says it is this player's turn.
   highlight?: boolean;
   directorArm: CampaignState["directorArm"];
@@ -137,7 +142,9 @@ function ComposerInner({
       <div className="mx-auto max-w-3xl sm:px-3">
         {pendingRolls.map((pending) => (
           <PendingRollCard
-            key={pending.id}
+            // Inspiration rewrites the parked roll's dice: the card starts
+            // over with the new faces (and files in again).
+            key={`${pending.id}:${pending.expression}`}
             campaignId={campaignId}
             pending={pending}
             sheets={sheets}
@@ -189,6 +196,7 @@ function ComposerInner({
             onKindChange={onKindChange}
             composerRef={composerRef}
             trackAmmo={trackAmmo}
+            edges={edges}
           />
         ) : null}
         <div data-pill-group="" className="mb-2 flex flex-wrap items-center gap-1.5" data-tour="composer-modes">

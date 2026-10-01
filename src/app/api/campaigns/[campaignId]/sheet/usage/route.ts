@@ -9,7 +9,10 @@ import { publishPersisted } from "@/lib/events";
 import { spendAction } from "@/lib/dm/action-budget";
 import { attacksAllowedFor, budgetFor, storeBudget } from "@/lib/dm/turn-budget";
 import { canAct } from "@/lib/dm/can-act";
+import { recordManualTicks } from "@/lib/dm/manual-ticks";
 import { attunementRefusal, gearChanges, usageLowers, usageSpendsHitDice } from "@/lib/dm/usage-rules";
+import { armorChangeMinutes } from "@/lib/dm/don-doff";
+import { advanceClock } from "@/lib/db/clock";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,6 +39,8 @@ const usageSchema = z
       .record(z.string().regex(/^[1-9]$/), z.number().int().min(0).max(10))
       .optional(),
     hitDiceSpent: z.number().int().min(0).max(20).optional(),
+    // Pact Magic slots used (a warlock's own pool, back on a short rest).
+    pactUsed: z.number().int().min(0).max(10).optional(),
     resources: z.record(z.string().max(40), z.number().int().min(0).max(200)).optional(),
     // Worn/attuned state keyed by the exact item name on their sheet.
     // Equipping armor moves their derived AC (src/lib/srd/armor.ts).
@@ -49,6 +54,7 @@ const usageSchema = z
   .refine(
     (value) =>
       value.slots !== undefined ||
+      value.pactUsed !== undefined ||
       value.hitDiceSpent !== undefined ||
       value.resources !== undefined ||
       value.gear !== undefined,
@@ -100,7 +106,8 @@ export async function POST(
     if (sheet.deathSaves?.dead) {
       return refuse(`${sheet.name} is dead and spends nothing. ${lead}`);
     }
-    if (usageLowers(sheet, parsed.data)) {
+    const pact = sheet.spellcasting?.pact;
+    if (usageLowers(sheet, parsed.data) || (pact && (parsed.data.pactUsed ?? pact.used) < pact.used)) {
       return refuse(
         `Spell slots, hit dice and class features come back at rests, so a player can only mark them spent. ${lead}`,
       );
@@ -181,11 +188,21 @@ export async function POST(
         continue;
       }
       slots[level] = { max: existing.max, used: clampUsed(used, existing.max) };
+      // A slot marked spent by hand pays for the cast it was ticked for
+      // (src/lib/dm/manual-ticks.ts).
+      recordManualTicks(sheet.id, Number(level), slots[level].used - existing.used);
       changed = true;
     }
     if (changed) {
       patch.spellcasting = { ...sheet.spellcasting, slots };
     }
+  }
+
+  // The pact pool is its own counter beside the shared slots.
+  if (parsed.data.pactUsed !== undefined && sheet.spellcasting?.pact) {
+    const pact = sheet.spellcasting.pact;
+    const casting = patch.spellcasting ?? sheet.spellcasting;
+    patch.spellcasting = { ...casting, pact: { ...pact, used: clampUsed(parsed.data.pactUsed, pact.max) } };
   }
 
   if (parsed.data.hitDiceSpent !== undefined) {
@@ -226,11 +243,21 @@ export async function POST(
       const equipped = wornByAttuning
         ? true
         : entry?.equipped ?? item.equipped ?? (explicit ? false : undefined);
-      const attuned = entry?.attuned ?? item.attuned;
+      // Attuning takes a short rest spent with the item (SRD 5.1,
+      // Attunement): asked for here, the row waits as `attuning` and the
+      // next short or long rest makes it attuned (src/lib/dm/rest-tools.ts).
+      // Letting go ends it at once, pending or not.
+      const asks = entry?.attuned === true && !item.attuned;
+      const lets = entry?.attuned === false;
+      const attuned = asks ? item.attuned : (entry?.attuned ?? item.attuned);
+      const { attuning: _pending, ...rest } = item;
+      void _pending;
+      const attuning = asks ? true : lets ? undefined : item.attuning;
       return {
-        ...item,
+        ...rest,
         ...(equipped === undefined ? {} : { equipped }),
         ...(attuned === undefined ? {} : { attuned }),
+        ...(attuning ? { attuning } : {}),
       };
     });
     patch.equipment = equipment;
@@ -251,6 +278,13 @@ export async function POST(
   if (encounter && shieldBudget?.ok) {
     storeBudget(encounter, shieldBudget.budget);
   }
+  // Out of a fight armor takes minutes to put on or take off, and ending an
+  // attunement a short rest spent with the item; the clock moves by them
+  // (SRD 5.1, Getting Into and Out of Armor; Attunement).
+  const dressing = parsed.data.gear && !encounter ? armorChangeMinutes(sheet.equipment, parsed.data.gear) : null;
+  if (dressing?.minutes) {
+    advanceClock(campaignId, dressing.minutes, "minutes");
+  }
 
   const own = sheet.userId === context.user.id;
   const entry = insertSheetAudit({
@@ -268,5 +302,5 @@ export async function POST(
   publishPersisted(campaignId, "sheet_audit", { entry, characterName: sheet.name });
   publishPersisted(campaignId, "sheet_updated", { sheet: updated });
 
-  return Response.json({ sheet: updated });
+  return Response.json({ sheet: updated, ...(dressing?.minutes ? { timePassed: dressing.lines.join(" ") } : {}) });
 }

@@ -2,6 +2,7 @@
 
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { cn } from "@/lib/cn";
+import { HostSvgImage } from "@/components/ui/HostSvgImage";
 import {
   buildCells,
   PALETTES,
@@ -24,6 +25,8 @@ import {
   TurnSpotlight,
   type AimOverlay,
 } from "@/app/campaigns/[campaignId]/BoardStageLayers";
+import { ZoneLayer } from "@/app/campaigns/[campaignId]/BoardZoneLayer";
+import { AreaAimLayer, type AreaAimOverlay } from "@/app/campaigns/[campaignId]/BoardAreaAim";
 import { recoilFor, seedOf, type Shake } from "@/lib/battlemap/delivery";
 import type { MapDrawing, MapLabel } from "@/lib/battlemap/scene";
 import { FxLayer, useFxPlayer } from "@/app/campaigns/[campaignId]/BoardFx";
@@ -62,6 +65,8 @@ export type MapOverlay = {
   sketch?: Pick<MapDrawing, "kind" | "points" | "tone"> | null;
   // A target being chosen: the scrim, the reticles, the ember arc.
   aim?: AimOverlay | null;
+  // A spell's area being aimed: the squares it would lay (BoardAreaAim.tsx).
+  area?: AreaAimOverlay | null;
 };
 
 // Memoized: the session view re-renders on every SSE event (including each
@@ -429,7 +434,7 @@ export const BattleMapGrid = memo(
             tiles are opaque, so the art is covered exactly where the fog
             covers the terrain (src/lib/battlemap/backdrop.ts). */}
         {view.backdrop ? (
-          <image
+          <HostSvgImage
             href={view.backdrop.path}
             {...backdropRect(view.backdrop.transform, width, height, TILE)}
             opacity={view.backdrop.transform.opacity}
@@ -448,7 +453,7 @@ export const BattleMapGrid = memo(
         {/* The DM's overlay, the annotated picture, in the backdrop's
             register. Only the DM's projection carries it. */}
         {view.overlayPath ? (
-          <image
+          <HostSvgImage
             href={view.overlayPath}
             {...(view.backdrop
               ? backdropRect(view.backdrop.transform, width, height, TILE)
@@ -472,6 +477,8 @@ export const BattleMapGrid = memo(
             style={{ animationDelay: `${-((index * 1.3) % 4.1).toFixed(1)}s` }}
           />
         ))}
+        {/* Spell areas on the ground, under everything that stands on it (BoardZoneLayer.tsx). */}
+        <ZoneLayer zones={view.spellZones} width={width} />
         {/* The stage dressing (BoardStageLayers.tsx): dust in the light, then
             the spotlight on whoever's turn it is, deepened while aiming. */}
         {view.board === "fight" ? <MoteLayer seed={boardSeed} width={width} height={height} /> : null}
@@ -601,8 +608,10 @@ export const BattleMapGrid = memo(
             ))}
           </g>
         ) : null}
+        {/* A spell's area being aimed, over the figures so the caster sees who it catches. */}
+        <AreaAimLayer aim={overlay?.area} width={width} />
         {/* The drag ruler: the path a move would actually take, and its cost
-            in feet, measured with the same pathfinder the server enforces. */}
+            in feet, as the server counts it (src/lib/battlemap/board-move.ts). */}
         {overlay?.ruler && overlay.ruler.path.length ? (
           <g pointerEvents="none">
             <polyline

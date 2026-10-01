@@ -2,6 +2,7 @@ import { normalizeSpeaker, type Speaker } from "@/lib/dm/speech";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { touchCampaign } from "@/lib/db/campaigns";
 import type { GeneratedImage, ImageRequest } from "@/lib/types";
+import { parseMessageIntent, type MessageIntent } from "@/lib/dm/intent-logic";
 
 export type CampaignMessage = {
   id: string;
@@ -31,6 +32,8 @@ export type CampaignMessage = {
   // Who a DM message is spoken as (docs/vtt-parity-implementation-plan.md
   // 8.1): an NPC or a monster on the board. Absent for the narrator.
   speaker?: Speaker;
+  // The card a player's action was played from, when it came from the Hand.
+  intent?: MessageIntent;
   createdAt: string;
 };
 
@@ -49,6 +52,7 @@ type MessageRow = {
   variant_index: number | null;
   dm_turn_id: string | null;
   speaker_json: string | null;
+  intent_json?: string | null;
   created_at: string;
 };
 
@@ -68,6 +72,7 @@ function mapMessage(row: MessageRow): CampaignMessage {
     variantIndex: row.variant_index ?? undefined,
     dmTurnId: row.dm_turn_id ?? undefined,
     speaker: normalizeSpeaker(parseJson<unknown>(row.speaker_json ?? "null", null)) ?? undefined,
+    intent: parseMessageIntent(parseJson<unknown>(row.intent_json ?? "null", null)) ?? undefined,
     createdAt: row.created_at,
   };
 }
@@ -83,6 +88,7 @@ export function insertCampaignMessage(input: {
   locationId?: string;
   dmTurnId?: string;
   speaker?: Speaker | null;
+  intent?: MessageIntent | null;
 }): CampaignMessage {
   const id = crypto.randomUUID();
   getDatabase()
@@ -90,9 +96,9 @@ export function insertCampaignMessage(input: {
       `
         INSERT INTO campaign_messages (
           id, campaign_id, seq, author_type, user_id, character_id, content,
-          image_request_json, location_id, dm_turn_id, speaker_json, created_at
+          image_request_json, location_id, dm_turn_id, speaker_json, intent_json, created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
     )
     .run(
@@ -107,6 +113,7 @@ export function insertCampaignMessage(input: {
       input.locationId ?? null,
       input.dmTurnId ?? null,
       input.speaker && input.speaker.kind !== "narrator" ? JSON.stringify(input.speaker) : null,
+      input.intent ? JSON.stringify(input.intent) : null,
       nowIso(),
     );
   touchCampaign(input.campaignId);

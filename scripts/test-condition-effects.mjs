@@ -19,9 +19,8 @@ const {
   conditionRollRiders,
   conditionSpeed,
   describeConditionEffects,
-  grantedAttackDice,
-  grantedAttackFor,
 } = await import("../src/lib/srd/condition-effects.ts");
+const { grantedAttackDice, grantedAttackFor } = await import("../src/lib/srd/granted-attacks.ts");
 const { isValidExpression } = await import("../src/lib/dice.ts");
 const { attackContext, effectiveSpeed, pcResistances } = await import(
   "../src/lib/dm/condition-logic.ts"

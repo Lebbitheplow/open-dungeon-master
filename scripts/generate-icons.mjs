@@ -163,6 +163,16 @@ for (const e of ALL) {
 }
 mkdirSync(OUT_DIR, { recursive: true });
 writeFileSync(manifestPath, `${JSON.stringify({ px: SHIP_PX, icons }, null, 2)}\n`);
+// The slugs src/lib/icons.ts may ask for, so a screen never requests a
+// painting that was not made. Glyphs are named in code and not listed.
+const painted = {};
+for (const icon of icons) {
+  if (icon.group === "glyph") continue;
+  (painted[icon.group] ??= []).push(icon.src.split("/").pop().replace(/\.webp$/, ""));
+}
+for (const group of Object.keys(painted)) painted[group].sort();
+const sortedPainted = Object.fromEntries(Object.keys(painted).sort().map((group) => [group, painted[group]]));
+writeFileSync(path.join(ROOT, "src", "lib", "painted-icons.json"), `${JSON.stringify(sortedPainted)}\n`);
 contactSheets();
 const bytes = icons.reduce((s, i) => s + i.bytes, 0);
 console.log(`\n${icons.length} icon(s) of ${ALL.length} in public/assets/icons (${rendered} rendered, ${reused} from kept originals, ${(bytes / 1024 / 1024).toFixed(2)} MB).`);

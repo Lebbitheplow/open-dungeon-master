@@ -214,7 +214,11 @@ export function SpellBook({
         {needle ? `Matching "${filter.trim()}"` : levelLabel(active)}
       </p>
       {ordered.length ? (
-        <ul className="grid grid-cols-2 gap-1.5 min-[480px]:grid-cols-3 sm:grid-cols-4">
+        // Columns follow the room the book is drawn in, not the window: the
+        // level-up dialog is narrow on a wide screen, and four columns there
+        // cut "Absorb Elements" to "Absorb Eleme".
+        <div className="@container">
+        <ul className="grid grid-cols-2 gap-1.5 @lg:grid-cols-3 @3xl:grid-cols-4">
           {ordered.map((tile) => {
             const clickable = toggles(tile) && !busy;
             const summary = tile.data ? spellSummary(tile.data) : undefined;
@@ -233,7 +237,7 @@ export function SpellBook({
                     <StateMark state={tile.state} />
                   </span>
                   <span className="min-w-0">
-                    <span className="line-clamp-2 text-xs leading-tight">
+                    <span className="line-clamp-2 text-xs leading-tight [overflow-wrap:anywhere]" title={tile.label ?? tile.name}>
                       {tile.label ?? tile.name}
                       {tile.suggested ? (
                         <Star className="ml-1 inline size-3 fill-amber-300 text-amber-300" aria-label="suggested" />
@@ -260,6 +264,7 @@ export function SpellBook({
             );
           })}
         </ul>
+        </div>
       ) : (
         <p className="py-2 text-xs text-stone-500">{needle ? "No spell matches." : emptyText}</p>
       )}

@@ -5,6 +5,7 @@ import { PortraitMedallion } from "@/components/sheet/SheetParts";
 import { FxSprite } from "@/components/ui/FxSprite";
 import { GameIcon } from "@/components/ui/GameIcon";
 import type { AuditEntry, CampaignLocation } from "@/app/campaigns/[campaignId]/useCampaignStream";
+import { effectiveMaxHp } from "@/lib/dm/condition-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { matchMagicItem } from "@/lib/srd/magic-items";
 import { CharacterPortrait } from "@/lib/ui";
@@ -71,7 +72,7 @@ function restLine(entry: AuditEntry, sheet: CharacterSheet | undefined): string 
   }
   const hp = typeof entry.delta.currentHp === "number" ? entry.delta.currentHp : null;
   if (hp !== null && sheet) {
-    return `${hp}/${sheet.maxHp} hit points`;
+    return `${hp}/${effectiveMaxHp(sheet)} hit points`;
   }
   return entry.reason || "rested";
 }

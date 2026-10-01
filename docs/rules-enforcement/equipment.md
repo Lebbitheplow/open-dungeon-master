@@ -1,5 +1,7 @@
 # Equipment enforcement report
 
+The second audit and repair (2026-09-30) and the state after it are in [`../rules-enforcement-audit.md`](../rules-enforcement-audit.md); this report describes the first audit.
+
 Area: weapons, armor, shields, gear, inventory, currency, encumbrance, shops and trade, magic
 items and attunement, item use, homebrew gear.
 

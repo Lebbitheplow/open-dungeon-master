@@ -3,6 +3,7 @@
 import { EmptyState } from "@/components/EmptyState";
 import { useMemo, type KeyboardEvent } from "react";
 import { cn } from "@/lib/cn";
+import { HostSvgImage } from "@/components/ui/HostSvgImage";
 import { layoutGraph } from "@/lib/npcs/graph-layout";
 import type { RelationGraph as Graph } from "@/lib/npcs/forge";
 
@@ -81,7 +82,7 @@ export function RelationGraph({
           const face = portraits.get(node.name);
           return face ? (
             <pattern key={node.name} id={`face-${slug(node.name)}`} patternUnits="objectBoundingBox" width="1" height="1">
-              <image href={face} width={RADIUS * 2} height={RADIUS * 2} preserveAspectRatio="xMidYMid slice" />
+              <HostSvgImage href={face} width={RADIUS * 2} height={RADIUS * 2} preserveAspectRatio="xMidYMid slice" />
             </pattern>
           ) : null;
         })}

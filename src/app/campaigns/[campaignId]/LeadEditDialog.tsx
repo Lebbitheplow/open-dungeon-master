@@ -8,88 +8,26 @@ import { ui } from "@/lib/ui";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { NumberStepper } from "@/components/ui/NumberStepper";
 import { SectionHead } from "@/components/ui/SectionHead";
+import { Switch } from "@/components/ui/Switch";
 import { KitButton, PanelError } from "./PanelKit";
-import { spellClassFor } from "@/lib/classes";
-import { spellSlotsFor } from "@/lib/srd";
+import {
+  ChipList,
+  ItemFlags,
+  SlotSteppers,
+  equipmentFrom,
+  highestStoredSlot,
+  itemRowsOf,
+  levelMeta,
+  spellListOf,
+  syncCasterLists,
+  type ItemRow,
+  type SlotEdits,
+} from "./LeadEditParts";
+import { acBreakdownFor, effectiveAcFor } from "@/lib/srd";
 import { isCantripName } from "@/lib/srd/spell-lists";
-import { casterViewsOf, spellStyleFor, withCasterViews } from "@/lib/srd/spell-prep";
+import { spellStyleFor } from "@/lib/srd/spell-prep";
 import MultiContentPicker from "@/app/characters/builder/MultiContentPicker";
-
-// The highest spell level this character has a slot for, so the pickers
-// below offer what they could actually cast rather than the whole list up
-// to Wish. Cantrips (level 0) always pass.
-function highestSlotLevel(classId: string, level: number): number {
-  return Object.keys(spellSlotsFor(classId, level)).reduce(
-    (top, slotLevel) => Math.max(top, Number(slotLevel)),
-    0,
-  );
-}
-import type { CharacterSheet, EquipmentItem } from "@/lib/schemas/sheet";
-
-type ItemRow = { name: string; qty: string; slug?: string };
-
-// Removable name chips backing the spell and feat lists; adding goes
-// through the searchable multi-select pickers below each list.
-function ChipList({ values, onRemove }: { values: string[]; onRemove: (value: string) => void }) {
-  if (!values.length) {
-    return null;
-  }
-  return (
-    <div className="stagger-pop flex flex-wrap gap-1.5">
-      {values.map((value) => (
-        <span
-          key={value}
-          className="pk-chip gap-0.5 py-0 pl-2 pr-0.5 text-xs text-stone-200"
-        >
-          {value}
-          <KitButton tone="iconDanger" always onClick={() => onRemove(value)} aria-label={`Remove ${value}`} className="p-1">
-            <X className="size-3" />
-          </KitButton>
-        </span>
-      ))}
-    </div>
-  );
-}
-
-// Carries a lead's edit of the top-level spell lists into the per-class
-// lists: whatever was removed leaves every class, whatever was added joins
-// the class that holds that kind of list (the first one, failing that).
-function syncCasterLists(
-  before: NonNullable<CharacterSheet["spellcasting"]>,
-  after: NonNullable<CharacterSheet["spellcasting"]>,
-  sheet: CharacterSheet,
-): NonNullable<CharacterSheet["spellcasting"]> {
-  const lower = (list: string[] = []) => new Set(list.map((name) => name.toLowerCase()));
-  const keys = ["known", "prepared", "cantrips", "pending", "spellbook"] as const;
-  const views = casterViewsOf(sheet);
-  for (const key of keys) {
-    const was = lower(before[key]);
-    const now = lower(after[key]);
-    const removed = (before[key] ?? []).filter((name) => !now.has(name.toLowerCase()));
-    const added = (after[key] ?? []).filter((name) => !was.has(name.toLowerCase()));
-    for (const view of views) {
-      view[key] = view[key].filter((name) => !removed.some((gone) => gone.toLowerCase() === name.toLowerCase()));
-    }
-    if (added.length && views.length) {
-      const home =
-        views.find((view) =>
-          key === "known"
-            ? view.style === "known"
-            : key === "spellbook"
-              ? view.style === "spellbook"
-              : key === "cantrips"
-                ? true
-                : view.style !== "known",
-        ) ?? views[0];
-      home[key] = [...home[key], ...added];
-    }
-  }
-  return withCasterViews(after, views);
-}
-
-function levelMeta(entry: { level?: number }): string {
-  return entry.level !== undefined ? (entry.level === 0 ? "cantrip" : `level ${entry.level}`) : "";
-}
+import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // Party lead correction of any character's numbers, items, and spells, for
 // when the AI DM gets something wrong. Server clamps values and writes an
@@ -107,12 +45,21 @@ export function LeadEditDialog({
   const [tempHp, setTempHp] = useState(String(sheet.tempHp));
   const [maxHp, setMaxHp] = useState(String(sheet.maxHp));
   const [ac, setAc] = useState(String(sheet.ac));
+  // A pinned armor class stays where a person put it; unpinned, the armor
+  // engine sets it from what is worn on every write. The lead can hand a
+  // pinned one back (U:UC7), which before this could never be undone.
+  const [pinned, setPinned] = useState(sheet.acOverride);
+  // What the armor engine would set, for the switch's label.
+  const derived = acBreakdownFor({ ...sheet, classes: sheet.classes.length ? sheet.classes : undefined });
+  // What attacks would face with the draft as it stands, Shield and Haste included.
+  const facing = effectiveAcFor({ ...sheet, ac: pinned ? Number(ac) || 0 : derived.ac, acOverride: pinned });
+  // Lines the server held when it saved (a counter cannot hold more spent
+  // than it has); shown before the dialog closes (U:UC12).
+  const [held, setHeld] = useState<string[]>([]);
   const [gold, setGold] = useState(String(sheet.gold));
   const [xp, setXp] = useState(String(sheet.xp));
   const [conditions, setConditions] = useState(sheet.conditions.join(", "));
-  const [items, setItems] = useState<ItemRow[]>(
-    sheet.equipment.map((item) => ({ name: item.name, qty: String(item.qty), slug: item.slug })),
-  );
+  const [items, setItems] = useState<ItemRow[]>(() => itemRowsOf(sheet.equipment));
   const [prepared, setPrepared] = useState<string[]>(sheet.spellcasting?.prepared ?? []);
   const [known, setKnown] = useState<string[]>(sheet.spellcasting?.known ?? []);
   const [cantrips, setCantrips] = useState<string[]>(sheet.spellcasting?.cantrips ?? []);
@@ -121,6 +68,10 @@ export function LeadEditDialog({
   // dialog never offers a cleric a "known" list or a bard a "prepared" one.
   // Anything already on the sheet stays editable whatever the class says.
   const style = spellStyleFor(sheet.class);
+  // The list and the level the pickers search: the class's own list (the
+  // wizard's for a third caster) up to the highest slot the sheet stores.
+  const listClass = spellListOf(sheet);
+  const topLevel = String(highestStoredSlot(sheet.spellcasting));
   // A wizard's prepared spells are in the book even on a sheet written
   // before the book was kept.
   const [spellbook, setSpellbook] = useState<string[]>(() =>
@@ -142,14 +93,16 @@ export function LeadEditDialog({
   };
   const spellNamesOf = (entries: Array<{ name: string; level?: number }>) =>
     entries.filter((entry) => !isCantrip(entry)).map((entry) => entry.name);
-  const [slots, setSlots] = useState<Record<string, { max: string; used: string }>>(() =>
-    Object.fromEntries(
+  const pact = sheet.spellcasting?.pact;
+  const [slots, setSlots] = useState<SlotEdits>(() => ({
+    ...Object.fromEntries(
       Object.entries(sheet.spellcasting?.slots ?? {}).map(([level, slot]) => [
         level,
         { max: String(slot.max), used: String(slot.used) },
       ]),
     ),
-  );
+    ...(pact ? { pact: { max: String(pact.max), used: String(pact.used) } } : {}),
+  }));
   const [feats, setFeats] = useState<string[]>(sheet.feats);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -174,7 +127,8 @@ export function LeadEditDialog({
       ["currentHp", currentHp, sheet.currentHp],
       ["tempHp", tempHp, sheet.tempHp],
       ["maxHp", maxHp, sheet.maxHp],
-      ["ac", ac, sheet.ac],
+      // An unpinned AC is the armor engine's; only a pinned one is sent.
+      ...(pinned ? ([["ac", ac, sheet.ac]] as Array<[string, string, number]>) : []),
       ["gold", gold, sheet.gold],
       ["xp", xp, sheet.xp],
     ];
@@ -184,17 +138,14 @@ export function LeadEditDialog({
         patch[key] = value;
       }
     }
+    if (pinned !== sheet.acOverride) {
+      patch.acOverride = pinned;
+    }
     const nextConditions = splitList(conditions);
     if (nextConditions.join("|") !== sheet.conditions.join("|")) {
       patch.conditions = nextConditions;
     }
-    const nextEquipment: EquipmentItem[] = items
-      .map((row) => ({
-        name: row.name.trim(),
-        qty: Math.min(999, Math.max(1, Math.round(Number(row.qty)) || 1)),
-        ...(row.slug ? { slug: row.slug } : {}),
-      }))
-      .filter((item) => item.name);
+    const nextEquipment = equipmentFrom(items);
     if (JSON.stringify(nextEquipment) !== JSON.stringify(sheet.equipment)) {
       patch.equipment = nextEquipment;
     }
@@ -214,6 +165,15 @@ export function LeadEditDialog({
         known,
         cantrips,
       };
+      // Pact slots are one level, kept apart from the shared pool.
+      if (pact) {
+        const max = Math.min(4, Math.max(0, Math.round(Number(slots.pact?.max)) || 0));
+        nextSpellcasting.pact = {
+          level: pact.level,
+          max,
+          used: Math.min(max, Math.max(0, Math.round(Number(slots.pact?.used ?? "0")) || 0)),
+        };
+      }
       // The optional lists stay off a sheet that never had them.
       if (pending.length) {
         nextSpellcasting.pending = pending;
@@ -246,9 +206,13 @@ export function LeadEditDialog({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(patch),
         });
+        const data = (await response.json().catch(() => ({}))) as { error?: string; held?: string[] };
         if (!response.ok) {
-          const data = await response.json().catch(() => ({}));
           setError(data.error || "Could not save the correction.");
+          return;
+        }
+        if (Array.isArray(data.held) && data.held.length) {
+          setHeld(data.held);
           return;
         }
         onClose();
@@ -293,7 +257,6 @@ export function LeadEditDialog({
                 ["HP", currentHp, setCurrentHp, "rest-hp"],
                 ["Temp HP", tempHp, setTempHp, "rest-temp-hp"],
                 ["Max HP", maxHp, setMaxHp, "rest-hp"],
-                ["AC", ac, setAc, "rest-ac"],
                 ["Gold", gold, setGold, "coin-gp"],
                 ["XP", xp, setXp, "rest-xp"],
               ] as Array<[string, string, (value: string) => void, string]>
@@ -305,6 +268,32 @@ export function LeadEditDialog({
                 <NumberStepper size="sm" value={Number(value) || 0} onChange={(next) => setter(String(next))} label={label} />
               </div>
             ))}
+          </div>
+          <div className="mt-2 space-y-1.5 rounded-lg border border-stone-700/50 bg-stone-950/40 p-2 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="flex items-center gap-1 text-stone-400">
+                <GameIcon icon={{ kind: "glyph", key: "rest-ac" }} size="size-4" /> AC
+              </span>
+              <Switch on={pinned} onChange={setPinned} label="Pin the armor class by hand" />
+            </div>
+            {pinned ? (
+              <div className="reveal flex flex-wrap items-center gap-2">
+                <NumberStepper size="sm" value={Number(ac) || 0} min={1} max={40} onChange={(next) => setAc(String(next))} label="AC" />
+                <span className="text-[11px] text-stone-500">
+                  Pinned. Armor would set {derived.ac}. Unpin to hand it back.
+                </span>
+              </div>
+            ) : (
+              <p className="reveal text-[11px] text-stone-400">
+                Armor sets it: <span className="text-stone-100">{derived.ac}</span>
+                {derived.parts.length ? ` (${derived.parts.join(", ")})` : ""}
+              </p>
+            )}
+            {facing !== (pinned ? Number(ac) : derived.ac) ? (
+              <p className="live-in text-[11px] text-sky-300/90">
+                Attacks face {facing} right now: spells and forms on top ride along.
+              </p>
+            ) : null}
           </div>
           <label className="mt-2 block space-y-1 text-xs">
             <span className="text-stone-400">Conditions (comma separated)</span>
@@ -319,9 +308,10 @@ export function LeadEditDialog({
           <div className="mt-3 space-y-1 text-xs">
             <SectionHead title="Items" glyph="tab-loot" level="h3" aside={items.length || null} />
             {items.map((row, index) => (
-              <div key={index} className="flex items-center gap-2">
+              <div key={index} className="live-in space-y-0.5">
+              <div className="flex items-center gap-2">
                 <GameIcon icon={{ kind: "item", key: row.name, family: "item-gear" }} size="size-6" className="shrink-0" />
-                {row.slug ? (
+                {row.base.slug ? (
                   <span className={cn(field, "truncate")}>{row.name}</span>
                 ) : (
                   <input
@@ -336,6 +326,8 @@ export function LeadEditDialog({
                   <Trash2 className="size-4" />
                 </KitButton>
               </div>
+              <ItemFlags item={row.base} />
+              </div>
             ))}
             <div className="mt-1">
               <MultiContentPicker
@@ -348,7 +340,7 @@ export function LeadEditDialog({
                     ...entries.map((entry) => ({
                       name: entry.name,
                       qty: "1",
-                      ...(entry.slug ? { slug: entry.slug } : {}),
+                      base: { name: entry.name, qty: 1, ...(entry.slug ? { slug: entry.slug } : {}) },
                     })),
                   ])
                 }
@@ -372,7 +364,7 @@ export function LeadEditDialog({
                 />
                 <MultiContentPicker
                   kind="spells"
-                  extraParams={{ class: spellClassFor(sheet.class), level: "0" }}
+                  extraParams={{ class: listClass, level: "0" }}
                   placeholder="Search cantrips to add"
                   selectedNames={cantrips}
                   onAdd={(entries) => addCantrips(entries)}
@@ -388,10 +380,7 @@ export function LeadEditDialog({
                 />
                 <MultiContentPicker
                   kind="spells"
-                  extraParams={{
-                    class: spellClassFor(sheet.class),
-                    level: String(highestSlotLevel(sheet.class, sheet.level)),
-                  }}
+                  extraParams={{ class: listClass, level: topLevel }}
                   placeholder="Search spells to add as known"
                   selectedNames={known}
                   onAdd={(entries) => {
@@ -414,10 +403,7 @@ export function LeadEditDialog({
                   />
                   <MultiContentPicker
                     kind="spells"
-                    extraParams={{
-                      class: spellClassFor(sheet.class),
-                      level: String(highestSlotLevel(sheet.class, sheet.level)),
-                    }}
+                    extraParams={{ class: listClass, level: topLevel }}
                     placeholder="Search spells to write in the spellbook"
                     selectedNames={spellbook}
                     onAdd={(entries) => {
@@ -439,10 +425,7 @@ export function LeadEditDialog({
                 />
                 <MultiContentPicker
                   kind="spells"
-                  extraParams={{
-                    class: spellClassFor(sheet.class),
-                    level: String(highestSlotLevel(sheet.class, sheet.level)),
-                  }}
+                  extraParams={{ class: listClass, level: topLevel }}
                   placeholder="Search spells to add as prepared"
                   selectedNames={prepared}
                   onAdd={(entries) => {
@@ -467,40 +450,7 @@ export function LeadEditDialog({
                   />
                 </div>
               ) : null}
-              <div className="stagger-pop flex flex-wrap gap-2">
-                {Object.entries(sheet.spellcasting.slots).map(([level]) => (
-                  <div key={level} className="space-y-1">
-                    <span className="text-stone-400">L{level} used/max</span>
-                    <div className="flex items-center gap-1">
-                      <NumberStepper
-                        size="sm"
-                        min={0}
-                        value={Number(slots[level]?.used ?? "0") || 0}
-                        label={`Level ${level} slots used`}
-                        onChange={(next) =>
-                          setSlots((prev) => ({
-                            ...prev,
-                            [level]: { max: prev[level]?.max ?? "0", used: String(next) },
-                          }))
-                        }
-                      />
-                      <span className="text-stone-500">/</span>
-                      <NumberStepper
-                        size="sm"
-                        min={0}
-                        value={Number(slots[level]?.max ?? "0") || 0}
-                        label={`Level ${level} slots max`}
-                        onChange={(next) =>
-                          setSlots((prev) => ({
-                            ...prev,
-                            [level]: { used: prev[level]?.used ?? "0", max: String(next) },
-                          }))
-                        }
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <SlotSteppers levels={[...Object.keys(sheet.spellcasting.slots), ...(pact ? ["pact"] : [])]} slots={slots} onChange={setSlots} />
             </div>
           ) : null}
 
@@ -530,13 +480,31 @@ export function LeadEditDialog({
             />
           </label>
           {error ? <PanelError className="mt-2">{error}</PanelError> : null}
+          {held.length ? (
+            <div role="status" className="reveal mt-2 space-y-1 rounded-lg border border-amber-500/30 bg-amber-950/20 p-2 text-xs text-amber-100">
+              <p>Saved. The server held these to what the sheet has:</p>
+              <ul className="stagger list-disc space-y-0.5 pl-4 text-amber-200/90">
+                {held.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           <div className="mt-4 flex justify-end gap-2">
-            <button type="button" onClick={onClose} className={ui.btnSmall}>
-              Cancel
-            </button>
-            <KitButton tone="primary" onClick={save} disabled={busy} busy={busy} className="h-10 px-4 text-[13px]">
-              Save
-            </KitButton>
+            {held.length ? (
+              <KitButton tone="primary" onClick={onClose} className="h-10 px-4 text-[13px]">
+                Done
+              </KitButton>
+            ) : (
+              <>
+                <button type="button" onClick={onClose} className={ui.btnSmall}>
+                  Cancel
+                </button>
+                <KitButton tone="primary" onClick={save} disabled={busy} busy={busy} className="h-10 px-4 text-[13px]">
+                  Save
+                </KitButton>
+              </>
+            )}
           </div>
         </Dialog.Content>
       </Dialog.Portal>

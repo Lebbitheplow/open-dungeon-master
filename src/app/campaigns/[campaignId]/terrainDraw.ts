@@ -17,6 +17,7 @@ const TILE_FILL: Record<string, string> = {
   [TERRAIN.difficult]: "#4a4126",
   [TERRAIN.door]: "#6b4f2a",
   [TERRAIN.lowwall]: "#5a5147",
+  [TERRAIN.climb]: "#5b4a33",
 };
 
 // Over a backdrop the terrain stops being the surface and becomes the
@@ -29,6 +30,7 @@ const TILE_TINT: Record<string, { fill: string; alpha: number }> = {
   [TERRAIN.difficult]: { fill: "#4a4126", alpha: 0.4 },
   [TERRAIN.door]: { fill: "#6b4f2a", alpha: 0.5 },
   [TERRAIN.lowwall]: { fill: "#8a7f70", alpha: 0.5 },
+  [TERRAIN.climb]: { fill: "#b08a4a", alpha: 0.45 },
 };
 
 const BRUSH_PREVIEW: Record<string, string> = {
@@ -38,6 +40,7 @@ const BRUSH_PREVIEW: Record<string, string> = {
   [TERRAIN.difficult]: "rgba(200, 160, 60, 0.55)",
   [TERRAIN.door]: "rgba(220, 150, 70, 0.6)",
   [TERRAIN.lowwall]: "rgba(190, 180, 160, 0.6)",
+  [TERRAIN.climb]: "rgba(232, 200, 130, 0.6)",
 };
 
 const ZONE_TINT: Record<LightZone["ambient"], string> = {
@@ -94,12 +97,36 @@ export function drawGround(
         context.fillStyle = tint.fill;
         context.fillRect(x * tile, y * tile, tile, tile);
         context.globalAlpha = 1;
+        if (ch === TERRAIN.climb) {
+          drawClimbMarks(context, x * tile, y * tile, tile);
+        }
         continue;
       }
       context.fillStyle = TILE_FILL[ch] ?? "#2a2724";
       context.fillRect(x * tile, y * tile, tile, tile);
+      if (ch === TERRAIN.climb) {
+        drawClimbMarks(context, x * tile, y * tile, tile);
+      }
     }
   }
+}
+
+// A climbable tile's three up-pointing chevrons, as the play board draws them
+// (battleMapCells.tsx ClimbMarks), so the editor and the table agree.
+function drawClimbMarks(context: CanvasRenderingContext2D, px: number, py: number, tile: number) {
+  context.save();
+  context.strokeStyle = "rgba(232, 215, 168, 0.8)";
+  context.lineWidth = Math.max(1, tile / 22);
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  for (const at of [0.25, 0.47, 0.69]) {
+    context.beginPath();
+    context.moveTo(px + tile * 0.28, py + tile * (at + 0.12));
+    context.lineTo(px + tile * 0.5, py + tile * at);
+    context.lineTo(px + tile * 0.72, py + tile * (at + 0.12));
+    context.stroke();
+  }
+  context.restore();
 }
 
 // The renderer's picture as the ground (docs/visual-overhaul-plan.md 4.2).

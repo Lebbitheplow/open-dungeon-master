@@ -2,6 +2,7 @@ import { z } from "zod";
 import { isErrorResponse, requireDm } from "@/lib/campaign-api";
 import { consoleAdjudications } from "@/lib/dm/invoke-catalog";
 import { invokeEngine } from "@/lib/dm/invoke";
+import { agentTurnFor, isAgentRequest, recordAgentCall } from "@/lib/dm/agent-turn";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,7 +50,17 @@ export async function POST(
     return Response.json({ error: "Pick an action to run." }, { status: 400 });
   }
 
-  const outcome = await invokeEngine(campaign, { kind: "human", userId: user.id }, parsed.data);
+  // A connected agent program gets the AI's rails, not the console's
+  // correction power (src/lib/dm/agent-turn.ts).
+  const agent = isAgentRequest(request) ? agentTurnFor(campaignId) : null;
+  const outcome = await invokeEngine(
+    campaign,
+    agent ? { kind: "ai", turnId: agent.id } : { kind: "human", userId: user.id },
+    parsed.data,
+  );
+  if (agent) {
+    recordAgentCall(agent.id, parsed.data.name, parsed.data.args, outcome.ok ? outcome.result : { error: outcome.error });
+  }
   if (!outcome.ok) {
     // A refusal from the engine is the rules talking, not a broken request:
     // 409 so the console shows it as an answer rather than a failure.

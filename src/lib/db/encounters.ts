@@ -5,6 +5,7 @@ import type { EnemyStats } from "@/lib/bestiary/statblock";
 import type { ConditionMetaMap } from "@/lib/schemas/sheet";
 import type { TurnBudget } from "@/lib/dm/action-budget";
 import { normalizeIntents, type EncounterIntents } from "@/lib/db/encounter-intents";
+import { restoreOwnForm } from "@/lib/db/enemy-form";
 
 // Server-authoritative combat state. Enemy HP lives here and changes ONLY
 // through the encounter tools; the AI DM narrates from tool results, never
@@ -13,7 +14,9 @@ import { normalizeIntents, type EncounterIntents } from "@/lib/db/encounter-inte
 // health states and no numbers.
 
 export type OrderEntry =
-  | { kind: "pc"; characterId: string; userId: string; name: string; initiative: number }
+  // `reflex`: the second first-round turn of Thief's Reflexes (SRD 5.1),
+  // gone when round 1 ends. Absent on every entry written before it.
+  | { kind: "pc"; characterId: string; userId: string; name: string; initiative: number; reflex?: boolean }
   | { kind: "enemy"; enemyId: string; name: string; initiative: number }
   // A slot a human DM added by hand: an allied captain, a neutral bystander,
   // a swarm counted as one thing. It has no stat block and no hit points
@@ -469,6 +472,14 @@ export function patchEnemyConditions(
       .prepare(`UPDATE encounter_enemies SET conditions_json = ?, updated_at = ? WHERE id = ?`)
       .run(JSON.stringify(conditions.slice(0, 10)), nowIso(), enemyId);
   }
+  // A Polymorph ends with its condition whichever way that goes (the
+  // caster's concentration, its hour, Dispel Magic): the own block returns.
+  const after = getEnemy(enemyId);
+  const own = after?.stats.polymorphedFrom;
+  if (!own || after.conditions.some((name) => name.toLowerCase() === "polymorphed")) {
+    return after;
+  }
+  restoreOwnForm(enemyId, own);
   return getEnemy(enemyId);
 }
 

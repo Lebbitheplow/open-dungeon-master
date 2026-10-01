@@ -2,6 +2,10 @@ import { tickEffectMinutes } from "@/lib/db/active-effects";
 import { getCampaignById } from "@/lib/db/campaigns";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import { gutterBurntLights } from "@/lib/dm/light-timers";
+import { dawnsBetween, rechargeAtDawn } from "@/lib/dm/item-charges";
+import { upkeepAtDawns } from "@/lib/dm/supplies";
+import { afflictionClockTick } from "@/lib/dm/afflictions";
+import { poisonClockTick } from "@/lib/dm/affliction-poisons";
 import { fireCalendarEvents } from "@/lib/dm/calendar-fire";
 import { tickClockConditions } from "@/lib/dm/condition-tick";
 import { getDatabase, parseJson } from "@/lib/db/core";
@@ -52,6 +56,8 @@ export function advanceClock(
     return moved;
   }
   const clock = { ...current, instant: moved.instant };
+  // Time moving on closes the choosing of hit dice after a short rest.
+  delete clock.shortRest;
   // A Wild Shape lasts hours, and the hours are these.
   const lapsed = Object.entries(current.shapeEnds ?? {}).filter(([, ends]) => ends <= moved.instant);
   if (lapsed.length) {
@@ -91,8 +97,19 @@ export function advanceClock(
   // The same clock burns torches down and brings the calendar's days round
   // (docs/vtt-parity-implementation-plan.md 7.2 and 7.3).
   gutterBurntLights(campaignId, moved.instant);
+  // Every dawn crossed refills the wands and staffs that regain at dawn,
+  // and, under the supplies variant, ends a day of eating and drinking.
+  rechargeAtDawn(campaignId, current.instant, moved.instant);
+  const hunger = upkeepAtDawns(campaignId, dawnsBetween(current.instant, moved.instant), current.supplies ?? {});
+  if (hunger) {
+    setClock(campaignId, { ...getClock(campaignId), supplies: hunger });
+  }
   fireCalendarEvents(campaignId, current.calendar, current.instant, moved.instant);
-  return { clock, minutes: moved.minutes };
+  // A disease's symptoms, a long madness ending, a poison's daily save or
+  // its midnight (src/lib/dm/afflictions.ts, affliction-poisons.ts).
+  afflictionClockTick(campaignId, moved.instant);
+  poisonClockTick(campaignId, moved.instant);
+  return { clock: getClock(campaignId), minutes: moved.minutes };
 }
 
 // Setting the date by hand, which only a DM does and only to start a campaign
@@ -139,4 +156,62 @@ export function recordLongRests(campaignId: string, characterIds: string[], ende
     longRests[id] = clampInstant(endedAt);
   }
   setClock(campaignId, { ...current, longRests });
+}
+
+// The pace the party travels at, until they stop (src/lib/dm/check-tools.ts
+// reads it for passive Perception).
+export function setTravelPace(campaignId: string, pace: CampaignClock["travelPace"] | null) {
+  const current = getClock(campaignId);
+  const { travelPace: _was, ...rest } = current;
+  void _was;
+  setClock(campaignId, pace ? { ...rest, travelPace: pace } : rest);
+}
+
+// How much water the party finds each day, for the `supplies` variant
+// (src/lib/dm/supplies.ts); "plenty" clears a shortage.
+export function setWaterRation(campaignId: string, ration: "plenty" | "half" | "none") {
+  const { waterRation: _was, ...rest } = getClock(campaignId);
+  void _was;
+  setClock(campaignId, ration === "plenty" ? rest : { ...rest, waterRation: ration });
+}
+
+// Undoing a long rest gives back the 24 hours it started: the character may
+// take the rest again (sheet-undo.ts). Only the rest the undo reverts is
+// forgotten, so a later one still counts.
+export function forgetLongRest(campaignId: string, characterId: string) {
+  const current = getClock(campaignId);
+  if (!current.longRests?.[characterId]) {
+    return;
+  }
+  const longRests = { ...current.longRests };
+  delete longRests[characterId];
+  setClock(campaignId, { ...current, longRests });
+}
+
+// After a short rest, the characters whose players choose their own hit
+// dice (src/lib/dm/rest-tools.ts). Replaces any earlier window.
+export function openShortRestWindow(campaignId: string, characterIds: string[]) {
+  const current = getClock(campaignId);
+  const { shortRest: _old, ...rest } = current;
+  void _old;
+  setClock(campaignId, characterIds.length ? { ...rest, shortRest: { ids: characterIds, sung: [] } } : rest);
+}
+
+// Whether this character may still spend hit dice from the rest just taken.
+export function inShortRestWindow(campaignId: string, characterId: string): boolean {
+  return getClock(campaignId).shortRest?.ids.includes(characterId) ?? false;
+}
+
+// Marks this character's Song of Rest die as spent in the open window, and
+// says whether it had been before.
+export function claimRestSong(campaignId: string, characterId: string): boolean {
+  const current = getClock(campaignId);
+  if (!current.shortRest || current.shortRest.sung.includes(characterId)) {
+    return false;
+  }
+  setClock(campaignId, {
+    ...current,
+    shortRest: { ...current.shortRest, sung: [...current.shortRest.sung, characterId] },
+  });
+  return true;
 }

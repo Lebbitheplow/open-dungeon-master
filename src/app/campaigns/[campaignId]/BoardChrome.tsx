@@ -4,10 +4,11 @@ import { EyeOff } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { GameIcon } from "@/components/ui/GameIcon";
-import { glyphFor } from "@/lib/battlemap/condition-glyphs";
+import { conditionIconKey } from "@/lib/battlemap/condition-glyphs";
 import { HEALTH_LABEL, HEALTH_RING, type HealthWord } from "@/lib/battlemap/health-words";
 import type { StageToken } from "@/app/campaigns/[campaignId]/BoardStage";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
+import type { TargetEdge } from "@/lib/battlemap/view-tactics";
 
 // The chrome on the board as a stage (docs/visual-overhaul-plan.md 5.1): the
 // initiative rail, the turn HUD, the turn banner, the hover plate and the
@@ -271,14 +272,37 @@ function HealthWordChip({ word }: { word: HealthWord }) {
   );
 }
 
-export function ConditionChip({ label, rounds }: { label: string; rounds?: number }) {
-  const glyph = glyphFor(label);
+export function ConditionChip({ label, rounds, note }: { label: string; rounds?: number; note?: string }) {
   return (
-    <span className="fx-pop inline-flex items-center gap-1 rounded-full border border-amber-900/60 bg-amber-950/30 py-px pl-px pr-1.5 text-[10px] capitalize text-amber-300">
-      <GameIcon icon={{ kind: "condition", key: glyph.id }} size="size-4" />
-      {label}
+    <span className="fx-pop inline-flex max-w-full items-center gap-1 rounded-full border border-amber-900/60 bg-amber-950/30 py-px pl-px pr-1.5 text-[10px] text-amber-300">
+      <GameIcon icon={{ kind: "condition", key: conditionIconKey(label) }} size="size-4" />
+      <span className="capitalize">{label}</span>
       {rounds ? ` (${rounds} rd)` : ""}
+      {/* What the engine's metadata says: until whose turn, the save that
+          ends it, who laid it (src/lib/battlemap/condition-notes.ts). */}
+      {note ? <span className="truncate text-amber-200/70">{note}</span> : null}
     </span>
+  );
+}
+
+// Cover and flanking from this player's character to the enemy under the
+// plate: the board's own verdict (view-tactics.ts), the one the hit preview
+// and pc_attack read.
+function EdgeChips({ edge }: { edge: TargetEdge }) {
+  const chips = [
+    edge.blocked ? "No line of sight" : edge.cover === 5 ? "Three-quarters cover (+5 AC)" : edge.cover === 2 ? "Half cover (+2 AC)" : null,
+    edge.flanking ? "Flanked: advantage in melee" : null,
+    edge.hostileBeside && !edge.adjacent ? "Enemy beside you: ranged at disadvantage" : null,
+  ].filter((chip): chip is string => Boolean(chip));
+  if (!chips.length) return null;
+  return (
+    <div className="mt-1 flex flex-wrap gap-1">
+      {chips.map((chip) => (
+        <span key={chip} className="fx-pop rounded-full border border-sky-800/60 bg-sky-950/40 px-1.5 py-px text-[10px] text-sky-200">
+          {chip}
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -292,6 +316,7 @@ export function TokenPlate({
   face,
   health,
   conditions,
+  edge,
 }: {
   token: StageToken;
   boardWidth: number;
@@ -299,7 +324,8 @@ export function TokenPlate({
   footprint: number;
   face: Array<string | null | undefined>;
   health?: HealthWord;
-  conditions?: Array<{ id: string; label: string; rounds?: number }>;
+  conditions?: Array<{ id: string; label: string; rounds?: number; note?: string }>;
+  edge?: TargetEdge;
 }) {
   const cx = ((token.x + footprint / 2) / boardWidth) * 100;
   // Below the figure near the top edge, above it everywhere else.
@@ -332,10 +358,11 @@ export function TokenPlate({
       {conditions?.length ? (
         <div className="mt-1 flex flex-wrap gap-1">
           {conditions.map((condition, index) => (
-            <ConditionChip key={`${condition.id}-${index}`} label={condition.label} rounds={condition.rounds} />
+            <ConditionChip key={`${condition.id}-${index}`} label={condition.label} rounds={condition.rounds} note={condition.note} />
           ))}
         </div>
       ) : null}
+      {edge ? <EdgeChips edge={edge} /> : null}
     </div>
   );
 }

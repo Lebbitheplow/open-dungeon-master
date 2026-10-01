@@ -1,0 +1,21 @@
+/* A sigil the engine refuses right now: dimmed, a softer lift, and a shake
+   on the press while the board's line says why (TokenHud.tsx). */
+.token-sigil[data-refused="true"] {
+  opacity: 0.55;
+  transition:
+    opacity var(--dur-beat) var(--ease-snap),
+    box-shadow var(--dur-quick) var(--ease-snap),
+    scale 120ms var(--ease-snap);
+}
+.token-sigil[data-refused="true"]:hover,
+.token-sigil[data-refused="true"]:focus-visible {
+  box-shadow: 0 0 10px rgba(143, 138, 171, 0.3);
+  scale: 1.06;
+}
+.token-sigil[data-refused="true"]:active {
+  animation: shake-x var(--dur-beat) var(--ease-snap);
+}
+@media (prefers-reduced-motion: reduce) {
+  .token-sigil[data-refused="true"],
+  .token-sigil[data-refused="true"]:active { transition: none; animation: none; }
+}

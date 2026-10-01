@@ -18,6 +18,13 @@ import { TokenFace, type FaceLookup } from "@/app/campaigns/[campaignId]/BoardCh
 // happened is what the audit trail is for, and a rewind that pretended
 // otherwise would be worse than no rewind at all.
 
+// Tap targets a thumb can hit on a phone (U:UD10): the icons stay small, the
+// buttons around them do not.
+const ROW_ICON =
+  "inline-flex size-9 shrink-0 items-center justify-center rounded-md text-stone-500 hover:text-stone-200 disabled:opacity-40 motion-nudge";
+const HEAD_ICON =
+  "inline-flex size-9 items-center justify-center rounded-md border border-stone-700 text-stone-400 hover:text-stone-200 disabled:opacity-40 motion-press";
+
 const KIND_LABELS: Record<string, string> = {
   pc: "Player",
   enemy: "Enemy",
@@ -87,7 +94,7 @@ export function DmInitiativePanel({
           onClick={() => void send({ op: "step", direction: "back" })}
           aria-label="Back a turn"
           title="Back a turn"
-          className="rounded-md border border-stone-700 p-1 text-stone-400 hover:text-stone-200 disabled:opacity-40"
+          className={HEAD_ICON}
         >
           <SkipBack className="size-3.5" />
         </button>
@@ -97,7 +104,7 @@ export function DmInitiativePanel({
           onClick={() => void send({ op: "step", direction: "forward" })}
           aria-label="On a turn"
           title="On a turn"
-          className="rounded-md border border-stone-700 p-1 text-stone-400 hover:text-stone-200 disabled:opacity-40"
+          className={HEAD_ICON}
         >
           <SkipForward className="size-3.5" />
         </button>
@@ -117,7 +124,7 @@ export function DmInitiativePanel({
           }}
           aria-label="Reset initiative"
           title="Reset initiative"
-          className="rounded-md border border-stone-700 p-1 text-stone-400 hover:text-stone-200 disabled:opacity-40"
+          className={HEAD_ICON}
         >
           <ListRestart className="size-3.5" />
         </button>
@@ -128,7 +135,7 @@ export function DmInitiativePanel({
             key={`${entry.id}-${index}`}
             className={cn(
               // The turn passes as a glow that moves, not one that blinks.
-              "flex items-center gap-1 rounded-md border px-2 py-1 transition-[color,background-color,border-color,box-shadow] duration-[260ms] ease-settle",
+              "flex flex-wrap items-center gap-1 rounded-md border px-2 py-1 transition-[color,background-color,border-color,box-shadow] duration-[260ms] ease-settle",
               index === encounter.turnIndex
                 ? "border-amber-700 bg-amber-950/40 shadow-glow-gold"
                 : "border-stone-800",
@@ -153,7 +160,7 @@ export function DmInitiativePanel({
               onClick={() => void send({ op: "goto", id: entry.id })}
               title={entry.kind === "pc" ? "Give them the turn" : "The turn rests on players only"}
               className={cn(
-                "min-w-0 flex-1 truncate text-left text-xs disabled:cursor-default",
+                "min-h-9 min-w-0 flex-1 truncate text-left text-xs disabled:cursor-default",
                 index === encounter.turnIndex ? "text-amber-100" : "text-stone-300",
                 entry.kind === "pc" && index !== encounter.turnIndex && "hover:text-amber-200",
               )}
@@ -162,6 +169,11 @@ export function DmInitiativePanel({
               <span className="ml-1.5 text-[10px] text-stone-600">
                 {KIND_LABELS[entry.kind] ?? entry.kind}
                 {entry.hidden ? " · hidden" : ""}
+                {entry.reflex ? (
+                  <span className="motion-pop ml-1 text-amber-300" title="Thief's Reflexes: a second turn in the first round">
+                    · 2nd turn
+                  </span>
+                ) : null}
               </span>
             </button>
             <button
@@ -170,7 +182,7 @@ export function DmInitiativePanel({
               onClick={() => void send({ op: "move", id: entry.id, direction: "up" })}
               aria-label={`Move ${entry.name} up the order`}
               title="Up the order"
-              className="rounded p-0.5 text-stone-500 hover:text-stone-200 disabled:opacity-40"
+              className={ROW_ICON}
             >
               <ChevronUp className="size-3.5" />
             </button>
@@ -180,7 +192,7 @@ export function DmInitiativePanel({
               onClick={() => void send({ op: "move", id: entry.id, direction: "down" })}
               aria-label={`Move ${entry.name} down the order`}
               title="Down the order"
-              className="rounded p-0.5 text-stone-500 hover:text-stone-200 disabled:opacity-40"
+              className={ROW_ICON}
             >
               <ChevronDown className="size-3.5" />
             </button>
@@ -190,17 +202,21 @@ export function DmInitiativePanel({
               onClick={() => void send({ op: "delay", id: entry.id })}
               aria-label={`Delay ${entry.name} to the bottom of the round`}
               title="Delay to the bottom of the round"
-              className="rounded p-0.5 text-stone-500 hover:text-stone-200 disabled:opacity-40"
+              className={ROW_ICON}
             >
               <Clock className="size-3.5" />
             </button>
             <button
               type="button"
               disabled={busy}
-              onClick={() => void send({ op: "remove", id: entry.id })}
+              onClick={async () => {
+                if (await appConfirm(`Take ${entry.name} out of the order? They get no more turns in this fight.`, { actionLabel: "Take out" })) {
+                  void send({ op: "remove", id: entry.id });
+                }
+              }}
               aria-label={`Take ${entry.name} out of the order`}
               title="Out of the order"
-              className="rounded p-0.5 text-stone-500 hover:text-red-300 disabled:opacity-40"
+              className={cn(ROW_ICON, "hover:text-red-300")}
             >
               <Trash2 className="size-3.5" />
             </button>
@@ -208,13 +224,13 @@ export function DmInitiativePanel({
         ))}
       </ol>
       {adding ? (
-        <div className="flex flex-wrap items-center gap-1">
+        <div className="reveal flex flex-wrap items-center gap-1">
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
             maxLength={ENTRY_NAME_MAX}
             placeholder="Captain Vell"
-            className="min-w-0 flex-1 rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 placeholder:text-stone-600"
+            className="min-h-9 min-w-0 flex-1 rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 placeholder:text-stone-600 motion-input"
           />
           <NumberStepper
             value={initiative}
@@ -235,14 +251,14 @@ export function DmInitiativePanel({
                 }
               });
             }}
-            className="rounded-md border border-amber-700 bg-amber-950/50 px-2 py-1 text-xs text-amber-100 disabled:opacity-40"
+            className="min-h-9 rounded-md border border-amber-700 bg-amber-950/50 px-3 py-1 text-xs text-amber-100 disabled:opacity-40 motion-press"
           >
             Add
           </button>
           <button
             type="button"
             onClick={() => setAdding(false)}
-            className="rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-400 hover:text-stone-200"
+            className="min-h-9 rounded-md border border-stone-700 px-3 py-1 text-xs text-stone-400 hover:text-stone-200 motion-press"
           >
             Cancel
           </button>
@@ -251,7 +267,7 @@ export function DmInitiativePanel({
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="flex items-center gap-1 rounded-md border border-stone-700 px-2 py-1 text-xs text-stone-400 hover:text-stone-200"
+          className="flex min-h-9 items-center gap-1 rounded-md border border-stone-700 px-3 py-1 text-xs text-stone-400 hover:text-stone-200 motion-press"
         >
           <Plus className="size-3.5" />
           A slot of your own
@@ -261,7 +277,7 @@ export function DmInitiativePanel({
         Stepping back moves the turn, not the world: hit points and conditions stay where
         the fight left them.
       </p>
-      {error ? <p className="text-[11px] text-red-400">{error}</p> : null}
+      {error ? <p role="alert" className="motion-shake text-[11px] text-red-400">{error}</p> : null}
     </section>
   );
 }

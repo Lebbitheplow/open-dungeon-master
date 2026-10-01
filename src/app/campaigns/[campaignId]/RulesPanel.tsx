@@ -60,6 +60,11 @@ export const VARIANT_TOGGLES: Array<{
     label: "Ammunition",
     tip: "Arrows, bolts and bullets are spent when they are fired and half are recovered after the fight.",
   },
+  {
+    key: "supplies",
+    label: "Food and water",
+    tip: "Each dawn every character eats a ration from their pack and drinks; going without costs exhaustion on the SRD's schedule, and that exhaustion stays until they eat. Off: the party is assumed supplied.",
+  },
 ];
 
 export const REST_LABELS: Record<GameSettings["variantRules"]["restVariant"], string> = {
@@ -141,6 +146,8 @@ export function RulesPanel({
   const [chunks, setChunks] = useState<RuleChunkView[]>([]);
   const [saving, setSaving] = useState(false);
   const [settingsBusy, setSettingsBusy] = useState(false);
+  // A refused change says why, instead of the switch quietly snapping back.
+  const [settingsError, setSettingsError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -198,12 +205,19 @@ export function RulesPanel({
 
   async function patchVariant(update: Partial<GameSettings["variantRules"]>) {
     setSettingsBusy(true);
+    setSettingsError("");
     try {
-      await fetch(`/api/campaigns/${campaignId}/settings`, {
+      const response = await fetch(`/api/campaigns/${campaignId}/settings`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ variantRules: { ...settings.variantRules, ...update } }),
       });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string };
+        setSettingsError(data.error ?? "That rule could not be changed.");
+      }
+    } catch {
+      setSettingsError("Could not reach the server.");
     } finally {
       setSettingsBusy(false);
     }
@@ -232,6 +246,11 @@ export function RulesPanel({
                 />
               </span>
             </Tooltip>
+            {settingsError ? (
+              <p role="alert" className="motion-shake pt-1 text-[11px] text-red-300">
+                {settingsError}
+              </p>
+            ) : null}
           </div>
         ) : (
           <p className="text-xs leading-5 text-stone-400">

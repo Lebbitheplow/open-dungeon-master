@@ -7,11 +7,12 @@ import { weatherObscurementTiles } from "@/lib/srd/weather";
 import { listEffects } from "@/lib/db/active-effects";
 import { getActiveBoard, getActiveEncounter, listEnemies, type Encounter } from "@/lib/db/encounters";
 import { speedFor } from "@/lib/srd";
-import { effectiveSpeed, exhaustionSpeed } from "@/lib/dm/condition-logic";
+import { getMounts } from "@/lib/db/mounts";
+import { effectiveMaxHp, effectiveSpeed, exhaustionSpeed } from "@/lib/dm/condition-logic";
 import { budgetApplies } from "@/lib/dm/action-budget";
 import { getSheetForUser, listSheets } from "@/lib/db/sheets";
 import { footprintForSize, footprintIndexes, type Footprint } from "@/lib/battlemap/footprint";
-import { healthWord, type HealthWord } from "@/lib/battlemap/health-words";
+import { healthWord } from "@/lib/battlemap/health-words";
 import { orderEntryId } from "@/lib/db/encounters";
 import {
   getBattleMapForEncounter,
@@ -30,117 +31,27 @@ import {
 import { cachedLitTiles } from "@/lib/battlemap/lit-cache";
 import { sensesFromText, type Senses } from "@/lib/srd/senses";
 import { reachableTiles, speedToTiles } from "@/lib/battlemap/movement";
-import {
-  tileIndex,
-  type AmbientLight,
-  type BattleToken,
-  type TokenKind,
-  type TokenMovement,
-} from "@/lib/battlemap/types";
-import type { Backdrop } from "@/lib/battlemap/backdrop";
-import {
-  drawingsFor,
-  labelsFor,
-  type DoorStates,
-  type LightZone,
-  type MapDrawing,
-  type MapLabel,
-} from "@/lib/battlemap/scene";
-import type { MapTheme } from "@/lib/battlemap/generate";
-import type { MapSkin } from "@/lib/battlemap/skins";
+import { pcMoveTraits } from "@/lib/battlemap/passage";
+import { flyingSpeedOf, tileIndex, type BattleToken, type TokenMovement } from "@/lib/battlemap/types";
+import { drawingsFor, labelsFor } from "@/lib/battlemap/scene";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import type { TokenIntent } from "@/lib/battlemap/intent";
 import { projectIntents } from "@/lib/dm/intent";
+import { namesLookup } from "@/lib/battlemap/condition-notes";
+import { characterHealthWord, characterStageRows, enemyStageRows } from "@/lib/battlemap/view-stage";
+import { targetEdges } from "@/lib/battlemap/view-tactics";
+import { lightsWithZones, sightTerrainFor, withZoneSteps } from "@/lib/dm/zone-rules";
+import { viewZones } from "@/lib/dm/zone-view";
+import { standUpTiles } from "@/lib/srd/authored-effects-more";
+import { addSilenceChips, viewerMoves } from "@/lib/battlemap/view-moves";
+import type { AuraTone, PlayerMapView } from "@/lib/battlemap/view-types";
+
+export type { PlayerMapView } from "@/lib/battlemap/view-types";
 
 // Per-player projection of the battle map. This is the ONLY battlemap
 // module that touches the DB, and the only shape clients ever see: terrain
 // is blanked outside explored tiles, enemy tokens are fog-gated, and ally
 // PC tokens are always shown (the party coordinates aloud at the table).
 
-export type PlayerMapView = {
-  mapId: string;
-  width: number;
-  height: number;
-  // The light the board is under right now: the author's for a roofed map,
-  // the clock's and the weather's for one under the sky.
-  ambient: AmbientLight;
-  outdoors: boolean;
-  theme: MapTheme;
-  // Row-major terrain chars; unexplored tiles are replaced with a space.
-  terrain: string;
-  // Cosmetic art under the grid, or null. The renderer draws it only inside
-  // explored tiles, so a picture cannot show a player through the fog that
-  // is hiding the terrain (src/lib/battlemap/backdrop.ts).
-  backdrop: Backdrop | null;
-  // What the board is painted with when it has no backdrop; empty means the
-  // setting and theme decide. Cosmetic, so it is the same for every viewer.
-  skin: MapSkin;
-  visible: number[];
-  explored: number[];
-  tokens: Array<{
-    id: string;
-    kind: TokenKind;
-    refId: string;
-    name: string;
-    x: number;
-    y: number;
-    mine: boolean;
-    // PC at 0 HP: rendered downed, never removed from the map.
-    down: boolean;
-    // Only ever true in the DM's projection: a hidden token is absent from a
-    // player's rather than marked in it.
-    hidden: boolean;
-    // A carried light burning down: minutes left of the whole, or null
-    // (docs/vtt-parity-implementation-plan.md 7.3).
-    light: { remaining: number; total: number } | null;
-    // The painted object a prop or bystander is drawn as, or "" for the
-    // plain figure (public/assets/props/manifest.json ids).
-    stamp: string;
-  }>;
-  lights: Array<{ x: number; y: number; radius: number }>;
-  reachable: number[];
-  budgetLeft: number;
-  myTokenId: string | null;
-  round: number;
-  currentTurnName: string;
-  // Whether this board is a fight or an exploration scene. A scene has no
-  // rounds and no initiative, so movement is not rationed on it.
-  board: "fight" | "scene";
-  // True when this projection skipped fog entirely (the DM's view). Clients
-  // use it to drop the fog shading, not to decide what they may do.
-  fullVision: boolean;
-  // DM view only: real hit points behind every token, so the person running
-  // the fight can see the board the way they see their own notes.
-  tokenHp?: Record<string, { current: number; max: number }>;
-  // The scene layer (src/lib/battlemap/scene.ts). Labels a player may see,
-  // and only where they have been; the DM sees them all. Door states,
-  // patches of light and the overlay picture are the DM's alone: a player
-  // sees a locked or secret door as the wall the engine treats it as.
-  labels: MapLabel[];
-  // Marks drawn on the board: everyone's, and the DM's own for the DM.
-  drawings: MapDrawing[];
-  doors?: DoorStates;
-  zones?: LightZone[];
-  overlayPath?: string;
-  // The stage layer (docs/vtt-parity-implementation-plan.md section 1.1).
-  // Every entry states a fact the engine holds: conditions with rounds
-  // left, a health word instead of a number, an aura's reach, a large
-  // creature's footprint, whether it is flying, whose turn it is, and who
-  // attacked whom this round. Keyed by token id; absent keys mean none.
-  tokenConditions: Record<string, Array<{ id: string; label: string; rounds?: number }>>;
-  tokenHealth: Record<string, HealthWord>;
-  tokenAuras: Record<string, Array<{ id: string; radiusFeet: number; tone: AuraTone }>>;
-  tokenFootprint: Record<string, Footprint>;
-  tokenElevation: Record<string, "flying" | "burrowing">;
-  turn: { tokenId: string; round: number } | null;
-  targets: Record<string, string[]>;
-  // What each enemy this viewer can see is about to do: the DM's declaration
-  // for this round, else the engine's guess (src/lib/dm/intent.ts, which also
-  // holds the redaction). Empty when the table has `enemyIntent` off.
-  intents: TokenIntent[];
-};
-
-type AuraTone = "ward" | "harm" | "bless" | "neutral";
 
 // Aura of Protection reaches 10 ft from paladin 6 and 30 ft from 18; the
 // save bonus itself is applied by src/lib/dm/aura.ts. This is only the ring.
@@ -150,20 +61,6 @@ function paladinAura(sheet: CharacterSheet): { radiusFeet: number; tone: AuraTon
     return null;
   }
   return { radiusFeet: sheet.level >= 18 ? 30 : 10, tone: "ward" };
-}
-
-function conditionRows(
-  conditions: string[],
-  meta: Record<string, { rounds?: number } | undefined>,
-): Array<{ id: string; label: string; rounds?: number }> {
-  return conditions.map((condition) => {
-    const rounds = meta[condition]?.rounds;
-    return {
-      id: condition.toLowerCase(),
-      label: condition,
-      ...(typeof rounds === "number" && rounds > 0 ? { rounds } : {}),
-    };
-  });
 }
 
 function elevationOf(movement: TokenMovement): "flying" | "burrowing" | null {
@@ -211,9 +108,15 @@ export function pcMoveBudget(
   token: BattleToken,
 ): { speed: number; tiles: number; fullTiles: number } {
   const campaign = getCampaignById(campaignId);
-  const base = speedFor(sheet, {
-    encumbrance: campaign?.gameSettings.variantRules.encumbrance ?? false,
-  });
+  // A mounted rider moves at the mount's speed (SRD 5.1, Mounted Combat).
+  const mount = getMounts(campaignId)[sheet.id];
+  // Aloft, a character moves at their flying speed (the Fly spell's 60 feet).
+  const flying = token.movement === "fly" ? flyingSpeedOf({ conditions: sheet.conditions, features: sheet.features }) : null;
+  const base = mount
+    ? mount.speed
+    : flying ?? speedFor(sheet, {
+        encumbrance: campaign?.gameSettings.variantRules.encumbrance ?? false,
+      });
   const speed = exhaustionSpeed(sheet.exhaustion ?? 0, effectiveSpeed(sheet.conditions, base));
   // A scene has no rounds, so there is no per-round budget to spend: the
   // party walks the board while the DM describes it.
@@ -229,8 +132,9 @@ export function pcMoveBudget(
   // what the board lights; `fullTiles` is the movement actually in hand,
   // which the move route charges the standing or the crawling to.
   const prone = sheet.conditions.some((entry) => entry.trim().toLowerCase() === "prone");
+  // Tipsy Sway stands for 5 feet (src/lib/srd/authored-effects-more.ts).
   const tiles = prone
-    ? Math.max(fullTiles - Math.floor(speedToTiles(speed) / 2), Math.floor(fullTiles / 2))
+    ? Math.max(fullTiles - standUpTiles(sheet, speedToTiles(speed)), Math.floor(fullTiles / 2))
     : fullTiles;
   return { speed, tiles: Math.max(0, tiles), fullTiles };
 }
@@ -281,12 +185,14 @@ export function buildPlayerMapView(
     clock.weather,
   );
   // Spectators (no sheet/token) see only ally positions on a dark field.
+  // Spell areas stop sight (a fog cloud, magical darkness) and light it
+  // (Daylight): src/lib/dm/zone-rules.ts.
   const vision = {
-    terrain: map.terrain,
+    terrain: sheet ? sightTerrainFor(map, sheetSenses(sheet)) : map.terrain,
     width: map.width,
     height: map.height,
     ambient,
-    zones: map.zones,
+    zones: lightsWithZones(map),
     obscureBeyond: map.outdoors ? weatherObscurementTiles(clock.weather) : Infinity,
   };
   // Shared across every member's projection of this board; read only
@@ -373,12 +279,15 @@ export function buildPlayerMapView(
   // Out of combat there are no rounds to ration movement against, so a scene
   // spends nothing: the party walks the board while the DM talks.
   let reachable: number[] = [];
+  let reachableCost: number[] = [];
+  let moves: PlayerMapView["moves"];
   let budgetLeft = 0;
   if (!fullVision && sheet && myToken && sheet.currentHp > 0 && canMoveNow(campaignId, sheet.id)) {
-    budgetLeft = pcMoveBudget(campaignId, encounter, map, sheet, myToken).tiles;
+    const budget = pcMoveBudget(campaignId, encounter, map, sheet, myToken);
+    budgetLeft = budget.tiles;
     if (budgetLeft > 0) {
       const occupied = occupiedTiles(map, tokens, myToken, footprintLookup(enemiesById));
-      reachable = [
+      const costs = [
         ...reachableTiles(
           map.terrain,
           map.width,
@@ -388,14 +297,32 @@ export function buildPlayerMapView(
           budgetLeft,
           1,
           myToken.movement === "fly",
-        ).keys(),
+          // The same passage the move route allows (src/lib/battlemap/passage.ts).
+          withZoneSteps(pcMoveTraits({ width: map.width, tokens, mover: myToken, sheet, footprintOf: footprintLookup(enemiesById), enemySize: (refId) => enemiesById.get(refId)?.stats.size }), map, "pc"),
+        ).entries(),
       ];
+      // What the move route will charge for each square, and what the move
+      // may carry this turn (src/lib/battlemap/view-moves.ts).
+      ({ reachable, reachableCost, moves } = viewerMoves({
+        costs,
+        sheet,
+        token: myToken,
+        scene: encounter.kind === "scene",
+        budget,
+        enemies: [...enemiesById.values()],
+      }));
     }
   }
 
   const currentEntry = encounter.orderReady ? encounter.order[encounter.turnIndex] : undefined;
 
   // The stage layer: facts about each shown token, keyed by token id.
+  // Names a condition's metadata may point at: the combatants this viewer
+  // can see, and every member of the party.
+  const nameOf = namesLookup([
+    ...shownTokens.map((token) => ({ id: token.refId, name: token.name })),
+    ...[...sheetsById.values()].map((entry) => ({ id: entry.id, name: entry.name })),
+  ]);
   const tokenConditions: PlayerMapView["tokenConditions"] = {};
   const tokenHealth: PlayerMapView["tokenHealth"] = {};
   const tokenAuras: PlayerMapView["tokenAuras"] = {};
@@ -423,10 +350,7 @@ export function buildPlayerMapView(
       if (!enemy) {
         continue;
       }
-      const rows = conditionRows(enemy.conditions, enemy.conditionMeta);
-      if (enemy.concentration) {
-        rows.push({ id: "concentrating", label: `Concentrating: ${enemy.concentration}` });
-      }
+      const rows = enemyStageRows(enemy, nameOf);
       if (rows.length) {
         tokenConditions[shown.id] = rows;
       }
@@ -442,13 +366,11 @@ export function buildPlayerMapView(
       if (!pcSheet) {
         continue;
       }
-      const rows = conditionRows(pcSheet.conditions, pcSheet.conditionMeta);
+      const rows = characterStageRows(pcSheet, nameOf);
       if (rows.length) {
         tokenConditions[shown.id] = rows;
       }
-      tokenHealth[shown.id] = healthWord(pcSheet.currentHp, pcSheet.maxHp, {
-        dead: Boolean(pcSheet.deathSaves?.dead),
-      });
+      tokenHealth[shown.id] = characterHealthWord(pcSheet);
       const paladin = paladinAura(pcSheet);
       if (paladin) {
         auras.push({ id: `aura-${pcSheet.id}`, ...paladin });
@@ -458,6 +380,9 @@ export function buildPlayerMapView(
       tokenAuras[shown.id] = auras;
     }
   }
+  // A creature standing in Silence is deafened by it (view-moves.ts).
+  const spellZones = viewZones(map, encounter, explored, fullVision ? null : { characterId: sheet?.id ?? null, cell: myToken ? tileIndex(map.width, myToken.x, myToken.y) : null });
+  addSilenceChips(spellZones, shownTokens, tokenConditions, map.width);
   const shownIds = new Set(shownTokens.map((token) => token.id));
   const turnToken =
     currentEntry && encounter.kind === "fight"
@@ -529,6 +454,8 @@ export function buildPlayerMapView(
       .filter((light) => explored.has(tileIndex(map.width, light.x, light.y)))
       .map((light) => ({ x: light.x, y: light.y, radius: light.brightRadius })),
     reachable,
+    reachableCost,
+    ...(moves ? { moves } : {}),
     budgetLeft,
     myTokenId: myToken?.id ?? null,
     round: encounter.round,
@@ -536,6 +463,7 @@ export function buildPlayerMapView(
     board: encounter.kind,
     fullVision,
     labels: labelsFor(map.labels, map.width, { dm: fullVision, explored }),
+    spellZones,
     drawings: drawingsFor(map.drawings, { dm: fullVision, round: encounter.round }),
     tokenConditions,
     tokenHealth,
@@ -545,6 +473,16 @@ export function buildPlayerMapView(
     turn,
     targets,
     intents,
+    edges:
+      !fullVision && sheet && myToken && encounter.kind === "fight"
+        ? targetEdges({
+            encounterId: encounter.id,
+            characterId: sheet.id,
+            characterConditions: sheet.conditions,
+            enemyIds: shownTokens.filter((token) => token.kind === "enemy").map((token) => token.refId),
+            flankingRule: getCampaignById(campaignId)?.gameSettings.variantRules.flanking === true,
+          })
+        : {},
     ...(fullVision
       ? {
           doors: map.doors,
@@ -559,7 +497,8 @@ export function buildPlayerMapView(
               if (!source) {
                 return [];
               }
-              return [[token.id, { current: source.currentHp, max: source.maxHp }]];
+              const max = token.kind === "enemy" ? source.maxHp : effectiveMaxHp(source as CharacterSheet);
+              return [[token.id, { current: source.currentHp, max }]];
             }),
           ),
         }

@@ -8,7 +8,8 @@
 //
 // Database-free like the other *-logic modules, so the route stays a thin
 // shell and scripts can exercise every branch.
-import { matchArmor } from "@/lib/srd/armor";
+import { armorOfRow } from "@/lib/srd/armor";
+import { gearDefFor } from "@/lib/srd/magic-gear";
 import { attunementProblem } from "@/lib/srd/magic-items";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -73,7 +74,8 @@ export function gearChanges(
     if (entry.equipped === undefined || entry.equipped === worn) {
       continue;
     }
-    const armor = item.gear?.armor ?? matchArmor(item.name);
+    // A magic suit is armor too (Armor of Invulnerability is plate).
+    const armor = armorOfRow(item)?.armor ?? null;
     if (!armor) {
       // Weapons and everything else: drawing or stowing is free.
       continue;
@@ -96,12 +98,20 @@ export function attunementRefusal(
   sheet: Pick<CharacterSheet, "name" | "equipment" | "class" | "classes" | "race" | "alignment" | "spellcasting">,
   gear: NonNullable<UsageAsk["gear"]>,
 ): string | null {
+  // A cursed item's attunement holds until remove curse (SRD 5.1: Berserker
+  // Axe, Armor of Vulnerability, Demon Armor, Shield of Missile Attraction).
+  const cursed = sheet.equipment.find(
+    (item) => item.attuned && gear[item.name]?.attuned === false && gearDefFor(item.name, item.slug)?.cursed,
+  );
+  if (cursed) {
+    return `${cursed.name} is cursed: ${sheet.name} cannot end the attunement until remove curse or similar magic breaks it.`;
+  }
   let pack = sheet.equipment.map((item) =>
-    gear[item.name]?.attuned === false ? { ...item, attuned: false } : item,
+    gear[item.name]?.attuned === false ? { ...item, attuned: false, attuning: false } : item,
   );
   for (let index = 0; index < pack.length; index += 1) {
     const item = pack[index];
-    if (gear[item.name]?.attuned !== true || item.attuned) {
+    if (gear[item.name]?.attuned !== true || item.attuned || item.attuning) {
       continue;
     }
     const problem = attunementProblem(item, pack, sheet);

@@ -26,6 +26,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3-multiple-ciphers";
 import { ADDED, DROPPED, REPLACED } from "./lib/magic-item-corrections.mjs";
+import { categoryBase, DAILY_POWERS, GEAR_RIDERS } from "./lib/magic-item-riders.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const contentDb = join(root, "data", "content", "open5e.sqlite");
@@ -55,8 +56,8 @@ const CLASSES = [
   "wizard",
 ];
 
-// The thirteen damage types, and the one keyword the damage engine reads
-// beside them (Armor of Invulnerability).
+// The thirteen damage types, and the phrase the damage engine reads for
+// resistance to nonmagical weapons (Armor of Invulnerability).
 const RESISTABLE = new Set([
   "acid",
   "bludgeoning",
@@ -73,6 +74,14 @@ const RESISTABLE = new Set([
   "thunder",
   "nonmagical",
 ]);
+
+// "Resistance to nonmagical damage" (Armor of Invulnerability): every damage
+// type, from anything that is not a spell, a magic weapon or strikes that
+// count as magical. The token is read by pcResistances
+// (src/lib/dm/condition-logic.ts), which expands it to every type only for
+// damage that is not magical. A bare "nonmagical" matched no damage type at
+// all, and the three weapon types alone let a burning flask of oil through.
+const NONMAGICAL = "nonmagical damage";
 
 // Used up, not worn: what one of these does lasts an hour and is the use_item
 // tool's to apply.
@@ -196,9 +205,50 @@ function parseEffects(desc, category) {
     effects.push({ kind: "set_ability", ...setAbility });
   }
   if (resist.length) {
-    effects.push({ kind: "resistance", types: [...new Set(resist)] });
+    effects.push({
+      kind: "resistance",
+      types: [...new Set(resist.map((type) => (type === "nonmagical" ? NONMAGICAL : type)))],
+    });
   }
   return { effects, carried, read };
+}
+
+// A magic weapon's or armor's flat bonus, in the words every such item uses.
+function gearBonus(desc, category) {
+  if (/^weapon/i.test(category)) {
+    const weapon = /\+(\d) bonus to attack and damage rolls made with this (?:magic )?weapon/i.exec(desc);
+    return weapon ? Number(weapon[1]) : 0;
+  }
+  if (/^armor/i.test(category)) {
+    const armor = /\+(\d) bonus to (?:AC|Armor Class)(?! against)/i.exec(desc);
+    return armor ? Number(armor[1]) : 0;
+  }
+  return 0;
+}
+
+// An item's charges: how many it holds, what comes back at dawn, and what
+// happens when the last is spent. Read from the sentences every charged item
+// in the SRD is written in.
+function chargesOf(desc) {
+  const DICE = "\\d+d\\d+(?:\\s*[+-]\\s*\\d+)?";
+  const max =
+    new RegExp(`\\b(?:has|have|starts with) (${DICE}|\\d+) charges\\b`, "i").exec(desc) ??
+    /\bof its (\d+) charges\b/i.exec(desc);
+  if (!max) {
+    return null;
+  }
+  const regain = new RegExp(`regains? (all|${DICE}|\\d+) (?:of its )?(?:expended )?charges daily at dawn`, "i").exec(desc);
+  const out = { max: /d/i.test(max[1]) ? max[1].replace(/\s+/g, "") : Number(max[1]) };
+  if (regain) {
+    out.regain = regain[1].toLowerCase() === "all" ? "all" : regain[1].replace(/\s+/g, "");
+  }
+  if (/last charge, roll a d20\. On a 1,[^.]*destroyed/i.test(desc)) {
+    out.lastChargeD20 = true;
+  }
+  if (/destroyed when its last charge|last charge[^.]*(?:is destroyed|becomes nonmagical)|becomes nonmagical when you use the last charge/i.test(desc)) {
+    out.spentAway = true;
+  }
+  return out;
 }
 
 // Who may attune, from the pack's own line: "requires attunement by a
@@ -230,13 +280,47 @@ function attunedBy(text) {
 
 const keyOf = (name) => name.trim().toLowerCase();
 
+// What the attack and armor engines read off a row beyond its effects: the
+// base item its category names, the SRD's riders (scripts/lib/
+// magic-item-riders.mjs), a +N any magic weapon or armor states in the
+// standard words, and charges. Only the SRD's own rows take a base from the
+// category, which is the one the SRD wrote; another document's weapon is read
+// from its name, as before.
+function gearOf(row, desc, match) {
+  const out = {};
+  const category = row.category || "";
+  const srd = row.document_slug === "wotc-srd";
+  const base = srd ? categoryBase(category) : null;
+  if (base) {
+    out.base = { kind: base.kind, name: base.name };
+  }
+  const authored = srd ? GEAR_RIDERS[match] : undefined;
+  const bonus = gearBonus(desc, category);
+  if (/^weapon/i.test(category) && (authored?.weapon || bonus)) {
+    out.weapon = { ...(bonus ? { bonus } : {}), ...(authored?.weapon ?? {}) };
+  }
+  if (/^armor/i.test(category) && (authored?.armor || bonus)) {
+    out.armor = { ...(bonus ? { bonus } : {}), ...(authored?.armor ?? {}) };
+  }
+  if (authored?.cursed) {
+    out.cursed = true;
+  }
+  const charges = chargesOf(desc);
+  if (charges) {
+    out.charges = charges;
+  } else if (srd && DAILY_POWERS[match]) {
+    out.charges = { max: 1, regain: "all", daily: DAILY_POWERS[match] };
+  }
+  return out;
+}
+
 function collect() {
   const db = new Database(contentDb, { readonly: true });
   // The SRD's own wording first, so an item two documents describe is read
   // from the SRD.
   const rows = db
     .prepare(
-      `SELECT slug, name, category, rarity, data_json FROM items WHERE kind = 'magic_item'
+      `SELECT slug, name, category, rarity, document_slug, data_json FROM items WHERE kind = 'magic_item'
        ORDER BY CASE document_slug WHEN 'wotc-srd' THEN 0 ELSE 1 END, slug`,
     )
     .all();
@@ -263,9 +347,11 @@ function collect() {
     const parsed = parseEffects(desc, row.category || "");
     const effects = DROPPED[match] ? [] : (REPLACED[match] ?? parsed.effects);
     const restriction = attunedBy(attunement);
+    const gear = gearOf(row, desc, match);
     // A row with no effect is kept only when the engine has something to
-    // enforce about it: who may attune.
-    if (!effects.length && !restriction) {
+    // enforce about it: who may attune, the item a magic weapon or armor is
+    // built on, its bonus, its charges.
+    if (!effects.length && !restriction && !Object.keys(gear).length) {
       continue;
     }
     out.push({
@@ -276,6 +362,7 @@ function collect() {
       ...(restriction ? { attunedBy: restriction } : {}),
       ...(parsed.carried && effects.length ? { carried: true } : {}),
       effects,
+      ...gear,
     });
     explained.push({ name: row.name.trim(), effects, read: parsed.read });
   }
@@ -292,6 +379,7 @@ function collect() {
       requiresAttunement: added.requiresAttunement,
       ...(added.aliases ? { aliases: added.aliases } : {}),
       effects: added.effects,
+      ...(added.base ? { base: added.base } : {}),
     });
   }
   return {

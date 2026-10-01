@@ -39,11 +39,17 @@ test("the library slugs a name exactly as the catalogue does", () => {
 test("paths are root relative and the fallback chain is own icon, then family", () => {
   assert.equal(iconPath("spell", "Magic Missile"), "/assets/icons/spell/magic-missile.webp");
   assert.equal(familyIconPath("spell-evocation"), "/assets/icons/family/spell-evocation.webp");
-  assert.deepEqual(iconCandidates({ kind: "item", key: "Rope, hempen", family: "item-gear" }), [
-    "/assets/icons/item/rope-hempen.webp",
+  assert.deepEqual(iconCandidates({ kind: "item", key: "Chain Mail", family: "item-armor" }), [
+    "/assets/icons/item/chain-mail.webp",
+    "/assets/icons/family/item-armor.webp",
+  ]);
+  // A name the catalogue never painted is not asked for: its family's icon
+  // is the first and only try.
+  assert.deepEqual(iconCandidates({ kind: "item", key: "Rope, hempen (50 feet)", family: "item-gear" }), [
     "/assets/icons/family/item-gear.webp",
   ]);
-  assert.deepEqual(iconCandidates({ kind: "feat", key: "Alert" }), ["/assets/icons/feat/alert.webp"]);
+  assert.deepEqual(iconCandidates({ kind: "feat", key: "Athletic" }), ["/assets/icons/feat/athletic.webp"]);
+  assert.deepEqual(iconCandidates({ kind: "feat", key: "Alert" }), [], "no painting, no family: nothing is asked for");
 });
 
 if (existsSync(path.join(ICONS, "manifest.json"))) {

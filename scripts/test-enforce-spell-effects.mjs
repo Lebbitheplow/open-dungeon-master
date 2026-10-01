@@ -92,7 +92,8 @@ await test("Bless adds a d4 to attack rolls and saving throws, for the blessed a
   assert.equal(cast.ok, true, cast.error);
   assert.deepEqual(world.sheet(priest.id).spellcasting.slots["1"], { max: 4, used: 1 });
   assert.deepEqual(held(world, friend), ["blessed"]);
-  assert.deepEqual(meta(world, friend), { blessed: { rounds: 10 } }, "a minute is ten rounds");
+  // The condition records the spell, its caster and the slot (spell-effects.ts).
+  assert.deepEqual(meta(world, friend), { blessed: { rounds: 10, spell: "Bless", source: priest.id, slotLevel: 1 } }, "a minute is ten rounds");
   assert.deepEqual(held(world, other), []);
 
   skipCurrentTurn(world.campaignId);
@@ -110,7 +111,7 @@ await test("Bless runs out after ten rounds of a fight", async () => {
   await world.invoke("cast_buff", { characterId: priest.id, spell: "Bless", level: 1, targetCharacterIds: [priest.id, friend.id] });
   for (let left = 9; left >= 1; left -= 1) {
     nextRound(world);
-    assert.deepEqual(meta(world, friend), { blessed: { rounds: left } }, `${left} rounds left`);
+    assert.deepEqual(meta(world, friend), { blessed: { rounds: left, spell: "Bless", source: priest.id, slotLevel: 1 } }, `${left} rounds left`);
   }
   nextRound(world);
   assert.deepEqual(held(world, friend), []);
@@ -143,7 +144,7 @@ await test("Bane lands on a failed Charisma save and not on a made one, for a mi
   const made = await bane(second, dc);
   assert.equal(made.result.saved, true);
   const [one, two] = world.enemies().sort((a, b) => a.displayName.localeCompare(b.displayName));
-  assert.deepEqual([one.conditions, one.conditionMeta], [["baned"], { baned: { rounds: 10 } }]);
+  assert.deepEqual([one.conditions, one.conditionMeta], [["baned"], { baned: { rounds: 10, spell: "Bane", source: priest.id, slotLevel: 1 } }]);
   assert.deepEqual(two.conditions, []);
   assert.equal(world.sheet(priest.id).spellcasting.slots["1"].used, 2);
 });
@@ -198,7 +199,7 @@ await test("Haste: +2 AC, advantage on Dexterity saves, for a minute", async () 
   assert.equal(ac, 10 + abilityMod(14), "unarmored");
   const cast = await world.invoke("cast_buff", { characterId: mage.id, spell: "Haste", level: 3, targetCharacterIds: [friend.id] });
   assert.equal(cast.ok, true, cast.error);
-  assert.deepEqual(meta(world, friend), { hasted: { rounds: 10 } });
+  assert.deepEqual(meta(world, friend), { hasted: { rounds: 10, spell: "Haste", source: mage.id, slotLevel: 3 } });
   assert.equal(world.sheet(friend.id).ac, ac + 2);
   assert.equal(world.sheet(mage.id).spellcasting.slots["3"].used, 1);
   const dex = await save(world, friend, "dex", [4, 15]);
@@ -378,7 +379,7 @@ await test("a buff's duration is the spell's, whatever slot it is cast from", as
   const { world, sheets: [priest] } = await party(cleric(5));
   const cast = await world.invoke("cast_buff", { characterId: priest.id, spell: "Bless", level: 3 });
   assert.equal(cast.ok, true, cast.error);
-  assert.deepEqual(meta(world, priest), { blessed: { rounds: 10 } });
+  assert.deepEqual(meta(world, priest), { blessed: { rounds: 10, spell: "Bless", source: priest.id, slotLevel: 3 } });
   assert.deepEqual(world.sheet(priest.id).spellcasting.slots["3"], { max: 2, used: 1 });
   assert.equal(world.sheet(priest.id).spellcasting.slots["1"].used, 0);
 });

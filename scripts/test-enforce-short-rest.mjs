@@ -209,13 +209,17 @@ await test("short-rest features come back and long-rest features do not", async 
     ["monk", 5, { ki: 5 }],
     ["cleric", 6, { channel_divinity: 2 }],
     ["druid", 4, { wild_shape: 2 }],
+    // Font of Inspiration: from bard 5 Bardic Inspiration comes back on a
+    // short rest too (SRD 5.1). This row used to pin ODM's old "long at
+    // every level".
+    ["bard", 5, { bardic_inspiration: 1 }],
   ];
   const LONG = [
     ["barbarian", 5, { rage: 3 }],
     ["paladin", 5, { lay_on_hands: 25, divine_sense: 1 }],
     ["sorcerer", 5, { sorcery_points: 5 }],
-    // ODM's rule: long at every level (the SRD adds the short rest at bard 5).
-    ["bard", 5, { bardic_inspiration: 1 }],
+    // Before Font of Inspiration it waits for a long rest.
+    ["bard", 4, { bardic_inspiration: 1 }],
   ];
   const seated = [...SHORT, ...LONG].map(([classId, level, spent]) => {
     const sheet = table.addHero({ class: classId, level });

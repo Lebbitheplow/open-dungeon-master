@@ -18,6 +18,7 @@ import { COPPER_PER_GOLD, purseCopper } from "@/lib/srd/currency";
 import { wearsUntrainedArmor } from "@/lib/srd/armor";
 import { matchWeapon } from "@/lib/srd/weapons";
 import { spendAction, spendCastAttack, type TurnBudget } from "@/lib/dm/action-budget";
+import { masteredSpell, pactLevelFor } from "@/lib/dm/cast-slot-choice";
 
 export type CastRefusal = { error: string };
 
@@ -271,7 +272,12 @@ export function slotPlan(
   if (spell && cantrip) {
     return { kind: "none", note: `${facts?.name ?? spell} is a cantrip: no spell slot is spent. Cantrips are unlimited.` };
   }
-  const level = Math.floor(named && named > 0 ? named : (facts?.level ?? 0));
+  // Spell Mastery (wizard 18): the chosen 1st and 2nd level spells, cast at
+  // their own level, spend no slot.
+  if (facts && facts.level <= 2 && (!named || named === facts.level) && masteredSpell(sheet, names)) {
+    return { kind: "none", note: `${facts.name} is mastered (Spell Mastery): cast at its own level, no slot is spent.` };
+  }
+  const level = Math.floor(named && named > 0 ? named : (facts ? pactLevelFor(sheet, facts, names) : 0));
   if (level < 1 || level > 9) {
     return {
       error: spell
@@ -348,8 +354,8 @@ export function longCastingProblem(facts: SpellFacts | null, inFight: boolean): 
 
 // What the turn budget remembers of the spells cast this turn, kept in its
 // once-per-turn list so the budget's own shape stays as it is.
-const BONUS_SPELL = "spell:bonus-action";
-const LEVELLED_SPELL = "spell:levelled";
+export const BONUS_SPELL = "spell:bonus-action";
+export const LEVELLED_SPELL = "spell:levelled";
 const SHARES = "cast-shares";
 
 // A casting whose attack rolls, darts or targets are resolved one call at a

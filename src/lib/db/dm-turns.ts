@@ -448,6 +448,15 @@ export function setPendingCombatNote(id: string, note: string) {
     .run(note.slice(0, 500), id);
 }
 
+// A parked roll the player spent Inspiration on takes its new d20 term while
+// it is still open (src/lib/dm/pending-inspiration.ts). Null once resolved.
+export function setPendingAdvantage(id: string, expression: string, advantage: Advantage): PendingRoll | null {
+  const result = getDatabase()
+    .prepare(`UPDATE pending_rolls SET expression = ?, advantage = ? WHERE id = ? AND status = 'pending'`)
+    .run(expression, advantage, id);
+  return result.changes > 0 ? getPendingRoll(id) : null;
+}
+
 export function resolvePendingRoll(
   id: string,
   status: "submitted" | "fallback",

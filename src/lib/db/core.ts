@@ -1422,6 +1422,8 @@ function ensureSchema(db: SqliteDatabase) {
     // Bound creatures (familiars, animal companions, drakes); managed by
     // the pet engine (src/lib/dm/pet-tools.ts). NULL = none.
     ["pets_json", `TEXT`],
+    // A creature a spell or feature made (src/lib/schemas/summon.ts); NULL = not one.
+    ["summon_json", `TEXT`],
     // AI companion party member: owned by an unloginable bot user row so
     // UNIQUE(campaign_id, user_id) and the users FK stay satisfied. The DM
     // drives these sheets (src/lib/dm/companion-tools.ts).
@@ -1515,6 +1517,10 @@ function ensureSchema(db: SqliteDatabase) {
     // both, so the two uses never collide on a single row. Null on messages
     // written before this column existed.
     ["dm_turn_id", `TEXT`],
+    // The card a player's action came from (src/lib/dm/intent-logic.ts), so
+    // the prompt shows it to the model and the turn can check it was
+    // resolved. Null on typed actions and on messages written before it.
+    ["intent_json", `TEXT`],
   ]);
 
   addColumns("dm_turns", [
@@ -1568,6 +1574,8 @@ function ensureSchema(db: SqliteDatabase) {
   // map keeps the look it was drawn with.
   addColumns("prepared_maps", [["skin_json", `TEXT NOT NULL DEFAULT '{}'`]]);
   addColumns("battle_maps", [["skin_json", `TEXT NOT NULL DEFAULT '{}'`]]);
+  // Spell areas laid on a live board (src/lib/battlemap/zones.ts).
+  addColumns("battle_maps", [["spell_zones_json", `TEXT NOT NULL DEFAULT '[]'`]]);
 
   addColumns("locations", [
     // The prepared map this place stands on, so arriving offers the DM a

@@ -54,6 +54,41 @@
   100% { scale: 1; }
 }
 
+/* The attack options (Reckless, Stunning Strike, Knock out) pop in with the
+   targets, and a toggle answers its press with the chip's own spring; the
+   reaction prompt files in like a new line of the log, its chips popping in
+   after it; Ready's trigger field arrives the same way. */
+.hand-option,
+.hand-react-chip {
+  animation: hand-chip-pop var(--dur-quick) var(--ease-settle) backwards;
+  animation-delay: calc(var(--i, 0) * 40ms);
+  transition:
+    background-color var(--dur-quick) var(--ease-snap),
+    border-color var(--dur-quick) var(--ease-snap),
+    color var(--dur-quick) var(--ease-snap);
+}
+.hand-option[aria-pressed="true"],
+.hand-react-chip[aria-pressed="true"] {
+  animation: hand-chip-pop var(--dur-quick) var(--ease-settle) backwards, hand-chip-on 280ms var(--ease-spring);
+  animation-delay: calc(var(--i, 0) * 40ms), 0s;
+}
+.hand-react { animation: hand-file-in var(--dur-move) var(--ease-settle) both, hand-react-glow 1600ms var(--ease-snap) 1; }
+.hand-react-chip { animation-delay: calc(120ms + var(--i, 0) * 40ms); }
+@keyframes hand-react-glow {
+  0% { box-shadow: 0 0 0 0 rgba(125, 211, 252, 0); }
+  30% { box-shadow: 0 0 0 3px rgba(125, 211, 252, 0.28); }
+  100% { box-shadow: 0 0 0 0 rgba(125, 211, 252, 0); }
+}
+.hand-trigger { animation: hand-file-in var(--dur-move) var(--ease-settle) backwards; }
+/* A spell's pick (Command's word, Bestow Curse's curse) and a readied spell
+   file in like the trigger; the chosen chip answers with the same spring as a
+   toggle while the row's pill slides to it (src/lib/motion/pill.ts). */
+.hand-choice { animation: hand-file-in var(--dur-move) var(--ease-settle) backwards; }
+.hand-option[aria-checked="true"] {
+  animation: hand-chip-pop var(--dur-quick) var(--ease-settle) backwards, hand-chip-on 280ms var(--ease-spring);
+  animation-delay: calc(var(--i, 0) * 40ms), 0s;
+}
+
 /* What the card will do files in row by row, and a number that changes with
    the target (the odds, the expected damage) ticks over instead of cutting. */
 .hand-aim .hand-row {
@@ -152,5 +187,15 @@ html[data-theme="light"] .hand-played { border-color: #a6842a; box-shadow: 0 0 0
   .hand-more,
   .hand-more-row,
   .hand-fan[data-folding="true"] .hand-slot,
-  .hand-fan[data-folding="true"] .hand-more { animation: none; }
+  .hand-fan[data-folding="true"] .hand-more,
+  .hand-option,
+  .hand-option[aria-pressed="true"],
+  .hand-react,
+  .hand-react-chip,
+  .hand-react-chip[aria-pressed="true"],
+  .hand-option[aria-checked="true"],
+  .hand-choice,
+  .hand-trigger { animation: none; }
+  .hand-option,
+  .hand-react-chip { transition: none; }
 }

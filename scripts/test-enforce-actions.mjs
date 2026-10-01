@@ -6,12 +6,12 @@
 // with a size cap, and a grappled creature's speed is 0.
 //
 // ODM's own rules, pinned here as it documents them:
-//   - Ready, Search and Use an Object are not actions take_action knows.
-//     They are refused rather than improvised.
-//   - Grapple and Shove cost the whole action (ACTION_COST). SRD 5.1 lets
-//     each replace one attack of the Attack action.
 //   - In a grapple or shove contest the enemy rolls with the better of its
 //     Strength and Dexterity modifiers from the stat block.
+// Ready, Search, Use an Object and the escape from a grapple are actions
+// take_action knows (test-enforce-turn-actions.mjs), and Grapple and Shove
+// each replace one attack of the Attack action, as SRD 5.1 has it
+// (test-enforce-bonus-actions.mjs).
 import assert from "node:assert/strict";
 import { openWorld } from "./lib/enforce-world.mjs";
 import { abilityMod, proficiencyBonus, suite } from "./lib/enforce-harness.mjs";
@@ -283,12 +283,14 @@ await test("nobody at 0 hit points takes an action", async () => {
   assert.deepEqual(world.sheet(brawler.id).conditions, []);
 });
 
-await test("Ready, Search and Use an Object are refused, not improvised", async () => {
+await test("an action take_action does not know is refused, not improvised", async () => {
   await stage(brawler);
-  for (const action of ["ready", "search", "use_object", "use an object"]) {
+  for (const action of ["use an object", "sprint", "parley"]) {
     const out = await act(brawler, action);
     assert.equal(out.ok, false, action);
   }
+  // Ready with no trigger names nothing to wait for, so it is refused too.
+  assert.equal((await act(brawler, "ready")).ok, false);
   assert.equal(world.encounter().turnBudget, null);
 });
 
@@ -325,7 +327,7 @@ await test("The benefit of Dodge is lost if the dodger is incapacitated or their
 
 await test("Help gives the ally advantage on their next ability check or, against a creature within 5 feet of the helper, their next attack roll.", async () => {
   const [enemy] = await stage(brawler);
-  assert.equal((await act(brawler, "help", { targetCharacterId: sneak.id })).ok, true);
+  assert.equal((await act(brawler, "help", { targetCharacterId: sneak.id, targetEnemyId: enemy.id })).ok, true);
   assert.equal(kit.endTurn(brawler.userId), true);
   kit.place(sneak.id, 6, 6);
   world.dice(3, 17, 1, 1, 1, 1);

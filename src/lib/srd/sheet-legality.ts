@@ -37,6 +37,7 @@ import {
   type HpClass,
 } from "@/lib/srd/hit-points";
 import { MULTICLASS_CAP, describePrereq, meetsPrereq } from "@/lib/srd/multiclass";
+import { featureAbilityGrants, featureHitPoints } from "@/lib/srd/trait-rules";
 import { hpBonusPerLevel } from "@/lib/srd/race-id";
 import {
   ancestryOf,
@@ -326,6 +327,8 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
       recorded,
       halfFeats: takesHalfFeats ? [] : halfFeatPoints(halfFeats),
       freePoints: 2 * Math.max(0, unrecorded - feats.slotsUsed),
+      // Primal Champion's +4 STR and CON, which lift the cap to 24.
+      grants: featureAbilityGrants({ class: input.class, level, classes, features: input.features }),
       mode: policy.scores,
       pools: [
         ...(context.abilityPool ? [context.abilityPool] : []),
@@ -351,7 +354,9 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
     level: entry.level,
   }));
   const perLevelBonus = hpBonusPerLevelFor(hpBonusPerLevel(race.id) > 0, feats.feats);
-  const hpInput = { classes: hpClasses, con: abilities.con, perLevelBonus };
+  // Draconic Resilience's hit point per sorcerer level (trait-rules.ts).
+  const extraHp = featureHitPoints({ class: input.class, subclass: input.subclass, level, classes, features: input.features });
+  const hpInput = { classes: hpClasses, con: abilities.con, perLevelBonus, extraHp };
   const range = hpRange(hpInput);
   let maxHp = input.maxHp;
   let rolledHp: number[] | undefined;

@@ -113,7 +113,10 @@ for (const [condition, expected] of Object.entries(OWN_ATTACKS)) {
     assert.equal(out.result.hit, expected === "advantage");
   });
   await test(`${condition}: an enemy's own attack rolls at ${expected}`, async () => {
-    const out = await goblinSwing([], [condition]);
+    // A prone enemy with the movement to stand does so before it attacks
+    // (SRD 5.1, Being Prone; test-enforce-enemy-turns); one held at speed 0
+    // by a grapple attacks from the ground.
+    const out = await goblinSwing([], condition === "prone" ? ["prone", "grappled"] : [condition]);
     assert.equal(goblinState(out), expected);
   });
 }

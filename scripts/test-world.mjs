@@ -48,8 +48,9 @@ test("forced march begins past 8 hours with a rising DC", () => {
   assert.equal(forcedMarchHours(8), 0);
   assert.equal(forcedMarchHours(6), 0);
   assert.equal(forcedMarchHours(11), 3);
-  assert.equal(forcedMarchSaveDc(1), 10);
-  assert.equal(forcedMarchSaveDc(3), 12);
+  // SRD 5.1: "The DC is 10 + 1 for each hour past 8 hours."
+  assert.equal(forcedMarchSaveDc(1), 11);
+  assert.equal(forcedMarchSaveDc(3), 13);
 });
 
 test("pace changes watchfulness and stealth", () => {

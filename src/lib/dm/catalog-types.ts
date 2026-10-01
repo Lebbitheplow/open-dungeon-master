@@ -33,10 +33,25 @@ export const CATEGORY_LABELS: Record<AdjudicationCategory, string> = {
 
 // How the console renders one argument. "character" and "enemy" become
 // pickers filled from live game state; the rest are ordinary inputs.
+//
+// - "enemies": several live enemies, sent as an id list.
+// - "combatant": one character or enemy on the board, sent as its id, for
+//   the map tools that take a token by name or id.
+// - "shares": split_damage's rows, one creature and its share each, sent as
+//   the handler's own [{ enemyId | characterId, share }].
+// - "hitDice": take_rest's per-character hit dice, sent as the handler's
+//   own [{ characterId, dice }].
+// - "list": several words typed in one box (a companion's spells), sent as
+//   a list.
 export type FieldKind =
   | "character"
   | "characters"
   | "enemy"
+  | "enemies"
+  | "combatant"
+  | "shares"
+  | "hitDice"
+  | "list"
   | "text"
   | "longtext"
   | "number"
@@ -61,6 +76,16 @@ export type CatalogField = {
   // One line under the input. Says what the server does with the value,
   // not what the value is.
   help?: string;
+  // A select that also takes a typed value: the options are the ones the
+  // engine knows (the SRD conditions), and the typed one is for a story
+  // condition it tracks by name only.
+  other?: { label: string; placeholder?: string };
+  // A column whose row is the field named here: the console offers a
+  // "pick on the board" button beside it, and one tap on the battle map
+  // fills both. `role` says which square of a spell's area it is (its centre
+  // or first square, or the square a wall or line runs toward), so the board
+  // can preview the area the pick would lay.
+  square?: { row: string; role: "at" | "toward" };
 };
 
 export type CatalogEntry = {
@@ -75,7 +100,22 @@ export type CatalogEntry = {
   fields: CatalogField[];
   // Greyed out with a reason when no fight is running.
   needsEncounter?: boolean;
+  // An action that cannot be taken back asks first. With `when`, only when
+  // that field holds that value (a relationship ended by death).
+  confirm?: { message: string; when?: { field: string; equals: string | boolean } };
 };
+
+// Whether running these arguments needs the person to confirm first.
+export function needsConfirm(entry: CatalogEntry, args: Record<string, unknown>): string | null {
+  if (!entry.confirm) {
+    return null;
+  }
+  const when = entry.confirm.when;
+  if (when && args[when.field] !== when.equals) {
+    return null;
+  }
+  return entry.confirm.message;
+}
 
 export function findAdjudication(
   entries: CatalogEntry[],
@@ -83,6 +123,26 @@ export function findAdjudication(
 ): CatalogEntry | null {
   const wanted = (name ?? "").trim();
   return entries.find((entry) => entry.name === wanted) ?? null;
+}
+
+// Whether a select takes a value. A person picks from the list, so the
+// value is exact; the delegated AI and connected agents reach the same
+// check through the façade and write "Fire" or "fire damage", which every
+// handler reads as fire. Those pass here and the handler's own schema has
+// the last word, as it always has.
+function selectAccepts(allowed: string[], value: string): boolean {
+  if (allowed.includes(value)) {
+    return true;
+  }
+  const cleaned = value.trim().toLowerCase().replace(/\s+/g, " ");
+  return allowed.some((option) => {
+    const wanted = option.toLowerCase();
+    return (
+      cleaned === wanted ||
+      cleaned.replace(/ /g, "_") === wanted ||
+      new RegExp(`(^|[^a-z])${wanted.replace(/[^a-z0-9 _]/g, "")}([^a-z]|$)`).test(cleaned)
+    );
+  });
 }
 
 // A pre-flight check for the console's form: required fields present,
@@ -112,9 +172,14 @@ export function checkArgs(
     if (field.kind === "boolean" && typeof value !== "boolean") {
       return `${field.label} must be true or false.`;
     }
-    if (field.kind === "select" && field.options) {
+    if (field.kind === "hitDice" || field.kind === "shares") {
+      if (!Array.isArray(value) || value.some((row) => !row || typeof row !== "object")) {
+        return `${field.label} must be a list of rows.`;
+      }
+    }
+    if (field.kind === "select" && field.options && !field.other) {
       const allowed = field.options.map((option) => option.value);
-      if (typeof value !== "string" || !allowed.includes(value)) {
+      if (typeof value !== "string" || !selectAccepts(allowed, value)) {
         return `${field.label} must be one of: ${allowed.join(", ")}.`;
       }
     }

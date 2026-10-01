@@ -1,5 +1,7 @@
 import { tileIndex, type AmbientLight, type BattleToken, type MapLight } from "@/lib/battlemap/types";
 import { describeScene, type DoorStates, type MapLabel } from "@/lib/battlemap/scene";
+import { withAnchors, type SpellZone } from "@/lib/battlemap/zones";
+import { describeZones } from "@/lib/battlemap/zones-describe";
 
 // Model-facing map text: an ASCII grid with token overlay letters plus a
 // token list carrying exact ids and coordinates. Target is under ~1.5k
@@ -15,6 +17,8 @@ export type SerializableMap = {
   lights: MapLight[];
   doors?: DoorStates;
   labels?: MapLabel[];
+  // Spell areas on the board (src/lib/battlemap/zones.ts), one line each.
+  spellZones?: SpellZone[];
 };
 
 // PCs get A-Z in party order; enemies get digits then lowercase letters.
@@ -58,6 +62,7 @@ export function serializeMapForPrompt(
     "Legend: . floor | # wall (blocks movement and sight) | ~ water (difficult) | , difficult ground | + door | | low wall or fence (blocks walking, not sight or flying; half cover behind it). Letters and digits are combatants.",
   );
   lines.push(...describeScene({ doors: map.doors ?? {}, labels: map.labels ?? [] }));
+  lines.push(...describeZones(withAnchors(map.spellZones ?? [], tokens, map), map.width));
   // Column header uses last-digit ruler so wide maps stay aligned.
   const header = Array.from({ length: map.width }, (_, x) => String(x % 10)).join("");
   lines.push(`   ${header}`);

@@ -224,6 +224,14 @@ export function FinishStep({
         </StepPanel>
       ) : null}
 
+      {table.rulesError ? (
+        <p role="alert" className="reveal flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-950/20 px-3 py-2 text-xs text-amber-100">
+          {table.rulesError}
+          <button type="button" onClick={table.retryRules} className={ui.btnSmall}>
+            Try again
+          </button>
+        </p>
+      ) : null}
       {preview && race ? (
         <StepPanel title="Derived stats" ornate className="border-amber-500/30">
           <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm text-stone-300 sm:grid-cols-4">
@@ -270,9 +278,21 @@ export function FinishStep({
       ) : null}
 
       {error ? (
-        <p className="motion-shake text-sm text-red-400" role="alert">
-          {error}
-        </p>
+        // Every reason the server gave, not just the first (U:UB8).
+        error.includes("\n") ? (
+          <div className="motion-shake text-sm text-red-400" role="alert">
+            <p>The server did not save the character:</p>
+            <ul className="stagger mt-1 list-disc space-y-0.5 pl-5">
+              {error.split("\n").map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <p className="motion-shake text-sm text-red-400" role="alert">
+            {error}
+          </p>
+        )
       ) : null}
     </div>
   );

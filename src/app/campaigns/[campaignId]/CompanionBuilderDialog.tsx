@@ -9,6 +9,7 @@ import CharacterBuilder, {
   type BuilderResult,
 } from "@/app/characters/builder/CharacterBuilder";
 import type { Genre } from "@/lib/schemas/game-settings";
+import { refusalText } from "@/app/characters/builder/refusal";
 
 // Whoever steers the story (the party lead in an AI campaign, the DM in a
 // human-run one) builds a lasting companion with the full character creator.
@@ -68,7 +69,7 @@ export function CompanionBuilderDialog({
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setError(data.error || "Could not create the companion.");
+        setError(refusalText(data, "Could not create the companion."));
         return;
       }
       onCreated?.();

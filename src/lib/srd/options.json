@@ -9,7 +9,11 @@
     "pact_boon": { "label": "Pact Boon", "prefix": "Pact Boon: ", "grantedBy": "Pact Boon" },
     "infusion": { "label": "Infusion", "prefix": "Infusion: ", "grantedBy": "Infuse Item" },
     "rune": { "label": "Rune", "prefix": "Rune: ", "grantedBy": "Rune Carver" },
-    "discipline": { "label": "Elemental Discipline", "prefix": "Discipline: ", "grantedBy": "Disciple of the Elements" }
+    "discipline": { "label": "Elemental Discipline", "prefix": "Discipline: ", "grantedBy": "Disciple of the Elements" },
+    "hunters_prey": { "label": "Hunter's Prey", "prefix": "Hunter's Prey: ", "grantedBy": "Hunter's Prey" },
+    "defensive_tactics": { "label": "Defensive Tactics", "prefix": "Defensive Tactics: ", "grantedBy": "Defensive Tactics" },
+    "hunter_multiattack": { "label": "Hunter's Multiattack", "prefix": "Multiattack: ", "grantedBy": "Multiattack" },
+    "superior_hunters_defense": { "label": "Superior Hunter's Defense", "prefix": "Superior Hunter's Defense: ", "grantedBy": "Superior Hunter's Defense" }
   },
   "options": [
     { "k": "invocation", "n": "Agonizing Blast", "d": "Add your Charisma modifier to the damage of each Eldritch Blast beam. Usually the first invocation a warlock takes.", "req": "Eldritch Blast cantrip" },
@@ -141,6 +145,17 @@
     { "k": "discipline", "n": "Shape the Flowing River", "d": "Spend 1 ki to freeze, thaw or reshape a 30-foot area of water or ice." },
     { "k": "discipline", "n": "Sweeping Cinder Strike", "d": "Spend 2 ki to cast burning hands." },
     { "k": "discipline", "n": "Water Whip", "d": "Spend 2 ki to lash a creature within 30 feet for 3d10 bludgeoning damage, then pull it 25 feet or knock it prone on a failed Dexterity save." },
-    { "k": "discipline", "n": "Wave of Rolling Earth", "d": "Spend 6 ki to cast wall of stone.", "req": "level 17" }
+    { "k": "discipline", "n": "Wave of Rolling Earth", "d": "Spend 6 ki to cast wall of stone.", "req": "level 17" },
+    { "k": "hunters_prey", "n": "Colossus Slayer", "d": "Once per turn, a weapon hit on a creature already below its hit point maximum deals an extra 1d8 damage." },
+    { "k": "hunters_prey", "n": "Giant Killer", "d": "When a Large or larger creature within 5 feet hits or misses you with an attack, your reaction makes an attack against it right after." },
+    { "k": "hunters_prey", "n": "Horde Breaker", "d": "Once on each of your turns when you make a weapon attack, you can make another attack with the same weapon against a different creature within 5 feet of the first target and in range." },
+    { "k": "defensive_tactics", "n": "Escape the Horde", "d": "Opportunity attacks against you are made with disadvantage." },
+    { "k": "defensive_tactics", "n": "Multiattack Defense", "d": "After a creature hits you with an attack, you gain +4 AC against all its later attacks this turn." },
+    { "k": "defensive_tactics", "n": "Steel Will", "d": "Advantage on saving throws against being frightened." },
+    { "k": "hunter_multiattack", "n": "Volley", "d": "As an action, a ranged weapon attack against any number of creatures within 10 feet of a point you can see in range, with a separate attack roll for each." },
+    { "k": "hunter_multiattack", "n": "Whirlwind Attack", "d": "As an action, a melee attack against any number of creatures within 5 feet of you, with a separate attack roll for each." },
+    { "k": "superior_hunters_defense", "n": "Evasion", "d": "On a Dexterity save for half damage, you take none on a success and half on a failure." },
+    { "k": "superior_hunters_defense", "n": "Stand Against the Tide", "d": "When a hostile creature misses you with a melee attack, your reaction can make it repeat the attack against another creature of your choice." },
+    { "k": "superior_hunters_defense", "n": "Uncanny Dodge", "d": "When an attacker you can see hits you with an attack, your reaction halves the attack's damage against you." }
   ]
 }

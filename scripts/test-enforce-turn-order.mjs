@@ -137,10 +137,20 @@ await test("a person running the table is not capped", async () => {
   assert.equal(kit.enemy(enemy.id).currentHp, 200 - ENCOUNTER_CAP_PER_TURN - 3);
 });
 
+// Off their own turn the attack is a readied one (or an opportunity attack,
+// which the server rolls itself), so second holds a readied attack here, as
+// take_action ready leaves it (test-enforce-turn-actions.mjs).
+const readyUp = (hero) =>
+  world.patch(hero.id, {
+    conditions: [...world.sheet(hero.id).conditions, "readied"],
+    conditionMeta: { ...world.sheet(hero.id).conditionMeta, readied: { untilTurnOf: hero.id, source: "when it comes close" } },
+  });
+
 await test("Off their own turn a character attacks only with their reaction, and there is one reaction a round.", async () => {
   const [enemy] = await stage();
   kit.setEnemy(enemy.id, { maxHp: 200 });
   assert.equal(kit.current().characterId, first.id);
+  readyUp(second);
   const results = [];
   for (let index = 0; index < 3; index += 1) {
     world.dice(15, 3, 3, 3, 3);
@@ -160,7 +170,8 @@ await test("Sneak Attack is dealt once per turn, and an attack off the rogue's o
   // first stands next to the enemy, so second's finesse attack qualifies.
   // It is first's turn: second's attack is their reaction, and it carries
   // the dice, since Sneak Attack is once per TURN and this is not the
-  // rogue's own.
+  // rogue's own. The attack off their turn is a readied one.
+  readyUp(second);
   world.dice(15, 1, 1, 1, 1);
   const reaction = await kit.attack(second.id, enemy.id);
   world.clearDice();
@@ -247,6 +258,13 @@ await test("An enemy takes one action on its turn: one attack, or one Multiattac
   world.patch(first.id, { ac: 12, acOverride: true, currentHp: 30 });
   const turn = createDmTurn(world.campaignId, [], "ai");
   const actor = { kind: "ai", turnId: turn.id };
+  // Its turn comes when the pointer passes it (src/lib/dm/enemy-turn-order.ts).
+  for (let guard = 0; guard < 4; guard += 1) {
+    const ended = await invokeEngine(world.campaign(), actor, { name: "end_turn", args: { characterId: kit.current().characterId } });
+    if (JSON.stringify(ended.result?.enemiesToAct ?? []).includes(enemy.id)) {
+      break;
+    }
+  }
   const call = { name: "enemy_attack", args: { enemyId: enemy.id, targetCharacterId: first.id } };
   world.dice(15, 3);
   const one = await invokeEngine(world.campaign(), actor, call);
@@ -301,7 +319,7 @@ await test("The per-turn caps apply to the AI's share of an assisted session (sr
     const out = await invokeEngine(
       world.campaign(),
       { kind: "ai", turnId: turn.id },
-      { name: "damage_enemy", args: { enemyId: enemy.id, amount: 1 } },
+      { name: "damage_enemy", args: { enemyId: enemy.id, amount: 1, source: "hazard" } },
     );
     refused += out.ok ? 0 : 1;
   }

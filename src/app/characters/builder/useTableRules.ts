@@ -58,6 +58,11 @@ export type TableRulesState = {
   wealthBusy: boolean;
   wealthError: string;
   rollWealth: () => void;
+  // The table's settings could not be read. The builder then says so and
+  // offers to try again, rather than quietly showing the defaults as if
+  // they were this table's (U:UB7).
+  rulesError: string;
+  retryRules: () => void;
 };
 
 // What the table has set for the numbers the server derives, and the
@@ -73,6 +78,8 @@ export function useTableRules(
   const [wealth, setWealth] = useState<WealthRoll | null>(null);
   const [wealthBusy, setWealthBusy] = useState(false);
   const [wealthError, setWealthError] = useState("");
+  const [rulesError, setRulesError] = useState("");
+  const [attempt, setAttempt] = useState(0);
 
   // The state lands in .then callbacks rather than after an await, so each
   // fetch reads as "subscribe to an external system", which is what it is.
@@ -82,25 +89,35 @@ export function useTableRules(
     }
     let cancelled = false;
     fetch(`/api/campaigns/${campaignId}`)
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => {
+      .then(async (response) => ({ ok: response.ok, data: await response.json().catch(() => null) }))
+      .then(({ ok, data }) => {
         if (cancelled) {
           return;
         }
-        const stored = data?.campaign?.gameSettings;
+        if (!ok || !data?.campaign) {
+          // Rules stay unknown; the server still derives the real numbers
+          // when the character is saved.
+          setRulesError(data?.error || "This table's rules could not be read, so the numbers shown are the defaults.");
+          return;
+        }
+        // A setting the table never changed is the server's default.
+        const stored = data.campaign.gameSettings;
+        setRulesError("");
         setSettings({
           hpMethod: stored?.hpMethod ?? "average",
           startingWealth: stored?.startingWealth ?? "equipment",
         });
       })
       .catch(() => {
-        // Without the table's settings the builder shows the defaults; the
-        // server derives the real numbers when the character is saved.
+        if (!cancelled) {
+          setRulesError("Could not reach the server for this table's rules, so the numbers shown are the defaults.");
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [campaignId]);
+  }, [campaignId, attempt]);
+  const retryRules = useCallback(() => setAttempt((count) => count + 1), []);
 
   const rolled = settings?.startingWealth === "rolled";
 
@@ -169,5 +186,7 @@ export function useTableRules(
     wealthBusy,
     wealthError,
     rollWealth,
+    rulesError,
+    retryRules,
   };
 }

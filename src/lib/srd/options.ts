@@ -1,5 +1,6 @@
 // The pick-lists that hang off a class feature: invocations, maneuvers,
-// metamagic, pact boons, infusions, runes and elemental disciplines.
+// metamagic, pact boons, infusions, runes, elemental disciplines and the
+// Hunter ranger's four choices.
 //
 // Before this existed a warlock's sheet said "Eldritch Invocations" and
 // stopped, so the player never chose any and never got the abilities. The
@@ -21,7 +22,11 @@ export type OptionKind =
   | "pact_boon"
   | "infusion"
   | "rune"
-  | "discipline";
+  | "discipline"
+  | "hunters_prey"
+  | "defensive_tactics"
+  | "hunter_multiattack"
+  | "superior_hunters_defense";
 
 export type OptionDef = {
   k: OptionKind;
@@ -135,6 +140,12 @@ const GRANTS: Grant[] = [
       [3, 2],
     ],
   },
+  // The Hunter ranger's one Hunter's Prey pick at 3rd level; Colossus Slayer
+  // rides pc_attack (src/lib/dm/pc-attack-damage.ts).
+  { kind: "hunters_prey", classId: "ranger", subclass: "Hunter", steps: [[3, 1]] },
+  { kind: "defensive_tactics", classId: "ranger", subclass: "Hunter", steps: [[7, 1]] },
+  { kind: "hunter_multiattack", classId: "ranger", subclass: "Hunter", steps: [[11, 1]] },
+  { kind: "superior_hunters_defense", classId: "ranger", subclass: "Hunter", steps: [[15, 1]] },
   {
     kind: "discipline",
     classId: "monk",

@@ -5,9 +5,14 @@
 // rests refill by recharge type. Pure and dependency-light so test scripts
 // import it directly.
 
+import { COMBAT_RESOURCE_DEFS } from "@/lib/srd/combat-rows";
 import customResourcesJson from "@/lib/classes/resources.json";
 import authoredResourcesJson from "@/lib/srd/authored-resources.json";
 import { innateSpellCounterRows } from "@/lib/srd/racial-grants";
+import { LATE_RESOURCE_DEFS } from "@/lib/srd/class-resources-late";
+import { UNLIMITED_USES } from "@/lib/srd/resource-limits";
+
+export { isUnlimited, UNLIMITED_USES } from "@/lib/srd/resource-limits";
 
 export type Recharge = "short" | "long";
 
@@ -173,15 +178,6 @@ export function effectFromFx(fx: ResourceFx | undefined): ResourceEffect {
   }
 }
 
-// What a counter holds when the feature has no limit (Rage at barbarian 20,
-// Wild Shape at druid 20). The stored shape stays { max, used }; a spend
-// from a counter this size is not counted (src/lib/dm/resource-tools.ts).
-export const UNLIMITED_USES = 99;
-
-export function isUnlimited(state: { max: number }): boolean {
-  return state.max >= UNLIMITED_USES;
-}
-
 // What spending the feature costs of a turn in a fight. "none" is a feature
 // used on the character's own turn for nothing (Action Surge). Absent means
 // the feature's many uses cost different things (Ki, Channel Divinity
@@ -218,6 +214,12 @@ export type ResourceDef = {
   // The character level the counter starts at (a tiefling's hellish rebuke
   // at 3rd); below it the sheet holds no counter.
   minLevel?: number;
+  // When the refill depends on the level the counter is held at (Bardic
+  // Inspiration comes back on a short rest from bard 5, Font of
+  // Inspiration). Overrides `recharge` for rests that know the sheet.
+  rechargeFor?: (level: number) => Recharge;
+  // Never refilled by a rest: the DM gives it back (Inspiration).
+  noRefill?: boolean;
   // One line of SRD truth handed back to the model in the tool result, so a
   // spend never leaves it guessing what the feature does.
   guidance: string;
@@ -341,7 +343,7 @@ const SRD_RESOURCE_DEFS: ResourceDef[] = [
     recharge: "short",
     effect: { kind: "narrative" },
     guidance:
-      "Divine power channelled into a subclass effect (Turn Undead, Destroy Undead, a domain or oath option). Turned enemies flee: apply the frightened condition with set_enemy_condition, or enemy_flees for the ones that break entirely.",
+      "Divine power channelled into a subclass effect. Pass variant to have the server resolve it: 'turn undead' (every undead within 30 feet makes a WIS save against the spell DC; a failure is turned for a minute, and from cleric 5 an undead at or under the Destroy Undead CR is destroyed instead), 'sacred weapon' (Oath of Devotion: +CHA to weapon attack rolls for a minute), 'preserve life' (Life Domain: heals up to 5 x cleric level split among targetCharacterIds, none past half their maximum). Never apply turned or frightened by hand: the save decides it.",
   },
   {
     id: "bardic_inspiration",
@@ -349,13 +351,14 @@ const SRD_RESOURCE_DEFS: ResourceDef[] = [
     match: ["bardic inspiration"],
     displayName: "Bardic Inspiration",
     maxFor: (_level, mods) => Math.max(1, mods.cha ?? 0),
-    // SRD: refills on long rest (short too from bard 5; modeled as long for
-    // simplicity, the server errs toward scarcity).
+    // SRD: refills on a long rest, and from bard 5 (Font of Inspiration) on
+    // a short rest too.
     recharge: "long",
+    rechargeFor: (level) => (level >= 5 ? "short" : "long"),
     action: "bonus",
     effect: { kind: "inspire", die: inspirationDie },
     guidance:
-      "The target keeps the inspiration die for up to 10 minutes and adds it to one ability check, attack roll, or saving throw. The server hands it to them and spends it on their next roll automatically.",
+      "The target keeps the inspiration die for up to 10 minutes and adds it to one ability check, attack roll, or saving throw. The server hands it to them and spends it on their next roll automatically. From bard 5 (Font of Inspiration) the uses come back on a short rest too.",
   },
   {
     id: "wild_shape",
@@ -452,7 +455,7 @@ const SRD_RESOURCE_DEFS: ResourceDef[] = [
     recharge: "long",
     effect: { kind: "narrative" },
     guidance:
-      "The fighter rerolls a saving throw they just failed and must use the new roll. Roll the save again with request_roll.",
+      "The fighter rerolls the saving throw they last failed and must use the new roll. The server rerolls it; on a success the condition that save put on them comes off.",
   },
   {
     id: "cleansing_touch",
@@ -479,6 +482,7 @@ const SRD_RESOURCE_DEFS: ResourceDef[] = [
     guidance:
       "An attack that missed a target in range hits instead, or a failed ability check is treated as a 20 on the d20.",
   },
+  ...LATE_RESOURCE_DEFS,
   ...[6, 7, 8, 9].map(
     (spellLevel): ResourceDef => ({
       id: `mystic_arcanum_${spellLevel}`,
@@ -552,9 +556,13 @@ type SubclassResourceRow = {
   proficiency?: number;
   // Descending [level, uses] steps, first match wins.
   scale?: Array<[number, number]>;
-  // Pools sized by character level (Balm of the Summer Court, Healing Light).
+  // Pools sized by character level (Balm of the Summer Court, Healing Light),
+  // times `levelTimes`, plus an ability modifier (the Arcane Ward: twice the
+  // wizard level plus Intelligence).
   byLevel?: boolean;
   levelPlus?: number;
+  levelTimes?: number;
+  plusAbility?: "str" | "dex" | "con" | "int" | "wis" | "cha";
   recharge: Recharge;
   guidance: string;
   // Optional typed effect the spend executes server-side.
@@ -576,7 +584,7 @@ const SUBCLASS_RESOURCE_DEFS: ResourceDef[] = (
   displayName: row.displayName,
   maxFor: (level: number, mods: Record<string, number>) => {
     if (row.byLevel) {
-      return Math.max(1, level + (row.levelPlus ?? 0));
+      return Math.max(1, level * (row.levelTimes ?? 1) + (row.levelPlus ?? 0) + (row.plusAbility ? (mods[row.plusAbility] ?? 0) : 0));
     }
     if (row.proficiency) {
       return proficiencyBonus(level) * row.proficiency;
@@ -626,6 +634,7 @@ export const RESOURCE_DEFS: ResourceDef[] = [
   ...CUSTOM_RESOURCE_DEFS,
   ...SUBCLASS_RESOURCE_DEFS,
   ...INNATE_RESOURCE_DEFS,
+  ...COMBAT_RESOURCE_DEFS,
 ];
 
 export type ResourceState = { max: number; used: number };
@@ -790,6 +799,11 @@ export function populateResources(
     const used = Math.min(existing?.[def.id]?.used ?? 0, max);
     out[def.id] = { max, used };
   }
+  // Inspiration belongs to no feature: the DM awarded it, and it stays until
+  // it is spent.
+  if (existing?.inspiration) {
+    out.inspiration = existing.inspiration;
+  }
   return out;
 }
 
@@ -803,16 +817,4 @@ export function spendRelentlessEndurance(resources: ResourceMap | undefined): Re
     return null;
   }
   return { ...resources, relentless_endurance: { max: state.max, used: state.used + 1 } };
-}
-
-// Rest refills: long rests refill everything, short rests only the
-// short-recharge pools.
-export function refillResources(resources: ResourceMap | undefined, rest: Recharge): ResourceMap {
-  const out: ResourceMap = {};
-  for (const [id, state] of Object.entries(resources ?? {})) {
-    const def = resourceDef(id);
-    const refill = rest === "long" || def?.recharge === "short";
-    out[id] = { max: state.max, used: refill ? 0 : state.used };
-  }
-  return out;
 }

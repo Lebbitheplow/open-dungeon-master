@@ -94,9 +94,12 @@ export type ExhaustionPatch = {
 
 // One step on the exhaustion track, with what the new level does to the
 // body. Level 4 halves the maximum, so hit points above the half are lost;
-// level 6 is death, and the dead hold no hit points.
+// level 6 is death, and the dead hold no hit points. The maximum is the real
+// one: a caller that hands in the whole sheet has its Amulet of Health's hit
+// points counted (effectiveMaxHp reads level, abilities and equipment), so a
+// level of exhaustion never clips them to the number stored on the sheet.
 export function exhaustionPatch(
-  sheet: { maxHp: number; currentHp: number; exhaustion: number },
+  sheet: Parameters<typeof effectiveMaxHp>[0] & { currentHp: number; exhaustion: number },
   level: number,
 ): ExhaustionPatch {
   const exhaustion = Math.max(0, Math.min(6, Math.round(level)));
@@ -107,7 +110,7 @@ export function exhaustionPatch(
       deathSaves: { successes: 0, failures: 3, stable: false, dead: true },
     };
   }
-  const ceiling = effectiveMaxHp({ maxHp: sheet.maxHp, exhaustion });
+  const ceiling = effectiveMaxHp({ ...sheet, exhaustion });
   return {
     exhaustion,
     ...(sheet.currentHp > ceiling ? { currentHp: ceiling } : {}),

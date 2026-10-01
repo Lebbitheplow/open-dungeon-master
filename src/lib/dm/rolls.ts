@@ -1,91 +1,30 @@
-import { z } from "zod";
 import { d20Expression, type Advantage } from "@/lib/dice";
-import { exhaustionRollState, mergeAdvantage, rollDerivation } from "@/lib/dm/condition-logic";
+import {
+  exhaustionRollState,
+  mergeAdvantage,
+  rollDerivation,
+  wearsHeavyArmor,
+} from "@/lib/dm/condition-logic";
+import { heldHelp } from "@/lib/dm/help-logic";
 import { encumbranceCovers, encumbranceFor } from "@/lib/srd/encumbrance";
 import { conditionRollRiders } from "@/lib/srd/condition-effects";
 import {
   defenseRiders,
   halfProficiencyCovers,
-  hasBrave,
   hasHalflingLuck,
 } from "@/lib/srd/feature-effects";
-import { normalizeAbility, normalizeAdvantage, normalizeRollKind } from "@/lib/dm/arg-coerce";
-import { dcForDifficulty, normalizeDifficulty } from "@/lib/srd/dc";
+import { strengthCheckFloor } from "@/lib/srd/trait-rules";
+import { computeAbilityScore, INSPIRATION_SPEND, toolProficiencyBonus } from "@/lib/dm/roll-riders";
+import { rollFeatureRiders } from "@/lib/dm/roll-feature-riders";
+import type { RollArgs } from "@/lib/dm/roll-args";
 import { DM_TOOL_NAME_PATTERN, toolTextRegex, xmlToolCallRegex } from "@/lib/dm/tool-text";
 import { acBreakdownFor, computeSheetDerived, findSkill, SRD_SKILLS } from "@/lib/srd";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { StreamedToolCall } from "@/lib/model-client";
+import { senseCheckFailure } from "@/lib/srd/sense-checks";
+import { sightRotPenalty } from "@/lib/srd/afflictions";
 
-export const rollArgsSchema = z.object({
-  // Who may read the result. Only a human DM sets anything but "public";
-  // the AI DM is never offered it (src/lib/dm/viewer.ts).
-  visibility: z.enum(["public", "dm", "blind", "self"]).optional(),
-  characterId: z.string().optional(),
-  kind: z.preprocess(
-    normalizeRollKind,
-    z.enum([
-      "skill_check",
-      "saving_throw",
-      "ability_check",
-      "attack",
-      "damage",
-      "initiative",
-      "custom",
-    ]),
-  ),
-  skill: z.string().optional(),
-  ability: z.preprocess(
-    normalizeAbility,
-    z.enum(["str", "dex", "con", "int", "wis", "cha"]).optional(),
-  ),
-  dc: z.coerce.number().int().min(1).max(40).optional(),
-  // A difficulty tier the server turns into the canonical DC (very_easy 5 ..
-  // nearly_impossible 30). When both are sent, an explicit dc wins.
-  difficulty: z.preprocess(
-    (value) => normalizeDifficulty(value) ?? undefined,
-    z
-      .enum(["very_easy", "easy", "moderate", "hard", "very_hard", "nearly_impossible"])
-      .optional(),
-  ),
-  expression: z.string().max(60).optional(),
-  advantage: z.preprocess(
-    normalizeAdvantage,
-    z.enum(["none", "advantage", "disadvantage"]).optional(),
-  ),
-  // kind=damage only: the enemy this damage strikes; the server applies the
-  // rolled total to that enemy the moment the dice resolve.
-  targetEnemyId: z.string().optional(),
-  // kind=damage only: damage type, so resistances and immunities apply.
-  damageType: z.string().optional(),
-  reason: z.string().optional(),
-  // kind=saving_throw only: what the save resists (a condition or effect), so
-  // defensive traits like Brave (advantage vs frightened) apply server-side.
-  against: z.string().max(60).optional(),
-}).transform((args) => {
-  // Fold a difficulty tier down into a concrete dc so every downstream
-  // consumer (success computation, result text) sees one number. An explicit
-  // dc always wins over the tier.
-  if (args.dc === undefined && args.difficulty) {
-    return { ...args, dc: dcForDifficulty(args.difficulty) };
-  }
-  return args;
-});
-
-export type RollArgs = z.infer<typeof rollArgsSchema>;
-
-// The DC of a request_roll at this table. A named difficulty moves with the
-// table's strictness (two points a step, docs/rules-coverage.md), as it does
-// for group_check and check_notice; a DC given as a number is the number.
-// `raw` is the call as it was sent, which is where "given as a number" can
-// still be told from "folded down from the tier".
-export function rollDcFor(args: RollArgs, raw: unknown, shift: number): number | undefined {
-  const sent = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-  const explicit = sent.dc !== undefined && sent.dc !== null && sent.dc !== "";
-  if (explicit || !args.difficulty) {
-    return args.dc;
-  }
-  return dcForDifficulty(args.difficulty, shift);
-}
+export { rollArgsSchema, rollDcFor, type RollArgs } from "@/lib/dm/roll-args";
 
 export type ParsedToolCall = {
   id?: string;
@@ -405,19 +344,6 @@ export function salvageProseRollAsks(
   };
 }
 
-// An unspent Bardic Inspiration die a character is holding. The die size
-// rides in the condition name ("bardic inspiration (d8)"), written by
-// use_resource in src/lib/dm/resource-tools.ts.
-function findInspiration(conditions: string[]): { condition: string; die: string } | null {
-  for (const condition of conditions) {
-    const match = /^bardic inspiration \((d\d{1,2})\)$/i.exec(condition.trim());
-    if (match) {
-      return { condition, die: match[1].toLowerCase() };
-    }
-  }
-  return null;
-}
-
 // Resolve a request_roll call into a canonical expression using the sheet as
 // the only source of modifiers. Conditions on the sheet auto-derive
 // advantage/disadvantage (poisoned checks, restrained DEX saves) and can
@@ -443,6 +369,14 @@ export function resolveRollExpression(
     effectNote?: string;
     effectAdvantage?: boolean;
     effectDisadvantage?: boolean;
+    // A drow with Sunlight Sensitivity standing in direct sunlight
+    // (src/lib/dm/sunlight.ts): disadvantage on Perception by sight.
+    sunlight?: boolean;
+    // Standing in an obscured spell area (src/lib/dm/zone-rules.ts): the same.
+    obscured?: string | null;
+    // The roller moved no more than half their speed this turn (Supreme
+    // Sneak, src/lib/srd/check-traits.ts); the caller reads the board.
+    movedLittle?: boolean;
   },
 ):
   | {
@@ -469,12 +403,20 @@ export function resolveRollExpression(
       ? findSkill((args.skill ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_"))?.ability
       : undefined;
   const derivationAbility = args.ability ?? skillAbility;
+  // Rage gives nothing in heavy armor, its advantage on Strength included.
   const derivation =
     sheet && derivationKind
-      ? rollDerivation(sheet.conditions, derivationKind, derivationAbility)
+      ? rollDerivation(sheet.conditions, derivationKind, derivationAbility, {
+          rageSuppressed: wearsHeavyArmor(sheet.equipment),
+        })
       : { advantage: "none" as const, autoFail: false, notes: [] };
   if (derivation.autoFail) {
     return { autoFail: true, detail: args.ability ?? "", notes: derivation.notes };
+  }
+  // Blinded or deafened: a check that needs the lost sense fails (srd/sense-checks.ts).
+  const senseless = sheet && (derivationKind === "skill_check" || derivationKind === "ability_check") ? senseCheckFailure(sheet.conditions, { reason: args.reason }) : null;
+  if (senseless) {
+    return { autoFail: true, detail: args.skill ?? args.ability ?? "", notes: [senseless] };
   }
   const exhaustion =
     sheet && derivationKind
@@ -486,29 +428,28 @@ export function resolveRollExpression(
   // which leaves the held Help where it is for the roll it was given for.
   const helped =
     sheet && derivationKind && derivationKind !== "initiative" && derivationKind !== "saving_throw"
-      ? sheet.conditions.find((entry) => entry.trim().toLowerCase() === "helped") ?? null
+      ? heldHelp(sheet, { check: true })
       : null;
-  // Feature-driven roll riders: Danger Sense grants advantage on the save
-  // ability it covers, Reliable Talent floors a proficient check.
+  // Feature-driven roll riders: Reliable Talent floors a proficient check,
+  // Jack of All Trades adds half proficiency.
   const defense =
     sheet && sheet.class
       ? defenseRiders({ class: sheet.class, level: sheet.level, features: sheet.features })
       : { saveAdvantage: new Set<string>(), halfProficiency: null };
-  const dangerSense =
-    derivationKind === "saving_throw" &&
-    derivationAbility !== undefined &&
-    defense.saveAdvantage.has(derivationAbility);
   // Halfling Lucky: attacks, checks, and saves reroll a natural 1 once. It
   // rides the leading d20 term as the grammar's "r1" reroll suffix (placed
   // before any Reliable Talent floor, which raises the surviving face).
   const lucky = sheet && derivationKind ? hasHalflingLuck(sheet) : false;
-  // Brave: advantage on a saving throw against being frightened. The initial
-  // save the DM rolls says what it resists through `against`; the recurring
-  // save-ends re-roll is handled server-side in condition-tick.ts.
-  const braveSave =
-    derivationKind === "saving_throw" &&
-    /frighten|fear/i.test(args.against ?? "") &&
-    Boolean(sheet && hasBrave(sheet));
+  // The features, traits, items and held dice that ride this roll
+  // (src/lib/dm/roll-feature-riders.ts).
+  const riders = rollFeatureRiders(sheet, args, {
+    kind: derivationKind,
+    ability: derivationAbility,
+    movedLittle: extras?.movedLittle,
+  });
+  if ("error" in riders) {
+    return riders;
+  }
   // What the character is wearing, for the armor rules below. Test doubles
   // and partial sheets without equipment skip these.
   const wornBreakdown =
@@ -545,7 +486,13 @@ export function resolveRollExpression(
           : null;
   const effects =
     sheet && effectKind
-      ? conditionRollRiders(sheet.conditions, effectKind, derivationAbility)
+      ? conditionRollRiders(
+          sheet.conditions,
+          effectKind,
+          derivationAbility,
+          // Pass without Trace's +10 rides Stealth checks only.
+          derivationKind === "skill_check" ? findSkill((args.skill ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_"))?.id : undefined,
+        )
       : { diceSuffix: "", advantageSources: [], notes: [], spent: [] };
   const advantage: Advantage = mergeAdvantage([
     args.advantage ?? "none",
@@ -555,29 +502,28 @@ export function resolveRollExpression(
     exhaustion.advantage,
     ...effects.advantageSources,
     ...(helped ? ["advantage" as const] : []),
-    ...(dangerSense ? ["advantage" as const] : []),
-    ...(braveSave ? ["advantage" as const] : []),
+    ...riders.advantageSources,
     ...(armorUntrained ? ["disadvantage" as const] : []),
     ...(overloaded ? ["disadvantage" as const] : []),
   ]);
-  // A held Bardic Inspiration die rides along on the next d20 the character
-  // rolls and is spent by doing so; the caller clears the condition.
-  const inspiration =
-    sheet && derivationKind && derivationKind !== "initiative"
-      ? findInspiration(sheet.conditions)
-      : null;
-  const bonusDie = `${inspiration ? `+1${inspiration.die}` : ""}${effects.diceSuffix}`;
+  const bonusDie = `${riders.dice}${effects.diceSuffix}`;
   // All one-shot carriers are spent the same way: the caller clears them.
-  const spent = [inspiration?.condition, helped, ...effects.spent].filter(Boolean) as string[];
+  const spent = [
+    riders.inspirationCondition,
+    riders.peerless,
+    helped,
+    ...effects.spent,
+    ...riders.authoredSpent,
+    riders.inspired ? INSPIRATION_SPEND : null,
+  ].filter(Boolean) as string[];
   const inspirationFields = spent.length ? { spendInspiration: spent.join("|") } : {};
   const allNotes = [
     ...derivation.notes,
     ...(exhaustion.note ? [exhaustion.note] : []),
-    ...(inspiration ? [`spends their Bardic Inspiration die: +1${inspiration.die}`] : []),
+    ...riders.inspirationNotes,
     ...effects.notes,
     ...(helped ? ["spends the Help their ally gave them: advantage"] : []),
-    ...(dangerSense ? [`Danger Sense: advantage on ${derivationAbility?.toUpperCase()} saves`] : []),
-    ...(braveSave ? ["Brave: advantage on saves against being frightened"] : []),
+    ...riders.notes,
     ...(armorUntrained
       ? ["wearing armor they are not trained in: disadvantage on STR and DEX rolls"]
       : []),
@@ -610,22 +556,45 @@ export function resolveRollExpression(
     // Worn armor tagged noisy (scale, plate...) imposes disadvantage on
     // Stealth checks; the AC breakdown already knows what is worn.
     const armorStealth = skill.id === "stealth" && Boolean(wornBreakdown?.stealthDisadvantage);
-    const finalAdvantage = armorStealth
-      ? mergeAdvantage([advantage, "disadvantage"])
-      : advantage;
+    const sunlit = skill.id === "perception" && Boolean(extras?.sunlight);
+    const veiled = skill.id === "perception" ? (extras?.obscured ?? null) : null;
+    const finalAdvantage =
+      armorStealth || sunlit || veiled ? mergeAdvantage([advantage, "disadvantage"]) : advantage;
+    // A skill check is an ability check: a lasting effect on checks counts,
+    // and so does an item that rides checks.
+    const skillEffect = (extras?.effectBonus ?? 0) + riders.checkBonus;
+    // Variant, Skills with Different Abilities (SRD 5.1): a Constitution
+    // (Athletics) check keeps the Athletics proficiency and takes the
+    // Constitution modifier in place of Strength's.
+    const checkAbility = args.ability ?? skill.ability;
+    const abilitySwap =
+      checkAbility !== skill.ability
+        ? (derived.abilityMods[checkAbility] ?? 0) - (derived.abilityMods[skill.ability] ?? 0)
+        : 0;
+    // Sight rot: its penalty rides the checks that rely on sight.
+    const sightRot = skill.id === "perception" || skill.id === "investigation" ? sightRotPenalty(sheet.conditions) : 0;
+    const skillModifier = (derived.skills[skill.id] ?? 0) + abilitySwap + skillEffect - sightRot;
+    // Indomitable Might: a Strength check never totals below the score.
+    const mightFloor =
+      checkAbility === "str"
+        ? strengthCheckFloor(sheet, computeAbilityScore(sheet, "str"), skillModifier)
+        : null;
+    const floor = Math.max(reliable ? 10 : 0, mightFloor ?? 0);
     // Reroll (Lucky) comes before floor (Reliable Talent): the 1 is rerolled,
     // then the surviving face is raised to 10 if still low.
-    const d20Mods = `${lucky ? "r1" : ""}${reliable ? "f10" : ""}`;
-    // A skill check is an ability check: a lasting effect on checks counts.
-    const skillEffect = extras?.effectBonus ?? 0;
-    const base = d20Expression((derived.skills[skill.id] ?? 0) + skillEffect, finalAdvantage).replace(
+    const d20Mods = `${lucky ? "r1" : ""}${floor > 1 ? `f${floor}` : ""}`;
+    const base = d20Expression(skillModifier, finalAdvantage).replace(
       /^(\d+d20(?:k[hl]\d+)?)/,
       `$1${d20Mods}`,
     );
     const skillNotes = [
       ...(conditionNotes ?? []),
+      ...(sightRot ? [`sight rot: -${sightRot} on a check that relies on sight`] : []),
+      ...(checkAbility !== skill.ability ? [`a ${checkAbility.toUpperCase()} (${skill.name}) check: ${checkAbility.toUpperCase()} in place of ${skill.ability.toUpperCase()}, the skill's proficiency kept`] : []),
       ...(reliable ? ["Reliable Talent: a d20 face below 10 counts as 10"] : []),
       ...(armorStealth ? ["their armor imposes disadvantage on Stealth"] : []),
+      ...(sunlit ? ["Sunlight Sensitivity: disadvantage on Perception in direct sunlight"] : []),
+      ...(veiled ? [veiled] : []),
       ...(extras?.effectNote ? [extras.effectNote] : []),
     ];
     return {
@@ -658,22 +627,35 @@ export function resolveRollExpression(
         : 0;
     const auraBonus = args.kind === "saving_throw" ? (extras?.saveBonus ?? 0) : 0;
     const effectBonus = extras?.effectBonus ?? 0;
+    // A check made with a tool the character is trained in adds proficiency
+    // (twice with expertise in it), in place of the half a bard would add.
+    const tool =
+      args.kind === "ability_check" && args.tool ? toolProficiencyBonus(sheet, args.tool, derived.proficiencyBonus) : null;
+    const checkBonus =
+      args.kind === "ability_check" ? (tool ? tool.bonus : halfBonus) + riders.checkBonus : 0;
     const modifier =
       (args.kind === "saving_throw"
         ? derived.saves[args.ability]
         : derived.abilityMods[args.ability]) +
-      halfBonus +
+      (args.kind === "saving_throw" ? halfBonus : checkBonus) +
       auraBonus +
       effectBonus;
+    // Indomitable Might: a Strength check never totals below the score.
+    const mightFloor =
+      args.kind === "ability_check" && args.ability === "str"
+        ? strengthCheckFloor(sheet, computeAbilityScore(sheet, "str"), modifier)
+        : null;
     const abilityNotes = [
       ...(conditionNotes ?? []),
-      ...(halfBonus ? [`half proficiency on ability checks: +${halfBonus}`] : []),
+      ...(halfBonus && !tool ? [`half proficiency on ability checks: +${halfBonus}`] : []),
+      ...(tool ? [tool.note] : []),
       ...(auraBonus && extras?.saveNote ? [extras.saveNote] : []),
       ...(extras?.effectNote ? [extras.effectNote] : []),
+      ...(mightFloor ? ["Indomitable Might: the check totals at least their Strength score"] : []),
     ];
     const luckyBase = d20Expression(modifier, advantage).replace(
       /^(\d+d20(?:k[hl]\d+)?)/,
-      lucky ? "$1r1" : "$1",
+      `$1${lucky ? "r1" : ""}${mightFloor ? `f${mightFloor}` : ""}`,
     );
     return {
       expression: `${luckyBase}${bonusDie}`,
@@ -702,6 +684,7 @@ export function resolveRollExpression(
       expression: `${luckyBase}${effects.diceSuffix}`,
       detail: "initiative",
       ...(initiativeNotes.length ? { conditionNotes: initiativeNotes } : {}),
+      ...inspirationFields,
     };
   }
 

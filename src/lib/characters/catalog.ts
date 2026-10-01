@@ -29,6 +29,7 @@ import authoredFeatsJson from "@/lib/srd/authored-feats.json";
 import { bundledSubclassName } from "@/lib/srd/features";
 import { srdRaceId } from "@/lib/srd/race-id";
 import { checklistSpell } from "@/lib/srd/spell-lists";
+import { bundledSpellSchool } from "@/lib/srd/spell-facts";
 import {
   bundledPriceCopper,
   looksMagical,
@@ -196,6 +197,7 @@ export function spellFactsFor(name: string, homebrewOwnerId?: string): SpellFact
       name: published?.name ?? listed!.name,
       level: published?.level ?? listed!.level,
       classes: [...new Set([...(published?.classes ?? []), ...(listed?.classes ?? [])].map(lower))],
+      school: published?.school ? lower(published.school) : bundledSpellSchool(published?.name ?? listed!.name),
     };
   }
   if (!homebrewOwnerId) {
@@ -205,7 +207,7 @@ export function spellFactsFor(name: string, homebrewOwnerId?: string): SpellFact
     (entry) => entry.source === "homebrew" && spellNameMatches(entry, wanted),
   );
   return brewed
-    ? { name: brewed.name, level: brewed.level, classes: brewed.classes.map(lower) }
+    ? { name: brewed.name, level: brewed.level, classes: brewed.classes.map(lower), school: brewed.school ? lower(brewed.school) : null }
     : null;
 }
 

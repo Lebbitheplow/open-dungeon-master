@@ -40,9 +40,11 @@ function test(name, fn) {
   passed += 1;
 }
 
-test("a torch burns an hour, a lantern six, an everburning thing forever", () => {
+test("a torch burns an hour, a lantern six on a flask of oil, an everburning thing forever", () => {
   assert.deepEqual(carriedLight({ equipment: [{ name: "Torch" }] }), { radius: 4, minutes: 60 });
-  assert.deepEqual(carriedLight({ equipment: [{ name: "Hooded lantern" }] }), { radius: 6, minutes: 360 });
+  // SRD 5.1: a lantern burns for 6 hours on a flask of oil; with none it is dark.
+  assert.deepEqual(carriedLight({ equipment: [{ name: "Hooded lantern" }, { name: "Flask of Oil" }] }), { radius: 6, minutes: 360 });
+  assert.deepEqual(carriedLight({ equipment: [{ name: "Hooded lantern" }] }), { radius: 0, minutes: 0 });
   assert.deepEqual(carriedLight({ equipment: [{ name: "Everburning torch" }] }), { radius: 4, minutes: 0 });
   assert.deepEqual(carriedLight({ equipment: [{ name: "Rope" }] }), { radius: 0, minutes: 0 });
 });

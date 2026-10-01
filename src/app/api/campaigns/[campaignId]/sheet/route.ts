@@ -34,6 +34,7 @@ import {
 } from "@/lib/characters/catalog";
 import { defaultRng } from "@/lib/dice";
 import { buildLevelUp } from "@/lib/srd/level-up";
+import { freeCantripCount } from "@/lib/srd/free-cantrips";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 
@@ -484,7 +485,9 @@ export async function PATCH(
       hpMethod: context.campaign.gameSettings.hpMethod ?? "average",
       multiclassAllowed: context.campaign.gameSettings.multiclassingEnabled !== false,
       classOf: classGrantsFor,
-      racialCantrips: raceGrantsFor(sheet.race, owner)?.cantripChoice?.count ?? 0,
+      // The race's cantrip pick and its innate cantrips (Thaumaturgy) are
+      // known on top of the class's, as at creation (U:UB3).
+      racialCantrips: freeCantripCount(sheet, raceGrantsFor(sheet.race, owner)?.cantripChoice?.count ?? 0),
       spellOf: (name) => spellFactsFor(name, owner),
       featOf: (name) => featFactsFor(name, owner),
       subclassOffered: (classId, name) => subclassIsOffered(classId, name, owner),

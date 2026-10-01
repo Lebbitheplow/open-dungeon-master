@@ -13,6 +13,8 @@ import { coverBetween, hasLineOfSight } from "@/lib/battlemap/los";
 import { chebyshev } from "@/lib/battlemap/types";
 import { isIncapacitated } from "@/lib/dm/condition-logic";
 import { hostileWithinFiveFeet, isFlanking } from "@/lib/dm/attack-rules";
+import { zoneCoverBetween, zoneHidesFrom } from "@/lib/dm/zone-rules";
+import { enemySenses } from "@/lib/dm/attack-light";
 
 const lowered = (conditions: string[]) => conditions.map((entry) => entry.toLowerCase());
 const blind = (conditions: string[]) => lowered(conditions).includes("blinded");
@@ -125,9 +127,11 @@ export function enemyFlanks(encounterId: string, enemyId: string, characterId: s
   return isFlanking(attacker, target, allies);
 }
 
-// Cover the terrain gives a target against an attacker, as the AC bonus:
-// 0, +2 (half) or +5 (three-quarters). The same reading pc_attack takes for
-// an enemy behind a wall, asked for a character behind one.
+// Cover a target has against an attacker, as the AC bonus: 0, +2 (half) or
+// +5 (three-quarters). The terrain's (a wall, a low wall), and a creature
+// standing in the line between them, which gives half cover (SRD 5.1,
+// Cover); covers do not add up, the best one counts. The same reading
+// pc_attack takes for an enemy behind a wall, asked for a character.
 export function coverFor(encounterId: string, attackerRef: string, targetRef: string): 0 | 2 | 5 {
   const map = getBattleMapForEncounter(encounterId);
   const attacker = map ? getTokenByRef(map.id, attackerRef) : null;
@@ -135,7 +139,7 @@ export function coverFor(encounterId: string, attackerRef: string, targetRef: st
   if (!map || !attacker || !target) {
     return 0;
   }
-  return coverBetween(
+  const terrain = coverBetween(
     map.terrain,
     map.width,
     map.height,
@@ -144,6 +148,65 @@ export function coverFor(encounterId: string, attackerRef: string, targetRef: st
     target.x,
     target.y,
   );
+  // Blade Barrier gives three-quarters cover to what stands behind it (zone-rules.ts).
+  const blades = zoneCoverBetween(encounterId, attackerRef, targetRef);
+  return terrain === 5 || blades === 5 ? 5 : creatureCover(encounterId, attackerRef, targetRef) ? 2 : terrain;
+}
+
+// Every square strictly between two on a straight line (Bresenham), the
+// squares a creature would have to stand on to be in the way.
+export function squaresBetween(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+): Array<{ x: number; y: number }> {
+  const out: Array<{ x: number; y: number }> = [];
+  let x = from.x;
+  let y = from.y;
+  const dx = Math.abs(to.x - from.x);
+  const dy = -Math.abs(to.y - from.y);
+  const sx = from.x < to.x ? 1 : -1;
+  const sy = from.y < to.y ? 1 : -1;
+  let error = dx + dy;
+  for (;;) {
+    if (x === to.x && y === to.y) {
+      break;
+    }
+    const doubled = 2 * error;
+    if (doubled >= dy) {
+      error += dy;
+      x += sx;
+    }
+    if (doubled <= dx) {
+      error += dx;
+      y += sy;
+    }
+    if (x === to.x && y === to.y) {
+      break;
+    }
+    out.push({ x, y });
+  }
+  return out;
+}
+
+// The creature standing in the line between an attacker and its target,
+// which gives the target half cover (SRD 5.1: "another creature"), or null.
+// Toe to toe nothing stands between them.
+export function creatureCover(encounterId: string, attackerRef: string, targetRef: string): string | null {
+  const map = getBattleMapForEncounter(encounterId);
+  const attacker = map ? getTokenByRef(map.id, attackerRef) : null;
+  const target = map ? getTokenByRef(map.id, targetRef) : null;
+  if (!map || !attacker || !target || chebyshev(attacker.x, attacker.y, target.x, target.y) <= 1) {
+    return null;
+  }
+  const line = squaresBetween(attacker, target);
+  const blocker = listTokens(map.id).find(
+    (token) =>
+      token.refId !== attackerRef &&
+      token.refId !== targetRef &&
+      (token.kind === "pc" || token.kind === "enemy" || token.kind === "npc") &&
+      line.some((square) => square.x === token.x && square.y === token.y),
+  );
+  return blocker ? blocker.name : null;
 }
 
 // Whether any enemy that can see has a clear view of the character: a
@@ -181,7 +244,8 @@ export function seenClearlyBy(encounterId: string, characterId: string): string 
       hider.y,
     );
     const dark = map.ambient === "dark" && hider.lightRadius <= 0;
-    if (sighted && cover === 0 && !dark) {
+    // A fog cloud or magical darkness between them hides as darkness does.
+    if (sighted && cover === 0 && !dark && !zoneHidesFrom(map, token, hider, enemySenses(enemy))) {
       return enemy.displayName;
     }
   }

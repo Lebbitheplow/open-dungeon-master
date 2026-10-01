@@ -6,6 +6,7 @@ import { GameTerm } from "@/components/ui/GameTerm";
 import { InfoChipList } from "@/components/ui/InfoDialog";
 import { CountPop } from "@/components/ui/Reveal";
 import { cn } from "@/lib/cn";
+import { conditionIconKey } from "@/lib/battlemap/condition-glyphs";
 import { describeConditionDuration } from "@/lib/dm/condition-logic";
 import { contentSlug, describeFeature } from "@/lib/help";
 import { ABILITIES } from "@/lib/schemas/sheet";
@@ -165,11 +166,22 @@ export function VitalTiles({ vitals }: { vitals: Vital[] }) {
 
 // Hit points as a bar: what is left in red, temporary points riding on top
 // in blue. The numbers stay beside it; the bar is the glance.
-export function HpBar({ current, max, temp = 0 }: { current: number; max: number; temp?: number }) {
+export function HpBar({
+  current,
+  max,
+  temp = 0,
+  note,
+}: {
+  current: number;
+  max: number;
+  temp?: number;
+  // Why the maximum is not the sheet's own (exhaustion, an item).
+  note?: string | null;
+}) {
   const span = Math.max(1, max + temp);
   const width = (value: number) => `${Math.max(0, Math.min(100, (value / span) * 100))}%`;
   return (
-    <div className="sheet-hp" title={`${current}${temp ? ` +${temp} temporary` : ""} of ${max} hit points`}>
+    <div className="sheet-hp" title={`${current}${temp ? ` +${temp} temporary` : ""} of ${max} hit points${note ? `. ${note}` : ""}`}>
       <GameIcon icon={{ kind: "glyph", key: "rest-hp" }} size="size-7" />
       <div className="min-w-0 grow">
         <div className="flex items-baseline justify-between gap-2">
@@ -179,7 +191,7 @@ export function HpBar({ current, max, temp = 0 }: { current: number; max: number
           <span className="font-display text-sm text-amber-50">
             {current}
             {temp ? <span className="text-sky-300"> +{temp}</span> : null}
-            <span className="text-stone-500"> / {max}</span>
+            <span key={max} className={cn("motion-pop inline-block", note ? "text-orange-300" : "text-stone-500")}> / {max}</span>
           </span>
         </div>
         <div className="sheet-hp-track">
@@ -192,6 +204,7 @@ export function HpBar({ current, max, temp = 0 }: { current: number; max: number
           />
           {temp ? <span className="sheet-hp-temp" style={{ left: width(current), width: width(temp) }} /> : null}
         </div>
+        {note ? <p className="reveal mt-0.5 text-[11px] text-orange-300/90">{note}</p> : null}
       </div>
     </div>
   );
@@ -228,15 +241,25 @@ export function SkillRows({
 // is marked on the chip.
 export function EquipmentChips({
   equipment,
+  extra,
 }: {
-  equipment: Array<{ name: string; qty: number; equipped?: boolean; attuned?: boolean }>;
+  equipment: Array<{ name: string; qty: number; equipped?: boolean; attuned?: boolean; attuning?: boolean }>;
+  // More for a row's note, by its index: its charges ("4/7 charges").
+  extra?: (index: number) => string | null | undefined;
 }) {
   return (
     <InfoChipList
-      items={equipment.map((item) => ({
+      items={equipment.map((item, index) => ({
         name: item.qty > 1 ? `${item.name} x${item.qty}` : item.name,
         icon: { kind: "item" as const, key: item.name, family: "item-gear" },
-        note: [item.equipped ? "worn" : null, item.attuned ? "attuned" : null].filter(Boolean).join(", ") || undefined,
+        note:
+          [
+            item.equipped ? "worn" : null,
+            item.attuned ? "attuned" : item.attuning ? "attunes at the next rest" : null,
+            extra?.(index) ?? null,
+          ]
+            .filter(Boolean)
+            .join(", ") || undefined,
         reference: { kind: "items", slug: contentSlug(item.name), name: item.name },
       }))}
     />
@@ -281,21 +304,34 @@ export function FeatChips({ feats, classId, subclass }: { feats: string[]; class
 export function ConditionChips({
   conditions,
   rounds,
+  detail,
 }: {
   conditions: string[];
   rounds?: Record<string, { rounds?: number } | undefined>;
+  // What the condition's stored metadata says beyond a count of rounds:
+  // "until Kael's turn", "save ends (WIS 13)", "from Goblin 2"
+  // (src/components/sheet/sheet-state.ts conditionDetail). When given it
+  // replaces the rounds tail, which it already includes.
+  detail?: (condition: string) => string;
 }) {
   return (
     <div className="stagger-pop flex flex-wrap gap-1.5">
-      {conditions.map((condition) => (
-        <span key={condition} className="sheet-condition motion-pop">
-          <GameIcon icon={{ kind: "condition", key: condition }} size="size-5" />
-          {condition}
-          {rounds?.[condition]?.rounds
-            ? ` (${describeConditionDuration(rounds[condition]?.rounds ?? 0)})`
-            : ""}
-        </span>
-      ))}
+      {conditions.map((condition) => {
+        const said = detail?.(condition) ?? "";
+        return (
+          <span key={condition} className="sheet-condition motion-pop" title={said || undefined}>
+            <GameIcon icon={{ kind: "condition", key: conditionIconKey(condition) }} size="size-5" />
+            {condition}
+            {detail
+              ? said
+                ? ` (${said})`
+                : ""
+              : rounds?.[condition]?.rounds
+                ? ` (${describeConditionDuration(rounds[condition]?.rounds ?? 0)})`
+                : ""}
+          </span>
+        );
+      })}
     </div>
   );
 }

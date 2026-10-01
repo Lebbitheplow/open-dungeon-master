@@ -546,8 +546,10 @@ function removeCompanion(campaign: Campaign, sheet: CharacterSheet, reason?: str
 // server writes them out instead of letting temporary allies quietly become
 // permanent party members. Returns their names for the DM to narrate.
 export function dismissGuestCompanions(campaign: Campaign, reason: string): string[] {
+  // A creature a spell made stays while the spell lasts, fight or no fight
+  // (src/lib/dm/summon-store.ts sends it away).
   const guests = listCompanions(listSheets(campaign.id)).filter(
-    (sheet) => sheet.companionKind === "guest",
+    (sheet) => sheet.companionKind === "guest" && !sheet.summon,
   );
   if (!guests.length) {
     return [];

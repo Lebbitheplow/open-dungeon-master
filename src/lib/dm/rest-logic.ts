@@ -1,9 +1,12 @@
+import { easeOrdeal } from "@/lib/dm/ordeal";
 import { effectiveMaxHp, pruneMeta, removeConditions } from "@/lib/dm/condition-logic";
 import type { RollResult } from "@/lib/dice";
-import { RAGING, refillResources } from "@/lib/srd/class-resources";
+import { RAGING } from "@/lib/srd/class-resources";
+import { refillResources } from "@/lib/srd/resource-refills";
 import { findClass, spellSlotsFor } from "@/lib/srd";
 import { isMulticlass, slotTableFor } from "@/lib/srd/multiclass";
 import { settlePreparation } from "@/lib/srd/spell-prep";
+import { attunementProblem } from "@/lib/srd/magic-items";
 import type { CharacterSheet, FullPatchSheetInput, HitDicePool } from "@/lib/schemas/sheet";
 
 // Pure 5e rest math, database-free so scripts/test-rest-logic.mjs can
@@ -31,7 +34,12 @@ function recoverPools(pools: HitDicePool[], count: number): HitDicePool[] {
 // half the total hit dice (minimum 1) recovered, and one level of exhaustion
 // removed. Who may take one (alive, at least 1 hit point, none in the last
 // 24 hours) is the caller's to decide (rest-tools.ts).
-export function longRestPatch(sheet: CharacterSheet): FullPatchSheetInput {
+// `keepExhaustion`: a character going without food or water under the
+// supplies variant sleeps without losing a level (src/lib/dm/supplies.ts).
+export function longRestPatch(
+  sheet: CharacterSheet,
+  options: { keepExhaustion?: boolean } = {},
+): FullPatchSheetInput {
   const recovered = Math.max(1, Math.floor(sheet.hitDice.total / 2));
   // 5e: a long rest reduces exhaustion by ONE level, not to zero. Legacy
   // string entries convert into the leveled field on the way through. The
@@ -41,16 +49,18 @@ export function longRestPatch(sheet: CharacterSheet): FullPatchSheetInput {
     condition.startsWith("exhaustion"),
   );
   const effectiveExhaustion = Math.max(sheet.exhaustion ?? 0, legacyExhaustion ? 1 : 0);
-  const exhaustionAfter = Math.max(0, effectiveExhaustion - 1);
+  const exhaustionAfter = options.keepExhaustion
+    ? effectiveExhaustion
+    : Math.max(0, effectiveExhaustion - 1);
   const patch: FullPatchSheetInput = {
-    currentHp: effectiveMaxHp({ maxHp: sheet.maxHp, exhaustion: exhaustionAfter }),
+    currentHp: effectiveMaxHp({ ...sheet, exhaustion: exhaustionAfter }),
     tempHp: 0,
     deathSaves: null,
     concentratingOn: null,
     // Nobody sleeps through a night still shaped or still raging.
     wildShape: null,
     // Every limited-use class resource refills on a long rest.
-    resources: refillResources(sheet.resources, "long"),
+    resources: refillResources(sheet.resources, "long", sheet),
   };
   // Multiclass sheets recover into their per-class pools (patchSheet keeps
   // the summed hitDice mirror in sync); single-class sheets patch the
@@ -121,6 +131,12 @@ export function longRestPatch(sheet: CharacterSheet): FullPatchSheetInput {
     patch.conditions = cleared.conditions;
     patch.conditionMeta = cleared.meta;
   }
+  // Coming back from the dead eases by one a night (src/lib/dm/ordeal.ts).
+  const eased = easeOrdeal(patch.conditions ?? sheet.conditions);
+  if (eased.join("|") !== (patch.conditions ?? sheet.conditions).join("|")) {
+    patch.conditions = eased;
+    patch.conditionMeta = pruneMeta(eased, patch.conditionMeta ?? sheet.conditionMeta);
+  }
   return patch;
 }
 
@@ -145,7 +161,8 @@ export function slotsRefillOnShortRest(
 // back with them. Returns null when nothing changes so callers can skip the
 // write.
 export function shortRestResourcePatch(sheet: CharacterSheet): FullPatchSheetInput | null {
-  const next = refillResources(sheet.resources, "short");
+  // With the sheet, a counter's refill reads its level (Font of Inspiration).
+  const next = refillResources(sheet.resources, "short", sheet);
   const changed = Object.entries(next).some(
     ([id, state]) => state.used !== sheet.resources?.[id]?.used,
   );
@@ -274,4 +291,28 @@ export function hitDiceHealing(
     .filter((die) => die.kept)
     .reduce((sum, die) => sum + Math.max(0, die.value + conMod), 0);
   return fromDice + (song && song.kind === "dice" ? song.subtotal : 0);
+}
+
+// Attuning takes a short rest spent with the item (SRD 5.1, Attunement), so
+// a rest turns each item waiting as `attuning` into an attuned one, in pack
+// order, while the rules still allow it (three at most, one copy, who the
+// item names). One the rules no longer allow simply stops waiting. Null when
+// nothing waits.
+export function settleAttuning(sheet: CharacterSheet): FullPatchSheetInput | null {
+  if (!sheet.equipment.some((item) => item.attuning)) {
+    return null;
+  }
+  let pack = sheet.equipment.map((item) => ({ ...item }));
+  for (let index = 0; index < pack.length; index += 1) {
+    const item = pack[index];
+    if (!item.attuning) {
+      continue;
+    }
+    const others = pack.map((entry, at) => (at === index ? entry : { ...entry, attuning: false }));
+    const allowed = attunementProblem(item, others.filter((entry) => entry.attuned || entry === item), sheet) === null;
+    const { attuning: _pending, ...rest } = item;
+    void _pending;
+    pack = pack.map((entry, at) => (at === index ? (allowed ? { ...rest, attuned: true } : rest) : entry));
+  }
+  return { equipment: pack };
 }

@@ -1,7 +1,7 @@
+import { settleFrenzies } from "@/lib/dm/frenzy";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import type { TurnBudget } from "@/lib/dm/action-budget";
 import {
-  getActiveEncounter,
   getEncounter,
   listEnemies,
   orderEntryId,
@@ -16,10 +16,11 @@ import { insertRoll } from "@/lib/db/rolls";
 import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
-import { saveModFor } from "@/lib/bestiary/statblock";
+import { rollEnemySave } from "@/lib/dm/forced-save";
 import { allySaveAura } from "@/lib/dm/aura";
 import {
   ROUNDS_PER_MINUTE,
+  effectiveMaxHp,
   exhaustionRollState,
   mergeAdvantage,
   removeConditions,
@@ -28,11 +29,18 @@ import {
   type ConditionMetaMap,
 } from "@/lib/dm/condition-logic";
 import { wakeStable } from "@/lib/dm/death";
-import { breakConcentration, LETHARGY, lethargyRounds } from "@/lib/dm/concentration";
-import { spellMechanicsFor } from "@/lib/content";
+import { breakConcentration, LETHARGY, lethargyRounds, spellEndPatch } from "@/lib/dm/concentration";
+import { endSpentConcentration } from "@/lib/dm/concentration-upkeep";
 import { STABLE_SOURCE, STABLE_WAKE_HOURS_MAX, UNCONSCIOUS } from "@/lib/dm/vitals-logic";
-import { hasBrave } from "@/lib/srd/feature-effects";
+import { holdsFeature, traitSaveAdvantages } from "@/lib/srd/trait-rules";
 import { tickEffectRound } from "@/lib/db/active-effects";
+import { spellTurnStart } from "@/lib/dm/spell-aura";
+import { zoneTurnStart } from "@/lib/dm/zone-triggers";
+import { violetRayTurnStart } from "@/lib/dm/prismatic-violet";
+import { authoredTurnStart } from "@/lib/dm/authored-turns";
+import { readiedSpellOf } from "@/lib/dm/readied-spell";
+import { spellKeyOf as castKeyOf } from "@/lib/dm/cast-rules";
+import { sweepSummons } from "@/lib/dm/summon-store";
 
 // Condition upkeep: timed conditions count down and expire, save-ends
 // conditions get their re-save rolled server-side (enemy saves from stat
@@ -57,11 +65,13 @@ export function tickEncounterConditions(campaign: Campaign, encounter: Encounter
     lines.push(`${expired.name} wears off.`);
   }
 
-  tickEnemyConditions(encounter, 1, lines);
+  tickEnemyConditions(campaign, encounter, 1, lines);
   tickSheetConditions(campaign, 1, lines, { encounter });
   if (lines.length) {
     endSpentConcentration(campaign, lines);
   }
+  // A frenzy outliving its rage costs its level of exhaustion (frenzy.ts).
+  lines.push(...settleFrenzies(campaign));
 
   if (lines.length) {
     publishPersisted(campaign.id, "encounter_updated", {
@@ -100,46 +110,11 @@ export function tickClockConditions(campaign: Campaign, minutes: number) {
   }
   if (lines.length) {
     endSpentConcentration(campaign, lines);
+  }
+  // Creatures whose spell ran out on the clock go (src/lib/dm/summon-store.ts).
+  lines.push(...sweepSummons(campaign));
+  if (lines.length) {
     noteAtTable(campaign.id, lines);
-  }
-}
-
-// Concentration lasts no longer than the spell. When durations have run out,
-// a caster whose spell is known to hold conditions in place, and whose
-// conditions nobody holds any more, is no longer concentrating. A spell the
-// content pack cannot describe, or one that places no condition, is left
-// alone: there is nothing here to say it has ended.
-function endSpentConcentration(campaign: Campaign, lines: string[]) {
-  const sheets = listSheets(campaign.id).map((stale) => getSheetById(stale.id) ?? stale);
-  const casters = sheets.filter((sheet) => sheet.concentratingOn && !sheet.deathSaves?.dead);
-  if (!casters.length) {
-    return;
-  }
-  const encounter = getActiveEncounter(campaign.id);
-  const held = new Set(
-    [
-      ...sheets.flatMap((sheet) => sheet.conditions),
-      ...(encounter ? listEnemies(encounter.id) : [])
-        .filter((enemy) => enemy.status === "alive")
-        .flatMap((enemy) => enemy.conditions ?? []),
-    ].map((name) => name.toLowerCase()),
-  );
-  for (const caster of casters) {
-    const spell = caster.concentratingOn ?? "";
-    const resolved = spellMechanicsFor({ spell, userId: caster.userId });
-    const places = [
-      resolved?.mech.buff?.condition,
-      ...(resolved?.mech.buff?.variants ?? []),
-      resolved?.mech.condition?.name,
-    ]
-      .filter((name): name is string => Boolean(name))
-      .map((name) => name.toLowerCase());
-    if (!places.length || places.some((name) => held.has(name))) {
-      continue;
-    }
-    if (breakConcentration(campaign, null, caster.id, "the spell ran its course")) {
-      lines.push(`${caster.name} is no longer concentrating on ${spell} (the spell has ended).`);
-    }
   }
 }
 
@@ -166,6 +141,7 @@ export function startTurnConditions(
     return;
   }
   endTurnRage(campaign, encounter, combatantIds[0], endedTurn);
+  startTurnFeatures(campaign, combatantIds);
   let enemiesChanged = false;
   for (const enemy of listEnemies(encounter.id)) {
     const ending = turnBoundConditionsEnding(enemy.conditions, enemy.conditionMeta, combatantIds);
@@ -181,6 +157,14 @@ export function startTurnConditions(
     if (!ending.length) {
       continue;
     }
+    // A readied spell never released is lost, and the concentration that
+    // held it ends with it (src/lib/dm/readied-spell.ts).
+    const lostSpell = ending.some((name) => name.toLowerCase() === "readied")
+      ? readiedSpellOf(sheet)?.spell
+      : undefined;
+    if (lostSpell && castKeyOf(sheet.concentratingOn ?? "") === castKeyOf(lostSpell)) {
+      breakConcentration(campaign, null, sheet.id, "the readied spell was never released");
+    }
     const removed = removeConditions(sheet.conditions, sheet.conditionMeta, ending);
     const updated = patchSheet(sheet.id, {
       conditions: removed.conditions,
@@ -190,10 +174,52 @@ export function startTurnConditions(
       publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
     }
   }
-  if (enemiesChanged) {
+  // Running spells act at the start of a turn: Spirit Guardians around its
+  // caster, Phantasmal Killer's dread, Heroism's temporary hit points
+  // (src/lib/dm/spell-aura.ts).
+  // With them, the authored subclass features' (Elder Champion, Aura of Conquest, Dread Lord): authored-hooks.ts.
+  const spellLines = [...spellTurnStart(campaign, encounter, combatantIds), ...authoredTurnStart(campaign, encounter, combatantIds)];
+  // The spell areas on the board: those that ran out go, the rest strike (zone-triggers.ts).
+  spellLines.push(...zoneTurnStart(campaign, encounter, combatantIds));
+  // Prismatic Spray's violet ray asks its WIS save as the caster's turn starts (prismatic.ts).
+  spellLines.push(...violetRayTurnStart(campaign, combatantIds));
+  if (enemiesChanged || spellLines.length) {
     publishPersisted(campaign.id, "encounter_updated", {
       encounter: activePublicEncounter(campaign.id),
     });
+  }
+  if (spellLines.length) {
+    noteAtTable(campaign.id, spellLines);
+  }
+}
+
+// What a character's features do at the start of their turn. Survivor
+// (Champion 18): at or under half their hit points and above 0, they regain
+// 5 + their Constitution modifier.
+function startTurnFeatures(campaign: Campaign, combatantIds: string[]) {
+  const lines: string[] = [];
+  for (const id of combatantIds) {
+    const sheet = getSheetById(id);
+    if (!sheet || sheet.deathSaves?.dead || !holdsFeature(sheet, "survivor")) {
+      continue;
+    }
+    const max = effectiveMaxHp(sheet);
+    if (sheet.currentHp <= 0 || sheet.currentHp > Math.floor(max / 2)) {
+      continue;
+    }
+    const regained = Math.max(0, 5 + computeSheetDerived(sheet).abilityMods.con);
+    const currentHp = Math.min(max, sheet.currentHp + regained);
+    if (currentHp === sheet.currentHp) {
+      continue;
+    }
+    const updated = patchSheet(sheet.id, { currentHp });
+    if (updated) {
+      publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
+    }
+    lines.push(`${sheet.name} regains ${currentHp - sheet.currentHp} hit points (Survivor).`);
+  }
+  if (lines.length) {
+    noteAtTable(campaign.id, lines);
   }
 }
 
@@ -253,7 +279,7 @@ function endTurnRage(
   ]);
 }
 
-function tickEnemyConditions(encounter: Encounter, by: number, lines: string[]) {
+function tickEnemyConditions(campaign: Campaign, encounter: Encounter, by: number, lines: string[]) {
   for (const enemy of listEnemies(encounter.id)) {
     if (enemy.status !== "alive" || !enemy.conditions.length) {
       continue;
@@ -279,17 +305,33 @@ function tickEnemyConditions(encounter: Encounter, by: number, lines: string[]) 
       if (!conditions.includes(due.name)) {
         continue;
       }
-      const outcome = rollExpression(d20Expression(saveModFor(enemy.stats, due.ability)));
-      if (outcome.total >= due.dc) {
+      // The creature's full save (src/lib/dm/forced-save.ts), as the first
+      // one was: its conditions (restrained is DEX disadvantage), a spell a
+      // character left on it (Bane's d4), lasting effects, and Magic
+      // Resistance against a spell's hold.
+      const outcome = rollEnemySave(
+        campaign.id,
+        { ...enemy, conditions, conditionMeta: meta },
+        due.ability,
+        due.dc,
+        {
+          magical: Boolean((meta as ConditionMetaMap)[due.name]?.spell),
+          // On the record like every roll, for the DM's eyes (enemy saves are
+          // rolled silently at the table).
+          record: { detail: `${enemy.displayName}: ${due.ability.toUpperCase()} save to end ${due.name}` },
+        },
+      );
+      const shown = outcome.total === null ? "an automatic failure" : String(outcome.total);
+      if (outcome.success) {
         const removed = removeConditions(conditions, meta, [due.name]);
         conditions = removed.conditions;
         meta = removed.meta;
         lines.push(
-          `${enemy.displayName} shakes off ${due.name} (${due.ability.toUpperCase()} save ${outcome.total} vs DC ${due.dc}).`,
+          `${enemy.displayName} shakes off ${due.name} (${due.ability.toUpperCase()} save ${shown} vs DC ${due.dc}).`,
         );
       } else {
         lines.push(
-          `${enemy.displayName} stays ${due.name} (${due.ability.toUpperCase()} save ${outcome.total} vs DC ${due.dc}).`,
+          `${enemy.displayName} stays ${due.name} (${due.ability.toUpperCase()} save ${shown} vs DC ${due.dc}).`,
         );
       }
     }
@@ -353,8 +395,10 @@ function tickSheetConditions(
       // A nearby paladin's aura rides re-saves too (map-scoped).
       const aura = allySaveAura(campaign.id, sheet);
       const saveMod = computeSheetDerived(sheet).saves[due.ability] + (aura?.bonus ?? 0);
-      // Brave: advantage on the save to shake off being frightened.
-      const brave = due.name.toLowerCase().includes("frighten") && hasBrave(sheet);
+      // The traits keyed to what the save resists (Brave against fear, Fey
+      // Ancestry against charm, Dwarven Resilience against poison).
+      const traits = traitSaveAdvantages(sheet, due.ability, due.name);
+      const brave = traits.length > 0;
       // Exhaustion level 3 costs every saving throw disadvantage, this one
       // included; the two cancel to a straight roll when both apply.
       const tired = exhaustionRollState(sheet.exhaustion ?? 0, "saving_throw");
@@ -366,7 +410,7 @@ function tickSheetConditions(
         requestedBy: "dm",
         kind: "saving_throw",
         detail: `${due.ability.toUpperCase()} save to end ${due.name}${
-          brave ? " (Brave: advantage)" : ""
+          brave ? ` (${traits.join("; ")})` : ""
         }${tired.note ? ` (${tired.note})` : ""}`,
         dc: due.dc,
         ...(advantage === "none" ? {} : { advantage }),
@@ -406,6 +450,8 @@ function tickSheetConditions(
         conditions,
         conditionMeta: meta,
         ...(polymorphEnded ? { wildShape: null } : {}),
+        // Aid running out takes back the hit points it gave.
+        ...spellEndPatch(sheet, tick.expired),
       });
       if (updated) {
         publishPersisted(campaign.id, "sheet_updated", { sheet: updated });

@@ -68,6 +68,7 @@ import { useTableAudio } from "@/app/campaigns/[campaignId]/useTableAudio";
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
 import { InitiativeRibbon, PartyRail, QuestGlance, RollToast, SceneBackdrop, TabletopChronicle } from "@/app/campaigns/[campaignId]/CinematicParts";
 import { BattleMapPanel } from "@/app/campaigns/[campaignId]/BattleMapPanel";
+import { turnFromEncounter, turnHudBudget } from "@/lib/battlemap/hand-table";
 import { useDocked } from "@/app/campaigns/[campaignId]/SidePanel";
 
 // The level-up dialog carries the class feature and resource tables of the
@@ -716,8 +717,15 @@ export function SessionView({
                     intents={state.battleMap.intents}
                     genre={campaign.gameSettings?.genre ?? null}
                     turnBudget={
-                      state.encounter?.turn && sheets.some((sheet) => sheet.id === state.encounter?.turn?.ownerId && sheet.userId === me.id)
-                        ? { action: !state.encounter.turn.actionUsed, bonus: !state.encounter.turn.bonusUsed, reaction: !state.encounter.turn.reactionUsed }
+                      // The engine's count, the one the Hand reads
+                      // (src/lib/battlemap/hand-table.ts): a spent reaction
+                      // lives in reactionsUsed, not the turn budget.
+                      mySheet && !mySheet.isCompanion && state.encounter
+                        ? turnHudBudget(
+                            turnFromEncounter(state.encounter, mySheet, {
+                              myTurn: state.encounter.turn?.ownerId === mySheet.id,
+                            }),
+                          )
                         : null
                     }
                     canDirect={caps.adjudicates}
@@ -762,6 +770,7 @@ export function SessionView({
             <Composer
               campaignId={campaign.id}
               trackAmmo={campaign.gameSettings?.variantRules?.ammunition ?? false}
+              edges={state.battleMap?.edges}
               sheets={sheets}
               meUserId={me.id}
               steersStory={steersStory}

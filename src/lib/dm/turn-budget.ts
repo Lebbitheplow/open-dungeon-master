@@ -15,6 +15,7 @@ import {
 import { conditionExtraActions } from "@/lib/srd/condition-effects";
 import { combatRiders } from "@/lib/srd/feature-effects";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { summonAttacksPerTurn } from "@/lib/dm/summon-rules";
 
 // The combatant the initiative pointer is currently on, or null out of
 // combat and while initiative is still being rolled.
@@ -62,7 +63,8 @@ export function storeBudget(encounter: Encounter, budget: TurnBudget) {
 
 // Attacks the Attack action grants this character: 1 plus Extra Attack.
 export function attacksAllowedFor(sheet: CharacterSheet): number {
-  return 1 + combatRiders(sheet).extraAttacks;
+  // A summoned creature's Attack action is its Multiattack (summon-rules.ts).
+  return summonAttacksPerTurn(sheet) ?? 1 + combatRiders(sheet).extraAttacks;
 }
 
 // Action Surge: one additional action on the turn it is used. Called by

@@ -106,9 +106,12 @@ test("a character at 0 HP is refused, dying or stable", () => {
   }
 });
 
-test("each incapacitating condition refuses every kind, a reaction included", () => {
+test("each incapacitating condition refuses every kind, a reaction included; bare incapacitation still moves", () => {
+  // SRD 5.1: incapacitated takes actions and reactions only; the other four
+  // also say "can't move".
+  assert.equal(canAct({ sheet: hero({ conditions: ["incapacitated"] }), encounter: fight(), kind: "move" }).ok, true);
   for (const condition of ["incapacitated", "paralyzed", "stunned", "unconscious", "petrified"]) {
-    for (const kind of KINDS) {
+    for (const kind of KINDS.filter((entry) => condition !== "incapacitated" || entry !== "move")) {
       const result = canAct({ sheet: hero({ conditions: [condition] }), encounter: fight(), kind });
       assert.equal(reasonOf(result), "incapacitated", `${condition} ${kind}`);
       assert.match(result.error, new RegExp(condition));

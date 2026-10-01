@@ -124,12 +124,15 @@ export function upcastStep(
   if (baseLevel === null) {
     return null;
   }
-  const every = /for\s+every\s+(\d+)\s+slot\s+levels?\s+above/i.exec(higherLevel);
+  // "for every 2 slot levels", and the SRD's own "for every two slot levels"
+  // (Spiritual Weapon, Flame Blade).
+  const every = /for\s+every\s+(\d+|two|three)\s+slot\s+levels?\s+above/i.exec(higherLevel);
+  const words: Record<string, number> = { two: 2, three: 3 };
   return {
     dice: `${match[2]}d${match[3]}`,
     baseLevel,
     kind: match[1].toLowerCase() === "healing" ? "healing" : "damage",
-    per: every ? Math.max(1, Number(every[1])) : 1,
+    per: every ? Math.max(1, words[every[1].toLowerCase()] ?? Number(every[1])) : 1,
   };
 }
 
