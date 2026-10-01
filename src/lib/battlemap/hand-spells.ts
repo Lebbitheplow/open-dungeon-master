@@ -12,6 +12,7 @@ import type { CombatRiders } from "@/lib/srd/feature-effects";
 import { authoredSpellRow, parseSpellMech, spellMechFor, type SpellMech } from "@/lib/srd/spell-mechanics";
 import { baseHealingDice, scaledSpellDice } from "@/lib/srd/spell-scaling";
 import { mechSpellDamage } from "@/lib/srd/spell-dice";
+import { bakedSpellMech } from "@/lib/content/baked-spells";
 import { allSpellNames } from "@/lib/srd/spell-lists";
 import { areaFor } from "@/lib/battlemap/hand-area";
 import {
@@ -150,9 +151,14 @@ function spellCard(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, 
   const cost = castingCost(fact.castingTime);
   if (!cost) return null;
   // The mechanics row the engine reads; the prose is parsed only for what the
-  // card shows when no row exists (its target, its save).
+  // card shows when no row exists (its target, its save). With no pack there
+  // is no prose, and the engine reads the answers baked from the SRD rows, so
+  // the card does too (Shocking Grasp stays a melee spell attack).
   const row = spellMechFor([name]);
-  const mech: SpellMech = row ?? parseSpellMech({ desc: fact.desc, higherLevel: fact.higherLevel }) ?? { resolution: "utility" };
+  const mech: SpellMech =
+    row ??
+    (fact.desc ? parseSpellMech({ desc: fact.desc, higherLevel: fact.higherLevel }) : bakedSpellMech(name)) ??
+    { resolution: "utility" };
   const slot = fact.level > 0 ? lowestSlot(sheet, fact.level) : null;
   const derived = computeSheetDerived(sheet);
   const abilityMod = sheet.spellcasting ? derived.abilityMods[sheet.spellcasting.ability] : 0;

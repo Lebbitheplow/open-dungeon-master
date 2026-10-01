@@ -41,7 +41,12 @@ if (pack) {
 }
 
 await test("an area effect that names no spell and sends no save is refused, nothing rolled", async () => {
-  if (!world.encounter()) await world.beginFight([{ monster: "goblin", count: 1 }]);
+  // Without the content pack the Fireball case above is skipped, and with it
+  // the only character: a fight needs someone to face it.
+  if (!world.encounter()) {
+    world.addHero(wizard(5, { name: "Ilsa" }));
+    await world.beginFight([{ monster: "goblin", count: 1 }]);
+  }
   const [goblin] = world.enemies();
   const before = goblin.currentHp;
   const out = await world.invoke("aoe_damage", { damage: "2d6", enemyIds: [goblin.id] });
