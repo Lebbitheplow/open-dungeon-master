@@ -23,6 +23,8 @@ import {
   goalText,
   setGoal,
 } from "@/app/campaigns/[campaignId]/NpcFields";
+import { DictateField } from "@/components/DictateField";
+import { appendDictation } from "@/lib/dictation";
 
 // The four sections of the NPC form: who they are on the surface, who they
 // are underneath, what they want, and how they feel about everyone else.
@@ -143,13 +145,19 @@ export function NpcEditorFields({
         />
 
         <div className="flex items-start gap-1.5">
-          <textarea
-            value={draft.trait}
-            onChange={(event) => onChange({ ...draft, trait: event.target.value })}
-            rows={2}
-            placeholder="What a player notices about them first"
-            className={cn(ui.input, "min-w-0 flex-1")}
-          />
+          <DictateField
+            label="What a player notices first"
+            className="min-w-0 flex-1"
+            onTranscript={(text) => onChange({ ...draft, trait: appendDictation(draft.trait, text) })}
+          >
+            <textarea
+              value={draft.trait}
+              onChange={(event) => onChange({ ...draft, trait: event.target.value })}
+              rows={2}
+              placeholder="What a player notices about them first"
+              className={ui.input}
+            />
+          </DictateField>
           {suggest("trait")}
         </div>
 

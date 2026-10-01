@@ -12,6 +12,8 @@ import { Slider } from "@/components/ui/Slider";
 import { LoreImageField } from "@/app/workshop/lore/LoreFields";
 import { GlyphChip, KitButton, PanelLoading, panelField, panelRow } from "./PanelKit";
 import { FACTION_ATTITUDES, REPUTATION_MAX, REPUTATION_MIN, reputationLabel, type FactionAttitude } from "@/lib/dm/faction-logic";
+import { DictateField } from "@/components/DictateField";
+import { appendDictation } from "@/lib/dictation";
 
 // Factions (docs/vtt-parity-implementation-plan.md section 6): a card per
 // faction with its crest, its stance, the party's standing on a ladder
@@ -143,8 +145,12 @@ export function FactionsPanel({ campaignId, steersStory, refreshKey = 0 }: { cam
       {editing !== null ? (
         <div className="panel reveal space-y-1.5 rounded-lg p-2.5">
           <input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} maxLength={80} placeholder="The Reed Court" aria-label="Faction name" className={panelField} />
-          <textarea value={draft.blurb} onChange={(event) => setDraft({ ...draft, blurb: event.target.value })} rows={2} maxLength={400} placeholder="What the table knows of them" aria-label="What the table knows of them" className={panelField} />
-          <textarea value={draft.goal} onChange={(event) => setDraft({ ...draft, goal: event.target.value })} rows={2} maxLength={400} placeholder="What they want (only you read this)" aria-label="What they want (only you read this)" className={cn(panelField, "border-violet-900/60 focus:border-violet-500/70")} />
+          <DictateField label="What the table knows of them" onTranscript={(text) => setDraft((current) => ({ ...current, blurb: appendDictation(current.blurb, text, 400) }))}>
+            <textarea value={draft.blurb} onChange={(event) => setDraft({ ...draft, blurb: event.target.value })} rows={2} maxLength={400} placeholder="What the table knows of them" aria-label="What the table knows of them" className={panelField} />
+          </DictateField>
+          <DictateField label="What they want" onTranscript={(text) => setDraft((current) => ({ ...current, goal: appendDictation(current.goal, text, 400) }))}>
+            <textarea value={draft.goal} onChange={(event) => setDraft({ ...draft, goal: event.target.value })} rows={2} maxLength={400} placeholder="What they want (only you read this)" aria-label="What they want (only you read this)" className={cn(panelField, "border-violet-900/60 focus:border-violet-500/70")} />
+          </DictateField>
           <div data-pill-group="" role="group" aria-label="Attitude" className="flex flex-wrap items-center gap-1">
             {FACTION_ATTITUDES.map((attitude) => (
               <button data-on={draft.attitude === attitude ? "" : undefined} key={attitude} type="button" aria-pressed={draft.attitude === attitude} onClick={() => setDraft({ ...draft, attitude })} className="pk-pill pk-tap motion-press capitalize">

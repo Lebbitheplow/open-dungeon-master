@@ -371,3 +371,146 @@
 @media (prefers-reduced-motion: reduce) {
   .stream-caret { animation: none !important; }
 }
+
+/* Dictation (src/components/DictateField.tsx): a microphone pinned in a
+   field's corner. At rest it sits quiet; recording, it turns red and its
+   outer ring swells with the speaker's voice (--dictate-level, 0 to 1, set
+   every frame from the microphone) while a second ring keeps rippling out,
+   so a silent room still reads as "listening". No kit class on the button:
+   .motion-press would make it position: relative and clip the rings; the
+   pointer layer (src/lib/motion/answer.ts) gives it the lift and press. */
+@keyframes dictate-ripple {
+  0% { opacity: 0.75; scale: 1; }
+  100% { opacity: 0; scale: 2.1; }
+}
+@layer components {
+  .dictate-mic {
+    position: absolute;
+    right: 10px;
+    bottom: 8px;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 9999px;
+    border: 1px solid rgba(212, 171, 58, 0.22);
+    background: rgba(12, 10, 9, 0.6);
+    color: var(--color-stone-400);
+    transition: color var(--dur-quick) var(--ease-snap), background-color var(--dur-quick) var(--ease-snap),
+      border-color var(--dur-quick) var(--ease-snap), box-shadow var(--dur-quick) var(--ease-snap);
+  }
+  .dictate-mic:hover:not(:disabled),
+  .dictate-mic:focus-visible {
+    color: var(--color-amber-200);
+    border-color: rgba(212, 171, 58, 0.6);
+    box-shadow: 0 0 12px rgba(212, 171, 58, 0.25);
+    outline: none;
+  }
+  .dictate-mic:disabled { opacity: 0.5; cursor: default; }
+  /* Writing it down is the mic at work, not the mic switched off. */
+  .dictate-mic[data-state="transcribing"] { opacity: 1; color: var(--color-amber-200); border-color: rgba(212, 171, 58, 0.6); }
+  html[data-theme="light"] .dictate-mic[data-state="transcribing"] { color: #7a5a18; border-color: rgba(146, 110, 30, 0.7); }
+  .dictate-box-single .dictate-mic { top: 0; bottom: 0; right: 5px; margin: auto 0; width: 24px; height: 24px; }
+  .dictate-mic-live,
+  .dictate-mic-live:hover:not(:disabled) {
+    color: #fff;
+    border-color: rgba(252, 165, 165, 0.9);
+    background: rgba(220, 38, 38, 0.92);
+    box-shadow: 0 0 calc(8px + var(--dictate-level, 0) * 20px) rgba(239, 68, 68, calc(0.35 + var(--dictate-level, 0) * 0.5));
+  }
+  .dictate-mic-live::before,
+  .dictate-mic-live::after {
+    content: "";
+    position: absolute;
+    border-radius: inherit;
+    pointer-events: none;
+  }
+  .dictate-mic-live::before {
+    inset: -4px;
+    border: 2px solid rgba(248, 113, 113, 0.85);
+    scale: calc(1 + var(--dictate-level, 0) * 0.5);
+    opacity: calc(0.2 + var(--dictate-level, 0) * 0.8);
+    transition: scale 90ms linear, opacity 90ms linear;
+  }
+  .dictate-mic-live::after {
+    inset: 0;
+    border: 1px solid rgba(248, 113, 113, 0.7);
+    animation: dictate-ripple 1.6s var(--ease-drift) infinite;
+  }
+  .dictate-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+    font-size: 11px;
+    line-height: 1rem;
+    color: var(--color-stone-400);
+  }
+  .dictate-dot {
+    width: 7px;
+    height: 7px;
+    flex: none;
+    border-radius: 9999px;
+    background: var(--color-red-500);
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.7);
+    animation: app-breathe 1.2s var(--ease-drift) infinite;
+  }
+  .dictate-discard {
+    margin-left: auto;
+    flex: none;
+    border-radius: 6px;
+    padding: 1px 6px;
+    color: var(--color-stone-400);
+    transition: color var(--dur-quick) var(--ease-snap), background-color var(--dur-quick) var(--ease-snap);
+  }
+  .dictate-discard:hover { color: var(--color-amber-100); background: rgba(41, 37, 36, 0.7); }
+  .dictate-partial {
+    margin-top: 2px;
+    padding-left: 13px;
+    font-size: 12px;
+    line-height: 1.1rem;
+    font-style: italic;
+    color: var(--color-stone-300);
+  }
+  html[data-theme="light"] .dictate-partial { color: #4a3b27; }
+  .dictate-time { font-family: var(--font-mono, ui-monospace, monospace); font-variant-numeric: tabular-nums; color: var(--color-red-200); }
+  .dictate-closing { color: var(--color-amber-300); }
+  .dictate-error { color: var(--color-red-400); }
+
+  /* Parchment day theme: the mic sits light on the page, the words read dark. */
+  html[data-theme="light"] .dictate-mic {
+    border-color: rgba(146, 110, 30, 0.35);
+    background: rgba(255, 250, 238, 0.9);
+    color: #7a6444;
+  }
+  html[data-theme="light"] .dictate-mic:hover:not(:disabled),
+  html[data-theme="light"] .dictate-mic:focus-visible {
+    color: #5c4318;
+    border-color: rgba(146, 110, 30, 0.7);
+    box-shadow: 0 0 10px rgba(180, 130, 30, 0.25);
+  }
+  html[data-theme="light"] .dictate-mic-live,
+  html[data-theme="light"] .dictate-mic-live:hover:not(:disabled) {
+    color: #fff;
+    border-color: rgba(185, 28, 28, 0.9);
+    background: rgba(220, 38, 38, 0.92);
+  }
+  html[data-theme="light"] .dictate-status,
+  html[data-theme="light"] .dictate-discard { color: #6b5a44; }
+  html[data-theme="light"] .dictate-discard:hover { color: #3f2f16; background: rgba(146, 110, 30, 0.12); }
+  html[data-theme="light"] .dictate-time { color: #b91c1c; }
+  html[data-theme="light"] .dictate-closing { color: #9a5b00; }
+  html[data-theme="light"] .dictate-error { color: #b91c1c; }
+}
+/* Room for the mic, unlayered so it outranks the field's own padding
+   utilities. Only while the mic is actually there. */
+.dictate-box-on > textarea { padding-right: 2.75rem; }
+.dictate-box-on > input { padding-right: 2.1rem; }
+html[data-effects="low"] .dictate-mic-live::after,
+html[data-effects="low"] .dictate-dot { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .dictate-mic-live::after, .dictate-dot { animation: none !important; }
+  .dictate-mic-live::before { transition: none !important; }
+}

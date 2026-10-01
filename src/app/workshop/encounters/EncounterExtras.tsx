@@ -15,6 +15,8 @@ import {
 import { TerrainCanvas } from "@/app/campaigns/[campaignId]/TerrainCanvas";
 import type { MapOption } from "@/app/workshop/encounters/types";
 import { RefPicker } from "@/app/workshop/tables/RefPicker";
+import { DictateField } from "@/components/DictateField";
+import { appendDictation } from "@/lib/dictation";
 
 // The rest of a prepared fight (docs/workshop-parity-audit.md phase 13):
 // where each enemy starts on the linked map, where the party comes in, who
@@ -178,14 +180,16 @@ export function EncounterExtras({
 
       <SectionHead title="What the fight is worth" glyph="coin-purse" className="mb-0" />
       <Field as="label" label="Rewards">
-        <textarea
-          value={value.rewards}
-          maxLength={EXTRAS_LIMITS.rewards}
-          rows={2}
-          placeholder="120 gp in a locked chest, the captain's signet ring, roll once on Marsh treasure."
-          onChange={(event) => set({ rewards: event.target.value })}
-          className={field}
-        />
+        <DictateField label="Rewards" onTranscript={(text) => set({ rewards: appendDictation(value.rewards, text, EXTRAS_LIMITS.rewards) })}>
+          <textarea
+            value={value.rewards}
+            maxLength={EXTRAS_LIMITS.rewards}
+            rows={2}
+            placeholder="120 gp in a locked chest, the captain's signet ring, roll once on Marsh treasure."
+            onChange={(event) => set({ rewards: event.target.value })}
+            className={field}
+          />
+        </DictateField>
       </Field>
       {/* Pick the loot rather than spell it: a roll on one of this world's
           tables or an item from the catalogue lands as a line the deploy

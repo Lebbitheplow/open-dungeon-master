@@ -6,7 +6,9 @@ import { serverEnv } from "@/lib/server-env";
 // choosing it.
 
 export function sttUrl(): string {
-  return serverEnv("STT_URL", "").replace(/\/+$/, "");
+  const value = serverEnv("STT_URL", "").replace(/\/+$/, "");
+  // "off" is the dictation switch for "no Whisper here" (stt-logic.ts).
+  return value.trim().toLowerCase() === "off" ? "" : value;
 }
 
 export function sttAvailable(): boolean {

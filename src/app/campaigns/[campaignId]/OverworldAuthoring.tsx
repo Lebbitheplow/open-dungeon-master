@@ -13,6 +13,8 @@ import {
 import { OVERWORLD_SIZES, sizeLabel, type OverworldSize } from "@/lib/overworld/features";
 import type { OverworldData } from "@/app/campaigns/[campaignId]/overworldDraw";
 import { offersStoryModel, useCapabilities } from "@/lib/use-capabilities";
+import { DictateField } from "@/components/DictateField";
+import { appendDictation } from "@/lib/dictation";
 
 // Authoring the region: describe it, roll seeds against it, name what you
 // see, and write down what only you know.
@@ -241,13 +243,15 @@ export function OverworldAuthoring({
               placeholder="The Salt Wharf"
               className="w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-sm text-stone-200"
             />
-            <input
-              value={placeBlurb}
-              maxLength={300}
-              onChange={(event) => setPlaceBlurb(event.target.value)}
-              placeholder="What a traveller would say about it (optional)"
-              className="w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-sm text-stone-200"
-            />
+            <DictateField single label="What a traveller would say" onTranscript={(text) => setPlaceBlurb((current) => appendDictation(current, text, 300))}>
+              <input
+                value={placeBlurb}
+                maxLength={300}
+                onChange={(event) => setPlaceBlurb(event.target.value)}
+                placeholder="What a traveller would say about it (optional)"
+                className="w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-sm text-stone-200"
+              />
+            </DictateField>
             <button
               type="button"
               disabled={busy || !placeName.trim()}
@@ -258,24 +262,37 @@ export function OverworldAuthoring({
             </button>
           </div>
 
-          <label className="block">
-            <span className="text-[11px] uppercase tracking-wide text-stone-500">
+          <div>
+            <label htmlFor="region-notes" className="text-[11px] uppercase tracking-wide text-stone-500">
               Notes on the region
-            </span>
-            <textarea
-              value={notes}
-              onChange={(event) => setNotes(event.target.value)}
-              onBlur={() => {
-                if (notes !== (data.map.notes ?? "")) {
-                  void patch({ notes });
-                }
+            </label>
+            {/* Typed notes save when the field lets go of focus; spoken ones
+                save as they land, since no blur follows them. */}
+            <DictateField
+              label="Notes on the region"
+              className="mt-0.5"
+              onTranscript={(text) => {
+                const next = appendDictation(notes, text);
+                setNotes(next);
+                void patch({ notes: next });
               }}
-              rows={2}
-              placeholder="What lies past the edge. Which roads are watched."
-              className="mt-0.5 w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-sm text-stone-200"
-            />
+            >
+              <textarea
+                id="region-notes"
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                onBlur={() => {
+                  if (notes !== (data.map.notes ?? "")) {
+                    void patch({ notes });
+                  }
+                }}
+                rows={2}
+                placeholder="What lies past the edge. Which roads are watched."
+                className="w-full rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-sm text-stone-200"
+              />
+            </DictateField>
             <span className="text-[10px] text-stone-600">Yours alone; players never see this.</span>
-          </label>
+          </div>
 
           {error ? <p className="motion-shake text-[11px] text-red-400">{error}</p> : null}
         </div>

@@ -4,6 +4,8 @@ import { Check, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
+import { DictateField } from "@/components/DictateField";
+import { appendDictation } from "@/lib/dictation";
 
 // Inline narration editor, ported from NE-P's InlineMessageEditor
 // (src/components/message/InlineMessageEditor.tsx, MIT, Copyright (c) 2026
@@ -62,26 +64,40 @@ export function InlineMessageEditor({
 
   return (
     <div className="space-y-1.5">
-      <textarea
-        ref={ref}
-        value={draft}
+      <DictateField
+        label="Narration"
         disabled={busy}
-        onChange={(event) => {
-          setDraft(event.target.value);
+        onTranscript={(text) => {
+          setDraft((current) => appendDictation(current, text));
           setError("");
-          grow(event.currentTarget);
+          requestAnimationFrame(() => {
+            if (ref.current) {
+              grow(ref.current);
+            }
+          });
         }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && !event.shiftKey) {
-            event.preventDefault();
-            void save();
-          } else if (event.key === "Escape") {
-            event.preventDefault();
-            onCancel();
-          }
-        }}
-        className={cn(ui.input, "resize-none p-3 font-serif text-base leading-relaxed disabled:opacity-60")}
-      />
+      >
+        <textarea
+          ref={ref}
+          value={draft}
+          disabled={busy}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            setError("");
+            grow(event.currentTarget);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              void save();
+            } else if (event.key === "Escape") {
+              event.preventDefault();
+              onCancel();
+            }
+          }}
+          className={cn(ui.input, "resize-none p-3 font-serif text-base leading-relaxed disabled:opacity-60")}
+        />
+      </DictateField>
       {error ? <p className="motion-shake text-xs text-red-400">{error}</p> : null}
       <div className="flex items-center gap-2">
         <button

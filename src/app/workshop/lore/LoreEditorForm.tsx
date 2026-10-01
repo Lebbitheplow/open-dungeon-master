@@ -13,6 +13,8 @@ import { Markdown } from "@/components/ui/Markdown";
 import { LORE_STYLES, WORLD_LORE_CATEGORIES, type LoreLinkTarget, type LoreStyle, type WorldLoreCategory } from "@/lib/dm/world-lore-logic";
 import { LoreImageField, VisibilitySelect } from "@/app/workshop/lore/LoreFields";
 import { CATEGORY_LABELS, type LoreDraft } from "@/app/workshop/lore/types";
+import { DictateField } from "@/components/DictateField";
+import { appendDictation } from "@/lib/dictation";
 
 // The binder's author form (docs/vtt-parity-implementation-plan.md
 // sections 5.1 to 5.6): who reads it, how it is dressed, the picture and
@@ -119,27 +121,35 @@ export function LoreEditorForm({
 
   const textarea = (
     <div className="relative text-sm">
-      <textarea
-        ref={bodyRef}
-        value={draft.body}
-        onChange={(event) => onBodyChange(event.target.value, event.target.selectionStart ?? event.target.value.length)}
-        onKeyDown={(event) => {
-          if (!complete) {
-            return;
-          }
-          if (event.key === "Escape") {
-            setComplete(null);
-          } else if (event.key === "Enter" && suggestions[0]) {
-            event.preventDefault();
-            insertLink(suggestions[0].value);
-          }
+      <DictateField
+        label="Lore entry"
+        onTranscript={(text) => {
+          const next = appendDictation(draft.body, text, 4000);
+          onBodyChange(next, next.length);
         }}
-        rows={rows ? 10 : 5}
-        maxLength={4000}
-        placeholder={"What is established about it...\n\n# Headings, **bold**, - lists, [[The Mill]] to link, [[1d6]] to roll, and :::secret ... ::: for what only you read."}
-        data-tour="lore-body"
-        className={cn(ui.input, "leading-5")}
-      />
+      >
+        <textarea
+          ref={bodyRef}
+          value={draft.body}
+          onChange={(event) => onBodyChange(event.target.value, event.target.selectionStart ?? event.target.value.length)}
+          onKeyDown={(event) => {
+            if (!complete) {
+              return;
+            }
+            if (event.key === "Escape") {
+              setComplete(null);
+            } else if (event.key === "Enter" && suggestions[0]) {
+              event.preventDefault();
+              insertLink(suggestions[0].value);
+            }
+          }}
+          rows={rows ? 10 : 5}
+          maxLength={4000}
+          placeholder={"What is established about it...\n\n# Headings, **bold**, - lists, [[The Mill]] to link, [[1d6]] to roll, and :::secret ... ::: for what only you read."}
+          data-tour="lore-body"
+          className={cn(ui.input, "leading-5")}
+        />
+      </DictateField>
       {complete && suggestions.length ? (
         <ul role="listbox" className="panel fx-pop absolute left-2 top-full z-20 mt-0.5 w-64 rounded-lg p-1 text-xs shadow-elev-2">
           {suggestions.map((option, index) => (

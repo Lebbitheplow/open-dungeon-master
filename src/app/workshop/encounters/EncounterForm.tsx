@@ -10,6 +10,8 @@ import { TEMPLATE_NAME_MAX } from "@/lib/dm/encounter-template-logic";
 import { MonsterRosterPicker } from "@/app/campaigns/[campaignId]/MonsterRosterPicker";
 import { EncounterExtras } from "@/app/workshop/encounters/EncounterExtras";
 import type { EncounterDraft, MapOption } from "@/app/workshop/encounters/types";
+import { DictateField } from "@/components/DictateField";
+import { appendDictation } from "@/lib/dictation";
 
 // The prepared-encounter form: a name, the roster (picked or typed), where it
 // happens, which map, and the notes. Split out of DmEncounterPrepPanel so
@@ -106,14 +108,16 @@ export function EncounterForm({
         onChange={(extras) => set({ extras })}
       />
       <SectionHead title="Notes" glyph="tab-notes" className="mb-1 pt-1" />
-      <textarea
-        value={value.notes}
-        onChange={(event) => set({ notes: event.target.value })}
-        rows={2}
-        placeholder="Tactics, what they want, when they run."
-        aria-label="Notes"
-        className={field}
-      />
+      <DictateField label="Encounter notes" onTranscript={(text) => set({ notes: appendDictation(value.notes, text) })}>
+        <textarea
+          value={value.notes}
+          onChange={(event) => set({ notes: event.target.value })}
+          rows={2}
+          placeholder="Tactics, what they want, when they run."
+          aria-label="Notes"
+          className={field}
+        />
+      </DictateField>
       <button
         type="button"
         disabled={busy || !value.name.trim() || !value.enemies.trim()}

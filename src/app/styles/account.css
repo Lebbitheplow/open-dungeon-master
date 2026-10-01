@@ -405,3 +405,10 @@ html[data-theme="light"] .danger-zone {
     repeating-linear-gradient(135deg, rgba(190, 50, 40, 0.85) 0 10px, rgba(90, 30, 20, 0.85) 10px 20px),
     linear-gradient(180deg, rgba(190, 50, 40, 0.12), rgba(190, 50, 40, 0.03) 55%, transparent);
 }
+
+/* Admin > Speech: the built-in engine's "Installed" pill (BuiltinSpeechCard). */
+html[data-theme="light"] .speech-installed {
+  color: #1d6b42;
+  border-color: rgba(34, 139, 84, 0.5);
+  background: rgba(34, 139, 84, 0.12);
+}

@@ -13,6 +13,8 @@ import { NoteComposer } from "@/app/campaigns/[campaignId]/NotesPanel";
 import type { CampaignMember } from "@/lib/campaign-types";
 import type { Note } from "@/lib/db/notes";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { DictateField } from "@/components/DictateField";
+import { appendDictation } from "@/lib/dictation";
 
 // Notes attached to one character: public party notes (anyone can write;
 // the author, the party lead, and the character's owner can delete) and the
@@ -50,14 +52,16 @@ function CharacterNoteRow({
     <li className={panelRow}>
       {editing ? (
         <div className="reveal space-y-1.5">
-          <textarea
-            value={body}
-            onChange={(event) => setBody(event.target.value)}
-            rows={2}
-            maxLength={2000}
-            aria-label="Note"
-            className={cn(panelField, "leading-5")}
-          />
+          <DictateField label="Note" onTranscript={(text) => setBody((current) => appendDictation(current, text, 2000))}>
+            <textarea
+              value={body}
+              onChange={(event) => setBody(event.target.value)}
+              rows={2}
+              maxLength={2000}
+              aria-label="Note"
+              className={cn(panelField, "leading-5")}
+            />
+          </DictateField>
           <div className="flex gap-1.5">
             <KitButton
               tone="primary"

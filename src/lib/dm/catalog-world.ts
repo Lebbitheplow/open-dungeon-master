@@ -554,7 +554,7 @@ export const STORY_ADJUDICATIONS: CatalogEntry[] = [
           { value: "story", label: "Story beat" },
         ],
       },
-      { name: "summary", label: "One sentence", kind: "text", required: true },
+      { name: "summary", label: "One sentence", kind: "text", required: true, dictate: true },
     ],
   },
   {

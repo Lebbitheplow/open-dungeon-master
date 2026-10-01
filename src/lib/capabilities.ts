@@ -1,5 +1,7 @@
 import { configValue, getGlobalConfig } from "@/lib/app-config";
-import { openAiImagesConfigured } from "@/lib/openai-images";
+import { openAiImagesConfigured, openAiSpeechConfig } from "@/lib/openai-images";
+import { builtinSpeechInstalled } from "@/lib/stt-builtin";
+import { pickSttBackend, sttWantsWav, whisperSwitchedOff, type SttBackend } from "@/lib/stt-logic";
 import { configuredDefaultStorySettings } from "@/lib/runtime-defaults";
 import { serverEnv } from "@/lib/server-env";
 import { voiceConfig, type VoiceMode } from "@/lib/voice/config";
@@ -25,7 +27,9 @@ export type Capabilities = {
   utility: { configured: boolean };
   images: { configured: boolean; reachable: boolean; backend: string };
   tts: { configured: boolean; reachable: boolean };
-  stt: { configured: boolean };
+  // backend: which engine /api/stt will use; wantsWav: whether the browser
+  // must send 16 kHz WAV instead of its own recording (the built-in engine).
+  stt: { configured: boolean; backend: SttBackend; wantsWav: boolean };
   voice: { enabled: boolean; mode: VoiceMode };
 };
 
@@ -169,6 +173,15 @@ export function ttsProbeUrl(kokoroBaseUrl: string): string {
   return `${kokoroBaseUrl.replace(/\/+$/, "")}/health`;
 }
 
+function sttCapability(backend: SttBackend): Capabilities["stt"] {
+  return { configured: backend !== "none", backend, wantsWav: sttWantsWav(backend) };
+}
+
+// The Whisper service is OpenAI-shaped and answers a model list.
+export function sttProbeUrl(sttBaseUrl: string): string {
+  return `${sttBaseUrl.replace(/\/+$/, "")}/v1/models`;
+}
+
 type ProbeEntry = { probedAt: number; reachable: boolean };
 
 declare global {
@@ -260,7 +273,8 @@ export async function capabilitiesSnapshot(): Promise<Capabilities> {
   const kokoroBase = configValue(cfg.speech.kokoroUrl, "KOKORO_URL", "http://127.0.0.1:8880");
   const comfyBase = configValue(cfg.images.comfyUrl, "COMFYUI_URL", "http://127.0.0.1:8188");
   const fluxBase = serverEnv("FLUX_WORKER_URL", "http://127.0.0.1:7869");
-  const [storyReachable, ttsReachable, imagesReachable] = await Promise.all([
+  const sttBase = configValue(cfg.speech.sttUrl, "STT_URL", "http://127.0.0.1:8870");
+  const [storyReachable, ttsReachable, imagesReachable, sttReachable] = await Promise.all([
     settings.textProvider === "harness"
       ? harnessReady()
       : configured
@@ -276,6 +290,7 @@ export async function capabilitiesSnapshot(): Promise<Capabilities> {
       : Promise.resolve(false),
     probeReachable(ttsProbeUrl(kokoroBase)),
     probeReachable(imagesProbeUrl(settings.imageBackend, comfyBase, fluxBase)),
+    whisperSwitchedOff(sttBase) ? Promise.resolve(false) : probeReachable(sttProbeUrl(sttBase)),
   ]);
   const voice = voiceConfig();
   // Asked of the backend's own resolver rather than re-listed here, so the
@@ -309,9 +324,16 @@ export async function capabilitiesSnapshot(): Promise<Capabilities> {
       configured: speechConfigured(configValue(cfg.speech.kokoroUrl, "KOKORO_URL"), ttsReachable),
       reachable: ttsReachable,
     },
-    // No probe for Whisper: nothing depends on it at creation time, so an
-    // explicit URL (admin panel or env) is the only signal reported.
-    stt: { configured: Boolean(configValue(cfg.speech.sttUrl, "STT_URL")) },
+    // Whisper (an explicit URL, or the default address answering), then the
+    // built-in engine, then an OpenAI key: see src/lib/stt-logic.ts.
+    stt: sttCapability(
+      pickSttBackend({
+        explicitWhisperUrl: whisperSwitchedOff(sttBase) ? "" : configValue(cfg.speech.sttUrl, "STT_URL"),
+        whisperReachable: sttReachable,
+        builtinInstalled: builtinSpeechInstalled(),
+        openAiKey: openAiSpeechConfig().apiKey,
+      }),
+    ),
     voice: { enabled: voice.enabled, mode: voice.mode },
   };
 }
