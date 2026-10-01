@@ -158,6 +158,11 @@ function partialMarkerStart(text: string): number {
   if (angle >= 0 && angle >= text.length - 40 && !text.slice(angle).includes(">")) {
     return angle;
   }
+  // A trailing "{" may open a bare JSON object whose first key is coming.
+  const brace = text.search(/\{\s*$/);
+  if (brace >= 0) {
+    return brace;
+  }
   // A trailing prefix of the glued "assistantfinal" marker.
   const glued = "assistantfinal";
   const window = text.slice(-glued.length);
@@ -216,6 +221,16 @@ export function createStreamingArtifactFilter() {
           jsonReply = true;
         }
         if (jsonReply) {
+          break;
+        }
+        // Tool arguments glued to the prose as bare JSON are salvaged or cut
+        // once the call completes (src/lib/dm/json-salvage.ts); the prose
+        // before them streams, the object and anything after it wait.
+        const bareJsonAt = pending.search(/\{\s*"/);
+        if (bareJsonAt >= 0 && !STREAM_SUPPRESS_OPEN.test(pending.slice(0, bareJsonAt))) {
+          output += pending.slice(0, bareJsonAt).replace(new RegExp(STREAM_STRIP.source, "gi"), "");
+          pending = "";
+          jsonReply = true;
           break;
         }
 
@@ -278,6 +293,14 @@ export function createStreamingArtifactFilter() {
       return rest;
     },
   };
+}
+
+// A reply's visible text, reasoning stripped, without extractStoryText's
+// reading of a reply that opens with "{" as the structured story format: the
+// DM turn loop salvages bare JSON tool arguments from it first
+// (src/lib/dm/json-salvage.ts).
+export function extractReplyText(raw: unknown): string {
+  return typeof raw === "string" ? stripReasoningArtifacts(raw.trim()) : extractStoryText(raw);
 }
 
 export function extractStoryText(raw: unknown): string {

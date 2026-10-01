@@ -4,7 +4,7 @@ import type { DmTurn } from "@/lib/db/dm-turns";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { requestDmMessage } from "@/lib/dm/model";
 import { extractStoryText } from "@/lib/story-prompt";
-import { fakeRollMarkerRegex } from "@/lib/dm/tool-text";
+import { stripToolText } from "@/lib/dm/tool-text";
 import {
   buildCorrectionPrompt,
   checkNarration,
@@ -132,9 +132,10 @@ export async function enforceEngineBoundary(
     return;
   }
 
-  const corrected = extractStoryText(message?.content)
-    .replace(fakeRollMarkerRegex(), "")
-    .trim();
+  // Tool text the rewrite wrote out (a call it was not offered, as brackets,
+  // XML or bare JSON) is stripped like every other narration path does;
+  // stripToolText also drops hand-written roll markers.
+  const corrected = stripToolText(extractStoryText(message?.content)).trim();
   // A stub reply ("Understood.") technically contradicts nothing; the table
   // would rather have the flawed paragraph it already watched stream in.
   if (corrected.length < Math.min(120, Math.floor(narration.length / 3))) {
