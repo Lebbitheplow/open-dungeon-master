@@ -52,6 +52,7 @@ import { describeIntent } from "@/lib/dm/intent-logic";
 import { describeEquipmentItem } from "@/lib/dm/equipment-line";
 import { summonStateLine } from "@/lib/dm/summon-rules";
 import { dmSystemText, encounterRulesText, tracksAmmunition } from "@/lib/dm/prompt-rules";
+import { rollerName } from "@/lib/roll-labels";
 
 export { DM_SYSTEM, dmSystemText, ENCOUNTER_RULES, encounterRulesText } from "@/lib/dm/prompt-rules";
 
@@ -542,7 +543,7 @@ export function buildGameStateBlock(state: DmGameState): string {
 
   const rollLines = recentRolls.slice(-5).map((roll) => {
     const sheet = sheets.find((entry) => entry.id === roll.characterId);
-    const who = sheet?.name ?? "someone";
+    const who = rollerName(roll, sheet?.name) ?? "someone";
     const outcome =
       roll.dc === null ? "" : roll.success ? ` vs DC ${roll.dc}: success` : ` vs DC ${roll.dc}: failure`;
     return `- ${who}: ${roll.kind.replaceAll("_", " ")}${roll.detail ? ` (${roll.detail.replaceAll("_", " ")})` : ""} rolled ${roll.total}${outcome}${roll.breakdown.crit === "nat20" ? " (natural 20)" : roll.breakdown.crit === "nat1" ? " (natural 1)" : ""}`;

@@ -171,6 +171,8 @@ export function handleRequestRoll(
       advantage: args.advantage ?? "none",
       dc: args.dc ?? null,
       result: outcome,
+      // Free text about the sheet's own roll: its owner reads as the roller.
+      attacker: null,
       // A screen is a person's tool; the model's rolls are the table's.
       visibility: model ? "public" : args.visibility ?? "public",
     });

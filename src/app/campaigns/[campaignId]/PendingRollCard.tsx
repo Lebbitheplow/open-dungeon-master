@@ -24,16 +24,7 @@ import { CheckDie, CheckFrame, ModifierBreakdown } from "@/app/campaigns/[campai
 import { findSkill } from "@/lib/srd";
 import { heldInspiration } from "@/lib/dm/roll-riders";
 import { INSPIRED_KINDS } from "@/lib/dm/pending-inspiration";
-
-const KIND_TITLES: Record<string, string> = {
-  skill_check: "Skill check",
-  saving_throw: "Saving throw",
-  ability_check: "Ability check",
-  attack: "Attack roll",
-  damage: "Damage",
-  initiative: "Initiative",
-  custom: "Roll",
-};
+import { ROLL_KIND_LABELS } from "@/lib/roll-labels";
 
 const ABILITY_NAMES: Record<string, string> = {
   str: "Strength",
@@ -152,14 +143,10 @@ export function PendingRollCard({
   }, [mine, faceSources, faces]);
 
   const character = sheets.find((sheet) => sheet.id === pending.characterId);
-  // Attack-engine pendings already carry a full sentence in detail
-  // ("Kara: Longsword vs Goblin"); avoid stacking the name twice.
   const detailText = pending.detail.replaceAll("_", " ");
-  const label = detailText.startsWith(`${character?.name ?? ""}:`)
-    ? detailText
-    : `${character?.name ?? "Someone"}: ${pending.kind.replaceAll("_", " ")}${
-        detailText ? ` (${detailText})` : ""
-      }`;
+  const label = `${character?.name ?? "Someone"}: ${pending.kind.replaceAll("_", " ")}${
+    detailText ? ` (${detailText})` : ""
+  }`;
   // Plain-words instruction: "Roll 2× d20 and 1× d8" from the faces list.
   const diceSummary = (() => {
     if (!faces.length) {
@@ -288,7 +275,7 @@ export function PendingRollCard({
 
   // What the card is about, for its head: the kind, the DC the table was
   // sent, and the ability behind a skill ("Athletics" is Strength).
-  const title = KIND_TITLES[pending.kind] ?? "Roll";
+  const title = ROLL_KIND_LABELS[pending.kind] ?? "Roll";
   const skillId = pending.detail.trim().toLowerCase().replace(/[\s-]+/g, "_");
   const abilityId =
     pending.kind === "skill_check"

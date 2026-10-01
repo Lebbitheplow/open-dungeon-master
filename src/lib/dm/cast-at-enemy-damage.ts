@@ -7,7 +7,8 @@
 import type { Campaign } from "@/lib/db/campaigns";
 import type { Encounter, EncounterEnemy } from "@/lib/db/encounters";
 import type { DmTurn } from "@/lib/db/dm-turns";
-import { rollExpression } from "@/lib/dice";
+import { rollCard } from "@/lib/dm/action-common";
+import { rollAgainst } from "@/lib/roll-labels";
 import { spellDamageFor, spellFactsFor, spellMechanicsFor, spellSchoolFor } from "@/lib/content";
 import { authoredOnKill } from "@/lib/dm/authored-hooks";
 import { applyEnemyDamage } from "@/lib/dm/enemy-damage";
@@ -26,6 +27,8 @@ export function landSpellDamage(input: {
   sheet: CharacterSheet;
   enemy: EncounterEnemy;
   spell: string;
+  // The spell's own name, for its damage card.
+  spellName: string;
   authors: string[];
   mech: NonNullable<ReturnType<typeof spellMechanicsFor>>["mech"] | null;
   facts: ReturnType<typeof spellFactsFor>;
@@ -39,7 +42,7 @@ export function landSpellDamage(input: {
   sheets: CharacterSheet[];
   sheetsById: Map<string, CharacterSheet>;
 }): number {
-  const { campaign, turn, encounter, sheet, enemy, spell, authors, mech, facts, scaled, damageExpression, damageType, spellLevel, halfOnSave, saved, base, sheets, sheetsById } = input;
+  const { campaign, turn, encounter, sheet, enemy, spell, spellName, authors, mech, facts, scaled, damageExpression, damageType, spellLevel, halfOnSave, saved, base, sheets, sheetsById } = input;
   const riders = spellDamageRiders(sheet, {
     school: spellSchoolFor(spell, authors),
     damageType,
@@ -50,7 +53,12 @@ export function landSpellDamage(input: {
   // A subclass feature's die rides the roll (Enhanced Bond, Arcane Firearm).
   const rolledExpression = [damageExpression, ...riders.dice].join("+");
   const maxed = maximizedDamage(mech, enemy, rolledExpression);
-  const outcome = maxed === null ? rollExpression(rolledExpression) : { total: maxed };
+  // The card shows the dice as rolled; the save halves or stops what lands.
+  // A maximized blow rolls no dice, so it has no card.
+  const outcome =
+    maxed === null
+      ? rollCard(campaign, turn, sheet.id, "damage", rollAgainst(spellName, enemy.displayName), rolledExpression, { kind: "sheet", id: sheet.id, name: sheet.name })
+      : { total: maxed };
   const total = outcome.total + riders.flat;
   const halves = halfOnSave || riders.potentCantrip;
   // Feeblemind's damage lands whatever the save (spell-mech-types.ts).

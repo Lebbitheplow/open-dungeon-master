@@ -14,6 +14,7 @@
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, getEnemy, patchEnemyConditions, type EncounterEnemy } from "@/lib/db/encounters";
 import { insertRoll } from "@/lib/db/rolls";
+import { rollAgainst } from "@/lib/roll-labels";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
 import { rollExpression } from "@/lib/dice";
@@ -188,8 +189,9 @@ export function poisonOnHit(campaign: Campaign, sheetId: string, enemyId: string
       characterId: sheet.id,
       requestedBy: "dm",
       kind: "damage",
-      detail: `${sheet.name}: ${coat.name} on ${enemy.displayName}`,
+      detail: rollAgainst(label, enemy.displayName),
       result: outcome,
+      attacker: { kind: "sheet", id: sheet.id, name: sheet.name },
     });
     publishRoll(campaign.id, roll);
     damageEnemy(campaign, enemy, dealt, "poison");
@@ -301,13 +303,15 @@ export function hurlReturn(campaign: Campaign, enemy: EncounterEnemy, meta: Cond
     return `${enemy.displayName} returns from the lower planes unharmed: it is a fiend.`;
   }
   const outcome = rollExpression("10d10");
+  const warlock = meta.source ? getSheetById(meta.source) : null;
   const roll = insertRoll({
     campaignId: campaign.id,
     characterId: meta.source ?? null,
     requestedBy: "dm",
     kind: "damage",
-    detail: `Hurl Through Hell: ${enemy.displayName} returns`,
+    detail: rollAgainst("Hurl Through Hell", enemy.displayName),
     result: outcome,
+    attacker: warlock ? { kind: "sheet", id: warlock.id, name: warlock.name } : null,
   });
   publishRoll(campaign.id, roll);
   damageEnemy(campaign, enemy, outcome.total, "psychic");

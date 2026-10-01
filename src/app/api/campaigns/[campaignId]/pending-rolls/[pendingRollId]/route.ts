@@ -140,6 +140,12 @@ export async function POST(
     advantage: pending.advantage,
     dc: pending.dc,
     result: outcome,
+    // A parked pc_attack roll (to-hit or damage) is the PC's own; any other
+    // parked roll is a roll tool's free text about its sheet.
+    attacker:
+      pending.attack && pending.characterId
+        ? { kind: "sheet", id: pending.characterId, name: pending.attack.attacker }
+        : null,
   });
 
   const resolved = resolvePendingRoll(

@@ -3,6 +3,7 @@ import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { insertRoll } from "@/lib/db/rolls";
+import { rollAgainst } from "@/lib/roll-labels";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
@@ -418,8 +419,9 @@ export function handlePetAttack(
     characterId: sheet.id,
     requestedBy: "dm",
     kind: "attack",
-    detail: `${pet.name} (${sheet.name}'s ${pet.form}): ${attack.name} vs ${enemy.displayName}`,
+    detail: rollAgainst(attack.name, enemy.displayName),
     result: hitOutcome,
+    attacker: { kind: "pet", id: sheet.id, name: pet.name },
   });
   publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", {
     roll: hitRoll,
@@ -449,8 +451,9 @@ export function handlePetAttack(
     characterId: sheet.id,
     requestedBy: "dm",
     kind: "damage",
-    detail: `${pet.name}: ${attack.name} damage${crit ? " (CRIT)" : ""}`,
+    detail: rollAgainst(`${attack.name}${crit ? " (CRIT)" : ""}`, enemy.displayName),
     result: damageOutcome,
+    attacker: { kind: "pet", id: sheet.id, name: pet.name },
   });
   publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", {
     roll: damageRoll,

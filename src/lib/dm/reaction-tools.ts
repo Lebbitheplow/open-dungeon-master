@@ -34,7 +34,9 @@ import { addSheetCondition, rollCard } from "@/lib/dm/action-common";
 import { tilesBetween } from "@/lib/dm/attack-spatial";
 import { canAct } from "@/lib/dm/can-act";
 import { removeConditions } from "@/lib/dm/condition-logic";
-import { freshLastHit, type LastHit, type SwingRecord } from "@/lib/dm/last-hit";
+import { freshLastHit, rerollAttacker, type LastHit, type SwingRecord } from "@/lib/dm/last-hit";
+import type { RollAttacker } from "@/lib/db/rolls";
+import { rollAgainst } from "@/lib/roll-labels";
 import { opportunity, reactionSpell } from "@/lib/dm/reaction-spells";
 import { settleLastHit } from "@/lib/dm/reaction-refund";
 import { authoredReaction } from "@/lib/dm/authored-reactions";
@@ -152,7 +154,7 @@ function deflectMissiles(ctx: Ctx): Record<string, unknown> {
   }
   spendReaction(ctx);
   const dex = computeSheetDerived(sheet).abilityMods.dex;
-  const die = rollCard(campaign, ctx.turn, sheet.id, "custom", `${sheet.name}: Deflect Missiles`, "1d10").total;
+  const die = rollCard(campaign, ctx.turn, sheet.id, "custom", `${sheet.name}: Deflect Missiles`, "1d10", null).total;
   const reduction = die + dex + (monk || sheet.level);
   const corrected = record.swings.map((swing, at) =>
     at === index ? { ...swing, raw: Math.max(0, swing.raw - reduction) } : swing,
@@ -199,14 +201,15 @@ function throwBack(ctx: Ctx, record: LastHit, monkLevel: number): Record<string,
   }
   const derived = computeSheetDerived(sheet);
   const bonus = derived.abilityMods.dex + derived.proficiencyBonus;
-  const hitRoll = rollCard(campaign, ctx.turn, sheet.id, "attack", `${sheet.name}: the caught missile thrown back at ${enemy.displayName}`, d20Expression(bonus, apart !== null && apart > 4 ? "disadvantage" : "none"));
+  const thrower: RollAttacker = { kind: "sheet", id: sheet.id, name: sheet.name };
+  const hitRoll = rollCard(campaign, ctx.turn, sheet.id, "attack", rollAgainst("Caught missile", enemy.displayName), d20Expression(bonus, apart !== null && apart > 4 ? "disadvantage" : "none"), thrower);
   const ac = enemyAcWithEffects(campaign.id, enemy);
   const hit = hitRoll.crit !== "nat1" && (hitRoll.crit === "nat20" || hitRoll.total >= ac);
   if (!hit) {
     return { rolled: hitRoll.total, vsAc: ac, hit: false, ki: "1 ki spent" };
   }
   const faces = `1${martialArtsDie(monkLevel)}`;
-  const damage = rollCard(campaign, ctx.turn, sheet.id, "damage", `${sheet.name}: the thrown missile's damage`, hitRoll.crit === "nat20" ? `${faces}+${faces}+${derived.abilityMods.dex}` : `${faces}+${derived.abilityMods.dex}`);
+  const damage = rollCard(campaign, ctx.turn, sheet.id, "damage", rollAgainst("Caught missile", enemy.displayName), hitRoll.crit === "nat20" ? `${faces}+${faces}+${derived.abilityMods.dex}` : `${faces}+${derived.abilityMods.dex}`, thrower);
   const applied = applyEnemyDamage(campaign, ctx.turn, encounter, enemy, Math.max(0, damage.total), ctx.sheets, ctx.sheetsById, record.type);
   publishEncounter(campaign.id);
   return { rolled: hitRoll.total, vsAc: ac, hit: true, damage: damage.total, ki: "1 ki spent", ...applied };
@@ -251,7 +254,7 @@ function cuttingWords(ctx: Ctx): Record<string, unknown> {
     publishPersisted(campaign.id, "sheet_updated", { sheet: spentPool });
   }
   const dieExpression = bardDie(sheet);
-  const die = rollCard(campaign, ctx.turn, sheet.id, "custom", `${sheet.name}: Cutting Words`, dieExpression).total;
+  const die = rollCard(campaign, ctx.turn, sheet.id, "custom", `${sheet.name}: Cutting Words`, dieExpression, null).total;
   const swing = record.swings[index];
   // Off the attack roll when that turns the hit into a miss (a natural 20
   // hits whatever the total), otherwise off the damage.
@@ -304,7 +307,7 @@ function protection(ctx: Ctx): Record<string, unknown> {
         ? first.natural
         : first.advantage === "advantage"
           ? first.faces[0]
-          : Math.min(first.natural, rollCard(campaign, ctx.turn, null, "attack", `${record.attacker.name}: the attack again, at disadvantage (Protection)`, "1d20").total);
+          : Math.min(first.natural, rollCard(campaign, ctx.turn, null, "attack", rollAgainst(`${record.attack} again, at disadvantage (Protection)`, ally.name), "1d20", rerollAttacker(record)).total);
     const total = first.total - first.natural + kept;
     const missed = kept !== 20 && (kept === 1 || total < first.vsAc);
     if (missed) {
