@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Calculator, Columns3, Loader2, MessageCircleQuestion, Search } from "lucide-react";
 import type { IconKind } from "@/lib/icons";
 import { GameIcon } from "@/components/ui/GameIcon";
@@ -284,6 +285,11 @@ export default function ReferencePage() {
       glyph="tab-reference"
       title="Rules reference"
       blurb="Look something up, line things up side by side, run the numbers, or ask."
+      actions={
+        <Link href="/rulebook" className={cn(ui.btnSmall, "gap-1.5")}>
+          <GameIcon icon={{ kind: "glyph", key: "system-rules" }} size="size-5" /> Read the rulebook
+        </Link>
+      }
     >
       {/* Four long labels do not fit 360 px: the row scrolls rather than clipping the last mode. */}
       <div className="-mx-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Check } from "lucide-react";
-import { memo, type ComponentProps, type ReactNode } from "react";
+import { memo, useState, type ComponentProps, type ReactNode } from "react";
 import { HeaderGlyph } from "@/app/campaigns/[campaignId]/SessionGlyph";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { Slider } from "@/components/ui/Slider";
@@ -13,6 +13,7 @@ import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { headerButtonClass } from "@/app/campaigns/[campaignId]/headerButton";
 import { VoiceDock } from "@/app/campaigns/[campaignId]/VoiceDock";
+import { RulebookDialog } from "@/components/rulebook/RulebookDialog";
 import type { NarrationAudio } from "@/app/campaigns/[campaignId]/useNarrationAudio";
 import type { AmbienceAudio } from "@/app/campaigns/[campaignId]/useAmbienceAudio";
 
@@ -279,6 +280,7 @@ export const SessionHeader = memo(function SessionHeader({
             </button>
           </Tooltip>
         ) : null}
+        <RulebookButton />
         <Tooltip content="How everything works, and the guided tours" side="bottom">
           <button
             type="button"
@@ -307,3 +309,25 @@ export const SessionHeader = memo(function SessionHeader({
     </header>
   );
 });
+
+// The rulebook, laid open over the table so a rule can be checked without
+// leaving the session.
+function RulebookButton() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Tooltip content="The rulebook: every rule, spell and monster" side="bottom">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label="Rulebook"
+          data-tour="header-rulebook"
+          className={headerButtonClass(open)}
+        >
+          <HeaderGlyph glyph="system-rules" />
+        </button>
+      </Tooltip>
+      <RulebookDialog open={open} onOpenChange={setOpen} />
+    </>
+  );
+}

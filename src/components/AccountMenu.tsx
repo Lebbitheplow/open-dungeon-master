@@ -178,6 +178,11 @@ export function AccountMenu({
               </Link>
             </DropdownMenu.Item>
             <DropdownMenu.Item asChild>
+              <Link href="/rulebook" className={itemClass}>
+                <GameIcon icon={{ kind: "glyph", key: "system-rules" }} size="size-6" /> Rulebook
+              </Link>
+            </DropdownMenu.Item>
+            <DropdownMenu.Item asChild>
               <Link href="/friends" className={itemClass}>
                 <GameIcon icon={{ kind: "glyph", key: "tab-friends" }} size="size-6" /> Friends
               </Link>

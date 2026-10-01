@@ -22,6 +22,19 @@ This work includes material taken from the System Reference Document 5.1
 ("SRD 5.1") by Wizards of the Coast LLC. The SRD 5.1 is licensed under the
 Creative Commons Attribution 4.0 International License.
 
+### The rulebook
+
+`src/lib/rulebook/srd-5.1.json` is the full text of the SRD 5.1 (every rules
+chapter, spell, magic item and monster), served by the in-app rulebook at
+`/rulebook`. It is built by `scripts/import-srd-rulebook.mjs` from Old Man
+Umby's reForged markdown conversion of the SRD 5.1
+(https://github.com/oldmanumby/dnd.srd.5.1, pinned to one commit), which
+contains no product identity. The text is the SRD's own, under the same
+CC-BY-4.0 terms and attribution as above; the import only reorders it into
+chapters, drops each page's repeated title, and corrects the few conversion
+slips listed in the script's `ERRATA`. The rulebook shows the attribution on
+its contents page and ends with the SRD's legal notice as its last page.
+
 ## Ambience and music
 
 **No audio ships with this project.** `src/lib/ambience/catalog.ts` names the

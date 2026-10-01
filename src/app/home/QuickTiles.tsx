@@ -25,6 +25,7 @@ export function HomeMenu({
     ...(showSolo ? [{ id: "solo", label: "Solo adventure", glyph: "tab-story", onClick: onSolo, tour: "tile-solo" }] : []),
     { id: "characters", label: "Characters", glyph: "tab-characters", href: "/characters", tour: "tile-characters" },
     { id: "workshop", label: "Workshop", glyph: "system-homebrew", href: "/workshop", tour: "tile-workshop" },
+    { id: "rulebook", label: "Rulebook", glyph: "system-rules", href: "/rulebook", tour: "tile-rulebook" },
     { id: "join", label: "Join with a code", glyph: "tab-handout", onClick: onJoin, tour: "tile-join" },
   ];
   return (

@@ -95,6 +95,25 @@ Items combine v1 weapons (68), armor (23), magic items (1618), and v2 plain
 adventuring gear. Races include subraces as separate rows linked by
 `parent_slug`. Monsters are imported now for the future combat engine.
 
+## The rulebook
+
+`/rulebook` is the whole SRD 5.1 laid out as a book (the reader lives in
+`src/components/rulebook/`, and the session header opens the same book over
+the table). Its text is not in the content pack: it ships in the repo as
+`src/lib/rulebook/srd-5.1.json`, so every server has it, pack or no pack.
+Rebuild it with:
+
+```bash
+node scripts/import-srd-rulebook.mjs            # uses the cached tarball if present
+node scripts/import-srd-rulebook.mjs --refresh  # download the pinned commit again
+```
+
+The server cuts every page at its headings for search
+(`src/lib/rulebook/search.ts`), so a hit lands on the passage, not just the
+page. `scripts/test-rulebook.mjs` asserts the book is complete, that no page
+leaves markdown behind, and that the quick links a table uses mid-session
+(`QUICK_LINKS` in `src/lib/rulebook/book.ts`) point at anchors that exist.
+
 ## Licensing
 
 Each imported document's license is listed on the in-app `/licenses` page,

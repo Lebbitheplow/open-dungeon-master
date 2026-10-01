@@ -39,6 +39,15 @@ export default function LicensesPage() {
           Attribution 4.0 International License (CC-BY-4.0).
         </p>
         <p>
+          The <Link href="/rulebook" className="text-amber-200 hover:text-amber-100">rulebook</Link> is the
+          full text of the SRD 5.1, set from Old Man Umby&rsquo;s reForged markdown conversion of it
+          (github.com/oldmanumby/dnd.srd.5.1). This work includes material taken from the System
+          Reference Document 5.1 (&ldquo;SRD 5.1&rdquo;) by Wizards of the Coast LLC and available at
+          https://dnd.wizards.com/resources/systems-reference-document. The SRD 5.1 is licensed under
+          the Creative Commons Attribution 4.0 International License available at
+          https://creativecommons.org/licenses/by/4.0/legalcode.
+        </p>
+        <p>
           Expanded character options, spells, items, and monsters are imported from the{" "}
           <span className="text-stone-100">Open5e</span> dataset (open5e.com), which
           aggregates open-licensed tabletop content. Each source document and its license
