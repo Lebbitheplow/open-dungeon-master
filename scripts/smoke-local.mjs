@@ -64,6 +64,8 @@ const METRICS = [
 ];
 
 function formatValue(value) {
+  // A report from an older script has no entry for a newer metric.
+  if (value === undefined) return "–";
   if (value && typeof value === "object") {
     const entries = Object.entries(value);
     return entries.length ? entries.map(([key, count]) => `${key} ${count}`).join(", ") : "none";
