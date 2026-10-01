@@ -17,8 +17,11 @@
 //   node scripts/smoke-local.mjs --url http://127.0.0.1:8000/v1 --model gpt-oss-120b [--runs 6]
 //   node scripts/smoke-local.mjs --provider local --model gemma4:31b-it-qat [--runs 6]
 //       (Ollama native API at OLLAMA_BASE_URL; LOCAL_TEXT_CONTEXT caps num_ctx)
-//   options: --turns 1-5 (default 5)  --label NAME  --out DIR (writes <label>.json)
+//   options: --turns N (how many of the five turns to play, default 5)
+//            --label NAME  --out DIR (writes <label>.json)
 //            --context N (the window the prompt packs against; custom provider)
+//            --key KEY (the custom provider's API key, default OPENAI_COMPAT_API_KEY;
+//            the server only sends that env key to OPENAI_COMPAT_BASE_URL itself)
 //   node scripts/smoke-local.mjs --compare a.json b.json [...]   side-by-side summary
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
@@ -40,6 +43,7 @@ const { values: args, positionals } = parseArgs({
     label: { type: "string", default: "" },
     out: { type: "string", default: "" },
     context: { type: "string", default: "" },
+    key: { type: "string", default: process.env.OPENAI_COMPAT_API_KEY || "" },
     compare: { type: "boolean", default: false },
   },
 });
@@ -49,6 +53,7 @@ const METRICS = [
   ["turns", "Turns"],
   ["empty", "Turns ending on the empty-turn line"],
   ["emptyCauses", "… by cause"],
+  ["emptyRetries", "Empty replies asked again"],
   ["rescueOk", "Tool-leak rescues that recovered"],
   ["rescueEmpty", "Tool-leak rescues that came back empty"],
   ["artifacts", "Turns whose narration shows an artifact"],
@@ -100,7 +105,7 @@ const { createCampaign, getCampaignById, setCampaignStatus, updateStorySettings,
 const { createSheet, getSheetById, listSheets } = await import("../src/lib/db/sheets.ts");
 const { createSheetSchema } = await import("../src/lib/schemas/sheet.ts");
 const { insertCampaignMessage, listRecentMessages } = await import("../src/lib/db/messages.ts");
-const { startDmTurn, resumeDmTurn } = await import("../src/lib/dm/turn.ts");
+const { startDmTurn, resumeDmTurn, MAX_MODEL_CALLS } = await import("../src/lib/dm/turn.ts");
 const { runStorySetup } = await import("../src/lib/dm/setup.ts");
 const { generateStoryArc } = await import("../src/lib/dm/arc.ts");
 const { listOpenPendingRolls, resolvePendingRoll, listPendingForTurn, getLatestDmTurnId, getDmTurn } =
@@ -112,6 +117,7 @@ const { listQuests } = await import("../src/lib/db/quests.ts");
 const { listActiveFacts } = await import("../src/lib/db/facts.ts");
 const { listNpcs } = await import("../src/lib/db/npcs.ts");
 const { EMPTY_TURN_LINE } = await import("../src/lib/dm/empty-turn.ts");
+const { DM_HALTED_PREFIX } = await import("../src/lib/campaign-types.ts");
 const { storyContextTokens } = await import("../src/lib/model-client.ts");
 const VERSION = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
 
@@ -197,7 +203,7 @@ function emptyCause(calls, rescues) {
   if (!last) return "no-call";
   if (rescues.length) return "rescue-empty";
   if (!String(last.content).trim() && !last.tools.length) return "reply-empty";
-  if (last.tools.length && last.index === 3) return "final-call-tool";
+  if (last.tools.length && last.index === MAX_MODEL_CALLS - 1) return "final-call-tool";
   if (last.tools.length === 1 && last.tools[0] === "request_player_input") return "question-only";
   if (last.tools.length) return "tool-only";
   return "text-filtered";
@@ -299,7 +305,9 @@ async function playRun(runNumber) {
   });
   updateStorySettings(campaign.id, {
     textProvider: PROVIDER,
-    ...(PROVIDER === "custom" ? { customBaseUrl: args.url, customModel: args.model } : { localTextModel: args.model }),
+    ...(PROVIDER === "custom"
+      ? { customBaseUrl: args.url, customModel: args.model, customApiKey: args.key }
+      : { localTextModel: args.model }),
     imageGenerationEnabled: false,
     autoImages: false,
   });
@@ -323,9 +331,10 @@ async function playRun(runNumber) {
   const turns = [];
   for (const script of TURNS.slice(0, MAX_TURNS)) {
     const player = players[script.who];
+    const playerSeq = allocateSeq(campaign.id);
     insertCampaignMessage({
       campaignId: campaign.id,
-      seq: allocateSeq(campaign.id),
+      seq: playerSeq,
       authorType: "player",
       userId: player.user.id,
       characterId: player.sheet.id,
@@ -345,7 +354,11 @@ async function playRun(runNumber) {
     const lines = captured;
     const calls = lines.map(parseCall).filter(Boolean);
     const rescues = lines.map(parseRescue).filter(Boolean);
-    const dm = listRecentMessages(campaign.id, 400).filter((message) => message.authorType === "dm");
+    // Only what this turn wrote: a turn that halted writes a system notice
+    // and no narration, and must not be scored on the turn before it.
+    const written = listRecentMessages(campaign.id, 400).filter((message) => message.seq > playerSeq);
+    const dm = written.filter((message) => message.authorType === "dm");
+    const halted = written.find((message) => message.authorType === "system" && message.content.startsWith(DM_HALTED_PREFIX));
     const narration = String(dm[dm.length - 1]?.content ?? "").replace(ROLL_MARKER, "").trim();
     const stored = getDmTurn(getLatestDmTurnId(campaign.id));
     const toolNames = new Set(calls.flatMap((call) => call.tools));
@@ -354,11 +367,13 @@ async function playRun(runNumber) {
         if (call?.function?.name) toolNames.add(call.function.name);
       }
     }
-    const empty = isEmptyTurn(narration);
+    const empty = !halted && isEmptyTurn(narration);
     const turn = {
       label: script.label,
       seconds,
       calls: calls.length,
+      // The turn loop asks an empty reply again under the same call index.
+      emptyRetries: calls.filter((call, index) => index > 0 && call.index === calls[index - 1].index).length,
       tools: calls.flatMap((call) => call.tools),
       rolls: listRecentRolls(campaign.id, 500).length - rollsBefore,
       encounter: Boolean(getActiveEncounter(campaign.id)),
@@ -369,12 +384,17 @@ async function playRun(runNumber) {
       narration,
       callLog: calls.map((call) => ({ index: call.index, content: String(call.content).slice(0, 300), tools: call.tools })),
     };
-    turn.error = thrown;
-    turn.softFail = thrown ? `the turn threw: ${thrown}` : script.expect ? script.expect(turn) : null;
+    turn.error = thrown ?? (halted ? halted.content.slice(DM_HALTED_PREFIX.length) : null);
+    turn.softFail = turn.error
+      ? `the turn ${thrown ? "threw" : "halted"}: ${turn.error}`
+      : script.expect
+        ? script.expect(turn)
+        : null;
     turns.push(turn);
 
     const flags = [
       turn.empty ? `EMPTY:${turn.cause}` : "",
+      ...Array(turn.emptyRetries).fill("empty-retry"),
       ...turn.rescues.map((rescue) => `leak-rescue:${rescue}`),
       ...turn.artifacts.map((artifact) => `ARTIFACT:${artifact.kind}`),
       turn.softFail ? `MISSED:${turn.softFail}` : "",
@@ -419,6 +439,7 @@ const summary = {
   turns: turns.length,
   empty: turns.filter((turn) => turn.empty).length,
   emptyCauses: tally(turns.filter((turn) => turn.empty).map((turn) => turn.cause)),
+  emptyRetries: turns.reduce((sum, turn) => sum + turn.emptyRetries, 0),
   rescueOk: turns.flatMap((turn) => turn.rescues).filter((rescue) => rescue === "ok").length,
   rescueEmpty: turns.flatMap((turn) => turn.rescues).filter((rescue) => rescue === "empty").length,
   artifacts: turns.filter((turn) => turn.artifacts.length).length,

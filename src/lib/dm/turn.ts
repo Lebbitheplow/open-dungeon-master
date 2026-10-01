@@ -30,7 +30,8 @@ import { describeConditionDuration } from "@/lib/dm/condition-logic";
 import { heldRollUserIds } from "@/lib/dice/held-rolls";
 import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
 import { generateImageTool, parseGenerateImageToolCall } from "@/lib/image-tool";
-import { createStreamingArtifactFilter, extractStoryText } from "@/lib/story-prompt";
+import { createStreamingArtifactFilter, extractReplyText, extractStoryText } from "@/lib/story-prompt";
+import { salvageJsonToolCalls } from "@/lib/dm/json-salvage";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { fulfillMessageImage } from "@/lib/dm/images";
 import { imageProducerReady } from "@/lib/image-generate";
@@ -650,11 +651,15 @@ function dmTurnTools(
 // program reads its tool list once, when it starts (src/lib/harness/bridge.ts),
 // so a turn that starts a fight must already have the combat tools on it; the
 // bridge refuses any call the loop is not offering at that moment.
-function dmTurnToolCatalogue(campaign: Campaign, imageEnabled: boolean, leanTools: boolean): unknown[] {
+export function dmTurnToolCatalogue(campaign: Campaign, imageEnabled: boolean, leanTools: boolean): unknown[] {
   return [
     ...dmTurnTools(campaign, false, imageEnabled, leanTools),
     ...dmTurnTools(campaign, true, imageEnabled, leanTools),
   ];
+}
+
+function offersTool(tools: unknown[], name: string): boolean {
+  return tools.some((tool) => (tool as { function?: { name?: string } })?.function?.name === name);
 }
 
 async function runAdvance(context: TurnContext, turn: DmTurn) {
@@ -690,6 +695,10 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
   // Whether the last call, sent with toolChoice "none", came back with tool
   // calls anyway (see narrateAfterToolLeak).
   let finalCallLeaked = false;
+  // Whether an empty reply was already asked again, and whether the call
+  // that ended the loop came back empty (see narrateAfterToolLeak).
+  let emptyRetried = false;
+  let lastReplyEmpty = false;
 
   while (turn.callIndex < MAX_MODEL_CALLS) {
     const finalCall = turn.callIndex === MAX_MODEL_CALLS - 1;
@@ -739,15 +748,29 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         `[dm-debug] call ${turn.callIndex}: content=${JSON.stringify(String(message?.content ?? "").slice(0, 300))} tool_calls=${JSON.stringify(message?.tool_calls ?? null).slice(0, 500)}`,
       );
     }
+    // gpt-oss on vLLM sometimes ends a call on its reasoning alone: no text
+    // and no tool call (PR #53). Nothing was said or done, so the same call
+    // is simply asked again, once a turn and outside the call budget. An
+    // empty last call is caught after the loop instead.
+    lastReplyEmpty =
+      !extractReplyText(message?.content).trim() && !extractToolCalls(message?.tool_calls).length;
+    if (lastReplyEmpty && !finalCall && !emptyRetried) {
+      emptyRetried = true;
+      continue;
+    }
     turn.callIndex += 1;
 
     // Salvage tool calls the model wrote as literal text so they still run
     // (and never reach players as raw text), then merge them with the
-    // structured calls under synthetic ids for tool-result pairing. Three
+    // structured calls under synthetic ids for tool-result pairing. Four
     // nets, in order: the model's native XML dialect (llama-server's
-    // extraction intermittently misses it), bracket leaks, prose roll-asks.
-    const xmlSalvage = salvageXmlToolCalls(extractStoryText(message?.content));
-    const salvage = salvageTextualToolCalls(xmlSalvage.text);
+    // extraction intermittently misses it), bare JSON arguments (read before
+    // extractStoryText, which takes a reply that is one JSON object for the
+    // structured story format and would swallow it), bracket leaks, prose
+    // roll-asks.
+    const xmlSalvage = salvageXmlToolCalls(extractReplyText(message?.content));
+    const jsonSalvage = salvageJsonToolCalls(xmlSalvage.text, tools);
+    const salvage = salvageTextualToolCalls(extractStoryText(jsonSalvage.text));
     // Prose roll-asks ("Avery, make an Investigation check, DC 15.")
     // become real request_roll calls. Skipped when the reply already rolls
     // (no double dice) and on the forced-narration final call, where a
@@ -755,13 +778,14 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     const alreadyRolls = [
       ...extractToolCalls(message?.tool_calls),
       ...xmlSalvage.calls,
+      ...jsonSalvage.calls,
       ...salvage.calls,
     ].some((toolCall) => toolCall.name === "request_roll");
     const proseRolls =
       finalCall || alreadyRolls
         ? { text: salvage.text, calls: [] }
         : salvageProseRollAsks(salvage.text, sheets);
-    const salvagedCalls = [...xmlSalvage.calls, ...salvage.calls, ...proseRolls.calls];
+    const salvagedCalls = [...xmlSalvage.calls, ...jsonSalvage.calls, ...salvage.calls, ...proseRolls.calls];
     const visibleText = proseRolls.text;
     const echoedToolCalls = salvagedCalls.length
       ? [
@@ -1029,8 +1053,10 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       // question put during a fight (no spotlight is set there, the
       // initiative order owns the floor) and one naming no player's
       // character (nobody was handed the floor), which used to close the
-      // turn on the empty-turn line.
-      if ((spotlightSet || inputCalls.length > 0) && !turn.narrationParts.length && !finalCall) {
+      // turn on the empty-turn line. A reply of other calls that need no
+      // follow-up (complete_beat, generate_image, a tool that does not
+      // exist) and no prose ended the same way, and is narrated the same way.
+      if ((spotlightSet || toolCalls.length > 0) && !turn.narrationParts.length && !finalCall) {
         const inFight = !spotlightSet && fightOwnsFloor(campaignId);
         turn.conversation.push({
           role: "assistant",
@@ -1047,7 +1073,13 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
             content: JSON.stringify(
               toolCall.name === "request_player_input"
                 ? playerInputResult(spotlightSet, inFight, true)
-                : (beatResults.get(toolCall.id ?? "complete_beat") ?? { ok: true }),
+                : toolCall.name === "complete_beat"
+                  ? (beatResults.get(toolCall.id ?? "complete_beat") ?? { ok: true })
+                  : toolCall.name === "generate_image"
+                    ? { ok: true, note: "The picture is queued with this turn." }
+                    : offersTool(tools, toolCall.name)
+                      ? { ok: true }
+                      : { error: `The engine has no action called "${toolCall.name}".` },
             ),
           });
         }
@@ -1509,7 +1541,14 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     setDmStatus(campaignId, "narrating");
   }
 
-  if (!failed && finalCallLeaked && !turn.narrationParts.length) {
+  // A private exchange (whispers only) is allowed to end without narration
+  // (finalize() writes nothing to the table for it), so an empty reply there
+  // gets no call asking for some.
+  if (
+    !failed &&
+    !turn.narrationParts.length &&
+    (finalCallLeaked || (lastReplyEmpty && !turn.playerWhisperIds.length))
+  ) {
     await narrateAfterToolLeak(context, turn);
   }
   if (!failed) {
@@ -1535,7 +1574,8 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
 // answer it with a tool call and no text (vLLM serving gpt-oss; Ollama has
 // no tool_choice at all), and the turn closed on the empty-turn line. One
 // more call with no tools offered asks for the narration. The leaked calls
-// never ran and are not echoed, so the history stays well-formed.
+// never ran and are not echoed, so the history stays well-formed. The same
+// call answers a turn whose last reply came back empty after its one retry.
 const TOOLS_CLOSED_PROMPT =
   "[System] Tools are closed for this turn: nothing you call now will run. Narrate the moment to the table in prose, from what has already resolved, and do not describe the outcome of anything that did not. If you need something from a player, ask it in the narration.";
 
@@ -1614,11 +1654,13 @@ async function ensureWhisperReplies(context: TurnContext, turn: DmTurn) {
     ],
     { tools: [sendWhisperTool], toolChoice: "auto", thinking: true },
   );
-  const xmlSalvage = salvageXmlToolCalls(extractStoryText(message?.content));
-  const salvage = salvageTextualToolCalls(xmlSalvage.text);
+  const xmlSalvage = salvageXmlToolCalls(extractReplyText(message?.content));
+  const jsonSalvage = salvageJsonToolCalls(xmlSalvage.text, [sendWhisperTool]);
+  const salvage = salvageTextualToolCalls(extractStoryText(jsonSalvage.text));
   const whisperCalls = [
     ...extractToolCalls(message?.tool_calls),
     ...xmlSalvage.calls,
+    ...jsonSalvage.calls,
     ...salvage.calls,
   ].filter((toolCall) => toolCall.name === "send_whisper");
   for (const whisperCall of whisperCalls) {
