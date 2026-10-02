@@ -125,7 +125,8 @@ export function handleAoeDamage(
   const skippedDead = pcTargets.filter((sheet) => sheet.deathSaves?.dead).map((sheet) => sheet.name);
   if (skippedDead.length) {
     pcTargets.splice(0, pcTargets.length, ...pcTargets.filter((sheet) => !sheet.deathSaves?.dead));
-    if (!enemyTargets.length && !pcTargets.length) {
+    // A spell that lays its area (a Web over the fallen) is still cast.
+    if (!enemyTargets.length && !pcTargets.length && !(args.spell && zoneRowFor(args.spell))) {
       return { error: `${skippedDead.join(", ")} ${skippedDead.length === 1 ? "is" : "are"} dead; the area catches nobody it can harm. Nothing was spent.` };
     }
   }
@@ -281,11 +282,16 @@ export function handleAoeDamage(
     ...enemyTargets.filter((enemy) => !unseen.includes(enemy.id)).map((enemy) => enemy.displayName),
     ...pcTargets.filter((sheet) => !plan?.sculpted.includes(sheet.id)).map((sheet) => sheet.name),
   ];
+  // A character's area that names no spell (a dragonborn's breath) is still
+  // theirs. A caster whose token is hidden is not named, as a hidden
+  // creature it catches is not (the tracker's word for it).
   const areaBy: RollAttacker | null = plan
     ? { kind: "sheet", id: plan.caster.id, name: plan.caster.name }
     : enemyUse
-      ? { kind: "enemy", id: enemyUse.enemy.id, name: enemyUse.enemy.displayName }
-      : null;
+      ? { kind: "enemy", id: enemyUse.enemy.id, name: unseen.includes(enemyUse.enemy.id) ? "Someone unseen" : enemyUse.enemy.displayName }
+      : awayCaster
+        ? { kind: "sheet", id: awayCaster.id, name: awayCaster.name }
+        : null;
   const areaName = plan ? plan.spell : enemyUse?.name || null;
   if (typeof args.damage === "number") {
     total = args.damage;
