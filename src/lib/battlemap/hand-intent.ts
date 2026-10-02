@@ -17,7 +17,7 @@ import { z } from "zod";
 const text = (max: number) => z.string().trim().min(1).max(max);
 const square = z.number().int().min(0).max(200).optional();
 
-export const HAND_INTENT_ACTIONS = ["search", "escape"] as const;
+export const HAND_INTENT_ACTIONS = ["search", "escape", "stand-up"] as const;
 
 // pc_attack's bonusAttack values (src/lib/dm/pc-attack-options.ts
 // BONUS_ATTACKS) and Open Hand Technique's riders (attack-choice-rules.ts).

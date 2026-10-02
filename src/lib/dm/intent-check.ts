@@ -32,7 +32,7 @@ function kindOf(intent: MessageIntent): ActKind {
     case "feature":
       return "free";
     case "basic":
-      return intent.action === "end-turn" ? "free" : intent.bonus ? "bonus" : "action";
+      return intent.action === "end-turn" ? "free" : intent.action === "stand-up" ? "move" : intent.bonus ? "bonus" : "action";
     case "reaction":
       return "reaction";
   }

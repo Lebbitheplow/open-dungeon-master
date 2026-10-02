@@ -269,6 +269,8 @@ export function composeSentence(
       return `I use an object${bonus}: `;
     case "end-turn":
       return "I end my turn.";
+    case "stand-up":
+      return "I stand up.";
   }
 }
 

@@ -233,6 +233,17 @@ test("Ready asks for its trigger and carries it; Search and Escape are cards", (
   assert.equal(byId(grappled, "basic:escape").disabled, null);
 });
 
+test("Stand up is a card only while prone: free, refused off the turn and at speed 0, and resolved by clearing prone", () => {
+  assert.equal(byId(deriveHand(sheet(), mine()), "basic:stand-up"), undefined);
+  const stand = byId(deriveHand(sheet({ conditions: ["prone"] }), mine()), "basic:stand-up");
+  assert.equal(stand.cost, "free");
+  assert.equal(stand.disabled, null);
+  assert.equal(composeSentence(stand, null, [], {}), "I stand up.");
+  assert.deepEqual(intentTools(messageIntentSchema.parse(intentBody(stand, null, [], {}))), ["clear_condition"]);
+  assert.match(byId(deriveHand(sheet({ conditions: ["prone"] }), talias()), "basic:stand-up").disabled, /It is Talia's turn/);
+  assert.match(byId(deriveHand(sheet({ conditions: ["prone", "grappled"] }), mine()), "basic:stand-up").disabled, /speed is 0/);
+});
+
 // ---- U:UA2 reactions after a hit ----
 
 const HIT = { characterId: "s1", attacker: "Goblin 2", attackerId: "e2", attack: "Scimitar", type: "slashing", ranged: false, source: "attack", hit: true, damage: 7, answered: [] };

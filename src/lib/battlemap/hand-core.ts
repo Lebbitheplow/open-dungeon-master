@@ -23,7 +23,7 @@ export type HandCardType = "attack" | "rider" | "spell" | "control" | "mend" | "
 export type HandTarget = "enemy" | "ally" | "self" | "none";
 export type BasicActionId =
   | "dodge" | "dash" | "disengage" | "help" | "hide" | "ready" | "grapple" | "shove" | "use-object" | "end-turn"
-  | "search" | "escape";
+  | "search" | "escape" | "stand-up";
 
 // What the structured commit carries beside the sentence. An optional extra
 // field on the action body: a server that does not know it drops it. The

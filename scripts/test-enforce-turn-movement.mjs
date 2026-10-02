@@ -26,6 +26,7 @@ const { allocateSeq } = await import("../src/lib/db/campaigns.ts");
 const { insertCampaignMessage } = await import("../src/lib/db/messages.ts");
 const { removeTokenByRef } = await import("../src/lib/db/battle-maps.ts");
 const { buildPlayerMapView } = await import("../src/lib/battlemap/view.ts");
+const { intentRefusal } = await import("../src/lib/dm/intent-check.ts");
 const { moveTokenTool } = await import("../src/lib/dm/map-tools.ts");
 const ai = await aiEngine(world);
 
@@ -332,6 +333,47 @@ await test("A typed move does not walk a character off their turn.", async () =>
   say("player", "Vex darts 20 feet east.", thief);
   assert.equal((await ai.invoke("move_token", { tokenName: thief.id, x: 6, y: 6 })).ok, false);
   assert.deepEqual([kit.token(thief.id).x, kit.token(thief.id).y], [2, 6]);
+});
+
+// ---- standing up ----
+
+await test("The AI clearing a prone character on their own turn stands them up for half their speed, as the board does.", async () => {
+  await typedMoveStage();
+  world.patch(fighter.id, { conditions: ["prone"] });
+  const out = await ai.invoke("clear_condition", { characterId: fighter.id, condition: "prone" });
+  assert.equal(out.ok, true, out.error);
+  assert.equal(prone(fighter), false);
+  assert.equal(lit(fighter), 3, "standing up cost no movement");
+});
+
+await test("A character cannot stand up with less than half their speed left, at speed 0, or off their own turn; the human DM's console still clears prone freely.", async () => {
+  await typedMoveStage();
+  assert.equal(await walk(fighter, 6, 2), 200);
+  world.patch(fighter.id, { conditions: ["prone"] });
+  assert.equal((await ai.invoke("clear_condition", { characterId: fighter.id, condition: "prone" })).ok, false, "stood up with 2 squares left");
+  assert.equal(prone(fighter), true);
+  await typedMoveStage();
+  world.patch(fighter.id, { conditions: ["prone", "grappled"] });
+  assert.equal((await ai.invoke("clear_condition", { characterId: fighter.id, condition: "prone" })).ok, false, "stood up at speed 0");
+  assert.equal(prone(fighter), true);
+  world.patch(fighter.id, { conditions: [] });
+  world.patch(thief.id, { conditions: ["prone"] });
+  assert.equal((await ai.invoke("clear_condition", { characterId: thief.id, condition: "prone" })).ok, false, "stood up off their turn");
+  assert.equal(prone(thief), true);
+  assert.equal((await world.invoke("clear_condition", { characterId: thief.id, condition: "prone" })).ok, true, "the console lost its free hand");
+  assert.equal(prone(thief), false);
+});
+
+await test("The Hand's Stand up card is judged as movement, not an action: allowed while only incapacitated, refused off the character's turn.", async () => {
+  await typedMoveStage();
+  const standUp = { card: "basic", action: "stand-up" };
+  // Bare incapacitation takes actions, not movement (SRD 5.1).
+  world.patch(fighter.id, { conditions: ["prone", "incapacitated"] });
+  assert.equal(intentRefusal(world.campaign(), world.sheet(fighter.id), standUp), null, "standing up was judged as an action");
+  world.patch(fighter.id, { conditions: [] });
+  world.patch(thief.id, { conditions: ["prone"] });
+  assert.match(String(intentRefusal(world.campaign(), world.sheet(thief.id), standUp)), /turn/);
+  world.patch(thief.id, { conditions: [] });
 });
 
 // ---- what the DM is told ----

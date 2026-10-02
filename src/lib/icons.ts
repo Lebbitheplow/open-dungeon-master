@@ -30,6 +30,7 @@ export function iconSlug(name: string): string {
 const ICON_ALIASES: Record<string, { kind: IconKind; slug: string }> = {
   "action/search": { kind: "glyph", slug: "skill-perception" },
   "action/escape": { kind: "feature", slug: "escape-artist" },
+  "action/stand-up": { kind: "condition", slug: "prone" },
   "feature/flurry-of-blows": { kind: "feature", slug: "martial-arts" },
 };
 
